@@ -7,7 +7,7 @@ import {
   toPublicAccessToken,
   type MintFailureReason,
 } from './access-token-service.js';
-import { isAdminSession } from './admin.js';
+import { isAdminSession } from './admin-session.js';
 import type { Store } from './store.js';
 
 /**

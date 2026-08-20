@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
+import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import { looksLikeCreatorAgentKey } from './agent-creator-key.js';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import { DEFAULT_TRANSCRIPT_WINDOW_ENTRIES, MAX_TRANSCRIPT_WINDOW_ENTRIES } from './build-transcript.js';
@@ -1111,7 +1112,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     pendingMessages: unknown[];
     warnings?: Array<{ code: string; message: string }>;
   }> {
-    const inbox = await injectChannel(request, 'GET', '/api/agent/build/inbox', channelToken);
+    const inbox = await injectChannel(request, 'GET', AGENT_CHANNEL_ROUTES.INBOX, channelToken);
     if (inbox.statusCode !== 200) {
       return { stop: false, pendingMessages: [] };
     }
@@ -2578,7 +2579,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
-        const res = await injectChannel(ctx.request, 'GET', '/api/agent/build/brief', auth.channelToken);
+        const res = await injectChannel(ctx.request, 'GET', AGENT_CHANNEL_ROUTES.BRIEF, auth.channelToken);
         if (res.statusCode !== 200) {
           const body = res.json() as { error?: string };
           return toolErr(body.error ?? `brief failed (${res.statusCode})`);
@@ -2617,7 +2618,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
-        const res = await injectChannel(ctx.request, 'GET', '/api/agent/build/reference-images', auth.channelToken);
+        const res = await injectChannel(ctx.request, 'GET', AGENT_CHANNEL_ROUTES.REFERENCE_IMAGES, auth.channelToken);
         if (res.statusCode !== 200) {
           const body = res.json() as { error?: string };
           return toolErr(body.error ?? `reference images failed (${res.statusCode})`);
@@ -2674,7 +2675,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
-        const res = await injectChannel(ctx.request, 'GET', '/api/agent/build/seed', auth.channelToken);
+        const res = await injectChannel(ctx.request, 'GET', AGENT_CHANNEL_ROUTES.SEED, auth.channelToken);
         const body = res.json() as {
           error?: string;
           available?: boolean;
@@ -2731,7 +2732,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
-        const res = await injectChannel(ctx.request, 'POST', '/api/agent/build/seed/regenerate', auth.channelToken, {
+        const res = await injectChannel(ctx.request, 'POST', AGENT_CHANNEL_ROUTES.SEED_REGENERATE, auth.channelToken, {
           ...(typeof args.steer === 'string' ? { steer: args.steer } : {}),
         });
         const body = res.json() as { error?: string; message?: string; [key: string]: unknown };
@@ -2793,7 +2794,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
-        const res = await injectChannel(ctx.request, 'GET', '/api/agent/build/kit', auth.channelToken);
+        const res = await injectChannel(ctx.request, 'GET', AGENT_CHANNEL_ROUTES.KIT, auth.channelToken);
         const body = res.json() as { error?: string; message?: string; browse?: Record<string, string> };
         if (res.statusCode !== 200) {
           return toolErr(body.message ?? body.error ?? `kit failed (${res.statusCode})`, body);
@@ -3113,7 +3114,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const res = await injectChannel(
           ctx.request,
           'POST',
-          '/api/agent/build/kit/files/read',
+          AGENT_CHANNEL_ROUTES.KIT_FILES_READ,
           auth.channelToken,
           body,
         );
@@ -3343,7 +3344,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
-        const res = await injectChannel(ctx.request, 'GET', '/api/agent/build/sources', auth.channelToken);
+        const res = await injectChannel(ctx.request, 'GET', AGENT_CHANNEL_ROUTES.SOURCES, auth.channelToken);
         const body = res.json() as {
           error?: string;
           delivery?: unknown;
@@ -3409,7 +3410,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
-        const res = await injectChannel(ctx.request, 'GET', '/api/agent/build/examples', auth.channelToken);
+        const res = await injectChannel(ctx.request, 'GET', AGENT_CHANNEL_ROUTES.EXAMPLES, auth.channelToken);
         const body = res.json() as {
           error?: string;
           examples?: Array<{ slug: string; title: string; genre: string; modules: string[]; whyReference: string }>;
@@ -3666,7 +3667,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         if (typeof args.done === 'number' && typeof args.total === 'number') {
           payload.progress = { done: args.done, total: args.total };
         }
-        const res = await injectChannel(ctx.request, 'POST', '/api/agent/build/progress', auth.channelToken, payload);
+        const res = await injectChannel(ctx.request, 'POST', AGENT_CHANNEL_ROUTES.PROGRESS, auth.channelToken, payload);
         const body = res.json() as {
           error?: string;
           accepted?: boolean;
@@ -3721,7 +3722,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const labelRaw =
           typeof args.caption === 'string' ? args.caption : typeof args.label === 'string' ? args.label : undefined;
         const label = typeof labelRaw === 'string' && labelRaw.trim() ? labelRaw.trim().slice(0, 120) : undefined;
-        const res = await injectChannel(ctx.request, 'POST', '/api/agent/build/shot/upload-url', auth.channelToken, {
+        const res = await injectChannel(ctx.request, 'POST', AGENT_CHANNEL_ROUTES.SHOT_UPLOAD_URL, auth.channelToken, {
           ...(label ? { label } : {}),
         });
         const body = res.json() as {
@@ -3920,7 +3921,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         }
         const slug =
           typeof args.slug === 'string' && args.slug.trim() ? args.slug.trim() : (auth.record.slug ?? undefined);
-        const res = await injectChannel(ctx.request, 'PUT', '/api/agent/build/sources/stage', auth.channelToken, {
+        const res = await injectChannel(ctx.request, 'PUT', AGENT_CHANNEL_ROUTES.SOURCES_STAGE, auth.channelToken, {
           path,
           content,
           ...(slug ? { slug } : {}),
@@ -4135,7 +4136,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const res = await injectChannel(
           ctx.request,
           'POST',
-          '/api/agent/build/sources/stage/patch',
+          AGENT_CHANNEL_ROUTES.SOURCES_STAGE_PATCH,
           auth.channelToken,
           hasFiles
             ? { files: args.files, ...(slug ? { slug } : {}) }
@@ -4248,7 +4249,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
-        const res = await injectChannel(ctx.request, 'GET', '/api/agent/build/sources/stage', auth.channelToken);
+        const res = await injectChannel(ctx.request, 'GET', AGENT_CHANNEL_ROUTES.SOURCES_STAGE, auth.channelToken);
         const body = res.json() as {
           error?: string;
           files?: Array<{ path: string; bytes: number }>;
@@ -4308,7 +4309,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const res = await injectChannel(
           ctx.request,
           'POST',
-          '/api/agent/build/sources/stage/clear',
+          AGENT_CHANNEL_ROUTES.SOURCES_STAGE_CLEAR,
           auth.channelToken,
           paths?.length ? { paths } : {},
         );
@@ -4383,7 +4384,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const res = await injectChannel(
           ctx.request,
           'POST',
-          '/api/agent/build/sources/stage/delete',
+          AGENT_CHANNEL_ROUTES.SOURCES_STAGE_DELETE,
           auth.channelToken,
           { path },
         );
@@ -4577,7 +4578,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const slug =
           typeof args.slug === 'string' && args.slug.trim() ? args.slug.trim() : (auth.record.slug ?? 'game');
 
-        const res = await injectChannel(ctx.request, 'POST', '/api/agent/build/sources', auth.channelToken, {
+        const res = await injectChannel(ctx.request, 'POST', AGENT_CHANNEL_ROUTES.SOURCES, auth.channelToken, {
           slug,
           ...(decodedFiles.length ? { files: decodedFiles } : {}),
           ...(fromStaged ? { fromStaged: true } : {}),
@@ -4712,7 +4713,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           ...(typeof args.locale === 'string' ? { locale: args.locale } : {}),
           ...(Array.isArray(args.ackInboxIds) ? { ackInboxIds: args.ackInboxIds } : {}),
         };
-        const res = await injectChannel(ctx.request, 'POST', '/api/agent/build/end', auth.channelToken, payload);
+        const res = await injectChannel(ctx.request, 'POST', AGENT_CHANNEL_ROUTES.END, auth.channelToken, payload);
         const body = res.json() as {
           error?: string;
           accepted?: boolean;
@@ -4925,7 +4926,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         // polling. A receipt is a closed round being read, not a fresh one.
         let gate: unknown = null;
         if (used > 0 || auth.access === 'terminal_receipt') {
-          const gateRes = await injectChannel(ctx.request, 'GET', '/api/agent/build/gate', auth.channelToken);
+          const gateRes = await injectChannel(ctx.request, 'GET', AGENT_CHANNEL_ROUTES.GATE, auth.channelToken);
           if (gateRes.statusCode === 200) gate = gateRes.json();
         }
 
@@ -5010,7 +5011,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           typeof args.deliveryId === 'string' && args.deliveryId.trim() ? args.deliveryId.trim() : null;
         const path = deliveryId
           ? `/api/agent/build/gate?version=${encodeURIComponent(deliveryId)}`
-          : '/api/agent/build/gate';
+          : AGENT_CHANNEL_ROUTES.GATE;
         const res = await injectChannel(ctx.request, 'GET', path, auth.channelToken);
         const body = res.json() as Record<string, unknown> & { error?: string; status?: string };
         if (res.statusCode !== 200) {
@@ -5284,7 +5285,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
-        const res = await injectChannel(ctx.request, 'GET', '/api/agent/build/inbox', auth.channelToken);
+        const res = await injectChannel(ctx.request, 'GET', AGENT_CHANNEL_ROUTES.INBOX, auth.channelToken);
         const body = res.json() as {
           error?: string;
           pending?: Array<{ id: string; text: string; createdAt: string }>;
@@ -5431,7 +5432,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         if (!idsParse.success) {
           return toolErr(idsParse.error.issues[0]?.message ?? 'invalid ids');
         }
-        const res = await injectChannel(ctx.request, 'POST', '/api/agent/build/inbox/ack', auth.channelToken, {
+        const res = await injectChannel(ctx.request, 'POST', AGENT_CHANNEL_ROUTES.INBOX_ACK, auth.channelToken, {
           ids: idsParse.data,
         });
         const body = res.json() as {

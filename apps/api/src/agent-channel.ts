@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import {
   AGENT_BUILD_RULES_DIGEST,
   briefLocales,
@@ -26,6 +27,7 @@ import {
   type UploadKind,
   type UploadTokenClaims,
 } from './agent-upload-token.js';
+import { MAX_BUILD_PREVIEW_BYTES } from './build-preview-limits.js';
 import { loadBuildTranscript } from './build-transcript.js';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import { deriveGateStatusString, readGateVerdict } from './gate-verdict.js';
@@ -189,16 +191,6 @@ const RETIRED_BASE64_SHOT_REASON =
   'base64 screenshot upload is retired — POST /api/agent/build/shot/upload-url, then curl --upload-file <png> "$url"';
 
 const MAX_PREVIEW_LABEL = 120;
-/**
- * 320 KB decoded. The games repo caps an assembled bundle at a little over 200 KB
- * (validate.ts Check 4) and the largest game in the catalog measures 243 KB, so this
- * clears the real ceiling with slack while staying well inside a Firestore document.
- *
- * Exported because every producer of a `BuildPreview` shares this ceiling — the agent's
- * own pushes here, the round-0 seed preview, and the staged live preview — and three
- * copies of one number is how the first two came to disagree.
- */
-export const MAX_BUILD_PREVIEW_BYTES = 320 * 1024;
 /**
  * A delivery: the game's own source files, and nothing else.
  *
@@ -1071,7 +1063,7 @@ export async function registerAgentChannelRoutes(
   // share a Cloud Run egress IP, so these are generous; the build-keyed checks
   // remain the real abuse control.
   app.post(
-    '/api/agent/build/progress',
+    AGENT_CHANNEL_ROUTES.PROGRESS,
     { config: { rateLimit: { max: 300, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -1117,7 +1109,7 @@ export async function registerAgentChannelRoutes(
 
   // Retired: base64 PNG in JSON burned model output tokens and was unsafe at real sizes.
   app.post(
-    '/api/agent/build/shot',
+    AGENT_CHANNEL_ROUTES.SHOT,
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
     async (_request, reply) => {
       return reply.status(410).send({ error: RETIRED_BASE64_SHOT_REASON });
@@ -1126,7 +1118,7 @@ export async function registerAgentChannelRoutes(
 
   // Mint a short-lived signed PUT URL; agent curls the PNG (no base64 in tool args).
   app.post(
-    '/api/agent/build/shot/upload-url',
+    AGENT_CHANNEL_ROUTES.SHOT_UPLOAD_URL,
     { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -1179,7 +1171,7 @@ export async function registerAgentChannelRoutes(
 
   // Raw PNG PUT for screenshot_upload_url (no base64).
   app.put(
-    '/api/agent/build/shot/upload',
+    AGENT_CHANNEL_ROUTES.SHOT_UPLOAD,
     {
       bodyLimit: maxShotBytes + 1024,
       config: { rateLimit: { max: 120, timeWindow: '1 hour' } },
@@ -1254,7 +1246,7 @@ export async function registerAgentChannelRoutes(
    * about it is unreviewed agent output, so the route that serves it back sandboxes it.
    */
   app.post(
-    '/api/agent/build/preview',
+    AGENT_CHANNEL_ROUTES.PREVIEW,
     { config: { rateLimit: { max: 200, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -1323,7 +1315,7 @@ export async function registerAgentChannelRoutes(
    * assembled upload; only the wire shape changes.
    */
   app.put(
-    '/api/agent/build/sources/stage',
+    AGENT_CHANNEL_ROUTES.SOURCES_STAGE,
     {
       config: { rateLimit: { max: 300, timeWindow: '1 hour' } },
       bodyLimit: 1_500_000,
@@ -1421,7 +1413,7 @@ export async function registerAgentChannelRoutes(
 
   // Raw-body stage PUT for stage_upload_url (same validation as JSON stage).
   app.put(
-    '/api/agent/build/sources/stage/upload',
+    AGENT_CHANNEL_ROUTES.SOURCES_STAGE_UPLOAD,
     {
       config: { rateLimit: { max: 300, timeWindow: '1 hour' } },
       bodyLimit: 1_000_000 + 1024,
@@ -1526,7 +1518,7 @@ export async function registerAgentChannelRoutes(
 
   // Patch into staging. Base is staged → delivery → seed. Keep every edit that applies; report failed[] for the rest.
   app.post(
-    '/api/agent/build/sources/stage/patch',
+    AGENT_CHANNEL_ROUTES.SOURCES_STAGE_PATCH,
     {
       config: { rateLimit: { max: 300, timeWindow: '1 hour' } },
       bodyLimit: 500_000,
@@ -1732,7 +1724,7 @@ export async function registerAgentChannelRoutes(
   );
 
   app.get(
-    '/api/agent/build/sources/stage',
+    AGENT_CHANNEL_ROUTES.SOURCES_STAGE,
     { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -1767,7 +1759,7 @@ export async function registerAgentChannelRoutes(
   // POST rather than DELETE: MCP inject + many clients are unreliable with DELETE bodies,
   // and selective clear needs a paths[] payload.
   app.post(
-    '/api/agent/build/sources/stage/clear',
+    AGENT_CHANNEL_ROUTES.SOURCES_STAGE_CLEAR,
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -1814,7 +1806,7 @@ export async function registerAgentChannelRoutes(
    * instead of carrying forward whatever the last delivery had there.
    */
   app.post(
-    '/api/agent/build/sources/stage/delete',
+    AGENT_CHANNEL_ROUTES.SOURCES_STAGE_DELETE,
     { config: { rateLimit: { max: 300, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -1891,7 +1883,7 @@ export async function registerAgentChannelRoutes(
    *   by our gate from these sources rather than accepted from the agent.
    */
   app.post(
-    '/api/agent/build/sources',
+    AGENT_CHANNEL_ROUTES.SOURCES,
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -2089,7 +2081,7 @@ export async function registerAgentChannelRoutes(
    * build can restore what it (or its published predecessor) delivered and nothing else.
    */
   app.get(
-    '/api/agent/build/sources',
+    AGENT_CHANNEL_ROUTES.SOURCES,
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -2156,7 +2148,7 @@ export async function registerAgentChannelRoutes(
   // Collect without reporting. Deliberately does NOT mark messages delivered — an
   // agent that reads a request and then crashes must not lose it. Acking is explicit.
   app.get(
-    '/api/agent/build/inbox',
+    AGENT_CHANNEL_ROUTES.INBOX,
     { config: { rateLimit: { max: 600, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -2173,7 +2165,7 @@ export async function registerAgentChannelRoutes(
 
   // The creator conversation, windowed — inbox serves the unacked tail, this the record.
   app.get(
-    '/api/agent/build/transcript',
+    AGENT_CHANNEL_ROUTES.TRANSCRIPT,
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -2190,7 +2182,7 @@ export async function registerAgentChannelRoutes(
   );
 
   app.post(
-    '/api/agent/build/inbox/ack',
+    AGENT_CHANNEL_ROUTES.INBOX_ACK,
     { config: { rateLimit: { max: 600, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -2217,7 +2209,7 @@ export async function registerAgentChannelRoutes(
    */
   // summary carries the closing word; prose outside tool calls reaches nobody.
   app.post(
-    '/api/agent/build/end',
+    AGENT_CHANNEL_ROUTES.END,
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -2307,7 +2299,7 @@ export async function registerAgentChannelRoutes(
    * ceiling are static / contract-derived — never invented per job.
    */
   app.get(
-    '/api/agent/build/brief',
+    AGENT_CHANNEL_ROUTES.BRIEF,
     { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -2343,7 +2335,7 @@ export async function registerAgentChannelRoutes(
 
   // Creator-attached reference images, with bytes — mirrors /build/media.
   app.get(
-    '/api/agent/build/reference-images',
+    AGENT_CHANNEL_ROUTES.REFERENCE_IMAGES,
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -2368,7 +2360,7 @@ export async function registerAgentChannelRoutes(
    * Pending seeds return 200 so MCP clients recheck instead of scaffolding.
    */
   app.get(
-    '/api/agent/build/seed',
+    AGENT_CHANNEL_ROUTES.SEED,
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -2409,7 +2401,7 @@ export async function registerAgentChannelRoutes(
 
   // Replaces an unusable draft; refused once staging has a base.
   app.post(
-    '/api/agent/build/seed/regenerate',
+    AGENT_CHANNEL_ROUTES.SEED_REGENERATE,
     { config: { rateLimit: { max: 10, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -2468,7 +2460,7 @@ export async function registerAgentChannelRoutes(
    * games-repo publish), never a fabricated engineRef.
    */
   app.get(
-    '/api/agent/build/kit',
+    AGENT_CHANNEL_ROUTES.KIT,
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -2543,7 +2535,7 @@ export async function registerAgentChannelRoutes(
 
   // Prompt-ready API reference for MCP get_kit_api — see byoca-mcp SKILL.md.
   app.get(
-    '/api/agent/build/kit/api',
+    AGENT_CHANNEL_ROUTES.KIT_API,
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -2588,7 +2580,7 @@ export async function registerAgentChannelRoutes(
    * List files inside the current Creator Kit without downloading the tarball to the agent.
    */
   app.get(
-    '/api/agent/build/kit/files',
+    AGENT_CHANNEL_ROUTES.KIT_FILES,
     { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -2623,7 +2615,7 @@ export async function registerAgentChannelRoutes(
 
   /** Grep text files in the current Creator Kit. */
   app.get(
-    '/api/agent/build/kit/search',
+    AGENT_CHANNEL_ROUTES.KIT_SEARCH,
     { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -2657,7 +2649,7 @@ export async function registerAgentChannelRoutes(
 
   /** Read one small kit file (refuse oversized — use /fragment). */
   app.get(
-    '/api/agent/build/kit/file',
+    AGENT_CHANNEL_ROUTES.KIT_FILE,
     { config: { rateLimit: { max: 240, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -2686,7 +2678,7 @@ export async function registerAgentChannelRoutes(
    * tool-call budgets when browsing a scaffold.
    */
   app.post(
-    '/api/agent/build/kit/files/read',
+    AGENT_CHANNEL_ROUTES.KIT_FILES_READ,
     { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -2720,7 +2712,7 @@ export async function registerAgentChannelRoutes(
 
   /** Read a byte/line window of one kit file. */
   app.get(
-    '/api/agent/build/kit/file/fragment',
+    AGENT_CHANNEL_ROUTES.KIT_FILE_FRAGMENT,
     { config: { rateLimit: { max: 240, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -2761,7 +2753,7 @@ export async function registerAgentChannelRoutes(
 
   // knowledge_query's route. A capped round still returns 200, not an error.
   app.get(
-    '/api/agent/build/knowledge/query',
+    AGENT_CHANNEL_ROUTES.KNOWLEDGE_QUERY,
     { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -2808,7 +2800,7 @@ export async function registerAgentChannelRoutes(
    * Curated first-party exemplars — allowlist JSON in-repo, never a store listing.
    */
   app.get(
-    '/api/agent/build/examples',
+    AGENT_CHANNEL_ROUTES.EXAMPLES,
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -2822,7 +2814,7 @@ export async function registerAgentChannelRoutes(
    * Non-allowlisted slugs 404 even if an object happens to exist under that name.
    */
   app.get(
-    '/api/agent/build/examples/:slug',
+    AGENT_CHANNEL_ROUTES.EXAMPLES_BY_SLUG,
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -2881,7 +2873,7 @@ export async function registerAgentChannelRoutes(
    * changes is only the transport: bytes through the tool instead of a link.
    */
   app.get(
-    '/api/agent/build/examples/:slug/files',
+    AGENT_CHANNEL_ROUTES.EXAMPLES_BY_SLUG_FILES,
     { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -2917,7 +2909,7 @@ export async function registerAgentChannelRoutes(
 
   /** One file from an allowlisted exemplar, inline. */
   app.get(
-    '/api/agent/build/examples/:slug/file',
+    AGENT_CHANNEL_ROUTES.EXAMPLES_BY_SLUG_FILE,
     { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
@@ -2959,7 +2951,7 @@ export async function registerAgentChannelRoutes(
    * (`previewVersion`, then `deliveredVersion`) — same order as Studio and restore.
    */
   app.get(
-    '/api/agent/build/gate',
+    AGENT_CHANNEL_ROUTES.GATE,
     { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply, { allowTerminalReceipt: true });
@@ -3065,7 +3057,7 @@ export async function registerAgentChannelRoutes(
    * green closes the round, and post-green is when there is something worth showing.
    */
   app.get(
-    '/api/agent/build/media',
+    AGENT_CHANNEL_ROUTES.MEDIA,
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply, { allowTerminalReceipt: true });

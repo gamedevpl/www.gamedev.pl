@@ -18,7 +18,7 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { isAdminSession } from './admin.js';
+import { isAdminSession } from './admin-session.js';
 import type { GamesStore, SourceFile } from './games-store.js';
 import { diffProposal } from './proposal-diff.js';
 import type { ContentChecker } from './moderation.js';

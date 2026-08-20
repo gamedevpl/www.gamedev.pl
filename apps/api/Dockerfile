@@ -50,6 +50,7 @@ ENV NODE_ENV=production \
 
 # Workspace package manifests must all be present for `npm ci` to resolve the tree.
 COPY package.json package-lock.json ./
+COPY packages/contract/package.json packages/contract/
 COPY packages/game-generator/package.json packages/game-generator/
 COPY packages/zone-core/package.json packages/zone-core/
 COPY apps/api/package.json apps/api/
@@ -71,6 +72,13 @@ COPY apps/web/package.json apps/web/
 RUN npm ci --omit=dev --ignore-scripts
 
 # Built output: API dist, game-generator dist + runtime templates, and the static web bundle.
+#
+# Unlike `npm run build` above, this list is NOT driven by package.json — every workspace
+# package the API imports needs its own COPY line here (and a package.json COPY above), or
+# the runtime stage boots with a `dist/` the builder never populated. #323 (zone-core) and
+# the @gamedevpl/contract package below both shipped as ERR_MODULE_NOT_FOUND at container
+# boot, caught only by the "Production image" CI job's health-check — not by a green build.
+COPY --from=builder /app/packages/contract/dist packages/contract/dist
 COPY --from=builder /app/packages/game-generator/dist packages/game-generator/dist
 COPY --from=builder /app/packages/game-generator/templates packages/game-generator/templates
 COPY --from=builder /app/packages/zone-core/dist packages/zone-core/dist

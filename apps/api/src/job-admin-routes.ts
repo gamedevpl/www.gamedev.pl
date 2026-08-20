@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { isAdminSession } from './admin.js';
+import { isAdminSession } from './admin-session.js';
 import { hasPublishableProfile } from './creator-profile.js';
 import {
   detectStall,

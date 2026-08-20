@@ -103,7 +103,7 @@ function channelDelivery(brief: BuildBrief, creating: boolean): string[] {
     'MCP paths are relative to the slug: pass `GAME.json`, never `games/<slug>/GAME.json`.',
     'Stage calls sequentially; never parallelize mutating calls.',
     'After staging `game.ts` and `GAME.json`, submit immediately.',
-    'A `howToPlay` (goal + hint) in `GAME.json` can stand in for `index.html` — the body is generated.',
+    'Define `howToPlay` (goal + hint) in `GAME.json`; the body is generated. Never author `index.html`.',
     'A `theme` in `GAME.json` can stand in for `style.css` the same way — never stage that file.',
     'Do not stage metadata files before the first preview delivery.',
     '',

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { isAdmin, isAdminSession } from './admin.js';
+import { isAdmin, isAdminSession } from './admin-session.js';
 import { emitReviewSweep, type EmitDeps } from './notify.js';
 import { ASSESSMENT_CHECKLIST_KEYS, isAssessmentChecklist } from './review-checklist.js';
 import {
