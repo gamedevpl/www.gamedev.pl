@@ -688,7 +688,16 @@
       "backToGame": "Wróć do gry",
       "assembling": "Budowa gry trwa.",
       "assemblingHint": "Agent nie dostarczył jeszcze grywalnej wersji — postęp widać w wątku.",
-      "openTheater": "Otwórz w trybie kinowym"
+      "openTheater": "Otwórz w trybie kinowym",
+      "checkingTitle": "Sprawdzamy tę wersję.",
+      "checkingKicker": "Sprawdzanie",
+      "endedTitle": "Agent zakończył tę rundę.",
+      "stall": {
+        "ended": "W tej rundzie nie powstała grywalna wersja — napisz w wątku, aby zacząć kolejną.",
+        "quiet": "Agent od dłuższej chwili nie daje znaku życia. Może wciąż pracuje — większe gry trwają dłużej.",
+        "awaiting_input": "Agent czeka na Ciebie — odpowiedz w wątku, aby budowa ruszyła dalej.",
+        "no_agent_yet": "Żaden agent jeszcze nie podjął tej rundy — podłącz swojego w wątku."
+      }
     },
     "ribbon": {
       "staged": "WERSJA ROBOCZA {{time}} · jeszcze niedostarczona",

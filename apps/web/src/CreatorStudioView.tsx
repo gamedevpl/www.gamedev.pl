@@ -1046,7 +1046,7 @@ export function CreatorStudioView({
                         studioStatus.status !== 'published' &&
                         studioStatus.status !== 'abandoned' &&
                         studioStatus.status !== 'needs_changes' ? (
-                          <StudioStageCard />
+                          <StudioStageCard status={studioStatus} />
                         ) : null}
 
                         <StudioVersionRibbon

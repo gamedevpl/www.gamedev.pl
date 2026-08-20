@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { latestAgentActivityAt } from './agentActivity.js';
 import { BuilderModeBadge } from './BuilderModeBadge.js';
 import type { BuilderUnavailableReason } from './BuilderChoice.js';
 import { defaultBuilderFor, isBuilderKind, saveLastBuilder, type BuilderKind } from './builderKind.js';
@@ -138,26 +139,6 @@ const STATUS_ICONS: Record<SubmissionStatus['status'], PixelIconName> = {
 // The linear happy path the timeline visualizes. needs_changes branches off it,
 // so it's handled as a separate "halted" state rather than a timeline position.
 const TIMELINE_STEPS: SubmissionStatus['status'][] = ['queued', 'building', 'in_review', 'publishing', 'published'];
-
-/**
- * When the build last did something worth seeing, or null before it has.
- *
- * Deliberately the *agent's* moments only — its events, its pictures, its playable
- * builds, its commits — and not the creator's own change requests. A creator who has
- * just sent a message would otherwise reset the heartbeat with it and be told the
- * build is fresh, which is the one moment they are actually waiting on a reply.
- */
-function latestAgentActivityAt(status: SubmissionStatus | null): number | null {
-  if (!status) return null;
-  const times = [
-    ...(status.lastAgentSignalAt ? [Date.parse(status.lastAgentSignalAt)] : []),
-    ...(status.events ?? []).map((event) => Date.parse(event.createdAt)),
-    ...(status.media ?? []).map((item) => (item.createdAt ? Date.parse(item.createdAt) : Number.NaN)),
-    ...(status.playable ?? []).map((item) => (item.createdAt ? Date.parse(item.createdAt) : Number.NaN)),
-    ...(status.progress?.commits ?? []).map((commit) => Date.parse(commit.committedDate)),
-  ].filter((time) => Number.isFinite(time));
-  return times.length > 0 ? Math.max(...times) : null;
-}
 
 /** How long a presence thought stays as the thread-bar headline before falling back. */
 const PRESENCE_THOUGHT_MS = 90_000;

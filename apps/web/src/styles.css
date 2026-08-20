@@ -12973,6 +12973,65 @@ button.builder-mode-selector:disabled {
   overflow-wrap: anywhere;
 }
 
+/* Assembling card, live half: the agent's own last line, its checklist count and its
+   heartbeat. Read on a stage with nothing on it, so it carries no error colouring —
+   the detail line below it is a status note here, not the crash message it is on the
+   crashed card. */
+.studio-stage-card-working {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+}
+
+.studio-stage-card-kicker {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--turquoise);
+}
+
+.studio-stage-card-working-text {
+  font-size: 0.82rem;
+  /* Explicit, so the clamped box is a whole number of lines and cuts no descenders. */
+  line-height: 1.45;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  /* Agent lines run long, and the card floats over a stage that can be short. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+.studio-stage-card-progress {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* The shared bar carries a bottom margin for its own list; this card stacks with gap. */
+.studio-stage-card-progress .build-progress-bar {
+  margin-bottom: 0;
+}
+
+.studio-stage-card-count,
+.studio-stage-card-heartbeat {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.studio-stage-card.is-assembling .studio-stage-card-detail {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--muted);
+}
+
 .studio-stage-card-actions {
   display: flex;
   gap: 8px;
