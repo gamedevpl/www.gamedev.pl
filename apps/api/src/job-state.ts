@@ -13,52 +13,10 @@
 
 import type { AgentTaskState } from './agent-state.js';
 import type { ManagedBudgetStop, ManagedSessionUsage } from './managed-agent.js';
+import { JOB_STATES, type JobState } from '@gamedevpl/contract';
 import type { SubmissionStatus } from './submission-status.js';
 
-/**
- * Internal job vocabulary. Richer than the creator-facing {@link SubmissionStatus},
- * because several distinct situations currently collapse into "building" and stay
- * invisible: sources delivered but unverified, our own gate running, an agent that
- * failed outright.
- */
-export const JOB_STATES = [
-  /** Accepted and paid for out of quota; not yet handed to an agent. */
-  'queued',
-  /** Handed to an agent backend; the agent has not started working yet. */
-  'dispatched',
-  /** An agent session is actively working. */
-  'building',
-  /** The agent delivered candidate sources; nothing has verified them yet. */
-  'submitted',
-  /**
-   * Our own gate is running against the delivered sources.
-   *
-   * Nothing writes this today. The gate runs in Cloud Build and reports by writing its
-   * verdict to the version manifest, which we read on a poll — so the job goes from
-   * `submitted` to the verdict in one hop and is never observed mid-gate. Kept because
-   * stored records may still hold it and the projection reads it, not because it is a
-   * step anything passes through.
-   */
-  'gating',
-  /** Gate green. Waiting on the human review that is the moderation boundary. */
-  'ready_for_review',
-  /** Approved; the snapshot bake is in flight. */
-  'publishing',
-  /** Live on the site. Terminal. */
-  'published',
-  /** Bounced back for another round — gate red past retries, or reviewer rejected. */
-  'needs_changes',
-  /**
-   * The agent failed, timed out, or finished without delivering. Terminal for the
-   * round — no observation reopens it — but creator feedback dispatches another.
-   */
-  'failed',
-  /** Stopped by the creator or the operator. Terminal. */
-  'canceled',
-  /** Creator walked away. Terminal, and distinct from canceled for reporting. */
-  'abandoned',
-] as const;
-export type JobState = (typeof JOB_STATES)[number];
+export { JOB_STATES, type JobState };
 
 export const TERMINAL_JOB_STATES: ReadonlySet<JobState> = new Set<JobState>([
   'published',

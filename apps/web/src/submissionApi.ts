@@ -1,8 +1,8 @@
-import type { BuildEventKind, BuildStep, SubmissionState } from '@gamedevpl/contract';
+import type { BuildEventKind, BuildStep, JobState, SubmissionState } from '@gamedevpl/contract';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
-export type { BuildEventKind, BuildStep, SubmissionState };
+export type { BuildEventKind, BuildStep, JobState, SubmissionState };
 
 export type BuildProgress = {
   /** Head commit SHA of the PR — changes when the agent pushes new work. */
@@ -66,31 +66,17 @@ export type BuildEvent = {
   createdAt: string;
 };
 
-/**
- * The build job's own state, finer than {@link SubmissionState}.
- *
- * `status` drives the five-step timeline and cannot grow without changing what the
- * timeline draws; this says which of the several situations behind one step the build
- * is actually in, so the sentence under the timeline can be true. Absent on builds we
- * derive from GitHub rather than run ourselves.
- */
-export type BuildPhase =
-  | 'queued'
-  | 'dispatched'
-  | 'building'
-  | 'submitted'
-  | 'gating'
-  | 'ready_for_review'
-  | 'publishing'
-  | 'published'
-  | 'needs_changes'
-  | 'failed'
-  | 'canceled'
-  | 'abandoned';
-
 export type SubmissionStatus = {
   status: SubmissionState;
-  phase?: BuildPhase;
+  /**
+   * The build job's own state, finer than {@link SubmissionState}.
+   *
+   * `status` drives the five-step timeline and cannot grow without changing what the
+   * timeline draws; this says which of the several situations behind one step the build
+   * is actually in, so the sentence under the timeline can be true. Absent on builds we
+   * derive from GitHub rather than run ourselves.
+   */
+  phase?: JobState;
   slug?: string;
   /**
    * `'remix'` when this Studio draft was saved from an in-player remix (private
