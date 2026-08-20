@@ -43,11 +43,10 @@ catches it well before it becomes the next `store.ts`.
 
 ## The freeze
 
-Until Phase 3 of the north-star plan lands (module boundaries, `Store` decomposition),
-**no new routes or logic land in `store.ts`, `submissions.ts`, `mcp-server.ts`, or
-`agent-channel.ts`.** Additions to those surfaces go in a new, cohesively-named module and
-are wired in from the existing composition points — this ratchet is what makes that a
-enforced rule rather than a request.
+Until these files are properly decomposed, **no new routes or logic land in `store.ts`,
+`submissions.ts`, `mcp-server.ts`, or `agent-channel.ts`.** Additions to those surfaces go
+in a new, cohesively-named module and are wired in from the existing composition points —
+this ratchet is what makes that an enforced rule rather than a request.
 
 ## Cost-effective cleanup
 
@@ -56,8 +55,7 @@ enforced rule rather than a request.
 2. **Hot-path first** — `store.ts`, `submissions.ts`, `mcp-server.ts`, `agent-channel.ts`
    are also the files agents re-read most; shrinking them cuts token spend as well as
    ceiling debt.
-3. **Mechanical batches** — one extraction (a cohesive slice, a shared primitive) per PR,
-   matching the module map in `north-star-architecture.md` §4 (N1) where one exists yet.
+3. **Mechanical batches** — one extraction (a cohesive slice, a shared primitive) per PR.
 4. **Ratchet, never reopen** — do not raise ceilings to turn CI green; split the file
    instead.
 
