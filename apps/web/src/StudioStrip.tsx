@@ -60,6 +60,7 @@ export type StudioStripProps = {
   isCompact?: boolean;
   // Replaces the global header's back arrow, hidden below 800px.
   onExit?: () => void;
+  isChromeIdle?: boolean;
 };
 
 export function StudioStrip({
@@ -89,6 +90,7 @@ export function StudioStrip({
   onOpenTheater,
   isCompact = false,
   onExit,
+  isChromeIdle = false,
 }: StudioStripProps) {
   const { t, i18n } = useTranslation();
   const [overflowOpen, setOverflowOpen] = useState(false);
@@ -135,8 +137,10 @@ export function StudioStrip({
       : t(`statusView.states.${status.status}.label`)
     : null;
 
+  const chromeHidden = isChromeIdle && !overflowOpen;
+
   return (
-    <header className="studio-strip">
+    <header className={`studio-strip${chromeHidden ? ' is-idle' : ''}`} aria-hidden={chromeHidden}>
       {isCompact && onExit ? (
         <button type="button" className="studio-strip-exit" onClick={onExit} aria-label={t('studioPanel.strip.exit')}>
           <PixelIcon name="arrowLeft" size={16} />

@@ -92,6 +92,8 @@ export type StudioStageProps = {
   /** Filled in with the editor bridge's live-push function, for the Code surface (§E tier 1). */
   editorPushRef?: MutableRefObject<EditorContentPush | null>;
   onEditorControllerChange?: (controller: EditorControllerState | null) => void;
+  // Relayed iframe activity, for mobile chrome auto-hide.
+  onPlayActivity?: () => void;
 };
 
 export function StudioStage({
@@ -111,6 +113,7 @@ export function StudioStage({
   onDisplayedOriginChange,
   editorPushRef,
   onEditorControllerChange,
+  onPlayActivity,
 }: StudioStageProps) {
   const { t } = useTranslation();
   const frameRef = useRef<HTMLIFrameElement | null>(null);
@@ -396,7 +399,8 @@ export function StudioStage({
   const requestWatch = useCallback(() => onPostureChange('watch'), [onPostureChange]);
   const onGameActivity = useCallback(() => {
     lastInputAtRef.current = Date.now();
-  }, []);
+    onPlayActivity?.();
+  }, [onPlayActivity]);
   const onPointerHeldChange = useCallback((held: boolean) => {
     pointerHeldRef.current = held;
     // A release restarts the idle countdown from now.
