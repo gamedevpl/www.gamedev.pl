@@ -849,6 +849,44 @@ cache), so a resume cannot keep showing “finished this round” next to live p
   MCP tools refuse an already-issued key with a reconnect instruction. Do not restore a
   per-game compatibility path in UI, API routes, or MCP tool handling.
 - An opener is checked by `start`; later calls use the returned round-scoped `sessionKey`.
+
+### The handshake carries the OAuth challenge, not the first `tools/call`
+
+`shouldIssueMcpOAuthChallenge` (`apps/api/src/mcp-oauth-metadata.ts`) answers a
+credential-less `initialize` with the 401 + `WWW-Authenticate` challenge. That 401 is the
+**only** in-band signal that starts OAuth discovery (RFC 9728 / the MCP auth flow): a
+client that handshakes to a clean 200 concludes the server needs no auth, never probes the
+protected-resource document, and so has no authorization endpoint to send anyone to.
+
+Deferring the challenge to the first `tools/call` therefore looked harmless — every
+credentialed lane worked, an anonymous visitor got a readable tool list — while silently
+breaking every browser-capable client. Observed as Claude connectors reporting
+"gamedev.pl didn't provide a sign-in link" while listing all 34 tools, and, earlier,
+as Cursor desktop stalling after DCR (then read as the client's bug, and worked around
+with `MCP_NO_ACCOUNT_HINT` instead). The authorization server (`oauth-as.ts`) —
+metadata, DCR, `/oauth/authorize` → `/studio?oauth_return=…`, PKCE, token — was reachable
+and correct the whole time. Nothing ever told a client to go there.
+
+What this does **not** change:
+
+- **`tools/list` stays anonymous**, so the surface is still readable as a directory.
+  `ping` and `notifications/*` too. Only `initialize` gained the gate.
+- **Every real credentialed lane already presents a Bearer at `initialize`**, so none of
+  them notice: the keyless connect flow puts the creator key in the client's configured
+  `Authorization` header (`self-build-connect.ts`); managed Anthropic/Gemini/OpenAI get a
+  vaulted `mcpBearerCredential` from `brief.mcpOpenerToken` (`agent-backend-env.ts`);
+  Copilot's connector authenticates with `COPILOT_MCP_CONNECTOR_SECRET`.
+- **Any token shape clears the handshake** — validity is still decided per call, because
+  the point of the challenge is to name the sign-in path, not to vet the credential.
+
+The one lane it would have broken passed its opener as a `start({ key })` argument with no
+header — durable per-game keys, already retired (`mintGameKeyKickoff` has no production
+callers). If a keyless-opener lane is ever reintroduced, it needs a header at `initialize`
+or this gate has to learn about it.
+
+Tests: `apps/api/src/mcp-oauth-handshake.test.ts`. Test helpers that open a session send a
+throwaway `Bearer handshake`; a case that means to arrive without one says so.
+
 - **`show_media` is how the creator sees the game.** `get_gate_media` attaches frames as
   image blocks, which reach the _model_ — it can look at them and describe them, and there is
   no path back out. Asked to display them, ChatGPT answered "the image attachments apparently

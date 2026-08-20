@@ -263,7 +263,7 @@ async function mcpCall(
     headers: {
       'content-type': 'application/json',
       accept: 'application/json, text/event-stream',
-      ...headers,
+      ...(method === 'initialize' ? { authorization: 'Bearer handshake', ...headers } : headers),
     },
     payload: { jsonrpc: '2.0', id, method, ...(params !== undefined ? { params } : {}) },
   });
@@ -1499,7 +1499,7 @@ declare const GameKit: { defineGame(): unknown };
     const res = await app.inject({
       method: 'POST',
       url: '/api/mcp',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', authorization: 'Bearer handshake' },
       payload: {
         jsonrpc: '2.0',
         id: 1,
@@ -1511,7 +1511,6 @@ declare const GameKit: { defineGame(): unknown };
         },
       },
     });
-    expect(res.statusCode).not.toBe(401);
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ jsonrpc: '2.0', id: 1 });
 
@@ -1528,7 +1527,7 @@ declare const GameKit: { defineGame(): unknown };
     const res = await app.inject({
       method: 'POST',
       url: '/api/mcp',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', authorization: 'Bearer handshake' },
       payload: {
         jsonrpc: '2.0',
         id: 1,
