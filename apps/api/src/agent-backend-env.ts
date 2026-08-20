@@ -28,8 +28,7 @@ import { DEFAULT_VERTEX_SEED_MODEL } from './seed-provider-vertex.js';
 interface Logger {
   info: (context: object, message: string) => void;
   warn: (context: object, message: string) => void;
-  // A deployment that cannot seed is broken, not unusual.
-  error?: (context: object, message: string) => void;
+  error?: (context: object, message: string) => void; // Missing seeding is broken, not unusual.
 }
 
 // Every managed vendor this file knows how to build a backend for.
@@ -271,16 +270,6 @@ export type SeedProviderId = (typeof SEED_PROVIDER_IDS)[number];
 // Every other vendor here can opt out of it, so this default is Meta-only.
 const PICK_MAX_OUTPUT_TOKENS_DEFAULTS: Partial<Record<SeedProviderId, number>> = { meta: 8192 };
 
-// The Anthropic SDK refuses a non-streaming request client-side once maxTokens implies
-// more than 10 minutes at its generic 128k-tokens/hour estimate — i.e. above ~21,333 —
-// and genaicode's anthropic provider always calls the non-streaming endpoint. The generic
-// GENERATE_MAX_OUTPUT_TOKENS default (65,536) sits well past that, so every anthropic
-// generate call 400s. 21,000 is as close to that ceiling as is safe: measured, a draft
-// has hit 20,000 exactly (likely truncated) on ordinary specs — Claude spends a real share
-// of this budget on reasoning, not just code — so leave it as little headroom below the
-// SDK's hard stop as the guard allows rather than a round, comfortable-looking number.
-const GENERATE_MAX_OUTPUT_TOKENS_DEFAULTS: Partial<Record<SeedProviderId, number>> = { anthropic: 21_000 };
-
 // Undefined when the credential/model are unset. Vertex needs neither: ambient ADC.
 function seedMaxOutputTokens(envVar: string, log: Logger | undefined, id: SeedProviderId): number | undefined {
   const raw = process.env[envVar]?.trim();
@@ -319,7 +308,7 @@ function buildSeedProviderConfig(id: SeedProviderId, log: Logger | undefined): S
   }
   const baseUrl = process.env[`SEED_${envPrefix}_BASE_URL`]?.trim();
   const maxOutputTokens =
-    seedMaxOutputTokens(`SEED_${envPrefix}_MAX_OUTPUT_TOKENS`, log, id) ?? GENERATE_MAX_OUTPUT_TOKENS_DEFAULTS[id];
+    seedMaxOutputTokens(`SEED_${envPrefix}_MAX_OUTPUT_TOKENS`, log, id) ?? (id === 'anthropic' ? 21_000 : undefined);
   const pickMaxOutputTokens =
     seedMaxOutputTokens(`SEED_${envPrefix}_PICK_MAX_OUTPUT_TOKENS`, log, id) ?? PICK_MAX_OUTPUT_TOKENS_DEFAULTS[id];
   return {
