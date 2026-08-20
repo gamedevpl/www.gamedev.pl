@@ -1,3 +1,5 @@
+import { DECLINE_REASONS, type DeclineReason } from '@gamedevpl/contract';
+export { DECLINE_REASONS, type DeclineReason };
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
 /**
@@ -25,8 +27,6 @@ export type ProposalState =
   | 'withdrawn'
   | 'superseded'
   | 'expired';
-
-export type DeclineReason = 'not_the_direction' | 'duplicate' | 'quality' | 'off_topic' | 'unsafe' | 'infringing';
 
 export type ProposalMessage = {
   id: string;

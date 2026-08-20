@@ -4,6 +4,7 @@ import { ProposalDiffView } from './ProposalDiffView.js';
 import {
   acceptProposal,
   declineProposal,
+  DECLINE_REASONS,
   requestProposalChanges,
   type DeclineReason,
   type Proposal,
@@ -25,15 +26,6 @@ import {
  * The accept button says "Accept…" with an ellipsis and carries a line of help, because
  * the word on its own implies publication. It does not publish. Nothing here does.
  */
-
-const DECLINE_REASONS: DeclineReason[] = [
-  'not_the_direction',
-  'duplicate',
-  'quality',
-  'off_topic',
-  'unsafe',
-  'infringing',
-];
 
 export function ProposalReviewCard(props: {
   proposal: Proposal;

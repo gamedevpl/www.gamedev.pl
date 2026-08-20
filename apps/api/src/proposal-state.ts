@@ -1,3 +1,5 @@
+import { DECLINE_REASONS, type DeclineReason } from '@gamedevpl/contract';
+
 // The proposal state machine.
 //
 // A proposal is a change to a game somebody else owns: an immutable candidate version the
@@ -161,30 +163,11 @@ export const MAX_PROPOSAL_TRANSITIONS = 50;
 /**
  * Why a reviewer said no.
  *
- * A category rather than free text because the answer has two audiences with different
- * rights: the proposer, who is owed something actionable, and — when the decision is the
- * platform's rather than a creator's — the DSA statement of reasons, which needs a
- * classification it can carry. Free text stays optional and additive.
- *
  * `off_topic` and `quality` are taste; `unsafe` and `infringing` are moderation. Only the
  * moderation ones make a *platform* decline reportable, which is why they are named apart
  * rather than collapsed into one "no".
  */
-export const DECLINE_REASONS = [
-  /** Works, but not the direction the owner wants for this game. */
-  'not_the_direction',
-  /** Duplicates something already done or already proposed. */
-  'duplicate',
-  /** Runs, but the change is not good enough as built. */
-  'quality',
-  /** Unrelated to the game, or a change nobody asked for and nothing motivates. */
-  'off_topic',
-  /** Content that breaches the content rules. Moderation, not taste. */
-  'unsafe',
-  /** Uses material the proposer has no right to. Moderation, not taste. */
-  'infringing',
-] as const;
-export type DeclineReason = (typeof DECLINE_REASONS)[number];
+export { DECLINE_REASONS, type DeclineReason };
 
 const MODERATION_DECLINE_REASONS: ReadonlySet<DeclineReason> = new Set<DeclineReason>(['unsafe', 'infringing']);
 
