@@ -1,14 +1,8 @@
+import type { SubmissionState } from '@gamedevpl/contract';
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
-export type SubmissionState =
-  | 'queued'
-  | 'building'
-  | 'in_review'
-  | 'publishing'
-  | 'published'
-  | 'needs_changes'
-  /** Creator-chosen terminal state: they stopped the build. */
-  | 'abandoned';
+export type { SubmissionState };
 
 export type BuildProgress = {
   /** Head commit SHA of the PR — changes when the agent pushes new work. */

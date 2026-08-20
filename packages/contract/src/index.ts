@@ -2,3 +2,4 @@
 
 export { AGENT_CHANNEL_ROUTES, type AgentChannelRouteKey, type AgentChannelRoutePath } from './agent-channel-routes.js';
 export { deriveGateStatusString, derivePreviewGateStatus, GATE_STATUS_VALUES, type GateStatus } from './gate-status.js';
+export { SUBMISSION_STATES, type SubmissionState } from './submission-state.js';

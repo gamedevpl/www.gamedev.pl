@@ -6,17 +6,10 @@
 
 import type { LinkedPullRequest } from './github-client.js';
 import type { JobStall, JobState } from './job-state.js';
+import type { SubmissionState } from '@gamedevpl/contract';
 
-export type SubmissionStatus =
-  | 'queued'
-  | 'building'
-  | 'in_review'
-  | 'publishing'
-  | 'published'
-  | 'needs_changes'
-  // Terminal and creator-chosen: they stopped the build (issue + PR closed). Never
-  // produced by deriveStatus — the store records it and the status route answers it.
-  | 'abandoned';
+// Same seven values apps/web/src/submissionApi.ts calls SubmissionState.
+export type SubmissionStatus = SubmissionState;
 
 export interface ChecklistItem {
   text: string;
