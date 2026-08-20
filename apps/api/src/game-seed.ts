@@ -79,8 +79,8 @@ const MAX_SEED_TOTAL_BYTES = 400_000;
 
 /** A seed that has not arrived by now has stopped being an optimization. */
 export const DEFAULT_SEED_PICK_TIMEOUT_MS = 30_000;
-// Raised with the anthropic ceiling — reasoning eats into its token budget.
-export const DEFAULT_SEED_GENERATE_TIMEOUT_MS = 300_000;
+// Raised further — reproduced needing 391s on a complex anthropic-ceiling spec.
+export const DEFAULT_SEED_GENERATE_TIMEOUT_MS = 600_000;
 
 // 'low' thinking shares this budget; 512 could starve the JSON answer empty.
 const SEED_PICK_MAX_OUTPUT_TOKENS = 2048;
