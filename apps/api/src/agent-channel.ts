@@ -63,6 +63,7 @@ import {
 import { seedPayload } from './seed-status.js';
 import { largeSourceFileHint } from './module-size.js';
 import { gameManifestHint } from './game-manifest-hint.js';
+import { resolveRoundBaseVersion } from './round-base-version.js';
 import { computeStageAdvisories } from './stage-hints.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from './source-patch.js';
 import { overlayGameSources } from './staged-preview.js';
@@ -464,11 +465,7 @@ async function resolvePatchBase(input: {
   });
   if (stagedContent !== null) return { content: stagedContent, baseFrom: 'staged' };
 
-  let version = input.record.previewVersion ?? input.record.deliveredVersion;
-  if (!version) {
-    const publication = await input.store.getPublication(input.slug);
-    if (publication?.state === 'published') version = publication.currentVersion;
-  }
+  const version = await resolveRoundBaseVersion(input.store, input.record, input.slug);
   if (version) {
     const delivered = await input.gamesStore.getSourceFile(input.slug, version, input.path);
     if (delivered !== null) return { content: delivered, baseFrom: 'delivery' };
@@ -1980,11 +1977,7 @@ export async function registerAgentChannelRoutes(
           // delivery over the seed. A one-file patch_source_file (or a partial stage) can
           // therefore submit a complete tree without re-uploading unchanged paths.
           let delivered: Array<{ path: string; content: string }> = [];
-          let version = record.previewVersion ?? record.deliveredVersion;
-          if (!version) {
-            const publication = await store!.getPublication(slug);
-            if (publication?.state === 'published') version = publication.currentVersion;
-          }
+          const version = await resolveRoundBaseVersion(store!, record, slug);
           if (version) {
             const manifest = await options.gamesStore.getManifest(slug, version);
             if (!manifest) {
@@ -2087,12 +2080,10 @@ export async function registerAgentChannelRoutes(
    * makes it the source of truth rather than a copy nobody can get back.
    *
    * Prefer the job's own latest candidate — previewVersion first (mode=preview may be
-   * the only upload so far, or a fix after a red publish), then deliveredVersion. When
-   * this job has neither but its slug is already published — the shape of every
-   * post-publish improvement, which is a *new* job on an existing game — fall back to
-   * the live publication. Without that, `npm run restore` reports nothing to restore
-   * and the agent rebuilds a stranger's game instead of revising the one the creator
-   * asked to change.
+   * the only upload so far, or a fix after a red publish), then deliveredVersion. A new
+   * sibling round inherits the newest eligible sibling delivery before the live
+   * publication. Without that, `npm run restore` reports nothing to restore and the
+   * agent rebuilds a stranger's game instead of revising what the creator played.
    *
    * Scoped to the job's own game by the same token that authorizes its delivery, so a
    * build can restore what it (or its published predecessor) delivered and nothing else.
@@ -2110,15 +2101,7 @@ export async function registerAgentChannelRoutes(
       }
 
       const slug = record.slug;
-      let version = record.previewVersion ?? record.deliveredVersion;
-      // An improvement job inherits the slug before it has delivered anything of its
-      // own. The publication pointer is what is live — the version the creator played.
-      if (slug && !version) {
-        const publication = await store!.getPublication(slug);
-        if (publication?.state === 'published') {
-          version = publication.currentVersion;
-        }
-      }
+      const version = slug ? await resolveRoundBaseVersion(store!, record, slug) : null;
 
       // Round 0 arrives here, not through a verb of its own: one read for every round.
       if (slug && !version && (record.seed?.files.length ?? 0) > 0) {
