@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
-import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
+import { AGENT_CHANNEL_ROUTES, GATE_STATUS_VALUES } from '@gamedevpl/contract';
 import { looksLikeCreatorAgentKey } from './agent-creator-key.js';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import { DEFAULT_TRANSCRIPT_WINDOW_ENTRIES, MAX_TRANSCRIPT_WINDOW_ENTRIES } from './build-transcript.js';
@@ -4957,7 +4957,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         properties: {
           status: {
             type: 'string',
-            enum: ['pending', 'green', 'red', 'kit_outdated', 'preview_passed', 'preview_failed'],
+            enum: ['pending', ...GATE_STATUS_VALUES],
           },
           deliveryId: { type: ['string', 'null'] },
           summary: { type: 'string' },

@@ -1,4 +1,7 @@
 import { type GamesStore } from './games-store.js';
+import { derivePreviewGateStatus } from '@gamedevpl/contract';
+
+export { deriveGateStatusString } from '@gamedevpl/contract';
 
 // Shared by the channel's gate route and MCP `start`.
 export interface GateVerdictSummary {
@@ -41,7 +44,6 @@ export async function readGateVerdict(
     }
     // Preview lane: never green — that would end the MCP round.
     if (manifest?.previewGate) {
-      const kitOutdated = manifest.previewGate.status === 'kit_outdated';
       return {
         version,
         lane: 'preview',
@@ -49,11 +51,7 @@ export async function readGateVerdict(
         previewPassed: manifest.previewGate.green,
         ranAt: manifest.previewGate.ranAt,
         ...(manifest.previewGate.report ? { report: manifest.previewGate.report } : {}),
-        status: kitOutdated
-          ? ('kit_outdated' as const)
-          : manifest.previewGate.green
-            ? ('preview_passed' as const)
-            : ('preview_failed' as const),
+        status: derivePreviewGateStatus(manifest.previewGate),
       };
     }
     return null;
@@ -61,15 +59,4 @@ export async function readGateVerdict(
     onError?.(error);
     return null;
   }
-}
-
-// Same vocabulary the gate route replies with.
-export function deriveGateStatusString(
-  gate: Pick<GateVerdictSummary, 'green' | 'status'>,
-): 'green' | 'kit_outdated' | 'preview_passed' | 'preview_failed' | 'red' {
-  if (gate.green) return 'green';
-  if (gate.status === 'kit_outdated') return 'kit_outdated';
-  if (gate.status === 'preview_passed') return 'preview_passed';
-  if (gate.status === 'preview_failed') return 'preview_failed';
-  return 'red';
 }
