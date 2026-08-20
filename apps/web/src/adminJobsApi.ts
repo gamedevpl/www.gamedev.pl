@@ -9,22 +9,12 @@
  * than as an error, because the operator surface does not confirm its own existence.
  */
 
-/** Internal job vocabulary — richer than what a creator is shown. Mirrors job-state.ts. */
-export type JobState =
-  | 'queued'
-  | 'dispatched'
-  | 'building'
-  | 'submitted'
-  | 'gating'
-  | 'ready_for_review'
-  | 'publishing'
-  | 'published'
-  | 'needs_changes'
-  | 'failed'
-  | 'canceled'
-  | 'abandoned';
+import type { JobStall as ContractJobStall, JobState } from '@gamedevpl/contract';
 
-export type JobStall = 'awaiting_input' | 'not_dispatched' | 'quiet' | 'ended' | 'gate_not_started';
+export type { JobState };
+
+// Admin/operator stalls, minus no_agent_yet — that one is self-build-round only.
+export type JobStall = Exclude<ContractJobStall, 'no_agent_yet'>;
 
 export interface JobQueueEntry {
   issueNumber: number;
