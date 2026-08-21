@@ -135,9 +135,7 @@ function buildSpec(
             'export GAME_CAPTURE_CHROME=/usr/local/bin/gate-chrome',
             'export CHROME_PATH=/usr/local/bin/gate-chrome',
             'cd /workspace/platform',
-            'npm ci --no-audit --no-fund',
-            // `npm ci` symlinks workspace packages but leaves `dist` unbuilt.
-            'npm run build:packages',
+            'npm ci --no-audit --no-fund && npm run build:packages',
             // Single-quoted so a slug or version can never break out of the command.
             // Both are already validated upstream — the slug against SLUG_PATTERN, the
             // version because we generated it — and this is the belt to that braces.
