@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { isAdminSession } from './admin-session.js';
+import { MANAGED_AGENT_VENDORS } from './agent-backend-env.js';
 import { DEFAULT_SEED_PROVIDER } from './game-seed.js';
 import {
   recentPartitions,
@@ -204,7 +205,7 @@ const CreationLimitsPatchSchema = z
     // Same document: whether the platform builder is offered. See managed-availability.ts.
     managedBuilderMode: z.enum(['auto', 'off', 'coming_soon']).optional(),
     // null clears the override, same as globalDailySubmissionCap above.
-    managedAgentVendorOverride: z.enum(['anthropic', 'gemini', 'copilot', 'openai']).nullable().optional(),
+    managedAgentVendorOverride: z.enum(MANAGED_AGENT_VENDORS).nullable().optional(),
     managedDailyCap: z.number().int().min(0).max(100_000).nullable().optional(),
     managedDailyUserCap: z.number().int().min(0).max(100_000).nullable().optional(),
     // Round 0's kill switch, same document as everything above.
