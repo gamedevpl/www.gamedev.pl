@@ -234,6 +234,10 @@ if gcloud secrets describe meta-api-key --project "$PROJECT_ID" >/dev/null 2>&1;
   SECRET_MAPPINGS+=("SEED_META_API_KEY=meta-api-key:latest")
   echo "==> meta-api-key found; selectable as a seed provider once SEED_META_MODEL is also set."
 fi
+if gcloud secrets describe openrouter-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
+  SECRET_MAPPINGS+=("SEED_OPENROUTER_API_KEY=openrouter-api-key:latest")
+  echo "==> openrouter-api-key found; selectable as a seed provider once SEED_OPENROUTER_MODEL is also set."
+fi
 
 if gcloud secrets describe session-secret --project "$PROJECT_ID" >/dev/null 2>&1; then
   SECRET_MAPPINGS+=("SESSION_SECRET=session-secret:latest")
@@ -364,14 +368,18 @@ for SEED_VAR in \
   SEED_OPENAI_MODEL \
   SEED_META_MODEL \
   SEED_META_BASE_URL \
+  SEED_OPENROUTER_MODEL \
+  SEED_OPENROUTER_BASE_URL \
   SEED_MAX_OUTPUT_TOKENS \
   SEED_ANTHROPIC_MAX_OUTPUT_TOKENS \
   SEED_OPENAI_MAX_OUTPUT_TOKENS \
   SEED_META_MAX_OUTPUT_TOKENS \
+  SEED_OPENROUTER_MAX_OUTPUT_TOKENS \
   SEED_PICK_MAX_OUTPUT_TOKENS \
   SEED_ANTHROPIC_PICK_MAX_OUTPUT_TOKENS \
   SEED_OPENAI_PICK_MAX_OUTPUT_TOKENS \
-  SEED_META_PICK_MAX_OUTPUT_TOKENS; do
+  SEED_META_PICK_MAX_OUTPUT_TOKENS \
+  SEED_OPENROUTER_PICK_MAX_OUTPUT_TOKENS; do
   eval "SEED_VAL=\${${SEED_VAR}:-}"
   if [ -n "${SEED_VAL}" ]; then
     ENV_VARS="${ENV_VARS}|${SEED_VAR}=${SEED_VAL}"
