@@ -119,7 +119,11 @@ jobs:
           if gcloud secrets describe meta-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
             SECRET_MAPPINGS+=("SEED_META_API_KEY=meta-api-key:latest")
           fi
-          if gcloud secrets describe openrouter-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
+          # describe only proves the secret container exists, not that it has a
+          # version — a container created without a version passes describe but
+          # makes --set-secrets fail deploy with "...versions/latest was not
+          # found" (2026-08-21 incident). Check for an accessible version instead.
+          if gcloud secrets versions access latest --secret=openrouter-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
             SECRET_MAPPINGS+=("SEED_OPENROUTER_API_KEY=openrouter-api-key:latest")
           fi
 
