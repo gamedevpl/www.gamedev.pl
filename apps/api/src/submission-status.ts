@@ -266,6 +266,20 @@ export interface SubmissionStatusResponseBase {
     readOnly: boolean;
     reason?: 'agent_round' | 'killed';
   };
+  // Last few delivered versions, newest first — what shipped, not the live round.
+  recentBuilds?: RecentBuild[];
+}
+
+// Summarizes one delivered version's manifest for `recentBuilds`.
+export interface RecentBuild {
+  version: string;
+  createdAt: string;
+  // Which lane produced it. Absent on the manifest means 'publish'.
+  mode: 'preview' | 'publish' | 'proposal';
+  // 'pending' until this version's own gate reports a verdict — not stuck.
+  verdict: 'pending' | 'green' | 'red';
+  // Machine-readable outcome, when the verdict isn't an ordinary pass/fail.
+  status?: 'kit_outdated';
 }
 
 /**

@@ -128,6 +128,7 @@ import {
   type CreatorRevision,
   type PriorRoundEntry,
   type PriorRoundHistory,
+  type RecentBuild,
   type SubmissionStatus,
   type SubmissionStatusResponse,
 } from './submission-status.js';
@@ -2807,6 +2808,28 @@ export async function registerSubmissionRoutes(
           if (manifest?.gateProgress && !manifest.gate && !manifest.previewGate) {
             status.gateProgress = manifest.gateProgress;
           }
+        } catch {
+          /* advisory */
+        }
+      }
+    }
+    // Rides the cached status poll; listVersions alone is too costly.
+    if (record.slug) {
+      const gamesStore = options.agentChannel?.gamesStore;
+      if (gamesStore?.listVersions) {
+        try {
+          const versions = await gamesStore.listVersions(record.slug, { limit: 8 });
+          status.recentBuilds = versions.map((manifest): RecentBuild => {
+            const mode = manifest.deliveryMode ?? 'publish';
+            const verdictSource = mode === 'preview' ? manifest.previewGate : manifest.gate;
+            return {
+              version: manifest.version,
+              createdAt: manifest.createdAt,
+              mode,
+              verdict: verdictSource ? (verdictSource.green ? 'green' : 'red') : 'pending',
+              ...(verdictSource?.status ? { status: verdictSource.status } : {}),
+            };
+          });
         } catch {
           /* advisory */
         }

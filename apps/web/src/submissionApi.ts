@@ -172,6 +172,18 @@ export type SubmissionStatus = {
   priorRounds?: PriorRoundHistory[];
   /** Read-only capability probe for the Code surface (CE-05). Absent before a bound slug. */
   codeSurface?: { available: boolean; readOnly: boolean; reason?: 'agent_round' | 'killed' };
+  // Last few delivered versions, newest first — what shipped, not the live round.
+  recentBuilds?: RecentBuild[];
+};
+
+// Summarizes one delivered version for `SubmissionStatus.recentBuilds`.
+export type RecentBuild = {
+  version: string;
+  createdAt: string;
+  mode: 'preview' | 'publish' | 'proposal';
+  // 'pending' until this version's own gate reports a verdict.
+  verdict: 'pending' | 'green' | 'red';
+  status?: 'kit_outdated';
 };
 
 /** One superseded build job's transcript, for the collapsed history blocks. */

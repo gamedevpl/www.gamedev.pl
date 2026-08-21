@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
+import { latestAgentActivityAt } from './agentActivity.js';
 import { PixelIcon } from './PixelIcon.js';
 import { formatRelativeTime } from './relativeTime.js';
 import type { SubmissionStatus } from './submissionApi.js';
@@ -14,17 +15,6 @@ import { recordCodeStep } from './visitTelemetry.js';
  */
 
 const HEARTBEAT_STATES = new Set<SubmissionStatus['status']>(['queued', 'building', 'in_review', 'publishing']);
-
-function latestAgentActivityAt(status: SubmissionStatus | null): number | null {
-  if (!status) return null;
-  const times = [
-    ...(status.lastAgentSignalAt ? [Date.parse(status.lastAgentSignalAt)] : []),
-    ...(status.events ?? []).map((event) => Date.parse(event.createdAt)),
-    ...(status.playable ?? []).map((item) => (item.createdAt ? Date.parse(item.createdAt) : Number.NaN)),
-    ...(status.progress?.commits ?? []).map((commit) => Date.parse(commit.committedDate)),
-  ].filter((time) => Number.isFinite(time));
-  return times.length > 0 ? Math.max(...times) : null;
-}
 
 export type StudioStripProps = {
   title: string;

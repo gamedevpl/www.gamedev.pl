@@ -1,21 +1,94 @@
 import { useTranslation } from 'react-i18next';
+import { latestAgentActivityAt } from './agentActivity.js';
 import { Mascot } from './Mascot.js';
+import { formatRelativeTime } from './relativeTime.js';
+import type { SubmissionStatus } from './submissionApi.js';
 
 /**
- * Round 0, staging incomplete (Workstream C): the no-API fallback. Naming the missing
- * file would be the good version, but `listStagedSources` is reachable only through the
- * agent channel today (see the plan's "assembling checklist has an API dependency"
- * note) — so this says a build is coming together and defers to the thread beside it,
- * which already carries the agent's progress entries. Weaker than a checklist, but
- * still a deliberate stage rather than a void, which is the property that matters.
+ * What the stage says while nothing playable has landed on it (Workstream C).
+ *
+ * It used to defer to the thread beside it, which is a void on a covered stage. The
+ * status poll already answers "is anything still moving?", so the card shows that.
  */
-export function StudioStageCard() {
-  const { t } = useTranslation();
+export function StudioStageCard({ status }: { status?: SubmissionStatus | null }) {
+  const { t, i18n } = useTranslation();
+
+  const gate = status?.gateProgress ?? null;
+  const latestEvent = status?.events?.[0] ?? null;
+  const checklist = status?.progress?.checklist ?? [];
+  const reported = status?.events?.find((event) => event.progress)?.progress;
+  const done = reported?.done ?? checklist.filter((item) => item.checked).length;
+  const total = reported?.total ?? checklist.length;
+  // Gate's own timestamp beats a stale pre-delivery agent line.
+  const heartbeatAt = gate ? Date.parse(gate.at) || latestAgentActivityAt(status) : latestAgentActivityAt(status);
+  const ended = status?.stall === 'ended' || Boolean(status?.agentEndedAt);
+
+  // Gate outranks the agent's last line: mid-check, that line is already history.
+  const working = gate
+    ? {
+        kicker: t('studioPanel.stage.checkingKicker'),
+        text: t(`statusView.gateProgress.${gate.stage}`, { defaultValue: t('statusView.phases.gating') }),
+      }
+    : latestEvent
+      ? {
+          kicker: latestEvent.step
+            ? t(`statusView.progress.steps.${latestEvent.step}`)
+            : t('statusView.progress.agentSays'),
+          text: latestEvent.text,
+        }
+      : status?.progress?.note
+        ? { kicker: t('statusView.progress.agentSays'), text: status.progress.note }
+        : null;
+
+  const title = gate
+    ? t('studioPanel.stage.checkingTitle')
+    : ended
+      ? t('studioPanel.stage.endedTitle')
+      : t('studioPanel.stage.assembling');
+
+  // `statusView.stall.*` says "reply below"; the thread is beside this card, not below.
+  const stall = status?.stall && !gate ? status.stall : null;
+  const hint = stall
+    ? t(`studioPanel.stage.stall.${stall}`, { defaultValue: t(`statusView.stall.${stall}`) })
+    : working
+      ? null
+      : t('studioPanel.stage.assemblingHint');
+
   return (
     <div className="studio-stage-card is-assembling" role="status" aria-live="polite">
       <Mascot emotion="busy" size={72} cooking title={t('mascot.busyAlt')} />
-      <p className="studio-stage-card-title">{t('studioPanel.stage.assembling')}</p>
-      <p className="studio-stage-card-detail">{t('studioPanel.stage.assemblingHint')}</p>
+      <p className="studio-stage-card-title">{title}</p>
+
+      {working ? (
+        <p className="studio-stage-card-working">
+          <span className="studio-stage-card-kicker">{working.kicker}</span>
+          <span className="studio-stage-card-working-text">{working.text}</span>
+        </p>
+      ) : null}
+
+      {total > 0 ? (
+        <div className="studio-stage-card-progress">
+          <div
+            className="build-progress-bar"
+            role="progressbar"
+            aria-valuenow={done}
+            aria-valuemin={0}
+            aria-valuemax={total}
+          >
+            <div className="build-progress-bar-fill" style={{ width: `${(done / total) * 100}%` }} />
+          </div>
+          <span className="studio-stage-card-count">{t('statusView.progress.checklistCount', { done, total })}</span>
+        </div>
+      ) : null}
+
+      {heartbeatAt != null ? (
+        // Ticks every poll; announcing "updated 2 minutes ago" that often is noise.
+        <p className="studio-stage-card-heartbeat" aria-live="off">
+          {t('statusView.updatedAgo', { time: formatRelativeTime(heartbeatAt, i18n.language) })}
+        </p>
+      ) : null}
+
+      {hint ? <p className="studio-stage-card-detail">{hint}</p> : null}
     </div>
   );
 }

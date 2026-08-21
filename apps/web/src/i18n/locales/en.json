@@ -542,6 +542,22 @@
       "exitFullScreen": "Exit full screen",
       "peekEmpty": "No updates yet"
     },
+    "buildHistory": {
+      "live": "Checking your latest changes now",
+      "idle": "No build is running right now",
+      "title": "Recent builds",
+      "mode": {
+        "preview": "Preview",
+        "publish": "Publish",
+        "proposal": "Proposal"
+      },
+      "verdict": {
+        "pending": "Checking…",
+        "green": "Passed",
+        "red": "Failed"
+      },
+      "kitOutdated": "Needs a kit refresh"
+    },
     "share": {
       "title": "Share the draft",
       "liveTitle": "Share the game",
@@ -680,7 +696,16 @@
       "backToGame": "Back to the game",
       "assembling": "The build is coming together.",
       "assemblingHint": "The agent hasn't landed a playable first draft yet — the thread has its progress.",
-      "openTheater": "Open in theater"
+      "openTheater": "Open in theater",
+      "checkingTitle": "Checking the build.",
+      "checkingKicker": "Checking",
+      "endedTitle": "The agent finished this round.",
+      "stall": {
+        "ended": "No playable build landed this round — send a note in the thread to start another.",
+        "quiet": "The agent has been quiet for a while. It may still be working — bigger games take longer.",
+        "awaiting_input": "The agent is waiting on you — answer in the thread to keep the build moving.",
+        "no_agent_yet": "No agent has picked this round up yet — connect yours from the thread."
+      }
     },
     "ribbon": {
       "staged": "STAGED {{time}} · not delivered yet",
