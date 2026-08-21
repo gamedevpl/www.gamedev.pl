@@ -1,5 +1,4 @@
 // Builds the coding-agent backend registry from the environment.
-//
 // Kept apart from app.ts so that "which backend, configured how" is one readable
 // decision rather than a branch buried in server wiring — and so a second backend can be
 // added here without touching the server at all.
