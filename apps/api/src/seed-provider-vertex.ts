@@ -6,7 +6,9 @@ import { registerSeedProvider, type SeedProviderConfig } from './seed-provider.j
 export const VERTEX_SEED_PROVIDER = 'vertex';
 
 // No apiKey: Vertex authenticates with ambient ADC, unlike every other provider here.
-export const DEFAULT_VERTEX_SEED_MODEL = 'gemini-3.7-flash';
+// flash-lite measured faster, cheaper, and more reliable than flash across four genres
+// run through this same seeder — swapped in on that data.
+export const DEFAULT_VERTEX_SEED_MODEL = 'gemini-3.5-flash-lite';
 
 registerSeedProvider(VERTEX_SEED_PROVIDER, (config: SeedProviderConfig) =>
   createVertexClient({

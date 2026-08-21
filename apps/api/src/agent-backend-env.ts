@@ -24,6 +24,7 @@ import './seed-provider-vertex.js';
 import './seed-provider-anthropic.js';
 import './seed-provider-openai.js';
 import './seed-provider-meta.js';
+import './seed-provider-openrouter.js';
 import { DEFAULT_VERTEX_SEED_MODEL } from './seed-provider-vertex.js';
 
 interface Logger {
@@ -261,7 +262,7 @@ export function createAgentBackendRegistryFromEnv(
 }
 
 // Every seed vendor this file can build a config for; registration is unconditional.
-export const SEED_PROVIDER_IDS = ['vertex', 'anthropic', 'openai', 'meta'] as const;
+export const SEED_PROVIDER_IDS = ['vertex', 'anthropic', 'openai', 'meta', 'openrouter'] as const;
 export type SeedProviderId = (typeof SEED_PROVIDER_IDS)[number];
 
 // Muse Spark always reasons and cannot turn it off (ops: seed-provider-selection-plan.md
