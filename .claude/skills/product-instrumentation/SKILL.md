@@ -54,7 +54,20 @@ Visit telemetry is the second, separate stream — the funnel before and between
   identity, acquisition capture, navigation subscription.
 - [apps/api/src/visit-telemetry.ts](../../../apps/api/src/visit-telemetry.ts) —
   `POST /api/telemetry/visit`, schema and caps.
-- `VisitEvent` / `VISIT_COLLECTION` in [store.ts](../../../apps/api/src/store.ts).
+- [apps/api/src/visit-funnel.ts](../../../apps/api/src/visit-funnel.ts) — the read-side
+  aggregator (`summarizeVisitFunnel`).
+- `VisitEvent` / `VISIT_COLLECTION` in [store.ts](../../../apps/api/src/store.ts) — the
+  event's field types are plain `string` here, not the closed enums below.
+
+The step/via/kind vocabularies each of those three files share (route kinds, funnel
+steps, `PlayVia`, and so on) live in one canonical module,
+[packages/contract/src/visit-vocab.ts](../../../packages/contract/src/visit-vocab.ts) —
+an `X_VALUES` array plus an `X` type per vocabulary. All three files import from it
+instead of declaring their own copy. **Adding a rung means adding it to the shared array
+in `visit-vocab.ts`; the browser client, the zod schema, and the funnel aggregator pick
+it up from that one import.** `BuilderDimension` (`'platform' | 'self'`) is the one
+exception still declared separately in each of the three files — it also touches two
+frozen mega-files (`mcp-server.ts`, `submissions.ts`) and has not been folded in yet.
 
 **The two streams must stay unjoinable.** A play event names a game and never a visit; a
 visit event names a visit and never a game. That is why `play_started` carries no slug —
@@ -141,14 +154,14 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
     (the last two measure the platform welcome handoff before Studio). Steps dedupe per
     visit (a rung means "this visit got this far"),
     and the aggregate dedupes again so a replayed flush cannot inflate one. Adding a rung
-    means touching the enum in `visitTelemetry.ts`, the zod enum in `visit-telemetry.ts`,
-    and `CREATE_STEPS` in `visit-funnel.ts` — the order in `CREATE_STEPS` _is_ the funnel's
-    meaning. The waitlist funnel (`waitlist_step` / `WAITLIST_STEPS`) follows the same
-    three-place contract beside it.
+    means adding it to `CREATE_STEPS` in `packages/contract/src/visit-vocab.ts` — the
+    order _is_ the funnel's meaning, and all three files (`visitTelemetry.ts`,
+    `visit-telemetry.ts`, `visit-funnel.ts`) import it from there. The waitlist funnel
+    (`waitlist_step` / `WAITLIST_STEPS`) follows the same shared-module contract beside it.
   - ~~Closed-beta waitlist funnel unmeasured~~ — **closed 2026-07-31**: `waitlist_step` on
-    the visit stream records `cta_clicked` → `joined`. Same three-place enum contract as
-    `create_step` (`visitTelemetry.ts`, `visit-telemetry.ts`, `WAITLIST_STEPS` in
-    `visit-funnel.ts`); rendered as a Waitlist block on `VisitFunnelPanel` beside Creating.
+    the visit stream records `cta_clicked` → `joined`. Same shared-module contract as
+    `create_step` — `WAITLIST_STEPS` in `packages/contract/src/visit-vocab.ts`; rendered
+    as a Waitlist block on `VisitFunnelPanel` beside Creating.
     The Join CTA is visible before sign-in; the drop between click and join _is_ the
     sign-in wall, so there is no separate `signin_required` rung (that name already means
     the creation wall).
@@ -160,8 +173,11 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
     `green` | `red` | `kit_outdated` | `creator` | `agent`). BY-18c adds sibling step
     `connect_deeplink` (`detail: cursor | vscode`) so one-click install clicks are not
     conflated with clipboard copies. `create_step` may also carry optional `builder` once
-    chosen. Same three-place contract (`visitTelemetry.ts`, `visit-telemetry.ts`,
-    `VisitEvent` in `store.ts`). Time-to-first agent signal is `msSinceStart` on
+    chosen. `StudioStep` / `StudioStepDetail` live in
+    `packages/contract/src/visit-vocab.ts` like the other step vocabularies;
+    `builder` itself is still `BuilderDimension`, declared separately in each of
+    `visitTelemetry.ts`, `visit-telemetry.ts`, and `VisitEvent` in `store.ts` (not yet
+    folded into the shared module — see Architecture above). Time-to-first agent signal is `msSinceStart` on
     `agent_signaled`. ~~No admin rollup yet~~ — **closed 2026-08-06**: daily MCP adoption
     series (`selfChosen` / `connected` / `signaled` / `gateVerdicts`) on
     `GET /api/admin/telemetry/trends`, rendered on the Trends strip of the operator
@@ -172,7 +188,8 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
     ladder) was landing on the visit stream since CE-01 with no read side —
     `summarizeVisitFunnel` had no rollup and the admin route couldn't expose it. Added
     `coding` to `VisitFunnel` (`visit-funnel.ts`), rendered as a Code surface block on
-    `VisitFunnelPanel` beside Editing. Same three-place contract as the others.
+    `VisitFunnelPanel` beside Editing. `CODE_STEPS` lives in the shared vocabulary module
+    like the others.
   - ~~Managed delivery preflight / gate effectiveness unmeasured~~ — **closed (MR-07)**:
     server log metrics in `delivery-metrics.ts` (`delivery preflight refused`,
     `delivery accepted`, `delivery gate verdict`) answer whether audio/symbols/typecheck
