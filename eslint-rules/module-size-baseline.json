@@ -92,7 +92,7 @@
     "apps/api/src/canonical-base64.ts": 36,
     "apps/api/src/canonical-host.test.ts": 54,
     "apps/api/src/catalog-genre-source.ts": 77,
-    "apps/api/src/catalog-touch.test.ts": 24,
+    "apps/api/src/catalog-touch.test.ts": 32,
     "apps/api/src/catalog-touch.ts": 29,
     "apps/api/src/chat-agent-metrics.test.ts": 53,
     "apps/api/src/chat-agent-metrics.ts": 44,

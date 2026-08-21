@@ -13,7 +13,7 @@ describe('classifyTouchSource', () => {
     ).toBe('native');
     expect(
       classifyTouchSource('const input = GameKit.createInput(canvas, { touch: false }); input.consumeWheel();'),
-    ).toBe('native');
+    ).toBe('none');
     expect(
       classifyTouchSource('const input = GameKit.createInput(canvas, { touch: false }); input.consumePinch();'),
     ).toBe('native');
