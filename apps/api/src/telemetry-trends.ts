@@ -1,3 +1,4 @@
+import type { TrendGrain } from '@gamedevpl/contract';
 import type { SubmissionRecord, User, VisitEvent } from './store.js';
 import { BOT_UID_PREFIX } from './store.js';
 import { returnedAfterPublish } from './creator-metrics.js';
@@ -22,7 +23,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** Connect steps that mean "this visit reached an MCP install surface". */
 const MCP_CONNECT_STEPS = new Set(['connect_copied', 'connect_deeplink', 'connect_restored']);
 
-export type TrendGrain = 'day' | 'week' | 'month';
+export type { TrendGrain };
 
 export interface DailyActivityPoint {
   /** UTC `yyyy-mm-dd` partition the counts were read from. */

@@ -1,4 +1,7 @@
+import type { TrendGrain } from '@gamedevpl/contract';
 import type { DailyActivityPoint, DailyMcpPoint, DailyRetentionPoint } from './healthApi.js';
+
+export type { TrendGrain };
 
 /**
  * Client-side rollups over the daily trends payload.
@@ -10,7 +13,6 @@ import type { DailyActivityPoint, DailyMcpPoint, DailyRetentionPoint } from './h
  * Arithmetic mirrors apps/api/src/telemetry-trends.ts; keep the two in step.
  */
 
-export type TrendGrain = 'day' | 'week' | 'month';
 export type RollingWindow = 0 | 7 | 28;
 
 export interface RolledTrendPoint {
