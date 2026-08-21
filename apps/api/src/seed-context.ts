@@ -1,23 +1,18 @@
-// What the seed generator is allowed to learn from: the catalog, published game sources,
-// and the game template.
+// What the seed generator learns from: the catalog and published game sources.
 //
-// The retrieval question here has an unusually easy answer, and it is worth saying why
-// rather than reaching for the expected machinery. The catalog is a curated
-// one-good-game-per-genre collection, not a long tail — so the entire index of
-// `slug — title — genre` is a few hundred tokens and fits in the picker's prompt whole.
-// There is nothing for an embedding index to do that a single cheap model call does not
-// already do better, and every vector store we did not build is a store we do not have to
-// keep in sync with the catalog.
+// No embedding index: the catalog is one-good-game-per-genre, so the whole
+// `slug — title — genre` list fits in the picker's prompt for a few hundred tokens.
 //
-// Sources come from the games-repo tarball for the same reason the snapshot bake uses it:
-// one request instead of a thousand, on a token whose budget is shared with serving. The
-// archive is cached across dispatches because it changes only when the harness moves, and
-// re-downloading the repo per build would make seeding cost more than it saves.
+// Sources come from the games-repo tarball, cached across dispatches — one request
+// instead of a thousand, on a token whose budget is shared with serving.
 
 import { fetchGamesRepoArchive, type GamesRepoArchive } from './games-repo-archive.js';
 
-/** Text-only: sources, specs, manifests, the catalog and the templates. No media. */
+/** Text-only: sources, specs, manifests, and the catalog. No media. */
 const TEXT_EXTENSIONS = ['.ts', '.json', '.md', '.css', '.html'];
+
+// Mirrors DEFAULT_STARTER in the games repo and agent-build-examples.json.
+export const SEED_SCAFFOLD_SLUG = 'block-cascade';
 
 /**
  * Which archive paths the seeder keeps.
@@ -30,7 +25,7 @@ const TEXT_EXTENSIONS = ['.ts', '.json', '.md', '.css', '.html'];
 function seedInclude(relativePath: string): boolean {
   if (relativePath === 'catalog.json') return true;
   if (relativePath === 'shared/game-kit.d.ts') return true;
-  const inScope = relativePath.startsWith('games/') || relativePath.startsWith('templates/');
+  const inScope = relativePath.startsWith('games/');
   return inScope && TEXT_EXTENSIONS.some((extension) => relativePath.endsWith(extension));
 }
 
@@ -40,13 +35,13 @@ const GAME_TOP_LEVEL_FILES = ['SPEC.md', 'GAME.json', 'game.ts', 'index.html', '
 /** One reference file this big is a generated blob, not something to learn a style from. */
 const MAX_REFERENCE_FILE_BYTES = 80_000;
 
-/** The template is small; this only stops a pathological repo state from filling context. */
+/** One game is small; this only stops a pathological repo state from filling context. */
 const CONTEXT_SCAFFOLD_BUDGET = 60_000;
 
 export interface SeedContext {
   /** `slug — title — genre` per published game, the picker's whole world. */
   catalogIndex: string;
-  /** The `templates/game` skeleton, rendered in the same fence format as references. */
+  // Empty means SEED_SCAFFOLD_SLUG is missing; the caller omits the section.
   scaffold: string;
   /** GameKit declarations for validation, never rendered into a prompt. */
   kitDeclaration: string | null;
@@ -132,7 +127,10 @@ export function buildSeedContext(index: SeedFileIndex, catalogEntries?: CatalogE
 
   return {
     catalogIndex: published.map((entry) => `${entry.slug} — ${entry.title} — ${entry.genre}`).join('\n'),
-    scaffold: renderTree('templates/game', 'games/<slug>', { remaining: CONTEXT_SCAFFOLD_BUDGET }),
+    // Same gate as references: a withdrawn game must not shape a new draft.
+    scaffold: slugs.has(SEED_SCAFFOLD_SLUG)
+      ? renderTree(`games/${SEED_SCAFFOLD_SLUG}`, 'games/<slug>', { remaining: CONTEXT_SCAFFOLD_BUDGET })
+      : '',
     kitDeclaration: index.read('shared/game-kit.d.ts'),
     hasGame: (slug: string) => slugs.has(slug),
     renderReferences(picks: string[], byteBudget: number): string {
