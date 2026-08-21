@@ -42,6 +42,7 @@ Provisioned by [`infra/setup-monitoring.sh`](../../infra/setup-monitoring.sh).
 | A24 | `A24 Vertex call volume abnormally high`        | Vertex calls >0.25/s sustained 10 min, project-wide                      | §Vertex spend below                              |
 | A25 | `A25 Vertex output token rate abnormally high`  | Vertex output tokens >300/s sustained 10 min, project-wide               | §Vertex spend below                              |
 | A27 | `A27 typecheck preflight budget chronically exceeded` | >2 preflight skips (budget exceeded) in 30 min on `gamedev-app` (log-based) | §below                                     |
+| A28 | `A28 gate build died without a verdict`         | Any gate build finishes without writing a verdict (log-based)            | §Gate crashes below                              |
 
 **A1 and A2 name the service; the rest do not.** A1/A2 exist once per Cloud Run service
 answering requests (`gamedev-app`, and the party relay when it takes traffic), so the
@@ -157,6 +158,42 @@ nothing pathological) ran 12.9s and got discarded. If A27 fires again, check
 `jsonPayload.durationMs` against the current budget before raising it again — a budget that
 keeps needing to grow might mean `tsc` itself got slower (the shared GameKit surface grew)
 rather than that games got bigger.
+
+### Gate crashes (A28)
+
+A gate Cloud Build that runs and dies without writing `manifest.gate` or
+`manifest.previewGate`. The candidate is stored, the agent believes it delivered, and
+nothing will ever verify it.
+
+**This is always our fault, by construction.** A game that merely fails its checks writes
+a *red* verdict, and `reconcileGateVerdict` moves the job on it. A red gate also exits the
+build non-zero, which is why A28 is keyed on a log line from
+[`apps/api/src/gate-crash.ts`](../../apps/api/src/gate-crash.ts) rather than on Cloud Build
+failure — the latter fires on every legitimately failing game and would be muted within a
+day. That module reads the build back only *after* confirming no verdict exists, so a red
+verdict can never be reported as a crash.
+
+Triage:
+
+1. Logs Explorer, `jsonPayload.msg="delivery gate crashed"`.
+2. Take `jsonPayload.delivery.buildId`, then `gcloud builds log <id> --project=gamedevpl`.
+3. Read what killed it *before* the gate's own output starts.
+
+The usual cause is the container failing before `gate:run` can execute: a workspace package
+that `npm ci` symlinks but never builds (`infra/cloudbuild-gate.yaml` must run
+`npm run build:packages` ahead of `gate:run`), a bad platform ref, or the `gate-runner` SA
+losing a permission.
+
+Several games tripping it at once is a full gate outage — every delivery in flight is
+stuck. That is exactly what happened on 2026-08-21, when consolidating a type into
+`@gamedevpl/contract` put an unbuilt package on the gate's import path and killed every run
+in the project — acceptance, preview and the nightly health sweep — for nearly nine hours,
+while Studio told each creator that verification simply had not started yet.
+
+Affected rounds stay open (`transitionClosesRound` treats `gate_crashed` like `gate_red`),
+so once the cause is fixed the agent only needs to deliver again. Re-gating is deliberately
+never automatic: on a systemic breakage a retry doubles the bill and still tells the
+creator nothing.
 
 ### Runtime levers, and which ones are real
 

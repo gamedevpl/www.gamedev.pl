@@ -80,6 +80,7 @@ import {
   type JobTransition,
 } from './job-state.js';
 import { isMcpPresenceEventText } from './mcp-presence.js';
+import { gateCrashStall, probeGateCrash } from './gate-crash.js';
 import {
   builderLabelFromRecord,
   failedStageFromProgress,
@@ -2787,7 +2788,7 @@ export async function registerSubmissionRoutes(
       agentEndedAt: record.agentEndedAt,
       now: now(),
       builder: builderOf(record),
-    });
+    }) ?? gateCrashStall(record);
     if (stall) status.stall = stall;
     // Mid-gate milestones from GCS.
     if (record.slug && playableVersion) {
@@ -3060,7 +3061,7 @@ export async function registerSubmissionRoutes(
    * cannot disagree with the store, and a gate run that dies before reporting is
    * indistinguishable from one that never ran — which is the honest reading.
    */
-  async function reconcileGateVerdict(record: SubmissionRecord): Promise<JobTransition | null> {
+  async function reconcileGateVerdict(record: SubmissionRecord, sweep = false): Promise<JobTransition | null> {
     const gamesStore = options.agentChannel?.gamesStore;
     if (!gamesStore || !store || !record.slug) return null;
     const state = record.state ?? 'queued';
@@ -3082,7 +3083,7 @@ export async function registerSubmissionRoutes(
           break;
         }
       }
-      if (!version || !manifest) return null;
+      if (!version || !manifest) return sweep ? probeGateCrash(record, { store, gamesStore, log: app.log, now }) : null;
       const emitGateMetric = async (input: {
         mode: 'preview' | 'publish';
         outcome: 'passed' | 'failed';
@@ -3143,12 +3144,11 @@ export async function registerSubmissionRoutes(
       }
       // mode=preview never writes manifest.gate — still emit metrics for green/red.
       const preview = manifest?.previewGate;
-      if (!preview) return null;
-      const previewStatus: DeliveryGateStatus = derivePreviewGateStatus(preview);
+      if (!preview) return sweep ? probeGateCrash(record, { store, gamesStore, log: app.log, now }) : null;
       await emitGateMetric({
         mode: 'preview',
         outcome: preview.green ? 'passed' : 'failed',
-        status: previewStatus,
+        status: derivePreviewGateStatus(preview),
         ...(preview.green ? {} : { failedStage: failedStageFromProgress(manifest?.gateProgress?.stage) }),
       });
       if (preview.green) return null;
@@ -5040,7 +5040,7 @@ export async function registerSubmissionRoutes(
 
           // Same derivation the status poll uses, so the sweep and the page can never
           // disagree about what a job's own record says.
-          const observed = (await reconcileNativeJob(record)) ?? (await reconcileGateVerdict(record));
+          const observed = (await reconcileNativeJob(record)) ?? (await reconcileGateVerdict(record, true));
           const current = observed
             ? {
                 ...record,

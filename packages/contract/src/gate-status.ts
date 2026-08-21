@@ -1,5 +1,5 @@
-// The gate verdict vocabulary — one declaration for every place that names it.
-export const GATE_STATUS_VALUES = ['green', 'kit_outdated', 'preview_passed', 'preview_failed', 'red'] as const;
+// The gate verdict vocabulary — `crashed` means there was no verdict at all.
+export const GATE_STATUS_VALUES = ['green', 'kit_outdated', 'preview_passed', 'preview_failed', 'red', 'crashed'] as const;
 
 export type GateStatus = (typeof GATE_STATUS_VALUES)[number];
 

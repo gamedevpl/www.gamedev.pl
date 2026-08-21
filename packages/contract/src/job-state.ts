@@ -39,6 +39,8 @@ export const JOB_STALL_VALUES = [
   'ended',
   // Delivered, but our own gate never picked it up.
   'gate_not_started',
+  // Our gate build died without ever writing a verdict.
+  'gate_crashed',
   // A self-build round waiting for the creator's agent to connect.
   'no_agent_yet',
 ] as const;

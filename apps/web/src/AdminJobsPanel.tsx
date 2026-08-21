@@ -36,8 +36,7 @@ const REFUSAL_COPY: Record<PublishRefusal, string> = {
   gate_red: 'the gate failed this version — read its report before publishing',
   not_gated: 'the gate has not run against this version yet',
   nothing_delivered: 'this build has never delivered a version',
-  profile_required:
-    'the creator has not claimed a public profile — ask them to open Studio and use Claim handle to publish',
+  profile_required: 'the creator has not claimed a public profile — ask them to open Studio and use Claim handle',
   store_unavailable: 'the games store is not configured on this deployment',
   unknown: 'refused, and the reason was not one this console knows',
 };
@@ -48,6 +47,7 @@ const STALL_COPY: Record<NonNullable<JobQueueEntry['stall']>, string> = {
   quiet: 'agent silent',
   ended: 'agent ended the round',
   gate_not_started: 'delivered, gate never started',
+  gate_crashed: 'gate build died with no verdict — ours',
 };
 
 const CANCEL_COPY: Record<CancelRefusal, string> = {

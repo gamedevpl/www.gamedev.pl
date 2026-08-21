@@ -335,6 +335,15 @@ ensure_log_metric typecheck_preflight_skipped \
   'Typecheck preflight abandoned past its time budget (delivered unvalidated). Backs alert A27.' \
   "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"typecheck preflight skipped: budget exceeded\""
 
+# Our own gate build died before writing any verdict, found by reading the build back
+# (apps/api/src/gate-crash.ts). Deliberately NOT keyed on Cloud Build failure: a red gate
+# also exits non-zero, so that signal fires on every legitimately failing game and would
+# be ignored within a day. This only counts builds that produced no verdict at all, which
+# is always our fault and never the creator's. Backs A28.
+ensure_log_metric gate_build_crashed \
+  'Gate build finished with no verdict written (platform fault). Backs alert A28.' \
+  "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"delivery gate crashed\""
+
 # A3 — a scheduled job is failing. notify-sweep already runs every 2 minutes against auth,
 # Firestore and the app in one request, which makes it a synthetic monitor we are getting
 # for free; all that was missing was anyone listening. Its failure is also a real
@@ -713,6 +722,40 @@ cat > "${POLICY_DIR}/a27.json" <<EOF
   "alertStrategy": { "autoClose": "86400s" },
   "documentation": {
     "content": "Deliveries are shipping without typecheck validation more than occasionally — apps/api/src/typecheck-preflight.ts's in-process tsc run kept exceeding TYPECHECK_PREFLIGHT_BUDGET_MS (currently 20s) and got discarded even though it finished (the check cannot be preempted mid-run, so this is never wasted server time, only a wasted verdict). One skip is unremarkable; several in 30 minutes means the budget is wrong for real game sizes, not just a pathological one. Triage: Logs Explorer, jsonPayload.msg=\"typecheck preflight skipped: budget exceeded\", check jsonPayload.durationMs against the current budget and jsonPayload.slug for which games are large enough to trip it — then decide whether to raise the budget again or investigate why tsc itself got slower (shared GameKit surface grew, instance under CPU pressure).",
+    "mimeType": "text/markdown"
+  }
+}
+EOF
+
+# A28 — a gate build that ran and died without ever writing a verdict. Unlike a red gate
+# (normal, and also exits the build non-zero) this is always ours: the candidate is stored,
+# the agent believes it delivered, and nothing will ever verify it. It went unnoticed for
+# nearly nine hours on 2026-08-21 when an unbuilt workspace package killed every gate in the
+# project at import — acceptance, preview and the nightly health sweep alike. Threshold is 0,
+# not a rate: one crashed gate is already a creator staring at a page that cannot progress.
+cat > "${POLICY_DIR}/a28.json" <<EOF
+{
+  "displayName": "A28 gate build died without a verdict",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "a delivery's gate build failed before writing any verdict",
+    "conditionThreshold": {
+      "filter": "metric.type=\"logging.googleapis.com/user/gate_build_crashed\" AND resource.type=\"cloud_run_revision\" AND resource.label.\"service_name\"=\"${PRIMARY_SERVICE}\"",
+      "aggregations": [{
+        "alignmentPeriod": "900s",
+        "perSeriesAligner": "ALIGN_SUM",
+        "crossSeriesReducer": "REDUCE_SUM"
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 0,
+      "duration": "0s",
+      "trigger": { "count": 1 }
+    }
+  }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
+  "alertStrategy": { "autoClose": "86400s" },
+  "documentation": {
+    "content": "A gate Cloud Build finished without writing manifest.gate or manifest.previewGate, so the delivery can never be verified or published and the creator's page will sit on 'verification failed on our side'. This is a platform fault by construction — a game that merely fails its checks writes a red verdict and never reaches this metric. Triage: Logs Explorer, jsonPayload.msg=\"delivery gate crashed\", take jsonPayload.delivery.buildId and read it with 'gcloud builds log <id> --project=gamedevpl'. The usual cause is the gate container failing before it can run: a workspace package that npm ci symlinks but never builds (infra/cloudbuild-gate.yaml must run 'npm run build:packages' ahead of gate:run), a bad platform ref, or the gate-runner SA losing a permission. If several games trip this at once, treat it as a full gate outage — every delivery in flight is stuck and none of their creators are being told anything useful. Affected rounds stay open, so once the cause is fixed the agent only needs to deliver again.",
     "mimeType": "text/markdown"
   }
 }

@@ -43,6 +43,7 @@ import {
 } from './games-store.js';
 import { parseGameMedia } from './github-client.js';
 import { canTransition, resolveJobState, type JobState } from './job-state.js';
+import { gateCrashStall } from './gate-crash.js';
 import {
   KitFilesError,
   createKitFileStore,
@@ -3000,11 +3001,14 @@ export async function registerAgentChannelRoutes(
         } catch {
           /* ignore */
         }
+        // A recorded crash is our build dying, not a slow one.
+        const crashed = gateCrashStall(record) !== null;
         return reply.send({
-          status: 'pending',
+          status: crashed ? 'crashed' : 'pending',
           deliveryId: version,
-          summary:
-            'gate has not reported yet — do not loop on get_gate_verdict; stop this run and let Studio show the eventual result',
+          summary: crashed
+            ? 'our gate build failed before it could check your game — this is a platform fault, not your code. Deliver again to start a fresh gate run; the round is still open.'
+            : 'gate has not reported yet — do not loop on get_gate_verdict; stop this run and let Studio show the eventual result',
           retryAfterSeconds: 30,
           access,
           ...(progress
