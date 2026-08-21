@@ -882,8 +882,6 @@
     "packages/contract/src/index.ts": 11,
     "packages/contract/src/managed-agent-vendor.test.ts": 8,
     "packages/contract/src/managed-agent-vendor.ts": 3,
-    "packages/contract/src/property-type.test.ts": 8,
-    "packages/contract/src/property-type.ts": 3,
     "packages/game-generator/src/engine/engine.test.ts": 35,
     "packages/game-generator/src/index.ts": 2,
     "packages/game-generator/src/mock.test.ts": 67,
