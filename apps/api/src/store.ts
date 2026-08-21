@@ -13,6 +13,7 @@ import {
   type JobState,
   type JobTransition,
 } from './job-state.js';
+import { isSweepActive } from './sweep-scope.js';
 import type { DeclineReason, ProposalState, ProposalTransition } from './proposal-state.js';
 import type { BuildEvent, SubmissionStatus } from './submission-status.js';
 
@@ -3917,7 +3918,7 @@ export class InMemoryStore implements Store {
 
   async listActiveSubmissions(): Promise<SubmissionRecord[]> {
     return Array.from(this.submissions.values())
-      .filter((s) => !s.abandonedAt && s.lastNotifiedStatus !== 'published' && s.lastNotifiedStatus !== 'needs_changes')
+      .filter(isSweepActive)
       .map((s) => ({ ...s }));
   }
 
@@ -6669,9 +6670,7 @@ export class FirestoreStore implements Store {
     const snap = await this.db.collection('submissions').get();
     return snap.docs
       .map((d) => d.data() as SubmissionRecord)
-      .filter(
-        (s) => !s.abandonedAt && s.lastNotifiedStatus !== 'published' && s.lastNotifiedStatus !== 'needs_changes',
-      );
+      .filter(isSweepActive);
   }
 
   async listSubmissionsMissingSlug(): Promise<SubmissionRecord[]> {
