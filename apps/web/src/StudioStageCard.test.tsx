@@ -65,12 +65,17 @@ describe('StudioStageCard', () => {
       ...building,
       agentEndedAt: new Date().toISOString(),
       stall: 'ended',
-      events: [{ id: '1', kind: 'done', text: 'Delivered.', createdAt: new Date().toISOString() }],
+      events: [
+        { id: '1', kind: 'done', text: 'Delivered.', createdAt: new Date(Date.now() - 20 * 60_000).toISOString() },
+      ],
       gateProgress: { lane: 'preview', stage: 'smoke', index: 2, total: 5, at: new Date().toISOString() },
     });
     expect(host.querySelector('.studio-stage-card-title')?.textContent).toBe('Checking the build.');
     expect(host.querySelector('.studio-stage-card-working-text')?.textContent).toBe('Running smoke test…');
     expect(host.querySelector('.studio-stage-card-detail')).toBeNull();
+    // Gate's own timestamp, not the stale pre-delivery event.
+    expect(host.querySelector('.studio-stage-card-heartbeat')?.textContent).toContain('now');
+    expect(host.querySelector('.studio-stage-card-heartbeat')?.textContent).not.toContain('minutes ago');
     unmount();
   });
 

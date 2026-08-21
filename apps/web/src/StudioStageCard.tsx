@@ -19,7 +19,8 @@ export function StudioStageCard({ status }: { status?: SubmissionStatus | null }
   const reported = status?.events?.find((event) => event.progress)?.progress;
   const done = reported?.done ?? checklist.filter((item) => item.checked).length;
   const total = reported?.total ?? checklist.length;
-  const heartbeatAt = latestAgentActivityAt(status);
+  // Gate's own timestamp beats a stale pre-delivery agent line.
+  const heartbeatAt = gate ? Date.parse(gate.at) || latestAgentActivityAt(status) : latestAgentActivityAt(status);
   const ended = status?.stall === 'ended' || Boolean(status?.agentEndedAt);
 
   // Gate outranks the agent's last line: mid-check, that line is already history.
