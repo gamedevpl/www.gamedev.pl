@@ -65,7 +65,7 @@ describe('kit file ops', () => {
     'kit.json': JSON.stringify({ engineRef: ENGINE }),
     'shared/modules/core.ts': 'export const core = 1;\n// GameKit.createCanvasGame helper\n',
     'shared/audio/beep.wav': Buffer.from([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00]),
-    'templates/game/game.ts': 'export {}\n',
+    'starters/block-cascade/game.ts': 'export {}\n',
   });
 
   it('lists with prefix and glob', () => {

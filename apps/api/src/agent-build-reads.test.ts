@@ -180,7 +180,7 @@ describe('agent build reads (BY-04)', () => {
     expect(empty.json()).toEqual({
       available: false,
       status: 'unavailable',
-      notice: expect.stringMatching(/scaffold from the kit/i),
+      notice: expect.stringMatching(/npm run create/i),
       files: [],
       references: [],
       notes: null,

@@ -1,40 +1,28 @@
 // Round 0 of a game, written by a model instead of by the coding agent.
 //
-// A creator's build spends its first minutes on work that is the same every time: read
-// the harness, choose reference games, write the file skeleton, wire GameKit up. That is
-// the most expensive minutes of the pipeline (a premium agent session) spent on the least
-// creative part of it, while the creator watches a status page that says nothing.
-//
-// So a direct model call does it first. Pick the closest published games from the
-// catalog, put their full source in context, and generate a complete first draft of the
-// game — which the agent then starts from instead of from an empty directory. Measured
-// over three specs (ops: llm-seed-spike.md), that made builds 3.2-3.8x faster with no
-// quality regression, and the agent kept 96-99% of the seed rather than fighting it.
+// A direct model call picks the closest published games, puts their full source in
+// context, and generates a first draft the agent starts from instead of an empty
+// directory. Measured over three specs (ops: llm-seed-spike.md): builds 3.2-3.8x
+// faster, no quality regression, agent kept 96-99% of the seed.
 //
 // Three properties this module must keep, in order of importance:
 //
-//  1. **Fail-open, always.** A seed is an optimization. Every failure path here returns
-//     null and the build dispatches unseeded, exactly as it does today. A seed must never
-//     be the reason a creator's game does not get built.
-//  2. **Bounded.** One pick call, one generate call, hard timeouts on both. A seed that
-//     takes longer than the minutes it saves is not worth having.
-//  3. **Backend-agnostic.** This produces *files*, not a branch and not a commit. How a
-//     workspace receives them is the backend adapter's business (a branch for Copilot, a
-//     seeded directory for a runtime we operate) — which is why the seed travels on the
-//     brief rather than being wired into one vendor's dispatch.
+//  1. Fail-open, always. Every failure path returns null and the build dispatches
+//     unseeded. A seed must never be why a creator's game does not get built.
+//  2. Bounded. One pick call, one generate call, hard timeouts on both.
+//  3. Backend-agnostic. Produces files, not a branch, so the seed travels on the brief.
 //
-// The spec text reaching the model is the creator's own, untrusted and already moderated
-// — the same exposure `refine.ts` has carried in production since the beginning, with the
-// same containment: output lands in a workspace whose only exits are our gate and human
-// review, and the path guard below refuses anything outside one game directory.
-
+// The spec reaching the model is the creator's own, untrusted and already moderated:
+// same exposure refine.ts has carried in production, same containment — output lands
+// in a workspace whose only exits are our gate and human review, and the path guard
+// below refuses anything outside one game directory.
 import path from 'node:path';
 import { z } from 'zod';
 import type { GenAIClient, GenerationResult } from 'genaicode';
 import { createSeedClient, type SeedProviderConfig } from './seed-provider.js';
 import { checkSeedBundles, type SeedBundleResult } from './seed-bundle.js';
 import { streamCollect, SEED_FENCE_HEADER_RE } from './seed-stream.js';
-import type { SeedContext, SeedContextSource } from './seed-context.js';
+import { SEED_SCAFFOLD_SLUG, type SeedContext, type SeedContextSource } from './seed-context.js';
 import { typeCheckGame } from './type-check.js';
 import type { TypeCheckResult } from './type-check.js';
 import { TYPECHECK_PREFLIGHT_BUDGET_MS } from './typecheck-preflight.js';
@@ -363,9 +351,16 @@ export function buildGeneratePrompt(input: {
           '',
         ]
       : []),
-    '=== TEMPLATE SCAFFOLD (replace its placeholder gameplay) ===',
-    input.scaffold,
-    '',
+    // A header with nothing under it reads as "no files".
+    ...(input.scaffold
+      ? [
+          '=== FILE SHAPE (a published game — structure only, not the game to build) ===',
+          'Copy its layout, manifest shape, and idioms; never its mechanics, theme, or objective.',
+          '',
+          input.scaffold,
+          '',
+        ]
+      : []),
     ...(input.knowledgeContext
       ? ['=== ENGINE / DOCS CONTEXT (excerpts, not files — do not write these back) ===', input.knowledgeContext, '']
       : []),
@@ -638,11 +633,16 @@ export class ModelGameSeeder implements GameSeeder {
         ? CONTEXT_BYTE_BUDGET - KNOWLEDGE_CONTEXT_BYTE_BUDGET
         : CONTEXT_BYTE_BUDGET;
 
+      // Rendering it twice wastes budget and over-weights one game's mechanics.
+      const duplicate = picks.includes(SEED_SCAFFOLD_SLUG);
+      if (!context.scaffold) {
+        this.options.log?.warn({ slug }, 'seed scaffold missing from the archive; prompting without one');
+      }
       const generatePrompt = buildGeneratePrompt({
         slug,
         title: request.title,
         spec,
-        scaffold: context.scaffold,
+        scaffold: duplicate ? '' : context.scaffold,
         references: context.renderReferences(picks, referenceBudget),
         ...(knowledgeContext ? { knowledgeContext } : {}),
         ...(steer ? { steer } : {}),

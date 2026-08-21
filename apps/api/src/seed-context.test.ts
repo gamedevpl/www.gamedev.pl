@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildSeedContext, createArchiveSeedContextSource, type SeedFileIndex } from './seed-context.js';
+import {
+  SEED_SCAFFOLD_SLUG,
+  buildSeedContext,
+  createArchiveSeedContextSource,
+  type SeedFileIndex,
+} from './seed-context.js';
 
 function indexOf(files: Record<string, string>): SeedFileIndex {
   return { paths: Object.keys(files), read: (path) => files[path] ?? null };
@@ -15,9 +20,9 @@ const FILES: Record<string, string> = {
   'catalog.json': CATALOG,
   'shared/game-kit.d.ts': 'interface GameKitDraw { circle(x: number, y: number, r: number): void; }\n',
   'shared/modules/core.ts': 'export const core = true;\n',
-  'templates/game/SPEC.md': '---\ntitle: __TITLE__\n---\n',
-  'templates/game/game.ts': "import { startGame } from './game/runtime.ts';\n",
-  'templates/game/game/runtime.ts': 'export function startGame() {}\n',
+  [`games/${SEED_SCAFFOLD_SLUG}/SPEC.md`]: '---\ntitle: Block Cascade\n---\n',
+  [`games/${SEED_SCAFFOLD_SLUG}/game.ts`]: "import { startGame } from './game/runtime.ts';\n",
+  [`games/${SEED_SCAFFOLD_SLUG}/game/runtime.ts`]: 'export function startGame() {}\n',
   'games/apex-sprint/SPEC.md': '---\ntitle: Apex Sprint\n---\n',
   'games/apex-sprint/game.ts': 'export {};\n',
   'games/apex-sprint/game/model.ts': 'export const SPEED = 1;\n',
@@ -69,13 +74,6 @@ describe('buildSeedContext', () => {
     // The budget is shared, so the closest match keeps its place and the tail is dropped
     // rather than every game being truncated into uselessness.
     expect(squeezed.length).toBeLessThan(full.length);
-  });
-
-  it('renders the template scaffold under a placeholder slug', () => {
-    const context = buildSeedContext(indexOf(FILES))!;
-
-    expect(context.scaffold).toContain('--- games/<slug>/game.ts ---');
-    expect(context.scaffold).toContain('--- games/<slug>/game/runtime.ts ---');
   });
 
   it('returns null without a catalog, so seeding is skipped rather than guessed', () => {
