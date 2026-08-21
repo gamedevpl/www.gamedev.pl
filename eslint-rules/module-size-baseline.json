@@ -879,7 +879,7 @@
     "packages/contract/src/gate-progress.ts": 3,
     "packages/contract/src/gate-status.test.ts": 49,
     "packages/contract/src/gate-status.ts": 25,
-    "packages/contract/src/index.ts": 12,
+    "packages/contract/src/index.ts": 13,
     "packages/contract/src/managed-agent-vendor.test.ts": 8,
     "packages/contract/src/managed-agent-vendor.ts": 3,
     "packages/game-generator/src/engine/engine.test.ts": 35,

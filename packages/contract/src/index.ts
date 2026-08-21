@@ -8,5 +8,6 @@ export { GATE_PROGRESS_LANES, type GateProgressLane } from './gate-progress.js';
 export { deriveGateStatusString, derivePreviewGateStatus, GATE_STATUS_VALUES, type GateStatus } from './gate-status.js';
 export { JOB_STALL_VALUES, JOB_STATES, type JobStall, type JobState } from './job-state.js';
 export { MANAGED_AGENT_VENDORS, type ManagedAgentVendorName } from './managed-agent-vendor.js';
+export { INPUT_KEYS, ROOM_PHASES, type InputKey, type RoomPhase } from './mp-protocol.js';
 export { PROPERTY_TYPES, type PropertyType } from './property-type.js';
 export { SUBMISSION_STATES, type SubmissionState } from './submission-state.js';

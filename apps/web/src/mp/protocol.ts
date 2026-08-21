@@ -9,14 +9,13 @@
  * the other), so every frame is narrowed by the guards below before it is used.
  */
 
+import { INPUT_KEYS, ROOM_PHASES, type InputKey, type RoomPhase } from '@gamedevpl/contract';
+
+export { INPUT_KEYS, ROOM_PHASES, type InputKey, type RoomPhase };
+
 export const PROTOCOL_VERSION = 1;
 /** Namespace on the bridge, so a game's own postMessage traffic can't be confused for ours. */
 export const BRIDGE_NAMESPACE = 'gdp';
-
-export const INPUT_KEYS = ['up', 'down', 'left', 'right', 'a'] as const;
-export type InputKey = (typeof INPUT_KEYS)[number];
-
-export type RoomPhase = 'lobby' | 'playing' | 'ended';
 
 export interface RosterSlot {
   slot: number;
