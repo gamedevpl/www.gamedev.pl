@@ -16,11 +16,9 @@ export function StudioStageCard({ status }: { status?: SubmissionStatus | null }
   const total = reported?.total ?? checklist.length;
   // Gate's own timestamp beats a stale pre-delivery agent line.
   const heartbeatAt = gate ? Date.parse(gate.at) || latestAgentActivityAt(status) : latestAgentActivityAt(status);
-  // Not ended while our gate still owes a verdict — that window said "no version".
+  // Not ended while the gate still owes a verdict.
   const awaitingGate = status?.phase === 'submitted' || status?.phase === 'gating';
   const ended = !awaitingGate && (status?.stall === 'ended' || Boolean(status?.agentEndedAt));
-
-  // Gate outranks the agent's last line: mid-check, that line is already history.
   const working = gate
     ? {
         kicker: t('studioPanel.stage.checkingKicker'),
@@ -38,7 +36,6 @@ export function StudioStageCard({ status }: { status?: SubmissionStatus | null }
         : status?.progress?.note
           ? { kicker: t('statusView.progress.agentSays'), text: status.progress.note }
           : null;
-
   const title =
     gate || awaitingGate
       ? t('studioPanel.stage.checkingTitle')
