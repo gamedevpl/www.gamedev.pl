@@ -396,9 +396,9 @@ const BRIDGE = `(function(){
 // Fit the logical canvas to the iframe without distorting pointer coordinates.
 const HIDE_CHROME =
   `#game-title,#game-desc,.game-controls,.hint{display:none!important}` +
-  // Hide buttons-only GameKit chrome on mouse desktops.
-  `@media not all and (any-pointer:coarse){` +
-  `.gamekit-touch:not(:has(.gamekit-touch-pad)){display:none!important}` +
+  // Hide touch chrome on hover/fine pointers; hybrid touchscreens are not phones.
+  `@media (hover:hover),(pointer:fine){` +
+  `.gamekit-touch{display:none!important}` +
   `}` +
   `html,body{width:100%;height:100%;margin:0;background:#000}` +
   `body{display:flex;align-items:center;justify-content:center;` +

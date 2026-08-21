@@ -9,9 +9,9 @@ describe('embedGameHtml', () => {
     // Style + script land inside <head> so rAF patches precede game scripts.
     expect(out).toContain('<style id="gdpl-embed">');
     expect(out).toContain('#game-title,#game-desc,.game-controls,.hint{display:none!important}');
-    // Desktop mouse: hide buttons-only GameKit chrome (pointer-native tactics UIs).
-    expect(out).toContain('@media not all and (any-pointer:coarse)');
-    expect(out).toContain('.gamekit-touch:not(:has(.gamekit-touch-pad))');
+    // Fine/hover primary pointer (desktops, incl. hybrid touchscreens): no touch chrome.
+    expect(out).toContain('@media (hover:hover),(pointer:fine)');
+    expect(out).toContain('.gamekit-touch{display:none!important}');
     expect(out).toContain('gdpl-player');
     expect(out.indexOf('<style id="gdpl-embed">')).toBeLessThan(out.indexOf('</head>'));
     expect(out.indexOf('<script>')).toBeLessThan(out.indexOf('</head>'));
