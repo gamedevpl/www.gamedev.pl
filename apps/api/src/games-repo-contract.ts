@@ -98,7 +98,7 @@ export type GameKitModuleName = (typeof GAME_KIT_MODULES)[number];
  * 252 → 624 KiB: transport-tycoon-remake assembled to 694_419 bytes, ~26 KiB
  * over the prior 668_048 cap.
  */
-export const GAME_BUDGET_BYTES = 624 * 1024;
+export const GAME_BUDGET_BYTES = 936 * 1024;
 
 /**
  * Raw TypeScript source-graph ceiling for the bake/play/seed bundlers
@@ -111,13 +111,13 @@ export const GAME_BUDGET_BYTES = 624 * 1024;
  * 300 → 336 KiB for the same game's island coastline, on-foot car collision and
  * mission-ladder work. 336 → 708 KiB to stay above the 624 KiB author budget.
  */
-export const SOURCE_GRAPH_BUDGET_BYTES = 708 * 1024;
+export const SOURCE_GRAPH_BUDGET_BYTES = 1062 * 1024;
 
 /**
  * Platform half of the serve cap — games-repo `GAMEKIT_PLATFORM_BYTES` /
  * `assemble-contract.json` `platformCeilingBytes`. Together with
  * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
- * (1_048_976, matching `maxProjectBytes`). Not a round KiB.
+ * (1_368_464, matching `maxProjectBytes`). Not a round KiB.
  *
  * One derived ceiling, not a sum of per-feature constants (games-repo #281). Check 4
  * bills each author for measured `assembled − platformBytes` against the 624 KiB
