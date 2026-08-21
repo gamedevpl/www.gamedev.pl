@@ -1,5 +1,8 @@
+import type { AssistLane } from '@gamedevpl/contract';
 import type { GameHealth } from './healthApi.js';
 import type { FeedbackContext, SubmissionState } from './submissionApi.js';
+
+export type { AssistLane };
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
@@ -196,8 +199,6 @@ export async function publishEditorContent(slug: string): Promise<{ version: str
   if (!response.ok) await throwResponseError(response);
   return (await response.json()) as { version: string; jobId: number };
 }
-
-export type AssistLane = 'params' | 'content' | 'code' | 'reject';
 
 export type AssistResponse = {
   lane: AssistLane;

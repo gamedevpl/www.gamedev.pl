@@ -1,3 +1,4 @@
+import type { AssistLane } from '@gamedevpl/contract';
 import type {
   EditorCollectionSpec,
   EditorContentDoc,
@@ -50,7 +51,7 @@ export type RemixSession = {
 };
 
 export type RemixAssistResponse = {
-  lane: 'params' | 'content' | 'code' | 'reject';
+  lane: AssistLane;
   patches?: Array<{ key: string; value: EditorParamValue }>;
   values?: Record<string, EditorParamValue>;
   summary?: EditorLabel;
