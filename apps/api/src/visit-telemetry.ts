@@ -1,3 +1,22 @@
+import {
+  ASSIST_STEPS,
+  BETA_WELCOME_STEPS,
+  CODE_COMPLETION_KINDS,
+  CODE_COMPLETION_OUTCOMES,
+  CODE_STEPS,
+  CREATE_STEPS,
+  EDITOR_STEPS,
+  HOW_TO_PLAY_VIAS,
+  INVITE_STEPS,
+  PLAY_VIAS,
+  REMIX_CONTROLS,
+  REMIX_PAINTED_VIAS,
+  REMIX_STEPS,
+  STUDIO_STEP_DETAILS,
+  STUDIO_STEPS,
+  VISIT_ROUTE_KINDS,
+  WAITLIST_STEPS,
+} from '@gamedevpl/contract';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { rememberBounded } from './bounded-map.js';
@@ -39,172 +58,25 @@ const MAX_BACKDATE_MS = 6 * 60 * 60 * 1000;
 const MAX_TRACKED_VISITS = 5000;
 const MAX_TRACKED_IPS = 20_000;
 
-const RouteKindSchema = z.enum([
-  'home',
-  'play',
-  'draft',
-  'status',
-  'join',
-  'invite',
-  'legal',
-  'health',
-  'studio',
-  'game',
-  'create',
-  'party',
-  'notFound',
-]);
-/**
- * Creation-funnel steps. A closed enum rather than a free string, for the same reason
- * every other field here is bounded: this reaches a grouping key, and the endpoint is
- * open to anyone who can reach the site.
- */
-const CreateStepSchema = z.enum([
-  'prompt_started',
-  'spec_submitted',
-  'signin_required',
-  'qa_shown',
-  'title_confirmed',
-  'submission_created',
-  'handoff_shown',
-  'handoff_enter_studio',
-]);
-/**
- * Closed-beta waitlist funnel. Same closed-enum posture as create steps: the value
- * reaches a grouping key on an open endpoint.
- */
-const WaitlistStepSchema = z.enum(['cta_clicked', 'joined']);
-const InviteStepSchema = z.enum(['opened', 'accepted', 'unavailable']);
-const BetaWelcomeStepSchema = z.enum(['shown', 'continued', 'dismissed']);
-/**
- * Studio / self-build funnel (BY-08). Sibling to create steps — not ordered with them.
- * Reaches a grouping key; closed enum on an open endpoint.
- */
-const StudioStepSchema = z.enum([
-  'builder_chosen',
-  'connect_copied',
-  'connect_deeplink',
-  'connect_dismissed',
-  'connect_restored',
-  'agent_signaled',
-  'gate_verdict',
-  'round_opened',
-  // A creator took a working copy to their own IDE (docs/own-ide-checkout.md). Its
-  // value is as the denominator for a question nothing else can answer: of the
-  // creators who leave to work locally, how many come back and deliver.
-  'workspace_checkout',
-]);
+const RouteKindSchema = z.enum(VISIT_ROUTE_KINDS);
+const CreateStepSchema = z.enum(CREATE_STEPS);
+const WaitlistStepSchema = z.enum(WAITLIST_STEPS);
+const InviteStepSchema = z.enum(INVITE_STEPS);
+const BetaWelcomeStepSchema = z.enum(BETA_WELCOME_STEPS);
+const StudioStepSchema = z.enum(STUDIO_STEPS);
 /** Platform vs creator's own agent. Optional on create_step; required on studio_step. */
 const BuilderDimensionSchema = z.enum(['platform', 'self']);
-/**
- * Closed detail for studio steps that carry one. Optional so steps without a detail
- * (builder choice, first agent signal) stay valid.
- * `header` = creator-key copy (BY-27a); `cursor` / `vscode` = one-click install (BY-18c).
- */
-const StudioStepDetailSchema = z.enum([
-  'install',
-  'kickoff',
-  'header',
-  'cursor',
-  'vscode',
-  'green',
-  'red',
-  'kit_outdated',
-  'creator',
-  'agent',
-]);
-/** EditorKit's revision funnel. No slug: the visit stream stays unjoinable. */
-const EditorStepSchema = z.enum([
-  'opened',
-  'draft_saved',
-  'previewed',
-  'published',
-  'v2_schema_loaded',
-  'v2_content_loaded',
-  'v2_controller_ready',
-  'v2_controller_failed',
-  'controller_loaded',
-  'controller_failed',
-  'tool_used',
-  'undo_used',
-  'selection_from_game',
-]);
-/** The NL tuning lane's outcomes — a dimension beside the editing funnel, not a rung in it. */
-const AssistStepSchema = z.enum(['asked', 'applied', 'handoff', 'rejected']);
-/**
- * The Code surface funnel (creator-code-editing-execution-plan.md CE-01). Reaches a
- * grouping key on an open endpoint like every other funnel here — and, same as the
- * editor funnel, never carries a file path or source text; those never leave the
- * client at all.
- */
-const CodeStepSchema = z.enum([
-  'offered',
-  'opened',
-  'file_opened',
-  'edited',
-  'typechecked',
-  'previewed',
-  'delivered',
-  'published',
-  'read_only_agent',
-  'conflict_seen',
-  'round_reopened',
-  'restored_missing',
-  'agent_mode_enabled',
-  'agent_mode_disabled',
-  'agent_console_run',
-]);
-const CodeCompletionKindSchema = z.enum(['language_service', 'ghost_text']);
-const CodeCompletionOutcomeSchema = z.enum(['shown', 'empty', 'failed']);
-/** The player-side remix funnel — see visit-funnel's REMIX_STEPS for the order's meaning. */
-const RemixStepSchema = z.enum([
-  'offered',
-  'opened',
-  'no_lane',
-  'typed',
-  'wall_shown',
-  'signed_in',
-  'tuned',
-  'painted',
-  'asked',
-  'applied',
-  'broken',
-  'undone',
-  'handoff',
-  'refused',
-  'shared',
-  'keep_clicked',
-  'proposed',
-]);
-/** Which door led to the painter — recorded on `painted`, closed like every grouping key. */
-const RemixViaSchema = z.enum(['redirect', 'menu', 'panel']);
-/**
- * Which control opened the remix. Its own field rather than more members on
- * `via`: that one names what led a player to the painter, this one names the
- * button they pressed, and collapsing the two would make every stored row
- * ambiguous the first time a third door exists.
- */
-const RemixControlSchema = z.enum(['bar', 'more', 'page']);
-/**
- * Which chrome surface opened How to play. Optional so a tab still running the previous
- * client can record the open without `via` — the aggregate treats missing as unknown
- * rather than dropping the event. Closed enum: the value reaches a grouping key.
- */
-const HowToPlayViaSchema = z.enum(['bar', 'more']);
-// Home page surface for play_started; not every entry point yet.
-const PlayViaSchema = z.enum([
-  'featured',
-  'rail_start_here',
-  'rail_continue',
-  'rail_party',
-  'rail_new',
-  'grid',
-  'composer_match',
-  'create_showcase',
-  'shelf',
-  'featured_similar',
-  'party_page',
-]);
+const StudioStepDetailSchema = z.enum(STUDIO_STEP_DETAILS);
+const EditorStepSchema = z.enum(EDITOR_STEPS);
+const AssistStepSchema = z.enum(ASSIST_STEPS);
+const CodeStepSchema = z.enum(CODE_STEPS);
+const CodeCompletionKindSchema = z.enum(CODE_COMPLETION_KINDS);
+const CodeCompletionOutcomeSchema = z.enum(CODE_COMPLETION_OUTCOMES);
+const RemixStepSchema = z.enum(REMIX_STEPS);
+const RemixViaSchema = z.enum(REMIX_PAINTED_VIAS);
+const RemixControlSchema = z.enum(REMIX_CONTROLS);
+const HowToPlayViaSchema = z.enum(HOW_TO_PLAY_VIAS);
+const PlayViaSchema = z.enum(PLAY_VIAS);
 /**
  * Acquisition strings are re-validated here rather than trusted from the client. The
  * browser filters them for cleanliness; this filters them because a value that reaches a

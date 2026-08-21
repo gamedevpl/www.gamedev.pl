@@ -1,3 +1,31 @@
+import {
+  ASSIST_STEPS,
+  BETA_WELCOME_STEPS,
+  CODE_COMPLETION_KINDS,
+  CODE_STEPS,
+  CREATE_STEPS,
+  EDITOR_STEPS,
+  HOW_TO_PLAY_VIAS,
+  INVITE_STEPS,
+  PLAY_VIAS,
+  REMIX_CONTROLS,
+  REMIX_PAINTED_VIAS,
+  REMIX_STEPS,
+  WAITLIST_STEPS,
+  type AssistStep,
+  type BetaWelcomeStep,
+  type CodeCompletionKind,
+  type CodeStep,
+  type CreateStep,
+  type EditorStep,
+  type HowToPlayVia,
+  type InviteStep,
+  type PlayVia,
+  type RemixControl,
+  type RemixPaintedVia,
+  type RemixStep,
+  type WaitlistStep,
+} from '@gamedevpl/contract';
 import type { VisitEvent } from './store.js';
 
 /**
@@ -100,7 +128,7 @@ export interface VisitFunnel {
    * that added the dimension. The doors are the hypothesis of
    * remix-content-editing-plan §3.1; this is what settles it.
    */
-  remixPaintedVia: Array<{ via: 'redirect' | 'menu' | 'panel' | 'unknown'; visits: number }>;
+  remixPaintedVia: Array<{ via: RemixPaintedVia | 'unknown'; visits: number }>;
   /**
    * Whether the remix entry is worth the space it takes.
    *
@@ -117,7 +145,7 @@ export interface VisitFunnel {
   remixEntry: {
     offered: number;
     opened: number;
-    byControl: Array<{ control: 'page' | 'bar' | 'more' | 'unknown'; visits: number }>;
+    byControl: Array<{ control: RemixControl | 'unknown'; visits: number }>;
     medianSecondsToOpen: number | null;
   };
   /**
@@ -176,165 +204,6 @@ export interface CodeCompletionFunnel {
     p90LatencyMs: number | null;
   }>;
 }
-
-export const CODE_COMPLETION_KINDS = ['language_service', 'ghost_text'] as const;
-export type CodeCompletionKind = (typeof CODE_COMPLETION_KINDS)[number];
-
-export const HOW_TO_PLAY_VIAS = ['bar', 'more'] as const;
-
-export type HowToPlayVia = (typeof HOW_TO_PLAY_VIAS)[number];
-
-// Not every play entry point yet — direct links land as unknown.
-export const PLAY_VIAS = [
-  'featured',
-  'rail_start_here',
-  'rail_continue',
-  'rail_party',
-  'rail_new',
-  'grid',
-  'composer_match',
-  'create_showcase',
-  'shelf',
-  'featured_similar',
-  'party_page',
-] as const;
-
-export type PlayVia = (typeof PLAY_VIAS)[number];
-
-/** Step order is the funnel's meaning, so it is declared once and reused. */
-export const CREATE_STEPS = [
-  'prompt_started',
-  'spec_submitted',
-  'signin_required',
-  'qa_shown',
-  'title_confirmed',
-  'submission_created',
-  'handoff_shown',
-  'handoff_enter_studio',
-] as const;
-
-export type CreateStep = (typeof CREATE_STEPS)[number];
-
-export const WAITLIST_STEPS = ['cta_clicked', 'joined'] as const;
-
-export type WaitlistStep = (typeof WAITLIST_STEPS)[number];
-
-export const INVITE_STEPS = ['opened', 'accepted', 'unavailable'] as const;
-
-export type InviteStep = (typeof INVITE_STEPS)[number];
-
-export const BETA_WELCOME_STEPS = ['shown', 'continued', 'dismissed'] as const;
-
-export type BetaWelcomeStep = (typeof BETA_WELCOME_STEPS)[number];
-
-export const EDITOR_STEPS = [
-  'opened',
-  'draft_saved',
-  'previewed',
-  'published',
-  'v2_schema_loaded',
-  'v2_content_loaded',
-  'v2_controller_ready',
-  'v2_controller_failed',
-  'controller_loaded',
-  'controller_failed',
-  'tool_used',
-  'undo_used',
-  'selection_from_game',
-] as const;
-
-export type EditorStep = (typeof EDITOR_STEPS)[number];
-
-/**
- * Outcomes of the editor's natural-language tuning lane.
- *
- * Deliberately NOT rungs of `EDITOR_STEPS`: funnel rungs are supersets of the
- * one below, and most creators will never open the composer, so an `asked` rung
- * would make a healthy editing ladder look like a cliff. `asked` is the
- * denominator for the other three.
- */
-export const ASSIST_STEPS = ['asked', 'applied', 'handoff', 'rejected'] as const;
-
-export type AssistStep = (typeof ASSIST_STEPS)[number];
-
-/**
- * The player-side remix funnel, in order.
- *
- * `opened → tuned` is the load-bearing pair: it answers whether players who can
- * bend a game actually do, which is the whole premise of the remix surface. The
- * later rungs are not supersets of each other (a player may share without ever
- * typing), so they are read as counts against `opened`, not as a strict ladder.
- */
-export const REMIX_STEPS = [
-  // The denominator. A visit that was shown the way in, whether or not it used
-  // it — recorded when the control renders. Every rung below is read against
-  // this one, which is the point: the entry left the player's line of sight and
-  // moved onto the chrome bar, and `offered → opened` is the only thing that can
-  // say what that cost. Without it, "nobody wants to remix" and "nobody found
-  // the button" are the same number.
-  'offered',
-  'opened',
-  // Opened onto nothing: the game declares no parameters and its code is not
-  // reachable, so there was no composer to type into. Sits directly under
-  // `opened` because it is the reason a visit never reaches `typed` — without
-  // it, "curious but silent" and "shown a dead panel" are the same number, and
-  // the first is a product problem while the second is a coverage one. It names
-  // no game: the visit stream never carries a slug, and how many games can
-  // answer is a question for the catalog, not for this stream.
-  'no_lane',
-  // The wall triple. `typed → signed_in` is the number the product strategy
-  // turns on: desire created versus what the sign-in wall costs. `typed` fires
-  // on send regardless of auth, so the gap is measured rather than guessed.
-  'typed',
-  'wall_shown',
-  'signed_in',
-  'tuned',
-  // `tuned`'s sibling for declared content: this visit changed a map in the
-  // remix painter. Beside it rather than below it — a visit may paint without
-  // ever touching a slider, and both answer the same "did they touch anything"
-  // question the surface's bet rests on.
-  'painted',
-  'asked',
-  'applied',
-  // `applied` is recorded when the rebuild arrives, which is before the game has
-  // run a frame. A build that then throws was counted as a success, and one the
-  // player took back was counted twice over — so the rung that measures whether
-  // the safety flow works had no numbers at all. These two are read against
-  // `applied`, not against each other: not every broken edit is undone.
-  'broken',
-  'undone',
-  'handoff',
-  'refused',
-  'shared',
-  'keep_clicked',
-  // The contribute-back exit: this visit successfully sent a proposal. Beside
-  // `shared` / `keep_clicked` rather than below them — a visit may propose without
-  // sharing a link or keeping a draft, and without this rung "opened the composer"
-  // and "sent a reviewable change" are the same number.
-  'proposed',
-] as const;
-
-export type RemixStep = (typeof REMIX_STEPS)[number];
-
-export const CODE_STEPS = [
-  'offered',
-  'opened',
-  'file_opened',
-  'edited',
-  'typechecked',
-  'previewed',
-  'delivered',
-  'published',
-  'read_only_agent',
-  'conflict_seen',
-  'round_reopened',
-  'restored_missing',
-  'agent_mode_enabled',
-  'agent_mode_disabled',
-  'agent_console_run',
-] as const;
-
-export type CodeStep = (typeof CODE_STEPS)[number];
 
 interface VisitRollup {
   started: boolean;
@@ -677,9 +546,9 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       visits: rollups.filter((rollup) => rollup.remixSteps.has(step)).length,
     })),
     remixPaintedVia: (() => {
-      const doors = ['redirect', 'menu', 'panel'] as const;
+      const doors = REMIX_PAINTED_VIAS;
       const painting = rollups.filter((rollup) => rollup.remixSteps.has('painted'));
-      const rows: Array<{ via: 'redirect' | 'menu' | 'panel' | 'unknown'; visits: number }> = doors.map((via) => ({
+      const rows: Array<{ via: RemixPaintedVia | 'unknown'; visits: number }> = doors.map((via) => ({
         via,
         visits: painting.filter((rollup) => rollup.paintedVia === via).length,
       }));
@@ -706,13 +575,11 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
        * it reports only the visits we know were shown the control.
        */
       const opened = offered.filter((rollup) => rollup.remixSteps.has('opened'));
-      const doors = ['page', 'bar', 'more'] as const;
-      const byControl: Array<{ control: 'page' | 'bar' | 'more' | 'unknown'; visits: number }> = doors.map(
-        (control) => ({
-          control,
-          visits: opened.filter((rollup) => rollup.remixControl === control).length,
-        }),
-      );
+      const doors = REMIX_CONTROLS;
+      const byControl: Array<{ control: RemixControl | 'unknown'; visits: number }> = doors.map((control) => ({
+        control,
+        visits: opened.filter((rollup) => rollup.remixControl === control).length,
+      }));
       const unknown = opened.filter((rollup) => !doors.includes(rollup.remixControl as (typeof doors)[number])).length;
       if (unknown > 0) byControl.push({ control: 'unknown', visits: unknown });
       // Only visits that actually opened one carry a delay, so the median is over
