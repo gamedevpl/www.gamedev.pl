@@ -1,3 +1,7 @@
+import { ZONE_LINK_STEPS, type ZoneLinkStep } from '@gamedevpl/contract';
+
+export { ZONE_LINK_STEPS };
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
 /**
@@ -35,10 +39,7 @@ export type TelemetryEvent =
    * Emitted by the shell, never accepted from inside the frame. A game that could send
    * `joined` could report itself multiplayer while sitting alone.
    */
-  | { type: 'zone_link'; step: 'admitted' | 'joined' | 'lost' };
-
-/** Order is the funnel's meaning, as with the visit stream's `create_step`. */
-export const ZONE_LINK_STEPS = ['admitted', 'joined', 'lost'] as const;
+  | { type: 'zone_link'; step: ZoneLinkStep };
 
 /** Flush when this many events are queued, so a busy session does not sit on data. */
 const FLUSH_AT = 10;

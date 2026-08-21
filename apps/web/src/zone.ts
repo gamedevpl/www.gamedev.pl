@@ -1,4 +1,5 @@
 import { useEffect, type MutableRefObject } from 'react';
+import type { ZoneLinkStep } from '@gamedevpl/contract';
 import { BRIDGE_NAMESPACE } from './mp/protocol.js';
 import { MAX_INPUTS_PER_SECOND, ZONE_PROTOCOL_VERSION, parseZoneBridgeMessage } from './zone/protocol.js';
 import { ZoneClient } from './zone/zoneClient.js';
@@ -55,7 +56,7 @@ export function useZoneBridge(frameRef: MutableRefObject<HTMLIFrameElement | nul
      * reaches `onFrame`, and a recorder that resolved the session per call would record
      * it against whatever game opened next.
      */
-    let recordPlayEvent: (event: { type: 'zone_link'; step: 'admitted' | 'joined' | 'lost' }) => void = () => {};
+    let recordPlayEvent: (event: { type: 'zone_link'; step: ZoneLinkStep }) => void = () => {};
 
     function postToGame(payload: Record<string, unknown>) {
       if (cancelled) return;
