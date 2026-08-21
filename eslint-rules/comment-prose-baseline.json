@@ -151,7 +151,7 @@
     "apps/api/src/job-costs.test.ts": 230,
     "apps/api/src/job-costs.ts": 805,
     "apps/api/src/job-state.test.ts": 487,
-    "apps/api/src/job-state.ts": 2010,
+    "apps/api/src/job-state.ts": 2033,
     "apps/api/src/kit-files.test.ts": 83,
     "apps/api/src/kit-files.ts": 552,
     "apps/api/src/kit-registry.ts": 157,
