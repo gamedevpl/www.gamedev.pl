@@ -58,3 +58,25 @@ describe('Studio status while the gate still owes a verdict', () => {
     expect(text).not.toContain('finished this round');
   });
 });
+
+// The window between delivery and the gate's first stage report.
+describe('the stage card before the gate reports a stage', () => {
+  const justDelivered = {
+    status: 'building',
+    phase: 'submitted',
+    events: [
+      { id: 'e1', text: 'Graphics pass: lit cities that dim when struck', createdAt: '2026-08-21T17:40:00.000Z' },
+    ],
+    recentBuilds: [
+      { version: 'v9', createdAt: '2026-08-21T17:40:00.000Z', mode: 'publish', verdict: 'pending', total: 12 },
+    ],
+  } as unknown as SubmissionStatus;
+
+  it('says it is checking, not that the agent is still writing', async () => {
+    const host = await render(<StudioStageCard status={justDelivered} />);
+    const text = host.textContent ?? '';
+
+    expect(text).toContain('Checking the build.');
+    expect(text).not.toContain('Graphics pass');
+  });
+});
