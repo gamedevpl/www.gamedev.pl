@@ -5,10 +5,9 @@
 // so they carry no List-Unsubscribe — that header belongs to the recurring
 // notification mails described in docs/notifications-plan.md.
 
+import type { Locale } from '@gamedevpl/contract';
 import type { EmailMessage } from './mailer.js';
 import type { OperatorNotificationType, ProposalNotificationType, SubmissionNotificationType } from './store.js';
-
-export type Locale = 'en' | 'pl';
 
 export function normalizeLocale(value: string | undefined): Locale {
   return value?.toLowerCase().startsWith('pl') ? 'pl' : 'en';

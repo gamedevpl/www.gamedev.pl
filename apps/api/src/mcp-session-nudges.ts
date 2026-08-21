@@ -7,6 +7,8 @@
  * results by the MCP dispatcher.
  */
 
+import type { SeedStatus } from './seed-status.js';
+
 export type NudgeCode =
   | 'progress_stale'
   | 'inbox_pending'
@@ -33,7 +35,7 @@ export interface JobNudgeState {
   /** True after a successful get_seed in this MCP session tracker. */
   seedFetched: boolean;
   /** Last known seedStatus from brief/seed payloads. */
-  seedStatus: 'pending' | 'available' | 'unavailable' | null;
+  seedStatus: SeedStatus | null;
   // Last-seen dispatchAttempt; a change re-arms transcriptFetched below.
   lastDispatchAttempt: number | null;
   // True after get_transcript since the last dispatch this tracker saw.
@@ -126,7 +128,7 @@ export interface McpNudgeTracker {
   noteProgress(jobId: number, nowMs: number): void;
   noteInboxCheck(jobId: number, nowMs: number): void;
   noteSeedFetch(jobId: number, nowMs: number): void;
-  noteSeedStatus(jobId: number, status: 'pending' | 'available' | 'unavailable' | null, nowMs: number): void;
+  noteSeedStatus(jobId: number, status: SeedStatus | null, nowMs: number): void;
   // Called with dispatchAttempt from a start/get_brief payload.
   noteDispatchAttempt(jobId: number, attempt: number, nowMs: number): void;
   /** Successful submit_sources — creator handoff may already be unlocked; still need `end`. */
@@ -194,7 +196,7 @@ export function createMcpNudgeTracker(
     state.seedFetched = true;
   }
 
-  function noteSeedStatus(jobId: number, status: 'pending' | 'available' | 'unavailable' | null, nowMs: number): void {
+  function noteSeedStatus(jobId: number, status: SeedStatus | null, nowMs: number): void {
     const state = ensure(jobId, nowMs);
     state.seedStatus = status;
   }

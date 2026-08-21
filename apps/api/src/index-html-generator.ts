@@ -2,6 +2,8 @@
 
 // Contract and goldens: docs/how-to-play-plan.md
 
+import type { Locale } from '@gamedevpl/contract';
+
 export interface HowToPlay {
   controls?: Array<{
     keys: string | { en: string; pl: string };
@@ -145,7 +147,7 @@ function buildLegendRows(howToPlay: HowToPlay | undefined): LegendRow[] {
   return rows;
 }
 
-function formatKey(keys: string | { en: string; pl: string }, locale: 'en' | 'pl'): string {
+function formatKey(keys: string | { en: string; pl: string }, locale: Locale): string {
   if (typeof keys === 'string') {
     return keys;
   }

@@ -1,9 +1,10 @@
+import type { Locale } from '@gamedevpl/contract';
 import { useTranslation } from 'react-i18next';
 import { SUPPORTED_LANGUAGES } from './i18n/index.js';
 
 const LABELS: Record<string, string> = { en: 'EN', pl: 'PL' };
 
-function resolveLang(language: string | undefined): 'en' | 'pl' {
+function resolveLang(language: string | undefined): Locale {
   return language?.toLowerCase().startsWith('pl') ? 'pl' : 'en';
 }
 

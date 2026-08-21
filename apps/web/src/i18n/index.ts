@@ -1,11 +1,12 @@
+import { LOCALES, type Locale } from '@gamedevpl/contract';
 import i18n from 'i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import { initReactI18next } from 'react-i18next';
 import en from './locales/en.json';
 import pl from './locales/pl.json';
 
-export const SUPPORTED_LANGUAGES = ['en', 'pl'] as const;
-export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
+export const SUPPORTED_LANGUAGES = LOCALES;
+export type SupportedLanguage = Locale;
 
 void i18n
   .use(LanguageDetector)

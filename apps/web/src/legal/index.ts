@@ -1,3 +1,4 @@
+import type { Locale } from '@gamedevpl/contract';
 import { privacyEn } from './privacy.en.js';
 import { privacyPl } from './privacy.pl.js';
 import { termsEn } from './terms.en.js';
@@ -6,7 +7,7 @@ import type { LegalDocId, LegalDocument } from './types.js';
 
 export type { LegalBlock, LegalDocId, LegalDocument, LegalSection } from './types.js';
 
-const DOCUMENTS: Record<'en' | 'pl', Record<LegalDocId, LegalDocument>> = {
+const DOCUMENTS: Record<Locale, Record<LegalDocId, LegalDocument>> = {
   en: { privacy: privacyEn, terms: termsEn },
   pl: { privacy: privacyPl, terms: termsPl },
 };

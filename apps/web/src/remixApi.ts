@@ -1,4 +1,4 @@
-import type { AssistLane } from '@gamedevpl/contract';
+import type { AssistLane, RemixSuggestion } from '@gamedevpl/contract';
 import type {
   EditorCollectionSpec,
   EditorContentDoc,
@@ -19,15 +19,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
  * server.
  */
 
-/**
- * Something worth saying, for this game. Structured rather than written: the
- * sentence is composed here from the game's own labels in the player's language,
- * because a suggestion is the one line a player is about to imitate and it has
- * to be in the language they are about to imitate it in.
- */
-export type RemixSuggestion =
-  | { kind: 'param'; key: string; direction: 'more' | 'less' | 'on' | 'off' }
-  | { kind: 'starter'; id: 'faster' | 'look' | 'harder' };
+export type { RemixSuggestion };
 
 export type RemixSession = {
   remixId: string;
