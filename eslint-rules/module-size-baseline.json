@@ -767,7 +767,7 @@
     "apps/web/src/StudioBuildBar.tsx": 44,
     "apps/web/src/StudioBuildHistory.test.tsx": 120,
     "apps/web/src/StudioBuildHistory.tsx": 58,
-    "apps/web/src/studioBuildStatus.test.tsx": 80,
+    "apps/web/src/studioBuildStatus.test.tsx": 82,
     "apps/web/src/StudioChatRail.test.tsx": 248,
     "apps/web/src/StudioChatRail.tsx": 306,
     "apps/web/src/studioChatSheet.test.ts": 22,
