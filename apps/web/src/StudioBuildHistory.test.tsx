@@ -85,6 +85,28 @@ describe('StudioBuildHistory', () => {
     unmount();
   });
 
+  it('reads a stalled "building" round as idle, not actively checking', async () => {
+    const { host, unmount } = await mount({
+      status: 'building',
+      stall: 'quiet',
+      recentBuilds: [{ version: 'v7', createdAt: new Date().toISOString(), mode: 'publish', verdict: 'pending' }],
+    });
+    expect(host.querySelector('.studio-build-history-live')?.className).not.toContain('is-live');
+    expect(host.querySelector('.studio-build-history-dot')?.className).not.toContain('is-live');
+    unmount();
+  });
+
+  it('trusts gateProgress over a stall — the gate itself is running', async () => {
+    const { host, unmount } = await mount({
+      status: 'building',
+      stall: 'gate_not_started',
+      gateProgress: { lane: 'preview', stage: 'smoke', index: 1, total: 3, at: new Date().toISOString() },
+      recentBuilds: [{ version: 'v8', createdAt: new Date().toISOString(), mode: 'publish', verdict: 'pending' }],
+    });
+    expect(host.querySelector('.studio-build-history-live')?.className).toContain('is-live');
+    unmount();
+  });
+
   it('names a stale-kit failure instead of a plain "Failed"', async () => {
     const { host, unmount } = await mount({
       ...base,
