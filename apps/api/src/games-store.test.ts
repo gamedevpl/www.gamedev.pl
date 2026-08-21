@@ -171,6 +171,21 @@ describe('validateSourceUpload — the delivery contract', () => {
       expect(() => validateSourceUpload(delivery)).toThrow(/game\/model\.ts:1:26 uses the `any` type/);
     });
 
+    it('refuses `any` behind syntax the build accepts but plain TS parsing rejects', () => {
+      // esbuild compiles decorators, so a delivery using them used to fail parsing here,
+      // report nothing, and land its `any` — refused by neither this check nor the gate.
+      const delivery = [
+        ...MINIMAL,
+        { path: 'game/render.ts', content: 'export class Boss {\n  @observable hp: any = 10;\n}\n' },
+      ];
+      expect(() => validateSourceUpload(delivery)).toThrow(/uses the `any` type/);
+    });
+
+    it('refuses a source it cannot parse rather than passing it as clean', () => {
+      const delivery = [...MINIMAL, { path: 'game/render.ts', content: "export const broken = 'oops\n" }];
+      expect(() => validateSourceUpload(delivery)).toThrow(/could not be parsed/);
+    });
+
     it('carries the refusal kind, so the round can count it', () => {
       const delivery = [...MINIMAL, { path: 'game/render.ts', content: 'const x = y as any;\n' }];
       try {

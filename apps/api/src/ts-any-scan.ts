@@ -12,10 +12,22 @@
  * the same independent library rather than one side out-parsing the other.
  */
 
-import { parse } from '@babel/parser';
+import { parse, type ParserPlugin } from '@babel/parser';
 import type { Comment, File, Node } from '@babel/types';
 
-export type BannedAnyKind = 'any-type' | 'ts-suppression';
+export type BannedAnyKind = 'any-type' | 'ts-suppression' | 'unparseable';
+
+/**
+ * Syntax this scan must understand, because the build accepts it.
+ *
+ * esbuild and `tsc` both compile decorators and `using` declarations; the parser needs to
+ * be told. Two sets because the two decorator proposals cannot be enabled at once and a
+ * game may be written against either — the first that parses wins.
+ */
+const PARSER_PLUGIN_SETS: readonly ParserPlugin[][] = [
+  ['typescript', 'decorators-legacy', 'decoratorAutoAccessors', 'explicitResourceManagement'],
+  ['typescript', 'decorators', 'decoratorAutoAccessors', 'explicitResourceManagement'],
+];
 
 export interface BannedAnyFinding {
   kind: BannedAnyKind;
@@ -117,11 +129,29 @@ function findingsFromComments(comments: readonly Comment[]): BannedAnyFinding[] 
  * already crosses (esbuild, `tsc`).
  */
 export function findBannedAnyUsages(source: string): BannedAnyFinding[] {
-  let file: File;
-  try {
-    file = parse(source, { sourceType: 'module', plugins: ['typescript'] });
-  } catch {
-    return [];
+  let file: File | undefined;
+  let failure: { message: string; loc?: { line: number; column: number } } | undefined;
+  for (const plugins of PARSER_PLUGIN_SETS) {
+    try {
+      file = parse(source, { sourceType: 'module', plugins });
+      failure = undefined;
+      break;
+    } catch (error) {
+      failure = error as { message: string; loc?: { line: number; column: number } };
+    }
+  }
+  // Fails closed. Reporting nothing would mean a file this parser cannot read is a file
+  // the ban does not apply to — and the build is more permissive than any one plugin set,
+  // so "we could not check it" must not read as "it is clean".
+  if (!file) {
+    return [
+      {
+        kind: 'unparseable',
+        line: failure?.loc?.line ?? 1,
+        column: (failure?.loc?.column ?? 0) + 1,
+        text: failure?.message ?? 'could not be parsed',
+      },
+    ];
   }
 
   const findings: BannedAnyFinding[] = [];
@@ -138,7 +168,9 @@ export function findBannedAnyUsages(source: string): BannedAnyFinding[] {
 /** One human-readable line per finding, in the shape both repos report it. */
 export function describeBannedAnyFinding(fileName: string, finding: BannedAnyFinding): string {
   const where = `${fileName}:${finding.line}:${finding.column}`;
-  return finding.kind === 'any-type' ? `${where} uses the \`any\` type` : `${where} uses \`${finding.text}\``;
+  if (finding.kind === 'any-type') return `${where} uses the \`any\` type`;
+  if (finding.kind === 'ts-suppression') return `${where} uses \`${finding.text}\``;
+  return `${where} could not be parsed, so it cannot be checked for \`any\`: ${finding.text}`;
 }
 
 /**
