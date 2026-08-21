@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ASSIST_LANES, type AssistLane } from '@gamedevpl/contract';
 import { createVertexClient, type VertexGenerationConfig } from './genai.js';
 import type { GenAIClient } from 'genaicode';
 import {
@@ -32,8 +33,7 @@ import { formatRemixTurns } from './remix-turns.js';
  * refine.ts, moderation, and the seeder. No agent, no tools, no credentials.
  */
 
-export const ASSIST_LANES = ['params', 'content', 'code', 'reject'] as const;
-export type AssistLane = (typeof ASSIST_LANES)[number];
+export { ASSIST_LANES, type AssistLane };
 
 export const DEFAULT_ASSIST_MODEL = 'gemini-3.7-flash';
 export const DEFAULT_ASSIST_TIMEOUT_MS = 8000;
