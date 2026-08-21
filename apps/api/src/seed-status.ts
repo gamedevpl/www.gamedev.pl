@@ -30,9 +30,9 @@ export function seedNoticeFor(status: SeedStatus): string | null {
     case 'available':
       return 'This game already has sources — a generated round-0 draft. Call get_sources now and continue those files; do not scaffold from scratch. The brief wins: delete anything in the draft that contradicts it rather than adapting the spec to the draft.';
     case 'pending':
-      return "This game's round-0 draft is still generating. Browse the kit if needed, then call get_sources again before scaffolding from a template.";
+      return "This game's round-0 draft is still generating. Browse the kit if needed, then call get_sources again before scaffolding.";
     default:
-      return 'This round has no draft to continue; scaffold from the kit.';
+      return 'This round has no draft to continue; scaffold from a kit starter — with a shell, `npm run create -- <slug> "Title" [--like <starter>]`; without one, read starters/<slug>/ via read_kit_file and stage those files.';
   }
 }
 
