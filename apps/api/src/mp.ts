@@ -1,6 +1,7 @@
 import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
+import { INPUT_KEYS, ROOM_PHASES, type InputKey, type RoomPhase } from '@gamedevpl/contract';
 import { checkUserAccess } from './auth.js';
 import type { InternalAuthVerifier } from './internal-auth.js';
 import type { RelayClient } from './mp-relay.js';
@@ -39,9 +40,7 @@ export const SLOT_COLORS = [
 export const MAX_SLOTS = SLOT_COLORS.length;
 export const DEFAULT_SLOTS = 4;
 
-/** The v1 controller layout: a d-pad plus one action button. */
-const INPUT_KEYS = ['up', 'down', 'left', 'right', 'a'] as const;
-export type InputKey = (typeof INPUT_KEYS)[number];
+export { INPUT_KEYS, ROOM_PHASES, type InputKey, type RoomPhase };
 
 const ROOM_TTL_MS = 2 * 60 * 60 * 1000;
 const ROOM_IDLE_MS = 15 * 60 * 1000;
@@ -50,8 +49,6 @@ const JOIN_TOKEN_TTL_MS = ROOM_TTL_MS;
 const MAX_FRAMES_PER_SECOND = 40;
 /** Frames larger than this are refused unread — controller frames are tiny. */
 const MAX_FRAME_BYTES = 2 * 1024;
-
-export type RoomPhase = 'lobby' | 'playing' | 'ended';
 
 /** A connection we can write to. Kept structural so tests need no real socket. */
 export interface RelaySocket {
@@ -197,7 +194,7 @@ const InputFrameSchema = z.object({
 
 const PhaseFrameSchema = z.object({
   t: z.literal('phase'),
-  phase: z.enum(['lobby', 'playing', 'ended']),
+  phase: z.enum(ROOM_PHASES),
 });
 
 const KickFrameSchema = z.object({
