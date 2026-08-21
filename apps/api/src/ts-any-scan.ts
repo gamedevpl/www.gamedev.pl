@@ -6,10 +6,14 @@
  * agent hears "no `any`" on upload instead of a gate round later. The cross-repo contract
  * check compares the two files; change them together.
  *
- * A parser is not used even though this side has one: the games repo cannot parse
- * (`typescript@7` there ships no JS API), and a refusal here the gate would not repeat is
- * worse than the lexer's rough edges, which the games-repo header documents.
+ * Uses `@babel/parser` rather than the `typescript` package this side already depends on
+ * (5.9.3, with a real API): the games repo cannot use TypeScript's own compiler API
+ * (`typescript@7` there ships no JS API, only the `tsc` binary), so both halves parse with
+ * the same independent library rather than one side out-parsing the other.
  */
+
+import { parse } from '@babel/parser';
+import type { Comment, File, Node } from '@babel/types';
 
 export type BannedAnyKind = 'any-type' | 'ts-suppression';
 
@@ -35,103 +39,49 @@ export interface BannedAnyFinding {
 const SUPPRESSION_PREFIX = '@ts-';
 const SUPPRESSIONS = ['ignore', 'expect-error', 'nocheck'].map((name) => `${SUPPRESSION_PREFIX}${name}`);
 
-/** After these, a `/` opens a regex literal; after anything else it divides. */
-const REGEX_PRECEDING_PUNCTUATION = new Set([
-  '',
-  '(',
-  ',',
-  '=',
-  ':',
-  '[',
-  '!',
-  '&',
-  '|',
-  '?',
-  '{',
-  '}',
-  ';',
-  '+',
-  '-',
-  '*',
-  '%',
-  '~',
-  '^',
-  '<',
-  '>',
+/** Node keys that hold source-position metadata or comment back-references, not child nodes. */
+const NON_CHILD_KEYS = new Set([
+  'loc',
+  'start',
+  'end',
+  'range',
+  'leadingComments',
+  'trailingComments',
+  'innerComments',
+  'extra',
 ]);
-const REGEX_PRECEDING_KEYWORDS = new Set([
-  'return',
-  'typeof',
-  'instanceof',
-  'in',
-  'of',
-  'new',
-  'delete',
-  'void',
-  'case',
-  'do',
-  'else',
-  'yield',
-  'await',
-  'throw',
-]);
-/** A word `previous` can hold after a `(` opened by one of these — see the `)` handler. */
-const CONTROL_PAREN_KEYWORDS = new Set(['if', 'for', 'while', 'switch']);
 
-function isIdentifierStart(ch: string): boolean {
-  return /[A-Za-z_$]/.test(ch);
+function isNode(value: unknown): value is Node {
+  return typeof value === 'object' && value !== null && typeof (value as { type?: unknown }).type === 'string';
 }
 
-function isIdentifierPart(ch: string): boolean {
-  return /[A-Za-z0-9_$]/.test(ch);
+/** Depth-first walk over every AST node reachable from `root`, in source order. */
+function walk(root: Node, visit: (node: Node) => void): void {
+  visit(root);
+  for (const key of Object.keys(root)) {
+    if (NON_CHILD_KEYS.has(key)) continue;
+    const value = (root as unknown as Record<string, unknown>)[key];
+    if (Array.isArray(value)) {
+      for (const entry of value) if (isNode(entry)) walk(entry, visit);
+    } else if (isNode(value)) {
+      walk(value, visit);
+    }
+  }
 }
 
 /**
- * Every banned occurrence in one TypeScript source, in source order.
- *
- * Runs on untrusted uploaded text, so it is a single forward pass with no backtracking
- * and no regex over the whole source: cost is linear in the file's length.
+ * A block comment with many suppression strings must not go quadratic locating them —
+ * newline offsets are computed once per comment, then each match is placed by binary
+ * search instead of rescanning from the comment's start.
  */
-export function findBannedAnyUsages(source: string): BannedAnyFinding[] {
+function findingsFromComments(comments: readonly Comment[]): BannedAnyFinding[] {
   const findings: BannedAnyFinding[] = [];
-  let index = 0;
-  let line = 1;
-  let lineStart = 0;
-  /** One entry per `${` we are inside, counting the braces opened within it. */
-  const templateExpressions: { braces: number }[] = [];
-  let inTemplateText = false;
-  /**
-   * One entry per open `(`: whether it belongs to `if`/`for`/`while`/`switch`. Its `)`
-   * starts a new statement, where a `/` opens a regex — unlike an ordinary `)` closing a
-   * call or a grouped expression, after which `/` divides.
-   */
-  const parens: boolean[] = [];
-  /** Last significant token, for the regex-or-division decision. */
-  let previous = '';
-
-  const columnAt = (at: number) => at - lineStart + 1;
-
-  const advanceLine = () => {
-    line += 1;
-    lineStart = index + 1;
-  };
-
-  const record = (kind: BannedAnyKind, at: number, text: string) => {
-    findings.push({ kind, line, column: columnAt(at), text });
-  };
-
-  const scanComment = (text: string, startIndex: number) => {
-    // `line`/`lineStart` as they stood when the comment started — captured once so a
-    // comment with many suppression strings locates every match without rescanning from
-    // the comment's start each time, which went quadratic in the comment's length.
-    const startLine = line;
-    const startLineStart = lineStart;
+  for (const comment of comments) {
     const newlineOffsets: number[] = [];
-    for (let i = 0; i < text.length; i += 1) {
-      if (text[i] === '\n') newlineOffsets.push(i);
+    for (let i = 0; i < comment.value.length; i += 1) {
+      if (comment.value[i] === '\n') newlineOffsets.push(i);
     }
     const locate = (offset: number) => {
-      // Last newline in the comment strictly before `offset`, via binary search.
       let lo = 0;
       let hi = newlineOffsets.length;
       while (lo < hi) {
@@ -140,219 +90,48 @@ export function findBannedAnyUsages(source: string): BannedAnyFinding[] {
         else hi = mid;
       }
       const newlinesBefore = lo;
-      const lineStartAbsolute =
-        newlinesBefore === 0 ? startLineStart : startIndex + newlineOffsets[newlinesBefore - 1]! + 1;
-      return { line: startLine + newlinesBefore, column: startIndex + offset - lineStartAbsolute + 1 };
+      if (newlinesBefore === 0) {
+        // On the comment's first line, the match sits after both the delimiter (`//` or
+        // `/*`, always 2 characters) and the comment's own start column.
+        return { line: comment.loc!.start.line, column: comment.loc!.start.column + 2 + offset + 1 };
+      }
+      return { line: comment.loc!.start.line + newlinesBefore, column: offset - newlineOffsets[newlinesBefore - 1]! };
     };
     for (const suppression of SUPPRESSIONS) {
-      let found = text.indexOf(suppression);
+      let found = comment.value.indexOf(suppression);
       while (found !== -1) {
-        const { line: commentLine, column } = locate(found);
-        findings.push({ kind: 'ts-suppression', line: commentLine, column, text: suppression });
-        found = text.indexOf(suppression, found + suppression.length);
+        const { line, column } = locate(found);
+        findings.push({ kind: 'ts-suppression', line, column, text: suppression });
+        found = comment.value.indexOf(suppression, found + suppression.length);
       }
     }
-  };
+  }
+  return findings;
+}
 
-  while (index < source.length) {
-    const char = source[index]!;
-
-    if (inTemplateText) {
-      if (char === '\\') {
-        if (source[index + 1] === '\n') advanceLine();
-        index += 2;
-        continue;
-      }
-      if (char === '\n') {
-        advanceLine();
-        index += 1;
-        continue;
-      }
-      if (char === '`') {
-        inTemplateText = false;
-        previous = '`';
-        index += 1;
-        continue;
-      }
-      if (char === '$' && source[index + 1] === '{') {
-        templateExpressions.push({ braces: 0 });
-        inTemplateText = false;
-        previous = '{';
-        index += 2;
-        continue;
-      }
-      index += 1;
-      continue;
-    }
-
-    if (char === '\n') {
-      advanceLine();
-      index += 1;
-      continue;
-    }
-
-    if (char === ' ' || char === '\t' || char === '\r') {
-      index += 1;
-      continue;
-    }
-
-    if (char === '/' && source[index + 1] === '/') {
-      const end = source.indexOf('\n', index);
-      const stop = end === -1 ? source.length : end;
-      scanComment(source.slice(index, stop), index);
-      index = stop;
-      continue;
-    }
-
-    if (char === '/' && source[index + 1] === '*') {
-      const end = source.indexOf('*/', index + 2);
-      const stop = end === -1 ? source.length : end + 2;
-      scanComment(source.slice(index, stop), index);
-      for (; index < stop; index += 1) {
-        if (source[index] === '\n') advanceLine();
-      }
-      continue;
-    }
-
-    if (char === '"' || char === "'") {
-      index += 1;
-      while (index < source.length) {
-        const stringChar = source[index]!;
-        if (stringChar === '\\') {
-          if (source[index + 1] === '\n') advanceLine();
-          index += 2;
-          continue;
-        }
-        if (stringChar === '\n') {
-          // Unterminated string; the compiler will say so far more clearly than this can.
-          advanceLine();
-          index += 1;
-          break;
-        }
-        index += 1;
-        if (stringChar === char) break;
-      }
-      previous = 'x';
-      continue;
-    }
-
-    if (char === '`') {
-      inTemplateText = true;
-      index += 1;
-      continue;
-    }
-
-    if (char === '{') {
-      const enclosing = templateExpressions[templateExpressions.length - 1];
-      if (enclosing) enclosing.braces += 1;
-      previous = '{';
-      index += 1;
-      continue;
-    }
-
-    if (char === '}') {
-      const enclosing = templateExpressions[templateExpressions.length - 1];
-      if (enclosing) {
-        if (enclosing.braces === 0) {
-          templateExpressions.pop();
-          inTemplateText = true;
-          previous = 'x';
-          index += 1;
-          continue;
-        }
-        enclosing.braces -= 1;
-      }
-      previous = '}';
-      index += 1;
-      continue;
-    }
-
-    if (char === '(') {
-      parens.push(CONTROL_PAREN_KEYWORDS.has(previous));
-      previous = '(';
-      index += 1;
-      continue;
-    }
-
-    if (char === ')') {
-      const closedControl = parens.pop() ?? false;
-      // A control condition's `)` starts a new statement — reuse '' (already in the
-      // "starts regex" set) rather than a plain ')', which an ordinary call/group leaves,
-      // and which correctly means the next `/` divides.
-      previous = closedControl ? '' : ')';
-      index += 1;
-      continue;
-    }
-
-    if (char === '!') {
-      // `!` is both prefix logical negation (`!x`, where a regex may follow: `!/re/.test(s)`)
-      // and TypeScript's postfix non-null assertion (`value!`, after which `/` divides).
-      // Only the token before it tells them apart: negation follows a "regex allowed" spot,
-      // an assertion follows a value. Reusing that same check here, rather than `!`'s own
-      // punctuation-set membership, is what makes `value! / (x as any)` divide correctly.
-      const wasValueContext = !(REGEX_PRECEDING_PUNCTUATION.has(previous) || REGEX_PRECEDING_KEYWORDS.has(previous));
-      previous = wasValueContext ? 'x' : '!';
-      index += 1;
-      continue;
-    }
-
-    if ((char === '+' && source[index + 1] === '+') || (char === '-' && source[index + 1] === '-')) {
-      // `++`/`--` (prefix or postfix) always leave a value behind, so a `/` right after
-      // divides — unlike a single `+`/`-`, which a regex can legally follow. Without this,
-      // `left++ / (x as any)` reads the `/` as opening a regex and the `any` never surfaces.
-      previous = 'x';
-      index += 2;
-      continue;
-    }
-
-    if (char === '/') {
-      const startsRegex = REGEX_PRECEDING_PUNCTUATION.has(previous) || REGEX_PRECEDING_KEYWORDS.has(previous);
-      if (!startsRegex) {
-        previous = '/';
-        index += 1;
-        continue;
-      }
-      index += 1;
-      let inClass = false;
-      while (index < source.length) {
-        const regexChar = source[index]!;
-        if (regexChar === '\\') {
-          index += 2;
-          continue;
-        }
-        if (regexChar === '\n') {
-          // Not a regex after all (they cannot span lines) — resync on the next line.
-          advanceLine();
-          index += 1;
-          break;
-        }
-        if (regexChar === '[') inClass = true;
-        else if (regexChar === ']') inClass = false;
-        else if (regexChar === '/' && !inClass) {
-          index += 1;
-          break;
-        }
-        index += 1;
-      }
-      while (index < source.length && isIdentifierPart(source[index]!)) index += 1;
-      previous = 'x';
-      continue;
-    }
-
-    if (isIdentifierStart(char)) {
-      const start = index;
-      while (index < source.length && isIdentifierPart(source[index]!)) index += 1;
-      const word = source.slice(start, index);
-      // After a dot the word is a member name, never the type.
-      if (word === 'any' && previous !== '.') record('any-type', start, 'any');
-      previous = word;
-      continue;
-    }
-
-    previous = char;
-    index += 1;
+/**
+ * Every banned occurrence in one TypeScript source, in source order.
+ *
+ * Runs on untrusted uploaded text; parsing untrusted source with a well-tested parser
+ * that never executes it is the same trust boundary every other check in this pipeline
+ * already crosses (esbuild, `tsc`).
+ */
+export function findBannedAnyUsages(source: string): BannedAnyFinding[] {
+  let file: File;
+  try {
+    file = parse(source, { sourceType: 'module', plugins: ['typescript'] });
+  } catch {
+    return [];
   }
 
+  const findings: BannedAnyFinding[] = [];
+  walk(file.program as unknown as Node, (node) => {
+    if (node.type === 'TSAnyKeyword') {
+      findings.push({ kind: 'any-type', line: node.loc!.start.line, column: node.loc!.start.column + 1, text: 'any' });
+    }
+  });
+  findings.push(...findingsFromComments(file.comments ?? []));
+  findings.sort((a, b) => a.line - b.line || a.column - b.column);
   return findings;
 }
 
