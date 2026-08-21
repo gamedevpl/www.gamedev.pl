@@ -18,4 +18,5 @@ export { MANAGED_AGENT_VENDORS, type ManagedAgentVendorName } from './managed-ag
 export { INPUT_KEYS, ROOM_PHASES, type InputKey, type RoomPhase } from './mp-protocol.js';
 export { PROPERTY_TYPES, type PropertyType } from './property-type.js';
 export { SUBMISSION_STATES, type SubmissionState } from './submission-state.js';
+export { TREND_GRAINS, type TrendGrain } from './trend-grain.js';
 export { ZONE_LINK_STEPS, type ZoneLinkStep } from './zone-link-step.js';
