@@ -16,32 +16,32 @@ export function StudioStageCard({ status }: { status?: SubmissionStatus | null }
   const total = reported?.total ?? checklist.length;
   // Gate's own timestamp beats a stale pre-delivery agent line.
   const heartbeatAt = gate ? Date.parse(gate.at) || latestAgentActivityAt(status) : latestAgentActivityAt(status);
-  // Not ended while our gate still owes a verdict — that window said "no version".
+  // Not ended while the gate still owes a verdict.
   const awaitingGate = status?.phase === 'submitted' || status?.phase === 'gating';
   const ended = !awaitingGate && (status?.stall === 'ended' || Boolean(status?.agentEndedAt));
-
-  // Gate outranks the agent's last line: mid-check, that line is already history.
   const working = gate
     ? {
         kicker: t('studioPanel.stage.checkingKicker'),
         text: t(`statusView.gateProgress.${gate.stage}`, { defaultValue: t('statusView.phases.gating') }),
       }
-    : latestEvent
-      ? {
-          kicker: latestEvent.step
-            ? t(`statusView.progress.steps.${latestEvent.step}`)
-            : t('statusView.progress.agentSays'),
-          text: latestEvent.text,
-        }
-      : status?.progress?.note
-        ? { kicker: t('statusView.progress.agentSays'), text: status.progress.note }
-        : null;
-
-  const title = gate
-    ? t('studioPanel.stage.checkingTitle')
-    : ended
-      ? t('studioPanel.stage.endedTitle')
-      : t('studioPanel.stage.assembling');
+    : awaitingGate
+      ? { kicker: t('studioPanel.stage.checkingKicker'), text: t('studioPanel.buildBar.starting') }
+      : latestEvent
+        ? {
+            kicker: latestEvent.step
+              ? t(`statusView.progress.steps.${latestEvent.step}`)
+              : t('statusView.progress.agentSays'),
+            text: latestEvent.text,
+          }
+        : status?.progress?.note
+          ? { kicker: t('statusView.progress.agentSays'), text: status.progress.note }
+          : null;
+  const title =
+    gate || awaitingGate
+      ? t('studioPanel.stage.checkingTitle')
+      : ended
+        ? t('studioPanel.stage.endedTitle')
+        : t('studioPanel.stage.assembling');
 
   // `statusView.stall.*` says "reply below"; the thread is beside this card, not below.
   const stall = status?.stall && !gate && !awaitingGate ? status.stall : null;
