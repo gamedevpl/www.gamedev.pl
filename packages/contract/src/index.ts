@@ -1,6 +1,7 @@
 // Types, constants, and schemas shared across workspaces — no I/O.
 
 export { AGENT_CHANNEL_ROUTES, type AgentChannelRouteKey, type AgentChannelRoutePath } from './agent-channel-routes.js';
+export { ASSESSMENT_CHECKLIST_KEYS, type AssessmentChecklistKey } from './assessment-checklist.js';
 export { BUILD_EVENT_KINDS, BUILD_STEPS, type BuildEventKind, type BuildStep } from './build-event.js';
 export { DECLINE_REASONS, type DeclineReason } from './decline-reason.js';
 export { GATE_PROGRESS_LANES, type GateProgressLane } from './gate-progress.js';

@@ -1,12 +1,7 @@
-import type { AssessmentChecklist, AssessmentChecklistKey, AssessmentChecklistMark } from './reviewTypes.js';
+import { ASSESSMENT_CHECKLIST_KEYS } from '@gamedevpl/contract';
+import type { AssessmentChecklist, AssessmentChecklistMark } from './reviewTypes.js';
 
-export const ASSESSMENT_CHECKLIST_KEYS = [
-  'graphics',
-  'gameplay',
-  'fun',
-  'sound',
-  'controls',
-] as const satisfies readonly AssessmentChecklistKey[];
+export { ASSESSMENT_CHECKLIST_KEYS };
 
 export const ASSESSMENT_CHECKLIST_MARKS = ['ok', 'weak', 'bad'] as const satisfies readonly AssessmentChecklistMark[];
 
