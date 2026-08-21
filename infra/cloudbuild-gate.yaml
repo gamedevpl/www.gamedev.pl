@@ -93,6 +93,13 @@ steps:
         export CHROME_PATH=/usr/local/bin/gate-chrome
         cd /workspace/platform
         npm ci --no-audit --no-fund
+        # Workspace packages resolve through `main: dist/index.js`, and `dist` is
+        # gitignored — `npm ci` symlinks them but leaves them unbuilt. Every other entry
+        # point (build, dev, test, type-check) runs this first. The gate did not, so the
+        # first `@gamedevpl/contract` import to reach its module graph took every run
+        # down at load: no verdict written, deliveries stuck in `submitted` reading as
+        # "verification hasn't started". Keep ahead of gate:run.
+        npm run build:packages
         npm run gate:run -w @gamedevpl/api -- --slug '${_SLUG}' --version '${_VERSION}'
 
 availableSecrets:

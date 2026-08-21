@@ -97,6 +97,19 @@ describe('createCloudBuildGateTrigger', () => {
     expect(script.indexOf('GAME_CAPTURE_CHROME')).toBeLessThan(script.indexOf('gate:run'));
   });
 
+  it('builds the workspace packages before running the gate', async () => {
+    // Unbuilt `dist` killed every gate at load, verdict never written.
+    const { impl, calls } = stubFetch();
+    const trigger = createCloudBuildGateTrigger({ ...OPTIONS, fetchImpl: impl });
+
+    await trigger!({ slug: 'comet-courier', version: 'v1' });
+
+    const script = (calls[0]!.body.steps as Array<{ args: string[] }>)[1]!.args[1]!;
+    expect(script).toContain('npm run build:packages');
+    expect(script.indexOf('npm ci')).toBeLessThan(script.indexOf('npm run build:packages'));
+    expect(script.indexOf('npm run build:packages')).toBeLessThan(script.indexOf('gate:run'));
+  });
+
   it('reports the build id, so a line on the bill can be traced back to a game', async () => {
     // Previously read off the response and dropped, which left cost attribution with no
     // join at all between a GCP charge and the game that caused it.
