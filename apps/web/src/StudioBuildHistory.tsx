@@ -5,7 +5,8 @@ import type { RecentBuild, SubmissionStatus } from './submissionApi.js';
 
 // The Build pane used to go silent once a version landed.
 
-const CURRENTLY_MOVING_STATUSES = new Set<SubmissionStatus['status']>(['building', 'in_review', 'publishing']);
+// Not 'in_review': the gate already resolved, it's waiting on platform review.
+const CURRENTLY_MOVING_STATUSES = new Set<SubmissionStatus['status']>(['building', 'publishing']);
 
 function isBuildLive(status: SubmissionStatus, builds: RecentBuild[]): boolean {
   if (CURRENTLY_MOVING_STATUSES.has(status.status)) return true;

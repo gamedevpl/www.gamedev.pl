@@ -76,6 +76,15 @@ describe('StudioBuildHistory', () => {
     unmount();
   });
 
+  it('reads in_review as idle — the gate already resolved, no work is running', async () => {
+    const { host, unmount } = await mount({
+      status: 'in_review',
+      recentBuilds: [{ version: 'v6', createdAt: new Date().toISOString(), mode: 'publish', verdict: 'green' }],
+    });
+    expect(host.querySelector('.studio-build-history-live')?.className).not.toContain('is-live');
+    unmount();
+  });
+
   it('names a stale-kit failure instead of a plain "Failed"', async () => {
     const { host, unmount } = await mount({
       ...base,
