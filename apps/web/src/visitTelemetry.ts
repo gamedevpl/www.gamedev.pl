@@ -1,4 +1,44 @@
+import {
+  PLAY_VIAS,
+  type AssistStep,
+  type BetaWelcomeStep,
+  type CodeCompletionKind,
+  type CodeCompletionOutcome,
+  type CodeStep,
+  type CreateStep,
+  type EditorStep,
+  type HowToPlayVia,
+  type InviteStep,
+  type PlayVia,
+  type RemixControl,
+  type RemixPaintedVia,
+  type RemixStep,
+  type StudioStep,
+  type StudioStepDetail,
+  type VisitRouteKind,
+  type WaitlistStep,
+} from '@gamedevpl/contract';
 import { NAVIGATE_EVENT, parsePathRoute } from './router.js';
+
+export type {
+  AssistStep,
+  BetaWelcomeStep,
+  CodeCompletionKind,
+  CodeCompletionOutcome,
+  CodeStep,
+  CreateStep,
+  EditorStep,
+  HowToPlayVia,
+  InviteStep,
+  PlayVia,
+  RemixControl,
+  RemixPaintedVia,
+  RemixStep,
+  StudioStep,
+  StudioStepDetail,
+  VisitRouteKind,
+  WaitlistStep,
+};
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
@@ -24,23 +64,6 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
  *   nothing; UTM values are lowercased, length-capped, and character-filtered. Full
  *   URLs and query strings are where personal data hides, so neither is ever sent.
  */
-
-/** Where a visit is, coarsely. Route parameters (tokens, slugs) never travel. */
-export type VisitRouteKind =
-  // `draft` is historical only — new visits on `/draft/<slug>` emit `play`.
-  | 'home'
-  | 'play'
-  | 'draft'
-  | 'status'
-  | 'join'
-  | 'invite'
-  | 'legal'
-  | 'health'
-  | 'studio'
-  | 'game'
-  | 'create'
-  | 'party'
-  | 'notFound';
 
 export type VisitEvent =
   | {
@@ -95,242 +118,13 @@ export type VisitEvent =
       completionChars?: number;
     };
 
-/**
- * The creation funnel, in the order a creator meets it.
- *
- * `signin_required` is the one that matters most: it is the wall an anonymous visitor
- * hits after writing their idea, and the only place the drop-off between "wanted to
- * make a game" and "made an account" is visible at all. Everything before it happens
- * with no session, which is exactly why these live in the anonymous visit stream
- * rather than alongside the signed-in submission record.
- */
-export type CreateStep =
-  /** First keystroke in the prompt box — intent, before anything is committed. */
-  | 'prompt_started'
-  /** Pressed the button with real content. Wanting a game, not yet allowed one. */
-  | 'spec_submitted'
-  /** The sign-in wall appeared because there was no session. */
-  | 'signin_required'
-  /** The QA gate returned clarifying questions instead of building immediately. */
-  | 'qa_shown'
-  /**
-   * The creator settled on a name and pressed create. The last step they control, and
-   * the one the build waits on — a drop here is someone who wrote an idea, was shown
-   * what it would be called, and walked away.
-   */
-  | 'title_confirmed'
-  /** A submission actually reached the games repo. */
-  | 'submission_created'
-  | 'handoff_shown'
-  | 'handoff_enter_studio';
-
-/**
- * The closed-beta waitlist funnel, in the order a visitor meets it.
- *
- * The Join CTA is visible before sign-in; `cta_clicked` is intent, and `joined` is the
- * successful write after an ID token arrives. Sign-in itself is not a rung here — the
- * drop between click and join *is* the sign-in wall, and inventing a middle step would
- * double-count it against the creation funnel's `signin_required`.
- */
-export type WaitlistStep =
-  /** Pressed Join the waitlist on the splash. */
-  | 'cta_clicked'
-  /** `POST /api/waitlist` succeeded for this visit. */
-  | 'joined';
-
-export type InviteStep = 'opened' | 'accepted' | 'unavailable';
-
-export type BetaWelcomeStep = 'shown' | 'continued' | 'dismissed';
-
-/**
- * Which chrome surface opened the How to play card.
- *
- * Closed enum: the value reaches a grouping key. `bar` is the theater-bar button;
- * `more` is the same control after it sheds into the overflow menu on a narrow viewport.
- * Deep-link vs arcade is *not* here — that is visit `entry`, already on `visit_started`.
- */
-export type HowToPlayVia = 'bar' | 'more';
-
-// Which home page surface produced a play; extends via, not a new field.
-export const PLAY_VIA_VALUES = [
-  'featured',
-  'rail_start_here',
-  'rail_continue',
-  'rail_party',
-  'rail_new',
-  'grid',
-  'composer_match',
-  'create_showcase',
-  'shelf',
-  'featured_similar',
-  'party_page',
-] as const;
-export type PlayVia = (typeof PLAY_VIA_VALUES)[number];
-
 // Untrusted input from a URL — the runtime check, not just the type.
 export function isPlayVia(value: unknown): value is PlayVia {
-  return typeof value === 'string' && (PLAY_VIA_VALUES as readonly string[]).includes(value);
+  return typeof value === 'string' && (PLAY_VIAS as readonly string[]).includes(value);
 }
 
 /** Who builds the round — closed enum; reaches a grouping key. */
 export type BuilderDimension = 'platform' | 'self';
-
-/**
- * Studio-side creator-funnel steps (BY-08). Sibling to `create_step`, not a rung of
- * that ordered funnel — these answer builder choice, connect friction, time to first
- * agent signal (`msSinceStart` on `agent_signaled`), and gate verdict per visit.
- */
-export type StudioStep =
-  | 'builder_chosen'
-  | 'connect_copied'
-  | 'connect_deeplink'
-  | 'connect_dismissed'
-  | 'connect_restored'
-  | 'agent_signaled'
-  | 'gate_verdict'
-  | 'round_opened'
-  // A working copy left for the creator's own IDE (docs/own-ide-checkout.md) — the
-  // denominator for "of those who go local, how many deliver back".
-  | 'workspace_checkout';
-
-/**
- * Closed detail for studio steps that need one. `install` / `kickoff` are connect-card
- * copies; `header` is the creator-wide MCP Authorization header (BY-27a);
- * `cursor` / `vscode` are credential-free one-click install deep links (BY-18c);
- * `green` / `red` / `kit_outdated` are gate verdicts. Absent on steps that need none
- * (builder choice, first agent signal).
- */
-export type StudioStepDetail =
-  'install' | 'kickoff' | 'header' | 'cursor' | 'vscode' | 'green' | 'red' | 'kit_outdated' | 'creator' | 'agent';
-
-/**
- * The content-editor funnel (EditorKit): did a creator who *can* edit actually
- * open the editor, change something, try it, and ship it?
- *
- * This is the revision half of question 5 (creator return). Publishing a game
- * was already measurable; editing it was not, so a creator who came back to
- * retune their maps looked identical to one who opened the Studio and left.
- *
- * No slug, deliberately — the visit stream must stay unjoinable to the play
- * stream, so this answers "how far did this sitting get" and never "which game
- * did they edit".
- */
-export type EditorStep =
-  | 'opened'
-  | 'draft_saved'
-  | 'previewed'
-  | 'published'
-  | 'v2_schema_loaded'
-  | 'v2_content_loaded'
-  | 'v2_controller_ready'
-  | 'v2_controller_failed'
-  | 'controller_loaded'
-  | 'controller_failed'
-  | 'tool_used'
-  | 'undo_used'
-  | 'selection_from_game';
-
-/**
- * The natural-language tuning lane, as a dimension beside the editing funnel
- * rather than a rung inside it.
- *
- * A funnel's rungs must each be a superset of the next, and most creators tune
- * with the sliders and never type a word — so an `asked` rung wedged between
- * `opened` and `draft_saved` would read as a cliff in a healthy loop and make
- * the ladder lie. These four answer their own questions instead: how many
- * editing sittings try the composer at all, and of those, how often the router
- * acts (`applied`), admits the request needs code (`handoff`), or refuses
- * (`rejected` — moderation, quota, or a router that did not answer).
- */
-export type AssistStep = 'asked' | 'applied' | 'handoff' | 'rejected';
-
-/**
- * The player-side remix loop.
- *
- * A real funnel this time, and the first two rungs are the whole thesis: of the
- * people who open a remix, how many touch anything at all. `tuned` is that
- * number — the one metric the plan says validates or falsifies the bet for free.
- * The tail (`shared`, `keep_clicked`, `proposed`) is where retention turns into
- * either a visitor, a creator, or a contributor.
- */
-export type RemixStep =
-  // The denominator for every rung below it: this visit was *shown* the way in.
-  // Recorded when the control renders, not when it is looked at — we cannot know
-  // the latter, and a rate against "could have clicked" is the honest version of
-  // the question anyway. It exists because the entry moved out of the player's
-  // path and onto the chrome bar, and a quieter door is only a good trade if the
-  // click-through it costs is visible rather than assumed.
-  | 'offered'
-  | 'opened'
-  | 'no_lane' // opened, and this game offered no way in — see the note below
-  | 'typed' // wrote a request and hit send — desire exists, regardless of auth
-  | 'wall_shown' // the sign-in wall dropped between typing and spending
-  | 'signed_in' // came through the wall; the stashed request runs next
-  | 'tuned'
-  | 'painted' // changed declared content in the remix painter — `tuned`'s sibling
-  | 'asked'
-  | 'applied'
-  | 'broken' // the swapped build threw — counted as applied a moment earlier
-  | 'undone' // and taken back, which is the safety flow working
-  | 'handoff'
-  | 'refused'
-  | 'shared'
-  | 'keep_clicked'
-  | 'proposed'; // sent a change back for review — the contribute-back exit
-
-/**
- * Which door led to the painter: the router proposing it after a content-shaped
- * request (`redirect`), the theater's More menu (`menu`), or the panel opening
- * it itself because it was the only lane this game had (`panel` — the state of
- * every collections game while the model flags are off). Recorded on `painted`
- * only — the decision that shaped the doors (ops repo,
- * remix-content-editing-plan §3.1) is a hypothesis about which one converts,
- * and this dimension is what settles it.
- */
-export type RemixPaintedVia = 'redirect' | 'menu' | 'panel';
-
-/**
- * The Code surface funnel (creator-code-editing-execution-plan.md CE-01): the D.15
- * lesson applied here — ship the denominator (`offered`) with the door, so "does
- * anyone edit" is answerable from day one rather than guessed at later.
- *
- * `read_only_agent` and `conflict_seen` are not rungs of the ladder; they are states
- * a visit can be in at any point in it, recorded once per visit like everything else
- * here. Never carries a file path or source text — nothing below this line does.
- */
-export type CodeStep =
-  | 'offered'
-  | 'opened'
-  | 'file_opened'
-  | 'edited'
-  | 'typechecked'
-  | 'previewed'
-  | 'delivered'
-  | 'published'
-  | 'read_only_agent'
-  | 'conflict_seen'
-  // CE-17: a staging write opened a fresh round implicitly.
-  | 'round_reopened'
-  // A refused delivery's missing required file was supplied from the fixit.
-  | 'restored_missing'
-  | 'agent_mode_enabled'
-  | 'agent_mode_disabled'
-  | 'agent_console_run';
-
-export type CodeCompletionKind = 'language_service' | 'ghost_text';
-export type CodeCompletionOutcome = 'shown' | 'empty' | 'failed';
-
-/**
- * Which door was used to open a remix: the game page, the theater chrome bar,
- * or the overflow menu it sheds into on narrow screens. Recorded on `offered`
- * and `opened` only.
- *
- * A separate field from `via` rather than more members on it. `via` answers
- * "what led someone to the painter" and this answers "which control did they
- * press"; one name covering both would make every historical row ambiguous the
- * day another door appears.
- */
-export type RemixControl = 'bar' | 'more' | 'page';
 
 const FLUSH_AT = 5;
 const MAX_BATCH = 25;
