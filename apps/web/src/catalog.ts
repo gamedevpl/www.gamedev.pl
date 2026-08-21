@@ -1,3 +1,23 @@
+import {
+  CATALOG_ORIENTATIONS,
+  CATALOG_TOUCH_VALUES,
+  type CatalogOrientation,
+  type CatalogTouch,
+} from '@gamedevpl/contract';
+
+/** The orientation a game was designed for; 'any' unless its spec says otherwise. */
+export type { CatalogOrientation };
+
+/**
+ * How a game can be driven by a finger. Unlike everything else on an entry this is
+ * derived from the game's own source by the games repo's build (`inferTouchSupport`),
+ * never authored in a spec — a spec cannot claim playability the code doesn't have.
+ * `gamekit` = GameKit's on-screen pad, `native` = the game draws its own touch input,
+ * `controllers` = playable only with phones as controllers on a second screen,
+ * `none` = keyboard only. null when the API served a catalog without the field.
+ */
+export type { CatalogTouch };
+
 export interface CatalogScreenshot {
   name: string;
   file: string;
@@ -14,19 +34,6 @@ export interface CatalogMultiplayer {
   minPlayers: number;
   maxPlayers: number;
 }
-
-/** The orientation a game was designed for; 'any' unless its spec says otherwise. */
-export type CatalogOrientation = 'any' | 'portrait' | 'landscape' | 'adaptive';
-
-/**
- * How a game can be driven by a finger. Unlike everything else on an entry this is
- * derived from the game's own source by the games repo's build (`inferTouchSupport`),
- * never authored in a spec — a spec cannot claim playability the code doesn't have.
- * `gamekit` = GameKit's on-screen pad, `native` = the game draws its own touch input,
- * `controllers` = playable only with phones as controllers on a second screen,
- * `none` = keyboard only. null when the API served a catalog without the field.
- */
-export type CatalogTouch = 'gamekit' | 'native' | 'controllers' | 'none';
 
 export interface CatalogEntry {
   slug: string;
@@ -175,10 +182,8 @@ function parseCatalogMultiplayer(value: unknown): CatalogMultiplayer | null {
 
 /** An older API (or a spec typo the API let through) simply means "no preference". */
 function parseCatalogOrientation(value: unknown): CatalogOrientation {
-  return value === 'portrait' || value === 'landscape' || value === 'adaptive' ? value : 'any';
+  return (CATALOG_ORIENTATIONS as readonly unknown[]).includes(value) ? (value as CatalogOrientation) : 'any';
 }
-
-const CATALOG_TOUCH_VALUES = new Set<string>(['gamekit', 'native', 'controllers', 'none']);
 
 /**
  * null rather than a guess when the field is missing or unrecognised: the UI only
@@ -186,7 +191,7 @@ const CATALOG_TOUCH_VALUES = new Set<string>(['gamekit', 'native', 'controllers'
  * has to mean "unknown", never "fine" and never "broken".
  */
 function parseCatalogTouch(value: unknown): CatalogTouch | null {
-  return typeof value === 'string' && CATALOG_TOUCH_VALUES.has(value) ? (value as CatalogTouch) : null;
+  return (CATALOG_TOUCH_VALUES as readonly unknown[]).includes(value) ? (value as CatalogTouch) : null;
 }
 
 async function readApiErrorMessage(response: Response, fallback: string): Promise<string> {
