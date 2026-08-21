@@ -2127,11 +2127,11 @@ describe('submission routes', () => {
     });
 
     expect(status.statusCode).toBe(200);
+    // `total` is the bar's denominator: preview 6, publish 12.
     expect(status.json().recentBuilds).toEqual([
-      { version: 'v3', createdAt: '2026-08-10T09:00:00.000Z', mode: 'preview', verdict: 'red', status: 'kit_outdated' },
-      { version: 'v2', createdAt: '2026-08-10T08:00:00.000Z', mode: 'publish', verdict: 'green' },
-      // No deliveryMode, no gate yet — an unchecked publish delivery.
-      { version: 'v1', createdAt: '2026-08-10T07:00:00.000Z', mode: 'publish', verdict: 'pending' },
+      { version: 'v3', createdAt: '2026-08-10T09:00:00.000Z', mode: 'preview', verdict: 'red', status: 'kit_outdated', total: 6, finishedInMs: 120000 },
+      { version: 'v2', createdAt: '2026-08-10T08:00:00.000Z', mode: 'publish', verdict: 'green', total: 12, finishedInMs: 120000 },
+      { version: 'v1', createdAt: '2026-08-10T07:00:00.000Z', mode: 'publish', verdict: 'pending', total: 12 },
     ]);
 
     await app.close();

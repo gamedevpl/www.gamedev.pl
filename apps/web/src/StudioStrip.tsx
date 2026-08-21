@@ -2,17 +2,13 @@ import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'rea
 import { useTranslation } from 'react-i18next';
 import { latestAgentActivityAt } from './agentActivity.js';
 import { PixelIcon } from './PixelIcon.js';
+import { StudioBuildBar } from './StudioBuildBar.js';
 import { formatRelativeTime } from './relativeTime.js';
 import type { SubmissionStatus } from './submissionApi.js';
 import type { StagePosture } from './StudioStage.js';
 import { recordCodeStep } from './visitTelemetry.js';
 
-/**
- * Replaces `.studio-detail-head` (Workstream B1): a thin, translucent bar that stays
- * over the stage always — the studio is a workroom, not the public play page, so no
- * auto-hide (a deliberate divergence from the shipped player auto-hide; see the plan's
- * "standing unless reversed" section).
- */
+// Always over the stage: a workroom, so no auto-hide (B1).
 
 const HEARTBEAT_STATES = new Set<SubmissionStatus['status']>(['queued', 'building', 'in_review', 'publishing']);
 
@@ -36,6 +32,7 @@ export type StudioStripProps = {
   onToggleCode: () => void;
   detailsActive: boolean;
   onToggleDetails: () => void;
+  onOpenBuild: () => void;
   threadOpen: boolean;
   onToggleThread: () => void;
   threadUnreadCount: number;
@@ -71,6 +68,7 @@ export function StudioStrip({
   onToggleCode,
   detailsActive,
   onToggleDetails,
+  onOpenBuild,
   threadOpen,
   onToggleThread,
   threadUnreadCount,
@@ -120,7 +118,7 @@ export function StudioStrip({
   }, [overflowOpen]);
 
   const heartbeatAt = latestAgentActivityAt(status);
-  const showPhasePill = Boolean(status && HEARTBEAT_STATES.has(status.status));
+  const showPhasePill = Boolean(status && HEARTBEAT_STATES.has(status.status) && !status.recentBuilds?.length);
   const phaseLabel = status
     ? status.phase === 'dispatched'
       ? t('statusView.phaseLabels.dispatched')
@@ -152,6 +150,7 @@ export function StudioStrip({
       <div className="studio-strip-title-block">
         <h2 className="studio-strip-title">{title}</h2>
         {slug ? <code className="studio-slug">{slug}</code> : null}
+        <StudioBuildBar status={status} onOpen={onOpenBuild} />
         {showPhasePill ? <span className="studio-strip-phase-pill">{phaseLabel}</span> : null}
         {heartbeatAt != null ? (
           <span className="studio-strip-heartbeat">

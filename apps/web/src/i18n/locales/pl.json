@@ -564,6 +564,13 @@
       },
       "kitOutdated": "Wymaga odświeżenia kit"
     },
+    "buildBar": {
+      "starting": "Sprawdzanie się zaczyna",
+      "failed": "Sprawdzian niezaliczony",
+      "passed": "Sprawdziany zaliczone",
+      "eta": "zwykle ~{{minutes}} min",
+      "open": "Otwórz postęp buildu"
+    },
     "share": {
       "title": "Udostępnij wersję roboczą",
       "liveTitle": "Udostępnij grę",

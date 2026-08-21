@@ -558,6 +558,13 @@
       },
       "kitOutdated": "Needs a kit refresh"
     },
+    "buildBar": {
+      "starting": "Verification starting",
+      "failed": "Check failed",
+      "passed": "Checks passed",
+      "eta": "usually ~{{minutes}} min",
+      "open": "Open build progress"
+    },
     "share": {
       "title": "Share the draft",
       "liveTitle": "Share the game",

@@ -6,6 +6,7 @@
 
 import type { LinkedPullRequest } from './github-client.js';
 import type { GateProgressLane } from './gate-progress.js';
+import type { RecentBuild } from './recent-builds.js';
 import type { JobStall, JobState } from './job-state.js';
 import {
   BUILD_EVENT_KINDS,
@@ -270,17 +271,7 @@ export interface SubmissionStatusResponseBase {
   recentBuilds?: RecentBuild[];
 }
 
-// Summarizes one delivered version's manifest for `recentBuilds`.
-export interface RecentBuild {
-  version: string;
-  createdAt: string;
-  // Which lane produced it. Absent on the manifest means 'publish'.
-  mode: 'preview' | 'publish' | 'proposal';
-  // 'pending' until this version's own gate reports a verdict — not stuck.
-  verdict: 'pending' | 'green' | 'red';
-  // Machine-readable outcome, when the verdict isn't an ordinary pass/fail.
-  status?: 'kit_outdated';
-}
+export type { RecentBuild } from './recent-builds.js';
 
 /**
  * One finished (or superseded) build job's transcript, summarized for the tip job's

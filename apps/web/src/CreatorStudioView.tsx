@@ -89,12 +89,7 @@ import type { EditorContentPush, EditorControllerState } from './editorBridge.js
 
 const WINDOWS = [1, 7, 30];
 
-/**
- * Where the details panel stops being a rail beside the thread and becomes a sheet over
- * it. Kept in step with the same breakpoint in styles.css by hand — the two describe one
- * decision, and a panel that behaves like a sheet while it is drawn as a rail (or the
- * reverse) locks the page scroll for something the reader can see straight past.
- */
+// Keep in step with the same breakpoint in styles.css.
 const SHEET_MAX_WIDTH = 1099;
 const SHEET_QUERY = `(max-width: ${SHEET_MAX_WIDTH}px)`;
 // Matches styles.css. Height too: a landscape phone clears the width alone.
@@ -962,6 +957,10 @@ export function CreatorStudioView({
                         codeAvailable={tabAvailable(activeGame, 'code')}
                         codeActive={tab === 'code'}
                         onToggleCode={() => openTab(tab === 'code' ? 'thread' : 'code')}
+                        onOpenBuild={() => {
+                          setDetailsPane('build');
+                          openTab('details');
+                        }}
                         detailsActive={tab === 'details'}
                         onToggleDetails={() => {
                           if (tab === 'details') {

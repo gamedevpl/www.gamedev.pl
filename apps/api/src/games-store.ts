@@ -26,7 +26,8 @@ import {
   DELIVERY_MAX_UPLOAD_BYTES,
   DELIVERY_RESERVED_SEGMENTS,
 } from './games-repo-contract.js';
-import type { GateProgress } from './gate-progress.js';
+import type { GateProgress, GateProgressStage } from './gate-progress.js';
+import { applyGateVerdict, applyPreviewGateVerdict, applyHealthVerdict } from './version-verdict.js';
 import { hasPlayableHowToPlay } from './index-html-generator.js';
 import { parseKitSidecar } from './kit-registry.js';
 import { KIT_REGISTRY_OBJECT, parseKitRegistry, type KitRegistry } from './kit-window.js';
@@ -449,6 +450,8 @@ export interface VersionManifest {
     status?: 'kit_outdated';
     /** First stills frame, when the preview run captured any (BY-28a). */
     screenshot?: string;
+    // Stage a red run died on.
+    failedStage?: GateProgressStage;
   };
   /**
    * The most recent *health* verdict: the same check re-run later against the current
@@ -491,6 +494,8 @@ export type GateVerdict = {
    * and only beside a green verdict. A finding for whoever reviews it, never a refusal.
    */
   behaviouralDiff?: boolean;
+  // Stage a red run died on; gateProgress is cleared.
+  failedStage?: GateProgressStage;
 };
 
 export type PublicationState = 'published' | 'archived' | 'disabled';
@@ -1193,15 +1198,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const existing = await readObject(`${prefix}/manifest.json`);
       if (!existing) throw new Error(`no manifest for ${slug}@${version}`);
       const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
-      manifest.gate = {
-        green: result.green,
-        ranAt: new Date(now()).toISOString(),
-        report: result.report,
-        ...(result.status ? { status: result.status } : {}),
-        ...(result.screenshot ? { screenshot: result.screenshot } : {}),
-        ...(result.behaviouralDiff ? { behaviouralDiff: true } : {}),
-      };
-      delete manifest.gateProgress;
+      applyGateVerdict(manifest, result, new Date(now()).toISOString());
       // First writer wins: the ref the *first* gate run checked against is the one the
       // verdict is reproducible against, and a re-run must not quietly repin it.
       if (result.engineRef && !manifest.engineRef) manifest.engineRef = result.engineRef;
@@ -1240,14 +1237,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const existing = await readObject(`${prefix}/manifest.json`);
       if (!existing) throw new Error(`no manifest for ${slug}@${version}`);
       const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
-      manifest.previewGate = {
-        green: result.green,
-        ranAt: new Date(now()).toISOString(),
-        ...(result.report ? { report: result.report } : {}),
-        ...(result.status ? { status: result.status } : {}),
-        ...(result.screenshot ? { screenshot: result.screenshot } : {}),
-      };
-      delete manifest.gateProgress;
+      applyPreviewGateVerdict(manifest, result, new Date(now()).toISOString());
       await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
     },
 
@@ -1256,13 +1246,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const existing = await readObject(`${prefix}/manifest.json`);
       if (!existing) throw new Error(`no manifest for ${slug}@${version}`);
       const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
-      manifest.health = {
-        green: result.green,
-        ranAt: new Date(now()).toISOString(),
-        ...(result.engineRef ? { engineRef: result.engineRef } : {}),
-        ...(result.report ? { report: result.report } : {}),
-      };
-      delete manifest.gateProgress;
+      applyHealthVerdict(manifest, result, new Date(now()).toISOString());
       await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
     },
 

@@ -102,15 +102,9 @@ export type SubmissionStatus = {
    * stretch where the page used to have nothing at all to show.
    */
   events?: BuildEvent[];
-  /**
-   * Last agent activity (MCP heartbeat / progress). May advance without a new chat
-   * event when the agent is browsing the kit.
-   */
+  // Last agent activity; advances even with no new chat event.
   lastAgentSignalAt?: string;
-  /**
-   * Ambient presence thought (closed key + timestamp). Studio flashes it in the
-   * thread bar; it is not a transcript row.
-   */
+  // Ambient presence thought — flashed, never a transcript row.
   lastAgentPresence?: { key: string; at: string };
   /** Mid-gate milestone while checks run. */
   gateProgress?: {
@@ -184,6 +178,12 @@ export type RecentBuild = {
   // 'pending' until this version's own gate reports a verdict.
   verdict: 'pending' | 'green' | 'red';
   status?: 'kit_outdated';
+  // Where a red run died, so the bar freezes there rather than guessing.
+  failedStage?: string;
+  failedIndex?: number;
+  total?: number;
+  // Delivery to verdict, in ms; the bar's ETA median uses these.
+  finishedInMs?: number;
 };
 
 /** One superseded build job's transcript, for the collapsed history blocks. */

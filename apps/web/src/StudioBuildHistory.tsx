@@ -3,14 +3,13 @@ import { PixelIcon } from './PixelIcon.js';
 import { formatRelativeTime } from './relativeTime.js';
 import type { SubmissionStatus } from './submissionApi.js';
 
-// The Build pane used to go silent once a version landed.
-
 // Not 'in_review': the gate already resolved, it's waiting on platform review.
 const CURRENTLY_MOVING_STATUSES = new Set<SubmissionStatus['status']>(['building', 'publishing']);
 
-// A stall (quiet, waiting, ended) outranks a coarse 'building' status.
+// The gate owning a delivery outranks an agent stall.
 function isBuildLive(status: SubmissionStatus): boolean {
   if (status.gateProgress) return true;
+  if (status.phase === 'submitted' || status.phase === 'gating') return true;
   if (status.stall) return false;
   return CURRENTLY_MOVING_STATUSES.has(status.status);
 }

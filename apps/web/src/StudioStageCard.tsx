@@ -4,12 +4,7 @@ import { Mascot } from './Mascot.js';
 import { formatRelativeTime } from './relativeTime.js';
 import type { SubmissionStatus } from './submissionApi.js';
 
-/**
- * What the stage says while nothing playable has landed on it (Workstream C).
- *
- * It used to defer to the thread beside it, which is a void on a covered stage. The
- * status poll already answers "is anything still moving?", so the card shows that.
- */
+// What the stage says while nothing playable has landed on it (Workstream C).
 export function StudioStageCard({ status }: { status?: SubmissionStatus | null }) {
   const { t, i18n } = useTranslation();
 
@@ -21,7 +16,9 @@ export function StudioStageCard({ status }: { status?: SubmissionStatus | null }
   const total = reported?.total ?? checklist.length;
   // Gate's own timestamp beats a stale pre-delivery agent line.
   const heartbeatAt = gate ? Date.parse(gate.at) || latestAgentActivityAt(status) : latestAgentActivityAt(status);
-  const ended = status?.stall === 'ended' || Boolean(status?.agentEndedAt);
+  // Not ended while our gate still owes a verdict — that window said "no version".
+  const awaitingGate = status?.phase === 'submitted' || status?.phase === 'gating';
+  const ended = !awaitingGate && (status?.stall === 'ended' || Boolean(status?.agentEndedAt));
 
   // Gate outranks the agent's last line: mid-check, that line is already history.
   const working = gate
@@ -47,7 +44,7 @@ export function StudioStageCard({ status }: { status?: SubmissionStatus | null }
       : t('studioPanel.stage.assembling');
 
   // `statusView.stall.*` says "reply below"; the thread is beside this card, not below.
-  const stall = status?.stall && !gate ? status.stall : null;
+  const stall = status?.stall && !gate && !awaitingGate ? status.stall : null;
   const hint = stall
     ? t(`studioPanel.stage.stall.${stall}`, { defaultValue: t(`statusView.stall.${stall}`) })
     : working

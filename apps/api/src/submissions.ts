@@ -81,6 +81,7 @@ import {
 } from './job-state.js';
 import { isMcpPresenceEventText } from './mcp-presence.js';
 import { gateCrashStall, probeGateCrash } from './gate-crash.js';
+import { toRecentBuilds } from './recent-builds.js';
 import {
   builderLabelFromRecord,
   failedStageFromProgress,
@@ -128,7 +129,6 @@ import {
   type CreatorRevision,
   type PriorRoundEntry,
   type PriorRoundHistory,
-  type RecentBuild,
   type SubmissionStatus,
   type SubmissionStatusResponse,
 } from './submission-status.js';
@@ -2819,17 +2819,7 @@ export async function registerSubmissionRoutes(
       if (gamesStore?.listVersions) {
         try {
           const versions = await gamesStore.listVersions(record.slug, { limit: 8 });
-          status.recentBuilds = versions.map((manifest): RecentBuild => {
-            const mode = manifest.deliveryMode ?? 'publish';
-            const verdictSource = mode === 'preview' ? manifest.previewGate : manifest.gate;
-            return {
-              version: manifest.version,
-              createdAt: manifest.createdAt,
-              mode,
-              verdict: verdictSource ? (verdictSource.green ? 'green' : 'red') : 'pending',
-              ...(verdictSource?.status ? { status: verdictSource.status } : {}),
-            };
-          });
+          status.recentBuilds = toRecentBuilds(versions);
         } catch {
           /* advisory */
         }
