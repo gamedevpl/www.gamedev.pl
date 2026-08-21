@@ -18,7 +18,7 @@ const OPTS_OUT = /touch\s*:\s*false/;
 const USES_GAMEKIT_INPUT = /createInput\s*\(|\bdefineGame\b/;
 const USES_PARTY = /\bcreateParty\s*\(/;
 const HANDLES_POINTERS =
-  /consumeClick\s*\(|consumePress\s*\(|\.position\s*\(|\.held\s*\(|pointerdown|pointermove|pointerup|touchstart|\.pointer\s*\(/;
+  /consumeClick\s*\(|consumePress\s*\(|consumeRelease\s*\(|consumePinch\s*\(|\.position\s*\(|\.held\s*\(|pointerdown|pointermove|pointerup|touchstart|\.pointer\s*\(/;
 
 /** Classifies a game's concatenated TypeScript. Pure so it is directly testable. */
 export function classifyTouchSource(code: string): CatalogGameTouch {
