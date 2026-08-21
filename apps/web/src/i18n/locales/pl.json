@@ -548,6 +548,22 @@
       "exitFullScreen": "Zamknij pełny ekran",
       "peekEmpty": "Brak nowości"
     },
+    "buildHistory": {
+      "live": "Sprawdzamy teraz Twoje ostatnie zmiany",
+      "idle": "Żaden build nie jest teraz uruchomiony",
+      "title": "Ostatnie buildy",
+      "mode": {
+        "preview": "Podgląd",
+        "publish": "Publikacja",
+        "proposal": "Propozycja"
+      },
+      "verdict": {
+        "pending": "Sprawdzamy…",
+        "green": "Zaliczony",
+        "red": "Niezaliczony"
+      },
+      "kitOutdated": "Wymaga odświeżenia kit"
+    },
     "share": {
       "title": "Udostępnij wersję roboczą",
       "liveTitle": "Udostępnij grę",

@@ -542,6 +542,22 @@
       "exitFullScreen": "Exit full screen",
       "peekEmpty": "No updates yet"
     },
+    "buildHistory": {
+      "live": "Checking your latest changes now",
+      "idle": "No build is running right now",
+      "title": "Recent builds",
+      "mode": {
+        "preview": "Preview",
+        "publish": "Publish",
+        "proposal": "Proposal"
+      },
+      "verdict": {
+        "pending": "Checking…",
+        "green": "Passed",
+        "red": "Failed"
+      },
+      "kitOutdated": "Needs a kit refresh"
+    },
     "share": {
       "title": "Share the draft",
       "liveTitle": "Share the game",

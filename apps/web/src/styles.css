@@ -4407,6 +4407,106 @@ body.player-open {
   color: var(--muted);
 }
 
+.studio-build-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.studio-build-history-live {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  background: var(--panel-card);
+  border: 1px solid var(--panel-border);
+}
+
+.studio-build-history-live.is-live {
+  color: var(--text);
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+.studio-build-history-live:not(.is-live) .live-dot {
+  animation: none;
+  opacity: 0.35;
+  background: var(--muted);
+}
+
+.studio-build-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.studio-build-history-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+}
+
+.studio-build-history-row.is-red {
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.studio-build-history-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--panel-card);
+  border: 1px solid var(--panel-border);
+}
+
+.studio-build-history-row.is-green .studio-build-history-dot {
+  color: var(--turquoise, #00e4ac);
+  border-color: rgba(0, 228, 172, 0.35);
+}
+
+.studio-build-history-row.is-red .studio-build-history-dot {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+.studio-build-history-dot.is-live {
+  background: var(--accent-blue);
+  border-color: transparent;
+  animation: live-dot-pulse 1.6s ease-in-out infinite;
+}
+
+.studio-build-history-mode {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.studio-build-history-verdict {
+  color: var(--muted);
+}
+
+.studio-build-history-time {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-build-history-dot.is-live {
+    animation: none;
+  }
+}
+
 .status-retry {
   display: inline-flex;
   align-items: center;

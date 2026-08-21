@@ -2067,6 +2067,76 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('summarizes recent versions from listVersions, newest first', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 731 });
+    const { backend } = createBackendStub();
+    const gamesStore = {
+      getManifest: async () => null,
+      listVersions: async () => [
+        {
+          slug: 'space-parcels',
+          version: 'v3',
+          createdAt: '2026-08-10T09:00:00.000Z',
+          issueNumber: 731,
+          roundGeneration: 1,
+          sourceFiles: [],
+          deliveryMode: 'preview',
+          previewGate: { green: false, ranAt: '2026-08-10T09:02:00.000Z', status: 'kit_outdated' },
+        },
+        {
+          slug: 'space-parcels',
+          version: 'v2',
+          createdAt: '2026-08-10T08:00:00.000Z',
+          issueNumber: 731,
+          roundGeneration: 1,
+          sourceFiles: [],
+          gate: { green: true, ranAt: '2026-08-10T08:02:00.000Z' },
+        },
+        {
+          slug: 'space-parcels',
+          version: 'v1',
+          createdAt: '2026-08-10T07:00:00.000Z',
+          issueNumber: 731,
+          roundGeneration: 1,
+          sourceFiles: [],
+        },
+      ],
+    } as unknown as GamesStore;
+
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionSlug(job.issueNumber, 'space-parcels');
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
+
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      headers: authHeaders,
+    });
+
+    expect(status.statusCode).toBe(200);
+    expect(status.json().recentBuilds).toEqual([
+      { version: 'v3', createdAt: '2026-08-10T09:00:00.000Z', mode: 'preview', verdict: 'red', status: 'kit_outdated' },
+      { version: 'v2', createdAt: '2026-08-10T08:00:00.000Z', mode: 'publish', verdict: 'green' },
+      // No deliveryMode, no gate yet — an unchecked publish delivery.
+      { version: 'v1', createdAt: '2026-08-10T07:00:00.000Z', mode: 'publish', verdict: 'pending' },
+    ]);
+
+    await app.close();
+  });
+
   it('emits a stable delivery gate verdict once per version/status', async () => {
     // Green preview stays submitted so dedupe can re-poll.
     const { githubClient } = createGithubClientStub({ issueNumber: 727 });

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
-import { getSubmissionStatus, type BuildEvent, type BuildProgress } from './submissionApi.js';
+import { StudioBuildHistory } from './StudioBuildHistory.js';
+import { getSubmissionStatus, type BuildEvent, type BuildProgress, type SubmissionStatus } from './submissionApi.js';
 
 // Details refreshes slower than the thread's own live pulse.
 const DETAILS_POLL_MS = 10_000;
@@ -88,12 +89,11 @@ export function StudioDetailsBuildProgress({
   emptyLabel,
 }: {
   token: string;
-  // Empty-state label shown when the checklist is empty.
+  // Shown when there's neither a checklist nor build history yet.
   emptyLabel?: string;
 }) {
   const { i18n } = useTranslation();
-  const [progress, setProgress] = useState<BuildProgress | null>(null);
-  const [events, setEvents] = useState<BuildEvent[]>([]);
+  const [status, setStatus] = useState<SubmissionStatus | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -101,10 +101,9 @@ export function StudioDetailsBuildProgress({
 
     const load = async () => {
       try {
-        const status = await getSubmissionStatus(token, i18n.language);
+        const next = await getSubmissionStatus(token, i18n.language);
         if (cancelled) return;
-        setProgress(status.progress ?? null);
-        setEvents(status.events ?? []);
+        setStatus(next);
       } catch {
         // Secondary chrome — a failed poll must not toast over the thread.
       } finally {
@@ -120,5 +119,17 @@ export function StudioDetailsBuildProgress({
     };
   }, [token, i18n.language]);
 
-  return <BuildProgressChecklist progress={progress} events={events} loaded={loaded} emptyLabel={emptyLabel} />;
+  const hasHistory = Boolean(status?.recentBuilds?.length);
+
+  return (
+    <>
+      <BuildProgressChecklist
+        progress={status?.progress ?? null}
+        events={status?.events ?? []}
+        loaded={loaded}
+        emptyLabel={hasHistory ? undefined : emptyLabel}
+      />
+      {status ? <StudioBuildHistory status={status} /> : null}
+    </>
+  );
 }
