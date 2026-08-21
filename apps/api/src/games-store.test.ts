@@ -158,6 +158,19 @@ describe('validateSourceUpload — the delivery contract', () => {
       expect(() => validateSourceUpload(delivery)).toThrow(/and 1 more/);
     });
 
+    it('counts every offending file, not just the first one it reaches', () => {
+      // Scanning stopped at the first bad file while still saying "in this delivery's
+      // sources", so an agent fixing what it was told about met the same refusal again
+      // for the next file — a round per file instead of one pass.
+      const delivery = [
+        ...MINIMAL,
+        { path: 'game/render.ts', content: 'export function paint(kit: any) {}\n' },
+        { path: 'game/model.ts', content: 'export const seed = 1 as any;\n' },
+      ];
+      expect(() => validateSourceUpload(delivery)).toThrow(/and 1 more/);
+      expect(() => validateSourceUpload(delivery)).toThrow(/game\/model\.ts:1:26 uses the `any` type/);
+    });
+
     it('carries the refusal kind, so the round can count it', () => {
       const delivery = [...MINIMAL, { path: 'game/render.ts', content: 'const x = y as any;\n' }];
       try {

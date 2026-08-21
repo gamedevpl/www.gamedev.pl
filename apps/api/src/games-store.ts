@@ -363,16 +363,19 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
   // all: it is the difference between a mistake the checker catches and one a player
   // does. Telling the agent now costs it one tool call; telling it at the gate costs a
   // round, and by then it has usually written more code on top of the untyped value.
+  // Every file, not the first offending one: an agent that fixes what it was told about
+  // and resubmits must not meet the same refusal again for the file after it.
+  const anyFindings: string[] = [];
   for (const file of normalized) {
     if (!file.path.endsWith('.ts')) continue;
-    const findings = findBannedAnyUsages(file.content);
-    const first = findings[0];
-    if (!first) continue;
-    const rest = findings.length > 1 ? ` (and ${findings.length - 1} more in this delivery's sources)` : '';
-    throw new InvalidUploadError(
-      `${describeBannedAnyFinding(file.path, first)}${rest}. ${BANNED_ANY_GUIDANCE}`,
-      'any-type',
-    );
+    for (const finding of findBannedAnyUsages(file.content)) {
+      anyFindings.push(describeBannedAnyFinding(file.path, finding));
+    }
+  }
+  if (anyFindings.length > 0) {
+    const [first, ...rest] = anyFindings;
+    const more = rest.length > 0 ? ` (and ${rest.length} more in this delivery's sources: ${rest.join(', ')})` : '';
+    throw new InvalidUploadError(`${first}${more}. ${BANNED_ANY_GUIDANCE}`, 'any-type');
   }
   const linkFindings = findUnresolvedSourceLinks(sourceFilesToMap(normalized));
   if (linkFindings.length > 0) {
