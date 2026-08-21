@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { ZONE_LINK_STEPS } from '@gamedevpl/contract';
 import { rememberBounded } from './bounded-map.js';
 import type { PublishedSlugGate } from './published-slugs.js';
 import type { Store, TelemetryEvent } from './store.js';
@@ -96,7 +97,7 @@ const EventSchema = z.discriminatedUnion('type', [
   // over postMessage, so a game cannot claim to be shared while it is sitting alone.
   z.object({
     type: z.literal('zone_link'),
-    step: z.enum(['admitted', 'joined', 'lost']),
+    step: z.enum(ZONE_LINK_STEPS),
     ...offsetField,
   }),
   z.object({
