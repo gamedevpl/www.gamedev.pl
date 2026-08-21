@@ -1,7 +1,6 @@
-// Fixed axes; see game-assessment-plan.md.
-export const ASSESSMENT_CHECKLIST_KEYS = ['graphics', 'gameplay', 'fun', 'sound', 'controls'] as const;
+import { ASSESSMENT_CHECKLIST_KEYS, type AssessmentChecklistKey } from '@gamedevpl/contract';
 
-export type AssessmentChecklistKey = (typeof ASSESSMENT_CHECKLIST_KEYS)[number];
+export { ASSESSMENT_CHECKLIST_KEYS, type AssessmentChecklistKey };
 export type AssessmentChecklistMark = 'ok' | 'weak' | 'bad';
 export type AssessmentChecklist = Record<AssessmentChecklistKey, AssessmentChecklistMark>;
 

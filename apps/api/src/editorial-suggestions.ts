@@ -1,11 +1,13 @@
 // Editorial desk cut consensus → Studio suggestion (aggregates only).
+import { ASSESSMENT_CHECKLIST_KEYS, type AssessmentChecklistKey } from '@gamedevpl/contract';
 import type { AssessmentChecklist, GameAssessment } from './store.js';
 import type { Suggestion, SuggestionEvidence } from './suggestions.js';
 
 export const MIN_EDITORIAL_REVIEWERS = 2;
 
-export const CHECKLIST_FACETS = ['graphics', 'gameplay', 'fun', 'sound', 'controls'] as const;
-export type ChecklistFacet = (typeof CHECKLIST_FACETS)[number];
+// Same facets as review-checklist.ts's ASSESSMENT_CHECKLIST_KEYS.
+export const CHECKLIST_FACETS = ASSESSMENT_CHECKLIST_KEYS;
+export type ChecklistFacet = AssessmentChecklistKey;
 
 export interface EditorialAggregate {
   slug: string;
