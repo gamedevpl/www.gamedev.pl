@@ -396,10 +396,7 @@ const BRIDGE = `(function(){
 // Fit the logical canvas to the iframe without distorting pointer coordinates.
 const HIDE_CHROME =
   `#game-title,#game-desc,.game-controls,.hint{display:none!important}` +
-  // Hide all GameKit touch chrome when the primary pointer is fine or can hover:
-  // hybrid mouse+touchscreen devices match any-pointer:coarse and used to get the
-  // full phone pad+button overlay on top of a desktop-sized playfield. Keyboard
-  // and mouse still work; real phones (hover:none + pointer:coarse) keep the pad.
+  // Hide touch chrome on hover/fine pointers; hybrid touchscreens are not phones.
   `@media (hover:hover),(pointer:fine){` +
   `.gamekit-touch{display:none!important}` +
   `}` +
