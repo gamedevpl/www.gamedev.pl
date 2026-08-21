@@ -922,8 +922,6 @@
     "packages/contract/src/submission-state.ts": 12,
     "packages/contract/src/trend-grain.test.ts": 8,
     "packages/contract/src/trend-grain.ts": 4,
-    "packages/contract/src/visit-vocab.test.ts": 194,
-    "packages/contract/src/visit-vocab.ts": 156,
     "packages/contract/src/zone-link-step.test.ts": 8,
     "packages/contract/src/zone-link-step.ts": 4,
     "packages/game-generator/src/engine/engine.test.ts": 35,
