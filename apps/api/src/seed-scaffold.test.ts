@@ -49,6 +49,19 @@ describe('seed scaffold', () => {
     expect(buildSeedContext(indexOf(withoutScaffold))!.scaffold).toBe('');
   });
 
+  // Same gate as references: a withdrawn game cannot shape drafts.
+  it('renders no scaffold when the scaffold game is not published', () => {
+    const archived = {
+      ...FILES,
+      'catalog.json': JSON.stringify([
+        { slug: SEED_SCAFFOLD_SLUG, title: 'Block Cascade', genre: 'puzzle', status: 'archived' },
+        { slug: 'word-forge', title: 'Word Forge', genre: 'word puzzle', status: 'published' },
+      ]),
+    };
+
+    expect(buildSeedContext(indexOf(archived))!.scaffold).toBe('');
+  });
+
   it('omits the file-shape section entirely when there is no scaffold', () => {
     const withScaffold = buildGeneratePrompt({
       ...PROMPT_BASE,

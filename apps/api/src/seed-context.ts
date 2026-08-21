@@ -127,7 +127,10 @@ export function buildSeedContext(index: SeedFileIndex, catalogEntries?: CatalogE
 
   return {
     catalogIndex: published.map((entry) => `${entry.slug} — ${entry.title} — ${entry.genre}`).join('\n'),
-    scaffold: renderTree(`games/${SEED_SCAFFOLD_SLUG}`, 'games/<slug>', { remaining: CONTEXT_SCAFFOLD_BUDGET }),
+    // Same gate as references: a withdrawn game must not shape a new draft.
+    scaffold: slugs.has(SEED_SCAFFOLD_SLUG)
+      ? renderTree(`games/${SEED_SCAFFOLD_SLUG}`, 'games/<slug>', { remaining: CONTEXT_SCAFFOLD_BUDGET })
+      : '',
     kitDeclaration: index.read('shared/game-kit.d.ts'),
     hasGame: (slug: string) => slugs.has(slug),
     renderReferences(picks: string[], byteBudget: number): string {
