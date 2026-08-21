@@ -4,6 +4,12 @@ export { AGENT_CHANNEL_ROUTES, type AgentChannelRouteKey, type AgentChannelRoute
 export { ASSESSMENT_CHECKLIST_KEYS, type AssessmentChecklistKey } from './assessment-checklist.js';
 export { ASSIST_LANES, type AssistLane } from './assist-lane.js';
 export { BUILD_EVENT_KINDS, BUILD_STEPS, type BuildEventKind, type BuildStep } from './build-event.js';
+export {
+  CATALOG_ORIENTATIONS,
+  CATALOG_TOUCH_VALUES,
+  type CatalogOrientation,
+  type CatalogTouch,
+} from './catalog-vocab.js';
 export { DECLINE_REASONS, type DeclineReason } from './decline-reason.js';
 export { GATE_PROGRESS_LANES, type GateProgressLane } from './gate-progress.js';
 export { deriveGateStatusString, derivePreviewGateStatus, GATE_STATUS_VALUES, type GateStatus } from './gate-status.js';

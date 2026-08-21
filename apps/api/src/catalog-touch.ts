@@ -1,3 +1,5 @@
+import type { CatalogTouch } from '@gamedevpl/contract';
+
 /**
  * How a game can be played with a thumb (and with mouse / touchpad via the same path).
  *
@@ -10,7 +12,7 @@
  * - `controllers` — party game; phones are the controllers
  * - `none` — keyboard-only
  */
-export type CatalogGameTouch = 'gamekit' | 'native' | 'controllers' | 'none';
+export type CatalogGameTouch = CatalogTouch;
 
 const OPTS_OUT = /touch\s*:\s*false/;
 const USES_GAMEKIT_INPUT = /createInput\s*\(|\bdefineGame\b/;

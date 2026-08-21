@@ -1,5 +1,10 @@
 import path from 'node:path';
 import { build, transform } from 'esbuild';
+import {
+  CATALOG_ORIENTATIONS,
+  CATALOG_TOUCH_VALUES as CONTRACT_CATALOG_TOUCH_VALUES,
+  type CatalogOrientation,
+} from '@gamedevpl/contract';
 import { rememberBounded } from './bounded-map.js';
 import { classifyTouchSource, type CatalogGameTouch } from './catalog-touch.js';
 import {
@@ -365,7 +370,7 @@ export interface CatalogGameEntry {
   touch?: CatalogGameTouch;
 }
 
-export type CatalogGameOrientation = 'any' | 'portrait' | 'landscape' | 'adaptive';
+export type CatalogGameOrientation = CatalogOrientation;
 
 export interface CatalogGameMultiplayer {
   mode: 'controllers';
@@ -418,7 +423,7 @@ function parseMultiplayer(frontmatter: Record<string, string>): CatalogGameMulti
   return { mode: 'controllers', minPlayers, maxPlayers };
 }
 
-const GAME_ORIENTATIONS = new Set<CatalogGameOrientation>(['any', 'portrait', 'landscape', 'adaptive']);
+const GAME_ORIENTATIONS = new Set<CatalogGameOrientation>(CATALOG_ORIENTATIONS);
 
 /**
  * Anything unrecognised degrades to 'any' rather than failing the catalog: an
@@ -1784,7 +1789,7 @@ ${gameJs}`;
 const SAFE_MEDIA_NAME = /^[a-z0-9][a-z0-9-]*$/;
 const SAFE_MEDIA_PNG = /^[a-z0-9][a-z0-9-]*\.png$/;
 const SAFE_MEDIA_MP4 = /^[a-z0-9][a-z0-9-]*\.mp4$/;
-const CATALOG_TOUCH_VALUES = new Set<CatalogGameTouch>(['gamekit', 'native', 'controllers', 'none']);
+const CATALOG_TOUCH_VALUES = new Set<CatalogGameTouch>(CONTRACT_CATALOG_TOUCH_VALUES);
 
 /**
  * Builds the website catalog from a games-repo archive listing. Same fields as
