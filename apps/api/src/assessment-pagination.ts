@@ -1,0 +1,33 @@
+import { z } from 'zod';
+
+const DEFAULT_PAGE_SIZE = 40;
+const MAX_PAGE_SIZE = 200;
+
+export const QueueQuerySchema = z.object({
+  source: z.enum(['catalog', 'creator', 'all']).optional(),
+});
+
+const QuerySchema = z
+  .object({
+    offset: z.coerce.number().int().min(0).default(0),
+    limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
+  })
+  .strict();
+
+export type AssessmentPageQuery = z.infer<typeof QuerySchema>;
+
+export function parseAssessmentPageQuery(query: unknown): AssessmentPageQuery | null {
+  const parsed = QuerySchema.safeParse(query);
+  return parsed.success ? parsed.data : null;
+}
+
+export function paginateAssessments<T>(rows: T[], query: AssessmentPageQuery) {
+  const { offset, limit } = query;
+  const recent = rows.slice(offset, offset + limit);
+  return {
+    recent,
+    offset,
+    limit,
+    nextOffset: offset + recent.length < rows.length ? offset + recent.length : null,
+  };
+}

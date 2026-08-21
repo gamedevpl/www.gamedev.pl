@@ -88,13 +88,16 @@ Unset / empty means nobody extra is a reviewer. Locally: `REVIEWER_UIDS=dev:loca
 | `GET`  | `/api/review/queue?source=catalog\|creator\|all`    | reviewer | Queue of games not yet assessed by this reviewer, plus any slug an operator has targeted for this reviewer to re-review        |
 | `POST` | `/api/review/assessments`                           | reviewer | `{ slug, source, title?, creatorHandle?, verdict, note, checklist, noteOrigin?, clientContext?, gameVersion? }`                |
 | `GET`  | `/api/review/assessments/mine`                      | reviewer | This reviewer's rows (progress / re-edit)                                                                                      |
-| `GET`  | `/api/admin/assessments`                            | admin    | Aggregate + recent rows for the operator tab                                                                                   |
+| `GET`  | `/api/admin/assessments?offset=&limit=`             | admin    | Aggregate + paginated detailed rows (`limit` defaults to 40, max 200; follow `nextOffset`)                                     |
 | `GET`  | `/api/admin/assessments/history?slug=&reviewerUid=` | admin    | The superseded rows a re-assessment would otherwise have overwritten silently                                                  |
 | `GET`  | `/api/admin/review-sweeps`                          | admin    | Open sweep + progress + recent history                                                                                         |
 | `POST` | `/api/admin/review-sweeps`                          | admin    | Start a sweep (`source`, `maxGames`, `releasePerDay?`, `note?`, `notify?`)                                                     |
 | `POST` | `/api/admin/review-sweeps/:id`                      | admin    | Pause / resume / complete / cancel, release more/all, change rate, notify again                                                |
 | `POST` | `/api/admin/review-requeue`                         | admin    | `{ slugs[], reviewerUids[], gameVersion?, reason?, notify? }` — target explicit games at explicit reviewers, outside any sweep |
 | `GET`  | `/api/admin/review-requeue`                         | admin    | Recent targeted re-review requests                                                                                             |
+
+The operator tab fetches every detailed assessment page before **Copy JSON**, while showing
+only the newest 40 rows on screen. The exported `{ total, games, recent }` shape stays stable.
 
 The desk queue is **empty until an operator opens a sweep**, except for slugs an operator
 explicitly targeted (see below), which surface regardless of any sweep. Released games

@@ -13,15 +13,17 @@ store.
 ## Operator steps
 
 1. Finish or pause a review sweep on **Admin → Assessments**.
-2. Click **Copy JSON** (same payload as `GET /api/admin/assessments`).
+2. Click **Copy JSON**. The panel follows every assessments page before copying.
 3. Paste into a coding-agent session scoped to `www.gamedev.pl-games` (or ask for a
    synthesis-only plan first).
 
 Session cookie alternative:
 
 ```bash
-curl -sS -b cookies.txt https://www.gamedev.pl/api/admin/assessments | pbcopy
+curl -sS -b cookies.txt 'https://www.gamedev.pl/api/admin/assessments?offset=0&limit=200'
 ```
+
+For more than 200 rows, request each returned `nextOffset` and concatenate `recent`.
 
 ## What the agent should produce
 

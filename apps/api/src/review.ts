@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { isAdmin, isAdminSession } from './admin-session.js';
+import { paginateAssessments, parseAssessmentPageQuery, QueueQuerySchema } from './assessment-pagination.js';
 import { emitReviewSweep, type EmitDeps } from './notify.js';
 import { ASSESSMENT_CHECKLIST_KEYS, isAssessmentChecklist } from './review-checklist.js';
 import {
@@ -77,10 +78,6 @@ export interface ReviewRoutesOptions {
   now?: () => number;
   emitDeps?: EmitDeps;
 }
-
-const QueueQuerySchema = z.object({
-  source: z.enum(['catalog', 'creator', 'all']).optional(),
-});
 
 const ClientContextSchema = z
   .object({
@@ -511,7 +508,9 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
       return reply.status(404).send({ error: 'not found' });
     }
 
-    // Aggregate all rows; cap only the recent list.
+    const query = parseAssessmentPageQuery(request.query);
+    if (!query) return reply.status(400).send({ error: 'invalid query' });
+
     const rows = await store.listGameAssessments();
     const byGame = new Map<
       string,
@@ -537,7 +536,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     return {
       total: rows.length,
       games,
-      recent: rows.slice(0, Math.min(40, MAX_ADMIN_ROWS)),
+      ...paginateAssessments(rows, query),
     };
   });
 

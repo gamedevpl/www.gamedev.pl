@@ -513,7 +513,7 @@ describe('reviewer assessment desk', () => {
     ).toBe(404);
   });
 
-  it('aggregates every assessment even when the recent list is capped', async () => {
+  it('aggregates every assessment while paginating detailed rows', async () => {
     const { app, store } = await makeApp({ catalog: [] });
     for (let i = 0; i < 210; i += 1) {
       const slug = `game-${String(i).padStart(3, '0')}`;
@@ -534,7 +534,7 @@ describe('reviewer assessment desk', () => {
     const boss = await sessionCookie(app, 'boss');
     const summary = await app.inject({
       method: 'GET',
-      url: '/api/admin/assessments',
+      url: '/api/admin/assessments?offset=40&limit=200',
       headers: { cookie: boss },
     });
     expect(summary.statusCode).toBe(200);
@@ -543,10 +543,10 @@ describe('reviewer assessment desk', () => {
       games: Array<{ slug: string; keep: number; cut: number }>;
       recent: unknown[];
     };
-    expect(body.total).toBe(210);
+    expect(body).toEqual(expect.objectContaining({ total: 210, offset: 40, limit: 200, nextOffset: null }));
     expect(body.games).toHaveLength(210);
     expect(body.games.reduce((sum, g) => sum + g.keep + g.cut, 0)).toBe(210);
-    expect(body.recent.length).toBeLessThanOrEqual(40);
+    expect(body.recent).toHaveLength(170);
   });
 });
 

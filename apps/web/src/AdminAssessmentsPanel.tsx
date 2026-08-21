@@ -7,12 +7,12 @@ import {
   type ReviewSweepsResponse,
   type ReviewSweepSource,
 } from './adminApi.js';
+import { fetchAllAdminAssessments, type AdminAssessmentsExport } from './assessmentExportApi.js';
 import { formatAssessmentChecklist } from './reviewChecklist.js';
 import { formatAssessmentClientContext } from './reviewClientContext.js';
-import { fetchAdminAssessments, type AdminAssessmentsResponse } from './reviewApi.js';
 
 export function AdminAssessmentsPanel() {
-  const [data, setData] = useState<AdminAssessmentsResponse | null>(null);
+  const [data, setData] = useState<AdminAssessmentsExport | null>(null);
   const [sweeps, setSweeps] = useState<ReviewSweepsResponse | null>(null);
   const [error, setError] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -25,7 +25,7 @@ export function AdminAssessmentsPanel() {
 
   const load = useCallback(async () => {
     try {
-      const [assessments, sweepBody] = await Promise.all([fetchAdminAssessments(), fetchReviewSweeps()]);
+      const [assessments, sweepBody] = await Promise.all([fetchAllAdminAssessments(), fetchReviewSweeps()]);
       if (!sweepBody) {
         setError(true);
         return;
@@ -185,7 +185,7 @@ export function AdminAssessmentsPanel() {
 
           <h3 className="admin-assessments-recent-title">Recent</h3>
           <ul className="admin-assessments-recent">
-            {data.recent.map((row) => {
+            {data.recent.slice(0, 40).map((row) => {
               const env = formatAssessmentClientContext(row.clientContext);
               const checklist = formatAssessmentChecklist(row.checklist);
               return (

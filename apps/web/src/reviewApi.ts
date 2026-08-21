@@ -72,19 +72,6 @@ export interface SubmitAssessmentInput {
   gameVersion?: string | null;
 }
 
-export interface AdminAssessmentsResponse {
-  total: number;
-  games: Array<{
-    slug: string;
-    title: string;
-    keep: number;
-    cut: number;
-    skip: number;
-    notes: number;
-  }>;
-  recent: GameAssessment[];
-}
-
 export class ReviewApiError extends Error {
   readonly status: number;
 
@@ -95,7 +82,7 @@ export class ReviewApiError extends Error {
   }
 }
 
-async function readJson<T>(res: Response): Promise<T> {
+export async function readJson<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let detail = '';
     try {
@@ -143,11 +130,6 @@ export async function fetchMyAssessments(): Promise<GameAssessment[]> {
   const res = await fetch(`${API_BASE}/api/review/assessments/mine`, { credentials: 'include' });
   const body = await readJson<{ assessments: GameAssessment[] }>(res);
   return body.assessments;
-}
-
-export async function fetchAdminAssessments(): Promise<AdminAssessmentsResponse> {
-  const res = await fetch(`${API_BASE}/api/admin/assessments`, { credentials: 'include' });
-  return readJson(res);
 }
 
 export type ReReviewRequestStatus = 'open' | 'resolved' | 'cancelled';
