@@ -1,3 +1,5 @@
+import type { Locale } from '@gamedevpl/contract';
+
 /**
  * Which summary language to show in the remix transcript.
  *
@@ -28,7 +30,7 @@ function foldPl(text: string): string {
 const PL_WORD =
   /\b(nie|jest|czy|jak|ale|oraz|bardzo|prosze|dziekuje|dodaj|zrob|zrobic|zmien|usun|niech|zeby|zebym|chce|chcial|chcialbym|moge|mozesz|tez|juz|teraz|troche|bardziej|mniej|gre|gry|pies|psa|ludzik|samochod|samochody|ciezarowki|wlosy|oczy|szybciej|wolniej|wiekszy|mniejszy)\b/;
 
-export function summaryLangFor(utterance: string, uiLanguage: string | undefined): 'en' | 'pl' {
+export function summaryLangFor(utterance: string, uiLanguage: string | undefined): Locale {
   if (/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/.test(utterance)) return 'pl';
   if (PL_WORD.test(foldPl(utterance))) return 'pl';
   return uiLanguage?.startsWith('pl') ? 'pl' : 'en';

@@ -1,33 +1,9 @@
+import { REMIX_SUGGESTION_STARTERS, type RemixSuggestion } from '@gamedevpl/contract';
 import { type EditorDefinition } from './editor-contract.js';
 
-/**
- * Three things worth saying, for this game.
- *
- * An empty field on a phone, over a paused game, is a small act of courage —
- * and it is where most people close the panel. Examples answer "what do I even
- * say", and they teach the register at the same time: short, concrete, in the
- * player's own words rather than the vocabulary of a settings screen.
- *
- * Two rules shape what may appear here.
- *
- * **Derived, never invented.** A suggestion the game cannot act on is worse than
- * no suggestion: it is a promise the next screen breaks. So a parameter line
- * exists only because the game declared that parameter, and the generic starters
- * exist only when a rebuild is actually available to satisfy them.
- *
- * **Structured, not written.** These travel as intent — which parameter, which
- * direction — and the client writes the sentence from the game's own labels in
- * the player's language. Composing English here would ship a panel that speaks
- * Polish everywhere except the one place a player is about to imitate.
- */
-export type RemixSuggestion =
-  | { kind: 'param'; key: string; direction: 'more' | 'less' | 'on' | 'off' }
-  | { kind: 'starter'; id: 'faster' | 'look' | 'harder' };
+export type { RemixSuggestion };
 
 export const MAX_SUGGESTIONS = 3;
-
-/** The starters, in the order they are offered. Each needs a rebuild to satisfy. */
-const STARTERS = ['faster', 'look', 'harder'] as const;
 
 export function buildSuggestions(
   definition: EditorDefinition | null,
@@ -59,7 +35,7 @@ export function buildSuggestions(
   }
 
   if (lanes.canCode) {
-    for (const id of STARTERS) {
+    for (const id of REMIX_SUGGESTION_STARTERS) {
       if (out.length >= MAX_SUGGESTIONS) break;
       out.push({ kind: 'starter', id });
     }

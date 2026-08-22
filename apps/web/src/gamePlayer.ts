@@ -1,3 +1,4 @@
+import type { Locale } from '@gamedevpl/contract';
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { isPlayTimeAccruing, TelemetrySession, type TelemetryEvent } from './telemetry.js';
 import { readReportedControls, type ReportedControls } from './howToPlay.js';
@@ -512,7 +513,7 @@ export function requestStateRestore(frame: HTMLIFrameElement | null, data: unkno
 }
 
 /** en/pl are the only locales games ship strings for; anything else maps to en. */
-export function toGameLocale(lang: string | undefined | null): 'en' | 'pl' {
+export function toGameLocale(lang: string | undefined | null): Locale {
   return lang?.toLowerCase().startsWith('pl') ? 'pl' : 'en';
 }
 

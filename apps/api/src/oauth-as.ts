@@ -1,4 +1,5 @@
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import type { Locale } from '@gamedevpl/contract';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
@@ -88,7 +89,7 @@ function readUidFromSession(request: FastifyRequest, sessionSecret: string, sess
   }
 }
 
-function pickLang(request: FastifyRequest): 'en' | 'pl' {
+function pickLang(request: FastifyRequest): Locale {
   const queryLang =
     typeof (request.query as { lang?: string }).lang === 'string'
       ? (request.query as { lang: string }).lang.trim().toLowerCase()
@@ -222,7 +223,7 @@ function consentTokenValid(candidate: string, expected: string): boolean {
 }
 
 function consentHtml(input: {
-  lang: 'en' | 'pl';
+  lang: Locale;
   redirectUri: string;
   clientId: string;
   clientName?: string;
