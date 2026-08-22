@@ -25,12 +25,29 @@ ceiling; it may **not** grow it. A file with no baseline entry — created after
 — gets the flat 500-line hard cap instead of its own history.
 
 ```bash
-npm run module-size                                  # report
-npm run module-size -- apps/api/src/store.ts         # one file
-npm run module-size -- --write                       # ratchet ceilings down after a shrink
+npm run module-size                                            # report
+npm run module-size -- apps/api/src/store.ts                   # one file
+npm run module-size -- apps/api/src/foo.ts --write --force     # raise ONE ceiling
+npm run module-size -- --write --reseal                        # reseal every file
 ```
 
-`--write` refuses to raise a ceiling unless `--force` is passed (seal / repair only).
+## Raising a ceiling is allowed
+
+A file that genuinely needs to grow may raise its own ceiling: run `--write --force`
+**scoped to that path**, and the diff shows one number moving, for review like any other
+change. Extract when the file is doing too much; raise when the growth is the work.
+Tests are the ordinary case — they grow with the features they cover.
+
+**Never run `--write` unscoped.** It does not only raise the file you are fixing; it also
+*lowers* every other ceiling to whatever that file happens to measure today, freezing
+files nobody touched. That is how a test file created an hour earlier ended up pinned at
+60 lines, and it is why the checker now refuses an unscoped `--write` without `--reseal`.
+
+Reach for `--reseal` only when you mean "re-baseline the whole repo", which is rare.
+
+The point of the ratchet is that `store.ts` never quietly becomes 8,791 lines again — not
+that no file may ever gain a line. If you find yourself deleting blank lines or shortening
+comments to fit, that is the wrong trade: raise the ceiling instead.
 
 ## Why a hard cap instead of baseline-everything
 
