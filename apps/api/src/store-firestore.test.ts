@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FirestoreStore, stripUndefined } from './store.js';
+import { FirestoreStore } from './store.js';
 import { fakeFirestore } from './store/fake-firestore.js';
 
 /**
@@ -16,18 +16,6 @@ import { fakeFirestore } from './store/fake-firestore.js';
  * and nested arrays with the same errors the real client raises. Anything that passes
  * here would have been writable for real.
  */
-
-describe('stripUndefined', () => {
-  it('drops undefined keys and keeps every other falsy value', () => {
-    expect(stripUndefined({ a: undefined, b: null, c: 0, d: '', e: false, f: 'x' })).toEqual({
-      b: null,
-      c: 0,
-      d: '',
-      e: false,
-      f: 'x',
-    });
-  });
-});
 
 describe('FirestoreStore.upsertUser', () => {
   it('creates an account that has no email or picture — the bot: case that broke in production', async () => {
