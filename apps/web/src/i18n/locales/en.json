@@ -556,7 +556,23 @@
         "green": "Passed",
         "red": "Failed"
       },
-      "kitOutdated": "Needs a kit refresh"
+      "kitOutdated": "Needs a kit refresh",
+      "showingCount": "Showing {{shown}} of {{total}} builds",
+      "showAll": "Show older builds",
+      "showLess": "Show fewer",
+      "previewAction": "Preview build",
+      "revertAction": "Revert to this build",
+      "reverting": "Reverting…",
+      "revertSuccess": "Roll-forward started for {{version}}",
+      "revertConfirm": "Are you sure you want to roll forward to {{version}}? This will create a new build with the exact source files from {{version}}.",
+      "authorship": {
+        "agent": "Built by AI Agent",
+        "owner": "Edited by Creator",
+        "mixed": "Collaborative (Creator + Agent)"
+      },
+      "fileCount_one": "{{count}} source file",
+      "fileCount_other": "{{count}} source files",
+      "versionLabel": "Version {{version}}"
     },
     "buildBar": {
       "starting": "Verification starting",

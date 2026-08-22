@@ -87,10 +87,16 @@ export function BuildProgressChecklist({
 export function StudioDetailsBuildProgress({
   token,
   emptyLabel,
+  onSelectPreviewVersion,
+  activePreviewVersion,
+  onReverted,
 }: {
   token: string;
   // Shown when there's neither a checklist nor build history yet.
   emptyLabel?: string;
+  onSelectPreviewVersion?: (version: string | null) => void;
+  activePreviewVersion?: string | null;
+  onReverted?: (version: string) => void;
 }) {
   const { i18n } = useTranslation();
   const [status, setStatus] = useState<SubmissionStatus | null>(null);
@@ -129,7 +135,14 @@ export function StudioDetailsBuildProgress({
         loaded={loaded}
         emptyLabel={hasHistory ? undefined : emptyLabel}
       />
-      {status ? <StudioBuildHistory status={status} /> : null}
+      {status ? (
+        <StudioBuildHistory
+          status={status}
+          onSelectPreviewVersion={onSelectPreviewVersion}
+          activePreviewVersion={activePreviewVersion}
+          onReverted={onReverted}
+        />
+      ) : null}
     </>
   );
 }

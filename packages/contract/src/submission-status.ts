@@ -115,6 +115,12 @@ export interface RecentBuild {
   total?: number;
   // Delivery to verdict in ms; the ETA median uses these.
   finishedInMs?: number;
+  // Who authored this delivery: agent, owner, or mixed.
+  authorship?: 'agent' | 'owner' | 'mixed';
+  // Summary or note describing what changed in this build.
+  summary?: string;
+  // Number of source files in this build.
+  fileCount?: number;
 }
 
 // Whether platform can be picked now; absent means no opinion.
@@ -171,6 +177,8 @@ export interface SubmissionStatusResponseBase {
   };
   // Last few delivered versions, newest first.
   recentBuilds?: RecentBuild[];
+  // Total number of recorded build versions for this game.
+  totalBuildsCount?: number;
 }
 
 // A published build always carries its slug.

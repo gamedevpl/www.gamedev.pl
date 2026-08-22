@@ -2129,10 +2129,35 @@ describe('submission routes', () => {
     expect(status.statusCode).toBe(200);
     // `total` is the bar's denominator: preview 6, publish 12.
     expect(status.json().recentBuilds).toEqual([
-      { version: 'v3', createdAt: '2026-08-10T09:00:00.000Z', mode: 'preview', verdict: 'red', status: 'kit_outdated', total: 6, finishedInMs: 120000 },
-      { version: 'v2', createdAt: '2026-08-10T08:00:00.000Z', mode: 'publish', verdict: 'green', total: 12, finishedInMs: 120000 },
-      { version: 'v1', createdAt: '2026-08-10T07:00:00.000Z', mode: 'publish', verdict: 'pending', total: 12 },
+      {
+        version: 'v3',
+        createdAt: '2026-08-10T09:00:00.000Z',
+        mode: 'preview',
+        verdict: 'red',
+        status: 'kit_outdated',
+        total: 6,
+        finishedInMs: 120000,
+        fileCount: 0,
+      },
+      {
+        version: 'v2',
+        createdAt: '2026-08-10T08:00:00.000Z',
+        mode: 'publish',
+        verdict: 'green',
+        total: 12,
+        finishedInMs: 120000,
+        fileCount: 0,
+      },
+      {
+        version: 'v1',
+        createdAt: '2026-08-10T07:00:00.000Z',
+        mode: 'publish',
+        verdict: 'pending',
+        total: 12,
+        fileCount: 0,
+      },
     ]);
+    expect(status.json().totalBuildsCount).toBe(3);
 
     await app.close();
   });
@@ -2900,6 +2925,47 @@ describe('submission preview route', () => {
     // And it never asked GitHub, which is the point: the delivered candidate is the
     // same tree the gate checks, so the creator plays exactly what gets judged.
     expect(findLinkedPR).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('serves a requested version override when specified in the query parameter', async () => {
+    const store = new InMemoryStore();
+    const jobId = 1_000_078;
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.createSubmission(jobId, 'g:test-user', 'TV Tycoon');
+    await store.setSubmissionSlug(jobId, 'tv-tycoon');
+    await store.setSubmissionDeliveredVersion(jobId, 'v2');
+
+    const gamesStore = {
+      getDerivedArtifact: async (_s: string, version: string, name: string) =>
+        version === 'v1' && name === 'bundle.html'
+          ? Buffer.from('<!doctype html><title>TV Tycoon v1</title><canvas></canvas>')
+          : version === 'v2' && name === 'bundle.html'
+            ? Buffer.from('<!doctype html><title>TV Tycoon v2</title><canvas></canvas>')
+            : null,
+    } as unknown as GamesStore;
+
+    const { githubClient } = createGithubClientStub({});
+    const { app, authHeaders } = await createApp({
+      store,
+      githubClient,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(jobId, secret)}/preview?version=v1`,
+      headers: authHeaders,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      slug: 'tv-tycoon',
+      title: 'TV Tycoon',
+      html: expect.stringContaining('TV Tycoon v1'),
+    });
 
     await app.close();
   });

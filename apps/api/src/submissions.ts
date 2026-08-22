@@ -2821,6 +2821,11 @@ export async function registerSubmissionRoutes(
         try {
           const versions = await gamesStore.listVersions(record.slug, { limit: 8 });
           status.recentBuilds = toRecentBuilds(versions);
+          if (gamesStore.countVersions) {
+            status.totalBuildsCount = await gamesStore.countVersions(record.slug);
+          } else {
+            status.totalBuildsCount = versions.length;
+          }
         } catch {
           /* advisory */
         }
@@ -5242,16 +5247,19 @@ export async function registerSubmissionRoutes(
     request: FastifyRequest,
     reply: FastifyReply,
     record: SubmissionRecord,
+    versionOverride?: string,
   ): Promise<boolean> {
     const gamesStore = options.agentChannel?.gamesStore;
     const { slug } = record;
-    const playableVersion = record.previewVersion ?? record.deliveredVersion;
+    const playableVersion = versionOverride ?? record.previewVersion ?? record.deliveredVersion;
     if (!gamesStore || !slug || !playableVersion) return false;
 
-    const cached = draftPreviewCache.get(record.issueNumber);
-    if (cached && cached.revision === playableVersion && cached.expiresAt > now()) {
-      reply.send(cached.value);
-      return true;
+    if (!versionOverride) {
+      const cached = draftPreviewCache.get(record.issueNumber);
+      if (cached && cached.revision === playableVersion && cached.expiresAt > now()) {
+        reply.send(cached.value);
+        return true;
+      }
     }
 
     // The verified bundle first, then the gate's red-run / preview-lane document. Both
@@ -5271,11 +5279,13 @@ export async function registerSubmissionRoutes(
     if (bundle === null) return false;
 
     const value: DraftPreviewValue = { slug, title: record.title || slug, html: bundle.toString('utf8') };
-    rememberDraftPreview(record.issueNumber, {
-      value,
-      revision: playableVersion,
-      expiresAt: now() + draftPreviewTtlMs,
-    });
+    if (!versionOverride) {
+      rememberDraftPreview(record.issueNumber, {
+        value,
+        revision: playableVersion,
+        expiresAt: now() + draftPreviewTtlMs,
+      });
+    }
     request.log.info(
       { issueNumber: record.issueNumber, slug, version: playableVersion, artifact },
       'served gate-built preview for a delivered version',
@@ -5284,8 +5294,14 @@ export async function registerSubmissionRoutes(
     return true;
   }
 
-  async function replyWithDraft(request: FastifyRequest, reply: FastifyReply, issueNumber: number): Promise<void> {
+  async function replyWithDraft(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    issueNumber: number,
+    versionOverride?: string,
+  ): Promise<void> {
     const serveLastKnown = (reason: string, err?: unknown): boolean => {
+      if (versionOverride) return false;
       const lastKnown = draftPreviewCache.get(issueNumber);
       if (!lastKnown) return false;
       request.log.warn({ err, issueNumber, revision: lastKnown.revision }, reason);
@@ -5304,7 +5320,7 @@ export async function registerSubmissionRoutes(
     const record = gamesStore ? await store?.getSubmission(issueNumber) : null;
     if (record) {
       try {
-        if (await replyWithStoredDraft(request, reply, record)) return;
+        if (await replyWithStoredDraft(request, reply, record, versionOverride)) return;
       } catch (error) {
         // No hygiene-error branch here on purpose. This path serves the gate's own
         // bundle byte-for-byte and never assembles anything, so EmptyProjectError and
@@ -5351,6 +5367,9 @@ export async function registerSubmissionRoutes(
       }
 
       const token = z.string().parse((request.params as { token?: string }).token);
+      const query = request.query as { version?: string } | undefined;
+      const requestedVersion =
+        typeof query?.version === 'string' && /^[a-zA-Z0-9_-]+$/.test(query.version) ? query.version : undefined;
       const currentTime = now();
       if (isRateLimited(previewsByIp, request.ip, currentTime, maxPreviewsPerWindow, previewRateLimitWindowMs)) {
         return reply.status(429).send({ error: 'too many preview requests, please try again later' });
@@ -5366,7 +5385,7 @@ export async function registerSubmissionRoutes(
         throw error;
       }
 
-      return replyWithDraft(request, reply, issueNumber);
+      return replyWithDraft(request, reply, issueNumber, requestedVersion);
     },
   );
 

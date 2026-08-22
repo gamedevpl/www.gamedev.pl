@@ -106,4 +106,20 @@ describe('toRecentBuild', () => {
     expect(toRecentBuild(m)).toMatchObject({ verdict: 'green', total: 12 });
     expect(toRecentBuild(m).failedIndex).toBeUndefined();
   });
+
+  it('preserves authorship, summary, and fileCount from manifest', () => {
+    const m = manifest({
+      gate: { green: true, ranAt: RAN_AT },
+      authorship: 'agent',
+      summary: 'Added sound effects',
+      sourceFiles: ['SPEC.md', 'GAME.json', 'game.ts'],
+    });
+
+    expect(toRecentBuild(m)).toMatchObject({
+      verdict: 'green',
+      authorship: 'agent',
+      summary: 'Added sound effects',
+      fileCount: 3,
+    });
+  });
 });
