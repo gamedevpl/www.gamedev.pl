@@ -16,6 +16,11 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { isAdmin, isAdminSession } from './admin-session.js';
 import { paginateAssessments, parseAssessmentPageQuery, QueueQuerySchema } from './assessment-pagination.js';
+import {
+  matchesResolutionFilter,
+  registerAssessmentResolutionRoute,
+  summarizeResolutions,
+} from './assessment-resolution.js';
 import { emitReviewSweep, type EmitDeps } from './notify.js';
 import { ASSESSMENT_CHECKLIST_KEYS, isAssessmentChecklist } from './review-checklist.js';
 import {
@@ -524,7 +529,16 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     const rows = await store.listGameAssessments();
     const byGame = new Map<
       string,
-      { slug: string; title: string; keep: number; cut: number; skip: number; notes: number }
+      {
+        slug: string;
+        title: string;
+        keep: number;
+        cut: number;
+        skip: number;
+        notes: number;
+        resolved: number;
+        open: number;
+      }
     >();
     for (const row of rows) {
       const current = byGame.get(row.slug) ?? {
@@ -534,21 +548,32 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
         cut: 0,
         skip: 0,
         notes: 0,
+        resolved: 0,
+        open: 0,
       };
       current[row.verdict] += 1;
       if (row.note) current.notes += 1;
+      if (row.resolution) current.resolved += 1;
+      else current.open += 1;
       if (row.title && row.title !== row.slug) current.title = row.title;
       byGame.set(row.slug, current);
     }
 
     const games = [...byGame.values()].sort((a, b) => b.cut - a.cut || b.keep - a.keep || a.slug.localeCompare(b.slug));
+    // Filter narrows detailed rows only; totals stay whole.
+    const matched = rows.filter((row) => matchesResolutionFilter(row, query.resolution));
 
     return {
       total: rows.length,
       games,
-      ...paginateAssessments(rows, query),
+      ...summarizeResolutions(rows),
+      resolution: query.resolution,
+      matched: matched.length,
+      ...paginateAssessments(matched, query),
     };
   });
+
+  await registerAssessmentResolutionRoute(app, { store, adminUids, now });
 
   const CreateSweepSchema = z.object({
     source: z.enum(REVIEW_SWEEP_SOURCES).default('catalog'),

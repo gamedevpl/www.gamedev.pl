@@ -9,12 +9,17 @@ interface AdminAssessmentTotals {
   cut: number;
   skip: number;
   notes: number;
+  // Verdicts already acted on, and those still open.
+  resolved: number;
+  open: number;
 }
 
 export interface AdminAssessmentsExport {
   total: number;
   games: AdminAssessmentTotals[];
   recent: GameAssessment[];
+  resolved: number;
+  open: number;
 }
 
 interface AdminAssessmentsPage extends AdminAssessmentsExport {
@@ -39,5 +44,5 @@ export async function fetchAllAdminAssessments(): Promise<AdminAssessmentsExport
     recent.push(...page.recent);
     nextOffset = page.nextOffset;
   }
-  return { total: first.total, games: first.games, recent };
+  return { total: first.total, games: first.games, recent, resolved: first.resolved, open: first.open };
 }

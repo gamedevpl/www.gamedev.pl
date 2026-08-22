@@ -812,3 +812,210 @@ describe('targeted re-review', () => {
     expect(JSON.parse(list.body).requests).toEqual([]);
   });
 });
+
+describe('assessment resolution', () => {
+  const apps: Array<Awaited<ReturnType<typeof buildApp>>> = [];
+
+  afterEach(async () => {
+    while (apps.length) {
+      await apps.pop()!.close();
+    }
+  });
+
+  const catalog = [
+    {
+      slug: 'sky-dodge',
+      title: 'Sky Dodge',
+      creatorHandle: null as string | null,
+      genre: 'arcade',
+      media: { screenshots: [], video: null as string | null },
+    },
+  ];
+
+  async function makeApp(opts: { reviewerUids?: string } = {}) {
+    const store = new InMemoryStore();
+    const app = await buildApp({
+      store,
+      contentChecker: allowAll,
+      reviewerUids: opts.reviewerUids ?? 'dev:reviewer',
+      adminUids: 'dev:boss',
+      reviewRoutes: { listCatalog: async () => catalog },
+    });
+    const now = new Date().toISOString();
+    await store.createReviewSweep({
+      id: 'swp-resolution',
+      status: 'active',
+      source: 'catalog',
+      slugs: catalog.map((entry) => entry.slug),
+      releasedCount: catalog.length,
+      releasePerDay: null,
+      startedAt: now,
+      note: null,
+      createdAt: now,
+      createdBy: 'dev:boss',
+      updatedAt: now,
+      updatedBy: 'dev:boss',
+      notifiedAt: null,
+      notifiedCount: 0,
+    });
+    apps.push(app);
+    return { app, store };
+  }
+
+  async function assess(app: Awaited<ReturnType<typeof buildApp>>, cookie: string, payload: Record<string, unknown>) {
+    const res = await app.inject({ method: 'POST', url: '/api/review/assessments', headers: { cookie }, payload });
+    expect(res.statusCode).toBe(200);
+    return JSON.parse(res.body).assessment;
+  }
+
+  it('records what an operator did about a verdict, and how', async () => {
+    const { app, store } = await makeApp();
+    const boss = await sessionCookie(app, 'boss');
+    const reviewer = await sessionCookie(app, 'reviewer');
+    await assess(app, reviewer, {
+      slug: 'sky-dodge',
+      source: 'catalog',
+      verdict: 'cut',
+      note: 'Controls are broken on touch.',
+      checklist: sampleChecklist,
+    });
+
+    // Reviewers judge; only the operator console records the response.
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/api/admin/assessments/resolve',
+          headers: { cookie: reviewer },
+          payload: { slug: 'sky-dodge', reviewerUid: 'dev:reviewer', status: 'addressed', comment: 'done' },
+        })
+      ).statusCode,
+    ).toBe(404);
+
+    // An unexplained "addressed" is what this stops.
+    const blank = await app.inject({
+      method: 'POST',
+      url: '/api/admin/assessments/resolve',
+      headers: { cookie: boss },
+      payload: { slug: 'sky-dodge', reviewerUid: 'dev:reviewer', status: 'addressed', comment: '   ' },
+    });
+    expect(blank.statusCode).toBe(400);
+    expect(JSON.parse(blank.body).error).toBe('comment is required');
+
+    const resolved = await app.inject({
+      method: 'POST',
+      url: '/api/admin/assessments/resolve',
+      headers: { cookie: boss },
+      payload: {
+        slug: 'sky-dodge',
+        reviewerUid: 'dev:reviewer',
+        status: 'addressed',
+        comment: 'Rebuilt the touch controls.',
+        link: 'https://github.com/gamedevpl/www.gamedev.pl-games/pull/12',
+      },
+    });
+    expect(resolved.statusCode).toBe(200);
+    const resolvedBody = JSON.parse(resolved.body) as {
+      resolved: boolean;
+      assessments: Array<{ resolution: { status: string; comment: string; link: string; resolvedBy: string } }>;
+    };
+    expect(resolvedBody.resolved).toBe(true);
+    expect(resolvedBody.assessments[0].resolution).toEqual(
+      expect.objectContaining({
+        status: 'addressed',
+        comment: 'Rebuilt the touch controls.',
+        link: 'https://github.com/gamedevpl/www.gamedev.pl-games/pull/12',
+        resolvedBy: 'dev:boss',
+      }),
+    );
+    expect(await store.getGameAssessment('sky-dodge', 'dev:reviewer')).toEqual(
+      expect.objectContaining({ resolution: expect.objectContaining({ status: 'addressed' }) }),
+    );
+
+    // The aggregate counts, and can list, what is open.
+    const summary = await app.inject({
+      method: 'GET',
+      url: '/api/admin/assessments',
+      headers: { cookie: boss },
+    });
+    const summaryBody = JSON.parse(summary.body) as {
+      resolved: number;
+      open: number;
+      games: Array<{ slug: string; resolved: number; open: number }>;
+    };
+    expect(summaryBody).toEqual(expect.objectContaining({ resolved: 1, open: 0 }));
+    expect(summaryBody.games[0]).toEqual(expect.objectContaining({ slug: 'sky-dodge', resolved: 1, open: 0 }));
+
+    const openOnly = await app.inject({
+      method: 'GET',
+      url: '/api/admin/assessments?resolution=open',
+      headers: { cookie: boss },
+    });
+    expect(JSON.parse(openOnly.body)).toEqual(expect.objectContaining({ total: 1, matched: 0, recent: [] }));
+
+    // Withdrawing a resolution filed by mistake.
+    const cleared = await app.inject({
+      method: 'POST',
+      url: '/api/admin/assessments/resolve',
+      headers: { cookie: boss },
+      payload: { slug: 'sky-dodge', reviewerUid: 'dev:reviewer', status: null },
+    });
+    expect(cleared.statusCode).toBe(200);
+    expect(JSON.parse(cleared.body).assessments[0].resolution).toBeNull();
+  });
+
+  it('resolves every reviewer row for a slug when no reviewer is named, and a fresh verdict reopens it', async () => {
+    const { app, store } = await makeApp({ reviewerUids: 'dev:reviewer,dev:second' });
+    const boss = await sessionCookie(app, 'boss');
+    const reviewer = await sessionCookie(app, 'reviewer');
+    const second = await sessionCookie(app, 'second');
+    for (const cookie of [reviewer, second]) {
+      await assess(app, cookie, {
+        slug: 'sky-dodge',
+        source: 'catalog',
+        verdict: 'cut',
+        note: 'Too slow to start.',
+        checklist: sampleChecklist,
+      });
+    }
+
+    const resolved = await app.inject({
+      method: 'POST',
+      url: '/api/admin/assessments/resolve',
+      headers: { cookie: boss },
+      payload: { slug: 'sky-dodge', status: 'wont_fix', comment: 'Pacing is the point of this one.' },
+    });
+    expect(resolved.statusCode).toBe(200);
+    expect(JSON.parse(resolved.body).assessments).toHaveLength(2);
+
+    // A missing game is a 404, not a silent no-op.
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/api/admin/assessments/resolve',
+          headers: { cookie: boss },
+          payload: { slug: 'no-such-game', status: 'addressed', comment: 'nothing to do' },
+        })
+      ).statusCode,
+    ).toBe(404);
+
+    // A second pass archives the follow-up with the old row.
+    await app.inject({
+      method: 'POST',
+      url: '/api/admin/review-requeue',
+      headers: { cookie: boss },
+      payload: { slugs: ['sky-dodge'], reviewerUids: ['dev:reviewer'], notify: false },
+    });
+    await assess(app, reviewer, {
+      slug: 'sky-dodge',
+      source: 'catalog',
+      verdict: 'keep',
+      note: 'The new opening fixes it.',
+      checklist: sampleChecklist,
+    });
+    expect((await store.getGameAssessment('sky-dodge', 'dev:reviewer'))?.resolution).toBeNull();
+    const history = await store.listGameAssessmentHistory('sky-dodge', 'dev:reviewer');
+    expect(history[0].resolution).toEqual(expect.objectContaining({ status: 'wont_fix' }));
+  });
+});

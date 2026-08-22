@@ -5,6 +5,7 @@ import type {
   AssessmentInputMethod,
   AssessmentNoteOrigin,
   AssessmentPlatform,
+  AssessmentResolutionStatus,
   AssessmentSource,
   AssessmentVerdict,
   BetaInviteStatus,
@@ -1230,6 +1231,16 @@ export interface AssessmentClientContext {
   ua: string | null;
 }
 
+// Operator follow-up on one verdict; see game-assessment-plan.md.
+export interface AssessmentResolution {
+  status: AssessmentResolutionStatus;
+  comment: string;
+  // Where the work landed; free text, not a validated URL.
+  link: string | null;
+  resolvedAt: string;
+  resolvedBy: string;
+}
+
 export interface GameAssessment {
   id: string;
   slug: string;
@@ -1245,6 +1256,8 @@ export interface GameAssessment {
   clientContext: AssessmentClientContext | null;
   // The deployed game version this verdict judged; null when unknown.
   gameVersion: string | null;
+  // Null until acted on; a fresh pass clears it into history.
+  resolution: AssessmentResolution | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1256,7 +1269,7 @@ export function gameAssessmentId(slug: string, reviewerUid: string): string {
   return `${slug}:${reviewerUid}`;
 }
 
-// Missing checklist / clientContext / gameVersion become null, not undefined.
+// Missing checklist / clientContext / gameVersion / resolution become null, not undefined.
 export function hydrateGameAssessment(id: string, data: Omit<GameAssessment, 'id'>): GameAssessment {
   return {
     ...data,
@@ -1264,6 +1277,7 @@ export function hydrateGameAssessment(id: string, data: Omit<GameAssessment, 'id
     checklist: data.checklist ?? null,
     clientContext: data.clientContext ?? null,
     gameVersion: data.gameVersion ?? null,
+    resolution: data.resolution ?? null,
   };
 }
 
@@ -2488,12 +2502,20 @@ export interface Store {
   countPlayerFeedback(slug: string): Promise<number>;
   // Upsert reviewer verdict; second pass overwrites in place.
   upsertGameAssessment(
-    input: Omit<GameAssessment, 'id' | 'createdAt' | 'updatedAt' | 'gameVersion'> & {
+    input: Omit<GameAssessment, 'id' | 'createdAt' | 'updatedAt' | 'gameVersion' | 'resolution'> & {
       createdAt?: string;
       gameVersion?: string | null;
     },
   ): Promise<GameAssessment>;
   getGameAssessment(slug: string, reviewerUid: string): Promise<GameAssessment | null>;
+  // Records, or with null withdraws, the operator follow-up.
+  setGameAssessmentResolution(
+    slug: string,
+    reviewerUid: string,
+    resolution: AssessmentResolution | null,
+  ): Promise<GameAssessment | null>;
+  // Every reviewer's row for one game.
+  listGameAssessmentsBySlug(slug: string): Promise<GameAssessment[]>;
   listGameAssessmentsByReviewer(reviewerUid: string): Promise<GameAssessment[]>;
   // Recent assessments across reviewers; bounded operator page.
   listGameAssessments(opts?: { limit?: number }): Promise<GameAssessment[]>;
@@ -4642,7 +4664,7 @@ export class InMemoryStore implements Store {
   }
 
   async upsertGameAssessment(
-    input: Omit<GameAssessment, 'id' | 'createdAt' | 'updatedAt' | 'gameVersion'> & {
+    input: Omit<GameAssessment, 'id' | 'createdAt' | 'updatedAt' | 'gameVersion' | 'resolution'> & {
       createdAt?: string;
       gameVersion?: string | null;
     },
@@ -4668,11 +4690,33 @@ export class InMemoryStore implements Store {
       checklist: input.checklist ?? null,
       clientContext: input.clientContext ?? null,
       gameVersion: input.gameVersion ?? null,
+      // Fresh judgment: prior follow-up stays on the archived row.
+      resolution: null,
       createdAt: existing?.createdAt ?? input.createdAt ?? now,
       updatedAt: now,
     };
     this.gameAssessments.set(id, record);
     return { ...record };
+  }
+
+  async setGameAssessmentResolution(
+    slug: string,
+    reviewerUid: string,
+    resolution: AssessmentResolution | null,
+  ): Promise<GameAssessment | null> {
+    const id = gameAssessmentId(slug, reviewerUid);
+    const existing = this.gameAssessments.get(id);
+    if (!existing) return null;
+    const record: GameAssessment = { ...existing, resolution: resolution ? { ...resolution } : null };
+    this.gameAssessments.set(id, record);
+    return hydrateGameAssessment(id, record);
+  }
+
+  async listGameAssessmentsBySlug(slug: string): Promise<GameAssessment[]> {
+    return Array.from(this.gameAssessments.values())
+      .filter((row) => row.slug === slug)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.reviewerUid.localeCompare(b.reviewerUid))
+      .map((row) => hydrateGameAssessment(row.id, row));
   }
 
   async listGameAssessmentHistory(slug: string, reviewerUid: string): Promise<GameAssessmentHistoryEntry[]> {
@@ -7814,7 +7858,7 @@ export class FirestoreStore implements Store {
   }
 
   async upsertGameAssessment(
-    input: Omit<GameAssessment, 'id' | 'createdAt' | 'updatedAt' | 'gameVersion'> & {
+    input: Omit<GameAssessment, 'id' | 'createdAt' | 'updatedAt' | 'gameVersion' | 'resolution'> & {
       createdAt?: string;
       gameVersion?: string | null;
     },
@@ -7840,6 +7884,8 @@ export class FirestoreStore implements Store {
       checklist: input.checklist ?? null,
       clientContext: input.clientContext ?? null,
       gameVersion: input.gameVersion ?? null,
+      // Fresh judgment: prior follow-up stays on the archived row.
+      resolution: null,
       createdAt,
       updatedAt: now,
     };
@@ -7866,11 +7912,34 @@ export class FirestoreStore implements Store {
       checklist: record.checklist,
       clientContext: record.clientContext,
       gameVersion: record.gameVersion,
+      resolution: record.resolution,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     });
     await batch.commit();
     return record;
+  }
+
+  async setGameAssessmentResolution(
+    slug: string,
+    reviewerUid: string,
+    resolution: AssessmentResolution | null,
+  ): Promise<GameAssessment | null> {
+    const id = gameAssessmentId(slug, reviewerUid);
+    const ref = this.gameAssessmentsCollection().doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) return null;
+    await ref.set({ resolution }, { merge: true });
+    const existing = hydrateGameAssessment(id, snap.data() as Omit<GameAssessment, 'id'>);
+    return { ...existing, resolution };
+  }
+
+  async listGameAssessmentsBySlug(slug: string): Promise<GameAssessment[]> {
+    // Equality only — no orderBy / composite index.
+    const snap = await this.gameAssessmentsCollection().where('slug', '==', slug).get();
+    return snap.docs
+      .map((d) => hydrateGameAssessment(d.id, d.data() as Omit<GameAssessment, 'id'>))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.reviewerUid.localeCompare(b.reviewerUid));
   }
 
   private gameAssessmentHistoryCollection() {
@@ -7886,7 +7955,13 @@ export class FirestoreStore implements Store {
         const { assessmentId, ...rest } = d.data() as Omit<GameAssessmentHistoryEntry, 'id'> & {
           assessmentId: string;
         };
-        return { ...rest, id: d.id, checklist: rest.checklist ?? null, clientContext: rest.clientContext ?? null };
+        return {
+          ...rest,
+          id: d.id,
+          checklist: rest.checklist ?? null,
+          clientContext: rest.clientContext ?? null,
+          resolution: rest.resolution ?? null,
+        };
       })
       .sort((a, b) => b.supersededAt.localeCompare(a.supersededAt));
   }
