@@ -200,6 +200,22 @@ describe('validateSourceUpload — the delivery contract', () => {
       expect(message.length).toBeLessThan(4000);
     });
 
+    it('bounds scanning across the whole delivery, not just per file', () => {
+      // The per-file cap does not bound a request: four files just under it spend the
+      // entire 2 MiB upload allowance on synchronous parsing. Refused as a delivery.
+      const big = (i: number) => {
+        const lines: string[] = [];
+        // One line is ~26 bytes; 20k of them clears 480 KiB without measuring each pass.
+        for (let n = 0; n < 20_000; n += 1) lines.push(`type T${i}_${n} = number;`);
+        return `${lines.join('\n')}\n`;
+      };
+      const delivery = [...MINIMAL, ...[0, 1, 2, 3].map((i) => ({ path: `game/m${i}.ts`, content: big(i) }))];
+      expect(() => validateSourceUpload(delivery)).toThrow(/more than \d+ bytes of TypeScript/);
+      // A delivery the gate would accept (author budget is 936 KiB) still scans in full.
+      const withinBudget = [...MINIMAL, { path: 'game/one.ts', content: big(9) }];
+      expect(() => validateSourceUpload(withinBudget)).not.toThrow();
+    });
+
     it('refuses a source it cannot parse rather than passing it as clean', () => {
       const delivery = [...MINIMAL, { path: 'game/render.ts', content: "export const broken = 'oops\n" }];
       expect(() => validateSourceUpload(delivery)).toThrow(/could not be parsed/);

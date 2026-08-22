@@ -29,15 +29,28 @@ export type BannedAnyKind = 'any-type' | 'ts-suppression' | 'unparseable' | 'too
 export const MAX_SCANNED_BYTES = 512 * 1024;
 
 /**
+ * Plugins both sets carry: syntax esbuild and `tsc` compile that the base TypeScript
+ * plugin does not accept alone. `deprecatedImportAssert` covers the older
+ * `assert { type: … }` import form (the newer `with { … }` needs no plugin); without it
+ * the fail-closed path refuses a valid, fully typed delivery as unparseable.
+ */
+const SHARED_PLUGINS: readonly ParserPlugin[] = [
+  'decoratorAutoAccessors',
+  'explicitResourceManagement',
+  'deprecatedImportAssert',
+];
+
+/**
  * Syntax this scan must understand, because the build accepts it.
  *
- * esbuild and `tsc` both compile decorators and `using` declarations; the parser needs to
- * be told. Two sets because the two decorator proposals cannot be enabled at once and a
- * game may be written against either — the first that parses wins.
+ * Two sets because the two decorator proposals cannot be enabled at once and a game may
+ * be written against either — the first that parses wins. Every entry here exists because
+ * the build accepts something this parser otherwise would not, and anything the scan
+ * cannot read is refused rather than passed, so a gap between the two is a false refusal.
  */
 const PARSER_PLUGIN_SETS: readonly ParserPlugin[][] = [
-  ['typescript', 'decorators-legacy', 'decoratorAutoAccessors', 'explicitResourceManagement'],
-  ['typescript', 'decorators', 'decoratorAutoAccessors', 'explicitResourceManagement'],
+  ['typescript', 'decorators-legacy', ...SHARED_PLUGINS],
+  ['typescript', 'decorators', ...SHARED_PLUGINS],
 ];
 
 export interface BannedAnyFinding {

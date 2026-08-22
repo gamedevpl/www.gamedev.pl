@@ -101,6 +101,17 @@ export const MAX_UPLOAD_BYTES = DELIVERY_MAX_UPLOAD_BYTES;
  * byte budget (`MAX_UPLOAD_BYTES`) and filename allowlist still bound abuse. */
 export const MAX_UPLOAD_FILES = DELIVERY_MAX_FILES;
 
+/**
+ * TypeScript bytes one delivery may have scanned for `any`, across all its files.
+ *
+ * The scanner caps a single source, which bounds one parse but not one request: four
+ * files just under that cap spend the whole upload allowance on synchronous parsing, on
+ * the event loop, for untrusted input. This is the budget that actually bounds it, and it
+ * sits above the games repo's author budget (936 KiB) so nothing the gate would accept is
+ * refused here for size.
+ */
+const MAX_SCANNED_DELIVERY_BYTES = 1024 * 1024;
+
 export interface SourceFile {
   path: string;
   content: string;
@@ -366,21 +377,39 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
   // Every file, not the first offending one: an agent that fixes what it was told about
   // and resubmits must not meet the same refusal again for the file after it.
   const MAX_LISTED_ANY_FINDINGS = 20;
-  const anyFindings: string[] = [];
+  let scannedBytes = 0;
+  let anyFindingCount = 0;
+  const listedFindings: string[] = [];
   for (const file of normalized) {
     if (!file.path.endsWith('.ts')) continue;
+    // The per-file cap inside the scanner does not bound a delivery: four files just
+    // under it spend the whole 2 MiB upload allowance on synchronous parsing, on the API
+    // event loop. This budget is what actually bounds the work, and it sits above the
+    // games repo's own author budget (936 KiB), so every delivery the gate would accept
+    // is one this still scans in full.
+    scannedBytes += Buffer.byteLength(file.content, 'utf8');
+    if (scannedBytes > MAX_SCANNED_DELIVERY_BYTES) {
+      throw new InvalidUploadError(
+        `This delivery carries more than ${MAX_SCANNED_DELIVERY_BYTES} bytes of TypeScript, which is more than ` +
+          'can be checked for the `any` type in one pass. Split the work across rounds, or ' +
+          'trim what the delivery carries.',
+        'any-type',
+      );
+    }
     for (const finding of findBannedAnyUsages(file.content)) {
-      anyFindings.push(describeBannedAnyFinding(file.path, finding));
+      anyFindingCount += 1;
+      // Counted always, described only up to the cap: a crafted delivery can carry tens of
+      // thousands, and every description is a string held until the message is built.
+      if (listedFindings.length < MAX_LISTED_ANY_FINDINGS) {
+        listedFindings.push(describeBannedAnyFinding(file.path, finding));
+      }
     }
   }
-  if (anyFindings.length > 0) {
-    // Listed, but not all of them: a crafted delivery can carry tens of thousands, and the
-    // message is built in memory and sent back over the wire. Enough to fix a pass, capped.
-    const listed = anyFindings.slice(0, MAX_LISTED_ANY_FINDINGS);
-    const [first, ...rest] = listed;
-    const hidden = anyFindings.length - listed.length;
+  if (anyFindingCount > 0) {
+    const [first, ...rest] = listedFindings;
+    const hidden = anyFindingCount - listedFindings.length;
     const more =
-      rest.length > 0 ? ` (and ${anyFindings.length - 1} more in this delivery's sources: ${rest.join(', ')}` : '';
+      rest.length > 0 ? ` (and ${anyFindingCount - 1} more in this delivery's sources: ${rest.join(', ')}` : '';
     const trailer = more ? `${hidden > 0 ? `, and ${hidden} not listed` : ''})` : '';
     throw new InvalidUploadError(`${first}${more}${trailer}. ${BANNED_ANY_GUIDANCE}`, 'any-type');
   }
