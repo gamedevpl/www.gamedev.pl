@@ -2,6 +2,7 @@ import path from 'node:path';
 import { build, transform } from 'esbuild';
 import {
   CATALOG_ORIENTATIONS,
+  MAX_MULTIPLAYER_SLOTS,
   CATALOG_TOUCH_VALUES as CONTRACT_CATALOG_TOUCH_VALUES,
   type CatalogEntry,
   type CatalogMedia,
@@ -315,7 +316,6 @@ function parseSensing(value: unknown): CatalogGameSensing | null {
 }
 
 /** Platform ceiling on player slots — mirrors SLOT_COLORS in mp.ts. */
-const MAX_MULTIPLAYER_SLOTS = 8;
 
 /**
  * Reads the multiplayer keys out of a game's frontmatter. Frontmatter is a flat

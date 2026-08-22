@@ -6,6 +6,7 @@ import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import {
   InvalidRoomTokenError,
   MAX_SLOTS,
+  SLOT_COLORS,
   mintRoomToken,
   RoomRegistry,
   sanitizeNick,
@@ -161,6 +162,11 @@ describe('RoomRegistry', () => {
     const registry = new RoomRegistry({ secret: roomSecret });
     expect(registry.createRoom('x', 'g:a', 99).maxPlayers).toBe(MAX_SLOTS);
     expect(registry.createRoom('x', 'g:b', 1).maxPlayers).toBe(2);
+  });
+
+  it('keeps one slot colour per seat', () => {
+    // A missing colour would hand a player the fallback instead.
+    expect(SLOT_COLORS).toHaveLength(MAX_SLOTS);
   });
 
   it('relays input to the host tagged with the slot', () => {

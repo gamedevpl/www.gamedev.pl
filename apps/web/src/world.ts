@@ -1,3 +1,4 @@
+import { MAX_WORLD_ENTRY_BYTES, MAX_WORLD_FIELDS, MAX_WORLD_KEY_LENGTH } from '@gamedevpl/contract';
 import { useEffect, type MutableRefObject } from 'react';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { deleteWorldEntry, fetchWorld, putWorldEntry } from './worldApi.js';
@@ -23,7 +24,7 @@ import { deleteWorldEntry, fetchWorld, putWorldEntry } from './worldApi.js';
  */
 
 /** Mirrors MAX_WORLD_KEY_LENGTH in the API. */
-const MAX_KEY_LENGTH = 64;
+const MAX_KEY_LENGTH = MAX_WORLD_KEY_LENGTH;
 const KEY_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$/;
 /**
  * Fields the shell will forward. The real check is the game's declared schema, applied
@@ -36,8 +37,8 @@ const KEY_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$/;
  * byte-identical — but validation only ever shrinks an entry (unknown fields are
  * refused, text is trimmed), so anything over this was never going to fit.
  */
-const MAX_FIELDS = 12;
-const MAX_FIELDS_BYTES = 4 * 1024;
+const MAX_FIELDS = MAX_WORLD_FIELDS;
+const MAX_FIELDS_BYTES = MAX_WORLD_ENTRY_BYTES;
 
 export type WorldRequest =
   | { t: 'commons:hello' }

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { ZONE_LINK_STEPS } from '@gamedevpl/contract';
+import { MAX_MULTIPLAYER_SLOTS, ZONE_LINK_STEPS } from '@gamedevpl/contract';
 import { rememberBounded } from './bounded-map.js';
 import type { PublishedSlugGate } from './published-slugs.js';
 import type { Store, TelemetryEvent } from './store.js';
@@ -69,7 +69,11 @@ const gfxBackendField = {
 };
 
 const EventSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('game_opened'), slots: z.number().int().min(1).max(8).optional(), ...offsetField }),
+  z.object({
+    type: z.literal('game_opened'),
+    slots: z.number().int().min(1).max(MAX_MULTIPLAYER_SLOTS).optional(),
+    ...offsetField,
+  }),
   z.object({ type: z.literal('play_time'), seconds: z.number().int().min(1).max(3600), ...offsetField }),
   z.object({ type: z.literal('game_closed'), ...offsetField }),
   z.object({

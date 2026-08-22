@@ -14,8 +14,9 @@
  */
 
 /** Matches the submission route's own bounds, so a suggestion is always submittable. */
+import { MAX_TITLE_LENGTH } from '@gamedevpl/contract';
 export const MIN_TITLE_LENGTH = 3;
-export const MAX_TITLE_LENGTH = 80;
+export { MAX_TITLE_LENGTH };
 
 /** How much of the opening clause to keep. Long enough to be recognisable as theirs. */
 const FALLBACK_TITLE_LENGTH = 48;

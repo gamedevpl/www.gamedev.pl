@@ -5,20 +5,25 @@
  * it is enforced against every declared sim by Check 23. This file is the server's copy
  * of the same numbers and the same encoding, and the two must move together.
  *
- * Keeping a copy rather than importing one is the same call `mp.ts` and
- * `apps/web/src/mp/protocol.ts` already make, for the same reason: the two repos deploy
- * independently, so a shared import would only move the drift rather than remove it.
- * What removes it is a test — `contract.test.ts` pins the encoding against vectors
- * copied verbatim from the games repo's own test, so a change on either side breaks the
- * side that changed rather than desyncing a live zone.
+ * The numbers themselves now live once, in `@gamedevpl/contract`, so the host and the
+ * browser client cannot drift from each other. What they still mirror is the games repo,
+ * which deploys independently and cannot be imported from — and what holds THAT together
+ * is a test: `contract.test.ts` pins the encoding against vectors copied verbatim from
+ * the games repo's own test, so a change on either side breaks the side that changed
+ * rather than desyncing a live zone.
  */
 
-/** Tick rates a zone may declare. Mirrors games-repo `TICK_HZ_VALUES`. */
-export const TICK_HZ_VALUES = [5, 10, 15, 20] as const;
-export type TickHz = (typeof TICK_HZ_VALUES)[number];
+import {
+  MAX_PLAYERS_PER_ZONE,
+  MAX_STATE_BYTES,
+  RESERVED_EVENT_KINDS,
+  TICK_HZ_VALUES,
+  type TickHz,
+  type ZoneEvent,
+} from '@gamedevpl/contract';
 
-/** Mirrors games-repo `MAX_PLAYERS_PER_ZONE`. A zone is a room-sized problem. */
-export const MAX_PLAYERS_PER_ZONE = 16;
+export { MAX_PLAYERS_PER_ZONE, MAX_STATE_BYTES, RESERVED_EVENT_KINDS, TICK_HZ_VALUES };
+export type { TickHz, ZoneEvent };
 
 /**
  * Budgets, mirroring games-repo `MAX_TICK_MS` / `MAX_INIT_MS` / `MAX_WAKE_MS`.
@@ -30,12 +35,6 @@ export const MAX_PLAYERS_PER_ZONE = 16;
 export const MAX_TICK_MS = 8;
 export const MAX_INIT_MS = 50;
 export const MAX_WAKE_MS = 50;
-
-/** Mirrors games-repo `MAX_STATE_BYTES`. A snapshot shares a Firestore document. */
-export const MAX_STATE_BYTES = 192 * 1024;
-
-/** Mirrors games-repo `RESERVED_EVENT_KINDS`. The platform sends these; clients never do. */
-export const RESERVED_EVENT_KINDS = ['join', 'leave'] as const;
 
 /** Mirrors games-repo `SIM_EXPORTS`. */
 export const SIM_EXPORTS = ['init', 'tick', 'wake'] as const;
@@ -61,13 +60,6 @@ export const SIM_REALM_REMOVED: Record<string, string> = {
   SharedArrayBuffer: 'same reason as Atomics',
   WebAssembly: 'opaque to the determinism gate, and its float semantics are its own',
 };
-
-/** One input to a tick. `slot` is assigned by the host, never claimed by a client. */
-export interface ZoneEvent {
-  slot: number;
-  k: string;
-  v?: number | string | boolean;
-}
 
 /**
  * Everything needed to bring a sleeping zone back exactly where it stopped.

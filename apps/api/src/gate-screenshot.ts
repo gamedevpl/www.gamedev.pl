@@ -5,6 +5,7 @@
  * identically. The label marks it as ours — a platform check frame, not an agent push.
  */
 
+import { MAX_SHOT_BYTES } from '@gamedevpl/contract';
 import type { GamesStore } from './games-store.js';
 import type { Store } from './store.js';
 
@@ -12,7 +13,6 @@ import type { Store } from './store.js';
 export const PLATFORM_CHECK_SHOT_LABEL = 'Platform check';
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-const MAX_SHOT_BYTES = 300 * 1024;
 
 /**
  * Picks the first screenshot path from a gate artifact list. Prefers the capture
