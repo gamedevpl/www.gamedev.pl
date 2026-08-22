@@ -54,7 +54,7 @@ All commands run from the **repo root**.
 | `npm run type-check` | Build packages, then `tsc --noEmit` per workspace.                                          |
 
 Everything runs **locally** — no cloud, no API keys, no secrets. The API defaults to
-`127.0.0.1:3001`; the generator defaults to the `mock` provider.
+`127.0.0.1:3001` and serves repo fixtures from an in-memory store.
 
 ### Definition of "green"
 
@@ -79,7 +79,7 @@ party mode — drive it.
 curl -X POST http://localhost:5173/api/auth/dev -c cookies.txt
 ```
 
-That is a full session for `dev:local` against the in-memory store and the mock generator.
+That is a full session for `dev:local` against the in-memory store and repo fixtures.
 No credentials, nothing real touched. See [`local-development.md`](./local-development.md).
 
 **Against the deployed site**, when the thing under test is production behaviour — real

@@ -34,8 +34,8 @@ npm install
 npm run type-check && npm run lint && npm run test && npm run build
 ```
 
-`npm run dev` runs everything locally; the generator defaults to the offline `mock` provider,
-so no cloud or API keys are needed.
+`npm run dev` runs everything locally against fixtures and an in-memory store, so no cloud
+or API keys are needed.
 
 **Testing behind sign-in.** Locally, `curl -X POST http://localhost:5173/api/auth/dev -c
 cookies.txt` gives you a full session — no credentials, in-memory store, nothing real
@@ -158,7 +158,7 @@ applies regardless of which agent you are.
 ## Cursor Cloud specific instructions
 
 Setup is just `npm install` (see the "Green gate" and `docs/contributing-for-agents.md` for the
-standard commands). Everything runs offline with the `mock` generator — no cloud, keys, or
+standard commands). Everything runs offline against fixtures — no cloud, keys, or
 secrets. Non-obvious caveats for running/testing locally:
 
 - **Open the web app at `http://localhost:5173`, not `http://127.0.0.1:5173`.** `npm run dev`

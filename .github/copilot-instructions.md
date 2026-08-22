@@ -15,9 +15,8 @@ file is the short actionable summary.
 
 - Monorepo, **npm workspaces**: `apps/web` (Vite + React + TS), `apps/api` (Fastify + TS),
   `packages/contract` (shared types), `packages/zone-core`, `infra/` (placeholder), `docs/` (docs).
-- The deterministic mock proves the local player loop. Production games are maintained by
-  coding agents in a dedicated games repository and published as static bundles; do not replace
-  the mock with an in-app agent runtime.
+- Production games are maintained by coding agents in a dedicated games repository and
+  published as static bundles; do not add an in-app agent runtime.
 
 ## The one safety rule — do not break it
 

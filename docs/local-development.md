@@ -56,7 +56,7 @@ account — useful for testing anything that involves two users. The endpoint an
 production**; it exists only outside it, and mints a session with no credential at all.
 
 This is the right tool for local work, including for a coding agent in a cloud VM: it runs
-against the in-memory store and the mock generator, so it touches nothing real. Testing the
+against the in-memory store and repo fixtures, so it touches nothing real. Testing the
 **deployed** site is a different problem with a different answer — see
 [`agent-access-tokens.md`](./agent-access-tokens.md).
 
