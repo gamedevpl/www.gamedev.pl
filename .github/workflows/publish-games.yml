@@ -85,6 +85,8 @@ jobs:
 
       - run: npm ci
 
+      - run: npm run build:packages
+
       - name: Resolve games-repo ref
         env:
           VALIDATED_SHA: ${{ needs.validate-games.outputs.games_sha }}
