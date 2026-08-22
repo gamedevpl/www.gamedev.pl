@@ -495,6 +495,119 @@ describe('the fake itself', () => {
         .set({ email: undefined } as never),
     ).rejects.toThrow(/Cannot use "undefined" as a Firestore value/);
   });
+
+  it('orders by a field, ascending and descending', async () => {
+    const { db } = fakeFirestore();
+    const col = db.collection('items');
+    await col.doc('a').set({ n: 3 });
+    await col.doc('b').set({ n: 1 });
+    await col.doc('c').set({ n: 2 });
+
+    const asc = await col.orderBy('n', 'asc').get();
+    expect(asc.docs.map((doc) => doc.id)).toEqual(['b', 'c', 'a']);
+
+    const desc = await col.orderBy('n', 'desc').get();
+    expect(desc.docs.map((doc) => doc.id)).toEqual(['a', 'c', 'b']);
+  });
+
+  it('supports range operators, the way listAccountsDueForDeletion needs', async () => {
+    const { db } = fakeFirestore();
+    const col = db.collection('items');
+    await col.doc('a').set({ n: 1 });
+    await col.doc('b').set({ n: 2 });
+    await col.doc('c').set({ n: 3 });
+
+    expect((await col.where('n', '<', 2).get()).docs.map((doc) => doc.id)).toEqual(['a']);
+    expect((await col.where('n', '<=', 2).get()).docs.map((doc) => doc.id)).toEqual(['a', 'b']);
+    expect((await col.where('n', '>', 2).get()).docs.map((doc) => doc.id)).toEqual(['c']);
+    expect((await col.where('n', '>=', 2).get()).docs.map((doc) => doc.id)).toEqual(['b', 'c']);
+  });
+
+  it('excludes documents missing the range-filtered field, like listAccountsDueForDeletion', async () => {
+    // A user who was never scheduled for deletion has no `deletionScheduledFor` at all --
+    // real Firestore excludes it from a `<=` query rather than treating the gap as a match.
+    const { db } = fakeFirestore();
+    const col = db.collection('users');
+    await col.doc('scheduled').set({ deletionScheduledFor: '2026-01-01' });
+    await col.doc('untouched').set({ name: 'still here' });
+
+    const found = await col.where('deletionScheduledFor', '<=', '2026-06-01').get();
+    expect(found.docs.map((doc) => doc.id)).toEqual(['scheduled']);
+  });
+
+  it('excludes documents missing the orderBy field too, not just range-filtered ones', async () => {
+    const { db } = fakeFirestore();
+    const col = db.collection('items');
+    await col.doc('has-field').set({ n: 1 });
+    await col.doc('no-field').set({ other: 'x' });
+
+    const found = await col.orderBy('n', 'asc').get();
+    expect(found.docs.map((doc) => doc.id)).toEqual(['has-field']);
+  });
+
+  it('resolves dotted field paths, the way listSeedOutcomesSince reads seedOutcome.at', async () => {
+    const { db } = fakeFirestore();
+    const col = db.collection('submissions');
+    await col.doc('1').set({ seedOutcome: { at: '2026-01-01' } });
+    await col.doc('2').set({ seedOutcome: { at: '2026-03-01' } });
+    await col.doc('3').set({ other: 'no seedOutcome at all' });
+
+    const found = await col.where('seedOutcome.at', '>=', '2026-02-01').orderBy('seedOutcome.at', 'desc').get();
+    expect(found.docs.map((doc) => doc.id)).toEqual(['2']);
+  });
+
+  it('supports "in", the way listSuggestions/listProposals filter by status set', async () => {
+    const { db } = fakeFirestore();
+    const col = db.collection('items');
+    await col.doc('a').set({ status: 'open' });
+    await col.doc('b').set({ status: 'closed' });
+    await col.doc('c').set({ status: 'archived' });
+
+    const found = await col.where('status', 'in', ['open', 'archived']).get();
+    expect(found.docs.map((doc) => doc.id).sort()).toEqual(['a', 'c']);
+  });
+
+  it('select() restricts returned fields, the way build-shot/preview listings depend on', async () => {
+    const { db } = fakeFirestore();
+    await db.collection('items').doc('a').set({ id: 'a', label: 'Shot', data: 'heavy-payload' });
+
+    const snap = await db.collection('items').select('id', 'label').get();
+    expect(snap.docs[0]?.data()).toEqual({ id: 'a', label: 'Shot' });
+  });
+
+  it('chains select().orderBy().limit() in listBuildShots order', async () => {
+    const { db } = fakeFirestore();
+    const col = db.collection('items');
+    await col.doc('a').set({ id: 'a', createdAt: '2026-01-01', data: 'heavy' });
+    await col.doc('b').set({ id: 'b', createdAt: '2026-01-03', data: 'heavy' });
+    await col.doc('c').set({ id: 'c', createdAt: '2026-01-02', data: 'heavy' });
+
+    const snap = await col.select('id', 'createdAt').orderBy('createdAt', 'desc').limit(2).get();
+    expect(snap.docs.map((doc) => doc.data())).toEqual([
+      { id: 'b', createdAt: '2026-01-03' },
+      { id: 'c', createdAt: '2026-01-02' },
+    ]);
+  });
+
+  it('startAfter pages through every row exactly once, cursor-style', async () => {
+    // Mirrors listSuggestions/listProposals: no orderBy, paged by a doc cursor rather
+    // than a single limit, because an unbounded caller must see every match.
+    const { db } = fakeFirestore();
+    const col = db.collection('items');
+    for (const id of ['a', 'b', 'c', 'd', 'e']) await col.doc(id).set({ id });
+
+    const seen: string[] = [];
+    let cursor: { id: string } | undefined;
+    for (;;) {
+      const page = cursor ? col.startAfter(cursor).limit(2) : col.limit(2);
+      const snap = await page.get();
+      if (snap.empty) break;
+      seen.push(...snap.docs.map((doc) => doc.id));
+      if (snap.docs.length < 2) break;
+      cursor = snap.docs[snap.docs.length - 1];
+    }
+    expect(seen.sort()).toEqual(['a', 'b', 'c', 'd', 'e']);
+  });
 });
 
 /**
