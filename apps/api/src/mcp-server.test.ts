@@ -2062,6 +2062,44 @@ declare const GameKit: { defineGame(): unknown };
     expect(bad.isError).toBe(true);
     expect(JSON.stringify(bad.structured)).toMatch(/illegal path/i);
 
+    // Batch path minting with paths: string[]
+    const batchMinted = await callTool(
+      app,
+      'stage_upload_url',
+      { sessionKey, paths: ['game/render.ts', 'game/model.ts'] },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(batchMinted.isError).toBe(false);
+    const batchStructured = batchMinted.structured as {
+      uploads: Array<{ path: string; url: string; upload: string; maxBytes: number }>;
+    };
+    expect(batchStructured.uploads).toHaveLength(2);
+    expect(batchStructured.uploads[0]?.path).toBe('game/render.ts');
+    expect(batchStructured.uploads[1]?.path).toBe('game/model.ts');
+    expect(batchStructured.uploads[0]?.upload).toMatch(/render\.ts/);
+    expect(batchStructured.uploads[1]?.upload).toMatch(/model\.ts/);
+
+    for (const item of batchStructured.uploads) {
+      const putRes = await app.inject({
+        method: 'PUT',
+        url: item.url.replace(/^https?:\/\/[^/]+/, ''),
+        headers: { 'content-type': 'text/plain; charset=utf-8' },
+        payload: Buffer.from(`// content for ${item.path}\n`, 'utf8'),
+      });
+      expect(putRes.statusCode).toBe(200);
+      expect(putRes.json()).toMatchObject({
+        accepted: true,
+        path: item.path,
+      });
+    }
+
+    const afterBatchList = await callTool(app, 'list_staged_sources', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(afterBatchList.isError).toBe(false);
+    const afterFiles = (afterBatchList.structured as { files: Array<{ path: string; bytes: number }> }).files;
+    expect(afterFiles.map((f) => f.path)).toEqual(
+      expect.arrayContaining(['game/extra.ts', 'game/render.ts', 'game/model.ts']),
+    );
+
     // Minting is not idempotent, so it must not be hinted read-only.
     const listedTools = await mcpCall(app, 'tools/list', undefined, { 'mcp-session-id': sessionId });
     const stageTool = (
