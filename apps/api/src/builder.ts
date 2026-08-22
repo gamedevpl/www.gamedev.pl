@@ -2,14 +2,10 @@
 //
 // A round may switch builders only through an explicit handoff.
 
+import { BUILDERS, isBuilderKind, type BuilderKind } from '@gamedevpl/contract';
 import type { JobState, JobStall, JobTransition } from './job-state.js';
 
-export const BUILDERS = ['platform', 'self'] as const;
-export type BuilderKind = (typeof BUILDERS)[number];
-
-export function isBuilderKind(value: unknown): value is BuilderKind {
-  return value === 'platform' || value === 'self';
-}
+export { BUILDERS, isBuilderKind, type BuilderKind };
 
 /** Default lifetime before a self round with no agent signal is auto-abandoned. */
 export const DEFAULT_SELF_BUILD_CONNECT_DAYS = 14;

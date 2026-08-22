@@ -1,3 +1,4 @@
+import type { BuilderKind } from '@gamedevpl/contract';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
@@ -101,12 +102,11 @@ type StudioConnectCardProps = {
   platformUnavailable?: BuilderUnavailableReason;
 };
 
-type BuilderHandoffTarget = 'platform' | 'self';
 type SwitchResult = { pending?: boolean };
 type SwitchHandler = () => Promise<void | SwitchResult> | void | SwitchResult;
 
 type SwitchBuilderControlProps = {
-  target: BuilderHandoffTarget;
+  target: BuilderKind;
   onSwitch: SwitchHandler;
   compact?: boolean;
   active?: boolean;

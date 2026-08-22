@@ -1,3 +1,4 @@
+import type { BuilderKind } from '@gamedevpl/contract';
 import { describe, expect, it } from 'vitest';
 import { mintCreatorAgentKey } from './agent-creator-key.js';
 import { resolveCreatorAgentKeyForOpenRound, resolveCreatorAgentKeyForStart } from './agent-creator-key-resolve.js';
@@ -14,7 +15,7 @@ async function seedSelfRound(
   issue: number,
   uid: string,
   gameSlug: string,
-  builder: 'self' | 'platform' = 'self',
+  builder: BuilderKind = 'self',
 ) {
   await store.createSubmission(issue, uid, 'Sky Dodge');
   await store.setSubmissionSlug(issue, gameSlug);

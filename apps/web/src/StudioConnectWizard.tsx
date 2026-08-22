@@ -1,3 +1,4 @@
+import type { BuilderKind } from '@gamedevpl/contract';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
@@ -86,7 +87,7 @@ export function StudioConnectWizard({ game, onOpenStudio }: StudioConnectWizardP
   const chapterOver = connectChapterOver(status);
   const roundBuilder = status?.builder ?? 'self';
   const agentConnected = Boolean(status && !awaiting && !chapterOver);
-  const goStudioRef = useRef<(deferred: boolean, builder?: 'self' | 'platform', replace?: boolean) => void>(() => {});
+  const goStudioRef = useRef<(deferred: boolean, builder?: BuilderKind, replace?: boolean) => void>(() => {});
 
   useEffect(() => {
     recordCreateStep('handoff_shown', 'self');
@@ -187,7 +188,7 @@ export function StudioConnectWizard({ game, onOpenStudio }: StudioConnectWizardP
     }
   };
 
-  const goStudio = (deferred: boolean, builder: 'self' | 'platform' = 'self', replace = false) => {
+  const goStudio = (deferred: boolean, builder: BuilderKind = 'self', replace = false) => {
     markStudioOnboarded();
     // Deferred still enters Studio; record both funnel steps.
     if (deferred) {

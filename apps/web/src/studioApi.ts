@@ -1,4 +1,4 @@
-import type { AssistLane } from '@gamedevpl/contract';
+import type { AssistLane, BuilderKind } from '@gamedevpl/contract';
 import type { GameHealth } from './healthApi.js';
 import type { FeedbackContext, SubmissionState } from './submissionApi.js';
 
@@ -404,7 +404,7 @@ export async function submitImprovement(
   token: string,
   feedback: string,
   context?: FeedbackContext,
-  builder?: 'platform' | 'self',
+  builder?: BuilderKind,
 ): Promise<{ ok: boolean; jobId?: number; token?: string; slug?: string; shotId?: string }> {
   const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/improve`, {
     method: 'POST',
