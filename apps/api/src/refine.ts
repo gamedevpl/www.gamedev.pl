@@ -1,3 +1,4 @@
+import { MAX_TITLE_LENGTH } from '@gamedevpl/contract';
 import { createHash } from 'node:crypto';
 import type { GenAIClient } from 'genaicode';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -94,7 +95,6 @@ const REFINE_CACHE_MAX_ENTRIES = 200;
  * a name they never wrote.
  */
 const MIN_TITLE_LENGTH = 3;
-const MAX_TITLE_LENGTH = 80;
 
 /**
  * A model-proposed title, or undefined when there is nothing usable.
@@ -306,7 +306,7 @@ const RefineRequestSchema = z.object({
     .string()
     .trim()
     .min(3, 'title must be at least 3 characters')
-    .max(80, 'title must be at most 80 characters')
+    .max(MAX_TITLE_LENGTH, `title must be at most ${MAX_TITLE_LENGTH} characters`)
     .optional(),
   concept: z
     .string()

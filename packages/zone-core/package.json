@@ -10,6 +10,9 @@
     "type-check": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@gamedevpl/contract": "*"
+  },
   "//": "isolated-vm is optional so `npm ci` still succeeds on a machine with no build toolchain. The cage that needs it imports it dynamically and says so plainly when it is missing; node:vm covers development and tests.",
   "optionalDependencies": {
     "isolated-vm": "^6.1.2"

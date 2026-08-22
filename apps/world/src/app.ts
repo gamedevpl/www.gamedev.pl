@@ -21,12 +21,13 @@ import { ZoneAdmissionError, ZoneHost, type ZoneConnection, type ZoneHostOptions
 import { ZONE_PROTOCOL_VERSION } from '@gamedevpl/contract';
 export { ZONE_PROTOCOL_VERSION };
 
-/** Frames larger than this are refused unread. A zone input is a few dozen bytes. */
-const MAX_FRAME_BYTES = 2 * 1024;
-/** Frames per second one connection may send. Above the fastest tick rate with headroom. */
-const MAX_FRAMES_PER_SECOND = 40;
-/** Sockets one address may hold open. A household playing together is a handful. */
-export const DEFAULT_MAX_SOCKETS_PER_IP = 24;
+import {
+  DEFAULT_MAX_SOCKETS_PER_IP,
+  MAX_SOCKET_FRAME_BYTES as MAX_FRAME_BYTES,
+  MAX_SOCKET_FRAMES_PER_SECOND as MAX_FRAMES_PER_SECOND,
+} from '@gamedevpl/contract';
+
+export { DEFAULT_MAX_SOCKETS_PER_IP };
 
 const HelloFrameSchema = z.object({
   t: z.literal('hello'),

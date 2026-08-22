@@ -1,7 +1,17 @@
 import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { INPUT_KEYS, MP_PROTOCOL_VERSION, ROOM_PHASES, type InputKey, type RoomPhase } from '@gamedevpl/contract';
+import {
+  DEFAULT_MAX_SOCKETS_PER_IP,
+  INPUT_KEYS,
+  MAX_SOCKET_FRAME_BYTES,
+  MAX_MULTIPLAYER_SLOTS,
+  MAX_SOCKET_FRAMES_PER_SECOND,
+  MP_PROTOCOL_VERSION,
+  ROOM_PHASES,
+  type InputKey,
+  type RoomPhase,
+} from '@gamedevpl/contract';
 import { checkUserAccess } from './auth.js';
 import type { InternalAuthVerifier } from './internal-auth.js';
 import type { RelayClient } from './mp-relay.js';
@@ -37,7 +47,7 @@ export const SLOT_COLORS = [
   '#f4f5ff',
 ] as const;
 
-export const MAX_SLOTS = SLOT_COLORS.length;
+export const MAX_SLOTS: number = MAX_MULTIPLAYER_SLOTS;
 export const DEFAULT_SLOTS = 4;
 
 export { INPUT_KEYS, ROOM_PHASES, type InputKey, type RoomPhase };
@@ -46,9 +56,9 @@ const ROOM_TTL_MS = 2 * 60 * 60 * 1000;
 const ROOM_IDLE_MS = 15 * 60 * 1000;
 const JOIN_TOKEN_TTL_MS = ROOM_TTL_MS;
 /** Frames per second a single connection may send before it is disconnected. */
-const MAX_FRAMES_PER_SECOND = 40;
+const MAX_FRAMES_PER_SECOND = MAX_SOCKET_FRAMES_PER_SECOND;
 /** Frames larger than this are refused unread — controller frames are tiny. */
-const MAX_FRAME_BYTES = 2 * 1024;
+const MAX_FRAME_BYTES = MAX_SOCKET_FRAME_BYTES;
 
 /** A connection we can write to. Kept structural so tests need no real socket. */
 export interface RelaySocket {
@@ -508,7 +518,7 @@ export interface MultiplayerRoutesOptions {
  * are normally on one household's wifi — so the default clears two simultaneous
  * parties from a single address, leaving room for reconnect overlap.
  */
-export const DEFAULT_MAX_SOCKETS_PER_IP = 24;
+export { DEFAULT_MAX_SOCKETS_PER_IP };
 
 /**
  * The address to bucket a connection under, or null when it cannot be determined.

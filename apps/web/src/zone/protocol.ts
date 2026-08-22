@@ -39,27 +39,25 @@
  * the shell never has to have an opinion about a shape that belongs to the game.
  */
 
-import { ZONE_PROTOCOL_VERSION } from '@gamedevpl/contract';
+import {
+  MAX_PLAYERS_PER_ZONE,
+  MAX_STATE_BYTES,
+  RESERVED_EVENT_KINDS,
+  TICK_HZ_VALUES,
+  ZONE_PROTOCOL_VERSION,
+  type ZoneEvent,
+} from '@gamedevpl/contract';
 export { ZONE_PROTOCOL_VERSION };
 
 /** Bridge namespace, shared with every other bridge so a game's own traffic can't pose as ours. */
 export { BRIDGE_NAMESPACE } from '../mp/protocol.js';
 
-/** Mirrors games-repo `sim-contract.ts` `RESERVED_EVENT_KINDS`. */
-export const RESERVED_EVENT_KINDS = ['join', 'leave'] as const;
-
-/** Mirrors games-repo `MAX_PLAYERS_PER_ZONE`. */
-export const MAX_PLAYERS_PER_ZONE = 16;
-
-/** Mirrors games-repo `TICK_HZ_VALUES`. */
-export const TICK_HZ_VALUES = [5, 10, 15, 20] as const;
-
 /**
- * Mirrors games-repo `MAX_STATE_BYTES`, with the same job it has there: a snapshot
- * shares a Firestore document with the event log. Checked on the way into the frame so
- * a host that somehow oversends cannot make the game's `JSON.parse` the place it fails.
+ * The sim-contract numbers, declared once in `@gamedevpl/contract` and mirrored there
+ * from the games repo. `MAX_STATE_BYTES` is checked on the way into the frame so a host
+ * that somehow oversends cannot make the game's `JSON.parse` the place it fails.
  */
-export const MAX_STATE_BYTES = 192 * 1024;
+export { MAX_PLAYERS_PER_ZONE, MAX_STATE_BYTES, RESERVED_EVENT_KINDS, TICK_HZ_VALUES } from '@gamedevpl/contract';
 
 /**
  * Longest an input kind may be, matching the games-repo validator's 16-character rule
@@ -72,21 +70,17 @@ export const MAX_INPUT_KIND_LENGTH = 16;
 const MAX_INPUT_VALUE_LENGTH = 32;
 
 /**
- * Inputs a client may send per second before the host disconnects it.
+ * Inputs this client allows itself per second — a self-throttle, not the host's rule.
  *
  * Above the fastest tick rate the contract allows (20 Hz) with room for a burst, and
- * well under party mode's 40: a zone input is a discrete intent ("step north"), not a
- * key-state stream, so a client sending more than a couple per tick is either broken or
- * trying something.
+ * deliberately under the host's own frame ceiling (`MAX_SOCKET_FRAMES_PER_SECOND`, 40),
+ * so a well-behaved client never reaches the limiter: a zone input is a discrete intent
+ * ("step north"), not a key-state stream.
  */
 export const MAX_INPUTS_PER_SECOND = 30;
 
 /** One event in the ordered stream a tick is fed. Slots are assigned by the host. */
-export interface ZoneEvent {
-  slot: number;
-  k: string;
-  v?: number | string | boolean;
-}
+export type { ZoneEvent } from '@gamedevpl/contract';
 
 export interface ZoneRosterEntry {
   slot: number;

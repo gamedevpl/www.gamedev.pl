@@ -1,3 +1,4 @@
+import { MAX_WORLD_ENTRY_BYTES, MAX_WORLD_FIELDS, MAX_WORLD_KEY_LENGTH } from '@gamedevpl/contract';
 import { createHash } from 'node:crypto';
 
 /**
@@ -28,18 +29,18 @@ import { createHash } from 'node:crypto';
  */
 
 /** Fields one entry may declare. More than this and it is a database, not a world. */
-export const MAX_WORLD_FIELDS = 12;
+export { MAX_WORLD_FIELDS };
 export const MAX_WORLD_TEXT_LENGTH = 240;
 export const MAX_WORLD_ENUM_VALUES = 16;
 /** Ceiling on what a game may set as its own per-player quota. */
 export const MAX_WORLD_ENTRIES_PER_PLAYER = 64;
-export const MAX_WORLD_KEY_LENGTH = 64;
+export { MAX_WORLD_KEY_LENGTH };
 /**
  * Bytes of stored JSON for one entry's fields. Generous next to the declared field
  * limits above — it is a backstop against a pathological declaration, not the primary
  * bound, which is the per-field one.
  */
-export const MAX_WORLD_ENTRY_BYTES = 4 * 1024;
+export { MAX_WORLD_ENTRY_BYTES };
 /**
  * Entries in one world, across every player. A quota bounds any single griefer; this
  * bounds a popular game, and more importantly bounds the read that returns the whole
