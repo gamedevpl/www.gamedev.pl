@@ -595,7 +595,8 @@ at all and feeds the only autonomous-eligible class.
   game is next touched — this is the one item on this list a platform-wide
   change cannot close in a single stroke.
 - ✅ **90-day retention, enforced.** Every row is written with an `expiresAt`
-  Timestamp ([store.ts](../apps/api/src/store.ts) `telemetryExpiresAt`) and the TTL
+  Timestamp ([store/records/telemetry.ts](../apps/api/src/store/records/telemetry.ts)
+  `telemetryExpiresAt`) and the TTL
   policy is provisioned by [setup-gcp.sh](../infra/setup-gcp.sh) step 6/6. Until
   this landed the 90 days was a documented intention that nothing enforced — worth
   recording _why_ it was easy to miss: a TTL policy needs a Timestamp field, `at` is

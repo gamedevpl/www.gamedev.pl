@@ -70,9 +70,9 @@ gcloud secrets add-iam-policy-binding session-secret \
 
 # Telemetry is kept for 90 days (docs/improvement-loop-plan.md IL-1). Firestore enforces
 # that with a TTL policy on the field the writer stamps — see TELEMETRY_TTL_FIELD,
-# TELEMETRY_COLLECTION and VISIT_COLLECTION in apps/api/src/store.ts. The names must match
-# those constants exactly: a policy pointed at the wrong field or collection group is a
-# silent no-op that deletes nothing and reports no error.
+# TELEMETRY_COLLECTION and VISIT_COLLECTION in apps/api/src/store/records/telemetry.ts.
+# The names must match those constants exactly: a policy pointed at the wrong field or
+# collection group is a silent no-op that deletes nothing and reports no error.
 #
 # **One policy per collection group, and that is the whole reason this is a loop.** A TTL
 # policy is scoped to a group rather than a path, so every new telemetry stream needs its
