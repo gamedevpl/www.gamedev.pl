@@ -103,6 +103,10 @@ export type { TelemetryEventType, TelemetryEvent, VisitEvent };
 import type { TelemetryStore } from './store/slices/telemetry.js';
 export type { TelemetryStore };
 import { InMemoryTelemetryStore, FirestoreTelemetryStore } from './store/slices/telemetry.js';
+import { stripUndefined } from './store/firestore-util.js';
+import type { OAuthStore } from './store/slices/oauth.js';
+export type { OAuthStore };
+import { InMemoryOAuthStore, FirestoreOAuthStore } from './store/slices/oauth.js';
 import type {
   NotificationType,
   ProposalNotificationType,
@@ -1300,61 +1304,8 @@ export interface AgentKeysStore {
   touchCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null>;
 }
 
-export interface OAuthStore {
-  /** Persist a dynamically registered or CIMD-cached OAuth client. */
-  createOAuthClient(record: OAuthClientRecord): Promise<void>;
-
-  getOAuthClient(clientId: string): Promise<OAuthClientRecord | null>;
-
-  createOAuthGrant(record: OAuthGrantRecord): Promise<void>;
-
-  getOAuthGrant(grantId: string): Promise<OAuthGrantRecord | null>;
-
-  getOAuthGrantByRefreshTokenId(refreshTokenId: string): Promise<OAuthGrantRecord | null>;
-
-  listOAuthGrantsByOwner(ownerUid: string): Promise<OAuthGrantRecord[]>;
-
-  revokeOAuthGrant(grantId: string, ownerUid: string): Promise<boolean>;
-
-  createOAuthAccessToken(record: OAuthAccessTokenRecord): Promise<void>;
-
-  getOAuthAccessToken(tokenId: string): Promise<OAuthAccessTokenRecord | null>;
-
-  deleteOAuthAccessToken(tokenId: string): Promise<boolean>;
-
-  createOAuthAuthCode(record: OAuthAuthCodeRecord): Promise<void>;
-
-  /**
-   * Single-use: returns the record with `usedAt` set, then deletes the stored
-   * row. Already-used or expired codes are deleted and yield null. Wrong-hash
-   * presentations leave the row in place.
-   */
-  consumeOAuthAuthCode(codeId: string, codeHash: string, nowMs: number): Promise<OAuthAuthCodeRecord | null>;
-
-  /**
-   * Rotate refresh credentials. When the presented refresh id is not the grant's
-   * current one, the whole grant is revoked (reuse detection).
-   */
-  rotateOAuthRefreshToken(input: {
-    refreshTokenId: string;
-    refreshSecretHash: string;
-    newRefreshTokenId: string;
-    newRefreshHash: string;
-    newRefreshExpiresAt: string;
-    newAccessToken: OAuthAccessTokenRecord;
-    nowMs: number;
-  }): Promise<RotateRefreshTokenResult>;
-
-  /** First token issue after authorization_code exchange (grant has no refresh yet). */
-  issueOAuthTokensFromGrant(input: {
-    grantId: string;
-    refreshTokenId: string;
-    refreshHash: string;
-    refreshExpiresAt: string;
-    accessToken: OAuthAccessTokenRecord;
-    nowMs: number;
-  }): Promise<OAuthGrantRecord | null>;
-}
+// OAuthStore, InMemoryOAuthStore and FirestoreOAuthStore live in
+// ./store/slices/oauth.js -- imported at the top of the file (Phase 2 wave 4).
 
 export interface Store
   extends
@@ -1383,28 +1334,8 @@ export function pushSubscriptionId(endpoint: string): string {
   return createHash('sha256').update(endpoint).digest('hex');
 }
 
-/**
- * Drop keys whose value is `undefined` before a Firestore write.
- *
- * Firestore rejects `undefined` outright ("Cannot use 'undefined' as a Firestore
- * value") rather than treating it as an absent field, which collides head-on with the
- * TypeScript optional fields (`email?`, `name?`, `picture?`, `locale?`) that this
- * codebase builds records from. The mismatch is invisible in tests because
- * `InMemoryStore` stores whatever it is handed, so it only ever surfaces as a 500 in
- * production — which is exactly how it surfaced: the first `bot:` account (no email, no
- * picture) could not be created, and the waitlist has the same latent fault for anyone
- * whose Google email is unverified, since `auth.ts` deliberately passes `undefined`
- * there rather than store an unverified claim.
- *
- * Applied at the write boundary rather than at each call site so a record can be built
- * naturally, with optional fields left off.
- */
-export function stripUndefined<T extends object>(value: T): T {
-  // `T extends object`, not `Record<string, unknown>`: interfaces (`User`,
-  // `WaitlistEntry`) have no implicit index signature, so the stricter bound rejects
-  // every real caller.
-  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
-}
+// stripUndefined lives in ./store/firestore-util.js -- imported at the top of the file
+// (Phase 2 wave 4), shared by every slice still in this file that writes to Firestore.
 
 /**
  * Presentation order for scorecards: newest computation first, slug as the tie-break.
@@ -1524,12 +1455,7 @@ export class InMemoryStore implements Store {
   // slug -> durable per-game agent opener state (BY-23)
   private gameAgentKeys = new Map<string, GameAgentKeyRecord>();
   private creatorAgentKeys = new Map<string, CreatorAgentKeyRecord>();
-  private oauthClients = new Map<string, OAuthClientRecord>();
-  private oauthGrants = new Map<string, OAuthGrantRecord>();
-  private oauthAccessTokens = new Map<string, OAuthAccessTokenRecord>();
-  private oauthAuthCodes = new Map<string, OAuthAuthCodeRecord>();
-  /** refresh token id -> grant id — enables reuse detection after rotation. */
-  private oauthRefreshTokenIndex = new Map<string, string>();
+  private oauthStore = new InMemoryOAuthStore();
   // lowercase handle -> reservation
   private handles = new Map<string, HandleRecord>();
 
@@ -1696,23 +1622,26 @@ export class InMemoryStore implements Store {
     for (const [id, suggestion] of [...this.suggestions]) {
       if (suggestion.ownerUid === uid) this.suggestions.set(id, { ...suggestion, ownerUid: null, updatedAt: at });
     }
-    for (const [clientId, client] of [...this.oauthClients]) {
-      if (client.ownerUid === uid) this.oauthClients.set(clientId, { ...client, ownerUid: undefined });
+    // Reaches into InMemoryOAuthStore's Maps directly -- documented exception, see PR.
+    for (const [clientId, client] of [...this.oauthStore.oauthClients]) {
+      if (client.ownerUid === uid) this.oauthStore.oauthClients.set(clientId, { ...client, ownerUid: undefined });
     }
     const grantIds = new Set<string>();
-    for (const [grantId, grant] of [...this.oauthGrants]) {
+    for (const [grantId, grant] of [...this.oauthStore.oauthGrants]) {
       if (grant.ownerUid !== uid) continue;
       grantIds.add(grantId);
-      this.oauthGrants.delete(grantId);
+      this.oauthStore.oauthGrants.delete(grantId);
     }
-    for (const [tokenId, token] of [...this.oauthAccessTokens]) {
-      if (token.ownerUid === uid || grantIds.has(token.grantId)) this.oauthAccessTokens.delete(tokenId);
+    for (const [tokenId, token] of [...this.oauthStore.oauthAccessTokens]) {
+      if (token.ownerUid === uid || grantIds.has(token.grantId)) this.oauthStore.oauthAccessTokens.delete(tokenId);
     }
-    for (const [codeId, code] of [...this.oauthAuthCodes]) {
-      if (code.ownerUid === uid || (code.grantId && grantIds.has(code.grantId))) this.oauthAuthCodes.delete(codeId);
+    for (const [codeId, code] of [...this.oauthStore.oauthAuthCodes]) {
+      if (code.ownerUid === uid || (code.grantId && grantIds.has(code.grantId))) {
+        this.oauthStore.oauthAuthCodes.delete(codeId);
+      }
     }
-    for (const [refreshId, grantId] of [...this.oauthRefreshTokenIndex]) {
-      if (grantIds.has(grantId)) this.oauthRefreshTokenIndex.delete(refreshId);
+    for (const [refreshId, grantId] of [...this.oauthStore.oauthRefreshTokenIndex]) {
+      if (grantIds.has(grantId)) this.oauthStore.oauthRefreshTokenIndex.delete(refreshId);
     }
     for (const slug of [...publishedSlugs, ...unpublishedSlugs]) this.gameAutonomy.delete(slug);
     this.users.delete(uid);
@@ -3768,79 +3697,51 @@ export class InMemoryStore implements Store {
   }
 
   async createOAuthClient(record: OAuthClientRecord): Promise<void> {
-    this.oauthClients.set(record.clientId, { ...record });
+    return this.oauthStore.createOAuthClient(record);
   }
 
   async getOAuthClient(clientId: string): Promise<OAuthClientRecord | null> {
-    const record = this.oauthClients.get(clientId);
-    return record ? { ...record } : null;
+    return this.oauthStore.getOAuthClient(clientId);
   }
 
   async createOAuthGrant(record: OAuthGrantRecord): Promise<void> {
-    this.oauthGrants.set(record.grantId, { ...record });
-    if (record.currentRefreshTokenId) {
-      this.oauthRefreshTokenIndex.set(record.currentRefreshTokenId, record.grantId);
-    }
+    return this.oauthStore.createOAuthGrant(record);
   }
 
   async getOAuthGrant(grantId: string): Promise<OAuthGrantRecord | null> {
-    const record = this.oauthGrants.get(grantId);
-    return record ? { ...record } : null;
+    return this.oauthStore.getOAuthGrant(grantId);
   }
 
   async getOAuthGrantByRefreshTokenId(refreshTokenId: string): Promise<OAuthGrantRecord | null> {
-    const grantId = this.oauthRefreshTokenIndex.get(refreshTokenId);
-    if (!grantId) return null;
-    return this.getOAuthGrant(grantId);
+    return this.oauthStore.getOAuthGrantByRefreshTokenId(refreshTokenId);
   }
 
   async listOAuthGrantsByOwner(ownerUid: string): Promise<OAuthGrantRecord[]> {
-    return Array.from(this.oauthGrants.values())
-      .filter((grant) => grant.ownerUid === ownerUid && !grant.revokedAt)
-      .map((grant) => ({ ...grant }))
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return this.oauthStore.listOAuthGrantsByOwner(ownerUid);
   }
 
   async revokeOAuthGrant(grantId: string, ownerUid: string): Promise<boolean> {
-    const grant = this.oauthGrants.get(grantId);
-    if (!grant || grant.ownerUid !== ownerUid) return false;
-    const at = new Date().toISOString();
-    this.oauthGrants.set(grantId, { ...grant, revokedAt: at });
-    return true;
+    return this.oauthStore.revokeOAuthGrant(grantId, ownerUid);
   }
 
   async createOAuthAccessToken(record: OAuthAccessTokenRecord): Promise<void> {
-    this.oauthAccessTokens.set(record.tokenId, { ...record });
+    return this.oauthStore.createOAuthAccessToken(record);
   }
 
   async getOAuthAccessToken(tokenId: string): Promise<OAuthAccessTokenRecord | null> {
-    const record = this.oauthAccessTokens.get(tokenId);
-    return record ? { ...record } : null;
+    return this.oauthStore.getOAuthAccessToken(tokenId);
   }
 
   async deleteOAuthAccessToken(tokenId: string): Promise<boolean> {
-    return this.oauthAccessTokens.delete(tokenId);
+    return this.oauthStore.deleteOAuthAccessToken(tokenId);
   }
 
   async createOAuthAuthCode(record: OAuthAuthCodeRecord): Promise<void> {
-    this.oauthAuthCodes.set(record.codeId, { ...record });
+    return this.oauthStore.createOAuthAuthCode(record);
   }
 
   async consumeOAuthAuthCode(codeId: string, codeHash: string, nowMs: number): Promise<OAuthAuthCodeRecord | null> {
-    const record = this.oauthAuthCodes.get(codeId);
-    if (!record) return null;
-    if (record.usedAt) {
-      this.oauthAuthCodes.delete(codeId);
-      return null;
-    }
-    if (Date.parse(record.expiresAt) <= nowMs) {
-      this.oauthAuthCodes.delete(codeId);
-      return null;
-    }
-    if (record.codeHash !== codeHash) return null;
-    const used: OAuthAuthCodeRecord = { ...record, usedAt: new Date(nowMs).toISOString() };
-    this.oauthAuthCodes.delete(codeId);
-    return used;
+    return this.oauthStore.consumeOAuthAuthCode(codeId, codeHash, nowMs);
   }
 
   async rotateOAuthRefreshToken(input: {
@@ -3852,30 +3753,7 @@ export class InMemoryStore implements Store {
     newAccessToken: OAuthAccessTokenRecord;
     nowMs: number;
   }): Promise<RotateRefreshTokenResult> {
-    const grantId = this.oauthRefreshTokenIndex.get(input.refreshTokenId);
-    if (!grantId) return { ok: false, reason: 'invalid' };
-    const grant = this.oauthGrants.get(grantId);
-    if (!grant) return { ok: false, reason: 'invalid' };
-    if (grant.revokedAt) return { ok: false, reason: 'revoked' };
-    if (Date.parse(grant.refreshExpiresAt) <= input.nowMs) return { ok: false, reason: 'expired' };
-    if (grant.currentRefreshTokenId !== input.refreshTokenId) {
-      this.oauthGrants.set(grantId, { ...grant, revokedAt: new Date(input.nowMs).toISOString() });
-      return { ok: false, reason: 'reuse' };
-    }
-    if (grant.currentRefreshHash !== input.refreshSecretHash) return { ok: false, reason: 'invalid' };
-
-    const previousRefreshTokenId = grant.currentRefreshTokenId;
-    const updated: OAuthGrantRecord = {
-      ...grant,
-      currentRefreshTokenId: input.newRefreshTokenId,
-      currentRefreshHash: input.newRefreshHash,
-      refreshExpiresAt: input.newRefreshExpiresAt,
-      lastUsedAt: new Date(input.nowMs).toISOString(),
-    };
-    this.oauthGrants.set(grantId, updated);
-    this.oauthRefreshTokenIndex.set(input.newRefreshTokenId, grantId);
-    this.oauthAccessTokens.set(input.newAccessToken.tokenId, { ...input.newAccessToken });
-    return { ok: true, grant: { ...updated }, previousRefreshTokenId };
+    return this.oauthStore.rotateOAuthRefreshToken(input);
   }
 
   async issueOAuthTokensFromGrant(input: {
@@ -3886,21 +3764,7 @@ export class InMemoryStore implements Store {
     accessToken: OAuthAccessTokenRecord;
     nowMs: number;
   }): Promise<OAuthGrantRecord | null> {
-    const grant = this.oauthGrants.get(input.grantId);
-    if (!grant || grant.revokedAt) return null;
-    if (grant.currentRefreshTokenId) return null;
-
-    const updated: OAuthGrantRecord = {
-      ...grant,
-      currentRefreshTokenId: input.refreshTokenId,
-      currentRefreshHash: input.refreshHash,
-      refreshExpiresAt: input.refreshExpiresAt,
-      lastUsedAt: new Date(input.nowMs).toISOString(),
-    };
-    this.oauthGrants.set(input.grantId, updated);
-    this.oauthRefreshTokenIndex.set(input.refreshTokenId, input.grantId);
-    this.oauthAccessTokens.set(input.accessToken.tokenId, { ...input.accessToken });
-    return { ...updated };
+    return this.oauthStore.issueOAuthTokensFromGrant(input);
   }
 
   // Test/inspection only — production reads go through `listWaitlistEntries`.
@@ -3912,10 +3776,12 @@ export class InMemoryStore implements Store {
 export class FirestoreStore implements Store {
   private db: Firestore;
   private telemetryStore: FirestoreTelemetryStore;
+  private oauthStore: FirestoreOAuthStore;
 
   constructor(db?: Firestore) {
     this.db = db ?? new Firestore();
     this.telemetryStore = new FirestoreTelemetryStore(this.db);
+    this.oauthStore = new FirestoreOAuthStore(this.db);
   }
 
   async getUser(uid: string): Promise<User | null> {
@@ -7191,100 +7057,51 @@ export class FirestoreStore implements Store {
   }
 
   async createOAuthClient(record: OAuthClientRecord): Promise<void> {
-    await this.db.collection('oauthClients').doc(record.clientId).create(stripUndefined(record));
+    return this.oauthStore.createOAuthClient(record);
   }
 
   async getOAuthClient(clientId: string): Promise<OAuthClientRecord | null> {
-    const snap = await this.db.collection('oauthClients').doc(clientId).get();
-    if (!snap.exists) return null;
-    return snap.data() as OAuthClientRecord;
+    return this.oauthStore.getOAuthClient(clientId);
   }
 
   async createOAuthGrant(record: OAuthGrantRecord): Promise<void> {
-    const batch = this.db.batch();
-    batch.create(this.db.collection('oauthGrants').doc(record.grantId), stripUndefined(record));
-    if (record.currentRefreshTokenId) {
-      batch.set(this.db.collection('oauthRefreshTokens').doc(record.currentRefreshTokenId), {
-        grantId: record.grantId,
-      });
-    }
-    await batch.commit();
+    return this.oauthStore.createOAuthGrant(record);
   }
 
   async getOAuthGrant(grantId: string): Promise<OAuthGrantRecord | null> {
-    const snap = await this.db.collection('oauthGrants').doc(grantId).get();
-    if (!snap.exists) return null;
-    return snap.data() as OAuthGrantRecord;
+    return this.oauthStore.getOAuthGrant(grantId);
   }
 
   async getOAuthGrantByRefreshTokenId(refreshTokenId: string): Promise<OAuthGrantRecord | null> {
-    const indexSnap = await this.db.collection('oauthRefreshTokens').doc(refreshTokenId).get();
-    if (!indexSnap.exists) return null;
-    const grantId = (indexSnap.data() as { grantId: string }).grantId;
-    return this.getOAuthGrant(grantId);
+    return this.oauthStore.getOAuthGrantByRefreshTokenId(refreshTokenId);
   }
 
   async listOAuthGrantsByOwner(ownerUid: string): Promise<OAuthGrantRecord[]> {
-    const snap = await this.db.collection('oauthGrants').where('ownerUid', '==', ownerUid).get();
-    return snap.docs
-      .map((doc) => doc.data() as OAuthGrantRecord)
-      .filter((grant) => !grant.revokedAt)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return this.oauthStore.listOAuthGrantsByOwner(ownerUid);
   }
 
   async revokeOAuthGrant(grantId: string, ownerUid: string): Promise<boolean> {
-    const docRef = this.db.collection('oauthGrants').doc(grantId);
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(docRef);
-      if (!snap.exists) return false;
-      const grant = snap.data() as OAuthGrantRecord;
-      if (grant.ownerUid !== ownerUid) return false;
-      tx.update(docRef, { revokedAt: new Date().toISOString() });
-      return true;
-    });
+    return this.oauthStore.revokeOAuthGrant(grantId, ownerUid);
   }
 
   async createOAuthAccessToken(record: OAuthAccessTokenRecord): Promise<void> {
-    await this.db.collection('oauthAccessTokens').doc(record.tokenId).create(stripUndefined(record));
+    return this.oauthStore.createOAuthAccessToken(record);
   }
 
   async getOAuthAccessToken(tokenId: string): Promise<OAuthAccessTokenRecord | null> {
-    const snap = await this.db.collection('oauthAccessTokens').doc(tokenId).get();
-    if (!snap.exists) return null;
-    return snap.data() as OAuthAccessTokenRecord;
+    return this.oauthStore.getOAuthAccessToken(tokenId);
   }
 
   async deleteOAuthAccessToken(tokenId: string): Promise<boolean> {
-    const docRef = this.db.collection('oauthAccessTokens').doc(tokenId);
-    const snap = await docRef.get();
-    if (!snap.exists) return false;
-    await docRef.delete();
-    return true;
+    return this.oauthStore.deleteOAuthAccessToken(tokenId);
   }
 
   async createOAuthAuthCode(record: OAuthAuthCodeRecord): Promise<void> {
-    await this.db.collection('oauthAuthCodes').doc(record.codeId).create(stripUndefined(record));
+    return this.oauthStore.createOAuthAuthCode(record);
   }
 
   async consumeOAuthAuthCode(codeId: string, codeHash: string, nowMs: number): Promise<OAuthAuthCodeRecord | null> {
-    const docRef = this.db.collection('oauthAuthCodes').doc(codeId);
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(docRef);
-      if (!snap.exists) return null;
-      const record = snap.data() as OAuthAuthCodeRecord;
-      if (record.usedAt) {
-        tx.delete(docRef);
-        return null;
-      }
-      if (Date.parse(record.expiresAt) <= nowMs) {
-        tx.delete(docRef);
-        return null;
-      }
-      if (record.codeHash !== codeHash) return null;
-      const usedAt = new Date(nowMs).toISOString();
-      tx.delete(docRef);
-      return { ...record, usedAt };
-    });
+    return this.oauthStore.consumeOAuthAuthCode(codeId, codeHash, nowMs);
   }
 
   async rotateOAuthRefreshToken(input: {
@@ -7296,40 +7113,7 @@ export class FirestoreStore implements Store {
     newAccessToken: OAuthAccessTokenRecord;
     nowMs: number;
   }): Promise<RotateRefreshTokenResult> {
-    const grantIdFromIndex = await this.getOAuthGrantByRefreshTokenId(input.refreshTokenId);
-    if (!grantIdFromIndex) return { ok: false, reason: 'invalid' };
-
-    const grantRef = this.db.collection('oauthGrants').doc(grantIdFromIndex.grantId);
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(grantRef);
-      if (!snap.exists) return { ok: false, reason: 'invalid' as const };
-      const grant = snap.data() as OAuthGrantRecord;
-      if (grant.revokedAt) return { ok: false, reason: 'revoked' as const };
-      if (Date.parse(grant.refreshExpiresAt) <= input.nowMs) return { ok: false, reason: 'expired' as const };
-      if (grant.currentRefreshTokenId !== input.refreshTokenId) {
-        tx.update(grantRef, { revokedAt: new Date(input.nowMs).toISOString() });
-        return { ok: false, reason: 'reuse' as const };
-      }
-      if (grant.currentRefreshHash !== input.refreshSecretHash) return { ok: false, reason: 'invalid' as const };
-
-      const previousRefreshTokenId = grant.currentRefreshTokenId;
-      const updated: OAuthGrantRecord = {
-        ...grant,
-        currentRefreshTokenId: input.newRefreshTokenId,
-        currentRefreshHash: input.newRefreshHash,
-        refreshExpiresAt: input.newRefreshExpiresAt,
-        lastUsedAt: new Date(input.nowMs).toISOString(),
-      };
-      tx.set(grantRef, updated);
-      tx.set(this.db.collection('oauthRefreshTokens').doc(input.newRefreshTokenId), {
-        grantId: grant.grantId,
-      });
-      tx.create(
-        this.db.collection('oauthAccessTokens').doc(input.newAccessToken.tokenId),
-        stripUndefined(input.newAccessToken),
-      );
-      return { ok: true, grant: updated, previousRefreshTokenId };
-    });
+    return this.oauthStore.rotateOAuthRefreshToken(input);
   }
 
   async issueOAuthTokensFromGrant(input: {
@@ -7340,30 +7124,6 @@ export class FirestoreStore implements Store {
     accessToken: OAuthAccessTokenRecord;
     nowMs: number;
   }): Promise<OAuthGrantRecord | null> {
-    const grantRef = this.db.collection('oauthGrants').doc(input.grantId);
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(grantRef);
-      if (!snap.exists) return null;
-      const grant = snap.data() as OAuthGrantRecord;
-      if (grant.revokedAt) return null;
-      if (grant.currentRefreshTokenId) return null;
-
-      const updated: OAuthGrantRecord = {
-        ...grant,
-        currentRefreshTokenId: input.refreshTokenId,
-        currentRefreshHash: input.refreshHash,
-        refreshExpiresAt: input.refreshExpiresAt,
-        lastUsedAt: new Date(input.nowMs).toISOString(),
-      };
-      tx.set(grantRef, updated);
-      tx.set(this.db.collection('oauthRefreshTokens').doc(input.refreshTokenId), {
-        grantId: input.grantId,
-      });
-      tx.create(
-        this.db.collection('oauthAccessTokens').doc(input.accessToken.tokenId),
-        stripUndefined(input.accessToken),
-      );
-      return updated;
-    });
+    return this.oauthStore.issueOAuthTokensFromGrant(input);
   }
 }
