@@ -227,8 +227,52 @@ export const privacyEn: LegalDocument = {
       ],
     },
     {
+      id: 'agent',
+      heading: '5. Connecting your own AI assistant (agent interface)',
+      blocks: [
+        {
+          kind: 'p',
+          text:
+            'You can also build and improve your games by connecting an AI assistant of your choice (for example ' +
+            'ChatGPT, Claude, or an AI-capable code editor) to the Service through our agent interface (MCP). ' +
+            'Nothing below happens until you connect an assistant yourself — with a creator key you generate, or by ' +
+            'signing in through the assistant (OAuth). While it is connected, the interface returns to it — for ' +
+            'your own games only — the following categories of data:',
+        },
+        {
+          kind: 'ul',
+          items: [
+            'the build brief for your game: title, your description and clarifying answers, your steering messages ' +
+              'and feedback — including a paged transcript of that conversation covering earlier build rounds;',
+            'sketches and reference images you attached to the game;',
+            'your game’s source files (published, draft and staged changes) and the platform’s own reference ' +
+              'material (the Creator Kit);',
+            'build records for your game: progress notes, screenshots, automated quality-gate verdicts, and the ' +
+              'screenshots and gameplay recordings the gate produced;',
+            'technical status metadata that travels with those replies: round and delivery identifiers, ' +
+              'timestamps, workflow state, and advisory warning codes.',
+          ],
+        },
+        {
+          kind: 'p',
+          text:
+            'The interface returns data about the game and the build round only. It does not return your email ' +
+            'address, your name, your account identifier, or any other creator’s non-public data — the assistant ' +
+            'sees your game, not your account.',
+        },
+        {
+          kind: 'p',
+          text:
+            'What the connected assistant does with the data it receives is governed by your agreement with its ' +
+            'provider (for example OpenAI or Anthropic) — the assistant acts on your instructions, as a recipient ' +
+            'you chose, not as our subcontractor. We send it nothing on our own initiative: every category above ' +
+            'is returned only in response to a request made by the assistant while you have it connected.',
+        },
+      ],
+    },
+    {
       id: 'odbiorcy',
-      heading: '5. Who we share data with',
+      heading: '6. Who we share data with',
       blocks: [
         {
           kind: 'p',
@@ -276,7 +320,7 @@ export const privacyEn: LegalDocument = {
     },
     {
       id: 'cookies',
-      heading: '6. Cookies and browser storage',
+      heading: '7. Cookies and browser storage',
       blocks: [
         {
           kind: 'p',
@@ -305,7 +349,7 @@ export const privacyEn: LegalDocument = {
     },
     {
       id: 'prawa',
-      heading: '7. Your rights',
+      heading: '8. Your rights',
       blocks: [
         { kind: 'p', text: 'In relation to your data you have the right to:' },
         {
@@ -338,7 +382,7 @@ export const privacyEn: LegalDocument = {
     },
     {
       id: 'usuniecie',
-      heading: '8. Deleting your account',
+      heading: '9. Deleting your account',
       blocks: [
         {
           kind: 'p',
@@ -364,7 +408,7 @@ export const privacyEn: LegalDocument = {
     },
     {
       id: 'bezpieczenstwo',
-      heading: '9. Security',
+      heading: '10. Security',
       blocks: [
         {
           kind: 'p',
@@ -383,7 +427,7 @@ export const privacyEn: LegalDocument = {
     },
     {
       id: 'wiek',
-      heading: '10. Age of users',
+      heading: '11. Age of users',
       blocks: [
         {
           kind: 'p',
@@ -396,7 +440,7 @@ export const privacyEn: LegalDocument = {
     },
     {
       id: 'zmiany',
-      heading: '11. Changes to this policy',
+      heading: '12. Changes to this policy',
       blocks: [
         {
           kind: 'p',

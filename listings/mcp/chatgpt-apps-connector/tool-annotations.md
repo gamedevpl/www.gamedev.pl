@@ -1,8 +1,20 @@
 # Tool annotation justifications — paste-ready
 
 One block per tool, one code block per form field. Copy each block into the matching box.
-Generated from `apps/api/src/mcp-server.ts`, so the tool list and annotation values are the
+Derived from `apps/api/src/mcp-server.ts`, so the tool list and annotation values are the
 server's, not a transcription.
+
+Covers exactly the tools `tools/list` advertises (`MCP_VISIBLE_TOOLS`), in the order the
+server lists them. Tools that exist only for REST compatibility and are never advertised
+to a model (`MCP_UNADVERTISED_TOOLS`) are deliberately absent — the review sees only the
+advertised surface.
+
+Every advertised tool sets all four hints (`readOnlyHint`, `destructiveHint`,
+`idempotentHint`, `openWorldHint`) to an explicit boolean on the wire — never null,
+never omitted. The 2026-08-22 review round flagged annotations, and the gap was this
+document lagging the live surface (seven advertised tools had no justification blocks
+here), not the wire values; `mcp-server.test.ts` ("annotates every tool…") pins the
+wire values per tool name.
 
 ## `start`
 
@@ -12,16 +24,22 @@ server's, not a transcription.
 Binds this client to a build round on the creator's own game and mints a short-lived session key, so it changes server state.
 ```
 
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
 **Destructive: False**
 
 ```
 Additive: it creates a round binding. No game, source file, delivery or message is modified or removed, and rejoining an open round returns that same round.
+```
+
+**Idempotent: True**
+
+```
+Calling it again for the same round returns the same open round and a key for it rather than creating anything new.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
 ## `create_game`
@@ -32,76 +50,22 @@ Additive: it creates a round binding. No game, source file, delivery or message 
 Creates a new game on the creator's account, so it writes state.
 ```
 
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
 **Destructive: False**
 
 ```
 Purely additive: it makes a game that did not exist and removes nothing. It spends the same daily creation quota and passes the same moderation as creating a game on the website.
 ```
 
-## `open_proposal_round`
-
-**Read Only: False**
+**Idempotent: False**
 
 ```
-Opens a proposal round against another creator's published game, which records new state.
+Each call attempts to create a new game, so two calls are two creations (bounded by the daily quota).
 ```
 
 **Open World: False**
 
 ```
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
-**Destructive: False**
-
-```
-Nothing belonging to the other creator is changed. A proposal is a request the owning creator can accept or reject; this tool cannot modify their game.
-```
-
-## `submit_proposal`
-
-**Read Only: False**
-
-```
-Submits the staged proposal for the owning creator's review, which records new state.
-```
-
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
-**Destructive: False**
-
-```
-Additive and cannot alter anyone else's game: it queues a proposal for review. Only the owning creator, acting separately, can apply it.
-```
-
-## `get_proposal_status`
-
-**Read Only: True**
-
-```
-Returns the current state of a proposal and writes nothing.
-```
-
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
-**Destructive: False**
-
-```
-Read-only; it inspects a proposal without changing it or the game it targets.
 ```
 
 ## `open_round`
@@ -112,16 +76,22 @@ Read-only; it inspects a proposal without changing it or the game it targets.
 Opens an improvement round on the creator's own published game, so it changes server state.
 ```
 
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
 **Destructive: False**
 
 ```
 Additive: it opens a round. The published game keeps serving unchanged until a new delivery passes the gate and the creator publishes it. If a round is already open, it returns that one instead of creating a second.
+```
+
+**Idempotent: True**
+
+```
+While a round is already open, calling it again returns that same round.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
 ## `continue_draft`
@@ -132,16 +102,22 @@ Additive: it opens a round. The published game keeps serving unchanged until a n
 Resumes an existing unpublished draft and opens a round for it, which writes state.
 ```
 
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
 **Destructive: False**
 
 ```
 Additive: the draft's existing content is preserved, not replaced. Repeating the call returns the same resumed round.
+```
+
+**Idempotent: True**
+
+```
+Repeating the call while the resumed round is open returns the same round.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
 ## `get_brief`
@@ -152,16 +128,48 @@ Additive: the draft's existing content is preserved, not replaced. Repeating the
 Returns the round's brief — title, spec, QA notes, constraints — and writes nothing.
 ```
 
+**Destructive: False**
+
+```
+Read-only; it reads brief data and changes nothing.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
 **Open World: False**
 
 ```
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
+## `get_reference_images`
+
+**Read Only: True**
+
+```
+Returns the sketches and photos the creator attached to the round, and writes nothing.
+```
+
 **Destructive: False**
 
 ```
-Read-only; it reads brief data and changes nothing.
+Read-only; the attached images are returned as-is and are not consumed or altered by reading them.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
 ## `get_seed`
@@ -172,16 +180,48 @@ Read-only; it reads brief data and changes nothing.
 Returns the platform-generated starter draft for the round, if one exists, and writes nothing.
 ```
 
+**Destructive: False**
+
+```
+Read-only; the seed is returned as-is and is not consumed or altered by reading it.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
 **Open World: False**
 
 ```
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
+## `regenerate_seed`
+
+**Read Only: False**
+
+```
+Queues generation of a replacement starter draft for the round, which writes state.
+```
+
 **Destructive: False**
 
 ```
-Read-only; the seed is returned as-is and is not consumed or altered by reading it.
+Additive with respect to the agent's own work: it is refused once anything has been staged or delivered, so it can only replace a platform-generated draft nobody has built on. Nothing creator-authored is touched.
+```
+
+**Idempotent: False**
+
+```
+Each accepted call queues another regeneration, and the call is capped per round, so repeat calls are not free.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
 ## `get_kit`
@@ -192,16 +232,48 @@ Read-only; the seed is returned as-is and is not consumed or altered by reading 
 Returns a reference to the Creator Kit archive and writes nothing.
 ```
 
+**Destructive: False**
+
+```
+Read-only; fetching the kit changes no server state.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
 **Open World: False**
 
 ```
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time. The kit download link is a short-lived signed URL for our own storage bucket, minted by us.
 ```
 
+## `get_kit_api`
+
+**Read Only: True**
+
+```
+Returns a compacted reference of the Creator Kit's API surface and writes nothing.
+```
+
 **Destructive: False**
 
 ```
-Read-only; fetching the kit changes no server state.
+Read-only; it summarizes reference material without modifying it.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
 ## `list_kit_files`
@@ -212,16 +284,22 @@ Read-only; fetching the kit changes no server state.
 Lists file paths inside the Creator Kit and writes nothing.
 ```
 
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
 **Destructive: False**
 
 ```
 Read-only; it enumerates kit contents without modifying them.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
 ## `search_kit_files`
@@ -232,16 +310,22 @@ Read-only; it enumerates kit contents without modifying them.
 Searches Creator Kit contents and returns matches, writing nothing.
 ```
 
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
 **Destructive: False**
 
 ```
 Read-only; searching does not modify the kit or any round state.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
 ## `read_kit_file`
@@ -252,16 +336,22 @@ Read-only; searching does not modify the kit or any round state.
 Returns the contents of one Creator Kit file and writes nothing.
 ```
 
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
 **Destructive: False**
 
 ```
 Read-only; kit files are reference material and are not modified by reading.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
 ## `read_kit_files`
@@ -272,16 +362,22 @@ Read-only; kit files are reference material and are not modified by reading.
 Returns the contents of several Creator Kit files in one call and writes nothing.
 ```
 
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
 **Destructive: False**
 
 ```
 Read-only; it is a batched read of the same reference material, with no write path.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
 ## `read_kit_file_fragment`
@@ -292,16 +388,48 @@ Read-only; it is a batched read of the same reference material, with no write pa
 Returns part of one Creator Kit file and writes nothing.
 ```
 
+**Destructive: False**
+
+```
+Read-only; reading a fragment modifies neither the file nor any round state.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
 **Open World: False**
 
 ```
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
+## `knowledge_query`
+
+**Read Only: True**
+
+```
+Answers a natural-language question from an index of our own documentation and source, and writes nothing.
+```
+
 **Destructive: False**
 
 ```
-Read-only; reading a fragment modifies neither the file nor any round state.
+Read-only; retrieval and answer synthesis leave the corpus and all round state unchanged.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
+**Open World: False**
+
+```
+Calls the gamedev.pl API, which retrieves from a Google Cloud Discovery Engine (Vertex AI Search) data store we configure and own — a fixed, first-party-controlled index built from our own repositories, not an arbitrary third-party service. The tool takes no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
 ## `get_sources`
@@ -312,96 +440,22 @@ Read-only; reading a fragment modifies neither the file nor any round state.
 Returns the game's existing source files so a round can continue prior work, and writes nothing.
 ```
 
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
 **Destructive: False**
 
 ```
 Read-only; it reads the current candidate or published sources without altering them.
 ```
 
-## `list_examples`
-
-**Read Only: True**
+**Idempotent: True**
 
 ```
-Lists curated first-party exemplar games and writes nothing.
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
 ```
 
 **Open World: False**
 
 ```
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
-**Destructive: False**
-
-```
-Read-only; the exemplar catalogue is reference material and is unchanged by listing it.
-```
-
-## `get_example`
-
-**Read Only: True**
-
-```
-Returns one allowlisted exemplar game and writes nothing.
-```
-
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time. Exemplars are served from our own storage via short-lived signed URLs we mint.
-```
-
-**Destructive: False**
-
-```
-Read-only; exemplars are first-party reference material and are not modified.
-```
-
-## `list_example_files`
-
-**Read Only: True**
-
-```
-Lists the files inside one exemplar and writes nothing.
-```
-
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
-**Destructive: False**
-
-```
-Read-only; it enumerates exemplar contents without changing them.
-```
-
-## `read_example_file`
-
-**Read Only: True**
-
-```
-Returns the contents of one exemplar file and writes nothing.
-```
-
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
-**Destructive: False**
-
-```
-Read-only; exemplar files are reference material and reading does not modify them.
 ```
 
 ## `report_progress`
@@ -412,16 +466,22 @@ Read-only; exemplar files are reference material and reading does not modify the
 Appends a progress note to the creator's thread for this round, which writes state.
 ```
 
+**Destructive: False**
+
+```
+Append-only: it adds a note. Earlier notes are not edited or removed.
+```
+
+**Idempotent: False**
+
+```
+Two calls produce two notes, so repeating the call is not a no-op.
+```
+
 **Open World: False**
 
 ```
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
-**Destructive: False**
-
-```
-Append-only: it adds a note. Earlier notes are not edited or removed. Two calls produce two notes, which is why it is not marked idempotent.
 ```
 
 ## `screenshot_upload_url`
@@ -429,7 +489,19 @@ Append-only: it adds a note. Earlier notes are not edited or removed. Two calls 
 **Read Only: False**
 
 ```
-Mints a short-lived signed PUT URL so the agent can curl a PNG into the round. The PUT writes state; there is no base64 screenshot tool.
+Mints a short-lived signed PUT URL so the agent can upload a PNG into the round. The subsequent PUT writes state.
+```
+
+**Destructive: False**
+
+```
+Minting the URL does not delete anything. The subsequent PUT is additive: it adds an image to the round.
+```
+
+**Idempotent: False**
+
+```
+Each call mints a fresh URL, and each upload adds another screenshot.
 ```
 
 **Open World: False**
@@ -438,10 +510,30 @@ Mints a short-lived signed PUT URL so the agent can curl a PNG into the round. T
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time. The returned URL is same-origin.
 ```
 
+## `stage_upload_url`
+
+**Read Only: False**
+
+```
+Mints short-lived signed PUT URL(s) so the agent can upload source files into the round’s staging area. The subsequent PUT writes state.
+```
+
 **Destructive: False**
 
 ```
-Minting the URL does not delete anything. The subsequent PUT is additive: it adds an image to the round.
+Minting the URL does not delete anything. The subsequent PUT applies the same validation as stage_source_file and lands in undelivered staging scratch space.
+```
+
+**Idempotent: False**
+
+```
+Each call mints fresh URLs; an upload to the same path overwrites the previously staged copy, so repeats are not free.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time. The returned URLs are same-origin.
 ```
 
 ## `stage_source_file`
@@ -452,16 +544,22 @@ Minting the URL does not delete anything. The subsequent PUT is additive: it add
 Writes one file into the round's staging area in preparation for delivery.
 ```
 
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
 **Destructive: True**
 
 ```
 Marked destructive because staging the same path again overwrites what was previously staged there. Nothing delivered or published is touched — staging is scratch space for the next delivery — but the call is not purely additive, so a client should be free to confirm it rather than assume it is safe to repeat.
+```
+
+**Idempotent: False**
+
+```
+Staging the same path twice overwrites the first copy rather than repeating a no-op.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
 ## `patch_source_file`
@@ -472,16 +570,22 @@ Marked destructive because staging the same path again overwrites what was previ
 Edits one or more files that are already staged, so it writes state.
 ```
 
+**Destructive: True**
+
+```
+Marked destructive because editing replaces existing staged content, and a patch can remove lines outright. It is bounded to the round’s staging area and cannot reach delivered or published sources, but bounded is not the same as additive.
+```
+
+**Idempotent: False**
+
+```
+Re-applying the same patch usually fails to match (the text already changed), so repeats do not have the same effect.
+```
+
 **Open World: False**
 
 ```
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
-**Destructive: True**
-
-```
-Marked destructive because editing replaces existing staged content, and a patch can remove lines outright. It is bounded to the round's staging area and cannot reach delivered or published sources, but bounded is not the same as additive.
 ```
 
 ## `list_staged_sources`
@@ -492,16 +596,22 @@ Marked destructive because editing replaces existing staged content, and a patch
 Lists what is currently staged for delivery and writes nothing.
 ```
 
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
 **Destructive: False**
 
 ```
 Read-only; it inspects the staging area without changing it.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
 ## `clear_staged_sources`
@@ -512,16 +622,48 @@ Read-only; it inspects the staging area without changing it.
 Empties the round's staging area, so it writes state.
 ```
 
+**Destructive: True**
+
+```
+Marked destructive because it deletes staged files. They are undelivered scratch space, so nothing creator-visible or live is lost and the agent can stage them again — but the hint describes what the operation does, and this one removes data.
+```
+
+**Idempotent: True**
+
+```
+Clearing the same paths (or everything) twice leaves the same empty result the second time — the same reasoning as ack_inbox re-acknowledging already-acked ids.
+```
+
 **Open World: False**
 
 ```
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
+## `delete_source_file`
+
+**Read Only: False**
+
+```
+Records that a path should be absent from the round's next delivery, so it writes state.
+```
+
 **Destructive: True**
 
 ```
-Marked destructive because it deletes staged files. They are undelivered scratch space, so nothing creator-visible or live is lost and the agent can stage them again — but the hint describes what the operation does, and this one removes data.
+Marked destructive because it removes a file from the game the next delivery assembles. The removal only takes effect through a later submit_sources, and delivered or published versions are untouched until then — but the operation exists to make something stop existing, so it is labelled accordingly.
+```
+
+**Idempotent: False**
+
+```
+The recorded removal persists, but pairing with later staging of the same path means repeats are not guaranteed no-ops.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
 ## `submit_sources`
@@ -532,16 +674,22 @@ Marked destructive because it deletes staged files. They are undelivered scratch
 Delivers the staged sources to the automated quality gate, which writes state and queues a gate run.
 ```
 
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time. Source content is agent-authored but purely inbound: it is bounded by a filename allowlist and size caps, and nothing in it can cause the server to fetch anything.
-```
-
 **Destructive: True**
 
 ```
 Marked destructive deliberately. Nothing is erased, but the call spends one of a fixed number of deliveries for the round — which cannot be un-spent — and moves the pointer deciding which sources publish, so the previous candidate stops being the one that would ship. We would rather a client prompt for confirmation than skip it.
+```
+
+**Idempotent: False**
+
+```
+Each call spends another delivery from the round’s fixed allowance.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time. Source content is agent-authored but purely inbound: it is bounded by a filename allowlist and size caps, and nothing in it can cause the server to fetch anything.
 ```
 
 ## `end`
@@ -552,16 +700,22 @@ Marked destructive deliberately. Nothing is erased, but the call spends one of a
 Commits and closes the round, which writes state.
 ```
 
+**Destructive: False**
+
+```
+It closes a round rather than destroying its contents: delivered sources, screenshots, progress notes and the gate verdict all remain.
+```
+
+**Idempotent: True**
+
+```
+Calling it again on a closed round changes nothing.
+```
+
 **Open World: False**
 
 ```
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
-**Destructive: False**
-
-```
-It closes a round rather than destroying its contents: delivered sources, screenshots, progress notes and the gate verdict all remain. Calling it again on a closed round changes nothing.
 ```
 
 ## `show_round`
@@ -572,16 +726,22 @@ It closes a round rather than destroying its contents: delivered sources, screen
 Renders a live status card in the creator's chat and writes no server state.
 ```
 
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time. The card refreshes by calling this same server; it loads nothing from a third party.
-```
-
 **Destructive: False**
 
 ```
 Read-only; displaying a view creates or alters no game, round, delivery or message.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time. The card refreshes by calling this same server; it loads nothing from a third party.
 ```
 
 ## `show_media`
@@ -592,16 +752,22 @@ Read-only; displaying a view creates or alters no game, round, delivery or messa
 Renders the gate's screenshots and recording in the creator's chat and writes no server state.
 ```
 
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time. Frames are supplied by this server; the gameplay recording is a short-lived signed URL for our own storage bucket.
-```
-
 **Destructive: False**
 
 ```
 Read-only; showing media to the creator changes nothing on the server.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time. Frames are supplied by this server; the gameplay recording is a short-lived signed URL for our own storage bucket.
 ```
 
 ## `get_round_status`
@@ -612,16 +778,22 @@ Read-only; showing media to the creator changes nothing on the server.
 Returns the round's current phase and progress for the round view, and writes nothing.
 ```
 
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
 **Destructive: False**
 
 ```
 Read-only; polling status does not advance, alter or end the round.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
 ## `get_gate_verdict`
@@ -632,16 +804,22 @@ Read-only; polling status does not advance, alter or end the round.
 Returns the verdict the automated gate has already produced, and writes nothing.
 ```
 
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
 **Destructive: False**
 
 ```
 Read-only. It reads a result; it does not run, re-run, or influence the gate, and it cannot change whether a delivery passed.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
 ## `get_round_media`
@@ -652,16 +830,22 @@ Read-only. It reads a result; it does not run, re-run, or influence the gate, an
 Returns the gate's frames for the round view and writes nothing.
 ```
 
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time. Frames are returned as inline data by this server; the gameplay recording is a short-lived signed URL for our own storage bucket.
-```
-
 **Destructive: False**
 
 ```
 Read-only; retrieving media does not alter the delivery it belongs to.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time. Frames are returned as inline data by this server; the gameplay recording is a short-lived signed URL for our own storage bucket.
 ```
 
 ## `get_gate_media`
@@ -672,16 +856,22 @@ Read-only; retrieving media does not alter the delivery it belongs to.
 Returns the gate's screenshots and gameplay recording for inspection, and writes nothing.
 ```
 
-**Open World: False**
-
-```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time. Media is served from our own storage via short-lived signed URLs we mint.
-```
-
 **Destructive: False**
 
 ```
 Read-only; it fetches artefacts the gate already produced and changes nothing.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time. Media is served from our own storage via short-lived signed URLs we mint.
 ```
 
 ## `read_inbox`
@@ -692,16 +882,48 @@ Read-only; it fetches artefacts the gate already produced and changes nothing.
 Returns pending messages the creator has sent for this round, and writes nothing.
 ```
 
+**Destructive: False**
+
+```
+Read-only. Reading does not acknowledge, consume or clear messages — that requires a separate explicit call.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
 **Open World: False**
 
 ```
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
+## `get_transcript`
+
+**Read Only: True**
+
+```
+Returns one window of the creator conversation and build history for this game, and writes nothing.
+```
+
 **Destructive: False**
 
 ```
-Read-only. Reading does not acknowledge, consume or clear messages — that requires a separate explicit call.
+Read-only. It pages through history that already exists; it acknowledges nothing and alters nothing.
+```
+
+**Idempotent: True**
+
+```
+Read-only: repeating the call returns the same data (or newer data of the same shape) and causes no additional effect.
+```
+
+**Open World: False**
+
+```
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
 ## `ack_inbox`
@@ -712,16 +934,22 @@ Read-only. Reading does not acknowledge, consume or clear messages — that requ
 Acknowledges creator messages by id, which writes state.
 ```
 
+**Destructive: True**
+
+```
+Marked destructive deliberately. Nothing is deleted, but acknowledged messages stop being surfaced to the agent, so information is lost from the agent's view and the creator's message will not be seen again by it.
+```
+
+**Idempotent: True**
+
+```
+Acknowledging the same ids twice changes nothing further.
+```
+
 **Open World: False**
 
 ```
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
-```
-
-**Destructive: True**
-
-```
-Marked destructive deliberately. Nothing is deleted, but acknowledged messages stop being surfaced to the agent, so information is lost from the agent's view and the creator's message will not be seen again by it. Acknowledging the same ids twice changes nothing further.
 ```
 
 ---
