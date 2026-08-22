@@ -393,7 +393,7 @@
     "apps/api/src/static-serving.test.ts": 95,
     "apps/api/src/store-firestore.test.ts": 710,
     "apps/api/src/store.test.ts": 838,
-    "apps/api/src/store.ts": 7060,
+    "apps/api/src/store.ts": 7166,
     "apps/api/src/submission-status.test.ts": 138,
     "apps/api/src/submission-status.ts": 234,
     "apps/api/src/submission-token.test.ts": 24,
