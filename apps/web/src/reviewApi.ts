@@ -1,4 +1,4 @@
-import type { ReReviewRequestStatus } from '@gamedevpl/contract';
+import type { AssessmentResolutionStatus, ReReviewRequestStatus } from '@gamedevpl/contract';
 import type {
   AssessmentChecklist,
   AssessmentClientContext,
@@ -42,6 +42,15 @@ export interface ReviewQueueResponse {
   emptyReason?: 'no_active_sweep' | 'sweep_paused' | 'queue_clear' | null;
 }
 
+// Operator follow-up; null until someone acts on it.
+export interface AssessmentResolution {
+  status: AssessmentResolutionStatus;
+  comment: string;
+  link: string | null;
+  resolvedAt: string;
+  resolvedBy: string;
+}
+
 export interface GameAssessment {
   id: string;
   slug: string;
@@ -56,6 +65,7 @@ export interface GameAssessment {
   clientContext: AssessmentClientContext | null;
   // The deployed game version this verdict judged.
   gameVersion: string | null;
+  resolution: AssessmentResolution | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -133,7 +143,32 @@ export async function fetchMyAssessments(): Promise<GameAssessment[]> {
   return body.assessments;
 }
 
-export type { ReReviewRequestStatus };
+export type { AssessmentResolutionStatus, ReReviewRequestStatus };
+
+export interface ResolveAssessmentInput {
+  slug: string;
+  // Omitted resolves every reviewer's row for the slug.
+  reviewerUid?: string;
+  // Null withdraws a resolution recorded by mistake.
+  status: AssessmentResolutionStatus | null;
+  comment?: string;
+  link?: string | null;
+  // Verdict generation this resolution answers; a newer row is refused.
+  expectedUpdatedAt?: string;
+}
+
+// Records the operator follow-up on one verdict or game.
+export async function resolveAssessment(
+  input: ResolveAssessmentInput,
+): Promise<{ assessments: GameAssessment[]; resolved: boolean; stale: string[] }> {
+  const res = await fetch(`${API_BASE}/api/admin/assessments/resolve`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return readJson(res);
+}
 
 export interface ReReviewRequest {
   id: string;

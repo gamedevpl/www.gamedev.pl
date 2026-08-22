@@ -452,6 +452,45 @@ describe('FirestoreStore game assessments', () => {
     const history = await store.listGameAssessmentHistory('sky-dodge', 'g:alice');
     expect(history).toEqual([expect.objectContaining({ verdict: 'cut', gameVersion: 'v1' })]);
   });
+
+  it('refuses a resolution pinned to a verdict the row has moved past', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    const seed = {
+      slug: 'sky-dodge',
+      title: 'Sky Dodge',
+      source: 'catalog' as const,
+      creatorHandle: null,
+      reviewerUid: 'g:alice',
+      verdict: 'cut' as const,
+      note: 'Controls are broken.',
+      noteOrigin: 'text' as const,
+      checklist: { ...checklist },
+      clientContext: null,
+    };
+    const first = await store.upsertGameAssessment(seed);
+    const resolution = {
+      status: 'addressed' as const,
+      comment: 'Rebuilt the touch controls.',
+      link: null,
+      resolvedAt: '2026-08-22T00:00:00.000Z',
+      resolvedBy: 'g:boss',
+    };
+
+    const stale = new Date(Date.parse(first.updatedAt) - 60_000).toISOString();
+    expect(await store.setGameAssessmentResolution('sky-dodge', 'g:alice', resolution, stale)).toEqual(
+      expect.objectContaining({ status: 'stale' }),
+    );
+    expect((await store.getGameAssessment('sky-dodge', 'g:alice'))?.resolution).toBeNull();
+
+    const landed = await store.setGameAssessmentResolution('sky-dodge', 'g:alice', resolution, first.updatedAt);
+    expect(landed.status).toBe('ok');
+    expect((await store.getGameAssessment('sky-dodge', 'g:alice'))?.resolution).toEqual(resolution);
+
+    expect(await store.setGameAssessmentResolution('no-such-game', 'g:alice', resolution)).toEqual({
+      status: 'not_found',
+    });
+  });
 });
 
 describe('FirestoreStore shared worlds', () => {

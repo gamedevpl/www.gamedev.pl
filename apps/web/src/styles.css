@@ -13024,7 +13024,6 @@ button.builder-mode-selector:disabled {
   }
 }
 
-
 .studio-strip-phase-pill {
   flex: none;
   padding: 2px 9px;
@@ -21064,6 +21063,67 @@ body.remix-entry-open {
   color: var(--muted);
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
+}
+
+.admin-assessment-resolution {
+  margin: 0.4rem 0 0;
+  padding: 0.4rem 0.55rem;
+  border-left: 2px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 0 6px 6px 0;
+}
+
+.admin-resolution-status {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.admin-assessment-resolution.is-addressed .admin-resolution-status {
+  color: var(--turquoise);
+}
+
+.admin-assessment-resolution.is-wont_fix .admin-resolution-status,
+.admin-assessment-resolution.is-deferred .admin-resolution-status {
+  color: var(--muted);
+}
+
+.admin-resolution-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0;
+}
+
+.admin-resolution-form textarea,
+.admin-resolution-form input[type='text'] {
+  width: 100%;
+}
+
+.admin-resolution-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.35rem;
+}
+
+.admin-resolution-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--muted);
+  text-transform: none;
+}
+
+.admin-resolution-error {
+  color: var(--error);
+  font-size: 0.8rem;
+  margin: 0.25rem 0 0;
 }
 
 .admin-review-sweep {

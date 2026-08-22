@@ -4,6 +4,7 @@ import {
   ASSESSMENT_INPUT_METHODS,
   ASSESSMENT_NOTE_ORIGINS,
   ASSESSMENT_PLATFORMS,
+  ASSESSMENT_RESOLUTION_STATUSES,
   ASSESSMENT_SOURCES,
   ASSESSMENT_VERDICTS,
   RE_REVIEW_REQUEST_STATUSES,
@@ -34,6 +35,10 @@ describe('review vocab', () => {
 
   it('lists assessment checklist marks', () => {
     expect(ASSESSMENT_CHECKLIST_MARKS).toEqual(['ok', 'weak', 'bad']);
+  });
+
+  it('lists assessment resolution statuses', () => {
+    expect(ASSESSMENT_RESOLUTION_STATUSES).toEqual(['addressed', 'wont_fix', 'deferred']);
   });
 
   it('lists review sweep statuses', () => {
