@@ -39,6 +39,7 @@ describe('StudioDetailsBuildProgress', () => {
           { text: 'Sprites', checked: true },
           { text: 'Audio', checked: false },
         ],
+        revisions: [],
       },
     });
     await i18n.changeLanguage('en');
@@ -69,7 +70,7 @@ describe('StudioDetailsBuildProgress', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'building',
-      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+      progress: { headSha: 'sha-1', commits: [], checklist: [], revisions: [] },
     });
     await i18n.changeLanguage('en');
 

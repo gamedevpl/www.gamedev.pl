@@ -1,3 +1,5 @@
+import type { GameHealth } from '@gamedevpl/contract';
+export type { GameHealth };
 import type { TelemetryEvent } from './store.js';
 
 /**
@@ -43,115 +45,6 @@ const MAX_PROGRESS_LABELS = 8;
  * so only its labels past this point are ignored, not the session itself.
  */
 const MAX_TRACKED_LABELS_PER_SESSION = 20;
-
-export interface GameHealth {
-  slug: string;
-  /** Distinct play sessions, i.e. distinct opens of the game. */
-  sessions: number;
-  /** Sessions that recorded an open but never any play time — the bounce count. */
-  bounces: number;
-  /** Sessions that reported a clean exit. A shortfall means tabs killed outright. */
-  closes: number;
-  /** Median of each session's total focused play time. The honest duration measure. */
-  medianPlaySeconds: number;
-  totalPlaySeconds: number;
-  /** Uncaught errors and unhandled rejections reported by the bridge. */
-  errors: number;
-  /**
-   * Most frequent distinct messages, worst first.
-   *
-   * **The one field here that is attacker-controlled.** Everything else is a number this
-   * service computed; a message is a string a game chose to emit, bounded to 200
-   * characters but otherwise arbitrary. Rendering it as text to an operator is safe
-   * (React escapes it). Feeding it to a coding agent is not — that is a prompt-injection
-   * channel, and IL-3 is the phase that will want to. Fence or summarize it there;
-   * never interpolate it into an agent's instructions.
-   */
-  errorSamples: Array<{ message: string; count: number }>;
-  /** Liveness ticks trusted for the frame stats below (see `resumeTicksIgnored`). */
-  aliveTicks: number;
-  /** Trusted ticks that observed no frames at all — the game was genuinely frozen. */
-  stalledTicks: number;
-  /** `stalledTicks / aliveTicks`, or 0 when nothing was measured. */
-  stallRate: number;
-  /** Median observed frames per second across trusted ticks; null when unmeasured. */
-  medianFps: number | null;
-  /**
-   * Ticks discarded as resume artifacts. Reported rather than hidden: it is the
-   * difference between "this game stalls" and "this player closed their laptop".
-   */
-  resumeTicksIgnored: number;
-
-  // Depth: does the game get *finished*, not merely opened and endured. Everything
-  // below is dark for a game whose GameKit snapshot never reaches a terminal state, so
-  // a zero here means "no evidence", never "nobody finished".
-
-  /**
-   * Rounds that reached a conclusion, by outcome. Counted per round, not per session:
-   * one sitting that loses four times and wins once is five data points about the game's
-   * difficulty and one about its reach.
-   */
-  outcomes: { won: number; lost: number; quit: number };
-  /** Sessions in which at least one round reached a conclusion. */
-  sessionsWithEnding: number;
-  /**
-   * `sessionsWithEnding / sessions` — how often opening the game turns into finishing a
-   * round of it. The counterpart to `bounces` at the other end of the session.
-   */
-  /** Sessions issued a seat in a shared world (P3 zones). Zero for a game without one. */
-  zoneAdmitted: number;
-  /**
-   * Of those, how many had a world actually arrive.
-   *
-   * Counted only within admitted sessions, so this can never exceed {@link zoneAdmitted}
-   * however batches were lost on the way here.
-   */
-  zoneJoined: number;
-  /**
-   * `zoneJoined / zoneAdmitted`, or null when this game never asked for a zone.
-   *
-   * The one number that makes the silent fallback visible. A shell that cannot reach the
-   * host drops the player into solo play without saying so — correct for the player,
-   * indistinguishable from success to everyone else — so anything below 1 here is people
-   * who were promised company and played alone.
-   */
-  zoneJoinRate: number | null;
-  finishRate: number;
-  /**
-   * `won / (won + lost)`, or null when no round was decided.
-   *
-   * Quits are excluded rather than counted as losses: leaving is a statement about the
-   * game holding attention (which `finishRate` already measures), not about its
-   * difficulty, and folding the two together would make an abandoned game look brutally
-   * hard instead of boring.
-   */
-  winRate: number | null;
-  /**
-   * Median across sessions of each session's *best* score; null when nothing scored.
-   *
-   * Best-per-session before the median because a score stream reports every improvement,
-   * so averaging the raw values would mostly measure how chatty a game is. Median across
-   * sessions for the usual reason: one expert should not become the typical player.
-   */
-  medianBestScore: number | null;
-  /**
-   * Landmarks reached, most-reached first — the drop-off curve when a game emits them.
-   *
-   * `sessions` counts sessions that reached the label at least once, so a level replayed
-   * five times still counts once; that makes the numbers monotonically comparable down a
-   * linear game's funnel.
-   *
-   * **Attacker-controlled, exactly like `errorSamples`** — a label is a string the game
-   * chose, clamped to 40 characters and otherwise arbitrary. Same rule: safe to render,
-   * never safe to interpolate into an agent's instructions.
-   */
-  progressLabels: Array<{ label: string; sessions: number }>;
-  /**
-   * Sessions that reported a render backend on `end` / `progress` (B18).
-   * Soft capture vs live WebGL — fixed vocabulary only.
-   */
-  gfxBackends: { canvas2d: number; webgl: number; webgl3d: number };
-}
 
 interface SessionState {
   playSeconds: number;

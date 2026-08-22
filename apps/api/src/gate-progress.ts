@@ -1,31 +1,13 @@
 /** Mid-gate milestones on the GCS version manifest. */
-import { GATE_PROGRESS_LANES, type GateProgressLane } from '@gamedevpl/contract';
+import {
+  GATE_PROGRESS_LANES,
+  GATE_PROGRESS_STAGES,
+  type GateProgress,
+  type GateProgressLane,
+  type GateProgressStage,
+} from '@gamedevpl/contract';
 
-export const GATE_PROGRESS_STAGES = [
-  'preparing',
-  'installing',
-  'typecheck',
-  'smoke',
-  'build',
-  'trace',
-  'capture',
-  'validate',
-  'accept',
-  'agent-play',
-  'agency',
-  'playtest',
-] as const;
-
-export type GateProgressStage = (typeof GATE_PROGRESS_STAGES)[number];
-export { GATE_PROGRESS_LANES, type GateProgressLane };
-
-export interface GateProgress {
-  lane: GateProgressLane;
-  stage: GateProgressStage;
-  index: number;
-  total: number;
-  at: string;
-}
+export { GATE_PROGRESS_LANES, GATE_PROGRESS_STAGES, type GateProgress, type GateProgressLane, type GateProgressStage };
 
 const PREVIEW_STAGES: readonly GateProgressStage[] = [
   'preparing',

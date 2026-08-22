@@ -16,74 +16,18 @@ export type { CatalogOrientation };
  * `controllers` = playable only with phones as controllers on a second screen,
  * `none` = keyboard only. null when the API served a catalog without the field.
  */
+import type { CatalogEntry, CatalogMedia, CatalogMultiplayer, CatalogScreenshot } from '@gamedevpl/contract';
+
 export type { CatalogTouch };
-
-export interface CatalogScreenshot {
-  name: string;
-  file: string;
-}
-
-export interface CatalogMedia {
-  screenshots: CatalogScreenshot[];
-  video: string | null;
-}
-
-/** Present only for games that declare `multiplayer: controllers` in their spec. */
-export interface CatalogMultiplayer {
-  mode: 'controllers';
-  minPlayers: number;
-  maxPlayers: number;
-}
-
-export interface CatalogEntry {
-  slug: string;
-  title: string;
-  genre: string;
-  controls: string;
-  status: string;
-  media: CatalogMedia | null;
-  multiplayer: CatalogMultiplayer | null;
-  /**
-   * `player` when the game keeps progress for signed-in players. Advisory: whether a
-   * save slot is opened is decided by whether the running game asks for one, so this is
-   * for telling a player what to expect, never for gating the bridge.
-   */
-  saves: 'player' | null;
-  /**
-   * `shared` when the game has a world every player of it writes into. Advisory in
-   * exactly the same way `saves` is — the bridge is live for every published game and
-   * only a game that asks gets a world — but it carries a heavier promise: "other
-   * people are here" is why somebody clicks, so it is worth being right about.
-   */
-  world: 'shared' | null;
-  /**
-   * `tilt` when the game can also be steered by tilting the device. Advisory in the
-   * same way `saves` is: the sense relay is gated by the running game saying hello
-   * over the bridge, never by this field — it exists to badge motion play.
-   */
-  sensing: 'tilt' | 'backdrop' | null;
-  orientation: CatalogOrientation;
-  touch: CatalogTouch | null;
-  /**
-   * Who commissioned the game (`submitted_by` in the games-repo SPEC). Unverified —
-   * a handle, a display name, or the platform sentinel. null when unknown.
-   * For store games with a creator profile, this is the profile display name.
-   */
-  submittedBy: string | null;
-  /**
-   * Unique creator handle when the catalog join resolved a profile. Present → the
-   * byline links to `/:handle`.
-   */
-  creatorHandle?: string | null;
-  /**
-   * Handles of people whose proposals were merged into the live version.
-   *
-   * Joined by the API from the version manifest, never from SPEC. Each links to
-   * `/:handle` the same way the owner byline does — a merged contribution is credited
-   * publicly or it is not credited at all.
-   */
-  contributorHandles?: string[];
-}
+export type {
+  CatalogEntry,
+  CatalogMedia,
+  CatalogMultiplayer,
+  CatalogSaves,
+  CatalogScreenshot,
+  CatalogSensing,
+  CatalogWorld,
+} from '@gamedevpl/contract';
 
 /** Platform sentinel used in fixture / seed SPECs for games with no human creator. */
 export const PLATFORM_SUBMITTED_BY = 'gamedev-platform';

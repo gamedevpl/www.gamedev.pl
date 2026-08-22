@@ -3,7 +3,14 @@ import { build, transform } from 'esbuild';
 import {
   CATALOG_ORIENTATIONS,
   CATALOG_TOUCH_VALUES as CONTRACT_CATALOG_TOUCH_VALUES,
+  type CatalogEntry,
+  type CatalogMedia,
+  type CatalogMultiplayer,
   type CatalogOrientation,
+  type CatalogSaves,
+  type CatalogScreenshot,
+  type CatalogSensing,
+  type CatalogWorld,
 } from '@gamedevpl/contract';
 import { rememberBounded } from './bounded-map.js';
 import { classifyTouchSource, type CatalogGameTouch } from './catalog-touch.js';
@@ -280,107 +287,15 @@ function parseMusicTracks(source: string): Record<string, unknown> {
   return parseMusicCatalogTracks(source);
 }
 
-export interface CatalogMediaScreenshot {
-  name: string;
-  file: string;
-}
-
-export interface CatalogGameMedia {
-  screenshots: CatalogMediaScreenshot[];
-  video: string | null;
-}
-
-/**
- * One game's catalog entry, derived from its SPEC.md frontmatter on the default
- * branch — the same fields the games repo's own tools/catalog.mjs emits. All
- * text is agent-authored (prompt-influenced) — render escaped only.
- */
-export interface CatalogGameEntry {
-  slug: string;
-  title: string;
-  genre: string;
-  controls: string;
-  status: string;
-  media: CatalogGameMedia | null;
-  /**
-   * Multiplayer capability, from the game's flat SPEC.md frontmatter
-   * (`multiplayer: controllers`). null for the single-player majority —
-   * the web app badges and offers "Play together" only when this is set.
-   */
-  multiplayer: CatalogGameMultiplayer | null;
-  /**
-   * `player` when the game keeps per-player progress (`saves: player` in SPEC.md
-   * frontmatter), null when every visit starts fresh. Advisory metadata for the
-   * catalog UI only: whether a save slot is actually opened is decided by whether the
-   * running game asks for one, not by this field.
-   */
-  saves: CatalogGameSaves | null;
-  /**
-   * `shared` when the game has a world every player writes into (`world: shared` in
-   * SPEC.md frontmatter), null for the solo majority. Advisory metadata for the catalog
-   * UI: whether a world actually exists is decided by the game's GAME.json field spec,
-   * read on demand by the world routes, not by this field.
-   */
-  world: CatalogGameWorld | null;
-  /**
-   * `tilt` / `backdrop` when the game opts into device sensing (`sensing:` in
-   * SPEC.md frontmatter), null otherwise. Advisory metadata for the catalog UI: the
-   * sense relay is actually gated by the running game saying hello over the bridge
-   * (apps/web/src/sensing.ts), not by this field.
-   */
-  sensing: CatalogGameSensing | null;
-  /**
-   * The orientation the game was designed for, from `orientation:` in SPEC.md
-   * frontmatter. Design intent nothing in the source can reveal, so unlike touch
-   * support it is authored rather than derived. Defaults to 'any'; the player
-   * uses it to nudge a phone that is held the wrong way round.
-   */
-  orientation: CatalogGameOrientation;
-  /**
-   * Who commissioned the game, from `submitted_by:` in SPEC.md (or the committed
-   * catalog). Unverified free text — a GitHub handle, a display name, or the
-   * platform sentinel `gamedev-platform`. null when absent or explicitly null.
-   * The player surfaces this as a byline; it is never a trust or identity claim.
-   *
-   * For store-published games with a creator profile, the catalog join overwrites
-   * this with the profile display name (never the Google/Apple account name).
-   */
-  submittedBy: string | null;
-  /**
-   * Unique creator handle when the catalog join resolved a publishable profile for
-   * the job owner. Present → byline links to `/:handle`. Absent for
-   * platform/repo games and unpublished drafts.
-   */
-  creatorHandle?: string | null;
-  /**
-   * Handles of people whose proposals were merged into the live version.
-   *
-   * Joined at read time from the version manifest's `proposal` provenance, exactly like
-   * the owner byline — never written into SPEC.md, which is the game's own file and has no
-   * business carrying identity. Absent when nobody has contributed or when the
-   * contributor has not claimed a handle.
-   */
-  contributorHandles?: string[];
-  /**
-   * Touch playability class, derived from each game's *code* (createInput /
-   * defineGame / party / pointer polls). Present when the catalog was built from
-   * a games-repo archive (snapshot bake) or from a legacy committed catalog.json.
-   * The GraphQL SPEC-only fallback leaves it absent.
-   */
-  touch?: CatalogGameTouch;
-}
-
 export type CatalogGameOrientation = CatalogOrientation;
+export type CatalogMediaScreenshot = CatalogScreenshot;
+export type CatalogGameMedia = CatalogMedia;
+export type CatalogGameMultiplayer = CatalogMultiplayer;
+export type CatalogGameEntry = CatalogEntry;
 
-export interface CatalogGameMultiplayer {
-  mode: 'controllers';
-  minPlayers: number;
-  maxPlayers: number;
-}
-
-export type CatalogGameSaves = 'player';
-export type CatalogGameWorld = 'shared';
-export type CatalogGameSensing = 'tilt' | 'backdrop';
+export type CatalogGameSaves = CatalogSaves;
+export type CatalogGameWorld = CatalogWorld;
+export type CatalogGameSensing = CatalogSensing;
 
 /**
  * `player` is the only mode that exists. Anything else — a typo, a value from a newer
