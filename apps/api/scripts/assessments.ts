@@ -14,7 +14,7 @@ import {
   formatAssessmentLine,
   formatResolutionLine,
   hasFlag,
-  positional,
+  resolveTarget,
 } from '../src/assessment-cli.js';
 import { applyResolution, prepareResolution, summarizeResolutions } from '../src/assessment-resolution.js';
 import { FirestoreStore } from '../src/store.js';
@@ -25,10 +25,14 @@ function usage(): never {
       'Usage:',
       '  assess:list      -- [--slug <slug>] [--reviewer <uid>] [--verdict keep|cut|skip]',
       '                      [--open | --resolved] [--limit N] [--json]',
-      '  assess:show      -- <slug> [--json]',
-      `  assess:resolve   -- <slug> [--reviewer <uid>] --status ${ASSESSMENT_RESOLUTION_STATUSES.join('|')}`,
-      '                      --comment <text> [--link <url>] [--dry-run]',
-      '  assess:unresolve -- <slug> [--reviewer <uid>] [--dry-run]',
+      '  assess:show      -- <slug> [--reviewer <uid> | --id <slug:reviewerUid>] [--json]',
+      `  assess:resolve   -- <slug> [--reviewer <uid> | --id <slug:reviewerUid>]`,
+      `                      --status ${ASSESSMENT_RESOLUTION_STATUSES.join('|')} --comment <text>`,
+      '                      [--link <url>] [--dry-run]',
+      '  assess:unresolve -- <slug> [--reviewer <uid> | --id <slug:reviewerUid>] [--dry-run]',
+      '',
+      '--id is the `id` field from assess:list/show --json (`<slug>:<reviewerUid>`) —',
+      'paste one straight back in instead of splitting it into --reviewer yourself.',
     ].join('\n'),
   );
   process.exit(1);
@@ -70,12 +74,17 @@ async function list(store: FirestoreStore, args: string[]): Promise<void> {
 }
 
 async function show(store: FirestoreStore, args: string[]): Promise<void> {
-  const slug = positional(args);
-  if (!slug) usage();
+  const target = resolveTarget(args);
+  if ('error' in target) {
+    console.error(target.error);
+    usage();
+  }
+  const { slug, reviewerUid } = target;
 
-  const rows = await store.listGameAssessmentsBySlug(slug);
+  const all = await store.listGameAssessmentsBySlug(slug);
+  const rows = reviewerUid ? all.filter((row) => row.reviewerUid === reviewerUid) : all;
   if (rows.length === 0) {
-    console.log(`No assessments for ${slug}.`);
+    console.log(`No assessments for ${reviewerUid ? `${slug}:${reviewerUid}` : slug}.`);
     process.exit(1);
   }
   if (hasFlag(args, '--json')) {
@@ -112,9 +121,12 @@ async function show(store: FirestoreStore, args: string[]): Promise<void> {
 }
 
 async function write(store: FirestoreStore, args: string[], status: AssessmentResolutionStatus | null): Promise<void> {
-  const slug = positional(args);
-  if (!slug) usage();
-  const reviewerUid = flagValue(args, '--reviewer');
+  const target = resolveTarget(args);
+  if ('error' in target) {
+    console.error(target.error);
+    usage();
+  }
+  const { slug, reviewerUid } = target;
 
   const prepared = prepareResolution(
     { status, comment: flagValue(args, '--comment'), link: flagValue(args, '--link') },

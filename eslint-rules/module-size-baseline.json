@@ -3,6 +3,7 @@
   "hardCapLines": 500,
   "files": {
     "apps/api/scripts/access-token.ts": 139,
+    "apps/api/scripts/assessments.ts": 185,
     "apps/api/scripts/beta-approve.ts": 74,
     "apps/api/scripts/beta-invite-backfill.ts": 69,
     "apps/api/scripts/beta-invite.ts": 84,
@@ -71,8 +72,8 @@
     "apps/api/src/apple-routes.test.ts": 241,
     "apps/api/src/assemble.test.ts": 63,
     "apps/api/src/assemble.ts": 92,
-    "apps/api/src/assessment-cli.test.ts": 98,
-    "apps/api/src/assessment-cli.ts": 62,
+    "apps/api/src/assessment-cli.test.ts": 145,
+    "apps/api/src/assessment-cli.ts": 105,
     "apps/api/src/assessment-pagination.test.ts": 41,
     "apps/api/src/assessment-pagination.ts": 36,
     "apps/api/src/assessment-resolution.ts": 163,

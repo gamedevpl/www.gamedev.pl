@@ -2,7 +2,16 @@
 import type { GameAssessment } from './store.js';
 
 // Flags whose next argv entry is their value, not the slug.
-export const VALUE_FLAGS = new Set(['--slug', '--reviewer', '--verdict', '--limit', '--status', '--comment', '--link']);
+export const VALUE_FLAGS = new Set([
+  '--slug',
+  '--reviewer',
+  '--verdict',
+  '--limit',
+  '--status',
+  '--comment',
+  '--link',
+  '--id',
+]);
 
 export function hasFlag(args: string[], flag: string): boolean {
   return args.includes(flag);
@@ -23,6 +32,40 @@ export function positional(args: string[]): string | undefined {
     return arg;
   }
   return undefined;
+}
+
+// Splits `<slug>:<reviewerUid>`. Slugs forbid ':', so the first one always ends it.
+export function splitAssessmentId(id: string): { slug: string; reviewerUid: string } | null {
+  const at = id.indexOf(':');
+  if (at <= 0 || at === id.length - 1) return null;
+  return { slug: id.slice(0, at), reviewerUid: id.slice(at + 1) };
+}
+
+export interface Target {
+  slug: string;
+  // Present only when this target names one reviewer's row.
+  reviewerUid?: string;
+}
+
+export interface TargetError {
+  error: string;
+}
+
+// Target from --id, or the positional slug plus optional --reviewer. --id wins.
+export function resolveTarget(args: string[]): Target | TargetError {
+  const id = flagValue(args, '--id');
+  const reviewerFlag = flagValue(args, '--reviewer');
+  if (id !== undefined) {
+    const parsed = splitAssessmentId(id);
+    if (!parsed) return { error: `--id must look like <slug>:<reviewerUid>, got "${id}"` };
+    if (reviewerFlag !== undefined && reviewerFlag !== parsed.reviewerUid) {
+      return { error: `--reviewer ${reviewerFlag} conflicts with --id ${id}` };
+    }
+    return { slug: parsed.slug, reviewerUid: parsed.reviewerUid };
+  }
+  const slug = positional(args);
+  if (!slug) return { error: 'missing slug (or --id)' };
+  return { slug, reviewerUid: reviewerFlag };
 }
 
 export interface AssessmentFilters {

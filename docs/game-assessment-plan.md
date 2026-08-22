@@ -179,13 +179,20 @@ npm run assess:resolve   -w @gamedevpl/api -- sky-dodge --status addressed \
 npm run assess:resolve   -w @gamedevpl/api -- sky-dodge --reviewer g:alice --status wont_fix \
                             --comment "Pacing is the point of this one." --dry-run
 npm run assess:unresolve -w @gamedevpl/api -- sky-dodge --reviewer g:alice
+
+# Or target one row by the id from a --json listing (<slug>:<reviewerUid>):
+npm run assess:resolve   -w @gamedevpl/api -- --id sky-dodge:g:alice --status addressed \
+                            --comment "Rebuilt the touch controls."
 ```
 
 `list` filters by `--slug` / `--reviewer` / `--verdict` / `--open` / `--resolved`, and
 `--json` gives the same rows the console exports. `show` prints one game in full: every
 reviewer's verdict, checklist, note, follow-up, and the superseded rows behind it.
 `resolve` without `--reviewer` covers every reviewer's row for the slug; `--dry-run` says
-what it would touch and writes nothing.
+what it would touch and writes nothing. Every subcommand also accepts `--id
+<slug>:<reviewerUid>` — the row's own `id` from a `--json` listing — as a shortcut for
+`<slug> --reviewer <uid>`; a `--reviewer` that disagrees with it is refused rather than
+picking one silently.
 
 Both paths call `prepareResolution` + `applyResolution`, so the required comment, the
 sanitizing and the stale-verdict refusal cannot drift between console and terminal. A CLI

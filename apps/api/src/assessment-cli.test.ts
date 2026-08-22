@@ -7,6 +7,8 @@ import {
   formatResolutionLine,
   hasFlag,
   positional,
+  resolveTarget,
+  splitAssessmentId,
 } from './assessment-cli.js';
 import type { GameAssessment } from './store.js';
 
@@ -94,5 +96,50 @@ describe('assessment CLI formatting', () => {
     expect(formatResolutionLine(row({ resolution: { ...addressed, link: null } }))).toBe(
       'addressed — Rebuilt the touch controls.',
     );
+  });
+});
+
+describe('assessment CLI --id', () => {
+  it('splits an id back into slug and reviewerUid, even when the uid itself has a colon', () => {
+    expect(splitAssessmentId('sky-dodge:g:alice')).toEqual({ slug: 'sky-dodge', reviewerUid: 'g:alice' });
+    expect(splitAssessmentId('sky-dodge:email:a@b.test')).toEqual({
+      slug: 'sky-dodge',
+      reviewerUid: 'email:a@b.test',
+    });
+    expect(splitAssessmentId('no-colon')).toBeNull();
+    expect(splitAssessmentId(':g:alice')).toBeNull();
+    expect(splitAssessmentId('sky-dodge:')).toBeNull();
+  });
+
+  it('resolves a target from --id without needing --reviewer', () => {
+    expect(resolveTarget(['--id', 'sky-dodge:g:alice', '--status', 'addressed'])).toEqual({
+      slug: 'sky-dodge',
+      reviewerUid: 'g:alice',
+    });
+  });
+
+  it('falls back to the positional slug plus --reviewer when there is no --id', () => {
+    expect(resolveTarget(['sky-dodge', '--reviewer', 'g:alice'])).toEqual({
+      slug: 'sky-dodge',
+      reviewerUid: 'g:alice',
+    });
+    // No --reviewer at all means every reviewer's row — a valid target.
+    expect(resolveTarget(['sky-dodge'])).toEqual({ slug: 'sky-dodge', reviewerUid: undefined });
+  });
+
+  it('refuses a malformed --id', () => {
+    expect(resolveTarget(['--id', 'sky-dodge'])).toEqual({
+      error: '--id must look like <slug>:<reviewerUid>, got "sky-dodge"',
+    });
+  });
+
+  it('refuses a --reviewer that disagrees with --id rather than picking one silently', () => {
+    expect(resolveTarget(['--id', 'sky-dodge:g:alice', '--reviewer', 'g:bob'])).toEqual({
+      error: '--reviewer g:bob conflicts with --id sky-dodge:g:alice',
+    });
+  });
+
+  it('requires a slug from somewhere', () => {
+    expect(resolveTarget(['--status', 'addressed'])).toEqual({ error: 'missing slug (or --id)' });
   });
 });
