@@ -59,4 +59,32 @@ describe('useStudioStatusPoll', () => {
 
     expect(vi.mocked(getSubmissionStatus)).toHaveBeenCalledWith('token-1', 'pl');
   });
+
+  it('polls again the moment a backgrounded tab is looked at', async () => {
+    // A backgrounded tab's setTimeout gets throttled by the browser, sometimes for
+    // minutes — long enough for a self-build round to finish unwatched.
+    await mount('token-1');
+    expect(vi.mocked(getSubmissionStatus)).toHaveBeenCalledTimes(1);
+
+    const spy = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    expect(vi.mocked(getSubmissionStatus)).toHaveBeenCalledTimes(2);
+    spy.mockRestore();
+  });
+
+  it('does nothing when the tab goes the other way, into the background', async () => {
+    await mount('token-1');
+    expect(vi.mocked(getSubmissionStatus)).toHaveBeenCalledTimes(1);
+
+    const spy = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    expect(vi.mocked(getSubmissionStatus)).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+  });
 });
