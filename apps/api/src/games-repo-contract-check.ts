@@ -49,12 +49,14 @@ import {
   GAME_KIT_VERTICAL_ENTRIES,
   MAX_PROJECT_BYTES,
   stripLeadingDocComment,
+  TS_ANY_SCAN_PATH,
   type DeliveryContract,
   type GameKitModuleName,
 } from './games-repo-contract.js';
 import { isRateLimitResponse } from './github-rate-limit.js';
 
 const LOCAL_EDITOR_CONTRACT_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'editor-contract.ts');
+const LOCAL_TS_ANY_SCAN_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'ts-any-scan.ts');
 
 export type ContractCheckOutcome =
   /** No token configured — forks and fresh clones still go green. */
@@ -284,12 +286,16 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
   let validateSource: string;
   let deliverySource: string | null;
   let editorContractSource: string;
+  let anyScanSource: string | null;
   try {
-    [assembleSource, validateSource, deliverySource, editorContractSource] = await Promise.all([
+    [assembleSource, validateSource, deliverySource, editorContractSource, anyScanSource] = await Promise.all([
       readGamesRepoFile('tools/lib/assemble.ts'),
       readGamesRepoFile('tools/validate.ts'),
       readOptionalGamesRepoFile(DELIVERY_CONTRACT_PATH),
       readGamesRepoFile(EDITOR_CONTRACT_PATH),
+      // Optional for the same reason as the delivery contract: this side lands first, and
+      // an absent file on the games tip is an observed absence, not a failed read.
+      readOptionalGamesRepoFile(TS_ANY_SCAN_PATH),
     ]);
   } catch (error: unknown) {
     if (error instanceof UnreachableGamesRepoError) {
@@ -455,9 +461,33 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
   }
   log('  ✓ editor-contract (EditorKit L0/L4, byte-equivalent below the header)');
 
+  if (anyScanSource !== null) {
+    const localAnyScan = stripLeadingDocComment(readLocalFile(LOCAL_TS_ANY_SCAN_PATH));
+    const remoteAnyScan = stripLeadingDocComment(anyScanSource);
+    if (localAnyScan !== remoteAnyScan) {
+      return {
+        kind: 'drift',
+        reason:
+          `ts-any-scan mismatch (${TS_ANY_SCAN_PATH} vs apps/api/src/ts-any-scan.ts): ` +
+          `${describeTextDrift(remoteAnyScan, localAnyScan)}\n` +
+          `  The two files must stay byte-equivalent below their own header comments. This side ` +
+          `refuses an upload for \`any\` and the games repo fails validate Check 37 for it; if they ` +
+          `disagree, an agent is told yes here and no at the gate. Update both files in one paired change.`,
+      };
+    }
+    log('  ✓ ts-any-scan (byte-equivalent below the header)');
+  }
+
   const notes: string[] = [];
   if (verticalNote) {
     notes.push(verticalNote);
+  }
+  if (anyScanSource === null) {
+    notes.push(
+      `${TS_ANY_SCAN_PATH} is absent from ${repo}@${ref} (404) — the \`any\` scan was NOT compared. ` +
+        `Expected only while this side is ahead of the games tip.`,
+    );
+    log(`  · ${TS_ANY_SCAN_PATH}: absent on the games tip — \`any\` scan not compared`);
   }
   if (deliverySource === null) {
     notes.push(

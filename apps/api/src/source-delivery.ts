@@ -289,7 +289,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       const roundGeneration = record.roundGeneration ?? 1;
       const deliveryLog = options.log ? asDeliveryLogger(options.log) : null;
 
-      const emitRefusal = async (kind: 'audio' | 'symbols' | 'typecheck') => {
+      const emitRefusal = async (kind: 'audio' | 'symbols' | 'typecheck' | 'any-type') => {
         if (kind === 'audio' || kind === 'symbols') {
           await options.store.incrementRoundPreflightRefusal(input.issueNumber, kind);
         }
@@ -413,7 +413,10 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
           ...(input.authorship ? { authorship: input.authorship } : {}),
         }));
       } catch (error) {
-        if (error instanceof InvalidUploadError && (error.kind === 'audio' || error.kind === 'symbols')) {
+        if (
+          error instanceof InvalidUploadError &&
+          (error.kind === 'audio' || error.kind === 'symbols' || error.kind === 'any-type')
+        ) {
           await emitRefusal(error.kind);
         }
         throw error;
