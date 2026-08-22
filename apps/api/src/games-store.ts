@@ -33,6 +33,7 @@ import { hasPlayableHowToPlay } from './index-html-generator.js';
 import { parseKitSidecar } from './kit-registry.js';
 import { KIT_REGISTRY_OBJECT, parseKitRegistry, type KitRegistry } from './kit-window.js';
 import { findUnresolvedSourceLinks, formatSourceLinkError, sourceFilesToMap } from './source-link-check.js';
+import { BANNED_ANY_GUIDANCE, describeBannedAnyFinding, findBannedAnyUsages } from './ts-any-scan.js';
 
 export type { GateProgress } from './gate-progress.js';
 
@@ -100,6 +101,17 @@ export const MAX_UPLOAD_BYTES = DELIVERY_MAX_UPLOAD_BYTES;
 /** Cap on files per delivery. Aligned with the MCP `submit_sources` schema; the
  * byte budget (`MAX_UPLOAD_BYTES`) and filename allowlist still bound abuse. */
 export const MAX_UPLOAD_FILES = DELIVERY_MAX_FILES;
+
+/**
+ * TypeScript bytes one delivery may have scanned for `any`, across all its files.
+ *
+ * The scanner caps a single source, which bounds one parse but not one request: four
+ * files just under that cap spend the whole upload allowance on synchronous parsing, on
+ * the event loop, for untrusted input. This is the budget that actually bounds it, and it
+ * sits above the games repo's author budget (936 KiB) so nothing the gate would accept is
+ * refused here for size.
+ */
+const MAX_SCANNED_DELIVERY_BYTES = 1024 * 1024;
 
 export interface SourceFile {
   path: string;
@@ -358,6 +370,50 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
 
   // Refuse missing cross-file symbols before the async gate.
   const normalized = files.map((file) => ({ path: file.path.trim(), content: file.content }));
+
+  // `any` is refused here rather than at the gate, for the reason the gate refuses it at
+  // all: it is the difference between a mistake the checker catches and one a player
+  // does. Telling the agent now costs it one tool call; telling it at the gate costs a
+  // round, and by then it has usually written more code on top of the untyped value.
+  // Every file, not the first offending one: an agent that fixes what it was told about
+  // and resubmits must not meet the same refusal again for the file after it.
+  const MAX_LISTED_ANY_FINDINGS = 20;
+  let scannedBytes = 0;
+  let anyFindingCount = 0;
+  const listedFindings: string[] = [];
+  for (const file of normalized) {
+    if (!file.path.endsWith('.ts')) continue;
+    // The per-file cap inside the scanner does not bound a delivery: four files just
+    // under it spend the whole 2 MiB upload allowance on synchronous parsing, on the API
+    // event loop. This budget is what actually bounds the work, and it sits above the
+    // games repo's own author budget (936 KiB), so every delivery the gate would accept
+    // is one this still scans in full.
+    scannedBytes += Buffer.byteLength(file.content, 'utf8');
+    if (scannedBytes > MAX_SCANNED_DELIVERY_BYTES) {
+      throw new InvalidUploadError(
+        `This delivery carries more than ${MAX_SCANNED_DELIVERY_BYTES} bytes of TypeScript, which is more than ` +
+          'can be checked for the `any` type in one pass. Split the work across rounds, or ' +
+          'trim what the delivery carries.',
+        'any-type',
+      );
+    }
+    for (const finding of findBannedAnyUsages(file.content)) {
+      anyFindingCount += 1;
+      // Counted always, described only up to the cap: a crafted delivery can carry tens of
+      // thousands, and every description is a string held until the message is built.
+      if (listedFindings.length < MAX_LISTED_ANY_FINDINGS) {
+        listedFindings.push(describeBannedAnyFinding(file.path, finding));
+      }
+    }
+  }
+  if (anyFindingCount > 0) {
+    const [first, ...rest] = listedFindings;
+    const hidden = anyFindingCount - listedFindings.length;
+    const more =
+      rest.length > 0 ? ` (and ${anyFindingCount - 1} more in this delivery's sources: ${rest.join(', ')}` : '';
+    const trailer = more ? `${hidden > 0 ? `, and ${hidden} not listed` : ''})` : '';
+    throw new InvalidUploadError(`${first}${more}${trailer}. ${BANNED_ANY_GUIDANCE}`, 'any-type');
+  }
   const linkFindings = findUnresolvedSourceLinks(sourceFilesToMap(normalized));
   if (linkFindings.length > 0) {
     throw new InvalidUploadError(formatSourceLinkError(linkFindings), 'symbols');

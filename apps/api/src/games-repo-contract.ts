@@ -493,6 +493,16 @@ function tryEvalArithmetic(expression: string, definitions: Map<string, number>)
 /** Unlike the rest of this file: the two sides must be byte-equivalent below their headers. */
 export const EDITOR_CONTRACT_PATH = 'tools/lib/editor-contract.ts';
 
+/**
+ * The `any` scan, the second file held byte-equivalent below its header.
+ *
+ * Both sides refuse the same game code — this side at `submit_sources`, the games repo at
+ * validate Check 37 — and the point of refusing early is that the answer is the same one
+ * the gate would give. Two implementations of "does this source use `any`" would drift
+ * into an agent being told yes and then no, which is worse than being told once, late.
+ */
+export const TS_ANY_SCAN_PATH = 'tools/lib/ts-any-scan.ts';
+
 /** Strips a file's own leading doc-comment header, exempted from the byte-equivalence rule. */
 export function stripLeadingDocComment(source: string): string {
   const match = /^\s*\/\*\*[\s\S]*?\*\/\s*/.exec(source);

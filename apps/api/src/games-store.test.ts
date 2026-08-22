@@ -140,6 +140,152 @@ describe('validateSourceUpload — the delivery contract', () => {
     });
   });
 
+  describe('`any` refusal', () => {
+    // Refused at upload rather than at the gate: the games repo fails the same source on
+    // validate Check 37, and hearing it now costs the agent a tool call instead of a round.
+    it('refuses the `any` type in a delivered module, on preview and publish', () => {
+      const delivery = [...MINIMAL, { path: 'game/render.ts', content: 'export function paint(kit: any) {}\n' }];
+      for (const mode of ['preview', 'publish'] as const) {
+        expect(() => validateSourceUpload(delivery, mode)).toThrow(/game\/render\.ts:1:28 uses the `any` type/);
+      }
+    });
+
+    it('names how many more it found, so a wholesale fix is one pass', () => {
+      const delivery = [
+        ...MINIMAL,
+        { path: 'game/render.ts', content: 'export function paint(kit: any, draw: any) {}\n' },
+      ];
+      expect(() => validateSourceUpload(delivery)).toThrow(/and 1 more/);
+    });
+
+    it('counts every offending file, not just the first one it reaches', () => {
+      // Scanning stopped at the first bad file while still saying "in this delivery's
+      // sources", so an agent fixing what it was told about met the same refusal again
+      // for the next file — a round per file instead of one pass.
+      const delivery = [
+        ...MINIMAL,
+        { path: 'game/render.ts', content: 'export function paint(kit: any) {}\n' },
+        { path: 'game/model.ts', content: 'export const seed = 1 as any;\n' },
+      ];
+      expect(() => validateSourceUpload(delivery)).toThrow(/and 1 more/);
+      expect(() => validateSourceUpload(delivery)).toThrow(/game\/model\.ts:1:26 uses the `any` type/);
+    });
+
+    it('refuses `any` behind syntax the build accepts but plain TS parsing rejects', () => {
+      // esbuild compiles decorators, so a delivery using them used to fail parsing here,
+      // report nothing, and land its `any` — refused by neither this check nor the gate.
+      const delivery = [
+        ...MINIMAL,
+        { path: 'game/render.ts', content: 'export class Boss {\n  @observable hp: any = 10;\n}\n' },
+      ];
+      expect(() => validateSourceUpload(delivery)).toThrow(/uses the `any` type/);
+    });
+
+    it('refuses an oversized source instead of parsing it, and bounds the message', () => {
+      // A delivery-sized file is parse cost an attacker picks, and listing every finding
+      // built an unbounded string. Both are capped; the message stays a fixed size.
+      const huge = `export const pad = '${'x'.repeat(600_000)}';\n`;
+      expect(() => validateSourceUpload([...MINIMAL, { path: 'game/huge.ts', content: huge }])).toThrow(
+        /too large to scan/,
+      );
+      const many = `export function paint(${Array.from({ length: 200 }, (_, i) => `a${i}: any`).join(', ')}) {}\n`;
+      let message = '';
+      try {
+        validateSourceUpload([...MINIMAL, { path: 'game/many.ts', content: many }]);
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).toMatch(/and 199 more/);
+      expect(message).toMatch(/not listed/);
+      expect(message.length).toBeLessThan(4000);
+    });
+
+    it('bounds scanning across the whole delivery, not just per file', () => {
+      // The per-file cap does not bound a request: four files just under it spend the
+      // entire 2 MiB upload allowance on synchronous parsing. Refused as a delivery.
+      const big = (i: number) => {
+        const lines: string[] = [];
+        // One line is ~26 bytes; 20k of them clears 480 KiB without measuring each pass.
+        for (let n = 0; n < 20_000; n += 1) lines.push(`type T${i}_${n} = number;`);
+        return `${lines.join('\n')}\n`;
+      };
+      const delivery = [...MINIMAL, ...[0, 1, 2, 3].map((i) => ({ path: `game/m${i}.ts`, content: big(i) }))];
+      expect(() => validateSourceUpload(delivery)).toThrow(/more than \d+ bytes of TypeScript/);
+      // A delivery the gate would accept (author budget is 936 KiB) still scans in full.
+      const withinBudget = [...MINIMAL, { path: 'game/one.ts', content: big(9) }];
+      expect(() => validateSourceUpload(withinBudget)).not.toThrow();
+    });
+
+    it('refuses a source it cannot parse rather than passing it as clean', () => {
+      const delivery = [...MINIMAL, { path: 'game/render.ts', content: "export const broken = 'oops\n" }];
+      expect(() => validateSourceUpload(delivery)).toThrow(/could not be parsed/);
+    });
+
+    it('carries the refusal kind, so the round can count it', () => {
+      const delivery = [...MINIMAL, { path: 'game/render.ts', content: 'const x = y as any;\n' }];
+      try {
+        validateSourceUpload(delivery);
+        expect.unreachable('expected the delivery to be refused');
+      } catch (error) {
+        expect(error).toBeInstanceOf(InvalidUploadError);
+        expect((error as InvalidUploadError).kind).toBe('any-type');
+      }
+    });
+
+    it('leaves the word alone in prose and data', () => {
+      const delivery = [
+        ...MINIMAL,
+        { path: 'game/render.ts', content: "// any of these\nexport const facing = 'any';\n" },
+      ];
+      // A JSON file is not scanned at all: `any` is only a type in TypeScript.
+      const withJsonKey = delivery.map((file) =>
+        file.path === 'GAME.json'
+          ? { path: 'GAME.json', content: JSON.stringify({ engine: { modules: [] }, howToPlay: HOW_TO_PLAY, any: 1 }) }
+          : file,
+      );
+      expect(validateSourceUpload(withJsonKey)).toHaveLength(withJsonKey.length);
+    });
+
+    it('is not fooled by `/` right after `++`/`--` into reading the rest of the line as a regex', () => {
+      // Without disambiguating postfix/prefix increment from a lone `+`/`-`, this `/`
+      // reads as opening a regex — which would swallow the `any` and let it upload clean.
+      const delivery = [
+        ...MINIMAL,
+        { path: 'game/model.ts', content: 'export const ratio = count++ / (total as any);\n' },
+      ];
+      expect(() => validateSourceUpload(delivery)).toThrow(/game\/model\.ts.*uses the `any` type/);
+    });
+
+    it('is not fooled by `/` right after a non-null assertion `!` into reading a regex', () => {
+      // `!` is both prefix negation (a regex can follow: `!/re/.test(s)`) and TypeScript's
+      // postfix non-null assertion (`value!`, after which `/` divides) — conflating them
+      // reads `value! / (x as any)` as division-then-regex and misses the `any`.
+      const delivery = [
+        ...MINIMAL,
+        { path: 'game/model.ts', content: 'export const ratio = value! / (denominator as any);\n' },
+      ];
+      expect(() => validateSourceUpload(delivery)).toThrow(/game\/model\.ts.*uses the `any` type/);
+    });
+
+    it('accepts a genuine regex right after a control-flow condition or `throw`', () => {
+      // A `)` closing an `if`/`while`/`for`/`switch` condition starts a new statement,
+      // where `/` opens a regex — misreading it as division walks the regex's interior as
+      // ordinary code and would refuse this delivery for the word `any` inside the pattern.
+      const delivery = [
+        ...MINIMAL,
+        {
+          path: 'game/model.ts',
+          content:
+            'export function checkName(ok: boolean, text: string) {\n' +
+            '  if (ok) /any/.test(text);\n' +
+            '  throw /any/;\n' +
+            '}\n',
+        },
+      ];
+      expect(validateSourceUpload(delivery)).toHaveLength(delivery.length);
+    });
+  });
+
   describe('cross-file symbol link check', () => {
     const brokenPair: SourceFile[] = [
       {
