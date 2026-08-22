@@ -25,3 +25,7 @@ export type ReviewSweepSource = (typeof REVIEW_SWEEP_SOURCES)[number];
 
 export const RE_REVIEW_REQUEST_STATUSES = ['open', 'resolved', 'cancelled'] as const;
 export type ReReviewRequestStatus = (typeof RE_REVIEW_REQUEST_STATUSES)[number];
+
+// What an operator did about one assessment; see game-assessment-plan.md.
+export const ASSESSMENT_RESOLUTION_STATUSES = ['addressed', 'wont_fix', 'deferred'] as const;
+export type AssessmentResolutionStatus = (typeof ASSESSMENT_RESOLUTION_STATUSES)[number];

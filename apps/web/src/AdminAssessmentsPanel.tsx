@@ -7,6 +7,7 @@ import {
   type ReviewSweepsResponse,
   type ReviewSweepSource,
 } from './adminApi.js';
+import { AssessmentResolutionSummary, AssessmentResolveForm } from './AdminAssessmentResolve.js';
 import { fetchAllAdminAssessments, type AdminAssessmentsExport } from './assessmentExportApi.js';
 import { formatAssessmentChecklist } from './reviewChecklist.js';
 import { formatAssessmentClientContext } from './reviewClientContext.js';
@@ -22,6 +23,7 @@ export function AdminAssessmentsPanel() {
   const [maxGames, setMaxGames] = useState('40');
   const [releasePerDay, setReleasePerDay] = useState('10');
   const [note, setNote] = useState('');
+  const [onlyOpen, setOnlyOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -135,7 +137,7 @@ export function AdminAssessmentsPanel() {
         <>
           <p className="admin-assessments-summary">
             {data.total} assessment{data.total === 1 ? '' : 's'} across {data.games.length} game
-            {data.games.length === 1 ? '' : 's'}.{' '}
+            {data.games.length === 1 ? '' : 's'} · {data.resolved} resolved, {data.open} open.{' '}
             <button
               type="button"
               className="admin-assessments-export"
@@ -165,6 +167,7 @@ export function AdminAssessmentsPanel() {
                 <th scope="col">Cut</th>
                 <th scope="col">Skip</th>
                 <th scope="col">Notes</th>
+                <th scope="col">Open</th>
               </tr>
             </thead>
             <tbody>
@@ -178,26 +181,45 @@ export function AdminAssessmentsPanel() {
                   <td className={game.cut > 0 ? 'is-warn' : undefined}>{game.cut}</td>
                   <td>{game.skip}</td>
                   <td>{game.notes}</td>
+                  <td className={game.open > 0 ? 'is-warn' : undefined}>
+                    {game.open === 0 ? 'all resolved' : `${game.open} of ${game.open + game.resolved}`}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
 
-          <h3 className="admin-assessments-recent-title">Recent</h3>
+          <h3 className="admin-assessments-recent-title">
+            Recent
+            <label className="admin-resolution-filter">
+              <input type="checkbox" checked={onlyOpen} onChange={(event) => setOnlyOpen(event.target.checked)} />
+              unresolved only
+            </label>
+          </h3>
           <ul className="admin-assessments-recent">
-            {data.recent.slice(0, 40).map((row) => {
-              const env = formatAssessmentClientContext(row.clientContext);
-              const checklist = formatAssessmentChecklist(row.checklist);
-              return (
-                <li key={row.id}>
-                  <span className={`admin-verdict is-${row.verdict}`}>{row.verdict}</span> <strong>{row.title}</strong>
-                  <span className="admin-assessments-slug"> {row.slug}</span>
-                  {checklist ? <div className="admin-assessments-checklist">{checklist}</div> : null}
-                  {env ? <div className="admin-assessments-env">{env}</div> : null}
-                  {row.note ? <p className="admin-assessments-note">{row.note}</p> : null}
-                </li>
-              );
-            })}
+            {data.recent
+              .filter((row) => !onlyOpen || row.resolution === null)
+              .slice(0, 40)
+              .map((row) => {
+                const env = formatAssessmentClientContext(row.clientContext);
+                const checklist = formatAssessmentChecklist(row.checklist);
+                return (
+                  <li key={row.id}>
+                    <span className={`admin-verdict is-${row.verdict}`}>{row.verdict}</span>{' '}
+                    <strong>{row.title}</strong>
+                    <span className="admin-assessments-slug"> {row.slug}</span>
+                    {checklist ? <div className="admin-assessments-checklist">{checklist}</div> : null}
+                    {env ? <div className="admin-assessments-env">{env}</div> : null}
+                    {row.note ? <p className="admin-assessments-note">{row.note}</p> : null}
+                    {row.resolution ? <AssessmentResolutionSummary resolution={row.resolution} /> : null}
+                    <AssessmentResolveForm
+                      key={`${row.id}:${row.updatedAt}:${row.resolution?.resolvedAt ?? 'open'}`}
+                      row={row}
+                      onSaved={() => void load()}
+                    />
+                  </li>
+                );
+              })}
           </ul>
         </>
       )}

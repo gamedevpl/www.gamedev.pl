@@ -1,5 +1,6 @@
 import { REVIEW_SWEEP_SOURCES } from '@gamedevpl/contract';
 import { z } from 'zod';
+import { RESOLUTION_FILTERS } from './assessment-resolution.js';
 
 const DEFAULT_PAGE_SIZE = 40;
 const MAX_PAGE_SIZE = 200;
@@ -12,6 +13,8 @@ const QuerySchema = z
   .object({
     offset: z.coerce.number().int().min(0).default(0),
     limit: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
+    // Detailed rows only: 'open' is the operator's own worklist.
+    resolution: z.enum(RESOLUTION_FILTERS).default('all'),
   })
   .strict();
 
