@@ -1,9 +1,10 @@
+import type { BuilderUnavailableReason } from '@gamedevpl/contract';
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { BuilderKind } from './builderKind.js';
 import { recordStudioStep } from './visitTelemetry.js';
 
-export type BuilderUnavailableReason = 'coming_soon' | 'outage' | 'global_limit' | 'user_limit';
+export type { BuilderUnavailableReason } from '@gamedevpl/contract';
 
 type BuilderChoiceProps = {
   value: BuilderKind;

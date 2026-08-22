@@ -1,3 +1,4 @@
+import type { WaitlistStatus as SharedWaitlistStatus } from '@gamedevpl/contract';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { clearCachedCatalogSortPayload } from './recommendationsApi.js';
 
@@ -28,7 +29,7 @@ export interface User {
   handleChangedAt?: string;
 }
 
-export type WaitlistStatus = 'unknown' | 'not_on_list' | 'pending' | 'approved' | 'rejected';
+export type WaitlistStatus = SharedWaitlistStatus | 'unknown' | 'not_on_list';
 
 interface AuthContextType {
   user: User | null;

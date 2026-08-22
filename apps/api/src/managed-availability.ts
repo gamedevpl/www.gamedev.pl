@@ -4,7 +4,9 @@
 
 import { BOT_UID_PREFIX, type CreationLimits, type Store } from './store.js';
 
-export type ManagedUnavailableReason = 'coming_soon' | 'outage' | 'global_limit' | 'user_limit';
+import type { BuilderUnavailableReason } from '@gamedevpl/contract';
+
+export type ManagedUnavailableReason = BuilderUnavailableReason;
 
 export type ManagedAvailability = { available: true } | { available: false; reason: ManagedUnavailableReason };
 

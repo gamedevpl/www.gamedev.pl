@@ -73,7 +73,8 @@ export async function fetchAdminSummary(): Promise<AdminSummary | null> {
   return (await res.json()) as AdminSummary;
 }
 
-export type ManagedBuilderMode = 'auto' | 'off' | 'coming_soon';
+import type { ManagedBuilderMode } from '@gamedevpl/contract';
+export type { ManagedBuilderMode };
 export type ManagedAgentVendor = ManagedAgentVendorName;
 export type SeedingMode = 'auto' | 'off';
 

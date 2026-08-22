@@ -15,6 +15,7 @@ import {
   STUDIO_STEP_DETAILS,
   STUDIO_STEPS,
   VISIT_ROUTE_KINDS,
+  BUILDERS,
   WAITLIST_STEPS,
 } from '@gamedevpl/contract';
 import type { FastifyInstance } from 'fastify';
@@ -65,7 +66,7 @@ const InviteStepSchema = z.enum(INVITE_STEPS);
 const BetaWelcomeStepSchema = z.enum(BETA_WELCOME_STEPS);
 const StudioStepSchema = z.enum(STUDIO_STEPS);
 /** Platform vs creator's own agent. Optional on create_step; required on studio_step. */
-const BuilderDimensionSchema = z.enum(['platform', 'self']);
+const BuilderDimensionSchema = z.enum(BUILDERS);
 const StudioStepDetailSchema = z.enum(STUDIO_STEP_DETAILS);
 const EditorStepSchema = z.enum(EDITOR_STEPS);
 const AssistStepSchema = z.enum(ASSIST_STEPS);

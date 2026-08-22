@@ -7,6 +7,8 @@
  */
 
 /** Lowercase handle: starts with a letter, then letters/digits/underscores. */
+import type { AvatarMode } from '@gamedevpl/contract';
+
 export const HANDLE_PATTERN = /^[a-z][a-z0-9_]{2,23}$/;
 
 export const PROFILE_NAME_MAX = 40;
@@ -71,7 +73,7 @@ export const RESERVED_HANDLES: ReadonlySet<string> = new Set([
   'www',
 ]);
 
-export type AvatarMode = 'google' | 'letter';
+export type { AvatarMode } from '@gamedevpl/contract';
 
 export type HandleClaimRefusal = 'invalid' | 'reserved' | 'taken' | 'unchanged' | 'cooldown' | 'not_found';
 

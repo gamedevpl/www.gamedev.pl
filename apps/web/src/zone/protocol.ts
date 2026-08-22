@@ -39,7 +39,8 @@
  * the shell never has to have an opinion about a shape that belongs to the game.
  */
 
-export const ZONE_PROTOCOL_VERSION = 1;
+import { ZONE_PROTOCOL_VERSION } from '@gamedevpl/contract';
+export { ZONE_PROTOCOL_VERSION };
 
 /** Bridge namespace, shared with every other bridge so a game's own traffic can't pose as ours. */
 export { BRIDGE_NAMESPACE } from '../mp/protocol.js';

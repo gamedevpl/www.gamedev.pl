@@ -1,7 +1,7 @@
 import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { INPUT_KEYS, ROOM_PHASES, type InputKey, type RoomPhase } from '@gamedevpl/contract';
+import { INPUT_KEYS, MP_PROTOCOL_VERSION, ROOM_PHASES, type InputKey, type RoomPhase } from '@gamedevpl/contract';
 import { checkUserAccess } from './auth.js';
 import type { InternalAuthVerifier } from './internal-auth.js';
 import type { RelayClient } from './mp-relay.js';
@@ -460,7 +460,7 @@ export class RoomRegistry {
 
   private sendTo(socket: RelaySocket, payload: Record<string, unknown>): void {
     try {
-      socket.send(JSON.stringify({ v: 1, ...payload }));
+      socket.send(JSON.stringify({ v: MP_PROTOCOL_VERSION, ...payload }));
     } catch {
       // A dead socket is not an error worth failing a room over — the close
       // handler will clean it up.
@@ -664,7 +664,7 @@ export async function registerMultiplayerRoutes(
 
     const closeWith = (reason: string) => {
       try {
-        socket.send(JSON.stringify({ v: 1, t: 'closed', reason }));
+        socket.send(JSON.stringify({ v: MP_PROTOCOL_VERSION, t: 'closed', reason }));
       } catch {
         // socket already gone
       }

@@ -1,10 +1,11 @@
+import { REVIEW_SWEEP_SOURCES } from '@gamedevpl/contract';
 import { z } from 'zod';
 
 const DEFAULT_PAGE_SIZE = 40;
 const MAX_PAGE_SIZE = 200;
 
 export const QueueQuerySchema = z.object({
-  source: z.enum(['catalog', 'creator', 'all']).optional(),
+  source: z.enum(REVIEW_SWEEP_SOURCES).optional(),
 });
 
 const QuerySchema = z

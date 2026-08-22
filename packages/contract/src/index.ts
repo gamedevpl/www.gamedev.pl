@@ -3,7 +3,10 @@
 export { AGENT_CHANNEL_ROUTES, type AgentChannelRouteKey, type AgentChannelRoutePath } from './agent-channel-routes.js';
 export { ASSESSMENT_CHECKLIST_KEYS, type AssessmentChecklistKey } from './assessment-checklist.js';
 export { ASSIST_LANES, type AssistLane } from './assist-lane.js';
+export { AUTONOMY_MODES, type AutonomyMode } from './autonomy-mode.js';
+export { AVATAR_MODES, type AvatarMode } from './avatar-mode.js';
 export { BUILD_EVENT_KINDS, BUILD_STEPS, type BuildEventKind, type BuildStep } from './build-event.js';
+export { BUILDER_UNAVAILABLE_REASONS, type BuilderUnavailableReason } from './builder-availability.js';
 export { BUILDERS, isBuilderKind, type BuilderKind } from './builder-kind.js';
 export {
   CATALOG_ORIENTATIONS,
@@ -11,6 +14,7 @@ export {
   type CatalogOrientation,
   type CatalogTouch,
 } from './catalog-vocab.js';
+export { CHAT_AGENT_SCOPES, type ChatAgentScope } from './chat-agent-scope.js';
 export {
   BETA_INVITE_STATUSES,
   CONTRIBUTION_MODES,
@@ -21,14 +25,21 @@ export {
   type VoteValue,
   type WaitlistStatus,
 } from './community-vocab.js';
+export { CONNECT_CLIENTS, type ConnectClient, type InstallSnippets } from './connect-client.js';
 export { DECLINE_REASONS, type DeclineReason } from './decline-reason.js';
+export { DELIVERY_MODES, type DeliveryMode } from './delivery-mode.js';
+export { DISMISS_REASONS, type DismissReason } from './dismiss-reason.js';
 export { GATE_PROGRESS_LANES, type GateProgressLane } from './gate-progress.js';
 export { deriveGateStatusString, derivePreviewGateStatus, GATE_STATUS_VALUES, type GateStatus } from './gate-status.js';
 export { JOB_STALL_VALUES, JOB_STATES, type JobStall, type JobState } from './job-state.js';
 export { LOCALES, type Locale } from './locale.js';
 export { MANAGED_AGENT_VENDORS, type ManagedAgentVendorName } from './managed-agent-vendor.js';
-export { INPUT_KEYS, ROOM_PHASES, type InputKey, type RoomPhase } from './mp-protocol.js';
+export { MANAGED_BUILDER_MODES, type ManagedBuilderMode } from './managed-builder-mode.js';
+export { INPUT_KEYS, MP_PROTOCOL_VERSION, ROOM_PHASES, type InputKey, type RoomPhase } from './mp-protocol.js';
+export { PREFLIGHT_KINDS, type PreflightKind } from './preflight-kind.js';
 export { PROPERTY_TYPES, type PropertyType } from './property-type.js';
+export { PROPOSAL_PUBLIC_STATES, type ProposalPublicState } from './proposal-public-state.js';
+export { RECOMMEND_REASONS, type RecommendReason } from './recommend-reason.js';
 export {
   REMIX_SUGGESTION_DIRECTIONS,
   REMIX_SUGGESTION_STARTERS,
@@ -56,6 +67,7 @@ export {
   type ReviewSweepSource,
   type ReviewSweepStatus,
 } from './review-vocab.js';
+export { SOCKET_STATUSES, type SocketStatus } from './socket-status.js';
 export { SUBMISSION_STATES, type SubmissionState } from './submission-state.js';
 export { TREND_GRAINS, type TrendGrain } from './trend-grain.js';
 export {
@@ -95,3 +107,4 @@ export {
   type WaitlistStep,
 } from './visit-vocab.js';
 export { ZONE_LINK_STEPS, type ZoneLinkStep } from './zone-link-step.js';
+export { ZONE_PROTOCOL_VERSION } from './zone-protocol.js';

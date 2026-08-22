@@ -8,10 +8,8 @@
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
-export const CONNECT_CLIENTS = ['claudeCode', 'codex', 'cursor', 'kimi', 'cli'] as const;
-export type ConnectClient = (typeof CONNECT_CLIENTS)[number];
-
-export type InstallSnippets = Record<ConnectClient, string>;
+import type { InstallSnippets } from '@gamedevpl/contract';
+export { CONNECT_CLIENTS, type ConnectClient, type InstallSnippets } from '@gamedevpl/contract';
 
 export type McpInstallLinks = {
   /** Credential-free Cursor deeplink (server URL only). */

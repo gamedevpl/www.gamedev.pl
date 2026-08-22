@@ -188,8 +188,7 @@ const ShotUploadUrlInputSchema = z.object({
     .optional(),
 });
 
-const RETIRED_BASE64_SHOT_REASON =
-  'base64 screenshot upload is retired — POST /api/agent/build/shot/upload-url, then curl --upload-file <png> "$url"';
+const RETIRED_BASE64_SHOT_REASON = `base64 screenshot upload is retired — POST ${AGENT_CHANNEL_ROUTES.SHOT_UPLOAD_URL}, then curl --upload-file <png> "$url"`;
 
 const MAX_PREVIEW_LABEL = 120;
 /**
@@ -1157,7 +1156,7 @@ export async function registerAgentChannelRoutes(
         ttlSeconds,
       });
       const expiresAt = new Date(issuedAt + ttlSeconds * 1000).toISOString();
-      const url = `${canonicalAppBaseUrl()}/api/agent/build/shot/upload?token=${encodeURIComponent(token)}`;
+      const url = `${canonicalAppBaseUrl()}${AGENT_CHANNEL_ROUTES.SHOT_UPLOAD}?token=${encodeURIComponent(token)}`;
       return reply.send({
         accepted: true,
         url,

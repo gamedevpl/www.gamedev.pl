@@ -1,3 +1,4 @@
+import { VOTE_VALUES } from '@gamedevpl/contract';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { PublishedSlugGate } from './published-slugs.js';
@@ -24,7 +25,7 @@ const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 const ParamsSchema = z.object({
   slug: z.string().trim().min(1).max(80).regex(SLUG_PATTERN, 'invalid slug'),
 });
-const VoteSchema = z.object({ value: z.enum(['up', 'down']) });
+const VoteSchema = z.object({ value: z.enum(VOTE_VALUES) });
 
 export interface VoteRoutesOptions {
   store: Store;

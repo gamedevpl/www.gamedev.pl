@@ -9,11 +9,11 @@
  * the other), so every frame is narrowed by the guards below before it is used.
  */
 
-import { INPUT_KEYS, ROOM_PHASES, type InputKey, type RoomPhase } from '@gamedevpl/contract';
+import { INPUT_KEYS, MP_PROTOCOL_VERSION, ROOM_PHASES, type InputKey, type RoomPhase } from '@gamedevpl/contract';
 
 export { INPUT_KEYS, ROOM_PHASES, type InputKey, type RoomPhase };
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = MP_PROTOCOL_VERSION;
 /** Namespace on the bridge, so a game's own postMessage traffic can't be confused for ours. */
 export const BRIDGE_NAMESPACE = 'gdp';
 

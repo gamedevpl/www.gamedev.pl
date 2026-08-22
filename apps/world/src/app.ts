@@ -18,7 +18,8 @@ import { ZoneAdmissionError, ZoneHost, type ZoneConnection, type ZoneHostOptions
  * any of it reaches a zone.
  */
 
-export const ZONE_PROTOCOL_VERSION = 1;
+import { ZONE_PROTOCOL_VERSION } from '@gamedevpl/contract';
+export { ZONE_PROTOCOL_VERSION };
 
 /** Frames larger than this are refused unread. A zone input is a few dozen bytes. */
 const MAX_FRAME_BYTES = 2 * 1024;

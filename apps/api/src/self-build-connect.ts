@@ -15,19 +15,14 @@ import {
   mintCreatorAgentKey,
   verifyCreatorAgentKey,
 } from './agent-creator-key.js';
+import type { InstallSnippets } from '@gamedevpl/contract';
 import { mintGameAgentKey, verifyGameAgentKey } from './agent-game-key.js';
 import { buildMcpInstallLinks, type McpInstallLinks } from './mcp-install-links.js';
 
 /** Path of the remote MCP endpoint (served by BY-05). Install snippets point here. */
 export const MCP_ENDPOINT_PATH = '/api/mcp';
 
-export interface InstallSnippets {
-  claudeCode: string;
-  codex: string;
-  cursor: string;
-  kimi: string;
-  cli: string;
-}
+export type { InstallSnippets } from '@gamedevpl/contract';
 
 export interface ConnectPayload {
   installSnippets: InstallSnippets;

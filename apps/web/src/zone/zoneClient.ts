@@ -1,3 +1,4 @@
+import type { SocketStatus } from '@gamedevpl/contract';
 import { parseZoneServerFrame, zoneSocketUrl, ZONE_PROTOCOL_VERSION, type ZoneServerFrame } from './protocol.js';
 
 /**
@@ -14,7 +15,7 @@ import { parseZoneServerFrame, zoneSocketUrl, ZONE_PROTOCOL_VERSION, type ZoneSe
  * the world.
  */
 
-export type ZoneStatus = 'connecting' | 'connected' | 'reconnecting' | 'closed';
+export type ZoneStatus = SocketStatus;
 
 export interface ZoneClientOptions {
   /** Base URL of the host that owns this zone, from the admission response. */

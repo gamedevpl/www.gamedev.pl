@@ -17,6 +17,7 @@
 // flag flip plus a re-bake instead of a revert-and-wait, and what stops a stray object
 // resurrecting a withdrawn game.
 
+import type { DeliveryMode, PreflightKind } from '@gamedevpl/contract';
 import { randomBytes } from 'node:crypto';
 import { GoogleAuth } from 'google-auth-library';
 import {
@@ -128,7 +129,7 @@ export interface SourceFile {
  * is the only way out, and it is why the guard is a stored fact rather than a lookup: a
  * publish path that forgot to consult the proposal registry would still be safe.
  */
-export type DeliveryMode = 'preview' | 'publish' | 'proposal';
+export type { DeliveryMode } from '@gamedevpl/contract';
 
 /**
  * Whether a version in this mode may ever be published.
@@ -143,7 +144,7 @@ export function isPublishableMode(mode: DeliveryMode | undefined): boolean {
 }
 
 // Preflight kinds counted by delivery metrics.
-export type PreflightRefusalKind = 'audio' | 'symbols' | 'typecheck' | 'any-type';
+export type PreflightRefusalKind = PreflightKind;
 
 export class InvalidUploadError extends Error {
   readonly kind?: PreflightRefusalKind;

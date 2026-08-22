@@ -1,3 +1,4 @@
+import { DISMISS_REASONS } from '@gamedevpl/contract';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Scorecard, Store, SuggestionRecord } from './store.js';
@@ -29,20 +30,7 @@ import type { SubmissionRoutesHandle } from './submissions.js';
  */
 
 /** Reasons a creator can give. Fixed so they can be counted, and so nothing is free text. */
-export const DISMISS_REASONS = [
-  /** The evidence is real but this is how the game is meant to be. */
-  'intentional',
-  /** The evidence does not describe a real problem. */
-  'not-a-problem',
-  /** Real, but not worth changing the game over. */
-  'wont-fix',
-  /** Real and worth doing, just not now. */
-  'not-now',
-  /** The numbers look wrong — the most valuable reason, because it indicts the router. */
-  'bad-evidence',
-] as const;
-
-export type DismissReason = (typeof DISMISS_REASONS)[number];
+export { DISMISS_REASONS, type DismissReason } from '@gamedevpl/contract';
 
 const DismissSchema = z.object({ reason: z.enum(DISMISS_REASONS) });
 

@@ -1,4 +1,9 @@
-import type { BetaInviteStatus } from '@gamedevpl/contract';
+import {
+  MANAGED_BUILDER_MODES,
+  WAITLIST_STATUSES,
+  type BetaInviteStatus,
+  type ManagedBuilderMode,
+} from '@gamedevpl/contract';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { isAdminSession } from './admin-session.js';
@@ -141,7 +146,7 @@ export interface CreationLimitsResponse {
     paused: boolean;
     globalDailySubmissionCap: number;
     // `auto` defers to `hasPlatformBackend` below.
-    managedBuilderMode: 'auto' | 'off' | 'coming_soon';
+    managedBuilderMode: ManagedBuilderMode;
     managedDailyCap: number | null;
     managedDailyUserCap: number | null;
     // Independent of managedBuilderMode above.
@@ -203,7 +208,7 @@ const CreationLimitsPatchSchema = z
     tabCompletePaused: z.boolean().optional(),
     globalDailyTabCompleteTokenCap: z.number().int().min(0).max(50_000_000).nullable().optional(),
     // Same document: whether the platform builder is offered. See managed-availability.ts.
-    managedBuilderMode: z.enum(['auto', 'off', 'coming_soon']).optional(),
+    managedBuilderMode: z.enum(MANAGED_BUILDER_MODES).optional(),
     // null clears the override, same as globalDailySubmissionCap above.
     managedAgentVendorOverride: z.enum(MANAGED_AGENT_VENDORS).nullable().optional(),
     managedDailyCap: z.number().int().min(0).max(100_000).nullable().optional(),
@@ -358,7 +363,7 @@ export interface CreatedBetaInviteResponse {
 const MAX_WAITLIST_ENTRIES = 200;
 const MAX_BETA_INVITES = 200;
 
-const WaitlistStatusSchema = z.enum(['pending', 'approved', 'rejected']);
+const WaitlistStatusSchema = z.enum(WAITLIST_STATUSES);
 
 const WaitlistListQuerySchema = z.object({
   status: WaitlistStatusSchema.optional(),

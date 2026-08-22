@@ -1,6 +1,6 @@
 // Delivery preflight + gate metrics (stable log messages).
 
-import type { GateStatus } from '@gamedevpl/contract';
+import type { DeliveryMode, GateStatus, PreflightKind } from '@gamedevpl/contract';
 
 export type DeliveryGateStatus = GateStatus;
 
@@ -8,9 +8,9 @@ export const DELIVERY_PREFLIGHT_REFUSED_MSG = 'delivery preflight refused';
 export const DELIVERY_ACCEPTED_MSG = 'delivery accepted';
 export const DELIVERY_GATE_VERDICT_MSG = 'delivery gate verdict';
 
-export type DeliveryPreflightKind = 'audio' | 'symbols' | 'typecheck' | 'any-type';
+export type DeliveryPreflightKind = PreflightKind;
 export type DeliveryBuilderLabel = 'platform' | 'self' | 'managed' | 'other';
-export type DeliveryModeLabel = 'preview' | 'publish';
+export type DeliveryModeLabel = Exclude<DeliveryMode, 'proposal'>;
 
 export type DeliveryFailedStage = 'typecheck' | 'smoke' | 'build' | 'trace' | 'capture' | 'validate' | 'other';
 

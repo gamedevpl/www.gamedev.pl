@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { deriveGateStatusString, derivePreviewGateStatus } from '@gamedevpl/contract';
+import { BUILDERS, deriveGateStatusString, derivePreviewGateStatus } from '@gamedevpl/contract';
 import type { GameProject } from '@gamedevpl/game-generator';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -160,7 +160,7 @@ const CreateSubmissionRequestSchema = z.object({
    * Who builds this round. Defaults to `platform`. Studio UI (out of scope here) will
    * surface the choice; the API accepts it so routing is testable without the card.
    */
-  builder: z.enum(['platform', 'self']).optional(),
+  builder: z.enum(BUILDERS).optional(),
   // Moodboard reference for the builder agent, not instructions.
   referenceImages: z.array(referenceImageSchema).max(MAX_REFERENCE_IMAGES).optional(),
 });
@@ -234,7 +234,7 @@ const FeedbackRequestSchema = z.object({
    * Builder for the *new* round this feedback opens. Refused while the current round
    * is still active — switching is a round-boundary decision only.
    */
-  builder: z.enum(['platform', 'self']).optional(),
+  builder: z.enum(BUILDERS).optional(),
   /**
    * Optional playtest attachment from Creator Studio: a paused-frame PNG (base64,
    * no data: prefix) plus a small instrumentation digest. Treated as data, never
@@ -2781,15 +2781,16 @@ export async function registerSubmissionRoutes(
         };
       }
     }
-    const stall = detectStall({
-      state,
-      stateSince: record.stateSince ?? record.createdAt,
-      lastAgentSignalAt: record.lastAgentSignalAt,
-      agentState: record.agentState,
-      agentEndedAt: record.agentEndedAt,
-      now: now(),
-      builder: builderOf(record),
-    }) ?? gateCrashStall(record);
+    const stall =
+      detectStall({
+        state,
+        stateSince: record.stateSince ?? record.createdAt,
+        lastAgentSignalAt: record.lastAgentSignalAt,
+        agentState: record.agentState,
+        agentEndedAt: record.agentEndedAt,
+        now: now(),
+        builder: builderOf(record),
+      }) ?? gateCrashStall(record);
     if (stall) status.stall = stall;
     // Mid-gate milestones from GCS.
     if (record.slug && playableVersion) {
@@ -3808,7 +3809,7 @@ export async function registerSubmissionRoutes(
 
       const parsedBody = z
         .object({
-          builder: z.enum(['platform', 'self']).optional(),
+          builder: z.enum(BUILDERS).optional(),
           stopActiveSelfAgent: z.boolean().optional(),
           stopActivePlatformAgent: z.boolean().optional(),
         })
