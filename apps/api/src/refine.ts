@@ -306,7 +306,7 @@ const RefineRequestSchema = z.object({
     .string()
     .trim()
     .min(3, 'title must be at least 3 characters')
-    .max(80, 'title must be at most 80 characters')
+    .max(MAX_TITLE_LENGTH, `title must be at most ${MAX_TITLE_LENGTH} characters`)
     .optional(),
   concept: z
     .string()

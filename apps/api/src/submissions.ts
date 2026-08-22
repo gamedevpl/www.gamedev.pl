@@ -1,6 +1,12 @@
 import { createHash } from 'node:crypto';
-import { BUILDERS, deriveGateStatusString, derivePreviewGateStatus, MAX_SHOT_BYTES } from '@gamedevpl/contract';
-import type { GameProject } from '@gamedevpl/contract';
+import {
+  BUILDERS,
+  deriveGateStatusString,
+  derivePreviewGateStatus,
+  MAX_SHOT_BYTES,
+  MAX_TITLE_LENGTH,
+  type GameProject,
+} from '@gamedevpl/contract';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { splitConceptBrief } from './agent-build-brief.js';
@@ -147,8 +153,9 @@ const MAX_REFERENCE_IMAGES = 4;
 // 4 images at the cap above exceed Fastify's default 1 MiB bodyLimit.
 const REFERENCE_IMAGES_BODY_LIMIT_BYTES = MAX_REFERENCE_IMAGES * MAX_SHOT_BASE64_CHARS + 64 * 1024;
 
+const TITLE_TOO_LONG_MSG = `title must be at most ${MAX_TITLE_LENGTH} characters`;
 const CreateSubmissionRequestSchema = z.object({
-  title: z.string().trim().min(3, 'title must be at least 3 characters').max(80, 'title must be at most 80 characters'),
+  title: z.string().trim().min(3, 'title must be at least 3 characters').max(MAX_TITLE_LENGTH, TITLE_TOO_LONG_MSG),
   concept: z
     .string()
     .trim()
