@@ -380,6 +380,17 @@ export function SubmissionStatusView({
   /** Immediate status re-pull after send (builder handoff / new dispatch). */
   const requestStatusRefreshRef = useRef<() => void>(() => {});
 
+  // Same reasoning as presence.ts's onVisibility: a backgrounded tab's poll timer gets
+  // throttled by the browser, so a self-build round can finish unwatched for minutes.
+  // Reuse the same ref send/handoff already use, rather than a second poll loop.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') requestStatusRefreshRef.current();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []);
+
   const currentTrackingUrl = useMemo(
     () => trackingUrl ?? new URL(embedded ? studioPath(token) : statusPath(token), window.location.href).toString(),
     [token, trackingUrl, embedded],

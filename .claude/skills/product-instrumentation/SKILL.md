@@ -39,8 +39,9 @@ together**, plus tests:
   caps, normalization. `TelemetrySession` is deliberately DOM-free so limits are testable.
 - [apps/api/src/telemetry.ts](../../../apps/api/src/telemetry.ts) — zod schema, rate
   limits, published-slug gating, server-anchored timestamps.
-- [apps/api/src/store.ts](../../../apps/api/src/store.ts) — `TelemetryEvent`, daily
-  partitions.
+- [apps/api/src/store/records/telemetry.ts](../../../apps/api/src/store/records/telemetry.ts)
+  — `TelemetryEvent`. Daily-partition storage is
+  [store/slices/telemetry.ts](../../../apps/api/src/store/slices/telemetry.ts).
 
 Events from inside a game iframe arrive as `postMessage` with `source: 'gdpl-player'`
 ([apps/web/src/gamePlayer.ts](../../../apps/web/src/gamePlayer.ts)). The host accepts
@@ -56,7 +57,8 @@ Visit telemetry is the second, separate stream — the funnel before and between
   `POST /api/telemetry/visit`, schema and caps.
 - [apps/api/src/visit-funnel.ts](../../../apps/api/src/visit-funnel.ts) — the read-side
   aggregator (`summarizeVisitFunnel`).
-- `VisitEvent` / `VISIT_COLLECTION` in [store.ts](../../../apps/api/src/store.ts) — the
+- `VisitEvent` / `VISIT_COLLECTION` in
+  [store/records/telemetry.ts](../../../apps/api/src/store/records/telemetry.ts) — the
   event's field types are plain `string` here, not the closed enums below.
 
 The step/via/kind vocabularies each of those three files share (route kinds, funnel
@@ -176,8 +178,9 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
     chosen. `StudioStep` / `StudioStepDetail` live in
     `packages/contract/src/visit-vocab.ts` like the other step vocabularies;
     `builder` itself is still `BuilderDimension`, declared separately in each of
-    `visitTelemetry.ts`, `visit-telemetry.ts`, and `VisitEvent` in `store.ts` (not yet
-    folded into the shared module — see Architecture above). Time-to-first agent signal is `msSinceStart` on
+    `visitTelemetry.ts`, `visit-telemetry.ts`, and `VisitEvent` in
+    `store/records/telemetry.ts` (not yet folded into the shared module — see
+    Architecture above). Time-to-first agent signal is `msSinceStart` on
     `agent_signaled`. ~~No admin rollup yet~~ — **closed 2026-08-06**: daily MCP adoption
     series (`selfChosen` / `connected` / `signaled` / `gateVerdicts`) on
     `GET /api/admin/telemetry/trends`, rendered on the Trends strip of the operator

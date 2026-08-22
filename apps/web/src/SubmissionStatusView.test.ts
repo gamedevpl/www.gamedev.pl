@@ -2740,6 +2740,38 @@ describe('SubmissionStatusView', () => {
       root.unmount();
     });
   });
+
+  it('re-reads status the moment a backgrounded tab is looked at again', async () => {
+    // A round a BYOCA agent opened while the tab was backgrounded and throttled
+    // would otherwise sit stale until the creator reloaded the page.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({ status: 'in_review', phase: 'ready_for_review' });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/status/visibility-token');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'visibility-token' }));
+      await flushEffects();
+    });
+    const callsBefore = mockedGetSubmissionStatus.mock.calls.length;
+
+    const visSpy = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      await flushEffects();
+    });
+
+    expect(mockedGetSubmissionStatus.mock.calls.length).toBeGreaterThan(callsBefore);
+    visSpy.mockRestore();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });
 
 describe('SubmissionStatusView expectations & failures', () => {
