@@ -7,8 +7,9 @@ import { createGcsObjectStore, type GcsObjectStore } from './gcs-sign.js';
 import { createGcsGamesStore, type GamesStore } from './games-store.js';
 import type { GitHubClient } from './github-client.js';
 import { KIT_ROOT_DIR } from './kit-registry.js';
-import { InMemoryStore } from './store.js';
+import { InMemoryStore, type SourceFile } from './store.js';
 import { StubTabCompleter, type TabCompleter } from './tab-complete.js';
+import type { SourceDeliveryService } from './source-delivery.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 const submissionTokenSecret = 'test-submission-secret';
@@ -125,6 +126,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
       games?: GamesStore;
       tabCompleter?: TabCompleter;
       githubClient?: GitHubClient;
+      sourceDelivery?: SourceDeliveryService;
     } = {},
   ): Promise<T> {
     const app = await buildApp({
@@ -135,6 +137,13 @@ describe('the Code surface routes (creator-code.ts)', () => {
         agentChannel: { gamesStore: options.games ?? games, objectStore: options.objectStore },
         // registerSubmissionRoutes only honors an injected client alongside a token.
         ...(options.githubClient ? { githubClient: options.githubClient, githubToken: 'test-github-token' } : {}),
+      },
+      creatorCodeRoutes: {
+        store,
+        gamesStore: options.games ?? games,
+        objectStore: options.objectStore,
+        githubClient: options.githubClient,
+        sourceDelivery: options.sourceDelivery,
       },
       tabCompleter: options.tabCompleter,
     });
@@ -1312,5 +1321,78 @@ describe('the Code surface routes (creator-code.ts)', () => {
           { tabCompleter: new StubTabCompleter({ completion: 'x' }) },
         ),
       ));
+  });
+
+  describe('POST /api/me/studio/games/:slug/sources/revert', () => {
+    it('rolls forward by creating a new build from target version sources', async () => {
+      const { version } = await games.putCandidateSources({
+        slug: 'sky-dodge',
+        issueNumber: 10,
+        mode: 'preview',
+        files: [
+          { path: 'SPEC.md', content: '# Sky Dodge' },
+          {
+            path: 'GAME.json',
+            content: JSON.stringify({
+              engine: { modules: [] },
+              howToPlay: { goal: { en: 'Win', pl: 'Wygraj' }, hint: { en: 'Play', pl: 'Graj' } },
+            }),
+          },
+          { path: 'game.ts', content: 'export function run() {}' },
+        ],
+      });
+
+      const delivered: Array<{ files: SourceFile[]; mode: string; summary?: string }> = [];
+      const stubSourceDelivery: SourceDeliveryService = {
+        deliver: async (input) => {
+          delivered.push({ files: input.files, mode: input.mode, summary: input.summary });
+          return { accepted: true, slug: input.slug, version: 'v-reverted', mode: input.mode, gateStarted: true };
+        },
+      };
+
+      await withApp(
+        async (app) => {
+          const res = await app.inject({
+            method: 'POST',
+            url: '/api/me/studio/games/sky-dodge/sources/revert',
+            headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+            payload: { targetVersion: version, attestation: true },
+          });
+
+          expect(res.statusCode).toBe(200);
+          expect(res.json()).toMatchObject({
+            accepted: true,
+            version: 'v-reverted',
+            targetVersion: version,
+          });
+          expect(delivered.length).toBe(1);
+          expect(delivered[0]?.files.map((f) => f.path)).toContain('game.ts');
+          expect(delivered[0]).toMatchObject({
+            summary: `Reverted to build ${version}`,
+          });
+        },
+        { sourceDelivery: stubSourceDelivery },
+      );
+    });
+
+    it('404s when target version does not exist', async () => {
+      const stubSourceDelivery: SourceDeliveryService = {
+        deliver: async () => ({ accepted: true, slug: 'sky-dodge', version: 'v2', mode: 'preview', gateStarted: true }),
+      };
+
+      await withApp(
+        async (app) => {
+          const res = await app.inject({
+            method: 'POST',
+            url: '/api/me/studio/games/sky-dodge/sources/revert',
+            headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+            payload: { targetVersion: 'v-nonexistent', attestation: true },
+          });
+
+          expect(res.statusCode).toBe(404);
+        },
+        { sourceDelivery: stubSourceDelivery },
+      );
+    });
   });
 });

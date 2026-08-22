@@ -6,7 +6,9 @@ import { KitRegistryError, parseKitRegistry, parseKitSidecar } from './kit-regis
 import { codeSurfaceEnabled } from './code-surface.js';
 import { collapseJobsToOwnerGames, MAX_OWNER_GAMES, pageOwnerGames } from './owner-games.js';
 import { readTarEntries, type TarEntry } from './tar.js';
+import { toRecentBuilds } from './recent-builds.js';
 import type {
+  StudioBuildsResponse,
   StudioGame,
   StudioGamesResponse,
   StudioHealthResponse,
@@ -20,6 +22,7 @@ export type CreatorHealthResponse = StudioHealthResponse;
 export type CreatorScorecardSummary = StudioScorecard;
 export type CreatorScorecardsResponse = StudioScorecardsResponse;
 export type CreatorStudioGamesResponse = StudioGamesResponse;
+export type CreatorBuildsResponse = StudioBuildsResponse;
 import { composeWorkspaceArchive, WorkspaceCompositionError } from './workspace-archive.js';
 import type { GamesStore } from './games-store.js';
 import type { Store, TelemetryEvent } from './store.js';
@@ -297,6 +300,49 @@ export async function registerCreatorStudioRoutes(
       }));
 
     const body: CreatorScorecardsResponse = { scorecards, truncated, totalGames: total };
+    return reply.send(body);
+  });
+
+  const BuildsQuerySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+    offset: z.coerce.number().int().min(0).optional(),
+  });
+
+  // List build history for an owned game.
+  app.get<{ Params: { slug: string } }>('/api/me/studio/games/:slug/builds', async (request, reply) => {
+    if (!requireUser(request, reply)) return;
+    if (!options.gamesStore?.listVersions) {
+      return reply.status(503).send({ error: 'games store is not configured' });
+    }
+
+    const slug = request.params.slug;
+    if (!/^[a-z0-9][a-z0-9-]{0,60}$/.test(slug)) {
+      return reply.status(400).send({ error: 'invalid slug' });
+    }
+
+    const records = await store.listSubmissionsByOwner(request.user!.uid);
+    const owned = records.some((record) => record.slug === slug);
+    if (!owned) {
+      return reply.status(404).send({ error: 'no such game' });
+    }
+
+    const parsed = BuildsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid query' });
+    }
+
+    const limit = parsed.data.limit ?? 50;
+    const offset = parsed.data.offset ?? 0;
+    const allVersions = await options.gamesStore.listVersions(slug, { limit: offset + limit });
+    const pagedVersions = allVersions.slice(offset, offset + limit);
+    const totalCount = options.gamesStore.countVersions
+      ? await options.gamesStore.countVersions(slug)
+      : allVersions.length;
+
+    const body: CreatorBuildsResponse = {
+      builds: toRecentBuilds(pagedVersions),
+      totalCount,
+    };
     return reply.send(body);
   });
 

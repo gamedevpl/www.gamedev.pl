@@ -4437,6 +4437,40 @@ body.player-open {
   background: var(--muted);
 }
 
+.studio-build-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.studio-build-history-count-badge {
+  font-size: 0.72rem;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.studio-build-history-alert {
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  margin-bottom: 6px;
+}
+
+.studio-build-history-alert.is-success {
+  background: rgba(0, 228, 172, 0.12);
+  color: var(--turquoise, #00e4ac);
+  border: 1px solid rgba(0, 228, 172, 0.3);
+}
+
+.studio-build-history-alert.is-error {
+  background: rgba(248, 113, 113, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+}
+
 .studio-build-history-list {
   list-style: none;
   margin: 0;
@@ -4447,17 +4481,162 @@ body.player-open {
 }
 
 .studio-build-history-row {
-  display: grid;
-  grid-template-columns: auto auto 1fr auto;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
   border-radius: 8px;
   font-size: 0.8rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid transparent;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.studio-build-history-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.studio-build-history-row.is-active-preview {
+  border-color: var(--turquoise, #00e4ac);
+  background: rgba(0, 228, 172, 0.06);
 }
 
 .studio-build-history-row.is-red {
   background: rgba(248, 113, 113, 0.08);
+}
+
+.studio-build-history-summary {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.studio-build-history-expand-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.studio-build-history-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px 10px 32px;
+  border-top: 1px solid var(--panel-border, rgba(255, 255, 255, 0.06));
+  background: rgba(0, 0, 0, 0.15);
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
+
+.studio-build-history-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+}
+
+.studio-build-history-version-tag {
+  font-weight: 600;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.studio-build-history-authorship {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.studio-build-history-file-count {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.studio-build-history-changelog {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  padding: 6px 8px;
+  border-left: 2px solid var(--turquoise, #00e4ac);
+}
+
+.studio-build-history-changelog-text {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text);
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.studio-build-history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.studio-build-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--panel-card);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  transition: all 0.15s ease;
+}
+
+.studio-build-action-btn:hover:not(:disabled) {
+  border-color: var(--turquoise, #00e4ac);
+  color: var(--turquoise, #00e4ac);
+}
+
+.studio-build-action-btn.is-active {
+  background: var(--turquoise, #00e4ac);
+  color: #0f1418;
+  border-color: var(--turquoise, #00e4ac);
+  font-weight: 600;
+}
+
+.studio-build-action-btn.is-revert:hover:not(:disabled) {
+  border-color: var(--accent-orange, #f59e0b);
+  color: var(--accent-orange, #f59e0b);
+}
+
+.studio-build-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.studio-build-history-toggle-all {
+  background: transparent;
+  border: 1px dashed var(--panel-border);
+  color: var(--muted);
+  padding: 6px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 4px;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.studio-build-history-toggle-all:hover {
+  border-color: var(--text);
+  color: var(--text);
 }
 
 .studio-build-history-dot {

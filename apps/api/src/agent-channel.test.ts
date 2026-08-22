@@ -2074,6 +2074,30 @@ describe('agent build channel', () => {
       expect(files.find((f) => f.path === 'game.ts')?.content).toBe(delivered['game.ts']);
     });
 
+    it('propagates summary changelog to candidate sources on submit_sources', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore, stored } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          files: MINIMAL,
+          mode: 'publish',
+          summary: 'Fix collisions and audio bugs',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(stored[0]).toMatchObject({
+        summary: 'Fix collisions and audio bugs',
+      });
+    });
+
     it('accepts old+new exact replace without a unified diff', async () => {
       const store = new InMemoryStore();
       await seedSubmission(store);

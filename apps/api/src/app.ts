@@ -24,7 +24,7 @@ import { resolveProposalBase } from './proposal-base.js';
 import { applyProposalToRepo } from './proposal-apply-bot.js';
 import { createSnapshotReaderFromEnv, type GameSnapshotStore } from './game-snapshot.js';
 import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
-import { registerCreatorCodeRoutes } from './creator-code.js';
+import { registerCreatorCodeRoutes, type CreatorCodeRoutesOptions } from './creator-code.js';
 import { registerCreatorStudioRoutes } from './creator-studio.js';
 import { registerEditorRoutes } from './editor-drafts.js';
 import { VertexEditorAssistant, type EditorAssistant } from './editor-assist.js';
@@ -185,6 +185,7 @@ export interface BuildAppOptions {
   reviewerUids?: string;
   // Seams for reviewer desk; defaults to snapshot/GitHub catalog.
   reviewRoutes?: Omit<ReviewRoutesOptions, 'store' | 'adminUids' | 'reviewerUids'>;
+  creatorCodeRoutes?: Partial<Omit<CreatorCodeRoutesOptions, 'store'>>;
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -758,6 +759,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // TA-01: built unconditionally (the Vertex client is lazy); TAB_COMPLETE gates it.
     tabCompleter: options.tabCompleter ?? new VertexTabCompleter(),
     tabCompleteGate: createTabCompleteGate({ store, logWarn: (payload, msg) => app.log.warn(payload, msg) }),
+    mintStatusToken: submissionTokenSecret ? (issueNumber) => mintToken(issueNumber, submissionTokenSecret) : undefined,
+    ...options.creatorCodeRoutes,
   });
 
   // The Creator Studio content editor (EditorKit): drafts in Firestore, publish

@@ -38,6 +38,9 @@ export function toRecentBuild(manifest: VersionManifest): RecentBuild {
     ...(failedIndex >= 0 ? { failedIndex } : {}),
     total: stages.length,
     ...(finishedInMs !== null ? { finishedInMs } : {}),
+    ...(manifest.authorship ? { authorship: manifest.authorship } : {}),
+    ...(manifest.summary ? { summary: manifest.summary } : {}),
+    ...(manifest.sourceFiles ? { fileCount: manifest.sourceFiles.length } : {}),
   };
 }
 

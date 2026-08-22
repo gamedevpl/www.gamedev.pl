@@ -117,4 +117,68 @@ describe('StudioBuildHistory', () => {
     expect(host.querySelector('.studio-build-history-verdict')?.textContent).toBe('Needs a kit refresh');
     unmount();
   });
+
+  it('shows badge and toggles pagination when builds exceed limit', async () => {
+    const builds = Array.from({ length: 8 }, (_, i) => ({
+      version: `v${i + 1}`,
+      createdAt: new Date().toISOString(),
+      mode: 'preview' as const,
+      verdict: 'green' as const,
+    }));
+    const { host, unmount } = await mount({
+      ...base,
+      recentBuilds: builds,
+      totalBuildsCount: 15,
+    });
+    expect(host.querySelector('[data-testid="studio-build-history-count"]')?.textContent).toContain(
+      'Showing 5 of 15 builds',
+    );
+    let rows = host.querySelectorAll('.studio-build-history-row');
+    expect(rows.length).toBe(5);
+
+    const toggleBtn = host.querySelector('.studio-build-history-toggle-all') as HTMLButtonElement;
+    expect(toggleBtn?.textContent).toContain('Show older builds');
+
+    await act(async () => {
+      toggleBtn.click();
+    });
+
+    rows = host.querySelectorAll('.studio-build-history-row');
+    expect(rows.length).toBe(8);
+    expect(host.querySelector('.studio-build-history-toggle-all')?.textContent).toContain('Show fewer');
+    unmount();
+  });
+
+  it('expands build details with changelog, authorship, and preview/revert buttons', async () => {
+    const { host, unmount } = await mount({
+      ...base,
+      slug: 'my-game',
+      recentBuilds: [
+        {
+          version: 'v10',
+          createdAt: new Date().toISOString(),
+          mode: 'publish',
+          verdict: 'green',
+          authorship: 'agent',
+          summary: 'Added jump physics and double-jump mechanic',
+          fileCount: 4,
+        },
+      ],
+    });
+
+    const summary = host.querySelector('.studio-build-history-summary') as HTMLElement;
+    await act(async () => {
+      summary.click();
+    });
+
+    const details = host.querySelector('[data-testid="build-details-v10"]');
+    expect(details).not.toBeNull();
+    expect(details?.textContent).toContain('Version v10');
+    expect(details?.textContent).toContain('Built by AI Agent');
+    expect(details?.textContent).toContain('4 source files');
+    expect(details?.textContent).toContain('Added jump physics and double-jump mechanic');
+    expect(details?.querySelector('.is-revert')).not.toBeNull();
+
+    unmount();
+  });
 });

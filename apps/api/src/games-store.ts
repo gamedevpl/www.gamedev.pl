@@ -532,6 +532,7 @@ export interface VersionManifest {
    * counsel-gated (§4); this field exists so the data is not lost waiting for that.
    */
   authorship?: 'agent' | 'owner' | 'mixed';
+  summary?: string;
 }
 
 /** What the gate wrote onto a candidate — green, red, or a kit-window refusal. */
@@ -650,8 +651,8 @@ export interface GamesStore {
     mode?: DeliveryMode;
     /** Marks the version as somebody else's proposed change — see {@link DeliveryMode}. */
     proposal?: { id: string; proposerUid: string };
-    /** Who wrote this delivery — see {@link VersionManifest.authorship} (CE-20). */
     authorship?: 'agent' | 'owner' | 'mixed';
+    summary?: string;
   }): Promise<{ version: string; manifest: VersionManifest }>;
   /**
    * Flips an accepted proposal version from `proposal` to `publish` and records who
@@ -727,6 +728,7 @@ export interface GamesStore {
    * public game page's release history, which is a paged read, not an audit.
    */
   listVersions(slug: string, opts?: { limit?: number }): Promise<VersionManifest[]>;
+  countVersions?(slug: string): Promise<number>;
   getSourceFile(slug: string, version: string, path: string): Promise<string | null>;
   /**
    * Records our gate's verdict against a version. Only a green one may publish.
@@ -966,6 +968,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         ...(input.forkedFrom ? { forkedFrom: input.forkedFrom } : {}),
         ...(input.proposal ? { proposal: input.proposal } : {}),
         ...(input.authorship ? { authorship: input.authorship } : {}),
+        ...(input.summary ? { summary: input.summary } : {}),
         sourceFiles: files.map((file) => file.path),
       };
       // Written last: a manifest is what makes a version real, so a run that dies
@@ -1224,6 +1227,19 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         }
       }
       return collected.slice(0, limit);
+    },
+
+    async countVersions(slug) {
+      assertSlug(slug);
+      const prefix = `games/${slug}/versions/`;
+      const url =
+        `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(bucket)}/o` +
+        `?prefix=${encodeURIComponent(prefix)}&delimiter=${encodeURIComponent('/')}&fields=prefixes`;
+      const response = await fetchImpl(url, { headers: { authorization: `Bearer ${await getAccessToken()}` } });
+      if (response.status === 404) return 0;
+      if (!response.ok) return 0;
+      const listing = (await response.json()) as { prefixes?: string[] };
+      return (listing.prefixes ?? []).length;
     },
 
     async adoptProposalVersion(input) {

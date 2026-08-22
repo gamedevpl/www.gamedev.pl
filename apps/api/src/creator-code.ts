@@ -78,6 +78,8 @@ export interface CreatorCodeRoutesOptions {
     version: string;
     mode?: 'health' | 'preview' | 'proposal';
   }) => Promise<{ buildId?: string; accepted?: boolean } | void> | void;
+  sourceDelivery?: SourceDeliveryService | null;
+  mintStatusToken?: (issueNumber: number) => string;
   log?: {
     warn: (context: object, message: string) => void;
     error: (context: object, message: string) => void;
@@ -186,15 +188,18 @@ export async function registerCreatorCodeRoutes(
       : options.objectStore
         ? createKitFileStore(options.objectStore)
         : null;
-  const sourceDelivery: SourceDeliveryService | null = options.gamesStore
-    ? createSourceDeliveryService({
-        store: options.store,
-        gamesStore: options.gamesStore,
-        kitFileStore,
-        onSourcesDelivered: options.onSourcesDelivered,
-        log: options.log,
-      })
-    : null;
+  const sourceDelivery: SourceDeliveryService | null =
+    options.sourceDelivery !== undefined
+      ? options.sourceDelivery
+      : options.gamesStore
+        ? createSourceDeliveryService({
+            store: options.store,
+            gamesStore: options.gamesStore,
+            kitFileStore,
+            onSourcesDelivered: options.onSourcesDelivered,
+            log: options.log,
+          })
+        : null;
   /** CE-19: per-slug cooldown between manual deliveries. Process-local, same posture
    * as source-delivery.ts's own per-build rate limiter. */
   const lastDeliverAt = new Map<string, number>();
@@ -1027,6 +1032,7 @@ export async function registerCreatorCodeRoutes(
      * Publish click itself as the confirmation (no separate checkbox).
      */
     attestation: z.literal(true),
+    summary: z.string().trim().max(1024).optional(),
   });
 
   /**
@@ -1152,6 +1158,7 @@ export async function registerCreatorCodeRoutes(
           files,
           mode: parsed.data.mode,
           ...(kitEngineRef ? { kitEngineRef } : {}),
+          ...(parsed.data.summary ? { summary: parsed.data.summary } : {}),
           authorship,
           actor: 'creator',
         });
@@ -1172,6 +1179,129 @@ export async function registerCreatorCodeRoutes(
       } catch (error) {
         if (error instanceof SourceDeliveryValidationError || error instanceof InvalidUploadError) {
           // `error` stays the sentence; `code`/`missing` drive the fixit.
+          const missing = error instanceof InvalidUploadError ? error.missingPaths : undefined;
+          return reply.status(400).send({
+            error: error.message,
+            code: 'invalid_upload',
+            ...(missing?.length ? { missing: [...missing] } : {}),
+          });
+        }
+        throw error;
+      }
+    },
+  );
+
+  const RevertInputSchema = z.object({
+    targetVersion: z.string().trim().min(1).max(64),
+    mode: z.enum(['preview', 'publish']).default('preview'),
+    attestation: z.literal(true),
+  });
+
+  // POST /api/me/studio/games/:slug/sources/revert — roll-forward revert.
+  app.post<{ Params: { slug: string } }>(
+    '/api/me/studio/games/:slug/sources/revert',
+    { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (notFoundIfDisabled(reply)) return;
+      if (!options.gamesStore || !sourceDelivery) {
+        return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
+      }
+      const resolved = await resolveForSlug(request, reply);
+      if (!resolved) return;
+      const { record, slug } = resolved;
+      const gamesStore = options.gamesStore;
+
+      if (isLiveAgentRound(record)) {
+        return reply.status(409).send({ error: 'agent_round', message: 'an agent is actively building this round' });
+      }
+
+      const parsed = RevertInputSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+      }
+
+      const { targetVersion, mode } = parsed.data;
+      const targetManifest = await gamesStore.getManifest(slug, targetVersion);
+      if (!targetManifest) {
+        return reply.status(404).send({ error: `target version ${targetVersion} not found` });
+      }
+
+      const reads = await Promise.all(
+        targetManifest.sourceFiles.map(async (path) => ({
+          path,
+          content: await gamesStore.getSourceFile(slug, targetVersion, path),
+        })),
+      );
+
+      const files: SourceFile[] = [];
+      for (const entry of reads) {
+        if (entry.content === null) {
+          return reply
+            .status(500)
+            .send({ error: `failed to read source file ${entry.path} from version ${targetVersion}` });
+        }
+        files.push({ path: entry.path, content: entry.content });
+      }
+
+      if (files.length === 0) {
+        return reply.status(400).send({ error: `target version ${targetVersion} contains no source files` });
+      }
+
+      const activeRecord = roundIsClosed(record) ? await openManualRound(store, record, slug) : record;
+
+      let kitEngineRef: string | undefined = targetManifest.kitEngineRef;
+      if (options.objectStore) {
+        try {
+          const registryBody = await options.objectStore.readObject('kits/current.json');
+          if (registryBody) {
+            const currentRef = parseKitRegistry(registryBody.toString('utf8')).current;
+            kitEngineRef = (await store.pinRoundKitEngineRef(activeRecord.issueNumber, currentRef)) ?? currentRef;
+          }
+        } catch (error) {
+          request.log.warn({ err: error, slug }, 'code surface revert: could not pin current kit engine ref');
+        }
+      }
+
+      const nowMs = Date.now();
+      request.log.info?.(
+        {
+          issueNumber: activeRecord.issueNumber,
+          slug,
+          targetVersion,
+          uid: request.user!.uid,
+          revertedAt: new Date(nowMs).toISOString(),
+        },
+        'code surface: revert roll-forward requested',
+      );
+
+      try {
+        const roundGeneration = activeRecord.roundGeneration ?? 1;
+        const outcome = await sourceDelivery.deliver({
+          issueNumber: activeRecord.issueNumber,
+          slug,
+          files,
+          mode,
+          ...(kitEngineRef ? { kitEngineRef } : {}),
+          authorship: 'owner',
+          summary: `Reverted to build ${targetVersion}`,
+          actor: 'creator',
+        });
+        if (outcome.accepted) {
+          lastDeliverAt.set(slug, nowMs);
+          await gamesStore
+            .clearStagedSources({ slug, issueNumber: activeRecord.issueNumber, roundGeneration })
+            .catch(() => {});
+        }
+        options.invalidateStatusCache?.(activeRecord.issueNumber);
+        const token = options.mintStatusToken?.(activeRecord.issueNumber);
+        return reply.send({
+          ...outcome,
+          targetVersion,
+          ...(activeRecord.issueNumber !== record.issueNumber ? { roundOpened: activeRecord.issueNumber } : {}),
+          ...(token ? { token } : {}),
+        });
+      } catch (error) {
+        if (error instanceof SourceDeliveryValidationError || error instanceof InvalidUploadError) {
           const missing = error instanceof InvalidUploadError ? error.missingPaths : undefined;
           return reply.status(400).send({
             error: error.message,

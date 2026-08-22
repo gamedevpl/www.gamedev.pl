@@ -562,7 +562,25 @@
         "green": "Zaliczony",
         "red": "Niezaliczony"
       },
-      "kitOutdated": "Wymaga odświeżenia kit"
+      "kitOutdated": "Wymaga odświeżenia kit",
+      "showingCount": "Widoczne {{shown}} z {{total}} buildów",
+      "showAll": "Pokaż starsze buildy",
+      "showLess": "Pokaż mniej",
+      "previewAction": "Podgląd buildu",
+      "revertAction": "Przywróć ten build",
+      "reverting": "Przywracanie…",
+      "revertSuccess": "Rozpoczęto roll-forward do wersji {{version}}",
+      "revertConfirm": "Czy na pewno chcesz przywrócić wersję {{version}}? Utworzy to nowy build (roll-forward) z dokładną zawartością plików z wersji {{version}}.",
+      "authorship": {
+        "agent": "Zbudowane przez Agenta AI",
+        "owner": "Edytowane przez Twórcę",
+        "mixed": "Współpraca (Twórca + Agent)"
+      },
+      "fileCount_one": "{{count}} plik źródłowy",
+      "fileCount_few": "{{count}} pliki źródłowe",
+      "fileCount_many": "{{count}} plików źródłowych",
+      "fileCount_other": "{{count}} plików źródłowych",
+      "versionLabel": "Wersja {{version}}"
     },
     "buildBar": {
       "starting": "Sprawdzanie się zaczyna",

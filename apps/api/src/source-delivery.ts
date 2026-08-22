@@ -45,6 +45,7 @@ export interface SourceDeliveryInput {
   authority?: SourceDeliveryAuthority;
   /** Who wrote this delivery — see {@link VersionManifest.authorship} (CE-20). */
   authorship?: 'agent' | 'owner' | 'mixed';
+  summary?: string;
   /** Who *called this route* — distinct from `authorship`'s file-level provenance.
    * Drives the `by` field on the job transitions this delivery records. Defaults to
    * `'agent'` (the agent channel and managed-harvest callers never set this); the Code
@@ -411,6 +412,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
           mode: input.mode,
           ...(input.kitEngineRef ? { kitEngineRef: input.kitEngineRef } : {}),
           ...(input.authorship ? { authorship: input.authorship } : {}),
+          ...(input.summary ? { summary: input.summary } : {}),
         }));
       } catch (error) {
         if (

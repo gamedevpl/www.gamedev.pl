@@ -22,19 +22,11 @@ export type StageOriginKind = 'staged' | 'delivered' | 'seed' | 'none';
 export type StageOrigin = {
   kind: StageOriginKind;
   at: number | null;
-  /** Agent-authored label for a channel build, when the origin carries one. Untrusted text. */
   versionLabel: string | null;
 };
 
 export type StageSource = {
-  /** Assembled + player-bridge-embedded HTML ready for `srcDoc`, or null before anything lands. */
   html: string | null;
-  /**
-   * The same document before `embedGameHtml`/`withGameLocale` — for a caller that does
-   * its own embedding, `GameTheater` via `GameFrame`'s `embed` prop being the one that
-   * matters here. Feeding it the already-embedded `html` would inject the player
-   * bridge twice.
-   */
   rawHtml: string | null;
   origin: StageOrigin;
 };
@@ -56,16 +48,27 @@ const NONE_ORIGIN: StageOrigin = { kind: 'none', at: null, versionLabel: null };
  * embedded game gets.
  */
 export type UseStageSourceResult = StageSource & {
-  // Track 2 fast lane: shows a synchronous preview immediately, no fetch.
   pushPreview: (html: string) => void;
 };
 
-export function useStageSource(token: string, status: SubmissionStatus | null): UseStageSourceResult {
+export type UseStageSourceOptions = {
+  selectedPreviewVersion?: string | null;
+};
+
+export function useStageSource(
+  token: string,
+  status: SubmissionStatus | null,
+  options?: UseStageSourceOptions,
+): UseStageSourceResult {
+  const selectedPreviewVersion = options?.selectedPreviewVersion ?? null;
   const [preview, setPreview] = useState<{ html: string; at: number } | null>(null);
+  const [versionPreview, setVersionPreview] = useState<{ html: string; at: number; version: string } | null>(null);
   const [channel, setChannel] = useState<{ html: string; at: number; label: string | null } | null>(null);
   const [published, setPublished] = useState<{ html: string; slug: string } | null>(null);
   const [dataToken, setDataToken] = useState(token);
 
+  const loadedVersionPreviewKeyRef = useRef<string | null>(null);
+  const versionPreviewInFlightRef = useRef(false);
   const loadedPreviewKeyRef = useRef<string | null>(null);
   const previewInFlightRef = useRef(false);
   const loadedChannelRef = useRef<string | null>(null);
@@ -94,9 +97,12 @@ export function useStageSource(token: string, status: SubmissionStatus | null): 
     setDataToken(token);
     activeTokenRef.current = token;
     setPreview(null);
+    setVersionPreview(null);
     setChannel(null);
     setPublished(null);
     loadedPreviewKeyRef.current = null;
+    loadedVersionPreviewKeyRef.current = null;
+    versionPreviewInFlightRef.current = false;
     previewInFlightRef.current = false;
     loadedChannelRef.current = null;
     channelInFlightRef.current = false;
@@ -106,6 +112,37 @@ export function useStageSource(token: string, status: SubmissionStatus | null): 
     channelRetryRef.current = 0;
     previewRetryRef.current = 0;
   }
+
+  useEffect(() => {
+    if (!token || !selectedPreviewVersion) {
+      setVersionPreview(null);
+      loadedVersionPreviewKeyRef.current = null;
+      return;
+    }
+    const versionKey = `${token}:${selectedPreviewVersion}`;
+    if (loadedVersionPreviewKeyRef.current === versionKey || versionPreviewInFlightRef.current) return;
+
+    versionPreviewInFlightRef.current = true;
+    const requestToken = token;
+    getSubmissionPreview(token, selectedPreviewVersion)
+      .then((result) => {
+        if (activeTokenRef.current !== requestToken) return;
+        loadedVersionPreviewKeyRef.current = versionKey;
+        setVersionPreview({
+          html: result.html,
+          at: Date.now(),
+          version: selectedPreviewVersion,
+        });
+      })
+      .catch(() => {
+        if (activeTokenRef.current !== requestToken) return;
+        setVersionPreview(null);
+      })
+      .finally(() => {
+        if (activeTokenRef.current !== requestToken) return;
+        versionPreviewInFlightRef.current = false;
+      });
+  }, [token, selectedPreviewVersion]);
 
   // Auto-load the live preview as soon as one is available, and silently refresh it
   // whenever the agent pushes a new commit (headSha changes) — no click required.
@@ -249,20 +286,26 @@ export function useStageSource(token: string, status: SubmissionStatus | null): 
       });
   }, [status?.status, status?.slug, token, publishedRetryTick]);
 
-  const isPublished = status?.status === 'published' && Boolean(status.slug);
+  const isPublished = !selectedPreviewVersion && status?.status === 'published' && Boolean(status.slug);
+  // When a historical version preview is explicitly selected, it takes precedence over normal stage sources.
+  const hasVersionPreview = Boolean(selectedPreviewVersion && versionPreview?.html);
   // The fetch-freshness fix above (CE-12) is wasted if display still prefers `preview`
   // unconditionally — a fresher `channel` document that gets fetched must also get
   // shown, or the stage keeps rendering the stale gate-built preview underneath it.
-  const showChannel = channel != null && (preview === null || channel.at > preview.at);
-  const rawHtml = isPublished
-    ? (published?.html ?? null)
-    : showChannel
-      ? channel!.html
-      : (preview?.html ?? channel?.html ?? null);
+  const showChannel = !hasVersionPreview && channel != null && (preview === null || channel.at > preview.at);
+  const rawHtml = hasVersionPreview
+    ? versionPreview!.html
+    : isPublished
+      ? (published?.html ?? null)
+      : showChannel
+        ? channel!.html
+        : (preview?.html ?? channel?.html ?? null);
   const html = rawHtml ? embedGameHtml(withGameLocale(rawHtml, i18n.language)) : null;
 
   let origin: StageOrigin = NONE_ORIGIN;
-  if (isPublished) {
+  if (hasVersionPreview) {
+    origin = { kind: 'staged', at: versionPreview!.at, versionLabel: versionPreview!.version };
+  } else if (isPublished) {
     origin = { kind: 'delivered', at: null, versionLabel: null };
   } else if (showChannel) {
     origin = { kind: 'staged', at: channel!.at, versionLabel: channel!.label };

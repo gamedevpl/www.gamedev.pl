@@ -110,6 +110,7 @@ export type {
 } from './submission-status.js';
 export { SUBMISSION_STATES, type SubmissionState } from './submission-state.js';
 export type {
+  StudioBuildsResponse,
   StudioGame,
   StudioGamesResponse,
   StudioHealthResponse,

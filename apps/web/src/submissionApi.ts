@@ -156,14 +156,37 @@ export async function listMySubmissions(): Promise<MySubmission[]> {
   return page.submissions;
 }
 
-export async function getSubmissionPreview(token: string): Promise<SubmissionPreview> {
-  const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/preview`);
+export async function getSubmissionPreview(token: string, version?: string): Promise<SubmissionPreview> {
+  const query = version ? `?version=${encodeURIComponent(version)}` : '';
+  const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/preview${query}`);
 
   if (!response.ok) {
     await throwResponseError(response);
   }
 
   return (await response.json()) as SubmissionPreview;
+}
+
+export interface RevertGameVersionResult {
+  accepted: boolean;
+  version?: string;
+  roundOpened?: number;
+  token?: string;
+}
+
+export async function revertGameVersion(slug: string, targetVersion: string): Promise<RevertGameVersionResult> {
+  const response = await fetch(`${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/sources/revert`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ targetVersion, attestation: true }),
+  });
+
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+
+  return (await response.json()) as RevertGameVersionResult;
 }
 
 /**
