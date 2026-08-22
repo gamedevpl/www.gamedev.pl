@@ -15,7 +15,18 @@
 import { parse, type ParserPlugin } from '@babel/parser';
 import type { Comment, File, Node } from '@babel/types';
 
-export type BannedAnyKind = 'any-type' | 'ts-suppression' | 'unparseable';
+export type BannedAnyKind = 'any-type' | 'ts-suppression' | 'unparseable' | 'too-large';
+
+/**
+ * Past this, a source is refused rather than parsed.
+ *
+ * Uploads are untrusted and this runs synchronously on the API event loop, where building
+ * an AST for a delivery-sized file is time and memory an attacker chooses. The delivery cap
+ * is 2 MiB; a crafted file that size costs over a second of parse and hundreds of MB. The
+ * largest file in the real catalog is 194 KiB and the largest game's is 57 KiB, so this
+ * leaves generous headroom while bounding the worst case to a fraction of a second.
+ */
+export const MAX_SCANNED_BYTES = 512 * 1024;
 
 /**
  * Syntax this scan must understand, because the build accepts it.
@@ -129,6 +140,18 @@ function findingsFromComments(comments: readonly Comment[]): BannedAnyFinding[] 
  * already crosses (esbuild, `tsc`).
  */
 export function findBannedAnyUsages(source: string): BannedAnyFinding[] {
+  const bytes = Buffer.byteLength(source, 'utf8');
+  if (bytes > MAX_SCANNED_BYTES) {
+    return [
+      {
+        kind: 'too-large',
+        line: 1,
+        column: 1,
+        text: `${bytes} bytes exceeds the ${MAX_SCANNED_BYTES}-byte scan limit`,
+      },
+    ];
+  }
+
   let file: File | undefined;
   let failure: { message: string; loc?: { line: number; column: number } } | undefined;
   for (const plugins of PARSER_PLUGIN_SETS) {
@@ -170,6 +193,7 @@ export function describeBannedAnyFinding(fileName: string, finding: BannedAnyFin
   const where = `${fileName}:${finding.line}:${finding.column}`;
   if (finding.kind === 'any-type') return `${where} uses the \`any\` type`;
   if (finding.kind === 'ts-suppression') return `${where} uses \`${finding.text}\``;
+  if (finding.kind === 'too-large') return `${where} is too large to scan for \`any\`: ${finding.text}`;
   return `${where} could not be parsed, so it cannot be checked for \`any\`: ${finding.text}`;
 }
 

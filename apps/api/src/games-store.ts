@@ -365,6 +365,7 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
   // round, and by then it has usually written more code on top of the untyped value.
   // Every file, not the first offending one: an agent that fixes what it was told about
   // and resubmits must not meet the same refusal again for the file after it.
+  const MAX_LISTED_ANY_FINDINGS = 20;
   const anyFindings: string[] = [];
   for (const file of normalized) {
     if (!file.path.endsWith('.ts')) continue;
@@ -373,9 +374,15 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
     }
   }
   if (anyFindings.length > 0) {
-    const [first, ...rest] = anyFindings;
-    const more = rest.length > 0 ? ` (and ${rest.length} more in this delivery's sources: ${rest.join(', ')})` : '';
-    throw new InvalidUploadError(`${first}${more}. ${BANNED_ANY_GUIDANCE}`, 'any-type');
+    // Listed, but not all of them: a crafted delivery can carry tens of thousands, and the
+    // message is built in memory and sent back over the wire. Enough to fix a pass, capped.
+    const listed = anyFindings.slice(0, MAX_LISTED_ANY_FINDINGS);
+    const [first, ...rest] = listed;
+    const hidden = anyFindings.length - listed.length;
+    const more =
+      rest.length > 0 ? ` (and ${anyFindings.length - 1} more in this delivery's sources: ${rest.join(', ')}` : '';
+    const trailer = more ? `${hidden > 0 ? `, and ${hidden} not listed` : ''})` : '';
+    throw new InvalidUploadError(`${first}${more}${trailer}. ${BANNED_ANY_GUIDANCE}`, 'any-type');
   }
   const linkFindings = findUnresolvedSourceLinks(sourceFilesToMap(normalized));
   if (linkFindings.length > 0) {

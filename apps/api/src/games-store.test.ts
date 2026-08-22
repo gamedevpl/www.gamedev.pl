@@ -181,6 +181,25 @@ describe('validateSourceUpload — the delivery contract', () => {
       expect(() => validateSourceUpload(delivery)).toThrow(/uses the `any` type/);
     });
 
+    it('refuses an oversized source instead of parsing it, and bounds the message', () => {
+      // A delivery-sized file is parse cost an attacker picks, and listing every finding
+      // built an unbounded string. Both are capped; the message stays a fixed size.
+      const huge = `export const pad = '${'x'.repeat(600_000)}';\n`;
+      expect(() => validateSourceUpload([...MINIMAL, { path: 'game/huge.ts', content: huge }])).toThrow(
+        /too large to scan/,
+      );
+      const many = `export function paint(${Array.from({ length: 200 }, (_, i) => `a${i}: any`).join(', ')}) {}\n`;
+      let message = '';
+      try {
+        validateSourceUpload([...MINIMAL, { path: 'game/many.ts', content: many }]);
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).toMatch(/and 199 more/);
+      expect(message).toMatch(/not listed/);
+      expect(message.length).toBeLessThan(4000);
+    });
+
     it('refuses a source it cannot parse rather than passing it as clean', () => {
       const delivery = [...MINIMAL, { path: 'game/render.ts', content: "export const broken = 'oops\n" }];
       expect(() => validateSourceUpload(delivery)).toThrow(/could not be parsed/);
