@@ -233,8 +233,52 @@ export const privacyPl: LegalDocument = {
       ],
     },
     {
+      id: 'agent',
+      heading: '5. Podłączenie własnego asystenta AI (interfejs agenta)',
+      blocks: [
+        {
+          kind: 'p',
+          text:
+            'Możesz też budować i ulepszać swoje gry, podłączając do Serwisu wybranego przez siebie asystenta AI ' +
+            '(np. ChatGPT, Claude albo edytor kodu z funkcjami AI) przez nasz interfejs agenta (MCP). Nic z ' +
+            'poniższego nie dzieje się, dopóki samodzielnie nie podłączysz asystenta — kluczem twórcy, który ' +
+            'generujesz, albo logując się przez asystenta (OAuth). Gdy asystent jest podłączony, interfejs zwraca ' +
+            'mu — wyłącznie dla Twoich gier — następujące kategorie danych:',
+        },
+        {
+          kind: 'ul',
+          items: [
+            'brief Twojej gry: tytuł, Twój opis i odpowiedzi na pytania doprecyzowujące, Twoje wiadomości ' +
+              'sterujące i opinie — w tym stronicowany zapis tej rozmowy obejmujący wcześniejsze rundy budowy;',
+            'szkice i obrazy referencyjne, które załączysz do gry;',
+            'pliki źródłowe Twojej gry (opublikowane, robocze i zmiany w poczekalni) oraz materiały referencyjne ' +
+              'platformy (Creator Kit);',
+            'zapisy budowy Twojej gry: notatki o postępie, zrzuty ekranu, werdykty automatycznej bramki jakości ' +
+              'oraz wytworzone przez nią zrzuty i nagrania rozgrywki;',
+            'techniczne metadane statusu towarzyszące tym odpowiedziom: identyfikatory rundy i dostawy, ' +
+              'znaczniki czasu, stan przepływu pracy i doradcze kody ostrzeżeń.',
+          ],
+        },
+        {
+          kind: 'p',
+          text:
+            'Interfejs zwraca wyłącznie dane o grze i rundzie budowy. Nie zwraca Twojego adresu e-mail, imienia ' +
+            'i nazwiska, identyfikatora konta ani niepublicznych danych innych twórców — asystent widzi Twoją ' +
+            'grę, nie Twoje konto.',
+        },
+        {
+          kind: 'p',
+          text:
+            'To, co podłączony asystent robi z otrzymanymi danymi, reguluje Twoja umowa z jego dostawcą (np. ' +
+            'OpenAI lub Anthropic) — asystent działa na Twoje polecenie, jako wybrany przez Ciebie odbiorca, a nie ' +
+            'nasz podwykonawca. Nie wysyłamy mu niczego z własnej inicjatywy: każda z powyższych kategorii jest ' +
+            'zwracana wyłącznie w odpowiedzi na żądanie asystenta, gdy masz go podłączonego.',
+        },
+      ],
+    },
+    {
       id: 'odbiorcy',
-      heading: '5. Komu przekazujemy dane',
+      heading: '6. Komu przekazujemy dane',
       blocks: [
         {
           kind: 'p',
@@ -286,7 +330,7 @@ export const privacyPl: LegalDocument = {
     },
     {
       id: 'cookies',
-      heading: '6. Pliki cookie i pamięć przeglądarki',
+      heading: '7. Pliki cookie i pamięć przeglądarki',
       blocks: [
         {
           kind: 'p',
@@ -318,7 +362,7 @@ export const privacyPl: LegalDocument = {
     },
     {
       id: 'prawa',
-      heading: '7. Twoje prawa',
+      heading: '8. Twoje prawa',
       blocks: [
         { kind: 'p', text: 'W związku z przetwarzaniem Twoich danych przysługuje Ci prawo do:' },
         {
@@ -350,7 +394,7 @@ export const privacyPl: LegalDocument = {
     },
     {
       id: 'usuniecie',
-      heading: '8. Usunięcie konta',
+      heading: '9. Usunięcie konta',
       blocks: [
         {
           kind: 'p',
@@ -376,7 +420,7 @@ export const privacyPl: LegalDocument = {
     },
     {
       id: 'bezpieczenstwo',
-      heading: '9. Bezpieczeństwo',
+      heading: '10. Bezpieczeństwo',
       blocks: [
         {
           kind: 'p',
@@ -395,7 +439,7 @@ export const privacyPl: LegalDocument = {
     },
     {
       id: 'wiek',
-      heading: '10. Wiek użytkowników',
+      heading: '11. Wiek użytkowników',
       blocks: [
         {
           kind: 'p',
@@ -408,7 +452,7 @@ export const privacyPl: LegalDocument = {
     },
     {
       id: 'zmiany',
-      heading: '11. Zmiany polityki',
+      heading: '12. Zmiany polityki',
       blocks: [
         {
           kind: 'p',

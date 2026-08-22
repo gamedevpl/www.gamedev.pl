@@ -1,6 +1,54 @@
-# ChatGPT / Codex plugin — draft listing (NOT SUBMITTED)
+# ChatGPT / Codex plugin — listing (SUBMITTED, REJECTED 2026-08-22 — remediation in progress)
 
-**Status:** prepared for owner review. Do not publish.
+**Status:** v1.0.0 was submitted and rejected on 2026-08-22. Remediate below, then
+re-submit from the OpenAI Platform dashboard.
+
+## Review round 1 (2026-08-22): rejected — findings and remediation
+
+Four findings, verbatim themes from the rejection email, with where each stands:
+
+1. **"Returns user-related data not disclosed in your privacy policy"** (including
+   nested and debug data). The MCP surface returns the creator's round data — brief/spec,
+   steering messages and the paged conversation transcript, reference images, source
+   files, progress notes, screenshots, gate verdicts/media, plus status metadata (round
+   and delivery ids, timestamps, warning codes). None of that was named in the privacy
+   policy, which also never mentioned the connector lane at all.
+   **Fixed in repo:** `apps/web/src/legal/privacy.{en,pl}.ts` gained section 5
+   ("Connecting your own AI assistant (agent interface)") enumerating each returned
+   category, the status/debug metadata, the no-account-identity guarantee (the surface
+   returns no email/name/account id — verified against `mcp-server.ts` and
+   `agent-channel.ts`), and the recipient relationship (the assistant provider acts on
+   the creator's instruction, not as our processor).
+   **Owner:** deploy before re-submitting, so the privacy-policy URL on the listing shows
+   the new section; decide whether the effective-date/14-day-notice clause needs a bump.
+2. **"Could not confirm that the verified individual or business owns this app."**
+   Entirely owner-gated, nothing in-repo: complete business/identity verification on the
+   OpenAI Platform org that submits, or re-submit from the account that carries the
+   verification, and make sure the publisher name matches who owns the gamedev.pl domain
+   and brand. Domain verification via `/.well-known/openai-apps-challenge` (below) is the
+   supporting evidence — do that step this time.
+3. **"Annotations do not appear to match the tool's behavior … explicitly true or false
+   (not null) for every tool … include a clear justification."** The live descriptors
+   were already explicit booleans for all four hints on every tool, but
+   [`tool-annotations.md`](./tool-annotations.md) — the paste-ready justification sheet —
+   had lagged the advertised surface: seven advertised tools (`regenerate_seed`,
+   `get_kit_api`, `knowledge_query`, `stage_upload_url`, `delete_source_file`,
+   `get_reference_images`, `get_transcript`) had no blocks, and seven REST-only tools
+   that models never see were still listed. **Fixed in repo:** the sheet now covers
+   exactly `MCP_VISIBLE_TOOLS` (36 tools) with explicit values and justifications for
+   all four hints, idempotency included.
+4. **"Tool naming and description quality … no comparative, biased, or preferential
+   language."** Names are unchanged (snake_case verbs, unique, behavior-matching
+   `annotations.title` on each), but descriptions carried "Preferred way to…",
+   "PREFERRED:", "Prefer X over Y", "better for…", and one competitor product name
+   ("Claude Chat") — all in `apps/api/src/mcp-server.ts`. **Fixed in repo:** every
+   advertised tool description and schema property description now states neutrally when
+   to use the tool ("Use X when…"); the competitor mention is gone. Deploy before
+   re-submitting so the reviewed `tools/list` reflects it.
+
+Re-submission preflight: deploy the API (descriptions) and web (privacy policy) first,
+then walk the "What is owner-gated" list at the bottom — verification (finding 2), demo
+account, URLs, icon — and paste the regenerated annotation blocks per tool.
 
 This is now a **plugin** submission, not a bare connector: OpenAI's directory takes
 skills + an MCP server + optional UI, and since #667 we have a skill to send. The server
@@ -80,7 +128,8 @@ tools; the earlier gap flagged during BY-18c has been closed.
 Verify before submitting:
 
 - Annotation sets are the `READS` / `WRITES` / `WRITES_ONCE` / `CONSUMES` constants in
-  `apps/api/src/mcp-server.ts` (~L521–551), spread into each tool's `annotations`.
+  `apps/api/src/mcp-server.ts` (search for "Tool annotations, and why every tool needs
+  them"), spread into each tool's `annotations`.
 - The regression test is `apps/api/src/mcp-server.test.ts` → _"annotates every tool, so a
   reader is not advertised as destructive"_ (~L1149), which asserts every tool has
   `title` + a boolean `destructiveHint`, and pins the reader/writer split per tool name.
