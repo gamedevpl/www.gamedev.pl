@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useEffect, useState, type ReactNode, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { latestAgentActivityAt } from './agentActivity.js';
 import { PixelIcon } from './PixelIcon.js';
+import { playPath } from './router.js';
 import { StudioBuildBar } from './StudioBuildBar.js';
+import { StudioStripOverflowMenu } from './StudioStripOverflowMenu.js';
 import { formatRelativeTime } from './relativeTime.js';
 import type { SubmissionStatus } from './submissionApi.js';
 import type { StagePosture } from './StudioStage.js';
@@ -82,8 +84,6 @@ export function StudioStrip({
 }: StudioStripProps) {
   const { t, i18n } = useTranslation();
   const [overflowOpen, setOverflowOpen] = useState(false);
-  const overflowRef = useRef<HTMLDivElement>(null);
-  const overflowTriggerRef = useRef<HTMLButtonElement>(null);
 
   // The D.15 denominator (CE-01): recorded where the door itself renders, not where
   // the surface behind it mounts — otherwise "offered" only ever fires alongside
@@ -95,27 +95,6 @@ export function StudioStrip({
   useEffect(() => {
     if (!isCompact) setOverflowOpen(false);
   }, [isCompact]);
-
-  useEffect(() => {
-    if (!overflowOpen) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setOverflowOpen(false);
-        overflowTriggerRef.current?.focus();
-      }
-    };
-    // Same idiom as the share popover: outside tap closes it.
-    const onPointerDown = (event: PointerEvent) => {
-      if (overflowRef.current?.contains(event.target as Node)) return;
-      setOverflowOpen(false);
-    };
-    window.addEventListener('keydown', onKey);
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      document.removeEventListener('pointerdown', onPointerDown);
-    };
-  }, [overflowOpen]);
 
   const heartbeatAt = latestAgentActivityAt(status);
   const showPhasePill = Boolean(status && HEARTBEAT_STATES.has(status.status) && !status.recentBuilds?.length);
@@ -148,8 +127,20 @@ export function StudioStrip({
       </button>
 
       <div className="studio-strip-title-block">
-        <h2 className="studio-strip-title">{title}</h2>
-        {slug ? <code className="studio-slug">{slug}</code> : null}
+        <h2 className="studio-strip-title">
+          {slug ? (
+            <a href={playPath(slug)} className="studio-strip-title-link">
+              {title}
+            </a>
+          ) : (
+            title
+          )}
+        </h2>
+      </div>
+
+      <div className="studio-strip-spacer" />
+
+      <div className="studio-strip-status">
         <StudioBuildBar status={status} onOpen={onOpenBuild} />
         {showPhasePill ? <span className="studio-strip-phase-pill">{phaseLabel}</span> : null}
         {heartbeatAt != null ? (
@@ -264,121 +255,25 @@ export function StudioStrip({
         ) : null}
 
         {isCompact ? (
-          <div className="studio-head-menu" ref={overflowRef}>
-            <button
-              type="button"
-              ref={overflowTriggerRef}
-              className={`studio-head-action is-icon-only${overflowOpen ? ' is-active' : ''}`}
-              aria-haspopup="menu"
-              aria-expanded={overflowOpen}
-              aria-label={t('studioPanel.strip.moreActions')}
-              onClick={() => setOverflowOpen((open) => !open)}
-            >
-              <PixelIcon name="menu" size={12} />{' '}
-              <span className="studio-head-action-label">{t('studioPanel.strip.moreActions')}</span>
-            </button>
-            {overflowOpen ? (
-              <div className="studio-head-menu-popover" role="menu" aria-label={t('studioPanel.strip.moreActions')}>
-                {codeAvailable ? (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={`studio-head-menu-item${codeActive ? ' is-active' : ''}`}
-                    aria-pressed={codeActive}
-                    onClick={() => {
-                      setOverflowOpen(false);
-                      onToggleCode();
-                    }}
-                  >
-                    <PixelIcon name="code" size={14} />
-                    <span>{t('studioPanel.tabs.code')}</span>
-                  </button>
-                ) : null}
-
-                {editAvailable ? (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className={`studio-head-menu-item${editActive ? ' is-active' : ''}`}
-                    aria-pressed={editActive}
-                    onClick={() => {
-                      setOverflowOpen(false);
-                      onToggleEdit();
-                    }}
-                  >
-                    <PixelIcon name="pencil" size={14} />
-                    <span>{t('studioPanel.tabs.edit')}</span>
-                  </button>
-                ) : null}
-
-                {canClaim ? (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="studio-head-menu-item"
-                    onClick={() => {
-                      setOverflowOpen(false);
-                      onClaim();
-                    }}
-                  >
-                    <PixelIcon name="sparkle" size={14} />
-                    <span>{t('creatorProfile.publishGateTitle')}</span>
-                  </button>
-                ) : null}
-
-                {onOpenTheater ? (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="studio-head-menu-item"
-                    disabled={stageEmpty}
-                    onClick={() => {
-                      setOverflowOpen(false);
-                      onOpenTheater();
-                    }}
-                  >
-                    <PixelIcon name="gamepad" size={14} />
-                    <span>{t('studioPanel.stage.openTheater')}</span>
-                  </button>
-                ) : null}
-
-                {shareSlot}
-
-                <button
-                  type="button"
-                  role="menuitem"
-                  className={`studio-head-menu-item${detailsActive ? ' is-active' : ''}`}
-                  aria-pressed={detailsActive}
-                  onClick={() => {
-                    setOverflowOpen(false);
-                    onToggleDetails();
-                  }}
-                >
-                  <PixelIcon name="panel" size={14} />
-                  <span>{t('studioPanel.tabs.details')}</span>
-                </button>
-
-                <button
-                  type="button"
-                  role="menuitem"
-                  className={`studio-head-menu-item${threadOpen ? ' is-active' : ''}`}
-                  aria-pressed={threadOpen}
-                  onClick={() => {
-                    setOverflowOpen(false);
-                    onToggleThread();
-                  }}
-                >
-                  <PixelIcon name="chat" size={14} />
-                  <span>{t('studioPanel.rail.chat')}</span>
-                  {threadUnreadCount > 0 ? (
-                    <span className="studio-chat-unread-badge" aria-hidden="true">
-                      {threadUnreadCount > 99 ? '99+' : threadUnreadCount}
-                    </span>
-                  ) : null}
-                </button>
-              </div>
-            ) : null}
-          </div>
+          <StudioStripOverflowMenu
+            codeAvailable={codeAvailable}
+            codeActive={codeActive}
+            onToggleCode={onToggleCode}
+            editAvailable={editAvailable}
+            editActive={editActive}
+            onToggleEdit={onToggleEdit}
+            canClaim={canClaim}
+            onClaim={onClaim}
+            stageEmpty={stageEmpty}
+            onOpenTheater={onOpenTheater}
+            shareSlot={shareSlot}
+            detailsActive={detailsActive}
+            onToggleDetails={onToggleDetails}
+            threadOpen={threadOpen}
+            onToggleThread={onToggleThread}
+            threadUnreadCount={threadUnreadCount}
+            onOpenChange={setOverflowOpen}
+          />
         ) : null}
       </div>
     </header>
