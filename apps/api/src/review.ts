@@ -1,4 +1,17 @@
-import type { AssessmentNoteOrigin, AssessmentSource, AssessmentVerdict, ReviewSweepSource } from '@gamedevpl/contract';
+import {
+  ASSESSMENT_CHECKLIST_MARKS,
+  ASSESSMENT_INPUT_METHODS,
+  ASSESSMENT_NOTE_ORIGINS,
+  ASSESSMENT_PLATFORMS,
+  ASSESSMENT_SOURCES,
+  ASSESSMENT_VERDICTS,
+  REVIEW_SWEEP_SOURCES,
+  REVIEW_SWEEP_STATUSES,
+  type AssessmentNoteOrigin,
+  type AssessmentSource,
+  type AssessmentVerdict,
+  type ReviewSweepSource,
+} from '@gamedevpl/contract';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { isAdmin, isAdminSession } from './admin-session.js';
@@ -30,7 +43,7 @@ const MAX_ADMIN_ROWS = 200;
 const MAX_REQUEUE_SLUGS = 50;
 const MAX_REQUEUE_REVIEWERS = 50;
 const MAX_REQUEUE_PAIRS = 200;
-const ChecklistMarkSchema = z.enum(['ok', 'weak', 'bad']);
+const ChecklistMarkSchema = z.enum(ASSESSMENT_CHECKLIST_MARKS);
 const ChecklistSchema = z
   .object({
     graphics: ChecklistMarkSchema,
@@ -83,8 +96,8 @@ const ClientContextSchema = z
     screenW: z.number().int().min(1).max(10000),
     screenH: z.number().int().min(1).max(10000),
     dpr: z.number().min(0.5).max(4),
-    input: z.enum(['touch', 'mouse', 'mixed']),
-    platform: z.enum(['ios', 'android', 'mac', 'windows', 'linux', 'other']),
+    input: z.enum(ASSESSMENT_INPUT_METHODS),
+    platform: z.enum(ASSESSMENT_PLATFORMS),
     lang: z.string().trim().min(1).max(32).nullable().optional(),
     ua: z.string().trim().min(1).max(160).nullable().optional(),
   })
@@ -92,12 +105,12 @@ const ClientContextSchema = z
 
 const AssessmentBodySchema = z.object({
   slug: z.string().trim().min(1).max(80).regex(SLUG_PATTERN, 'invalid slug'),
-  source: z.enum(['catalog', 'creator']),
+  source: z.enum(ASSESSMENT_SOURCES),
   title: z.string().trim().min(1).max(120).optional(),
   creatorHandle: z.string().trim().min(1).max(40).nullable().optional(),
-  verdict: z.enum(['keep', 'cut', 'skip']),
+  verdict: z.enum(ASSESSMENT_VERDICTS),
   note: z.string().trim().min(1).max(MAX_NOTE),
-  noteOrigin: z.enum(['text', 'speech']).optional(),
+  noteOrigin: z.enum(ASSESSMENT_NOTE_ORIGINS).exclude(['none']).optional(),
   checklist: ChecklistSchema,
   clientContext: ClientContextSchema.optional(),
   // The deployed game version this verdict judges.
@@ -538,7 +551,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
   });
 
   const CreateSweepSchema = z.object({
-    source: z.enum(['catalog', 'creator', 'all']).default('catalog'),
+    source: z.enum(REVIEW_SWEEP_SOURCES).default('catalog'),
     maxGames: z.number().int().min(1).max(MAX_SWEEP_GAMES).default(40),
     releasePerDay: z.number().int().min(1).max(MAX_RELEASE_PER_DAY).nullable().optional(),
     note: z.string().trim().max(280).nullable().optional(),
@@ -547,7 +560,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
 
   const PatchSweepSchema = z
     .object({
-      status: z.enum(['active', 'paused', 'completed', 'cancelled']).optional(),
+      status: z.enum(REVIEW_SWEEP_STATUSES).optional(),
       releaseMore: z.number().int().min(1).max(MAX_SWEEP_GAMES).optional(),
       releaseAll: z.boolean().optional(),
       releasePerDay: z.number().int().min(1).max(MAX_RELEASE_PER_DAY).nullable().optional(),

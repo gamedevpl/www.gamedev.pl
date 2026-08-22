@@ -1,4 +1,4 @@
-import { DECLINE_REASONS, type DeclineReason } from '@gamedevpl/contract';
+import { DECLINE_REASONS, type DeclineReason, type ProposalPublicState } from '@gamedevpl/contract';
 
 // The proposal state machine.
 //
@@ -245,18 +245,7 @@ export function isBaseStale(base: string | undefined, current: string | undefine
  * `changes_requested` stay distinct, because "it did not run" and "the owner wants
  * something different" are answered by different work.
  */
-export type ProposalPublicState =
-  | 'draft'
-  | 'checking'
-  | 'in_review'
-  | 'needs_work'
-  | 'changes_requested'
-  | 'accepted'
-  | 'merged'
-  | 'declined'
-  | 'withdrawn'
-  | 'superseded'
-  | 'expired';
+export type { ProposalPublicState } from '@gamedevpl/contract';
 
 export function toPublicProposalState(state: ProposalState): ProposalPublicState {
   switch (state) {

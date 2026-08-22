@@ -15,7 +15,8 @@
  * When there is no signal at all, the caller keeps games-repo order.
  */
 
-export type RecommendReason = 'popular' | 'for_you' | 'because_you_played' | 'continue';
+export type { RecommendReason } from '@gamedevpl/contract';
+import type { RecommendReason } from '@gamedevpl/contract';
 
 export interface RecommendGame {
   slug: string;
@@ -160,10 +161,7 @@ export function rankRecommendations(input: RankRecommendationsInput): RankedReco
 
   // Stable among ties: higher score first, then original catalog index.
   const catalogIndex = new Map(input.games.map((game, index) => [game.slug, index]));
-  discovery.sort(
-    (a, b) =>
-      b.score - a.score || (catalogIndex.get(a.slug) ?? 0) - (catalogIndex.get(b.slug) ?? 0),
-  );
+  discovery.sort((a, b) => b.score - a.score || (catalogIndex.get(a.slug) ?? 0) - (catalogIndex.get(b.slug) ?? 0));
 
   const ranked: RankedRecommendation[] = [
     ...continueSlugs.map((slug) => ({

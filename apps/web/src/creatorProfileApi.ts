@@ -2,9 +2,11 @@
  * Creator profile client — claim handle, edit byline, load public pages.
  */
 
+import type { AvatarMode } from '@gamedevpl/contract';
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
-export type AvatarMode = 'google' | 'letter';
+export type { AvatarMode } from '@gamedevpl/contract';
 
 export interface PublicCreatorProfile {
   handle: string;

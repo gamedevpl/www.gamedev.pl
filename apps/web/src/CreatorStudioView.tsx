@@ -1,3 +1,4 @@
+import type { DismissReason } from '@gamedevpl/contract';
 import { useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
@@ -2084,7 +2085,7 @@ function SuggestedImprovements({ slug }: { slug: string | undefined }) {
 }
 
 /** The fixed dismissal vocabulary the API accepts, paired with its translation key. */
-const DISMISS_REASON_KEYS: Array<[string, string]> = [
+const DISMISS_REASON_KEYS: Array<[DismissReason, string]> = [
   ['intentional', 'studioPanel.suggestions.reasonIntentional'],
   ['not-a-problem', 'studioPanel.suggestions.reasonNotAProblem'],
   ['wont-fix', 'studioPanel.suggestions.reasonWontFix'],

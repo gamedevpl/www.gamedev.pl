@@ -1,4 +1,6 @@
-export type RecommendationReason = 'popular' | 'for_you' | 'because_you_played' | 'continue';
+import { RECOMMEND_REASONS, type RecommendReason } from '@gamedevpl/contract';
+
+export type RecommendationReason = RecommendReason;
 
 export interface RecommendationItem {
   slug: string;
@@ -15,7 +17,7 @@ export interface CatalogSortPayload {
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 const SIGNALS_CACHE_KEY = 'gdpl.catalogSortSignals';
 
-const REASONS = new Set<RecommendationReason>(['popular', 'for_you', 'because_you_played', 'continue']);
+const REASONS = new Set<RecommendationReason>(RECOMMEND_REASONS);
 
 function parseItems(body: unknown): RecommendationItem[] {
   if (typeof body !== 'object' || body === null || !Array.isArray((body as { items?: unknown }).items)) {

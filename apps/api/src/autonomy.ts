@@ -1,3 +1,4 @@
+import type { AutonomyMode } from '@gamedevpl/contract';
 import type { SuggestionRecord } from './store.js';
 
 /**
@@ -13,18 +14,7 @@ import type { SuggestionRecord } from './store.js';
  * reach the site without the human review that is the moderation boundary. The worst an
  * over-eager router can do is spend an agent run and produce a candidate somebody declines.
  */
-export const AUTONOMY_MODES = [
-  /** Never act, and do not even raise a card. The digest still reports the numbers. */
-  'digest-only',
-  /** Propose; a human decides. The default, and what every game gets until told otherwise. */
-  'suggest',
-  /** Defects may be worked on unasked. The class the plan calls autonomous-eligible. */
-  'auto-fix-defects',
-  /** Defects and friction. Tuning inside the spec the creator already approved. */
-  'auto-tune',
-] as const;
-
-export type AutonomyMode = (typeof AUTONOMY_MODES)[number];
+export { AUTONOMY_MODES, type AutonomyMode } from '@gamedevpl/contract';
 
 export const DEFAULT_AUTONOMY: AutonomyMode = 'suggest';
 

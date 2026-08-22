@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@fastify/websocket": "^11.3.0",
+    "@gamedevpl/contract": "*",
     "@gamedevpl/zone-core": "*",
     "@google-cloud/firestore": "^8.7.0",
     "esbuild": "0.25.12",

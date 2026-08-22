@@ -1,4 +1,4 @@
-import type { AssistLane, BuilderKind } from '@gamedevpl/contract';
+import type { AssistLane, AutonomyMode, BuilderKind } from '@gamedevpl/contract';
 import type { GameHealth } from './healthApi.js';
 import type { FeedbackContext, SubmissionState } from './submissionApi.js';
 
@@ -490,8 +490,7 @@ export async function dismissSuggestion(id: string, reason: string): Promise<Stu
   return ((await response.json()) as { suggestion: StudioSuggestion }).suggestion;
 }
 
-/** What the platform may do to a game without asking (docs/improvement-loop-plan.md IL-4). */
-export type AutonomyMode = 'digest-only' | 'suggest' | 'auto-fix-defects' | 'auto-tune';
+export type { AutonomyMode } from '@gamedevpl/contract';
 
 export async function fetchGameAutonomy(slug: string): Promise<AutonomyMode> {
   const response = await fetch(`${API_BASE}/api/me/games/${encodeURIComponent(slug)}/autonomy`, {

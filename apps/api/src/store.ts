@@ -15,7 +15,7 @@ import type {
   VoteValue,
   WaitlistStatus,
 } from '@gamedevpl/contract';
-import { MANAGED_AGENT_VENDORS, type ManagedAgentVendorName } from './agent-backend-env.js';
+import { MANAGED_AGENT_VENDORS, type ManagedAgentVendorName, type ManagedBuilderMode } from '@gamedevpl/contract';
 import type { AgentTaskState } from './agent-state.js';
 import type { SeedFiles } from './agent-backend.js';
 import type { BuilderKind } from './builder.js';
@@ -768,7 +768,7 @@ export interface CreationLimits {
   // Shared daily token ceiling for ghost-text completion, everyone together.
   globalDailyTabCompleteTokenCap?: number | null;
   // Switches the `platform` option; `auto` defers to whether a backend exists.
-  managedBuilderMode?: 'auto' | 'off' | 'coming_soon';
+  managedBuilderMode?: ManagedBuilderMode;
   // Runtime override; unset defers to MANAGED_AGENT_VENDOR, the env-var default.
   managedAgentVendorOverride?: ManagedAgentVendorName | null;
   // Shared daily ceiling on platform rounds started. `null` = no cap.

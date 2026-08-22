@@ -1,4 +1,9 @@
-import { DECLINE_REASONS, type ContributionMode, type DeclineReason } from '@gamedevpl/contract';
+import {
+  DECLINE_REASONS,
+  type ContributionMode,
+  type DeclineReason,
+  type ProposalPublicState,
+} from '@gamedevpl/contract';
 export { DECLINE_REASONS, type DeclineReason };
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
@@ -15,18 +20,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
  */
 
 /** The proposer-facing vocabulary. `submitted`/`gating` arrive collapsed as `checking`. */
-export type ProposalState =
-  | 'draft'
-  | 'checking'
-  | 'in_review'
-  | 'needs_work'
-  | 'changes_requested'
-  | 'accepted'
-  | 'merged'
-  | 'declined'
-  | 'withdrawn'
-  | 'superseded'
-  | 'expired';
+export type ProposalState = ProposalPublicState;
 
 export type ProposalMessage = {
   id: string;

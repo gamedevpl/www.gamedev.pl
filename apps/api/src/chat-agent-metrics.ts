@@ -1,9 +1,11 @@
 // Studio chat agent metrics: structured logs, no message or reply text.
 
+import type { ChatAgentScope } from '@gamedevpl/contract';
+
 export const CHAT_AGENT_DECISION_MSG = 'studio chat agent decision';
 export const CHAT_AGENT_FAILOPEN_MSG = 'studio chat agent failed open';
 
-export type ChatAgentScopeLabel = 'draft' | 'improve';
+export type ChatAgentScopeLabel = ChatAgentScope;
 export type ChatAgentOutcome = 'build' | 'reply';
 
 interface Logger {

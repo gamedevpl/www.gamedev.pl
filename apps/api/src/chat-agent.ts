@@ -1,3 +1,4 @@
+import type { ChatAgentScope } from '@gamedevpl/contract';
 import { image, resultText, resultToolCalls, user, type GenAIClient, type ToolDefinition } from 'genaicode';
 import { createVertexClient } from './genai.js';
 import type { ChatTurn } from './chat-turns.js';
@@ -15,7 +16,7 @@ export const MAX_CONCEPT_CHARS = 400;
 // ~2x any legitimate composition of the fields below — a bloat backstop.
 export const MAX_PROMPT_CHARS = 12_000;
 
-export type ChatAgentScope = 'draft' | 'improve';
+export type { ChatAgentScope } from '@gamedevpl/contract';
 
 export interface ChatAgentStatus {
   scope: ChatAgentScope;

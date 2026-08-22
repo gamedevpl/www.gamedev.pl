@@ -16,7 +16,7 @@
 // all live in `proposals.ts` / `proposal-state.ts`; this module validates input, resolves
 // who is asking, and maps refusals onto status codes.
 
-import type { ContributionMode } from '@gamedevpl/contract';
+import { CONTRIBUTION_MODES, type ContributionMode } from '@gamedevpl/contract';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { isAdminSession } from './admin-session.js';
@@ -60,7 +60,7 @@ const ChangesSchema = z.object({
 });
 
 const ContributionSchema = z.object({
-  mode: z.enum(['off', 'review']),
+  mode: z.enum(CONTRIBUTION_MODES),
 });
 
 const BlockSchema = z.object({

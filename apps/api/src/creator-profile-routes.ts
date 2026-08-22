@@ -1,3 +1,4 @@
+import { AVATAR_MODES } from '@gamedevpl/contract';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
@@ -36,7 +37,7 @@ const ClaimHandleSchema = z.object({
 const UpdateProfileSchema = z.object({
   profileName: z.string().trim().min(1).max(PROFILE_NAME_MAX).optional(),
   bio: z.string().max(PROFILE_BIO_MAX).optional().nullable(),
-  avatarMode: z.enum(['google', 'letter']).optional(),
+  avatarMode: z.enum(AVATAR_MODES).optional(),
 });
 
 export interface CreatorProfileRoutesOptions {
