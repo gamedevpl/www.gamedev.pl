@@ -59,3 +59,9 @@ export interface StudioScorecardsResponse {
   truncated: boolean;
   totalGames: number;
 }
+
+// Build versions for a creator's game.
+export interface StudioBuildsResponse {
+  builds: import('./submission-status.js').RecentBuild[];
+  totalCount: number;
+}

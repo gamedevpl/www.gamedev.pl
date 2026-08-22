@@ -26,17 +26,25 @@ function statusFor(slug: string, headSha: string): SubmissionStatus {
 /** Renders the hook and reports what it returned on the most recent settled render. */
 function probe() {
   let latest: ReturnType<typeof useStageSource> | null = null;
-  function Probe(props: { token: string; status: SubmissionStatus | null }) {
-    latest = useStageSource(props.token, props.status);
+  function Probe(props: {
+    token: string;
+    status: SubmissionStatus | null;
+    options?: { selectedPreviewVersion?: string | null };
+  }) {
+    latest = useStageSource(props.token, props.status, props.options);
     return null;
   }
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
   return {
-    render: async (token: string, status: SubmissionStatus | null) => {
+    render: async (
+      token: string,
+      status: SubmissionStatus | null,
+      options?: { selectedPreviewVersion?: string | null },
+    ) => {
       await act(async () => {
-        root.render(createElement(Probe, { token, status }));
+        root.render(createElement(Probe, { token, status, options }));
       });
     },
     latest: () => latest!,
@@ -168,6 +176,28 @@ describe('useStageSource', () => {
 
     expect(latest().rawHtml).toBe('<p>synchronous</p>');
     expect(latest().origin.kind).toBe('staged');
+    root.unmount();
+  });
+
+  it('fetches and displays a specific historical version when selectedPreviewVersion is given', async () => {
+    mockedGetSubmissionPreview.mockImplementation(async (_token, version) => {
+      if (version === 'v-old') {
+        return { slug: 'sky-dodge', title: 'Sky Dodge', html: '<p>historical-version-old</p>' };
+      }
+      return { slug: 'sky-dodge', title: 'Sky Dodge', html: '<p>current-preview</p>' };
+    });
+
+    const { render, latest, root } = probe();
+    const base = statusFor('sky-dodge', 'sha-a');
+    await render('token-a', base, { selectedPreviewVersion: 'v-old' });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockedGetSubmissionPreview).toHaveBeenCalledWith('token-a', 'v-old');
+    expect(latest().rawHtml).toBe('<p>historical-version-old</p>');
+    expect(latest().origin).toMatchObject({ kind: 'staged', versionLabel: 'v-old' });
     root.unmount();
   });
 });

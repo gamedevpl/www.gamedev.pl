@@ -398,8 +398,11 @@ export function CreatorStudioView({
   // play posture before it ever applied.
   const initialSelectedPostureRef = useRef(selectedPosture);
   const firstStageTokenAppliedRef = useRef(false);
+  const [activePreviewVersion, setActivePreviewVersion] = useState<string | null>(null);
   const studioStatus = useStudioStatusPoll(stageToken);
-  const stageSource = useStageSource(stageToken ?? '', studioStatus);
+  const stageSource = useStageSource(stageToken ?? '', studioStatus, {
+    selectedPreviewVersion: activePreviewVersion,
+  });
   const [stageStatus, setStageStatus] = useState<StageStatus>({ kind: 'empty' });
   // "Fix it" seeds this; the composer consumes it once, then clears it.
   const [chatDraft, setChatDraft] = useState<{ text: string; seq: number } | null>(null);
@@ -440,6 +443,7 @@ export function CreatorStudioView({
   // creator picking a different game — always starts back in watch.
   useEffect(() => {
     if (!stageToken) return;
+    setActivePreviewVersion(null);
     if (!firstStageTokenAppliedRef.current) {
       firstStageTokenAppliedRef.current = true;
       setPosture(initialSelectedPostureRef.current === 'play' ? 'play' : 'watch');
@@ -1179,6 +1183,15 @@ export function CreatorStudioView({
                                 onClose={() => openTab('thread')}
                                 onDaysChange={setDays}
                                 onOpenPlaytest={() => changePosture('play')}
+                                onSelectPreviewVersion={setActivePreviewVersion}
+                                activePreviewVersion={activePreviewVersion}
+                                onReverted={(result) => {
+                                  setActivePreviewVersion(null);
+                                  if (result.token) {
+                                    setHandoffToken(result.token);
+                                  }
+                                  openTab('thread');
+                                }}
                                 onSwitchToPlatform={async () => {
                                   await handoffToPlatform(activeGame.token);
                                   setDetailsPane('overview');
@@ -1398,6 +1411,9 @@ function DetailsPanel({
   onClose,
   onDaysChange,
   onOpenPlaytest,
+  onSelectPreviewVersion,
+  activePreviewVersion,
+  onReverted,
   onSwitchToPlatform,
   onPlay,
   onDraftSharedChange,
@@ -1416,6 +1432,9 @@ function DetailsPanel({
   onClose: () => void;
   onDaysChange: (days: number) => void;
   onOpenPlaytest: () => void;
+  onSelectPreviewVersion?: (version: string | null) => void;
+  activePreviewVersion?: string | null;
+  onReverted?: (result: { version: string; token?: string; roundOpened?: number }) => void;
   onSwitchToPlatform: () => Promise<void>;
   onPlay: () => void;
   onDraftSharedChange: (shared: boolean) => void;
@@ -1613,7 +1632,13 @@ function DetailsPanel({
 
         {activePane === 'build' ? (
           showProgress ? (
-            <StudioDetailsBuildProgress token={game.token} emptyLabel={t('studioPanel.rail.buildEmpty')} />
+            <StudioDetailsBuildProgress
+              token={game.token}
+              emptyLabel={t('studioPanel.rail.buildEmpty')}
+              onSelectPreviewVersion={onSelectPreviewVersion}
+              activePreviewVersion={activePreviewVersion}
+              onReverted={onReverted}
+            />
           ) : (
             <p className="studio-rail-empty">{t('studioPanel.rail.buildEmpty')}</p>
           )

@@ -167,10 +167,14 @@ export async function getSubmissionPreview(token: string, version?: string): Pro
   return (await response.json()) as SubmissionPreview;
 }
 
-export async function revertGameVersion(
-  slug: string,
-  targetVersion: string,
-): Promise<{ accepted: boolean; version?: string }> {
+export interface RevertGameVersionResult {
+  accepted: boolean;
+  version?: string;
+  roundOpened?: number;
+  token?: string;
+}
+
+export async function revertGameVersion(slug: string, targetVersion: string): Promise<RevertGameVersionResult> {
   const response = await fetch(`${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/sources/revert`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -182,7 +186,7 @@ export async function revertGameVersion(
     await throwResponseError(response);
   }
 
-  return (await response.json()) as { accepted: boolean; version?: string };
+  return (await response.json()) as RevertGameVersionResult;
 }
 
 /**

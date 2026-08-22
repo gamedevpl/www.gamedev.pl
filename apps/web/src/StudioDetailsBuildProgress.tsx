@@ -96,7 +96,7 @@ export function StudioDetailsBuildProgress({
   emptyLabel?: string;
   onSelectPreviewVersion?: (version: string | null) => void;
   activePreviewVersion?: string | null;
-  onReverted?: (version: string) => void;
+  onReverted?: (result: { version: string; token?: string; roundOpened?: number }) => void;
 }) {
   const { i18n } = useTranslation();
   const [status, setStatus] = useState<SubmissionStatus | null>(null);

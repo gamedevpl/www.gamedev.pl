@@ -599,4 +599,88 @@ describe('GET /api/me/studio/scorecards', () => {
     expect(res.statusCode).toBe(401);
     await app.close();
   });
+
+  describe('GET /api/me/studio/games/:slug/builds', () => {
+    it('returns paged build history with manifests and total count', async () => {
+      await store.createSubmission(10, 'g:creator', 'Sky Dodge');
+      await store.setSubmissionSlug(10, 'sky-dodge');
+
+      const manifests = [
+        {
+          slug: 'sky-dodge',
+          version: 'v2',
+          createdAt: `${today}T12:00:00.000Z`,
+          issueNumber: 10,
+          deliveryMode: 'publish' as const,
+          sourceFiles: ['game.ts', 'GAME.json'],
+          gate: { green: true, ranAt: `${today}T12:05:00.000Z` },
+          summary: 'Added sound',
+        },
+        {
+          slug: 'sky-dodge',
+          version: 'v1',
+          createdAt: `${today}T11:00:00.000Z`,
+          issueNumber: 10,
+          deliveryMode: 'preview' as const,
+          sourceFiles: ['game.ts'],
+          previewGate: { green: true, ranAt: `${today}T11:02:00.000Z` },
+          summary: 'Initial draft',
+        },
+      ];
+
+      const gamesStore = {
+        listVersions: async () => manifests,
+        countVersions: async () => 2,
+      } as unknown as import('./games-store.js').GamesStore;
+
+      const app = await buildApp({
+        store,
+        sessionSecret,
+        submissionRoutes: { submissionTokenSecret, agentChannel: { gamesStore } },
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/me/studio/games/sky-dodge/builds',
+        headers: authHeaders('g:creator'),
+      });
+
+      expect(res.statusCode).toBe(200);
+      const data = res.json() as import('@gamedevpl/contract').StudioBuildsResponse;
+      expect(data.totalCount).toBe(2);
+      expect(data.builds.length).toBe(2);
+      expect(data.builds[0]).toMatchObject({
+        version: 'v2',
+        verdict: 'green',
+        summary: 'Added sound',
+        fileCount: 2,
+      });
+
+      await app.close();
+    });
+
+    it('404s when game is not owned by user', async () => {
+      const app = await buildApp({
+        store,
+        sessionSecret,
+        submissionRoutes: {
+          submissionTokenSecret,
+          agentChannel: {
+            gamesStore: {
+              listVersions: async () => [],
+            } as unknown as import('./games-store.js').GamesStore,
+          },
+        },
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/me/studio/games/not-owned/builds',
+        headers: authHeaders('g:creator'),
+      });
+
+      expect(res.statusCode).toBe(404);
+      await app.close();
+    });
+  });
 });

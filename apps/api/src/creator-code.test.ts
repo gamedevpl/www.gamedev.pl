@@ -1342,10 +1342,10 @@ describe('the Code surface routes (creator-code.ts)', () => {
         ],
       });
 
-      const delivered: Array<{ files: SourceFile[]; mode: string }> = [];
+      const delivered: Array<{ files: SourceFile[]; mode: string; summary?: string }> = [];
       const stubSourceDelivery: SourceDeliveryService = {
         deliver: async (input) => {
-          delivered.push({ files: input.files, mode: input.mode });
+          delivered.push({ files: input.files, mode: input.mode, summary: input.summary });
           return { accepted: true, slug: input.slug, version: 'v-reverted', mode: input.mode, gateStarted: true };
         },
       };
@@ -1367,6 +1367,9 @@ describe('the Code surface routes (creator-code.ts)', () => {
           });
           expect(delivered.length).toBe(1);
           expect(delivered[0]?.files.map((f) => f.path)).toContain('game.ts');
+          expect(delivered[0]).toMatchObject({
+            summary: `Reverted to build ${version}`,
+          });
         },
         { sourceDelivery: stubSourceDelivery },
       );

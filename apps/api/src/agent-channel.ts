@@ -248,6 +248,7 @@ const BuildSourcesInputSchema = z
      * except with fromLatestDelivery — then the previous candidate's lane is reused.
      */
     mode: z.enum(['preview', 'publish']).optional(),
+    summary: z.string().trim().max(1024).optional(),
   })
   .superRefine((value, ctx) => {
     if (value.fromStaged && value.fromLatestDelivery) {
@@ -2009,6 +2010,7 @@ export async function registerAgentChannelRoutes(
           mode,
           bindSlug: true,
           ...(parsed.data.kitEngineRef ? { kitEngineRef: parsed.data.kitEngineRef } : {}),
+          ...(parsed.data.summary ? { summary: parsed.data.summary } : {}),
           ...(record.dispatch?.backend || record.builder
             ? { backend: record.dispatch?.backend ?? record.builder }
             : {}),

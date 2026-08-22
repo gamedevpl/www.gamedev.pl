@@ -79,6 +79,7 @@ export interface CreatorCodeRoutesOptions {
     mode?: 'health' | 'preview' | 'proposal';
   }) => Promise<{ buildId?: string; accepted?: boolean } | void> | void;
   sourceDelivery?: SourceDeliveryService | null;
+  mintStatusToken?: (issueNumber: number) => string;
   log?: {
     warn: (context: object, message: string) => void;
     error: (context: object, message: string) => void;
@@ -1031,6 +1032,7 @@ export async function registerCreatorCodeRoutes(
      * Publish click itself as the confirmation (no separate checkbox).
      */
     attestation: z.literal(true),
+    summary: z.string().trim().max(1024).optional(),
   });
 
   /**
@@ -1156,6 +1158,7 @@ export async function registerCreatorCodeRoutes(
           files,
           mode: parsed.data.mode,
           ...(kitEngineRef ? { kitEngineRef } : {}),
+          ...(parsed.data.summary ? { summary: parsed.data.summary } : {}),
           authorship,
           actor: 'creator',
         });
@@ -1211,7 +1214,6 @@ export async function registerCreatorCodeRoutes(
       if (isLiveAgentRound(record)) {
         return reply.status(409).send({ error: 'agent_round', message: 'an agent is actively building this round' });
       }
-      const activeRecord = roundIsClosed(record) ? await openManualRound(store, record, slug) : record;
 
       const parsed = RevertInputSchema.safeParse(request.body ?? {});
       if (!parsed.success) {
@@ -1244,6 +1246,8 @@ export async function registerCreatorCodeRoutes(
       if (files.length === 0) {
         return reply.status(400).send({ error: `target version ${targetVersion} contains no source files` });
       }
+
+      const activeRecord = roundIsClosed(record) ? await openManualRound(store, record, slug) : record;
 
       let kitEngineRef: string | undefined = targetManifest.kitEngineRef;
       if (options.objectStore) {
@@ -1279,6 +1283,7 @@ export async function registerCreatorCodeRoutes(
           mode,
           ...(kitEngineRef ? { kitEngineRef } : {}),
           authorship: 'owner',
+          summary: `Reverted to build ${targetVersion}`,
           actor: 'creator',
         });
         if (outcome.accepted) {
@@ -1288,10 +1293,12 @@ export async function registerCreatorCodeRoutes(
             .catch(() => {});
         }
         options.invalidateStatusCache?.(activeRecord.issueNumber);
+        const token = options.mintStatusToken?.(activeRecord.issueNumber);
         return reply.send({
           ...outcome,
           targetVersion,
           ...(activeRecord.issueNumber !== record.issueNumber ? { roundOpened: activeRecord.issueNumber } : {}),
+          ...(token ? { token } : {}),
         });
       } catch (error) {
         if (error instanceof SourceDeliveryValidationError || error instanceof InvalidUploadError) {

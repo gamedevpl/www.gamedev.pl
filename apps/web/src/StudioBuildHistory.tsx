@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
 import { formatRelativeTime } from './relativeTime.js';
+import { fetchGameBuilds } from './studioApi.js';
 import { revertGameVersion, type RecentBuild, type SubmissionStatus } from './submissionApi.js';
 
 // Not 'in_review': the gate already resolved, it's waiting on platform review.
@@ -26,16 +27,25 @@ export function StudioBuildHistory({
   status: SubmissionStatus;
   onSelectPreviewVersion?: (version: string | null) => void;
   activePreviewVersion?: string | null;
-  onReverted?: (version: string) => void;
+  onReverted?: (result: { version: string; token?: string; roundOpened?: number }) => void;
 }) {
   const { t, i18n } = useTranslation();
   const [expandedBuildVersion, setExpandedBuildVersion] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [extraBuilds, setExtraBuilds] = useState<RecentBuild[] | null>(null);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [revertingVersion, setRevertingVersion] = useState<string | null>(null);
   const [revertError, setRevertError] = useState<string | null>(null);
   const [revertSuccess, setRevertSuccess] = useState<string | null>(null);
 
-  const builds = status.recentBuilds ?? [];
+  const statusBuilds = status.recentBuilds ?? [];
+  const builds = extraBuilds ?? statusBuilds;
+
+  useEffect(() => {
+    // Reset extra builds when game / status changes
+    setExtraBuilds(null);
+  }, [status.slug]);
+
   if (builds.length === 0) return null;
 
   const live = isBuildLive(status);
@@ -44,6 +54,21 @@ export function StudioBuildHistory({
 
   const toggleExpand = (version: string) => {
     setExpandedBuildVersion((prev) => (prev === version ? null : version));
+  };
+
+  const handleToggleShowAll = async () => {
+    if (!showAll && status.slug && totalCount > builds.length && !extraBuilds) {
+      setLoadingOlder(true);
+      try {
+        const res = await fetchGameBuilds(status.slug, { limit: 100 });
+        setExtraBuilds(res.builds);
+      } catch {
+        // Fall back to showing whatever we already have
+      } finally {
+        setLoadingOlder(false);
+      }
+    }
+    setShowAll((prev) => !prev);
   };
 
   const handleRevert = async (build: RecentBuild) => {
@@ -57,9 +82,13 @@ export function StudioBuildHistory({
     setRevertSuccess(null);
 
     try {
-      await revertGameVersion(slug, build.version);
+      const outcome = await revertGameVersion(slug, build.version);
       setRevertSuccess(t('studioPanel.buildHistory.revertSuccess', { version: build.version }));
-      onReverted?.(build.version);
+      onReverted?.({
+        version: build.version,
+        token: outcome.token,
+        roundOpened: outcome.roundOpened,
+      });
     } catch (err) {
       setRevertError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -206,9 +235,16 @@ export function StudioBuildHistory({
         })}
       </ul>
 
-      {builds.length > DEFAULT_INITIAL_LIMIT ? (
-        <button type="button" className="studio-build-history-toggle-all" onClick={() => setShowAll((prev) => !prev)}>
-          {t(showAll ? 'studioPanel.buildHistory.showLess' : 'studioPanel.buildHistory.showAll')}
+      {totalCount > DEFAULT_INITIAL_LIMIT || builds.length > DEFAULT_INITIAL_LIMIT ? (
+        <button
+          type="button"
+          className="studio-build-history-toggle-all"
+          disabled={loadingOlder}
+          onClick={() => void handleToggleShowAll()}
+        >
+          {loadingOlder
+            ? t('studioPanel.loading')
+            : t(showAll ? 'studioPanel.buildHistory.showLess' : 'studioPanel.buildHistory.showAll')}
         </button>
       ) : null}
     </div>

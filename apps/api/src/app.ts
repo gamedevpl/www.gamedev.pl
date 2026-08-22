@@ -759,6 +759,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // TA-01: built unconditionally (the Vertex client is lazy); TAB_COMPLETE gates it.
     tabCompleter: options.tabCompleter ?? new VertexTabCompleter(),
     tabCompleteGate: createTabCompleteGate({ store, logWarn: (payload, msg) => app.log.warn(payload, msg) }),
+    mintStatusToken: submissionTokenSecret ? (issueNumber) => mintToken(issueNumber, submissionTokenSecret) : undefined,
     ...options.creatorCodeRoutes,
   });
 

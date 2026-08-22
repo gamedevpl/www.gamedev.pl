@@ -2,13 +2,14 @@ import type {
   AssistLane,
   AutonomyMode,
   BuilderKind,
+  StudioBuildsResponse,
   StudioGame,
   StudioGamesResponse,
   StudioHealthResponse,
   StudioScorecard,
 } from '@gamedevpl/contract';
 
-export type { StudioGame, StudioGamesResponse, StudioHealthResponse, StudioScorecard };
+export type { StudioBuildsResponse, StudioGame, StudioGamesResponse, StudioHealthResponse, StudioScorecard };
 import type { FeedbackContext } from './submissionApi.js';
 
 export type { AssistLane };
@@ -469,4 +470,21 @@ export async function setGameAutonomy(slug: string, mode: AutonomyMode): Promise
     await throwResponseError(response);
   }
   return ((await response.json()) as { mode: AutonomyMode }).mode;
+}
+
+export async function fetchGameBuilds(
+  slug: string,
+  options?: { limit?: number; offset?: number },
+): Promise<StudioBuildsResponse> {
+  const params = new URLSearchParams();
+  if (options?.limit) params.set('limit', String(options.limit));
+  if (options?.offset) params.set('offset', String(options.offset));
+  const query = params.toString() ? `?${params.toString()}` : '';
+  const response = await fetch(`${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/builds${query}`, {
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  return (await response.json()) as StudioBuildsResponse;
 }
