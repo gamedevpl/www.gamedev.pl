@@ -118,11 +118,19 @@ import { runSlugBackfill, settleSlugClaim } from './slug-backfill.js';
 import {
   DELETED_ACCOUNT_UID,
   isStudioOrigin,
+  type AgentKeysStore,
+  type BuildLogStore,
   type BuildPreviewSummary,
   type BuildShotSummary,
   type CreatorMessageOrigin,
+  type DispatchStore,
+  type IdentityStore,
+  type PublicationStore,
+  type QuotaStore,
+  type RoundsStore,
   type Store,
   type SubmissionRecord,
+  type SubmissionStore,
 } from './store.js';
 import {
   CREATOR_FEEDBACK_MARKER,
@@ -143,6 +151,23 @@ import { normalizeAtIntake, type IntakeText } from './localize-intake.js';
 import { createTranslatorFromEnv, normalizeLocale, type Translator } from './translate.js';
 import { isVariantWidth } from './image-variants.js';
 import { logModerationRejection } from './moderation-metrics.js';
+
+/**
+ * The store slices `registerSubmissionRoutes` actually reaches into — every domain this
+ * one 5000+ line function touches, named so the Phase 3 decomposition target is visible
+ * as a type rather than left to be re-derived from a grep. Not yet the type of
+ * `SubmissionRoutesOptions.store` itself: this file forwards `store` on to
+ * agent-channel/mcp-server/notify/the gate factories, which still want the wide `Store`
+ * -- narrowing those is Phase 3, not this file's edit.
+ */
+export type SubmissionRoutesStore = IdentityStore &
+  RoundsStore &
+  DispatchStore &
+  SubmissionStore &
+  BuildLogStore &
+  PublicationStore &
+  QuotaStore &
+  AgentKeysStore;
 
 // Base64 PNG, no data: prefix — same shape as a playtest screenshot.
 const MAX_SHOT_BASE64_CHARS = Math.ceil((MAX_SHOT_BYTES * 4) / 3) + 1024;
@@ -318,7 +343,7 @@ function revisionOriginOf(message: { origin?: CreatorMessageOrigin }): 'agent' |
 
 // Validates and persists a base64 PNG as a build shot.
 async function storeCreatorImage(
-  store: Store,
+  store: BuildLogStore,
   issueNumber: number,
   pngBase64: string | undefined,
   label: 'creator-playtest' | 'creator-reference',
@@ -340,7 +365,7 @@ async function storeCreatorImage(
 }
 
 async function storeCreatorPlaytestShot(
-  store: Store,
+  store: BuildLogStore,
   issueNumber: number,
   pngBase64: string | undefined,
 ): Promise<string | undefined> {
@@ -349,7 +374,7 @@ async function storeCreatorPlaytestShot(
 
 // Persists up to MAX_REFERENCE_IMAGES images; also returns validated bytes for chat.
 async function storeCreatorReferenceImages(
-  store: Store,
+  store: BuildLogStore,
   issueNumber: number,
   pngBase64List: string[] | undefined,
 ): Promise<{ ids: string[]; images: ChatAgentImage[] }> {
@@ -395,6 +420,9 @@ export interface SubmissionRoutesOptions {
   githubClient?: GitHubClient;
   fetchImpl?: typeof fetch;
   now?: () => number;
+  // The real need is SubmissionRoutesStore, defined above; kept as the full Store
+  // because forwarding to agent-channel/mcp-server/notify/the gate factories still
+  // wants the wide type -- narrowing those is Phase 3, not this file's edit.
   store?: Store;
   dailySubmissionQuota?: number;
   /**

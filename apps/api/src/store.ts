@@ -220,43 +220,53 @@ export type {
   RotateRefreshTokenResult,
 };
 
-export interface Store {
+export interface IdentityStore {
   getUser(uid: string): Promise<User | null>;
+
   /** Public profile lookup by unique handle (case-insensitive). */
   getUserByHandle(handle: string): Promise<User | null>;
+
   /**
    * Raw reservation row, including cooldown-held released handles. Availability checks
    * need this — `getUserByHandle` deliberately hides released rows.
    */
   getHandleReservation(handle: string): Promise<HandleRecord | null>;
+
   /**
    * Claim or rename a handle. Transactional against the `handles` reservation so two
    * creators cannot both win the same name.
    */
   claimHandle(uid: string, handle: string, at: string): Promise<ClaimHandleResult>;
+
   /** Update profileName / bio / avatarMode. Does not touch the handle. */
   updateCreatorProfile(
     uid: string,
     patch: { profileName?: string; bio?: string; avatarMode?: AvatarMode },
   ): Promise<User | null>;
+
   /**
    * Drop every handle reservation this uid holds (active or cooldown) and clear profile
    * fields on the user. Used by the account-erasure path so a deleted account cannot
    * keep a handle forever.
    */
   releaseCreatorHandles(uid: string, at: string): Promise<string[]>;
+
   /**
    * Remove the account record and every credential/subscription tied to it. Published
    * submissions are retained under a non-personal platform owner; unfinished ones are
    * abandoned and likewise unlinked. Player contributions are erased separately first.
    */
   deleteAccountIdentity(uid: string, at: string): Promise<AccountIdentityDeletionResult>;
+
   /** Mark an account for later erasure without removing any data yet. */
   scheduleAccountDeletion(uid: string, requestedAt: string, scheduledFor: string): Promise<User | null>;
+
   /** Remove a pending deletion marker, normally when the person signs in again. */
   cancelAccountDeletion(uid: string): Promise<boolean>;
+
   /** Accounts whose recovery window has elapsed, oldest deadline first. */
   listAccountsDueForDeletion(at: string, limit: number): Promise<User[]>;
+
   /**
    * Find the single account holding this email, or null.
    *
@@ -271,16 +281,89 @@ export interface Store {
    * identity provider says it verified — see the callers.
    */
   findUserByEmail(email: string): Promise<User | null>;
+
   upsertUser(userData: Partial<User> & { uid: string }): Promise<User>;
+
   /** Set (or clear, with null) the global email-unsubscribe timestamp for a user. */
   setEmailUnsubscribed(uid: string, at: string | null): Promise<void>;
+
   /** Set (or clear, with null) the weekly-digest opt-out for a user. */
   setDigestOptOut(uid: string, at: string | null): Promise<void>;
-  createSubmission(issueNumber: number, ownerUid: string, title: string): Promise<SubmissionRecord>;
-  getSubmission(issueNumber: number): Promise<SubmissionRecord | null>;
-  setSubmissionNotifiedStatus(issueNumber: number, status: SubmissionStatus): Promise<void>;
-  /** Records the status last derived from GitHub, whether or not it notified anyone. */
-  setSubmissionLastStatus(issueNumber: number, status: SubmissionStatus): Promise<void>;
+}
+
+export interface RoundsStore {
+  /**
+   * Advances `roundGeneration` without a state change — used when a new round starts
+   * (creator feedback / operator retry) so the mint that follows binds to the new
+   * generation. Returns the new value, or null when the job is gone.
+   */
+  bumpRoundGeneration(issueNumber: number): Promise<number | null>;
+
+  /**
+   * Returns the job's active generation, initializing it to `1` when absent.
+   *
+   * Used when minting a round-scoped channel token for a legacy job that has never
+   * closed a round under the new model: the mint must write the field it claims, or
+   * validation rejects the brand-new key (`active === undefined`).
+   */
+  ensureRoundGeneration(issueNumber: number): Promise<number | null>;
+
+  // Clears stale agentEndedAt/lastAgentSignalAt/lastAgentPresence without touching round counters.
+  clearAgentEnded(issueNumber: number): Promise<void>;
+
+  // Fixes the round's kit engine and returns it; first caller wins.
+  // `replace` overrides the pin: kit_outdated recovery, or a kit gone.
+  pinRoundKitEngineRef(issueNumber: number, engineRef: string, replace?: boolean): Promise<string | null>;
+
+  /** Records the agent backend's last reported state, for stall detection. */
+  setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void>;
+
+  /**
+   * Records which builder owns the current round and updates the game's default.
+   * Starting a new round also resets per-round counters (deliveries, stored seed).
+   */
+  setRoundBuilder(issueNumber: number, builder: BuilderKind, options?: { resetRoundBudget?: boolean }): Promise<void>;
+
+  requestBuilderHandoff(
+    issueNumber: number,
+    to: BuilderKind,
+    requestedAt: string,
+    awaitsAgentAck?: boolean,
+  ): Promise<boolean>;
+
+  acknowledgeBuilderHandoff(issueNumber: number, acknowledgedAt: string): Promise<BuilderHandoff | null>;
+
+  clearBuilderHandoff(issueNumber: number): Promise<void>;
+
+  /** Stores (or clears) the generated seed draft on a self-build job. */
+  setSubmissionSeed(issueNumber: number, seed: SeedFiles | null): Promise<void>;
+
+  /** Marks seed generation pending / unavailable (available is set via {@link setSubmissionSeed}). */
+  setSeedStatus(issueNumber: number, status: 'pending' | 'unavailable'): Promise<void>;
+
+  // Increments and returns how many seed regenerations this job has asked for.
+  incrementSeedRegenerations(issueNumber: number): Promise<number>;
+
+  /** Increments and returns the per-round sources-delivery count. */
+  incrementRoundDeliveryCount(issueNumber: number): Promise<number>;
+
+  // Bump typecheck-preflight refusal count for this round.
+  incrementRoundTypecheckPreflightRefusals(issueNumber: number): Promise<number>;
+
+  // Store or clear bypass diagnostics after the refusal cap.
+  setRoundTypecheckPreflightBypassErrors(issueNumber: number, message: string | null): Promise<void>;
+
+  // Bump submit attempts (every deliver call that reaches preflight).
+  incrementRoundSubmitAttempts(issueNumber: number): Promise<number>;
+
+  // Bump audio or symbols preflight refusal count.
+  incrementRoundPreflightRefusal(issueNumber: number, kind: 'audio' | 'symbols'): Promise<number>;
+
+  // Record that a gate metric was logged for this version/status key.
+  setRoundLastGateMetricKey(issueNumber: number, key: string): Promise<void>;
+}
+
+export interface DispatchStore {
   /**
    * Moves a job to `transition.to`, stamping `stateSince` and appending to the history.
    *
@@ -290,75 +373,27 @@ export interface Store {
    * write (see `transitionClosesRound`).
    */
   recordJobTransition(issueNumber: number, transition: JobTransition): Promise<boolean>;
-  /**
-   * Advances `roundGeneration` without a state change — used when a new round starts
-   * (creator feedback / operator retry) so the mint that follows binds to the new
-   * generation. Returns the new value, or null when the job is gone.
-   */
-  bumpRoundGeneration(issueNumber: number): Promise<number | null>;
-  /**
-   * Returns the job's active generation, initializing it to `1` when absent.
-   *
-   * Used when minting a round-scoped channel token for a legacy job that has never
-   * closed a round under the new model: the mint must write the field it claims, or
-   * validation rejects the brand-new key (`active === undefined`).
-   */
-  ensureRoundGeneration(issueNumber: number): Promise<number | null>;
-  // Clears stale agentEndedAt/lastAgentSignalAt/lastAgentPresence without touching round counters.
-  clearAgentEnded(issueNumber: number): Promise<void>;
-  // Fixes the round's kit engine and returns it; first caller wins.
-  // `replace` overrides the pin: kit_outdated recovery, or a kit gone.
-  pinRoundKitEngineRef(issueNumber: number, engineRef: string, replace?: boolean): Promise<string | null>;
-  /** Records the agent backend's last reported state, for stall detection. */
-  setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void>;
-  /**
-   * Records which builder owns the current round and updates the game's default.
-   * Starting a new round also resets per-round counters (deliveries, stored seed).
-   */
-  setRoundBuilder(issueNumber: number, builder: BuilderKind, options?: { resetRoundBudget?: boolean }): Promise<void>;
-  requestBuilderHandoff(
-    issueNumber: number,
-    to: BuilderKind,
-    requestedAt: string,
-    awaitsAgentAck?: boolean,
-  ): Promise<boolean>;
-  acknowledgeBuilderHandoff(issueNumber: number, acknowledgedAt: string): Promise<BuilderHandoff | null>;
-  clearBuilderHandoff(issueNumber: number): Promise<void>;
-  /** Stores (or clears) the generated seed draft on a self-build job. */
-  setSubmissionSeed(issueNumber: number, seed: SeedFiles | null): Promise<void>;
-  /** Marks seed generation pending / unavailable (available is set via {@link setSubmissionSeed}). */
-  setSeedStatus(issueNumber: number, status: 'pending' | 'unavailable'): Promise<void>;
-  // Increments and returns how many seed regenerations this job has asked for.
-  incrementSeedRegenerations(issueNumber: number): Promise<number>;
-  /** Increments and returns the per-round sources-delivery count. */
-  incrementRoundDeliveryCount(issueNumber: number): Promise<number>;
-  // Bump typecheck-preflight refusal count for this round.
-  incrementRoundTypecheckPreflightRefusals(issueNumber: number): Promise<number>;
-  // Store or clear bypass diagnostics after the refusal cap.
-  setRoundTypecheckPreflightBypassErrors(issueNumber: number, message: string | null): Promise<void>;
-  // Bump submit attempts (every deliver call that reaches preflight).
-  incrementRoundSubmitAttempts(issueNumber: number): Promise<number>;
-  // Bump audio or symbols preflight refusal count.
-  incrementRoundPreflightRefusal(issueNumber: number, kind: 'audio' | 'symbols'): Promise<number>;
-  // Record that a gate metric was logged for this version/status key.
-  setRoundLastGateMetricKey(issueNumber: number, key: string): Promise<void>;
+
   /** Appends a dispatch ref, recording which backend is building this job and where. */
   recordDispatch(
     issueNumber: number,
     dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string; credentialRef?: string },
   ): Promise<void>;
+
   /**
    * Appends one billed thing to a job's ledger. Best-effort by contract: a cost that
    * fails to record must never fail the work it was recording, because the alternative
    * is dropping a build to keep the books.
    */
   recordJobCost(issueNumber: number, entry: JobCostEntry): Promise<void>;
+
   /**
    * Records what a seeded build's draft achieved. Written once, after dispatch, because
    * that is the first moment both halves are known: the generator says whether it
    * compiles, and only the backend can say whether it was placed.
    */
   recordSeedOutcome(issueNumber: number, outcome: JobSeedOutcome): Promise<void>;
+
   /**
    * Every seed outcome recorded at or after `since`, newest first.
    *
@@ -368,14 +403,17 @@ export interface Store {
    * quietly hide the successes and report degradation that is not happening.
    */
   listSeedOutcomesSince(since: string): Promise<JobSeedOutcome[]>;
+
   /**
    * Overwrites the credits on an existing `agent_session` ledger entry identified by
    * `ref`, once the vendor has reported real usage. No-op when no matching entry exists.
    * Best-effort like {@link recordJobCost}: must never fail the poll that discovered it.
    */
   setJobCostCredits(issueNumber: number, ref: string, credits: number): Promise<void>;
+
   // Token-billed twin of setJobCostCredits; drops the credit placeholder.
   setJobCostTokens(issueNumber: number, ref: string, tokens: AgentSessionTokens): Promise<void>;
+
   /**
    * Records where a dispatched job's work actually lives, once the backend can say.
    *
@@ -384,6 +422,7 @@ export interface Store {
    * session, and counting it as one would inflate every per-build cost figure.
    */
   setDispatchWorkspace(issueNumber: number, workspace: string): Promise<void>;
+
   /**
    * Forgets a released seed branch, so nothing tries to delete it twice.
    *
@@ -392,6 +431,7 @@ export interface Store {
    * against the one credential that also dispatches.
    */
   clearDispatchSeedWorkspace(issueNumber: number): Promise<void>;
+
   /**
    * Allocates a job id of our own.
    *
@@ -406,8 +446,23 @@ export interface Store {
    * side by side without a migration or a discriminator column.
    */
   allocateJobId(): Promise<number>;
+
+  claimDispatchReaperAttempt(issueNumber: number, at: string): Promise<boolean>;
+}
+
+export interface SubmissionStore {
+  createSubmission(issueNumber: number, ownerUid: string, title: string): Promise<SubmissionRecord>;
+
+  getSubmission(issueNumber: number): Promise<SubmissionRecord | null>;
+
+  setSubmissionNotifiedStatus(issueNumber: number, status: SubmissionStatus): Promise<void>;
+
+  /** Records the status last derived from GitHub, whether or not it notified anyone. */
+  setSubmissionLastStatus(issueNumber: number, status: SubmissionStatus): Promise<void>;
+
   /** Records the game directory a submission is building, once it is known. */
   setSubmissionSlug(issueNumber: number, slug: string): Promise<void>;
+
   /**
    * Updates the name shown on the shelf, in the studio, and in notifications.
    *
@@ -417,50 +472,31 @@ export interface Store {
    * (and the operator backfill) adopt the SPEC title so the shelf matches the game.
    */
   setSubmissionTitle(issueNumber: number, title: string): Promise<void>;
+
   /** Records the candidate version a delivery just stored, for the preview to read. */
   setSubmissionDeliveredVersion(issueNumber: number, version: string): Promise<void>;
+
   /** Latest playable version for Studio (preview or publish). */
   setSubmissionPreviewVersion(issueNumber: number, version: string): Promise<void>;
+
   /** Counts a send-back for finishing without delivering. Returns the new total. */
   recordDeliveryNudge(issueNumber: number): Promise<number>;
+
   /** Stamps the moment a submission was first seen published (for build-time stats). */
   setSubmissionPublishedAt(issueNumber: number, at: string): Promise<void>;
+
   /** Marks a submission abandoned by its creator. */
   setSubmissionAbandoned(issueNumber: number, at: string): Promise<void>;
+
   /** Turns the creator's shared draft link on (a timestamp) or off (null). */
   setDraftShared(issueNumber: number, at: string | null): Promise<void>;
-  /**
-   * Reads what is currently published for a slug, or null when nothing ever was.
-   *
-   * This — not the presence of an object in the bucket, and not a merge having happened —
-   * is publication authority. Keeping it here is what makes a takedown immediate and
-   * total: one write withdraws a game, and no leftover storage can contradict it.
-   */
-  getPublication(slug: string): Promise<PublicationRecord | null>;
-  /** Publishes (or re-publishes) a slug at a specific stored version. */
-  setPublication(record: PublicationRecord): Promise<void>;
-  /**
-   * Withdraws a game.
-   *
-   * Separate from `setPublication` because a takedown is not a publish with different
-   * arguments: it must record *why* and *when*, which is what a DSA statement of reasons
-   * is written from, and it must be impossible to perform by accident while editing a
-   * version pointer.
-   */
-  takedownPublication(slug: string, reason: string, at: string): Promise<boolean>;
-  archivePublication(slug: string, reason: string, at: string): Promise<boolean>;
-  /**
-   * Records or updates the publication's health re-gate (request, verdict, and
-   * notified-at are all patches of the same record — see PublicationHealthCheck).
-   * False when the slug has no publication to attach it to.
-   */
-  setPublicationHealthCheck(slug: string, check: PublicationHealthCheck): Promise<boolean>;
-  /** Every slug currently live — the input the snapshot bake reads. */
-  listPublications(): Promise<PublicationRecord[]>;
+
   /** Records the creator's language, so the agent can report progress in it. */
   setSubmissionLocale(issueNumber: number, locale: string): Promise<void>;
+
   /** Records how many QA answers reached the agent with this submission. */
   setSubmissionClarificationCount(issueNumber: number, count: number): Promise<void>;
+
   /**
    * Persists the concept the agent will build from (brief.spec / brief.qa).
    * Written once at submission create; not cleared on round boundaries — the
@@ -470,12 +506,89 @@ export interface Store {
     issueNumber: number,
     brief: { spec: string; qa: string[]; specIsSystemGenerated?: boolean },
   ): Promise<void>;
+
+  /** Most recently published submissions, newest first — the build-time sample. */
+  listRecentlyPublished(limit: number): Promise<SubmissionRecord[]>;
+
+  /**
+   * Resolves a slug back to its submission — the lookup behind shareable draft
+   * links. Returns null for a slug no submission has claimed.
+   *
+   * **Newest first when more than one job claims the slug**, which is now the normal
+   * case rather than a curiosity: an improvement is a new job on an existing game, so a
+   * published game plus an in-flight improvement is two submissions with one slug.
+   */
+  getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null>;
+
+  /**
+   * Every submission that claims this slug, newest first. A published game plus an
+   * in-flight improvement is the normal case — two jobs, one slug.
+   */
+  listSubmissionsBySlug(slug: string): Promise<SubmissionRecord[]>;
+
+  /**
+   * The *published* submission for a slug, ignoring in-flight work on the same game.
+   *
+   * Separate from the lookup above because "who owns this game" and "what is the latest
+   * job touching it" stopped being the same question the moment improvements became new
+   * jobs. Asking the newest for ownership would mean a game with an improvement running
+   * reads as unpublished — and anything that treats unpublished as "no longer live"
+   * would quietly retract work it had just commissioned.
+   */
+  getPublishedSubmissionBySlug(slug: string): Promise<SubmissionRecord | null>;
+
+  /**
+   * Submissions the sweep should still check: those not yet in a terminal,
+   * already-notified state (published / needs_changes recorded as last-notified).
+   */
+  listActiveSubmissions(): Promise<SubmissionRecord[]>;
+
+  /**
+   * Submissions a creator can still see that have no slug — the backfill's work list.
+   *
+   * Every submission has been given a slug at creation since the studio started
+   * addressing games by name, so this is legacy records plus anything that crashed in
+   * the window between the record being written and its slug being set. Oldest first,
+   * so a bounded run works through the backlog in a stable order.
+   *
+   * Abandoned builds are left out deliberately. The shelf hides them, so they are never
+   * addressed by anyone, and minting names for them would reserve every one against the
+   * games that might want it later.
+   */
+  listSubmissionsMissingSlug(): Promise<SubmissionRecord[]>;
+
+  /**
+   * Delivered (or published) games whose shelf title may still be the truncated prompt
+   * from before the naming step — the title-backfill's work list.
+   *
+   * A delivery writes the SPEC title onto the record now, so this is the backlog of
+   * games that arrived before that. Needs a slug and a delivered version so the SPEC
+   * can be read from the games store. Abandoned builds are left out for the same
+   * reason as {@link listSubmissionsMissingSlug}.
+   */
+  listSubmissionsWithDelivery(): Promise<SubmissionRecord[]>;
+
+  /**
+   * Every submission a creator owns, newest first. Backs the "my games" rail, so a
+   * creator finds their work-in-progress without having saved the tracking link
+   * (and on a device that never had it in localStorage).
+   *
+   * Omit `limit` to read the full job history; shelf endpoints collapse to distinct
+   * games before applying their own ceiling — a raw job limit is not a game limit.
+   */
+  listSubmissionsByOwner(ownerUid: string, opts?: { limit?: number }): Promise<SubmissionRecord[]>;
+
+  listQueuedSubmissions(): Promise<SubmissionRecord[]>;
+}
+
+export interface BuildLogStore {
   /** Appends a progress event. Returns it with its assigned id and timestamp. */
   appendBuildEvent(
     issueNumber: number,
     event: Omit<BuildEvent, 'id' | 'createdAt'> & { createdAt?: string },
     options?: { preserveEnded?: boolean },
   ): Promise<BuildEvent>;
+
   /**
    * Refreshes {@link SubmissionRecord.lastAgentSignalAt} without writing a chat event.
    * Used by MCP presence heartbeats so kit-browse activity clears `no_agent_yet` / quiet
@@ -490,24 +603,31 @@ export interface Store {
     presence?: { key: string },
     options?: { preserveEnded?: boolean },
   ): Promise<void>;
+
   /**
    * Marks that the agent finished iterating this round (MCP `end`). Idempotent.
    * Does not bump generation or stop the channel — creator handoff does that.
    */
   markAgentEnded(issueNumber: number, at?: string, by?: AgentEndedBy): Promise<void>;
+
   /** Agent progress events for a build, newest first. */
   listBuildEvents(issueNumber: number, opts?: { limit?: number }): Promise<BuildEvent[]>;
+
   /** How many events a build has recorded — the cap that bounds a runaway agent. */
   countBuildEvents(issueNumber: number): Promise<number>;
+
   /** Stores a screenshot the agent pushed straight to us, before any commit. */
   appendBuildShot(
     issueNumber: number,
     shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string },
   ): Promise<BuildShot>;
+
   /** A build's pushed screenshots, newest first. Bytes are omitted unless asked for. */
   listBuildShots(issueNumber: number, opts?: { limit?: number }): Promise<BuildShotSummary[]>;
+
   /** One pushed screenshot, bytes included — the read behind serving it. */
   getBuildShot(issueNumber: number, id: string): Promise<BuildShot | null>;
+
   /** How many screenshots a build has pushed — the cap that bounds a runaway agent. */
   countBuildShots(issueNumber: number): Promise<number>;
 
@@ -524,6 +644,7 @@ export interface Store {
 
   /** Drops all but the newest `keep` previews, returning how many were removed. */
   pruneBuildPreviews(issueNumber: number, keep: number): Promise<number>;
+
   /**
    * Queues a creator change request for the agent to collect. `origin` records who
    * typed it — omit it for the Studio composer, pass `agent` when an agent relayed the
@@ -540,8 +661,10 @@ export interface Store {
     text: string,
     opts?: { origin?: CreatorMessageOrigin; delivered?: boolean; textLocalized?: string; locale?: string },
   ): Promise<CreatorMessage>;
+
   // Undelivered messages, oldest first — the agent's inbox. Never a 'studio' row.
   listPendingCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
+
   /**
    * Every creator message on a build, delivered or not, oldest first. The status page
    * reads this to echo the creator's own revision history back to them: on jobs without
@@ -549,135 +672,149 @@ export interface Store {
    * the only durable record of what they asked for.
    */
   listCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
+
   /** Marks messages collected, so the agent is not handed the same request twice. */
   markCreatorMessagesDelivered(issueNumber: number, ids: string[]): Promise<void>;
+}
+
+export interface PublicationStore {
+  /**
+   * Reads what is currently published for a slug, or null when nothing ever was.
+   *
+   * This — not the presence of an object in the bucket, and not a merge having happened —
+   * is publication authority. Keeping it here is what makes a takedown immediate and
+   * total: one write withdraws a game, and no leftover storage can contradict it.
+   */
+  getPublication(slug: string): Promise<PublicationRecord | null>;
+
+  /** Publishes (or re-publishes) a slug at a specific stored version. */
+  setPublication(record: PublicationRecord): Promise<void>;
+
+  /**
+   * Withdraws a game.
+   *
+   * Separate from `setPublication` because a takedown is not a publish with different
+   * arguments: it must record *why* and *when*, which is what a DSA statement of reasons
+   * is written from, and it must be impossible to perform by accident while editing a
+   * version pointer.
+   */
+  takedownPublication(slug: string, reason: string, at: string): Promise<boolean>;
+
+  archivePublication(slug: string, reason: string, at: string): Promise<boolean>;
+
+  /**
+   * Records or updates the publication's health re-gate (request, verdict, and
+   * notified-at are all patches of the same record — see PublicationHealthCheck).
+   * False when the slug has no publication to attach it to.
+   */
+  setPublicationHealthCheck(slug: string, check: PublicationHealthCheck): Promise<boolean>;
+
+  /** Every slug currently live — the input the snapshot bake reads. */
+  listPublications(): Promise<PublicationRecord[]>;
+
+  /**
+   * Every slug that has a `games/{slug}` entry — including games whose document does
+   * not exist but which have subcollections (votes, feedback, scorecard).
+   *
+   * Exists for the erase path. A vote's uid is its *document id* and not a field, so
+   * unlike feedback there is no query that finds one user's votes across games; the only
+   * way is to look under each game. Bounded by the catalog, so a walk is affordable.
+   */
+  listGameSlugs(): Promise<string[]>;
+}
+
+export interface TelemetryStore {
   /**
    * Appends validated play-session events. Date-partitioned so a TTL policy can
    * expire a whole day at once and the aggregation job reads one partition rather
    * than fanning out across every submission.
    */
   appendTelemetryEvents(dateStr: string, events: TelemetryEvent[]): Promise<void>;
+
   /** One day's events for a game — the read the aggregation job (IL-2) will use. */
   listTelemetryEvents(dateStr: string, opts?: { slug?: string; limit?: number }): Promise<TelemetryEvent[]>;
+
   /** Appends visit-level events to one day's partition. */
   appendVisitEvents(dateStr: string, events: VisitEvent[]): Promise<void>;
+
   /** One day's visit events — funnel, depth, and acquisition reads. */
   listVisitEvents(
     dateStr: string,
     opts?: { visitId?: string; limit?: number; type?: VisitEvent['type']; excludeType?: VisitEvent['type'] },
   ): Promise<VisitEvent[]>;
+}
+
+export interface QuotaStore {
   /** Today's usage counters for a user, without incrementing anything. */
   getUsage(uid: string, dateStr: string): Promise<UsageCounters>;
-  /** Most recently published submissions, newest first — the build-time sample. */
-  listRecentlyPublished(limit: number): Promise<SubmissionRecord[]>;
-  /**
-   * Resolves a slug back to its submission — the lookup behind shareable draft
-   * links. Returns null for a slug no submission has claimed.
-   *
-   * **Newest first when more than one job claims the slug**, which is now the normal
-   * case rather than a curiosity: an improvement is a new job on an existing game, so a
-   * published game plus an in-flight improvement is two submissions with one slug.
-   */
-  getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null>;
-  /**
-   * Every submission that claims this slug, newest first. A published game plus an
-   * in-flight improvement is the normal case — two jobs, one slug.
-   */
-  listSubmissionsBySlug(slug: string): Promise<SubmissionRecord[]>;
-  /**
-   * The *published* submission for a slug, ignoring in-flight work on the same game.
-   *
-   * Separate from the lookup above because "who owns this game" and "what is the latest
-   * job touching it" stopped being the same question the moment improvements became new
-   * jobs. Asking the newest for ownership would mean a game with an improvement running
-   * reads as unpublished — and anything that treats unpublished as "no longer live"
-   * would quietly retract work it had just commissioned.
-   */
-  getPublishedSubmissionBySlug(slug: string): Promise<SubmissionRecord | null>;
-  /**
-   * Submissions the sweep should still check: those not yet in a terminal,
-   * already-notified state (published / needs_changes recorded as last-notified).
-   */
-  listActiveSubmissions(): Promise<SubmissionRecord[]>;
-  /**
-   * Submissions a creator can still see that have no slug — the backfill's work list.
-   *
-   * Every submission has been given a slug at creation since the studio started
-   * addressing games by name, so this is legacy records plus anything that crashed in
-   * the window between the record being written and its slug being set. Oldest first,
-   * so a bounded run works through the backlog in a stable order.
-   *
-   * Abandoned builds are left out deliberately. The shelf hides them, so they are never
-   * addressed by anyone, and minting names for them would reserve every one against the
-   * games that might want it later.
-   */
-  listSubmissionsMissingSlug(): Promise<SubmissionRecord[]>;
-  /**
-   * Delivered (or published) games whose shelf title may still be the truncated prompt
-   * from before the naming step — the title-backfill's work list.
-   *
-   * A delivery writes the SPEC title onto the record now, so this is the backlog of
-   * games that arrived before that. Needs a slug and a delivered version so the SPEC
-   * can be read from the games store. Abandoned builds are left out for the same
-   * reason as {@link listSubmissionsMissingSlug}.
-   */
-  listSubmissionsWithDelivery(): Promise<SubmissionRecord[]>;
-  /**
-   * Every submission a creator owns, newest first. Backs the "my games" rail, so a
-   * creator finds their work-in-progress without having saved the tracking link
-   * (and on a device that never had it in localStorage).
-   *
-   * Omit `limit` to read the full job history; shelf endpoints collapse to distinct
-   * games before applying their own ceiling — a raw job limit is not a game limit.
-   */
-  listSubmissionsByOwner(ownerUid: string, opts?: { limit?: number }): Promise<SubmissionRecord[]>;
-  listQueuedSubmissions(): Promise<SubmissionRecord[]>;
-  claimDispatchReaperAttempt(issueNumber: number, at: string): Promise<boolean>;
+
   checkAndIncrementQuota(
     uid: string,
     dateStr: string,
     limit: number,
     action: keyof UsageCounters,
   ): Promise<{ allowed: boolean; current: number; tier: User['tier'] }>;
+
   /** The stored circuit-breaker, or null when nobody has ever set one. */
   getCreationLimits(): Promise<CreationLimits | null>;
+
   /** Merges a change into the stored breaker and returns the result. */
   setCreationLimits(patch: Partial<Omit<CreationLimits, 'updatedAt'>>, updatedBy: string): Promise<CreationLimits>;
+
   getPublicPlayConfig(): Promise<PublicPlayConfig | null>;
+
   setPublicPlaySlugs(slugs: string[], updatedBy: string): Promise<PublicPlayConfig>;
+
   // Stored curated pool, or null when nobody has set one.
   getFeaturedPoolConfig(): Promise<FeaturedPoolConfig | null>;
+
   setFeaturedPoolSlugs(slugs: string[], updatedBy: string): Promise<FeaturedPoolConfig>;
+
   /** How many submissions everyone together has made on `dateStr`. */
   getGlobalSubmissionCount(dateStr: string): Promise<number>;
+
   // Tab-complete tokens everyone together has spent on `dateStr`.
   getGlobalTabCompleteTokenCount(dateStr: string): Promise<number>;
+
   /**
    * The global counterpart of checkAndIncrementQuota: takes one slot out of the day's
    * shared allowance, or refuses. Transactional for the same reason the per-user
    * version is — a cap that a burst can walk past is not a cap.
    */
   checkAndIncrementGlobalSubmissions(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
+
   /** Same shape for the editing lanes' shared daily allowance of model calls. */
   checkAndIncrementGlobalEdits(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
+
   /** Same shape, for the chat agent's own shared daily allowance. */
   checkAndIncrementGlobalChats(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
+
   // Same shape as chats, but counts tokens for ghost-text completion.
   checkAndIncrementGlobalTabCompleteTokens(
     dateStr: string,
     tokens: number,
     limit: number,
   ): Promise<{ allowed: boolean; current: number }>;
+
   // Reconciles a reservation against real usage — never refused, floors at 0.
   adjustGlobalTabCompleteTokens(dateStr: string, delta: number): Promise<number>;
+
   // Platform rounds everyone together has started on `dateStr`.
   getGlobalManagedBuildCount(dateStr: string): Promise<number>;
+
   // Same shape, for the shared daily ceiling.
   checkAndIncrementGlobalManagedBuilds(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
+}
+
+export interface AccessStore {
   upsertWaitlistEntry(entry: { uid: string; email?: string; name?: string; locale?: string }): Promise<WaitlistEntry>;
+
   getWaitlistEntry(uid: string): Promise<WaitlistEntry | null>;
+
   isWaitlistApproved(uid: string, email?: string): Promise<boolean>;
+
   setWaitlistStatus(uid: string, status: WaitlistStatus): Promise<WaitlistEntry | null>;
+
   /**
    * Operator listing of the closed-beta waitlist.
    *
@@ -687,14 +824,17 @@ export interface Store {
    * filters by status rather than paging.
    */
   listWaitlistEntries(opts?: { status?: WaitlistStatus; limit?: number }): Promise<WaitlistEntry[]>;
+
   /** Cheap count for the console tab badge. Optional status filter. */
   countWaitlistEntries(status?: WaitlistStatus): Promise<number>;
+
   /**
    * Approve / reject / reset by email — including pre-approval before the person has
    * ever visited. Mirrors `npm run beta:approve`: finds an existing row by email, or
    * creates `waitlist/email:<lower>` with the requested status.
    */
   setWaitlistStatusByEmail(email: string, status: WaitlistStatus): Promise<WaitlistEntry>;
+
   // Invite claim becomes membership; keeps requestedAt. See docs/deployment.md.
   recordBetaInviteAdmission(entry: {
     uid: string;
@@ -702,10 +842,17 @@ export interface Store {
     name?: string;
     locale?: string;
   }): Promise<WaitlistEntry>;
+
   createBetaInvite(createdByUid: string): Promise<CreatedBetaInvite>;
+
   listBetaInvites(opts?: { limit?: number }): Promise<BetaInvite[]>;
+
   claimBetaInvite(code: string, uid: string): Promise<ClaimBetaInviteResult>;
+
   revokeBetaInvite(id: string, revokedByUid: string): Promise<BetaInvite | null>;
+}
+
+export interface NotificationsStore {
   /**
    * Idempotent by notification id: a second emit for the same id is a no-op and
    * returns `created: false` (a crashed/re-run sweep can safely re-emit).
@@ -714,36 +861,53 @@ export interface Store {
     uid: string,
     notification: Omit<StoredNotification, 'readAt' | 'emailedAt'> & { createdAt?: string },
   ): Promise<{ created: boolean; notification: StoredNotification }>;
+
   listNotifications(uid: string, opts?: { limit?: number }): Promise<StoredNotification[]>;
+
   markNotificationsRead(uid: string, ids: string[] | 'all'): Promise<void>;
+
   /** Delete notifications by id, or all of them ('all') — the bell's dismiss/clear. */
   deleteNotifications(uid: string, ids: string[] | 'all'): Promise<void>;
+
   /** Stamp emailedAt after a successful send so retries don't re-send. */
   markNotificationEmailed(uid: string, id: string, at?: string): Promise<void>;
+
   /** Upsert a browser push subscription (idempotent by endpoint). */
   savePushSubscription(uid: string, subscription: Omit<PushSubscriptionRecord, 'createdAt'>): Promise<void>;
+
   /** All push subscriptions for a user — the push fan-out sends to each. */
   listPushSubscriptions(uid: string): Promise<PushSubscriptionRecord[]>;
+
   /** Remove a subscription (client unsubscribe, or pruning a dead endpoint). */
   deletePushSubscription(uid: string, endpoint: string): Promise<void>;
+}
+
+export interface SocialStore {
   /** A user's current vote on a game, or null if they have not voted. */
   getVote(slug: string, uid: string): Promise<VoteValue | null>;
+
   /**
    * Casts or changes a vote. Repeating the same value is a no-op; voting the other way
    * flips it. Returns the game's updated aggregate counts.
    */
   castVote(slug: string, uid: string, value: VoteValue): Promise<GameVoteCounts>;
+
   /** Removes a user's vote. Returns the game's updated aggregate counts. */
   clearVote(slug: string, uid: string): Promise<GameVoteCounts>;
+
   /**
    * Follow / unfollow a game. Stored as `games/{slug}/followers/{uid}` beside votes,
    * with the count denormalised onto the game document the same way vote tallies are —
    * a follower count is read on every page view and must not cost a subcollection scan.
    */
   setGameFollow(slug: string, uid: string, at: string): Promise<number>;
+
   clearGameFollow(slug: string, uid: string): Promise<number>;
+
   isFollowingGame(slug: string, uid: string): Promise<boolean>;
+
   countGameFollowers(slug: string): Promise<number>;
+
   /**
    * The uids to notify when a game publishes, newest follower first.
    *
@@ -752,19 +916,151 @@ export interface Store {
    * operator click into an unbounded write burst.
    */
   listGameFollowers(slug: string, opts?: { limit?: number }): Promise<string[]>;
+
   /** A game's aggregate vote counts — the public read, no uid involved. */
   getVoteCounts(slug: string): Promise<GameVoteCounts>;
+
+  /** Appends one already-moderated, already-sanitized feedback row. Returns it with its id. */
+  addPlayerFeedback(slug: string, uid: string, text: string): Promise<PlayerFeedbackRecord>;
+
+  /**
+   * A game's feedback, newest first.
+   *
+   * `limit` bounds the read for the scorecard sweep's theme extraction, so one game with
+   * thousands of notes cannot dominate a nightly job. Unbounded without it, because the
+   * erase preview needs every row it is about to delete.
+   */
+  listPlayerFeedback(slug: string, opts?: { limit?: number }): Promise<PlayerFeedbackRecord[]>;
+
+  /**
+   * How many feedback rows a game has, without reading them.
+   *
+   * A count rather than a length: the scorecard sweep needs this for every game it
+   * touches, and `listPlayerFeedback().length` would bill one document read per row per
+   * night. Firestore's aggregate query is billed per index scan instead, so a game with
+   * a thousand notes costs about the same as one with three.
+   */
+  countPlayerFeedback(slug: string): Promise<number>;
+
+  /**
+   * Deletes every feedback row a user wrote, across all games. Returns how many.
+   *
+   * Feedback *is* findable by uid because the row carries it as a field, which is the
+   * asymmetry with votes above.
+   */
+  deletePlayerFeedbackByUid(uid: string): Promise<number>;
+
+  /**
+   * How many feedback rows a user wrote, across all games — the dry run for the delete
+   * above.
+   *
+   * Deliberately the *same* predicate as `deletePlayerFeedbackByUid`, differing only in
+   * `.count()` versus `.get()`. A preview of a destructive operation that finds its rows
+   * by a different route than the deletion does is a preview that can quietly disagree
+   * with what follows, and the direction it disagrees in — under-reporting — is the one
+   * an operator would not catch.
+   */
+  countPlayerFeedbackByUid(uid: string): Promise<number>;
+}
+
+export interface ReviewStore {
+  // Upsert reviewer verdict; second pass overwrites in place.
+  upsertGameAssessment(
+    input: Omit<GameAssessment, 'id' | 'createdAt' | 'updatedAt' | 'gameVersion' | 'resolution'> & {
+      createdAt?: string;
+      gameVersion?: string | null;
+    },
+  ): Promise<GameAssessment>;
+
+  getGameAssessment(slug: string, reviewerUid: string): Promise<GameAssessment | null>;
+
+  // Records or withdraws the follow-up; expectedUpdatedAt pins the verdict.
+  setGameAssessmentResolution(
+    slug: string,
+    reviewerUid: string,
+    resolution: AssessmentResolution | null,
+    expectedUpdatedAt?: string,
+  ): Promise<ResolutionWriteResult>;
+
+  // Every reviewer's row for one game.
+  listGameAssessmentsBySlug(slug: string): Promise<GameAssessment[]>;
+
+  listGameAssessmentsByReviewer(reviewerUid: string): Promise<GameAssessment[]>;
+
+  // Recent assessments across reviewers; bounded operator page.
+  listGameAssessments(opts?: { limit?: number }): Promise<GameAssessment[]>;
+
+  listGameAssessmentsBySource(source: AssessmentSource): Promise<GameAssessment[]>;
+
+  countGameAssessmentsByUid(uid: string): Promise<number>;
+
+  deleteGameAssessmentsByUid(uid: string): Promise<number>;
+
+  // Superseded rows for one reviewer's one game, newest first.
+  listGameAssessmentHistory(slug: string, reviewerUid: string): Promise<GameAssessmentHistoryEntry[]>;
+
+  // Opens or re-opens one re-review request per (slug, reviewerUid) pair.
+  upsertReReviewRequests(
+    requests: Array<Pick<ReReviewRequest, 'slug' | 'reviewerUid' | 'gameVersion' | 'reason' | 'createdBy'>>,
+  ): Promise<ReReviewRequest[]>;
+
+  getReReviewRequest(slug: string, reviewerUid: string): Promise<ReReviewRequest | null>;
+
+  listOpenReReviewRequestsForReviewer(reviewerUid: string): Promise<ReReviewRequest[]>;
+
+  // Recent targeted requests across reviewers; bounded operator page.
+  listReReviewRequests(opts?: { limit?: number }): Promise<ReReviewRequest[]>;
+
+  resolveReReviewRequest(slug: string, reviewerUid: string): Promise<ReReviewRequest | null>;
+
+  getOpenReviewSweep(): Promise<ReviewSweep | null>;
+
+  getReviewSweep(id: string): Promise<ReviewSweep | null>;
+
+  listReviewSweeps(opts?: { limit?: number }): Promise<ReviewSweep[]>;
+
+  createReviewSweep(sweep: ReviewSweep): Promise<ReviewSweep>;
+
+  updateReviewSweep(
+    id: string,
+    patch: Partial<Omit<ReviewSweep, 'id' | 'createdAt' | 'createdBy' | 'slugs' | 'source'>>,
+  ): Promise<ReviewSweep | null>;
+
+  /** Overwrites a game's current scorecard (docs/improvement-loop-plan.md IL-2). */
+  putScorecard(slug: string, scorecard: Scorecard): Promise<void>;
+
+  /** A game's current scorecard, or null before the first sweep has run for it. */
+  getScorecard(slug: string): Promise<Scorecard | null>;
+
+  /**
+   * Every game's current scorecard, newest computation first.
+   *
+   * Exists so the sweep's output is *readable*. Writing an aggregate nobody can look at
+   * is the same shape of mistake as a silently-dropping branch: the first sign it had
+   * been producing nonsense would be an agent acting on the nonsense. Bounded, because
+   * this is one query behind an operator page rather than a paginated surface.
+   */
+  listScorecards(opts?: { limit?: number }): Promise<Scorecard[]>;
+}
+
+export interface PlayerDataStore {
   /** One player's save for one game, or null if they have none. */
   getGameSave(uid: string, slug: string): Promise<GameSaveRecord | null>;
+
   /** Writes (or replaces) one player's save. The caller has already size-checked `data`. */
   putGameSave(uid: string, slug: string, data: string, version: number): Promise<GameSaveRecord>;
+
   deleteGameSave(uid: string, slug: string): Promise<void>;
+
   /** Every save a person has, across games — the erase path's read. */
   listGameSaves(uid: string): Promise<GameSaveRecord[]>;
+
   /** Deletes every save a person has. Returns how many went. */
   deleteGameSaves(uid: string): Promise<number>;
+
   /** A creator's editor draft for one of their games, or null when none exists. */
   getEditorDraft(uid: string, slug: string): Promise<EditorDraftRecord | null>;
+
   /**
    * Writes a creator's draft, incrementing its revision. The caller has already
    * validated and size-checked `content`.
@@ -782,25 +1078,34 @@ export interface Store {
     content: string,
     expectedRevision?: number,
   ): Promise<{ conflict: false; record: EditorDraftRecord } | { conflict: true; revision: number }>;
+
   deleteEditorDraft(uid: string, slug: string): Promise<void>;
+
   /** Every editor draft a person has — the erase path's read, used for preview and for real. */
   listEditorDrafts(uid: string): Promise<EditorDraftRecord[]>;
+
   /** Deletes every editor draft a person has — the erase path. Returns how many went. */
   deleteEditorDrafts(uid: string): Promise<number>;
+
   /**
    * Records that a signed-in player opened a published game. Upserts the affinity
    * row, bumps `openCount`, and trims the oldest rows when the per-user ceiling is
    * exceeded so the map cannot grow without bound.
    */
   recordPlayAffinity(uid: string, slug: string, at?: string): Promise<PlayAffinityRecord>;
+
   /** Every game a person has opened while signed in — recommendations + erase read. */
   listPlayAffinity(uid: string): Promise<PlayAffinityRecord[]>;
+
   /** Deletes every play-affinity row a person has. Returns how many went. */
   deletePlayAffinity(uid: string): Promise<number>;
+
   /** Every entry in one shared world. The public read — no uid involved. */
   listWorldEntries(worldId: string): Promise<WorldEntryRecord[]>;
+
   /** One entry, or null. Used to settle ownership before a write. */
   getWorldEntry(worldId: string, key: string): Promise<WorldEntryRecord | null>;
+
   /**
    * Claims or updates one entry, atomically.
    *
@@ -817,88 +1122,21 @@ export interface Store {
     maxPerPlayer: number;
     maxEntries: number;
   }): Promise<{ ok: true; entry: WorldEntryRecord } | { ok: false; reason: 'conflict' | 'quota' | 'full' }>;
+
   /** Deletes an entry the player owns. False when it is missing or somebody else's. */
   deleteWorldEntry(worldId: string, key: string, uid: string): Promise<boolean>;
+
   /** How many entries a player owns in one world — the quota read. */
   countWorldEntries(worldId: string, uid: string): Promise<number>;
+
   /** Worlds where a person has written something — the erase path's read. */
   listWorldsForUser(uid: string): Promise<string[]>;
+
   /** Deletes everything one person wrote across every world. Returns how many went. */
   deleteWorldEntriesForUser(uid: string): Promise<number>;
-  /** Appends one already-moderated, already-sanitized feedback row. Returns it with its id. */
-  addPlayerFeedback(slug: string, uid: string, text: string): Promise<PlayerFeedbackRecord>;
-  /**
-   * A game's feedback, newest first.
-   *
-   * `limit` bounds the read for the scorecard sweep's theme extraction, so one game with
-   * thousands of notes cannot dominate a nightly job. Unbounded without it, because the
-   * erase preview needs every row it is about to delete.
-   */
-  listPlayerFeedback(slug: string, opts?: { limit?: number }): Promise<PlayerFeedbackRecord[]>;
-  /**
-   * How many feedback rows a game has, without reading them.
-   *
-   * A count rather than a length: the scorecard sweep needs this for every game it
-   * touches, and `listPlayerFeedback().length` would bill one document read per row per
-   * night. Firestore's aggregate query is billed per index scan instead, so a game with
-   * a thousand notes costs about the same as one with three.
-   */
-  countPlayerFeedback(slug: string): Promise<number>;
-  // Upsert reviewer verdict; second pass overwrites in place.
-  upsertGameAssessment(
-    input: Omit<GameAssessment, 'id' | 'createdAt' | 'updatedAt' | 'gameVersion' | 'resolution'> & {
-      createdAt?: string;
-      gameVersion?: string | null;
-    },
-  ): Promise<GameAssessment>;
-  getGameAssessment(slug: string, reviewerUid: string): Promise<GameAssessment | null>;
-  // Records or withdraws the follow-up; expectedUpdatedAt pins the verdict.
-  setGameAssessmentResolution(
-    slug: string,
-    reviewerUid: string,
-    resolution: AssessmentResolution | null,
-    expectedUpdatedAt?: string,
-  ): Promise<ResolutionWriteResult>;
-  // Every reviewer's row for one game.
-  listGameAssessmentsBySlug(slug: string): Promise<GameAssessment[]>;
-  listGameAssessmentsByReviewer(reviewerUid: string): Promise<GameAssessment[]>;
-  // Recent assessments across reviewers; bounded operator page.
-  listGameAssessments(opts?: { limit?: number }): Promise<GameAssessment[]>;
-  listGameAssessmentsBySource(source: AssessmentSource): Promise<GameAssessment[]>;
-  countGameAssessmentsByUid(uid: string): Promise<number>;
-  deleteGameAssessmentsByUid(uid: string): Promise<number>;
-  // Superseded rows for one reviewer's one game, newest first.
-  listGameAssessmentHistory(slug: string, reviewerUid: string): Promise<GameAssessmentHistoryEntry[]>;
-  // Opens or re-opens one re-review request per (slug, reviewerUid) pair.
-  upsertReReviewRequests(
-    requests: Array<Pick<ReReviewRequest, 'slug' | 'reviewerUid' | 'gameVersion' | 'reason' | 'createdBy'>>,
-  ): Promise<ReReviewRequest[]>;
-  getReReviewRequest(slug: string, reviewerUid: string): Promise<ReReviewRequest | null>;
-  listOpenReReviewRequestsForReviewer(reviewerUid: string): Promise<ReReviewRequest[]>;
-  // Recent targeted requests across reviewers; bounded operator page.
-  listReReviewRequests(opts?: { limit?: number }): Promise<ReReviewRequest[]>;
-  resolveReReviewRequest(slug: string, reviewerUid: string): Promise<ReReviewRequest | null>;
-  getOpenReviewSweep(): Promise<ReviewSweep | null>;
-  getReviewSweep(id: string): Promise<ReviewSweep | null>;
-  listReviewSweeps(opts?: { limit?: number }): Promise<ReviewSweep[]>;
-  createReviewSweep(sweep: ReviewSweep): Promise<ReviewSweep>;
-  updateReviewSweep(
-    id: string,
-    patch: Partial<Omit<ReviewSweep, 'id' | 'createdAt' | 'createdBy' | 'slugs' | 'source'>>,
-  ): Promise<ReviewSweep | null>;
-  /** Overwrites a game's current scorecard (docs/improvement-loop-plan.md IL-2). */
-  putScorecard(slug: string, scorecard: Scorecard): Promise<void>;
-  /** A game's current scorecard, or null before the first sweep has run for it. */
-  getScorecard(slug: string): Promise<Scorecard | null>;
-  /**
-   * Every game's current scorecard, newest computation first.
-   *
-   * Exists so the sweep's output is *readable*. Writing an aggregate nobody can look at
-   * is the same shape of mistake as a silently-dropping branch: the first sign it had
-   * been producing nonsense would be an agent acting on the nonsense. Bounded, because
-   * this is one query behind an operator page rather than a paginated surface.
-   */
-  listScorecards(opts?: { limit?: number }): Promise<Scorecard[]>;
+}
+
+export interface ContributionStore {
   /**
    * What the creator has allowed the platform to do to a game unasked (IL-4).
    *
@@ -907,7 +1145,9 @@ export interface Store {
    * that lived on a submission would be silently forgotten the first time one ran.
    */
   getGameAutonomy(slug: string): Promise<string | null>;
+
   setGameAutonomy(slug: string, mode: string): Promise<void>;
+
   /**
    * Deletes up to `limit` documents left by the superseded per-game suggestion sweep.
    *
@@ -926,10 +1166,13 @@ export interface Store {
    * report nothing forever.
    */
   purgeLegacyGameSuggestions(limit: number): Promise<number>;
+
   /** Writes a suggestion whole (docs/improvement-loop-plan.md IL-3). */
   putSuggestion(record: SuggestionRecord): Promise<void>;
+
   /** One suggestion by id, or null. */
   getSuggestion(id: string): Promise<SuggestionRecord | null>;
+
   /**
    * Suggestions, newest first, optionally narrowed.
    *
@@ -942,10 +1185,13 @@ export interface Store {
     ownerUid?: string;
     limit?: number;
   }): Promise<SuggestionRecord[]>;
+
   /** Writes a proposal whole. */
   putProposal(record: ProposalRecord): Promise<void>;
+
   /** One proposal by id, or null. */
   getProposal(id: string): Promise<ProposalRecord | null>;
+
   /**
    * Proposals, newest first, optionally narrowed.
    *
@@ -966,6 +1212,7 @@ export interface Store {
     state?: ProposalState[];
     limit?: number;
   }): Promise<ProposalRecord[]>;
+
   /**
    * A game's contribution setting, or null when nobody has ever set one.
    *
@@ -974,95 +1221,93 @@ export interface Store {
    * want to prompt creators to consider contributions we will need to tell them apart.
    */
   getContributionSettings(slug: string): Promise<GameContributionSettings | null>;
+
   putContributionSettings(record: GameContributionSettings): Promise<void>;
+
   /** Whether `ownerUid` has blocked `blockedUid` from proposing to their games. */
   isContributorBlocked(ownerUid: string, blockedUid: string): Promise<boolean>;
+
   blockContributor(record: ContributorBlockRecord): Promise<void>;
+
   unblockContributor(ownerUid: string, blockedUid: string): Promise<void>;
+
   /** Everyone this creator has blocked — the settings surface's read. */
   listContributorBlocks(ownerUid: string): Promise<ContributorBlockRecord[]>;
-  /**
-   * Every slug that has a `games/{slug}` entry — including games whose document does
-   * not exist but which have subcollections (votes, feedback, scorecard).
-   *
-   * Exists for the erase path. A vote's uid is its *document id* and not a field, so
-   * unlike feedback there is no query that finds one user's votes across games; the only
-   * way is to look under each game. Bounded by the catalog, so a walk is affordable.
-   */
-  listGameSlugs(): Promise<string[]>;
-  /**
-   * Deletes every feedback row a user wrote, across all games. Returns how many.
-   *
-   * Feedback *is* findable by uid because the row carries it as a field, which is the
-   * asymmetry with votes above.
-   */
-  deletePlayerFeedbackByUid(uid: string): Promise<number>;
-  /**
-   * How many feedback rows a user wrote, across all games — the dry run for the delete
-   * above.
-   *
-   * Deliberately the *same* predicate as `deletePlayerFeedbackByUid`, differing only in
-   * `.count()` versus `.get()`. A preview of a destructive operation that finds its rows
-   * by a different route than the deletion does is a preview that can quietly disagree
-   * with what follows, and the direction it disagrees in — under-reporting — is the one
-   * an operator would not catch.
-   */
-  countPlayerFeedbackByUid(uid: string): Promise<number>;
+}
+
+export interface AccessTokensStore {
   /** Persist a newly minted personal access token. */
   createAccessToken(record: AccessTokenRecord): Promise<void>;
+
   /** Point lookup by token id — the hot path on every bearer-authenticated request. */
   getAccessToken(tokenId: string): Promise<AccessTokenRecord | null>;
+
   /** Every token issued to a user, newest first. Never includes secrets (only hashes). */
   listAccessTokens(uid: string): Promise<AccessTokenRecord[]>;
+
   /** Revoke by id. Returns false when the token did not exist. */
   deleteAccessToken(tokenId: string): Promise<boolean>;
+
   /** Best-effort last-use stamp; callers must not let a failure fail the request. */
   touchAccessToken(tokenId: string, at: string): Promise<void>;
+}
+
+export interface AgentKeysStore {
   /**
    * Durable per-game opener state (BY-23). Returns null when no key has been issued
    * for this slug yet.
    */
   getGameAgentKey(slug: string): Promise<GameAgentKeyRecord | null>;
+
   /**
    * Ensures a gameAgentKeys doc exists for (slug, ownerUid), creating generation 1
    * when absent. If the doc exists for a different owner, returns null (caller must
    * refuse — the slug is not theirs to key).
    */
   ensureGameAgentKey(slug: string, ownerUid: string, at: string): Promise<GameAgentKeyRecord | null>;
+
   /**
    * Transactionally bumps `keyGeneration` for an owned slug. Returns the new record,
    * or null when missing / not owned by `ownerUid`.
    */
   rotateGameAgentKey(slug: string, ownerUid: string, at: string): Promise<GameAgentKeyRecord | null>;
+
   /**
    * BY-24: admit at most one in-flight `open_round` per slug. Returns false when another
    * caller already holds the lock.
    */
   beginAgentOpenRound(slug: string, at: string): Promise<boolean>;
+
   /** BY-24: release the admission lock after `open_round` completes or aborts. */
   finishAgentOpenRound(slug: string, at: string): Promise<void>;
+
   /** Creator-wide opener record, or null when the creator has never minted one. */
   getCreatorAgentKey(ownerUid: string): Promise<CreatorAgentKeyRecord | null>;
+
   /**
    * Ensures a creatorAgentKeys doc exists for ownerUid, creating generation 1 when
    * absent. Does not clear `revokedAt` — mint after revoke is an explicit reactivate.
    */
   ensureCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord>;
+
   /**
    * Clears `revokedAt` so a post-revoke mint can issue at the current (already bumped)
    * generation. Creates generation 1 when absent. Does not bump `keyGeneration`.
    */
   reactivateCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord>;
+
   /**
    * Transactionally bumps `keyGeneration` and clears `revokedAt`. Returns the new
    * record, or null when the creator has no key yet (caller should ensure first).
    */
   rotateCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null>;
+
   /**
    * Transactionally bumps `keyGeneration` and sets `revokedAt`. Returns the new
    * record, or null when missing. Keeps the doc so generation never resets to 1.
    */
   revokeCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null>;
+
   /**
    * Re-dates a generation without bumping it, so it mints a valid key again.
    *
@@ -1073,24 +1318,39 @@ export interface Store {
    * generation had expired before this could run.
    */
   touchCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null>;
+}
+
+export interface OAuthStore {
   /** Persist a dynamically registered or CIMD-cached OAuth client. */
   createOAuthClient(record: OAuthClientRecord): Promise<void>;
+
   getOAuthClient(clientId: string): Promise<OAuthClientRecord | null>;
+
   createOAuthGrant(record: OAuthGrantRecord): Promise<void>;
+
   getOAuthGrant(grantId: string): Promise<OAuthGrantRecord | null>;
+
   getOAuthGrantByRefreshTokenId(refreshTokenId: string): Promise<OAuthGrantRecord | null>;
+
   listOAuthGrantsByOwner(ownerUid: string): Promise<OAuthGrantRecord[]>;
+
   revokeOAuthGrant(grantId: string, ownerUid: string): Promise<boolean>;
+
   createOAuthAccessToken(record: OAuthAccessTokenRecord): Promise<void>;
+
   getOAuthAccessToken(tokenId: string): Promise<OAuthAccessTokenRecord | null>;
+
   deleteOAuthAccessToken(tokenId: string): Promise<boolean>;
+
   createOAuthAuthCode(record: OAuthAuthCodeRecord): Promise<void>;
+
   /**
    * Single-use: returns the record with `usedAt` set, then deletes the stored
    * row. Already-used or expired codes are deleted and yield null. Wrong-hash
    * presentations leave the row in place.
    */
   consumeOAuthAuthCode(codeId: string, codeHash: string, nowMs: number): Promise<OAuthAuthCodeRecord | null>;
+
   /**
    * Rotate refresh credentials. When the presented refresh id is not the grant's
    * current one, the whole grant is revoked (reuse detection).
@@ -1104,6 +1364,7 @@ export interface Store {
     newAccessToken: OAuthAccessTokenRecord;
     nowMs: number;
   }): Promise<RotateRefreshTokenResult>;
+
   /** First token issue after authorization_code exchange (grant has no refresh yet). */
   issueOAuthTokensFromGrant(input: {
     grantId: string;
@@ -1114,6 +1375,26 @@ export interface Store {
     nowMs: number;
   }): Promise<OAuthGrantRecord | null>;
 }
+
+export interface Store
+  extends
+    IdentityStore,
+    RoundsStore,
+    DispatchStore,
+    SubmissionStore,
+    BuildLogStore,
+    PublicationStore,
+    TelemetryStore,
+    QuotaStore,
+    AccessStore,
+    NotificationsStore,
+    SocialStore,
+    ReviewStore,
+    PlayerDataStore,
+    ContributionStore,
+    AccessTokensStore,
+    AgentKeysStore,
+    OAuthStore {}
 
 // Stable doc id for a subscription: a hash of its endpoint URL. Endpoints are long
 // and contain characters illegal in Firestore doc ids, and hashing gives idempotent
