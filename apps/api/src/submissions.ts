@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { BUILDERS, deriveGateStatusString, derivePreviewGateStatus } from '@gamedevpl/contract';
-import type { GameProject } from '@gamedevpl/game-generator';
+import type { GameProject } from '@gamedevpl/contract';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { splitConceptBrief } from './agent-build-brief.js';

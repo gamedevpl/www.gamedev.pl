@@ -41,7 +41,6 @@
     "@fastify/static": "^10.1.2",
     "@fastify/websocket": "^11.3.0",
     "@gamedevpl/contract": "*",
-    "@gamedevpl/game-generator": "*",
     "@gamedevpl/zone-core": "*",
     "@google-cloud/firestore": "^8.7.0",
     "diff": "^9.0.0",

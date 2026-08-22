@@ -44,7 +44,6 @@ ENV NODE_ENV=production \
 # Workspace manifests must all be present for `npm ci` to resolve the tree.
 COPY package.json package-lock.json ./
 COPY packages/contract/package.json packages/contract/
-COPY packages/game-generator/package.json packages/game-generator/
 COPY packages/zone-core/package.json packages/zone-core/
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/

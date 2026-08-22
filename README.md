@@ -104,7 +104,7 @@ apps/
   e2e/               Playwright checks for critical browser and production flows
   world/             Persistent-world service, deployed separately from the main API
 packages/
-  game-generator/    The generator seam: GameGenerator interface and GameProject type
+  contract/          Types, constants and route tables shared across workspaces
   zone-core/         Shared protocol and simulation primitives for persistent worlds
 infra/               Cloud Run deployment and read-only production-inspection scripts
 docs/                The plan of record — read this before making assumptions

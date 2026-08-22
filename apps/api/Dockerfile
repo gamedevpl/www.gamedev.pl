@@ -4,9 +4,8 @@
 # Build context is the repo ROOT (this is a npm-workspaces monorepo):
 #   docker build -f apps/api/Dockerfile -t gamedev-app .
 #
-# The API depends on the @gamedevpl/game-generator workspace package, which reads
-# its template files at runtime, so the runtime stage carries that package's dist
-# AND templates, plus prod node_modules (fastify, @fastify/cors, @fastify/static, zod).
+# The runtime stage carries each workspace package's dist plus prod node_modules
+# (fastify, @fastify/cors, @fastify/static, zod).
 
 # ---- builder: install everything and compile TS + build the web app ----
 FROM node:20-slim AS builder
@@ -51,7 +50,6 @@ ENV NODE_ENV=production \
 # Workspace package manifests must all be present for `npm ci` to resolve the tree.
 COPY package.json package-lock.json ./
 COPY packages/contract/package.json packages/contract/
-COPY packages/game-generator/package.json packages/game-generator/
 COPY packages/zone-core/package.json packages/zone-core/
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
@@ -71,7 +69,7 @@ COPY apps/web/package.json apps/web/
 # prebuilt binary that needs no script to work. Keep both flags off this line together.
 RUN npm ci --omit=dev --ignore-scripts
 
-# Built output: API dist, game-generator dist + runtime templates, and the static web bundle.
+# Built output: API dist, workspace package dists, and the static web bundle.
 #
 # Unlike `npm run build` above, this list is NOT driven by package.json — every workspace
 # package the API imports needs its own COPY line here (and a package.json COPY above), or
@@ -79,8 +77,6 @@ RUN npm ci --omit=dev --ignore-scripts
 # the @gamedevpl/contract package below both shipped as ERR_MODULE_NOT_FOUND at container
 # boot, caught only by the "Production image" CI job's health-check — not by a green build.
 COPY --from=builder /app/packages/contract/dist packages/contract/dist
-COPY --from=builder /app/packages/game-generator/dist packages/game-generator/dist
-COPY --from=builder /app/packages/game-generator/templates packages/game-generator/templates
 COPY --from=builder /app/packages/zone-core/dist packages/zone-core/dist
 COPY --from=builder /app/apps/api/dist apps/api/dist
 COPY --from=builder /app/apps/web/dist apps/web/dist

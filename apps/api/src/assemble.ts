@@ -1,4 +1,4 @@
-import type { GameProject } from '@gamedevpl/game-generator';
+import type { GameProject } from '@gamedevpl/contract';
 import { findCredentialLikeStrings } from './credential-scan.js';
 import { MAX_PROJECT_BYTES as CONTRACT_MAX_PROJECT_BYTES } from './games-repo-contract.js';
 

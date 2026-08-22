@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { generateGame, type GeneratedGame, type GenerateGameApiError } from './api.js';
 import { fetchCatalog, gamePageHandle, type CatalogEntry } from './catalog.js';
 import { GameTheater } from './GameTheater.js';
 import { NavHeader } from './NavHeader.js';
@@ -93,7 +92,6 @@ type StageContent =
       // Which home page surface launched this play, if it did.
       via?: PlayVia;
     }
-  | { type: 'generated'; game: GeneratedGame; prompt: string }
   | { type: 'party'; game: CatalogEntry; session: PartySession; via?: PlayVia };
 
 export function App() {
@@ -174,8 +172,6 @@ export function App() {
   const latestAnswersRef = useRef<PendingQaAnswers>(restoredQa.current?.answers ?? { selected: {}, custom: {} });
 
   // Demo generator state
-  const [mockStatus, setMockStatus] = useState<'idle' | 'loading' | 'error'>('idle');
-  const [mockError, setMockError] = useState<string | null>(null);
 
   // Multiplayer lobby state
   const [partyError, setPartyError] = useState<string | null>(null);
@@ -511,37 +507,6 @@ export function App() {
     }
     window.location.replace(oauthReturn);
   }, [authLoading, user]);
-
-  async function handleGenerateMock(text: string) {
-    if (!user) {
-      setIsAuthModalOpen(true);
-      return;
-    }
-
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    setMockStatus('loading');
-    setMockError(null);
-    try {
-      const generatedGame = await generateGame(trimmed);
-      setStageContent({ type: 'generated', game: generatedGame, prompt: trimmed });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : t('errors.generic');
-      const category = err instanceof Error ? (err as GenerateGameApiError).category : undefined;
-      if (message === 'content_rejected') {
-        setMockError(t(`errors.contentRejected.${category ?? 'other'}`));
-      } else if (message.includes('quota')) {
-        setMockError(t('auth.quotaExceeded'));
-      } else if (message.includes('blocked')) {
-        setMockError(t('auth.accountBlocked'));
-      } else {
-        setMockError(message);
-      }
-      setMockStatus('error');
-    } finally {
-      setMockStatus('idle');
-    }
-  }
 
   // The generation gate: before spending a submission we run the spec refiner. If it
   // returns clarifying questions, generation pauses on the QA panel until they're
@@ -953,20 +918,6 @@ export function App() {
         />
       )}
 
-      {stageContent?.type === 'generated' && (
-        <GameTheater
-          key={stageContent.game.html}
-          title={stageContent.game.title}
-          badge={{ icon: 'rocket', label: t('ai.generatedShort') }}
-          source={{ html: stageContent.game.html }}
-          onExit={() => setStageContent(null)}
-          meta={
-            stageContent.prompt ? (
-              <span className="theater-controls">{t('home.generatedFrom', { prompt: stageContent.prompt })}</span>
-            ) : undefined
-          }
-        />
-      )}
       {showBetaWelcome && user && <BetaWelcomeSplash onContinue={dismissBetaWelcome} />}
     </>
   );
@@ -1279,9 +1230,6 @@ export function App() {
                 submissionStatus={submissionStatus}
                 submissionError={submissionError}
                 onSubmitSpec={(concept, referenceImages) => void handleSubmitSpec(concept, undefined, referenceImages)}
-                mockStatus={mockStatus}
-                mockError={mockError}
-                onGenerateMock={(prompt) => void handleGenerateMock(prompt)}
                 onPlatformBuilderAvailability={setPlatformBuilderAvailability}
               />
             ) : route.view === 'party' ? (
@@ -1308,9 +1256,6 @@ export function App() {
                   onSubmitSpec={(concept, referenceImages) =>
                     void handleSubmitSpec(concept, undefined, referenceImages)
                   }
-                  mockStatus={mockStatus}
-                  mockError={mockError}
-                  onGenerateMock={(prompt) => void handleGenerateMock(prompt)}
                   onPlatformBuilderAvailability={setPlatformBuilderAvailability}
                 />
               </div>

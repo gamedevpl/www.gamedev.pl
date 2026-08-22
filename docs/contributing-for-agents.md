@@ -28,9 +28,11 @@ For coding agents (GitHub Copilot, Claude Code, Codex) and humans picking up wor
 ```
 apps/
   web/       Vite + React + TS frontend (prompt form + game player)
-  api/       Fastify + TS backend (POST /api/generate-game, GET /api/health)
+  api/       Fastify + TS backend (catalog, jobs, agent channel, MCP)
+  world/     Zone host (authoritative sims)
 packages/
-  game-generator/   The generator seam: GameGenerator + GameProject; a mock; templates/
+  contract/    Types, constants and route tables shared across workspaces
+  zone-core/   Zone tickets, schema, deterministic cage
 infra/       Non-deployable placeholder until hosting is selected
 docs/        This documentation set
 ```
@@ -52,7 +54,7 @@ All commands run from the **repo root**.
 | `npm run type-check` | Build packages, then `tsc --noEmit` per workspace.                                          |
 
 Everything runs **locally** — no cloud, no API keys, no secrets. The API defaults to
-`127.0.0.1:3001`; the generator defaults to the `mock` provider.
+`127.0.0.1:3001` and serves repo fixtures from an in-memory store.
 
 ### Definition of "green"
 
@@ -77,7 +79,7 @@ party mode — drive it.
 curl -X POST http://localhost:5173/api/auth/dev -c cookies.txt
 ```
 
-That is a full session for `dev:local` against the in-memory store and the mock generator.
+That is a full session for `dev:local` against the in-memory store and repo fixtures.
 No credentials, nothing real touched. See [`local-development.md`](./local-development.md).
 
 **Against the deployed site**, when the thing under test is production behaviour — real
@@ -104,7 +106,7 @@ never be committed or pasted into a game, an issue, or a PR description. Full gu
   `noUnusedParameters`, `noFallthroughCasesInSwitch`. Prefix intentionally-unused args with
   `_`.
 - **Small, focused files.** One clear responsibility per file (see how
-  `packages/game-generator/src` splits `types` / `mock` / `index`).
+  `packages/contract/src` gives each vocabulary its own module).
 - **Comments are one-liners only — no prose.** A comment is a `//` line of at most **12
   words**, saying _why_, never narrating _what_. Forbidden: multi-line `/* */` / `/** */`
   blocks, stacked `//` paragraphs, and essay headers. If the knowledge matters beyond one
@@ -143,6 +145,6 @@ hand-rolling `GoogleAuth` + REST against `*-aiplatform.googleapis.com`.
 
 If you encounter imports of `@gamedevpl/engine` or `@gamedevpl/llm-provider`, those belong to a
 removed DSL approach. **Migrate to the `GameProject` (HTML/JS/CSS) model** in
-`packages/game-generator/src/types.ts` — don't resurrect the DSL. Likewise, do not restore the
+`packages/contract/src/game-project.ts` — don't resurrect the DSL. Likewise, do not restore the
 removed container runner, auth proxy, job queue, or in-app agent execution path; production
 games belong in the dedicated games repository described in [`games-repo.md`](./games-repo.md).

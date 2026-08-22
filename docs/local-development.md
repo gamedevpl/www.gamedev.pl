@@ -56,7 +56,7 @@ account — useful for testing anything that involves two users. The endpoint an
 production**; it exists only outside it, and mints a session with no credential at all.
 
 This is the right tool for local work, including for a coding agent in a cloud VM: it runs
-against the in-memory store and the mock generator, so it touches nothing real. Testing the
+against the in-memory store and repo fixtures, so it touches nothing real. Testing the
 **deployed** site is a different problem with a different answer — see
 [`agent-access-tokens.md`](./agent-access-tokens.md).
 
@@ -71,8 +71,8 @@ build if you want to check it compiles the same way CI will.
 
 ## Things that will surprise you
 
-- **The generator is a mock.** Games are not generated on demand by this app; they are
-  written by coding agents in the games repo. `LLM_PROVIDER` accepts only `mock`.
+- **Nothing is generated on demand by this app.** Games are written by coding agents in
+  the games repo, or delivered over MCP by a creator's own agent.
 - **A submitted spec never progresses past "queued" locally.** No agent is watching, so
   there is no pull request to find. That is the honest local behaviour, not a bug.
 - **State evaporates on restart.** The in-memory store is not persisted; production uses

@@ -8,7 +8,7 @@ Then [`docs/contributing-for-agents.md`](docs/contributing-for-agents.md) for th
 
 ## Fast facts
 
-- npm-workspaces monorepo: `apps/web`, `apps/api`, `packages/game-generator`, `infra/`, `docs/`.
+- npm-workspaces monorepo: `apps/web`, `apps/api`, `apps/world`, `packages/contract`, `packages/zone-core`, `infra/`, `docs/`.
 - **This repo is public.** Internal docs (GTM strategy, risk register, legal analysis, store
   accounts, mobile/store launch plans, ops readiness, creator-experience review) live in the **private
   [`www.gamedev.pl-ops`](https://github.com/gamedevpl/www.gamedev.pl-ops) repo — required
@@ -34,8 +34,8 @@ npm install
 npm run type-check && npm run lint && npm run test && npm run build
 ```
 
-`npm run dev` runs everything locally; the generator defaults to the offline `mock` provider,
-so no cloud or API keys are needed.
+`npm run dev` runs everything locally against fixtures and an in-memory store, so no cloud
+or API keys are needed.
 
 **Testing behind sign-in.** Locally, `curl -X POST http://localhost:5173/api/auth/dev -c
 cookies.txt` gives you a full session — no credentials, in-memory store, nothing real
@@ -158,7 +158,7 @@ applies regardless of which agent you are.
 ## Cursor Cloud specific instructions
 
 Setup is just `npm install` (see the "Green gate" and `docs/contributing-for-agents.md` for the
-standard commands). Everything runs offline with the `mock` generator — no cloud, keys, or
+standard commands). Everything runs offline against fixtures — no cloud, keys, or
 secrets. Non-obvious caveats for running/testing locally:
 
 - **Open the web app at `http://localhost:5173`, not `http://127.0.0.1:5173`.** `npm run dev`
@@ -168,7 +168,7 @@ secrets. Non-obvious caveats for running/testing locally:
   shows a red "Could not load the catalog" error — this is expected.** The catalog is served
   from the separate games repo, which isn't wired up in local dev.
 - **The generate/create loop is gated behind Google sign-in in the UI** — clicking "Build My
-  Game" opens a "Sign in with Google" modal, and `POST /api/generate-game` returns 401 without a
+  Game" opens a "Sign in with Google" modal, and the creation routes return 401 without a
   session. Real Google OAuth isn't available locally. To exercise the authenticated
   generate→assemble loop without Google, do what the tests do: `InMemoryStore.upsertUser(...)` +
   `mintSessionToken(uid, 'dev-session-secret-change-me')` and send it as the `gamedev_session`

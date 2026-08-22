@@ -11,7 +11,7 @@
     "apps/*"
   ],
   "scripts": {
-    "build:packages": "npm run build -w @gamedevpl/game-generator && npm run build -w @gamedevpl/zone-core && npm run build -w @gamedevpl/contract",
+    "build:packages": "npm run build -w @gamedevpl/zone-core && npm run build -w @gamedevpl/contract",
     "build": "npm run build:packages && npm run build -w @gamedevpl/api && npm run build -w @gamedevpl/web",
     "dev": "npm run build:packages && concurrently -n api,web -c blue,green \"npm run dev -w @gamedevpl/api\" \"npm run dev -w @gamedevpl/web\"",
     "test": "npm run build:packages && npm run test --workspaces --if-present && npm run test:rules",

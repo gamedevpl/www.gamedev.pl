@@ -21,7 +21,7 @@
 
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { GameProject } from '@gamedevpl/game-generator';
+import type { GameProject } from '@gamedevpl/contract';
 import { assembleGameHtml } from './assemble.js';
 import { firstGateScreenshotPath } from './gate-screenshot.js';
 import {
