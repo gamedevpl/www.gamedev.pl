@@ -168,7 +168,7 @@ export class StagingGenerationMismatchError extends Error {
 }
 
 /** How many times a staging manifest write may retry after a concurrent update. */
-export const MAX_STAGING_MANIFEST_RETRIES = 8;
+export const MAX_STAGING_MANIFEST_RETRIES = 64;
 
 /** Hint derived from {@link ALLOWED_SOURCE_FILES} so refusal text cannot drift from the contract. */
 const ALLOWED_SOURCES_HINT = `${ALLOWED_SOURCE_FILES.join(', ')}, or your own .ts modules`;
