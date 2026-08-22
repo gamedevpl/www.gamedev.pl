@@ -2961,6 +2961,48 @@ describe('SubmissionStatusView expectations & failures', () => {
       root.unmount();
     });
   });
+
+  it('does not say "Writing code" over a platform round that has gone quiet', async () => {
+    // Reported live: the badge/foot said the agent was mid-build while the amber
+    // banner right below it said the opposite — "quiet for a while". `isAgentWorkActive`
+    // only excluded `stall === 'ended'`, so a quiet (not-yet-ended) round still read as
+    // active work with a 6-hour-old heartbeat under it.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      stall: 'quiet',
+      builder: 'platform',
+      events: [
+        {
+          id: 'e1',
+          kind: 'step',
+          step: 'testing',
+          text: 'Fixing the failing tests.',
+          createdAt: '2026-08-22T16:34:27.000Z',
+        },
+      ],
+    });
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'quiet-platform', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.studio-turn.is-working')).toBeNull();
+    expect(container.querySelector('.studio-thread-context')).toBeNull();
+    expect(container.querySelector('.status-warning')?.textContent).toMatch(/quiet for a while/i);
+    expect(container.querySelector('.studio-thread-turns')?.textContent).not.toMatch(/Writing code/i);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });
 
 describe('SubmissionStatusView stop & retry', () => {

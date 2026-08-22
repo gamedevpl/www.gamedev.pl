@@ -112,7 +112,7 @@ function isAgentWorkActive(status: SubmissionStatus | null | undefined): boolean
   if (isAwaitingOwnAgent(status)) return false;
   if (status.status === 'in_review' || status.phase === 'ready_for_review') return false;
   if (status.gateProgress) return true;
-  if (status.stall === 'ended' || Boolean(status.agentEndedAt)) return false;
+  if (status.stall === 'ended' || status.stall === 'quiet' || Boolean(status.agentEndedAt)) return false;
   return true;
 }
 
@@ -792,8 +792,16 @@ export function SubmissionStatusView({
             ? t('statusView.phaseLabels.dispatched')
             : t(`statusView.states.${status.status}.label`)
         : '';
-    // Foot bar owns the waiting caption — the card drops it.
-    const footBarShowing = Boolean(status && !agentWorking && status.stall !== 'ended' && !status.agentEndedAt);
+    // Foot bar owns the waiting caption — the card drops it. `quiet` only suppresses it
+    // for the plain in-progress label ("Writing code" 6h stale); the self-connect and
+    // ready_for_review branches already say something accurate regardless of staleness.
+    const footBarShowing = Boolean(
+      status &&
+        !agentWorking &&
+        status.stall !== 'ended' &&
+        !status.agentEndedAt &&
+        (status.stall !== 'quiet' || isAwaitingOwnAgent(status) || status.phase === 'ready_for_review'),
+    );
     return (
       <>
         <div className="studio-thread">
