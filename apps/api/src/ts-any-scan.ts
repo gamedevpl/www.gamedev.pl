@@ -78,16 +78,31 @@ function isNode(value: unknown): value is Node {
   return typeof value === 'object' && value !== null && typeof (value as { type?: unknown }).type === 'string';
 }
 
-/** Depth-first walk over every AST node reachable from `root`, in source order. */
+/**
+ * Every AST node reachable from `root`, walked with an explicit stack rather than
+ * recursion.
+ *
+ * Nesting depth follows the source, and the source is untrusted: `a.b.b.b…` ten thousand
+ * deep is 20 KB — far under the size cap — and nests `MemberExpression` just as deeply.
+ * Recursing exhausted the JavaScript stack, and that `RangeError` escaped past the guarded
+ * `parse()` as an internal failure instead of a refusal. The heap has no such limit, and
+ * the size cap bounds how much of it this can reach.
+ *
+ * Visit order is therefore not source order; callers sort findings by position instead.
+ */
 function walk(root: Node, visit: (node: Node) => void): void {
-  visit(root);
-  for (const key of Object.keys(root)) {
-    if (NON_CHILD_KEYS.has(key)) continue;
-    const value = (root as unknown as Record<string, unknown>)[key];
-    if (Array.isArray(value)) {
-      for (const entry of value) if (isNode(entry)) walk(entry, visit);
-    } else if (isNode(value)) {
-      walk(value, visit);
+  const stack: Node[] = [root];
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+    visit(node);
+    for (const key of Object.keys(node)) {
+      if (NON_CHILD_KEYS.has(key)) continue;
+      const value = (node as unknown as Record<string, unknown>)[key];
+      if (Array.isArray(value)) {
+        for (const entry of value) if (isNode(entry)) stack.push(entry);
+      } else if (isNode(value)) {
+        stack.push(value);
+      }
     }
   }
 }
