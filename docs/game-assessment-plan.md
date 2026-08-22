@@ -147,7 +147,14 @@ Naming a `reviewerUid` resolves that one row; omitting it resolves **every revie
 for the slug**, which is the usual shape — one fix answers the whole game's feedback.
 `status: null` withdraws a resolution filed by mistake.
 
-A resolution is a statement about **that verdict**, so a fresh reviewer pass clears it:
+A resolution is a statement about **that verdict**, so the write is pinned to the verdict
+generation it answers. `expectedUpdatedAt` (the row's `updatedAt` as the operator read it)
+is checked inside a Firestore transaction; a verdict that landed in between is refused with
+**409 `stale_verdict`** rather than inheriting a rationale written about the old one. The
+whole-slug path pins each row to the version it just listed and reports skipped reviewers
+in `stale`. The console sends the version it rendered and asks the operator to reload.
+
+For the same reason a fresh reviewer pass clears the resolution:
 the archived history row keeps the old resolution, and the new verdict starts open. Use
 targeted re-review to ask a reviewer to look again after a fix; the two compose — requeue,
 then resolve once the new verdict comes back.

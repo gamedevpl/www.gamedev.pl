@@ -964,6 +964,69 @@ describe('assessment resolution', () => {
     expect(JSON.parse(cleared.body).assessments[0].resolution).toBeNull();
   });
 
+  it('refuses a resolution aimed at a verdict that has already moved', async () => {
+    const { app, store } = await makeApp();
+    const boss = await sessionCookie(app, 'boss');
+    const reviewer = await sessionCookie(app, 'reviewer');
+    const first = await assess(app, reviewer, {
+      slug: 'sky-dodge',
+      source: 'catalog',
+      verdict: 'cut',
+      note: 'Controls are broken on touch.',
+      checklist: sampleChecklist,
+    });
+
+    // Reviewer re-assesses while the operator holds the old row.
+    await app.inject({
+      method: 'POST',
+      url: '/api/admin/review-requeue',
+      headers: { cookie: boss },
+      payload: { slugs: ['sky-dodge'], reviewerUids: ['dev:reviewer'], notify: false },
+    });
+    await assess(app, reviewer, {
+      slug: 'sky-dodge',
+      source: 'catalog',
+      verdict: 'keep',
+      note: 'Fixed in the new build.',
+      checklist: sampleChecklist,
+    });
+
+    // Fabricated: no reliance on millisecond clock granularity.
+    const staleStamp = new Date(Date.parse(first.updatedAt) - 60_000).toISOString();
+    const stale = await app.inject({
+      method: 'POST',
+      url: '/api/admin/assessments/resolve',
+      headers: { cookie: boss },
+      payload: {
+        slug: 'sky-dodge',
+        reviewerUid: 'dev:reviewer',
+        expectedUpdatedAt: staleStamp,
+        status: 'addressed',
+        comment: 'Rebuilt the touch controls.',
+      },
+    });
+    expect(stale.statusCode).toBe(409);
+    expect(JSON.parse(stale.body).error).toBe('stale_verdict');
+    expect((await store.getGameAssessment('sky-dodge', 'dev:reviewer'))?.resolution).toBeNull();
+
+    // Aimed at the verdict actually on the row, it lands.
+    const current = await store.getGameAssessment('sky-dodge', 'dev:reviewer');
+    const fresh = await app.inject({
+      method: 'POST',
+      url: '/api/admin/assessments/resolve',
+      headers: { cookie: boss },
+      payload: {
+        slug: 'sky-dodge',
+        reviewerUid: 'dev:reviewer',
+        expectedUpdatedAt: current!.updatedAt,
+        status: 'addressed',
+        comment: 'Rebuilt the touch controls.',
+      },
+    });
+    expect(fresh.statusCode).toBe(200);
+    expect(JSON.parse(fresh.body).stale).toEqual([]);
+  });
+
   it('resolves every reviewer row for a slug when no reviewer is named, and a fresh verdict reopens it', async () => {
     const { app, store } = await makeApp({ reviewerUids: 'dev:reviewer,dev:second' });
     const boss = await sessionCookie(app, 'boss');

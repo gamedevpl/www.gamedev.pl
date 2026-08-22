@@ -42,6 +42,7 @@ export function AssessmentResolveForm(props: { row: GameAssessment; onSaved: () 
       await resolveAssessment({
         slug: row.slug,
         reviewerUid: row.reviewerUid,
+        expectedUpdatedAt: row.updatedAt,
         status: next,
         comment: next === null ? undefined : comment.trim(),
         link: next === null ? undefined : link.trim() || null,
@@ -49,7 +50,10 @@ export function AssessmentResolveForm(props: { row: GameAssessment; onSaved: () 
       setOpen(false);
       props.onSaved();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'could not save the resolution');
+      const message = err instanceof Error ? err.message : 'could not save the resolution';
+      setError(
+        message === 'stale_verdict' ? 'this game was re-assessed — reload and resolve the new verdict' : message,
+      );
     } finally {
       setBusy(false);
     }

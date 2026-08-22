@@ -212,7 +212,11 @@ export function AdminAssessmentsPanel() {
                     {env ? <div className="admin-assessments-env">{env}</div> : null}
                     {row.note ? <p className="admin-assessments-note">{row.note}</p> : null}
                     {row.resolution ? <AssessmentResolutionSummary resolution={row.resolution} /> : null}
-                    <AssessmentResolveForm row={row} onSaved={() => void load()} />
+                    <AssessmentResolveForm
+                      key={`${row.id}:${row.updatedAt}:${row.resolution?.resolvedAt ?? 'open'}`}
+                      row={row}
+                      onSaved={() => void load()}
+                    />
                   </li>
                 );
               })}

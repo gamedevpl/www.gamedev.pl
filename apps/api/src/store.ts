@@ -1241,6 +1241,12 @@ export interface AssessmentResolution {
   resolvedBy: string;
 }
 
+// Refused when the verdict moved.
+export type ResolutionWriteResult =
+  | { status: 'ok'; assessment: GameAssessment }
+  | { status: 'stale'; assessment: GameAssessment }
+  | { status: 'not_found' };
+
 export interface GameAssessment {
   id: string;
   slug: string;
@@ -2508,12 +2514,13 @@ export interface Store {
     },
   ): Promise<GameAssessment>;
   getGameAssessment(slug: string, reviewerUid: string): Promise<GameAssessment | null>;
-  // Records, or with null withdraws, the operator follow-up.
+  // Records or withdraws the follow-up; expectedUpdatedAt pins the verdict.
   setGameAssessmentResolution(
     slug: string,
     reviewerUid: string,
     resolution: AssessmentResolution | null,
-  ): Promise<GameAssessment | null>;
+    expectedUpdatedAt?: string,
+  ): Promise<ResolutionWriteResult>;
   // Every reviewer's row for one game.
   listGameAssessmentsBySlug(slug: string): Promise<GameAssessment[]>;
   listGameAssessmentsByReviewer(reviewerUid: string): Promise<GameAssessment[]>;
@@ -4703,13 +4710,17 @@ export class InMemoryStore implements Store {
     slug: string,
     reviewerUid: string,
     resolution: AssessmentResolution | null,
-  ): Promise<GameAssessment | null> {
+    expectedUpdatedAt?: string,
+  ): Promise<ResolutionWriteResult> {
     const id = gameAssessmentId(slug, reviewerUid);
     const existing = this.gameAssessments.get(id);
-    if (!existing) return null;
+    if (!existing) return { status: 'not_found' };
+    if (expectedUpdatedAt !== undefined && existing.updatedAt !== expectedUpdatedAt) {
+      return { status: 'stale', assessment: hydrateGameAssessment(id, existing) };
+    }
     const record: GameAssessment = { ...existing, resolution: resolution ? { ...resolution } : null };
     this.gameAssessments.set(id, record);
-    return hydrateGameAssessment(id, record);
+    return { status: 'ok', assessment: hydrateGameAssessment(id, record) };
   }
 
   async listGameAssessmentsBySlug(slug: string): Promise<GameAssessment[]> {
@@ -7924,14 +7935,21 @@ export class FirestoreStore implements Store {
     slug: string,
     reviewerUid: string,
     resolution: AssessmentResolution | null,
-  ): Promise<GameAssessment | null> {
+    expectedUpdatedAt?: string,
+  ): Promise<ResolutionWriteResult> {
     const id = gameAssessmentId(slug, reviewerUid);
     const ref = this.gameAssessmentsCollection().doc(id);
-    const snap = await ref.get();
-    if (!snap.exists) return null;
-    await ref.set({ resolution }, { merge: true });
-    const existing = hydrateGameAssessment(id, snap.data() as Omit<GameAssessment, 'id'>);
-    return { ...existing, resolution };
+    // A new verdict must not inherit this resolution.
+    return this.db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(ref);
+      if (!snap.exists) return { status: 'not_found' } as ResolutionWriteResult;
+      const existing = hydrateGameAssessment(id, snap.data() as Omit<GameAssessment, 'id'>);
+      if (expectedUpdatedAt !== undefined && existing.updatedAt !== expectedUpdatedAt) {
+        return { status: 'stale', assessment: existing } as ResolutionWriteResult;
+      }
+      transaction.set(ref, { resolution }, { merge: true });
+      return { status: 'ok', assessment: { ...existing, resolution } } as ResolutionWriteResult;
+    });
   }
 
   async listGameAssessmentsBySlug(slug: string): Promise<GameAssessment[]> {

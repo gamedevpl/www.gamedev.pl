@@ -153,12 +153,14 @@ export interface ResolveAssessmentInput {
   status: AssessmentResolutionStatus | null;
   comment?: string;
   link?: string | null;
+  // Verdict generation this resolution answers; a newer row is refused.
+  expectedUpdatedAt?: string;
 }
 
 // Records the operator follow-up on one verdict or game.
 export async function resolveAssessment(
   input: ResolveAssessmentInput,
-): Promise<{ assessments: GameAssessment[]; resolved: boolean }> {
+): Promise<{ assessments: GameAssessment[]; resolved: boolean; stale: string[] }> {
   const res = await fetch(`${API_BASE}/api/admin/assessments/resolve`, {
     method: 'POST',
     credentials: 'include',

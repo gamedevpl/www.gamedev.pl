@@ -21,6 +21,8 @@ export const ResolveAssessmentSchema = z
     status: ResolutionStatusSchema.nullable(),
     comment: z.string().trim().max(MAX_RESOLUTION_COMMENT).optional(),
     link: z.string().trim().max(MAX_RESOLUTION_LINK).nullable().optional(),
+    // Verdict generation this resolution answers; a newer row is refused.
+    expectedUpdatedAt: z.string().trim().min(1).max(40).optional(),
   })
   .strict();
 
@@ -101,21 +103,37 @@ export async function registerAssessmentResolutionRoute(
 
     // Named reviewer: one row. Unnamed: the whole game.
     const targets = body.data.reviewerUid
-      ? [body.data.reviewerUid]
-      : (await store.listGameAssessmentsBySlug(body.data.slug)).map((row) => row.reviewerUid);
+      ? [{ reviewerUid: body.data.reviewerUid, expectedUpdatedAt: body.data.expectedUpdatedAt }]
+      : (await store.listGameAssessmentsBySlug(body.data.slug)).map((row) => ({
+          reviewerUid: row.reviewerUid,
+          expectedUpdatedAt: row.updatedAt,
+        }));
     if (targets.length === 0) {
       return reply.status(404).send({ error: 'not found' });
     }
 
     const updated: GameAssessment[] = [];
-    for (const reviewerUid of targets) {
-      const row = await store.setGameAssessmentResolution(body.data.slug, reviewerUid, resolution);
-      if (row) updated.push(row);
+    const stale: string[] = [];
+    let missing = 0;
+    for (const target of targets) {
+      const result = await store.setGameAssessmentResolution(
+        body.data.slug,
+        target.reviewerUid,
+        resolution,
+        target.expectedUpdatedAt,
+      );
+      if (result.status === 'ok') updated.push(result.assessment);
+      else if (result.status === 'stale') stale.push(target.reviewerUid);
+      else missing += 1;
     }
-    if (updated.length === 0) {
+    if (updated.length === 0 && stale.length > 0) {
+      // The verdict moved under the operator; re-read before resolving again.
+      return reply.status(409).send({ error: 'stale_verdict', stale });
+    }
+    if (updated.length === 0 && missing > 0) {
       return reply.status(404).send({ error: 'not found' });
     }
 
-    return { assessments: updated, resolved: resolution !== null };
+    return { assessments: updated, resolved: resolution !== null, stale };
   });
 }
