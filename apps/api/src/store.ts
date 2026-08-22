@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { FieldValue, Firestore, type DocumentData, type Query } from '@google-cloud/firestore';
+import { FieldValue, Firestore, type DocumentData } from '@google-cloud/firestore';
 import type { AssessmentSource, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
 import { MANAGED_AGENT_VENDORS } from '@gamedevpl/contract';
 import type { AgentTaskState } from './agent-state.js';
@@ -97,14 +97,12 @@ import type { CreationLimits, PublicPlayConfig, FeaturedPoolConfig, UsageCounter
 export type { CreationLimits, PublicPlayConfig, FeaturedPoolConfig, UsageCounters };
 import type { TelemetryEventType, TelemetryEvent, VisitEvent } from './store/records/telemetry.js';
 export type { TelemetryEventType, TelemetryEvent, VisitEvent };
-import {
-  TELEMETRY_RETENTION_DAYS,
-  TELEMETRY_TTL_FIELD,
-  TELEMETRY_COLLECTION,
-  VISIT_COLLECTION,
-  telemetryExpiresAt,
-} from './store/records/telemetry.js';
-export { TELEMETRY_RETENTION_DAYS, TELEMETRY_TTL_FIELD, TELEMETRY_COLLECTION, VISIT_COLLECTION, telemetryExpiresAt };
+// The retention constants (TELEMETRY_TTL_FIELD, telemetryExpiresAt, ...) are no longer
+// re-exported here -- their only consumers were InMemoryStore/FirestoreStore, both now in
+// ./store/slices/telemetry.js, and store.test.ts, now store/records/telemetry.test.ts.
+import type { TelemetryStore } from './store/slices/telemetry.js';
+export type { TelemetryStore };
+import { InMemoryTelemetryStore, FirestoreTelemetryStore } from './store/slices/telemetry.js';
 import type {
   NotificationType,
   ProposalNotificationType,
@@ -723,26 +721,8 @@ export interface PublicationStore {
   listGameSlugs(): Promise<string[]>;
 }
 
-export interface TelemetryStore {
-  /**
-   * Appends validated play-session events. Date-partitioned so a TTL policy can
-   * expire a whole day at once and the aggregation job reads one partition rather
-   * than fanning out across every submission.
-   */
-  appendTelemetryEvents(dateStr: string, events: TelemetryEvent[]): Promise<void>;
-
-  /** One day's events for a game — the read the aggregation job (IL-2) will use. */
-  listTelemetryEvents(dateStr: string, opts?: { slug?: string; limit?: number }): Promise<TelemetryEvent[]>;
-
-  /** Appends visit-level events to one day's partition. */
-  appendVisitEvents(dateStr: string, events: VisitEvent[]): Promise<void>;
-
-  /** One day's visit events — funnel, depth, and acquisition reads. */
-  listVisitEvents(
-    dateStr: string,
-    opts?: { visitId?: string; limit?: number; type?: VisitEvent['type']; excludeType?: VisitEvent['type'] },
-  ): Promise<VisitEvent[]>;
-}
+// TelemetryStore, InMemoryTelemetryStore and FirestoreTelemetryStore live in
+// ./store/slices/telemetry.js -- imported at the top of the file (Phase 2 wave 4).
 
 export interface QuotaStore {
   /** Today's usage counters for a user, without incrementing anything. */
@@ -1508,10 +1488,7 @@ export class InMemoryStore implements Store {
   private featuredPoolConfig: FeaturedPoolConfig | null = null;
   private waitlist = new Map<string, WaitlistEntry>();
   private betaInvites = new Map<string, BetaInvite>();
-  // yyyymmdd -> events recorded that day
-  private telemetry = new Map<string, TelemetryEvent[]>();
-  // yyyymmdd -> visit events recorded that day
-  private visits = new Map<string, VisitEvent[]>();
+  private telemetryStore = new InMemoryTelemetryStore();
   // uid -> (notificationId -> notification)
   private notifications = new Map<string, Map<string, StoredNotification>>();
   // uid -> (endpoint-hash -> subscription)
@@ -2510,34 +2487,22 @@ export class InMemoryStore implements Store {
   }
 
   async appendTelemetryEvents(dateStr: string, events: TelemetryEvent[]): Promise<void> {
-    const existing = this.telemetry.get(dateStr) ?? [];
-    existing.push(...events.map((event) => ({ ...event })));
-    this.telemetry.set(dateStr, existing);
+    return this.telemetryStore.appendTelemetryEvents(dateStr, events);
   }
 
   async listTelemetryEvents(dateStr: string, opts?: { slug?: string; limit?: number }): Promise<TelemetryEvent[]> {
-    return (this.telemetry.get(dateStr) ?? [])
-      .filter((event) => opts?.slug === undefined || event.slug === opts.slug)
-      .slice(0, opts?.limit ?? 1000)
-      .map((event) => ({ ...event }));
+    return this.telemetryStore.listTelemetryEvents(dateStr, opts);
   }
 
   async appendVisitEvents(dateStr: string, events: VisitEvent[]): Promise<void> {
-    const existing = this.visits.get(dateStr) ?? [];
-    existing.push(...events.map((event) => ({ ...event })));
-    this.visits.set(dateStr, existing);
+    return this.telemetryStore.appendVisitEvents(dateStr, events);
   }
 
   async listVisitEvents(
     dateStr: string,
     opts?: { visitId?: string; limit?: number; type?: VisitEvent['type']; excludeType?: VisitEvent['type'] },
   ): Promise<VisitEvent[]> {
-    return (this.visits.get(dateStr) ?? [])
-      .filter((event) => opts?.visitId === undefined || event.visitId === opts.visitId)
-      .filter((event) => opts?.type === undefined || event.type === opts.type)
-      .filter((event) => opts?.excludeType === undefined || event.type !== opts.excludeType)
-      .slice(0, opts?.limit ?? 1000)
-      .map((event) => ({ ...event }));
+    return this.telemetryStore.listVisitEvents(dateStr, opts);
   }
 
   async getUsage(uid: string, dateStr: string): Promise<UsageCounters> {
@@ -3946,9 +3911,11 @@ export class InMemoryStore implements Store {
 
 export class FirestoreStore implements Store {
   private db: Firestore;
+  private telemetryStore: FirestoreTelemetryStore;
 
   constructor(db?: Firestore) {
     this.db = db ?? new Firestore();
+    this.telemetryStore = new FirestoreTelemetryStore(this.db);
   }
 
   async getUser(uid: string): Promise<User | null> {
@@ -5211,68 +5178,23 @@ export class FirestoreStore implements Store {
     await batch.commit();
   }
 
-  private telemetryCollection(dateStr: string) {
-    return this.db.collection('telemetry').doc(dateStr).collection(TELEMETRY_COLLECTION);
-  }
-
-  private visitCollection(dateStr: string) {
-    return this.db.collection('telemetry').doc(dateStr).collection(VISIT_COLLECTION);
-  }
-
   async appendVisitEvents(dateStr: string, events: VisitEvent[]): Promise<void> {
-    if (events.length === 0) return;
-    const collection = this.visitCollection(dateStr);
-    const batch = this.db.batch();
-    events.forEach((event) =>
-      batch.set(collection.doc(randomUUID()), { ...event, [TELEMETRY_TTL_FIELD]: telemetryExpiresAt(event.at) }),
-    );
-    await batch.commit();
+    return this.telemetryStore.appendVisitEvents(dateStr, events);
   }
 
   async listVisitEvents(
     dateStr: string,
     opts?: { visitId?: string; limit?: number; type?: VisitEvent['type']; excludeType?: VisitEvent['type'] },
   ): Promise<VisitEvent[]> {
-    const base = this.visitCollection(dateStr);
-    let query: Query<DocumentData> = base;
-    if (opts?.visitId !== undefined) query = query.where('visitId', '==', opts.visitId);
-    if (opts?.type !== undefined) query = query.where('type', '==', opts.type);
-    if (opts?.excludeType !== undefined) query = query.where('type', '!=', opts.excludeType);
-    const snap = await query.limit(opts?.limit ?? 1000).get();
-    return snap.docs.map((doc) => {
-      const event = doc.data();
-      delete event[TELEMETRY_TTL_FIELD];
-      return event as VisitEvent;
-    });
+    return this.telemetryStore.listVisitEvents(dateStr, opts);
   }
 
   async appendTelemetryEvents(dateStr: string, events: TelemetryEvent[]): Promise<void> {
-    if (events.length === 0) return;
-    // One batch per flush: a play session sends a handful of events at a time, well
-    // inside Firestore's 500-write batch limit (the route caps a request long before).
-    const collection = this.telemetryCollection(dateStr);
-    const batch = this.db.batch();
-    events.forEach((event) =>
-      // `expiresAt` is written as a Date so the driver stores a real Timestamp: a TTL
-      // policy ignores a field of any other type, which would leave the row forever.
-      batch.set(collection.doc(randomUUID()), { ...event, [TELEMETRY_TTL_FIELD]: telemetryExpiresAt(event.at) }),
-    );
-    await batch.commit();
+    return this.telemetryStore.appendTelemetryEvents(dateStr, events);
   }
 
   async listTelemetryEvents(dateStr: string, opts?: { slug?: string; limit?: number }): Promise<TelemetryEvent[]> {
-    // Equality-only filter plus a limit, so no composite index is needed.
-    const base = this.telemetryCollection(dateStr);
-    const query = opts?.slug === undefined ? base : base.where('slug', '==', opts.slug);
-    const snap = await query.limit(opts?.limit ?? 1000).get();
-    return snap.docs.map((doc) => {
-      // Retention plumbing stays out of the domain object, so a reader cannot mistake
-      // it for signal and the privacy field-allowlist stays exactly the event's fields.
-      // `data()` hands back a fresh object per call, so dropping the field is local.
-      const event = doc.data();
-      delete event[TELEMETRY_TTL_FIELD];
-      return event as TelemetryEvent;
-    });
+    return this.telemetryStore.listTelemetryEvents(dateStr, opts);
   }
 
   async getUsage(uid: string, dateStr: string): Promise<UsageCounters> {
