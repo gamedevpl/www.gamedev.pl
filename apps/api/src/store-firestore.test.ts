@@ -523,6 +523,39 @@ describe('the fake itself', () => {
     expect((await col.where('n', '>=', 2).get()).docs.map((doc) => doc.id)).toEqual(['b', 'c']);
   });
 
+  it('excludes documents missing the range-filtered field, like listAccountsDueForDeletion', async () => {
+    // A user who was never scheduled for deletion has no `deletionScheduledFor` at all --
+    // real Firestore excludes it from a `<=` query rather than treating the gap as a match.
+    const { db } = fakeFirestore();
+    const col = db.collection('users');
+    await col.doc('scheduled').set({ deletionScheduledFor: '2026-01-01' });
+    await col.doc('untouched').set({ name: 'still here' });
+
+    const found = await col.where('deletionScheduledFor', '<=', '2026-06-01').get();
+    expect(found.docs.map((doc) => doc.id)).toEqual(['scheduled']);
+  });
+
+  it('excludes documents missing the orderBy field too, not just range-filtered ones', async () => {
+    const { db } = fakeFirestore();
+    const col = db.collection('items');
+    await col.doc('has-field').set({ n: 1 });
+    await col.doc('no-field').set({ other: 'x' });
+
+    const found = await col.orderBy('n', 'asc').get();
+    expect(found.docs.map((doc) => doc.id)).toEqual(['has-field']);
+  });
+
+  it('resolves dotted field paths, the way listSeedOutcomesSince reads seedOutcome.at', async () => {
+    const { db } = fakeFirestore();
+    const col = db.collection('submissions');
+    await col.doc('1').set({ seedOutcome: { at: '2026-01-01' } });
+    await col.doc('2').set({ seedOutcome: { at: '2026-03-01' } });
+    await col.doc('3').set({ other: 'no seedOutcome at all' });
+
+    const found = await col.where('seedOutcome.at', '>=', '2026-02-01').orderBy('seedOutcome.at', 'desc').get();
+    expect(found.docs.map((doc) => doc.id)).toEqual(['2']);
+  });
+
   it('supports "in", the way listSuggestions/listProposals filter by status set', async () => {
     const { db } = fakeFirestore();
     const col = db.collection('items');

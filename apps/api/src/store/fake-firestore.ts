@@ -151,11 +151,22 @@ export function fakeFirestore() {
       path.endsWith(`/${group}`),
     );
 
+  // 'seedOutcome.at' reads data.seedOutcome.at, never a literal top-level key.
+  const getField = (data: Record<string, unknown>, path: string): unknown =>
+    path.split('.').reduce<unknown>((value, segment) => {
+      if (value && typeof value === 'object' && segment in (value as object)) {
+        return (value as Record<string, unknown>)[segment];
+      }
+      return undefined;
+    }, data);
+
   type QueryOpts = {
     max?: number;
     order?: { field: string; direction: 'asc' | 'desc' };
     select?: string[];
     afterId?: string;
+    // Fields real Firestore requires present -- an inequality filter or orderBy target.
+    requireFields?: string[];
   };
 
   // No orderBy -> stable Map insertion order (real Firestore uses __name__).
@@ -168,14 +179,15 @@ export function fakeFirestore() {
       let found = paths.flatMap((path) =>
         idsUnder(path)
           .map((id) => ({ path, id, data: docs.get(key(path, id)) ?? {} }))
+          .filter((row) => (opts.requireFields ?? []).every((field) => getField(row.data, field) !== undefined))
           .filter((row) => (filter ? filter(row.data) : true)),
       );
       if (opts.order) {
         const { field, direction } = opts.order;
         const sign = direction === 'desc' ? -1 : 1;
         found = [...found].sort((a, b) => {
-          const av = a.data[field];
-          const bv = b.data[field];
+          const av = getField(a.data, field);
+          const bv = getField(b.data, field);
           if (av === bv) return 0;
           return (av! < bv! ? -1 : 1) * sign;
         });
@@ -187,30 +199,38 @@ export function fakeFirestore() {
       return opts.max === undefined ? found : found.slice(0, opts.max);
     };
     const project = (data: Record<string, unknown>) =>
-      opts.select ? Object.fromEntries(opts.select.map((field) => [field, data[field]])) : data;
+      opts.select ? Object.fromEntries(opts.select.map((field) => [field, getField(data, field)])) : data;
+    // == and in already exclude an absent field naturally; only inequalities need this.
+    const withRequired = (field: string, op: string) =>
+      op === '==' || op === 'in' ? opts : { ...opts, requireFields: [...(opts.requireFields ?? []), field] };
     const query = {
       where: (field: string, op: string, value: unknown) => {
         const test =
           op === '=='
-            ? (data: Record<string, unknown>) => data[field] === value
+            ? (data: Record<string, unknown>) => getField(data, field) === value
             : op === '!='
-              ? (data: Record<string, unknown>) => data[field] !== value
+              ? (data: Record<string, unknown>) => getField(data, field) !== value
               : op === '<'
-                ? (data: Record<string, unknown>) => lessThan(data[field], value)
+                ? (data: Record<string, unknown>) => lessThan(getField(data, field), value)
                 : op === '<='
-                  ? (data: Record<string, unknown>) => !lessThan(value, data[field])
+                  ? (data: Record<string, unknown>) => !lessThan(value, getField(data, field))
                   : op === '>'
-                    ? (data: Record<string, unknown>) => lessThan(value, data[field])
+                    ? (data: Record<string, unknown>) => lessThan(value, getField(data, field))
                     : op === '>='
-                      ? (data: Record<string, unknown>) => !lessThan(data[field], value)
+                      ? (data: Record<string, unknown>) => !lessThan(getField(data, field), value)
                       : op === 'in'
-                        ? (data: Record<string, unknown>) => Array.isArray(value) && value.includes(data[field])
+                        ? (data: Record<string, unknown>) =>
+                            Array.isArray(value) && value.includes(getField(data, field))
                         : null;
         if (!test) throw new Error(`fake doesn't support the "${op}" operator`);
-        return makeQuery(paths, (data) => (filter ? filter(data) : true) && test(data), opts);
+        return makeQuery(paths, (data) => (filter ? filter(data) : true) && test(data), withRequired(field, op));
       },
       orderBy: (field: string, direction: 'asc' | 'desc' = 'asc') =>
-        makeQuery(paths, filter, { ...opts, order: { field, direction } }),
+        makeQuery(paths, filter, {
+          ...opts,
+          order: { field, direction },
+          requireFields: [...(opts.requireFields ?? []), field],
+        }),
       select: (...fields: string[]) => makeQuery(paths, filter, { ...opts, select: fields }),
       // Matched by id -- unique within any single flat collection queried here.
       startAfter: (cursor: { id: string }) => makeQuery(paths, filter, { ...opts, afterId: cursor.id }),
