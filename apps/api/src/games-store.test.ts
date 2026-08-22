@@ -842,6 +842,59 @@ describe('GCS games store', () => {
     expect(result.files.map((f) => f.path).sort()).toEqual(['SPEC.md', 'game.ts']);
   });
 
+  it('handles high concurrency (20 parallel staged source file updates) without dropping updates', async () => {
+    const objects = new Map<string, Buffer>();
+    const generations = new Map<string, number>();
+    const impl = (async (url: string | URL, init: RequestInit = {}) => {
+      const href = String(url);
+      if (init.method === 'POST') {
+        const parsed = new URL(href);
+        const name = decodeURIComponent(parsed.searchParams.get('name') ?? '');
+        const ifMatch = parsed.searchParams.get('ifGenerationMatch');
+        const current = generations.get(name) ?? 0;
+        if (ifMatch !== null && Number(ifMatch) !== current) {
+          return new Response('Precondition Failed', { status: 412 });
+        }
+        objects.set(name, Buffer.from(init.body as Uint8Array));
+        const next = current + 1;
+        generations.set(name, next);
+        return new Response('{}', { status: 200 });
+      }
+      if (init.method === 'DELETE') {
+        const name = decodeURIComponent(href.split('/o/')[1].split('?')[0]);
+        objects.delete(name);
+        generations.delete(name);
+        return new Response(null, { status: 200 });
+      }
+      const name = decodeURIComponent(href.split('/o/')[1].split('?')[0]);
+      const body = objects.get(name);
+      if (!body) return new Response('', { status: 404 });
+      return new Response(new Uint8Array(body), {
+        status: 200,
+        headers: { 'x-goog-generation': String(generations.get(name) ?? 1) },
+      });
+    }) as unknown as typeof fetch;
+
+    const store = createGcsGamesStore({ ...base, fetchImpl: impl });
+    const paths = Array.from({ length: 20 }, (_, i) => `game/submodule-${i}.ts`);
+
+    const results = await Promise.all(
+      paths.map((path) =>
+        store.putStagedSourceFile({
+          slug: 'g',
+          issueNumber: 7,
+          roundGeneration: 1,
+          path,
+          content: `export const mod = "${path}";`,
+        }),
+      ),
+    );
+
+    expect(results).toHaveLength(20);
+    const listed = await store.listStagedSources({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
+    expect(listed.files.map((f) => f.path).sort()).toEqual(paths.sort());
+  });
+
   it('records kit_outdated on a preview-lane check without touching gate', async () => {
     const { impl } = stubGcs();
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
