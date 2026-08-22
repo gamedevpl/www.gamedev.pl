@@ -4,7 +4,14 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HeroPromptSection } from './HeroPromptSection.js';
+import { toBase64PngList } from './attachmentImages.js';
 import i18n from './i18n/index.js';
+
+vi.mock('./attachmentImages.js', () => ({
+  toBase64PngList: vi.fn(),
+}));
+
+const mockedToBase64PngList = vi.mocked(toBase64PngList);
 
 async function flushEffects() {
   await Promise.resolve();
@@ -16,6 +23,7 @@ describe('HeroPromptSection', () => {
     document.body.innerHTML = '';
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    mockedToBase64PngList.mockReset();
   });
 
   it('renders prompt inputs and attach, voice, build controls', async () => {
@@ -323,6 +331,65 @@ describe('HeroPromptSection', () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
     expect(container.querySelector<HTMLButtonElement>('.build-btn')?.disabled).toBe(false);
+
+    await act(async () => root.unmount());
+  });
+
+  it('disables Build while an attachment is being normalized', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    let resolveNormalization!: (images: string[]) => void;
+    mockedToBase64PngList.mockReturnValue(
+      new Promise((resolve) => {
+        resolveNormalization = resolve;
+      }),
+    );
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const onSubmitSpec = vi.fn();
+
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'a quiet garden game',
+          catalogEntries: [],
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec,
+        }),
+      );
+      await flushEffects();
+    });
+
+    const card = container.querySelector('.hero-prompt-card')!;
+    const file = new File(['fake'], 'sprite.png', { type: 'image/png' });
+    await act(async () => {
+      const drop = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent;
+      Object.defineProperty(drop, 'dataTransfer', {
+        value: { files: [file] },
+      });
+      card.dispatchEvent(drop);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    await act(async () => {
+      container
+        .querySelector('.prompt-box-form')
+        ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await flushEffects();
+    });
+    expect(container.querySelector<HTMLButtonElement>('.build-btn')?.disabled).toBe(true);
+    expect(onSubmitSpec).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveNormalization(['small']);
+      await flushEffects();
+    });
+    expect(container.querySelector<HTMLButtonElement>('.build-btn')?.disabled).toBe(false);
+    expect(onSubmitSpec).toHaveBeenCalledTimes(1);
 
     await act(async () => root.unmount());
   });
