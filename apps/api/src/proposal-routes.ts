@@ -16,6 +16,7 @@
 // all live in `proposals.ts` / `proposal-state.ts`; this module validates input, resolves
 // who is asking, and maps refusals onto status codes.
 
+import type { ContributionMode } from '@gamedevpl/contract';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { isAdminSession } from './admin-session.js';
@@ -37,7 +38,7 @@ import {
   MIN_PROPOSAL_DESCRIPTION_LENGTH,
   type ProposalDeps,
 } from './proposals.js';
-import type { ContributionMode, ProposalRecord, Store } from './store.js';
+import type { ProposalRecord, Store } from './store.js';
 
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 

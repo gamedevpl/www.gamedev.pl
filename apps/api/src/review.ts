@@ -1,3 +1,4 @@
+import type { AssessmentNoteOrigin, AssessmentSource, AssessmentVerdict, ReviewSweepSource } from '@gamedevpl/contract';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { isAdmin, isAdminSession } from './admin-session.js';
@@ -16,13 +17,9 @@ import { sanitizeCreatorText } from './submission-status.js';
 import type {
   AssessmentChecklist,
   AssessmentClientContext,
-  AssessmentNoteOrigin,
-  AssessmentSource,
-  AssessmentVerdict,
   GameAssessment,
   ReReviewRequest,
   ReviewSweep,
-  ReviewSweepSource,
   Store,
   SubmissionRecord,
 } from './store.js';

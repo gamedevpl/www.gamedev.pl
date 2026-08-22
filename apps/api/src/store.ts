@@ -1,5 +1,20 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { FieldValue, Firestore, type DocumentData, type Query } from '@google-cloud/firestore';
+import type {
+  AssessmentChecklistMark,
+  AssessmentInputMethod,
+  AssessmentNoteOrigin,
+  AssessmentPlatform,
+  AssessmentSource,
+  AssessmentVerdict,
+  BetaInviteStatus,
+  ContributionMode,
+  ReReviewRequestStatus,
+  ReviewSweepSource,
+  ReviewSweepStatus,
+  VoteValue,
+  WaitlistStatus,
+} from '@gamedevpl/contract';
 import { MANAGED_AGENT_VENDORS, type ManagedAgentVendorName } from './agent-backend-env.js';
 import type { AgentTaskState } from './agent-state.js';
 import type { SeedFiles } from './agent-backend.js';
@@ -1145,8 +1160,6 @@ export interface PushSubscriptionRecord {
  * (spamming one account), not the expensive one (many accounts), which nothing short
  * of identity verification closes and which this feature does not attempt.
  */
-export type VoteValue = 'up' | 'down';
-
 export interface GameVoteCounts {
   up: number;
   down: number;
@@ -1177,12 +1190,6 @@ export interface PlayerFeedbackRecord {
 }
 
 // Reviewer verdict on one game; see game-assessment-plan.md.
-export type AssessmentVerdict = 'keep' | 'cut' | 'skip';
-export type AssessmentSource = 'catalog' | 'creator';
-export type AssessmentNoteOrigin = 'text' | 'speech' | 'none';
-export type AssessmentInputMethod = 'touch' | 'mouse' | 'mixed';
-export type AssessmentPlatform = 'ios' | 'android' | 'mac' | 'windows' | 'linux' | 'other';
-export type AssessmentChecklistMark = 'ok' | 'weak' | 'bad';
 export type AssessmentChecklist = {
   graphics: AssessmentChecklistMark;
   gameplay: AssessmentChecklistMark;
@@ -1190,8 +1197,6 @@ export type AssessmentChecklist = {
   sound: AssessmentChecklistMark;
   controls: AssessmentChecklistMark;
 };
-export type ReviewSweepStatus = 'active' | 'paused' | 'completed' | 'cancelled';
-export type ReviewSweepSource = 'catalog' | 'creator' | 'all';
 
 // Operator review pass; one active sweep at a time.
 export interface ReviewSweep {
@@ -1269,8 +1274,6 @@ export interface GameAssessmentHistoryEntry extends Omit<GameAssessment, 'id'> {
 }
 
 export const GAME_ASSESSMENT_HISTORY_COLLECTION = 'gameAssessmentHistory';
-
-export type ReReviewRequestStatus = 'open' | 'resolved' | 'cancelled';
 
 // An operator asking one reviewer to look at one slug again.
 export interface ReReviewRequest {
@@ -1682,8 +1685,6 @@ export function compareProposals(a: ProposalRecord, b: ProposalRecord): number {
  * Stored per slug rather than per creator because it is a property of the game — a creator
  * may well want help on one and not on another.
  */
-export type ContributionMode = 'off' | 'review';
-
 export interface GameContributionSettings {
   slug: string;
   mode: ContributionMode;
@@ -1708,8 +1709,6 @@ export interface ContributorBlockRecord {
   createdAt: string;
 }
 
-export type WaitlistStatus = 'pending' | 'approved' | 'rejected';
-
 export interface WaitlistEntry {
   uid: string;
   email?: string;
@@ -1718,8 +1717,6 @@ export interface WaitlistEntry {
   locale?: string;
   status: WaitlistStatus;
 }
-
-export type BetaInviteStatus = 'available' | 'claimed' | 'revoked';
 
 export interface BetaInvite {
   id: string;
@@ -6668,9 +6665,7 @@ export class FirestoreStore implements Store {
     // with no lastNotifiedStatus yet; filtering client-side is simpler and the
     // active set is small (open submissions only).
     const snap = await this.db.collection('submissions').get();
-    return snap.docs
-      .map((d) => d.data() as SubmissionRecord)
-      .filter(isSweepActive);
+    return snap.docs.map((d) => d.data() as SubmissionRecord).filter(isSweepActive);
   }
 
   async listSubmissionsMissingSlug(): Promise<SubmissionRecord[]> {

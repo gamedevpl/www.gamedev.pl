@@ -10,6 +10,16 @@ export {
   type CatalogOrientation,
   type CatalogTouch,
 } from './catalog-vocab.js';
+export {
+  BETA_INVITE_STATUSES,
+  CONTRIBUTION_MODES,
+  VOTE_VALUES,
+  WAITLIST_STATUSES,
+  type BetaInviteStatus,
+  type ContributionMode,
+  type VoteValue,
+  type WaitlistStatus,
+} from './community-vocab.js';
 export { DECLINE_REASONS, type DeclineReason } from './decline-reason.js';
 export { GATE_PROGRESS_LANES, type GateProgressLane } from './gate-progress.js';
 export { deriveGateStatusString, derivePreviewGateStatus, GATE_STATUS_VALUES, type GateStatus } from './gate-status.js';
@@ -25,6 +35,26 @@ export {
   type RemixSuggestionDirection,
   type RemixSuggestionStarterId,
 } from './remix-suggestion.js';
+export {
+  ASSESSMENT_CHECKLIST_MARKS,
+  ASSESSMENT_INPUT_METHODS,
+  ASSESSMENT_NOTE_ORIGINS,
+  ASSESSMENT_PLATFORMS,
+  ASSESSMENT_SOURCES,
+  ASSESSMENT_VERDICTS,
+  RE_REVIEW_REQUEST_STATUSES,
+  REVIEW_SWEEP_SOURCES,
+  REVIEW_SWEEP_STATUSES,
+  type AssessmentChecklistMark,
+  type AssessmentInputMethod,
+  type AssessmentNoteOrigin,
+  type AssessmentPlatform,
+  type AssessmentSource,
+  type AssessmentVerdict,
+  type ReReviewRequestStatus,
+  type ReviewSweepSource,
+  type ReviewSweepStatus,
+} from './review-vocab.js';
 export { SUBMISSION_STATES, type SubmissionState } from './submission-state.js';
 export { TREND_GRAINS, type TrendGrain } from './trend-grain.js';
 export {
