@@ -445,6 +445,44 @@ describe('FirestoreStore shared worlds', () => {
   });
 });
 
+describe('FirestoreStore.createOAuthGrant', () => {
+  it('rejects a duplicate grantId, atomically -- the refresh-token write does not land either', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+
+    await store.createOAuthGrant({
+      grantId: 'dup-grant',
+      clientId: 'client-1',
+      ownerUid: 'g:user-1',
+      scope: 'mcp',
+      createdAt: '2026-08-22T00:00:00Z',
+      refreshFamilyId: 'family-a',
+      currentRefreshTokenId: 'refresh-a',
+      currentRefreshHash: 'hash-a',
+      refreshExpiresAt: '2026-09-22T00:00:00Z',
+    });
+
+    await expect(
+      store.createOAuthGrant({
+        grantId: 'dup-grant',
+        clientId: 'client-1',
+        ownerUid: 'g:user-2',
+        scope: 'mcp',
+        createdAt: '2026-08-22T00:01:00Z',
+        refreshFamilyId: 'family-b',
+        currentRefreshTokenId: 'refresh-b',
+        currentRefreshHash: 'hash-b',
+        refreshExpiresAt: '2026-09-22T00:01:00Z',
+      }),
+    ).rejects.toThrow(/already exists/);
+
+    // The failed create's sibling set() must not have landed either.
+    expect(await store.getOAuthGrantByRefreshTokenId('refresh-b')).toBeNull();
+    // The original grant is untouched, not overwritten by the failed attempt.
+    expect(await store.getOAuthGrant('dup-grant')).toMatchObject({ ownerUid: 'g:user-1' });
+  });
+});
+
 describe('the fake itself', () => {
   it('rejects a nested array the way the real client does', () => {
     // If this ever stops throwing, the argument for storing saves as a string has

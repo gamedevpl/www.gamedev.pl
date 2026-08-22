@@ -68,52 +68,77 @@ export function fakeFirestore() {
       .filter((stored) => stored.startsWith(`${path}/`) && !stored.slice(path.length + 1).includes('/'))
       .map((stored) => stored.slice(path.length + 1));
 
-  const makeRef = (collection: string, id: string) => ({
-    id,
-    // `worlds/{id}/worldEntries` — the grandparent is what names a world, and the
-    // erase path reads exactly that to report which worlds it touched.
-    get parent() {
-      return {
-        get parent() {
-          const segments = collection.split('/');
-          return segments.length >= 3 ? { id: segments[segments.length - 2] } : null;
+  // Splits validate from apply so batch.commit() below can be atomic.
+  const stageFor = (collection: string, id: string) => {
+    const docKey = key(collection, id);
+    return {
+      set: (data: Record<string, unknown>, options?: { merge?: boolean }) => ({
+        validate: () => {
+          rejectUndefined(data);
+          rejectNestedArrays(data);
         },
-      };
-    },
-    get: async () => ({
-      get exists() {
-        return docs.has(key(collection, id));
+        apply: () => {
+          const previous = options?.merge ? (docs.get(docKey) ?? {}) : {};
+          docs.set(docKey, { ...previous, ...data });
+        },
+      }),
+      // Unlike set, the real client refuses a create over an existing document --
+      // several record kinds (OAuth clients/tokens/codes, access tokens) rely on that
+      // to catch an id collision rather than silently overwriting another owner's row.
+      create: (data: Record<string, unknown>) => ({
+        validate: () => {
+          rejectUndefined(data);
+          rejectNestedArrays(data);
+          if (docs.has(docKey)) throw new Error(`ALREADY_EXISTS: document ${docKey} already exists`);
+        },
+        apply: () => docs.set(docKey, { ...data }),
+      }),
+      update: (data: Record<string, unknown>) => ({
+        validate: () => {
+          rejectUndefined(data);
+          rejectNestedArrays(data);
+          if (!docs.has(docKey)) throw new Error('no document to update');
+        },
+        apply: () => docs.set(docKey, { ...docs.get(docKey)!, ...data }),
+      }),
+      delete: () => ({ validate: () => {}, apply: () => docs.delete(docKey) }),
+    };
+  };
+
+  const makeRef = (collection: string, id: string) => {
+    const stage = stageFor(collection, id);
+    // Immediate write: validate then apply, same as inside a batch/transaction.
+    const now = (op: { validate: () => void; apply: () => void }) => {
+      op.validate();
+      op.apply();
+    };
+    return {
+      id,
+      // `worlds/{id}/worldEntries` — the grandparent is what names a world, and the
+      // erase path reads exactly that to report which worlds it touched.
+      get parent() {
+        return {
+          get parent() {
+            const segments = collection.split('/');
+            return segments.length >= 3 ? { id: segments[segments.length - 2] } : null;
+          },
+        };
       },
-      data: () => docs.get(key(collection, id)),
-    }),
-    set: async (data: Record<string, unknown>, options?: { merge?: boolean }) => {
-      rejectUndefined(data);
-      rejectNestedArrays(data);
-      const previous = options?.merge ? (docs.get(key(collection, id)) ?? {}) : {};
-      docs.set(key(collection, id), { ...previous, ...data });
-    },
-    // Unlike set, the real client refuses a create over an existing document --
-    // several record kinds (OAuth clients/tokens/codes, access tokens) rely on that
-    // to catch an id collision rather than silently overwriting another owner's row.
-    create: async (data: Record<string, unknown>) => {
-      rejectUndefined(data);
-      rejectNestedArrays(data);
-      if (docs.has(key(collection, id))) {
-        throw new Error(`ALREADY_EXISTS: document ${key(collection, id)} already exists`);
-      }
-      docs.set(key(collection, id), { ...data });
-    },
-    update: async (data: Record<string, unknown>) => {
-      rejectUndefined(data);
-      rejectNestedArrays(data);
-      if (!docs.has(key(collection, id))) throw new Error('no document to update');
-      docs.set(key(collection, id), { ...docs.get(key(collection, id))!, ...data });
-    },
-    delete: async () => {
-      docs.delete(key(collection, id));
-    },
-    collection: (sub: string) => makeCollection(`${collection}/${id}/${sub}`),
-  });
+      get: async () => ({
+        get exists() {
+          return docs.has(key(collection, id));
+        },
+        data: () => docs.get(key(collection, id)),
+      }),
+      set: async (data: Record<string, unknown>, options?: { merge?: boolean }) => now(stage.set(data, options)),
+      create: async (data: Record<string, unknown>) => now(stage.create(data)),
+      update: async (data: Record<string, unknown>) => now(stage.update(data)),
+      delete: async () => now(stage.delete()),
+      collection: (sub: string) => makeCollection(`${collection}/${id}/${sub}`),
+      // Internal: batch/transaction staging hook, not real Firestore's API.
+      _stage: stage,
+    };
+  };
 
   /** Paths whose last segment is `group`, wherever they sit — a collection group. */
   const groupPaths = (group: string) =>
@@ -175,33 +200,26 @@ export function fakeFirestore() {
     collectionGroup: (group: string) => makeQuery(groupPaths(group), null),
     // Deletes are staged and applied on commit, like the real client — so a test that
     // forgets to commit sees nothing deleted rather than passing by accident.
+
+    // commit() validates every staged write before applying any -- atomic, like real Firestore.
     batch: () => {
-      const staged: Array<() => void> = [];
+      const staged: Array<{ validate: () => void; apply: () => void }> = [];
       return {
-        set: (ref: ReturnType<typeof makeRef>, data: Record<string, unknown>, options?: { merge?: boolean }) => {
-          rejectUndefined(data);
-          rejectNestedArrays(data);
-          staged.push(() => void ref.set(data, options));
-        },
-        create: (ref: ReturnType<typeof makeRef>, data: Record<string, unknown>) => {
-          rejectUndefined(data);
-          rejectNestedArrays(data);
-          staged.push(() => void ref.create(data));
-        },
-        update: (ref: ReturnType<typeof makeRef>, data: Record<string, unknown>) => {
-          rejectUndefined(data);
-          rejectNestedArrays(data);
-          staged.push(() => void ref.update(data));
-        },
-        delete: (ref: { id: string; delete: () => Promise<void> }) => {
-          staged.push(() => void ref.delete());
-        },
+        set: (ref: ReturnType<typeof makeRef>, data: Record<string, unknown>, options?: { merge?: boolean }) =>
+          staged.push(ref._stage.set(data, options)),
+        create: (ref: ReturnType<typeof makeRef>, data: Record<string, unknown>) =>
+          staged.push(ref._stage.create(data)),
+        update: (ref: ReturnType<typeof makeRef>, data: Record<string, unknown>) =>
+          staged.push(ref._stage.update(data)),
+        delete: (ref: ReturnType<typeof makeRef>) => staged.push(ref._stage.delete()),
         commit: async () => {
-          for (const apply of staged) apply();
+          for (const op of staged) op.validate();
+          for (const op of staged) op.apply();
           staged.length = 0;
         },
       };
     },
+    // Writes apply as each tx.* call runs; a failed one now rejects.
     runTransaction: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => {
       const tx = {
         // Aggregate queries are readable inside a transaction in the real client, and
@@ -209,21 +227,24 @@ export function fakeFirestore() {
         // concurrent claim or two tabs can both spend the same last slot.
         get: (target: { get: () => Promise<unknown> }) => target.get(),
         set: (ref: ReturnType<typeof makeRef>, data: Record<string, unknown>, options?: { merge?: boolean }) => {
-          rejectUndefined(data);
-          rejectNestedArrays(data);
-          void ref.set(data, options);
+          const op = ref._stage.set(data, options);
+          op.validate();
+          op.apply();
         },
         create: (ref: ReturnType<typeof makeRef>, data: Record<string, unknown>) => {
-          rejectUndefined(data);
-          rejectNestedArrays(data);
-          void ref.create(data);
+          const op = ref._stage.create(data);
+          op.validate();
+          op.apply();
         },
         update: (ref: ReturnType<typeof makeRef>, data: Record<string, unknown>) => {
-          rejectUndefined(data);
-          rejectNestedArrays(data);
-          void ref.update(data);
+          const op = ref._stage.update(data);
+          op.validate();
+          op.apply();
         },
-        delete: (ref: ReturnType<typeof makeRef>) => void ref.delete(),
+        delete: (ref: ReturnType<typeof makeRef>) => {
+          const op = ref._stage.delete();
+          op.apply();
+        },
       };
       return fn(tx);
     },
