@@ -202,7 +202,7 @@ describe('CreatorStudioView publish→improve handoff', () => {
       // always mounted on whichever token the thread is on, so what proves the handoff
       // followed is that its status poll reads the new job's token continuously, not
       // the published shelf token, once the handoff has happened.
-      expect(mockedGetSubmissionStatus).toHaveBeenCalledWith('new-self-job');
+      expect(mockedGetSubmissionStatus).toHaveBeenCalledWith('new-self-job', expect.any(String));
       mockedGetSubmissionStatus.mockClear();
       await act(async () => {
         const playTab = Array.from(container.querySelectorAll('.studio-head-action.is-primary')).find(Boolean);
