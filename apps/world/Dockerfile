@@ -31,7 +31,8 @@ COPY . .
 # zone, which is the correct refusal (see assertProductionCage) but a terrible way to
 # find out.
 RUN npm ci
-RUN npm run build -w @gamedevpl/zone-core \
+RUN npm run build -w @gamedevpl/contract \
+ && npm run build -w @gamedevpl/zone-core \
  && npm run build -w @gamedevpl/world
 
 # ---- runtime: prod deps only + built output ----
@@ -42,6 +43,7 @@ ENV NODE_ENV=production \
 
 # Workspace manifests must all be present for `npm ci` to resolve the tree.
 COPY package.json package-lock.json ./
+COPY packages/contract/package.json packages/contract/
 COPY packages/game-generator/package.json packages/game-generator/
 COPY packages/zone-core/package.json packages/zone-core/
 COPY apps/api/package.json apps/api/
@@ -53,6 +55,7 @@ RUN npm ci --omit=dev --ignore-scripts
 # runtime layer keeps no toolchain. Both stages are the same base image and the same
 # Node ABI, so the binary is the one this Node will load.
 COPY --from=builder /app/node_modules/isolated-vm node_modules/isolated-vm
+COPY --from=builder /app/packages/contract/dist packages/contract/dist
 COPY --from=builder /app/packages/zone-core/dist packages/zone-core/dist
 COPY --from=builder /app/apps/world/dist apps/world/dist
 
