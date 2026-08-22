@@ -2,16 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FirestoreStore, InMemoryStore, type Store } from '../store.js';
 import { fakeFirestore } from './fake-firestore.js';
 
-/**
- * Runs the same assertions against InMemoryStore and FirestoreStore(fake).
- *
- * `store.test.ts` and `store-firestore.test.ts` predate this file and barely overlap:
- * job transitions, dispatch, publications and quota are InMemory-only tested; saves,
- * worlds, assessments and creation limits are Firestore-only tested. Neither implementation
- * change was ever checked against the other's behaviour. This is the shared spec the
- * north-star plan calls for -- proven here on the oauth and telemetry slices (the
- * cleanest and smallest), widened to the rest as each slice is carved out in a later wave.
- */
+// Runs the same assertions against InMemoryStore and FirestoreStore(fake).
 const IMPLEMENTATIONS: Array<[string, () => Store]> = [
   ['InMemoryStore', () => new InMemoryStore()],
   ['FirestoreStore(fake)', () => new FirestoreStore(fakeFirestore().db)],
