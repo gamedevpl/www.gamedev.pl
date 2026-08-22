@@ -24,10 +24,15 @@ from the baseline and therefore have baseline **0**.
 ```bash
 npm run comment-prose                              # report
 npm run comment-prose -- apps/api/src/store.ts     # one file
-npm run comment-prose -- --write                   # ratchet baselines down after a shrink
+npm run comment-prose -- apps/api/src/foo.ts --write --force   # raise ONE file
+npm run comment-prose -- --write --reseal          # reseal every file
 ```
 
-`--write` refuses to raise a count unless `--force` is passed (seal / repair only).
+A file whose prose genuinely grew may raise its own count with `--write --force`
+**scoped to that path**. Never run `--write` unscoped: it also lowers every other
+baseline to today's count, freezing files nobody touched — the checker now refuses
+that without `--reseal`. Same rule and reasoning as
+[`module-size-debt.md`](./module-size-debt.md).
 
 Games-repo twin: [`gamedevpl/www.gamedev.pl-games` `docs/comment-prose-debt.md`](https://github.com/gamedevpl/www.gamedev.pl-games/blob/main/docs/comment-prose-debt.md)
 (validate Check 34). Keep the word cap and the rule shape aligned.

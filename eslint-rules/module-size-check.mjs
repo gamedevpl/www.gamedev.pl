@@ -3,8 +3,11 @@
  *
  *   npm run module-size
  *   npm run module-size -- apps/api/src/store.ts
- *   npm run module-size -- --write
- *   npm run module-size -- --write --force
+ *   npm run module-size -- apps/api/src/store.ts --write --force
+ *   npm run module-size -- --write --reseal
+ *
+ * Scope a raise to the file that grew. An unscoped --write also *lowers* every other
+ * ceiling to its current size, which silently freezes files nobody touched.
  *
  * Wired into `npm run lint` so the green gate seals it.
  */
@@ -23,7 +26,18 @@ function main() {
   const argv = process.argv.slice(2);
   const write = argv.includes('--write');
   const force = argv.includes('--force');
+  const reseal = argv.includes('--reseal');
   const filters = argv.filter((arg) => !arg.startsWith('--'));
+
+  // An unscoped --write pins every file at today's size, so a one-file fix quietly
+  // costs everyone else their headroom. Make that the deliberate act it always was.
+  if (write && filters.length === 0 && !reseal) {
+    console.error('Refusing an unscoped --write: it lowers every ceiling to current size.');
+    console.error('  Raising one file:  npm run module-size -- <path> --write --force');
+    console.error('  Really reseal all: npm run module-size -- --write --reseal');
+    process.exitCode = 1;
+    return;
+  }
 
   let baseline = null;
   try {

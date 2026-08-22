@@ -3,8 +3,8 @@
  *
  *   npm run comment-prose
  *   npm run comment-prose -- apps/api/src/store.ts
- *   npm run comment-prose -- --write
- *   npm run comment-prose -- --write --force
+ *   npm run comment-prose -- apps/api/src/foo.ts --write --force
+ *   npm run comment-prose -- --write --reseal
  *
  * Wired into `npm run lint` so the green gate seals it.
  */
@@ -23,7 +23,17 @@ function main() {
   const argv = process.argv.slice(2);
   const write = argv.includes('--write');
   const force = argv.includes('--force');
+  const reseal = argv.includes('--reseal');
   const filters = argv.filter((arg) => !arg.startsWith('--'));
+
+  // Twin of the module-size guard: unscoped --write also tightens every other file.
+  if (write && filters.length === 0 && !reseal) {
+    console.error('Refusing an unscoped --write: it lowers every baseline to current words.');
+    console.error('  Raising one file:  npm run comment-prose -- <path> --write --force');
+    console.error('  Really reseal all: npm run comment-prose -- --write --reseal');
+    process.exitCode = 1;
+    return;
+  }
 
   let baseline = null;
   try {
