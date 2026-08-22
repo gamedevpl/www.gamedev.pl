@@ -1,4 +1,4 @@
-import { DECLINE_REASONS, type DeclineReason } from '@gamedevpl/contract';
+import { DECLINE_REASONS, type ContributionMode, type DeclineReason } from '@gamedevpl/contract';
 export { DECLINE_REASONS, type DeclineReason };
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
@@ -208,7 +208,7 @@ export async function requestProposalChanges(id: string, text: string): Promise<
   return proposal;
 }
 
-export type ContributionMode = 'off' | 'review';
+export type { ContributionMode };
 
 export async function getContributionMode(slug: string): Promise<ContributionMode> {
   const { mode } = await request<{ mode?: ContributionMode }>(

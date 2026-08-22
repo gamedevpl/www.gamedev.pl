@@ -1,3 +1,4 @@
+import type { BetaInviteStatus } from '@gamedevpl/contract';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { isAdminSession } from './admin-session.js';
@@ -39,7 +40,6 @@ import {
 import {
   BOT_UID_PREFIX,
   type BetaInvite,
-  type BetaInviteStatus,
   type CreationLimits,
   type FeaturedPoolConfig,
   type PublicPlayConfig,

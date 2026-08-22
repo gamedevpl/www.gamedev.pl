@@ -1,3 +1,4 @@
+import type { ReReviewRequestStatus } from '@gamedevpl/contract';
 import type {
   AssessmentChecklist,
   AssessmentClientContext,
@@ -132,7 +133,7 @@ export async function fetchMyAssessments(): Promise<GameAssessment[]> {
   return body.assessments;
 }
 
-export type ReReviewRequestStatus = 'open' | 'resolved' | 'cancelled';
+export type { ReReviewRequestStatus };
 
 export interface ReReviewRequest {
   id: string;

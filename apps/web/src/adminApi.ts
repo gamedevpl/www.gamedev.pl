@@ -5,7 +5,13 @@
 // rather than as an error, because the operator surface does not confirm its own
 // existence to someone who is not one.
 
-import type { ManagedAgentVendorName } from '@gamedevpl/contract';
+import type {
+  BetaInviteStatus,
+  ManagedAgentVendorName,
+  ReviewSweepSource,
+  ReviewSweepStatus,
+  WaitlistStatus,
+} from '@gamedevpl/contract';
 import type { JobStall } from './adminJobsApi.js';
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
@@ -31,7 +37,7 @@ export interface AdminSummary {
   waitlist: { pending: number };
 }
 
-export type WaitlistStatus = 'pending' | 'approved' | 'rejected';
+export type { WaitlistStatus };
 
 export interface WaitlistEntry {
   uid: string;
@@ -42,7 +48,7 @@ export interface WaitlistEntry {
   status: WaitlistStatus;
 }
 
-export type BetaInviteStatus = 'available' | 'claimed' | 'revoked';
+export type { BetaInviteStatus };
 
 export interface BetaInvite {
   id: string;
@@ -204,8 +210,7 @@ export async function setFeaturedPoolSlugs(slugs: string[]): Promise<FeaturedPoo
   return { error: body.error ?? `request failed (${res.status})` };
 }
 
-export type ReviewSweepStatus = 'active' | 'paused' | 'completed' | 'cancelled';
-export type ReviewSweepSource = 'catalog' | 'creator' | 'all';
+export type { ReviewSweepSource, ReviewSweepStatus };
 
 export interface ReviewSweepProgress {
   total: number;

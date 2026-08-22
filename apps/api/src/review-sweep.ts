@@ -1,4 +1,5 @@
-import type { ReviewSweep, ReviewSweepStatus } from './store.js';
+import type { ReviewSweepStatus } from '@gamedevpl/contract';
+import type { ReviewSweep } from './store.js';
 
 export const REVIEW_SWEEP_DAY_MS = 24 * 60 * 60 * 1000;
 

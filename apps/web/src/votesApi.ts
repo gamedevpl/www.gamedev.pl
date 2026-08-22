@@ -2,9 +2,11 @@
 // is public — `credentials: 'include'` just lets a signed-in caller also learn their
 // own vote — but casting or clearing one needs a session, same as push subscriptions.
 
+import type { VoteValue } from '@gamedevpl/contract';
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
-export type VoteValue = 'up' | 'down';
+export type { VoteValue };
 
 export interface VoteCounts {
   up: number;

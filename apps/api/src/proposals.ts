@@ -24,6 +24,7 @@
 // or serve any HTTP (see `proposal-routes.ts`). It is the domain layer both of those call.
 
 import { randomUUID } from 'node:crypto';
+import type { ContributionMode } from '@gamedevpl/contract';
 import type { FastifyBaseLogger } from 'fastify';
 import { logModerationRejection } from './moderation-metrics.js';
 import type { ContentChecker } from './moderation.js';
@@ -46,7 +47,6 @@ import {
 } from './proposal-state.js';
 import {
   MAX_PROPOSAL_MESSAGES,
-  type ContributionMode,
   type ProposalBase,
   type ProposalMessage,
   type ProposalRecord,
