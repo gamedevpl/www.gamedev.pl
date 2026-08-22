@@ -125,6 +125,7 @@ export function HeroPromptSection({
   const [attachments, setAttachments] = useState<VisualAttachment[]>([]);
   // FileReader work not yet landed in attachments.
   const [pendingAttachmentReads, setPendingAttachmentReads] = useState(0);
+  const [isPreparingAttachments, setIsPreparingAttachments] = useState(false);
   const [isSketchOpen, setIsSketchOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -283,7 +284,7 @@ export function HeroPromptSection({
   };
 
   // Desktop clips Build label; spinner + status must stay visible.
-  const isBusy = submissionStatus !== 'idle';
+  const isBusy = submissionStatus !== 'idle' || isPreparingAttachments;
   const busyLabel =
     submissionStatus === 'refining'
       ? t('qa.analyzing')
@@ -342,21 +343,27 @@ export function HeroPromptSection({
     const trimmed = promptText.trim();
     if (!trimmed && attachments.length === 0) return;
 
-    // Normalizes to PNG so an uploaded JPEG/WebP passes the backend's signature check.
-    const referenceImages = await toBase64PngList(attachments.slice(0, MAX_ATTACHMENTS).map((a) => a.dataUrl));
+    const hasAttachments = attachments.length > 0;
+    if (hasAttachments) setIsPreparingAttachments(true);
+    try {
+      // Normalizes to PNG so an uploaded JPEG/WebP passes the backend's signature check.
+      const referenceImages = await toBase64PngList(attachments.slice(0, MAX_ATTACHMENTS).map((a) => a.dataUrl));
 
-    let finalPrompt = trimmed;
-    if (attachments.length > 0) {
-      const attachSummary = attachments.map((a) => a.name).join(', ');
-      finalPrompt = trimmed
-        ? `${trimmed}\n\n[Visual attachments: ${attachSummary}]`
-        : `Game idea with attached visuals: ${attachSummary}`;
+      let finalPrompt = trimmed;
+      if (attachments.length > 0) {
+        const attachSummary = attachments.map((a) => a.name).join(', ');
+        finalPrompt = trimmed
+          ? `${trimmed}\n\n[Visual attachments: ${attachSummary}]`
+          : `Game idea with attached visuals: ${attachSummary}`;
+      }
+
+      // Funnel step: they asked for a game, signed-in or not.
+      recordCreateStep('spec_submitted');
+      // Naming happens in confirm; do not invent a title from the prompt.
+      onSubmitSpec(finalPrompt, referenceImages.length > 0 ? referenceImages : undefined);
+    } finally {
+      if (hasAttachments) setIsPreparingAttachments(false);
     }
-
-    // Funnel step: they asked for a game, signed-in or not.
-    recordCreateStep('spec_submitted');
-    // Naming happens in confirm; do not invent a title from the prompt.
-    onSubmitSpec(finalPrompt, referenceImages.length > 0 ? referenceImages : undefined);
   };
 
   return (
