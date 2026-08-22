@@ -66,6 +66,62 @@ export function summarizeResolutions(rows: GameAssessment[]): AssessmentResoluti
   return { resolved, open: rows.length - resolved };
 }
 
+export type PreparedResolution = { ok: true; resolution: AssessmentResolution | null } | { ok: false; error: string };
+
+// Sanitizes like a reviewer note; a real status needs a comment.
+export function prepareResolution(
+  input: { status: AssessmentResolutionStatus | null; comment?: string | null; link?: string | null },
+  resolvedBy: string,
+  nowMs: number,
+): PreparedResolution {
+  if (input.status === null) return { ok: true, resolution: null };
+  const comment = sanitizeCreatorText(input.comment?.trim() ?? '', { singleLine: false }).slice(
+    0,
+    MAX_RESOLUTION_COMMENT,
+  );
+  if (!comment) return { ok: false, error: 'comment is required' };
+  const link = input.link ? sanitizeCreatorText(input.link, { singleLine: true }).slice(0, MAX_RESOLUTION_LINK) : null;
+  return { ok: true, resolution: buildResolution({ status: input.status, comment, link }, resolvedBy, nowMs) };
+}
+
+export interface AppliedResolution {
+  updated: GameAssessment[];
+  // Reviewers whose verdict moved between the read and the write.
+  stale: string[];
+  missing: number;
+}
+
+// Writes one resolution across its targets.
+export async function applyResolution(
+  store: Store,
+  target: { slug: string; reviewerUid?: string; expectedUpdatedAt?: string },
+  resolution: AssessmentResolution | null,
+): Promise<AppliedResolution> {
+  // Named reviewer: one row. Unnamed: the whole game, each pinned.
+  const targets = target.reviewerUid
+    ? [{ reviewerUid: target.reviewerUid, expectedUpdatedAt: target.expectedUpdatedAt }]
+    : (await store.listGameAssessmentsBySlug(target.slug)).map((row) => ({
+        reviewerUid: row.reviewerUid,
+        expectedUpdatedAt: row.updatedAt,
+      }));
+
+  const updated: GameAssessment[] = [];
+  const stale: string[] = [];
+  let missing = 0;
+  for (const one of targets) {
+    const result = await store.setGameAssessmentResolution(
+      target.slug,
+      one.reviewerUid,
+      resolution,
+      one.expectedUpdatedAt,
+    );
+    if (result.status === 'ok') updated.push(result.assessment);
+    else if (result.status === 'stale') stale.push(one.reviewerUid);
+    else missing += 1;
+  }
+  return { updated, stale, missing };
+}
+
 export interface AssessmentResolutionRouteOptions {
   store: Store;
   adminUids: Set<string>;
@@ -88,52 +144,20 @@ export async function registerAssessmentResolutionRoute(
       return reply.status(400).send({ error: body.error.issues[0]?.message ?? 'invalid request' });
     }
 
-    let resolution: AssessmentResolution | null = null;
-    if (body.data.status !== null) {
-      const comment = sanitizeCreatorText(body.data.comment?.trim() ?? '', { singleLine: false }).slice(
-        0,
-        MAX_RESOLUTION_COMMENT,
-      );
-      if (!comment) {
-        return reply.status(400).send({ error: 'comment is required' });
-      }
-      const link = body.data.link ? sanitizeCreatorText(body.data.link, { singleLine: true }).slice(0, 300) : null;
-      resolution = buildResolution({ status: body.data.status, comment, link }, request.user!.uid, now());
+    const prepared = prepareResolution(body.data, request.user!.uid, now());
+    if (!prepared.ok) {
+      return reply.status(400).send({ error: prepared.error });
     }
 
-    // Named reviewer: one row. Unnamed: the whole game.
-    const targets = body.data.reviewerUid
-      ? [{ reviewerUid: body.data.reviewerUid, expectedUpdatedAt: body.data.expectedUpdatedAt }]
-      : (await store.listGameAssessmentsBySlug(body.data.slug)).map((row) => ({
-          reviewerUid: row.reviewerUid,
-          expectedUpdatedAt: row.updatedAt,
-        }));
-    if (targets.length === 0) {
-      return reply.status(404).send({ error: 'not found' });
-    }
-
-    const updated: GameAssessment[] = [];
-    const stale: string[] = [];
-    let missing = 0;
-    for (const target of targets) {
-      const result = await store.setGameAssessmentResolution(
-        body.data.slug,
-        target.reviewerUid,
-        resolution,
-        target.expectedUpdatedAt,
-      );
-      if (result.status === 'ok') updated.push(result.assessment);
-      else if (result.status === 'stale') stale.push(target.reviewerUid);
-      else missing += 1;
-    }
+    const { updated, stale, missing } = await applyResolution(store, body.data, prepared.resolution);
     if (updated.length === 0 && stale.length > 0) {
       // The verdict moved under the operator; re-read before resolving again.
       return reply.status(409).send({ error: 'stale_verdict', stale });
     }
-    if (updated.length === 0 && missing > 0) {
+    if (updated.length === 0 && (missing > 0 || stale.length === 0)) {
       return reply.status(404).send({ error: 'not found' });
     }
 
-    return { assessments: updated, resolved: resolution !== null, stale };
+    return { assessments: updated, resolved: prepared.resolution !== null, stale };
   });
 }

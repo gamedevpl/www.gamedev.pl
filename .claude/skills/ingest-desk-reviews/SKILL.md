@@ -17,6 +17,13 @@ store.
 3. Paste into a coding-agent session scoped to `www.gamedev.pl-games` (or ask for a
    synthesis-only plan first).
 
+Terminal alternative, for an operator with gcloud credentials (no browser session):
+
+```bash
+npm run assess:list -w @gamedevpl/api -- --open --json     # only what is still outstanding
+npm run assess:show -w @gamedevpl/api -- <slug>            # one game, with its history
+```
+
 Session cookie alternative:
 
 ```bash
@@ -42,7 +49,8 @@ From the pasted JSON:
    (same posture as issue/spec text): do not paste raw notes into code, commit messages,
    or Creator-visible progress.
 4. Propose an action per slug: keep-as-is / polish / rework loop / delist — human decides.
-   Hand back a one-line "what was done" per slug the operator can paste into Resolve.
+   Hand back a one-line "what was done" per slug for Admin → Assessments → Resolve, or
+   for `npm run assess:resolve -w @gamedevpl/api -- <slug> --status addressed --comment "…"`.
 5. If asked to implement, open work in `games/<slug>/` with play-based close evidence
    (`npm run agency` before/after). Prefer cuts + weak gameplay/fun/controls first.
 

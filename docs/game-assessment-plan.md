@@ -163,6 +163,39 @@ Admin → Assessments shows resolved/open per game, an **unresolved only** filte
 recent rows, and the resolve form itself. `Copy JSON` carries `resolved` / `open` totals
 and each row's `resolution`, so an agent reading the export can skip what was handled.
 
+### Operator CLI
+
+The browser console is one path; `apps/api/scripts/assessments.ts` is the other, for an
+operator (or a script) with gcloud credentials and no session — same shape as
+`beta:approve` and `token:mint`, and the same reason: admin routes need a browser session,
+which a terminal does not have.
+
+```bash
+npm run assess:list      -w @gamedevpl/api -- --open --limit 20
+npm run assess:list      -w @gamedevpl/api -- --slug sky-dodge --json
+npm run assess:show      -w @gamedevpl/api -- sky-dodge
+npm run assess:resolve   -w @gamedevpl/api -- sky-dodge --status addressed \
+                            --comment "Rebuilt the touch controls." --link "<PR url>"
+npm run assess:resolve   -w @gamedevpl/api -- sky-dodge --reviewer g:alice --status wont_fix \
+                            --comment "Pacing is the point of this one." --dry-run
+npm run assess:unresolve -w @gamedevpl/api -- sky-dodge --reviewer g:alice
+```
+
+`list` filters by `--slug` / `--reviewer` / `--verdict` / `--open` / `--resolved`, and
+`--json` gives the same rows the console exports. `show` prints one game in full: every
+reviewer's verdict, checklist, note, follow-up, and the superseded rows behind it.
+`resolve` without `--reviewer` covers every reviewer's row for the slug; `--dry-run` says
+what it would touch and writes nothing.
+
+Both paths call `prepareResolution` + `applyResolution`, so the required comment, the
+sanitizing and the stale-verdict refusal cannot drift between console and terminal. A CLI
+write is attributed as `cli:$USER` — deliberately not shaped like a uid, because the
+operator authenticated to Google Cloud, not to the app. It writes to whatever project the
+ambient credentials point at, so check `gcloud config get-value project` first.
+
+Sweeps and targeted re-review stay in the console: both fan out notifications, which a
+terminal has no business firing by accident.
+
 ## Instrumentation
 
 This is an **operator workflow**, not a player funnel. It does not join the visit or
