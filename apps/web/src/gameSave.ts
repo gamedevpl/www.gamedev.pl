@@ -1,3 +1,4 @@
+import { MAX_GAME_SAVE_BYTES } from '@gamedevpl/contract';
 import { useEffect, type MutableRefObject } from 'react';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { deleteGameSave, fetchGameSave, putGameSave } from './gameSaveApi.js';
@@ -23,7 +24,7 @@ import { deleteGameSave, fetchGameSave, putGameSave } from './gameSaveApi.js';
 
 /** Mirrors MAX_GAME_SAVE_BYTES in the API. Checked here so a runaway game is stopped at
  *  the bridge rather than being handed to the network to reject. */
-const MAX_SAVE_BYTES = 32 * 1024;
+const MAX_SAVE_BYTES = MAX_GAME_SAVE_BYTES;
 
 export type SaveRequest =
   | { t: 'save:hello'; version: number }

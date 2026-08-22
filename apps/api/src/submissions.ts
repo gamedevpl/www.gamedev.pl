@@ -1,6 +1,12 @@
 import { createHash } from 'node:crypto';
-import { BUILDERS, deriveGateStatusString, derivePreviewGateStatus } from '@gamedevpl/contract';
-import type { GameProject } from '@gamedevpl/contract';
+import {
+  BUILDERS,
+  deriveGateStatusString,
+  derivePreviewGateStatus,
+  MAX_SHOT_BYTES,
+  MAX_TITLE_LENGTH,
+  type GameProject,
+} from '@gamedevpl/contract';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { splitConceptBrief } from './agent-build-brief.js';
@@ -139,15 +145,17 @@ import { isVariantWidth } from './image-variants.js';
 import { logModerationRejection } from './moderation-metrics.js';
 
 // Base64 PNG, no data: prefix — same shape as a playtest screenshot.
-const referenceImageSchema = z.string().max(Math.ceil((300 * 1024 * 4) / 3) + 1024, 'reference image is too large');
+const MAX_SHOT_BASE64_CHARS = Math.ceil((MAX_SHOT_BYTES * 4) / 3) + 1024;
+const referenceImageSchema = z.string().max(MAX_SHOT_BASE64_CHARS, 'reference image is too large');
 
 const MAX_REFERENCE_IMAGES = 4;
 
 // 4 images at the cap above exceed Fastify's default 1 MiB bodyLimit.
-const REFERENCE_IMAGES_BODY_LIMIT_BYTES = MAX_REFERENCE_IMAGES * (Math.ceil((300 * 1024 * 4) / 3) + 1024) + 64 * 1024;
+const REFERENCE_IMAGES_BODY_LIMIT_BYTES = MAX_REFERENCE_IMAGES * MAX_SHOT_BASE64_CHARS + 64 * 1024;
 
+const TITLE_TOO_LONG_MSG = `title must be at most ${MAX_TITLE_LENGTH} characters`;
 const CreateSubmissionRequestSchema = z.object({
-  title: z.string().trim().min(3, 'title must be at least 3 characters').max(80, 'title must be at most 80 characters'),
+  title: z.string().trim().min(3, 'title must be at least 3 characters').max(MAX_TITLE_LENGTH, TITLE_TOO_LONG_MSG),
   concept: z
     .string()
     .trim()
@@ -242,10 +250,7 @@ const FeedbackRequestSchema = z.object({
    */
   context: z
     .object({
-      screenshotPng: z
-        .string()
-        .max(Math.ceil((300 * 1024 * 4) / 3) + 1024, 'screenshot is too large')
-        .optional(),
+      screenshotPng: z.string().max(MAX_SHOT_BASE64_CHARS, 'screenshot is too large').optional(),
       instrumentation: z
         .object({
           playSeconds: z.number().int().min(0).max(86_400).optional(),
@@ -261,7 +266,7 @@ const FeedbackRequestSchema = z.object({
 });
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-const MAX_CREATOR_SHOT_BYTES = 300 * 1024;
+const MAX_CREATOR_SHOT_BYTES = MAX_SHOT_BYTES;
 // Max wait for a handoff ack before the sweep forces it.
 const HANDOFF_ACK_STALL_MS = 10 * 60 * 1000;
 

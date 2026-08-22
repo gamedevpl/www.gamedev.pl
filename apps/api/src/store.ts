@@ -16,7 +16,12 @@ import type {
   VoteValue,
   WaitlistStatus,
 } from '@gamedevpl/contract';
-import { MANAGED_AGENT_VENDORS, type ManagedAgentVendorName, type ManagedBuilderMode } from '@gamedevpl/contract';
+import {
+  MANAGED_AGENT_VENDORS,
+  MAX_GAME_SAVE_BYTES,
+  type ManagedAgentVendorName,
+  type ManagedBuilderMode,
+} from '@gamedevpl/contract';
 import type { AgentTaskState } from './agent-state.js';
 import type { SeedFiles } from './agent-backend.js';
 import type { BuilderKind } from './builder.js';
@@ -1402,7 +1407,7 @@ export const MAX_PLAY_AFFINITY_OPENS = 1_000;
  * this is a budget for level numbers, unlocks and high scores. A game that needs more
  * is describing a world, which is P2's problem and wants a different schema.
  */
-export const MAX_GAME_SAVE_BYTES = 32 * 1024;
+export { MAX_GAME_SAVE_BYTES };
 
 /**
  * One document in a game's shared world (docs/persistent-world-plan.md, phase P2).

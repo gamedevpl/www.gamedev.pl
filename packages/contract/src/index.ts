@@ -40,6 +40,7 @@ export { DELIVERY_MODES, type DeliveryMode } from './delivery-mode.js';
 export { DISMISS_REASONS, type DismissReason } from './dismiss-reason.js';
 export type { GameHealth } from './game-health.js';
 export type { GameProject } from './game-project.js';
+export { MAX_GAME_SAVE_BYTES, MAX_MULTIPLAYER_SLOTS, MAX_SHOT_BYTES, MAX_TITLE_LENGTH } from './game-limits.js';
 export {
   GATE_PROGRESS_LANES,
   GATE_PROGRESS_STAGES,
@@ -87,6 +88,7 @@ export {
   type ReviewSweepStatus,
 } from './review-vocab.js';
 export { SOCKET_STATUSES, type SocketStatus } from './socket-status.js';
+export { DEFAULT_MAX_SOCKETS_PER_IP, MAX_SOCKET_FRAME_BYTES, MAX_SOCKET_FRAMES_PER_SECOND } from './socket-limits.js';
 export type {
   BuildEvent,
   BuildMediaItem,
@@ -151,5 +153,14 @@ export {
   type VisitRouteKind,
   type WaitlistStep,
 } from './visit-vocab.js';
+export { MAX_WORLD_ENTRY_BYTES, MAX_WORLD_FIELDS, MAX_WORLD_KEY_LENGTH } from './world-limits.js';
 export { ZONE_LINK_STEPS, type ZoneLinkStep } from './zone-link-step.js';
+export {
+  MAX_PLAYERS_PER_ZONE,
+  MAX_STATE_BYTES,
+  RESERVED_EVENT_KINDS,
+  TICK_HZ_VALUES,
+  type TickHz,
+  type ZoneEvent,
+} from './zone-contract.js';
 export { ZONE_PROTOCOL_VERSION } from './zone-protocol.js';
