@@ -1,4 +1,5 @@
 import type {
+  BuilderKind,
   BuildEventKind,
   BuildStep,
   GateProgressLane,
@@ -139,11 +140,11 @@ export type SubmissionStatus = {
    * Who is building the current round, when the API reports it. Optional — older
    * deploys omit it; the Studio then falls back to local last-used memory.
    */
-  builder?: 'platform' | 'self';
+  builder?: BuilderKind;
   /** Last builder used on this game (default for the next round), when reported. */
-  defaultBuilder?: 'platform' | 'self';
+  defaultBuilder?: BuilderKind;
   builderHandoff?: {
-    target: 'platform' | 'self';
+    target: BuilderKind;
     requestedAt: string;
     acknowledgedAt?: string;
   };
@@ -284,7 +285,7 @@ export async function submitSpec(input: {
   /** Told to the agent, so it writes its progress updates in this language. */
   locale?: string;
   /** Who builds this round — platform team (default) or the creator's own agent. */
-  builder?: 'platform' | 'self';
+  builder?: BuilderKind;
   // Base64 PNGs, no data: prefix. Max 4.
   referenceImages?: string[];
 }): Promise<{ token: string; slug?: string; statusUrl: string }> {
@@ -481,7 +482,7 @@ export async function submitFeedback(
   token: string,
   feedback: string,
   context?: FeedbackContext,
-  builder?: 'platform' | 'self',
+  builder?: BuilderKind,
 ): Promise<FeedbackResult> {
   const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/feedback`, {
     method: 'POST',

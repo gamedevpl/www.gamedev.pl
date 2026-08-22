@@ -45,8 +45,7 @@ import {
 } from './agent-token.js';
 import { DEFAULT_UPLOAD_URL_TTL_SECONDS, mintUploadToken, uploadCurlCommand } from './agent-upload-token.js';
 import { decodeCanonicalBase64Utf8, InvalidBase64Error } from './canonical-base64.js';
-import { selfBuildDeliveryCap } from './builder.js';
-import type { BuilderKind } from './builder.js';
+import { BUILDERS, selfBuildDeliveryCap, type BuilderKind } from './builder.js';
 import type { ManagedUnavailableReason } from './managed-availability.js';
 import {
   assertDeliverableSourcePath,
@@ -500,7 +499,7 @@ type ChannelControlBody = {
     stop?: boolean;
     reason?: string;
     builderHandoff?: {
-      target?: 'platform' | 'self';
+      target?: BuilderKind;
       requestedAt?: string;
       acknowledgedAt?: string;
     };
@@ -564,7 +563,7 @@ function channelControlFields(
   stop: boolean;
   reason?: string;
   builderHandoff?: {
-    target?: 'platform' | 'self';
+    target?: BuilderKind;
     requestedAt?: string;
     acknowledgedAt?: string;
   };
@@ -1410,7 +1409,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       type: 'object',
       description: 'A creator-requested builder switch awaiting acknowledgement by the current agent.',
       properties: {
-        target: { type: 'string', enum: ['platform', 'self'] },
+        target: { type: 'string', enum: [...BUILDERS] },
         requestedAt: { type: 'string' },
         acknowledgedAt: { type: 'string' },
       },

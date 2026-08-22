@@ -1,17 +1,9 @@
-/**
- * Who builds a round: the platform's AI dev team, or the creator's own coding agent.
- *
- * Mirrors the API's `platform` | `self`. The game's last choice is remembered so the
- * next round can default to it without waiting on a status field the API may not
- * yet echo.
- */
+// The game's last builder choice is remembered so the next round can default to it
+// without waiting on a status field the API may not yet echo.
 
-export const BUILDERS = ['platform', 'self'] as const;
-export type BuilderKind = (typeof BUILDERS)[number];
+import { BUILDERS, isBuilderKind, type BuilderKind } from '@gamedevpl/contract';
 
-export function isBuilderKind(value: unknown): value is BuilderKind {
-  return value === 'platform' || value === 'self';
-}
+export { BUILDERS, isBuilderKind, type BuilderKind };
 
 const STORAGE_PREFIX = 'gamedev_last_builder:';
 

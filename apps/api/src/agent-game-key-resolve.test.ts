@@ -1,3 +1,4 @@
+import type { BuilderKind } from '@gamedevpl/contract';
 import { describe, expect, it } from 'vitest';
 import {
   NO_OPEN_ROUND_REASON,
@@ -38,7 +39,7 @@ function setCreatedAt(store: InMemoryStore, issueNumber: number, createdAt: stri
   map.set(issueNumber, { ...sub, createdAt });
 }
 
-async function seedActiveSelfRound(store: InMemoryStore, issueNumber: number, builder: 'self' | 'platform' = 'self') {
+async function seedActiveSelfRound(store: InMemoryStore, issueNumber: number, builder: BuilderKind = 'self') {
   await store.createSubmission(issueNumber, ownerUid, 'Comet Courier');
   await store.setSubmissionSlug(issueNumber, slug);
   await store.setRoundBuilder(issueNumber, builder);

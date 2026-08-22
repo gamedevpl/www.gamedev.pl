@@ -4,6 +4,7 @@
 // (issue → linked PR → published catalog) into our status vocabulary — no I/O of
 // its own; callers pass an `isSlugPublished` probe.
 
+import type { BuilderKind } from '@gamedevpl/contract';
 import type { LinkedPullRequest } from './github-client.js';
 import type { GateProgressLane } from './gate-progress.js';
 import type { RecentBuild } from './recent-builds.js';
@@ -224,11 +225,11 @@ export interface SubmissionStatusResponseBase {
    * (with {@link defaultBuilder}) instead of localStorage alone so another browser
    * still defaults to the game's last-used choice.
    */
-  builder?: 'platform' | 'self';
+  builder?: BuilderKind;
   /** Last builder used on this game — default for the next round-boundary choice. */
-  defaultBuilder?: 'platform' | 'self';
+  defaultBuilder?: BuilderKind;
   builderHandoff?: {
-    target: 'platform' | 'self';
+    target: BuilderKind;
     requestedAt: string;
     acknowledgedAt?: string;
   };

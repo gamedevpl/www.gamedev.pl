@@ -4,6 +4,7 @@ export { AGENT_CHANNEL_ROUTES, type AgentChannelRouteKey, type AgentChannelRoute
 export { ASSESSMENT_CHECKLIST_KEYS, type AssessmentChecklistKey } from './assessment-checklist.js';
 export { ASSIST_LANES, type AssistLane } from './assist-lane.js';
 export { BUILD_EVENT_KINDS, BUILD_STEPS, type BuildEventKind, type BuildStep } from './build-event.js';
+export { BUILDERS, isBuilderKind, type BuilderKind } from './builder-kind.js';
 export {
   CATALOG_ORIENTATIONS,
   CATALOG_TOUCH_VALUES,

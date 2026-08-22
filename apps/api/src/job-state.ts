@@ -13,7 +13,7 @@
 
 import type { AgentTaskState } from './agent-state.js';
 import type { ManagedBudgetStop, ManagedSessionUsage } from './managed-agent.js';
-import { JOB_STALL_VALUES, JOB_STATES, type JobStall, type JobState } from '@gamedevpl/contract';
+import { JOB_STALL_VALUES, JOB_STATES, type BuilderKind, type JobStall, type JobState } from '@gamedevpl/contract';
 import type { SubmissionStatus } from './submission-status.js';
 
 export { JOB_STALL_VALUES, JOB_STATES, type JobStall, type JobState };
@@ -127,9 +127,7 @@ export function transitionClosesRound(transition: JobTransition): boolean {
       // `gate_crashed` joins them: our build died, so charging the creator a fresh round
       // to work around it would bill them for our bug.
       return (
-        transition.reason !== 'gate_red' &&
-        transition.reason !== 'kit_outdated' &&
-        transition.reason !== 'gate_crashed'
+        transition.reason !== 'gate_red' && transition.reason !== 'kit_outdated' && transition.reason !== 'gate_crashed'
       );
     default:
       return false;
@@ -420,7 +418,7 @@ export interface StallInput {
    * When `'self'`, silence before the first channel signal is `no_agent_yet` rather
    * than a stall — the platform is waiting on purpose.
    */
-  builder?: 'platform' | 'self';
+  builder?: BuilderKind;
 }
 
 /**
@@ -497,7 +495,7 @@ export function detectStall(input: StallInput): JobStall | null {
  * be auto-abandoned. Pure: the sweep supplies the clock and the configured window.
  */
 export function shouldAutoAbandonSelfRound(input: {
-  builder?: 'platform' | 'self';
+  builder?: BuilderKind;
   lastAgentSignalAt?: string;
   abandonedAt?: string;
   state?: JobState;
