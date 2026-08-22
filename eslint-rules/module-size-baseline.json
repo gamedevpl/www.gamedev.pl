@@ -503,7 +503,7 @@
     "apps/web/src/ArcadeCatalog.tsx": 1109,
     "apps/web/src/assessmentExportApi.test.ts": 46,
     "apps/web/src/assessmentExportApi.ts": 48,
-    "apps/web/src/attachmentImages.ts": 31,
+    "apps/web/src/attachmentImages.ts": 74,
     "apps/web/src/AuthContext.tsx": 264,
     "apps/web/src/AuthModal.tsx": 53,
     "apps/web/src/BetaInvitePage.tsx": 66,
