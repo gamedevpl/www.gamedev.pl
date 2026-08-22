@@ -1,25 +1,10 @@
 // Summarizes delivered versions for the Studio build rail and its progress bar.
 
-import { stagesForLane, type GateProgressStage } from './gate-progress.js';
+import type { RecentBuild } from '@gamedevpl/contract';
+import { stagesForLane } from './gate-progress.js';
 import type { VersionManifest } from './games-store.js';
 
-export interface RecentBuild {
-  version: string;
-  createdAt: string;
-  // Lane that produced it; absent means 'publish'.
-  mode: 'preview' | 'publish' | 'proposal';
-  // 'pending' until this version's gate reports; not stuck.
-  verdict: 'pending' | 'green' | 'red';
-  // Machine-readable outcome for non-ordinary verdicts.
-  status?: 'kit_outdated';
-  // Where a red run died, so the bar can freeze.
-  failedStage?: GateProgressStage;
-  failedIndex?: number;
-  // Lane stage count: preview 6, publish 12.
-  total?: number;
-  // Delivery to verdict, in ms; the ETA median is built from these.
-  finishedInMs?: number;
-}
+export type { RecentBuild } from '@gamedevpl/contract';
 
 // Null unless both ends parse; a bad clock is ignored.
 function spanMs(from: string, to: string | undefined): number | null {

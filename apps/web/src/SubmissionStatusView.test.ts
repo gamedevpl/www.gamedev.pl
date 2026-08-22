@@ -244,7 +244,7 @@ describe('SubmissionStatusView', () => {
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'building',
       preview: { slug: 'jump-rope-rhythm' },
-      progress: { headSha: 'sha-stuck', commits: [], checklist: [] },
+      progress: { headSha: 'sha-stuck', commits: [], checklist: [], revisions: [] },
       playable: [
         {
           ref: 'channel-1',
@@ -456,7 +456,7 @@ describe('SubmissionStatusView', () => {
       draftOrigin: 'remix',
       slug: 'remix-of-dog-dash',
       preview: { slug: 'remix-of-dog-dash' },
-      progress: { headSha: 'v1', commits: [], checklist: [] },
+      progress: { headSha: 'v1', commits: [], checklist: [], revisions: [] },
     });
     mockedGetSubmissionPreview.mockResolvedValue({
       slug: 'remix-of-dog-dash',
@@ -498,7 +498,7 @@ describe('SubmissionStatusView', () => {
       stall: 'quiet',
       slug: 'studio-play',
       preview: { slug: 'studio-play' },
-      progress: { headSha: 'v1', commits: [], checklist: [] },
+      progress: { headSha: 'v1', commits: [], checklist: [], revisions: [] },
     });
     mockedGetSubmissionPreview.mockResolvedValue({
       slug: 'studio-play',
@@ -1416,6 +1416,7 @@ describe('SubmissionStatusView', () => {
           { text: 'Scaffold index.html and game.js', checked: true },
           { text: 'Add collision detection', checked: false },
         ],
+        revisions: [],
       },
     });
     mockedGetSubmissionPreview.mockResolvedValue({
@@ -1468,7 +1469,7 @@ describe('SubmissionStatusView', () => {
       status: 'building',
       preview: { slug: 'space-runner' },
       previewGate: { green: false, ranAt: '2026-08-08T20:17:15Z', report: 'audio.sounds is required' },
-      progress: { headSha: 'failed-preview', commits: [], checklist: [] },
+      progress: { headSha: 'failed-preview', commits: [], checklist: [], revisions: [] },
     });
     mockedGetSubmissionPreview.mockRejectedValue(Object.assign(new Error('not ready'), { status: 409 }));
     await i18n.changeLanguage('en');
@@ -1500,7 +1501,7 @@ describe('SubmissionStatusView', () => {
       mockedGetSubmissionStatus.mockImplementation(async () => ({
         status: 'building',
         preview: { slug: 'space-runner' },
-        progress: { headSha: currentSha, commits: [], checklist: [] },
+        progress: { headSha: currentSha, commits: [], checklist: [], revisions: [] },
       }));
       mockedGetSubmissionPreview.mockImplementation(async () => ({
         slug: 'space-runner',
@@ -1572,7 +1573,7 @@ describe('SubmissionStatusView', () => {
       mockedGetSubmissionStatus.mockImplementation(async () => ({
         status: 'building',
         preview: { slug: 'space-runner' },
-        progress: { headSha: 'sha-1', commits: [], checklist: [] },
+        progress: { headSha: 'sha-1', commits: [], checklist: [], revisions: [] },
       }));
       mockedGetSubmissionPreview.mockResolvedValue({
         slug: 'space-runner',
@@ -1664,7 +1665,7 @@ describe('SubmissionStatusView', () => {
       status: 'in_review',
       phase: 'ready_for_review',
       preview: { slug: 'space-runner' },
-      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+      progress: { headSha: 'sha-1', commits: [], checklist: [], revisions: [] },
     });
     mockedGetSubmissionPreview.mockResolvedValue({
       slug: 'space-runner',
@@ -1731,7 +1732,7 @@ describe('SubmissionStatusView', () => {
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'needs_changes',
       preview: { slug: 'space-runner' },
-      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+      progress: { headSha: 'sha-1', commits: [], checklist: [], revisions: [] },
     });
     mockedGetSubmissionPreview.mockResolvedValue({
       slug: 'space-runner',
@@ -1776,7 +1777,7 @@ describe('SubmissionStatusView', () => {
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'needs_changes',
       preview: { slug: 'space-runner' },
-      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+      progress: { headSha: 'sha-1', commits: [], checklist: [], revisions: [] },
     });
     mockedGetSubmissionPreview.mockResolvedValue({
       slug: 'space-runner',
@@ -1850,7 +1851,7 @@ describe('SubmissionStatusView', () => {
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'needs_changes',
       preview: { slug: 'space-runner' },
-      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+      progress: { headSha: 'sha-1', commits: [], checklist: [], revisions: [] },
     });
     mockedGetSubmissionPreview.mockResolvedValue({
       slug: 'space-runner',
@@ -1896,7 +1897,7 @@ describe('SubmissionStatusView', () => {
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'needs_changes',
       preview: { slug: 'space-runner' },
-      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+      progress: { headSha: 'sha-1', commits: [], checklist: [], revisions: [] },
     });
     mockedGetSubmissionPreview.mockResolvedValue({
       slug: 'space-runner',
@@ -1971,7 +1972,7 @@ describe('SubmissionStatusView', () => {
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'needs_changes',
       preview: { slug: 'space-runner' },
-      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+      progress: { headSha: 'sha-1', commits: [], checklist: [], revisions: [] },
     });
     mockedGetSubmissionPreview.mockResolvedValue({
       slug: 'space-runner',
@@ -2038,7 +2039,7 @@ describe('SubmissionStatusView', () => {
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'needs_changes',
       preview: { slug: 'space-runner' },
-      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+      progress: { headSha: 'sha-1', commits: [], checklist: [], revisions: [] },
     });
     mockedGetSubmissionPreview.mockResolvedValue({
       slug: 'space-runner',
@@ -2091,7 +2092,7 @@ describe('SubmissionStatusView', () => {
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'needs_changes',
       preview: { slug: 'space-runner' },
-      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+      progress: { headSha: 'sha-1', commits: [], checklist: [], revisions: [] },
     });
     mockedGetSubmissionPreview.mockResolvedValue({
       slug: 'space-runner',
@@ -2157,6 +2158,7 @@ describe('SubmissionStatusView', () => {
           { text: 'E', checked: false },
           { text: 'F', checked: false },
         ],
+        revisions: [],
       },
     });
     await i18n.changeLanguage('en');
@@ -2420,7 +2422,7 @@ describe('SubmissionStatusView', () => {
       status: 'building',
       stall: 'quiet',
       builder: 'platform',
-      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+      progress: { headSha: 'sha-1', commits: [], checklist: [], revisions: [] },
     });
     await i18n.changeLanguage('en');
 
@@ -2457,7 +2459,7 @@ describe('SubmissionStatusView', () => {
       status: 'building',
       stall: 'ended',
       builder: 'platform',
-      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+      progress: { headSha: 'sha-1', commits: [], checklist: [], revisions: [] },
     });
     await i18n.changeLanguage('en');
 
@@ -2511,6 +2513,7 @@ describe('SubmissionStatusView', () => {
           { text: 'A', checked: true },
           { text: 'B', checked: true },
         ],
+        revisions: [],
       },
     });
     await i18n.changeLanguage('en');
@@ -2540,7 +2543,7 @@ describe('SubmissionStatusView', () => {
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'needs_changes',
       preview: { slug: 'space-runner' },
-      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+      progress: { headSha: 'sha-1', commits: [], checklist: [], revisions: [] },
     });
     mockedGetSubmissionPreview.mockResolvedValue({
       slug: 'space-runner',
@@ -2612,7 +2615,7 @@ describe('SubmissionStatusView', () => {
 
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'building',
-      progress: { headSha: 'sha-2', commits: [], checklist: [] },
+      progress: { headSha: 'sha-2', commits: [], checklist: [], revisions: [] },
     });
 
     await act(async () => {
@@ -2638,7 +2641,7 @@ describe('SubmissionStatusView', () => {
       status: 'in_review',
       phase: 'ready_for_review',
       preview: { slug: 'space-runner' },
-      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+      progress: { headSha: 'sha-1', commits: [], checklist: [], revisions: [] },
     });
     mockedGetSubmissionPreview.mockResolvedValue({
       slug: 'space-runner',
@@ -2756,6 +2759,7 @@ describe('SubmissionStatusView expectations & failures', () => {
         headSha: 'sha-1',
         commits: [],
         checklist: [{ text: 'Add collision detection', checked: false }],
+        revisions: [],
         note: 'Adding grenades to the soldiers.',
       },
     });
@@ -2785,7 +2789,7 @@ describe('SubmissionStatusView expectations & failures', () => {
     await i18n.changeLanguage('en');
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'building',
-      progress: { headSha: 'sha-1', commits: [], checklist: [], checks: 'FAILURE' },
+      progress: { headSha: 'sha-1', commits: [], checklist: [], checks: 'FAILURE', revisions: [] },
     });
 
     const container = document.createElement('div');

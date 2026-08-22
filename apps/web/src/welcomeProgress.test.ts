@@ -20,7 +20,10 @@ describe('welcomeProgressMessage', () => {
     expect(welcomeProgressMessage(null, t)).toBe('welcome.loading');
     expect(
       welcomeProgressMessage(
-        { status: 'queued', progress: { headSha: 'abc', commits: [], checklist: [], note: 'Seeding draft' } },
+        {
+          status: 'queued',
+          progress: { headSha: 'abc', commits: [], checklist: [], note: 'Seeding draft', revisions: [] },
+        },
         t,
       ),
     ).toBe('Seeding draft');

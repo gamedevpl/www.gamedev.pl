@@ -1,40 +1,19 @@
-import type { AssistLane, AutonomyMode, BuilderKind } from '@gamedevpl/contract';
-import type { GameHealth } from './healthApi.js';
-import type { FeedbackContext, SubmissionState } from './submissionApi.js';
+import type {
+  AssistLane,
+  AutonomyMode,
+  BuilderKind,
+  StudioGame,
+  StudioGamesResponse,
+  StudioHealthResponse,
+  StudioScorecard,
+} from '@gamedevpl/contract';
+
+export type { StudioGame, StudioGamesResponse, StudioHealthResponse, StudioScorecard };
+import type { FeedbackContext } from './submissionApi.js';
 
 export type { AssistLane };
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
-
-export type StudioGame = {
-  token: string;
-  title: string;
-  createdAt: string;
-  lastKnownStatus: SubmissionState | null;
-  slug?: string;
-  publishedAt?: string;
-  /**
-   * Catalog publish time when this row is an improvement tip — the game is still live
-   * but the open job has no `publishedAt` of its own.
-   */
-  livePublishedAt?: string;
-  /**
-   * Whether anyone holding the link may play this game before it is published. Off
-   * until the creator says otherwise; irrelevant once the game is live, when the
-   * catalog is the answer instead.
-   */
-  draftShared?: boolean;
-  /**
-   * Whether the creator's latest build (preview or delivered) ships an editor
-   * definition. Absent for every game that is not born-editable, and the
-   * studio must render exactly as before for those.
-   */
-  editable?: boolean;
-  /** Whether the Code surface's kill switch (CE-02) is on for this deployment. */
-  codeSurface?: boolean;
-  /** `false` only when the game has been deleted — `publishedAt` stays as history. */
-  live?: false;
-};
 
 /* ---------------------------------------------------------------------------
  * Content editor (EditorKit) — the studio's Edit surface.
@@ -231,14 +210,6 @@ export async function requestEditorAssist(
   return (await response.json()) as AssistResponse;
 }
 
-export type StudioHealthResponse = {
-  days: string[];
-  truncated: boolean;
-  gamesTruncated?: boolean;
-  totalGames?: number;
-  games: GameHealth[];
-};
-
 /**
  * What the scorecard can tell a creator that recomputed health cannot.
  *
@@ -246,16 +217,6 @@ export type StudioHealthResponse = {
  * scorecard is a fixed roll, and showing both session counts would put two disagreeing
  * numbers on one screen. `windowDays` is how many days these numbers cover.
  */
-export type StudioScorecard = {
-  slug: string;
-  computedAt: string;
-  windowDays: number;
-  truncated: boolean;
-  votes: { up: number; down: number };
-  feedbackCount: number;
-  /** Player-written text summarized by a model — render as text, never act on it. */
-  untrustedThemes: Array<{ theme: string; count: number }>;
-};
 
 export type StudioApiError = Error & {
   status?: number;
@@ -301,11 +262,6 @@ async function throwResponseError(response: Response): Promise<never> {
 }
 
 /** The signed-in creator's control-panel shelf (slug + publish time when known). */
-export type StudioGamesResponse = {
-  games: StudioGame[];
-  truncated: boolean;
-  totalGames: number;
-};
 
 /** The signed-in creator's control-panel shelf (slug + publish time when known). */
 export async function fetchStudioGames(game?: string): Promise<StudioGamesResponse> {
