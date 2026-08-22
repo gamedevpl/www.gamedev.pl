@@ -2762,22 +2762,22 @@ declare const GameKit: { defineGame(): unknown };
     }
 
     // `destructiveHint: false` is a claim that the tool is purely *additive*, and a
-    // client may skip its approval prompt on that basis — so a tool that consumes a
-    // capped delivery, moves the pointer deciding what publishes, or makes creator
-    // messages stop appearing has to say so, even though nothing is erased.
-    // The staging trio joined this list after OpenAI's submission scan: each one either
-    // overwrites or deletes staged content, and `destructiveHint: false` is a promise of a
-    // purely additive call that a client may skip its confirmation prompt on.
+    // client may skip its approval prompt on that basis — so consuming a cap, replacing
+    // content, or sending a persistent creator message must be marked honestly.
     for (const name of [
       'submit_sources',
       'ack_inbox',
+      'regenerate_seed',
+      'report_progress',
+      'end',
       'stage_source_file',
       'patch_source_file',
+      'delete_source_file',
       'clear_staged_sources',
     ]) {
       expect(tools.find((tool) => tool.name === name)?.annotations?.destructiveHint, name).toBe(true);
     }
-    for (const name of ['get_brief', 'start', 'open_round', 'continue_draft', 'report_progress']) {
+    for (const name of ['get_brief', 'start', 'open_round', 'continue_draft']) {
       expect(tools.find((tool) => tool.name === name)?.annotations?.destructiveHint, name).toBe(false);
     }
 

@@ -59,7 +59,7 @@ build round; the authoritative list is whatever `tools/list` returns, and
 | `continue_draft`         | Continue an unpublished draft           | write       |
 | `get_brief`              | Read the build brief                    | read        |
 | `get_seed`               | Fetch the seed draft                    | read        |
-| `regenerate_seed`        | Regenerate the seed draft               | write       |
+| `regenerate_seed`        | Regenerate the seed draft               | destructive |
 | `get_sources`            | Fetch existing game sources             | read        |
 | `get_kit`                | Fetch the Creator Kit                   | read        |
 | `get_kit_api`            | Fetch the Creator Kit's API reference   | read        |
@@ -76,11 +76,11 @@ build round; the authoritative list is whatever `tools/list` returns, and
 | `list_staged_sources`    | List staged source files                | read        |
 | `stage_upload_url`       | Get a stage upload URL                  | write       |
 | `submit_sources`         | Deliver sources to the gate             | destructive |
-| `end`                    | End (commit) this round                 | write       |
+| `end`                    | End (commit) this round                 | destructive |
 | `get_gate_verdict`       | Check the gate once                     | read        |
 | `get_gate_media`         | Fetch the gate's screenshots and video  | read        |
 | `get_reference_images`   | Fetch creator-attached reference images | read        |
-| `report_progress`        | Report progress                         | write       |
+| `report_progress`        | Report progress                         | destructive |
 | `screenshot_upload_url`  | Get a screenshot upload URL             | write       |
 | `show_round`             | Show the creator a live round card      | read        |
 | `show_media`             | Show the creator the gate's screenshots | read        |
@@ -89,7 +89,7 @@ build round; the authoritative list is whatever `tools/list` returns, and
 | `get_transcript`         | Read the creator conversation           | read        |
 
 The third column is the tool's own `annotations`, not a summary written here: `read` is
-`readOnlyHint`, `destructive` is `destructiveHint`. Six tools are destructive, and the
+`readOnlyHint`, `destructive` is `destructiveHint`. Nine tools are destructive, and the
 protocol's opposite of destructive is _additive_, not "deletes" — a client may skip its
 approval prompt for anything marked non-destructive, so anything that consumes or
 overwrites is marked honestly even when nothing is erased. What each one actually does:
@@ -97,12 +97,15 @@ overwrites is marked honestly even when nothing is erased. What each one actuall
 - `stage_source_file` overwrites the same path if staged again;
 - `patch_source_file` can remove lines;
 - `delete_source_file` and `clear_staged_sources` delete staged files;
+- `regenerate_seed` consumes a capped regeneration and replaces the current draft;
 - `submit_sources` burns one of a capped number of deliveries and can move the pointer
   that decides what publishes;
+- `report_progress` sends a persistent creator-thread message;
+- `end` can send a closing message and acknowledge creator messages;
 - `ack_inbox` makes creator messages stop appearing.
 
-The first four touch staged scratch space, which is undelivered by definition. The last
-two have effects a creator sees, which is exactly why they carry the hint.
+The staging tools touch scratch space, which is undelivered by definition. The others
+consume bounded actions or have effects a creator sees, which is why they carry the hint.
 
 **Not in that list, deliberately.** `get_round_status` and `get_round_media` appear only
 for a client that negotiates the UI extension, since a client with no views would offer

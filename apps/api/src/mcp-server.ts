@@ -2697,7 +2697,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     },
 
     regenerate_seed: {
-      annotations: { title: 'Regenerate the seed draft', ...WRITES },
+      annotations: { title: 'Regenerate the seed draft', ...CONSUMES },
       outputSchema: {
         type: 'object',
         properties: {
@@ -3604,7 +3604,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         properties: { ok: { type: 'boolean' }, reason: { type: 'string' }, ...REPLY_CONTROL },
         required: ['ok'],
       },
-      annotations: { title: 'Report progress', ...WRITES },
+      annotations: { title: 'Report progress', ...CONSUMES },
       description:
         'Report a build-progress update to the creator thread. Call before and after long steps. ' +
         `step is one of: ${BUILD_STEPS.join(', ')}. Reply includes stop and pendingMessages. ` +
@@ -4723,7 +4723,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     },
 
     end: {
-      annotations: { title: 'End (commit) this round', ...WRITES, idempotentHint: true },
+      annotations: { title: 'End (commit) this round', ...CONSUMES, idempotentHint: true },
       outputSchema: {
         type: 'object',
         properties: {
