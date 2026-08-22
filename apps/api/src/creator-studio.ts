@@ -6,7 +6,20 @@ import { KitRegistryError, parseKitRegistry, parseKitSidecar } from './kit-regis
 import { codeSurfaceEnabled } from './code-surface.js';
 import { collapseJobsToOwnerGames, MAX_OWNER_GAMES, pageOwnerGames } from './owner-games.js';
 import { readTarEntries, type TarEntry } from './tar.js';
-import { recentPartitions, summarizeGameHealth, type GameHealth } from './telemetry-health.js';
+import type {
+  StudioGame,
+  StudioGamesResponse,
+  StudioHealthResponse,
+  StudioScorecard,
+  StudioScorecardsResponse,
+} from '@gamedevpl/contract';
+import { recentPartitions, summarizeGameHealth } from './telemetry-health.js';
+
+export type CreatorStudioGame = StudioGame;
+export type CreatorHealthResponse = StudioHealthResponse;
+export type CreatorScorecardSummary = StudioScorecard;
+export type CreatorScorecardsResponse = StudioScorecardsResponse;
+export type CreatorStudioGamesResponse = StudioGamesResponse;
 import { composeWorkspaceArchive, WorkspaceCompositionError } from './workspace-archive.js';
 import type { GamesStore } from './games-store.js';
 import type { Store, TelemetryEvent } from './store.js';
@@ -49,80 +62,6 @@ export interface CreatorStudioRoutesOptions {
 
 /** Ceiling on the scaffold we will unpack — it is a handful of text files, not a kit. */
 const MAX_SCAFFOLD_BYTES = 1024 * 1024;
-
-export interface CreatorStudioGame {
-  token: string;
-  title: string;
-  createdAt: string;
-  lastKnownStatus: string | null;
-  slug?: string;
-  publishedAt?: string;
-  /**
-   * Catalog publish time when this row is an improvement tip — the game is still live
-   * but the open job has no `publishedAt` of its own.
-   */
-  livePublishedAt?: string;
-  /** Whether the creator has turned on the shared link for this game's draft. */
-  draftShared?: boolean;
-  /**
-   * Whether the creator's latest build (preview or delivered) ships an editor
-   * definition. Absent for every game that is not born-editable; the studio
-   * must render exactly as before for those.
-   */
-  editable?: boolean;
-  /**
-   * Whether the Code surface's kill switch (CE-02) is on. All-creators from M1 by
-   * owner decision — unlike {@link editable} this needs no manifest read, only the
-   * flag — so it is the same value for every row on a page where it is present at
-   * all, and absent entirely when the switch is off.
-   */
-  codeSurface?: boolean;
-  // `false` only when the slug's publication says archived/disabled.
-  live?: false;
-}
-
-export interface CreatorHealthResponse {
-  days: string[];
-  /** Telemetry scan hit the event budget. */
-  truncated: boolean;
-  /** Published-game list hit the shelf ceiling. */
-  gamesTruncated: boolean;
-  totalGames: number;
-  games: GameHealth[];
-}
-
-/**
- * The parts of a game's scorecard the health route cannot produce.
- *
- * Deliberately **not** the whole scorecard. Health recomputes over a window the creator
- * picks (7/14/30d); a scorecard is a fixed 28-day roll. Returning its session counts too
- * would put two numbers labelled "sessions" on one screen, disagreeing, with nothing
- * saying why — so this carries only what recomputation genuinely cannot supply, and the
- * window it was measured over travels with it.
- */
-export interface CreatorScorecardSummary {
-  slug: string;
-  computedAt: string;
-  /** Days the sweep actually read — the window these numbers describe. */
-  windowDays: number;
-  truncated: boolean;
-  votes: { up: number; down: number };
-  feedbackCount: number;
-  /**
-   * Recurring themes distilled from written feedback.
-   *
-   * Player-written text, summarized by a model that read player-written text: safe to
-   * render to the creator as text, never safe to hand an agent as instruction. It reaches
-   * the client under a name that says so.
-   */
-  untrustedThemes: Array<{ theme: string; count: number }>;
-}
-
-export interface CreatorScorecardsResponse {
-  scorecards: CreatorScorecardSummary[];
-  truncated: boolean;
-  totalGames: number;
-}
 
 /**
  * Reads play events for a fixed set of slugs under one shared document budget.

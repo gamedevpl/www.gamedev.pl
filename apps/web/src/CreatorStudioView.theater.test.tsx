@@ -97,7 +97,7 @@ describe('CreatorStudioView — open in theater', () => {
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'building',
       preview: { slug: 'sky-dodge' },
-      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+      progress: { headSha: 'sha-1', commits: [], checklist: [], revisions: [] },
     });
     mockedGetSubmissionPreview.mockResolvedValue({
       slug: 'sky-dodge',

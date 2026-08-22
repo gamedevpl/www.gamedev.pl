@@ -2,42 +2,11 @@
 // session cookie authenticates; the API answers 404 rather than 403 to anyone who is
 // not an admin, so `null` here means "not for you" and is not an error worth showing.
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
+import type { GameHealth } from '@gamedevpl/contract';
 
-export interface GameHealth {
-  slug: string;
-  sessions: number;
-  bounces: number;
-  closes: number;
-  medianPlaySeconds: number;
-  totalPlaySeconds: number;
-  errors: number;
-  errorSamples: Array<{ message: string; count: number }>;
-  aliveTicks: number;
-  stalledTicks: number;
-  stallRate: number;
-  medianFps: number | null;
-  resumeTicksIgnored: number;
-  /** Rounds that reached a conclusion, by outcome. Counted per round, not per session. */
-  outcomes: { won: number; lost: number; quit: number };
-  sessionsWithEnding: number;
-  /** Sessions that finished a round, over all sessions. */
-  finishRate: number;
-  /** Sessions issued a seat in a shared world; 0 for a game that declares no zone. */
-  zoneAdmitted: number;
-  /** Of those, how many had a world actually arrive. */
-  zoneJoined: number;
-  /** `zoneJoined / zoneAdmitted`, or null when this game never asked for a zone. */
-  zoneJoinRate: number | null;
-  /** `won / (won + lost)`; null when no round was decided. Quits decide nothing. */
-  winRate: number | null;
-  /** Median across sessions of each session's best score; null when nothing scored. */
-  medianBestScore: number | null;
-  /** Landmarks reached, most-reached first. Game-authored text — render, never interpolate. */
-  progressLabels: Array<{ label: string; sessions: number }>;
-  /** Sessions that reported a render backend on progress/end (B18). */
-  gfxBackends: { canvas2d: number; webgl: number; webgl3d: number };
-}
+export type { GameHealth };
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
 export interface HealthResponse {
   days: string[];

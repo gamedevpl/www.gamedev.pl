@@ -8,6 +8,15 @@ export { AVATAR_MODES, type AvatarMode } from './avatar-mode.js';
 export { BUILD_EVENT_KINDS, BUILD_STEPS, type BuildEventKind, type BuildStep } from './build-event.js';
 export { BUILDER_UNAVAILABLE_REASONS, type BuilderUnavailableReason } from './builder-availability.js';
 export { BUILDERS, isBuilderKind, type BuilderKind } from './builder-kind.js';
+export type {
+  CatalogEntry,
+  CatalogMedia,
+  CatalogMultiplayer,
+  CatalogSaves,
+  CatalogScreenshot,
+  CatalogSensing,
+  CatalogWorld,
+} from './catalog-entry.js';
 export {
   CATALOG_ORIENTATIONS,
   CATALOG_TOUCH_VALUES,
@@ -29,7 +38,14 @@ export { CONNECT_CLIENTS, type ConnectClient, type InstallSnippets } from './con
 export { DECLINE_REASONS, type DeclineReason } from './decline-reason.js';
 export { DELIVERY_MODES, type DeliveryMode } from './delivery-mode.js';
 export { DISMISS_REASONS, type DismissReason } from './dismiss-reason.js';
-export { GATE_PROGRESS_LANES, type GateProgressLane } from './gate-progress.js';
+export type { GameHealth } from './game-health.js';
+export {
+  GATE_PROGRESS_LANES,
+  GATE_PROGRESS_STAGES,
+  type GateProgress,
+  type GateProgressLane,
+  type GateProgressStage,
+} from './gate-progress.js';
 export { deriveGateStatusString, derivePreviewGateStatus, GATE_STATUS_VALUES, type GateStatus } from './gate-status.js';
 export { JOB_STALL_VALUES, JOB_STATES, type JobStall, type JobState } from './job-state.js';
 export { LOCALES, type Locale } from './locale.js';
@@ -70,7 +86,33 @@ export {
   type ReviewSweepStatus,
 } from './review-vocab.js';
 export { SOCKET_STATUSES, type SocketStatus } from './socket-status.js';
+export type {
+  BuildEvent,
+  BuildMediaItem,
+  BuildPlayableItem,
+  BuildProgress,
+  ChecklistItem,
+  CreatorRevision,
+  MySubmission,
+  MySubmissionsPage,
+  PlatformBuilderAvailability,
+  PriorRoundEntry,
+  PriorRoundHistory,
+  RecentBuild,
+  StoredBuildEvent,
+  StoredCreatorRevision,
+  SubmissionPublishedResponse,
+  SubmissionStatusResponse,
+  SubmissionStatusResponseBase,
+} from './submission-status.js';
 export { SUBMISSION_STATES, type SubmissionState } from './submission-state.js';
+export type {
+  StudioGame,
+  StudioGamesResponse,
+  StudioHealthResponse,
+  StudioScorecard,
+  StudioScorecardsResponse,
+} from './studio-status.js';
 export { TREND_GRAINS, type TrendGrain } from './trend-grain.js';
 export {
   ASSIST_STEPS,

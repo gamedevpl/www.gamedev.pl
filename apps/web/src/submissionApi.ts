@@ -1,217 +1,37 @@
 import type {
-  BuilderKind,
   BuildEventKind,
+  BuilderKind,
+  BuildMediaItem,
+  BuildPlayableItem,
   BuildStep,
   GateProgressLane,
   JobStall,
   JobState,
+  MySubmission,
+  MySubmissionsPage,
+  PlatformBuilderAvailability,
   SubmissionState,
+  SubmissionStatusResponse,
 } from '@gamedevpl/contract';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
 export type { BuildEventKind, BuildStep, GateProgressLane, JobStall, JobState, SubmissionState };
+export type {
+  BuildEvent,
+  BuildMediaItem,
+  BuildPlayableItem,
+  BuildProgress,
+  MySubmission,
+  MySubmissionsPage,
+  PlatformBuilderAvailability,
+  PriorRoundEntry,
+  PriorRoundHistory,
+  RecentBuild,
+} from '@gamedevpl/contract';
 
-export type BuildProgress = {
-  /** Head commit SHA of the PR — changes when the agent pushes new work. */
-  headSha: string;
-  /** Running build log — recent commit subject lines, oldest→newest. Untrusted text. */
-  commits: Array<{ message: string; committedDate: string }>;
-  /** The agent's task checklist parsed from the PR body. Untrusted text. */
-  checklist: Array<{ text: string; checked: boolean }>;
-  /** CI rollup on the head commit — 'FAILURE' means in trouble, not just slow. */
-  checks?: 'SUCCESS' | 'FAILURE' | 'PENDING' | null;
-  /**
-   * The agent's own one-line "what I'm doing right now", written to its branch and
-   * localized by the API. Present only when the agent keeps that journal.
-   */
-  note?: string;
-  /**
-   * The creator's own change requests on this build, oldest→newest — read back off
-   * the PR conversation or the store, whichever this build uses, so the page can
-   * show a creator what they already asked for. Optional: an older API deploy
-   * doesn't send it.
-   */
-  revisions?: Array<{
-    text: string;
-    createdAt: string;
-    // 'agent': relayed by the agent. 'studio': the chat agent. Else: the creator.
-    origin?: 'agent' | 'studio';
-    delivered?: boolean;
-  }>;
-};
-
-/** One of the creator's games, as listed by GET /api/submissions/mine. */
-export type MySubmission = {
-  token: string;
-  title: string;
-  createdAt: string;
-  /** Last status derived server-side, refreshed by the two-minute sweep. */
-  lastKnownStatus: SubmissionState | null;
-  /** Present once known, so a published card can link straight to the game. */
-  slug: string | null;
-  /** Set when the game has published — optional on older API responses. */
-  publishedAt?: string;
-  /**
-   * Catalog publish time when this row is an improvement tip — the game is still live
-   * but the open job has no `publishedAt` of its own.
-   */
-  livePublishedAt?: string;
-};
-
-/**
- * An update the agent pushed over the build channel. Unlike a commit subject, this
- * is the agent saying what it is doing *now*, and it arrives without waiting for a
- * push. `text` is already resolved to the reader's language by the API.
- */
-export type BuildEvent = {
-  id: string;
-  kind: BuildEventKind;
-  step?: BuildStep;
-  /** Untrusted, agent-authored text — render escaped. */
-  text: string;
-  progress?: { done: number; total: number };
-  createdAt: string;
-};
-
-export type SubmissionStatus = {
-  status: SubmissionState;
-  /**
-   * The build job's own state, finer than {@link SubmissionState}.
-   *
-   * `status` drives the five-step timeline and cannot grow without changing what the
-   * timeline draws; this says which of the several situations behind one step the build
-   * is actually in, so the sentence under the timeline can be true. Absent on builds we
-   * derive from GitHub rather than run ourselves.
-   */
-  phase?: JobState;
-  slug?: string;
-  /**
-   * `'remix'` when this Studio draft was saved from an in-player remix (private
-   * preview-lane fork). Used so Final-check / "going live" copy is not shown for
-   * a remix that never ran the gate and never publishes by itself.
-   */
-  draftOrigin?: 'remix';
-  /** Present while an unmerged PR is open: the game can be previewed from its branch. */
-  preview?: { slug: string };
-  /** Present while an unmerged PR is open: live build signals mined from the PR. */
-  progress?: BuildProgress;
-  previewGate?: { green: boolean; ranAt: string; report?: string; status?: 'kit_outdated' };
-  /**
-   * Agent updates from the build channel, newest first. Deliberately independent of
-   * `progress`: these start arriving before a PR exists, which is precisely the
-   * stretch where the page used to have nothing at all to show.
-   */
-  events?: BuildEvent[];
-  // Last agent activity; advances even with no new chat event.
-  lastAgentSignalAt?: string;
-  // Ambient presence thought — flashed, never a transcript row.
-  lastAgentPresence?: { key: string; at: string };
-  /** Mid-gate milestone while checks run. */
-  gateProgress?: {
-    lane: GateProgressLane;
-    stage: string;
-    index: number;
-    total: number;
-    at: string;
-  };
-  /**
-   * Pictures of the build, newest first. `branch` items are captures the agent
-   * committed; `channel` items were pushed straight to the API and can appear long
-   * before the first commit. Build the URL with {@link buildMediaUrl}.
-   */
-  media?: BuildMediaItem[];
-  /**
-   * Playable builds pushed over the channel, newest first — the game as it stood at
-   * some moment, before any commit. Build the URL with {@link buildPlayableUrl}.
-   */
-  playable?: BuildPlayableItem[];
-  /**
-   * Why the build looks stuck, when it does. Closed vocabulary; the page renders its
-   * own translated copy per value. Absent means progressing normally.
-   */
-  stall?: JobStall;
-  /**
-   * When the self agent called MCP `end`. Survives when stall later becomes
-   * `gate_not_started` — Studio still offers platform handoff.
-   */
-  agentEndedAt?: string;
-  /**
-   * Who is building the current round, when the API reports it. Optional — older
-   * deploys omit it; the Studio then falls back to local last-used memory.
-   */
-  builder?: BuilderKind;
-  /** Last builder used on this game (default for the next round), when reported. */
-  defaultBuilder?: BuilderKind;
-  builderHandoff?: {
-    target: BuilderKind;
-    requestedAt: string;
-    acknowledgedAt?: string;
-  };
-  // Whether platform can be picked or handed off to right now.
-  platformBuilder?: PlatformBuilderAvailability;
-  /**
-   * Why this build is asking the creator to act. Covers a dead agent round
-   * (`task_failed`, …) and a gate bounce (`gate_red`) — both arrive as public
-   * `needs_changes`. Render translated copy keyed on `reason`, never the string
-   * itself. Sending feedback starts a new round.
-   */
-  failure?: { reason: string };
-  /** Who opened this improvement round, when reported (BY-24). */
-  openedBy?: 'creator' | 'agent';
-  /**
-   * Older jobs on the same game (same slug), oldest first — collapsed history so a
-   * new improve round does not make prior Studio chat look deleted. Optional: older
-   * API deploys omit it.
-   */
-  priorRounds?: PriorRoundHistory[];
-  /** Read-only capability probe for the Code surface (CE-05). Absent before a bound slug. */
-  codeSurface?: { available: boolean; readOnly: boolean; reason?: 'agent_round' | 'killed' };
-  // Last few delivered versions, newest first — what shipped, not the live round.
-  recentBuilds?: RecentBuild[];
-};
-
-// Summarizes one delivered version for `SubmissionStatus.recentBuilds`.
-export type RecentBuild = {
-  version: string;
-  createdAt: string;
-  mode: 'preview' | 'publish' | 'proposal';
-  // 'pending' until this version's own gate reports a verdict.
-  verdict: 'pending' | 'green' | 'red';
-  status?: 'kit_outdated';
-  // Where a red run died, so the bar freezes there rather than guessing.
-  failedStage?: string;
-  failedIndex?: number;
-  total?: number;
-  // Delivery to verdict, in ms; the bar's ETA median uses these.
-  finishedInMs?: number;
-};
-
-/** One superseded build job's transcript, for the collapsed history blocks. */
-export type PriorRoundHistory = {
-  id: string;
-  createdAt: string;
-  publishedAt?: string;
-  status: SubmissionState;
-  entries: PriorRoundEntry[];
-};
-
-export type PriorRoundEntry = {
-  kind: 'revision' | 'event';
-  /** Untrusted text — render escaped. */
-  text: string;
-  createdAt: string;
-  origin?: 'agent' | 'studio';
-  step?: BuildStep;
-};
-
-export type BuildPlayableItem = {
-  ref: string;
-  slug?: string;
-  /** Untrusted, agent-authored text — render escaped. */
-  label?: string;
-  createdAt?: string;
-};
+// The whole GET /api/submissions/:token body, under the name the web has always used.
+export type SubmissionStatus = SubmissionStatusResponse;
 
 /**
  * Fetch one channel-pushed playable build as HTML text.
@@ -239,14 +59,6 @@ export async function getChannelPlayable(token: string, item: BuildPlayableItem)
 export function buildPlayableUrl(token: string, item: BuildPlayableItem): string {
   return `${API_BASE}/api/submissions/${encodeURIComponent(token)}/preview/${encodeURIComponent(item.ref)}`;
 }
-
-export type BuildMediaItem = {
-  source: 'branch' | 'channel';
-  ref: string;
-  /** Untrusted, agent-authored text — render escaped. */
-  label?: string;
-  createdAt?: string;
-};
 
 /**
  * Where to fetch one of a build's pictures. The two sources are served by different
@@ -318,16 +130,6 @@ export async function getSubmissionStatus(token: string, locale?: string): Promi
 
   return (await response.json()) as SubmissionStatus;
 }
-
-/**
- * The signed-in creator's own games. Server-side ownership means this works on a
- * device that never saved the tracking link — the tokens come back with it.
- */
-export type MySubmissionsPage = {
-  submissions: MySubmission[];
-  truncated: boolean;
-  totalGames: number;
-};
 
 export async function listMySubmissionsPage(): Promise<MySubmissionsPage> {
   const response = await fetch(`${API_BASE}/api/submissions/mine`, { credentials: 'include' });
@@ -423,9 +225,6 @@ export async function handoffToSelf(token: string): Promise<BuilderHandoffRespon
   }
   return (await response.json()) as BuilderHandoffResponse;
 }
-
-export type PlatformBuilderAvailability =
-  { available: true } | { available: false; reason: 'coming_soon' | 'outage' | 'global_limit' | 'user_limit' };
 
 /** Today's submission allowance, so a creator sees it before they hit a 429. */
 export async function getQuota(): Promise<{

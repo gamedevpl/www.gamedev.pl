@@ -19,7 +19,7 @@ function statusFor(slug: string, headSha: string): SubmissionStatus {
   return {
     status: 'building',
     preview: { slug },
-    progress: { headSha, commits: [], checklist: [] },
+    progress: { headSha, commits: [], checklist: [], revisions: [] },
   };
 }
 
