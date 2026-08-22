@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { getSubmissionStatus, type SubmissionApiError, type SubmissionStatus } from './submissionApi.js';
 
 const ACTIVE_STATES = new Set(['queued', 'building', 'in_review', 'publishing']);
@@ -22,6 +23,9 @@ function delayFor(status: SubmissionStatus | null): number {
  * riskier refactor than one more idempotent GET at a relaxed cadence.
  */
 export function useStudioStatusPoll(token: string | null): SubmissionStatus | null {
+  // Without a locale the stage reads English while the thread reads Polish.
+  const { i18n } = useTranslation();
+  const locale = i18n.language;
   const [status, setStatus] = useState<SubmissionStatus | null>(null);
   const [statusToken, setStatusToken] = useState(token);
 
@@ -45,7 +49,7 @@ export function useStudioStatusPoll(token: string | null): SubmissionStatus | nu
 
     const tick = async () => {
       try {
-        const next = await getSubmissionStatus(token);
+        const next = await getSubmissionStatus(token, locale);
         if (cancelled) return;
         setStatus(next);
         timer = setTimeout(() => void tick(), delayFor(next));
@@ -63,7 +67,7 @@ export function useStudioStatusPoll(token: string | null): SubmissionStatus | nu
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [token]);
+  }, [token, locale]);
 
   return status;
 }
