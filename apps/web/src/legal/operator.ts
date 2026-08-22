@@ -68,4 +68,4 @@ export const SERVICE_URL = 'https://www.gamedev.pl';
  * Date both documents took effect. Bump on any substantive change, and tell users
  * before it takes effect (the terms promise 14 days' notice).
  */
-export const LEGAL_EFFECTIVE_DATE = '2026-07-27';
+export const LEGAL_EFFECTIVE_DATE = '2026-09-05';

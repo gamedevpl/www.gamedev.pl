@@ -429,7 +429,7 @@ Read-only: repeating the call returns the same data (or newer data of the same s
 **Open World: False**
 
 ```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time. Retrieval runs against a search index we build from our own repositories and host in our own cloud project; the query reaches no other system.
+Calls the gamedev.pl API, which retrieves from a Google Cloud Discovery Engine (Vertex AI Search) data store we configure and own — a fixed, first-party-controlled index built from our own repositories, not an arbitrary third-party service. The tool takes no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
 ## `get_sources`
@@ -628,10 +628,10 @@ Empties the round's staging area, so it writes state.
 Marked destructive because it deletes staged files. They are undelivered scratch space, so nothing creator-visible or live is lost and the agent can stage them again — but the hint describes what the operation does, and this one removes data.
 ```
 
-**Idempotent: False**
+**Idempotent: True**
 
 ```
-Clearing when paths[] is given removes those specific entries; what a second call removes depends on what was re-staged in between.
+Clearing the same paths (or everything) twice leaves the same empty result the second time — the same reasoning as ack_inbox re-acknowledging already-acked ids.
 ```
 
 **Open World: False**

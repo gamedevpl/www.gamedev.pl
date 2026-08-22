@@ -2781,7 +2781,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         'count when a kept one is trimmed member-wise), so a missing signature is never silent; ' +
         "use the browse tools named in this reply's browse block (list/search/read) for those or " +
         'any other specific kit file. ' +
-        'With shell egress, unpack via kitUrl/unpack and follow SKILL.md locally instead of either. ' +
+        'With shell egress, kitUrl/unpack lets you unpack the kit locally and read SKILL.md directly. ' +
         'entry=gamedevpl-creator-kit/SKILL.md (tarball roots at gamedevpl-creator-kit/; ' +
         'do not assume a `cd` persists across tool calls). ' +
         BEHAVIOURAL_CONTRACT,
@@ -2827,8 +2827,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         'changes when engineRef does. Pass engineRef from get_kit so a mid-round registry bump ' +
         "cannot mix kit revisions. Falls back to the registry's current engine when engineRef is " +
         'omitted, but that risks reading a different kit than the round is pinned to. ' +
-        'Use this instead of unpacking the whole kit into context; use the browse tools ' +
-        '(list_kit_files / search_kit_files / read_kit_file) for anything this digest omitted, ' +
+        'Gives that orientation without unpacking the whole kit into context; the browse tools ' +
+        '(list_kit_files / search_kit_files / read_kit_file) cover anything this digest omitted, ' +
         'summarized, or named in its omission note. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
@@ -3077,8 +3077,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         required: ['engineRef', 'files', 'totalBytes', 'maxBytes', 'maxFiles', 'truncated'],
       },
       description:
-        'Read up to 12 small Creator Kit files in one call (≤128 KiB aggregate). Use this instead of repeated ' +
-        'read_kit_file calls to stay within per-turn tool-call limits. Pass engineRef from get_kit. ' +
+        'Read up to 12 small Creator Kit files in one call (≤128 KiB aggregate), staying within per-turn ' +
+        'tool-call limits. Pass engineRef from get_kit. ' +
         'Per-path failures stay in files[]; oversized files need read_kit_file_fragment. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
@@ -3957,7 +3957,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         'Use stage_upload_url + curl --upload-file when you have shell egress — re-emitting file contents ' +
         'as a tool argument burns output tokens. Use this tool for new files when you have no shell; ' +
         'for edits to an existing path use patch_source_file so you do not re-emit a whole large file. ' +
-        'Use it instead of a giant submit_sources files[] when the tree is large (clients can truncate very large inline tool JSON). ' +
+        'For a large tree, staging file-by-file avoids one giant submit_sources files[] payload, which some clients truncate. ' +
         'Call once per path, then submit_sources({ fromStaged: true, mode, kitEngineRef }). Overwrites the same path if staged again. ' +
         'After preview_failed / red (warnings.code=must_fix_gate), staging alone does not re-run the gate — you must submit_sources again. ' +
         'Keep modules modest — if hint warns the file is large, split into cohesive game/*.ts modules. ' +
@@ -4102,8 +4102,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       },
       description:
         'Edit existing path(s) in the staging buffer without re-uploading whole files. ' +
-        'Use this instead of stage_source_file whenever the file already exists (from get_sources, a prior stage, or the seed) — ' +
-        'especially for large game/render.ts or game/model.ts files. ' +
+        'Edits a file that already exists (from get_sources, a prior stage, or the seed) without re-uploading it whole — ' +
+        'especially useful for large game/render.ts or game/model.ts files. ' +
         'PRIMARY FORM: pass old + new (exact unique substring replace), or patches: [{ old, new }, ...] for multiple replacements in one file, ' +
         'or files: [{ path, old, new } | { path, patches: [{ old, new }] }, ...] to edit several files in one call — no @@ line numbers, no diff format. ' +
         'With patches[] / files[], replacements apply sequentially per file; ensure earlier replacements do not make a later old snippet ambiguous. ' +
@@ -4344,9 +4344,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     },
 
     clear_staged_sources: {
-      // Deletes staged files. Undelivered scratch space, so nothing creator-visible is
-      // lost — but the hint describes the operation, not the blast radius.
-      annotations: { title: 'Clear staged source files', ...CONSUMES },
+      // Deletes staged files — scratch space, nothing creator-visible lost. Idempotent
+      // like ack_inbox: clearing the same paths twice leaves the same result twice.
+      annotations: { title: 'Clear staged source files', ...CONSUMES, idempotentHint: true },
       outputSchema: {
         type: 'object',
         properties: {
