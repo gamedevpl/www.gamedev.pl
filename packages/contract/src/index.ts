@@ -29,6 +29,7 @@ export { CONNECT_CLIENTS, type ConnectClient, type InstallSnippets } from './con
 export { DECLINE_REASONS, type DeclineReason } from './decline-reason.js';
 export { DELIVERY_MODES, type DeliveryMode } from './delivery-mode.js';
 export { DISMISS_REASONS, type DismissReason } from './dismiss-reason.js';
+export type { GameProject } from './game-project.js';
 export { GATE_PROGRESS_LANES, type GateProgressLane } from './gate-progress.js';
 export { deriveGateStatusString, derivePreviewGateStatus, GATE_STATUS_VALUES, type GateStatus } from './gate-status.js';
 export { JOB_STALL_VALUES, JOB_STATES, type JobStall, type JobState } from './job-state.js';

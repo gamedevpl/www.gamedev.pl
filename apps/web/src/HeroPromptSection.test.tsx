@@ -34,9 +34,6 @@ describe('HeroPromptSection', () => {
           submissionStatus: 'idle',
           submissionError: null,
           onSubmitSpec: vi.fn(),
-          mockStatus: 'idle',
-          mockError: null,
-          onGenerateMock: vi.fn(),
         }),
       );
       await flushEffects();
@@ -83,8 +80,6 @@ describe('HeroPromptSection', () => {
           submissionStatus: 'idle',
           submissionError: null,
           onSubmitSpec: vi.fn(),
-          mockStatus: 'idle',
-          mockError: null,
         }),
       );
       await flushEffects();
@@ -113,9 +108,6 @@ describe('HeroPromptSection', () => {
             submissionStatus,
             submissionError: null,
             onSubmitSpec: vi.fn(),
-            mockStatus: 'idle',
-            mockError: null,
-            onGenerateMock: vi.fn(),
           }),
         );
         await flushEffects();
@@ -153,9 +145,6 @@ describe('HeroPromptSection', () => {
             submissionStatus,
             submissionError: null,
             onSubmitSpec: vi.fn(),
-            mockStatus: 'idle',
-            mockError: null,
-            onGenerateMock: vi.fn(),
           }),
         );
         await flushEffects();
@@ -205,9 +194,6 @@ describe('HeroPromptSection', () => {
           submissionStatus: 'idle',
           submissionError: null,
           onSubmitSpec: vi.fn(),
-          mockStatus: 'idle',
-          mockError: null,
-          onGenerateMock: vi.fn(),
         }),
       );
       await flushEffects();
@@ -227,9 +213,6 @@ describe('HeroPromptSection', () => {
           submissionStatus: 'refining',
           submissionError: null,
           onSubmitSpec: vi.fn(),
-          mockStatus: 'idle',
-          mockError: null,
-          onGenerateMock: vi.fn(),
         }),
       );
       await flushEffects();
@@ -270,9 +253,6 @@ describe('HeroPromptSection', () => {
           submissionStatus: 'idle',
           submissionError: null,
           onSubmitSpec: vi.fn(),
-          mockStatus: 'idle',
-          mockError: null,
-          onGenerateMock: vi.fn(),
         }),
       );
       await flushEffects();
@@ -313,9 +293,6 @@ describe('HeroPromptSection', () => {
           submissionStatus: 'idle',
           submissionError: null,
           onSubmitSpec,
-          mockStatus: 'idle',
-          mockError: null,
-          onGenerateMock: vi.fn(),
         }),
       );
       await flushEffects();
@@ -379,9 +356,6 @@ describe('HeroPromptSection', () => {
           submissionStatus: 'idle',
           submissionError: null,
           onSubmitSpec: vi.fn(),
-          mockStatus: 'idle',
-          mockError: null,
-          onGenerateMock: vi.fn(),
         }),
       );
       await flushEffects();
@@ -425,9 +399,6 @@ describe('HeroPromptSection', () => {
           submissionStatus: 'idle',
           submissionError: null,
           onSubmitSpec: vi.fn(),
-          mockStatus: 'idle',
-          mockError: null,
-          onGenerateMock: vi.fn(),
         }),
       );
       await flushEffects();
@@ -479,8 +450,6 @@ describe('HeroPromptSection', () => {
           submissionStatus: 'idle',
           submissionError: null,
           onSubmitSpec: vi.fn(),
-          mockStatus: 'idle',
-          mockError: null,
         }),
       );
       await flushEffects();

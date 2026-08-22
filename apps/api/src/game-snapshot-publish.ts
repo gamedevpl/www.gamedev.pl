@@ -1,4 +1,4 @@
-import type { GameProject } from '@gamedevpl/game-generator';
+import type { GameProject } from '@gamedevpl/contract';
 import { assembleGameHtml } from './assemble.js';
 import {
   generateSnapshotId,

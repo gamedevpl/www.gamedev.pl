@@ -1,12 +1,9 @@
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
-import type { GameGenerator } from '@gamedevpl/game-generator';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyServerOptions } from 'fastify';
-import { z } from 'zod';
-import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { registerAccessTokenRoutes } from './access-token-routes.js';
 import { registerJobAdminRoutes } from './job-admin-routes.js';
 import { createGameSeederFromEnv } from './agent-backend-env.js';
@@ -35,7 +32,6 @@ import { VertexCodeLane } from './code-lane.js';
 import { VertexTabCompleter, type TabCompleter } from './tab-complete.js';
 import { registerRemixRoutes, MAX_REMIX_ID_LENGTH } from './remix.js';
 import { createEditingGate, createCreationGate, createTabCompleteGate } from './creation-limits.js';
-import { createGenerator } from './generator.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { registerContactRoutes, type ContactRoutesOptions } from './contact.js';
 import { registerEmailRoutes } from './email-routes.js';
@@ -74,20 +70,14 @@ import { registerVoteRoutes, type VoteRoutesOptions } from './votes.js';
 import { registerRecommendationRoutes, type RecommendationRoutesOptions } from './recommendations.js';
 import { createCombinedPublishedSlugGate, createPublishedSlugGateFromEnv } from './published-slugs.js';
 import { createCatalogGenreSourceFromEnv } from './catalog-genre-source.js';
-import { peekQuota } from './quota-gate.js';
 import { registerRateLimit } from './rate-limit.js';
 import { isKnownSpaShellPath, looksLikeStaticAsset } from './spa-paths.js';
-import { logModerationRejection } from './moderation-metrics.js';
 import { registerOAuthProtectedResourceRoutes } from './mcp-oauth-metadata.js';
 import { registerMcpServerDiscoveryRoutes } from './mcp-server-discovery.js';
 import { registerOpenAiAppsChallengeRoute } from './openai-apps-challenge.js';
 import { registerOAuthAuthorizationServerRoutes } from './oauth-as.js';
 import { registerTokenLoginRoutes } from './oauth-token-login.js';
 import { registerCreatorAgentKeyRoutes } from './creator-agent-key-routes.js';
-
-const GenerateRequestSchema = z.object({
-  prompt: z.string().trim().min(1, 'prompt is required').max(500, 'prompt is too long'),
-});
 
 const GAME_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -131,7 +121,6 @@ function isPublicPlayRequest(request: FastifyRequest, publicPlaySlugs: Set<strin
 }
 
 export interface BuildAppOptions {
-  generator?: GameGenerator;
   /** `false` in tests by default; pass a Pino destination to assert on log lines. */
   logger?: FastifyServerOptions['logger'];
   store?: Store;
@@ -141,7 +130,6 @@ export interface BuildAppOptions {
   googleAuthVerifier?: GoogleAuthVerifier;
   /** Seam for Sign in with Apple; defaults to JWKS-or-deny-all from APPLE_CLIENT_IDS. */
   appleAuthVerifier?: AppleAuthVerifier;
-  dailyGenerationQuota?: number;
   submissionRoutes?: SubmissionRoutesOptions;
   contentChecker?: ContentChecker;
   specRefiner?: SpecRefiner;
@@ -200,7 +188,6 @@ export interface BuildAppOptions {
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
-  const generator = options.generator ?? createGenerator();
   // Cloud Run terminates the connection and proxies to this container, so without
   // trustProxy every request.ip is the proxy's own address (169.254.x.x) —
   // collapsing every per-IP rate limiter in the app into one shared, site-wide
@@ -223,7 +210,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     routerOptions: { maxParamLength: MAX_REMIX_ID_LENGTH },
   });
   const store = options.store ?? new InMemoryStore();
-  const dailyGenerationQuota = options.dailyGenerationQuota ?? Number(process.env.DAILY_GENERATION_QUOTA ?? '20');
 
   const isProd = process.env.NODE_ENV === 'production';
   const webOrigin = process.env.WEB_ORIGIN?.trim();
@@ -924,7 +910,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
    */
   app.get('/api/health', async () => ({
     status: 'ok',
-    provider: generator.name,
+    // Retained for shape stability after the mock generator was retired.
+    provider: 'mock',
     privateBeta,
     appleSignIn: Boolean(options.appleAuthVerifier) || parseAppleClientIds(process.env.APPLE_CLIENT_IDS).length > 0,
     publicPlaySlugs: [...(await getPublicPlaySlugs())],
@@ -1031,81 +1018,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       return reply.status(401).send({ error: 'authentication required' });
     }
   });
-
-  // Moderation on this route is a paid Vertex call, so the per-IP ceiling is what
-  // stops one account turning it into an unbounded bill. It is declared here rather
-  // than checked in the handler on purpose: the rate-limit hook runs *before* the
-  // handler body, so a refused request costs nothing at all. Same window as the
-  // sibling refine route, which is the pattern this follows throughout.
-  app.post(
-    '/api/generate-game',
-    { config: { rateLimit: { max: 30, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      if (!request.user) {
-        return reply.status(401).send({ error: 'authentication required' });
-      }
-
-      // 1. Validate request payload first so malformed requests don't burn daily quota
-      const parsedRequest = GenerateRequestSchema.safeParse(request.body);
-      if (!parsedRequest.success) {
-        return reply.status(400).send({ error: parsedRequest.error.issues[0]?.message ?? 'invalid request' });
-      }
-
-      const dateStr = new Date().toISOString().slice(0, 10);
-
-      // 2. Quota headroom, read-only. Moderation below costs money, so an account that
-      // is already out of budget must be turned away before we spend any — otherwise
-      // the daily limit caps games created but not dollars spent. The authoritative
-      // increment still happens after moderation (step 4), so rejected content remains
-      // free to the creator.
-      const headroom = await peekQuota(store, request.user.uid, dateStr, dailyGenerationQuota, 'mocks');
-      if (!headroom.allowed) {
-        if (headroom.tier === 'blocked') {
-          return reply.status(403).send({ error: 'account is blocked' });
-        }
-        return reply.status(429).send({ error: 'daily generation quota exceeded' });
-      }
-
-      // 3. Content moderation, before any quota is spent (docs/content-safety-plan.md Layer 1 & 1b)
-      const moderation = await contentChecker.check(parsedRequest.data.prompt);
-      if (!moderation.allowed) {
-        logModerationRejection(request.log, {
-          surface: 'mock_prompt',
-          uid: request.user?.uid,
-          category: moderation.category,
-        });
-        return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
-      }
-
-      // 4. Daily user generation quota check
-      const quota = await store.checkAndIncrementQuota(request.user.uid, dateStr, dailyGenerationQuota, 'mocks');
-      if (!quota.allowed) {
-        if (quota.tier === 'blocked') {
-          return reply.status(403).send({ error: 'account is blocked' });
-        }
-        return reply.status(429).send({ error: 'daily generation quota exceeded' });
-      }
-
-      const project = await generator.generate(parsedRequest.data.prompt);
-
-      // Generated code isn't schema-validatable — the client runs it in a sandboxed
-      // iframe. We only assemble it into one document and enforce basic hygiene here.
-      try {
-        const html = assembleGameHtml(project);
-        return { title: project.title, description: project.description, html };
-      } catch (error) {
-        if (
-          error instanceof EmptyProjectError ||
-          error instanceof ProjectTooLargeError ||
-          error instanceof CredentialLeakError
-        ) {
-          request.log.error({ err: error }, 'generated project failed hygiene checks');
-          return reply.status(502).send({ error: 'game generation failed' });
-        }
-        throw error;
-      }
-    },
-  );
 
   // In production (single Cloud Run service) the API also serves the built web app from the
   // same origin, so the browser makes only same-origin requests and no CORS is involved.

@@ -71,8 +71,8 @@ build if you want to check it compiles the same way CI will.
 
 ## Things that will surprise you
 
-- **The generator is a mock.** Games are not generated on demand by this app; they are
-  written by coding agents in the games repo. `LLM_PROVIDER` accepts only `mock`.
+- **Nothing is generated on demand by this app.** Games are written by coding agents in
+  the games repo, or delivered over MCP by a creator's own agent.
 - **A submitted spec never progresses past "queued" locally.** No agent is watching, so
   there is no pull request to find. That is the honest local behaviour, not a bug.
 - **State evaporates on restart.** The in-memory store is not persisted; production uses

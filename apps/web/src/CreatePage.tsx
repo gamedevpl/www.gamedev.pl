@@ -15,9 +15,6 @@ type CreatePageProps = {
   submissionStatus: 'idle' | 'refining' | 'loading';
   submissionError: string | null;
   onSubmitSpec: (concept: string, referenceImages?: string[]) => void;
-  mockStatus: 'idle' | 'loading' | 'error';
-  mockError: string | null;
-  onGenerateMock: (prompt: string) => void;
   onPlatformBuilderAvailability: (availability: PlatformBuilderAvailability | undefined) => void;
 };
 
@@ -35,9 +32,6 @@ export function CreatePage({
   submissionStatus,
   submissionError,
   onSubmitSpec,
-  mockStatus,
-  mockError,
-  onGenerateMock,
   onPlatformBuilderAvailability,
 }: CreatePageProps) {
   const { t } = useTranslation();
@@ -62,9 +56,6 @@ export function CreatePage({
           submissionStatus={submissionStatus}
           submissionError={submissionError}
           onSubmitSpec={onSubmitSpec}
-          mockStatus={mockStatus}
-          mockError={mockError}
-          onGenerateMock={onGenerateMock}
           onPlatformBuilderAvailability={onPlatformBuilderAvailability}
           exampleChips={exampleChips}
         />

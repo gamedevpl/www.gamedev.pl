@@ -68,9 +68,6 @@ describe('CreatePage', () => {
           submissionStatus: 'idle',
           submissionError: null,
           onSubmitSpec: vi.fn(),
-          mockStatus: 'idle',
-          mockError: null,
-          onGenerateMock: vi.fn(),
           onPlatformBuilderAvailability: vi.fn(),
         }),
       );

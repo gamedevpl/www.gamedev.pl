@@ -21,10 +21,6 @@ type HeroPromptSectionProps = {
   submissionStatus: 'idle' | 'refining' | 'loading';
   submissionError: string | null;
   onSubmitSpec: (concept: string, referenceImages?: string[]) => void;
-  mockStatus: 'idle' | 'loading' | 'error';
-  mockError: string | null;
-  // Demo mock only; Build runs QA before any generation
-  onGenerateMock?: (prompt: string) => void;
   // Fires once the quota poll resolves.
   onPlatformBuilderAvailability?: (availability: PlatformBuilderAvailability | undefined) => void;
   // Click-to-fill prompt starters; unused on home, /create shows a few.
@@ -119,8 +115,6 @@ export function HeroPromptSection({
   submissionStatus,
   submissionError,
   onSubmitSpec,
-  mockStatus,
-  mockError,
   onPlatformBuilderAvailability,
   exampleChips,
 }: HeroPromptSectionProps) {
@@ -256,7 +250,7 @@ export function HeroPromptSection({
   const matchedGame = useMemo(() => findMatchingGame(promptText, catalogEntries), [promptText, catalogEntries]);
 
   const handleFiles = (files: FileList | File[]) => {
-    if (submissionStatus !== 'idle' || mockStatus === 'loading') return;
+    if (submissionStatus !== 'idle') return;
     Array.from(files).forEach((file) => {
       if (!file.type.startsWith('image/')) return;
       setPendingAttachmentReads((count) => count + 1);
@@ -289,11 +283,11 @@ export function HeroPromptSection({
   };
 
   // Desktop clips Build label; spinner + status must stay visible.
-  const isBusy = submissionStatus !== 'idle' || mockStatus === 'loading';
+  const isBusy = submissionStatus !== 'idle';
   const busyLabel =
     submissionStatus === 'refining'
       ? t('qa.analyzing')
-      : submissionStatus === 'loading' || mockStatus === 'loading'
+      : submissionStatus === 'loading'
         ? t('submit.submitting')
         : null;
 
@@ -571,7 +565,6 @@ export function HeroPromptSection({
         </form>
 
         {submissionError && <p className="error">{submissionError}</p>}
-        {mockError && <p className="error">{mockError}</p>}
 
         {/* AI Act art. 50(1): disclose AI at the prompt interaction point. */}
         <p className="ai-notice">

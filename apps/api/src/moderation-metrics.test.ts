@@ -96,7 +96,6 @@ describe('every moderating module reports its rejections', () => {
     // Without this the suite below passes vacuously the moment the pattern stops matching
     // — for instance if the checker is ever renamed or wrapped.
     expect(callSites.sort()).toEqual([
-      'app.ts',
       'contact.ts',
       'editor-drafts.ts',
       'mcp-server.ts',

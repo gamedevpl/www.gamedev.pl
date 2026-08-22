@@ -8,7 +8,7 @@ Then [`docs/contributing-for-agents.md`](docs/contributing-for-agents.md) for th
 
 ## Fast facts
 
-- npm-workspaces monorepo: `apps/web`, `apps/api`, `packages/game-generator`, `infra/`, `docs/`.
+- npm-workspaces monorepo: `apps/web`, `apps/api`, `apps/world`, `packages/contract`, `packages/zone-core`, `infra/`, `docs/`.
 - **This repo is public.** Internal docs (GTM strategy, risk register, legal analysis, store
   accounts, mobile/store launch plans, ops readiness, creator-experience review) live in the **private
   [`www.gamedev.pl-ops`](https://github.com/gamedevpl/www.gamedev.pl-ops) repo — required
@@ -168,7 +168,7 @@ secrets. Non-obvious caveats for running/testing locally:
   shows a red "Could not load the catalog" error — this is expected.** The catalog is served
   from the separate games repo, which isn't wired up in local dev.
 - **The generate/create loop is gated behind Google sign-in in the UI** — clicking "Build My
-  Game" opens a "Sign in with Google" modal, and `POST /api/generate-game` returns 401 without a
+  Game" opens a "Sign in with Google" modal, and the creation routes return 401 without a
   session. Real Google OAuth isn't available locally. To exercise the authenticated
   generate→assemble loop without Google, do what the tests do: `InMemoryStore.upsertUser(...)` +
   `mintSessionToken(uid, 'dev-session-secret-change-me')` and send it as the `gamedev_session`
