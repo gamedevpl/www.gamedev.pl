@@ -2708,10 +2708,6 @@ export interface Store {
   beginAgentOpenRound(slug: string, at: string): Promise<boolean>;
   /** BY-24: release the admission lock after `open_round` completes or aborts. */
   finishAgentOpenRound(slug: string, at: string): Promise<void>;
-  // At-most-once managed harvest claim across instances.
-  claimManagedDelivery(claim: { issueNumber: number; sessionRef: string; slug: string }, at: string): Promise<boolean>;
-  // Release a failed harvest claim for retry.
-  releaseManagedDelivery(claim: { issueNumber: number; sessionRef: string }): Promise<void>;
   /** Creator-wide opener record, or null when the creator has never minted one. */
   getCreatorAgentKey(ownerUid: string): Promise<CreatorAgentKeyRecord | null>;
   /**
@@ -2936,11 +2932,6 @@ export class InMemoryStore implements Store {
   private accessTokens = new Map<string, AccessTokenRecord>();
   // slug -> durable per-game agent opener state (BY-23)
   private gameAgentKeys = new Map<string, GameAgentKeyRecord>();
-  // `${issueNumber}:${sessionRef}` -> managed harvest claim
-  private managedDeliveryClaims = new Map<
-    string,
-    { issueNumber: number; sessionRef: string; slug: string; claimedAt: string }
-  >();
   private creatorAgentKeys = new Map<string, CreatorAgentKeyRecord>();
   private oauthClients = new Map<string, OAuthClientRecord>();
   private oauthGrants = new Map<string, OAuthGrantRecord>();
@@ -5126,20 +5117,6 @@ export class InMemoryStore implements Store {
     const next: GameAgentKeyRecord = { ...existing, updatedAt: at };
     delete next.agentOpenRoundPending;
     this.gameAgentKeys.set(slug, next);
-  }
-
-  async claimManagedDelivery(
-    claim: { issueNumber: number; sessionRef: string; slug: string },
-    at: string,
-  ): Promise<boolean> {
-    const key = `${claim.issueNumber}:${claim.sessionRef}`;
-    if (this.managedDeliveryClaims.has(key)) return false;
-    this.managedDeliveryClaims.set(key, { ...claim, claimedAt: at });
-    return true;
-  }
-
-  async releaseManagedDelivery(claim: { issueNumber: number; sessionRef: string }): Promise<void> {
-    this.managedDeliveryClaims.delete(`${claim.issueNumber}:${claim.sessionRef}`);
   }
 
   async getCreatorAgentKey(ownerUid: string): Promise<CreatorAgentKeyRecord | null> {
@@ -8569,33 +8546,6 @@ export class FirestoreStore implements Store {
       delete next.agentOpenRoundPending;
       tx.set(docRef, next);
     });
-  }
-
-  private managedDeliveryClaimRef(issueNumber: number, sessionRef: string) {
-    // Session refs are opaque vendor ids; colon keeps the composite key readable.
-    return this.db.collection('managedDeliveryClaims').doc(`${issueNumber}:${sessionRef}`);
-  }
-
-  async claimManagedDelivery(
-    claim: { issueNumber: number; sessionRef: string; slug: string },
-    at: string,
-  ): Promise<boolean> {
-    const docRef = this.managedDeliveryClaimRef(claim.issueNumber, claim.sessionRef);
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(docRef);
-      if (snap.exists) return false;
-      tx.set(docRef, {
-        issueNumber: claim.issueNumber,
-        sessionRef: claim.sessionRef,
-        slug: claim.slug,
-        claimedAt: at,
-      });
-      return true;
-    });
-  }
-
-  async releaseManagedDelivery(claim: { issueNumber: number; sessionRef: string }): Promise<void> {
-    await this.managedDeliveryClaimRef(claim.issueNumber, claim.sessionRef).delete();
   }
 
   async getCreatorAgentKey(ownerUid: string): Promise<CreatorAgentKeyRecord | null> {
