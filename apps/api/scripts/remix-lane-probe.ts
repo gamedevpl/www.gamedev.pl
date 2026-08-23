@@ -24,9 +24,9 @@
 
 import { writeFileSync } from 'node:fs';
 import { assembleGameHtml } from '../src/catalog/assemble.js';
-import { VertexCodeLane } from '../src/code-lane.js';
+import { VertexCodeLane } from '../src/creation/code-lane.js';
 import { createLocalGamesClient } from '../src/catalog/local-games-repo.js';
-import { buildSymbolMap, renderSymbolMap, sliceRegion } from '../src/symbol-map.js';
+import { buildSymbolMap, renderSymbolMap, sliceRegion } from '../src/creation/symbol-map.js';
 
 const [slug, utterance, ...rest] = process.argv.slice(2);
 if (!slug || !utterance) {

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { mintCreatorAgentKey } from './agent-creator-key.js';
 import { resolveCreatorAgentKeyForOpenRound, resolveCreatorAgentKeyForStart } from './agent-creator-key-resolve.js';
 import { NO_OPEN_ROUND_REASON, PLATFORM_ROUND_REASON, SLUG_NOT_ON_ACCOUNT_REASON } from './agent-game-key.js';
-import { InMemoryStore } from '../store.js';
+import { InMemoryStore } from '../platform/store.js';
 
 const secret = 'creator-resolve-test-secret';
 const owner = 'g:owner';

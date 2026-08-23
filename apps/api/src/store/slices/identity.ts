@@ -1,5 +1,5 @@
 import { FieldValue, type Firestore } from '@google-cloud/firestore';
-import type { AvatarMode } from '../../creator-profile.js';
+import type { AvatarMode } from '../../creation/creator-profile.js';
 import { stripUndefined } from '../firestore-util.js';
 import type { User, HandleRecord, ClaimHandleResult } from '../records/identity.js';
 import { claimHandleInMemory, claimHandleFirestore } from './identity-claim-handle.js';

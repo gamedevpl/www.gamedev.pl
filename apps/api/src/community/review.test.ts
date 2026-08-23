@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildApp } from '../app.js';
-import { InMemoryStore } from '../store.js';
-import type { ContentChecker } from '../moderation.js';
+import { buildApp } from '../platform/app.js';
+import { InMemoryStore } from '../platform/store.js';
+import type { ContentChecker } from '../platform/moderation.js';
 
 const allowAll: ContentChecker = {
   async check() {

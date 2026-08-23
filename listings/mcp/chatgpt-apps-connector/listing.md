@@ -101,7 +101,7 @@ to prevent.
 
 ## Domain verification
 
-The route is already live and already wired: `apps/api/src/openai-apps-challenge.ts`
+The route is already live and already wired: `apps/api/src/platform/openai-apps-challenge.ts`
 serves `GET /.well-known/openai-apps-challenge` from `OPENAI_APPS_CHALLENGE_TOKEN`
 (404 when unset), and `.github/workflows/deploy.yml` — the actual CI/CD path, not
 `infra/deploy-api.sh` (that one is owner-run, local-only, never invoked by CI) —

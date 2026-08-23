@@ -9,7 +9,7 @@ import {
 } from '@gamedevpl/contract';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { splitConceptBrief } from './agent-build-brief.js';
+import { splitConceptBrief } from './creation/agent-build-brief.js';
 import { creatorOwnsSlug } from './agent-surface/agent-game-key-resolve.js';
 import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-surface/agent-channel.js';
 import { mintAgentToken, mintManagedMcpOpener } from './agent-surface/agent-token.js';
@@ -22,7 +22,7 @@ import {
   CREATION_REFUSAL_CODES,
   type ChatGate,
   type CreationGate,
-} from './creation-limits.js';
+} from './creation/creation-limits.js';
 import {
   createManagedAvailabilityGate,
   MANAGED_UNAVAILABLE_ERROR,
@@ -30,7 +30,7 @@ import {
   type ManagedUnavailableReason,
 } from './agent-surface/managed-availability.js';
 import { postGateScreenshotToThread } from './delivery/gate-screenshot.js';
-import { profileBylineName, toPublicCreatorProfile } from './creator-profile.js';
+import { profileBylineName, toPublicCreatorProfile } from './creation/creator-profile.js';
 import {
   catalogEntryFromSpec,
   createGitHubClient,
@@ -51,7 +51,7 @@ import {
   overlayGameSources,
   type StagedPreviewOptions,
 } from './delivery/staged-preview.js';
-import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
+import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './platform/internal-auth.js';
 import type { AgentBackend, SeedDelivery, SeedFiles } from './agent-surface/agent-backend.js';
 import { PLAYTEST_CONTEXT_HEADER, stripPlaytestContext } from './delivery/build-transcript.js';
 import {
@@ -61,7 +61,7 @@ import {
   type AgentBackendRegistry,
   type ManagedBackendDeps,
 } from './agent-surface/agent-backend-env.js';
-import { createSeedAvailabilityGate, type SeedAvailabilityGate } from './seed-availability.js';
+import { createSeedAvailabilityGate, type SeedAvailabilityGate } from './creation/seed-availability.js';
 import {
   allowsCreatorBuilderHandoff,
   allowsSelfToPlatformHandoff,
@@ -71,9 +71,9 @@ import {
   selfBuildConnectDays,
   selfBuildDeliveryCap,
   type BuilderKind,
-} from './builder.js';
-import { codeSurfaceEnabled, isLiveAgentRound } from './code-surface.js';
-import { DEFAULT_SEED_PROVIDER, type GameSeeder, type SeedDraft, type SeedFile } from './game-seed.js';
+} from './creation/builder.js';
+import { codeSurfaceEnabled, isLiveAgentRound } from './creation/code-surface.js';
+import { DEFAULT_SEED_PROVIDER, type GameSeeder, type SeedDraft, type SeedFile } from './creation/game-seed.js';
 import { createSourceDeliveryService } from './delivery/source-delivery.js';
 import { createKitFileStore } from './agent-surface/kit-files.js';
 import type { GamesStore } from './delivery/games-store.js';
@@ -88,7 +88,7 @@ import {
   toSubmissionStatus,
   type JobState,
   type JobTransition,
-} from './job-state.js';
+} from './creation/job-state.js';
 import { isMcpPresenceEventText } from './agent-surface/mcp-presence.js';
 import { gateCrashStall, probeGateCrash } from './delivery/gate-crash.js';
 import {
@@ -96,7 +96,7 @@ import {
   noteObserveFailure,
   sessionCrashStall,
   sessionCrashTransition,
-} from './session-crash.js';
+} from './creation/session-crash.js';
 import { hydrateRecentBuildSummaries } from './delivery/build-changelog.js';
 import { toRecentBuilds } from './delivery/recent-builds.js';
 import {
@@ -111,13 +111,13 @@ import {
   type ChatAgentScope,
   type ChatAgentStatus,
   type StudioChatAgent,
-} from './chat-agent.js';
+} from './creation/chat-agent.js';
 import { asChatAgentLogger, logChatAgentDecision, logChatAgentFailOpen } from './telemetry/chat-agent-metrics.js';
-import { MAX_CHAT_TURNS, rememberChatTurn, type ChatTurn } from './chat-turns.js';
+import { MAX_CHAT_TURNS, rememberChatTurn, type ChatTurn } from './creation/chat-turns.js';
 import { mintConnectPayload } from './agent-surface/self-build-connect.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './catalog/local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './notifications/mailer.js';
-import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
+import { createDefaultContentChecker, type ContentChecker } from './platform/moderation.js';
 import {
   emitOperatorAlert,
   emitSubmissionNotification,
@@ -126,9 +126,9 @@ import {
 } from './notifications/notify.js';
 import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './notifications/operator-alerts.js';
 import { pageOwnerGames } from './catalog/owner-games.js';
-import { seedOutcomeFor } from './seed-status.js';
-import { isAdminSession } from './admin-session.js';
-import { peekQuota } from './quota-gate.js';
+import { seedOutcomeFor } from './creation/seed-status.js';
+import { isAdminSession } from './platform/admin-session.js';
+import { peekQuota } from './creation/quota-gate.js';
 import { mintGameSlug } from './catalog/slug.js';
 import { runSlugBackfill, settleSlugClaim } from './catalog/slug-backfill.js';
 import {
@@ -150,7 +150,7 @@ import {
   type SubmissionQueryStore,
   type SubmissionRecord,
   type SubmissionStore,
-} from './store.js';
+} from './platform/store.js';
 import {
   CREATOR_FEEDBACK_MARKER,
   countCreatorClarifications,
@@ -164,11 +164,11 @@ import {
   type PriorRoundHistory,
   type SubmissionStatus,
   type SubmissionStatusResponse,
-} from './submission-status.js';
-import { InvalidTokenError, mintToken, verifyToken } from './submission-token.js';
-import { normalizeAtIntake, type IntakeText } from './localize-intake.js';
-import { createTranslatorFromEnv, normalizeLocale, type Translator } from './translate.js';
-import { isVariantWidth } from './image-variants.js';
+} from './platform/submission-status.js';
+import { InvalidTokenError, mintToken, verifyToken } from './platform/submission-token.js';
+import { normalizeAtIntake, type IntakeText } from './platform/localize-intake.js';
+import { createTranslatorFromEnv, normalizeLocale, type Translator } from './platform/translate.js';
+import { isVariantWidth } from './platform/image-variants.js';
 import { logModerationRejection } from './telemetry/moderation-metrics.js';
 
 /**
@@ -427,7 +427,7 @@ export interface SubmissionRoutesOptions {
    * games-repo credentials already live.
    */
   resolveProposalBase?: (slug: string) => Promise<{
-    base: import('./store.js').ProposalBase;
+    base: import('./platform/store.js').ProposalBase;
     files: import('./delivery/games-store.js').SourceFile[];
   } | null>;
   submissionTokenSecret?: string;

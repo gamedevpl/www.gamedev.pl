@@ -108,12 +108,12 @@ done
 # single fields only at COLLECTION scope, never COLLECTION_GROUP. Without these the query
 # fails with `9 FAILED_PRECONDITION` — not a slow query, a hard error:
 #
-#   scorecard.computedAt (DESC)  listScorecards, apps/api/src/store.ts
+#   scorecard.computedAt (DESC)  listScorecards, apps/api/src/platform/store.ts
 #     Backs GET /api/admin/scorecards and the /health scorecards panel. All four operator
 #     reads share one Promise.all and one error state, so this one missing index blanks
 #     the game-health table too, not just the panel that needs it.
 #
-#   playerFeedback.uid (ASC)     deletePlayerFeedbackByUid, apps/api/src/store.ts
+#   playerFeedback.uid (ASC)     deletePlayerFeedbackByUid, apps/api/src/platform/store.ts
 #     Backs `npm run player:erase` — the executable half of the privacy notice's promise
 #     to remove a person's votes and feedback on account deletion. This one fails at the
 #     worst possible moment: an operator running a deletion request they have already
@@ -417,7 +417,7 @@ PROJECT_ID="$PROJECT_ID" REGION="$APP_REGION" "$SCRIPT_DIR/setup-account-deletio
 # searchTier/searchAddOns, so this step talks to the REST API directly with
 # `gcloud auth print-access-token` + curl — the same pattern step 7 above uses for the
 # Firestore single-field index, and the same no-SDK idiom apps/api/src/gcs-sign.ts and
-# apps/api/src/knowledge-search.ts use for the runtime's own calls.
+# apps/api/src/creation/knowledge-search.ts use for the runtime's own calls.
 #
 # IDs are deterministic (not timestamp-based) so this script stays safely re-runnable.
 #

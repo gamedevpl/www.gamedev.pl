@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildApp } from '../app.js';
+import { buildApp } from '../platform/app.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { extractSpecDescription } from './game-page-routes.js';
 import type { CatalogGameEntry, GitHubClient } from './github-client.js';
-import { InMemoryStore } from '../store.js';
+import { InMemoryStore } from '../platform/store.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 

@@ -10,7 +10,7 @@ Guidance for agents and admins managing closed beta access on **www.gamedev.pl**
 ## Architecture & Access Control
 
 When `PRIVATE_BETA=true`, all `/api/*` data routes and sign-in require an approved account.
-Access is determined by a **dual-layer check** inside [`apps/api/src/auth.ts`](../../apps/api/src/auth.ts):
+Access is determined by a **dual-layer check** inside [`apps/api/src/platform/auth.ts`](../../apps/api/src/platform/auth.ts):
 
 1. **Dynamic Firestore Approval (Primary)**:
    Checks Firestore `waitlist` collection (`projectId: gamedevpl`) via `isWaitlistApproved(uid, email)`.

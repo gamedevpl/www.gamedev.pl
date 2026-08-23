@@ -5,7 +5,7 @@
 
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import type { Store } from '../store.js';
+import type { Store } from '../platform/store.js';
 
 const MarkReadSchema = z
   .object({

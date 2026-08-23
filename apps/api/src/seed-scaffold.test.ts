@@ -1,7 +1,7 @@
 // Regression cover: a deleted scaffold path silently emptied every seed prompt.
 import { describe, expect, it } from 'vitest';
-import { buildGeneratePrompt } from './game-seed.js';
-import { SEED_SCAFFOLD_SLUG, buildSeedContext, type SeedFileIndex } from './seed-context.js';
+import { buildGeneratePrompt } from './creation/game-seed.js';
+import { SEED_SCAFFOLD_SLUG, buildSeedContext, type SeedFileIndex } from './creation/seed-context.js';
 
 function indexOf(files: Record<string, string>): SeedFileIndex {
   return { paths: Object.keys(files), read: (path) => files[path] ?? null };

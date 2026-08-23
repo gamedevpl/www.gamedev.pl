@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { buildApp } from '../app.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from '../auth.js';
-import { InMemoryStore, MAX_GAME_SAVE_BYTES } from '../store.js';
+import { buildApp } from '../platform/app.js';
+import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
+import { InMemoryStore, MAX_GAME_SAVE_BYTES } from '../platform/store.js';
 import type { PublishedSlugGate } from '../catalog/published-slugs.js';
 
 const sessionSecret = 'dev-session-secret-change-me';

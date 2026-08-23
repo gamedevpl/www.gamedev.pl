@@ -9,8 +9,8 @@ import {
   stripPlaytestContext,
 } from './build-transcript.js';
 import { mcpPresenceText } from '../agent-surface/mcp-presence.js';
-import type { CreatorMessage, Store, SubmissionRecord } from '../store.js';
-import type { BuildEvent } from '../submission-status.js';
+import type { CreatorMessage, Store, SubmissionRecord } from '../platform/store.js';
+import type { BuildEvent } from '../platform/submission-status.js';
 
 type TranscriptStore = Pick<Store, 'listSubmissionsBySlug' | 'listCreatorMessages' | 'listBuildEvents'>;
 

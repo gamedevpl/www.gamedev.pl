@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-export { readBearerToken } from '../bearer.js';
+export { readBearerToken } from '../platform/bearer.js';
 
 /**
  * Build-channel tokens (docs/agent-live-channel-plan.md §1).

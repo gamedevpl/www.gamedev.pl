@@ -1,5 +1,5 @@
 // Vendor-neutral seam for hosted coding-agent platforms.
-import type { AgentTaskState } from '../agent-state.js';
+import type { AgentTaskState } from '../creation/agent-state.js';
 
 // Coarse reasoning budget; vendors name it differently.
 export type ManagedAgentEffort = 'low' | 'medium' | 'high';

@@ -4,16 +4,16 @@ import { mintAgentToken, mintLegacyAgentToken, STALE_AGENT_TOKEN_REASON } from '
 import { verifyUploadToken } from './agent-upload-token.js';
 import type { AgentChannelOptions } from './agent-channel.js';
 import { MAX_TRANSCRIPT_LIST_ENTRIES } from '../delivery/build-transcript.js';
-import { buildApp } from '../app.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from '../auth.js';
+import { buildApp } from '../platform/app.js';
+import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from '../catalog/github-client.js';
 import type { AgentBackend } from './agent-backend.js';
-import type { GameSeeder } from '../game-seed.js';
+import type { GameSeeder } from '../creation/game-seed.js';
 import { InvalidUploadError, type GamesStore } from '../delivery/games-store.js';
-import type { KnowledgeQueryResult } from '../knowledge-search.js';
-import { InMemoryStore } from '../store.js';
-import { mintToken } from '../submission-token.js';
-import type { Translator } from '../translate.js';
+import type { KnowledgeQueryResult } from '../creation/knowledge-search.js';
+import { InMemoryStore } from '../platform/store.js';
+import { mintToken } from '../platform/submission-token.js';
+import type { Translator } from '../platform/translate.js';
 
 const secret = 'test-secret';
 const ISSUE = 42;
@@ -606,7 +606,7 @@ describe('agent build channel', () => {
     await seedSubmission(store);
     await store.markAgentEnded(ISSUE, '2026-08-11T12:00:00.000Z');
     const stored = (
-      store as unknown as { submissions: Map<number, import('../store.js').SubmissionRecord> }
+      store as unknown as { submissions: Map<number, import('../platform/store.js').SubmissionRecord> }
     ).submissions.get(ISSUE);
     delete stored!.agentEndedBy;
     app = await createApp(store);
@@ -925,8 +925,9 @@ describe('agent build channel', () => {
     await seedSubmission(store);
     // Simulate a pre-migration record: strip the generation new creates stamp.
     const legacy = await store.getSubmission(ISSUE);
-    const submissions = (store as unknown as { submissions: Map<number, import('../store.js').SubmissionRecord> })
-      .submissions;
+    const submissions = (
+      store as unknown as { submissions: Map<number, import('../platform/store.js').SubmissionRecord> }
+    ).submissions;
     submissions.set(ISSUE, { ...legacy!, roundGeneration: undefined });
 
     app = await createApp(store);

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import type { BuilderKind } from '../builder.js';
+import type { BuilderKind } from '../creation/builder.js';
 import type { ManagedUnavailableReason } from '../agent-surface/managed-availability.js';
-import type { InternalAuthVerifier } from '../internal-auth.js';
+import type { InternalAuthVerifier } from '../platform/internal-auth.js';
 import {
   aggregateCreatorAssessments,
   playSignalWinsOverEditorial,
@@ -15,7 +15,7 @@ import {
   type Store,
   type SubmissionRecord,
   type SuggestionRecord,
-} from '../store.js';
+} from '../platform/store.js';
 import { advanceSuggestionOutcomes } from './suggestion-outcomes.js';
 import {
   AUTONOMOUS_ACTOR,
@@ -24,7 +24,7 @@ import {
   mayActAutonomously,
   wantsSuggestions,
   type AutonomyMode,
-} from '../autonomy.js';
+} from '../creation/autonomy.js';
 import { hypothesisMetric, metricFromScorecard } from './suggestion-outcomes.js';
 
 /**

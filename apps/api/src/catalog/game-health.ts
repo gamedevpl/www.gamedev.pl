@@ -25,8 +25,8 @@
 import type { FastifyInstance } from 'fastify';
 import type { GamesStore, PublicationRecord } from '../delivery/games-store.js';
 import type { GitHubClient } from './github-client.js';
-import type { InternalAuthVerifier } from '../internal-auth.js';
-import type { Store } from '../store.js';
+import type { InternalAuthVerifier } from '../platform/internal-auth.js';
+import type { Store } from '../platform/store.js';
 
 /** The configured Cloud Build gate trigger — the same seam the delivery path uses. */
 export type HealthGateTrigger = (input: {

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { readBearerToken } from '../bearer.js';
-import { canonicalAppBaseUrl } from '../canonical-app-url.js';
+import { readBearerToken } from '../platform/bearer.js';
+import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
 import { MCP_ENDPOINT_PATH, mcpEndpointUrl } from './self-build-connect.js';
 
 /** RFC 9728 protected-resource metadata document (BY-18a). */

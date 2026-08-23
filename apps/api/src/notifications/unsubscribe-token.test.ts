@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { InvalidUnsubscribeTokenError, mintUnsubscribeToken, verifyUnsubscribeToken } from './unsubscribe-token.js';
-import { mintSessionToken } from '../auth.js';
+import { mintSessionToken } from '../platform/auth.js';
 
 const secret = 'unsub-secret';
 

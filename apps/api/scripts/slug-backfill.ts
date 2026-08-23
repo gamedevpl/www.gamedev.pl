@@ -21,7 +21,7 @@
 
 import { createGcsSnapshotStore } from '../src/catalog/game-snapshot.js';
 import { runSlugBackfill } from '../src/catalog/slug-backfill.js';
-import { FirestoreStore } from '../src/store.js';
+import { FirestoreStore } from '../src/platform/store.js';
 
 // Same default as infra/deploy-api.sh: ${PROJECT_ID}-games-snapshots.
 const SNAPSHOT_BUCKET = process.env.GAMES_SNAPSHOT_BUCKET ?? 'gamedevpl-games-snapshots';

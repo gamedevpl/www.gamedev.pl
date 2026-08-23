@@ -10,7 +10,7 @@ import {
   resolveTarget,
   splitAssessmentId,
 } from './assessment-cli.js';
-import type { GameAssessment } from '../store.js';
+import type { GameAssessment } from '../platform/store.js';
 
 function row(overrides: Partial<GameAssessment> = {}): GameAssessment {
   return {

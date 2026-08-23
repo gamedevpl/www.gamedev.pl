@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { GamesStore, VersionManifest } from '../delivery/games-store.js';
 import type { GitHubClient } from '../catalog/github-client.js';
 import { applyProposalToRepo, proposalBranchName, proposalPullRequestBody } from './proposal-apply-bot.js';
-import { InMemoryStore, type ProposalRecord } from '../store.js';
+import { InMemoryStore, type ProposalRecord } from '../platform/store.js';
 
 const NOW = '2026-08-04T12:00:00Z';
 

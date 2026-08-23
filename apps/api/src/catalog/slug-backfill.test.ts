@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { runSlugBackfill } from './slug-backfill.js';
-import { InMemoryStore } from '../store.js';
+import { InMemoryStore } from '../platform/store.js';
 
 // The HTTP route's own tests live in submissions.test.ts. These cover the shared loop
 // directly, because the `slug:backfill` CLI reaches it without a server and its probe

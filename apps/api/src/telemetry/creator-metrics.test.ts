@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { returnedAfterPublish, summarizeCreatorMetrics } from './creator-metrics.js';
-import type { SubmissionRecord, User } from '../store.js';
+import type { SubmissionRecord, User } from '../platform/store.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = Date.parse('2026-08-01T12:00:00.000Z');

@@ -2,14 +2,14 @@ import type { FastifyInstance } from 'fastify';
 import { gzipSync } from 'node:zlib';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-surface/agent-token.js';
-import { AGENT_BUILD_RULES_DIGEST } from './agent-build-brief.js';
-import { listAgentBuildExamples } from './agent-build-examples.js';
-import { buildApp } from './app.js';
+import { AGENT_BUILD_RULES_DIGEST } from './creation/agent-build-brief.js';
+import { listAgentBuildExamples } from './creation/agent-build-examples.js';
+import { buildApp } from './platform/app.js';
 import { MAX_PROJECT_BYTES } from './catalog/games-repo-contract.js';
 import type { GcsObjectStore } from './delivery/gcs-sign.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
 import { KIT_ROOT_DIR } from './agent-surface/kit-registry.js';
-import { InMemoryStore } from './store.js';
+import { InMemoryStore } from './platform/store.js';
 
 const secret = 'test-secret';
 const ISSUE = 77;

@@ -7,7 +7,7 @@
 
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import type { Store } from '../store.js';
+import type { Store } from '../platform/store.js';
 
 // The client sends `subscription.toJSON()` verbatim. Validate the shape we depend
 // on (endpoint + the two ECDH keys) and ignore any extra fields the browser adds.

@@ -1,22 +1,22 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { assertAgentTokenActive, mintAgentToken, verifyAgentToken } from './agent-surface/agent-token.js';
-import { buildApp } from './app.js';
-import type { GameSeeder, SeedDraft } from './game-seed.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
+import { buildApp } from './platform/app.js';
+import type { GameSeeder, SeedDraft } from './creation/game-seed.js';
+import { mintSessionToken, SESSION_COOKIE_NAME } from './platform/auth.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
-import type { ContentChecker } from './moderation.js';
-import { InMemoryStore, type Store } from './store.js';
-import { mintToken, verifyToken } from './submission-token.js';
-import { canTransition } from './job-state.js';
+import type { ContentChecker } from './platform/moderation.js';
+import { InMemoryStore, type Store } from './platform/store.js';
+import { mintToken, verifyToken } from './platform/submission-token.js';
+import { canTransition } from './creation/job-state.js';
 import type { AgentBackend, BuildBrief } from './agent-surface/agent-backend.js';
 import type { GamesStore } from './delivery/games-store.js';
 import { DELIVERY_GATE_VERDICT_MSG } from './telemetry/delivery-metrics.js';
-import { JOB_ID_FLOOR } from './store.js';
+import { JOB_ID_FLOOR } from './platform/store.js';
 import { createManagedAvailabilityGate, type ManagedAvailabilityGate } from './agent-surface/managed-availability.js';
-import { StubStudioChatAgent, type ChatAgentRequest, type StudioChatAgent } from './chat-agent.js';
-import type { ChatGate } from './creation-limits.js';
-import type { InternalAuthVerifier } from './internal-auth.js';
+import { StubStudioChatAgent, type ChatAgentRequest, type StudioChatAgent } from './creation/chat-agent.js';
+import type { ChatGate } from './creation/creation-limits.js';
+import type { InternalAuthVerifier } from './platform/internal-auth.js';
 
 const secret = 'submission-secret';
 const repo = 'gamedevpl/www.gamedev.pl-games';
@@ -5223,8 +5223,9 @@ describe('a session that finishes without delivering', () => {
     // round-scoped key claiming generation 1 — that field must be written, or the
     // brand-new token fails assertAgentTokenActive (active === undefined).
     const { app, store, job, briefs, clock, token } = await jobWithFinishedSession();
-    const submissions = (store as unknown as { submissions: Map<number, import('./store.js').SubmissionRecord> })
-      .submissions;
+    const submissions = (
+      store as unknown as { submissions: Map<number, import('./platform/store.js').SubmissionRecord> }
+    ).submissions;
     const before = await store.getSubmission(job.issueNumber);
     submissions.set(job.issueNumber, { ...before!, roundGeneration: undefined });
 
@@ -6958,7 +6959,7 @@ describe('seeded dispatch', () => {
   });
 
   it('records the seed workspace so the branch is released with the job', async () => {
-    const { InMemoryStore } = await import('./store.js');
+    const { InMemoryStore } = await import('./platform/store.js');
     const store = new InMemoryStore();
     await store.createSubmission(1, 'g:1', 'A game');
     await store.recordDispatch(1, {

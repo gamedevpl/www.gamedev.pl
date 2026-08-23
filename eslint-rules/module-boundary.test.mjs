@@ -19,7 +19,18 @@ fs.mkdirSync(apiSrcRoot, { recursive: true });
 fs.mkdirSync(path.join(apiSrcRoot, 'store'));
 fs.mkdirSync(path.join(apiSrcRoot, '__tests__'));
 
-for (const name of ['votes', 'review', 'mp', 'presence', 'store', 'app', 'store/records', 'unlisted-util', 'unlisted-importer']) {
+for (const name of [
+  'votes',
+  'review',
+  'mp',
+  'presence',
+  'store',
+  'app',
+  'store/records',
+  'platform/store',
+  'unlisted-util',
+  'unlisted-importer',
+]) {
   const target = path.join(apiSrcRoot, `${name}.ts`);
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.writeFileSync(target, '');
@@ -43,6 +54,9 @@ ruleTester.run('module-boundary', moduleBoundary, {
     // community importing the Store, which is always platform regardless of subpath.
     { code: "import { a } from './store.js';", filename: filenameIn('.', 'votes') },
     { code: "import { a } from './store/records.js';", filename: filenameIn('.', 'votes') },
+    // The Store orchestration file itself, after Phase 3 Wave A relocated it into platform/
+    // (a real, mapped bucket) -- still always platform, not the unmapped-target case below.
+    { code: "import { a } from './platform/store.js';", filename: filenameIn('.', 'votes') },
     // Two unmapped files reaching each other say nothing yet -- neither bucket is known.
     { code: "import { a } from './unlisted-util.js';", filename: filenameIn('.', 'unlisted-importer') },
     // platform importing a domain file is unrestricted (composition root wires everyone up).

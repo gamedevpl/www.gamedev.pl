@@ -1,8 +1,8 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { buildApp } from './app.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
-import { InMemoryStore, type VisitEvent } from './store.js';
-import type { TrendsResponse } from './admin.js';
+import { buildApp } from './platform/app.js';
+import { mintSessionToken, SESSION_COOKIE_NAME } from './platform/auth.js';
+import { InMemoryStore, type VisitEvent } from './platform/store.js';
+import type { TrendsResponse } from './platform/admin.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 const today = new Date().toISOString().slice(0, 10);

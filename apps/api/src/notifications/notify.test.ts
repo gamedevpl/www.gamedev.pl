@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { InMemoryStore } from '../store.js';
+import { InMemoryStore } from '../platform/store.js';
 import { ConsoleMailer, type EmailMessage, type Mailer } from './mailer.js';
 import {
   absoluteAppUrl,
@@ -12,7 +12,7 @@ import {
   type EmitDeps,
 } from './notify.js';
 
-import type { SubmissionStatusResponse } from '../submission-status.js';
+import type { SubmissionStatusResponse } from '../platform/submission-status.js';
 
 describe('absoluteAppUrl', () => {
   it('joins origin and path without a double slash', () => {

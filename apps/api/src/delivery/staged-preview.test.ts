@@ -632,4 +632,52 @@ describe('createStagedPreviewPublisher', () => {
       vi.useRealTimers();
     }
   });
+
+  it('waits out a busy slot instead of skipping a delivered candidate', async () => {
+    // publishCandidate must retry a busy slot, not skip on the first check.
+    vi.useFakeTimers();
+    try {
+      let release: () => void = () => {};
+      const backgroundAssembly = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let calls = 0;
+      const { publisher, previews, log } = harness({
+        debounceMs: 10,
+        minGapMs: 10,
+        busyRetryMs: 50,
+        assemble: async () => {
+          calls += 1;
+          if (calls === 1) await backgroundAssembly;
+          return { ...GAME_SOURCES, gameJs: `console.log(${calls});` };
+        },
+      });
+
+      publisher.schedule(7);
+      await vi.advanceTimersByTimeAsync(50);
+      expect(previews).toHaveLength(0);
+
+      const candidate = publisher.publishCandidate({
+        issueNumber: 7,
+        slug: 'comet-courier',
+        version: 'v20260823T120000Z-abcdef',
+        roundGeneration: 2,
+        files: PLAYABLE_TREE,
+      });
+
+      await vi.advanceTimersByTimeAsync(200);
+      expect(previews).toHaveLength(0);
+      expect(log.warn).not.toHaveBeenCalled();
+
+      release();
+      await vi.advanceTimersByTimeAsync(200);
+
+      expect(await candidate).toBe('published');
+      expect(previews).toHaveLength(2);
+      expect(log.warn).not.toHaveBeenCalled();
+      publisher.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

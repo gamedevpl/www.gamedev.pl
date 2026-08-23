@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import type { Store } from '../store.js';
+import type { Store } from '../platform/store.js';
 
 /**
  * Following a game — "Obserwuj".

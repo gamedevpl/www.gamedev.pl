@@ -1,7 +1,7 @@
 // beta:invite:backfill — claimed invites → approved rows. See docs/deployment.md.
 
 import { Firestore } from '@google-cloud/firestore';
-import type { BetaInvite, User, WaitlistEntry } from '../src/store.js';
+import type { BetaInvite, User, WaitlistEntry } from '../src/platform/store.js';
 
 async function main() {
   const apply = process.argv.slice(2).includes('--apply');

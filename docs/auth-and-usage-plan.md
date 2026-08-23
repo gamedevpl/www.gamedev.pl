@@ -102,13 +102,13 @@ the coarse outer layer (and is the only limiter on `/api/auth/*`).
 
 ## API changes
 
-- `apps/api/src/auth.ts` (new):
+- `apps/api/src/platform/auth.ts` (new):
   - `POST /api/auth/google` — body: GIS ID token; verify signature/audience/issuer/expiry
     via `google-auth-library`; upsert `users/g:<sub>`; reject `tier: blocked`; set session
     cookie. No OAuth redirect dance, no client secret — ID-token verification only.
   - `POST /api/auth/logout`, `GET /api/auth/me` (SPA boot).
   - `requireSession` Fastify guard applied per-route. Basic-Auth hook stays outermost.
-- `apps/api/src/store.ts` (new) — thin Firestore wrapper with an **in-memory fake for tests**
+- `apps/api/src/platform/store.ts` (new) — thin Firestore wrapper with an **in-memory fake for tests**
   (same seam pattern as the `githubClient` stubs; unit tests never touch real Firestore).
 - `submissions.ts` — owner recorded on create; transactional quota check before
   `createIssue`; preview requires session; counters incremented on spend.
@@ -166,7 +166,7 @@ creation at all short of editing an environment variable and redeploying, which
 mid-incident also drops every party room in flight.
 
 Two controls now sit beside the per-user quota, both in
-[`creation-limits.ts`](../apps/api/src/creation-limits.ts):
+[`creation-limits.ts`](../apps/api/src/creation/creation-limits.ts):
 
 | Control                    | Effect                                                                                |
 | -------------------------- | ------------------------------------------------------------------------------------- |

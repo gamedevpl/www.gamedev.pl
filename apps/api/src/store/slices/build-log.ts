@@ -1,6 +1,6 @@
 import { FieldValue, type Firestore } from '@google-cloud/firestore';
 import { randomUUID } from 'node:crypto';
-import type { BuildEvent } from '../../submission-status.js';
+import type { BuildEvent } from '../../platform/submission-status.js';
 import type { CreatorMessage, CreatorMessageOrigin } from '../records/build-log.js';
 import { isStudioOrigin } from '../records/build-log.js';
 import type { AgentEndedBy } from '../records/rounds.js';

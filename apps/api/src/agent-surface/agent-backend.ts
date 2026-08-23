@@ -12,7 +12,7 @@
 // test of the seam is Backend B (an SDK agent in a runtime we operate): introducing it
 // should change this file's implementations and nothing else.
 
-import type { AgentObservation } from '../job-state.js';
+import type { AgentObservation } from '../creation/job-state.js';
 
 /** Everything a backend needs to start a build. Deliberately not a GitHub issue. */
 export interface BuildBrief {

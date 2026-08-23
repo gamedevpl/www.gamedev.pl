@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildApp } from '../app.js';
+import { buildApp } from '../platform/app.js';
 import { parseBatchSize, runHealthSweep, startHealthCheck, type HealthGateTrigger } from './game-health.js';
 import type { GamesStore, VersionManifest } from '../delivery/games-store.js';
-import type { InternalAuthVerifier } from '../internal-auth.js';
-import { InMemoryStore } from '../store.js';
+import type { InternalAuthVerifier } from '../platform/internal-auth.js';
+import { InMemoryStore } from '../platform/store.js';
 
 /**
  * The sweep's whole job is deciding *which* games to re-check, and the cost of getting

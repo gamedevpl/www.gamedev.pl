@@ -236,7 +236,7 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
   in one pass.
 - ~~Nothing aggregates per-game signals durably~~ — **closed 2026-07-27**: a nightly
   Cloud Scheduler sweep (`POST /api/internal/scorecard-sweep`,
-  [scorecard.ts](../../../apps/api/src/scorecard.ts)) writes
+  [scorecard.ts](../../../apps/api/src/creation/scorecard.ts)) writes
   `games/{slug}/scorecard/current` from a 28-day telemetry window plus vote and feedback
   counts. **This doc is the only thing IL-3's agents are permitted to read**, which makes
   two of its properties load-bearing for anything added to it later:

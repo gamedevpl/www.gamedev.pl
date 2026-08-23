@@ -7,7 +7,7 @@ import {
   summarizeVisitDay,
   trendPartitions,
 } from './telemetry-trends.js';
-import type { SubmissionRecord, User, VisitEvent } from '../store.js';
+import type { SubmissionRecord, User, VisitEvent } from '../platform/store.js';
 
 function visit(partial: Partial<VisitEvent> & Pick<VisitEvent, 'visitId' | 'type'>): VisitEvent {
   return {

@@ -27,7 +27,7 @@ import { randomUUID } from 'node:crypto';
 import type { ContributionMode } from '@gamedevpl/contract';
 import type { FastifyBaseLogger } from 'fastify';
 import { logModerationRejection } from '../telemetry/moderation-metrics.js';
-import type { ContentChecker } from '../moderation.js';
+import type { ContentChecker } from '../platform/moderation.js';
 import type { GamesStore, SourceFile } from '../delivery/games-store.js';
 import { ownerUidOf, resolveOwnerOfRecord, reviewerKindOf, type OwnerOfRecord } from '../catalog/owner-of-record.js';
 import { isRepoBaseStale } from './proposal-base.js';
@@ -51,8 +51,8 @@ import {
   type ProposalMessage,
   type ProposalRecord,
   type Store,
-} from '../store.js';
-import { sanitizeCreatorText } from '../submission-status.js';
+} from '../platform/store.js';
+import { sanitizeCreatorText } from '../platform/submission-status.js';
 
 /**
  * `issueNumber` written onto a proposal's version manifest.

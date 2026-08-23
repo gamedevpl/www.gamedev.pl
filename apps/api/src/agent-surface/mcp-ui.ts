@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { canonicalAppBaseUrl } from '../canonical-app-url.js';
+import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
 
 /**
  * MCP Apps (SEP-1865, extension `io.modelcontextprotocol/ui`).

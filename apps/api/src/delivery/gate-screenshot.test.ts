@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { firstGateScreenshotPath, PLATFORM_CHECK_SHOT_LABEL, postGateScreenshotToThread } from './gate-screenshot.js';
 import type { GamesStore } from './games-store.js';
-import { InMemoryStore } from '../store.js';
+import { InMemoryStore } from '../platform/store.js';
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01]);
 

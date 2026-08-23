@@ -206,7 +206,7 @@ cadence as the loss bound; runtime budget enforcement as the cost bound.
 | Wake via `wake()` with rng draw alignment                | `Zone.wakeUp`, `SimInstance.restore`                                  |
 | Snapshot every 30 s; that is the loss bound              | `SNAPSHOT_EVERY_MS`, `Zone.persist`                                   |
 | Runtime metering, not only CI                            | `Zone.recordTickCost`, `Zone.measure`                                 |
-| SIGTERM is a scheduled hibernate                         | `ZoneHost.shutdown`, `apps/world/src/server.ts`                       |
+| SIGTERM is a scheduled hibernate                         | `ZoneHost.shutdown`, `apps/world/src/platform/server.ts`              |
 
 Three things about the build are worth knowing before changing any of it.
 

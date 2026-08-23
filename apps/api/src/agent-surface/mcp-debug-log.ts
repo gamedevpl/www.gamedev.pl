@@ -10,7 +10,7 @@
 import { looksLikeCreatorAgentKey } from './agent-creator-key.js';
 import { looksLikeGameAgentKey } from './agent-game-key.js';
 import { looksLikeMcpSessionKey, verifyMcpSessionKey } from './mcp-session-key.js';
-import { looksLikeAsAccessToken } from '../oauth-tokens.js';
+import { looksLikeAsAccessToken } from '../platform/oauth-tokens.js';
 
 export type McpBearerKind = 'none' | 'oauth' | 'creator_key' | 'game_key' | 'round_or_other';
 export type McpSessionKeyShape = 'absent' | 'session' | 'game_key' | 'creator_key' | 'other';

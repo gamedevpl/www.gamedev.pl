@@ -6,9 +6,14 @@ import {
   briefLocales,
   buildConstraints,
   DEFAULT_BUILD_ORIENTATION,
-} from '../agent-build-brief.js';
-import { getAgentBuildExample, listAgentBuildExamples } from '../agent-build-examples.js';
-import { ExampleFilesError, createExampleFileStore, listExampleFiles, readExampleFile } from '../example-files.js';
+} from '../creation/agent-build-brief.js';
+import { getAgentBuildExample, listAgentBuildExamples } from '../creation/agent-build-examples.js';
+import {
+  ExampleFilesError,
+  createExampleFileStore,
+  listExampleFiles,
+  readExampleFile,
+} from '../creation/example-files.js';
 import {
   assertAgentTokenActive,
   classifyAgentTokenAccess,
@@ -29,7 +34,7 @@ import {
 } from './agent-upload-token.js';
 import { MAX_BUILD_PREVIEW_BYTES } from '../delivery/build-preview-limits.js';
 import { loadBuildTranscript } from '../delivery/build-transcript.js';
-import { canonicalAppBaseUrl } from '../canonical-app-url.js';
+import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
 import { deriveGateStatusString, readGateVerdict } from '../delivery/gate-verdict.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from '../delivery/gcs-sign.js';
 import { DEFAULT_MCP_DIGEST_MAX_BYTES, compactKitDigestForApi } from './kit-digest.js';
@@ -42,7 +47,7 @@ import {
   type GamesStore,
 } from '../delivery/games-store.js';
 import { parseGameMedia } from '../catalog/github-client.js';
-import { canTransition, resolveJobState, type JobState } from '../job-state.js';
+import { canTransition, resolveJobState, type JobState } from '../creation/job-state.js';
 import { gateCrashStall } from '../delivery/gate-crash.js';
 import {
   KitFilesError,
@@ -54,7 +59,12 @@ import {
   searchKitFiles,
 } from './kit-files.js';
 import { logKnowledgeQuery } from '../telemetry/knowledge-metrics.js';
-import type { KnowledgeMode, KnowledgeQueryResult, KnowledgeScope, QueryKnowledgeFn } from '../knowledge-search.js';
+import type {
+  KnowledgeMode,
+  KnowledgeQueryResult,
+  KnowledgeScope,
+  QueryKnowledgeFn,
+} from '../creation/knowledge-search.js';
 import {
   KIT_ENTRY,
   KitRegistryError,
@@ -63,12 +73,12 @@ import {
   parseKitRegistry,
   parseKitSidecar,
 } from './kit-registry.js';
-import { seedPayload } from '../seed-status.js';
-import { largeSourceFileHint } from '../module-size.js';
+import { seedPayload } from '../creation/seed-status.js';
+import { largeSourceFileHint } from '../creation/module-size.js';
 import { gameManifestHint } from '../catalog/game-manifest-hint.js';
-import { resolveRoundBaseVersion } from '../round-base-version.js';
+import { resolveRoundBaseVersion } from '../creation/round-base-version.js';
 import { computeStageAdvisories } from '../delivery/stage-hints.js';
-import { applyExactReplace, applySourcePatch, SourcePatchError } from '../source-patch.js';
+import { applyExactReplace, applySourcePatch, SourcePatchError } from '../creation/source-patch.js';
 import { overlayGameSources } from '../delivery/staged-preview.js';
 import { SourceDeliveryValidationError, type SourceDeliveryService } from '../delivery/source-delivery.js';
 import {
@@ -77,11 +87,11 @@ import {
   type CreatorMessage,
   type Store,
   type SubmissionRecord,
-} from '../store.js';
+} from '../platform/store.js';
 import { pickLatestChangelogText } from '../delivery/build-changelog.js';
-import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from '../submission-status.js';
-import { normalizeAtIntake, type IntakeText } from '../localize-intake.js';
-import { createTranslatorFromEnv, type Translator } from '../translate.js';
+import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from '../platform/submission-status.js';
+import { normalizeAtIntake, type IntakeText } from '../platform/localize-intake.js';
+import { createTranslatorFromEnv, type Translator } from '../platform/translate.js';
 
 // The build channel (docs/agent-live-channel-plan.md). Direct route for progress, staging, and status.
 // Invariant: agent input is untrusted, prompt-influenced text — sanitized, escaped on render, never model instructions.

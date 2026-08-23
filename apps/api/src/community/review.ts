@@ -14,7 +14,7 @@ import {
 } from '@gamedevpl/contract';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { isAdmin, isAdminSession } from '../admin-session.js';
+import { isAdmin, isAdminSession } from '../platform/admin-session.js';
 import { paginateAssessments, parseAssessmentPageQuery, QueueQuerySchema } from './assessment-pagination.js';
 import {
   matchesResolutionFilter,
@@ -31,7 +31,7 @@ import {
   releasedSlugs,
   summarizeSweepProgress,
 } from './review-sweep.js';
-import { sanitizeCreatorText } from '../submission-status.js';
+import { sanitizeCreatorText } from '../platform/submission-status.js';
 import type {
   AssessmentChecklist,
   AssessmentClientContext,
@@ -40,7 +40,7 @@ import type {
   ReviewSweep,
   Store,
   SubmissionRecord,
-} from '../store.js';
+} from '../platform/store.js';
 
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 const MAX_NOTE = 2000;

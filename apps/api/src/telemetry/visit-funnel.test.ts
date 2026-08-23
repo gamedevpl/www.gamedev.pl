@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { summarizeVisitFunnel } from './visit-funnel.js';
-import type { VisitEvent } from '../store.js';
+import type { VisitEvent } from '../platform/store.js';
 
 function started(visitId: string, extra: Partial<VisitEvent> = {}): VisitEvent {
   return { visitId, type: 'visit_started', at: '2026-07-26T10:00:00.000Z', msSinceStart: 0, entry: 'home', ...extra };

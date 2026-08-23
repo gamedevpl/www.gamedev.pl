@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { buildApp } from '../app.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from '../auth.js';
+import { buildApp } from '../platform/app.js';
+import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
 import { createPublishedSlugGate } from '../catalog/published-slugs.js';
-import { InMemoryStore } from '../store.js';
+import { InMemoryStore } from '../platform/store.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 const sessionId = '00000000-0000-4000-8000-000000000000';

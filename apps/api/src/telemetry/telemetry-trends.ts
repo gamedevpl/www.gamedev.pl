@@ -1,6 +1,6 @@
 import type { TrendGrain } from '@gamedevpl/contract';
-import type { SubmissionRecord, User, VisitEvent } from '../store.js';
-import { BOT_UID_PREFIX } from '../store.js';
+import type { SubmissionRecord, User, VisitEvent } from '../platform/store.js';
+import { BOT_UID_PREFIX } from '../platform/store.js';
 import { returnedAfterPublish } from './creator-metrics.js';
 
 /**

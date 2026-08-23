@@ -1,4 +1,4 @@
-import type { SubmissionRecord, User } from '../store.js';
+import type { SubmissionRecord, User } from '../platform/store.js';
 
 /**
  * Creator-side aggregates: do creators come back, and what does a build cost us?

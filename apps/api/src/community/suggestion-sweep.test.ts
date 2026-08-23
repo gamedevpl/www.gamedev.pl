@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { InMemoryStore, type Scorecard } from '../store.js';
+import { InMemoryStore, type Scorecard } from '../platform/store.js';
 import { runSuggestionSweep, suggestionId } from './suggestion-sweep.js';
-import { buildApp } from '../app.js';
-import type { InternalAuthVerifier } from '../internal-auth.js';
+import { buildApp } from '../platform/app.js';
+import type { InternalAuthVerifier } from '../platform/internal-auth.js';
 
 /**
  * The sweep's job is not to create suggestions — the router already decides those. It is

@@ -1,6 +1,6 @@
 // Editorial desk cut consensus → Studio suggestion (aggregates only).
 import { ASSESSMENT_CHECKLIST_KEYS, type AssessmentChecklistKey } from '@gamedevpl/contract';
-import type { AssessmentChecklist, GameAssessment } from '../store.js';
+import type { AssessmentChecklist, GameAssessment } from '../platform/store.js';
 import type { Suggestion, SuggestionEvidence } from './suggestions.js';
 
 export const MIN_EDITORIAL_REVIEWERS = 2;

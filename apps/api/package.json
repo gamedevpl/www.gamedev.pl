@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "PORT=3001 tsx watch src/server.ts",
+    "dev": "PORT=3001 tsx watch src/platform/server.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/server.js",
+    "start": "node dist/platform/server.js",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "contract:games-repo": "tsx scripts/check-games-repo-contract.ts",

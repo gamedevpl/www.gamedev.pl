@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COMPILER_OPTIONS as apiOptions } from './type-check.js';
+import { COMPILER_OPTIONS as apiOptions } from './creation/type-check.js';
 
 // GA-03: divergence would let the editor suggest members the server refuses.
 describe('the browser language service stays in lockstep with the server typecheck', () => {
