@@ -200,7 +200,7 @@ cadence as the loss bound; runtime budget enforcement as the cost bound.
 | -------------------------------------------------------- | --------------------------------------------------------------------- |
 | Separate service, own image, own cadence                 | `apps/world/`, `apps/world/Dockerfile`, `infra/cloudbuild-world.yaml` |
 | min-instances 0, max-instances 1, 60-min timeout         | `infra/deploy-world.sh`                                               |
-| HMAC tickets from the main API; host never sees a cookie | `packages/zone-core/src/ticket.ts`, `apps/api/src/zones.ts`           |
+| HMAC tickets from the main API; host never sees a cookie | `packages/zone-core/src/ticket.ts`, `apps/api/src/realtime/zones.ts`  |
 | `isolated-vm` in production, `node:vm` never             | `packages/zone-core/src/cage.ts`, `assertProductionCage`              |
 | Hibernate on empty; instance drains                      | `Zone.hibernate`, `ZoneHost.pump`                                     |
 | Wake via `wake()` with rng draw alignment                | `Zone.wakeUp`, `SimInstance.restore`                                  |

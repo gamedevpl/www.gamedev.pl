@@ -397,7 +397,7 @@ to Artifact Registry, and deploy to Cloud Run from a local environment. It deplo
 `--min-instances 0` (scale-to-zero) and a `--max-instances` value it derives — see below.
 
 **Why the instance ceiling is 1, and what lifts it:** the multiplayer relay keeps party-mode
-lobbies in the memory of a single process ([`apps/api/src/mp.ts`](../apps/api/src/mp.ts)). A
+lobbies in the memory of a single process ([`apps/api/src/realtime/mp.ts`](../apps/api/src/realtime/mp.ts)). A
 second instance would put a phone controller and the screen it controls in different processes,
 and the lobby would appear empty — intermittently, which is how it gets blamed on the guest's
 wifi. Raising the cap therefore requires moving that state out of the app process first. It is
@@ -412,7 +412,7 @@ The relay is the only thing that needs the pin, so it moves to its own Cloud Run
 that service takes the pin instead. **Both services run the same image** — the role is chosen by
 env (`MP_RELAY_ONLY` on the relay, `MP_RELAY_URL` on the app) — because a second Dockerfile is a
 second thing to drift. See [`multiplayer-plan.md` §4.6](./multiplayer-plan.md) and
-[`apps/api/src/mp-relay.ts`](../apps/api/src/mp-relay.ts) for the design.
+[`apps/api/src/realtime/mp-relay.ts`](../apps/api/src/realtime/mp-relay.ts) for the design.
 
 Rollout, owner-run and in this order:
 

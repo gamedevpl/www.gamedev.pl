@@ -27,7 +27,7 @@
 > `POST /api/telemetry` validates, caps, and stores them unattributed
 > ([telemetry.ts](../apps/api/src/telemetry/telemetry.ts)). Votes, `end`/`score` depth
 > events, and written player feedback
-> ([player-feedback.ts](../apps/api/src/player-feedback.ts)) have since shipped
+> ([player-feedback.ts](../apps/api/src/community/player-feedback.ts)) have since shipped
 > too (2026-07-26) — see the phased-plan checklist below for the current state.
 > Per-game `progress` markers are the one item that stays perpetually partial by
 > design: 13 of ~82 games call `GameKit.progress` as of 2026-07-26, growing one
@@ -487,7 +487,7 @@ considerably:
   [Approve → dispatches a job] / [Dismiss with reason], in the studio's stats tab beside the
   reactions block, because a suggestion is a reading of the same evidence
   ([CreatorStudioView.tsx](../apps/web/src/CreatorStudioView.tsx),
-  [suggestion-inbox.ts](../apps/api/src/suggestion-inbox.ts)). Dismissal reasons are a
+  [suggestion-inbox.ts](../apps/api/src/community/suggestion-inbox.ts)). Dismissal reasons are a
   **fixed vocabulary** rather than free text: they exist to tune the router, so they have
   to be countable, and a free-text field on a card that later feeds an agent's context is
   a prompt-injection surface with no reason to exist — the creator's own words already
@@ -561,7 +561,7 @@ at all and feeds the only autonomous-eligible class.
   timestamps, published games only, and **nothing that identifies a player** — no
   uid, no IP, no user agent stored.
 - ✅ **Thumbs up/down** (2026-07-26): `POST`/`DELETE /api/games/:slug/vote` and the
-  public `GET /api/games/:slug/votes` ([votes.ts](../apps/api/src/votes.ts)), backed
+  public `GET /api/games/:slug/votes` ([votes.ts](../apps/api/src/community/votes.ts)), backed
   by `games/{slug}/votes/{uid}` — matching the Data model section below, not the
   `submissions/{n}/votes` this bullet originally named, since `submissions` cannot
   address the ~95% of the catalog with no submission document (the same reason
@@ -570,7 +570,7 @@ at all and feeds the only autonomous-eligible class.
   the player header next to sound/fullscreen, gated on the same published-slug
   condition as the report control.
 - ✅ **Written player feedback** (2026-07-26): `POST /api/games/:slug/feedback`
-  ([player-feedback.ts](../apps/api/src/player-feedback.ts)) — session-gated (a
+  ([player-feedback.ts](../apps/api/src/community/player-feedback.ts)) — session-gated (a
   deliberate departure from votes' public-read/session-write split: free text is a
   materially larger abuse surface than a thumb, and the cost is real — it excludes
   the anonymous players this loop exists to measure), moderated, sanitized, and
@@ -688,7 +688,7 @@ at all and feeds the only autonomous-eligible class.
   denies everything when its audience is unset, so an unconfigured deploy cannot be swept
   by anyone.
 
-- ✅ **Feedback theme extraction** (2026-07-28): [feedback-themes.ts](../apps/api/src/feedback-themes.ts)
+- ✅ **Feedback theme extraction** (2026-07-28): [feedback-themes.ts](../apps/api/src/community/feedback-themes.ts)
   summarizes written feedback through the genai seam, and the sweep writes the result to
   `untrusted.feedbackThemes`. The condition this item was always gated on is met — text now
   reaches the scorecard only as a summary, never raw.
@@ -791,7 +791,7 @@ at all and feeds the only autonomous-eligible class.
 
 ### Phase IL-3 — Suggest (agent in the loop, human approves everything)
 
-- ✅ **The router** (2026-07-28): [suggestions.ts](../apps/api/src/suggestions.ts) classifies
+- ✅ **The router** (2026-07-28): [suggestions.ts](../apps/api/src/community/suggestions.ts) classifies
   each scorecard as defect / friction / design-change / healthy / insufficient-data, with
   evidence blocks of measurements only. A second pass on the same sweep also routes
   creator-desk cut consensus as `editorial` (aggregates only — see
@@ -846,7 +846,7 @@ at all and feeds the only autonomous-eligible class.
   persistence and an inbox would have cost both.
 
 - ✅ **Babysitter analyst run** (2026-07-30): `POST /api/internal/suggestion-sweep`
-  ([suggestion-sweep.ts](../apps/api/src/suggestion-sweep.ts)) persists what the router
+  ([suggestion-sweep.ts](../apps/api/src/community/suggestion-sweep.ts)) persists what the router
   says into `suggestions/{id}`. Still **files nothing and notifies nobody** — approving is
   a separate human step.
 
@@ -900,7 +900,7 @@ at all and feeds the only autonomous-eligible class.
 
 - ✅ **Inbox, approval and dismissal** (2026-07-30):
   `GET /api/me/suggestions`, `POST .../:id/approve`, `POST .../:id/dismiss`
-  ([suggestion-inbox.ts](../apps/api/src/suggestion-inbox.ts)). Approve starts an
+  ([suggestion-inbox.ts](../apps/api/src/community/suggestion-inbox.ts)). Approve starts an
   improvement round through the _same_ `startImprovementRound` as the creator's own
   improve request — a new job seeded with the game's slug — and spends the `improvements`
   quota, so approving cannot outrun the budget the plan reserved for it.
@@ -923,7 +923,7 @@ at all and feeds the only autonomous-eligible class.
   stale copy. That is the ⚠️ below, answered at the exact point it bites.
 
 - ✅ **Stall reporting and 14-day measurement** (2026-07-30):
-  [suggestion-outcomes.ts](../apps/api/src/suggestion-outcomes.ts), run by the same
+  [suggestion-outcomes.ts](../apps/api/src/community/suggestion-outcomes.ts), run by the same
   nightly sweep — proposing new work and following up on approved work are both "what
   does the evidence say this morning", and splitting them would buy a fifth scheduler job
   and a fifth audience for nothing.

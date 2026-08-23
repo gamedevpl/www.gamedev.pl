@@ -1,5 +1,5 @@
 import type { ContributionMode } from '@gamedevpl/contract';
-import type { DeclineReason, ProposalState, ProposalTransition } from '../../proposal-state.js';
+import type { DeclineReason, ProposalState, ProposalTransition } from '../../community/proposal-state.js';
 
 /**
  * Where a suggestion is in its life (docs/improvement-loop-plan.md IL-3).

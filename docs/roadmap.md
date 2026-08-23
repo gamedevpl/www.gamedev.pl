@@ -115,7 +115,7 @@ long-lived service-account key exists.
 Genuinely still open, in rough priority order:
 
 - ✅ **The multiplayer instance-count mismatch is fixed** (2026-07-25). Both deploy
-  paths set `--max-instances 1`, which [mp.ts](../apps/api/src/mp.ts) requires while
+  paths set `--max-instances 1`, which [mp.ts](../apps/api/src/realtime/mp.ts) requires while
   multiplayer is enabled: rooms are per-instance in-memory state, so a guest
   load-balanced onto a second container sees a valid room code as "no such room".
   Before the fix it worked only because closed-beta traffic rarely warms a second

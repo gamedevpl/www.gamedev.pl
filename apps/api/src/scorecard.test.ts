@@ -4,7 +4,7 @@ import { InMemoryStore, type TelemetryEvent } from './store.js';
 import { buildScorecard, runScorecardSweep } from './scorecard.js';
 import { summarizeGameHealth } from './telemetry/telemetry-health.js';
 import type { InternalAuthVerifier } from './internal-auth.js';
-import { MIN_FEEDBACK_FOR_THEMES, type FeedbackTheme, type ThemeExtractor } from './feedback-themes.js';
+import { MIN_FEEDBACK_FOR_THEMES, type FeedbackTheme, type ThemeExtractor } from './community/feedback-themes.js';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
