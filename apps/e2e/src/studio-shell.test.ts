@@ -159,6 +159,10 @@ async function stubStudioThreadData(page: Page) {
     }
     await route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not found"}' });
   });
+
+  await page.route(`**/api/games/${FIXTURE_SLUG}`, async (route) => {
+    await fulfillJson(route, { slug: FIXTURE_SLUG, title: 'E2E Studio Shell Fixture', html: '<p>fixture</p>' });
+  });
 }
 
 describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
