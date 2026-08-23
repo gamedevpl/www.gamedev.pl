@@ -8,6 +8,7 @@ import type { JobQueueEntry, JobQueueResponse } from './adminJobsApi.js';
 
 const mocked = vi.hoisted(() => ({
   fetchJobQueue: vi.fn(),
+  fetchJobPreview: vi.fn(),
   publishJob: vi.fn(),
   cancelJob: vi.fn(),
   retryJob: vi.fn(),
@@ -341,4 +342,146 @@ describe('AdminJobsPanel', () => {
 
     await act(async () => root.unmount());
   });
+
+  it('filters jobs using search input', async () => {
+    mocked.fetchJobQueue.mockResolvedValue(
+      queue([
+        job({ issueNumber: 101, title: 'Super Mario Clone', slug: 'mario-clone' }),
+        job({ issueNumber: 102, title: 'Global Thermonuclear Strategy', slug: 'wargame' }),
+      ]),
+    );
+
+    const { container, root } = await render();
+    expect(container.querySelectorAll('.admin-job-row')).toHaveLength(2);
+
+    const searchInput = container.querySelector('.admin-jobs-search-input') as HTMLInputElement;
+    await act(async () => {
+      const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+      nativeSetter?.call(searchInput, 'mario');
+      searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.querySelectorAll('.admin-job-row')).toHaveLength(1);
+    expect(container.textContent).toContain('Super Mario Clone');
+    expect(container.textContent).not.toContain('Global Thermonuclear Strategy');
+
+    await act(async () => root.unmount());
+  });
+
+  it('filters jobs using status filter chips', async () => {
+    mocked.fetchJobQueue.mockResolvedValue(
+      queue([
+        job({ issueNumber: 1, state: 'ready_for_review' }),
+        job({ issueNumber: 2, state: 'building', stall: 'quiet' }),
+        job({ issueNumber: 3, state: 'failed' }),
+      ]),
+    );
+
+    const { container, root } = await render();
+    expect(container.querySelectorAll('.admin-job-row')).toHaveLength(3);
+
+    const chips = Array.from(container.querySelectorAll('.admin-filter-chip')) as HTMLButtonElement[];
+    const readyChip = chips.find((c) => c.textContent?.includes('Ready to publish'));
+    expect(readyChip).toBeDefined();
+
+    await act(async () => {
+      readyChip?.click();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelectorAll('.admin-job-row')).toHaveLength(1);
+    expect(container.textContent).toContain('#1');
+
+    await act(async () => root.unmount());
+  });
+
+  it('opens preview modal when Preview button is clicked', async () => {
+    mocked.fetchJobQueue.mockResolvedValue(queue([job({ issueNumber: 1234, title: 'Sky Dodge', slug: 'sky-dodge' })]));
+    mocked.fetchJobPreview.mockResolvedValue({
+      slug: 'sky-dodge',
+      title: 'Sky Dodge',
+      version: 'v1',
+      html: '<!doctype html><html><body>Playable Game Canvas</body></html>',
+    });
+
+    const { container, root } = await render();
+    const previewBtn = container.querySelector('.admin-job-preview-btn') as HTMLButtonElement;
+    expect(previewBtn).toBeDefined();
+
+    await act(async () => {
+      previewBtn.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocked.fetchJobPreview).toHaveBeenCalledWith(1234);
+    const modal = document.querySelector('.admin-preview-modal');
+    expect(modal).not.toBeNull();
+    expect(modal?.textContent).toContain('Sky Dodge');
+    expect(modal?.querySelector('iframe')).not.toBeNull();
+
+    // Close preview
+    const closeBtn = document.querySelector('.admin-preview-close-btn') as HTMLButtonElement;
+    await act(async () => {
+      closeBtn.click();
+      await Promise.resolve();
+    });
+
+    expect(document.querySelector('.admin-preview-modal')).toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it('executes batch publish on all ready jobs', async () => {
+    mocked.fetchJobQueue.mockResolvedValue(
+      queue([
+        job({ issueNumber: 10, slug: 'game-1', state: 'ready_for_review' }),
+        job({ issueNumber: 11, slug: 'game-2', state: 'ready_for_review' }),
+        job({ issueNumber: 12, slug: 'game-3', state: 'building' }),
+      ]),
+    );
+    mocked.publishJob.mockResolvedValue({ ok: true, slug: 'game', version: 'v1', publishedAt: '2026-07-30T12:00:00Z' });
+
+    const { container, root } = await render();
+    const bulkBtn = container.querySelector('.admin-bulk-publish-cta') as HTMLButtonElement;
+    expect(bulkBtn?.textContent).toContain('Publish all ready (2)');
+
+    await act(async () => {
+      bulkBtn.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocked.publishJob).toHaveBeenCalledWith(10);
+    expect(mocked.publishJob).toHaveBeenCalledWith(11);
+    expect(mocked.publishJob).not.toHaveBeenCalledWith(12);
+
+    await act(async () => root.unmount());
+  });
+
+  it('groups builds by game when toggle is checked', async () => {
+    mocked.fetchJobQueue.mockResolvedValue(
+      queue([
+        job({ issueNumber: 1, title: 'Wargame', slug: 'wargame' }),
+        job({ issueNumber: 2, title: 'Wargame', slug: 'wargame' }),
+        job({ issueNumber: 3, title: 'Asteroids', slug: 'asteroids' }),
+      ]),
+    );
+
+    const { container, root } = await render();
+    const toggle = container.querySelector('.admin-jobs-group-toggle input') as HTMLInputElement;
+
+    await act(async () => {
+      toggle.click();
+      await Promise.resolve();
+    });
+
+    const groups = container.querySelectorAll('.admin-job-group-row');
+    expect(groups).toHaveLength(2); // Wargame group and Asteroids group
+    expect(container.textContent).toContain('2 builds');
+
+    await act(async () => root.unmount());
+  });
 });
+

@@ -191,3 +191,17 @@ export async function retryJob(issueNumber: number): Promise<RetryResult | { ref
   ];
   return { refused: known.find((code) => code === body.error) ?? 'unknown' };
 }
+
+export interface JobPreview {
+  slug: string;
+  title: string;
+  version: string;
+  html: string;
+}
+
+export async function fetchJobPreview(issueNumber: number): Promise<JobPreview | null> {
+  const response = await fetch(`/api/admin/jobs/${issueNumber}/preview`, { credentials: 'include' });
+  if (!response.ok) return null;
+  return (await response.json()) as JobPreview;
+}
+
