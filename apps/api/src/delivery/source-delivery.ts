@@ -24,6 +24,7 @@ import {
   sharedSourcesFromKitTree,
   TYPECHECK_PREFLIGHT_MAX_REFUSALS,
 } from '../typecheck-preflight.js';
+import type { StagedPreviewPublisher } from './staged-preview.js';
 
 export interface SourceDeliveryAuthority {
   backend: string; // Backend identity recorded at dispatch time.
@@ -107,6 +108,7 @@ export interface SourceDeliveryServiceOptions {
   gamesStore: GamesStore;
   // Optional: typecheck against the round's pinned kit.
   kitFileStore?: KitFileStore | null;
+  stagedPreviews?: Pick<StagedPreviewPublisher, 'publishCandidate'> | null;
   now?: () => number;
   maxSubmitsPerWindow?: number;
   onSourcesDelivered?: (input: {
@@ -474,6 +476,23 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
           by: transitionActor,
           reason: 'sources_delivered',
         });
+      }
+
+      // Assemble fast in-process preview via staged preview publisher.
+      if (options.stagedPreviews?.publishCandidate) {
+        await options.stagedPreviews
+          .publishCandidate({
+            issueNumber: input.issueNumber,
+            slug: input.slug,
+            version,
+            roundGeneration,
+            files: input.files,
+            kitEngineRef: input.kitEngineRef,
+            locale: record.locale,
+          })
+          .catch((err: unknown) => {
+            options.log?.warn?.({ err, slug: input.slug, version }, 'candidate preview generation failed');
+          });
       }
 
       const gate = await options.onSourcesDelivered?.({

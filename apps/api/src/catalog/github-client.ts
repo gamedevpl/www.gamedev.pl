@@ -125,6 +125,14 @@ export interface GameSources {
   timings?: GameSourcesTimings;
 }
 
+export interface GetGameSourcesOptions {
+  /**
+   * When true, game files and TypeScript modules must come from overrides; missing files
+   * return null rather than falling back to games/<slug> on the ref.
+   */
+  noRefFallback?: boolean;
+}
+
 // Generation lives here so every assembly path gets it for free.
 
 // Null when the manifest cannot stand in: unparseable, or no goal/hint.
@@ -450,7 +458,12 @@ export interface GitHubClient {
    * inside the game directory are consultable — an override for anything else is
    * never looked at, because the bundler only ever asks for game-root paths.
    */
-  getGameSources(ref: string, slug: string, overrides?: Record<string, string>): Promise<GameSources | null>;
+  getGameSources(
+    ref: string,
+    slug: string,
+    overrides?: Record<string, string>,
+    options?: GetGameSourcesOptions,
+  ): Promise<GameSources | null>;
   /**
    * One declared file out of a game's directory, or null when it is not there.
    *
@@ -837,6 +850,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
     overrides?: Record<string, string>,
     /** When given, every module the walk loads is recorded here by root-relative path. */
     collect?: Map<string, string>,
+    options?: GetGameSourcesOptions,
   ): Promise<string> {
     const loadedPaths = new Set([entryPath]);
     let sourceBytes = Buffer.byteLength(entrySource, 'utf8');
@@ -896,14 +910,17 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
                 const relative = absolutePath.slice(sourceRoot.length + 1);
                 return Object.hasOwn(overrides, relative) ? overrides[relative] : null;
               };
-              let source = overrideOf(loadedPath) ?? (await readRawFile(loadedPath.slice(1), ref));
+              let source =
+                overrideOf(loadedPath) ?? (options?.noRefFallback ? null : await readRawFile(loadedPath.slice(1), ref));
               if (source === null && loadedPath.endsWith('.ts')) {
                 const indexPath = `${loadedPath.slice(0, -'.ts'.length)}/index.ts`;
                 const isAllowedIndex =
                   indexPath.startsWith(`${sourceRoot}/`) ||
                   (sourceKind === 'game' && indexPath.startsWith(`${SHARED_SIM_ROOT}/`));
                 if (isAllowedIndex) {
-                  const indexSource = overrideOf(indexPath) ?? (await readRawFile(indexPath.slice(1), ref));
+                  const indexSource =
+                    overrideOf(indexPath) ??
+                    (options?.noRefFallback ? null : await readRawFile(indexPath.slice(1), ref));
                   if (indexSource !== null) {
                     loadedPath = indexPath;
                     source = indexSource;
@@ -951,9 +968,19 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
     slug: string,
     overrides?: Record<string, string>,
     collect?: Map<string, string>,
+    options?: GetGameSourcesOptions,
   ): Promise<string> {
     const gameRoot = `/games/${slug}`;
-    return bundleTypeScriptGraph(entrySource, ref, gameRoot, `${gameRoot}/game.ts`, 'game', overrides, collect);
+    return bundleTypeScriptGraph(
+      entrySource,
+      ref,
+      gameRoot,
+      `${gameRoot}/game.ts`,
+      'game',
+      overrides,
+      collect,
+      options,
+    );
   }
 
   // Resolves a branch, tag, or SHA to the commit SHA it names.
@@ -1390,7 +1417,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       return readRawFile(`games/${slug}/${path}`, ref);
     },
 
-    async getGameSources(ref, slug, overrides) {
+    async getGameSources(ref, slug, overrides, options) {
       // Only well-formed slugs address a game directory; reject anything that could
       // escape it (path traversal, nested paths) before it reaches the contents API.
       if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) {
@@ -1402,10 +1429,11 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       // somewhere else entirely — the games store, or a remix's edited copy —
       // while the *engine* half below still comes from the pinned ref, so serve
       // policy and the kit are never the caller's to substitute.
-      const gameFile = async (relative: string): Promise<string | null> =>
-        overrides && Object.hasOwn(overrides, relative)
-          ? overrides[relative]
-          : await readRawFile(`games/${slug}/${relative}`, ref);
+      const gameFile = async (relative: string): Promise<string | null> => {
+        if (overrides && Object.hasOwn(overrides, relative)) return overrides[relative];
+        if (options?.noRefFallback) return null;
+        return await readRawFile(`games/${slug}/${relative}`, ref);
+      };
 
       const startedAt = Date.now();
       // The SHA gates the caches below and shares this game's own request.
@@ -1545,7 +1573,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       const assetsJs = assetChunks.length > 0 ? `${assetChunks.join('\n')}\n` : '';
       const bundleStartedAt = Date.now();
       const transpiledSources = [coreJs, ...availableModuleSources];
-      const gameJs = await bundleGameTypeScript(gameTs, ref, slug, overrides);
+      const gameJs = await bundleGameTypeScript(gameTs, ref, slug, overrides, undefined, options);
       const bundleMs = Date.now() - bundleStartedAt;
       const bundledJs = `${assetsJs}${transpiledSources.join('\n')}
 Object.freeze(window.GameKit);
