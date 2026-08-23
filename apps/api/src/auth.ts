@@ -9,9 +9,9 @@ import { isReviewer, isReviewerSession } from './review.js';
 import { resolveAppleAccount } from './apple-account.js';
 import { createAppleAuthVerifierFromEnv, parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { readBearerToken } from './bearer.js';
-import { createMailerFromEnv } from './mailer.js';
-import { emitWaitlistJoined } from './notify.js';
-import { createPusherFromEnv } from './pusher.js';
+import { createMailerFromEnv } from './notifications/mailer.js';
+import { emitWaitlistJoined } from './notifications/notify.js';
+import { createPusherFromEnv } from './notifications/pusher.js';
 import { withActiveDay, type Store, type User } from './store.js';
 import { normalizeLocale } from './translate.js';
 

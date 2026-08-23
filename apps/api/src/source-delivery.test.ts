@@ -5,7 +5,7 @@ import type { KitFileStore, KitTree } from './kit-files.js';
 import { KIT_ROOT_DIR } from './kit-registry.js';
 import { InMemoryStore } from './store.js';
 import { NoopTranslator, type BilingualText, type Translator } from './translate.js';
-import { DELIVERY_ACCEPTED_MSG, DELIVERY_PREFLIGHT_REFUSED_MSG } from './delivery-metrics.js';
+import { DELIVERY_ACCEPTED_MSG, DELIVERY_PREFLIGHT_REFUSED_MSG } from './telemetry/delivery-metrics.js';
 import {
   createSourceDeliveryService,
   SourceDeliveryAuthorityError,

@@ -4,7 +4,7 @@ import {
   builderLabelFromRecord,
   logDeliveryAccepted,
   logDeliveryPreflightRefused,
-} from './delivery-metrics.js';
+} from './telemetry/delivery-metrics.js';
 import { InvalidUploadError, type GamesStore, type SourceFile } from './games-store.js';
 import { parseSpecTitle } from './github-client.js';
 import {

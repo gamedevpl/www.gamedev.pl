@@ -165,12 +165,12 @@ the sweep is the backstop for closed tabs. Both paths converge on the same idemp
 
 ## API changes
 
-- `apps/api/src/notify.ts` (new): `emit(uid, event, payload)` — idempotent Firestore write;
+- `apps/api/src/notifications/notify.ts` (new): `emit(uid, event, payload)` — idempotent Firestore write;
   M1.5 adds email fan-out (checks `emailPrefs` + `emailUnsubscribedAt`, sends via the
   mailer seam, stamps `emailedAt` — a failed send leaves it null so the next sweep retries);
   M2 adds push fan-out with dead-subscription pruning (delete on 404/410 from the push
   service). Same seam pattern as `store.ts`: in-memory fake for tests.
-- `apps/api/src/mailer.ts` (new, M1.5): provider HTTP client behind a `Mailer` interface +
+- `apps/api/src/notifications/mailer.ts` (new, M1.5): provider HTTP client behind a `Mailer` interface +
   in-memory fake. Bilingual templates (en/pl chosen by the user's last-seen locale, stored
   on the user doc at login), `List-Unsubscribe` header, plain-text-first with minimal HTML.
 - `GET /api/email/unsubscribe?token=` (M1.5) — **no session required**: signed HMAC token

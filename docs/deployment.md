@@ -174,7 +174,7 @@ draft, and creation routes remain gated.
 Email is used for **beta invites** today (`npm run beta:invite`) and is the shared
 foundation for **notifications** later (see [`notifications-plan.md`](./notifications-plan.md)).
 The provider is **Resend** (EU / Ireland sending region), reached over its HTTP API — SMTP is
-blocked on Cloud Run. The transport lives behind a seam ([`apps/api/src/mailer.ts`](../apps/api/src/mailer.ts)):
+blocked on Cloud Run. The transport lives behind a seam ([`apps/api/src/notifications/mailer.ts`](../apps/api/src/notifications/mailer.ts)):
 with `RESEND_API_KEY` present it sends for real, without it the mailer **degrades to a no-op
 console logger**, so deploys stay green whether or not email is configured.
 

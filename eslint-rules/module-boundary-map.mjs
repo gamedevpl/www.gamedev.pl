@@ -125,6 +125,7 @@ const FILE_BUCKET = {
   'game-seed': 'creation',
   'session-crash': 'creation',
   scorecard: 'creation',
+  'source-link-check': 'creation',
   'knowledge-search': 'creation',
   'example-files': 'creation',
 
@@ -187,6 +188,7 @@ const FILE_BUCKET = {
   'gate-screenshot': 'delivery',
 
   // catalog: github-client, snapshots, assemble, play
+  'music-tracks': 'catalog',
   'github-client': 'catalog',
   'github-rate-limit': 'catalog',
   'game-snapshot': 'catalog',
@@ -214,6 +216,9 @@ const FILE_BUCKET = {
   votes: 'community',
   'player-feedback': 'community',
   'feedback-themes': 'community',
+  'assessment-cli': 'community',
+  'assessment-pagination': 'community',
+  'assessment-resolution': 'community',
   review: 'community',
   'review-checklist': 'community',
   'review-sweep': 'community',
@@ -265,6 +270,10 @@ const FILE_BUCKET = {
   'unsubscribe-token': 'notifications',
   contact: 'notifications',
   'operator-alerts': 'notifications',
+
+  // submissions.ts is deliberately unmapped: it's the D2 mega-file (registerSubmissionRoutes,
+  // ~5,400 lines) Phase 3 Wave B dismantles piece by piece, not a Wave A move target -- every
+  // domain it touches surfaces as an honest unmapped-importer warning until that happens.
 };
 
 function isStorePath(relativePathNoExt) {

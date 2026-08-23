@@ -100,7 +100,7 @@ import {
   failedStageFromProgress,
   logDeliveryGateVerdict,
   type DeliveryGateStatus,
-} from './delivery-metrics.js';
+} from './telemetry/delivery-metrics.js';
 import {
   VertexStudioChatAgent,
   type ChatAgentImage,
@@ -108,14 +108,19 @@ import {
   type ChatAgentStatus,
   type StudioChatAgent,
 } from './chat-agent.js';
-import { asChatAgentLogger, logChatAgentDecision, logChatAgentFailOpen } from './chat-agent-metrics.js';
+import { asChatAgentLogger, logChatAgentDecision, logChatAgentFailOpen } from './telemetry/chat-agent-metrics.js';
 import { MAX_CHAT_TURNS, rememberChatTurn, type ChatTurn } from './chat-turns.js';
 import { mintConnectPayload } from './self-build-connect.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
-import { createMailerFromEnv, type Mailer } from './mailer.js';
+import { createMailerFromEnv, type Mailer } from './notifications/mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
-import { emitOperatorAlert, emitSubmissionNotification, notifyOnTransition, type EmitDeps } from './notify.js';
-import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './operator-alerts.js';
+import {
+  emitOperatorAlert,
+  emitSubmissionNotification,
+  notifyOnTransition,
+  type EmitDeps,
+} from './notifications/notify.js';
+import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './notifications/operator-alerts.js';
 import { pageOwnerGames } from './owner-games.js';
 import { seedOutcomeFor } from './seed-status.js';
 import { isAdminSession } from './admin-session.js';
@@ -160,7 +165,7 @@ import { InvalidTokenError, mintToken, verifyToken } from './submission-token.js
 import { normalizeAtIntake, type IntakeText } from './localize-intake.js';
 import { createTranslatorFromEnv, normalizeLocale, type Translator } from './translate.js';
 import { isVariantWidth } from './image-variants.js';
-import { logModerationRejection } from './moderation-metrics.js';
+import { logModerationRejection } from './telemetry/moderation-metrics.js';
 
 /**
  * The store slices `registerSubmissionRoutes` actually reaches into — every domain this

@@ -11,7 +11,7 @@ import { mintToken, verifyToken } from './submission-token.js';
 import { canTransition } from './job-state.js';
 import type { AgentBackend, BuildBrief } from './agent-backend.js';
 import type { GamesStore } from './games-store.js';
-import { DELIVERY_GATE_VERDICT_MSG } from './delivery-metrics.js';
+import { DELIVERY_GATE_VERDICT_MSG } from './telemetry/delivery-metrics.js';
 import { JOB_ID_FLOOR } from './store.js';
 import { createManagedAvailabilityGate, type ManagedAvailabilityGate } from './managed-availability.js';
 import { StubStudioChatAgent, type ChatAgentRequest, type StudioChatAgent } from './chat-agent.js';

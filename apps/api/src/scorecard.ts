@@ -6,7 +6,7 @@ import {
   summarizeGameHealth,
   type GameHealth,
   type PartitionScanBudget,
-} from './telemetry-health.js';
+} from './telemetry/telemetry-health.js';
 import {
   createDefaultThemeExtractor,
   MAX_FEEDBACK_ROWS,

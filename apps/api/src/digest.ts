@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { InternalAuthVerifier } from './internal-auth.js';
-import { emitDigestNotification, type EmitDeps } from './notify.js';
+import { emitDigestNotification, type EmitDeps } from './notifications/notify.js';
 import { BOT_UID_PREFIX, type Scorecard, type Store } from './store.js';
 
 /**

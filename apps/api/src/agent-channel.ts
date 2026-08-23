@@ -53,7 +53,7 @@ import {
   readKitFiles,
   searchKitFiles,
 } from './kit-files.js';
-import { logKnowledgeQuery } from './knowledge-metrics.js';
+import { logKnowledgeQuery } from './telemetry/knowledge-metrics.js';
 import type { KnowledgeMode, KnowledgeQueryResult, KnowledgeScope, QueryKnowledgeFn } from './knowledge-search.js';
 import {
   KIT_ENTRY,
