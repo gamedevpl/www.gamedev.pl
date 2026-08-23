@@ -1460,6 +1460,40 @@ describe('getGameSources', () => {
 
     await expect(client.getGameSources('main', 'unsafe')).rejects.toThrow(expectedError);
   });
+
+  it('rejects missing files when noRefFallback is true instead of reading from ref', async () => {
+    const files = new Map<string, string | Uint8Array>([
+      ['games/modular/index.html', '<div id="game"></div>'],
+      ['games/modular/game.ts', "import { extra } from './extra.ts'; console.log(extra);"],
+      ['games/modular/extra.ts', 'export const extra = "from-ref";'],
+      ['games/modular/style.css', 'body { margin: 0; }'],
+      ['games/modular/SPEC.md', specMd({ title: 'Modular' })],
+      ['games/modular/GAME.json', JSON.stringify({ engine: { modules: [] } })],
+      ['shared/game-shell.css', '.shell { display: grid; }'],
+      ['shared/modules/core.ts', 'window.GameKit = {};'],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const requestedPath = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(requestedPath);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const overrides = {
+      'index.html': '<div id="game"></div>',
+      'game.ts': "import { extra } from './extra.ts'; console.log(extra);",
+      'style.css': 'body { margin: 0; }',
+      'SPEC.md': specMd({ title: 'Modular' }),
+      'GAME.json': JSON.stringify({ engine: { modules: [] } }),
+    };
+
+    // With noRefFallback, extra.ts is missing from overrides so bundling fails rather than reading ref's extra.ts
+    await expect(
+      client.getGameSources('main', 'modular', overrides, { noRefFallback: true }),
+    ).rejects.toThrow(/module not found.*extra\.ts/);
+  });
 });
 
 describe('getGameSourceMap', () => {

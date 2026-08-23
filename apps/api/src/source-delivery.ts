@@ -24,15 +24,7 @@ import {
   sharedSourcesFromKitTree,
   TYPECHECK_PREFLIGHT_MAX_REFUSALS,
 } from './typecheck-preflight.js';
-import { assembleGameHtml } from './assemble.js';
-import { MAX_BUILD_PREVIEW_BYTES } from './build-preview-limits.js';
-import type { GitHubClient } from './github-client.js';
-import {
-  hasPlayableOverlay,
-  STAGED_PREVIEW_LABEL,
-  STAGED_PREVIEW_LABEL_PL,
-  type StagedPreviewPublisher,
-} from './staged-preview.js';
+import type { StagedPreviewPublisher } from './staged-preview.js';
 
 export interface SourceDeliveryAuthority {
   backend: string; // Backend identity recorded at dispatch time.
@@ -116,9 +108,7 @@ export interface SourceDeliveryServiceOptions {
   gamesStore: GamesStore;
   // Optional: typecheck against the round's pinned kit.
   kitFileStore?: KitFileStore | null;
-  githubClient?: Pick<GitHubClient, 'getGameSources'> | null;
-  engineRef?: string;
-  stagedPreviews?: Pick<StagedPreviewPublisher, 'publishNow'> | null;
+  stagedPreviews?: Pick<StagedPreviewPublisher, 'publishCandidate'> | null;
   now?: () => number;
   maxSubmitsPerWindow?: number;
   onSourcesDelivered?: (input: {
@@ -488,54 +478,21 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
         });
       }
 
-      // Generate immediate in-process preview so the creator gets instant playability
-      // without waiting for Cloud Build gate.
-      if (options.githubClient) {
-        try {
-          const overlay: Record<string, string> = Object.create(null) as Record<string, string>;
-          for (const file of input.files) {
-            overlay[file.path] = file.content;
-          }
-          if (hasPlayableOverlay(overlay)) {
-            const engineRef = input.kitEngineRef || options.engineRef || 'main';
-            const sources = await options.githubClient.getGameSources(engineRef, input.slug, overlay);
-            if (sources) {
-              const html = assembleGameHtml(
-                {
-                  title: sources.title ?? input.slug,
-                  description: '',
-                  html: sources.indexHtml,
-                  js: sources.gameJs,
-                  css: sources.styleCss,
-                },
-                { restrictNetwork: true },
-              );
-              if (Buffer.byteLength(html, 'utf8') <= MAX_BUILD_PREVIEW_BYTES) {
-                await options.gamesStore.putDerivedArtifact(
-                  input.slug,
-                  version,
-                  'preview.html',
-                  Buffer.from(html, 'utf8'),
-                  'text/html; charset=utf-8',
-                );
-                const locale = record.locale ?? '';
-                await options.store.appendBuildPreview(input.issueNumber, {
-                  data: Buffer.from(html, 'utf8').toString('base64'),
-                  slug: input.slug,
-                  label: STAGED_PREVIEW_LABEL,
-                  ...(locale.startsWith('pl') ? { labelLocalized: STAGED_PREVIEW_LABEL_PL, locale } : {}),
-                });
-                await options.store.pruneBuildPreviews(input.issueNumber, 4).catch(() => 0);
-              }
-            }
-          }
-        } catch (err) {
-          options.log?.warn?.({ err, slug: input.slug, version }, 'fast delivery preview generation failed');
-        }
-      }
-
-      if (options.stagedPreviews) {
-        void options.stagedPreviews.publishNow(input.issueNumber).catch(() => {});
+      // Assemble fast in-process preview via staged preview publisher.
+      if (options.stagedPreviews?.publishCandidate) {
+        await options.stagedPreviews
+          .publishCandidate({
+            issueNumber: input.issueNumber,
+            slug: input.slug,
+            version,
+            roundGeneration,
+            files: input.files,
+            kitEngineRef: input.kitEngineRef,
+            locale: record.locale,
+          })
+          .catch((err: unknown) => {
+            options.log?.warn?.({ err, slug: input.slug, version }, 'candidate preview generation failed');
+          });
       }
 
       const gate = await options.onSourcesDelivered?.({

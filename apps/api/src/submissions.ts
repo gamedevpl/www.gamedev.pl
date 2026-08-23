@@ -6055,8 +6055,6 @@ export async function registerSubmissionRoutes(
           store,
           gamesStore: stagedPreviewStore,
           kitFileStore: kitFileStoreForDelivery,
-          githubClient,
-          engineRef: publishedRef,
           stagedPreviews: stagedPreviews ?? undefined,
           now,
           maxSubmitsPerWindow: options.agentChannel?.maxSubmitsPerWindow,

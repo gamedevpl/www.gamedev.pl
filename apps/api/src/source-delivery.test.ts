@@ -11,7 +11,6 @@ import {
   SourceDeliveryAuthorityError,
   type SourceDeliveryAuthority,
 } from './source-delivery.js';
-import type { GitHubClient } from './github-client.js';
 import type { StagedPreviewPublisher } from './staged-preview.js';
 
 const ISSUE = 701;
@@ -75,8 +74,7 @@ async function setup(opts?: {
   kitFileStore?: KitFileStore | null;
   failPutCandidateSources?: boolean;
   translator?: Translator;
-  githubClient?: Pick<GitHubClient, 'getGameSources'>;
-  stagedPreviews?: Pick<StagedPreviewPublisher, 'publishNow'>;
+  stagedPreviews?: Pick<StagedPreviewPublisher, 'publishCandidate'>;
 }) {
   const store = new InMemoryStore();
   await store.createSubmission(ISSUE, 'owner', 'Original title');
@@ -104,7 +102,6 @@ async function setup(opts?: {
     store,
     gamesStore,
     kitFileStore: opts?.kitFileStore,
-    githubClient: opts?.githubClient,
     stagedPreviews: opts?.stagedPreviews,
     onSourcesDelivered: gate,
     onEvent: vi.fn(),
@@ -565,19 +562,11 @@ export function tick(round: Round) {
       expect((await store.getSubmission(ISSUE))?.agentEndedAt).toBe('2026-08-19T07:00:00.000Z');
     });
 
-    it('assembles and stores fast in-process preview.html on candidate delivery when githubClient is provided', async () => {
-      const githubClient = {
-        getGameSources: vi.fn(async () => ({
-          title: 'Fast Preview Title',
-          indexHtml: '<!doctype html><html><head></head><body><div id="game"></div></body></html>',
-          gameJs: 'console.log("ready");',
-          styleCss: 'body { margin: 0; }',
-        })),
-      };
+    it('calls stagedPreviews.publishCandidate on candidate delivery when stagedPreviews is provided', async () => {
       const stagedPreviews = {
-        publishNow: vi.fn(async () => 'published'),
+        publishCandidate: vi.fn(async () => 'published' as const),
       };
-      const { store, putDerivedArtifact, service, authority } = await setup({ githubClient, stagedPreviews });
+      const { service, authority } = await setup({ stagedPreviews });
 
       const files: SourceFile[] = [
         { path: 'GAME.json', content: JSON.stringify({ title: 'Fast Game', theme: { bg: '#000' } }) },
@@ -596,17 +585,15 @@ export function tick(round: Round) {
       });
 
       expect(result.accepted).toBe(true);
-      expect(githubClient.getGameSources).toHaveBeenCalledWith('main', SLUG, expect.any(Object));
-      expect(putDerivedArtifact).toHaveBeenCalledWith(
-        SLUG,
-        expect.any(String),
-        'preview.html',
-        expect.any(Buffer),
-        'text/html; charset=utf-8',
-      );
-      expect(stagedPreviews.publishNow).toHaveBeenCalledWith(ISSUE);
-      const previews = await store.listBuildPreviews(ISSUE);
-      expect(previews.length).toBeGreaterThan(0);
+      expect(stagedPreviews.publishCandidate).toHaveBeenCalledWith({
+        issueNumber: ISSUE,
+        slug: SLUG,
+        version: expect.any(String),
+        roundGeneration: 1,
+        files,
+        kitEngineRef: undefined,
+        locale: undefined,
+      });
     });
   });
 });

@@ -30,7 +30,12 @@ import {
   SourceDeliveryValidationError,
   type SourceDeliveryService,
 } from './source-delivery.js';
-import { hasPlayableOverlay, overlayGameSources, readDeliveredSources } from './staged-preview.js';
+import {
+  hasPlayableOverlay,
+  overlayGameSources,
+  readDeliveredSources,
+  type StagedPreviewPublisher,
+} from './staged-preview.js';
 import type { Store, SubmissionRecord } from './store.js';
 import { MAX_PREFIX_CHARS, MAX_SUFFIX_CHARS, tabCompleteEnabled, type TabCompleter } from './tab-complete.js';
 import { sharedSourcesFromKitTree } from './typecheck-preflight.js';
@@ -60,6 +65,7 @@ export interface CreatorCodeRoutesOptions {
   // Track 2: the fast-lane synchronous preview route's engine half.
   githubClient?: Pick<GitHubClient, 'getGameSources'>;
   engineRef?: string;
+  stagedPreviews?: Pick<StagedPreviewPublisher, 'publishCandidate'> | null;
   now?: () => number;
   /** Busts the cached status response after an owner write — see submissions.ts. */
   invalidateStatusCache?: (issueNumber: number) => void;
@@ -197,16 +203,7 @@ export async function registerCreatorCodeRoutes(
             store: options.store,
             gamesStore: options.gamesStore,
             kitFileStore,
-            githubClient: options.githubClient,
-            engineRef: options.engineRef,
-            stagedPreviews: options.scheduleStagedPreview
-              ? {
-                  publishNow: async (issueNumber: number) => {
-                    options.scheduleStagedPreview!(issueNumber);
-                    return 'published';
-                  },
-                }
-              : undefined,
+            stagedPreviews: options.stagedPreviews,
             onSourcesDelivered: options.onSourcesDelivered,
             onEvent: (issueNumber) => options.scheduleStagedPreview?.(issueNumber),
             log: options.log,
