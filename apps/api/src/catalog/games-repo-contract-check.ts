@@ -55,8 +55,11 @@ import {
 } from './games-repo-contract.js';
 import { isRateLimitResponse } from './github-rate-limit.js';
 
-const LOCAL_EDITOR_CONTRACT_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '../editor-contract.ts');
-const LOCAL_TS_ANY_SCAN_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '../ts-any-scan.ts');
+const LOCAL_EDITOR_CONTRACT_PATH = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../creation/editor-contract.ts',
+);
+const LOCAL_TS_ANY_SCAN_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '../creation/ts-any-scan.ts');
 
 export type ContractCheckOutcome =
   /** No token configured — forks and fresh clones still go green. */
@@ -453,7 +456,7 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
     return {
       kind: 'drift',
       reason:
-        `editor-contract mismatch (${EDITOR_CONTRACT_PATH} vs apps/api/src/editor-contract.ts): ` +
+        `editor-contract mismatch (${EDITOR_CONTRACT_PATH} vs apps/api/src/creation/editor-contract.ts): ` +
         `${describeTextDrift(remoteEditorContract, localEditorContract)}\n` +
         `  The two files must stay byte-equivalent below their own header comments — EditorKit L0/L4 ` +
         `is a lockstep, not an asymmetric rollout contract. Update both files in one paired change.`,
@@ -468,7 +471,7 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
       return {
         kind: 'drift',
         reason:
-          `ts-any-scan mismatch (${TS_ANY_SCAN_PATH} vs apps/api/src/ts-any-scan.ts): ` +
+          `ts-any-scan mismatch (${TS_ANY_SCAN_PATH} vs apps/api/src/creation/ts-any-scan.ts): ` +
           `${describeTextDrift(remoteAnyScan, localAnyScan)}\n` +
           `  The two files must stay byte-equivalent below their own header comments. This side ` +
           `refuses an upload for \`any\` and the games repo fails validate Check 37 for it; if they ` +
