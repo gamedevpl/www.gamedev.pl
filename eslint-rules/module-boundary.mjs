@@ -1,21 +1,21 @@
 /**
  * Warn on an import that crosses N1 module buckets inside `apps/api/src`.
  *
- * docs/north-star-architecture.md Phase 0 asks for this rule in permissive (warn) mode,
- * with the target module map, so a new cross-domain edge is visible in review before any
- * file physically moves. Phase 3 flips it to error module by module once the directories
- * exist. Not registered at 'warn' in the repo-wide `eslint .` pass (that would trip
- * `--max-warnings 0` on the pre-existing debt this rule is meant to surface, not block) --
- * run it explicitly via `npm run module-boundary`.
+ * The `north-star-architecture.md` plan (private gamedevpl/www.gamedev.pl-ops repo -- see
+ * AGENTS.md) asks for this rule in permissive (warn) mode, with the target module map, so
+ * a new cross-domain edge is visible in review before any file physically moves. Phase 3
+ * flips it to error module by module once the directories exist. Not registered at 'warn'
+ * in the repo-wide `eslint .` pass (that would trip `--max-warnings 0` on the pre-existing
+ * debt this rule is meant to surface, not block) -- run it via `npm run module-boundary`.
  *
  * A domain module may import `platform` (composition root, shared primitives, the Store)
- * and its own bucket; it may not reach into another domain's internals. `platform` itself,
- * and anything not yet in the module map, is unrestricted -- the map only needs to grow
- * where it catches a real reach, not be complete on day one.
+ * and its own bucket; it may not reach into another domain's internals. A file with no
+ * entry in the map gets its own warning instead of silently passing as `platform` --
+ * otherwise a new file nobody classified would defeat the whole check it's meant to add.
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { classifyModule, DEFAULT_BUCKET } from './module-boundary-map.mjs';
+import { classifyModule, isMappedModule, DEFAULT_BUCKET } from './module-boundary-map.mjs';
 
 const SOURCE_EXTENSIONS = ['.ts', '.tsx'];
 
@@ -72,7 +72,11 @@ export const moduleBoundary = {
     schema: [],
     messages: {
       crossBucket:
-        "'{{specifier}}' pulls '{{targetBucket}}' into a '{{importerBucket}}' module. Domain modules import platform/ and their own bucket, not each other's internals (docs/north-star-architecture.md, N1).",
+        "'{{specifier}}' pulls '{{targetBucket}}' into a '{{importerBucket}}' module. Domain modules import platform/ and their own bucket, not each other's internals (N1 module map, north-star-architecture.md).",
+      unmappedImporter:
+        "This file has no entry in module-boundary-map.mjs, so '{{specifier}}' (bucket '{{targetBucket}}') can't be checked for crossing a boundary. Add this file's bucket to FILE_BUCKET.",
+      unmappedTarget:
+        "'{{specifier}}' has no entry in module-boundary-map.mjs, so this edge can't be checked for crossing a boundary. Add its bucket to FILE_BUCKET.",
     },
   },
 
@@ -87,8 +91,10 @@ export const moduleBoundary = {
     const importerModulePath = toModulePath(apiSrcRoot, filename);
     if (importerModulePath === undefined) return {};
 
+    const importerMapped = isMappedModule(importerModulePath);
     const importerBucket = classifyModule(importerModulePath);
-    if (importerBucket === DEFAULT_BUCKET) return {};
+    // An unmapped importer's real bucket is unknown; skip only when it's explicitly platform.
+    if (importerMapped && importerBucket === DEFAULT_BUCKET) return {};
 
     const directory = path.dirname(filename);
 
@@ -102,9 +108,24 @@ export const moduleBoundary = {
       const targetModulePath = toModulePath(apiSrcRoot, resolved);
       if (targetModulePath === undefined) return;
 
+      const targetMapped = isMappedModule(targetModulePath);
       const targetBucket = classifyModule(targetModulePath);
-      if (targetBucket === DEFAULT_BUCKET || targetBucket === importerBucket) return;
 
+      if (!importerMapped) {
+        // Unknown importer bucket -- only worth flagging when the target is a real,
+        // known domain (an unmapped-importing-unmapped edge has nothing to say yet).
+        if (targetMapped && targetBucket !== DEFAULT_BUCKET) {
+          context.report({ node: source, messageId: 'unmappedImporter', data: { specifier, targetBucket } });
+        }
+        return;
+      }
+
+      if (!targetMapped) {
+        context.report({ node: source, messageId: 'unmappedTarget', data: { specifier } });
+        return;
+      }
+
+      if (targetBucket === DEFAULT_BUCKET || targetBucket === importerBucket) return;
       context.report({ node: source, messageId: 'crossBucket', data: { specifier, importerBucket, targetBucket } });
     }
 

@@ -19,7 +19,7 @@ fs.mkdirSync(apiSrcRoot, { recursive: true });
 fs.mkdirSync(path.join(apiSrcRoot, 'store'));
 fs.mkdirSync(path.join(apiSrcRoot, '__tests__'));
 
-for (const name of ['votes', 'review', 'mp', 'presence', 'store', 'app', 'store/records', 'unlisted-util']) {
+for (const name of ['votes', 'review', 'mp', 'presence', 'store', 'app', 'store/records', 'unlisted-util', 'unlisted-importer']) {
   const target = path.join(apiSrcRoot, `${name}.ts`);
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.writeFileSync(target, '');
@@ -43,8 +43,8 @@ ruleTester.run('module-boundary', moduleBoundary, {
     // community importing the Store, which is always platform regardless of subpath.
     { code: "import { a } from './store.js';", filename: filenameIn('.', 'votes') },
     { code: "import { a } from './store/records.js';", filename: filenameIn('.', 'votes') },
-    // Unlisted files default to platform, so they're importable from any bucket.
-    { code: "import { a } from './unlisted-util.js';", filename: filenameIn('.', 'votes') },
+    // Two unmapped files reaching each other say nothing yet -- neither bucket is known.
+    { code: "import { a } from './unlisted-util.js';", filename: filenameIn('.', 'unlisted-importer') },
     // platform importing a domain file is unrestricted (composition root wires everyone up).
     { code: "import { a } from './votes.js';", filename: filenameIn('.', 'app') },
     // Bare specifiers and unresolvable relative paths are not this rule's business.
@@ -71,6 +71,20 @@ ruleTester.run('module-boundary', moduleBoundary, {
       code: "const m = await import('./mp.js');",
       filename: filenameIn('.', 'votes'),
       errors: [{ messageId: 'crossBucket' }],
+    },
+    // A mapped importer reaching an unmapped file: the edge can't be checked, but it's
+    // flagged rather than silently trusted as platform.
+    {
+      code: "import { a } from './unlisted-util.js';",
+      filename: filenameIn('.', 'votes'),
+      errors: [{ messageId: 'unmappedTarget' }],
+    },
+    // An unmapped file reaching a real, known domain: its own bucket needs classifying
+    // before this edge means anything.
+    {
+      code: "import { a } from './votes.js';",
+      filename: filenameIn('.', 'unlisted-importer'),
+      errors: [{ messageId: 'unmappedImporter' }],
     },
   ],
 });

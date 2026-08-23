@@ -1,12 +1,14 @@
 /**
- * The target N1 module map for `apps/api/src`, per docs/north-star-architecture.md Phase 0/3.
+ * The target N1 module map for `apps/api/src`, per the north-star-architecture.md plan
+ * (private gamedevpl/www.gamedev.pl-ops repo -- see AGENTS.md) Phase 0/3.
  *
  * Phase 3 physically moves files into these directories and flips the boundary rule from
- * warn to error, module by module. Phase 0 only needs the *assignment* — which bucket each
- * file already belongs to by its current name and purpose — so cross-bucket imports are
- * visible in review before any file moves. A file not listed here defaults to `platform`
- * (importable by, and free to import, everything else): the map only needs to be complete
- * enough to catch real domain reaches, not exhaustive on day one.
+ * warn to error, module by module. Phase 0 only needs the *assignment* -- which bucket each
+ * file already belongs to by its current name and purpose -- so cross-bucket imports are
+ * visible in review before any file moves. `platform` (composition root, auth, shared
+ * primitives, the Store) is a real bucket like any other and is listed explicitly below,
+ * same as every domain file; a name with no entry at all is genuinely unclassified and the
+ * boundary rule warns about that too, rather than quietly trusting it as platform.
  */
 
 /** Doc order: platform, creation, agent-surface, delivery, catalog, community, realtime, telemetry, notifications. */
@@ -24,8 +26,53 @@ export const MODULE_BUCKETS = [
 
 const DEFAULT_BUCKET = 'platform';
 
-/** Filename (no directory, no .ts/.test.ts) -> bucket. Anything unlisted is `platform`. */
+/** Filename (no directory, no .ts/.test.ts) -> bucket. A name with no entry is unclassified. */
 const FILE_BUCKET = {
+  // platform: composition root, auth, errors, rate limits, shared primitives
+  app: 'platform',
+  server: 'platform',
+  auth: 'platform',
+  bearer: 'platform',
+  'internal-auth': 'platform',
+  admin: 'platform',
+  'admin-session': 'platform',
+  'rate-limit': 'platform',
+  moderation: 'platform',
+  'moderation-terms': 'platform',
+  'credential-scan': 'platform',
+  'canonical-app-url': 'platform',
+  'canonical-base64': 'platform',
+  'bounded-map': 'platform',
+  'oauth-as': 'platform',
+  'oauth-page-chrome': 'platform',
+  'oauth-pkce': 'platform',
+  'oauth-redirect': 'platform',
+  'oauth-token-login': 'platform',
+  'oauth-tokens': 'platform',
+  'apple-account': 'platform',
+  'apple-auth': 'platform',
+  'erase-account': 'platform',
+  'erase-player-signals': 'platform',
+  'verify-erase-signals': 'platform',
+  'account-deletion': 'platform',
+  'account-deletion-routes': 'platform',
+  'submission-token': 'platform',
+  'access-token': 'platform',
+  'access-token-routes': 'platform',
+  'access-token-service': 'platform',
+  digest: 'platform',
+  'sweep-scope': 'platform',
+  'dev-seed-studio': 'platform',
+  'openai-apps-challenge': 'platform',
+  'spa-paths': 'platform',
+  'theme-css-generator': 'platform',
+  translate: 'platform',
+  'localize-intake': 'platform',
+  'image-variants': 'platform',
+  // Cross-domain status vocabulary read by every phase of the pipeline -- the
+  // N2 contract plan moves it to packages/contract; platform until then.
+  'submission-status': 'platform',
+
   // creation: jobs, rounds, dispatch, seed, refine
   'job-state': 'creation',
   'job-costs': 'creation',
@@ -220,14 +267,26 @@ const FILE_BUCKET = {
   'operator-alerts': 'notifications',
 };
 
+function isStorePath(relativePathNoExt) {
+  return relativePathNoExt === 'store' || relativePathNoExt.startsWith('store/');
+}
+
 /**
  * Bucket for a file, given its path relative to `apps/api/src` (posix, extension stripped).
- * `store/**` is the shared persistence layer, not a domain -- always `platform`.
+ * `store/**` is the shared persistence layer, not a domain -- always `platform`. A file with
+ * no map entry also reads as `platform` here; check `isMappedModule` to tell the two apart.
  */
 export function classifyModule(relativePathNoExt) {
-  if (relativePathNoExt === 'store' || relativePathNoExt.startsWith('store/')) return DEFAULT_BUCKET;
+  if (isStorePath(relativePathNoExt)) return DEFAULT_BUCKET;
   const basename = relativePathNoExt.split('/').pop();
   return FILE_BUCKET[basename] ?? DEFAULT_BUCKET;
+}
+
+/** False for a file with no explicit bucket -- it only reads as `platform` by default. */
+export function isMappedModule(relativePathNoExt) {
+  if (isStorePath(relativePathNoExt)) return true;
+  const basename = relativePathNoExt.split('/').pop();
+  return basename in FILE_BUCKET;
 }
 
 export { DEFAULT_BUCKET };
