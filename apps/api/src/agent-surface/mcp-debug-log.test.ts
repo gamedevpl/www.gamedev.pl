@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mintGameAgentKey } from './agent-game-key.js';
 import { mintAgentToken } from './agent-token.js';
-import { buildApp } from '../app.js';
+import { buildApp } from '../platform/app.js';
 import {
   classifyMcpBearerKind,
   classifyMcpSessionKeyShape,
@@ -11,9 +11,9 @@ import {
   toolErrorReason,
 } from './mcp-debug-log.js';
 import { mintMcpSessionKey, newMcpSessionId } from './mcp-session-key.js';
-import { generateAsAccessToken } from '../oauth-tokens.js';
+import { generateAsAccessToken } from '../platform/oauth-tokens.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
-import { InMemoryStore } from '../store.js';
+import { InMemoryStore } from '../platform/store.js';
 
 const secret = 'mcp-debug-log-secret';
 

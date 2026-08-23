@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import type { InternalAuthVerifier } from './internal-auth.js';
+import type { InternalAuthVerifier } from './platform/internal-auth.js';
 import {
   recentPartitions,
   scanPartitions,
@@ -15,7 +15,7 @@ import {
   type FeedbackTheme,
   type ThemeExtractor,
 } from './community/feedback-themes.js';
-import type { Scorecard, Store, TelemetryEvent } from './store.js';
+import type { Scorecard, Store, TelemetryEvent } from './platform/store.js';
 
 /**
  * The scorecard sweep (docs/improvement-loop-plan.md IL-2 "Distill").

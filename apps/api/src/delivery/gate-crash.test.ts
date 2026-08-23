@@ -8,7 +8,7 @@ import {
   outcomeFromBuildStatus,
   type GateCrashProbeDeps,
 } from './gate-crash.js';
-import type { SubmissionRecord } from '../store.js';
+import type { SubmissionRecord } from '../platform/store.js';
 
 const NOW = Date.parse('2026-08-21T09:00:00.000Z');
 const DELIVERED_AT = '2026-08-21T08:00:00.000Z';

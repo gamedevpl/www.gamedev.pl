@@ -14,7 +14,7 @@ Hash routing (`#/play/<slug>`, `#/status/<token>`, …) was chosen early so a st
 could serve one `index.html` without SPA fallback. That constraint is gone:
 
 - Production is one Cloud Run service that already serves the web dist and has an SPA
-  fallback (`apps/api/src/app.ts` → `setNotFoundHandler` → `index.html`).
+  fallback (`apps/api/src/platform/app.ts` → `setNotFoundHandler` → `index.html`).
 - Vite's dev server already falls back to `index.html` for unknown paths.
 - Hash URLs are ugly in the address bar, worse in shared/copy-pasted links, and fight
   analytics, Referer-based tooling, and "open in new tab" expectations.
@@ -86,7 +86,7 @@ answers **404** while still serving `index.html`, so crawlers and `curl -I` see 
 real miss and the SPA can still render `NotFoundPage`. Known deep links
 (`/play/<slug>`, `/studio`, `/studio/<token>`, `/status/<token>`, `/join/<code>`, …) stay **200**. Missing
 extension-bearing files (`/assets/…`, `/sw.js`) stay hard 404s without the HTML
-shell. See `apps/api/src/spa-paths.ts` (also wired into Vite for local dev).
+shell. See `apps/api/src/platform/spa-paths.ts` (also wired into Vite for local dev).
 
 **Reserved:** anything under `/api/*` is the API. Do not add SPA routes that collide with
 static files (`/assets/*`, `/icons/*`, `/sw.js`, `/offline.html`, …).
@@ -115,7 +115,7 @@ This keeps the existing `AppRoute` type and all the stage/theater effects that k
 - **Dev:** Vite plugin `spa-proper-404` mirrors production status codes (known deep
   links → 200, unknown → 404 + shell).
 - **Prod:** Fastify `setNotFoundHandler` uses `isKnownSpaShellPath` /
-  `looksLikeStaticAsset` (`apps/api/src/spa-paths.ts`) so unknown paths are proper
+  `looksLikeStaticAsset` (`apps/api/src/platform/spa-paths.ts`) so unknown paths are proper
   HTTP 404s with `index.html`, not soft 200s.
 - **Canonical host redirect** already preserves path + query (`canonical-host.test.ts`).
 

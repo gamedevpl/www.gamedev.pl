@@ -6,8 +6,8 @@ import {
   verifyCreatorAgentKey,
 } from './agent-creator-key.js';
 import { mintGameAgentKey, verifyGameAgentKey } from './agent-game-key.js';
-import { buildApp } from '../app.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from '../auth.js';
+import { buildApp } from '../platform/app.js';
+import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from '../catalog/github-client.js';
 import {
   assertInstallLinksHaveNoCredentials,
@@ -22,8 +22,8 @@ import {
   mintGameKeyKickoff,
   MCP_ENDPOINT_PATH,
 } from './self-build-connect.js';
-import { InMemoryStore } from '../store.js';
-import { mintToken } from '../submission-token.js';
+import { InMemoryStore } from '../platform/store.js';
+import { mintToken } from '../platform/submission-token.js';
 
 const MCP_HANDSHAKE_HEADERS = {
   'content-type': 'application/json',

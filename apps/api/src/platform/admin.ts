@@ -7,27 +7,27 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { isAdminSession } from './admin-session.js';
-import { MANAGED_AGENT_VENDORS } from './agent-surface/agent-backend-env.js';
-import { DEFAULT_SEED_PROVIDER } from './game-seed.js';
+import { MANAGED_AGENT_VENDORS } from '../agent-surface/agent-backend-env.js';
+import { DEFAULT_SEED_PROVIDER } from '../game-seed.js';
 import {
   recentPartitions,
   scanPartitions,
   summarizeGameHealth,
   type GameHealth,
   type PartitionScanBudget,
-} from './telemetry/telemetry-health.js';
-import { routeAll, type Suggestion } from './community/suggestions.js';
-import { buildJobQueue } from './job-admin-routes.js';
-import type { JobState } from './job-state.js';
-import { buildCostReport } from './job-costs.js';
+} from '../telemetry/telemetry-health.js';
+import { routeAll, type Suggestion } from '../community/suggestions.js';
+import { buildJobQueue } from '../job-admin-routes.js';
+import type { JobState } from '../job-state.js';
+import { buildCostReport } from '../job-costs.js';
 import {
   detectOperatorAlerts,
   detectSeedingDegraded,
   SEEDING_DEGRADED_WINDOW_MS,
   type OperatorAlert,
-} from './notifications/operator-alerts.js';
-import { summarizeVisitFunnel, type VisitFunnel } from './telemetry/visit-funnel.js';
-import { summarizeCreatorMetrics, type CreatorMetrics } from './telemetry/creator-metrics.js';
+} from '../notifications/operator-alerts.js';
+import { summarizeVisitFunnel, type VisitFunnel } from '../telemetry/visit-funnel.js';
+import { summarizeCreatorMetrics, type CreatorMetrics } from '../telemetry/creator-metrics.js';
 import {
   summarizeRetentionByEligibilityDay,
   summarizeVisitDay,
@@ -36,12 +36,12 @@ import {
   type DailyMcpPoint,
   type DailyRetentionPoint,
   type TelemetryTrends,
-} from './telemetry/telemetry-trends.js';
+} from '../telemetry/telemetry-trends.js';
 import {
   DEFAULT_CREATION_LIMITS_TTL_MS,
   resolveDefaultGlobalDailyCap,
   resolveDefaultGlobalDailyTabCompleteTokenCap,
-} from './creation-limits.js';
+} from '../creation-limits.js';
 import {
   BOT_UID_PREFIX,
   type BetaInvite,

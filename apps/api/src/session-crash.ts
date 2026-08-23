@@ -1,6 +1,6 @@
 // Precedent and shape: gate-crash.ts.
 
-import type { SubmissionRecord } from './store.js';
+import type { SubmissionRecord } from './platform/store.js';
 import { canTransition, type JobStall, type JobTransition } from './job-state.js';
 
 // Two: one blip is noise, two in a row is not.

@@ -1,37 +1,37 @@
 import { FieldValue, Firestore } from '@google-cloud/firestore';
 import type { AssessmentSource, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
-import type { AgentTaskState } from './agent-state.js';
-import type { SeedFiles } from './agent-surface/agent-backend.js';
-import type { BuilderKind } from './builder.js';
-import type { PublicationHealthCheck, PublicationRecord } from './delivery/games-store.js';
-import type { AvatarMode } from './creator-profile.js';
-import type { AgentSessionTokens, JobTransition } from './job-state.js';
-import type { ProposalState } from './community/proposal-state.js';
+import type { AgentTaskState } from '../agent-state.js';
+import type { SeedFiles } from '../agent-surface/agent-backend.js';
+import type { BuilderKind } from '../builder.js';
+import type { PublicationHealthCheck, PublicationRecord } from '../delivery/games-store.js';
+import type { AvatarMode } from '../creator-profile.js';
+import type { AgentSessionTokens, JobTransition } from '../job-state.js';
+import type { ProposalState } from '../community/proposal-state.js';
 import type { BuildEvent, SubmissionStatus } from './submission-status.js';
-import type { PublicationStore } from './store/slices/publication.js';
+import type { PublicationStore } from '../store/slices/publication.js';
 export type { PublicationStore };
-import { InMemoryPublicationStore, FirestorePublicationStore } from './store/slices/publication.js';
-import type { RoundsStore } from './store/slices/rounds.js';
+import { InMemoryPublicationStore, FirestorePublicationStore } from '../store/slices/publication.js';
+import type { RoundsStore } from '../store/slices/rounds.js';
 export type { RoundsStore };
-import { InMemoryRoundsStore, FirestoreRoundsStore } from './store/slices/rounds.js';
-import type { RoundBudgetStore } from './store/slices/round-budget.js';
+import { InMemoryRoundsStore, FirestoreRoundsStore } from '../store/slices/rounds.js';
+import type { RoundBudgetStore } from '../store/slices/round-budget.js';
 export type { RoundBudgetStore };
-import { InMemoryRoundBudgetStore, FirestoreRoundBudgetStore } from './store/slices/round-budget.js';
-import type { DispatchStore } from './store/slices/dispatch.js';
+import { InMemoryRoundBudgetStore, FirestoreRoundBudgetStore } from '../store/slices/round-budget.js';
+import type { DispatchStore } from '../store/slices/dispatch.js';
 export type { DispatchStore };
-import { InMemoryDispatchStore, FirestoreDispatchStore } from './store/slices/dispatch.js';
-import type { SubmissionStore } from './store/slices/submission.js';
+import { InMemoryDispatchStore, FirestoreDispatchStore } from '../store/slices/dispatch.js';
+import type { SubmissionStore } from '../store/slices/submission.js';
 export type { SubmissionStore };
-import { InMemorySubmissionStore, FirestoreSubmissionStore } from './store/slices/submission.js';
-import type { SubmissionQueryStore } from './store/slices/submission-queries.js';
+import { InMemorySubmissionStore, FirestoreSubmissionStore } from '../store/slices/submission.js';
+import type { SubmissionQueryStore } from '../store/slices/submission-queries.js';
 export type { SubmissionQueryStore };
-import { InMemorySubmissionQueryStore, FirestoreSubmissionQueryStore } from './store/slices/submission-queries.js';
-import type { BuildLogStore } from './store/slices/build-log.js';
+import { InMemorySubmissionQueryStore, FirestoreSubmissionQueryStore } from '../store/slices/submission-queries.js';
+import type { BuildLogStore } from '../store/slices/build-log.js';
 export type { BuildLogStore };
-import { InMemoryBuildLogStore, FirestoreBuildLogStore } from './store/slices/build-log.js';
-import type { BuildMediaStore } from './store/slices/build-media.js';
+import { InMemoryBuildLogStore, FirestoreBuildLogStore } from '../store/slices/build-log.js';
+import type { BuildMediaStore } from '../store/slices/build-media.js';
 export type { BuildMediaStore };
-import { InMemoryBuildMediaStore, FirestoreBuildMediaStore } from './store/slices/build-media.js';
+import { InMemoryBuildMediaStore, FirestoreBuildMediaStore } from '../store/slices/build-media.js';
 
 /**
  * Uid namespace for automation accounts (docs/agent-access-tokens.md).
@@ -46,18 +46,23 @@ export const BOT_UID_PREFIX = 'bot:';
 // Record types moved to store/records/*.ts (Phase 2 wave 1). Re-exported here so
 // every existing importer keeps working unchanged; each slice's own consumers
 // migrate to the direct path as that slice is carved out in a later wave.
-import type { User, HandleRecord, AccountIdentityDeletionResult, ClaimHandleResult } from './store/records/identity.js';
+import type {
+  User,
+  HandleRecord,
+  AccountIdentityDeletionResult,
+  ClaimHandleResult,
+} from '../store/records/identity.js';
 export type { User, HandleRecord, AccountIdentityDeletionResult, ClaimHandleResult };
-import { DELETED_ACCOUNT_UID, ACTIVE_DAYS_KEPT, withActiveDay } from './store/records/identity.js';
+import { DELETED_ACCOUNT_UID, ACTIVE_DAYS_KEPT, withActiveDay } from '../store/records/identity.js';
 export { DELETED_ACCOUNT_UID, ACTIVE_DAYS_KEPT, withActiveDay };
-import type { IdentityStore } from './store/slices/identity.js';
+import type { IdentityStore } from '../store/slices/identity.js';
 export type { IdentityStore };
-import { InMemoryIdentityStore, FirestoreIdentityStore } from './store/slices/identity.js';
-import type { BuilderHandoff, AgentEndedBy } from './store/records/rounds.js';
+import { InMemoryIdentityStore, FirestoreIdentityStore } from '../store/slices/identity.js';
+import type { BuilderHandoff, AgentEndedBy } from '../store/records/rounds.js';
 export type { BuilderHandoff, AgentEndedBy };
-import type { SubmissionRecord } from './store/records/submission.js';
+import type { SubmissionRecord } from '../store/records/submission.js';
 export type { SubmissionRecord };
-import type { JobSeedOutcome, JobCostEntry } from './store/records/dispatch.js';
+import type { JobSeedOutcome, JobCostEntry } from '../store/records/dispatch.js';
 export type { JobSeedOutcome, JobCostEntry };
 import {
   MAX_JOB_COSTS,
@@ -65,7 +70,7 @@ import {
   MAX_JOB_TRANSITIONS,
   JOB_ID_FLOOR,
   dispatchAttempt,
-} from './store/records/dispatch.js';
+} from '../store/records/dispatch.js';
 export { MAX_JOB_COSTS, applyMeasuredTokens, MAX_JOB_TRANSITIONS, JOB_ID_FLOOR, dispatchAttempt };
 import type {
   CreatorMessage,
@@ -74,35 +79,35 @@ import type {
   BuildShotSummary,
   BuildPreview,
   BuildPreviewSummary,
-} from './store/records/build-log.js';
+} from '../store/records/build-log.js';
 export type { CreatorMessage, CreatorMessageOrigin, BuildShot, BuildShotSummary, BuildPreview, BuildPreviewSummary };
-import { isStudioOrigin } from './store/records/build-log.js';
+import { isStudioOrigin } from '../store/records/build-log.js';
 export { isStudioOrigin };
-import type { CreationLimits, PublicPlayConfig, FeaturedPoolConfig, UsageCounters } from './store/records/quota.js';
+import type { CreationLimits, PublicPlayConfig, FeaturedPoolConfig, UsageCounters } from '../store/records/quota.js';
 export type { CreationLimits, PublicPlayConfig, FeaturedPoolConfig, UsageCounters };
-import type { QuotaStore } from './store/slices/quota.js';
+import type { QuotaStore } from '../store/slices/quota.js';
 export type { QuotaStore };
-import { InMemoryQuotaStore, FirestoreQuotaStore } from './store/slices/quota.js';
-import type { GlobalQuotaStore } from './store/slices/quota-global.js';
+import { InMemoryQuotaStore, FirestoreQuotaStore } from '../store/slices/quota.js';
+import type { GlobalQuotaStore } from '../store/slices/quota-global.js';
 export type { GlobalQuotaStore };
-import { InMemoryGlobalQuotaStore, FirestoreGlobalQuotaStore } from './store/slices/quota-global.js';
-import type { TelemetryEventType, TelemetryEvent, VisitEvent } from './store/records/telemetry.js';
+import { InMemoryGlobalQuotaStore, FirestoreGlobalQuotaStore } from '../store/slices/quota-global.js';
+import type { TelemetryEventType, TelemetryEvent, VisitEvent } from '../store/records/telemetry.js';
 export type { TelemetryEventType, TelemetryEvent, VisitEvent };
 // The retention constants (TELEMETRY_TTL_FIELD, telemetryExpiresAt, ...) are no longer
 // re-exported here -- their only consumers were InMemoryStore/FirestoreStore, both now in
 // ./store/slices/telemetry.js, and store.test.ts, now store/records/telemetry.test.ts.
-import type { TelemetryStore } from './store/slices/telemetry.js';
+import type { TelemetryStore } from '../store/slices/telemetry.js';
 export type { TelemetryStore };
-import { InMemoryTelemetryStore, FirestoreTelemetryStore } from './store/slices/telemetry.js';
-import type { OAuthStore } from './store/slices/oauth.js';
+import { InMemoryTelemetryStore, FirestoreTelemetryStore } from '../store/slices/telemetry.js';
+import type { OAuthStore } from '../store/slices/oauth.js';
 export type { OAuthStore };
-import { InMemoryOAuthStore, FirestoreOAuthStore } from './store/slices/oauth.js';
-import type { PlayerDataStore } from './store/slices/player-data.js';
+import { InMemoryOAuthStore, FirestoreOAuthStore } from '../store/slices/oauth.js';
+import type { PlayerDataStore } from '../store/slices/player-data.js';
 export type { PlayerDataStore };
-import { InMemoryPlayerDataStore, FirestorePlayerDataStore } from './store/slices/player-data.js';
-import type { WorldEntriesStore } from './store/slices/world-entries.js';
+import { InMemoryPlayerDataStore, FirestorePlayerDataStore } from '../store/slices/player-data.js';
+import type { WorldEntriesStore } from '../store/slices/world-entries.js';
 export type { WorldEntriesStore };
-import { InMemoryWorldEntriesStore, FirestoreWorldEntriesStore } from './store/slices/world-entries.js';
+import { InMemoryWorldEntriesStore, FirestoreWorldEntriesStore } from '../store/slices/world-entries.js';
 import type {
   NotificationType,
   ProposalNotificationType,
@@ -110,7 +115,7 @@ import type {
   OperatorNotificationType,
   StoredNotification,
   PushSubscriptionRecord,
-} from './store/records/notifications.js';
+} from '../store/records/notifications.js';
 export type {
   NotificationType,
   ProposalNotificationType,
@@ -118,14 +123,14 @@ export type {
   OperatorNotificationType,
   StoredNotification,
 };
-import type { NotificationsStore } from './store/slices/notifications.js';
+import type { NotificationsStore } from '../store/slices/notifications.js';
 export type { NotificationsStore };
-import { InMemoryNotificationsStore, FirestoreNotificationsStore } from './store/slices/notifications.js';
-import type { GameVoteCounts, PlayerFeedbackRecord } from './store/records/social.js';
+import { InMemoryNotificationsStore, FirestoreNotificationsStore } from '../store/slices/notifications.js';
+import type { GameVoteCounts, PlayerFeedbackRecord } from '../store/records/social.js';
 export type { GameVoteCounts, PlayerFeedbackRecord };
-import type { SocialStore } from './store/slices/social.js';
+import type { SocialStore } from '../store/slices/social.js';
 export type { SocialStore };
-import { InMemorySocialStore, FirestoreSocialStore } from './store/slices/social.js';
+import { InMemorySocialStore, FirestoreSocialStore } from '../store/slices/social.js';
 import type {
   AssessmentChecklist,
   ReviewSweep,
@@ -137,7 +142,7 @@ import type {
   ReReviewRequest,
   ScorecardUntrusted,
   Scorecard,
-} from './store/records/review.js';
+} from '../store/records/review.js';
 export type {
   AssessmentChecklist,
   ReviewSweep,
@@ -150,20 +155,20 @@ export type {
   ScorecardUntrusted,
   Scorecard,
 };
-import type { ReviewStore } from './store/slices/review.js';
+import type { ReviewStore } from '../store/slices/review.js';
 export type { ReviewStore };
-import { InMemoryReviewStore, FirestoreReviewStore } from './store/slices/review.js';
-import type { ReviewSweepStore } from './store/slices/review-sweeps.js';
+import { InMemoryReviewStore, FirestoreReviewStore } from '../store/slices/review.js';
+import type { ReviewSweepStore } from '../store/slices/review-sweeps.js';
 export type { ReviewSweepStore };
-import { InMemoryReviewSweepStore, FirestoreReviewSweepStore } from './store/slices/review-sweeps.js';
+import { InMemoryReviewSweepStore, FirestoreReviewSweepStore } from '../store/slices/review-sweeps.js';
 import type {
   GameSaveRecord,
   EditorDraftRecord,
   PlayAffinityRecord,
   WorldEntryRecord,
-} from './store/records/player-data.js';
+} from '../store/records/player-data.js';
 export type { GameSaveRecord, EditorDraftRecord, PlayAffinityRecord, WorldEntryRecord };
-import { MAX_EDITOR_DRAFT_BYTES, MAX_GAME_SAVE_BYTES } from './store/records/player-data.js';
+import { MAX_EDITOR_DRAFT_BYTES, MAX_GAME_SAVE_BYTES } from '../store/records/player-data.js';
 export { MAX_EDITOR_DRAFT_BYTES, MAX_GAME_SAVE_BYTES };
 import type {
   SuggestionStatus,
@@ -173,7 +178,7 @@ import type {
   ProposalRecord,
   GameContributionSettings,
   ContributorBlockRecord,
-} from './store/records/contribution.js';
+} from '../store/records/contribution.js';
 export type {
   SuggestionStatus,
   SuggestionRecord,
@@ -183,33 +188,33 @@ export type {
   GameContributionSettings,
   ContributorBlockRecord,
 };
-import { OPEN_SUGGESTION_STATUSES, MAX_PROPOSAL_MESSAGES, compareProposals } from './store/records/contribution.js';
+import { OPEN_SUGGESTION_STATUSES, MAX_PROPOSAL_MESSAGES, compareProposals } from '../store/records/contribution.js';
 export { OPEN_SUGGESTION_STATUSES, MAX_PROPOSAL_MESSAGES, compareProposals };
-import type { ContributionStore } from './store/slices/contribution.js';
+import type { ContributionStore } from '../store/slices/contribution.js';
 export type { ContributionStore };
-import { InMemoryContributionStore, FirestoreContributionStore } from './store/slices/contribution.js';
-import type { WaitlistEntry, BetaInvite, CreatedBetaInvite, ClaimBetaInviteResult } from './store/records/access.js';
+import { InMemoryContributionStore, FirestoreContributionStore } from '../store/slices/contribution.js';
+import type { WaitlistEntry, BetaInvite, CreatedBetaInvite, ClaimBetaInviteResult } from '../store/records/access.js';
 export type { WaitlistEntry, BetaInvite, CreatedBetaInvite, ClaimBetaInviteResult };
-import type { AccessStore } from './store/slices/access.js';
+import type { AccessStore } from '../store/slices/access.js';
 export type { AccessStore };
-import { InMemoryAccessStore, FirestoreAccessStore } from './store/slices/access.js';
-import type { AccessTokenRecord } from './store/records/access-tokens.js';
+import { InMemoryAccessStore, FirestoreAccessStore } from '../store/slices/access.js';
+import type { AccessTokenRecord } from '../store/records/access-tokens.js';
 export type { AccessTokenRecord };
-import type { AccessTokensStore } from './store/slices/access-tokens.js';
+import type { AccessTokensStore } from '../store/slices/access-tokens.js';
 export type { AccessTokensStore };
-import { InMemoryAccessTokensStore, FirestoreAccessTokensStore } from './store/slices/access-tokens.js';
-import type { GameAgentKeyRecord, CreatorAgentKeyRecord } from './store/records/agent-keys.js';
+import { InMemoryAccessTokensStore, FirestoreAccessTokensStore } from '../store/slices/access-tokens.js';
+import type { GameAgentKeyRecord, CreatorAgentKeyRecord } from '../store/records/agent-keys.js';
 export type { GameAgentKeyRecord, CreatorAgentKeyRecord };
-import type { AgentKeysStore } from './store/slices/agent-keys.js';
+import type { AgentKeysStore } from '../store/slices/agent-keys.js';
 export type { AgentKeysStore };
-import { InMemoryAgentKeysStore, FirestoreAgentKeysStore } from './store/slices/agent-keys.js';
+import { InMemoryAgentKeysStore, FirestoreAgentKeysStore } from '../store/slices/agent-keys.js';
 import type {
   OAuthClientRecord,
   OAuthGrantRecord,
   OAuthAccessTokenRecord,
   OAuthAuthCodeRecord,
   RotateRefreshTokenResult,
-} from './store/records/oauth.js';
+} from '../store/records/oauth.js';
 export type {
   OAuthClientRecord,
   OAuthGrantRecord,

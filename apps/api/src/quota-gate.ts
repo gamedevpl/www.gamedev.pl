@@ -1,4 +1,4 @@
-import type { Store, UsageCounters, User } from './store.js';
+import type { Store, UsageCounters, User } from './platform/store.js';
 
 /**
  * Read-only "is there budget left?" check, run *before* a paid Vertex call.

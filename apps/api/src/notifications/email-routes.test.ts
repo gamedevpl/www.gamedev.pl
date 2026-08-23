@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { buildApp } from '../app.js';
-import { InMemoryStore } from '../store.js';
+import { buildApp } from '../platform/app.js';
+import { InMemoryStore } from '../platform/store.js';
 import { mintUnsubscribeToken } from './unsubscribe-token.js';
 
 const sessionSecret = 'dev-session-secret-change-me';

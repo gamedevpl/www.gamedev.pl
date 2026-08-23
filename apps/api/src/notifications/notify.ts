@@ -30,8 +30,12 @@ import type {
   SubmissionNotificationType,
   SubmissionRecord,
   Store,
-} from '../store.js';
-import type { SubmissionPublishedResponse, SubmissionStatus, SubmissionStatusResponse } from '../submission-status.js';
+} from '../platform/store.js';
+import type {
+  SubmissionPublishedResponse,
+  SubmissionStatus,
+  SubmissionStatusResponse,
+} from '../platform/submission-status.js';
 import { mintUnsubscribeToken } from './unsubscribe-token.js';
 
 const SHORT_TYPE: Record<SubmissionNotificationType, string> = {

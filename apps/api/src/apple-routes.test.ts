@@ -1,8 +1,8 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { AppleAuthPayload, AppleAuthVerifier } from './apple-auth.js';
-import { registerAuthPlugin, SESSION_COOKIE_NAME, type AuthPluginOptions } from './auth.js';
-import { InMemoryStore } from './store.js';
+import type { AppleAuthPayload, AppleAuthVerifier } from './platform/apple-auth.js';
+import { registerAuthPlugin, SESSION_COOKIE_NAME, type AuthPluginOptions } from './platform/auth.js';
+import { InMemoryStore } from './platform/store.js';
 
 class MockAppleVerifier implements AppleAuthVerifier {
   constructor(private tokens: Record<string, AppleAuthPayload>) {}
@@ -192,7 +192,10 @@ describe('POST /api/auth/apple', () => {
     it('admits a creator already allowlisted by their Google uid', async () => {
       // The allowlist is checked against the *resolved* uid, so somebody already in the
       // beta is not turned away merely for arriving through a different button.
-      const { app, store } = await setup({ 'apple-token': VERIFIED }, beta({ betaAllowedUids: new Set(['g:google-sub']) }));
+      const { app, store } = await setup(
+        { 'apple-token': VERIFIED },
+        beta({ betaAllowedUids: new Set(['g:google-sub']) }),
+      );
       await store.upsertUser({ uid: 'g:google-sub', email: 'creator@example.com' });
 
       const res = await signIn(app);

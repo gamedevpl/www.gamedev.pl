@@ -2,7 +2,7 @@
 
 // Reuses the creation-limits document and TTL cache; see creation-limits.ts.
 
-import { BOT_UID_PREFIX, type CreationLimits, type Store } from '../store.js';
+import { BOT_UID_PREFIX, type CreationLimits, type Store } from '../platform/store.js';
 
 import type { BuilderUnavailableReason } from '@gamedevpl/contract';
 

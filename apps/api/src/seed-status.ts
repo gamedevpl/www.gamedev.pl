@@ -4,7 +4,7 @@
 
 // Tri-state, not boolean: "not yet" must never read as "never".
 
-import type { JobSeedOutcome, SubmissionRecord } from './store.js';
+import type { JobSeedOutcome, SubmissionRecord } from './platform/store.js';
 
 // The half of a draft this needs; full shape in game-seed.
 interface SeedAttemptDraft {

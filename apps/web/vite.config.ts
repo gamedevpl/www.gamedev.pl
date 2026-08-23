@@ -5,7 +5,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vite';
-import { isKnownSpaShellPath, looksLikeStaticAsset } from '../api/src/spa-paths.js';
+import { isKnownSpaShellPath, looksLikeStaticAsset } from '../api/src/platform/spa-paths.js';
 import { replaceBuildManifest, shellAssetEntries, shellRevision } from './src/shellPrecache.js';
 
 const apiTarget = process.env.VITE_API_TARGET ?? 'http://127.0.0.1:3001';

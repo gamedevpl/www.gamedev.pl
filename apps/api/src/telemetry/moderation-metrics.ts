@@ -27,7 +27,7 @@
  */
 
 import type { FastifyBaseLogger } from 'fastify';
-import type { RejectCategory } from '../moderation-terms.js';
+import type { RejectCategory } from '../platform/moderation-terms.js';
 
 /**
  * Where the rejection happened. A closed set on purpose: this is a metric label, and a

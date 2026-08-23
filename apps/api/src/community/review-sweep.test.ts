@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { effectiveReleasedCount, releasedSlugs, REVIEW_SWEEP_DAY_MS, summarizeSweepProgress } from './review-sweep.js';
-import type { ReviewSweep } from '../store.js';
+import type { ReviewSweep } from '../platform/store.js';
 
 function sweep(partial: Partial<ReviewSweep> & Pick<ReviewSweep, 'slugs' | 'releasedCount'>): ReviewSweep {
   return {

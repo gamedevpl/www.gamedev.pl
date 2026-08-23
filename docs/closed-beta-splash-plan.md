@@ -4,7 +4,7 @@
 > the splash and can join the waitlist; the beta wall gates `/api/` paths while the static
 > shell still loads, except for operator-selected promotional games. See
 > [`apps/web/src/ClosedBetaSplash.tsx`](../apps/web/src/ClosedBetaSplash.tsx)
-> and the waitlist routes in [`apps/api/src/auth.ts`](../apps/api/src/auth.ts).
+> and the waitlist routes in [`apps/api/src/platform/auth.ts`](../apps/api/src/platform/auth.ts).
 >
 > Originally planned 2026-07-23 (owner approved), depending on the P0 shell fix.
 

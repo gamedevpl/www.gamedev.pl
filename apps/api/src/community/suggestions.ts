@@ -1,4 +1,4 @@
-import type { Scorecard } from '../store.js';
+import type { Scorecard } from '../platform/store.js';
 
 /**
  * The suggestion router (docs/improvement-loop-plan.md IL-3 "Suggest").

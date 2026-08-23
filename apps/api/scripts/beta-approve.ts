@@ -1,5 +1,5 @@
 import { Firestore } from '@google-cloud/firestore';
-import type { WaitlistEntry } from '../src/store.js';
+import type { WaitlistEntry } from '../src/platform/store.js';
 
 async function main() {
   const args = process.argv.slice(2);

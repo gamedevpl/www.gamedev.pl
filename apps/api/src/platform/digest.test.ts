@@ -1,13 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
-import {
-  buildDigestTotals,
-  digestId,
-  isEmptyDigest,
-  isoWeekKey,
-  matchesPrevious,
-  runDigestSweep,
-} from './digest.js';
+import { buildDigestTotals, digestId, isEmptyDigest, isoWeekKey, matchesPrevious, runDigestSweep } from './digest.js';
 import type { InternalAuthVerifier } from './internal-auth.js';
 import { InMemoryStore, type Scorecard } from './store.js';
 
@@ -58,8 +51,18 @@ describe('isoWeekKey', () => {
 describe('buildDigestTotals', () => {
   it('sums across a creator’s games', () => {
     const totals = buildDigestTotals([
-      scorecard({ slug: 'a', sessions: { count: 10, bounces: 0, closes: 0, medianPlaySeconds: 0, totalPlaySeconds: 0 }, votes: { up: 3, down: 1 }, feedback: { count: 2 } }),
-      scorecard({ slug: 'b', sessions: { count: 5, bounces: 0, closes: 0, medianPlaySeconds: 0, totalPlaySeconds: 0 }, votes: { up: 1, down: 0 }, feedback: { count: 1 } }),
+      scorecard({
+        slug: 'a',
+        sessions: { count: 10, bounces: 0, closes: 0, medianPlaySeconds: 0, totalPlaySeconds: 0 },
+        votes: { up: 3, down: 1 },
+        feedback: { count: 2 },
+      }),
+      scorecard({
+        slug: 'b',
+        sessions: { count: 5, bounces: 0, closes: 0, medianPlaySeconds: 0, totalPlaySeconds: 0 },
+        votes: { up: 1, down: 0 },
+        feedback: { count: 1 },
+      }),
     ]);
 
     expect(totals).toEqual({ games: 2, sessions: 15, votesUp: 4, votesDown: 1, feedback: 3 });
@@ -90,11 +93,15 @@ describe('matchesPrevious', () => {
   });
 
   it('matches identical numbers', () => {
-    expect(matchesPrevious({ games: '1', sessions: '10', votesUp: '2', votesDown: '0', feedback: '1' }, totals)).toBe(true);
+    expect(matchesPrevious({ games: '1', sessions: '10', votesUp: '2', votesDown: '0', feedback: '1' }, totals)).toBe(
+      true,
+    );
   });
 
   it('does not match when a single number moved', () => {
-    expect(matchesPrevious({ games: '1', sessions: '11', votesUp: '2', votesDown: '0', feedback: '1' }, totals)).toBe(false);
+    expect(matchesPrevious({ games: '1', sessions: '11', votesUp: '2', votesDown: '0', feedback: '1' }, totals)).toBe(
+      false,
+    );
   });
 });
 
@@ -281,7 +288,10 @@ describe('runDigestSweep', () => {
 
 describe('POST /api/internal/digest-sweep', () => {
   it('rejects a caller without a valid scheduler token', async () => {
-    const app = await buildApp({ store: new InMemoryStore(), digestRoutes: { internalAuthVerifier: { verify: async () => false } } });
+    const app = await buildApp({
+      store: new InMemoryStore(),
+      digestRoutes: { internalAuthVerifier: { verify: async () => false } },
+    });
     const response = await app.inject({ method: 'POST', url: '/api/internal/digest-sweep' });
     expect(response.statusCode).toBe(401);
     await app.close();

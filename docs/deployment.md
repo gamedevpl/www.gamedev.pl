@@ -439,7 +439,7 @@ because a phone that scanned a QR has no Google identity and never will. What pr
 app-level — the room token verified in the socket's first frame, and an audience-pinned OIDC
 token from the app service on the internal create route. Missing either `MP_RELAY_AUDIENCE` or
 `MP_RELAY_CALLER_SA` makes that route **deny-all**
-([`internal-auth.ts`](../apps/api/src/internal-auth.ts)), so a half-configured relay refuses to
+([`internal-auth.ts`](../apps/api/src/platform/internal-auth.ts)), so a half-configured relay refuses to
 open rooms rather than opening them to the internet. `PRIVATE_BETA=true` with no allowlist walls
 every other route the shared image happens to register, which needs no maintenance: the relay's
 whole job lives in the two paths the wall exempts.

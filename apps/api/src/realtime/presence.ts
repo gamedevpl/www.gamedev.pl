@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { rememberBounded } from '../bounded-map.js';
+import { rememberBounded } from '../platform/bounded-map.js';
 import type { PresenceGrid, WorldSchema } from './world-schema.js';
 import type { WorldSchemaSource } from './world-source.js';
 

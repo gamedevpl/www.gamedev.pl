@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildApp } from '../app.js';
+import { buildApp } from '../platform/app.js';
 import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
 import { mintGameAgentKey } from './agent-game-key.js';
 import { mintMcpSessionKey } from './mcp-session-key.js';
@@ -15,7 +15,7 @@ import {
   oauthProtectedResourcePathForMcp,
 } from './mcp-oauth-metadata.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
-import { InMemoryStore } from '../store.js';
+import { InMemoryStore } from '../platform/store.js';
 
 describe('canonicalAppBaseUrl / oauth metadata helpers', () => {
   const envKeys = [

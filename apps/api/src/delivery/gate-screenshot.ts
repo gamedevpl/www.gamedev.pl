@@ -7,7 +7,7 @@
 
 import { MAX_SHOT_BYTES } from '@gamedevpl/contract';
 import type { GamesStore } from './games-store.js';
-import type { Store } from '../store.js';
+import type { Store } from '../platform/store.js';
 
 /** Caption shown on the thread for a gate-produced frame. */
 export const PLATFORM_CHECK_SHOT_LABEL = 'Platform check';

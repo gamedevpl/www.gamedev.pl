@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { buildApp } from './app.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
+import { buildApp } from './platform/app.js';
+import { mintSessionToken, SESSION_COOKIE_NAME } from './platform/auth.js';
 import type { CreatorHealthResponse, CreatorScorecardsResponse, CreatorStudioGame } from './creator-studio.js';
-import { InMemoryStore, type Scorecard, type TelemetryEvent } from './store.js';
-import { mintToken } from './submission-token.js';
+import { InMemoryStore, type Scorecard, type TelemetryEvent } from './platform/store.js';
+import { mintToken } from './platform/submission-token.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 const submissionTokenSecret = 'test-submission-secret';

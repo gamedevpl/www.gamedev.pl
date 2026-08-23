@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildApp } from './app.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
+import { buildApp } from './platform/app.js';
+import { mintSessionToken, SESSION_COOKIE_NAME } from './platform/auth.js';
 import type { GamesStore } from './delivery/games-store.js';
 import { buildJobQueue } from './job-admin-routes.js';
-import { InMemoryStore, type SubmissionRecord } from './store.js';
+import { InMemoryStore, type SubmissionRecord } from './platform/store.js';
 
 const NOW = Date.parse('2026-07-30T12:00:00Z');
 const MINUTE = 60_000;

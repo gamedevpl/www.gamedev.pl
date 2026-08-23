@@ -7,7 +7,7 @@ import {
   type SnapshotPointer,
 } from './game-snapshot.js';
 import type { CatalogGameEntry, GitHubClient } from './github-client.js';
-import { downscalePng, VARIANT_WIDTHS } from '../image-variants.js';
+import { downscalePng, VARIANT_WIDTHS } from '../platform/image-variants.js';
 
 /**
  * Bakes every published game into the snapshot bucket.

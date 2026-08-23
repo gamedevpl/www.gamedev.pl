@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildApp } from './app.js';
+import { buildApp } from './platform/app.js';
 import type { GamesStore } from './delivery/games-store.js';
 import type { CatalogGameEntry, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
-import type { InternalAuthVerifier } from './internal-auth.js';
-import { InMemoryStore } from './store.js';
+import type { InternalAuthVerifier } from './platform/internal-auth.js';
+import { InMemoryStore } from './platform/store.js';
 
 const secret = 'submission-secret';
 const acceptAll: InternalAuthVerifier = { verify: async () => true };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildCostReport } from './job-costs.js';
-import type { JobCostEntry, SubmissionRecord } from './store.js';
+import type { JobCostEntry, SubmissionRecord } from './platform/store.js';
 
 const NOW = Date.parse('2026-07-30T12:00:00Z');
 const MINUTE = 60_000;

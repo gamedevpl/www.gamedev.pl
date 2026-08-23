@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { collapseJobsToOwnerGames, MAX_OWNER_GAMES, pageOwnerGames } from './owner-games.js';
-import type { SubmissionRecord } from '../store.js';
+import type { SubmissionRecord } from '../platform/store.js';
 
 function job(
   partial: Partial<SubmissionRecord> & Pick<SubmissionRecord, 'issueNumber' | 'createdAt'>,

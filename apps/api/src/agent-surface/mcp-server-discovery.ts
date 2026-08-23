@@ -17,7 +17,7 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import { canonicalAppBaseUrl } from '../canonical-app-url.js';
+import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
 import { oauthProtectedResourceMetadataUrl } from './mcp-oauth-metadata.js';
 import { mcpEndpointUrl } from './self-build-connect.js';
 

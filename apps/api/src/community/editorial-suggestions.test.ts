@@ -6,7 +6,7 @@ import {
   routeEditorialAggregate,
   type EditorialAggregate,
 } from './editorial-suggestions.js';
-import type { GameAssessment } from '../store.js';
+import type { GameAssessment } from '../platform/store.js';
 
 function row(
   partial: Partial<GameAssessment> & Pick<GameAssessment, 'slug' | 'reviewerUid' | 'verdict'>,

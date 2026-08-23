@@ -145,8 +145,6 @@ describe('VertexTranslator.toBilingual', () => {
   });
 });
 
-
-
 describe('createTranslatorFromEnv', () => {
   const previous = process.env.TRANSLATE_BUILD_LOG;
 

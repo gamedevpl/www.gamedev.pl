@@ -13,7 +13,7 @@ import {
   type CatalogSensing,
   type CatalogWorld,
 } from '@gamedevpl/contract';
-import { rememberBounded } from '../bounded-map.js';
+import { rememberBounded } from '../platform/bounded-map.js';
 import { classifyTouchSource, type CatalogGameTouch } from './catalog-touch.js';
 import {
   DELIVERY_FIXED_FILES,
@@ -30,7 +30,7 @@ import {
   type GameManifest as IndexHtmlManifest,
 } from './index-html-generator.js';
 import { mergeMusicTrackMaps, parseGameMusicTracks, parseMusicCatalogTracks } from './music-tracks.js';
-import { generateStyleCss, type Theme } from '../theme-css-generator.js';
+import { generateStyleCss, type Theme } from '../platform/theme-css-generator.js';
 
 export type { CatalogGameTouch } from './catalog-touch.js';
 

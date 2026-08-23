@@ -1,9 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import type { ContentChecker } from '../moderation.js';
+import type { ContentChecker } from '../platform/moderation.js';
 import type { PublishedSlugGate } from '../catalog/published-slugs.js';
-import { sanitizeCreatorText } from '../submission-status.js';
-import type { Store } from '../store.js';
+import { sanitizeCreatorText } from '../platform/submission-status.js';
+import type { Store } from '../platform/store.js';
 import { logModerationRejection } from '../telemetry/moderation-metrics.js';
 
 /**

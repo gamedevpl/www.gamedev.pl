@@ -286,11 +286,11 @@ issuing a credential is an admission decision in itself.
 
 ## Code map
 
-| File                                   | What it holds                                                       |
-| -------------------------------------- | ------------------------------------------------------------------- |
-| `apps/api/src/access-token.ts`         | Pure format, mint, hash, verify — no I/O                            |
-| `apps/api/src/access-token-service.ts` | Shared issuance rules (namespace, cap, expiry) and token resolution |
-| `apps/api/src/access-token-routes.ts`  | Operator HTTP surface                                               |
-| `apps/api/src/auth.ts`                 | Bearer resolution in the `onRequest` hook; `POST /api/auth/session` |
-| `apps/api/src/oauth-token-login.ts`    | `/oauth/token-login` — the same exchange as a browser form          |
-| `apps/api/scripts/access-token.ts`     | The `token:mint` / `token:list` / `token:revoke` CLI                |
+| File                                            | What it holds                                                       |
+| ----------------------------------------------- | ------------------------------------------------------------------- |
+| `apps/api/src/platform/access-token.ts`         | Pure format, mint, hash, verify — no I/O                            |
+| `apps/api/src/platform/access-token-service.ts` | Shared issuance rules (namespace, cap, expiry) and token resolution |
+| `apps/api/src/platform/access-token-routes.ts`  | Operator HTTP surface                                               |
+| `apps/api/src/platform/auth.ts`                 | Bearer resolution in the `onRequest` hook; `POST /api/auth/session` |
+| `apps/api/src/platform/oauth-token-login.ts`    | `/oauth/token-login` — the same exchange as a browser form          |
+| `apps/api/scripts/access-token.ts`              | The `token:mint` / `token:list` / `token:revoke` CLI                |

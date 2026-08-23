@@ -20,7 +20,7 @@
 import { fetchGamesRepoArchive } from '../catalog/games-repo-archive.js';
 import type { GamesStore, SourceFile } from '../delivery/games-store.js';
 import type { GameSnapshotStore } from '../catalog/game-snapshot.js';
-import type { ProposalBase, Store } from '../store.js';
+import type { ProposalBase, Store } from '../platform/store.js';
 
 /** A game's current sources, plus what to pin a proposal built from them to. */
 export interface ProposalBaseSources {

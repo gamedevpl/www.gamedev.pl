@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildApp } from '../app.js';
-import { InMemoryStore, type Scorecard, type SuggestionRecord } from '../store.js';
+import { buildApp } from '../platform/app.js';
+import { InMemoryStore, type Scorecard, type SuggestionRecord } from '../platform/store.js';
 import { buildImprovementBrief, DISMISS_REASONS } from './suggestion-inbox.js';
 
 /**

@@ -9,7 +9,7 @@ import {
   TAB_COMPLETE_TOKEN_RESERVATION,
   type CreationGateOptions,
 } from './creation-limits.js';
-import { InMemoryStore, type CreationLimits, type Store } from './store.js';
+import { InMemoryStore, type CreationLimits, type Store } from './platform/store.js';
 
 const today = '2026-07-30';
 

@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildApp } from './app.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
+import { buildApp } from './platform/app.js';
+import { mintSessionToken, SESSION_COOKIE_NAME } from './platform/auth.js';
 import type { GamesStore } from './delivery/games-store.js';
 import type { CatalogGameEntry, GitHubClient } from './catalog/github-client.js';
-import { InMemoryStore } from './store.js';
+import { InMemoryStore } from './platform/store.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 

@@ -1,11 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-surface/agent-token.js';
-import { buildApp } from './app.js';
+import { buildApp } from './platform/app.js';
 import type { GamesStore } from './delivery/games-store.js';
 import type { GcsObjectStore } from './delivery/gcs-sign.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
-import { InMemoryStore } from './store.js';
+import { InMemoryStore } from './platform/store.js';
 
 /**
  * BY-28 — the gate's own media, read back over the channel.

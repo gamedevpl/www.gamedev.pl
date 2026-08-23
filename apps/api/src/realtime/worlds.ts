@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import type { ContentChecker } from '../moderation.js';
-import type { Store, WorldEntryRecord } from '../store.js';
+import type { ContentChecker } from '../platform/moderation.js';
+import type { Store, WorldEntryRecord } from '../platform/store.js';
 import {
   isValidWorldKey,
   MAX_WORLD_ENTRIES,

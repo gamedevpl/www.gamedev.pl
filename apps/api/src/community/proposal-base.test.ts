@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { GamesStore, VersionManifest } from '../delivery/games-store.js';
 import { isRepoBaseStale, ProposalBaseUnavailableError, resolveProposalBase } from './proposal-base.js';
-import { InMemoryStore } from '../store.js';
+import { InMemoryStore } from '../platform/store.js';
 
 const NOW = '2026-08-04T12:00:00Z';
 

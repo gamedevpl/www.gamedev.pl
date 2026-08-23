@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FirestoreStore, InMemoryStore, type Store } from '../store.js';
+import { FirestoreStore, InMemoryStore, type Store } from '../platform/store.js';
 import { fakeFirestore } from './fake-firestore.js';
 
 // Runs the same assertions against InMemoryStore and FirestoreStore(fake).

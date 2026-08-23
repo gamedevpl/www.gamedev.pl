@@ -5,7 +5,7 @@
 > then never watched, so a deny-list that had stopped being called would have looked
 > identical to one finding nothing. See Rollout at the foot of this file.
 > Submitted specs are moderated before an agent ever sees them:
-> [`createDefaultContentChecker`](../apps/api/src/moderation.ts) returns the Vertex-backed
+> [`createDefaultContentChecker`](../apps/api/src/platform/moderation.ts) returns the Vertex-backed
 > checker whenever `NODE_ENV=production`, so moderation is on in prod by construction rather
 > than by a flag someone must remember to set. Outside production it falls back to a pattern
 > checker. A retired Vertex model therefore fails closed and takes creation down with it —
@@ -44,7 +44,7 @@ prompt (web) → POST /api/submissions → GitHub issue → Copilot agent → PR
 
 ## Layer 1 — Input screening at the API (first slice, build now)
 
-New `apps/api/src/moderation.ts`, applied to title + spec in `POST /api/submissions`
+New `apps/api/src/platform/moderation.ts`, applied to title + spec in `POST /api/submissions`
 and to the prompt in `POST /api/generate-game`, BEFORE quota is consumed:
 
 - **Deny patterns**: curated regex lists (en + pl — Polish profanity/slur coverage is

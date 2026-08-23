@@ -3,7 +3,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { AGENT_CHANNEL_ROUTES, GATE_STATUS_VALUES } from '@gamedevpl/contract';
 import { looksLikeCreatorAgentKey } from './agent-creator-key.js';
-import { canonicalAppBaseUrl } from '../canonical-app-url.js';
+import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
 import { DEFAULT_TRANSCRIPT_WINDOW_ENTRIES, MAX_TRANSCRIPT_WINDOW_ENTRIES } from '../delivery/build-transcript.js';
 import {
   resolveCreatorAgentKeyForOpenRound,
@@ -44,7 +44,7 @@ import {
   type AgentTokenClaims,
 } from './agent-token.js';
 import { DEFAULT_UPLOAD_URL_TTL_SECONDS, mintUploadToken, uploadCurlCommand } from './agent-upload-token.js';
-import { decodeCanonicalBase64Utf8, InvalidBase64Error } from '../canonical-base64.js';
+import { decodeCanonicalBase64Utf8, InvalidBase64Error } from '../platform/canonical-base64.js';
 import { BUILDERS, selfBuildDeliveryCap, type BuilderKind } from '../builder.js';
 import type { ManagedUnavailableReason } from './managed-availability.js';
 import {
@@ -91,7 +91,7 @@ import {
   pendingCountFromPayload,
   type NudgeWarning,
 } from './mcp-session-nudges.js';
-import { looksLikeAsAccessToken, verifyAsAccessToken } from '../oauth-tokens.js';
+import { looksLikeAsAccessToken, verifyAsAccessToken } from '../platform/oauth-tokens.js';
 import {
   canProposeTo,
   openProposal,
@@ -101,12 +101,12 @@ import {
 } from '../community/proposals.js';
 import { isProposerTurn, toPublicProposalState } from '../community/proposal-state.js';
 import type { SourceFile } from '../delivery/games-store.js';
-import type { ProposalBase } from '../store.js';
+import type { ProposalBase } from '../platform/store.js';
 import { seedPayload } from '../seed-status.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
-import { BUILD_STEPS, sanitizeCreatorText } from '../submission-status.js';
-import { dispatchAttempt, type Store, type SubmissionRecord } from '../store.js';
-import type { ContentChecker } from '../moderation.js';
+import { BUILD_STEPS, sanitizeCreatorText } from '../platform/submission-status.js';
+import { dispatchAttempt, type Store, type SubmissionRecord } from '../platform/store.js';
+import type { ContentChecker } from '../platform/moderation.js';
 import { logModerationRejection } from '../telemetry/moderation-metrics.js';
 
 /**

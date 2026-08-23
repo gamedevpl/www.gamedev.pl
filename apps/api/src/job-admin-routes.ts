@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { isAdminSession } from './admin-session.js';
+import { isAdminSession } from './platform/admin-session.js';
 import { hasPublishableProfile } from './creator-profile.js';
 import {
   detectStall,
@@ -10,7 +10,7 @@ import {
   type JobState,
 } from './job-state.js';
 import { isPublishableMode, type GamesStore } from './delivery/games-store.js';
-import { BOT_UID_PREFIX, type Store, type SubmissionRecord } from './store.js';
+import { BOT_UID_PREFIX, type Store, type SubmissionRecord } from './platform/store.js';
 
 /**
  * The operator's view of the build queue.

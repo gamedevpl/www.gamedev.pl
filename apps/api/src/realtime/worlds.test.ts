@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { buildApp } from '../app.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from '../auth.js';
-import type { ContentChecker } from '../moderation.js';
-import { InMemoryStore } from '../store.js';
+import { buildApp } from '../platform/app.js';
+import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
+import type { ContentChecker } from '../platform/moderation.js';
+import { InMemoryStore } from '../platform/store.js';
 import type { WorldSchema } from './world-schema.js';
 import type { WorldSchemaSource } from './world-source.js';
 

@@ -15,10 +15,10 @@ import {
   type TransitionActor,
 } from '../job-state.js';
 import type { KitFileStore } from '../agent-surface/kit-files.js';
-import { normalizeAtIntake } from '../localize-intake.js';
-import { sanitizeCreatorText } from '../submission-status.js';
-import type { Store, SubmissionRecord } from '../store.js';
-import { createTranslatorFromEnv, type Translator } from '../translate.js';
+import { normalizeAtIntake } from '../platform/localize-intake.js';
+import { sanitizeCreatorText } from '../platform/submission-status.js';
+import type { Store, SubmissionRecord } from '../platform/store.js';
+import { createTranslatorFromEnv, type Translator } from '../platform/translate.js';
 import {
   runTypecheckPreflight,
   sharedSourcesFromKitTree,

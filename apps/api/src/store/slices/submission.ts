@@ -1,5 +1,5 @@
 import { FieldValue, type Firestore } from '@google-cloud/firestore';
-import type { SubmissionStatus } from '../../submission-status.js';
+import type { SubmissionStatus } from '../../platform/submission-status.js';
 import type { SubmissionRecord } from '../records/submission.js';
 
 export interface SubmissionStore {

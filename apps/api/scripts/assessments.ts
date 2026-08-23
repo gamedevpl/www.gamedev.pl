@@ -17,7 +17,7 @@ import {
   resolveTarget,
 } from '../src/community/assessment-cli.js';
 import { applyResolution, prepareResolution, summarizeResolutions } from '../src/community/assessment-resolution.js';
-import { FirestoreStore } from '../src/store.js';
+import { FirestoreStore } from '../src/platform/store.js';
 
 function usage(): never {
   console.error(

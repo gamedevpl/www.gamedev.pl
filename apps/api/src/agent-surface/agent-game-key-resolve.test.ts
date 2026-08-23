@@ -12,8 +12,8 @@ import {
   resolveGameAgentKeyForStart,
   verifyDurableGameAgentKey,
 } from './agent-game-key-resolve.js';
-import type { SubmissionRecord } from '../store.js';
-import { InMemoryStore } from '../store.js';
+import type { SubmissionRecord } from '../platform/store.js';
+import { InMemoryStore } from '../platform/store.js';
 
 const secret = 'resolve-game-key-secret';
 const slug = 'comet-courier';

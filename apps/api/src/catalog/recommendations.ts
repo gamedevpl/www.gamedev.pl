@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { PublishedSlugGate } from './published-slugs.js';
 import { rankRecommendations, type RecommendGame, type RecommendScorecardSignals } from './recommend.js';
-import type { Scorecard, Store } from '../store.js';
+import type { Scorecard, Store } from '../platform/store.js';
 
 /**
  * Home-page catalog sorting signals: community popularity from scorecards + personal

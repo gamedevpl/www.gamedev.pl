@@ -26,7 +26,7 @@ import {
   type RemixStep,
   type WaitlistStep,
 } from '@gamedevpl/contract';
-import type { VisitEvent } from '../store.js';
+import type { VisitEvent } from '../platform/store.js';
 
 /**
  * Aggregates raw visit events into the funnel — the Stage 0 metrics of gtm-plan.md in the private www.gamedev.pl-ops repo.

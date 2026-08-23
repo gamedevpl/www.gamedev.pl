@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { buildApp } from './app.js';
-import { InMemoryStore, type TelemetryEvent } from './store.js';
+import { buildApp } from './platform/app.js';
+import { InMemoryStore, type TelemetryEvent } from './platform/store.js';
 import { buildScorecard, runScorecardSweep } from './scorecard.js';
 import { summarizeGameHealth } from './telemetry/telemetry-health.js';
-import type { InternalAuthVerifier } from './internal-auth.js';
+import type { InternalAuthVerifier } from './platform/internal-auth.js';
 import { MIN_FEEDBACK_FOR_THEMES, type FeedbackTheme, type ThemeExtractor } from './community/feedback-themes.js';
 
 const today = () => new Date().toISOString().slice(0, 10);

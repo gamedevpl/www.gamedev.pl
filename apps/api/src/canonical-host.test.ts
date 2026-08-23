@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildApp } from './app.js';
-import { InMemoryStore } from './store.js';
+import { buildApp } from './platform/app.js';
+import { InMemoryStore } from './platform/store.js';
 
 // Apex → www canonicalization. Cloud Run domain mappings can't 301, so the app
 // does it: with CANONICAL_HOST=www.gamedev.pl set, a request to the bare apex

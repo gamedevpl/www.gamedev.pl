@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { runDispatchReaperSweep, type RedispatchOutcome } from './dispatch-reaper.js';
-import { InMemoryStore } from './store.js';
+import { InMemoryStore } from './platform/store.js';
 
 const AT = Date.parse('2026-08-15T12:00:00.000Z');
 

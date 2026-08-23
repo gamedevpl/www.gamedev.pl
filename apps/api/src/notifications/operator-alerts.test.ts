@@ -6,7 +6,7 @@ import {
   FEEDBACK_STALL_MS,
   SEEDING_DEGRADED_WINDOW_MS,
 } from './operator-alerts.js';
-import type { JobSeedOutcome, SubmissionRecord } from '../store.js';
+import type { JobSeedOutcome, SubmissionRecord } from '../platform/store.js';
 
 const NOW = Date.parse('2026-07-30T12:00:00Z');
 const MINUTE = 60_000;

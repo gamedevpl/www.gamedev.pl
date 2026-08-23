@@ -5,13 +5,13 @@ import { OAuth2Client } from 'google-auth-library';
 import { z } from 'zod';
 import { resolveAccessTokenUser } from './access-token-service.js';
 import { isAdmin, isAdminSession } from './admin-session.js';
-import { isReviewer, isReviewerSession } from './community/review.js';
+import { isReviewer, isReviewerSession } from '../community/review.js';
 import { resolveAppleAccount } from './apple-account.js';
 import { createAppleAuthVerifierFromEnv, parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { readBearerToken } from './bearer.js';
-import { createMailerFromEnv } from './notifications/mailer.js';
-import { emitWaitlistJoined } from './notifications/notify.js';
-import { createPusherFromEnv } from './notifications/pusher.js';
+import { createMailerFromEnv } from '../notifications/mailer.js';
+import { emitWaitlistJoined } from '../notifications/notify.js';
+import { createPusherFromEnv } from '../notifications/pusher.js';
 import { withActiveDay, type Store, type User } from './store.js';
 import { normalizeLocale } from './translate.js';
 

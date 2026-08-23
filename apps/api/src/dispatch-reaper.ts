@@ -1,9 +1,9 @@
 // Retries a job whose dispatch died before recording a session.
 
 import type { FastifyInstance } from 'fastify';
-import type { InternalAuthVerifier } from './internal-auth.js';
+import type { InternalAuthVerifier } from './platform/internal-auth.js';
 import { DEFAULT_STALL_THRESHOLDS } from './job-state.js';
-import type { Store } from './store.js';
+import type { Store } from './platform/store.js';
 
 export interface RedispatchOutcome {
   outcome: 'retried' | 'exhausted' | 'skipped';

@@ -497,7 +497,7 @@ considerably:
 - 📋 **Digest** — a batched notification, not a new channel. `NotificationType`
   gains `game.digest` (weekly, per creator, batched across their games) and
   `game.suggestion`; both must pass the existing "would the user thank us?" test
-  recorded in [store.ts](../apps/api/src/store.ts). Delivery is the shipped
+  recorded in [store.ts](../apps/api/src/platform/store.ts). Delivery is the shipped
   in-app bell → email (with unsubscribe token) → Web Push chain.
   [notifications-plan.md](./notifications-plan.md) already reserves
   `submission.feedback_reply` for this loop; wire into that plan rather than
@@ -610,7 +610,7 @@ at all and feeds the only autonomous-eligible class.
 ### Phase IL-2 — Distill (aggregates + dashboard)
 
 - ✅ **Operator health view** — `GET /api/admin/telemetry/health?days=N`
-  ([admin.ts](../apps/api/src/admin.ts)) over a pure aggregator
+  ([admin.ts](../apps/api/src/platform/admin.ts)) over a pure aggregator
   ([telemetry-health.ts](../apps/api/src/telemetry/telemetry-health.ts)), rendered at the
   unlisted `#/health` route. Per game: sessions, bounces, median play time, median
   fps, stall rate, and grouped error messages, worst first.
@@ -717,7 +717,7 @@ at all and feeds the only autonomous-eligible class.
 
 - ✅ **Creator Studio** (`/studio`, #236): the creator's own shelf, build status, playtest
   and stats surface, with per-game play health from `/api/me/studio/health`.
-- ✅ **Weekly creator digest** (2026-07-28): [digest.ts](../apps/api/src/digest.ts) —
+- ✅ **Weekly creator digest** (2026-07-28): [digest.ts](../apps/api/src/platform/digest.ts) —
   `POST /api/internal/digest-sweep`, one notification per creator per ISO week, riding the
   existing notification seam so it reaches the bell, email and Web Push with no new
   delivery path.

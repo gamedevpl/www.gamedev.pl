@@ -20,7 +20,7 @@
 
 import type { GenAIClient } from 'genaicode';
 import { z } from 'zod';
-import { createVertexClient, type VertexGenerationConfig } from './agent-surface/genai.js';
+import { createVertexClient, type VertexGenerationConfig } from '../agent-surface/genai.js';
 
 /**
  * What kind of text is being rendered, which decides how the model is asked for it.

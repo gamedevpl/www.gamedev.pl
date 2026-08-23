@@ -172,8 +172,8 @@ secrets. Non-obvious caveats for running/testing locally:
   session. Real Google OAuth isn't available locally. To exercise the authenticated
   generate→assemble loop without Google, do what the tests do: `InMemoryStore.upsertUser(...)` +
   `mintSessionToken(uid, 'dev-session-secret-change-me')` and send it as the `gamedev_session`
-  cookie (see `apps/api/src/app.test.ts`). Dev uses `InMemoryStore` and that default session
-  secret (`apps/api/src/server.ts`, `auth.ts`).
+  cookie (see `apps/api/src/platform/app.test.ts`). Dev uses `InMemoryStore` and that default session
+  secret (`apps/api/src/platform/server.ts`, `auth.ts`).
 - Generated games render only in `<iframe sandbox="allow-scripts allow-pointer-lock">` with no `allow-same-origin`
   (`apps/web/src/GameFrame.tsx`) — the safety invariant. A produced game document is a
   self-contained `<!doctype html>` with inlined `<style>`/`<script>`.

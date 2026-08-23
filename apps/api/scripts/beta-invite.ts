@@ -12,7 +12,7 @@
 // --dry-run to preview the email and the approval it would make.
 
 import { Firestore } from '@google-cloud/firestore';
-import type { WaitlistEntry } from '../src/store.js';
+import type { WaitlistEntry } from '../src/platform/store.js';
 import { createMailerFromEnv, ConsoleMailer } from '../src/notifications/mailer.js';
 import { betaInviteMessage, normalizeLocale } from '../src/notifications/email-templates.js';
 

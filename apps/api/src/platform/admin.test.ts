@@ -11,8 +11,8 @@ import type {
   ScorecardsResponse,
   VisitsResponse,
 } from './admin.js';
-import type { CostReport } from './job-costs.js';
-import { runScorecardSweep } from './scorecard.js';
+import type { CostReport } from '../job-costs.js';
+import { runScorecardSweep } from '../scorecard.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 

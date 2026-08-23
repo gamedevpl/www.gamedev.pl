@@ -9,13 +9,13 @@ import {
 } from './agent-surface/agent-game-key.js';
 import { resolveGameAgentKeyForOpenRound } from './agent-surface/agent-game-key-resolve.js';
 import { mintAgentToken } from './agent-surface/agent-token.js';
-import { buildApp } from './app.js';
-import type { ContentChecker } from './moderation.js';
+import { buildApp } from './platform/app.js';
+import type { ContentChecker } from './platform/moderation.js';
 import type { GamesStore } from './delivery/games-store.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
 import { mintMcpSessionKey } from './agent-surface/mcp-session-key.js';
-import { InMemoryStore } from './store.js';
-import { mintToken } from './submission-token.js';
+import { InMemoryStore } from './platform/store.js';
+import { mintToken } from './platform/submission-token.js';
 
 const secret = 'open-round-test-secret';
 const OWNER = 'g:owner';

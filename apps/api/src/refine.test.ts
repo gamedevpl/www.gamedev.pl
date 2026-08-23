@@ -2,11 +2,11 @@ import type { FastifyInstance } from 'fastify';
 import { genaicode } from 'genaicode';
 import type { GenerationRequest } from 'genaicode';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildApp } from './app.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
-import { PatternChecker } from './moderation.js';
+import { buildApp } from './platform/app.js';
+import { mintSessionToken, SESSION_COOKIE_NAME } from './platform/auth.js';
+import { PatternChecker } from './platform/moderation.js';
 import { DEFAULT_REFINE_TIMEOUT_MS, StubSpecRefiner, VertexSpecRefiner } from './refine.js';
-import { InMemoryStore } from './store.js';
+import { InMemoryStore } from './platform/store.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 

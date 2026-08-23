@@ -1,4 +1,4 @@
-import type { SubmissionRecord } from '../store.js';
+import type { SubmissionRecord } from '../platform/store.js';
 
 /** Studio shelf ceiling — distinct games, not raw jobs. */
 export const MAX_OWNER_GAMES = 50;

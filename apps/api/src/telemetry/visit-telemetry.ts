@@ -20,8 +20,8 @@ import {
 } from '@gamedevpl/contract';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { rememberBounded } from '../bounded-map.js';
-import type { Store, VisitEvent } from '../store.js';
+import { rememberBounded } from '../platform/bounded-map.js';
+import type { Store, VisitEvent } from '../platform/store.js';
 
 /**
  * Visit telemetry intake — the write half of the funnel that play telemetry cannot see.
