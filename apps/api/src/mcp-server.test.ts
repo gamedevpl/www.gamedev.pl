@@ -2101,8 +2101,11 @@ declare const GameKit: { defineGame(): unknown };
     expect(batchMinted.isError).toBe(false);
     const batchStructured = batchMinted.structured as {
       uploads: Array<{ path: string; url: string; upload: string; maxBytes: number }>;
+      uploadScript?: string;
     };
     expect(batchStructured.uploads).toHaveLength(20);
+    expect(batchStructured.uploadScript).toContain('curl -H');
+    expect(batchStructured.uploadScript?.split(' && ')).toHaveLength(20);
 
     // Parallel concurrent PUT execution — verifies CAS retry resilience under 20-way concurrency
     const putResults = await Promise.all(

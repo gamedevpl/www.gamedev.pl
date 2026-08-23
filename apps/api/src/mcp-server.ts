@@ -632,7 +632,7 @@ const BEHAVIOURAL_CONTRACT = [
   // language they did not choose, which is the whole reason the field exists.
   "Write progress in the creator's language: when get_brief.locales[0] is not 'en', send report_progress with textLocalized and locale as well as the English text.",
   'Send a screenshot as soon as the game draws anything playable via screenshot_upload_url + curl --upload-file. There is no base64 screenshot tool — PNG bytes must never enter the model.',
-  'While iterating, deliver with mode=preview (no TRACE required). Prefer stage_upload_url ({ path } or { paths: [...] } batch) + curl --upload-file for new/rewritten paths when you have shell (bytes never re-enter the model; mint multiple URLs in one turn instead of looping). stage_source_file is the no-shell fallback. Prefer patch_source_file for edits — prefer old+new exact replace, or files: [{ path, old, new }, ...] to edit several files in one call; patch=unified diff also works (never re-emit a whole large render.ts/model.ts). To retire a path (an old game/*.ts module, or a hand-authored index.html/GAME.json field), call delete_source_file — staging empty content still delivers a live empty file, not a removal. Honour warnings.code=module_too_large by splitting before more feature work. Then submit_sources({ fromStaged:true, mode:"preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed so only changed paths need staging. Avoid one giant files[] payload. Only mode=publish needs TRACE/PLAYTEST and can go green.',
+  'While iterating, deliver with mode=preview (no TRACE required). Prefer batch stage_upload_url({ paths: [...] }) + curl --upload-file for new/rewritten paths when you have shell (bytes never re-enter the model; ALWAYS mint all URLs in a single call with paths: [...] rather than emitting multiple stage_upload_url calls; use stage_upload_url({ path }) only for a lone file). stage_source_file is the no-shell fallback. Prefer patch_source_file for edits — prefer old+new exact replace, or files: [{ path, old, new }, ...] to edit several files in one call; patch=unified diff also works (never re-emit a whole large render.ts/model.ts). To retire a path (an old game/*.ts module, or a hand-authored index.html/GAME.json field), call delete_source_file — staging empty content still delivers a live empty file, not a removal. Honour warnings.code=module_too_large by splitting before more feature work. Then submit_sources({ fromStaged:true, mode:"preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed so only changed paths need staging. Avoid one giant files[] payload. Only mode=publish needs TRACE/PLAYTEST and can go green.',
   'If the last gate was preview_failed / red / kit_outdated (warnings.code=must_fix_gate), fix then submit_sources again — do not stop at stage/patch/show_round. Staging does not re-run the gate; the creator card stays on the refused delivery until you submit.',
   'While iterating, run only npm run typecheck -- <slug> (no browser, npm ci, capture, playtest, or agency), then stage and submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }); the server verifies the preview. If a browser is available and the draft is approaching delivery, optionally run npm run check:game -- <slug> --preview (typecheck → smoke → build). Run the full gate only immediately before a mode:"publish" seal.',
   'After submit_sources, if you will not deliver more this round, call end (required — warnings.code=call_end; submit already unlocks creator handoff). Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. Do not stop after submit alone without end. If you are fixing a refused gate, ignore call_end until after the next submit_sources.',
@@ -672,7 +672,7 @@ const SESSION_WORKFLOW: readonly string[] = [
   'Capability and "how do I…" questions: check get_kit_api first for exact kit-API surface (signatures, module names). knowledge_query is for everything get_kit_api does not cover — EditorKit internals, example-game patterns, docs/process, and broader capability questions — with citations and an indexedCommit; treat its prose as a pointer to verify via get_kit_api / read_kit_file, not a source of truth for exact signatures.',
   'Build the game — continuing the sources you fetched, otherwise from the kit; report_progress before and after long steps. Soft module budget: keep each game/*.ts under ~350 lines / ~12 KiB. When a file approaches that, split cohesive pieces (render→art/ui/hud/rooms; model→tables/layout/types; runtime→systems) before more feature work. Honour warnings.code=module_too_large the same way you honour call_end — act, then continue.',
   'As soon as the game draws anything playable: screenshot_upload_url then curl --upload-file <png> "$url". There is no base64 send path — PNG bytes must never enter the model. Without shell egress, skip mid-build screenshots; the gate still captures on delivery.',
-  'While iterating: run only npm run typecheck -- <slug> locally, then prefer stage_upload_url({ path }) or batch stage_upload_url({ paths: [...] }) and curl --upload-file <file> "$url" for new/rewritten paths when you have shell egress (bytes never re-enter the model; mint multiple URLs in one call rather than looping single calls). Fall back to stage_source_file({ path, content }) without shell. For edits prefer patch_source_file({ path, old, new }) — exact unique substring replace, no unified-diff arithmetic. Or patch_source_file({ files: [{ path, old, new }, ...] }) to edit several files in one call. Or patch_source_file({ path, patch }) with a unified diff (bare @@ ok). Stage only changed paths — never re-upload the whole tree. Then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed and the server verifies it; no browser, npm ci, capture, playtest, or agency is required for this preview. If a browser is available near delivery, optionally run npm run check:game -- <slug> --preview. Run the full gate only immediately before a mode:"publish" seal. Inline files[] still works for tiny trees.',
+  'While iterating: run only npm run typecheck -- <slug> locally, then prefer batch stage_upload_url({ paths: [...] }) (or stage_upload_url({ path }) for a single lone file) and curl --upload-file <file> "$url" for new/rewritten paths when you have shell egress (bytes never re-enter the model; ALWAYS mint all URLs in one call with paths: [...] rather than looping or calling stage_upload_url multiple times). Fall back to stage_source_file({ path, content }) without shell. For edits prefer patch_source_file({ path, old, new }) — exact unique substring replace, no unified-diff arithmetic. Or patch_source_file({ files: [{ path, old, new }, ...] }) to edit several files in one call. Or patch_source_file({ path, patch }) with a unified diff (bare @@ ok). Stage only changed paths — never re-upload the whole tree. Then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed and the server verifies it; no browser, npm ci, capture, playtest, or agency is required for this preview. If a browser is available near delivery, optionally run npm run check:game -- <slug> --preview. Run the full gate only immediately before a mode:"publish" seal. Inline files[] still works for tiny trees.',
   'Staging is already visible: once game.ts, GAME.json and markup are present across staging + delivery/seed, the platform assembles a live playable preview — without waiting for submit or the gate. Markup means GAME.json howToPlay carrying goal and hint, from which the body is generated — index.html is never accepted as a stage/patch/submit write, so do not author one. style.css is optional the same way: a GAME.json theme (accent/canvasBackground/canvasBorderColor/pixelArt) generates it when none is staged. Stage a runnable tree early and keep staging/patching as you work; a buffer that does not compile simply leaves the previous preview up.',
   'After every successful submit_sources: creator handoff is already unlocked; still call end immediately if you will not deliver more (warnings.code=call_end). Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. submit alone leaves your MCP session open — end sets stop:true. ChatGPT-class agents often stop after submit; end closes the session cleanly.',
   // The thread is the creator's whole view of the round.
@@ -3776,6 +3776,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           expiresInSeconds: { type: 'number' },
           path: { type: 'string' },
           upload: { type: 'string' },
+          uploadScript: { type: 'string' },
           maxBytes: { type: 'number' },
           uploads: {
             type: 'array',
@@ -3795,12 +3796,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         },
       },
       // Not READS: each call mints a fresh nonce, so it is neither read-only nor idempotent.
-      annotations: { title: 'Get a stage upload URL', ...WRITES },
+      annotations: { title: 'Get stage upload URL(s)', ...WRITES },
       description:
         'Stage new or fully rewritten source file(s) when you have curl/shell egress. ' +
-        'Pass `path` for a single file or `paths` for multiple files in one call to mint upload URLs in batch. ' +
+        'ALWAYS mint all upload URLs in a single call: pass `paths: ["file1.ts", "file2.ts", ...]` for multiple files ' +
+        '(do NOT make multiple stage_upload_url calls in parallel or loop them). Pass `path` only for a lone single file. ' +
         'Returns short-lived signed PUT URL(s) — run the returned `upload` one-liner(s) ' +
-        '(curl --upload-file <file> "$url"). The file bytes never enter the model; the PUT applies the same ' +
+        '(curl --upload-file <file> "$url") or `uploadScript`. The file bytes never enter the model; the PUT applies the same ' +
         'validation as stage_source_file (path allowlist, size caps, module_too_large hint) and returns the ' +
         'staging receipt with stop/pendingMessages. Then submit_sources({ fromStaged: true, … }). ' +
         'Use stage_source_file / patch_source_file when you have no shell. ' +
@@ -3809,15 +3811,16 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         type: 'object',
         properties: {
           sessionKey: SESSION_KEY_PROP,
-          path: {
-            type: 'string',
-            description: 'Game-relative path (e.g. game.ts, game/render.ts). Bound into the URL. Pass path or paths.',
-          },
           paths: {
             type: 'array',
             items: { type: 'string' },
             description:
-              'Array of game-relative paths (e.g. ["game.ts", "game/render.ts"]) to mint multiple upload URLs in one call.',
+              'Array of game-relative paths (e.g. ["game.ts", "game/render.ts", "GAME.json"]). MANDATORY FOR MULTIPLE FILES: Always pass all changed files in this array in a single call to mint all URLs in batch. Never emit multiple stage_upload_url calls.',
+          },
+          path: {
+            type: 'string',
+            description:
+              'Single game-relative path (e.g. "game.ts"). Use ONLY when staging a single lone file; if staging multiple files, you MUST use paths instead.',
           },
           slug: { type: 'string' },
         },
@@ -3915,6 +3918,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
         return toolOk({
           uploads,
+          uploadScript: uploads.map((u) => u.upload).join(' && '),
           expiresAt,
           expiresInSeconds: ttlSeconds,
         });
