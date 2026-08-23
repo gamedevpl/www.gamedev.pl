@@ -576,6 +576,7 @@
     },
     "buildBar": {
       "starting": "Verification starting",
+      "roundInProgress": "Round in progress",
       "failed": "Check failed",
       "passed": "Checks passed",
       "eta": "usually ~{{minutes}} min",

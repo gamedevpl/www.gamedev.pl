@@ -584,6 +584,7 @@
     },
     "buildBar": {
       "starting": "Sprawdzanie się zaczyna",
+      "roundInProgress": "Runda w toku",
       "failed": "Sprawdzian niezaliczony",
       "passed": "Sprawdziany zaliczone",
       "eta": "zwykle ~{{minutes}} min",

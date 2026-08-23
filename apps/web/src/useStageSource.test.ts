@@ -6,14 +6,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useStageSource } from './useStageSource.js';
 import { getChannelPlayable, getSubmissionPreview } from './submissionApi.js';
 import type { SubmissionStatus } from './submissionApi.js';
+import { fetchPublishedGame } from './catalog.js';
 
 vi.mock('./submissionApi.js', async () => {
   const actual = await vi.importActual<typeof import('./submissionApi.js')>('./submissionApi.js');
   return { ...actual, getSubmissionPreview: vi.fn(), getChannelPlayable: vi.fn() };
 });
 
+vi.mock('./catalog.js', async () => {
+  const actual = await vi.importActual<typeof import('./catalog.js')>('./catalog.js');
+  return { ...actual, fetchPublishedGame: vi.fn() };
+});
+
 const mockedGetSubmissionPreview = vi.mocked(getSubmissionPreview);
 const mockedGetChannelPlayable = vi.mocked(getChannelPlayable);
+const mockedFetchPublishedGame = vi.mocked(fetchPublishedGame);
 
 function statusFor(slug: string, headSha: string): SubmissionStatus {
   return {
@@ -57,6 +64,7 @@ describe('useStageSource', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionPreview.mockReset();
     mockedGetChannelPlayable.mockReset();
+    mockedFetchPublishedGame.mockReset();
   });
 
   afterEach(() => {
@@ -198,6 +206,23 @@ describe('useStageSource', () => {
     expect(mockedGetSubmissionPreview).toHaveBeenCalledWith('token-a', 'v-old');
     expect(latest().rawHtml).toBe('<p>historical-version-old</p>');
     expect(latest().origin).toMatchObject({ kind: 'staged', versionLabel: 'v-old' });
+    root.unmount();
+  });
+
+  it('falls back to the last published build while a new round has not delivered anything yet', async () => {
+    mockedFetchPublishedGame.mockResolvedValue({ slug: 'sky-dodge', title: 'Sky Dodge', html: '<p>live</p>' });
+
+    const { render, latest, root } = probe();
+    await render('token-a', { status: 'dispatched', slug: 'sky-dodge' } as unknown as SubmissionStatus);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockedFetchPublishedGame).toHaveBeenCalledWith('sky-dodge');
+    expect(latest().rawHtml).toBe('<p>live</p>');
+    expect(latest().origin.kind).toBe('delivered');
+
     root.unmount();
   });
 });

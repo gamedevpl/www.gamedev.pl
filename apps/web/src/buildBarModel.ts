@@ -27,10 +27,21 @@ export function medianGateMinutes(builds: readonly RecentBuild[] | undefined): n
   return Math.max(1, Math.round(ms / 60_000));
 }
 
-export function buildBarModel(status: SubmissionStatus | null | undefined, t: (key: string) => string): BuildBarModel | null {
+export function buildBarModel(
+  status: SubmissionStatus | null | undefined,
+  t: (key: string) => string,
+): BuildBarModel | null {
   const latest = status?.recentBuilds?.[0];
   if (!latest) return null;
   const eta = medianGateMinutes(status?.recentBuilds);
+
+  if (
+    typeof status?.issueNumber === 'number' &&
+    typeof latest.issueNumber === 'number' &&
+    latest.issueNumber !== status.issueNumber
+  ) {
+    return { state: 'starting', fraction: null, label: t('studioPanel.buildBar.roundInProgress'), etaMinutes: eta };
+  }
 
   if (latest.verdict === 'pending') {
     const gate = status?.gateProgress;
@@ -50,7 +61,8 @@ export function buildBarModel(status: SubmissionStatus | null | undefined, t: (k
   if (latest.verdict === 'red') {
     // Frozen where it died: early is ours, late is theirs.
     const total = latest.total ?? null;
-    const fraction = total && typeof latest.failedIndex === 'number' ? Math.min(1, (latest.failedIndex + 1) / total) : 1;
+    const fraction =
+      total && typeof latest.failedIndex === 'number' ? Math.min(1, (latest.failedIndex + 1) / total) : 1;
     return { state: 'red', fraction, label: t('studioPanel.buildBar.failed'), etaMinutes: null };
   }
 

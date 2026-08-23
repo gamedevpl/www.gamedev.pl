@@ -133,6 +133,8 @@ export interface SubmissionStatusResponseBase {
   status: SubmissionState;
   // Finer than status; absent for GitHub-derived submissions.
   phase?: JobState;
+  // This round's own job id, distinct from slug-scoped `recentBuilds[0]`.
+  issueNumber?: number;
   slug?: string;
   // 'remix' means a private save-as-yours fork that never gates.
   draftOrigin?: 'remix';

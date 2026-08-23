@@ -251,9 +251,12 @@ export function useStageSource(
   }, [preview, status?.playable, token, channelRetryTick]);
 
   // Once the game has published, the stage shows the delivered build itself — the
-  // same document a player sees — rather than a stale staged/channel copy.
+  // same document a player sees — rather than a stale staged/channel copy. Fetched
+  // whenever a slug exists, not only while the round is currently `published`: an
+  // improvement round on an already-live game keeps this as the fallback under the
+  // "building" card, instead of the stage going blank the moment a new round opens.
   useEffect(() => {
-    const slug = status?.status === 'published' ? status.slug : undefined;
+    const slug = status?.slug;
     if (!slug) return;
     if (loadedPublishedSlugRef.current === slug || publishedInFlightRef.current) return;
 
@@ -299,7 +302,7 @@ export function useStageSource(
       ? (published?.html ?? null)
       : showChannel
         ? channel!.html
-        : (preview?.html ?? channel?.html ?? null);
+        : (preview?.html ?? channel?.html ?? published?.html ?? null);
   const html = rawHtml ? embedGameHtml(withGameLocale(rawHtml, i18n.language)) : null;
 
   let origin: StageOrigin = NONE_ORIGIN;
@@ -313,6 +316,8 @@ export function useStageSource(
     origin = { kind: 'staged', at: preview.at, versionLabel: null };
   } else if (channel) {
     origin = { kind: 'staged', at: channel.at, versionLabel: channel.label };
+  } else if (published) {
+    origin = { kind: 'delivered', at: null, versionLabel: null };
   } else if (status && !status.preview && !status.playable?.length) {
     origin = NONE_ORIGIN;
   }
