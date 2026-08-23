@@ -13,14 +13,12 @@ export function stripPlaytestContext(text: string): string {
   const marker = text.indexOf(PLAYTEST_CONTEXT_HEADER);
   return marker === -1 ? text : text.slice(0, marker).trimEnd();
 }
-
 export type TranscriptEntry = {
   kind: 'creator_request' | 'agent_note' | 'build_progress';
   text: string;
   createdAt: string;
   round: 'current' | 'earlier';
 };
-
 // Rounds of the same game read into the transcript, current round included.
 export const MAX_TRANSCRIPT_ROUNDS = 6;
 // Per-round read ceiling — both lists return newest-first only.

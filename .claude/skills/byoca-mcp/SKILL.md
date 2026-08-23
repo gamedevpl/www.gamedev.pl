@@ -33,8 +33,8 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
    base64 `send_screenshot` — PNG bytes must never enter the model. Without shell
    egress, skip mid-build screenshots; the gate still captures on delivery
 3. Prefer staging then `submit_sources({ fromStaged: true, mode, kitEngineRef })`
-   - **New/full rewrite with shell:** `stage_upload_url({ path })` or batch `stage_upload_url({ paths: [...] })` then
-     `curl --upload-file <file> "$url"` — bytes never re-enter the model; mint multiple URLs in one turn instead of looping
+   - **New/full rewrite with shell:** batch `stage_upload_url({ paths: [...] })` (or `stage_upload_url({ path })` for a single lone file) then
+     `curl --upload-file <file> "$url"` — bytes never re-enter the model; ALWAYS mint URLs in batch with `paths: [...]` up to 50 paths per call (chunking into batches of 50 if staging more), rather than looping or emitting multiple stage_upload_url calls per file
    - **New/full rewrite without shell:** `stage_source_file({ path, content })`
    - **Edits:** prefer `patch_source_file({ path, old, new })` (exact unique substring
      replace — no diff format), or `patch_source_file({ path, patches: [{ old, new }, ...] })`

@@ -313,9 +313,7 @@ describe('loadBuildTranscript', () => {
       job(i + 1, `2026-08-${String(i + 10).padStart(2, '0')}T00:00:00.000Z`),
     );
     const store = fakeStore({ submissions: [current, ...siblings] });
-
     const page = await loadBuildTranscript(store, current);
-
     expect(page).not.toHaveProperty('truncatedAtSource');
   });
 
@@ -328,9 +326,7 @@ describe('loadBuildTranscript', () => {
       true,
     );
     const store = fakeStore({});
-
     const page = await loadBuildTranscript(store, current);
-
     expect(page.entries).toEqual([
       expect.objectContaining({ kind: 'agent_note', text: 'Evidence brief: players stall at level 2.' }),
     ]);
