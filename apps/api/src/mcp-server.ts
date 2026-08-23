@@ -3828,6 +3828,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
+        if (!agentTokenSecret) return toolErr('the MCP build endpoint is not configured');
         const hasPath = typeof args.path === 'string' && args.path.trim().length > 0;
         const hasPaths = Array.isArray(args.paths) && args.paths.length > 0;
         if ((!hasPath && !hasPaths) || (hasPath && hasPaths)) {
