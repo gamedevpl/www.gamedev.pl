@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { FieldValue, Firestore } from '@google-cloud/firestore';
 import type { AssessmentSource, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
 import type { AgentTaskState } from './agent-state.js';
@@ -6,18 +5,33 @@ import type { SeedFiles } from './agent-backend.js';
 import type { BuilderKind } from './builder.js';
 import type { PublicationHealthCheck, PublicationRecord } from './games-store.js';
 import type { AvatarMode } from './creator-profile.js';
-import {
-  nextRoundGeneration,
-  transitionClosesRound,
-  type AgentSessionTokens,
-  type JobTransition,
-} from './job-state.js';
-import { isSweepActive } from './sweep-scope.js';
+import type { AgentSessionTokens, JobTransition } from './job-state.js';
 import type { ProposalState } from './proposal-state.js';
 import type { BuildEvent, SubmissionStatus } from './submission-status.js';
 import type { PublicationStore } from './store/slices/publication.js';
 export type { PublicationStore };
 import { InMemoryPublicationStore, FirestorePublicationStore } from './store/slices/publication.js';
+import type { RoundsStore } from './store/slices/rounds.js';
+export type { RoundsStore };
+import { InMemoryRoundsStore, FirestoreRoundsStore } from './store/slices/rounds.js';
+import type { RoundBudgetStore } from './store/slices/round-budget.js';
+export type { RoundBudgetStore };
+import { InMemoryRoundBudgetStore, FirestoreRoundBudgetStore } from './store/slices/round-budget.js';
+import type { DispatchStore } from './store/slices/dispatch.js';
+export type { DispatchStore };
+import { InMemoryDispatchStore, FirestoreDispatchStore } from './store/slices/dispatch.js';
+import type { SubmissionStore } from './store/slices/submission.js';
+export type { SubmissionStore };
+import { InMemorySubmissionStore, FirestoreSubmissionStore } from './store/slices/submission.js';
+import type { SubmissionQueryStore } from './store/slices/submission-queries.js';
+export type { SubmissionQueryStore };
+import { InMemorySubmissionQueryStore, FirestoreSubmissionQueryStore } from './store/slices/submission-queries.js';
+import type { BuildLogStore } from './store/slices/build-log.js';
+export type { BuildLogStore };
+import { InMemoryBuildLogStore, FirestoreBuildLogStore } from './store/slices/build-log.js';
+import type { BuildMediaStore } from './store/slices/build-media.js';
+export type { BuildMediaStore };
+import { InMemoryBuildMediaStore, FirestoreBuildMediaStore } from './store/slices/build-media.js';
 
 /**
  * Uid namespace for automation accounts (docs/agent-access-tokens.md).
@@ -217,391 +231,20 @@ export interface AccountErasureStore {
   deleteAccountIdentity(uid: string, at: string): Promise<AccountIdentityDeletionResult>;
 }
 
-export interface RoundsStore {
-  /**
-   * Advances `roundGeneration` without a state change — used when a new round starts
-   * (creator feedback / operator retry) so the mint that follows binds to the new
-   * generation. Returns the new value, or null when the job is gone.
-   */
-  bumpRoundGeneration(issueNumber: number): Promise<number | null>;
-
-  /**
-   * Returns the job's active generation, initializing it to `1` when absent.
-   *
-   * Used when minting a round-scoped channel token for a legacy job that has never
-   * closed a round under the new model: the mint must write the field it claims, or
-   * validation rejects the brand-new key (`active === undefined`).
-   */
-  ensureRoundGeneration(issueNumber: number): Promise<number | null>;
-
-  // Clears stale agentEndedAt/lastAgentSignalAt/lastAgentPresence without touching round counters.
-  clearAgentEnded(issueNumber: number): Promise<void>;
-
-  // Fixes the round's kit engine and returns it; first caller wins.
-  // `replace` overrides the pin: kit_outdated recovery, or a kit gone.
-  pinRoundKitEngineRef(issueNumber: number, engineRef: string, replace?: boolean): Promise<string | null>;
-
-  /** Records the agent backend's last reported state, for stall detection. */
-  setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void>;
-
-  /**
-   * Records which builder owns the current round and updates the game's default.
-   * Starting a new round also resets per-round counters (deliveries, stored seed).
-   */
-  setRoundBuilder(issueNumber: number, builder: BuilderKind, options?: { resetRoundBudget?: boolean }): Promise<void>;
-
-  requestBuilderHandoff(
-    issueNumber: number,
-    to: BuilderKind,
-    requestedAt: string,
-    awaitsAgentAck?: boolean,
-  ): Promise<boolean>;
-
-  acknowledgeBuilderHandoff(issueNumber: number, acknowledgedAt: string): Promise<BuilderHandoff | null>;
-
-  clearBuilderHandoff(issueNumber: number): Promise<void>;
-
-  /** Stores (or clears) the generated seed draft on a self-build job. */
-  setSubmissionSeed(issueNumber: number, seed: SeedFiles | null): Promise<void>;
-
-  /** Marks seed generation pending / unavailable (available is set via {@link setSubmissionSeed}). */
-  setSeedStatus(issueNumber: number, status: 'pending' | 'unavailable'): Promise<void>;
-
-  // Increments and returns how many seed regenerations this job has asked for.
-  incrementSeedRegenerations(issueNumber: number): Promise<number>;
-
-  /** Increments and returns the per-round sources-delivery count. */
-  incrementRoundDeliveryCount(issueNumber: number): Promise<number>;
-
-  // Bump typecheck-preflight refusal count for this round.
-  incrementRoundTypecheckPreflightRefusals(issueNumber: number): Promise<number>;
-
-  // Store or clear bypass diagnostics after the refusal cap.
-  setRoundTypecheckPreflightBypassErrors(issueNumber: number, message: string | null): Promise<void>;
-
-  // Bump submit attempts (every deliver call that reaches preflight).
-  incrementRoundSubmitAttempts(issueNumber: number): Promise<number>;
-
-  // Bump audio or symbols preflight refusal count.
-  incrementRoundPreflightRefusal(issueNumber: number, kind: 'audio' | 'symbols'): Promise<number>;
-
-  // Record that a gate metric was logged for this version/status key.
-  setRoundLastGateMetricKey(issueNumber: number, key: string): Promise<void>;
-}
-
-export interface DispatchStore {
-  /**
-   * Moves a job to `transition.to`, stamping `stateSince` and appending to the history.
-   *
-   * Callers decide *whether* to move (the rules live in job-state.ts); this only records
-   * the decision. Returns false when the record is gone, so a caller can tell a no-op
-   * from a write. Round-closing transitions also bump `roundGeneration` in the same
-   * write (see `transitionClosesRound`).
-   */
-  recordJobTransition(issueNumber: number, transition: JobTransition): Promise<boolean>;
-
-  /** Appends a dispatch ref, recording which backend is building this job and where. */
-  recordDispatch(
-    issueNumber: number,
-    dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string; credentialRef?: string },
-  ): Promise<void>;
-
-  /**
-   * Appends one billed thing to a job's ledger. Best-effort by contract: a cost that
-   * fails to record must never fail the work it was recording, because the alternative
-   * is dropping a build to keep the books.
-   */
-  recordJobCost(issueNumber: number, entry: JobCostEntry): Promise<void>;
-
-  /**
-   * Records what a seeded build's draft achieved. Written once, after dispatch, because
-   * that is the first moment both halves are known: the generator says whether it
-   * compiles, and only the backend can say whether it was placed.
-   */
-  recordSeedOutcome(issueNumber: number, outcome: JobSeedOutcome): Promise<void>;
-
-  /**
-   * Every seed outcome recorded at or after `since`, newest first.
-   *
-   * Its own query rather than a filter over `listActiveSubmissions`, because that set
-   * drops published jobs — and a *successful* seed is exactly the one whose job is most
-   * likely to have published within the window. Reading the alert off that set would
-   * quietly hide the successes and report degradation that is not happening.
-   */
-  listSeedOutcomesSince(since: string): Promise<JobSeedOutcome[]>;
-
-  /**
-   * Overwrites the credits on an existing `agent_session` ledger entry identified by
-   * `ref`, once the vendor has reported real usage. No-op when no matching entry exists.
-   * Best-effort like {@link recordJobCost}: must never fail the poll that discovered it.
-   */
-  setJobCostCredits(issueNumber: number, ref: string, credits: number): Promise<void>;
-
-  // Token-billed twin of setJobCostCredits; drops the credit placeholder.
-  setJobCostTokens(issueNumber: number, ref: string, tokens: AgentSessionTokens): Promise<void>;
-
-  /**
-   * Records where a dispatched job's work actually lives, once the backend can say.
-   *
-   * Deliberately not `recordDispatch`: that appends a session ref, and the ref list is
-   * how many agent sessions a build has cost. Learning the branch is not another
-   * session, and counting it as one would inflate every per-build cost figure.
-   */
-  setDispatchWorkspace(issueNumber: number, workspace: string): Promise<void>;
-
-  /**
-   * Forgets a released seed branch, so nothing tries to delete it twice.
-   *
-   * The record is what a later release path reads, so leaving a deleted branch on it
-   * would have the job asking GitHub to delete the same ref on every poll — a 404 loop
-   * against the one credential that also dispatches.
-   */
-  clearDispatchSeedWorkspace(issueNumber: number): Promise<void>;
-
-  /**
-   * Allocates a job id of our own.
-   *
-   * Job identity used to be a GitHub issue number, which meant creating a work item in
-   * someone else's system before we could name our own job — and made every store key,
-   * every token and the whole build channel depend on that call succeeding.
-   *
-   * Ids stay numeric so none of that has to change; only their *source* moves. They are
-   * allocated from {@link JOB_ID_FLOOR} upward, well clear of any real issue number, so
-   * the two eras are distinguishable by value alone: below the floor is a legacy
-   * issue-keyed job, at or above it is one of ours. That is what lets both be served
-   * side by side without a migration or a discriminator column.
-   */
-  allocateJobId(): Promise<number>;
-
-  claimDispatchReaperAttempt(issueNumber: number, at: string): Promise<boolean>;
-}
-
-export interface SubmissionStore {
-  createSubmission(issueNumber: number, ownerUid: string, title: string): Promise<SubmissionRecord>;
-
-  getSubmission(issueNumber: number): Promise<SubmissionRecord | null>;
-
-  setSubmissionNotifiedStatus(issueNumber: number, status: SubmissionStatus): Promise<void>;
-
-  /** Records the status last derived from GitHub, whether or not it notified anyone. */
-  setSubmissionLastStatus(issueNumber: number, status: SubmissionStatus): Promise<void>;
-
-  /** Records the game directory a submission is building, once it is known. */
-  setSubmissionSlug(issueNumber: number, slug: string): Promise<void>;
-
-  /**
-   * Updates the name shown on the shelf, in the studio, and in notifications.
-   *
-   * The creator confirms a title at submission, but games that predate that step were
-   * named by truncating the prompt — "A game tycoon like where I run a tv busi" — and
-   * that string stuck even after the agent wrote a real title into SPEC.md. Delivery
-   * (and the operator backfill) adopt the SPEC title so the shelf matches the game.
-   */
-  setSubmissionTitle(issueNumber: number, title: string): Promise<void>;
-
-  /** Records the candidate version a delivery just stored, for the preview to read. */
-  setSubmissionDeliveredVersion(issueNumber: number, version: string): Promise<void>;
-
-  /** Latest playable version for Studio (preview or publish). */
-  setSubmissionPreviewVersion(issueNumber: number, version: string): Promise<void>;
-
-  /** Counts a send-back for finishing without delivering. Returns the new total. */
-  recordDeliveryNudge(issueNumber: number): Promise<number>;
-
-  /** Stamps the moment a submission was first seen published (for build-time stats). */
-  setSubmissionPublishedAt(issueNumber: number, at: string): Promise<void>;
-
-  /** Marks a submission abandoned by its creator. */
-  setSubmissionAbandoned(issueNumber: number, at: string): Promise<void>;
-
-  /** Turns the creator's shared draft link on (a timestamp) or off (null). */
-  setDraftShared(issueNumber: number, at: string | null): Promise<void>;
-
-  /** Records the creator's language, so the agent can report progress in it. */
-  setSubmissionLocale(issueNumber: number, locale: string): Promise<void>;
-
-  /** Records how many QA answers reached the agent with this submission. */
-  setSubmissionClarificationCount(issueNumber: number, count: number): Promise<void>;
-
-  /**
-   * Persists the concept the agent will build from (brief.spec / brief.qa).
-   * Written once at submission create; not cleared on round boundaries — the
-   * game's brief is the job's brief for its whole life.
-   */
-  setSubmissionBrief(
-    issueNumber: number,
-    brief: { spec: string; qa: string[]; specIsSystemGenerated?: boolean },
-  ): Promise<void>;
-
-  /** Most recently published submissions, newest first — the build-time sample. */
-  listRecentlyPublished(limit: number): Promise<SubmissionRecord[]>;
-
-  /**
-   * Resolves a slug back to its submission — the lookup behind shareable draft
-   * links. Returns null for a slug no submission has claimed.
-   *
-   * **Newest first when more than one job claims the slug**, which is now the normal
-   * case rather than a curiosity: an improvement is a new job on an existing game, so a
-   * published game plus an in-flight improvement is two submissions with one slug.
-   */
-  getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null>;
-
-  /**
-   * Every submission that claims this slug, newest first. A published game plus an
-   * in-flight improvement is the normal case — two jobs, one slug.
-   */
-  listSubmissionsBySlug(slug: string): Promise<SubmissionRecord[]>;
-
-  /**
-   * The *published* submission for a slug, ignoring in-flight work on the same game.
-   *
-   * Separate from the lookup above because "who owns this game" and "what is the latest
-   * job touching it" stopped being the same question the moment improvements became new
-   * jobs. Asking the newest for ownership would mean a game with an improvement running
-   * reads as unpublished — and anything that treats unpublished as "no longer live"
-   * would quietly retract work it had just commissioned.
-   */
-  getPublishedSubmissionBySlug(slug: string): Promise<SubmissionRecord | null>;
-
-  /**
-   * Submissions the sweep should still check: those not yet in a terminal,
-   * already-notified state (published / needs_changes recorded as last-notified).
-   */
-  listActiveSubmissions(): Promise<SubmissionRecord[]>;
-
-  /**
-   * Submissions a creator can still see that have no slug — the backfill's work list.
-   *
-   * Every submission has been given a slug at creation since the studio started
-   * addressing games by name, so this is legacy records plus anything that crashed in
-   * the window between the record being written and its slug being set. Oldest first,
-   * so a bounded run works through the backlog in a stable order.
-   *
-   * Abandoned builds are left out deliberately. The shelf hides them, so they are never
-   * addressed by anyone, and minting names for them would reserve every one against the
-   * games that might want it later.
-   */
-  listSubmissionsMissingSlug(): Promise<SubmissionRecord[]>;
-
-  /**
-   * Delivered (or published) games whose shelf title may still be the truncated prompt
-   * from before the naming step — the title-backfill's work list.
-   *
-   * A delivery writes the SPEC title onto the record now, so this is the backlog of
-   * games that arrived before that. Needs a slug and a delivered version so the SPEC
-   * can be read from the games store. Abandoned builds are left out for the same
-   * reason as {@link listSubmissionsMissingSlug}.
-   */
-  listSubmissionsWithDelivery(): Promise<SubmissionRecord[]>;
-
-  /**
-   * Every submission a creator owns, newest first. Backs the "my games" rail, so a
-   * creator finds their work-in-progress without having saved the tracking link
-   * (and on a device that never had it in localStorage).
-   *
-   * Omit `limit` to read the full job history; shelf endpoints collapse to distinct
-   * games before applying their own ceiling — a raw job limit is not a game limit.
-   */
-  listSubmissionsByOwner(ownerUid: string, opts?: { limit?: number }): Promise<SubmissionRecord[]>;
-
-  listQueuedSubmissions(): Promise<SubmissionRecord[]>;
-}
-
-export interface BuildLogStore {
-  /** Appends a progress event. Returns it with its assigned id and timestamp. */
-  appendBuildEvent(
-    issueNumber: number,
-    event: Omit<BuildEvent, 'id' | 'createdAt'> & { createdAt?: string },
-    options?: { preserveEnded?: boolean },
-  ): Promise<BuildEvent>;
-
-  /**
-   * Refreshes {@link SubmissionRecord.lastAgentSignalAt} without writing a chat event.
-   * Used by MCP presence heartbeats so kit-browse activity clears `no_agent_yet` / quiet
-   * stalls without stuffing "Browsing the Creator Kit…" into the Studio thread.
-   * When `presence` is set, also stores a short-lived thought key for the Studio bar.
-   * Clears `agentEndedAt` unless `options.preserveEnded` — gate-poll presence must not
-   * relock self→platform handoff after submit auto-end.
-   */
-  touchLastAgentSignalAt(
-    issueNumber: number,
-    at?: string,
-    presence?: { key: string },
-    options?: { preserveEnded?: boolean },
-  ): Promise<void>;
-
-  /**
-   * Marks that the agent finished iterating this round (MCP `end`). Idempotent.
-   * Does not bump generation or stop the channel — creator handoff does that.
-   */
-  markAgentEnded(issueNumber: number, at?: string, by?: AgentEndedBy): Promise<void>;
-
-  /** Agent progress events for a build, newest first. */
-  listBuildEvents(issueNumber: number, opts?: { limit?: number }): Promise<BuildEvent[]>;
-
-  /** How many events a build has recorded — the cap that bounds a runaway agent. */
-  countBuildEvents(issueNumber: number): Promise<number>;
-
-  /** Stores a screenshot the agent pushed straight to us, before any commit. */
-  appendBuildShot(
-    issueNumber: number,
-    shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string },
-  ): Promise<BuildShot>;
-
-  /** A build's pushed screenshots, newest first. Bytes are omitted unless asked for. */
-  listBuildShots(issueNumber: number, opts?: { limit?: number }): Promise<BuildShotSummary[]>;
-
-  /** One pushed screenshot, bytes included — the read behind serving it. */
-  getBuildShot(issueNumber: number, id: string): Promise<BuildShot | null>;
-
-  /** How many screenshots a build has pushed — the cap that bounds a runaway agent. */
-  countBuildShots(issueNumber: number): Promise<number>;
-
-  appendBuildPreview(
-    issueNumber: number,
-    preview: Omit<BuildPreview, 'id' | 'createdAt'> & { createdAt?: string },
-  ): Promise<BuildPreview>;
-
-  listBuildPreviews(issueNumber: number, opts?: { limit?: number }): Promise<BuildPreviewSummary[]>;
-
-  getBuildPreview(issueNumber: number, id: string): Promise<BuildPreview | null>;
-
-  countBuildPreviews(issueNumber: number): Promise<number>;
-
-  /** Drops all but the newest `keep` previews, returning how many were removed. */
-  pruneBuildPreviews(issueNumber: number, keep: number): Promise<number>;
-
-  /**
-   * Queues a creator change request for the agent to collect. `origin` records who
-   * typed it — omit it for the Studio composer, pass `agent` when an agent relayed the
-   * request on the creator's behalf (@see CreatorMessage.origin).
-   *
-   * `delivered` writes it already collected, for a request the agent is receiving by
-   * another route — a new improvement round, whose brief already *is* this text. It
-   * still belongs in the thread (it is what the creator asked for), but queueing it
-   * would hand the agent the same instruction twice: once as its brief, once as a
-   * pending note that reads like something new to act on.
-   */
-  appendCreatorMessage(
-    issueNumber: number,
-    text: string,
-    opts?: { origin?: CreatorMessageOrigin; delivered?: boolean; textLocalized?: string; locale?: string },
-  ): Promise<CreatorMessage>;
-
-  // Undelivered messages, oldest first — the agent's inbox. Never a 'studio' row.
-  listPendingCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
-
-  /**
-   * Every creator message on a build, delivered or not, oldest first. The status page
-   * reads this to echo the creator's own revision history back to them: on jobs without
-   * a pull request there is no comment thread to re-read it from, so the store copy is
-   * the only durable record of what they asked for.
-   */
-  listCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
-
-  /** Marks messages collected, so the agent is not handed the same request twice. */
-  markCreatorMessagesDelivered(issueNumber: number, ids: string[]): Promise<void>;
-}
+// RoundsStore, InMemoryRoundsStore and FirestoreRoundsStore live in
+// ./store/slices/rounds.js; RoundBudgetStore and its implementations live in
+// ./store/slices/round-budget.js (Phase 2 wave 4).
+
+// DispatchStore, InMemoryDispatchStore and FirestoreDispatchStore live in
+// ./store/slices/dispatch.js -- imported at the top of the file (Phase 2 wave 4).
+
+// SubmissionStore and SubmissionQueryStore, their InMemory and Firestore
+// implementations, live in ./store/slices/submission.js and
+// ./store/slices/submission-queries.js (Phase 2 wave 4).
+
+// BuildLogStore and BuildMediaStore, their InMemory and Firestore
+// implementations, live in ./store/slices/build-log.js and
+// ./store/slices/build-media.js (Phase 2 wave 4).
 
 // PublicationStore, InMemoryPublicationStore and FirestorePublicationStore live in
 // ./store/slices/publication.js -- imported at the top of the file (Phase 2 wave 4).
@@ -653,9 +296,12 @@ export interface Store
     IdentityStore,
     AccountErasureStore,
     RoundsStore,
+    RoundBudgetStore,
     DispatchStore,
     SubmissionStore,
+    SubmissionQueryStore,
     BuildLogStore,
+    BuildMediaStore,
     PublicationStore,
     GameSlugsStore,
     TelemetryStore,
@@ -674,22 +320,20 @@ export interface Store
     OAuthStore {}
 
 // compareSuggestions moved to ./store/slices/contribution.js; emptyUsageCounters moved
-// to ./store/slices/quota.js (Phase 2 wave 4). Neither is used elsewhere in this file.
-
-/** Newest first, with the id as a stable tie-break for same-millisecond events. */
-function byNewestFirst(a: { createdAt: string; id: string }, b: { createdAt: string; id: string }): number {
-  return b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id);
-}
+// to ./store/slices/quota.js; byNewestFirst moved to ./store/slices/build-log.js
+// (Phase 2 wave 4). None is used elsewhere in this file.
 
 export class InMemoryStore implements Store {
   private identityStore = new InMemoryIdentityStore();
   private submissions = new Map<number, SubmissionRecord>();
   private publicationStore = new InMemoryPublicationStore();
-  private nextJobId = JOB_ID_FLOOR;
-  private buildEvents = new Map<number, BuildEvent[]>();
-  private buildShots = new Map<number, BuildShot[]>();
-  private buildPreviews = new Map<number, BuildPreview[]>();
-  private creatorMessages = new Map<number, CreatorMessage[]>();
+  private roundsStore = new InMemoryRoundsStore(this.submissions);
+  private roundBudgetStore = new InMemoryRoundBudgetStore(this.submissions);
+  private dispatchStore = new InMemoryDispatchStore(this.submissions);
+  private submissionStore = new InMemorySubmissionStore(this.submissions);
+  private submissionQueryStore = new InMemorySubmissionQueryStore(this.submissions);
+  private buildLogStore = new InMemoryBuildLogStore(this.submissions);
+  private buildMediaStore = new InMemoryBuildMediaStore();
   private quotaStore = new InMemoryQuotaStore((uid) => this.identityStore.getUser(uid));
   private globalQuotaStore = new InMemoryGlobalQuotaStore();
   private accessStore = new InMemoryAccessStore();
@@ -844,117 +488,31 @@ export class InMemoryStore implements Store {
   }
 
   async createSubmission(issueNumber: number, ownerUid: string, title: string): Promise<SubmissionRecord> {
-    const createdAt = new Date().toISOString();
-    const record: SubmissionRecord = {
-      issueNumber,
-      ownerUid,
-      createdAt,
-      title,
-      // New jobs are generation-scoped from the first mint; legacy records created
-      // before this field existed stay unset until their current round closes.
-      roundGeneration: 1,
-      roundStartedAt: createdAt,
-    };
-    this.submissions.set(issueNumber, record);
-    return { ...record };
+    return this.submissionStore.createSubmission(issueNumber, ownerUid, title);
   }
 
   async getSubmission(issueNumber: number): Promise<SubmissionRecord | null> {
-    const sub = this.submissions.get(issueNumber);
-    return sub ? { ...sub } : null;
+    return this.submissionStore.getSubmission(issueNumber);
   }
 
   async setSubmissionNotifiedStatus(issueNumber: number, status: SubmissionStatus): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (sub) this.submissions.set(issueNumber, { ...sub, lastNotifiedStatus: status });
+    return this.submissionStore.setSubmissionNotifiedStatus(issueNumber, status);
   }
 
   async setSubmissionLastStatus(issueNumber: number, status: SubmissionStatus): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (sub) this.submissions.set(issueNumber, { ...sub, lastStatus: status });
+    return this.submissionStore.setSubmissionLastStatus(issueNumber, status);
   }
 
   async recordJobTransition(issueNumber: number, transition: JobTransition): Promise<boolean> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub) return false;
-    // Idempotent for concurrent *identical* arrivals (status poll + notify sweep both
-    // seeing `submitted`→`needs_changes`/`gate_red`). Same-state with a *new* reason is
-    // intentional only for the operator — a quiet-build retry re-enters `building` with
-    // `operator_retry`. A reconciler/gate re-observation with a different reason would
-    // only reset `stateSince` and overwrite the reason that actually moved the job.
-    if (sub.state === transition.to) {
-      const last = sub.transitions?.at(-1);
-      if (last?.to === transition.to && last?.reason === transition.reason) return false;
-      if (transition.by !== 'operator') return false;
-    }
-    const closes = transitionClosesRound(transition);
-    const next: SubmissionRecord = {
-      ...sub,
-      state: transition.to,
-      stateSince: transition.at,
-      transitions: [...(sub.transitions ?? []), transition].slice(-MAX_JOB_TRANSITIONS),
-      ...(closes
-        ? {
-            roundGeneration: nextRoundGeneration(sub.roundGeneration),
-            roundDeliveryCount: 0,
-            roundTypecheckPreflightRefusals: 0,
-            roundSubmitAttempts: 0,
-            roundPreflightRefusalsAudio: 0,
-            roundPreflightRefusalsSymbols: 0,
-            roundStartedAt: transition.at,
-          }
-        : {}),
-    };
-    if (closes) {
-      delete next.seed;
-      delete next.seedStatus;
-      // Signals belong to the round that closed — keeping them makes the next self
-      // round look "connected" before any agent has joined.
-      delete next.lastAgentSignalAt;
-      delete next.lastAgentPresence;
-      delete next.agentEndedAt;
-      delete next.agentEndedBy;
-      delete next.roundKitEngineRef;
-      delete next.roundTypecheckPreflightBypassErrors;
-      delete next.roundLastGateMetricKey;
-    }
-    this.submissions.set(issueNumber, next);
-    return true;
+    return this.dispatchStore.recordJobTransition(issueNumber, transition);
   }
 
   async bumpRoundGeneration(issueNumber: number): Promise<number | null> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub) return null;
-    const roundGeneration = nextRoundGeneration(sub.roundGeneration);
-    const next: SubmissionRecord = {
-      ...sub,
-      roundGeneration,
-      roundDeliveryCount: 0,
-      roundTypecheckPreflightRefusals: 0,
-      roundSubmitAttempts: 0,
-      roundPreflightRefusalsAudio: 0,
-      roundPreflightRefusalsSymbols: 0,
-      roundStartedAt: new Date().toISOString(),
-    };
-    delete next.seed;
-    delete next.seedStatus;
-    delete next.lastAgentSignalAt;
-    delete next.lastAgentPresence;
-    delete next.agentEndedAt;
-    delete next.agentEndedBy;
-    delete next.roundKitEngineRef;
-    delete next.roundTypecheckPreflightBypassErrors;
-    delete next.roundLastGateMetricKey;
-    this.submissions.set(issueNumber, next);
-    return roundGeneration;
+    return this.roundsStore.bumpRoundGeneration(issueNumber);
   }
 
   async pinRoundKitEngineRef(issueNumber: number, engineRef: string, replace = false): Promise<string | null> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub) return null;
-    if (sub.roundKitEngineRef && !replace) return sub.roundKitEngineRef;
-    this.submissions.set(issueNumber, { ...sub, roundKitEngineRef: engineRef });
-    return engineRef;
+    return this.roundsStore.pinRoundKitEngineRef(issueNumber, engineRef, replace);
   }
 
   async requestBuilderHandoff(
@@ -963,52 +521,27 @@ export class InMemoryStore implements Store {
     requestedAt: string,
     awaitsAgentAck = true,
   ): Promise<boolean> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub || sub.builderHandoff) return false;
-    const from = sub.builder ?? sub.defaultBuilder ?? 'platform';
-    if (from === to) return false;
-    this.submissions.set(issueNumber, { ...sub, builderHandoff: { from, to, requestedAt, awaitsAgentAck } });
-    return true;
+    return this.roundsStore.requestBuilderHandoff(issueNumber, to, requestedAt, awaitsAgentAck);
   }
 
   async acknowledgeBuilderHandoff(issueNumber: number, acknowledgedAt: string): Promise<BuilderHandoff | null> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub?.builderHandoff || sub.builderHandoff.acknowledgedAt) return null;
-    const handoff: BuilderHandoff = { ...sub.builderHandoff, acknowledgedAt };
-    this.submissions.set(issueNumber, { ...sub, builderHandoff: handoff });
-    return handoff;
+    return this.roundsStore.acknowledgeBuilderHandoff(issueNumber, acknowledgedAt);
   }
 
   async clearBuilderHandoff(issueNumber: number): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub?.builderHandoff) return;
-    const next = { ...sub };
-    delete next.builderHandoff;
-    this.submissions.set(issueNumber, next);
+    return this.roundsStore.clearBuilderHandoff(issueNumber);
   }
 
   async ensureRoundGeneration(issueNumber: number): Promise<number | null> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub) return null;
-    if (sub.roundGeneration !== undefined) return sub.roundGeneration;
-    this.submissions.set(issueNumber, { ...sub, roundGeneration: 1 });
-    return 1;
+    return this.roundsStore.ensureRoundGeneration(issueNumber);
   }
 
   async clearAgentEnded(issueNumber: number): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub) return;
-    const next = { ...sub };
-    delete next.lastAgentSignalAt;
-    delete next.lastAgentPresence;
-    delete next.agentEndedAt;
-    delete next.agentEndedBy;
-    this.submissions.set(issueNumber, next);
+    return this.roundsStore.clearAgentEnded(issueNumber);
   }
 
   async setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (sub) this.submissions.set(issueNumber, { ...sub, agentState });
+    return this.roundsStore.setSubmissionAgentState(issueNumber, agentState);
   }
 
   async setRoundBuilder(
@@ -1016,196 +549,82 @@ export class InMemoryStore implements Store {
     builder: BuilderKind,
     options?: { resetRoundBudget?: boolean },
   ): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub) return;
-    const reset = options?.resetRoundBudget ?? false;
-    const next: SubmissionRecord = {
-      ...sub,
-      builder,
-      defaultBuilder: builder,
-    };
-    if (reset) {
-      delete next.seed;
-      delete next.seedStatus;
-      next.roundDeliveryCount = 0;
-      next.roundTypecheckPreflightRefusals = 0;
-      next.roundSubmitAttempts = 0;
-      next.roundPreflightRefusalsAudio = 0;
-      next.roundPreflightRefusalsSymbols = 0;
-      next.roundStartedAt = new Date().toISOString();
-      delete next.roundTypecheckPreflightBypassErrors;
-      delete next.roundLastGateMetricKey;
-    }
-    this.submissions.set(issueNumber, next);
+    return this.roundsStore.setRoundBuilder(issueNumber, builder, options);
   }
 
   async setSubmissionSeed(issueNumber: number, seed: SeedFiles | null): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub) return;
-    if (seed) {
-      this.submissions.set(issueNumber, { ...sub, seed, seedStatus: 'available' });
-      return;
-    }
-    const next = { ...sub, seedStatus: 'unavailable' as const };
-    delete next.seed;
-    this.submissions.set(issueNumber, next);
+    return this.roundsStore.setSubmissionSeed(issueNumber, seed);
   }
 
   async setSeedStatus(issueNumber: number, status: 'pending' | 'unavailable'): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub) return;
-    // Never downgrade an already-stored draft.
-    if (sub.seed) {
-      this.submissions.set(issueNumber, { ...sub, seedStatus: 'available' });
-      return;
-    }
-    this.submissions.set(issueNumber, { ...sub, seedStatus: status });
+    return this.roundsStore.setSeedStatus(issueNumber, status);
   }
 
   async incrementSeedRegenerations(issueNumber: number): Promise<number> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub) return 0;
-    const seedRegenerations = (sub.seedRegenerations ?? 0) + 1;
-    this.submissions.set(issueNumber, { ...sub, seedRegenerations });
-    return seedRegenerations;
+    return this.roundBudgetStore.incrementSeedRegenerations(issueNumber);
   }
 
   async incrementRoundDeliveryCount(issueNumber: number): Promise<number> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub) return 0;
-    const roundDeliveryCount = (sub.roundDeliveryCount ?? 0) + 1;
-    this.submissions.set(issueNumber, { ...sub, roundDeliveryCount });
-    return roundDeliveryCount;
+    return this.roundBudgetStore.incrementRoundDeliveryCount(issueNumber);
   }
 
   async incrementRoundTypecheckPreflightRefusals(issueNumber: number): Promise<number> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub) return 0;
-    const roundTypecheckPreflightRefusals = (sub.roundTypecheckPreflightRefusals ?? 0) + 1;
-    this.submissions.set(issueNumber, { ...sub, roundTypecheckPreflightRefusals });
-    return roundTypecheckPreflightRefusals;
+    return this.roundBudgetStore.incrementRoundTypecheckPreflightRefusals(issueNumber);
   }
 
   async setRoundTypecheckPreflightBypassErrors(issueNumber: number, message: string | null): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub) return;
-    if (message == null) {
-      const next = { ...sub };
-      delete next.roundTypecheckPreflightBypassErrors;
-      this.submissions.set(issueNumber, next);
-      return;
-    }
-    this.submissions.set(issueNumber, { ...sub, roundTypecheckPreflightBypassErrors: message });
+    return this.roundBudgetStore.setRoundTypecheckPreflightBypassErrors(issueNumber, message);
   }
 
   async incrementRoundSubmitAttempts(issueNumber: number): Promise<number> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub) return 0;
-    const roundSubmitAttempts = (sub.roundSubmitAttempts ?? 0) + 1;
-    this.submissions.set(issueNumber, { ...sub, roundSubmitAttempts });
-    return roundSubmitAttempts;
+    return this.roundBudgetStore.incrementRoundSubmitAttempts(issueNumber);
   }
 
   async incrementRoundPreflightRefusal(issueNumber: number, kind: 'audio' | 'symbols'): Promise<number> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub) return 0;
-    if (kind === 'audio') {
-      const roundPreflightRefusalsAudio = (sub.roundPreflightRefusalsAudio ?? 0) + 1;
-      this.submissions.set(issueNumber, { ...sub, roundPreflightRefusalsAudio });
-      return roundPreflightRefusalsAudio;
-    }
-    const roundPreflightRefusalsSymbols = (sub.roundPreflightRefusalsSymbols ?? 0) + 1;
-    this.submissions.set(issueNumber, { ...sub, roundPreflightRefusalsSymbols });
-    return roundPreflightRefusalsSymbols;
+    return this.roundBudgetStore.incrementRoundPreflightRefusal(issueNumber, kind);
   }
 
   async setRoundLastGateMetricKey(issueNumber: number, key: string): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub) return;
-    this.submissions.set(issueNumber, { ...sub, roundLastGateMetricKey: key });
+    return this.roundBudgetStore.setRoundLastGateMetricKey(issueNumber, key);
   }
 
   async allocateJobId(): Promise<number> {
-    this.nextJobId = Math.max(this.nextJobId, JOB_ID_FLOOR) + 1;
-    return this.nextJobId;
+    return this.dispatchStore.allocateJobId();
   }
 
   async recordDispatch(
     issueNumber: number,
     dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string; credentialRef?: string },
   ): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub) return;
-    const existing = sub.dispatch;
-    this.submissions.set(issueNumber, {
-      ...sub,
-      dispatch: {
-        backend: dispatch.backend,
-        refs: [...(existing?.refs ?? []), dispatch.ref],
-        ...(dispatch.credentialRef
-          ? { credentialRefs: { ...existing?.credentialRefs, [dispatch.ref]: dispatch.credentialRef } }
-          : {}),
-        workspace: dispatch.workspace ?? existing?.workspace,
-        seedWorkspace: dispatch.seedWorkspace ?? existing?.seedWorkspace,
-      },
-    });
+    return this.dispatchStore.recordDispatch(issueNumber, dispatch);
   }
 
   async clearDispatchSeedWorkspace(issueNumber: number): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub?.dispatch) return;
-    const dispatch = { ...sub.dispatch };
-    delete dispatch.seedWorkspace;
-    this.submissions.set(issueNumber, { ...sub, dispatch });
+    return this.dispatchStore.clearDispatchSeedWorkspace(issueNumber);
   }
 
   async recordSeedOutcome(issueNumber: number, outcome: JobSeedOutcome): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub) return;
-    this.submissions.set(issueNumber, { ...sub, seedOutcome: outcome });
+    return this.dispatchStore.recordSeedOutcome(issueNumber, outcome);
   }
 
   async listSeedOutcomesSince(since: string): Promise<JobSeedOutcome[]> {
-    return [...this.submissions.values()]
-      .map((sub) => sub.seedOutcome)
-      .filter((outcome): outcome is JobSeedOutcome => Boolean(outcome) && outcome!.at >= since)
-      .sort((a, b) => b.at.localeCompare(a.at));
+    return this.dispatchStore.listSeedOutcomesSince(since);
   }
 
   async recordJobCost(issueNumber: number, entry: JobCostEntry): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub) return;
-    this.submissions.set(issueNumber, {
-      ...sub,
-      costs: [...(sub.costs ?? []), entry].slice(-MAX_JOB_COSTS),
-    });
+    return this.dispatchStore.recordJobCost(issueNumber, entry);
   }
 
   async setJobCostCredits(issueNumber: number, ref: string, credits: number): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub?.costs?.length) return;
-    let changed = false;
-    const costs = sub.costs.map((entry) => {
-      if (entry.kind !== 'agent_session' || entry.ref !== ref || entry.creditsMeasured) return entry;
-      changed = true;
-      return { ...entry, credits, creditsMeasured: true };
-    });
-    if (!changed) return;
-    this.submissions.set(issueNumber, { ...sub, costs });
+    return this.dispatchStore.setJobCostCredits(issueNumber, ref, credits);
   }
 
   async setJobCostTokens(issueNumber: number, ref: string, tokens: AgentSessionTokens): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub?.costs?.length) return;
-    const costs = applyMeasuredTokens(sub.costs, ref, tokens);
-    if (!costs) return;
-    this.submissions.set(issueNumber, { ...sub, costs });
+    return this.dispatchStore.setJobCostTokens(issueNumber, ref, tokens);
   }
 
   async setDispatchWorkspace(issueNumber: number, workspace: string): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub?.dispatch) return;
-    this.submissions.set(issueNumber, { ...sub, dispatch: { ...sub.dispatch, workspace } });
+    return this.dispatchStore.setDispatchWorkspace(issueNumber, workspace);
   }
 
   async getPublication(slug: string): Promise<PublicationRecord | null> {
@@ -1233,97 +652,62 @@ export class InMemoryStore implements Store {
   }
 
   async setSubmissionSlug(issueNumber: number, slug: string): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (sub) this.submissions.set(issueNumber, { ...sub, slug });
+    return this.submissionStore.setSubmissionSlug(issueNumber, slug);
   }
 
   async setSubmissionTitle(issueNumber: number, title: string): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (sub) this.submissions.set(issueNumber, { ...sub, title });
+    return this.submissionStore.setSubmissionTitle(issueNumber, title);
   }
 
   async setSubmissionDeliveredVersion(issueNumber: number, version: string): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (sub) this.submissions.set(issueNumber, { ...sub, deliveredVersion: version, previewVersion: version });
+    return this.submissionStore.setSubmissionDeliveredVersion(issueNumber, version);
   }
 
   async setSubmissionPreviewVersion(issueNumber: number, version: string): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (sub) this.submissions.set(issueNumber, { ...sub, previewVersion: version });
+    return this.submissionStore.setSubmissionPreviewVersion(issueNumber, version);
   }
 
   async recordDeliveryNudge(issueNumber: number): Promise<number> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub) return 0;
-    const deliveryNudges = (sub.deliveryNudges ?? 0) + 1;
-    this.submissions.set(issueNumber, { ...sub, deliveryNudges });
-    return deliveryNudges;
+    return this.submissionStore.recordDeliveryNudge(issueNumber);
   }
 
   async getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
-    // Newest first, matching the Firestore implementation. It used to take whatever
-    // `find` reached first, which agreed with production only while a slug never had
-    // more than one job — no longer true now that an improvement is a new job.
-    const records = await this.listSubmissionsBySlug(slug);
-    return records[0] ?? null;
+    return this.submissionQueryStore.getSubmissionBySlug(slug);
   }
 
   async listSubmissionsBySlug(slug: string): Promise<SubmissionRecord[]> {
-    return Array.from(this.submissions.values())
-      .filter((s) => s.slug === slug)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .map((s) => ({ ...s }));
+    return this.submissionQueryStore.listSubmissionsBySlug(slug);
   }
 
   async getPublishedSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
-    const match = Array.from(this.submissions.values())
-      .filter((s) => s.slug === slug && s.publishedAt && !s.abandonedAt)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-    return match ? { ...match } : null;
+    return this.submissionQueryStore.getPublishedSubmissionBySlug(slug);
   }
 
   async setSubmissionPublishedAt(issueNumber: number, at: string): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (sub && !sub.publishedAt) this.submissions.set(issueNumber, { ...sub, publishedAt: at });
+    return this.submissionStore.setSubmissionPublishedAt(issueNumber, at);
   }
 
   async setSubmissionAbandoned(issueNumber: number, at: string): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (sub) this.submissions.set(issueNumber, { ...sub, abandonedAt: at });
+    return this.submissionStore.setSubmissionAbandoned(issueNumber, at);
   }
 
   async setDraftShared(issueNumber: number, at: string | null): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub) return;
-    const next = { ...sub };
-    if (at) next.draftSharedAt = at;
-    else delete next.draftSharedAt;
-    this.submissions.set(issueNumber, next);
+    return this.submissionStore.setDraftShared(issueNumber, at);
   }
 
   async setSubmissionLocale(issueNumber: number, locale: string): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (sub) this.submissions.set(issueNumber, { ...sub, locale });
+    return this.submissionStore.setSubmissionLocale(issueNumber, locale);
   }
 
   async setSubmissionClarificationCount(issueNumber: number, count: number): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (sub) this.submissions.set(issueNumber, { ...sub, clarificationCount: count });
+    return this.submissionStore.setSubmissionClarificationCount(issueNumber, count);
   }
 
   async setSubmissionBrief(
     issueNumber: number,
     brief: { spec: string; qa: string[]; specIsSystemGenerated?: boolean },
   ): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
-    if (sub) {
-      this.submissions.set(issueNumber, {
-        ...sub,
-        spec: brief.spec,
-        qa: brief.qa,
-        ...(brief.specIsSystemGenerated ? { specIsSystemGenerated: true } : {}),
-      });
-    }
+    return this.submissionStore.setSubmissionBrief(issueNumber, brief);
   }
 
   async appendBuildEvent(
@@ -1331,23 +715,7 @@ export class InMemoryStore implements Store {
     event: Omit<BuildEvent, 'id' | 'createdAt'> & { createdAt?: string },
     options?: { preserveEnded?: boolean },
   ): Promise<BuildEvent> {
-    const record: BuildEvent = { ...event, id: randomUUID(), createdAt: event.createdAt ?? new Date().toISOString() };
-    const existing = this.buildEvents.get(issueNumber) ?? [];
-    existing.push(record);
-    this.buildEvents.set(issueNumber, existing);
-    const submission = this.submissions.get(issueNumber);
-    if (submission) {
-      const next: SubmissionRecord = { ...submission, lastAgentSignalAt: record.createdAt };
-      // A real chat row supersedes the ambient thought flash.
-      delete next.lastAgentPresence;
-      if (!options?.preserveEnded) {
-        // Resumed work after MCP `end` — clear so stall is no longer `ended`.
-        delete next.agentEndedAt;
-        delete next.agentEndedBy;
-      }
-      this.submissions.set(issueNumber, next);
-    }
-    return { ...record };
+    return this.buildLogStore.appendBuildEvent(issueNumber, event, options);
   }
 
   async touchLastAgentSignalAt(
@@ -1356,121 +724,61 @@ export class InMemoryStore implements Store {
     presence?: { key: string },
     options?: { preserveEnded?: boolean },
   ): Promise<void> {
-    const submission = this.submissions.get(issueNumber);
-    if (!submission) return;
-    const stamped = at ?? new Date().toISOString();
-    const next: SubmissionRecord = {
-      ...submission,
-      lastAgentSignalAt: stamped,
-      ...(presence ? { lastAgentPresence: { key: presence.key, at: stamped } } : {}),
-    };
-    if (!options?.preserveEnded) {
-      delete next.agentEndedAt;
-      delete next.agentEndedBy;
-    }
-    this.submissions.set(issueNumber, next);
+    return this.buildLogStore.touchLastAgentSignalAt(issueNumber, at, presence, options);
   }
 
   async markAgentEnded(issueNumber: number, at?: string, by: AgentEndedBy = 'end'): Promise<void> {
-    const submission = this.submissions.get(issueNumber);
-    if (!submission) return;
-    this.submissions.set(issueNumber, {
-      ...submission,
-      agentEndedAt: at ?? new Date().toISOString(),
-      agentEndedBy: by,
-    });
+    return this.buildLogStore.markAgentEnded(issueNumber, at, by);
   }
 
   async listBuildEvents(issueNumber: number, opts?: { limit?: number }): Promise<BuildEvent[]> {
-    return [...(this.buildEvents.get(issueNumber) ?? [])]
-      .sort(byNewestFirst)
-      .slice(0, opts?.limit ?? 20)
-      .map((event) => ({ ...event }));
+    return this.buildLogStore.listBuildEvents(issueNumber, opts);
   }
 
   async countBuildEvents(issueNumber: number): Promise<number> {
-    return this.buildEvents.get(issueNumber)?.length ?? 0;
+    return this.buildLogStore.countBuildEvents(issueNumber);
   }
 
   async appendBuildShot(
     issueNumber: number,
     shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string },
   ): Promise<BuildShot> {
-    const record: BuildShot = { ...shot, id: randomUUID(), createdAt: shot.createdAt ?? new Date().toISOString() };
-    const existing = this.buildShots.get(issueNumber) ?? [];
-    existing.push(record);
-    this.buildShots.set(issueNumber, existing);
-    return { ...record };
+    return this.buildMediaStore.appendBuildShot(issueNumber, shot);
   }
 
   async listBuildShots(issueNumber: number, opts?: { limit?: number }): Promise<BuildShotSummary[]> {
-    return [...(this.buildShots.get(issueNumber) ?? [])]
-      .sort(byNewestFirst)
-      .slice(0, opts?.limit ?? 12)
-      .map(({ data: _data, ...summary }) => ({ ...summary }));
+    return this.buildMediaStore.listBuildShots(issueNumber, opts);
   }
 
   async getBuildShot(issueNumber: number, id: string): Promise<BuildShot | null> {
-    const found = this.buildShots.get(issueNumber)?.find((shot) => shot.id === id);
-    return found ? { ...found } : null;
+    return this.buildMediaStore.getBuildShot(issueNumber, id);
   }
 
   async countBuildShots(issueNumber: number): Promise<number> {
-    return this.buildShots.get(issueNumber)?.length ?? 0;
+    return this.buildMediaStore.countBuildShots(issueNumber);
   }
 
   async appendBuildPreview(
     issueNumber: number,
     preview: Omit<BuildPreview, 'id' | 'createdAt'> & { createdAt?: string },
   ): Promise<BuildPreview> {
-    const existing = this.buildPreviews.get(issueNumber) ?? [];
-    // ISO timestamps only have millisecond precision. Rapid back-to-back pushes in
-    // tests (and occasionally in prod) land on the same tick; bump so "newest"
-    // matches append order instead of UUID tie-breaks.
-    const nowIso = new Date().toISOString();
-    // The newest by value, not by position. `pruneBuildPreviews` writes the array back
-    // sorted newest-first, so after the first prune the last element is the *oldest* — and
-    // reading it here silently disabled this bump, letting two appends in the same
-    // millisecond tie on `createdAt` and be ordered by a random UUID instead.
-    const newestCreatedAt = existing.reduce<string | undefined>(
-      (newest, entry) => (newest === undefined || entry.createdAt > newest ? entry.createdAt : newest),
-      undefined,
-    );
-    const createdAt =
-      preview.createdAt ??
-      (newestCreatedAt && newestCreatedAt >= nowIso ? new Date(Date.parse(newestCreatedAt) + 1).toISOString() : nowIso);
-    const record: BuildPreview = {
-      ...preview,
-      id: randomUUID(),
-      createdAt,
-    };
-    existing.push(record);
-    this.buildPreviews.set(issueNumber, existing);
-    return { ...record };
+    return this.buildMediaStore.appendBuildPreview(issueNumber, preview);
   }
 
   async listBuildPreviews(issueNumber: number, opts?: { limit?: number }): Promise<BuildPreviewSummary[]> {
-    return [...(this.buildPreviews.get(issueNumber) ?? [])]
-      .sort(byNewestFirst)
-      .slice(0, opts?.limit ?? 4)
-      .map(({ data: _data, ...summary }) => ({ ...summary }));
+    return this.buildMediaStore.listBuildPreviews(issueNumber, opts);
   }
 
   async getBuildPreview(issueNumber: number, id: string): Promise<BuildPreview | null> {
-    const found = this.buildPreviews.get(issueNumber)?.find((preview) => preview.id === id);
-    return found ? { ...found } : null;
+    return this.buildMediaStore.getBuildPreview(issueNumber, id);
   }
 
   async countBuildPreviews(issueNumber: number): Promise<number> {
-    return this.buildPreviews.get(issueNumber)?.length ?? 0;
+    return this.buildMediaStore.countBuildPreviews(issueNumber);
   }
 
   async pruneBuildPreviews(issueNumber: number, keep: number): Promise<number> {
-    const existing = this.buildPreviews.get(issueNumber) ?? [];
-    if (existing.length <= keep) return 0;
-    const kept = [...existing].sort(byNewestFirst).slice(0, keep);
-    this.buildPreviews.set(issueNumber, kept);
-    return existing.length - kept.length;
+    return this.buildMediaStore.pruneBuildPreviews(issueNumber, keep);
   }
 
   async appendCreatorMessage(
@@ -1478,50 +786,19 @@ export class InMemoryStore implements Store {
     text: string,
     opts?: { origin?: CreatorMessageOrigin; delivered?: boolean; textLocalized?: string; locale?: string },
   ): Promise<CreatorMessage> {
-    const now = new Date().toISOString();
-    const record: CreatorMessage = {
-      id: randomUUID(),
-      text,
-      createdAt: now,
-      deliveredAt: opts?.delivered ? now : null,
-      ...(opts?.origin === 'agent' || isStudioOrigin(opts?.origin) ? { origin: opts?.origin } : {}),
-      ...(opts?.textLocalized && opts?.locale ? { textLocalized: opts.textLocalized, locale: opts.locale } : {}),
-    };
-    const existing = this.creatorMessages.get(issueNumber) ?? [];
-    existing.push(record);
-    this.creatorMessages.set(issueNumber, existing);
-    return { ...record };
+    return this.buildLogStore.appendCreatorMessage(issueNumber, text, opts);
   }
 
   async listPendingCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
-    return (this.creatorMessages.get(issueNumber) ?? [])
-      .filter((message) => !message.deliveredAt && !isStudioOrigin(message.origin))
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
-      .slice(0, opts?.limit ?? 10)
-      .map((message) => ({ ...message }));
+    return this.buildLogStore.listPendingCreatorMessages(issueNumber, opts);
   }
 
   async listCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
-    // No id tie-break: the array is already in append order, and a stable sort on
-    // createdAt alone preserves it for same-millisecond messages — a random-UUID
-    // tie-break would shuffle exactly those.
-    return [...(this.creatorMessages.get(issueNumber) ?? [])]
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-      .slice(-(opts?.limit ?? 20))
-      .map((message) => ({ ...message }));
+    return this.buildLogStore.listCreatorMessages(issueNumber, opts);
   }
 
   async markCreatorMessagesDelivered(issueNumber: number, ids: string[]): Promise<void> {
-    const existing = this.creatorMessages.get(issueNumber);
-    if (!existing || ids.length === 0) return;
-    const at = new Date().toISOString();
-    const targets = new Set(ids);
-    this.creatorMessages.set(
-      issueNumber,
-      existing.map((message) =>
-        targets.has(message.id) && !message.deliveredAt ? { ...message, deliveredAt: at } : message,
-      ),
-    );
+    return this.buildLogStore.markCreatorMessagesDelivered(issueNumber, ids);
   }
 
   async appendTelemetryEvents(dateStr: string, events: TelemetryEvent[]): Promise<void> {
@@ -1548,55 +825,31 @@ export class InMemoryStore implements Store {
   }
 
   async listRecentlyPublished(limit: number): Promise<SubmissionRecord[]> {
-    return Array.from(this.submissions.values())
-      .filter((s) => s.publishedAt)
-      .sort((a, b) => (b.publishedAt ?? '').localeCompare(a.publishedAt ?? ''))
-      .slice(0, limit)
-      .map((s) => ({ ...s }));
+    return this.submissionQueryStore.listRecentlyPublished(limit);
   }
 
   async listActiveSubmissions(): Promise<SubmissionRecord[]> {
-    return Array.from(this.submissions.values())
-      .filter(isSweepActive)
-      .map((s) => ({ ...s }));
+    return this.submissionQueryStore.listActiveSubmissions();
   }
 
   async listSubmissionsMissingSlug(): Promise<SubmissionRecord[]> {
-    return Array.from(this.submissions.values())
-      .filter((s) => !s.slug && !s.abandonedAt)
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-      .map((s) => ({ ...s }));
+    return this.submissionQueryStore.listSubmissionsMissingSlug();
   }
 
   async listSubmissionsWithDelivery(): Promise<SubmissionRecord[]> {
-    return Array.from(this.submissions.values())
-      .filter((s) => Boolean(s.slug && s.deliveredVersion) && !s.abandonedAt)
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-      .map((s) => ({ ...s }));
+    return this.submissionQueryStore.listSubmissionsWithDelivery();
   }
 
   async listSubmissionsByOwner(ownerUid: string, opts?: { limit?: number }): Promise<SubmissionRecord[]> {
-    const sorted = Array.from(this.submissions.values())
-      .filter((s) => s.ownerUid === ownerUid)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .map((s) => ({ ...s }));
-    return opts?.limit !== undefined ? sorted.slice(0, opts.limit) : sorted;
+    return this.submissionQueryStore.listSubmissionsByOwner(ownerUid, opts);
   }
 
   async listQueuedSubmissions(): Promise<SubmissionRecord[]> {
-    return Array.from(this.submissions.values())
-      .filter((s) => s.state === 'queued')
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-      .map((s) => ({ ...s }));
+    return this.submissionQueryStore.listQueuedSubmissions();
   }
 
   async claimDispatchReaperAttempt(issueNumber: number, at: string): Promise<boolean> {
-    const sub = this.submissions.get(issueNumber);
-    if (!sub || sub.state !== 'queued' || sub.dispatchReaperAttemptedAt || (sub.dispatch?.refs?.length ?? 0) > 0) {
-      return false;
-    }
-    this.submissions.set(issueNumber, { ...sub, dispatchReaperAttemptedAt: at });
-    return true;
+    return this.dispatchStore.claimDispatchReaperAttempt(issueNumber, at);
   }
 
   async checkAndIncrementQuota(
@@ -2278,6 +1531,13 @@ export class FirestoreStore implements Store {
   private socialStore: FirestoreSocialStore;
   private contributionStore: FirestoreContributionStore;
   private publicationStore: FirestorePublicationStore;
+  private roundsStore: FirestoreRoundsStore;
+  private roundBudgetStore: FirestoreRoundBudgetStore;
+  private dispatchStore: FirestoreDispatchStore;
+  private submissionStore: FirestoreSubmissionStore;
+  private submissionQueryStore: FirestoreSubmissionQueryStore;
+  private buildLogStore: FirestoreBuildLogStore;
+  private buildMediaStore: FirestoreBuildMediaStore;
 
   constructor(db?: Firestore) {
     this.db = db ?? new Firestore();
@@ -2297,6 +1557,13 @@ export class FirestoreStore implements Store {
     this.socialStore = new FirestoreSocialStore(this.db);
     this.contributionStore = new FirestoreContributionStore(this.db);
     this.publicationStore = new FirestorePublicationStore(this.db);
+    this.roundsStore = new FirestoreRoundsStore(this.db);
+    this.roundBudgetStore = new FirestoreRoundBudgetStore(this.db);
+    this.dispatchStore = new FirestoreDispatchStore(this.db);
+    this.submissionStore = new FirestoreSubmissionStore(this.db);
+    this.submissionQueryStore = new FirestoreSubmissionQueryStore(this.db);
+    this.buildLogStore = new FirestoreBuildLogStore(this.db);
+    this.buildMediaStore = new FirestoreBuildMediaStore(this.db);
   }
 
   async getUser(uid: string): Promise<User | null> {
@@ -2489,138 +1756,31 @@ export class FirestoreStore implements Store {
   }
 
   async createSubmission(issueNumber: number, ownerUid: string, title: string): Promise<SubmissionRecord> {
-    const createdAt = new Date().toISOString();
-    const record: SubmissionRecord = {
-      issueNumber,
-      ownerUid,
-      createdAt,
-      title,
-      // New jobs are generation-scoped from the first mint; legacy records created
-      // before this field existed stay unset until their current round closes.
-      roundGeneration: 1,
-      roundStartedAt: createdAt,
-    };
-    await this.db.collection('submissions').doc(String(issueNumber)).set(record);
-    return record;
+    return this.submissionStore.createSubmission(issueNumber, ownerUid, title);
   }
 
   async getSubmission(issueNumber: number): Promise<SubmissionRecord | null> {
-    const snap = await this.db.collection('submissions').doc(String(issueNumber)).get();
-    if (!snap.exists) return null;
-    return snap.data() as SubmissionRecord;
+    return this.submissionStore.getSubmission(issueNumber);
   }
 
   async setSubmissionNotifiedStatus(issueNumber: number, status: SubmissionStatus): Promise<void> {
-    await this.db
-      .collection('submissions')
-      .doc(String(issueNumber))
-      .set({ lastNotifiedStatus: status }, { merge: true });
+    return this.submissionStore.setSubmissionNotifiedStatus(issueNumber, status);
   }
 
   async setSubmissionLastStatus(issueNumber: number, status: SubmissionStatus): Promise<void> {
-    await this.db.collection('submissions').doc(String(issueNumber)).set({ lastStatus: status }, { merge: true });
+    return this.submissionStore.setSubmissionLastStatus(issueNumber, status);
   }
 
   async recordJobTransition(issueNumber: number, transition: JobTransition): Promise<boolean> {
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    // A transaction, not a merge: the status poll and the reconciler sweep can both
-    // observe the same job at once, and appending to a list read outside a transaction
-    // loses whichever write landed second — silently, and exactly under the concurrent
-    // load where the history matters most. The round-generation bump rides in the same
-    // write so a closing transition never leaves a stale channel token valid.
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return false;
-      const current = snap.data() as SubmissionRecord;
-      // Same race as InMemoryStore: concurrent identical arrivals must not both "win"
-      // (gate screenshots key off `recorded`). Same-state with a new reason is allowed
-      // only for the operator (quiet-build retry); see InMemoryStore.recordJobTransition.
-      if (current.state === transition.to) {
-        const last = current.transitions?.at(-1);
-        if (last?.to === transition.to && last?.reason === transition.reason) return false;
-        if (transition.by !== 'operator') return false;
-      }
-      const closes = transitionClosesRound(transition);
-      if (closes) {
-        const next: SubmissionRecord = {
-          ...current,
-          state: transition.to,
-          stateSince: transition.at,
-          transitions: [...(current.transitions ?? []), transition].slice(-MAX_JOB_TRANSITIONS),
-          roundGeneration: nextRoundGeneration(current.roundGeneration),
-          roundDeliveryCount: 0,
-          roundTypecheckPreflightRefusals: 0,
-          roundSubmitAttempts: 0,
-          roundPreflightRefusalsAudio: 0,
-          roundPreflightRefusalsSymbols: 0,
-          roundStartedAt: transition.at,
-        };
-        delete next.seed;
-        delete next.seedStatus;
-        delete next.lastAgentSignalAt;
-        delete next.lastAgentPresence;
-        delete next.agentEndedAt;
-        delete next.agentEndedBy;
-        delete next.roundKitEngineRef;
-        delete next.roundTypecheckPreflightBypassErrors;
-        delete next.roundLastGateMetricKey;
-        tx.set(ref, next);
-      } else {
-        tx.set(
-          ref,
-          {
-            state: transition.to,
-            stateSince: transition.at,
-            transitions: [...(current.transitions ?? []), transition].slice(-MAX_JOB_TRANSITIONS),
-          },
-          { merge: true },
-        );
-      }
-      return true;
-    });
+    return this.dispatchStore.recordJobTransition(issueNumber, transition);
   }
 
   async bumpRoundGeneration(issueNumber: number): Promise<number | null> {
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return null;
-      const current = snap.data() as SubmissionRecord;
-      const roundGeneration = nextRoundGeneration(current.roundGeneration);
-      const next: SubmissionRecord = {
-        ...current,
-        roundGeneration,
-        roundDeliveryCount: 0,
-        roundTypecheckPreflightRefusals: 0,
-        roundSubmitAttempts: 0,
-        roundPreflightRefusalsAudio: 0,
-        roundPreflightRefusalsSymbols: 0,
-        roundStartedAt: new Date().toISOString(),
-      };
-      delete next.seed;
-      delete next.seedStatus;
-      delete next.lastAgentSignalAt;
-      delete next.lastAgentPresence;
-      delete next.agentEndedAt;
-      delete next.agentEndedBy;
-      delete next.roundKitEngineRef;
-      delete next.roundTypecheckPreflightBypassErrors;
-      delete next.roundLastGateMetricKey;
-      tx.set(ref, next);
-      return roundGeneration;
-    });
+    return this.roundsStore.bumpRoundGeneration(issueNumber);
   }
 
   async pinRoundKitEngineRef(issueNumber: number, engineRef: string, replace = false): Promise<string | null> {
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return null;
-      const current = snap.data() as SubmissionRecord;
-      if (current.roundKitEngineRef && !replace) return current.roundKitEngineRef;
-      tx.set(ref, { roundKitEngineRef: engineRef }, { merge: true });
-      return engineRef;
-    });
+    return this.roundsStore.pinRoundKitEngineRef(issueNumber, engineRef, replace);
   }
 
   async requestBuilderHandoff(
@@ -2629,74 +1789,27 @@ export class FirestoreStore implements Store {
     requestedAt: string,
     awaitsAgentAck = true,
   ): Promise<boolean> {
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return false;
-      const current = snap.data() as SubmissionRecord;
-      if (current.builderHandoff) return false;
-      const from = current.builder ?? current.defaultBuilder ?? 'platform';
-      if (from === to) return false;
-      tx.set(ref, { builderHandoff: { from, to, requestedAt, awaitsAgentAck } }, { merge: true });
-      return true;
-    });
+    return this.roundsStore.requestBuilderHandoff(issueNumber, to, requestedAt, awaitsAgentAck);
   }
 
   async acknowledgeBuilderHandoff(issueNumber: number, acknowledgedAt: string): Promise<BuilderHandoff | null> {
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return null;
-      const current = snap.data() as SubmissionRecord;
-      if (!current.builderHandoff || current.builderHandoff.acknowledgedAt) return null;
-      const handoff: BuilderHandoff = { ...current.builderHandoff, acknowledgedAt };
-      tx.set(ref, { builderHandoff: handoff }, { merge: true });
-      return handoff;
-    });
+    return this.roundsStore.acknowledgeBuilderHandoff(issueNumber, acknowledgedAt);
   }
 
   async clearBuilderHandoff(issueNumber: number): Promise<void> {
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    await this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return;
-      const current = snap.data() as SubmissionRecord;
-      if (!current.builderHandoff) return;
-      const next = { ...current };
-      delete next.builderHandoff;
-      tx.set(ref, next);
-    });
+    return this.roundsStore.clearBuilderHandoff(issueNumber);
   }
 
   async ensureRoundGeneration(issueNumber: number): Promise<number | null> {
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return null;
-      const current = snap.data() as SubmissionRecord;
-      if (current.roundGeneration !== undefined) return current.roundGeneration;
-      tx.set(ref, { roundGeneration: 1 }, { merge: true });
-      return 1;
-    });
+    return this.roundsStore.ensureRoundGeneration(issueNumber);
   }
 
   async clearAgentEnded(issueNumber: number): Promise<void> {
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    await this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return;
-      const current = snap.data() as SubmissionRecord;
-      const next = { ...current };
-      delete next.lastAgentSignalAt;
-      delete next.lastAgentPresence;
-      delete next.agentEndedAt;
-      delete next.agentEndedBy;
-      tx.set(ref, next);
-    });
+    return this.roundsStore.clearAgentEnded(issueNumber);
   }
 
   async setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void> {
-    await this.db.collection('submissions').doc(String(issueNumber)).set({ agentState }, { merge: true });
+    return this.roundsStore.setSubmissionAgentState(issueNumber, agentState);
   }
 
   async setRoundBuilder(
@@ -2704,282 +1817,82 @@ export class FirestoreStore implements Store {
     builder: BuilderKind,
     options?: { resetRoundBudget?: boolean },
   ): Promise<void> {
-    const reset = options?.resetRoundBudget ?? false;
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    if (!reset) {
-      await ref.set({ builder, defaultBuilder: builder }, { merge: true });
-      return;
-    }
-    // Clearing seed on a new round: merge cannot delete a field, so read-modify-write.
-    await this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return;
-      const current = snap.data() as SubmissionRecord;
-      const next: SubmissionRecord = {
-        ...current,
-        builder,
-        defaultBuilder: builder,
-        roundDeliveryCount: 0,
-        roundTypecheckPreflightRefusals: 0,
-        roundSubmitAttempts: 0,
-        roundPreflightRefusalsAudio: 0,
-        roundPreflightRefusalsSymbols: 0,
-        roundStartedAt: new Date().toISOString(),
-      };
-      delete next.seed;
-      delete next.seedStatus;
-      delete next.roundTypecheckPreflightBypassErrors;
-      delete next.roundLastGateMetricKey;
-      tx.set(ref, next);
-    });
+    return this.roundsStore.setRoundBuilder(issueNumber, builder, options);
   }
 
   async setSubmissionSeed(issueNumber: number, seed: SeedFiles | null): Promise<void> {
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    if (seed) {
-      await ref.set({ seed, seedStatus: 'available' }, { merge: true });
-      return;
-    }
-    await this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return;
-      const current = snap.data() as SubmissionRecord;
-      const next: SubmissionRecord = { ...current, seedStatus: 'unavailable' };
-      delete next.seed;
-      tx.set(ref, next);
-    });
+    return this.roundsStore.setSubmissionSeed(issueNumber, seed);
   }
 
   async setSeedStatus(issueNumber: number, status: 'pending' | 'unavailable'): Promise<void> {
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    await this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return;
-      const current = snap.data() as SubmissionRecord;
-      if (current.seed) {
-        tx.set(ref, { seedStatus: 'available' }, { merge: true });
-        return;
-      }
-      tx.set(ref, { seedStatus: status }, { merge: true });
-    });
+    return this.roundsStore.setSeedStatus(issueNumber, status);
   }
 
   async incrementSeedRegenerations(issueNumber: number): Promise<number> {
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return 0;
-      const current = snap.data() as SubmissionRecord;
-      const seedRegenerations = (current.seedRegenerations ?? 0) + 1;
-      tx.set(ref, { seedRegenerations }, { merge: true });
-      return seedRegenerations;
-    });
+    return this.roundBudgetStore.incrementSeedRegenerations(issueNumber);
   }
 
   async incrementRoundDeliveryCount(issueNumber: number): Promise<number> {
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return 0;
-      const current = snap.data() as SubmissionRecord;
-      const roundDeliveryCount = (current.roundDeliveryCount ?? 0) + 1;
-      tx.set(ref, { roundDeliveryCount }, { merge: true });
-      return roundDeliveryCount;
-    });
+    return this.roundBudgetStore.incrementRoundDeliveryCount(issueNumber);
   }
 
   async incrementRoundTypecheckPreflightRefusals(issueNumber: number): Promise<number> {
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return 0;
-      const current = snap.data() as SubmissionRecord;
-      const roundTypecheckPreflightRefusals = (current.roundTypecheckPreflightRefusals ?? 0) + 1;
-      tx.set(ref, { roundTypecheckPreflightRefusals }, { merge: true });
-      return roundTypecheckPreflightRefusals;
-    });
+    return this.roundBudgetStore.incrementRoundTypecheckPreflightRefusals(issueNumber);
   }
 
   async setRoundTypecheckPreflightBypassErrors(issueNumber: number, message: string | null): Promise<void> {
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    if (message == null) {
-      await ref.set({ roundTypecheckPreflightBypassErrors: FieldValue.delete() }, { merge: true });
-      return;
-    }
-    await ref.set({ roundTypecheckPreflightBypassErrors: message }, { merge: true });
+    return this.roundBudgetStore.setRoundTypecheckPreflightBypassErrors(issueNumber, message);
   }
 
   async incrementRoundSubmitAttempts(issueNumber: number): Promise<number> {
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return 0;
-      const current = snap.data() as SubmissionRecord;
-      const roundSubmitAttempts = (current.roundSubmitAttempts ?? 0) + 1;
-      tx.set(ref, { roundSubmitAttempts }, { merge: true });
-      return roundSubmitAttempts;
-    });
+    return this.roundBudgetStore.incrementRoundSubmitAttempts(issueNumber);
   }
 
   async incrementRoundPreflightRefusal(issueNumber: number, kind: 'audio' | 'symbols'): Promise<number> {
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return 0;
-      const current = snap.data() as SubmissionRecord;
-      if (kind === 'audio') {
-        const roundPreflightRefusalsAudio = (current.roundPreflightRefusalsAudio ?? 0) + 1;
-        tx.set(ref, { roundPreflightRefusalsAudio }, { merge: true });
-        return roundPreflightRefusalsAudio;
-      }
-      const roundPreflightRefusalsSymbols = (current.roundPreflightRefusalsSymbols ?? 0) + 1;
-      tx.set(ref, { roundPreflightRefusalsSymbols }, { merge: true });
-      return roundPreflightRefusalsSymbols;
-    });
+    return this.roundBudgetStore.incrementRoundPreflightRefusal(issueNumber, kind);
   }
 
   async setRoundLastGateMetricKey(issueNumber: number, key: string): Promise<void> {
-    await this.db
-      .collection('submissions')
-      .doc(String(issueNumber))
-      .set({ roundLastGateMetricKey: key }, { merge: true });
+    return this.roundBudgetStore.setRoundLastGateMetricKey(issueNumber, key);
   }
 
   async allocateJobId(): Promise<number> {
-    const ref = this.db.collection('counters').doc('jobs');
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      const current = (snap.data() as { next?: number } | undefined)?.next ?? JOB_ID_FLOOR;
-      const next = Math.max(current, JOB_ID_FLOOR) + 1;
-      tx.set(ref, { next }, { merge: true });
-      return next;
-    });
+    return this.dispatchStore.allocateJobId();
   }
 
   async recordDispatch(
     issueNumber: number,
     dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string; credentialRef?: string },
   ): Promise<void> {
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    // Transactional for the same reason transitions are: a dispatch and a reconciler
-    // observation can land together, and appending to a list read outside a transaction
-    // drops one of them.
-    await this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return;
-      const existing = (snap.data() as SubmissionRecord).dispatch;
-      tx.set(
-        ref,
-        {
-          dispatch: {
-            backend: dispatch.backend,
-            refs: [...(existing?.refs ?? []), dispatch.ref],
-            ...(dispatch.credentialRef
-              ? { credentialRefs: { ...existing?.credentialRefs, [dispatch.ref]: dispatch.credentialRef } }
-              : {}),
-            ...((dispatch.workspace ?? existing?.workspace)
-              ? { workspace: dispatch.workspace ?? existing?.workspace }
-              : {}),
-            ...((dispatch.seedWorkspace ?? existing?.seedWorkspace)
-              ? { seedWorkspace: dispatch.seedWorkspace ?? existing?.seedWorkspace }
-              : {}),
-          },
-        },
-        { merge: true },
-      );
-    });
+    return this.dispatchStore.recordDispatch(issueNumber, dispatch);
   }
 
   async recordSeedOutcome(issueNumber: number, outcome: JobSeedOutcome): Promise<void> {
-    // A plain merge: one writer, once per job, so there is nothing here to race.
-    await this.db.collection('submissions').doc(String(issueNumber)).set({ seedOutcome: outcome }, { merge: true });
+    return this.dispatchStore.recordSeedOutcome(issueNumber, outcome);
   }
 
   async listSeedOutcomesSince(since: string): Promise<JobSeedOutcome[]> {
-    // A real range query, unlike most reads here: `seedOutcome.at` is a map subfield and
-    // Firestore indexes those automatically, so this costs the documents in the window
-    // rather than the collection. Ordering by the same field it filters on needs no
-    // composite index.
-    const snap = await this.db
-      .collection('submissions')
-      .where('seedOutcome.at', '>=', since)
-      .orderBy('seedOutcome.at', 'desc')
-      .get();
-    return snap.docs
-      .map((d) => (d.data() as SubmissionRecord).seedOutcome)
-      .filter((outcome): outcome is JobSeedOutcome => Boolean(outcome));
+    return this.dispatchStore.listSeedOutcomesSince(since);
   }
 
   async recordJobCost(issueNumber: number, entry: JobCostEntry): Promise<void> {
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    // Transactional like every other append here: two rounds of a job can be charged
-    // within the same second, and a read outside a transaction loses one of them —
-    // which is the one failure mode a ledger may not have.
-    await this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return;
-      const existing = (snap.data() as SubmissionRecord).costs ?? [];
-      tx.set(ref, { costs: [...existing, entry].slice(-MAX_JOB_COSTS) }, { merge: true });
-    });
+    return this.dispatchStore.recordJobCost(issueNumber, entry);
   }
 
   async setJobCostCredits(issueNumber: number, ref: string, credits: number): Promise<void> {
-    const docRef = this.db.collection('submissions').doc(String(issueNumber));
-    await this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(docRef);
-      if (!snap.exists) return;
-      const existing = (snap.data() as SubmissionRecord).costs ?? [];
-      let changed = false;
-      const costs = existing.map((entry) => {
-        if (entry.kind !== 'agent_session' || entry.ref !== ref || entry.creditsMeasured) return entry;
-        changed = true;
-        return { ...entry, credits, creditsMeasured: true };
-      });
-      if (!changed) return;
-      tx.set(docRef, { costs }, { merge: true });
-    });
+    return this.dispatchStore.setJobCostCredits(issueNumber, ref, credits);
   }
 
   async setJobCostTokens(issueNumber: number, ref: string, tokens: AgentSessionTokens): Promise<void> {
-    const docRef = this.db.collection('submissions').doc(String(issueNumber));
-    await this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(docRef);
-      if (!snap.exists) return;
-      const existing = (snap.data() as SubmissionRecord).costs ?? [];
-      const costs = applyMeasuredTokens(existing, ref, tokens);
-      if (!costs) return;
-      tx.set(docRef, { costs }, { merge: true });
-    });
+    return this.dispatchStore.setJobCostTokens(issueNumber, ref, tokens);
   }
 
   async setDispatchWorkspace(issueNumber: number, workspace: string): Promise<void> {
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    // Transactional like recordDispatch, and for the same reason: this runs from a
-    // status poll that can race a dispatch, and a merge computed from a stale read
-    // would drop whichever landed first.
-    await this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return;
-      const existing = (snap.data() as SubmissionRecord).dispatch;
-      if (!existing) return;
-      tx.set(ref, { dispatch: { ...existing, workspace } }, { merge: true });
-    });
+    return this.dispatchStore.setDispatchWorkspace(issueNumber, workspace);
   }
 
   async clearDispatchSeedWorkspace(issueNumber: number): Promise<void> {
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    await this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return;
-      const existing = (snap.data() as SubmissionRecord).dispatch;
-      if (!existing?.seedWorkspace) return;
-      // Rewritten whole rather than merged with a delete sentinel: `dispatch` is a small
-      // object already read inside this transaction, so replacing it is both simpler and
-      // safe from the partial-merge surprise a field delete would risk.
-      const dispatch = { ...existing };
-      delete dispatch.seedWorkspace;
-      tx.set(ref, { dispatch }, { merge: true });
-    });
+    return this.dispatchStore.clearDispatchSeedWorkspace(issueNumber);
   }
 
   async getPublication(slug: string): Promise<PublicationRecord | null> {
@@ -3007,101 +1920,50 @@ export class FirestoreStore implements Store {
   }
 
   async setSubmissionSlug(issueNumber: number, slug: string): Promise<void> {
-    await this.db.collection('submissions').doc(String(issueNumber)).set({ slug }, { merge: true });
+    return this.submissionStore.setSubmissionSlug(issueNumber, slug);
   }
 
   async setSubmissionTitle(issueNumber: number, title: string): Promise<void> {
-    await this.db.collection('submissions').doc(String(issueNumber)).set({ title }, { merge: true });
+    return this.submissionStore.setSubmissionTitle(issueNumber, title);
   }
 
   async setSubmissionDeliveredVersion(issueNumber: number, version: string): Promise<void> {
-    // Last write wins on purpose: the newest delivery is the one worth previewing.
-    await this.db
-      .collection('submissions')
-      .doc(String(issueNumber))
-      .set({ deliveredVersion: version, previewVersion: version }, { merge: true });
+    return this.submissionStore.setSubmissionDeliveredVersion(issueNumber, version);
   }
 
   async setSubmissionPreviewVersion(issueNumber: number, version: string): Promise<void> {
-    await this.db.collection('submissions').doc(String(issueNumber)).set({ previewVersion: version }, { merge: true });
+    return this.submissionStore.setSubmissionPreviewVersion(issueNumber, version);
   }
 
   async recordDeliveryNudge(issueNumber: number): Promise<number> {
-    // Transactional: two pollers can observe the same undelivered session at once, and
-    // a lost increment here buys the job an extra agent session it was not owed.
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return 0;
-      const nudges = ((snap.data() as SubmissionRecord).deliveryNudges ?? 0) + 1;
-      tx.set(ref, { deliveryNudges: nudges }, { merge: true });
-      return nudges;
-    });
+    return this.submissionStore.recordDeliveryNudge(issueNumber);
   }
 
   async setSubmissionPublishedAt(issueNumber: number, at: string): Promise<void> {
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    const snap = await ref.get();
-    // First observation wins: a later re-derivation must not move the timestamp.
-    if ((snap.data() as SubmissionRecord | undefined)?.publishedAt) return;
-    await ref.set({ publishedAt: at }, { merge: true });
+    return this.submissionStore.setSubmissionPublishedAt(issueNumber, at);
   }
 
   async setSubmissionAbandoned(issueNumber: number, at: string): Promise<void> {
-    await this.db.collection('submissions').doc(String(issueNumber)).set({ abandonedAt: at }, { merge: true });
+    return this.submissionStore.setSubmissionAbandoned(issueNumber, at);
   }
 
   async setDraftShared(issueNumber: number, at: string | null): Promise<void> {
-    // Deleted rather than set false, so "shared" is one shape everywhere: a timestamp
-    // is present or it is not, and no reader has to know about a legacy falsy value.
-    await this.db
-      .collection('submissions')
-      .doc(String(issueNumber))
-      .set({ draftSharedAt: at ?? FieldValue.delete() }, { merge: true });
+    return this.submissionStore.setDraftShared(issueNumber, at);
   }
 
   async setSubmissionLocale(issueNumber: number, locale: string): Promise<void> {
-    await this.db.collection('submissions').doc(String(issueNumber)).set({ locale }, { merge: true });
+    return this.submissionStore.setSubmissionLocale(issueNumber, locale);
   }
 
   async setSubmissionClarificationCount(issueNumber: number, count: number): Promise<void> {
-    await this.db
-      .collection('submissions')
-      .doc(String(issueNumber))
-      .set({ clarificationCount: count }, { merge: true });
+    return this.submissionStore.setSubmissionClarificationCount(issueNumber, count);
   }
 
   async setSubmissionBrief(
     issueNumber: number,
     brief: { spec: string; qa: string[]; specIsSystemGenerated?: boolean },
   ): Promise<void> {
-    await this.db
-      .collection('submissions')
-      .doc(String(issueNumber))
-      .set(
-        {
-          spec: brief.spec,
-          qa: brief.qa,
-          ...(brief.specIsSystemGenerated ? { specIsSystemGenerated: true } : {}),
-        },
-        { merge: true },
-      );
-  }
-
-  private eventsCollection(issueNumber: number) {
-    return this.db.collection('submissions').doc(String(issueNumber)).collection('events');
-  }
-
-  private messagesCollection(issueNumber: number) {
-    return this.db.collection('submissions').doc(String(issueNumber)).collection('messages');
-  }
-
-  private shotsCollection(issueNumber: number) {
-    return this.db.collection('submissions').doc(String(issueNumber)).collection('shots');
-  }
-
-  private previewsCollection(issueNumber: number) {
-    return this.db.collection('submissions').doc(String(issueNumber)).collection('previews');
+    return this.submissionStore.setSubmissionBrief(issueNumber, brief);
   }
 
   async appendBuildEvent(
@@ -3109,28 +1971,7 @@ export class FirestoreStore implements Store {
     event: Omit<BuildEvent, 'id' | 'createdAt'> & { createdAt?: string },
     options?: { preserveEnded?: boolean },
   ): Promise<BuildEvent> {
-    const record: BuildEvent = { ...event, id: randomUUID(), createdAt: event.createdAt ?? new Date().toISOString() };
-    // Firestore rejects undefined values; optional fields are simply absent instead.
-    const document = Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
-    await this.eventsCollection(issueNumber).doc(record.id).set(document);
-    // Denormalized onto the parent so the operator queue can judge silence for every
-    // in-flight job without a subcollection read per job. Merged separately rather than
-    // transactionally: losing a race here costs a slightly stale liveness timestamp,
-    // which is not worth a transaction on the hottest write in the channel.
-    await this.db
-      .collection('submissions')
-      .doc(String(issueNumber))
-      .set(
-        {
-          lastAgentSignalAt: record.createdAt,
-          // A real chat row supersedes the ambient thought flash.
-          lastAgentPresence: FieldValue.delete(),
-          // Resumed work after MCP `end`.
-          ...(options?.preserveEnded ? {} : { agentEndedAt: FieldValue.delete(), agentEndedBy: FieldValue.delete() }),
-        },
-        { merge: true },
-      );
-    return record;
+    return this.buildLogStore.appendBuildEvent(issueNumber, event, options);
   }
 
   async touchLastAgentSignalAt(
@@ -3139,127 +1980,61 @@ export class FirestoreStore implements Store {
     presence?: { key: string },
     options?: { preserveEnded?: boolean },
   ): Promise<void> {
-    const stamped = at ?? new Date().toISOString();
-    await this.db
-      .collection('submissions')
-      .doc(String(issueNumber))
-      .set(
-        {
-          lastAgentSignalAt: stamped,
-          ...(options?.preserveEnded ? {} : { agentEndedAt: FieldValue.delete(), agentEndedBy: FieldValue.delete() }),
-          ...(presence ? { lastAgentPresence: { key: presence.key, at: stamped } } : {}),
-        },
-        { merge: true },
-      );
+    return this.buildLogStore.touchLastAgentSignalAt(issueNumber, at, presence, options);
   }
 
   async markAgentEnded(issueNumber: number, at?: string, by: AgentEndedBy = 'end'): Promise<void> {
-    await this.db
-      .collection('submissions')
-      .doc(String(issueNumber))
-      .set({ agentEndedAt: at ?? new Date().toISOString(), agentEndedBy: by }, { merge: true });
+    return this.buildLogStore.markAgentEnded(issueNumber, at, by);
   }
 
   async listBuildEvents(issueNumber: number, opts?: { limit?: number }): Promise<BuildEvent[]> {
-    const snap = await this.eventsCollection(issueNumber)
-      .orderBy('createdAt', 'desc')
-      .limit(opts?.limit ?? 20)
-      .get();
-    return snap.docs.map((doc) => doc.data() as BuildEvent).sort(byNewestFirst);
+    return this.buildLogStore.listBuildEvents(issueNumber, opts);
   }
 
   async countBuildEvents(issueNumber: number): Promise<number> {
-    const snap = await this.eventsCollection(issueNumber).count().get();
-    return snap.data().count;
+    return this.buildLogStore.countBuildEvents(issueNumber);
   }
 
   async appendBuildShot(
     issueNumber: number,
     shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string },
   ): Promise<BuildShot> {
-    const record: BuildShot = { ...shot, id: randomUUID(), createdAt: shot.createdAt ?? new Date().toISOString() };
-    const document = Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
-    await this.shotsCollection(issueNumber).doc(record.id).set(document);
-    return record;
+    return this.buildMediaStore.appendBuildShot(issueNumber, shot);
   }
 
   async listBuildShots(issueNumber: number, opts?: { limit?: number }): Promise<BuildShotSummary[]> {
-    // `select()` keeps the bytes on the server: a listing rides the status response,
-    // which is polled every few seconds, and the images themselves are fetched once
-    // each by the browser and then cached.
-    const snap = await this.shotsCollection(issueNumber)
-      .select('id', 'label', 'labelLocalized', 'locale', 'createdAt')
-      .orderBy('createdAt', 'desc')
-      .limit(opts?.limit ?? 12)
-      .get();
-    return snap.docs.map((doc) => doc.data() as BuildShotSummary).sort(byNewestFirst);
+    return this.buildMediaStore.listBuildShots(issueNumber, opts);
   }
 
   async getBuildShot(issueNumber: number, id: string): Promise<BuildShot | null> {
-    const doc = await this.shotsCollection(issueNumber).doc(id).get();
-    return doc.exists ? (doc.data() as BuildShot) : null;
+    return this.buildMediaStore.getBuildShot(issueNumber, id);
   }
 
   async countBuildShots(issueNumber: number): Promise<number> {
-    const snap = await this.shotsCollection(issueNumber).count().get();
-    return snap.data().count;
+    return this.buildMediaStore.countBuildShots(issueNumber);
   }
 
   async appendBuildPreview(
     issueNumber: number,
     preview: Omit<BuildPreview, 'id' | 'createdAt'> & { createdAt?: string },
   ): Promise<BuildPreview> {
-    const record: BuildPreview = {
-      ...preview,
-      id: randomUUID(),
-      createdAt: preview.createdAt ?? new Date().toISOString(),
-    };
-    const document = Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
-    await this.previewsCollection(issueNumber).doc(record.id).set(document);
-    return record;
+    return this.buildMediaStore.appendBuildPreview(issueNumber, preview);
   }
 
   async listBuildPreviews(issueNumber: number, opts?: { limit?: number }): Promise<BuildPreviewSummary[]> {
-    // `select()` matters far more here than it does for shots: a preview document is a
-    // couple of hundred kilobytes, and this listing rides a status response the creator's
-    // browser polls every few seconds. The bytes are fetched once, by the iframe.
-    const snap = await this.previewsCollection(issueNumber)
-      .select('id', 'slug', 'label', 'labelLocalized', 'locale', 'createdAt')
-      .orderBy('createdAt', 'desc')
-      .limit(opts?.limit ?? 4)
-      .get();
-    return snap.docs.map((doc) => doc.data() as BuildPreviewSummary).sort(byNewestFirst);
+    return this.buildMediaStore.listBuildPreviews(issueNumber, opts);
   }
 
   async getBuildPreview(issueNumber: number, id: string): Promise<BuildPreview | null> {
-    const doc = await this.previewsCollection(issueNumber).doc(id).get();
-    return doc.exists ? (doc.data() as BuildPreview) : null;
+    return this.buildMediaStore.getBuildPreview(issueNumber, id);
   }
 
   async countBuildPreviews(issueNumber: number): Promise<number> {
-    const snap = await this.previewsCollection(issueNumber).count().get();
-    return snap.data().count;
+    return this.buildMediaStore.countBuildPreviews(issueNumber);
   }
 
   async pruneBuildPreviews(issueNumber: number, keep: number): Promise<number> {
-    // Previews are heavy and each one obsoletes the last, so the collection is trimmed on
-    // write rather than left to a retention job. Ids only — pulling the documents to
-    // decide which to drop would fetch the very bytes this is trying not to keep.
-    const snap = await this.previewsCollection(issueNumber).select('createdAt').orderBy('createdAt', 'desc').get();
-    const stale = snap.docs.slice(keep);
-    if (!stale.length) return 0;
-    // Chunked, because a Firestore batch takes at most 500 operations. Steady state is
-    // one deletion per push, so this never matters — until pruning falls behind (a spell
-    // of write errors while the watcher keeps pushing), at which point a single batch
-    // would start failing permanently and previews would grow without bound. The cheap
-    // loop is what stops a transient fault from becoming a permanent one.
-    const BATCH_LIMIT = 500;
-    for (let start = 0; start < stale.length; start += BATCH_LIMIT) {
-      const batch = this.db.batch();
-      for (const doc of stale.slice(start, start + BATCH_LIMIT)) batch.delete(doc.ref);
-      await batch.commit();
-    }
-    return stale.length;
+    return this.buildMediaStore.pruneBuildPreviews(issueNumber, keep);
   }
 
   async appendCreatorMessage(
@@ -3267,57 +2042,19 @@ export class FirestoreStore implements Store {
     text: string,
     opts?: { origin?: CreatorMessageOrigin; delivered?: boolean; textLocalized?: string; locale?: string },
   ): Promise<CreatorMessage> {
-    // Spread in only for agent/studio — Firestore rejects an explicit undefined.
-    const now = new Date().toISOString();
-    const record: CreatorMessage = {
-      id: randomUUID(),
-      text,
-      createdAt: now,
-      deliveredAt: opts?.delivered ? now : null,
-      ...(opts?.origin === 'agent' || isStudioOrigin(opts?.origin) ? { origin: opts?.origin } : {}),
-      ...(opts?.textLocalized && opts?.locale ? { textLocalized: opts.textLocalized, locale: opts.locale } : {}),
-    };
-    await this.messagesCollection(issueNumber).doc(record.id).set(record);
-    return record;
+    return this.buildLogStore.appendCreatorMessage(issueNumber, text, opts);
   }
 
   async listPendingCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
-    // Filtered and sorted here rather than in a composite index — the set is tiny.
-
-    // Studio rows are pre-delivered already; this filter is the belt-and-braces guard.
-    const snap = await this.messagesCollection(issueNumber).where('deliveredAt', '==', null).get();
-    return snap.docs
-      .map((doc) => doc.data() as CreatorMessage)
-      .filter((message) => !isStudioOrigin(message.origin))
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
-      .slice(0, opts?.limit ?? 10);
+    return this.buildLogStore.listPendingCreatorMessages(issueNumber, opts);
   }
 
   async listCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
-    // Newest-`limit` kept by slicing from the end after an oldest-first sort, matching
-    // the in-memory store; the per-build message count is small enough to read whole.
-    const snap = await this.messagesCollection(issueNumber).get();
-    return snap.docs
-      .map((doc) => doc.data() as CreatorMessage)
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
-      .slice(-(opts?.limit ?? 20));
+    return this.buildLogStore.listCreatorMessages(issueNumber, opts);
   }
 
   async markCreatorMessagesDelivered(issueNumber: number, ids: string[]): Promise<void> {
-    if (ids.length === 0) return;
-    const at = new Date().toISOString();
-    const collection = this.messagesCollection(issueNumber);
-    // `set(..., {merge: true})` on a doc that doesn't exist yet *creates* it — a stale or
-    // bogus id from an agent's ack_inbox call would otherwise materialize a phantom
-    // message with only `deliveredAt` and no `text`, which crashes every later reader
-    // that assumes `text` is a string. Check existence first so a bad id is a no-op.
-    const refs = ids.map((id) => collection.doc(id));
-    const snaps = await this.db.getAll(...refs);
-    const batch = this.db.batch();
-    snaps.forEach((snap, index) => {
-      if (snap.exists) batch.set(refs[index], { deliveredAt: at }, { merge: true });
-    });
-    await batch.commit();
+    return this.buildLogStore.markCreatorMessagesDelivered(issueNumber, ids);
   }
 
   async appendVisitEvents(dateStr: string, events: VisitEvent[]): Promise<void> {
@@ -3344,95 +2081,43 @@ export class FirestoreStore implements Store {
   }
 
   async listRecentlyPublished(limit: number): Promise<SubmissionRecord[]> {
-    // orderBy on a single field uses Firestore's automatic index, and documents
-    // without publishedAt are excluded by definition — exactly the sample we want.
-    const snap = await this.db.collection('submissions').orderBy('publishedAt', 'desc').limit(limit).get();
-    return snap.docs.map((d) => d.data() as SubmissionRecord);
+    return this.submissionQueryStore.listRecentlyPublished(limit);
   }
 
   async getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
-    const records = await this.listSubmissionsBySlug(slug);
-    return records[0] ?? null;
+    return this.submissionQueryStore.getSubmissionBySlug(slug);
   }
 
   async listSubmissionsBySlug(slug: string): Promise<SubmissionRecord[]> {
-    // Equality-only query — no composite index needed. Result set is bounded by how
-    // many jobs have touched one game.
-    const snap = await this.db.collection('submissions').where('slug', '==', slug).get();
-    return snap.docs.map((d) => d.data() as SubmissionRecord).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return this.submissionQueryStore.listSubmissionsBySlug(slug);
   }
 
   async getPublishedSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
-    // Same single-field query, filtered in memory: adding `where('publishedAt','!=',null)`
-    // would need a composite index for a result set already bounded by how many jobs have
-    // touched one game.
-    const snap = await this.db.collection('submissions').where('slug', '==', slug).get();
-    const records = snap.docs
-      .map((d) => d.data() as SubmissionRecord)
-      .filter((record) => record.publishedAt && !record.abandonedAt);
-    records.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    return records[0] ?? null;
+    return this.submissionQueryStore.getPublishedSubmissionBySlug(slug);
   }
 
   async listActiveSubmissions(): Promise<SubmissionRecord[]> {
-    // 'in' with the non-terminal set would need a composite index and misses docs
-    // with no lastNotifiedStatus yet; filtering client-side is simpler and the
-    // active set is small (open submissions only).
-    const snap = await this.db.collection('submissions').get();
-    return snap.docs.map((d) => d.data() as SubmissionRecord).filter(isSweepActive);
+    return this.submissionQueryStore.listActiveSubmissions();
   }
 
   async listSubmissionsMissingSlug(): Promise<SubmissionRecord[]> {
-    // Firestore cannot ask for documents where a field is absent, so this is the same
-    // full scan and client-side filter as listActiveSubmissions above, for the same
-    // reason: the collection is small and the alternative is a sentinel field written
-    // to every record just so this one query can exist.
-    const snap = await this.db.collection('submissions').get();
-    return snap.docs
-      .map((d) => d.data() as SubmissionRecord)
-      .filter((s) => !s.slug && !s.abandonedAt)
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    return this.submissionQueryStore.listSubmissionsMissingSlug();
   }
 
   async listSubmissionsWithDelivery(): Promise<SubmissionRecord[]> {
-    const snap = await this.db.collection('submissions').get();
-    return snap.docs
-      .map((d) => d.data() as SubmissionRecord)
-      .filter((s) => Boolean(s.slug && s.deliveredVersion) && !s.abandonedAt)
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    return this.submissionQueryStore.listSubmissionsWithDelivery();
   }
 
   async listSubmissionsByOwner(ownerUid: string, opts?: { limit?: number }): Promise<SubmissionRecord[]> {
-    // Equality-only query (no orderBy) so Firestore needs no composite index; a
-    // creator's submission count is small, so sorting here is cheap.
-    const snap = await this.db.collection('submissions').where('ownerUid', '==', ownerUid).get();
-    const sorted = snap.docs
-      .map((d) => d.data() as SubmissionRecord)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    return opts?.limit !== undefined ? sorted.slice(0, opts.limit) : sorted;
+    return this.submissionQueryStore.listSubmissionsByOwner(ownerUid, opts);
   }
 
   async listQueuedSubmissions(): Promise<SubmissionRecord[]> {
-    const snap = await this.db.collection('submissions').where('state', '==', 'queued').get();
-    return snap.docs.map((d) => d.data() as SubmissionRecord).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    return this.submissionQueryStore.listQueuedSubmissions();
   }
 
   async claimDispatchReaperAttempt(issueNumber: number, at: string): Promise<boolean> {
-    const ref = this.db.collection('submissions').doc(String(issueNumber));
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return false;
-      const current = snap.data() as SubmissionRecord;
-      if (
-        current.state !== 'queued' ||
-        current.dispatchReaperAttemptedAt ||
-        (current.dispatch?.refs?.length ?? 0) > 0
-      ) {
-        return false;
-      }
-      tx.set(ref, { dispatchReaperAttemptedAt: at }, { merge: true });
-      return true;
-    });
+    return this.dispatchStore.claimDispatchReaperAttempt(issueNumber, at);
   }
 
   async checkAndIncrementQuota(
