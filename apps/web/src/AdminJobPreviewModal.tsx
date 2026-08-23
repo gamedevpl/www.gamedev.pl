@@ -36,15 +36,20 @@ export function AdminJobPreviewModal({
     setState('loading');
     setMessage(null);
 
-    void fetchJobPreview(job.issueNumber).then((data) => {
-      if (cancelled) return;
-      if (!data) {
+    void fetchJobPreview(job.issueNumber)
+      .then((data) => {
+        if (cancelled) return;
+        if (!data) {
+          setState('error');
+        } else {
+          setPreview(data);
+          setState('ready');
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
         setState('error');
-      } else {
-        setPreview(data);
-        setState('ready');
-      }
-    });
+      });
 
     return () => {
       cancelled = true;

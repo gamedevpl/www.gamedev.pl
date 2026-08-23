@@ -544,13 +544,30 @@ export function AdminJobsPanel() {
     });
   }, []);
 
+  const allFilteredSelected = useMemo(() => {
+    if (filteredItems.length === 0) return false;
+    return filteredItems.every(({ job }) => selectedIssues.has(job.issueNumber));
+  }, [filteredItems, selectedIssues]);
+
   const toggleSelectAll = useCallback(() => {
-    if (selectedIssues.size >= filteredItems.length && filteredItems.length > 0) {
-      setSelectedIssues(new Set());
+    if (allFilteredSelected) {
+      setSelectedIssues((prev) => {
+        const next = new Set(prev);
+        for (const { job } of filteredItems) {
+          next.delete(job.issueNumber);
+        }
+        return next;
+      });
     } else {
-      setSelectedIssues(new Set(filteredItems.map(({ job }) => job.issueNumber)));
+      setSelectedIssues((prev) => {
+        const next = new Set(prev);
+        for (const { job } of filteredItems) {
+          next.add(job.issueNumber);
+        }
+        return next;
+      });
     }
-  }, [selectedIssues.size, filteredItems]);
+  }, [allFilteredSelected, filteredItems]);
 
   const onBatchPublish = useCallback(
     async (targets: JobQueueEntry[]) => {
@@ -757,7 +774,7 @@ export function AdminJobsPanel() {
                 <th className="admin-job-select-header">
                   <input
                     type="checkbox"
-                    checked={selectedIssues.size > 0 && selectedIssues.size >= filteredItems.length}
+                    checked={allFilteredSelected}
                     onChange={toggleSelectAll}
                     aria-label="Select all matching jobs"
                   />

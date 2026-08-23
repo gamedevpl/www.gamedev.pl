@@ -514,4 +514,66 @@ describe('AdminJobsPanel', () => {
 
     await act(async () => root.unmount());
   });
+
+  it('computes select-all strictly from matching filtered job IDs', async () => {
+    mocked.fetchJobQueue.mockResolvedValue(
+      queue([
+        job({ issueNumber: 101, title: 'Super Mario', slug: 'mario', state: 'ready_for_review' }),
+        job({ issueNumber: 102, title: 'Zelda', slug: 'zelda', state: 'ready_for_review' }),
+      ]),
+    );
+
+    const { container, root } = await render();
+    const selectAllCheckbox = container.querySelector('.admin-job-select-header input') as HTMLInputElement;
+    expect(selectAllCheckbox.checked).toBe(false);
+
+    // Select row 101 only
+    const row101Checkbox = container.querySelector('input[aria-label="Select job #101"]') as HTMLInputElement;
+    await act(async () => {
+      row101Checkbox.click();
+      await Promise.resolve();
+    });
+    expect(selectAllCheckbox.checked).toBe(false);
+
+    // Filter to Zelda (#102) only (which is not selected)
+    const searchInput = container.querySelector('.admin-jobs-search-input') as HTMLInputElement;
+    await act(async () => {
+      const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+      nativeSetter?.call(searchInput, 'zelda');
+      searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    // Even though 1 item is selected in total (job 101), Zelda is not selected, so select-all MUST be false
+    expect(selectAllCheckbox.checked).toBe(false);
+
+    // Click select all to select Zelda
+    await act(async () => {
+      selectAllCheckbox.click();
+      await Promise.resolve();
+    });
+    expect(selectAllCheckbox.checked).toBe(true);
+
+    await act(async () => root.unmount());
+  });
+
+  it('handles preview fetch failure/rejection gracefully with error state', async () => {
+    mocked.fetchJobQueue.mockResolvedValue(queue([job({ issueNumber: 9999, title: 'Broken Preview', slug: 'broken' })]));
+    mocked.fetchJobPreview.mockRejectedValue(new Error('Network error'));
+
+    const { container, root } = await render();
+    const previewBtn = container.querySelector('.admin-job-preview-btn') as HTMLButtonElement;
+
+    await act(async () => {
+      previewBtn.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const modal = document.querySelector('.admin-preview-modal');
+    expect(modal).not.toBeNull();
+    expect(modal?.textContent).toContain('No playable preview available');
+
+    await act(async () => root.unmount());
+  });
 });
