@@ -671,4 +671,81 @@ describe('HeroPromptSection', () => {
 
     await act(async () => root.unmount());
   });
+
+  it('updates matched game when vector search returns high confidence match', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const mockCatalog = [
+      {
+        slug: 'cosmic-rift',
+        title: 'Cosmic Rift',
+        genre: 'Sci-Fi',
+        controls: 'WASD to fly',
+        status: 'published',
+        media: null,
+        multiplayer: null,
+        saves: null,
+        world: null,
+        sensing: null,
+        orientation: 'landscape' as const,
+        submittedBy: null,
+        tagline: { en: 'Deep space dogfights in a shattered galaxy.', pl: 'Walki w kosmosie.' },
+      },
+    ];
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (String(url).includes('/api/catalog/search')) {
+        return {
+          ok: true,
+          json: async () => ({
+            match: {
+              slug: 'cosmic-rift',
+              title: 'Cosmic Rift',
+              genre: 'Sci-Fi',
+              tagline: { en: 'Deep space dogfights in a shattered galaxy.', pl: 'Walki w kosmosie.' },
+            },
+            score: 0.88,
+          }),
+        } as Response;
+      }
+      return { ok: false } as Response;
+    });
+
+    // An ambiguous natural language prompt that local search wouldn't direct match
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'shooting aliens in deep space with laser cannons',
+          catalogEntries: mockCatalog,
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    // Advance timer for 200ms debounce
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250));
+      await flushEffects();
+    });
+
+    const card = container.querySelector('.matched-card');
+    expect(card).not.toBeNull();
+
+    const title = container.querySelector('.matched-title');
+    expect(title?.textContent).toBe('Cosmic Rift');
+
+    const desc = container.querySelector('.matched-desc');
+    expect(desc?.textContent).toBe('Deep space dogfights in a shattered galaxy.');
+
+    fetchSpy.mockRestore();
+    await act(async () => root.unmount());
+  });
 });

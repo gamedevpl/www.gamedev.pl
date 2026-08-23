@@ -46,6 +46,8 @@ import {
   type GameSnapshotReader,
 } from './catalog/game-snapshot.js';
 import { attachCatalogEnrichments } from './catalog/catalog-enricher.js';
+import { VertexEmbeddingService } from './catalog/embedding-service.js';
+import { CatalogVectorIndex } from './catalog/catalog-vector-index.js';
 import { startHealthCheck } from './catalog/game-health.js';
 import {
   createStagedPreviewPublisher,
@@ -5836,6 +5838,68 @@ export async function registerSubmissionRoutes(
       }
       request.log.error({ err: error }, 'failed to load catalog');
       return reply.status(502).send({ error: 'failed to load catalog' });
+    }
+  });
+
+  const embeddingService = new VertexEmbeddingService();
+  const catalogVectorIndex = new CatalogVectorIndex();
+
+  async function ensureCatalogVectorIndex(): Promise<void> {
+    if (catalogVectorIndex.size() > 0 || !githubClient) return;
+    try {
+      const entries = await getCatalogEntries(githubClient);
+      const published = entries.filter((entry) => entry.status === 'published');
+      const enriched = await attachCatalogEnrichments(published, store);
+      for (const entry of enriched) {
+        const docText = `${entry.title}. ${entry.genre}. ${entry.tagline?.en || ''} ${entry.tagline?.pl || ''} ${(entry.searchKeywords || []).join(', ')}`;
+        const vec = await embeddingService.embedText(docText);
+        if (vec.length > 0) {
+          catalogVectorIndex.upsert({
+            slug: entry.slug,
+            title: entry.title,
+            genre: entry.genre,
+            tagline: entry.tagline,
+            shortControls: entry.shortControls,
+            searchKeywords: entry.searchKeywords,
+            embedding: vec,
+          });
+        }
+      }
+    } catch {
+      // Non-blocking index sync
+    }
+  }
+
+  // Multimodal semantic vector search across catalog games.
+  app.get('/api/catalog/search', async (request, reply) => {
+    const query =
+      typeof request.query === 'object' && request.query !== null && 'q' in request.query
+        ? String((request.query as { q: unknown }).q || '').trim()
+        : '';
+    if (!query || query.length < 2) {
+      return reply.send({ match: null, score: 0 });
+    }
+
+    try {
+      await ensureCatalogVectorIndex();
+      const queryVector = await embeddingService.embedText(query);
+      const best = catalogVectorIndex.findBestMatch(queryVector, 0.65);
+      if (best) {
+        return reply.send({
+          match: {
+            slug: best.game.slug,
+            title: best.game.title,
+            genre: best.game.genre,
+            tagline: best.game.tagline,
+            shortControls: best.game.shortControls,
+            searchKeywords: best.game.searchKeywords,
+          },
+          score: best.score,
+        });
+      }
+      return reply.send({ match: null, score: 0 });
+    } catch {
+      return reply.send({ match: null, score: 0 });
     }
   });
 

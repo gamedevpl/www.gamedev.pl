@@ -260,7 +260,43 @@ export function HeroPromptSection({
     }
   };
 
-  const matchedGame = useMemo(() => findMatchingGame(promptText, catalogEntries), [promptText, catalogEntries]);
+  const localMatchedGame = useMemo(() => findMatchingGame(promptText, catalogEntries), [promptText, catalogEntries]);
+  const [vectorMatchedGame, setVectorMatchedGame] = useState<CatalogEntry | null>(null);
+
+  useEffect(() => {
+    const trimmed = promptText.trim();
+    if (trimmed.length < 3) {
+      setVectorMatchedGame(null);
+      return;
+    }
+
+    const handle = setTimeout(() => {
+      fetch(`/api/catalog/search?q=${encodeURIComponent(trimmed)}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data: { match?: CatalogEntry | null; score?: number } | null) => {
+          if (data?.match && typeof data.score === 'number' && data.score >= 0.65) {
+            const found = catalogEntries.find((e) => e.slug === data.match?.slug);
+            if (found) {
+              setVectorMatchedGame({
+                ...found,
+                tagline: data.match.tagline || found.tagline,
+                shortControls: data.match.shortControls || found.shortControls,
+                searchKeywords: data.match.searchKeywords || found.searchKeywords,
+              });
+              return;
+            }
+          }
+          setVectorMatchedGame(null);
+        })
+        .catch(() => {
+          setVectorMatchedGame(null);
+        });
+    }, 200);
+
+    return () => clearTimeout(handle);
+  }, [promptText, catalogEntries]);
+
+  const matchedGame = vectorMatchedGame || localMatchedGame;
 
   const matchedPoster = useMemo(() => {
     if (!matchedGame?.media?.screenshots?.length) return null;
