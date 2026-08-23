@@ -417,7 +417,7 @@ PROJECT_ID="$PROJECT_ID" REGION="$APP_REGION" "$SCRIPT_DIR/setup-account-deletio
 # searchTier/searchAddOns, so this step talks to the REST API directly with
 # `gcloud auth print-access-token` + curl — the same pattern step 7 above uses for the
 # Firestore single-field index, and the same no-SDK idiom apps/api/src/gcs-sign.ts and
-# apps/api/src/knowledge-search.ts use for the runtime's own calls.
+# apps/api/src/creation/knowledge-search.ts use for the runtime's own calls.
 #
 # IDs are deterministic (not timestamp-based) so this script stays safely re-runnable.
 #

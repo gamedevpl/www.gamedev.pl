@@ -9,7 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assembleGameHtml } from '../src/catalog/assemble.js';
 import { createLocalGamesClient } from '../src/catalog/local-games-repo.js';
-import { typeCheckGame } from '../src/type-check.js';
+import { typeCheckGame } from '../src/creation/type-check.js';
 
 export const GAMES_ROOT =
   process.env.GAMES_DIR ?? path.resolve(fileURLToPath(new URL('../../..', import.meta.url)), '../www.gamedev.pl-games');

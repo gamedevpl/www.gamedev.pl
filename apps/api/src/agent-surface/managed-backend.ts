@@ -1,7 +1,7 @@
 // AgentBackend over any ManagedAgentProvider, dispatched over MCP.
 import type { AgentBackend, BuildBrief, DispatchResult, SeedDelivery } from './agent-backend.js';
 import { buildPrompt } from '../delivery/build-prompt.js';
-import type { AgentObservation, AgentSessionTokens } from '../job-state.js';
+import type { AgentObservation, AgentSessionTokens } from '../creation/job-state.js';
 import { appendKitDigest, type KitDigestLoader } from './kit-digest.js';
 import {
   isManagedSessionHarvestable,

@@ -166,7 +166,7 @@ creation at all short of editing an environment variable and redeploying, which
 mid-incident also drops every party room in flight.
 
 Two controls now sit beside the per-user quota, both in
-[`creation-limits.ts`](../apps/api/src/creation-limits.ts):
+[`creation-limits.ts`](../apps/api/src/creation/creation-limits.ts):
 
 | Control                    | Effect                                                                                |
 | -------------------------- | ------------------------------------------------------------------------------------- |

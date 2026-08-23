@@ -14,7 +14,7 @@ import { buildApp } from '../platform/app.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { GcsObjectStore } from '../delivery/gcs-sign.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from '../catalog/github-client.js';
-import type { KnowledgeQueryResult, QueryKnowledgeFn } from '../knowledge-search.js';
+import type { KnowledgeQueryResult, QueryKnowledgeFn } from '../creation/knowledge-search.js';
 import { mintMcpSessionKey, verifyMcpSessionKey } from './mcp-session-key.js';
 import { MCP_UNADVERTISED_TOOLS } from './mcp-server.js';
 import { KIT_ROOT_DIR } from './kit-registry.js';

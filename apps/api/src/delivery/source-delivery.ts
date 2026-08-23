@@ -1,4 +1,4 @@
-import { selfBuildDeliveryCap } from '../builder.js';
+import { selfBuildDeliveryCap } from '../creation/builder.js';
 import {
   asDeliveryLogger,
   builderLabelFromRecord,
@@ -13,7 +13,7 @@ import {
   TERMINAL_JOB_STATES,
   type JobState,
   type TransitionActor,
-} from '../job-state.js';
+} from '../creation/job-state.js';
 import type { KitFileStore } from '../agent-surface/kit-files.js';
 import { normalizeAtIntake } from '../platform/localize-intake.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
@@ -23,7 +23,7 @@ import {
   runTypecheckPreflight,
   sharedSourcesFromKitTree,
   TYPECHECK_PREFLIGHT_MAX_REFUSALS,
-} from '../typecheck-preflight.js';
+} from '../creation/typecheck-preflight.js';
 import type { StagedPreviewPublisher } from './staged-preview.js';
 
 export interface SourceDeliveryAuthority {

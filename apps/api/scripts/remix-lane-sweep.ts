@@ -19,8 +19,13 @@
 
 import path from 'node:path';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { DEFAULT_EDIT_CONTEXT, VertexCodeLane, type CodeLaneEditContext, type CodeLaneOutcome } from '../src/code-lane.js';
-import type { SymbolRegion } from '../src/symbol-map.js';
+import {
+  DEFAULT_EDIT_CONTEXT,
+  VertexCodeLane,
+  type CodeLaneEditContext,
+  type CodeLaneOutcome,
+} from '../src/creation/code-lane.js';
+import type { SymbolRegion } from '../src/creation/symbol-map.js';
 import { REF, assembleGame, gameKit, github, typeCheck } from './remix-lane-bench.js';
 
 export interface ProbeCase {
@@ -74,7 +79,9 @@ async function probe(testCase: ProbeCase, options: RunOptions): Promise<ProbeRes
         if (!options.showMap) return;
         console.log(`\n── symbol map (${regions.length} regions) ──`);
         for (const region of regions) {
-          console.log(`  ${region.file}:${region.name} (${region.endLine - region.startLine + 1}L) ${region.signature}`);
+          console.log(
+            `  ${region.file}:${region.name} (${region.endLine - region.startLine + 1}L) ${region.signature}`,
+          );
         }
       },
       picked: (decision, region) => {
@@ -155,7 +162,6 @@ async function probe(testCase: ProbeCase, options: RunOptions): Promise<ProbeRes
   return result;
 }
 
-
 function label(options: RunOptions): string {
   return `${options.variant}${options.typecheck ? (options.observeOnly ? '+tsc(observed)' : '+tsc') : ''}`;
 }
@@ -220,7 +226,9 @@ async function main() {
 
   if (!cases.length || !cases[0].slug || !cases[0].utterance) {
     console.error('usage: remix-lane-probe <slug> "<utterance>" [--map] [--prompt] [--html out.html]');
-    console.error('       remix-lane-probe --corpus cases.json [--variant region|types|file] [--typecheck] [--out results.json]');
+    console.error(
+      '       remix-lane-probe --corpus cases.json [--variant region|types|file] [--typecheck] [--out results.json]',
+    );
     process.exit(1);
   }
 
@@ -231,7 +239,12 @@ async function main() {
     const perCase: RunOptions = {
       ...options,
       ...(htmlDir
-        ? { htmlPath: path.join(htmlDir, `${String(index + 1).padStart(2, '0')}-${testCase.slug}-${label(options).replace(/[^a-z]/g, '')}.html`) }
+        ? {
+            htmlPath: path.join(
+              htmlDir,
+              `${String(index + 1).padStart(2, '0')}-${testCase.slug}-${label(options).replace(/[^a-z]/g, '')}.html`,
+            ),
+          }
         : {}),
     };
     try {

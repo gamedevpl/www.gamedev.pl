@@ -5,8 +5,8 @@
 
 import { MANAGED_AGENT_VENDORS, type ManagedAgentVendorName } from '@gamedevpl/contract';
 import type { AgentBackend } from './agent-backend.js';
-import type { BuilderKind } from '../builder.js';
-import { ModelGameSeeder, DEFAULT_SEED_PROVIDER, type GameSeeder } from '../game-seed.js';
+import type { BuilderKind } from '../creation/builder.js';
+import { ModelGameSeeder, DEFAULT_SEED_PROVIDER, type GameSeeder } from '../creation/game-seed.js';
 import { createManagedProvider, type ManagedAgentEffort } from './managed-agent.js';
 import './managed-provider-anthropic.js';
 import './managed-provider-copilot.js';
@@ -14,17 +14,17 @@ import './managed-provider-openai.js';
 import { GEMINI_DEFAULT_MODEL } from './managed-provider-gemini.js';
 import { createManagedBackend, type ManagedRoundSignals } from './managed-backend.js';
 import type { KitDigestLoader } from './kit-digest.js';
-import type { QueryKnowledgeFn } from '../knowledge-search.js';
-import { createArchiveSeedContextSource } from '../seed-context.js';
+import type { QueryKnowledgeFn } from '../creation/knowledge-search.js';
+import { createArchiveSeedContextSource } from '../creation/seed-context.js';
 import type { GameSnapshotReader } from '../catalog/game-snapshot.js';
 import { createSelfBuildBackend, type SelfBuildBackendOptions } from './self-build-backend.js';
-import type { SeedProviderConfig } from '../seed-provider.js';
-import '../seed-provider-vertex.js';
-import '../seed-provider-anthropic.js';
-import '../seed-provider-openai.js';
-import '../seed-provider-meta.js';
-import '../seed-provider-openrouter.js';
-import { DEFAULT_VERTEX_SEED_MODEL } from '../seed-provider-vertex.js';
+import type { SeedProviderConfig } from '../creation/seed-provider.js';
+import '../creation/seed-provider-vertex.js';
+import '../creation/seed-provider-anthropic.js';
+import '../creation/seed-provider-openai.js';
+import '../creation/seed-provider-meta.js';
+import '../creation/seed-provider-openrouter.js';
+import { DEFAULT_VERTEX_SEED_MODEL } from '../creation/seed-provider-vertex.js';
 
 interface Logger {
   info: (context: object, message: string) => void;

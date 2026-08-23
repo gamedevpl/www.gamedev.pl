@@ -4,7 +4,7 @@ import {
   transitionClosesRound,
   type AgentSessionTokens,
   type JobTransition,
-} from '../../job-state.js';
+} from '../../creation/job-state.js';
 import {
   MAX_JOB_COSTS,
   applyMeasuredTokens,

@@ -10,7 +10,7 @@
 // sweep that emails. An alert that shows up in one and not the other is worse than no
 // alert, because the number stops meaning anything.
 
-import { detectStall, isTerminal, resolveJobState, type JobStall } from '../job-state.js';
+import { detectStall, isTerminal, resolveJobState, type JobStall } from '../creation/job-state.js';
 import type { JobSeedOutcome, SubmissionRecord } from '../platform/store.js';
 
 export type OperatorAlertKind =

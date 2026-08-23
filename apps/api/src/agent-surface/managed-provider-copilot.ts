@@ -5,7 +5,7 @@ import {
   type AgentTask,
   type AgentTasksClient,
   type AgentTaskModel,
-} from '../agent-tasks.js';
+} from '../creation/agent-tasks.js';
 import { createGitHubClient, IN_FLIGHT_RUN_STATUSES, type GitHubClient } from '../catalog/github-client.js';
 import {
   ManagedAgentError,

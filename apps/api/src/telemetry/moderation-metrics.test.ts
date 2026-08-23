@@ -105,11 +105,11 @@ describe('every moderating module reports its rejections', () => {
       'agent-surface/mcp-server.ts',
       'community/player-feedback.ts',
       'community/proposals.ts',
-      'editor-drafts.ts',
+      'creation/editor-drafts.ts',
+      'creation/refine.ts',
+      'creation/remix.ts',
       'notifications/contact.ts',
       'realtime/worlds.ts',
-      'refine.ts',
-      'remix.ts',
       'submissions.ts',
     ]);
   });

@@ -1,4 +1,4 @@
-import { isActiveBuildRound } from '../builder.js';
+import { isActiveBuildRound } from '../creation/builder.js';
 import type { Store } from '../platform/store.js';
 
 /**

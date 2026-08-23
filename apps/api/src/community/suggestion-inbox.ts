@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Scorecard, Store, SuggestionRecord } from '../platform/store.js';
 import { hypothesisMetric, metricFromScorecard } from './suggestion-outcomes.js';
-import { AUTONOMY_MODES, DEFAULT_AUTONOMY, type AutonomyMode } from '../autonomy.js';
+import { AUTONOMY_MODES, DEFAULT_AUTONOMY, type AutonomyMode } from '../creation/autonomy.js';
 import type { SubmissionRoutesHandle } from '../submissions.js';
 
 /**
