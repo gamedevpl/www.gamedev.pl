@@ -395,7 +395,7 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
       reason:
         `GAME_KIT_VERTICALS mismatch.\n${verticalDrift.map((entry) => `  ${entry}`).join('\n')}\n` +
         `  Every games-repo vertical must resolve to the same entry path in ` +
-        `GAME_KIT_VERTICAL_ENTRIES in apps/api/src/games-repo-contract.ts, or the bake cannot ` +
+        `GAME_KIT_VERTICAL_ENTRIES in apps/api/src/catalog/games-repo-contract.ts, or the bake cannot ` +
         `find the module's source and every game selecting it fails to publish.`,
     };
   }
@@ -418,7 +418,7 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
         `MAX_BUNDLE_BYTES mismatch: games-repo=${remoteBudget} website MAX_PROJECT_BYTES=${MAX_PROJECT_BYTES}\n` +
         `  games-repo assignment: ${assignLine}\n` +
         `  Website is behind the build ceiling — raise GAMEKIT_PLATFORM_BYTES / MAX_PROJECT_BYTES ` +
-        `in apps/api/src/games-repo-contract.ts (website-first).`,
+        `in apps/api/src/catalog/games-repo-contract.ts (website-first).`,
     };
   }
   if (MAX_PROJECT_BYTES > remoteBudget) {
@@ -611,7 +611,7 @@ function describeDeliveryDrift(remote: DeliveryContract): { drift: string | null
   }
   return {
     drift:
-      `delivery contract mismatch (${DELIVERY_CONTRACT_PATH} vs apps/api/src/games-repo-contract.ts):\n` +
+      `delivery contract mismatch (${DELIVERY_CONTRACT_PATH} vs apps/api/src/catalog/games-repo-contract.ts):\n` +
       problems.map((problem) => `  - ${problem}`).join('\n'),
     notes,
   };
