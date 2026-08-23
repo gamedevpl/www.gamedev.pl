@@ -702,7 +702,8 @@ export type GamePlayerMeta = { title: string; desc: string };
 export function useGamePlayer(
   frameRef: MutableRefObject<HTMLIFrameElement | null>,
   active: boolean,
-  /** Called when Escape is pressed *inside* the game (see the bridge's job 4). */
+  /** Called when Escape is pressed *inside* the game, for a game with no shell menu of its
+   *  own (see the bridge's job 4, and 'shell-menu' below). */
   onEscape?: () => void,
   /** Called on pointerdown inside the game (see the bridge's job 5). */
   onPointer?: () => void,
@@ -712,6 +713,8 @@ export function useGamePlayer(
   onEnd?: () => void,
   // A pointer or touch is held down, or released.
   onPointerHeldChange?: (held: boolean) => void,
+  /** Called when the game's own pause menu asks to leave the theater (Quit Game row). */
+  onExitGame?: () => void,
 ) {
   const [meta, setMeta] = useState<GamePlayerMeta | null>(null);
   const [controls, setControls] = useState<ReportedControls | null>(null);
@@ -728,6 +731,8 @@ export function useGamePlayer(
   onEndRef.current = onEnd;
   const onPointerHeldChangeRef = useRef(onPointerHeldChange);
   onPointerHeldChangeRef.current = onPointerHeldChange;
+  const onExitGameRef = useRef(onExitGame);
+  onExitGameRef.current = onExitGame;
 
   useEffect(() => {
     if (!active) {
@@ -736,6 +741,11 @@ export function useGamePlayer(
       setMuted(false);
       return;
     }
+    // A GameKit shell-scenes game (docs/shell-scenes.md in the games repo) owns Escape
+    // itself once it reports in — the theater must stop treating Escape as "leave the
+    // game" for it, or the game's own resume-from-pause races this component's exit.
+    // Reset alongside meta/controls/muted above: a fresh game load always toggles `active`.
+    let hasShellMenu = false;
     function onMessage(event: MessageEvent) {
       // Opaque-origin sandboxed iframe → origin string is "null".
       if (event.origin !== 'null') return;
@@ -765,8 +775,12 @@ export function useGamePlayer(
         if (next) setControls(next);
       } else if (data.type === 'sound') {
         setMuted(Boolean(data.muted));
+      } else if (data.type === 'shell-menu') {
+        hasShellMenu = true;
+      } else if (data.type === 'exit-game') {
+        onExitGameRef.current?.();
       } else if (data.type === 'key' && data.key === 'Escape') {
-        onEscapeRef.current?.();
+        if (!hasShellMenu) onEscapeRef.current?.();
       } else if (data.type === 'pointer') {
         onPointerRef.current?.();
         onActivityRef.current?.();

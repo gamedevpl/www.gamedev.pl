@@ -284,6 +284,42 @@ describe('GameTheater how-to-play', () => {
     expect(document.querySelector('.howto-card')).toBeNull();
     expect(onExit).not.toHaveBeenCalled();
   });
+
+  it('stops exiting on Escape once the game reports its own shell menu', async () => {
+    const onExit = vi.fn();
+    await draw({ controls: CONTROLS, onExit });
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', { data: { source: 'gdpl-player', type: 'shell-menu' }, origin: 'null' }),
+      );
+    });
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', { data: { source: 'gdpl-player', type: 'key', key: 'Escape' }, origin: 'null' }),
+      );
+    });
+
+    expect(onExit).not.toHaveBeenCalled();
+  });
+
+  it("exits on the pause menu's Quit Game signal even after the game reported a shell menu", async () => {
+    const onExit = vi.fn();
+    await draw({ controls: CONTROLS, onExit });
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', { data: { source: 'gdpl-player', type: 'shell-menu' }, origin: 'null' }),
+      );
+    });
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', { data: { source: 'gdpl-player', type: 'exit-game' }, origin: 'null' }),
+      );
+    });
+
+    expect(onExit).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('GameTheater controls reported by the game', () => {
