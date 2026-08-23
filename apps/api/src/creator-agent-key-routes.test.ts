@@ -612,7 +612,8 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     // granularity — so a same-second probe could never have produced the failure.
     await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
     const MINTED_AT = '2026-07-01T00:00:00.000Z';
-    const records = (store as unknown as { creatorAgentKeys: Map<string, CreatorAgentKeyRecord> }).creatorAgentKeys;
+    const records = (store as unknown as { agentKeysStore: { creatorAgentKeys: Map<string, CreatorAgentKeyRecord> } })
+      .agentKeysStore.creatorAgentKeys;
     records.set(OWNER, { ...records.get(OWNER)!, updatedAt: MINTED_AT });
 
     const first = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
@@ -715,7 +716,8 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     app = await createApp(store);
 
     await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
-    const records = (store as unknown as { creatorAgentKeys: Map<string, CreatorAgentKeyRecord> }).creatorAgentKeys;
+    const records = (store as unknown as { agentKeysStore: { creatorAgentKeys: Map<string, CreatorAgentKeyRecord> } })
+      .agentKeysStore.creatorAgentKeys;
     const aged = new Date(Date.now() - (DEFAULT_CREATOR_AGENT_KEY_TTL_DAYS + 30) * 24 * 60 * 60 * 1000);
     records.set(OWNER, { ...records.get(OWNER)!, updatedAt: aged.toISOString() });
 

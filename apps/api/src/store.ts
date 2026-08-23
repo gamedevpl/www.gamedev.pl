@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { FieldValue, Firestore, type DocumentData } from '@google-cloud/firestore';
 import type { AssessmentSource, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
 import { MANAGED_AGENT_VENDORS } from '@gamedevpl/contract';
@@ -28,12 +28,6 @@ import type { BuildEvent, SubmissionStatus } from './submission-status.js';
 export const BOT_UID_PREFIX = 'bot:';
 
 const PUBLIC_PLAY_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const BETA_INVITE_CODE_BYTES = 24;
-
-function hashBetaInviteCode(code: string): string {
-  return createHash('sha256').update(code).digest('hex');
-}
-
 // Set preserves insertion order — this list is a rotation, not a set.
 function normalizeFeaturedPoolSlugs(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -107,6 +101,12 @@ import { stripUndefined } from './store/firestore-util.js';
 import type { OAuthStore } from './store/slices/oauth.js';
 export type { OAuthStore };
 import { InMemoryOAuthStore, FirestoreOAuthStore } from './store/slices/oauth.js';
+import type { PlayerDataStore } from './store/slices/player-data.js';
+export type { PlayerDataStore };
+import { InMemoryPlayerDataStore, FirestorePlayerDataStore } from './store/slices/player-data.js';
+import type { WorldEntriesStore } from './store/slices/world-entries.js';
+export type { WorldEntriesStore };
+import { InMemoryWorldEntriesStore, FirestoreWorldEntriesStore } from './store/slices/world-entries.js';
 import type {
   NotificationType,
   ProposalNotificationType,
@@ -121,8 +121,10 @@ export type {
   SubmissionNotificationType,
   OperatorNotificationType,
   StoredNotification,
-  PushSubscriptionRecord,
 };
+import type { NotificationsStore } from './store/slices/notifications.js';
+export type { NotificationsStore };
+import { InMemoryNotificationsStore, FirestoreNotificationsStore } from './store/slices/notifications.js';
 import type { GameVoteCounts, PlayerFeedbackRecord } from './store/records/social.js';
 export type { GameVoteCounts, PlayerFeedbackRecord };
 import type {
@@ -149,24 +151,12 @@ export type {
   ScorecardUntrusted,
   Scorecard,
 };
-import {
-  GAME_ASSESSMENTS_COLLECTION,
-  REVIEW_SWEEPS_COLLECTION,
-  gameAssessmentId,
-  hydrateGameAssessment,
-  GAME_ASSESSMENT_HISTORY_COLLECTION,
-  RE_REVIEW_REQUESTS_COLLECTION,
-  reReviewRequestId,
-} from './store/records/review.js';
-export {
-  GAME_ASSESSMENTS_COLLECTION,
-  REVIEW_SWEEPS_COLLECTION,
-  gameAssessmentId,
-  hydrateGameAssessment,
-  GAME_ASSESSMENT_HISTORY_COLLECTION,
-  RE_REVIEW_REQUESTS_COLLECTION,
-  reReviewRequestId,
-};
+import type { ReviewStore } from './store/slices/review.js';
+export type { ReviewStore };
+import { InMemoryReviewStore, FirestoreReviewStore } from './store/slices/review.js';
+import type { ReviewSweepStore } from './store/slices/review-sweeps.js';
+export type { ReviewSweepStore };
+import { InMemoryReviewSweepStore, FirestoreReviewSweepStore } from './store/slices/review-sweeps.js';
 import type {
   GameSaveRecord,
   EditorDraftRecord,
@@ -174,13 +164,8 @@ import type {
   WorldEntryRecord,
 } from './store/records/player-data.js';
 export type { GameSaveRecord, EditorDraftRecord, PlayAffinityRecord, WorldEntryRecord };
-import {
-  MAX_EDITOR_DRAFT_BYTES,
-  MAX_PLAY_AFFINITY_GAMES,
-  MAX_PLAY_AFFINITY_OPENS,
-  MAX_GAME_SAVE_BYTES,
-} from './store/records/player-data.js';
-export { MAX_EDITOR_DRAFT_BYTES, MAX_PLAY_AFFINITY_GAMES, MAX_PLAY_AFFINITY_OPENS, MAX_GAME_SAVE_BYTES };
+import { MAX_EDITOR_DRAFT_BYTES, MAX_GAME_SAVE_BYTES } from './store/records/player-data.js';
+export { MAX_EDITOR_DRAFT_BYTES, MAX_GAME_SAVE_BYTES };
 import type {
   SuggestionStatus,
   SuggestionRecord,
@@ -203,10 +188,19 @@ import { OPEN_SUGGESTION_STATUSES, MAX_PROPOSAL_MESSAGES, compareProposals } fro
 export { OPEN_SUGGESTION_STATUSES, MAX_PROPOSAL_MESSAGES, compareProposals };
 import type { WaitlistEntry, BetaInvite, CreatedBetaInvite, ClaimBetaInviteResult } from './store/records/access.js';
 export type { WaitlistEntry, BetaInvite, CreatedBetaInvite, ClaimBetaInviteResult };
+import type { AccessStore } from './store/slices/access.js';
+export type { AccessStore };
+import { InMemoryAccessStore, FirestoreAccessStore } from './store/slices/access.js';
 import type { AccessTokenRecord } from './store/records/access-tokens.js';
 export type { AccessTokenRecord };
+import type { AccessTokensStore } from './store/slices/access-tokens.js';
+export type { AccessTokensStore };
+import { InMemoryAccessTokensStore, FirestoreAccessTokensStore } from './store/slices/access-tokens.js';
 import type { GameAgentKeyRecord, CreatorAgentKeyRecord } from './store/records/agent-keys.js';
 export type { GameAgentKeyRecord, CreatorAgentKeyRecord };
+import type { AgentKeysStore } from './store/slices/agent-keys.js';
+export type { AgentKeysStore };
+import { InMemoryAgentKeysStore, FirestoreAgentKeysStore } from './store/slices/agent-keys.js';
 import type {
   OAuthClientRecord,
   OAuthGrantRecord,
@@ -790,81 +784,11 @@ export interface QuotaStore {
   checkAndIncrementGlobalManagedBuilds(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
 }
 
-export interface AccessStore {
-  upsertWaitlistEntry(entry: { uid: string; email?: string; name?: string; locale?: string }): Promise<WaitlistEntry>;
+// AccessStore, InMemoryAccessStore and FirestoreAccessStore live in
+// ./store/slices/access.js -- imported at the top of the file (Phase 2 wave 4).
 
-  getWaitlistEntry(uid: string): Promise<WaitlistEntry | null>;
-
-  isWaitlistApproved(uid: string, email?: string): Promise<boolean>;
-
-  setWaitlistStatus(uid: string, status: WaitlistStatus): Promise<WaitlistEntry | null>;
-
-  /**
-   * Operator listing of the closed-beta waitlist.
-   *
-   * Sorted newest-request first. When `status` is set, only that status is returned.
-   * Bounded by `limit` (default 200) so a growing list cannot ship the whole collection
-   * in one console poll — at closed-beta scale the cap is generous; past that the panel
-   * filters by status rather than paging.
-   */
-  listWaitlistEntries(opts?: { status?: WaitlistStatus; limit?: number }): Promise<WaitlistEntry[]>;
-
-  /** Cheap count for the console tab badge. Optional status filter. */
-  countWaitlistEntries(status?: WaitlistStatus): Promise<number>;
-
-  /**
-   * Approve / reject / reset by email — including pre-approval before the person has
-   * ever visited. Mirrors `npm run beta:approve`: finds an existing row by email, or
-   * creates `waitlist/email:<lower>` with the requested status.
-   */
-  setWaitlistStatusByEmail(email: string, status: WaitlistStatus): Promise<WaitlistEntry>;
-
-  // Invite claim becomes membership; keeps requestedAt. See docs/deployment.md.
-  recordBetaInviteAdmission(entry: {
-    uid: string;
-    email?: string;
-    name?: string;
-    locale?: string;
-  }): Promise<WaitlistEntry>;
-
-  createBetaInvite(createdByUid: string): Promise<CreatedBetaInvite>;
-
-  listBetaInvites(opts?: { limit?: number }): Promise<BetaInvite[]>;
-
-  claimBetaInvite(code: string, uid: string): Promise<ClaimBetaInviteResult>;
-
-  revokeBetaInvite(id: string, revokedByUid: string): Promise<BetaInvite | null>;
-}
-
-export interface NotificationsStore {
-  /**
-   * Idempotent by notification id: a second emit for the same id is a no-op and
-   * returns `created: false` (a crashed/re-run sweep can safely re-emit).
-   */
-  createNotification(
-    uid: string,
-    notification: Omit<StoredNotification, 'readAt' | 'emailedAt'> & { createdAt?: string },
-  ): Promise<{ created: boolean; notification: StoredNotification }>;
-
-  listNotifications(uid: string, opts?: { limit?: number }): Promise<StoredNotification[]>;
-
-  markNotificationsRead(uid: string, ids: string[] | 'all'): Promise<void>;
-
-  /** Delete notifications by id, or all of them ('all') — the bell's dismiss/clear. */
-  deleteNotifications(uid: string, ids: string[] | 'all'): Promise<void>;
-
-  /** Stamp emailedAt after a successful send so retries don't re-send. */
-  markNotificationEmailed(uid: string, id: string, at?: string): Promise<void>;
-
-  /** Upsert a browser push subscription (idempotent by endpoint). */
-  savePushSubscription(uid: string, subscription: Omit<PushSubscriptionRecord, 'createdAt'>): Promise<void>;
-
-  /** All push subscriptions for a user — the push fan-out sends to each. */
-  listPushSubscriptions(uid: string): Promise<PushSubscriptionRecord[]>;
-
-  /** Remove a subscription (client unsubscribe, or pruning a dead endpoint). */
-  deletePushSubscription(uid: string, endpoint: string): Promise<void>;
-}
+// NotificationsStore, InMemoryNotificationsStore and FirestoreNotificationsStore live in
+// ./store/slices/notifications.js -- imported at the top of the file (Phase 2 wave 4).
 
 export interface SocialStore {
   /** A user's current vote on a game, or null if they have not voted. */
@@ -947,178 +871,11 @@ export interface SocialStore {
   countPlayerFeedbackByUid(uid: string): Promise<number>;
 }
 
-export interface ReviewStore {
-  // Upsert reviewer verdict; second pass overwrites in place.
-  upsertGameAssessment(
-    input: Omit<GameAssessment, 'id' | 'createdAt' | 'updatedAt' | 'gameVersion' | 'resolution'> & {
-      createdAt?: string;
-      gameVersion?: string | null;
-    },
-  ): Promise<GameAssessment>;
+// ReviewStore/ReviewSweepStore, their InMemory and Firestore implementations live in
+// ./store/slices/review.js and ./store/slices/review-sweeps.js (Phase 2 wave 4).
 
-  getGameAssessment(slug: string, reviewerUid: string): Promise<GameAssessment | null>;
-
-  // Records or withdraws the follow-up; expectedUpdatedAt pins the verdict.
-  setGameAssessmentResolution(
-    slug: string,
-    reviewerUid: string,
-    resolution: AssessmentResolution | null,
-    expectedUpdatedAt?: string,
-  ): Promise<ResolutionWriteResult>;
-
-  // Every reviewer's row for one game.
-  listGameAssessmentsBySlug(slug: string): Promise<GameAssessment[]>;
-
-  listGameAssessmentsByReviewer(reviewerUid: string): Promise<GameAssessment[]>;
-
-  // Recent assessments across reviewers; bounded operator page.
-  listGameAssessments(opts?: { limit?: number }): Promise<GameAssessment[]>;
-
-  listGameAssessmentsBySource(source: AssessmentSource): Promise<GameAssessment[]>;
-
-  countGameAssessmentsByUid(uid: string): Promise<number>;
-
-  deleteGameAssessmentsByUid(uid: string): Promise<number>;
-
-  // Superseded rows for one reviewer's one game, newest first.
-  listGameAssessmentHistory(slug: string, reviewerUid: string): Promise<GameAssessmentHistoryEntry[]>;
-
-  // Opens or re-opens one re-review request per (slug, reviewerUid) pair.
-  upsertReReviewRequests(
-    requests: Array<Pick<ReReviewRequest, 'slug' | 'reviewerUid' | 'gameVersion' | 'reason' | 'createdBy'>>,
-  ): Promise<ReReviewRequest[]>;
-
-  getReReviewRequest(slug: string, reviewerUid: string): Promise<ReReviewRequest | null>;
-
-  listOpenReReviewRequestsForReviewer(reviewerUid: string): Promise<ReReviewRequest[]>;
-
-  // Recent targeted requests across reviewers; bounded operator page.
-  listReReviewRequests(opts?: { limit?: number }): Promise<ReReviewRequest[]>;
-
-  resolveReReviewRequest(slug: string, reviewerUid: string): Promise<ReReviewRequest | null>;
-
-  getOpenReviewSweep(): Promise<ReviewSweep | null>;
-
-  getReviewSweep(id: string): Promise<ReviewSweep | null>;
-
-  listReviewSweeps(opts?: { limit?: number }): Promise<ReviewSweep[]>;
-
-  createReviewSweep(sweep: ReviewSweep): Promise<ReviewSweep>;
-
-  updateReviewSweep(
-    id: string,
-    patch: Partial<Omit<ReviewSweep, 'id' | 'createdAt' | 'createdBy' | 'slugs' | 'source'>>,
-  ): Promise<ReviewSweep | null>;
-
-  /** Overwrites a game's current scorecard (docs/improvement-loop-plan.md IL-2). */
-  putScorecard(slug: string, scorecard: Scorecard): Promise<void>;
-
-  /** A game's current scorecard, or null before the first sweep has run for it. */
-  getScorecard(slug: string): Promise<Scorecard | null>;
-
-  /**
-   * Every game's current scorecard, newest computation first.
-   *
-   * Exists so the sweep's output is *readable*. Writing an aggregate nobody can look at
-   * is the same shape of mistake as a silently-dropping branch: the first sign it had
-   * been producing nonsense would be an agent acting on the nonsense. Bounded, because
-   * this is one query behind an operator page rather than a paginated surface.
-   */
-  listScorecards(opts?: { limit?: number }): Promise<Scorecard[]>;
-}
-
-export interface PlayerDataStore {
-  /** One player's save for one game, or null if they have none. */
-  getGameSave(uid: string, slug: string): Promise<GameSaveRecord | null>;
-
-  /** Writes (or replaces) one player's save. The caller has already size-checked `data`. */
-  putGameSave(uid: string, slug: string, data: string, version: number): Promise<GameSaveRecord>;
-
-  deleteGameSave(uid: string, slug: string): Promise<void>;
-
-  /** Every save a person has, across games — the erase path's read. */
-  listGameSaves(uid: string): Promise<GameSaveRecord[]>;
-
-  /** Deletes every save a person has. Returns how many went. */
-  deleteGameSaves(uid: string): Promise<number>;
-
-  /** A creator's editor draft for one of their games, or null when none exists. */
-  getEditorDraft(uid: string, slug: string): Promise<EditorDraftRecord | null>;
-
-  /**
-   * Writes a creator's draft, incrementing its revision. The caller has already
-   * validated and size-checked `content`.
-   *
-   * `expectedRevision` makes the multi-tab guard real rather than advisory: the
-   * compare and the increment happen in one transaction, so two saves racing on
-   * the same base cannot both succeed. A mismatch resolves to
-   * `{ conflict: true }` with the revision that actually won — never a throw,
-   * because losing that race is an ordinary outcome the caller reports as 409.
-   * Omit it to take over deliberately (last write wins).
-   */
-  putEditorDraft(
-    uid: string,
-    slug: string,
-    content: string,
-    expectedRevision?: number,
-  ): Promise<{ conflict: false; record: EditorDraftRecord } | { conflict: true; revision: number }>;
-
-  deleteEditorDraft(uid: string, slug: string): Promise<void>;
-
-  /** Every editor draft a person has — the erase path's read, used for preview and for real. */
-  listEditorDrafts(uid: string): Promise<EditorDraftRecord[]>;
-
-  /** Deletes every editor draft a person has — the erase path. Returns how many went. */
-  deleteEditorDrafts(uid: string): Promise<number>;
-
-  /**
-   * Records that a signed-in player opened a published game. Upserts the affinity
-   * row, bumps `openCount`, and trims the oldest rows when the per-user ceiling is
-   * exceeded so the map cannot grow without bound.
-   */
-  recordPlayAffinity(uid: string, slug: string, at?: string): Promise<PlayAffinityRecord>;
-
-  /** Every game a person has opened while signed in — recommendations + erase read. */
-  listPlayAffinity(uid: string): Promise<PlayAffinityRecord[]>;
-
-  /** Deletes every play-affinity row a person has. Returns how many went. */
-  deletePlayAffinity(uid: string): Promise<number>;
-
-  /** Every entry in one shared world. The public read — no uid involved. */
-  listWorldEntries(worldId: string): Promise<WorldEntryRecord[]>;
-
-  /** One entry, or null. Used to settle ownership before a write. */
-  getWorldEntry(worldId: string, key: string): Promise<WorldEntryRecord | null>;
-
-  /**
-   * Claims or updates one entry, atomically.
-   *
-   * Returns `conflict` when the key already belongs to somebody else, and `quota` when
-   * this would take the player past `maxPerPlayer`. Both are decided inside the same
-   * transaction as the write: checking first and writing after would let two browsers
-   * on one account, or two players racing for the same plot, both pass the check.
-   */
-  putWorldEntry(options: {
-    worldId: string;
-    key: string;
-    uid: string;
-    fields: Record<string, string | number | boolean>;
-    maxPerPlayer: number;
-    maxEntries: number;
-  }): Promise<{ ok: true; entry: WorldEntryRecord } | { ok: false; reason: 'conflict' | 'quota' | 'full' }>;
-
-  /** Deletes an entry the player owns. False when it is missing or somebody else's. */
-  deleteWorldEntry(worldId: string, key: string, uid: string): Promise<boolean>;
-
-  /** How many entries a player owns in one world — the quota read. */
-  countWorldEntries(worldId: string, uid: string): Promise<number>;
-
-  /** Worlds where a person has written something — the erase path's read. */
-  listWorldsForUser(uid: string): Promise<string[]>;
-
-  /** Deletes everything one person wrote across every world. Returns how many went. */
-  deleteWorldEntriesForUser(uid: string): Promise<number>;
-}
+// PlayerDataStore, InMemoryPlayerDataStore and FirestorePlayerDataStore live in
+// ./store/slices/player-data.js -- imported at the top of the file (Phase 2 wave 4).
 
 export interface ContributionStore {
   /**
@@ -1219,90 +976,11 @@ export interface ContributionStore {
   listContributorBlocks(ownerUid: string): Promise<ContributorBlockRecord[]>;
 }
 
-export interface AccessTokensStore {
-  /** Persist a newly minted personal access token. */
-  createAccessToken(record: AccessTokenRecord): Promise<void>;
+// AccessTokensStore, InMemoryAccessTokensStore and FirestoreAccessTokensStore live in
+// ./store/slices/access-tokens.js -- imported at the top of the file (Phase 2 wave 4).
 
-  /** Point lookup by token id — the hot path on every bearer-authenticated request. */
-  getAccessToken(tokenId: string): Promise<AccessTokenRecord | null>;
-
-  /** Every token issued to a user, newest first. Never includes secrets (only hashes). */
-  listAccessTokens(uid: string): Promise<AccessTokenRecord[]>;
-
-  /** Revoke by id. Returns false when the token did not exist. */
-  deleteAccessToken(tokenId: string): Promise<boolean>;
-
-  /** Best-effort last-use stamp; callers must not let a failure fail the request. */
-  touchAccessToken(tokenId: string, at: string): Promise<void>;
-}
-
-export interface AgentKeysStore {
-  /**
-   * Durable per-game opener state (BY-23). Returns null when no key has been issued
-   * for this slug yet.
-   */
-  getGameAgentKey(slug: string): Promise<GameAgentKeyRecord | null>;
-
-  /**
-   * Ensures a gameAgentKeys doc exists for (slug, ownerUid), creating generation 1
-   * when absent. If the doc exists for a different owner, returns null (caller must
-   * refuse — the slug is not theirs to key).
-   */
-  ensureGameAgentKey(slug: string, ownerUid: string, at: string): Promise<GameAgentKeyRecord | null>;
-
-  /**
-   * Transactionally bumps `keyGeneration` for an owned slug. Returns the new record,
-   * or null when missing / not owned by `ownerUid`.
-   */
-  rotateGameAgentKey(slug: string, ownerUid: string, at: string): Promise<GameAgentKeyRecord | null>;
-
-  /**
-   * BY-24: admit at most one in-flight `open_round` per slug. Returns false when another
-   * caller already holds the lock.
-   */
-  beginAgentOpenRound(slug: string, at: string): Promise<boolean>;
-
-  /** BY-24: release the admission lock after `open_round` completes or aborts. */
-  finishAgentOpenRound(slug: string, at: string): Promise<void>;
-
-  /** Creator-wide opener record, or null when the creator has never minted one. */
-  getCreatorAgentKey(ownerUid: string): Promise<CreatorAgentKeyRecord | null>;
-
-  /**
-   * Ensures a creatorAgentKeys doc exists for ownerUid, creating generation 1 when
-   * absent. Does not clear `revokedAt` — mint after revoke is an explicit reactivate.
-   */
-  ensureCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord>;
-
-  /**
-   * Clears `revokedAt` so a post-revoke mint can issue at the current (already bumped)
-   * generation. Creates generation 1 when absent. Does not bump `keyGeneration`.
-   */
-  reactivateCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord>;
-
-  /**
-   * Transactionally bumps `keyGeneration` and clears `revokedAt`. Returns the new
-   * record, or null when the creator has no key yet (caller should ensure first).
-   */
-  rotateCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null>;
-
-  /**
-   * Transactionally bumps `keyGeneration` and sets `revokedAt`. Returns the new
-   * record, or null when missing. Keeps the doc so generation never resets to 1.
-   */
-  revokeCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null>;
-
-  /**
-   * Re-dates a generation without bumping it, so it mints a valid key again.
-   *
-   * Mints are anchored to `updatedAt` (one generation, one key), which means a
-   * generation older than the key TTL would otherwise mint an expired key forever —
-   * and the only escape the panel offers is the destructive Rotate. Re-dating keeps
-   * the generation, so nothing that was already dead comes back: every key of this
-   * generation had expired before this could run.
-   */
-  touchCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null>;
-}
+// AgentKeysStore, InMemoryAgentKeysStore and FirestoreAgentKeysStore live in
+// ./store/slices/agent-keys.js -- imported at the top of the file (Phase 2 wave 4).
 
 // OAuthStore, InMemoryOAuthStore and FirestoreOAuthStore live in
 // ./store/slices/oauth.js -- imported at the top of the file (Phase 2 wave 4).
@@ -1321,38 +999,16 @@ export interface Store
     NotificationsStore,
     SocialStore,
     ReviewStore,
+    ReviewSweepStore,
     PlayerDataStore,
+    WorldEntriesStore,
     ContributionStore,
     AccessTokensStore,
     AgentKeysStore,
     OAuthStore {}
 
-// Stable doc id for a subscription: a hash of its endpoint URL. Endpoints are long
-// and contain characters illegal in Firestore doc ids, and hashing gives idempotent
-// re-subscribes for free.
-export function pushSubscriptionId(endpoint: string): string {
-  return createHash('sha256').update(endpoint).digest('hex');
-}
-
 // stripUndefined lives in ./store/firestore-util.js -- imported at the top of the file
 // (Phase 2 wave 4), shared by every slice still in this file that writes to Firestore.
-
-/**
- * Presentation order for scorecards: newest computation first, slug as the tie-break.
- *
- * The tie-break is the load-bearing half, not a nicety. A sweep stamps **one**
- * `computedAt` onto every game it writes, so equal timestamps are not an edge case —
- * they are every row. Ordering on the timestamp alone leaves the result order undefined
- * (Firestore guarantees nothing among equal values), which would make the operator table
- * reshuffle between reads and, past the read limit, change *which* games appear at all.
- *
- * Shared by both stores so the in-memory one used by tests cannot quietly disagree with
- * the Firestore one used in production — that divergence is what makes an ordering bug
- * invisible until it is in front of a person.
- */
-export function compareScorecards(a: Scorecard, b: Scorecard): number {
-  return b.computedAt.localeCompare(a.computedAt) || a.slug.localeCompare(b.slug);
-}
 
 /**
  * Presentation order for suggestions: worst first, then newest, then slug.
@@ -1417,33 +1073,19 @@ export class InMemoryStore implements Store {
   private creationLimits: CreationLimits | null = null;
   private publicPlayConfig: PublicPlayConfig | null = null;
   private featuredPoolConfig: FeaturedPoolConfig | null = null;
-  private waitlist = new Map<string, WaitlistEntry>();
-  private betaInvites = new Map<string, BetaInvite>();
+  private accessStore = new InMemoryAccessStore();
   private telemetryStore = new InMemoryTelemetryStore();
-  // uid -> (notificationId -> notification)
-  private notifications = new Map<string, Map<string, StoredNotification>>();
-  // uid -> (endpoint-hash -> subscription)
-  private pushSubs = new Map<string, Map<string, PushSubscriptionRecord>>();
+  private notificationsStore = new InMemoryNotificationsStore();
   // slug -> (uid -> value)
   private votes = new Map<string, Map<string, VoteValue>>();
   /** slug → uid → followedAt. Mirrors `games/{slug}/followers/{uid}` in Firestore. */
   private follows = new Map<string, Map<string, string>>();
   // slug -> feedback rows, newest last (reversed on read)
   private playerFeedback = new Map<string, PlayerFeedbackRecord[]>();
-  private gameAssessments = new Map<string, GameAssessment>();
-  // gameAssessmentId -> superseded rows, oldest first.
-  private gameAssessmentHistory = new Map<string, GameAssessmentHistoryEntry[]>();
-  private reReviewRequests = new Map<string, ReReviewRequest>();
-  private reviewSweeps = new Map<string, ReviewSweep>();
-  // uid -> (slug -> saved progress)
-  private gameSaves = new Map<string, Map<string, GameSaveRecord>>();
-  private editorDrafts = new Map<string, Map<string, EditorDraftRecord>>();
-  // uid -> (slug -> play affinity for recommendations)
-  private playAffinity = new Map<string, Map<string, PlayAffinityRecord>>();
-  /** worldId -> key -> entry. Keyed by world, not by player: a world is shared. */
-  private worldEntries = new Map<string, Map<string, WorldEntryRecord>>();
-  // slug -> current scorecard
-  private scorecards = new Map<string, Scorecard>();
+  private reviewStore = new InMemoryReviewStore();
+  private reviewSweepStore = new InMemoryReviewSweepStore();
+  private playerDataStore = new InMemoryPlayerDataStore();
+  private worldEntriesStore = new InMemoryWorldEntriesStore();
   private suggestions = new Map<string, SuggestionRecord>();
   private proposals = new Map<string, ProposalRecord>(); // id -> proposal
   private contributionSettings = new Map<string, GameContributionSettings>(); // slug -> setting
@@ -1451,10 +1093,9 @@ export class InMemoryStore implements Store {
   private gameAutonomy = new Map<string, string>();
   private legacyGameSuggestions = new Set<string>();
   // tokenId -> personal access token record
-  private accessTokens = new Map<string, AccessTokenRecord>();
+  private accessTokensStore = new InMemoryAccessTokensStore();
   // slug -> durable per-game agent opener state (BY-23)
-  private gameAgentKeys = new Map<string, GameAgentKeyRecord>();
-  private creatorAgentKeys = new Map<string, CreatorAgentKeyRecord>();
+  private agentKeysStore = new InMemoryAgentKeysStore();
   private oauthStore = new InMemoryOAuthStore();
   // lowercase handle -> reservation
   private handles = new Map<string, HandleRecord>();
@@ -1597,28 +1238,28 @@ export class InMemoryStore implements Store {
       void counters;
       if (key.startsWith(`${uid}:`)) this.usage.delete(key);
     }
-    this.waitlist.delete(uid);
+    this.accessStore.waitlist.delete(uid);
     if (user?.email) {
       const email = user.email.toLowerCase();
-      for (const [key, entry] of [...this.waitlist]) {
-        if (entry.email?.toLowerCase() === email) this.waitlist.delete(key);
+      for (const [key, entry] of [...this.accessStore.waitlist]) {
+        if (entry.email?.toLowerCase() === email) this.accessStore.waitlist.delete(key);
       }
     }
-    for (const [id, invite] of [...this.betaInvites]) {
-      if (invite.createdByUid === uid || invite.claimedUid === uid) this.betaInvites.delete(id);
+    for (const [id, invite] of [...this.accessStore.betaInvites]) {
+      if (invite.createdByUid === uid || invite.claimedUid === uid) this.accessStore.betaInvites.delete(id);
     }
-    this.notifications.delete(uid);
-    this.pushSubs.delete(uid);
-    this.gameSaves.delete(uid);
-    this.editorDrafts.delete(uid);
-    this.playAffinity.delete(uid);
-    for (const [tokenId, record] of [...this.accessTokens]) {
-      if (record.uid === uid) this.accessTokens.delete(tokenId);
+    this.notificationsStore.notifications.delete(uid);
+    this.notificationsStore.pushSubs.delete(uid);
+    this.playerDataStore.gameSaves.delete(uid);
+    this.playerDataStore.editorDrafts.delete(uid);
+    this.playerDataStore.playAffinity.delete(uid);
+    for (const [tokenId, record] of [...this.accessTokensStore.accessTokens]) {
+      if (record.uid === uid) this.accessTokensStore.accessTokens.delete(tokenId);
     }
-    for (const [slug, record] of [...this.gameAgentKeys]) {
-      if (record.ownerUid === uid) this.gameAgentKeys.delete(slug);
+    for (const [slug, record] of [...this.agentKeysStore.gameAgentKeys]) {
+      if (record.ownerUid === uid) this.agentKeysStore.gameAgentKeys.delete(slug);
     }
-    this.creatorAgentKeys.delete(uid);
+    this.agentKeysStore.creatorAgentKeys.delete(uid);
     for (const [id, suggestion] of [...this.suggestions]) {
       if (suggestion.ownerUid === uid) this.suggestions.set(id, { ...suggestion, ownerUid: null, updatedAt: at });
     }
@@ -2687,88 +2328,31 @@ export class InMemoryStore implements Store {
     name?: string;
     locale?: string;
   }): Promise<WaitlistEntry> {
-    const now = new Date().toISOString();
-    const existing = this.waitlist.get(entry.uid);
-    // Lowercase at write so equality queries (Firestore `where email ==`) and the
-    // pre-approve path agree — mixed-case joins used to miss and mint a second row.
-    const rawEmail = entry.email ?? existing?.email;
-
-    const updated: WaitlistEntry = {
-      uid: entry.uid,
-      email: rawEmail !== undefined ? rawEmail.toLowerCase() : undefined,
-      name: entry.name ?? existing?.name,
-      requestedAt: now,
-      locale: entry.locale ?? existing?.locale,
-      status: existing?.status ?? 'pending',
-    };
-
-    this.waitlist.set(entry.uid, updated);
-    return { ...updated };
+    return this.accessStore.upsertWaitlistEntry(entry);
   }
 
   async getWaitlistEntry(uid: string): Promise<WaitlistEntry | null> {
-    const entry = this.waitlist.get(uid);
-    return entry ? { ...entry } : null;
+    return this.accessStore.getWaitlistEntry(uid);
   }
 
   async isWaitlistApproved(uid: string, email?: string): Promise<boolean> {
-    const byUid = this.waitlist.get(uid);
-    if (byUid?.status === 'approved') return true;
-    if (email) {
-      const emailLower = email.toLowerCase();
-      for (const entry of this.waitlist.values()) {
-        if (entry.email?.toLowerCase() === emailLower && entry.status === 'approved') {
-          return true;
-        }
-      }
-    }
-    return false;
+    return this.accessStore.isWaitlistApproved(uid, email);
   }
 
   async setWaitlistStatus(uid: string, status: WaitlistStatus): Promise<WaitlistEntry | null> {
-    const existing = this.waitlist.get(uid);
-    if (!existing) return null;
-    const updated: WaitlistEntry = { ...existing, status };
-    this.waitlist.set(uid, updated);
-    return { ...updated };
+    return this.accessStore.setWaitlistStatus(uid, status);
   }
 
   async listWaitlistEntries(opts?: { status?: WaitlistStatus; limit?: number }): Promise<WaitlistEntry[]> {
-    const limit = opts?.limit ?? 200;
-    const rows = Array.from(this.waitlist.values()).filter(
-      (entry) => opts?.status === undefined || entry.status === opts.status,
-    );
-    rows.sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
-    return rows.slice(0, limit).map((entry) => ({ ...entry }));
+    return this.accessStore.listWaitlistEntries(opts);
   }
 
   async countWaitlistEntries(status?: WaitlistStatus): Promise<number> {
-    if (status === undefined) return this.waitlist.size;
-    let count = 0;
-    for (const entry of this.waitlist.values()) {
-      if (entry.status === status) count += 1;
-    }
-    return count;
+    return this.accessStore.countWaitlistEntries(status);
   }
 
   async setWaitlistStatusByEmail(email: string, status: WaitlistStatus): Promise<WaitlistEntry> {
-    const emailLower = email.toLowerCase();
-    for (const entry of this.waitlist.values()) {
-      if (entry.email?.toLowerCase() === emailLower) {
-        const updated: WaitlistEntry = { ...entry, status };
-        this.waitlist.set(entry.uid, updated);
-        return { ...updated };
-      }
-    }
-    const now = new Date().toISOString();
-    const created: WaitlistEntry = {
-      uid: `email:${emailLower}`,
-      email: emailLower,
-      requestedAt: now,
-      status,
-    };
-    this.waitlist.set(created.uid, created);
-    return { ...created };
+    return this.accessStore.setWaitlistStatusByEmail(email, status);
   }
 
   async recordBetaInviteAdmission(entry: {
@@ -2777,152 +2361,58 @@ export class InMemoryStore implements Store {
     name?: string;
     locale?: string;
   }): Promise<WaitlistEntry> {
-    const existing = this.waitlist.get(entry.uid);
-    const rawEmail = entry.email ?? existing?.email;
-
-    const updated: WaitlistEntry = {
-      uid: entry.uid,
-      email: rawEmail !== undefined ? rawEmail.toLowerCase() : undefined,
-      name: entry.name ?? existing?.name,
-      requestedAt: existing?.requestedAt ?? new Date().toISOString(),
-      locale: entry.locale ?? existing?.locale,
-      status: 'approved',
-    };
-
-    this.waitlist.set(entry.uid, updated);
-    return { ...updated };
+    return this.accessStore.recordBetaInviteAdmission(entry);
   }
 
   async createBetaInvite(createdByUid: string): Promise<CreatedBetaInvite> {
-    const code = randomBytes(BETA_INVITE_CODE_BYTES).toString('base64url');
-    const invite: BetaInvite = {
-      id: randomUUID(),
-      codeHash: hashBetaInviteCode(code),
-      createdAt: new Date().toISOString(),
-      createdByUid,
-      status: 'available',
-    };
-    this.betaInvites.set(invite.id, invite);
-    return { invite: { ...invite }, code };
+    return this.accessStore.createBetaInvite(createdByUid);
   }
 
   async listBetaInvites(opts?: { limit?: number }): Promise<BetaInvite[]> {
-    const limit = opts?.limit ?? 200;
-    return [...this.betaInvites.values()]
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .slice(0, limit)
-      .map((invite) => ({ ...invite }));
+    return this.accessStore.listBetaInvites(opts);
   }
 
   async claimBetaInvite(code: string, uid: string): Promise<ClaimBetaInviteResult> {
-    const codeHash = hashBetaInviteCode(code);
-    const invite = [...this.betaInvites.values()].find((candidate) => candidate.codeHash === codeHash);
-    if (!invite) return { ok: false, reason: 'not_found' };
-    if (invite.status === 'revoked') return { ok: false, reason: 'revoked' };
-    if (invite.status === 'claimed') {
-      return invite.claimedUid === uid ? { ok: true, invite: { ...invite } } : { ok: false, reason: 'claimed' };
-    }
-
-    const claimed: BetaInvite = {
-      ...invite,
-      status: 'claimed',
-      claimedAt: new Date().toISOString(),
-      claimedUid: uid,
-    };
-    this.betaInvites.set(invite.id, claimed);
-    return { ok: true, invite: { ...claimed } };
+    return this.accessStore.claimBetaInvite(code, uid);
   }
 
   async revokeBetaInvite(id: string, revokedByUid: string): Promise<BetaInvite | null> {
-    const invite = this.betaInvites.get(id);
-    if (!invite || invite.status !== 'available') return null;
-    const revoked: BetaInvite = {
-      ...invite,
-      status: 'revoked',
-      revokedAt: new Date().toISOString(),
-      revokedByUid,
-    };
-    this.betaInvites.set(id, revoked);
-    return { ...revoked };
+    return this.accessStore.revokeBetaInvite(id, revokedByUid);
   }
 
   async createNotification(
     uid: string,
     notification: Omit<StoredNotification, 'readAt' | 'emailedAt'> & { createdAt?: string },
   ): Promise<{ created: boolean; notification: StoredNotification }> {
-    const forUser = this.notifications.get(uid) ?? new Map<string, StoredNotification>();
-    const existing = forUser.get(notification.id);
-    if (existing) {
-      return { created: false, notification: { ...existing } };
-    }
-    const record: StoredNotification = {
-      id: notification.id,
-      type: notification.type,
-      createdAt: notification.createdAt ?? new Date().toISOString(),
-      readAt: null,
-      emailedAt: null,
-      titleKey: notification.titleKey,
-      bodyKey: notification.bodyKey,
-      params: { ...notification.params },
-      link: notification.link,
-    };
-    forUser.set(record.id, record);
-    this.notifications.set(uid, forUser);
-    return { created: true, notification: { ...record } };
+    return this.notificationsStore.createNotification(uid, notification);
   }
 
   async listNotifications(uid: string, opts?: { limit?: number }): Promise<StoredNotification[]> {
-    const forUser = this.notifications.get(uid);
-    if (!forUser) return [];
-    const sorted = Array.from(forUser.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    const limited = opts?.limit ? sorted.slice(0, opts.limit) : sorted;
-    return limited.map((n) => ({ ...n }));
+    return this.notificationsStore.listNotifications(uid, opts);
   }
 
   async markNotificationsRead(uid: string, ids: string[] | 'all'): Promise<void> {
-    const forUser = this.notifications.get(uid);
-    if (!forUser) return;
-    const now = new Date().toISOString();
-    const targets = ids === 'all' ? Array.from(forUser.keys()) : ids;
-    for (const id of targets) {
-      const n = forUser.get(id);
-      if (n && n.readAt === null) forUser.set(id, { ...n, readAt: now });
-    }
+    return this.notificationsStore.markNotificationsRead(uid, ids);
   }
 
   async deleteNotifications(uid: string, ids: string[] | 'all'): Promise<void> {
-    const forUser = this.notifications.get(uid);
-    if (!forUser) return;
-    if (ids === 'all') {
-      forUser.clear();
-      return;
-    }
-    for (const id of ids) forUser.delete(id);
+    return this.notificationsStore.deleteNotifications(uid, ids);
   }
 
   async markNotificationEmailed(uid: string, id: string, at?: string): Promise<void> {
-    const forUser = this.notifications.get(uid);
-    const n = forUser?.get(id);
-    if (n) forUser!.set(id, { ...n, emailedAt: at ?? new Date().toISOString() });
+    return this.notificationsStore.markNotificationEmailed(uid, id, at);
   }
 
   async savePushSubscription(uid: string, subscription: Omit<PushSubscriptionRecord, 'createdAt'>): Promise<void> {
-    const forUser = this.pushSubs.get(uid) ?? new Map<string, PushSubscriptionRecord>();
-    forUser.set(pushSubscriptionId(subscription.endpoint), {
-      endpoint: subscription.endpoint,
-      keys: { ...subscription.keys },
-      createdAt: new Date().toISOString(),
-    });
-    this.pushSubs.set(uid, forUser);
+    return this.notificationsStore.savePushSubscription(uid, subscription);
   }
 
   async listPushSubscriptions(uid: string): Promise<PushSubscriptionRecord[]> {
-    const forUser = this.pushSubs.get(uid);
-    return forUser ? Array.from(forUser.values()).map((s) => ({ ...s, keys: { ...s.keys } })) : [];
+    return this.notificationsStore.listPushSubscriptions(uid);
   }
 
   async deletePushSubscription(uid: string, endpoint: string): Promise<void> {
-    this.pushSubs.get(uid)?.delete(pushSubscriptionId(endpoint));
+    return this.notificationsStore.deletePushSubscription(uid, endpoint);
   }
 
   private voteCounts(slug: string): GameVoteCounts {
@@ -2982,35 +2472,27 @@ export class InMemoryStore implements Store {
   }
 
   async getGameSave(uid: string, slug: string): Promise<GameSaveRecord | null> {
-    const found = this.gameSaves.get(uid)?.get(slug);
-    return found ? { ...found } : null;
+    return this.playerDataStore.getGameSave(uid, slug);
   }
 
   async putGameSave(uid: string, slug: string, data: string, version: number): Promise<GameSaveRecord> {
-    const record: GameSaveRecord = { slug, data, version, updatedAt: new Date().toISOString() };
-    const forUser = this.gameSaves.get(uid) ?? new Map<string, GameSaveRecord>();
-    forUser.set(slug, record);
-    this.gameSaves.set(uid, forUser);
-    return { ...record };
+    return this.playerDataStore.putGameSave(uid, slug, data, version);
   }
 
   async deleteGameSave(uid: string, slug: string): Promise<void> {
-    this.gameSaves.get(uid)?.delete(slug);
+    return this.playerDataStore.deleteGameSave(uid, slug);
   }
 
   async listGameSaves(uid: string): Promise<GameSaveRecord[]> {
-    return [...(this.gameSaves.get(uid)?.values() ?? [])].map((record) => ({ ...record }));
+    return this.playerDataStore.listGameSaves(uid);
   }
 
   async deleteGameSaves(uid: string): Promise<number> {
-    const count = this.gameSaves.get(uid)?.size ?? 0;
-    this.gameSaves.delete(uid);
-    return count;
+    return this.playerDataStore.deleteGameSaves(uid);
   }
 
   async getEditorDraft(uid: string, slug: string): Promise<EditorDraftRecord | null> {
-    const found = this.editorDrafts.get(uid)?.get(slug);
-    return found ? { ...found } : null;
+    return this.playerDataStore.getEditorDraft(uid, slug);
   }
 
   async putEditorDraft(
@@ -3019,76 +2501,39 @@ export class InMemoryStore implements Store {
     content: string,
     expectedRevision?: number,
   ): Promise<{ conflict: false; record: EditorDraftRecord } | { conflict: true; revision: number }> {
-    const forUser = this.editorDrafts.get(uid) ?? new Map<string, EditorDraftRecord>();
-    const current = forUser.get(slug)?.revision ?? 0;
-    if (expectedRevision !== undefined && current !== expectedRevision) {
-      return { conflict: true, revision: current };
-    }
-    const record: EditorDraftRecord = {
-      slug,
-      content,
-      revision: current + 1,
-      updatedAt: new Date().toISOString(),
-    };
-    forUser.set(slug, record);
-    this.editorDrafts.set(uid, forUser);
-    return { conflict: false, record: { ...record } };
+    return this.playerDataStore.putEditorDraft(uid, slug, content, expectedRevision);
   }
 
   async deleteEditorDraft(uid: string, slug: string): Promise<void> {
-    this.editorDrafts.get(uid)?.delete(slug);
+    return this.playerDataStore.deleteEditorDraft(uid, slug);
   }
 
   async listEditorDrafts(uid: string): Promise<EditorDraftRecord[]> {
-    return [...(this.editorDrafts.get(uid)?.values() ?? [])].map((record) => ({ ...record }));
+    return this.playerDataStore.listEditorDrafts(uid);
   }
 
   async deleteEditorDrafts(uid: string): Promise<number> {
-    const count = this.editorDrafts.get(uid)?.size ?? 0;
-    this.editorDrafts.delete(uid);
-    return count;
+    return this.playerDataStore.deleteEditorDrafts(uid);
   }
 
   async recordPlayAffinity(uid: string, slug: string, at?: string): Promise<PlayAffinityRecord> {
-    const when = at ?? new Date().toISOString();
-    const forUser = this.playAffinity.get(uid) ?? new Map<string, PlayAffinityRecord>();
-    const existing = forUser.get(slug);
-    const record: PlayAffinityRecord = {
-      slug,
-      openCount: Math.min(MAX_PLAY_AFFINITY_OPENS, (existing?.openCount ?? 0) + 1),
-      lastPlayedAt: when,
-    };
-    forUser.set(slug, record);
-    if (forUser.size > MAX_PLAY_AFFINITY_GAMES) {
-      const oldest = [...forUser.values()]
-        .filter((entry) => entry.slug !== slug)
-        .sort((a, b) => a.lastPlayedAt.localeCompare(b.lastPlayedAt) || a.slug.localeCompare(b.slug));
-      const overflow = forUser.size - MAX_PLAY_AFFINITY_GAMES;
-      for (const entry of oldest.slice(0, overflow)) forUser.delete(entry.slug);
-    }
-    this.playAffinity.set(uid, forUser);
-    return { ...record };
+    return this.playerDataStore.recordPlayAffinity(uid, slug, at);
   }
 
   async listPlayAffinity(uid: string): Promise<PlayAffinityRecord[]> {
-    return [...(this.playAffinity.get(uid)?.values() ?? [])]
-      .map((record) => ({ ...record }))
-      .sort((a, b) => b.lastPlayedAt.localeCompare(a.lastPlayedAt) || a.slug.localeCompare(b.slug));
+    return this.playerDataStore.listPlayAffinity(uid);
   }
 
   async deletePlayAffinity(uid: string): Promise<number> {
-    const count = this.playAffinity.get(uid)?.size ?? 0;
-    this.playAffinity.delete(uid);
-    return count;
+    return this.playerDataStore.deletePlayAffinity(uid);
   }
 
   async listWorldEntries(worldId: string): Promise<WorldEntryRecord[]> {
-    return [...(this.worldEntries.get(worldId)?.values() ?? [])].map((entry) => ({ ...entry }));
+    return this.worldEntriesStore.listWorldEntries(worldId);
   }
 
   async getWorldEntry(worldId: string, key: string): Promise<WorldEntryRecord | null> {
-    const found = this.worldEntries.get(worldId)?.get(key);
-    return found ? { ...found } : null;
+    return this.worldEntriesStore.getWorldEntry(worldId, key);
   }
 
   async putWorldEntry(options: {
@@ -3099,62 +2544,23 @@ export class InMemoryStore implements Store {
     maxPerPlayer: number;
     maxEntries: number;
   }): Promise<{ ok: true; entry: WorldEntryRecord } | { ok: false; reason: 'conflict' | 'quota' | 'full' }> {
-    const world = this.worldEntries.get(options.worldId) ?? new Map<string, WorldEntryRecord>();
-    const existing = world.get(options.key);
-    if (existing && existing.ownerUid !== options.uid) return { ok: false, reason: 'conflict' };
-    if (!existing) {
-      if (world.size >= options.maxEntries) return { ok: false, reason: 'full' };
-      let owned = 0;
-      for (const entry of world.values()) if (entry.ownerUid === options.uid) owned += 1;
-      if (owned >= options.maxPerPlayer) return { ok: false, reason: 'quota' };
-    }
-    const now = new Date().toISOString();
-    const entry: WorldEntryRecord = {
-      key: options.key,
-      fields: options.fields,
-      ownerUid: options.uid,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-    };
-    world.set(options.key, entry);
-    this.worldEntries.set(options.worldId, world);
-    return { ok: true, entry: { ...entry } };
+    return this.worldEntriesStore.putWorldEntry(options);
   }
 
   async deleteWorldEntry(worldId: string, key: string, uid: string): Promise<boolean> {
-    const world = this.worldEntries.get(worldId);
-    const existing = world?.get(key);
-    if (!existing || existing.ownerUid !== uid) return false;
-    world!.delete(key);
-    return true;
+    return this.worldEntriesStore.deleteWorldEntry(worldId, key, uid);
   }
 
   async countWorldEntries(worldId: string, uid: string): Promise<number> {
-    let owned = 0;
-    for (const entry of this.worldEntries.get(worldId)?.values() ?? []) {
-      if (entry.ownerUid === uid) owned += 1;
-    }
-    return owned;
+    return this.worldEntriesStore.countWorldEntries(worldId, uid);
   }
 
   async listWorldsForUser(uid: string): Promise<string[]> {
-    const touched: string[] = [];
-    for (const [worldId, world] of this.worldEntries) {
-      if ([...world.values()].some((entry) => entry.ownerUid === uid)) touched.push(worldId);
-    }
-    return touched.sort();
+    return this.worldEntriesStore.listWorldsForUser(uid);
   }
 
   async deleteWorldEntriesForUser(uid: string): Promise<number> {
-    let removed = 0;
-    for (const world of this.worldEntries.values()) {
-      for (const entry of [...world.values()]) {
-        if (entry.ownerUid !== uid) continue;
-        world.delete(entry.key);
-        removed += 1;
-      }
-    }
-    return removed;
+    return this.worldEntriesStore.deleteWorldEntriesForUser(uid);
   }
 
   async addPlayerFeedback(slug: string, uid: string, text: string): Promise<PlayerFeedbackRecord> {
@@ -3180,34 +2586,11 @@ export class InMemoryStore implements Store {
       gameVersion?: string | null;
     },
   ): Promise<GameAssessment> {
-    const id = gameAssessmentId(input.slug, input.reviewerUid);
-    const existing = this.gameAssessments.get(id);
-    const now = new Date().toISOString();
-    if (existing) {
-      const history = this.gameAssessmentHistory.get(id) ?? [];
-      history.push({ ...existing, supersededAt: now });
-      this.gameAssessmentHistory.set(id, history);
-    }
-    const record: GameAssessment = {
-      id,
-      slug: input.slug,
-      title: input.title,
-      source: input.source,
-      creatorHandle: input.creatorHandle,
-      reviewerUid: input.reviewerUid,
-      verdict: input.verdict,
-      note: input.note,
-      noteOrigin: input.noteOrigin,
-      checklist: input.checklist ?? null,
-      clientContext: input.clientContext ?? null,
-      gameVersion: input.gameVersion ?? null,
-      // Fresh judgment: prior follow-up stays on the archived row.
-      resolution: null,
-      createdAt: existing?.createdAt ?? input.createdAt ?? now,
-      updatedAt: now,
-    };
-    this.gameAssessments.set(id, record);
-    return { ...record };
+    return this.reviewStore.upsertGameAssessment(input);
+  }
+
+  async getGameAssessment(slug: string, reviewerUid: string): Promise<GameAssessment | null> {
+    return this.reviewStore.getGameAssessment(slug, reviewerUid);
   }
 
   async setGameAssessmentResolution(
@@ -3216,195 +2599,92 @@ export class InMemoryStore implements Store {
     resolution: AssessmentResolution | null,
     expectedUpdatedAt?: string,
   ): Promise<ResolutionWriteResult> {
-    const id = gameAssessmentId(slug, reviewerUid);
-    const existing = this.gameAssessments.get(id);
-    if (!existing) return { status: 'not_found' };
-    if (expectedUpdatedAt !== undefined && existing.updatedAt !== expectedUpdatedAt) {
-      return { status: 'stale', assessment: hydrateGameAssessment(id, existing) };
-    }
-    const record: GameAssessment = { ...existing, resolution: resolution ? { ...resolution } : null };
-    this.gameAssessments.set(id, record);
-    return { status: 'ok', assessment: hydrateGameAssessment(id, record) };
+    return this.reviewStore.setGameAssessmentResolution(slug, reviewerUid, resolution, expectedUpdatedAt);
   }
 
   async listGameAssessmentsBySlug(slug: string): Promise<GameAssessment[]> {
-    return Array.from(this.gameAssessments.values())
-      .filter((row) => row.slug === slug)
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.reviewerUid.localeCompare(b.reviewerUid))
-      .map((row) => hydrateGameAssessment(row.id, row));
+    return this.reviewStore.listGameAssessmentsBySlug(slug);
+  }
+
+  async listGameAssessmentsByReviewer(reviewerUid: string): Promise<GameAssessment[]> {
+    return this.reviewStore.listGameAssessmentsByReviewer(reviewerUid);
+  }
+
+  async listGameAssessments(opts?: { limit?: number }): Promise<GameAssessment[]> {
+    return this.reviewStore.listGameAssessments(opts);
+  }
+
+  async listGameAssessmentsBySource(source: AssessmentSource): Promise<GameAssessment[]> {
+    return this.reviewStore.listGameAssessmentsBySource(source);
+  }
+
+  async countGameAssessmentsByUid(uid: string): Promise<number> {
+    return this.reviewStore.countGameAssessmentsByUid(uid);
+  }
+
+  async deleteGameAssessmentsByUid(uid: string): Promise<number> {
+    return this.reviewStore.deleteGameAssessmentsByUid(uid);
   }
 
   async listGameAssessmentHistory(slug: string, reviewerUid: string): Promise<GameAssessmentHistoryEntry[]> {
-    const id = gameAssessmentId(slug, reviewerUid);
-    return [...(this.gameAssessmentHistory.get(id) ?? [])]
-      .sort((a, b) => b.supersededAt.localeCompare(a.supersededAt))
-      .map((row) => ({ ...row }));
+    return this.reviewStore.listGameAssessmentHistory(slug, reviewerUid);
   }
 
   async upsertReReviewRequests(
     requests: Array<Pick<ReReviewRequest, 'slug' | 'reviewerUid' | 'gameVersion' | 'reason' | 'createdBy'>>,
   ): Promise<ReReviewRequest[]> {
-    const now = new Date().toISOString();
-    const out: ReReviewRequest[] = [];
-    for (const req of requests) {
-      const id = reReviewRequestId(req.slug, req.reviewerUid);
-      const record: ReReviewRequest = {
-        id,
-        slug: req.slug,
-        reviewerUid: req.reviewerUid,
-        status: 'open',
-        gameVersion: req.gameVersion,
-        reason: req.reason,
-        createdAt: now,
-        createdBy: req.createdBy,
-        resolvedAt: null,
-      };
-      this.reReviewRequests.set(id, record);
-      out.push({ ...record });
-    }
-    return out;
+    return this.reviewStore.upsertReReviewRequests(requests);
   }
 
   async getReReviewRequest(slug: string, reviewerUid: string): Promise<ReReviewRequest | null> {
-    const record = this.reReviewRequests.get(reReviewRequestId(slug, reviewerUid));
-    return record ? { ...record } : null;
+    return this.reviewStore.getReReviewRequest(slug, reviewerUid);
   }
 
   async listOpenReReviewRequestsForReviewer(reviewerUid: string): Promise<ReReviewRequest[]> {
-    return Array.from(this.reReviewRequests.values())
-      .filter((row) => row.reviewerUid === reviewerUid && row.status === 'open')
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .map((row) => ({ ...row }));
+    return this.reviewStore.listOpenReReviewRequestsForReviewer(reviewerUid);
   }
 
   async listReReviewRequests(opts?: { limit?: number }): Promise<ReReviewRequest[]> {
-    const sorted = Array.from(this.reReviewRequests.values())
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .map((row) => ({ ...row }));
-    return opts?.limit !== undefined ? sorted.slice(0, opts.limit) : sorted;
+    return this.reviewStore.listReReviewRequests(opts);
   }
 
   async resolveReReviewRequest(slug: string, reviewerUid: string): Promise<ReReviewRequest | null> {
-    const id = reReviewRequestId(slug, reviewerUid);
-    const existing = this.reReviewRequests.get(id);
-    if (!existing) return null;
-    if (existing.status !== 'open') return { ...existing };
-    const updated: ReReviewRequest = { ...existing, status: 'resolved', resolvedAt: new Date().toISOString() };
-    this.reReviewRequests.set(id, updated);
-    return { ...updated };
-  }
-
-  async getGameAssessment(slug: string, reviewerUid: string): Promise<GameAssessment | null> {
-    const record = this.gameAssessments.get(gameAssessmentId(slug, reviewerUid));
-    return record ? hydrateGameAssessment(record.id, record) : null;
-  }
-
-  async listGameAssessmentsByReviewer(reviewerUid: string): Promise<GameAssessment[]> {
-    return Array.from(this.gameAssessments.values())
-      .filter((row) => row.reviewerUid === reviewerUid)
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.slug.localeCompare(b.slug))
-      .map((row) => hydrateGameAssessment(row.id, row));
-  }
-
-  async listGameAssessments(opts?: { limit?: number }): Promise<GameAssessment[]> {
-    const sorted = Array.from(this.gameAssessments.values())
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.slug.localeCompare(b.slug))
-      .map((row) => hydrateGameAssessment(row.id, row));
-    return opts?.limit !== undefined ? sorted.slice(0, opts.limit) : sorted;
-  }
-
-  async listGameAssessmentsBySource(source: AssessmentSource): Promise<GameAssessment[]> {
-    return Array.from(this.gameAssessments.values())
-      .filter((row) => row.source === source)
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.slug.localeCompare(b.slug))
-      .map((row) => hydrateGameAssessment(row.id, row));
-  }
-
-  async countGameAssessmentsByUid(uid: string): Promise<number> {
-    let total = 0;
-    for (const row of this.gameAssessments.values()) {
-      if (row.reviewerUid === uid) total += 1;
-    }
-    return total;
-  }
-
-  async deleteGameAssessmentsByUid(uid: string): Promise<number> {
-    let deleted = 0;
-    for (const [id, row] of this.gameAssessments) {
-      if (row.reviewerUid === uid) {
-        this.gameAssessments.delete(id);
-        this.gameAssessmentHistory.delete(id);
-        deleted += 1;
-      }
-    }
-    for (const [id, row] of this.reReviewRequests) {
-      if (row.reviewerUid === uid) this.reReviewRequests.delete(id);
-    }
-    return deleted;
+    return this.reviewStore.resolveReReviewRequest(slug, reviewerUid);
   }
 
   async getOpenReviewSweep(): Promise<ReviewSweep | null> {
-    const open = Array.from(this.reviewSweeps.values()).filter(
-      (row) => row.status === 'active' || row.status === 'paused',
-    );
-    open.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-    return open[0] ? { ...open[0], slugs: [...open[0].slugs] } : null;
+    return this.reviewSweepStore.getOpenReviewSweep();
   }
 
   async getReviewSweep(id: string): Promise<ReviewSweep | null> {
-    const row = this.reviewSweeps.get(id);
-    return row ? { ...row, slugs: [...row.slugs] } : null;
+    return this.reviewSweepStore.getReviewSweep(id);
   }
 
   async listReviewSweeps(opts?: { limit?: number }): Promise<ReviewSweep[]> {
-    const limit = opts?.limit ?? 20;
-    return Array.from(this.reviewSweeps.values())
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .slice(0, limit)
-      .map((row) => ({ ...row, slugs: [...row.slugs] }));
+    return this.reviewSweepStore.listReviewSweeps(opts);
   }
 
   async createReviewSweep(sweep: ReviewSweep): Promise<ReviewSweep> {
-    for (const [id, row] of this.reviewSweeps) {
-      if (row.status === 'active' || row.status === 'paused') {
-        this.reviewSweeps.set(id, {
-          ...row,
-          status: 'cancelled',
-          updatedAt: sweep.createdAt,
-          updatedBy: sweep.createdBy,
-        });
-      }
-    }
-    const record: ReviewSweep = { ...sweep, slugs: [...sweep.slugs] };
-    this.reviewSweeps.set(record.id, record);
-    return { ...record, slugs: [...record.slugs] };
+    return this.reviewSweepStore.createReviewSweep(sweep);
   }
 
   async updateReviewSweep(
     id: string,
     patch: Partial<Omit<ReviewSweep, 'id' | 'createdAt' | 'createdBy' | 'slugs' | 'source'>>,
   ): Promise<ReviewSweep | null> {
-    const existing = this.reviewSweeps.get(id);
-    if (!existing) return null;
-    const record: ReviewSweep = { ...existing, ...patch, id: existing.id, slugs: [...existing.slugs] };
-    this.reviewSweeps.set(id, record);
-    return { ...record, slugs: [...record.slugs] };
+    return this.reviewSweepStore.updateReviewSweep(id, patch);
   }
 
   async putScorecard(slug: string, scorecard: Scorecard): Promise<void> {
-    this.scorecards.set(slug, structuredClone(scorecard));
+    return this.reviewSweepStore.putScorecard(slug, scorecard);
   }
 
   async getScorecard(slug: string): Promise<Scorecard | null> {
-    const found = this.scorecards.get(slug);
-    return found ? structuredClone(found) : null;
+    return this.reviewSweepStore.getScorecard(slug);
   }
 
   async listScorecards(opts?: { limit?: number }): Promise<Scorecard[]> {
-    return [...this.scorecards.values()]
-      .map((card) => structuredClone(card))
-      .sort(compareScorecards)
-      .slice(0, opts?.limit ?? 200);
+    return this.reviewSweepStore.listScorecards(opts);
   }
 
   async getGameAutonomy(slug: string): Promise<string | null> {
@@ -3529,7 +2809,7 @@ export class InMemoryStore implements Store {
         ...this.votes.keys(),
         ...this.follows.keys(),
         ...this.playerFeedback.keys(),
-        ...this.scorecards.keys(),
+        ...this.reviewSweepStore.scorecards.keys(),
         ...this.suggestions.keys(),
       ]),
     ].sort();
@@ -3554,146 +2834,67 @@ export class InMemoryStore implements Store {
   }
 
   async createAccessToken(record: AccessTokenRecord): Promise<void> {
-    this.accessTokens.set(record.tokenId, { ...record });
+    return this.accessTokensStore.createAccessToken(record);
   }
 
   async getAccessToken(tokenId: string): Promise<AccessTokenRecord | null> {
-    const record = this.accessTokens.get(tokenId);
-    return record ? { ...record } : null;
+    return this.accessTokensStore.getAccessToken(tokenId);
   }
 
   async listAccessTokens(uid: string): Promise<AccessTokenRecord[]> {
-    return Array.from(this.accessTokens.values())
-      .filter((record) => record.uid === uid)
-      .map((record) => ({ ...record }))
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return this.accessTokensStore.listAccessTokens(uid);
   }
 
   async deleteAccessToken(tokenId: string): Promise<boolean> {
-    return this.accessTokens.delete(tokenId);
+    return this.accessTokensStore.deleteAccessToken(tokenId);
   }
 
   async touchAccessToken(tokenId: string, at: string): Promise<void> {
-    const record = this.accessTokens.get(tokenId);
-    if (record) this.accessTokens.set(tokenId, { ...record, lastUsedAt: at });
+    return this.accessTokensStore.touchAccessToken(tokenId, at);
   }
 
   async getGameAgentKey(slug: string): Promise<GameAgentKeyRecord | null> {
-    const record = this.gameAgentKeys.get(slug);
-    return record ? { ...record } : null;
+    return this.agentKeysStore.getGameAgentKey(slug);
   }
 
   async ensureGameAgentKey(slug: string, ownerUid: string, at: string): Promise<GameAgentKeyRecord | null> {
-    const existing = this.gameAgentKeys.get(slug);
-    if (existing) {
-      if (existing.ownerUid !== ownerUid) return null;
-      return { ...existing };
-    }
-    const created: GameAgentKeyRecord = {
-      slug,
-      ownerUid,
-      keyGeneration: 1,
-      createdAt: at,
-      updatedAt: at,
-    };
-    this.gameAgentKeys.set(slug, created);
-    return { ...created };
+    return this.agentKeysStore.ensureGameAgentKey(slug, ownerUid, at);
   }
 
   async rotateGameAgentKey(slug: string, ownerUid: string, at: string): Promise<GameAgentKeyRecord | null> {
-    const existing = this.gameAgentKeys.get(slug);
-    if (!existing || existing.ownerUid !== ownerUid) return null;
-    const next: GameAgentKeyRecord = {
-      ...existing,
-      keyGeneration: existing.keyGeneration + 1,
-      updatedAt: at,
-    };
-    this.gameAgentKeys.set(slug, next);
-    return { ...next };
+    return this.agentKeysStore.rotateGameAgentKey(slug, ownerUid, at);
   }
 
   async beginAgentOpenRound(slug: string, at: string): Promise<boolean> {
-    const existing = this.gameAgentKeys.get(slug);
-    if (!existing || existing.agentOpenRoundPending) return false;
-    this.gameAgentKeys.set(slug, { ...existing, agentOpenRoundPending: true, updatedAt: at });
-    return true;
+    return this.agentKeysStore.beginAgentOpenRound(slug, at);
   }
 
   async finishAgentOpenRound(slug: string, at: string): Promise<void> {
-    const existing = this.gameAgentKeys.get(slug);
-    if (!existing?.agentOpenRoundPending) return;
-    const next: GameAgentKeyRecord = { ...existing, updatedAt: at };
-    delete next.agentOpenRoundPending;
-    this.gameAgentKeys.set(slug, next);
+    return this.agentKeysStore.finishAgentOpenRound(slug, at);
   }
 
   async getCreatorAgentKey(ownerUid: string): Promise<CreatorAgentKeyRecord | null> {
-    const record = this.creatorAgentKeys.get(ownerUid);
-    return record ? { ...record } : null;
+    return this.agentKeysStore.getCreatorAgentKey(ownerUid);
   }
 
   async ensureCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord> {
-    const existing = this.creatorAgentKeys.get(ownerUid);
-    if (existing) return { ...existing };
-    const created: CreatorAgentKeyRecord = {
-      ownerUid,
-      keyGeneration: 1,
-      createdAt: at,
-      updatedAt: at,
-    };
-    this.creatorAgentKeys.set(ownerUid, created);
-    return { ...created };
+    return this.agentKeysStore.ensureCreatorAgentKey(ownerUid, at);
   }
 
   async reactivateCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord> {
-    const existing = this.creatorAgentKeys.get(ownerUid);
-    if (!existing) {
-      return this.ensureCreatorAgentKey(ownerUid, at);
-    }
-    if (!existing.revokedAt) return { ...existing };
-    const cleared: CreatorAgentKeyRecord = {
-      ownerUid: existing.ownerUid,
-      keyGeneration: existing.keyGeneration,
-      createdAt: existing.createdAt,
-      updatedAt: at,
-    };
-    this.creatorAgentKeys.set(ownerUid, cleared);
-    return { ...cleared };
+    return this.agentKeysStore.reactivateCreatorAgentKey(ownerUid, at);
   }
 
   async rotateCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null> {
-    const existing = this.creatorAgentKeys.get(ownerUid);
-    if (!existing) return null;
-    const next: CreatorAgentKeyRecord = {
-      ownerUid: existing.ownerUid,
-      keyGeneration: existing.keyGeneration + 1,
-      createdAt: existing.createdAt,
-      updatedAt: at,
-    };
-    this.creatorAgentKeys.set(ownerUid, next);
-    return { ...next };
+    return this.agentKeysStore.rotateCreatorAgentKey(ownerUid, at);
   }
 
   async touchCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null> {
-    const existing = this.creatorAgentKeys.get(ownerUid);
-    if (!existing || existing.revokedAt) return null;
-    const next: CreatorAgentKeyRecord = { ...existing, updatedAt: at };
-    this.creatorAgentKeys.set(ownerUid, next);
-    return { ...next };
+    return this.agentKeysStore.touchCreatorAgentKey(ownerUid, at);
   }
 
   async revokeCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null> {
-    const existing = this.creatorAgentKeys.get(ownerUid);
-    if (!existing) return null;
-    const next: CreatorAgentKeyRecord = {
-      ownerUid: existing.ownerUid,
-      keyGeneration: existing.keyGeneration + 1,
-      createdAt: existing.createdAt,
-      updatedAt: at,
-      revokedAt: at,
-    };
-    this.creatorAgentKeys.set(ownerUid, next);
-    return { ...next };
+    return this.agentKeysStore.revokeCreatorAgentKey(ownerUid, at);
   }
 
   async createOAuthClient(record: OAuthClientRecord): Promise<void> {
@@ -3769,7 +2970,7 @@ export class InMemoryStore implements Store {
 
   // Test/inspection only — production reads go through `listWaitlistEntries`.
   waitlistEntries(): WaitlistEntry[] {
-    return Array.from(this.waitlist.values());
+    return Array.from(this.accessStore.waitlist.values());
   }
 }
 
@@ -3777,11 +2978,27 @@ export class FirestoreStore implements Store {
   private db: Firestore;
   private telemetryStore: FirestoreTelemetryStore;
   private oauthStore: FirestoreOAuthStore;
+  private playerDataStore: FirestorePlayerDataStore;
+  private worldEntriesStore: FirestoreWorldEntriesStore;
+  private notificationsStore: FirestoreNotificationsStore;
+  private accessTokensStore: FirestoreAccessTokensStore;
+  private agentKeysStore: FirestoreAgentKeysStore;
+  private accessStore: FirestoreAccessStore;
+  private reviewStore: FirestoreReviewStore;
+  private reviewSweepStore: FirestoreReviewSweepStore;
 
   constructor(db?: Firestore) {
     this.db = db ?? new Firestore();
     this.telemetryStore = new FirestoreTelemetryStore(this.db);
     this.oauthStore = new FirestoreOAuthStore(this.db);
+    this.playerDataStore = new FirestorePlayerDataStore(this.db);
+    this.worldEntriesStore = new FirestoreWorldEntriesStore(this.db);
+    this.notificationsStore = new FirestoreNotificationsStore(this.db);
+    this.accessTokensStore = new FirestoreAccessTokensStore(this.db);
+    this.agentKeysStore = new FirestoreAgentKeysStore(this.db);
+    this.accessStore = new FirestoreAccessStore(this.db);
+    this.reviewStore = new FirestoreReviewStore(this.db);
+    this.reviewSweepStore = new FirestoreReviewSweepStore(this.db);
   }
 
   async getUser(uid: string): Promise<User | null> {
@@ -5476,107 +4693,31 @@ export class FirestoreStore implements Store {
     name?: string;
     locale?: string;
   }): Promise<WaitlistEntry> {
-    const now = new Date().toISOString();
-    const docRef = this.db.collection('waitlist').doc(entry.uid);
-    const snap = await docRef.get();
-    const existing = snap.exists ? (snap.data() as WaitlistEntry) : null;
-    // Same normalisation as InMemoryStore: email queries are case-sensitive in
-    // Firestore, and setWaitlistStatusByEmail / isWaitlistApproved look up the
-    // lowercased form.
-    const rawEmail = entry.email !== undefined ? entry.email : existing?.email;
-
-    const record: WaitlistEntry = {
-      uid: entry.uid,
-      email: rawEmail !== undefined ? rawEmail.toLowerCase() : undefined,
-      name: entry.name,
-      requestedAt: now,
-      locale: entry.locale,
-      status: existing?.status ?? 'pending',
-    };
-    await docRef.set(stripUndefined(record), { merge: true });
-    return record;
+    return this.accessStore.upsertWaitlistEntry(entry);
   }
 
   async getWaitlistEntry(uid: string): Promise<WaitlistEntry | null> {
-    const snap = await this.db.collection('waitlist').doc(uid).get();
-    if (!snap.exists) return null;
-    return snap.data() as WaitlistEntry;
+    return this.accessStore.getWaitlistEntry(uid);
   }
 
   async isWaitlistApproved(uid: string, email?: string): Promise<boolean> {
-    const uidSnap = await this.db.collection('waitlist').doc(uid).get();
-    if (uidSnap.exists && (uidSnap.data() as WaitlistEntry).status === 'approved') {
-      return true;
-    }
-    if (email) {
-      const emailLower = email.toLowerCase();
-      const emailQuery = await this.db
-        .collection('waitlist')
-        .where('email', '==', emailLower)
-        .where('status', '==', 'approved')
-        .limit(1)
-        .get();
-      if (!emailQuery.empty) return true;
-    }
-    return false;
+    return this.accessStore.isWaitlistApproved(uid, email);
   }
 
   async setWaitlistStatus(uid: string, status: WaitlistStatus): Promise<WaitlistEntry | null> {
-    const docRef = this.db.collection('waitlist').doc(uid);
-    const snap = await docRef.get();
-    if (!snap.exists) return null;
-    await docRef.update({ status });
-    const updatedSnap = await docRef.get();
-    return updatedSnap.data() as WaitlistEntry;
+    return this.accessStore.setWaitlistStatus(uid, status);
   }
 
   async listWaitlistEntries(opts?: { status?: WaitlistStatus; limit?: number }): Promise<WaitlistEntry[]> {
-    // Equality-only (no orderBy) so a status filter needs no composite index; sort and
-    // slice in memory. The waitlist stays small at closed-beta scale, and the same
-    // posture as `listAccessTokens` keeps an operator page from depending on a new
-    // index that only fails in production.
-    const limit = opts?.limit ?? 200;
-    const collection = this.db.collection('waitlist');
-    const snap =
-      opts?.status === undefined ? await collection.get() : await collection.where('status', '==', opts.status).get();
-    const rows = snap.docs.map((doc) => doc.data() as WaitlistEntry);
-    rows.sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
-    return rows.slice(0, limit);
+    return this.accessStore.listWaitlistEntries(opts);
   }
 
   async countWaitlistEntries(status?: WaitlistStatus): Promise<number> {
-    const collection = this.db.collection('waitlist');
-    const query = status === undefined ? collection : collection.where('status', '==', status);
-    const snap = await query.count().get();
-    return snap.data().count;
+    return this.accessStore.countWaitlistEntries(status);
   }
 
   async setWaitlistStatusByEmail(email: string, status: WaitlistStatus): Promise<WaitlistEntry> {
-    const emailLower = email.toLowerCase();
-    const querySnap = await this.db.collection('waitlist').where('email', '==', emailLower).limit(1).get();
-    if (!querySnap.empty) {
-      const doc = querySnap.docs[0]!;
-      await doc.ref.update({ status });
-      return { ...(doc.data() as WaitlistEntry), status, email: emailLower };
-    }
-    // Rows written before email was normalised may still hold mixed case; find and
-    // heal them so an approve does not mint a duplicate `email:` doc beside the
-    // original join. Cheap at closed-beta scale (one collection read, operator-only).
-    const legacySnap = await this.db.collection('waitlist').get();
-    const legacy = legacySnap.docs.find((doc) => (doc.data() as WaitlistEntry).email?.toLowerCase() === emailLower);
-    if (legacy) {
-      await legacy.ref.update({ status, email: emailLower });
-      return { ...(legacy.data() as WaitlistEntry), status, email: emailLower };
-    }
-    const now = new Date().toISOString();
-    const created: WaitlistEntry = {
-      uid: `email:${emailLower}`,
-      email: emailLower,
-      requestedAt: now,
-      status,
-    };
-    await this.db.collection('waitlist').doc(created.uid).set(stripUndefined(created));
-    return created;
+    return this.accessStore.setWaitlistStatusByEmail(email, status);
   }
 
   async recordBetaInviteAdmission(entry: {
@@ -5585,186 +4726,58 @@ export class FirestoreStore implements Store {
     name?: string;
     locale?: string;
   }): Promise<WaitlistEntry> {
-    const docRef = this.db.collection('waitlist').doc(entry.uid);
-    const snap = await docRef.get();
-    const existing = snap.exists ? (snap.data() as WaitlistEntry) : null;
-    const rawEmail = entry.email !== undefined ? entry.email : existing?.email;
-
-    const record: WaitlistEntry = {
-      uid: entry.uid,
-      email: rawEmail !== undefined ? rawEmail.toLowerCase() : undefined,
-      name: entry.name ?? existing?.name,
-      requestedAt: existing?.requestedAt ?? new Date().toISOString(),
-      locale: entry.locale ?? existing?.locale,
-      status: 'approved',
-    };
-    await docRef.set(stripUndefined(record), { merge: true });
-    return record;
+    return this.accessStore.recordBetaInviteAdmission(entry);
   }
 
   async createBetaInvite(createdByUid: string): Promise<CreatedBetaInvite> {
-    const code = randomBytes(BETA_INVITE_CODE_BYTES).toString('base64url');
-    const invite: BetaInvite = {
-      id: randomUUID(),
-      codeHash: hashBetaInviteCode(code),
-      createdAt: new Date().toISOString(),
-      createdByUid,
-      status: 'available',
-    };
-    await this.db.collection('betaInvites').doc(invite.id).set(stripUndefined(invite));
-    return { invite, code };
+    return this.accessStore.createBetaInvite(createdByUid);
   }
 
   async listBetaInvites(opts?: { limit?: number }): Promise<BetaInvite[]> {
-    const limit = opts?.limit ?? 200;
-    const snap = await this.db.collection('betaInvites').get();
-    return snap.docs
-      .map((doc) => doc.data() as BetaInvite)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .slice(0, limit);
+    return this.accessStore.listBetaInvites(opts);
   }
 
   async claimBetaInvite(code: string, uid: string): Promise<ClaimBetaInviteResult> {
-    const codeHash = hashBetaInviteCode(code);
-    const querySnap = await this.db.collection('betaInvites').where('codeHash', '==', codeHash).limit(1).get();
-    if (querySnap.empty) return { ok: false, reason: 'not_found' };
-
-    const docRef = querySnap.docs[0]!.ref;
-    return await this.db.runTransaction(async (transaction) => {
-      const snap = await transaction.get(docRef);
-      if (!snap.exists) return { ok: false, reason: 'not_found' };
-      const invite = snap.data() as BetaInvite;
-      if (invite.status === 'revoked') return { ok: false, reason: 'revoked' };
-      if (invite.status === 'claimed') {
-        return invite.claimedUid === uid ? { ok: true, invite } : { ok: false, reason: 'claimed' };
-      }
-
-      const claimed: BetaInvite = {
-        ...invite,
-        status: 'claimed',
-        claimedAt: new Date().toISOString(),
-        claimedUid: uid,
-      };
-      transaction.set(docRef, stripUndefined(claimed), { merge: true });
-      return { ok: true, invite: claimed };
-    });
+    return this.accessStore.claimBetaInvite(code, uid);
   }
 
   async revokeBetaInvite(id: string, revokedByUid: string): Promise<BetaInvite | null> {
-    const docRef = this.db.collection('betaInvites').doc(id);
-    return await this.db.runTransaction(async (transaction) => {
-      const snap = await transaction.get(docRef);
-      if (!snap.exists) return null;
-      const invite = snap.data() as BetaInvite;
-      if (invite.status !== 'available') return null;
-
-      const revoked: BetaInvite = {
-        ...invite,
-        status: 'revoked',
-        revokedAt: new Date().toISOString(),
-        revokedByUid,
-      };
-      transaction.set(docRef, stripUndefined(revoked), { merge: true });
-      return revoked;
-    });
-  }
-
-  private notificationRef(uid: string, id: string) {
-    return this.db.collection('users').doc(uid).collection('notifications').doc(id);
+    return this.accessStore.revokeBetaInvite(id, revokedByUid);
   }
 
   async createNotification(
     uid: string,
     notification: Omit<StoredNotification, 'readAt' | 'emailedAt'> & { createdAt?: string },
   ): Promise<{ created: boolean; notification: StoredNotification }> {
-    const docRef = this.notificationRef(uid, notification.id);
-    return await this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(docRef);
-      if (snap.exists) {
-        return { created: false, notification: snap.data() as StoredNotification };
-      }
-      const record: StoredNotification = {
-        id: notification.id,
-        type: notification.type,
-        createdAt: notification.createdAt ?? new Date().toISOString(),
-        readAt: null,
-        emailedAt: null,
-        titleKey: notification.titleKey,
-        bodyKey: notification.bodyKey,
-        params: notification.params,
-        link: notification.link,
-      };
-      tx.set(docRef, record);
-      return { created: true, notification: record };
-    });
+    return this.notificationsStore.createNotification(uid, notification);
   }
 
   async listNotifications(uid: string, opts?: { limit?: number }): Promise<StoredNotification[]> {
-    const query = this.db
-      .collection('users')
-      .doc(uid)
-      .collection('notifications')
-      .orderBy('createdAt', 'desc')
-      .limit(opts?.limit ?? 20);
-    const snap = await query.get();
-    return snap.docs.map((d) => d.data() as StoredNotification);
+    return this.notificationsStore.listNotifications(uid, opts);
   }
 
   async markNotificationsRead(uid: string, ids: string[] | 'all'): Promise<void> {
-    const now = new Date().toISOString();
-    const col = this.db.collection('users').doc(uid).collection('notifications');
-    if (ids === 'all') {
-      const unread = await col.where('readAt', '==', null).get();
-      const batch = this.db.batch();
-      unread.docs.forEach((d) => batch.update(d.ref, { readAt: now }));
-      await batch.commit();
-      return;
-    }
-    const batch = this.db.batch();
-    ids.forEach((id) => batch.set(col.doc(id), { readAt: now }, { merge: true }));
-    await batch.commit();
+    return this.notificationsStore.markNotificationsRead(uid, ids);
   }
 
   async deleteNotifications(uid: string, ids: string[] | 'all'): Promise<void> {
-    const col = this.db.collection('users').doc(uid).collection('notifications');
-    if (ids === 'all') {
-      const snap = await col.get();
-      if (snap.empty) return;
-      const batch = this.db.batch();
-      snap.docs.forEach((d) => batch.delete(d.ref));
-      await batch.commit();
-      return;
-    }
-    if (ids.length === 0) return;
-    const batch = this.db.batch();
-    ids.forEach((id) => batch.delete(col.doc(id)));
-    await batch.commit();
+    return this.notificationsStore.deleteNotifications(uid, ids);
   }
 
   async markNotificationEmailed(uid: string, id: string, at?: string): Promise<void> {
-    await this.notificationRef(uid, id).set({ emailedAt: at ?? new Date().toISOString() }, { merge: true });
-  }
-
-  private pushSubRef(uid: string, endpoint: string) {
-    return this.db.collection('users').doc(uid).collection('pushSubscriptions').doc(pushSubscriptionId(endpoint));
+    return this.notificationsStore.markNotificationEmailed(uid, id, at);
   }
 
   async savePushSubscription(uid: string, subscription: Omit<PushSubscriptionRecord, 'createdAt'>): Promise<void> {
-    const record: PushSubscriptionRecord = {
-      endpoint: subscription.endpoint,
-      keys: { p256dh: subscription.keys.p256dh, auth: subscription.keys.auth },
-      createdAt: new Date().toISOString(),
-    };
-    await this.pushSubRef(uid, subscription.endpoint).set(record);
+    return this.notificationsStore.savePushSubscription(uid, subscription);
   }
 
   async listPushSubscriptions(uid: string): Promise<PushSubscriptionRecord[]> {
-    const snap = await this.db.collection('users').doc(uid).collection('pushSubscriptions').get();
-    return snap.docs.map((d) => d.data() as PushSubscriptionRecord);
+    return this.notificationsStore.listPushSubscriptions(uid);
   }
 
   async deletePushSubscription(uid: string, endpoint: string): Promise<void> {
-    await this.pushSubRef(uid, endpoint).delete();
+    return this.notificationsStore.deletePushSubscription(uid, endpoint);
   }
 
   private gameRef(slug: string) {
@@ -5882,85 +4895,28 @@ export class FirestoreStore implements Store {
     return FirestoreStore.readVoteCounts(snap.data());
   }
 
-  // Under the player, keyed by slug — see GameSaveRecord for why this is not
-  // `games/{slug}/saves/{uid}` the way votes are.
-  private gameSaveRef(uid: string, slug: string) {
-    return this.db.collection('users').doc(uid).collection('gameSaves').doc(slug);
-  }
-
   async getGameSave(uid: string, slug: string): Promise<GameSaveRecord | null> {
-    const snap = await this.gameSaveRef(uid, slug).get();
-    if (!snap.exists) return null;
-    const data = snap.data() ?? {};
-    return {
-      slug,
-      data: typeof data.data === 'string' ? data.data : '',
-      version: typeof data.version === 'number' ? data.version : 0,
-      updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : '',
-    };
+    return this.playerDataStore.getGameSave(uid, slug);
   }
 
   async putGameSave(uid: string, slug: string, data: string, version: number): Promise<GameSaveRecord> {
-    const record: GameSaveRecord = { slug, data, version, updatedAt: new Date().toISOString() };
-    // `set` without merge: a save is a whole snapshot of the player's progress, and
-    // merging would leave fields from an older shape alive beside a newer one — a
-    // state the game never actually wrote.
-    await this.gameSaveRef(uid, slug).set({ data, version, updatedAt: record.updatedAt });
-    return record;
+    return this.playerDataStore.putGameSave(uid, slug, data, version);
   }
 
   async deleteGameSave(uid: string, slug: string): Promise<void> {
-    await this.gameSaveRef(uid, slug).delete();
+    return this.playerDataStore.deleteGameSave(uid, slug);
   }
 
   async listGameSaves(uid: string): Promise<GameSaveRecord[]> {
-    const snap = await this.db.collection('users').doc(uid).collection('gameSaves').get();
-    return snap.docs.map((doc) => {
-      const data = doc.data();
-      return {
-        slug: doc.id,
-        data: typeof data.data === 'string' ? data.data : '',
-        version: typeof data.version === 'number' ? data.version : 0,
-        updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : '',
-      };
-    });
+    return this.playerDataStore.listGameSaves(uid);
   }
 
   async deleteGameSaves(uid: string): Promise<number> {
-    // `listDocuments` rather than `get`: this only needs the references to delete, and
-    // a person's saves may be tens of kilobytes each that nobody is going to read.
-    const refs = await this.db.collection('users').doc(uid).collection('gameSaves').listDocuments();
-    if (refs.length === 0) return 0;
-
-    // Chunked batches rather than a delete per document, for the same reason
-    // `deletePlayerFeedbackByUid` uses them: this runs inside an erasure request an
-    // operator has already accepted, and somebody who plays a lot of games is exactly
-    // the person whose deletion would otherwise be a long sequence of round trips.
-    // 400 per batch leaves headroom under Firestore's 500-write limit.
-    for (let index = 0; index < refs.length; index += 400) {
-      const batch = this.db.batch();
-      for (const ref of refs.slice(index, index + 400)) batch.delete(ref);
-      await batch.commit();
-    }
-    return refs.length;
-  }
-
-  // Under the creator, keyed by slug — one private draft per (creator, game),
-  // same placement reasoning as gameSaves.
-  private editorDraftRef(uid: string, slug: string) {
-    return this.db.collection('users').doc(uid).collection('editorDrafts').doc(slug);
+    return this.playerDataStore.deleteGameSaves(uid);
   }
 
   async getEditorDraft(uid: string, slug: string): Promise<EditorDraftRecord | null> {
-    const snap = await this.editorDraftRef(uid, slug).get();
-    if (!snap.exists) return null;
-    const data = snap.data() ?? {};
-    return {
-      slug,
-      content: typeof data.content === 'string' ? data.content : '',
-      revision: typeof data.revision === 'number' ? data.revision : 0,
-      updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : '',
-    };
+    return this.playerDataStore.getEditorDraft(uid, slug);
   }
 
   async putEditorDraft(
@@ -5969,156 +4925,39 @@ export class FirestoreStore implements Store {
     content: string,
     expectedRevision?: number,
   ): Promise<{ conflict: false; record: EditorDraftRecord } | { conflict: true; revision: number }> {
-    const ref = this.editorDraftRef(uid, slug);
-    // A transaction, not a read followed by a `set`: two tabs saving against the
-    // same base revision would both read it, both write, and both be told they
-    // won, with one edit silently gone. Compare and increment together or not
-    // at all.
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      const data = snap.exists ? (snap.data() ?? {}) : {};
-      const current = typeof data.revision === 'number' ? data.revision : 0;
-      if (expectedRevision !== undefined && current !== expectedRevision) {
-        return { conflict: true as const, revision: current };
-      }
-      const record: EditorDraftRecord = {
-        slug,
-        content,
-        revision: current + 1,
-        updatedAt: new Date().toISOString(),
-      };
-      // `set` without merge, like saves: a draft is a whole snapshot of the content.
-      tx.set(ref, { content, revision: record.revision, updatedAt: record.updatedAt });
-      return { conflict: false as const, record };
-    });
+    return this.playerDataStore.putEditorDraft(uid, slug, content, expectedRevision);
   }
 
   async deleteEditorDraft(uid: string, slug: string): Promise<void> {
-    await this.editorDraftRef(uid, slug).delete();
+    return this.playerDataStore.deleteEditorDraft(uid, slug);
   }
 
   async listEditorDrafts(uid: string): Promise<EditorDraftRecord[]> {
-    const snap = await this.db.collection('users').doc(uid).collection('editorDrafts').get();
-    return snap.docs.map((doc) => {
-      const data = doc.data();
-      return {
-        slug: doc.id,
-        content: typeof data.content === 'string' ? data.content : '',
-        revision: typeof data.revision === 'number' ? data.revision : 0,
-        updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : '',
-      };
-    });
+    return this.playerDataStore.listEditorDrafts(uid);
   }
 
   async deleteEditorDrafts(uid: string): Promise<number> {
-    const refs = await this.db.collection('users').doc(uid).collection('editorDrafts').listDocuments();
-    if (refs.length === 0) return 0;
-    for (let index = 0; index < refs.length; index += 400) {
-      const batch = this.db.batch();
-      for (const ref of refs.slice(index, index + 400)) batch.delete(ref);
-      await batch.commit();
-    }
-    return refs.length;
-  }
-
-  private playAffinityRef(uid: string, slug: string) {
-    return this.db.collection('users').doc(uid).collection('playAffinity').doc(slug);
+    return this.playerDataStore.deleteEditorDrafts(uid);
   }
 
   async recordPlayAffinity(uid: string, slug: string, at?: string): Promise<PlayAffinityRecord> {
-    const when = at ?? new Date().toISOString();
-    const ref = this.playAffinityRef(uid, slug);
-    const record = await this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      const existing = snap.exists ? snap.data() : null;
-      const openCount = Math.min(
-        MAX_PLAY_AFFINITY_OPENS,
-        (typeof existing?.openCount === 'number' ? existing.openCount : 0) + 1,
-      );
-      const next: PlayAffinityRecord = { slug, openCount, lastPlayedAt: when };
-      tx.set(ref, { openCount: next.openCount, lastPlayedAt: next.lastPlayedAt });
-      return next;
-    });
-
-    // Trim outside the transaction: the ceiling is a soft bound, and racing two opens
-    // past 100 is harmless compared to holding a transaction across a collection list.
-    const col = this.db.collection('users').doc(uid).collection('playAffinity');
-    const listed = await col.get();
-    if (listed.size > MAX_PLAY_AFFINITY_GAMES) {
-      const oldest = listed.docs
-        .filter((doc) => doc.id !== slug)
-        .map((doc) => ({
-          id: doc.id,
-          lastPlayedAt: typeof doc.data().lastPlayedAt === 'string' ? doc.data().lastPlayedAt : '',
-        }))
-        .sort((a, b) => a.lastPlayedAt.localeCompare(b.lastPlayedAt) || a.id.localeCompare(b.id));
-      const overflow = listed.size - MAX_PLAY_AFFINITY_GAMES;
-      for (let index = 0; index < overflow; index += 400) {
-        const batch = this.db.batch();
-        for (const entry of oldest.slice(index, Math.min(index + 400, overflow))) {
-          batch.delete(col.doc(entry.id));
-        }
-        await batch.commit();
-      }
-    }
-
-    return record;
+    return this.playerDataStore.recordPlayAffinity(uid, slug, at);
   }
 
   async listPlayAffinity(uid: string): Promise<PlayAffinityRecord[]> {
-    const snap = await this.db.collection('users').doc(uid).collection('playAffinity').get();
-    return snap.docs
-      .map((doc) => {
-        const data = doc.data();
-        return {
-          slug: doc.id,
-          openCount: typeof data.openCount === 'number' ? data.openCount : 0,
-          lastPlayedAt: typeof data.lastPlayedAt === 'string' ? data.lastPlayedAt : '',
-        };
-      })
-      .sort((a, b) => b.lastPlayedAt.localeCompare(a.lastPlayedAt) || a.slug.localeCompare(b.slug));
+    return this.playerDataStore.listPlayAffinity(uid);
   }
 
   async deletePlayAffinity(uid: string): Promise<number> {
-    const refs = await this.db.collection('users').doc(uid).collection('playAffinity').listDocuments();
-    if (refs.length === 0) return 0;
-    for (let index = 0; index < refs.length; index += 400) {
-      const batch = this.db.batch();
-      for (const ref of refs.slice(index, index + 400)) batch.delete(ref);
-      await batch.commit();
-    }
-    return refs.length;
-  }
-
-  // Worlds are top-level, not under a user: a world belongs to a game and outlives
-  // every individual player of it. `worldId` is opaque (today it equals the slug), so
-  // per-creator or seasonal worlds later are a new id rather than a migration.
-  private worldCollection(worldId: string) {
-    return this.db.collection('worlds').doc(worldId).collection('worldEntries');
-  }
-
-  private toWorldEntry(id: string, data: Record<string, unknown>): WorldEntryRecord {
-    const fields = data.fields;
-    return {
-      key: id,
-      fields: (fields && typeof fields === 'object' && !Array.isArray(fields)
-        ? fields
-        : {}) as WorldEntryRecord['fields'],
-      ownerUid: typeof data.ownerUid === 'string' ? data.ownerUid : '',
-      createdAt: typeof data.createdAt === 'string' ? data.createdAt : '',
-      updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : '',
-    };
+    return this.playerDataStore.deletePlayAffinity(uid);
   }
 
   async listWorldEntries(worldId: string): Promise<WorldEntryRecord[]> {
-    const snap = await this.worldCollection(worldId).get();
-    return snap.docs.map((doc) => this.toWorldEntry(doc.id, doc.data()));
+    return this.worldEntriesStore.listWorldEntries(worldId);
   }
 
   async getWorldEntry(worldId: string, key: string): Promise<WorldEntryRecord | null> {
-    const snap = await this.worldCollection(worldId).doc(key).get();
-    if (!snap.exists) return null;
-    return this.toWorldEntry(key, snap.data() ?? {});
+    return this.worldEntriesStore.getWorldEntry(worldId, key);
   }
 
   async putWorldEntry(options: {
@@ -6129,101 +4968,23 @@ export class FirestoreStore implements Store {
     maxPerPlayer: number;
     maxEntries: number;
   }): Promise<{ ok: true; entry: WorldEntryRecord } | { ok: false; reason: 'conflict' | 'quota' | 'full' }> {
-    const ref = this.worldCollection(options.worldId).doc(options.key);
-    // A transaction, because both rules this enforces are exactly the kind that a
-    // check-then-write silently loses: two players claiming the same empty plot in the
-    // same second, and one player with two tabs open spending their last quota slot
-    // twice. Reading inside the transaction is what makes the decision binding.
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      const existing = snap.exists ? this.toWorldEntry(options.key, snap.data() ?? {}) : null;
-      if (existing && existing.ownerUid !== options.uid) return { ok: false as const, reason: 'conflict' as const };
-
-      if (!existing) {
-        // Counted only when claiming a new key. Re-editing an entry the player already
-        // owns cannot change either total, and charging a read for it would make the
-        // common case — a player tidying their own plot — the expensive one.
-        const [owned, total] = await Promise.all([
-          tx.get(this.worldCollection(options.worldId).where('ownerUid', '==', options.uid).count()),
-          tx.get(this.worldCollection(options.worldId).count()),
-        ]);
-        if (total.data().count >= options.maxEntries) return { ok: false as const, reason: 'full' as const };
-        if (owned.data().count >= options.maxPerPlayer) return { ok: false as const, reason: 'quota' as const };
-      }
-
-      const now = new Date().toISOString();
-      const entry: WorldEntryRecord = {
-        key: options.key,
-        fields: options.fields,
-        ownerUid: options.uid,
-        createdAt: existing?.createdAt || now,
-        updatedAt: now,
-      };
-      // No merge: `fields` is the whole entry, and merging would leave a value from a
-      // shape the game has since stopped writing alive next to the current one.
-      tx.set(ref, {
-        fields: entry.fields,
-        ownerUid: entry.ownerUid,
-        createdAt: entry.createdAt,
-        updatedAt: entry.updatedAt,
-      });
-      return { ok: true as const, entry };
-    });
+    return this.worldEntriesStore.putWorldEntry(options);
   }
 
   async deleteWorldEntry(worldId: string, key: string, uid: string): Promise<boolean> {
-    const ref = this.worldCollection(worldId).doc(key);
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return false;
-      // Ownership re-read inside the transaction: the route checked it too, but only
-      // this read is ordered against a concurrent write to the same key.
-      if (this.toWorldEntry(key, snap.data() ?? {}).ownerUid !== uid) return false;
-      tx.delete(ref);
-      return true;
-    });
+    return this.worldEntriesStore.deleteWorldEntry(worldId, key, uid);
   }
 
   async countWorldEntries(worldId: string, uid: string): Promise<number> {
-    const snap = await this.worldCollection(worldId).where('ownerUid', '==', uid).count().get();
-    return snap.data().count;
-  }
-
-  /**
-   * A collection-group query, because erasure has to reach into every world at once and
-   * there is no list of which ones a person touched. Needs the COLLECTION_GROUP index on
-   * `worldEntries.ownerUid` provisioned in infra/setup-gcp.sh — Firestore's automatic
-   * single-field indexes are COLLECTION scope only, so this is the one query here that
-   * does not get an index for free.
-   */
-  private worldEntriesOwnedBy(uid: string) {
-    return this.db.collectionGroup('worldEntries').where('ownerUid', '==', uid);
+    return this.worldEntriesStore.countWorldEntries(worldId, uid);
   }
 
   async listWorldsForUser(uid: string): Promise<string[]> {
-    const snap = await this.worldEntriesOwnedBy(uid).get();
-    const touched = new Set<string>();
-    for (const doc of snap.docs) {
-      // worlds/{worldId}/worldEntries/{key} — the grandparent names the world.
-      const worldId = doc.ref.parent.parent?.id;
-      if (worldId) touched.add(worldId);
-    }
-    return [...touched].sort();
+    return this.worldEntriesStore.listWorldsForUser(uid);
   }
 
   async deleteWorldEntriesForUser(uid: string): Promise<number> {
-    const snap = await this.worldEntriesOwnedBy(uid).get();
-    if (snap.empty) return 0;
-    // Chunked batches, same as `deleteGameSaves`: this runs inside an erasure request
-    // an operator has already accepted, and somebody who built in several worlds is
-    // exactly the person whose deletion would otherwise be a long run of round trips.
-    // 400 per batch leaves headroom under Firestore's 500-write limit.
-    for (let index = 0; index < snap.docs.length; index += 400) {
-      const batch = this.db.batch();
-      for (const doc of snap.docs.slice(index, index + 400)) batch.delete(doc.ref);
-      await batch.commit();
-    }
-    return snap.docs.length;
+    return this.worldEntriesStore.deleteWorldEntriesForUser(uid);
   }
 
   async addPlayerFeedback(slug: string, uid: string, text: string): Promise<PlayerFeedbackRecord> {
@@ -6248,71 +5009,17 @@ export class FirestoreStore implements Store {
     return snap.data().count;
   }
 
-  private gameAssessmentsCollection() {
-    return this.db.collection(GAME_ASSESSMENTS_COLLECTION);
-  }
-
   async upsertGameAssessment(
     input: Omit<GameAssessment, 'id' | 'createdAt' | 'updatedAt' | 'gameVersion' | 'resolution'> & {
       createdAt?: string;
       gameVersion?: string | null;
     },
   ): Promise<GameAssessment> {
-    const id = gameAssessmentId(input.slug, input.reviewerUid);
-    const ref = this.gameAssessmentsCollection().doc(id);
-    const now = new Date().toISOString();
-    const existing = await ref.get();
-    const createdAt =
-      existing.exists && typeof existing.data()?.createdAt === 'string'
-        ? (existing.data()!.createdAt as string)
-        : (input.createdAt ?? now);
-    const record: GameAssessment = {
-      id,
-      slug: input.slug,
-      title: input.title,
-      source: input.source,
-      creatorHandle: input.creatorHandle,
-      reviewerUid: input.reviewerUid,
-      verdict: input.verdict,
-      note: input.note,
-      noteOrigin: input.noteOrigin,
-      checklist: input.checklist ?? null,
-      clientContext: input.clientContext ?? null,
-      gameVersion: input.gameVersion ?? null,
-      // Fresh judgment: prior follow-up stays on the archived row.
-      resolution: null,
-      createdAt,
-      updatedAt: now,
-    };
-    // One batch: the archive and the replacement land together, or neither does.
-    const batch = this.db.batch();
-    if (existing.exists) {
-      const prior = hydrateGameAssessment(id, existing.data() as Omit<GameAssessment, 'id'>);
-      const { id: priorId, ...priorBody } = prior;
-      batch.set(this.gameAssessmentHistoryCollection().doc(), {
-        ...priorBody,
-        assessmentId: priorId,
-        supersededAt: now,
-      });
-    }
-    batch.set(ref, {
-      slug: record.slug,
-      title: record.title,
-      source: record.source,
-      creatorHandle: record.creatorHandle,
-      reviewerUid: record.reviewerUid,
-      verdict: record.verdict,
-      note: record.note,
-      noteOrigin: record.noteOrigin,
-      checklist: record.checklist,
-      clientContext: record.clientContext,
-      gameVersion: record.gameVersion,
-      resolution: record.resolution,
-      createdAt: record.createdAt,
-      updatedAt: record.updatedAt,
-    });
-    await batch.commit();
-    return record;
+    return this.reviewStore.upsertGameAssessment(input);
+  }
+
+  async getGameAssessment(slug: string, reviewerUid: string): Promise<GameAssessment | null> {
+    return this.reviewStore.getGameAssessment(slug, reviewerUid);
   }
 
   async setGameAssessmentResolution(
@@ -6321,288 +5028,88 @@ export class FirestoreStore implements Store {
     resolution: AssessmentResolution | null,
     expectedUpdatedAt?: string,
   ): Promise<ResolutionWriteResult> {
-    const id = gameAssessmentId(slug, reviewerUid);
-    const ref = this.gameAssessmentsCollection().doc(id);
-    // A new verdict must not inherit this resolution.
-    return this.db.runTransaction(async (transaction) => {
-      const snap = await transaction.get(ref);
-      if (!snap.exists) return { status: 'not_found' } as ResolutionWriteResult;
-      const existing = hydrateGameAssessment(id, snap.data() as Omit<GameAssessment, 'id'>);
-      if (expectedUpdatedAt !== undefined && existing.updatedAt !== expectedUpdatedAt) {
-        return { status: 'stale', assessment: existing } as ResolutionWriteResult;
-      }
-      transaction.set(ref, { resolution }, { merge: true });
-      return { status: 'ok', assessment: { ...existing, resolution } } as ResolutionWriteResult;
-    });
+    return this.reviewStore.setGameAssessmentResolution(slug, reviewerUid, resolution, expectedUpdatedAt);
   }
 
   async listGameAssessmentsBySlug(slug: string): Promise<GameAssessment[]> {
-    // Equality only — no orderBy / composite index.
-    const snap = await this.gameAssessmentsCollection().where('slug', '==', slug).get();
-    return snap.docs
-      .map((d) => hydrateGameAssessment(d.id, d.data() as Omit<GameAssessment, 'id'>))
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.reviewerUid.localeCompare(b.reviewerUid));
+    return this.reviewStore.listGameAssessmentsBySlug(slug);
   }
 
-  private gameAssessmentHistoryCollection() {
-    return this.db.collection(GAME_ASSESSMENT_HISTORY_COLLECTION);
+  async listGameAssessmentsByReviewer(reviewerUid: string): Promise<GameAssessment[]> {
+    return this.reviewStore.listGameAssessmentsByReviewer(reviewerUid);
+  }
+
+  async listGameAssessments(opts?: { limit?: number }): Promise<GameAssessment[]> {
+    return this.reviewStore.listGameAssessments(opts);
+  }
+
+  async listGameAssessmentsBySource(source: AssessmentSource): Promise<GameAssessment[]> {
+    return this.reviewStore.listGameAssessmentsBySource(source);
+  }
+
+  async countGameAssessmentsByUid(uid: string): Promise<number> {
+    return this.reviewStore.countGameAssessmentsByUid(uid);
   }
 
   async listGameAssessmentHistory(slug: string, reviewerUid: string): Promise<GameAssessmentHistoryEntry[]> {
-    const id = gameAssessmentId(slug, reviewerUid);
-    // Equality query only; sort in memory, same shape as the assessments themselves.
-    const snap = await this.gameAssessmentHistoryCollection().where('assessmentId', '==', id).get();
-    return snap.docs
-      .map((d) => {
-        const { assessmentId, ...rest } = d.data() as Omit<GameAssessmentHistoryEntry, 'id'> & {
-          assessmentId: string;
-        };
-        return {
-          ...rest,
-          id: d.id,
-          checklist: rest.checklist ?? null,
-          clientContext: rest.clientContext ?? null,
-          resolution: rest.resolution ?? null,
-        };
-      })
-      .sort((a, b) => b.supersededAt.localeCompare(a.supersededAt));
-  }
-
-  private reReviewRequestsCollection() {
-    return this.db.collection(RE_REVIEW_REQUESTS_COLLECTION);
-  }
-
-  private hydrateReReviewRequest(id: string, data: Omit<ReReviewRequest, 'id'>): ReReviewRequest {
-    return {
-      ...data,
-      id,
-      gameVersion: data.gameVersion ?? null,
-      reason: data.reason ?? null,
-      resolvedAt: data.resolvedAt ?? null,
-    };
+    return this.reviewStore.listGameAssessmentHistory(slug, reviewerUid);
   }
 
   async upsertReReviewRequests(
     requests: Array<Pick<ReReviewRequest, 'slug' | 'reviewerUid' | 'gameVersion' | 'reason' | 'createdBy'>>,
   ): Promise<ReReviewRequest[]> {
-    const now = new Date().toISOString();
-    const out: ReReviewRequest[] = [];
-    for (let index = 0; index < requests.length; index += 400) {
-      const batch = this.db.batch();
-      const chunk = requests.slice(index, index + 400);
-      const records = chunk.map((req) => {
-        const id = reReviewRequestId(req.slug, req.reviewerUid);
-        const record: ReReviewRequest = {
-          id,
-          slug: req.slug,
-          reviewerUid: req.reviewerUid,
-          status: 'open',
-          gameVersion: req.gameVersion,
-          reason: req.reason,
-          createdAt: now,
-          createdBy: req.createdBy,
-          resolvedAt: null,
-        };
-        const { id: recordId, ...body } = record;
-        batch.set(this.reReviewRequestsCollection().doc(recordId), body);
-        return record;
-      });
-      await batch.commit();
-      out.push(...records);
-    }
-    return out;
+    return this.reviewStore.upsertReReviewRequests(requests);
   }
 
   async getReReviewRequest(slug: string, reviewerUid: string): Promise<ReReviewRequest | null> {
-    const id = reReviewRequestId(slug, reviewerUid);
-    const snap = await this.reReviewRequestsCollection().doc(id).get();
-    if (!snap.exists) return null;
-    return this.hydrateReReviewRequest(id, snap.data() as Omit<ReReviewRequest, 'id'>);
+    return this.reviewStore.getReReviewRequest(slug, reviewerUid);
   }
 
   async listOpenReReviewRequestsForReviewer(reviewerUid: string): Promise<ReReviewRequest[]> {
-    // Equality only — no orderBy / composite index.
-    const snap = await this.reReviewRequestsCollection()
-      .where('reviewerUid', '==', reviewerUid)
-      .where('status', '==', 'open')
-      .get();
-    return snap.docs
-      .map((d) => this.hydrateReReviewRequest(d.id, d.data() as Omit<ReReviewRequest, 'id'>))
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return this.reviewStore.listOpenReReviewRequestsForReviewer(reviewerUid);
   }
 
   async listReReviewRequests(opts?: { limit?: number }): Promise<ReReviewRequest[]> {
-    const ordered = this.reReviewRequestsCollection().orderBy('createdAt', 'desc');
-    const snap = await (opts?.limit === undefined ? ordered : ordered.limit(opts.limit)).get();
-    return snap.docs.map((d) => this.hydrateReReviewRequest(d.id, d.data() as Omit<ReReviewRequest, 'id'>));
+    return this.reviewStore.listReReviewRequests(opts);
   }
 
   async resolveReReviewRequest(slug: string, reviewerUid: string): Promise<ReReviewRequest | null> {
-    const id = reReviewRequestId(slug, reviewerUid);
-    const ref = this.reReviewRequestsCollection().doc(id);
-    const snap = await ref.get();
-    if (!snap.exists) return null;
-    const existing = this.hydrateReReviewRequest(id, snap.data() as Omit<ReReviewRequest, 'id'>);
-    if (existing.status !== 'open') return existing;
-    const resolvedAt = new Date().toISOString();
-    await ref.set({ status: 'resolved', resolvedAt }, { merge: true });
-    return { ...existing, status: 'resolved', resolvedAt };
-  }
-
-  async getGameAssessment(slug: string, reviewerUid: string): Promise<GameAssessment | null> {
-    const id = gameAssessmentId(slug, reviewerUid);
-    const snap = await this.gameAssessmentsCollection().doc(id).get();
-    if (!snap.exists) return null;
-    return hydrateGameAssessment(id, snap.data() as Omit<GameAssessment, 'id'>);
-  }
-
-  async listGameAssessmentsByReviewer(reviewerUid: string): Promise<GameAssessment[]> {
-    // Equality query only; sort in memory.
-    const snap = await this.gameAssessmentsCollection().where('reviewerUid', '==', reviewerUid).get();
-    return snap.docs
-      .map((d) => hydrateGameAssessment(d.id, d.data() as Omit<GameAssessment, 'id'>))
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.slug.localeCompare(b.slug));
-  }
-
-  async listGameAssessments(opts?: { limit?: number }): Promise<GameAssessment[]> {
-    const ordered = this.gameAssessmentsCollection().orderBy('updatedAt', 'desc');
-    const snap = await (opts?.limit === undefined ? ordered : ordered.limit(opts.limit)).get();
-    return snap.docs.map((d) => hydrateGameAssessment(d.id, d.data() as Omit<GameAssessment, 'id'>));
-  }
-
-  async listGameAssessmentsBySource(source: AssessmentSource): Promise<GameAssessment[]> {
-    // Equality only — no orderBy / composite index.
-    const snap = await this.gameAssessmentsCollection().where('source', '==', source).get();
-    return snap.docs
-      .map((d) => hydrateGameAssessment(d.id, d.data() as Omit<GameAssessment, 'id'>))
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.slug.localeCompare(b.slug));
-  }
-
-  async countGameAssessmentsByUid(uid: string): Promise<number> {
-    const snap = await this.gameAssessmentsCollection().where('reviewerUid', '==', uid).count().get();
-    return snap.data().count;
+    return this.reviewStore.resolveReReviewRequest(slug, reviewerUid);
   }
 
   async deleteGameAssessmentsByUid(uid: string): Promise<number> {
-    const [assessments, history, reReviews] = await Promise.all([
-      this.gameAssessmentsCollection().where('reviewerUid', '==', uid).get(),
-      this.gameAssessmentHistoryCollection().where('reviewerUid', '==', uid).get(),
-      this.reReviewRequestsCollection().where('reviewerUid', '==', uid).get(),
-    ]);
-    const refs = [...assessments.docs, ...history.docs, ...reReviews.docs].map((d) => d.ref);
-    for (let index = 0; index < refs.length; index += 400) {
-      const batch = this.db.batch();
-      for (const ref of refs.slice(index, index + 400)) batch.delete(ref);
-      await batch.commit();
-    }
-    return assessments.docs.length;
-  }
-
-  private reviewSweepsCollection() {
-    return this.db.collection(REVIEW_SWEEPS_COLLECTION);
-  }
-
-  private hydrateReviewSweep(id: string, data: Omit<ReviewSweep, 'id'>): ReviewSweep {
-    return {
-      ...data,
-      id,
-      slugs: Array.isArray(data.slugs) ? data.slugs.filter((s): s is string => typeof s === 'string') : [],
-      note: data.note ?? null,
-      releasePerDay: data.releasePerDay ?? null,
-      notifiedAt: data.notifiedAt ?? null,
-      notifiedCount: typeof data.notifiedCount === 'number' ? data.notifiedCount : 0,
-    };
+    return this.reviewStore.deleteGameAssessmentsByUid(uid);
   }
 
   async getOpenReviewSweep(): Promise<ReviewSweep | null> {
-    // Two equality queries avoid a composite index.
-    const [active, paused] = await Promise.all([
-      this.reviewSweepsCollection().where('status', '==', 'active').limit(5).get(),
-      this.reviewSweepsCollection().where('status', '==', 'paused').limit(5).get(),
-    ]);
-    const rows = [...active.docs, ...paused.docs]
-      .map((d) => this.hydrateReviewSweep(d.id, d.data() as Omit<ReviewSweep, 'id'>))
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-    return rows[0] ?? null;
+    return this.reviewSweepStore.getOpenReviewSweep();
   }
 
   async getReviewSweep(id: string): Promise<ReviewSweep | null> {
-    const snap = await this.reviewSweepsCollection().doc(id).get();
-    if (!snap.exists) return null;
-    return this.hydrateReviewSweep(id, snap.data() as Omit<ReviewSweep, 'id'>);
+    return this.reviewSweepStore.getReviewSweep(id);
   }
 
   async listReviewSweeps(opts?: { limit?: number }): Promise<ReviewSweep[]> {
-    const limit = opts?.limit ?? 20;
-    const snap = await this.reviewSweepsCollection().orderBy('createdAt', 'desc').limit(limit).get();
-    return snap.docs.map((d) => this.hydrateReviewSweep(d.id, d.data() as Omit<ReviewSweep, 'id'>));
+    return this.reviewSweepStore.listReviewSweeps(opts);
   }
 
   async createReviewSweep(sweep: ReviewSweep): Promise<ReviewSweep> {
-    const open = await this.getOpenReviewSweep();
-    if (open) {
-      await this.reviewSweepsCollection().doc(open.id).set(
-        {
-          status: 'cancelled',
-          updatedAt: sweep.createdAt,
-          updatedBy: sweep.createdBy,
-        },
-        { merge: true },
-      );
-    }
-    const { id, ...body } = sweep;
-    await this.reviewSweepsCollection().doc(id).set(body);
-    return { ...sweep, slugs: [...sweep.slugs] };
+    return this.reviewSweepStore.createReviewSweep(sweep);
   }
 
   async updateReviewSweep(
     id: string,
     patch: Partial<Omit<ReviewSweep, 'id' | 'createdAt' | 'createdBy' | 'slugs' | 'source'>>,
   ): Promise<ReviewSweep | null> {
-    const ref = this.reviewSweepsCollection().doc(id);
-    const existing = await ref.get();
-    if (!existing.exists) return null;
-    await ref.set(patch, { merge: true });
-    const snap = await ref.get();
-    return this.hydrateReviewSweep(id, snap.data() as Omit<ReviewSweep, 'id'>);
-  }
-
-  // `current` is a fixed doc id, so a game has exactly one scorecard and the sweep
-  // overwrites rather than accumulating a history nobody reads.
-  private scorecardRef(slug: string) {
-    return this.gameRef(slug).collection('scorecard').doc('current');
+    return this.reviewSweepStore.updateReviewSweep(id, patch);
   }
 
   async putScorecard(slug: string, scorecard: Scorecard): Promise<void> {
-    // `set` without merge: a scorecard is a whole snapshot, and merging would leave
-    // fields from a previous window alive next to a newer one — a row that never
-    // existed as a measurement.
-    await this.scorecardRef(slug).set(scorecard);
+    return this.reviewSweepStore.putScorecard(slug, scorecard);
   }
 
   async listScorecards(opts?: { limit?: number }): Promise<Scorecard[]> {
-    // A collection-group query over `scorecard` reads every game's `current` doc in one
-    // round trip, instead of one read per catalog slug. Safe as a group name: nothing
-    // else in the schema uses it, unlike the `events` collision that forced play
-    // telemetry into its own group.
-    //
-    // Ordered by `computedAt` rather than by any metric, because the question this read
-    // exists to answer is "did the sweep run, and how fresh is the freshest" — a stale
-    // scorecard is the failure worth seeing first.
-    //
-    // The `orderBy` selects *which* docs the limit keeps (the freshest, if the catalog
-    // ever outgrows it); the sort below decides the order they are presented in. Both
-    // are needed: a sweep stamps one `computedAt` on every game it writes, so equal
-    // timestamps are the normal case rather than a rare tie, and Firestore promises
-    // nothing about order among equal values. Sorting here rather than adding
-    // `.orderBy('slug')` avoids provisioning a composite index for a listing that is
-    // already bounded to a couple of hundred rows.
-    const snap = await this.db
-      .collectionGroup('scorecard')
-      .orderBy('computedAt', 'desc')
-      .limit(opts?.limit ?? 200)
-      .get();
-    return snap.docs.map((doc) => doc.data() as Scorecard).sort(compareScorecards);
+    return this.reviewSweepStore.listScorecards(opts);
   }
 
   async listGameSlugs(): Promise<string[]> {
@@ -6643,8 +5150,7 @@ export class FirestoreStore implements Store {
   }
 
   async getScorecard(slug: string): Promise<Scorecard | null> {
-    const snap = await this.scorecardRef(slug).get();
-    return snap.exists ? (snap.data() as Scorecard) : null;
+    return this.reviewSweepStore.getScorecard(slug);
   }
 
   // Top-level rather than under `games/{slug}`: a suggestion is read as a queue across
@@ -6854,206 +5360,67 @@ export class FirestoreStore implements Store {
   }
 
   async createAccessToken(record: AccessTokenRecord): Promise<void> {
-    await this.db.collection('accessTokens').doc(record.tokenId).create(record);
+    return this.accessTokensStore.createAccessToken(record);
   }
 
   async getAccessToken(tokenId: string): Promise<AccessTokenRecord | null> {
-    const snap = await this.db.collection('accessTokens').doc(tokenId).get();
-    if (!snap.exists) return null;
-    return snap.data() as AccessTokenRecord;
+    return this.accessTokensStore.getAccessToken(tokenId);
   }
 
   async listAccessTokens(uid: string): Promise<AccessTokenRecord[]> {
-    const snap = await this.db.collection('accessTokens').where('uid', '==', uid).get();
-    // Sorted in memory rather than with orderBy: a composite (uid, createdAt) index is
-    // not worth provisioning for a listing whose result set is a handful of rows.
-    return snap.docs
-      .map((doc) => doc.data() as AccessTokenRecord)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return this.accessTokensStore.listAccessTokens(uid);
   }
 
   async deleteAccessToken(tokenId: string): Promise<boolean> {
-    const docRef = this.db.collection('accessTokens').doc(tokenId);
-    const snap = await docRef.get();
-    if (!snap.exists) return false;
-    await docRef.delete();
-    return true;
+    return this.accessTokensStore.deleteAccessToken(tokenId);
   }
 
   async getGameAgentKey(slug: string): Promise<GameAgentKeyRecord | null> {
-    const snap = await this.db.collection('gameAgentKeys').doc(slug).get();
-    if (!snap.exists) return null;
-    return snap.data() as GameAgentKeyRecord;
+    return this.agentKeysStore.getGameAgentKey(slug);
   }
 
   async ensureGameAgentKey(slug: string, ownerUid: string, at: string): Promise<GameAgentKeyRecord | null> {
-    const docRef = this.db.collection('gameAgentKeys').doc(slug);
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(docRef);
-      if (snap.exists) {
-        const existing = snap.data() as GameAgentKeyRecord;
-        if (existing.ownerUid !== ownerUid) return null;
-        return existing;
-      }
-      const created: GameAgentKeyRecord = {
-        slug,
-        ownerUid,
-        keyGeneration: 1,
-        createdAt: at,
-        updatedAt: at,
-      };
-      tx.create(docRef, created);
-      return created;
-    });
+    return this.agentKeysStore.ensureGameAgentKey(slug, ownerUid, at);
   }
 
   async rotateGameAgentKey(slug: string, ownerUid: string, at: string): Promise<GameAgentKeyRecord | null> {
-    const docRef = this.db.collection('gameAgentKeys').doc(slug);
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(docRef);
-      if (!snap.exists) return null;
-      const existing = snap.data() as GameAgentKeyRecord;
-      if (existing.ownerUid !== ownerUid) return null;
-      const next: GameAgentKeyRecord = {
-        ...existing,
-        keyGeneration: existing.keyGeneration + 1,
-        updatedAt: at,
-      };
-      tx.set(docRef, next);
-      return next;
-    });
+    return this.agentKeysStore.rotateGameAgentKey(slug, ownerUid, at);
   }
 
   async beginAgentOpenRound(slug: string, at: string): Promise<boolean> {
-    const docRef = this.db.collection('gameAgentKeys').doc(slug);
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(docRef);
-      if (!snap.exists) return false;
-      const existing = snap.data() as GameAgentKeyRecord;
-      if (existing.agentOpenRoundPending) return false;
-      const next: GameAgentKeyRecord = { ...existing, agentOpenRoundPending: true, updatedAt: at };
-      tx.set(docRef, next);
-      return true;
-    });
+    return this.agentKeysStore.beginAgentOpenRound(slug, at);
   }
 
   async finishAgentOpenRound(slug: string, at: string): Promise<void> {
-    const docRef = this.db.collection('gameAgentKeys').doc(slug);
-    await this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(docRef);
-      if (!snap.exists) return;
-      const existing = snap.data() as GameAgentKeyRecord;
-      if (!existing.agentOpenRoundPending) return;
-      const next: GameAgentKeyRecord = { ...existing, updatedAt: at };
-      delete next.agentOpenRoundPending;
-      tx.set(docRef, next);
-    });
+    return this.agentKeysStore.finishAgentOpenRound(slug, at);
   }
 
   async getCreatorAgentKey(ownerUid: string): Promise<CreatorAgentKeyRecord | null> {
-    const snap = await this.db.collection('creatorAgentKeys').doc(ownerUid).get();
-    if (!snap.exists) return null;
-    return snap.data() as CreatorAgentKeyRecord;
+    return this.agentKeysStore.getCreatorAgentKey(ownerUid);
   }
 
   async ensureCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord> {
-    const docRef = this.db.collection('creatorAgentKeys').doc(ownerUid);
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(docRef);
-      if (snap.exists) {
-        return snap.data() as CreatorAgentKeyRecord;
-      }
-      const created: CreatorAgentKeyRecord = {
-        ownerUid,
-        keyGeneration: 1,
-        createdAt: at,
-        updatedAt: at,
-      };
-      tx.create(docRef, created);
-      return created;
-    });
+    return this.agentKeysStore.ensureCreatorAgentKey(ownerUid, at);
   }
 
   async reactivateCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord> {
-    const docRef = this.db.collection('creatorAgentKeys').doc(ownerUid);
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(docRef);
-      if (!snap.exists) {
-        const created: CreatorAgentKeyRecord = {
-          ownerUid,
-          keyGeneration: 1,
-          createdAt: at,
-          updatedAt: at,
-        };
-        tx.create(docRef, created);
-        return created;
-      }
-      const existing = snap.data() as CreatorAgentKeyRecord;
-      if (!existing.revokedAt) return existing;
-      const cleared: CreatorAgentKeyRecord = {
-        ownerUid: existing.ownerUid,
-        keyGeneration: existing.keyGeneration,
-        createdAt: existing.createdAt,
-        updatedAt: at,
-      };
-      tx.set(docRef, cleared);
-      return cleared;
-    });
+    return this.agentKeysStore.reactivateCreatorAgentKey(ownerUid, at);
   }
 
   async rotateCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null> {
-    const docRef = this.db.collection('creatorAgentKeys').doc(ownerUid);
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(docRef);
-      if (!snap.exists) return null;
-      const existing = snap.data() as CreatorAgentKeyRecord;
-      const next: CreatorAgentKeyRecord = {
-        ownerUid: existing.ownerUid,
-        keyGeneration: existing.keyGeneration + 1,
-        createdAt: existing.createdAt,
-        updatedAt: at,
-      };
-      tx.set(docRef, next);
-      return next;
-    });
+    return this.agentKeysStore.rotateCreatorAgentKey(ownerUid, at);
   }
 
   async touchCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null> {
-    const docRef = this.db.collection('creatorAgentKeys').doc(ownerUid);
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(docRef);
-      if (!snap.exists) return null;
-      const existing = snap.data() as CreatorAgentKeyRecord;
-      if (existing.revokedAt) return null;
-      const next: CreatorAgentKeyRecord = { ...existing, updatedAt: at };
-      tx.set(docRef, next);
-      return next;
-    });
+    return this.agentKeysStore.touchCreatorAgentKey(ownerUid, at);
   }
 
   async revokeCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null> {
-    const docRef = this.db.collection('creatorAgentKeys').doc(ownerUid);
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(docRef);
-      if (!snap.exists) return null;
-      const existing = snap.data() as CreatorAgentKeyRecord;
-      const next: CreatorAgentKeyRecord = {
-        ownerUid: existing.ownerUid,
-        keyGeneration: existing.keyGeneration + 1,
-        createdAt: existing.createdAt,
-        updatedAt: at,
-        revokedAt: at,
-      };
-      tx.set(docRef, next);
-      return next;
-    });
+    return this.agentKeysStore.revokeCreatorAgentKey(ownerUid, at);
   }
 
   async touchAccessToken(tokenId: string, at: string): Promise<void> {
-    // `update` (not merge-set): a revoked token's doc is gone, and merge-set
-    // would resurrect a partial record that later auth reads crash on. Missing
-    // docs throw; callers already treat touch as best-effort.
-    await this.db.collection('accessTokens').doc(tokenId).update({ lastUsedAt: at });
+    return this.accessTokensStore.touchAccessToken(tokenId, at);
   }
 
   async createOAuthClient(record: OAuthClientRecord): Promise<void> {
