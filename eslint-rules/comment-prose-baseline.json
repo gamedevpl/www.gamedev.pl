@@ -581,7 +581,7 @@
     "apps/web/src/TelemetryCharts.tsx": 289,
     "apps/web/src/TelemetryOverview.test.tsx": 29,
     "apps/web/src/TelemetryOverview.tsx": 131,
-    "apps/web/src/telemetryTrends.ts": 81,
+    "apps/web/src/telemetryTrends.ts": 82,
     "apps/web/src/TelemetryTrendsPanel.tsx": 49,
     "apps/web/src/tsCompilerOptions.ts": 62,
     "apps/web/src/UnpublishedPlayView.tsx": 126,

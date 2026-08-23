@@ -10,7 +10,7 @@ export type { TrendGrain };
  * rolling averages are toggles an operator flips while looking — recomputing them
  * here keeps those clicks free of another Firestore walk.
  *
- * Arithmetic mirrors apps/api/src/telemetry-trends.ts; keep the two in step.
+ * Arithmetic mirrors apps/api/src/telemetry/telemetry-trends.ts; keep the two in step.
  */
 
 export type RollingWindow = 0 | 7 | 28;

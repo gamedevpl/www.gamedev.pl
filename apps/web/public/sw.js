@@ -182,7 +182,7 @@ self.addEventListener('fetch', (event) => {
  *
  * The app routes on `location.pathname` after boot, so deep links still land where they
  * should. The one thing this gives up is the server's 200-vs-404 distinction for unknown
- * paths (apps/api/src/spa-paths.ts): a controlled navigation to a typo'd URL renders the
+ * paths (apps/api/src/platform/spa-paths.ts): a controlled navigation to a typo'd URL renders the
  * NotFound page with an HTTP 200 behind it. That distinction exists for crawlers and
  * tools, which never run a service worker, so the trade buys a sub-second cold start for
  * real visitors at no cost to the audience the status code was written for.
