@@ -62,6 +62,9 @@ import type { User, HandleRecord, AccountIdentityDeletionResult, ClaimHandleResu
 export type { User, HandleRecord, AccountIdentityDeletionResult, ClaimHandleResult };
 import { DELETED_ACCOUNT_UID, ACTIVE_DAYS_KEPT, withActiveDay } from './store/records/identity.js';
 export { DELETED_ACCOUNT_UID, ACTIVE_DAYS_KEPT, withActiveDay };
+import type { IdentityStore } from './store/slices/identity.js';
+export type { IdentityStore };
+import { InMemoryIdentityStore, FirestoreIdentityStore } from './store/slices/identity.js';
 import type { BuilderHandoff, AgentEndedBy } from './store/records/rounds.js';
 export type { BuilderHandoff, AgentEndedBy };
 import type { SubmissionRecord } from './store/records/submission.js';
@@ -216,75 +219,17 @@ export type {
   RotateRefreshTokenResult,
 };
 
-export interface IdentityStore {
-  getUser(uid: string): Promise<User | null>;
+// IdentityStore, InMemoryIdentityStore and FirestoreIdentityStore live in
+// ./store/slices/identity.js -- imported at the top of the file (Phase 2 wave 4).
 
-  /** Public profile lookup by unique handle (case-insensitive). */
-  getUserByHandle(handle: string): Promise<User | null>;
-
-  /**
-   * Raw reservation row, including cooldown-held released handles. Availability checks
-   * need this — `getUserByHandle` deliberately hides released rows.
-   */
-  getHandleReservation(handle: string): Promise<HandleRecord | null>;
-
-  /**
-   * Claim or rename a handle. Transactional against the `handles` reservation so two
-   * creators cannot both win the same name.
-   */
-  claimHandle(uid: string, handle: string, at: string): Promise<ClaimHandleResult>;
-
-  /** Update profileName / bio / avatarMode. Does not touch the handle. */
-  updateCreatorProfile(
-    uid: string,
-    patch: { profileName?: string; bio?: string; avatarMode?: AvatarMode },
-  ): Promise<User | null>;
-
-  /**
-   * Drop every handle reservation this uid holds (active or cooldown) and clear profile
-   * fields on the user. Used by the account-erasure path so a deleted account cannot
-   * keep a handle forever.
-   */
-  releaseCreatorHandles(uid: string, at: string): Promise<string[]>;
-
+// Not delegated to the identity slice -- this orchestrator already reaches every slice.
+export interface AccountErasureStore {
   /**
    * Remove the account record and every credential/subscription tied to it. Published
    * submissions are retained under a non-personal platform owner; unfinished ones are
    * abandoned and likewise unlinked. Player contributions are erased separately first.
    */
   deleteAccountIdentity(uid: string, at: string): Promise<AccountIdentityDeletionResult>;
-
-  /** Mark an account for later erasure without removing any data yet. */
-  scheduleAccountDeletion(uid: string, requestedAt: string, scheduledFor: string): Promise<User | null>;
-
-  /** Remove a pending deletion marker, normally when the person signs in again. */
-  cancelAccountDeletion(uid: string): Promise<boolean>;
-
-  /** Accounts whose recovery window has elapsed, oldest deadline first. */
-  listAccountsDueForDeletion(at: string, limit: number): Promise<User[]>;
-
-  /**
-   * Find the single account holding this email, or null.
-   *
-   * Exists for one caller: linking a Sign in with Apple identity onto the Google account
-   * the same person already has (`resolveAppleAccount` in `apple-account.ts`). Without it
-   * a creator who taps the Apple button lands in an empty account and their games look
-   * deleted.
-   *
-   * Returns null when *more than one* account matches, not an arbitrary one. An ambiguous
-   * match means signing somebody into an account that may not be theirs; a null means
-   * they get a fresh account, which is recoverable. Only ever called with an address the
-   * identity provider says it verified — see the callers.
-   */
-  findUserByEmail(email: string): Promise<User | null>;
-
-  upsertUser(userData: Partial<User> & { uid: string }): Promise<User>;
-
-  /** Set (or clear, with null) the global email-unsubscribe timestamp for a user. */
-  setEmailUnsubscribed(uid: string, at: string | null): Promise<void>;
-
-  /** Set (or clear, with null) the weekly-digest opt-out for a user. */
-  setDigestOptOut(uid: string, at: string | null): Promise<void>;
 }
 
 export interface RoundsStore {
@@ -988,6 +933,7 @@ export interface ContributionStore {
 export interface Store
   extends
     IdentityStore,
+    AccountErasureStore,
     RoundsStore,
     DispatchStore,
     SubmissionStore,
@@ -1055,7 +1001,7 @@ function byNewestFirst(a: { createdAt: string; id: string }, b: { createdAt: str
 }
 
 export class InMemoryStore implements Store {
-  private users = new Map<string, User>();
+  private identityStore = new InMemoryIdentityStore();
   private submissions = new Map<number, SubmissionRecord>();
   private publications = new Map<string, PublicationRecord>();
   private nextJobId = JOB_ID_FLOOR;
@@ -1097,122 +1043,36 @@ export class InMemoryStore implements Store {
   // slug -> durable per-game agent opener state (BY-23)
   private agentKeysStore = new InMemoryAgentKeysStore();
   private oauthStore = new InMemoryOAuthStore();
-  // lowercase handle -> reservation
-  private handles = new Map<string, HandleRecord>();
 
   async getUser(uid: string): Promise<User | null> {
-    const user = this.users.get(uid);
-    return user ? { ...user } : null;
+    return this.identityStore.getUser(uid);
   }
 
   async getUserByHandle(handle: string): Promise<User | null> {
-    const key = handle.trim().toLowerCase();
-    const reservation = this.handles.get(key);
-    if (!reservation || reservation.releasedAt) return null;
-    return this.getUser(reservation.uid);
+    return this.identityStore.getUserByHandle(handle);
   }
 
   async getHandleReservation(handle: string): Promise<HandleRecord | null> {
-    const key = handle.trim().toLowerCase();
-    const reservation = this.handles.get(key);
-    return reservation ? { ...reservation } : null;
+    return this.identityStore.getHandleReservation(handle);
   }
 
   async claimHandle(uid: string, handle: string, at: string): Promise<ClaimHandleResult> {
-    const { normalizeHandle, validateHandleShape, HANDLE_RENAME_COOLDOWN_MS } = await import('./creator-profile.js');
-    const key = normalizeHandle(handle);
-    const shape = validateHandleShape(key);
-    if (shape) return { ok: false, reason: shape };
-
-    const user = this.users.get(uid);
-    if (!user) return { ok: false, reason: 'not_found' };
-    if (user.handle === key) return { ok: false, reason: 'unchanged' };
-
-    if (user.handle && user.handleChangedAt) {
-      const elapsed = Date.parse(at) - Date.parse(user.handleChangedAt);
-      if (Number.isFinite(elapsed) && elapsed < HANDLE_RENAME_COOLDOWN_MS) {
-        return { ok: false, reason: 'cooldown' };
-      }
-    }
-
-    const existing = this.handles.get(key);
-    if (existing && !existing.releasedAt && existing.uid !== uid) {
-      return { ok: false, reason: 'taken' };
-    }
-    if (existing?.releasedAt && existing.previousUid !== uid) {
-      const elapsed = Date.parse(at) - Date.parse(existing.releasedAt);
-      if (Number.isFinite(elapsed) && elapsed < HANDLE_RENAME_COOLDOWN_MS) {
-        return { ok: false, reason: 'taken' };
-      }
-    }
-
-    if (user.handle) {
-      this.handles.set(user.handle, {
-        uid: user.uid,
-        claimedAt: user.profileCreatedAt ?? at,
-        releasedAt: at,
-        previousUid: user.uid,
-      });
-    }
-
-    this.handles.set(key, { uid, claimedAt: user.profileCreatedAt ?? at });
-    const updated: User = {
-      ...user,
-      handle: key,
-      profileCreatedAt: user.profileCreatedAt ?? at,
-      handleChangedAt: at,
-      profileName: user.profileName ?? key,
-      // Lettermark until the creator opts into showing their Google picture.
-      avatarMode: user.avatarMode ?? 'letter',
-    };
-    this.users.set(uid, updated);
-    return { ok: true, user: { ...updated } };
+    return this.identityStore.claimHandle(uid, handle, at);
   }
 
   async updateCreatorProfile(
     uid: string,
     patch: { profileName?: string; bio?: string; avatarMode?: AvatarMode },
   ): Promise<User | null> {
-    const user = this.users.get(uid);
-    if (!user) return null;
-    const updated: User = {
-      ...user,
-      ...(patch.profileName !== undefined ? { profileName: patch.profileName } : {}),
-      ...(patch.bio !== undefined ? { bio: patch.bio } : {}),
-      ...(patch.avatarMode !== undefined ? { avatarMode: patch.avatarMode } : {}),
-    };
-    this.users.set(uid, updated);
-    return { ...updated };
+    return this.identityStore.updateCreatorProfile(uid, patch);
   }
 
   async releaseCreatorHandles(uid: string, at: string): Promise<string[]> {
-    const released: string[] = [];
-    for (const [key, reservation] of [...this.handles.entries()]) {
-      const owns =
-        (!reservation.releasedAt && reservation.uid === uid) ||
-        (Boolean(reservation.releasedAt) && reservation.previousUid === uid);
-      if (!owns) continue;
-      this.handles.delete(key);
-      released.push(key);
-    }
-    const user = this.users.get(uid);
-    if (user) {
-      this.users.set(uid, {
-        ...user,
-        handle: undefined,
-        profileName: undefined,
-        bio: undefined,
-        avatarMode: undefined,
-        profileCreatedAt: undefined,
-        handleChangedAt: undefined,
-      });
-    }
-    void at;
-    return released.sort();
+    return this.identityStore.releaseCreatorHandles(uid, at);
   }
 
   async deleteAccountIdentity(uid: string, at: string): Promise<AccountIdentityDeletionResult> {
-    const user = this.users.get(uid);
+    const user = this.identityStore.users.get(uid);
     const owned = [...this.submissions.values()].filter((submission) => submission.ownerUid === uid);
     const publishedSlugs = owned
       .filter((submission) => Boolean(submission.publishedAt && submission.slug))
@@ -1231,8 +1091,8 @@ export class InMemoryStore implements Store {
       });
     }
 
-    for (const [key, reservation] of [...this.handles]) {
-      if (reservation.uid === uid || reservation.previousUid === uid) this.handles.delete(key);
+    for (const [key, reservation] of [...this.identityStore.handles]) {
+      if (reservation.uid === uid || reservation.previousUid === uid) this.identityStore.handles.delete(key);
     }
     for (const [key, counters] of [...this.usage]) {
       void counters;
@@ -1285,84 +1145,37 @@ export class InMemoryStore implements Store {
       if (grantIds.has(grantId)) this.oauthStore.oauthRefreshTokenIndex.delete(refreshId);
     }
     for (const slug of [...publishedSlugs, ...unpublishedSlugs]) this.gameAutonomy.delete(slug);
-    this.users.delete(uid);
+    this.identityStore.users.delete(uid);
 
     return { publishedSlugs, unpublishedSlugs };
   }
 
   async scheduleAccountDeletion(uid: string, requestedAt: string, scheduledFor: string): Promise<User | null> {
-    const user = this.users.get(uid);
-    if (!user) return null;
-    const updated = { ...user, deletionRequestedAt: requestedAt, deletionScheduledFor: scheduledFor };
-    this.users.set(uid, updated);
-    return { ...updated };
+    return this.identityStore.scheduleAccountDeletion(uid, requestedAt, scheduledFor);
   }
 
   async cancelAccountDeletion(uid: string): Promise<boolean> {
-    const user = this.users.get(uid);
-    if (!user?.deletionScheduledFor) return false;
-    this.users.set(uid, { ...user, deletionRequestedAt: undefined, deletionScheduledFor: undefined });
-    return true;
+    return this.identityStore.cancelAccountDeletion(uid);
   }
 
   async listAccountsDueForDeletion(at: string, limit: number): Promise<User[]> {
-    return [...this.users.values()]
-      .filter((user) => user.deletionScheduledFor !== undefined && user.deletionScheduledFor <= at)
-      .sort((left, right) => left.deletionScheduledFor!.localeCompare(right.deletionScheduledFor!))
-      .slice(0, limit)
-      .map((user) => ({ ...user }));
+    return this.identityStore.listAccountsDueForDeletion(at, limit);
   }
 
   async findUserByEmail(email: string): Promise<User | null> {
-    const wanted = email.trim().toLowerCase();
-    if (wanted === '') return null;
-    const matches = [...this.users.values()].filter((user) => user.email?.trim().toLowerCase() === wanted);
-    if (matches.length !== 1) return null;
-    return { ...(matches[0] as User) };
+    return this.identityStore.findUserByEmail(email);
   }
 
   async upsertUser(userData: Partial<User> & { uid: string }): Promise<User> {
-    const now = new Date().toISOString();
-    const existing = this.users.get(userData.uid);
-
-    const updated: User = {
-      uid: userData.uid,
-      email: userData.email ?? existing?.email,
-      name: userData.name ?? existing?.name,
-      picture: userData.picture ?? existing?.picture,
-      createdAt: existing?.createdAt ?? now,
-      lastLoginAt: now,
-      tier: userData.tier ?? existing?.tier ?? 'standard',
-      // Preserve email prefs across logins — a re-login must not resubscribe.
-      locale: userData.locale ?? existing?.locale,
-      emailUnsubscribedAt: existing?.emailUnsubscribedAt ?? null,
-      digestOptOutAt: existing?.digestOptOutAt ?? null,
-      // Carried explicitly. Omitting it silently discarded every write from the
-      // activity hook in `auth.ts`, whose only purpose is to persist this field.
-      activeDays: userData.activeDays ?? existing?.activeDays,
-      // Profile fields are never set by sign-in — only claim/update routes touch them.
-      handle: existing?.handle,
-      profileName: existing?.profileName,
-      bio: existing?.bio,
-      avatarMode: existing?.avatarMode,
-      profileCreatedAt: existing?.profileCreatedAt,
-      handleChangedAt: existing?.handleChangedAt,
-      deletionRequestedAt: existing?.deletionRequestedAt,
-      deletionScheduledFor: existing?.deletionScheduledFor,
-    };
-
-    this.users.set(userData.uid, updated);
-    return { ...updated };
+    return this.identityStore.upsertUser(userData);
   }
 
   async setEmailUnsubscribed(uid: string, at: string | null): Promise<void> {
-    const existing = this.users.get(uid);
-    if (existing) this.users.set(uid, { ...existing, emailUnsubscribedAt: at });
+    return this.identityStore.setEmailUnsubscribed(uid, at);
   }
 
   async setDigestOptOut(uid: string, at: string | null): Promise<void> {
-    const existing = this.users.get(uid);
-    if (existing) this.users.set(uid, { ...existing, digestOptOutAt: at });
+    return this.identityStore.setDigestOptOut(uid, at);
   }
 
   async createSubmission(issueNumber: number, ownerUid: string, title: string): Promise<SubmissionRecord> {
@@ -2986,6 +2799,7 @@ export class FirestoreStore implements Store {
   private accessStore: FirestoreAccessStore;
   private reviewStore: FirestoreReviewStore;
   private reviewSweepStore: FirestoreReviewSweepStore;
+  private identityStore: FirestoreIdentityStore;
 
   constructor(db?: Firestore) {
     this.db = db ?? new Firestore();
@@ -2999,154 +2813,34 @@ export class FirestoreStore implements Store {
     this.accessStore = new FirestoreAccessStore(this.db);
     this.reviewStore = new FirestoreReviewStore(this.db);
     this.reviewSweepStore = new FirestoreReviewSweepStore(this.db);
+    this.identityStore = new FirestoreIdentityStore(this.db);
   }
 
   async getUser(uid: string): Promise<User | null> {
-    const docRef = this.db.collection('users').doc(uid);
-    const snap = await docRef.get();
-    if (!snap.exists) return null;
-    return snap.data() as User;
+    return this.identityStore.getUser(uid);
   }
 
   async getUserByHandle(handle: string): Promise<User | null> {
-    const key = handle.trim().toLowerCase();
-    if (!key) return null;
-    const snap = await this.db.collection('handles').doc(key).get();
-    if (!snap.exists) return null;
-    const reservation = snap.data() as HandleRecord;
-    if (reservation.releasedAt) return null;
-    return this.getUser(reservation.uid);
+    return this.identityStore.getUserByHandle(handle);
   }
 
   async getHandleReservation(handle: string): Promise<HandleRecord | null> {
-    const key = handle.trim().toLowerCase();
-    if (!key) return null;
-    const snap = await this.db.collection('handles').doc(key).get();
-    if (!snap.exists) return null;
-    return snap.data() as HandleRecord;
+    return this.identityStore.getHandleReservation(handle);
   }
 
   async claimHandle(uid: string, handle: string, at: string): Promise<ClaimHandleResult> {
-    const { normalizeHandle, validateHandleShape, HANDLE_RENAME_COOLDOWN_MS } = await import('./creator-profile.js');
-    const key = normalizeHandle(handle);
-    const shape = validateHandleShape(key);
-    if (shape) return { ok: false, reason: shape };
-
-    const users = this.db.collection('users');
-    const handles = this.db.collection('handles');
-
-    try {
-      return await this.db.runTransaction(async (tx) => {
-        const userRef = users.doc(uid);
-        const userSnap = await tx.get(userRef);
-        if (!userSnap.exists) return { ok: false, reason: 'not_found' };
-        const user = userSnap.data() as User;
-        if (user.handle === key) return { ok: false, reason: 'unchanged' };
-
-        if (user.handle && user.handleChangedAt) {
-          const elapsed = Date.parse(at) - Date.parse(user.handleChangedAt);
-          if (Number.isFinite(elapsed) && elapsed < HANDLE_RENAME_COOLDOWN_MS) {
-            return { ok: false, reason: 'cooldown' };
-          }
-        }
-
-        const handleRef = handles.doc(key);
-        const handleSnap = await tx.get(handleRef);
-        if (handleSnap.exists) {
-          const existing = handleSnap.data() as HandleRecord;
-          if (!existing.releasedAt && existing.uid !== uid) {
-            return { ok: false, reason: 'taken' };
-          }
-          if (existing.releasedAt && existing.previousUid !== uid) {
-            const elapsed = Date.parse(at) - Date.parse(existing.releasedAt);
-            if (Number.isFinite(elapsed) && elapsed < HANDLE_RENAME_COOLDOWN_MS) {
-              return { ok: false, reason: 'taken' };
-            }
-          }
-        }
-
-        // Firestore requires every read before every write in a transaction.
-        const oldHandleRef = user.handle && user.handle !== key ? handles.doc(user.handle) : null;
-        if (oldHandleRef) await tx.get(oldHandleRef);
-
-        if (oldHandleRef) {
-          tx.set(oldHandleRef, {
-            uid: user.uid,
-            claimedAt: user.profileCreatedAt ?? at,
-            releasedAt: at,
-            previousUid: user.uid,
-          } satisfies HandleRecord);
-        }
-
-        const updated: User = {
-          ...user,
-          handle: key,
-          profileCreatedAt: user.profileCreatedAt ?? at,
-          handleChangedAt: at,
-          profileName: user.profileName ?? key,
-          // Lettermark until the creator opts into showing their Google picture.
-          avatarMode: user.avatarMode ?? 'letter',
-        };
-        tx.set(handleRef, { uid, claimedAt: updated.profileCreatedAt ?? at } satisfies HandleRecord);
-        tx.set(userRef, stripUndefined(updated), { merge: true });
-        return { ok: true, user: updated };
-      });
-    } catch (err) {
-      console.error('claimHandle transaction failed', err);
-      return { ok: false, reason: 'taken' };
-    }
+    return this.identityStore.claimHandle(uid, handle, at);
   }
 
   async updateCreatorProfile(
     uid: string,
     patch: { profileName?: string; bio?: string; avatarMode?: AvatarMode },
   ): Promise<User | null> {
-    const user = await this.getUser(uid);
-    if (!user) return null;
-    const updated: User = {
-      ...user,
-      ...(patch.profileName !== undefined ? { profileName: patch.profileName } : {}),
-      ...(patch.bio !== undefined ? { bio: patch.bio } : {}),
-      ...(patch.avatarMode !== undefined ? { avatarMode: patch.avatarMode } : {}),
-    };
-    await this.db.collection('users').doc(uid).set(stripUndefined(updated), { merge: true });
-    return updated;
+    return this.identityStore.updateCreatorProfile(uid, patch);
   }
 
   async releaseCreatorHandles(uid: string, at: string): Promise<string[]> {
-    const released = new Set<string>();
-    const user = await this.getUser(uid);
-    if (user?.handle) released.add(user.handle);
-
-    // Cooldown-held former handles still block claims; free those too.
-    const previous = await this.db.collection('handles').where('previousUid', '==', uid).get();
-    for (const doc of previous.docs) released.add(doc.id);
-    const owned = await this.db.collection('handles').where('uid', '==', uid).get();
-    for (const doc of owned.docs) released.add(doc.id);
-
-    const batch = this.db.batch();
-    for (const key of released) {
-      batch.delete(this.db.collection('handles').doc(key));
-    }
-    if (user) {
-      batch.set(
-        this.db.collection('users').doc(uid),
-        {
-          handle: FieldValue.delete(),
-          profileName: FieldValue.delete(),
-          bio: FieldValue.delete(),
-          avatarMode: FieldValue.delete(),
-          profileCreatedAt: FieldValue.delete(),
-          handleChangedAt: FieldValue.delete(),
-        },
-        { merge: true },
-      );
-    }
-    if (released.size > 0 || user?.handle) {
-      await batch.commit();
-    }
-    void at;
-    return [...released].sort();
+    return this.identityStore.releaseCreatorHandles(uid, at);
   }
 
   async deleteAccountIdentity(uid: string, at: string): Promise<AccountIdentityDeletionResult> {
@@ -3284,117 +2978,31 @@ export class FirestoreStore implements Store {
   }
 
   async scheduleAccountDeletion(uid: string, requestedAt: string, scheduledFor: string): Promise<User | null> {
-    const ref = this.db.collection('users').doc(uid);
-    return this.db.runTransaction(async (transaction) => {
-      const snap = await transaction.get(ref);
-      if (!snap.exists) return null;
-      const updated = {
-        ...(snap.data() as User),
-        deletionRequestedAt: requestedAt,
-        deletionScheduledFor: scheduledFor,
-      };
-      transaction.set(ref, { deletionRequestedAt: requestedAt, deletionScheduledFor: scheduledFor }, { merge: true });
-      return updated;
-    });
+    return this.identityStore.scheduleAccountDeletion(uid, requestedAt, scheduledFor);
   }
 
   async cancelAccountDeletion(uid: string): Promise<boolean> {
-    const ref = this.db.collection('users').doc(uid);
-    return this.db.runTransaction(async (transaction) => {
-      const snap = await transaction.get(ref);
-      if (!snap.exists || !(snap.data() as User).deletionScheduledFor) return false;
-      transaction.set(
-        ref,
-        { deletionRequestedAt: FieldValue.delete(), deletionScheduledFor: FieldValue.delete() },
-        { merge: true },
-      );
-      return true;
-    });
+    return this.identityStore.cancelAccountDeletion(uid);
   }
 
   async listAccountsDueForDeletion(at: string, limit: number): Promise<User[]> {
-    const snap = await this.db
-      .collection('users')
-      .where('deletionScheduledFor', '<=', at)
-      .orderBy('deletionScheduledFor', 'asc')
-      .limit(limit)
-      .get();
-    return snap.docs.map((doc) => doc.data() as User);
+    return this.identityStore.listAccountsDueForDeletion(at, limit);
   }
 
   async findUserByEmail(email: string): Promise<User | null> {
-    const trimmed = email.trim();
-    if (trimmed === '') return null;
-
-    // Collection-scoped equality, so Firestore's automatic single-field index covers it
-    // and nothing needs provisioning in setup-gcp.sh (see firestore-indexes.test.ts —
-    // only collection *group* queries need a declared index).
-    //
-    // Two casings because `users.email` is stored exactly as the identity provider sent
-    // it, with no normalization, for every account created before this method existed.
-    // Google returns lowercase in practice, which is why the common case is one read.
-    const lower = trimmed.toLowerCase();
-    const candidates = [lower, ...(trimmed === lower ? [] : [trimmed])];
-
-    for (const candidate of candidates) {
-      // limit(2), not limit(1): the point is to *detect* an ambiguous match rather than
-      // silently sign somebody into the first of several accounts sharing an address.
-      const snap = await this.db.collection('users').where('email', '==', candidate).limit(2).get();
-      if (snap.size === 1) return snap.docs[0]?.data() as User;
-      if (snap.size > 1) return null;
-    }
-
-    return null;
+    return this.identityStore.findUserByEmail(email);
   }
 
   async upsertUser(userData: Partial<User> & { uid: string }): Promise<User> {
-    const now = new Date().toISOString();
-    const docRef = this.db.collection('users').doc(userData.uid);
-
-    return await this.db.runTransaction(async (transaction) => {
-      const snap = await transaction.get(docRef);
-      let user: User;
-
-      if (!snap.exists) {
-        user = {
-          uid: userData.uid,
-          email: userData.email,
-          name: userData.name,
-          picture: userData.picture,
-          createdAt: now,
-          lastLoginAt: now,
-          tier: userData.tier ?? 'standard',
-          locale: userData.locale,
-          activeDays: userData.activeDays,
-        };
-      } else {
-        const existing = snap.data() as User;
-        user = {
-          ...existing,
-          email: userData.email ?? existing.email,
-          name: userData.name ?? existing.name,
-          picture: userData.picture ?? existing.picture,
-          lastLoginAt: now,
-          tier: userData.tier ?? existing.tier,
-          // `...existing` carries the *stored* value, so an incoming update to either of
-          // these was dropped on the floor for every account that already existed —
-          // which, for `activeDays`, is every account the activity hook ever touched.
-          locale: userData.locale ?? existing.locale,
-          activeDays: userData.activeDays ?? existing.activeDays,
-        };
-      }
-
-      transaction.set(docRef, stripUndefined(user), { merge: true });
-      return user;
-    });
+    return this.identityStore.upsertUser(userData);
   }
 
   async setEmailUnsubscribed(uid: string, at: string | null): Promise<void> {
-    await this.db.collection('users').doc(uid).set({ emailUnsubscribedAt: at }, { merge: true });
+    return this.identityStore.setEmailUnsubscribed(uid, at);
   }
 
   async setDigestOptOut(uid: string, at: string | null): Promise<void> {
-    await this.db.collection('users').doc(uid).set({ digestOptOutAt: at }, { merge: true });
+    return this.identityStore.setDigestOptOut(uid, at);
   }
 
   async createSubmission(issueNumber: number, ownerUid: string, title: string): Promise<SubmissionRecord> {
