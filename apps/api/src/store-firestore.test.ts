@@ -667,3 +667,30 @@ describe('FirestoreStore creation limits', () => {
     expect(docs.get(key('globalUsage', '2026-07-30'))).toMatchObject({ submissions: 2 });
   });
 });
+
+describe('FirestoreStore.markCreatorMessagesDelivered', () => {
+  it('delivers a real message', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+
+    const message = await store.appendCreatorMessage(9, 'make it faster');
+    await store.markCreatorMessagesDelivered(9, [message.id]);
+
+    const [stored] = await store.listCreatorMessages(9);
+    expect(stored.deliveredAt).not.toBeNull();
+    expect(stored.text).toBe('make it faster');
+  });
+
+  it('does not materialize a phantom message for an id that was never appended', async () => {
+    // Production incident: a stale/bogus ack_inbox id used to `set(..., {merge: true})`
+    // a brand-new document with only `deliveredAt` and no `text` — every later reader
+    // of the thread crashed on that missing field.
+    const { db, docs, key } = fakeFirestore();
+    const store = new FirestoreStore(db);
+
+    await store.markCreatorMessagesDelivered(9, ['never-appended']);
+
+    expect(docs.has(key('submissions/9/messages', 'never-appended'))).toBe(false);
+    expect(await store.listCreatorMessages(9)).toEqual([]);
+  });
+});

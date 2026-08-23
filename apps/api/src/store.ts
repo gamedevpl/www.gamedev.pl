@@ -5039,8 +5039,16 @@ export class FirestoreStore implements Store {
     if (ids.length === 0) return;
     const at = new Date().toISOString();
     const collection = this.messagesCollection(issueNumber);
+    // `set(..., {merge: true})` on a doc that doesn't exist yet *creates* it — a stale or
+    // bogus id from an agent's ack_inbox call would otherwise materialize a phantom
+    // message with only `deliveredAt` and no `text`, which crashes every later reader
+    // that assumes `text` is a string. Check existence first so a bad id is a no-op.
+    const refs = ids.map((id) => collection.doc(id));
+    const snaps = await this.db.getAll(...refs);
     const batch = this.db.batch();
-    ids.forEach((id) => batch.set(collection.doc(id), { deliveredAt: at }, { merge: true }));
+    snaps.forEach((snap, index) => {
+      if (snap.exists) batch.set(refs[index], { deliveredAt: at }, { merge: true });
+    });
     await batch.commit();
   }
 

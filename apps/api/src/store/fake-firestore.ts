@@ -263,6 +263,7 @@ export function fakeFirestore() {
   const db = {
     collection: (collection: string) => makeCollection(collection),
     collectionGroup: (group: string) => makeQuery(groupPaths(group), null),
+    getAll: async (...refs: ReturnType<typeof makeRef>[]) => Promise.all(refs.map((ref) => ref.get())),
     // Deletes are staged and applied on commit, like the real client — so a test that
     // forgets to commit sees nothing deleted rather than passing by accident.
 
