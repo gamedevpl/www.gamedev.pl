@@ -124,10 +124,13 @@ export function transitionClosesRound(transition: JobTransition): boolean {
       return true;
     case 'needs_changes':
       // Same-session repair after a red gate / stale kit still holds the current token.
-      // `gate_crashed` joins them: our build died, so charging the creator a fresh round
-      // to work around it would bill them for our bug.
+      // `gate_crashed`/`session_crashed` join them: our own detection failed, so
+      // charging the creator a fresh round to work around it would bill them for it.
       return (
-        transition.reason !== 'gate_red' && transition.reason !== 'kit_outdated' && transition.reason !== 'gate_crashed'
+        transition.reason !== 'gate_red' &&
+        transition.reason !== 'kit_outdated' &&
+        transition.reason !== 'gate_crashed' &&
+        transition.reason !== 'session_crashed'
       );
     default:
       return false;

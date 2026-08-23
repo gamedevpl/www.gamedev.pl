@@ -21,7 +21,7 @@ describe('JOB_STATES', () => {
 });
 
 describe('JOB_STALL_VALUES', () => {
-  it('lists the seven stall reasons the API and web both derive', () => {
+  it('lists the eight stall reasons the API and web both derive', () => {
     expect(JOB_STALL_VALUES).toEqual([
       'awaiting_input',
       'not_dispatched',
@@ -29,6 +29,7 @@ describe('JOB_STALL_VALUES', () => {
       'ended',
       'gate_not_started',
       'gate_crashed',
+      'session_crashed',
       'no_agent_yet',
     ]);
   });

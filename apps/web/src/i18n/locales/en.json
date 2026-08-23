@@ -1056,6 +1056,7 @@
       "endedSelf": "Your coding agent finished this round. Send a note below to continue with your agent.",
       "gate_not_started": "The game was delivered, but verification hasn't started yet. This is on our side — no action needed from you.",
       "gate_crashed": "Our verification build failed before it could check your game. That's a fault on our side, not a problem with your game — we've been alerted. Your agent can deliver again to start a fresh check.",
+      "session_crashed": "Our agent session failed to respond on our last two checks. That's a fault on our side, not a problem with your game — we've been alerted. Your agent can deliver again to start a fresh session.",
       "no_agent_yet": "No agent yet — this round waits for your coding agent. Follow the steps below to connect it."
     },
     "tryAgain": "Try this idea again",

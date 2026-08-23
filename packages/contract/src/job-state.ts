@@ -41,6 +41,8 @@ export const JOB_STALL_VALUES = [
   'gate_not_started',
   // Our gate build died without ever writing a verdict.
   'gate_crashed',
+  // The vendor's own agent session errored on our last two checks in a row.
+  'session_crashed',
   // A self-build round waiting for the creator's agent to connect.
   'no_agent_yet',
 ] as const;

@@ -48,6 +48,7 @@ const STALL_COPY: Record<NonNullable<JobQueueEntry['stall']>, string> = {
   ended: 'agent ended the round',
   gate_not_started: 'delivered, gate never started',
   gate_crashed: 'gate build died with no verdict — ours',
+  session_crashed: 'agent session errored on both checks — ours',
 };
 
 const CANCEL_COPY: Record<CancelRefusal, string> = {

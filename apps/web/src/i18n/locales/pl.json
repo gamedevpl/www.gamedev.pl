@@ -1066,6 +1066,7 @@
       "endedSelf": "Twój agent zakończył tę rundę. Wyślij uwagę poniżej, żeby kontynuować ze swoim agentem.",
       "gate_not_started": "Gra została dostarczona, ale weryfikacja jeszcze się nie rozpoczęła. To po naszej stronie — nie musisz nic robić.",
       "gate_crashed": "Nasza budowa weryfikacyjna nie powiodła się, zanim zdążyła sprawdzić grę. To błąd po naszej stronie, nie problem z Twoją grą — wiemy o nim. Twój agent może dostarczyć grę ponownie, aby uruchomić nowe sprawdzenie.",
+      "session_crashed": "Nasza sesja agenta nie odpowiedziała przy ostatnich dwóch sprawdzeniach. To błąd po naszej stronie, nie problem z Twoją grą — wiemy o nim. Twój agent może dostarczyć grę ponownie, aby uruchomić nową sesję.",
       "no_agent_yet": "Nie ma jeszcze agenta — ta runda czeka na Twojego agenta. Wykonaj kroki poniżej, żeby go podłączyć."
     },
     "tryAgain": "Spróbuj z tym pomysłem jeszcze raz",
