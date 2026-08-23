@@ -341,7 +341,7 @@
     "apps/api/vitest.setup.ts": 122,
     "apps/e2e/src/anonymous-and-mobile.test.ts": 136,
     "apps/e2e/src/auth.test.ts": 285,
-    "apps/e2e/src/browser.ts": 1290,
+    "apps/e2e/src/browser.ts": 1323,
     "apps/e2e/src/config.ts": 180,
     "apps/e2e/src/games-playable.test.ts": 712,
     "apps/e2e/src/gate-prerequisites.test.ts": 164,
