@@ -3828,21 +3828,15 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
-        if (!agentTokenSecret) return toolErr('the MCP build endpoint is not configured');
         const hasPath = typeof args.path === 'string' && args.path.trim().length > 0;
         const hasPaths = Array.isArray(args.paths) && args.paths.length > 0;
-        if (!hasPath && !hasPaths) {
-          return toolErr('path or paths is required');
+        if ((!hasPath && !hasPaths) || (hasPath && hasPaths)) {
+          return toolErr(hasPath ? 'pass either path or paths, not both' : 'path or paths is required');
         }
-        if (hasPath && hasPaths) {
-          return toolErr('pass either path or paths, not both');
-        }
-        const rawPaths: string[] = hasPaths
-          ? (args.paths as unknown[]).filter((p): p is string => typeof p === 'string')
-          : [args.path as string];
-        if (rawPaths.length === 0) {
-          return toolErr('paths must contain at least one valid path');
-        }
+        const rawPaths = (hasPaths ? (args.paths as unknown[]) : [args.path]).filter(
+          (p): p is string => typeof p === 'string' && p.trim().length > 0,
+        );
+        if (rawPaths.length === 0) return toolErr('paths must contain at least one valid path');
         if (rawPaths.length > MAX_UPLOAD_FILES) {
           return toolErr(`too many paths in one request (max ${MAX_UPLOAD_FILES})`);
         }
@@ -3850,7 +3844,6 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const validPaths: string[] = [];
         for (const raw of rawPaths) {
           const trimmed = raw.trim();
-          if (!trimmed) return toolErr('path cannot be empty');
           try {
             validPaths.push(assertDeliverableSourcePath(trimmed));
           } catch (error) {

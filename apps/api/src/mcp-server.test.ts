@@ -2118,15 +2118,10 @@ declare const GameKit: { defineGame(): unknown };
         }),
       ),
     );
-
-    for (let i = 0; i < putResults.length; i++) {
-      const putRes = putResults[i]!;
-      expect(putRes.statusCode).toBe(200);
-      expect(putRes.json()).toMatchObject({
-        accepted: true,
-        path: testPaths[i],
-      });
-    }
+    putResults.forEach((res, i) => {
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ accepted: true, path: testPaths[i] });
+    });
 
     const afterBatchList = await callTool(app, 'list_staged_sources', { sessionKey }, { 'mcp-session-id': sessionId });
     expect(afterBatchList.isError).toBe(false);
