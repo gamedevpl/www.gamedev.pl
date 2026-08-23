@@ -135,8 +135,10 @@ import {
   type IdentityStore,
   type PublicationStore,
   type QuotaStore,
+  type RoundBudgetStore,
   type RoundsStore,
   type Store,
+  type SubmissionQueryStore,
   type SubmissionRecord,
   type SubmissionStore,
 } from './store.js';
@@ -170,8 +172,10 @@ import { logModerationRejection } from './moderation-metrics.js';
  */
 export type SubmissionRoutesStore = IdentityStore &
   RoundsStore &
+  RoundBudgetStore &
   DispatchStore &
   SubmissionStore &
+  SubmissionQueryStore &
   BuildLogStore &
   BuildMediaStore &
   PublicationStore &
