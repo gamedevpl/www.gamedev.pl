@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { FieldValue, Firestore, type DocumentData } from '@google-cloud/firestore';
+import { FieldValue, Firestore } from '@google-cloud/firestore';
 import type { AssessmentSource, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
-import { MANAGED_AGENT_VENDORS } from '@gamedevpl/contract';
 import type { AgentTaskState } from './agent-state.js';
 import type { SeedFiles } from './agent-backend.js';
 import type { BuilderKind } from './builder.js';
@@ -16,6 +15,9 @@ import {
 import { isSweepActive } from './sweep-scope.js';
 import type { ProposalState } from './proposal-state.js';
 import type { BuildEvent, SubmissionStatus } from './submission-status.js';
+import type { PublicationStore } from './store/slices/publication.js';
+export type { PublicationStore };
+import { InMemoryPublicationStore, FirestorePublicationStore } from './store/slices/publication.js';
 
 /**
  * Uid namespace for automation accounts (docs/agent-access-tokens.md).
@@ -26,34 +28,6 @@ import type { BuildEvent, SubmissionStatus } from './submission-status.js';
  * accidentally call a mistyped `g:` account into existence.
  */
 export const BOT_UID_PREFIX = 'bot:';
-
-const PUBLIC_PLAY_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-// Set preserves insertion order — this list is a rotation, not a set.
-function normalizeFeaturedPoolSlugs(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return [
-    ...new Set(
-      value.flatMap((entry) => {
-        if (typeof entry !== 'string') return [];
-        const slug = entry.trim().toLowerCase();
-        return PUBLIC_PLAY_SLUG_PATTERN.test(slug) ? [slug] : [];
-      }),
-    ),
-  ];
-}
-
-function normalizePublicPlaySlugs(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return [
-    ...new Set(
-      value.flatMap((entry) => {
-        if (typeof entry !== 'string') return [];
-        const slug = entry.trim().toLowerCase();
-        return PUBLIC_PLAY_SLUG_PATTERN.test(slug) ? [slug] : [];
-      }),
-    ),
-  ];
-}
 
 // Record types moved to store/records/*.ts (Phase 2 wave 1). Re-exported here so
 // every existing importer keeps working unchanged; each slice's own consumers
@@ -92,6 +66,12 @@ import { isStudioOrigin } from './store/records/build-log.js';
 export { isStudioOrigin };
 import type { CreationLimits, PublicPlayConfig, FeaturedPoolConfig, UsageCounters } from './store/records/quota.js';
 export type { CreationLimits, PublicPlayConfig, FeaturedPoolConfig, UsageCounters };
+import type { QuotaStore } from './store/slices/quota.js';
+export type { QuotaStore };
+import { InMemoryQuotaStore, FirestoreQuotaStore } from './store/slices/quota.js';
+import type { GlobalQuotaStore } from './store/slices/quota-global.js';
+export type { GlobalQuotaStore };
+import { InMemoryGlobalQuotaStore, FirestoreGlobalQuotaStore } from './store/slices/quota-global.js';
 import type { TelemetryEventType, TelemetryEvent, VisitEvent } from './store/records/telemetry.js';
 export type { TelemetryEventType, TelemetryEvent, VisitEvent };
 // The retention constants (TELEMETRY_TTL_FIELD, telemetryExpiresAt, ...) are no longer
@@ -100,7 +80,6 @@ export type { TelemetryEventType, TelemetryEvent, VisitEvent };
 import type { TelemetryStore } from './store/slices/telemetry.js';
 export type { TelemetryStore };
 import { InMemoryTelemetryStore, FirestoreTelemetryStore } from './store/slices/telemetry.js';
-import { stripUndefined } from './store/firestore-util.js';
 import type { OAuthStore } from './store/slices/oauth.js';
 export type { OAuthStore };
 import { InMemoryOAuthStore, FirestoreOAuthStore } from './store/slices/oauth.js';
@@ -130,6 +109,9 @@ export type { NotificationsStore };
 import { InMemoryNotificationsStore, FirestoreNotificationsStore } from './store/slices/notifications.js';
 import type { GameVoteCounts, PlayerFeedbackRecord } from './store/records/social.js';
 export type { GameVoteCounts, PlayerFeedbackRecord };
+import type { SocialStore } from './store/slices/social.js';
+export type { SocialStore };
+import { InMemorySocialStore, FirestoreSocialStore } from './store/slices/social.js';
 import type {
   AssessmentChecklist,
   ReviewSweep,
@@ -189,6 +171,9 @@ export type {
 };
 import { OPEN_SUGGESTION_STATUSES, MAX_PROPOSAL_MESSAGES, compareProposals } from './store/records/contribution.js';
 export { OPEN_SUGGESTION_STATUSES, MAX_PROPOSAL_MESSAGES, compareProposals };
+import type { ContributionStore } from './store/slices/contribution.js';
+export type { ContributionStore };
+import { InMemoryContributionStore, FirestoreContributionStore } from './store/slices/contribution.js';
 import type { WaitlistEntry, BetaInvite, CreatedBetaInvite, ClaimBetaInviteResult } from './store/records/access.js';
 export type { WaitlistEntry, BetaInvite, CreatedBetaInvite, ClaimBetaInviteResult };
 import type { AccessStore } from './store/slices/access.js';
@@ -618,116 +603,23 @@ export interface BuildLogStore {
   markCreatorMessagesDelivered(issueNumber: number, ids: string[]): Promise<void>;
 }
 
-export interface PublicationStore {
-  /**
-   * Reads what is currently published for a slug, or null when nothing ever was.
-   *
-   * This — not the presence of an object in the bucket, and not a merge having happened —
-   * is publication authority. Keeping it here is what makes a takedown immediate and
-   * total: one write withdraws a game, and no leftover storage can contradict it.
-   */
-  getPublication(slug: string): Promise<PublicationRecord | null>;
+// PublicationStore, InMemoryPublicationStore and FirestorePublicationStore live in
+// ./store/slices/publication.js -- imported at the top of the file (Phase 2 wave 4).
 
-  /** Publishes (or re-publishes) a slug at a specific stored version. */
-  setPublication(record: PublicationRecord): Promise<void>;
-
-  /**
-   * Withdraws a game.
-   *
-   * Separate from `setPublication` because a takedown is not a publish with different
-   * arguments: it must record *why* and *when*, which is what a DSA statement of reasons
-   * is written from, and it must be impossible to perform by accident while editing a
-   * version pointer.
-   */
-  takedownPublication(slug: string, reason: string, at: string): Promise<boolean>;
-
-  archivePublication(slug: string, reason: string, at: string): Promise<boolean>;
-
-  /**
-   * Records or updates the publication's health re-gate (request, verdict, and
-   * notified-at are all patches of the same record — see PublicationHealthCheck).
-   * False when the slug has no publication to attach it to.
-   */
-  setPublicationHealthCheck(slug: string, check: PublicationHealthCheck): Promise<boolean>;
-
-  /** Every slug currently live — the input the snapshot bake reads. */
-  listPublications(): Promise<PublicationRecord[]>;
-
-  /**
-   * Every slug that has a `games/{slug}` entry — including games whose document does
-   * not exist but which have subcollections (votes, feedback, scorecard).
-   *
-   * Exists for the erase path. A vote's uid is its *document id* and not a field, so
-   * unlike feedback there is no query that finds one user's votes across games; the only
-   * way is to look under each game. Bounded by the catalog, so a walk is affordable.
-   */
+// Not delegated -- InMemory's listGameSlugs reaches into Social/Contribution/Review's
+// Maps, which a delegate-only PublicationStore slice must not depend on.
+export interface GameSlugsStore {
+  // Every slug with a `games/{slug}` entry, including doc-less games with only
+  // subcollections (votes, feedback, scorecard) -- the erase path's game-discovery walk.
   listGameSlugs(): Promise<string[]>;
 }
 
 // TelemetryStore, InMemoryTelemetryStore and FirestoreTelemetryStore live in
 // ./store/slices/telemetry.js -- imported at the top of the file (Phase 2 wave 4).
 
-export interface QuotaStore {
-  /** Today's usage counters for a user, without incrementing anything. */
-  getUsage(uid: string, dateStr: string): Promise<UsageCounters>;
-
-  checkAndIncrementQuota(
-    uid: string,
-    dateStr: string,
-    limit: number,
-    action: keyof UsageCounters,
-  ): Promise<{ allowed: boolean; current: number; tier: User['tier'] }>;
-
-  /** The stored circuit-breaker, or null when nobody has ever set one. */
-  getCreationLimits(): Promise<CreationLimits | null>;
-
-  /** Merges a change into the stored breaker and returns the result. */
-  setCreationLimits(patch: Partial<Omit<CreationLimits, 'updatedAt'>>, updatedBy: string): Promise<CreationLimits>;
-
-  getPublicPlayConfig(): Promise<PublicPlayConfig | null>;
-
-  setPublicPlaySlugs(slugs: string[], updatedBy: string): Promise<PublicPlayConfig>;
-
-  // Stored curated pool, or null when nobody has set one.
-  getFeaturedPoolConfig(): Promise<FeaturedPoolConfig | null>;
-
-  setFeaturedPoolSlugs(slugs: string[], updatedBy: string): Promise<FeaturedPoolConfig>;
-
-  /** How many submissions everyone together has made on `dateStr`. */
-  getGlobalSubmissionCount(dateStr: string): Promise<number>;
-
-  // Tab-complete tokens everyone together has spent on `dateStr`.
-  getGlobalTabCompleteTokenCount(dateStr: string): Promise<number>;
-
-  /**
-   * The global counterpart of checkAndIncrementQuota: takes one slot out of the day's
-   * shared allowance, or refuses. Transactional for the same reason the per-user
-   * version is — a cap that a burst can walk past is not a cap.
-   */
-  checkAndIncrementGlobalSubmissions(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
-
-  /** Same shape for the editing lanes' shared daily allowance of model calls. */
-  checkAndIncrementGlobalEdits(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
-
-  /** Same shape, for the chat agent's own shared daily allowance. */
-  checkAndIncrementGlobalChats(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
-
-  // Same shape as chats, but counts tokens for ghost-text completion.
-  checkAndIncrementGlobalTabCompleteTokens(
-    dateStr: string,
-    tokens: number,
-    limit: number,
-  ): Promise<{ allowed: boolean; current: number }>;
-
-  // Reconciles a reservation against real usage — never refused, floors at 0.
-  adjustGlobalTabCompleteTokens(dateStr: string, delta: number): Promise<number>;
-
-  // Platform rounds everyone together has started on `dateStr`.
-  getGlobalManagedBuildCount(dateStr: string): Promise<number>;
-
-  // Same shape, for the shared daily ceiling.
-  checkAndIncrementGlobalManagedBuilds(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
-}
+// QuotaStore, InMemoryQuotaStore and FirestoreQuotaStore live in ./store/slices/quota.js;
+// GlobalQuotaStore and its InMemory/Firestore implementations live in
+// ./store/slices/quota-global.js -- imported at the top of the file (Phase 2 wave 4).
 
 // AccessStore, InMemoryAccessStore and FirestoreAccessStore live in
 // ./store/slices/access.js -- imported at the top of the file (Phase 2 wave 4).
@@ -735,86 +627,8 @@ export interface QuotaStore {
 // NotificationsStore, InMemoryNotificationsStore and FirestoreNotificationsStore live in
 // ./store/slices/notifications.js -- imported at the top of the file (Phase 2 wave 4).
 
-export interface SocialStore {
-  /** A user's current vote on a game, or null if they have not voted. */
-  getVote(slug: string, uid: string): Promise<VoteValue | null>;
-
-  /**
-   * Casts or changes a vote. Repeating the same value is a no-op; voting the other way
-   * flips it. Returns the game's updated aggregate counts.
-   */
-  castVote(slug: string, uid: string, value: VoteValue): Promise<GameVoteCounts>;
-
-  /** Removes a user's vote. Returns the game's updated aggregate counts. */
-  clearVote(slug: string, uid: string): Promise<GameVoteCounts>;
-
-  /**
-   * Follow / unfollow a game. Stored as `games/{slug}/followers/{uid}` beside votes,
-   * with the count denormalised onto the game document the same way vote tallies are —
-   * a follower count is read on every page view and must not cost a subcollection scan.
-   */
-  setGameFollow(slug: string, uid: string, at: string): Promise<number>;
-
-  clearGameFollow(slug: string, uid: string): Promise<number>;
-
-  isFollowingGame(slug: string, uid: string): Promise<boolean>;
-
-  countGameFollowers(slug: string): Promise<number>;
-
-  /**
-   * The uids to notify when a game publishes, newest follower first.
-   *
-   * Bounded rather than complete: fanout is best-effort courtesy beside a publish, and
-   * a game with more followers than the cap is a good problem that must not turn one
-   * operator click into an unbounded write burst.
-   */
-  listGameFollowers(slug: string, opts?: { limit?: number }): Promise<string[]>;
-
-  /** A game's aggregate vote counts — the public read, no uid involved. */
-  getVoteCounts(slug: string): Promise<GameVoteCounts>;
-
-  /** Appends one already-moderated, already-sanitized feedback row. Returns it with its id. */
-  addPlayerFeedback(slug: string, uid: string, text: string): Promise<PlayerFeedbackRecord>;
-
-  /**
-   * A game's feedback, newest first.
-   *
-   * `limit` bounds the read for the scorecard sweep's theme extraction, so one game with
-   * thousands of notes cannot dominate a nightly job. Unbounded without it, because the
-   * erase preview needs every row it is about to delete.
-   */
-  listPlayerFeedback(slug: string, opts?: { limit?: number }): Promise<PlayerFeedbackRecord[]>;
-
-  /**
-   * How many feedback rows a game has, without reading them.
-   *
-   * A count rather than a length: the scorecard sweep needs this for every game it
-   * touches, and `listPlayerFeedback().length` would bill one document read per row per
-   * night. Firestore's aggregate query is billed per index scan instead, so a game with
-   * a thousand notes costs about the same as one with three.
-   */
-  countPlayerFeedback(slug: string): Promise<number>;
-
-  /**
-   * Deletes every feedback row a user wrote, across all games. Returns how many.
-   *
-   * Feedback *is* findable by uid because the row carries it as a field, which is the
-   * asymmetry with votes above.
-   */
-  deletePlayerFeedbackByUid(uid: string): Promise<number>;
-
-  /**
-   * How many feedback rows a user wrote, across all games — the dry run for the delete
-   * above.
-   *
-   * Deliberately the *same* predicate as `deletePlayerFeedbackByUid`, differing only in
-   * `.count()` versus `.get()`. A preview of a destructive operation that finds its rows
-   * by a different route than the deletion does is a preview that can quietly disagree
-   * with what follows, and the direction it disagrees in — under-reporting — is the one
-   * an operator would not catch.
-   */
-  countPlayerFeedbackByUid(uid: string): Promise<number>;
-}
+// SocialStore, InMemorySocialStore and FirestoreSocialStore live in
+// ./store/slices/social.js -- imported at the top of the file (Phase 2 wave 4).
 
 // ReviewStore/ReviewSweepStore, their InMemory and Firestore implementations live in
 // ./store/slices/review.js and ./store/slices/review-sweeps.js (Phase 2 wave 4).
@@ -822,104 +636,8 @@ export interface SocialStore {
 // PlayerDataStore, InMemoryPlayerDataStore and FirestorePlayerDataStore live in
 // ./store/slices/player-data.js -- imported at the top of the file (Phase 2 wave 4).
 
-export interface ContributionStore {
-  /**
-   * What the creator has allowed the platform to do to a game unasked (IL-4).
-   *
-   * Keyed by slug rather than by submission, like every other per-game fact, because a
-   * game now outlives the job that built it — an improvement is a new job, and a setting
-   * that lived on a submission would be silently forgotten the first time one ran.
-   */
-  getGameAutonomy(slug: string): Promise<string | null>;
-
-  setGameAutonomy(slug: string, mode: string): Promise<void>;
-
-  /**
-   * Deletes up to `limit` documents left by the superseded per-game suggestion sweep.
-   *
-   * One-shot cleanup, not a permanent feature. An earlier IL-3 slice wrote the router's
-   * whole output — including its `untrustedContext` block of game- and player-authored
-   * strings — to `games/{slug}/suggestion/current`, overwritten nightly. This design
-   * stores no untrusted text and joins the live scorecard instead, which is what keeps
-   * erasure working: a player who erases their signals drops out of the next nightly
-   * recomputation everywhere that reads it.
-   *
-   * Those documents are the exception. Nothing reads or refreshes them any more, and the
-   * erase path does not know they exist — so a player's words would sit frozen in them
-   * indefinitely. Deleting them is finishing the migration, not tidying.
-   *
-   * Returns how many were removed, so the sweep can report the drain once and then
-   * report nothing forever.
-   */
-  purgeLegacyGameSuggestions(limit: number): Promise<number>;
-
-  /** Writes a suggestion whole (docs/improvement-loop-plan.md IL-3). */
-  putSuggestion(record: SuggestionRecord): Promise<void>;
-
-  /** One suggestion by id, or null. */
-  getSuggestion(id: string): Promise<SuggestionRecord | null>;
-
-  /**
-   * Suggestions, newest first, optionally narrowed.
-   *
-   * Filtering happens in the query for `status` and `ownerUid` because those are the two
-   * a caller always has, and sorting happens in memory: a composite index per filter
-   * combination would be real infrastructure for a listing bounded by the catalog.
-   */
-  listSuggestions(opts?: {
-    status?: SuggestionStatus[];
-    ownerUid?: string;
-    limit?: number;
-  }): Promise<SuggestionRecord[]>;
-
-  /** Writes a proposal whole. */
-  putProposal(record: ProposalRecord): Promise<void>;
-
-  /** One proposal by id, or null. */
-  getProposal(id: string): Promise<ProposalRecord | null>;
-
-  /**
-   * Proposals, newest first, optionally narrowed.
-   *
-   * The three filters are the three questions asked of this collection: "what have I
-   * sent?" (`proposerUid`), "what is waiting on me?" (`targetOwnerUid`, with `null`
-   * meaning the platform queue), and "what is open against this game?" (`targetSlug`,
-   * which the supersede sweep asks after every publish). Sorting is in memory via
-   * {@link compareProposals} for the same reason suggestions do it: a composite index per
-   * filter combination would be real infrastructure for a listing this size.
-   *
-   * `targetOwnerUid: null` is a real filter value, not "unset" — it selects
-   * platform-owned targets. Callers wanting everything simply omit the key.
-   */
-  listProposals(opts?: {
-    proposerUid?: string;
-    targetOwnerUid?: string | null;
-    targetSlug?: string;
-    state?: ProposalState[];
-    limit?: number;
-  }): Promise<ProposalRecord[]>;
-
-  /**
-   * A game's contribution setting, or null when nobody has ever set one.
-   *
-   * Null rather than a defaulted `off` on purpose: "never configured" and "deliberately
-   * turned off" are the same answer today, but they are different facts, and the day we
-   * want to prompt creators to consider contributions we will need to tell them apart.
-   */
-  getContributionSettings(slug: string): Promise<GameContributionSettings | null>;
-
-  putContributionSettings(record: GameContributionSettings): Promise<void>;
-
-  /** Whether `ownerUid` has blocked `blockedUid` from proposing to their games. */
-  isContributorBlocked(ownerUid: string, blockedUid: string): Promise<boolean>;
-
-  blockContributor(record: ContributorBlockRecord): Promise<void>;
-
-  unblockContributor(ownerUid: string, blockedUid: string): Promise<void>;
-
-  /** Everyone this creator has blocked — the settings surface's read. */
-  listContributorBlocks(ownerUid: string): Promise<ContributorBlockRecord[]>;
-}
+// ContributionStore, InMemoryContributionStore and FirestoreContributionStore live in
+// ./store/slices/contribution.js -- imported at the top of the file (Phase 2 wave 4).
 
 // AccessTokensStore, InMemoryAccessTokensStore and FirestoreAccessTokensStore live in
 // ./store/slices/access-tokens.js -- imported at the top of the file (Phase 2 wave 4).
@@ -939,8 +657,10 @@ export interface Store
     SubmissionStore,
     BuildLogStore,
     PublicationStore,
+    GameSlugsStore,
     TelemetryStore,
     QuotaStore,
+    GlobalQuotaStore,
     AccessStore,
     NotificationsStore,
     SocialStore,
@@ -953,47 +673,8 @@ export interface Store
     AgentKeysStore,
     OAuthStore {}
 
-// stripUndefined lives in ./store/firestore-util.js -- imported at the top of the file
-// (Phase 2 wave 4), shared by every slice still in this file that writes to Firestore.
-
-/**
- * Presentation order for suggestions: worst first, then newest, then slug.
- *
- * Priority leads because this list is a queue of work rather than a log — the question
- * it answers is "what should be looked at first". `createdAt` and `slug` follow for the
- * same reason `compareScorecards` needs a tie-break: one sweep stamps a single timestamp
- * across every row it writes, and equal priorities are common (every `proposed` defect
- * on a game with the same session count sorts alike), so without them the queue would
- * reshuffle between reads.
- *
- * Shared by both stores so the in-memory one used by tests cannot disagree with the
- * Firestore one used in production.
- */
-export function compareSuggestions(a: SuggestionRecord, b: SuggestionRecord): number {
-  return (
-    b.priority - a.priority ||
-    b.createdAt.localeCompare(a.createdAt) ||
-    a.slug.localeCompare(b.slug) ||
-    a.id.localeCompare(b.id)
-  );
-}
-
-/** A zeroed counter set — the shape every usage read falls back to. */
-function emptyUsageCounters(): UsageCounters {
-  return {
-    submissions: 0,
-    previews: 0,
-    mocks: 0,
-    refines: 0,
-    feedback: 0,
-    playerFeedback: 0,
-    improvements: 0,
-    assists: 0,
-    chats: 0,
-    managedBuilds: 0,
-    tabCompletes: 0,
-  };
-}
+// compareSuggestions moved to ./store/slices/contribution.js; emptyUsageCounters moved
+// to ./store/slices/quota.js (Phase 2 wave 4). Neither is used elsewhere in this file.
 
 /** Newest first, with the id as a stable tie-break for same-millisecond events. */
 function byNewestFirst(a: { createdAt: string; id: string }, b: { createdAt: string; id: string }): number {
@@ -1003,41 +684,23 @@ function byNewestFirst(a: { createdAt: string; id: string }, b: { createdAt: str
 export class InMemoryStore implements Store {
   private identityStore = new InMemoryIdentityStore();
   private submissions = new Map<number, SubmissionRecord>();
-  private publications = new Map<string, PublicationRecord>();
+  private publicationStore = new InMemoryPublicationStore();
   private nextJobId = JOB_ID_FLOOR;
   private buildEvents = new Map<number, BuildEvent[]>();
   private buildShots = new Map<number, BuildShot[]>();
   private buildPreviews = new Map<number, BuildPreview[]>();
   private creatorMessages = new Map<number, CreatorMessage[]>();
-  private usage = new Map<string, UsageCounters>();
-  // yyyy-mm-dd -> submissions accepted that day across every account
-  private globalSubmissions = new Map<string, number>();
-  private globalEdits = new Map<string, number>();
-  private globalChats = new Map<string, number>();
-  private globalManagedBuilds = new Map<string, number>();
-  private globalTabCompleteTokens = new Map<string, number>();
-  private creationLimits: CreationLimits | null = null;
-  private publicPlayConfig: PublicPlayConfig | null = null;
-  private featuredPoolConfig: FeaturedPoolConfig | null = null;
+  private quotaStore = new InMemoryQuotaStore((uid) => this.identityStore.getUser(uid));
+  private globalQuotaStore = new InMemoryGlobalQuotaStore();
   private accessStore = new InMemoryAccessStore();
   private telemetryStore = new InMemoryTelemetryStore();
   private notificationsStore = new InMemoryNotificationsStore();
-  // slug -> (uid -> value)
-  private votes = new Map<string, Map<string, VoteValue>>();
-  /** slug → uid → followedAt. Mirrors `games/{slug}/followers/{uid}` in Firestore. */
-  private follows = new Map<string, Map<string, string>>();
-  // slug -> feedback rows, newest last (reversed on read)
-  private playerFeedback = new Map<string, PlayerFeedbackRecord[]>();
+  private socialStore = new InMemorySocialStore();
   private reviewStore = new InMemoryReviewStore();
   private reviewSweepStore = new InMemoryReviewSweepStore();
   private playerDataStore = new InMemoryPlayerDataStore();
   private worldEntriesStore = new InMemoryWorldEntriesStore();
-  private suggestions = new Map<string, SuggestionRecord>();
-  private proposals = new Map<string, ProposalRecord>(); // id -> proposal
-  private contributionSettings = new Map<string, GameContributionSettings>(); // slug -> setting
-  private contributorBlocks = new Map<string, Map<string, ContributorBlockRecord>>(); // ownerUid -> blockedUid -> row
-  private gameAutonomy = new Map<string, string>();
-  private legacyGameSuggestions = new Set<string>();
+  private contributionStore = new InMemoryContributionStore();
   // tokenId -> personal access token record
   private accessTokensStore = new InMemoryAccessTokensStore();
   // slug -> durable per-game agent opener state (BY-23)
@@ -1094,9 +757,9 @@ export class InMemoryStore implements Store {
     for (const [key, reservation] of [...this.identityStore.handles]) {
       if (reservation.uid === uid || reservation.previousUid === uid) this.identityStore.handles.delete(key);
     }
-    for (const [key, counters] of [...this.usage]) {
+    for (const [key, counters] of [...this.quotaStore.usage]) {
       void counters;
-      if (key.startsWith(`${uid}:`)) this.usage.delete(key);
+      if (key.startsWith(`${uid}:`)) this.quotaStore.usage.delete(key);
     }
     this.accessStore.waitlist.delete(uid);
     if (user?.email) {
@@ -1120,8 +783,10 @@ export class InMemoryStore implements Store {
       if (record.ownerUid === uid) this.agentKeysStore.gameAgentKeys.delete(slug);
     }
     this.agentKeysStore.creatorAgentKeys.delete(uid);
-    for (const [id, suggestion] of [...this.suggestions]) {
-      if (suggestion.ownerUid === uid) this.suggestions.set(id, { ...suggestion, ownerUid: null, updatedAt: at });
+    for (const [id, suggestion] of [...this.contributionStore.suggestions]) {
+      if (suggestion.ownerUid === uid) {
+        this.contributionStore.suggestions.set(id, { ...suggestion, ownerUid: null, updatedAt: at });
+      }
     }
     // Reaches into InMemoryOAuthStore's Maps directly -- documented exception, see PR.
     for (const [clientId, client] of [...this.oauthStore.oauthClients]) {
@@ -1144,7 +809,7 @@ export class InMemoryStore implements Store {
     for (const [refreshId, grantId] of [...this.oauthStore.oauthRefreshTokenIndex]) {
       if (grantIds.has(grantId)) this.oauthStore.oauthRefreshTokenIndex.delete(refreshId);
     }
-    for (const slug of [...publishedSlugs, ...unpublishedSlugs]) this.gameAutonomy.delete(slug);
+    for (const slug of [...publishedSlugs, ...unpublishedSlugs]) this.contributionStore.gameAutonomy.delete(slug);
     this.identityStore.users.delete(uid);
 
     return { publishedSlugs, unpublishedSlugs };
@@ -1544,37 +1209,27 @@ export class InMemoryStore implements Store {
   }
 
   async getPublication(slug: string): Promise<PublicationRecord | null> {
-    const record = this.publications.get(slug);
-    return record ? { ...record } : null;
+    return this.publicationStore.getPublication(slug);
   }
 
   async setPublication(record: PublicationRecord): Promise<void> {
-    this.publications.set(record.slug, { ...record });
+    return this.publicationStore.setPublication(record);
   }
 
   async setPublicationHealthCheck(slug: string, check: PublicationHealthCheck): Promise<boolean> {
-    const record = this.publications.get(slug);
-    if (!record) return false;
-    this.publications.set(slug, { ...record, healthCheck: { ...check } });
-    return true;
+    return this.publicationStore.setPublicationHealthCheck(slug, check);
   }
 
   async takedownPublication(slug: string, reason: string, at: string): Promise<boolean> {
-    const record = this.publications.get(slug);
-    if (!record) return false;
-    this.publications.set(slug, { ...record, state: 'disabled', takedownAt: at, takedownReason: reason });
-    return true;
+    return this.publicationStore.takedownPublication(slug, reason, at);
   }
 
   async archivePublication(slug: string, reason: string, at: string): Promise<boolean> {
-    const record = this.publications.get(slug);
-    if (!record) return false;
-    this.publications.set(slug, { ...record, state: 'archived', takedownAt: at, takedownReason: reason });
-    return true;
+    return this.publicationStore.archivePublication(slug, reason, at);
   }
 
   async listPublications(): Promise<PublicationRecord[]> {
-    return Array.from(this.publications.values()).map((record) => ({ ...record }));
+    return this.publicationStore.listPublications();
   }
 
   async setSubmissionSlug(issueNumber: number, slug: string): Promise<void> {
@@ -1889,7 +1544,7 @@ export class InMemoryStore implements Store {
   }
 
   async getUsage(uid: string, dateStr: string): Promise<UsageCounters> {
-    return { ...(this.usage.get(`${uid}:${dateStr}`) ?? emptyUsageCounters()) };
+    return this.quotaStore.getUsage(uid, dateStr);
   }
 
   async listRecentlyPublished(limit: number): Promise<SubmissionRecord[]> {
@@ -1950,151 +1605,57 @@ export class InMemoryStore implements Store {
     limit: number,
     action: keyof UsageCounters,
   ): Promise<{ allowed: boolean; current: number; tier: User['tier'] }> {
-    const user = await this.getUser(uid);
-    const tier = user?.tier ?? 'standard';
-
-    if (tier === 'blocked') {
-      return { allowed: false, current: Infinity, tier };
-    }
-
-    if (tier === 'trusted') {
-      return { allowed: true, current: 0, tier };
-    }
-
-    const key = `${uid}:${dateStr}`;
-    const currentCounters: UsageCounters = this.usage.get(key) ?? emptyUsageCounters();
-    const currentVal = currentCounters[action] ?? 0;
-
-    if (currentVal >= limit) {
-      return { allowed: false, current: currentVal, tier };
-    }
-
-    const newCounters: UsageCounters = {
-      ...currentCounters,
-      [action]: currentVal + 1,
-    };
-    this.usage.set(key, newCounters);
-
-    return { allowed: true, current: newCounters[action], tier };
+    return this.quotaStore.checkAndIncrementQuota(uid, dateStr, limit, action);
   }
 
   async getCreationLimits(): Promise<CreationLimits | null> {
-    return this.creationLimits ? { ...this.creationLimits } : null;
+    return this.quotaStore.getCreationLimits();
   }
 
   async setCreationLimits(
     patch: Partial<Omit<CreationLimits, 'updatedAt'>>,
     updatedBy: string,
   ): Promise<CreationLimits> {
-    const merged: CreationLimits = {
-      paused: patch.paused ?? this.creationLimits?.paused ?? false,
-      globalDailySubmissionCap:
-        patch.globalDailySubmissionCap !== undefined
-          ? patch.globalDailySubmissionCap
-          : (this.creationLimits?.globalDailySubmissionCap ?? null),
-      editingPaused: patch.editingPaused ?? this.creationLimits?.editingPaused ?? false,
-      remixTracePaused: patch.remixTracePaused ?? this.creationLimits?.remixTracePaused ?? false,
-      globalDailyEditCap:
-        patch.globalDailyEditCap !== undefined
-          ? patch.globalDailyEditCap
-          : (this.creationLimits?.globalDailyEditCap ?? null),
-      chatPaused: patch.chatPaused ?? this.creationLimits?.chatPaused ?? false,
-      globalDailyChatCap:
-        patch.globalDailyChatCap !== undefined
-          ? patch.globalDailyChatCap
-          : (this.creationLimits?.globalDailyChatCap ?? null),
-      tabCompletePaused: patch.tabCompletePaused ?? this.creationLimits?.tabCompletePaused ?? false,
-      globalDailyTabCompleteTokenCap:
-        patch.globalDailyTabCompleteTokenCap !== undefined
-          ? patch.globalDailyTabCompleteTokenCap
-          : (this.creationLimits?.globalDailyTabCompleteTokenCap ?? null),
-      managedBuilderMode: patch.managedBuilderMode ?? this.creationLimits?.managedBuilderMode ?? 'auto',
-      managedAgentVendorOverride:
-        patch.managedAgentVendorOverride !== undefined
-          ? patch.managedAgentVendorOverride
-          : (this.creationLimits?.managedAgentVendorOverride ?? null),
-      managedDailyCap:
-        patch.managedDailyCap !== undefined ? patch.managedDailyCap : (this.creationLimits?.managedDailyCap ?? null),
-      managedDailyUserCap:
-        patch.managedDailyUserCap !== undefined
-          ? patch.managedDailyUserCap
-          : (this.creationLimits?.managedDailyUserCap ?? null),
-      seedingMode: patch.seedingMode ?? this.creationLimits?.seedingMode ?? 'auto',
-      seedProviderOverride:
-        patch.seedProviderOverride !== undefined
-          ? patch.seedProviderOverride
-          : (this.creationLimits?.seedProviderOverride ?? null),
-      updatedAt: new Date().toISOString(),
-      updatedBy,
-    };
-    this.creationLimits = merged;
-    return { ...merged };
+    return this.quotaStore.setCreationLimits(patch, updatedBy);
   }
 
   async getPublicPlayConfig(): Promise<PublicPlayConfig | null> {
-    return this.publicPlayConfig ? { ...this.publicPlayConfig, slugs: [...this.publicPlayConfig.slugs] } : null;
+    return this.quotaStore.getPublicPlayConfig();
   }
 
   async setPublicPlaySlugs(slugs: string[], updatedBy: string): Promise<PublicPlayConfig> {
-    const config: PublicPlayConfig = {
-      slugs: [...slugs],
-      updatedAt: new Date().toISOString(),
-      updatedBy,
-    };
-    this.publicPlayConfig = config;
-    return { ...config, slugs: [...config.slugs] };
+    return this.quotaStore.setPublicPlaySlugs(slugs, updatedBy);
   }
 
   async getFeaturedPoolConfig(): Promise<FeaturedPoolConfig | null> {
-    return this.featuredPoolConfig ? { ...this.featuredPoolConfig, slugs: [...this.featuredPoolConfig.slugs] } : null;
+    return this.quotaStore.getFeaturedPoolConfig();
   }
 
   async setFeaturedPoolSlugs(slugs: string[], updatedBy: string): Promise<FeaturedPoolConfig> {
-    const config: FeaturedPoolConfig = {
-      slugs: [...slugs],
-      updatedAt: new Date().toISOString(),
-      updatedBy,
-    };
-    this.featuredPoolConfig = config;
-    return { ...config, slugs: [...config.slugs] };
+    return this.quotaStore.setFeaturedPoolSlugs(slugs, updatedBy);
   }
 
   async getGlobalSubmissionCount(dateStr: string): Promise<number> {
-    return this.globalSubmissions.get(dateStr) ?? 0;
+    return this.globalQuotaStore.getGlobalSubmissionCount(dateStr);
   }
 
   async getGlobalTabCompleteTokenCount(dateStr: string): Promise<number> {
-    return this.globalTabCompleteTokens.get(dateStr) ?? 0;
+    return this.globalQuotaStore.getGlobalTabCompleteTokenCount(dateStr);
   }
 
   async checkAndIncrementGlobalSubmissions(
     dateStr: string,
     limit: number,
   ): Promise<{ allowed: boolean; current: number }> {
-    const current = this.globalSubmissions.get(dateStr) ?? 0;
-    if (current >= limit) {
-      return { allowed: false, current };
-    }
-    this.globalSubmissions.set(dateStr, current + 1);
-    return { allowed: true, current: current + 1 };
+    return this.globalQuotaStore.checkAndIncrementGlobalSubmissions(dateStr, limit);
   }
 
   async checkAndIncrementGlobalEdits(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
-    const current = this.globalEdits.get(dateStr) ?? 0;
-    if (current >= limit) {
-      return { allowed: false, current };
-    }
-    this.globalEdits.set(dateStr, current + 1);
-    return { allowed: true, current: current + 1 };
+    return this.globalQuotaStore.checkAndIncrementGlobalEdits(dateStr, limit);
   }
 
   async checkAndIncrementGlobalChats(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
-    const current = this.globalChats.get(dateStr) ?? 0;
-    if (current >= limit) {
-      return { allowed: false, current };
-    }
-    this.globalChats.set(dateStr, current + 1);
-    return { allowed: true, current: current + 1 };
+    return this.globalQuotaStore.checkAndIncrementGlobalChats(dateStr, limit);
   }
 
   async checkAndIncrementGlobalTabCompleteTokens(
@@ -2102,37 +1663,22 @@ export class InMemoryStore implements Store {
     tokens: number,
     limit: number,
   ): Promise<{ allowed: boolean; current: number }> {
-    const current = this.globalTabCompleteTokens.get(dateStr) ?? 0;
-    const next = current + tokens;
-    // Refuse a reservation that would itself cross the cap.
-    if (next > limit) {
-      return { allowed: false, current };
-    }
-    this.globalTabCompleteTokens.set(dateStr, next);
-    return { allowed: true, current: next };
+    return this.globalQuotaStore.checkAndIncrementGlobalTabCompleteTokens(dateStr, tokens, limit);
   }
 
   async adjustGlobalTabCompleteTokens(dateStr: string, delta: number): Promise<number> {
-    const current = this.globalTabCompleteTokens.get(dateStr) ?? 0;
-    const next = Math.max(0, current + delta);
-    this.globalTabCompleteTokens.set(dateStr, next);
-    return next;
+    return this.globalQuotaStore.adjustGlobalTabCompleteTokens(dateStr, delta);
   }
 
   async getGlobalManagedBuildCount(dateStr: string): Promise<number> {
-    return this.globalManagedBuilds.get(dateStr) ?? 0;
+    return this.globalQuotaStore.getGlobalManagedBuildCount(dateStr);
   }
 
   async checkAndIncrementGlobalManagedBuilds(
     dateStr: string,
     limit: number,
   ): Promise<{ allowed: boolean; current: number }> {
-    const current = this.globalManagedBuilds.get(dateStr) ?? 0;
-    if (current >= limit) {
-      return { allowed: false, current };
-    }
-    this.globalManagedBuilds.set(dateStr, current + 1);
-    return { allowed: true, current: current + 1 };
+    return this.globalQuotaStore.checkAndIncrementGlobalManagedBuilds(dateStr, limit);
   }
 
   async upsertWaitlistEntry(entry: {
@@ -2228,60 +1774,40 @@ export class InMemoryStore implements Store {
     return this.notificationsStore.deletePushSubscription(uid, endpoint);
   }
 
-  private voteCounts(slug: string): GameVoteCounts {
-    const counts: GameVoteCounts = { up: 0, down: 0 };
-    for (const value of this.votes.get(slug)?.values() ?? []) counts[value] += 1;
-    return counts;
-  }
-
   async getVote(slug: string, uid: string): Promise<VoteValue | null> {
-    return this.votes.get(slug)?.get(uid) ?? null;
+    return this.socialStore.getVote(slug, uid);
   }
 
   async castVote(slug: string, uid: string, value: VoteValue): Promise<GameVoteCounts> {
-    const forGame = this.votes.get(slug) ?? new Map<string, VoteValue>();
-    forGame.set(uid, value);
-    this.votes.set(slug, forGame);
-    return this.voteCounts(slug);
+    return this.socialStore.castVote(slug, uid, value);
   }
 
   async clearVote(slug: string, uid: string): Promise<GameVoteCounts> {
-    this.votes.get(slug)?.delete(uid);
-    return this.voteCounts(slug);
+    return this.socialStore.clearVote(slug, uid);
   }
 
   async getVoteCounts(slug: string): Promise<GameVoteCounts> {
-    return this.voteCounts(slug);
+    return this.socialStore.getVoteCounts(slug);
   }
 
   async setGameFollow(slug: string, uid: string, at: string): Promise<number> {
-    const forGame = this.follows.get(slug) ?? new Map<string, string>();
-    if (!forGame.has(uid)) forGame.set(uid, at);
-    this.follows.set(slug, forGame);
-    return forGame.size;
+    return this.socialStore.setGameFollow(slug, uid, at);
   }
 
   async clearGameFollow(slug: string, uid: string): Promise<number> {
-    const forGame = this.follows.get(slug);
-    forGame?.delete(uid);
-    return forGame?.size ?? 0;
+    return this.socialStore.clearGameFollow(slug, uid);
   }
 
   async isFollowingGame(slug: string, uid: string): Promise<boolean> {
-    return this.follows.get(slug)?.has(uid) ?? false;
+    return this.socialStore.isFollowingGame(slug, uid);
   }
 
   async countGameFollowers(slug: string): Promise<number> {
-    return this.follows.get(slug)?.size ?? 0;
+    return this.socialStore.countGameFollowers(slug);
   }
 
   async listGameFollowers(slug: string, opts?: { limit?: number }): Promise<string[]> {
-    const forGame = this.follows.get(slug);
-    if (!forGame) return [];
-    const sorted = Array.from(forGame.entries())
-      .sort((a, b) => b[1].localeCompare(a[1]))
-      .map(([uid]) => uid);
-    return opts?.limit ? sorted.slice(0, opts.limit) : sorted;
+    return this.socialStore.listGameFollowers(slug, opts);
   }
 
   async getGameSave(uid: string, slug: string): Promise<GameSaveRecord | null> {
@@ -2377,20 +1903,15 @@ export class InMemoryStore implements Store {
   }
 
   async addPlayerFeedback(slug: string, uid: string, text: string): Promise<PlayerFeedbackRecord> {
-    const record: PlayerFeedbackRecord = { id: randomUUID(), uid, text, createdAt: new Date().toISOString() };
-    const forGame = this.playerFeedback.get(slug) ?? [];
-    forGame.push(record);
-    this.playerFeedback.set(slug, forGame);
-    return record;
+    return this.socialStore.addPlayerFeedback(slug, uid, text);
   }
 
   async listPlayerFeedback(slug: string, opts?: { limit?: number }): Promise<PlayerFeedbackRecord[]> {
-    const newestFirst = [...(this.playerFeedback.get(slug) ?? [])].reverse();
-    return opts?.limit === undefined ? newestFirst : newestFirst.slice(0, opts.limit);
+    return this.socialStore.listPlayerFeedback(slug, opts);
   }
 
   async countPlayerFeedback(slug: string): Promise<number> {
-    return this.playerFeedback.get(slug)?.length ?? 0;
+    return this.socialStore.countPlayerFeedback(slug);
   }
 
   async upsertGameAssessment(
@@ -2501,37 +2022,28 @@ export class InMemoryStore implements Store {
   }
 
   async getGameAutonomy(slug: string): Promise<string | null> {
-    return this.gameAutonomy.get(slug) ?? null;
+    return this.contributionStore.getGameAutonomy(slug);
   }
 
   async purgeLegacyGameSuggestions(limit: number): Promise<number> {
-    const doomed = [...this.legacyGameSuggestions].slice(0, limit);
-    for (const slug of doomed) this.legacyGameSuggestions.delete(slug);
-    return doomed.length;
+    return this.contributionStore.purgeLegacyGameSuggestions(limit);
   }
 
-  /**
-   * Seeds a legacy per-game suggestion doc.
-   *
-   * Deliberately **not** on the `Store` interface: nothing in the product writes these
-   * any more, and adding a writer for something only the purge should touch would invite
-   * one. It exists so a test can prove the purge removes what production will find.
-   */
+  // Test-only seed for the legacy-suggestion purge above; not on the Store interface.
   seedLegacyGameSuggestion(slug: string): void {
-    this.legacyGameSuggestions.add(slug);
+    this.contributionStore.seedLegacyGameSuggestion(slug);
   }
 
   async setGameAutonomy(slug: string, mode: string): Promise<void> {
-    this.gameAutonomy.set(slug, mode);
+    return this.contributionStore.setGameAutonomy(slug, mode);
   }
 
   async putSuggestion(record: SuggestionRecord): Promise<void> {
-    this.suggestions.set(record.id, structuredClone(record));
+    return this.contributionStore.putSuggestion(record);
   }
 
   async getSuggestion(id: string): Promise<SuggestionRecord | null> {
-    const found = this.suggestions.get(id);
-    return found ? structuredClone(found) : null;
+    return this.contributionStore.getSuggestion(id);
   }
 
   async listSuggestions(opts?: {
@@ -2539,27 +2051,15 @@ export class InMemoryStore implements Store {
     ownerUid?: string;
     limit?: number;
   }): Promise<SuggestionRecord[]> {
-    const wanted = opts?.status ? new Set(opts.status) : null;
-    return (
-      [...this.suggestions.values()]
-        .filter((record) => (wanted ? wanted.has(record.status) : true))
-        .filter((record) => (opts?.ownerUid ? record.ownerUid === opts.ownerUid : true))
-        .map((record) => structuredClone(record))
-        .sort(compareSuggestions)
-        // No limit means every match, matching Firestore's paged read. Defaulting to a
-        // number here would make the in-memory store agree with production only while the
-        // collection stayed small — the divergence that hides until it matters.
-        .slice(0, opts?.limit ?? Number.MAX_SAFE_INTEGER)
-    );
+    return this.contributionStore.listSuggestions(opts);
   }
 
   async putProposal(record: ProposalRecord): Promise<void> {
-    this.proposals.set(record.id, structuredClone(record));
+    return this.contributionStore.putProposal(record);
   }
 
   async getProposal(id: string): Promise<ProposalRecord | null> {
-    const found = this.proposals.get(id);
-    return found ? structuredClone(found) : null;
+    return this.contributionStore.getProposal(id);
   }
 
   async listProposals(opts?: {
@@ -2569,48 +2069,31 @@ export class InMemoryStore implements Store {
     state?: ProposalState[];
     limit?: number;
   }): Promise<ProposalRecord[]> {
-    const wanted = opts?.state ? new Set(opts.state) : null;
-    // `'targetOwnerUid' in opts` rather than a truthiness test: `null` is a real filter
-    // value here (the platform queue), and `?? undefined` would silently widen it to
-    // "every proposal on the platform" — the one bug this filter must not have.
-    const filterByOwner = opts !== undefined && 'targetOwnerUid' in opts;
-    return [...this.proposals.values()]
-      .filter((record) => (opts?.proposerUid ? record.proposerUid === opts.proposerUid : true))
-      .filter((record) => (filterByOwner ? record.targetOwnerUid === opts.targetOwnerUid : true))
-      .filter((record) => (opts?.targetSlug ? record.targetSlug === opts.targetSlug : true))
-      .filter((record) => (wanted ? wanted.has(record.state) : true))
-      .map((record) => structuredClone(record))
-      .sort(compareProposals)
-      .slice(0, opts?.limit ?? Number.MAX_SAFE_INTEGER);
+    return this.contributionStore.listProposals(opts);
   }
 
   async getContributionSettings(slug: string): Promise<GameContributionSettings | null> {
-    const found = this.contributionSettings.get(slug);
-    return found ? { ...found } : null;
+    return this.contributionStore.getContributionSettings(slug);
   }
 
   async putContributionSettings(record: GameContributionSettings): Promise<void> {
-    this.contributionSettings.set(record.slug, { ...record });
+    return this.contributionStore.putContributionSettings(record);
   }
 
   async isContributorBlocked(ownerUid: string, blockedUid: string): Promise<boolean> {
-    return this.contributorBlocks.get(ownerUid)?.has(blockedUid) ?? false;
+    return this.contributionStore.isContributorBlocked(ownerUid, blockedUid);
   }
 
   async blockContributor(record: ContributorBlockRecord): Promise<void> {
-    const forOwner = this.contributorBlocks.get(record.ownerUid) ?? new Map<string, ContributorBlockRecord>();
-    forOwner.set(record.blockedUid, { ...record });
-    this.contributorBlocks.set(record.ownerUid, forOwner);
+    return this.contributionStore.blockContributor(record);
   }
 
   async unblockContributor(ownerUid: string, blockedUid: string): Promise<void> {
-    this.contributorBlocks.get(ownerUid)?.delete(blockedUid);
+    return this.contributionStore.unblockContributor(ownerUid, blockedUid);
   }
 
   async listContributorBlocks(ownerUid: string): Promise<ContributorBlockRecord[]> {
-    return [...(this.contributorBlocks.get(ownerUid)?.values() ?? [])]
-      .map((record) => ({ ...record }))
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.blockedUid.localeCompare(b.blockedUid));
+    return this.contributionStore.listContributorBlocks(ownerUid);
   }
 
   async listGameSlugs(): Promise<string[]> {
@@ -2619,31 +2102,21 @@ export class InMemoryStore implements Store {
     // whose subcollections do.
     return [
       ...new Set([
-        ...this.votes.keys(),
-        ...this.follows.keys(),
-        ...this.playerFeedback.keys(),
+        ...this.socialStore.votes.keys(),
+        ...this.socialStore.follows.keys(),
+        ...this.socialStore.playerFeedback.keys(),
         ...this.reviewSweepStore.scorecards.keys(),
-        ...this.suggestions.keys(),
+        ...this.contributionStore.suggestions.keys(),
       ]),
     ].sort();
   }
 
   async deletePlayerFeedbackByUid(uid: string): Promise<number> {
-    let deleted = 0;
-    for (const [slug, rows] of this.playerFeedback) {
-      const kept = rows.filter((row) => row.uid !== uid);
-      deleted += rows.length - kept.length;
-      this.playerFeedback.set(slug, kept);
-    }
-    return deleted;
+    return this.socialStore.deletePlayerFeedbackByUid(uid);
   }
 
   async countPlayerFeedbackByUid(uid: string): Promise<number> {
-    let total = 0;
-    for (const rows of this.playerFeedback.values()) {
-      total += rows.filter((row) => row.uid === uid).length;
-    }
-    return total;
+    return this.socialStore.countPlayerFeedbackByUid(uid);
   }
 
   async createAccessToken(record: AccessTokenRecord): Promise<void> {
@@ -2800,6 +2273,11 @@ export class FirestoreStore implements Store {
   private reviewStore: FirestoreReviewStore;
   private reviewSweepStore: FirestoreReviewSweepStore;
   private identityStore: FirestoreIdentityStore;
+  private quotaStore: FirestoreQuotaStore;
+  private globalQuotaStore: FirestoreGlobalQuotaStore;
+  private socialStore: FirestoreSocialStore;
+  private contributionStore: FirestoreContributionStore;
+  private publicationStore: FirestorePublicationStore;
 
   constructor(db?: Firestore) {
     this.db = db ?? new Firestore();
@@ -2814,6 +2292,11 @@ export class FirestoreStore implements Store {
     this.reviewStore = new FirestoreReviewStore(this.db);
     this.reviewSweepStore = new FirestoreReviewSweepStore(this.db);
     this.identityStore = new FirestoreIdentityStore(this.db);
+    this.quotaStore = new FirestoreQuotaStore(this.db);
+    this.globalQuotaStore = new FirestoreGlobalQuotaStore(this.db);
+    this.socialStore = new FirestoreSocialStore(this.db);
+    this.contributionStore = new FirestoreContributionStore(this.db);
+    this.publicationStore = new FirestorePublicationStore(this.db);
   }
 
   async getUser(uid: string): Promise<User | null> {
@@ -3500,67 +2983,27 @@ export class FirestoreStore implements Store {
   }
 
   async getPublication(slug: string): Promise<PublicationRecord | null> {
-    const snap = await this.db.collection('games').doc(slug).get();
-    const publication = (snap.data() as { publication?: PublicationRecord } | undefined)?.publication;
-    return publication ?? null;
+    return this.publicationStore.getPublication(slug);
   }
 
   async setPublication(record: PublicationRecord): Promise<void> {
-    // Merged onto the existing game document rather than a collection of its own: votes,
-    // player feedback and scorecards already live at games/{slug}, and a takedown that
-    // has to remember to visit a second place is a takedown that eventually misses one.
-    await this.db.collection('games').doc(record.slug).set({ publication: record }, { merge: true });
+    return this.publicationStore.setPublication(record);
   }
 
   async setPublicationHealthCheck(slug: string, check: PublicationHealthCheck): Promise<boolean> {
-    const ref = this.db.collection('games').doc(slug);
-    // Transactional for the same reason takedown is: the sweep writing a verdict can
-    // race an operator re-requesting, and a merge from a stale read would resurrect
-    // whichever check the other side just replaced.
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      const current = (snap.data() as { publication?: PublicationRecord } | undefined)?.publication;
-      if (!current) return false;
-      tx.set(ref, { publication: { ...current, healthCheck: check } }, { merge: true });
-      return true;
-    });
+    return this.publicationStore.setPublicationHealthCheck(slug, check);
   }
 
   async takedownPublication(slug: string, reason: string, at: string): Promise<boolean> {
-    const ref = this.db.collection('games').doc(slug);
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      const current = (snap.data() as { publication?: PublicationRecord } | undefined)?.publication;
-      if (!current) return false;
-      tx.set(
-        ref,
-        { publication: { ...current, state: 'disabled', takedownAt: at, takedownReason: reason } },
-        { merge: true },
-      );
-      return true;
-    });
+    return this.publicationStore.takedownPublication(slug, reason, at);
   }
 
   async archivePublication(slug: string, reason: string, at: string): Promise<boolean> {
-    const ref = this.db.collection('games').doc(slug);
-    return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      const current = (snap.data() as { publication?: PublicationRecord } | undefined)?.publication;
-      if (!current) return false;
-      tx.set(
-        ref,
-        { publication: { ...current, state: 'archived', takedownAt: at, takedownReason: reason } },
-        { merge: true },
-      );
-      return true;
-    });
+    return this.publicationStore.archivePublication(slug, reason, at);
   }
 
   async listPublications(): Promise<PublicationRecord[]> {
-    const snap = await this.db.collection('games').get();
-    return snap.docs
-      .map((doc) => (doc.data() as { publication?: PublicationRecord }).publication)
-      .filter((publication): publication is PublicationRecord => Boolean(publication));
+    return this.publicationStore.listPublications();
   }
 
   async setSubmissionSlug(issueNumber: number, slug: string): Promise<void> {
@@ -3897,8 +3340,7 @@ export class FirestoreStore implements Store {
   }
 
   async getUsage(uid: string, dateStr: string): Promise<UsageCounters> {
-    const snap = await this.db.collection('usage').doc(uid).collection('counters').doc(dateStr).get();
-    return { ...emptyUsageCounters(), ...(snap.data() as Partial<UsageCounters> | undefined) };
+    return this.quotaStore.getUsage(uid, dateStr);
   }
 
   async listRecentlyPublished(limit: number): Promise<SubmissionRecord[]> {
@@ -3999,248 +3441,57 @@ export class FirestoreStore implements Store {
     limit: number,
     action: keyof UsageCounters,
   ): Promise<{ allowed: boolean; current: number; tier: User['tier'] }> {
-    const userRef = this.db.collection('users').doc(uid);
-    const counterRef = this.db.collection('usage').doc(uid).collection('counters').doc(dateStr);
-
-    return await this.db.runTransaction(async (transaction) => {
-      const userSnap = await transaction.get(userRef);
-      const user = userSnap.exists ? (userSnap.data() as User) : null;
-      const tier = user?.tier ?? 'standard';
-
-      if (tier === 'blocked') {
-        return { allowed: false, current: Infinity, tier };
-      }
-
-      if (tier === 'trusted') {
-        return { allowed: true, current: 0, tier };
-      }
-
-      const counterSnap = await transaction.get(counterRef);
-      const data = counterSnap.exists ? counterSnap.data() : {};
-      const currentVal = (data?.[action] as number) ?? 0;
-
-      if (currentVal >= limit) {
-        return { allowed: false, current: currentVal, tier };
-      }
-
-      const nextVal = currentVal + 1;
-      transaction.set(counterRef, { [action]: nextVal }, { merge: true });
-
-      return { allowed: true, current: nextVal, tier };
-    });
-  }
-
-  /**
-   * One document, read on a short TTL by every instance and written only by an
-   * operator. Deliberately a *document* rather than an environment variable: see
-   * CreationLimits. Nothing here is per-user, so there is no query and no index.
-   */
-  private creationLimitsRef() {
-    return this.db.collection('opsConfig').doc('creationLimits');
-  }
-
-  private publicPlayConfigRef() {
-    return this.db.collection('opsConfig').doc('publicPlay');
-  }
-
-  private featuredPoolConfigRef() {
-    return this.db.collection('opsConfig').doc('featuredPool');
-  }
-
-  /** The day's shared allowance. One document per UTC day, so history is free. */
-  private globalUsageRef(dateStr: string) {
-    return this.db.collection('globalUsage').doc(dateStr);
+    return this.quotaStore.checkAndIncrementQuota(uid, dateStr, limit, action);
   }
 
   async getCreationLimits(): Promise<CreationLimits | null> {
-    const snap = await this.creationLimitsRef().get();
-    if (!snap.exists) return null;
-    const data = snap.data() as Partial<CreationLimits> | undefined;
-    return {
-      paused: data?.paused === true,
-      globalDailySubmissionCap:
-        typeof data?.globalDailySubmissionCap === 'number' ? data.globalDailySubmissionCap : null,
-      editingPaused: data?.editingPaused === true,
-      remixTracePaused: data?.remixTracePaused === true,
-      globalDailyEditCap: typeof data?.globalDailyEditCap === 'number' ? data.globalDailyEditCap : null,
-      chatPaused: data?.chatPaused === true,
-      globalDailyChatCap: typeof data?.globalDailyChatCap === 'number' ? data.globalDailyChatCap : null,
-      tabCompletePaused: data?.tabCompletePaused === true,
-      globalDailyTabCompleteTokenCap:
-        typeof data?.globalDailyTabCompleteTokenCap === 'number' ? data.globalDailyTabCompleteTokenCap : null,
-      managedBuilderMode:
-        data?.managedBuilderMode === 'off' || data?.managedBuilderMode === 'coming_soon'
-          ? data.managedBuilderMode
-          : 'auto',
-      managedAgentVendorOverride:
-        typeof data?.managedAgentVendorOverride === 'string' &&
-        MANAGED_AGENT_VENDORS.includes(data.managedAgentVendorOverride)
-          ? data.managedAgentVendorOverride
-          : null,
-      managedDailyCap: typeof data?.managedDailyCap === 'number' ? data.managedDailyCap : null,
-      managedDailyUserCap: typeof data?.managedDailyUserCap === 'number' ? data.managedDailyUserCap : null,
-      seedingMode: data?.seedingMode === 'off' ? 'off' : 'auto',
-      seedProviderOverride: typeof data?.seedProviderOverride === 'string' ? data.seedProviderOverride : null,
-      ...(data?.updatedAt ? { updatedAt: data.updatedAt } : {}),
-      ...(data?.updatedBy ? { updatedBy: data.updatedBy } : {}),
-    };
+    return this.quotaStore.getCreationLimits();
   }
 
   async setCreationLimits(
     patch: Partial<Omit<CreationLimits, 'updatedAt'>>,
     updatedBy: string,
   ): Promise<CreationLimits> {
-    const ref = this.creationLimitsRef();
-    return await this.db.runTransaction(async (transaction) => {
-      const snap = await transaction.get(ref);
-      const existing = snap.exists ? (snap.data() as Partial<CreationLimits>) : {};
-      const merged: CreationLimits = {
-        paused: patch.paused ?? existing.paused ?? false,
-        globalDailySubmissionCap:
-          patch.globalDailySubmissionCap !== undefined
-            ? patch.globalDailySubmissionCap
-            : (existing.globalDailySubmissionCap ?? null),
-        editingPaused: patch.editingPaused ?? existing.editingPaused ?? false,
-        globalDailyEditCap:
-          patch.globalDailyEditCap !== undefined ? patch.globalDailyEditCap : (existing.globalDailyEditCap ?? null),
-        chatPaused: patch.chatPaused ?? existing.chatPaused ?? false,
-        globalDailyChatCap:
-          patch.globalDailyChatCap !== undefined ? patch.globalDailyChatCap : (existing.globalDailyChatCap ?? null),
-        tabCompletePaused: patch.tabCompletePaused ?? existing.tabCompletePaused ?? false,
-        globalDailyTabCompleteTokenCap:
-          patch.globalDailyTabCompleteTokenCap !== undefined
-            ? patch.globalDailyTabCompleteTokenCap
-            : (existing.globalDailyTabCompleteTokenCap ?? null),
-        managedBuilderMode: patch.managedBuilderMode ?? existing.managedBuilderMode ?? 'auto',
-        managedAgentVendorOverride:
-          patch.managedAgentVendorOverride !== undefined
-            ? patch.managedAgentVendorOverride
-            : (existing.managedAgentVendorOverride ?? null),
-        managedDailyCap:
-          patch.managedDailyCap !== undefined ? patch.managedDailyCap : (existing.managedDailyCap ?? null),
-        managedDailyUserCap:
-          patch.managedDailyUserCap !== undefined ? patch.managedDailyUserCap : (existing.managedDailyUserCap ?? null),
-        seedingMode: patch.seedingMode ?? existing.seedingMode ?? 'auto',
-        seedProviderOverride:
-          patch.seedProviderOverride !== undefined
-            ? patch.seedProviderOverride
-            : (existing.seedProviderOverride ?? null),
-        updatedAt: new Date().toISOString(),
-        updatedBy,
-      };
-      transaction.set(ref, merged);
-      return merged;
-    });
+    return this.quotaStore.setCreationLimits(patch, updatedBy);
   }
 
   async getPublicPlayConfig(): Promise<PublicPlayConfig | null> {
-    const snap = await this.publicPlayConfigRef().get();
-    if (!snap.exists) return null;
-    const data = snap.data() as Partial<PublicPlayConfig> | undefined;
-    const slugs = normalizePublicPlaySlugs(data?.slugs);
-    return {
-      slugs,
-      ...(data?.updatedAt ? { updatedAt: data.updatedAt } : {}),
-      ...(data?.updatedBy ? { updatedBy: data.updatedBy } : {}),
-    };
+    return this.quotaStore.getPublicPlayConfig();
   }
 
   async setPublicPlaySlugs(slugs: string[], updatedBy: string): Promise<PublicPlayConfig> {
-    const config: PublicPlayConfig = {
-      slugs: [...slugs],
-      updatedAt: new Date().toISOString(),
-      updatedBy,
-    };
-    await this.publicPlayConfigRef().set(config);
-    return { ...config, slugs: [...config.slugs] };
+    return this.quotaStore.setPublicPlaySlugs(slugs, updatedBy);
   }
 
   async getFeaturedPoolConfig(): Promise<FeaturedPoolConfig | null> {
-    const snap = await this.featuredPoolConfigRef().get();
-    if (!snap.exists) return null;
-    const data = snap.data() as Partial<FeaturedPoolConfig> | undefined;
-    const slugs = normalizeFeaturedPoolSlugs(data?.slugs);
-    return {
-      slugs,
-      ...(data?.updatedAt ? { updatedAt: data.updatedAt } : {}),
-      ...(data?.updatedBy ? { updatedBy: data.updatedBy } : {}),
-    };
+    return this.quotaStore.getFeaturedPoolConfig();
   }
 
   async setFeaturedPoolSlugs(slugs: string[], updatedBy: string): Promise<FeaturedPoolConfig> {
-    const config: FeaturedPoolConfig = {
-      slugs: [...slugs],
-      updatedAt: new Date().toISOString(),
-      updatedBy,
-    };
-    await this.featuredPoolConfigRef().set(config);
-    return { ...config, slugs: [...config.slugs] };
+    return this.quotaStore.setFeaturedPoolSlugs(slugs, updatedBy);
   }
 
   async getGlobalSubmissionCount(dateStr: string): Promise<number> {
-    const snap = await this.globalUsageRef(dateStr).get();
-    const value = snap.data()?.submissions;
-    return typeof value === 'number' ? value : 0;
+    return this.globalQuotaStore.getGlobalSubmissionCount(dateStr);
   }
 
   async getGlobalTabCompleteTokenCount(dateStr: string): Promise<number> {
-    const snap = await this.globalUsageRef(dateStr).get();
-    const value = snap.data()?.tabCompleteTokens;
-    return typeof value === 'number' ? value : 0;
+    return this.globalQuotaStore.getGlobalTabCompleteTokenCount(dateStr);
   }
 
   async checkAndIncrementGlobalSubmissions(
     dateStr: string,
     limit: number,
   ): Promise<{ allowed: boolean; current: number }> {
-    const ref = this.globalUsageRef(dateStr);
-    return await this.db.runTransaction(async (transaction) => {
-      const snap = await transaction.get(ref);
-      const value = snap.data()?.submissions;
-      const current = typeof value === 'number' ? value : 0;
-
-      if (current >= limit) {
-        return { allowed: false, current };
-      }
-
-      const nextVal = current + 1;
-      transaction.set(ref, { submissions: nextVal }, { merge: true });
-      return { allowed: true, current: nextVal };
-    });
+    return this.globalQuotaStore.checkAndIncrementGlobalSubmissions(dateStr, limit);
   }
 
   async checkAndIncrementGlobalEdits(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
-    const ref = this.globalUsageRef(dateStr);
-    return await this.db.runTransaction(async (transaction) => {
-      const snap = await transaction.get(ref);
-      const value = snap.data()?.edits;
-      const current = typeof value === 'number' ? value : 0;
-
-      if (current >= limit) {
-        return { allowed: false, current };
-      }
-
-      const nextVal = current + 1;
-      transaction.set(ref, { edits: nextVal }, { merge: true });
-      return { allowed: true, current: nextVal };
-    });
+    return this.globalQuotaStore.checkAndIncrementGlobalEdits(dateStr, limit);
   }
 
   async checkAndIncrementGlobalChats(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
-    const ref = this.globalUsageRef(dateStr);
-    return await this.db.runTransaction(async (transaction) => {
-      const snap = await transaction.get(ref);
-      const value = snap.data()?.chats;
-      const current = typeof value === 'number' ? value : 0;
-
-      if (current >= limit) {
-        return { allowed: false, current };
-      }
-
-      const nextVal = current + 1;
-      transaction.set(ref, { chats: nextVal }, { merge: true });
-      return { allowed: true, current: nextVal };
-    });
+    return this.globalQuotaStore.checkAndIncrementGlobalChats(dateStr, limit);
   }
 
   async checkAndIncrementGlobalTabCompleteTokens(
@@ -4248,59 +3499,22 @@ export class FirestoreStore implements Store {
     tokens: number,
     limit: number,
   ): Promise<{ allowed: boolean; current: number }> {
-    const ref = this.globalUsageRef(dateStr);
-    return await this.db.runTransaction(async (transaction) => {
-      const snap = await transaction.get(ref);
-      const value = snap.data()?.tabCompleteTokens;
-      const current = typeof value === 'number' ? value : 0;
-      const nextVal = current + tokens;
-
-      // Refuse a reservation that would itself cross the cap.
-      if (nextVal > limit) {
-        return { allowed: false, current };
-      }
-
-      transaction.set(ref, { tabCompleteTokens: nextVal }, { merge: true });
-      return { allowed: true, current: nextVal };
-    });
+    return this.globalQuotaStore.checkAndIncrementGlobalTabCompleteTokens(dateStr, tokens, limit);
   }
 
   async adjustGlobalTabCompleteTokens(dateStr: string, delta: number): Promise<number> {
-    const ref = this.globalUsageRef(dateStr);
-    return await this.db.runTransaction(async (transaction) => {
-      const snap = await transaction.get(ref);
-      const value = snap.data()?.tabCompleteTokens;
-      const current = typeof value === 'number' ? value : 0;
-      const next = Math.max(0, current + delta);
-      transaction.set(ref, { tabCompleteTokens: next }, { merge: true });
-      return next;
-    });
+    return this.globalQuotaStore.adjustGlobalTabCompleteTokens(dateStr, delta);
   }
 
   async getGlobalManagedBuildCount(dateStr: string): Promise<number> {
-    const snap = await this.globalUsageRef(dateStr).get();
-    const value = snap.data()?.managedBuilds;
-    return typeof value === 'number' ? value : 0;
+    return this.globalQuotaStore.getGlobalManagedBuildCount(dateStr);
   }
 
   async checkAndIncrementGlobalManagedBuilds(
     dateStr: string,
     limit: number,
   ): Promise<{ allowed: boolean; current: number }> {
-    const ref = this.globalUsageRef(dateStr);
-    return await this.db.runTransaction(async (transaction) => {
-      const snap = await transaction.get(ref);
-      const value = snap.data()?.managedBuilds;
-      const current = typeof value === 'number' ? value : 0;
-
-      if (current >= limit) {
-        return { allowed: false, current };
-      }
-
-      const nextVal = current + 1;
-      transaction.set(ref, { managedBuilds: nextVal }, { merge: true });
-      return { allowed: true, current: nextVal };
-    });
+    return this.globalQuotaStore.checkAndIncrementGlobalManagedBuilds(dateStr, limit);
   }
 
   async upsertWaitlistEntry(entry: {
@@ -4396,119 +3610,40 @@ export class FirestoreStore implements Store {
     return this.notificationsStore.deletePushSubscription(uid, endpoint);
   }
 
-  private gameRef(slug: string) {
-    return this.db.collection('games').doc(slug);
-  }
-
-  private voteRef(slug: string, uid: string) {
-    return this.gameRef(slug).collection('votes').doc(uid);
-  }
-
-  private feedbackCollection(slug: string) {
-    return this.gameRef(slug).collection('playerFeedback');
-  }
-
-  private followerRef(slug: string, uid: string) {
-    return this.gameRef(slug).collection('followers').doc(uid);
-  }
-
-  private static readVoteCounts(data: DocumentData | undefined): GameVoteCounts {
-    return { up: (data?.votesUp as number | undefined) ?? 0, down: (data?.votesDown as number | undefined) ?? 0 };
-  }
-
   async getVote(slug: string, uid: string): Promise<VoteValue | null> {
-    const snap = await this.voteRef(slug, uid).get();
-    return snap.exists ? ((snap.data()?.value as VoteValue | undefined) ?? null) : null;
+    return this.socialStore.getVote(slug, uid);
   }
 
   async castVote(slug: string, uid: string, value: VoteValue): Promise<GameVoteCounts> {
-    const gameRef = this.gameRef(slug);
-    const voteRef = this.voteRef(slug, uid);
-    return await this.db.runTransaction(async (transaction) => {
-      const gameSnap = await transaction.get(gameRef);
-      const voteSnap = await transaction.get(voteRef);
-      const counts = FirestoreStore.readVoteCounts(gameSnap.data());
-      const previous = voteSnap.exists ? (voteSnap.data()?.value as VoteValue | undefined) : undefined;
-
-      // Repeating the same vote must not double-count it; only a genuine change
-      // touches the tally.
-      if (previous !== value) {
-        if (previous) counts[previous] = Math.max(0, counts[previous] - 1);
-        counts[value] += 1;
-        transaction.set(gameRef, { votesUp: counts.up, votesDown: counts.down }, { merge: true });
-      }
-      transaction.set(voteRef, { value, updatedAt: new Date().toISOString() });
-      return counts;
-    });
+    return this.socialStore.castVote(slug, uid, value);
   }
 
   async clearVote(slug: string, uid: string): Promise<GameVoteCounts> {
-    const gameRef = this.gameRef(slug);
-    const voteRef = this.voteRef(slug, uid);
-    return await this.db.runTransaction(async (transaction) => {
-      const gameSnap = await transaction.get(gameRef);
-      const voteSnap = await transaction.get(voteRef);
-      const counts = FirestoreStore.readVoteCounts(gameSnap.data());
-      if (!voteSnap.exists) return counts;
-
-      const previous = voteSnap.data()?.value as VoteValue | undefined;
-      if (previous) counts[previous] = Math.max(0, counts[previous] - 1);
-      transaction.delete(voteRef);
-      transaction.set(gameRef, { votesUp: counts.up, votesDown: counts.down }, { merge: true });
-      return counts;
-    });
+    return this.socialStore.clearVote(slug, uid);
   }
 
   async setGameFollow(slug: string, uid: string, at: string): Promise<number> {
-    const gameRef = this.gameRef(slug);
-    const followerRef = this.followerRef(slug, uid);
-    return await this.db.runTransaction(async (transaction) => {
-      const gameSnap = await transaction.get(gameRef);
-      const followerSnap = await transaction.get(followerRef);
-      const count = (gameSnap.data()?.followers as number | undefined) ?? 0;
-      // Following twice is not two followers — only a genuine change moves the tally.
-      if (followerSnap.exists) return count;
-      transaction.set(followerRef, { followedAt: at });
-      transaction.set(gameRef, { followers: count + 1 }, { merge: true });
-      return count + 1;
-    });
+    return this.socialStore.setGameFollow(slug, uid, at);
   }
 
   async clearGameFollow(slug: string, uid: string): Promise<number> {
-    const gameRef = this.gameRef(slug);
-    const followerRef = this.followerRef(slug, uid);
-    return await this.db.runTransaction(async (transaction) => {
-      const gameSnap = await transaction.get(gameRef);
-      const followerSnap = await transaction.get(followerRef);
-      const count = (gameSnap.data()?.followers as number | undefined) ?? 0;
-      if (!followerSnap.exists) return count;
-      const next = Math.max(0, count - 1);
-      transaction.delete(followerRef);
-      transaction.set(gameRef, { followers: next }, { merge: true });
-      return next;
-    });
+    return this.socialStore.clearGameFollow(slug, uid);
   }
 
   async isFollowingGame(slug: string, uid: string): Promise<boolean> {
-    const snap = await this.followerRef(slug, uid).get();
-    return snap.exists;
+    return this.socialStore.isFollowingGame(slug, uid);
   }
 
   async countGameFollowers(slug: string): Promise<number> {
-    const snap = await this.gameRef(slug).get();
-    return (snap.data()?.followers as number | undefined) ?? 0;
+    return this.socialStore.countGameFollowers(slug);
   }
 
   async listGameFollowers(slug: string, opts?: { limit?: number }): Promise<string[]> {
-    let query = this.gameRef(slug).collection('followers').orderBy('followedAt', 'desc');
-    if (opts?.limit) query = query.limit(opts.limit);
-    const snap = await query.get();
-    return snap.docs.map((doc) => doc.id);
+    return this.socialStore.listGameFollowers(slug, opts);
   }
 
   async getVoteCounts(slug: string): Promise<GameVoteCounts> {
-    const snap = await this.gameRef(slug).get();
-    return FirestoreStore.readVoteCounts(snap.data());
+    return this.socialStore.getVoteCounts(slug);
   }
 
   async getGameSave(uid: string, slug: string): Promise<GameSaveRecord | null> {
@@ -4604,25 +3739,15 @@ export class FirestoreStore implements Store {
   }
 
   async addPlayerFeedback(slug: string, uid: string, text: string): Promise<PlayerFeedbackRecord> {
-    const createdAt = new Date().toISOString();
-    const ref = this.feedbackCollection(slug).doc();
-    const record: PlayerFeedbackRecord = { id: ref.id, uid, text, createdAt };
-    await ref.set({ uid, text, createdAt });
-    return record;
+    return this.socialStore.addPlayerFeedback(slug, uid, text);
   }
 
   async listPlayerFeedback(slug: string, opts?: { limit?: number }): Promise<PlayerFeedbackRecord[]> {
-    // Unbounded by default because the erase preview and the operator read both want
-    // everything; the sweep passes a limit so one game with thousands of notes cannot
-    // dominate a nightly job's read budget.
-    const ordered = this.feedbackCollection(slug).orderBy('createdAt', 'desc');
-    const snap = await (opts?.limit === undefined ? ordered : ordered.limit(opts.limit)).get();
-    return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<PlayerFeedbackRecord, 'id'>) }));
+    return this.socialStore.listPlayerFeedback(slug, opts);
   }
 
   async countPlayerFeedback(slug: string): Promise<number> {
-    const snap = await this.feedbackCollection(slug).count().get();
-    return snap.data().count;
+    return this.socialStore.countPlayerFeedback(slug);
   }
 
   async upsertGameAssessment(
@@ -4737,79 +3862,36 @@ export class FirestoreStore implements Store {
     return refs.map((ref) => ref.id).sort();
   }
 
-  // Both of these need the COLLECTION_GROUP index on playerFeedback.uid that
-  // infra/setup-gcp.sh step 7 provisions. Firestore auto-indexes single fields at
-  // COLLECTION scope only, so without it they fail with 9 FAILED_PRECONDITION rather
-  // than merely running slowly.
-  private feedbackByUid(uid: string) {
-    return this.db.collectionGroup('playerFeedback').where('uid', '==', uid);
-  }
-
   async deletePlayerFeedbackByUid(uid: string): Promise<number> {
-    const snap = await this.feedbackByUid(uid).get();
-    if (snap.empty) return 0;
-
-    // Chunked because a batch tops out at 500 writes, and "delete everything this
-    // person wrote" is precisely the request that could exceed it.
-    const docs = snap.docs;
-    for (let index = 0; index < docs.length; index += 400) {
-      const batch = this.db.batch();
-      for (const doc of docs.slice(index, index + 400)) batch.delete(doc.ref);
-      await batch.commit();
-    }
-    return docs.length;
+    return this.socialStore.deletePlayerFeedbackByUid(uid);
   }
 
   async countPlayerFeedbackByUid(uid: string): Promise<number> {
-    const snap = await this.feedbackByUid(uid).count().get();
-    return snap.data().count;
+    return this.socialStore.countPlayerFeedbackByUid(uid);
   }
 
   async getScorecard(slug: string): Promise<Scorecard | null> {
     return this.reviewSweepStore.getScorecard(slug);
   }
 
-  // Top-level rather than under `games/{slug}`: a suggestion is read as a queue across
-  // every game ("what needs attention") far more often than per game, and a collection
-  // group would be the third one in this schema for no gain over a plain collection.
-  private suggestionRef(id: string) {
-    return this.db.collection('suggestions').doc(id);
-  }
-
   async purgeLegacyGameSuggestions(limit: number): Promise<number> {
-    // A bare collection-group read needs no custom index — no filter, no ordering — so
-    // this finds the leftovers wherever they are rather than only under games that still
-    // have a scorecard. A game whose scorecard has since expired is exactly the one whose
-    // stale copy nobody would otherwise reach.
-    const snap = await this.db.collectionGroup('suggestion').limit(limit).get();
-    if (snap.empty) return 0;
-    const batch = this.db.batch();
-    for (const doc of snap.docs) batch.delete(doc.ref);
-    await batch.commit();
-    return snap.size;
+    return this.contributionStore.purgeLegacyGameSuggestions(limit);
   }
 
   async getGameAutonomy(slug: string): Promise<string | null> {
-    const snap = await this.gameRef(slug).get();
-    return (snap.data() as { autonomy?: string } | undefined)?.autonomy ?? null;
+    return this.contributionStore.getGameAutonomy(slug);
   }
 
   async setGameAutonomy(slug: string, mode: string): Promise<void> {
-    // Merge: the game document carries other per-game facts, and a whole-document write
-    // here would drop them.
-    await this.gameRef(slug).set({ autonomy: mode }, { merge: true });
+    return this.contributionStore.setGameAutonomy(slug, mode);
   }
 
   async putSuggestion(record: SuggestionRecord): Promise<void> {
-    // Whole-document `set`, like a scorecard: a suggestion is a snapshot of one routing
-    // decision, and merging would leave evidence from a previous window sitting beside a
-    // newer status.
-    await this.suggestionRef(record.id).set(stripUndefined(record));
+    return this.contributionStore.putSuggestion(record);
   }
 
   async getSuggestion(id: string): Promise<SuggestionRecord | null> {
-    const snap = await this.suggestionRef(id).get();
-    return snap.exists ? (snap.data() as SuggestionRecord) : null;
+    return this.contributionStore.getSuggestion(id);
   }
 
   async listSuggestions(opts?: {
@@ -4817,66 +3899,15 @@ export class FirestoreStore implements Store {
     ownerUid?: string;
     limit?: number;
   }): Promise<SuggestionRecord[]> {
-    let query: FirebaseFirestore.Query = this.db.collection('suggestions');
-    // `in` caps at 30 values and there are 8 statuses, so this never needs chunking.
-    if (opts?.status?.length) query = query.where('status', 'in', opts.status);
-    if (opts?.ownerUid) query = query.where('ownerUid', '==', opts.ownerUid);
-
-    // Deliberately **no** `orderBy`: combining one with these equality filters is exactly
-    // what needs a composite index per filter combination. Without one the query is
-    // implicitly ordered by `__name__`, which is always indexed — deterministic, but
-    // unrelated to priority. Ordering is restored in memory by the shared comparator, so
-    // both stores agree.
-    //
-    // Which makes a bare `limit()` a trap, and the reason this pages instead. A caller
-    // that asks for *the* open set and silently receives an arbitrary slice of it would
-    // not see the suggestion it was checking for, and would open a second one for the
-    // same game — a duplicate that looks exactly like the router changing its mind. So a
-    // caller with no explicit limit gets every match, read in pages; only a caller that
-    // asked for a bounded page (the inbox, showing a creator their shelf) gets one.
-    const pageSize = 500;
-    if (opts?.limit !== undefined) {
-      const snap = await query.limit(opts.limit).get();
-      return snap.docs.map((doc) => doc.data() as SuggestionRecord).sort(compareSuggestions);
-    }
-
-    const records: SuggestionRecord[] = [];
-    let cursor: FirebaseFirestore.QueryDocumentSnapshot | undefined;
-    for (;;) {
-      const page = cursor ? query.startAfter(cursor).limit(pageSize) : query.limit(pageSize);
-      const snap = await page.get();
-      if (snap.empty) break;
-      records.push(...snap.docs.map((doc) => doc.data() as SuggestionRecord));
-      if (snap.docs.length < pageSize) break;
-      cursor = snap.docs[snap.docs.length - 1];
-    }
-    return records.sort(compareSuggestions);
-  }
-
-  // Top-level, like suggestions and for the same reason: a proposal is read as a queue
-  // across games ("what is waiting on me", "what have I sent") far more often than per
-  // game, and the per-game read the supersede sweep needs is one equality filter away.
-  private proposalRef(id: string) {
-    return this.db.collection('proposals').doc(id);
-  }
-
-  // `{ownerUid}_{blockedUid}` as the document id rather than a subcollection under the
-  // owner: the hot read is "has A blocked B", which this answers as a point read, and a
-  // composite id keeps that true without an index. Uids cannot contain `_`.
-  private contributorBlockRef(ownerUid: string, blockedUid: string) {
-    return this.db.collection('contributorBlocks').doc(`${ownerUid}_${blockedUid}`);
+    return this.contributionStore.listSuggestions(opts);
   }
 
   async putProposal(record: ProposalRecord): Promise<void> {
-    // Whole-document `set`: a proposal is written by one owner at a time (the service
-    // reads, transitions, and writes it back), and a merge would let a stale decision
-    // survive beside a newer state.
-    await this.proposalRef(record.id).set(stripUndefined(record));
+    return this.contributionStore.putProposal(record);
   }
 
   async getProposal(id: string): Promise<ProposalRecord | null> {
-    const snap = await this.proposalRef(id).get();
-    return snap.exists ? (snap.data() as ProposalRecord) : null;
+    return this.contributionStore.getProposal(id);
   }
 
   async listProposals(opts?: {
@@ -4886,93 +3917,31 @@ export class FirestoreStore implements Store {
     state?: ProposalState[];
     limit?: number;
   }): Promise<ProposalRecord[]> {
-    let query: FirebaseFirestore.Query = this.db.collection('proposals');
-    if (opts?.proposerUid) query = query.where('proposerUid', '==', opts.proposerUid);
-    // `null` is a real value — the platform queue — so this tests for the key's presence
-    // rather than its truthiness. Equality against `null` matches stored nulls in
-    // Firestore, which is why `targetOwnerUid` is written explicitly rather than omitted
-    // for platform-owned targets (see `stripUndefined`: it strips `undefined`, not `null`).
-    if (opts !== undefined && 'targetOwnerUid' in opts) {
-      query = query.where('targetOwnerUid', '==', opts.targetOwnerUid ?? null);
-    }
-    if (opts?.targetSlug) query = query.where('targetSlug', '==', opts.targetSlug);
-    // 12 states, well under the 30-value `in` cap.
-    if (opts?.state?.length) query = query.where('state', 'in', opts.state);
-
-    // No `orderBy`, paged rather than limited — same rule and same reasoning as
-    // `listSuggestions` above: ordering is restored in memory by the shared comparator so
-    // a filtered read never needs a composite index, and an unbounded caller must get
-    // every match rather than an arbitrary slice. The supersede sweep is exactly such a
-    // caller: a slice would leave stale proposals live against a game that just published.
-    const pageSize = 500;
-    if (opts?.limit !== undefined) {
-      const snap = await query.limit(opts.limit).get();
-      return snap.docs.map((doc) => doc.data() as ProposalRecord).sort(compareProposals);
-    }
-
-    const records: ProposalRecord[] = [];
-    let cursor: FirebaseFirestore.QueryDocumentSnapshot | undefined;
-    for (;;) {
-      const page = cursor ? query.startAfter(cursor).limit(pageSize) : query.limit(pageSize);
-      const snap = await page.get();
-      if (snap.empty) break;
-      records.push(...snap.docs.map((doc) => doc.data() as ProposalRecord));
-      if (snap.docs.length < pageSize) break;
-      cursor = snap.docs[snap.docs.length - 1];
-    }
-    return records.sort(compareProposals);
+    return this.contributionStore.listProposals(opts);
   }
 
   async getContributionSettings(slug: string): Promise<GameContributionSettings | null> {
-    const snap = await this.gameRef(slug).get();
-    const data = (snap.data() as { contributions?: { mode?: string; updatedAt?: string; updatedByUid?: string } })
-      ?.contributions;
-    if (!data) return null;
-    // Field-by-field rather than a cast: this rides on the shared `games/{slug}` document,
-    // so an unknown mode written by a future version must read as `off` rather than as
-    // whatever string happens to be stored — the failure direction that keeps a game shut
-    // rather than accidentally open.
-    return {
-      slug,
-      mode: data.mode === 'review' ? 'review' : 'off',
-      updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : '',
-      ...(typeof data.updatedByUid === 'string' ? { updatedByUid: data.updatedByUid } : {}),
-    };
+    return this.contributionStore.getContributionSettings(slug);
   }
 
   async putContributionSettings(record: GameContributionSettings): Promise<void> {
-    // Merge, not whole-document: `games/{slug}` also carries `autonomy` and the
-    // publication registry, and a whole write here would drop what is live.
-    await this.gameRef(record.slug).set(
-      {
-        contributions: stripUndefined({
-          mode: record.mode,
-          updatedAt: record.updatedAt,
-          updatedByUid: record.updatedByUid,
-        }),
-      },
-      { merge: true },
-    );
+    return this.contributionStore.putContributionSettings(record);
   }
 
   async isContributorBlocked(ownerUid: string, blockedUid: string): Promise<boolean> {
-    const snap = await this.contributorBlockRef(ownerUid, blockedUid).get();
-    return snap.exists;
+    return this.contributionStore.isContributorBlocked(ownerUid, blockedUid);
   }
 
   async blockContributor(record: ContributorBlockRecord): Promise<void> {
-    await this.contributorBlockRef(record.ownerUid, record.blockedUid).set(stripUndefined(record));
+    return this.contributionStore.blockContributor(record);
   }
 
   async unblockContributor(ownerUid: string, blockedUid: string): Promise<void> {
-    await this.contributorBlockRef(ownerUid, blockedUid).delete();
+    return this.contributionStore.unblockContributor(ownerUid, blockedUid);
   }
 
   async listContributorBlocks(ownerUid: string): Promise<ContributorBlockRecord[]> {
-    const snap = await this.db.collection('contributorBlocks').where('ownerUid', '==', ownerUid).get();
-    return snap.docs
-      .map((doc) => doc.data() as ContributorBlockRecord)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.blockedUid.localeCompare(b.blockedUid));
+    return this.contributionStore.listContributorBlocks(ownerUid);
   }
 
   async createAccessToken(record: AccessTokenRecord): Promise<void> {
