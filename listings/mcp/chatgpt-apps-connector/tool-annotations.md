@@ -206,10 +206,10 @@ Calls only the gamedev.pl API on our own domain. It performs no web access, cont
 Queues generation of a replacement starter draft for the round, which writes state.
 ```
 
-**Destructive: False**
+**Destructive: True**
 
 ```
-Additive with respect to the agent's own work: it is refused once anything has been staged or delivered, so it can only replace a platform-generated draft nobody has built on. Nothing creator-authored is touched.
+Marked destructive because it replaces the round's current generated draft: once the replacement lands, the prior one is gone. It is refused once anything has been staged or delivered, so it can only ever discard a platform-generated draft, never creator-authored work — but replacing existing content is still not additive.
 ```
 
 **Idempotent: False**
@@ -466,10 +466,10 @@ Calls only the gamedev.pl API on our own domain. It performs no web access, cont
 Appends a progress note to the creator's thread for this round, which writes state.
 ```
 
-**Destructive: False**
+**Destructive: True**
 
 ```
-Append-only: it adds a note. Earlier notes are not edited or removed.
+Marked destructive because it sends a persistent, creator-visible message that this tool cannot retract or edit — the same reasoning that already applies to a closing summary from end.
 ```
 
 **Idempotent: False**
@@ -700,16 +700,16 @@ Calls only the gamedev.pl API on our own domain. It performs no web access, cont
 Commits and closes the round, which writes state.
 ```
 
-**Destructive: False**
+**Destructive: True**
 
 ```
-It closes a round rather than destroying its contents: delivered sources, screenshots, progress notes and the gate verdict all remain.
+Marked destructive because it can send a persistent, unretractable closing message (same reasoning as report_progress) and, via ackInboxIds, acknowledge creator messages so they stop being surfaced to the agent (same reasoning as ack_inbox) — even though delivered sources, screenshots, progress notes and the gate verdict all remain untouched.
 ```
 
 **Idempotent: True**
 
 ```
-Calling it again on a closed round changes nothing.
+Calling it again on a closed round changes nothing further; re-acknowledging already-acked ids is a no-op the same way ack_inbox is.
 ```
 
 **Open World: False**
