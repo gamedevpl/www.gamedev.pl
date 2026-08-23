@@ -634,10 +634,7 @@ describe('createStagedPreviewPublisher', () => {
   });
 
   it('waits out a busy slot instead of skipping a delivered candidate', async () => {
-    // A delivered version is not the courtesy background pass — it is what the creator's
-    // Play button waits on. If a background assembly happens to be running for the same
-    // job, publishCandidate must retry until that slot frees rather than answering
-    // `skipped` on the first check and leaving the delivery un-previewed with no signal.
+    // publishCandidate must retry a busy slot, not skip on the first check.
     vi.useFakeTimers();
     try {
       let release: () => void = () => {};
@@ -658,7 +655,7 @@ describe('createStagedPreviewPublisher', () => {
 
       publisher.schedule(7);
       await vi.advanceTimersByTimeAsync(50);
-      expect(previews).toHaveLength(0); // background assembly is in flight, holding the slot
+      expect(previews).toHaveLength(0);
 
       const candidate = publisher.publishCandidate({
         issueNumber: 7,
@@ -668,7 +665,6 @@ describe('createStagedPreviewPublisher', () => {
         files: PLAYABLE_TREE,
       });
 
-      // Busy retries elapse while the background assembly is still held open.
       await vi.advanceTimersByTimeAsync(200);
       expect(previews).toHaveLength(0);
       expect(log.warn).not.toHaveBeenCalled();
