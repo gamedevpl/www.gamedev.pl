@@ -17025,12 +17025,407 @@ button.builder-mode-selector:disabled {
   margin-top: 2rem;
 }
 
+.admin-jobs-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.admin-bulk-publish-cta {
+  background: #2ecc71;
+  color: #0f141c;
+  border-color: #2ecc71;
+  border-radius: 4px;
+  border-style: solid;
+  border-width: 1px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.45rem 1rem;
+  cursor: pointer;
+}
+
+.admin-bulk-publish-cta:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.admin-jobs-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1rem 0;
+  padding: 0.65rem 0.85rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+}
+
+.admin-jobs-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.admin-filter-chip {
+  cursor: pointer;
+  padding: 0.3rem 0.65rem;
+  font: inherit;
+  font-size: 0.78rem;
+  border-radius: 16px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.15));
+  background: transparent;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.admin-filter-chip:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.admin-filter-chip.is-active {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: currentColor;
+  font-weight: 600;
+}
+
+.admin-filter-chip-count {
+  font-size: 0.72rem;
+  opacity: 0.75;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.05rem 0.35rem;
+  border-radius: 10px;
+}
+
+.admin-jobs-toolbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.admin-jobs-search-input {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.15));
+  border-radius: 4px;
+  color: inherit;
+  padding: 0.35rem 0.65rem;
+  font: inherit;
+  font-size: 0.82rem;
+  min-width: 220px;
+}
+
+.admin-jobs-search-input:focus {
+  outline: none;
+  border-color: var(--accent, #3498db);
+}
+
+.admin-jobs-group-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.admin-job-state-badge {
+  display: inline-block;
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  font-weight: 600;
+  border: 1px solid currentColor;
+}
+
+.admin-job-state-badge--ready_for_review {
+  color: #2ecc71;
+  background: color-mix(in srgb, #2ecc71 12%, transparent);
+}
+
+.admin-job-state-badge--failed,
+.admin-job-state-badge--needs_changes {
+  color: var(--danger, #c0392b);
+  background: color-mix(in srgb, var(--danger, #c0392b) 12%, transparent);
+}
+
+.admin-job-state-badge--building,
+.admin-job-state-badge--dispatched,
+.admin-job-state-badge--gating,
+.admin-job-state-badge--assembling {
+  color: #3498db;
+  background: color-mix(in srgb, #3498db 12%, transparent);
+}
+
+.admin-job-select-header,
+.admin-job-select-cell {
+  width: 2.2rem;
+  text-align: center;
+}
+
+.admin-job-preview-btn {
+  cursor: pointer;
+  padding: 0.3rem 0.7rem;
+  font: inherit;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  border: 1px solid #3498db;
+  background: color-mix(in srgb, #3498db 15%, transparent);
+  color: #3498db;
+  transition: background 0.15s ease;
+}
+
+.admin-job-preview-btn:hover {
+  background: color-mix(in srgb, #3498db 28%, transparent);
+}
+
+.admin-jobs-bulk-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.85rem;
+  background: color-mix(in srgb, #3498db 15%, transparent);
+  border: 1px solid #3498db;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.admin-jobs-bulk-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.admin-batch-progress {
+  padding: 0.6rem 0.85rem;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.admin-batch-progress.is-running {
+  background: rgba(52, 152, 219, 0.15);
+  border: 1px solid #3498db;
+}
+
+.admin-batch-progress.is-done {
+  background: rgba(46, 204, 113, 0.15);
+  border: 1px solid #2ecc71;
+}
+
+.admin-batch-dismiss {
+  background: transparent;
+  border: 1px solid currentColor;
+  color: inherit;
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.admin-job-group-row td {
+  padding: 0 !important;
+}
+
+.admin-job-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.85rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+}
+
+.admin-job-group-expand {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.admin-job-group-chevron {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+.admin-job-group-title {
+  font-size: 0.95rem;
+}
+
+.admin-job-group-badge {
+  font-size: 0.72rem;
+  opacity: 0.75;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.1rem 0.4rem;
+  border-radius: 10px;
+}
+
+.admin-job-group-ready-badge {
+  font-size: 0.72rem;
+  color: #2ecc71;
+  background: rgba(46, 204, 113, 0.15);
+  padding: 0.1rem 0.4rem;
+  border-radius: 10px;
+}
+
+.admin-job-superseded-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.12);
+  padding: 0.08rem 0.4rem;
+  border-radius: 6px;
+  margin-left: 0.4rem;
+}
+
+.admin-job-nested-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+/* Modal overlay and sandboxed preview theater */
+.admin-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.admin-preview-modal {
+  background: var(--bg-dark, #16181d);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.15));
+  border-radius: 10px;
+  width: min(1100px, 95vw);
+  height: min(820px, 92vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+}
+
+.admin-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.admin-preview-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.admin-preview-meta {
+  font-size: 0.8rem;
+  opacity: 0.75;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.2rem;
+}
+
+.admin-preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.admin-job-publish.is-promoted {
+  background: #2ecc71;
+  color: #0f141c;
+  border-color: #2ecc71;
+  font-weight: 700;
+}
+
+.admin-preview-close-btn {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.admin-preview-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.admin-preview-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-preview-frame-wrap {
+  width: 100%;
+  height: 100%;
+}
+
+.admin-preview-frame-wrap iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.admin-preview-state {
+  font-size: 1rem;
+  opacity: 0.75;
+  text-align: center;
+  padding: 2rem;
+}
+
+.admin-preview-state.is-error {
+  color: var(--danger, #c0392b);
+}
+
+.admin-preview-footer {
+  padding: 0.5rem 1rem;
+  border-top: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  font-size: 0.8rem;
+  background: rgba(255, 255, 255, 0.03);
+}
+
 .admin-job-message {
   margin-top: 0.35rem;
   font-size: 0.78rem;
   opacity: 0.8;
   max-width: 22rem;
 }
+
 
 /* Suggested improvements (docs/improvement-loop-plan.md IL-3). Sits under the reactions
    block in the stats tab, because a suggestion is a reading of the same evidence. */

@@ -219,6 +219,21 @@ export async function registerJobAdminRoutes(
     // is left alone so the next sweep can still emit the published notification.
     await store.setSubmissionLastStatus(issueNumber, 'published');
 
+    // Supersede earlier rounds for this slug on publish.
+    const activeRecords = await store.listActiveSubmissions();
+    for (const other of activeRecords) {
+      if (other.slug === record.slug && other.issueNumber !== issueNumber) {
+        await store.recordJobTransition(other.issueNumber, {
+          to: 'abandoned',
+          at,
+          by: 'system',
+          reason: 'superseded_by_publish',
+        });
+        await store.setSubmissionAbandoned(other.issueNumber, at);
+        await store.setSubmissionLastStatus(other.issueNumber, 'abandoned');
+      }
+    }
+
     // Tell the people who follow this game that it moved. Best-effort and after the
     // publish has already happened: a notification that fails must never leave a game
     // half-published, and the creator's own `submission.published` note comes from the
@@ -238,4 +253,41 @@ export async function registerJobAdminRoutes(
 
     return reply.send({ ok: true, slug: record.slug, version: record.deliveredVersion, publishedAt: at });
   });
+
+  // Sandboxed game preview for operator review before publishing.
+  app.get<{ Params: { issueNumber: string } }>('/api/admin/jobs/:issueNumber/preview', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) {
+      return reply.code(404).send({ error: 'not_found' });
+    }
+    if (!store || !gamesStore) {
+      return reply.code(503).send({ error: 'store_unavailable' });
+    }
+
+    const issueNumber = Number(request.params.issueNumber);
+    if (!Number.isInteger(issueNumber)) {
+      return reply.code(400).send({ error: 'invalid_job' });
+    }
+
+    const record = await store.getSubmission(issueNumber);
+    if (!record) return reply.code(404).send({ error: 'not_found' });
+    const { slug } = record;
+    const playableVersion = record.previewVersion ?? record.deliveredVersion;
+    if (!slug || !playableVersion) {
+      return reply.code(409).send({ error: 'no_preview_available' });
+    }
+
+    let bundle = await gamesStore.getDerivedArtifact(slug, playableVersion, 'bundle.html');
+    bundle ??= await gamesStore.getDerivedArtifact(slug, playableVersion, 'preview.html');
+    if (!bundle) {
+      return reply.code(404).send({ error: 'bundle_not_found' });
+    }
+
+    return reply.send({
+      slug,
+      title: record.title || slug,
+      version: playableVersion,
+      html: bundle.toString('utf8'),
+    });
+  });
 }
+
