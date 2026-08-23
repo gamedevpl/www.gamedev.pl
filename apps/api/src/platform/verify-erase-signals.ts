@@ -1,6 +1,6 @@
 import { erasePlayerSignals } from './erase-player-signals.js';
 import type { Store } from './store.js';
-import { MAX_WORLD_ENTRIES } from './realtime/world-schema.js';
+import { MAX_WORLD_ENTRIES } from '../realtime/world-schema.js';
 
 /**
  * Proves `erasePlayerSignals` still finds and removes real rows in a real database.

@@ -6,7 +6,7 @@ import {
   routeScorecard,
   type SuggestionClass,
 } from './suggestions.js';
-import type { Scorecard } from '../store.js';
+import type { Scorecard } from '../platform/store.js';
 
 /**
  * This function decides whether a coding agent gets pointed at somebody's game, so the

@@ -84,4 +84,4 @@ COPY --from=builder /app/apps/web/dist apps/web/dist
 # Cloud Run sets $PORT (default 8080); server.ts reads PORT and HOST from env.
 EXPOSE 8080
 USER node
-CMD ["node", "apps/api/dist/server.js"]
+CMD ["node", "apps/api/dist/platform/server.js"]

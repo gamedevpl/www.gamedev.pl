@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { registerRemixRoutes, MAX_REMIX_ID_LENGTH, REMIX_TTL_MS } from './remix.js';
-import { InMemoryStore } from './store.js';
+import { InMemoryStore } from './platform/store.js';
 import type { GamesStore } from './delivery/games-store.js';
 import type { GitHubClient } from './catalog/github-client.js';
 import type { EditorAssistant } from './editor-assist.js';
@@ -919,7 +919,7 @@ describe('remix survives an instance change', () => {
     // default and the router answers 414 before any handler. That failure would
     // be invisible in these tests, which build their own instance, so the
     // production wiring is asserted at the source.
-    const appSource = readFileSync(new URL('./app.ts', import.meta.url), 'utf8');
+    const appSource = readFileSync(new URL('./platform/app.ts', import.meta.url), 'utf8');
     expect(appSource).toContain('routerOptions: { maxParamLength: MAX_REMIX_ID_LENGTH }');
     // The bound has to cover the longest id the minter can produce: the format
     // preamble plus a slug at its schema maximum.

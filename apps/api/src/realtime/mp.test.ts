@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
-import { buildApp } from '../app.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from '../auth.js';
+import { buildApp } from '../platform/app.js';
+import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
 import {
   InvalidRoomTokenError,
   MAX_SLOTS,
@@ -13,7 +13,7 @@ import {
   verifyRoomToken,
   type RelaySocket,
 } from './mp.js';
-import { InMemoryStore } from '../store.js';
+import { InMemoryStore } from '../platform/store.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 const roomSecret = 'room-test-secret';

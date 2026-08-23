@@ -13,7 +13,7 @@ import {
   verifyCreatorAgentKey,
 } from './agent-creator-key.js';
 import { endOpenAgentSessions } from './agent-session-revocation.js';
-import type { CreatorAgentKeyRecord, Store } from '../store.js';
+import type { CreatorAgentKeyRecord, Store } from '../platform/store.js';
 
 export interface CreatorAgentKeyRoutesOptions {
   store: Store;

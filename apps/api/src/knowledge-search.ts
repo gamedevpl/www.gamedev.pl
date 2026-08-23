@@ -1,7 +1,7 @@
 // Discovery Engine seam for knowledge_query. Fail-open: answer -> chunks -> warning result.
 
 import { GoogleAuth } from 'google-auth-library';
-import { rememberBounded } from './bounded-map.js';
+import { rememberBounded } from './platform/bounded-map.js';
 
 export type KnowledgeMode = 'answer' | 'chunks';
 export type KnowledgeScope = 'kit' | 'editor' | 'examples' | 'docs';

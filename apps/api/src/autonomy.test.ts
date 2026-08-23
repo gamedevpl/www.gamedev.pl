@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AUTONOMOUS_ACTOR, budgetVerdict, DEFAULT_AUTONOMY, mayActAutonomously, wantsSuggestions } from './autonomy.js';
-import type { SuggestionRecord } from './store.js';
+import type { SuggestionRecord } from './platform/store.js';
 
 /**
  * These are the rules that decide when a machine may change somebody's published game

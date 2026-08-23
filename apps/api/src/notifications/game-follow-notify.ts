@@ -1,5 +1,5 @@
 import { emitFollowedGameNotification, type EmitDeps } from './notify.js';
-import type { Store } from '../store.js';
+import type { Store } from '../platform/store.js';
 
 /**
  * Fans a published version out to the game's followers.

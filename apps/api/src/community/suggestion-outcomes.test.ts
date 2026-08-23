@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { InMemoryStore, type Scorecard, type SuggestionRecord } from '../store.js';
+import { InMemoryStore, type Scorecard, type SuggestionRecord } from '../platform/store.js';
 import {
   advanceSuggestionOutcomes,
   judge,

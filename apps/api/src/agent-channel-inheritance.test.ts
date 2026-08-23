@@ -1,11 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mintAgentToken } from './agent-surface/agent-token.js';
-import { buildApp } from './app.js';
+import { buildApp } from './platform/app.js';
 import type { GamesStore, SourceFile } from './delivery/games-store.js';
 import { validateSourceUpload } from './delivery/games-store.js';
 import type { GitHubClient } from './catalog/github-client.js';
-import { InMemoryStore } from './store.js';
+import { InMemoryStore } from './platform/store.js';
 
 const ISSUE = 42;
 const SECRET = 'test-secret';

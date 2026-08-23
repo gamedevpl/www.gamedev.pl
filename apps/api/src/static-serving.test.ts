@@ -4,8 +4,8 @@ import path from 'node:path';
 import { brotliCompressSync, gzipSync } from 'node:zlib';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildApp } from './app.js';
-import { InMemoryStore } from './store.js';
+import { buildApp } from './platform/app.js';
+import { InMemoryStore } from './platform/store.js';
 
 // Static serving of the web dist (production mode): precompressed variants are
 // served as-is (zero runtime CPU — Cloud Run bills CPU) and cache headers are

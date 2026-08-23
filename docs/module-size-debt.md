@@ -26,7 +26,7 @@ ceiling; it may **not** grow it. A file with no baseline entry — created after
 
 ```bash
 npm run module-size                                            # report
-npm run module-size -- apps/api/src/store.ts                   # one file
+npm run module-size -- apps/api/src/platform/store.ts                   # one file
 npm run module-size -- apps/api/src/foo.ts --write --force     # raise ONE ceiling
 npm run module-size -- --write --reseal                        # reseal every file
 ```
@@ -39,7 +39,7 @@ change. Extract when the file is doing too much; raise when the growth is the wo
 Tests are the ordinary case — they grow with the features they cover.
 
 **Never run `--write` unscoped.** It does not only raise the file you are fixing; it also
-*lowers* every other ceiling to whatever that file happens to measure today, freezing
+_lowers_ every other ceiling to whatever that file happens to measure today, freezing
 files nobody touched. That is how a test file created an hour earlier ended up pinned at
 60 lines, and it is why the checker now refuses an unscoped `--write` without `--reseal`.
 

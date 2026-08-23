@@ -1,5 +1,5 @@
 import type { Firestore } from '@google-cloud/firestore';
-import { isSweepActive } from '../../sweep-scope.js';
+import { isSweepActive } from '../../platform/sweep-scope.js';
 import type { SubmissionRecord } from '../records/submission.js';
 
 export interface SubmissionQueryStore {

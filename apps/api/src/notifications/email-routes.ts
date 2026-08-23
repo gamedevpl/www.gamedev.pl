@@ -3,7 +3,7 @@
 // token instead of a session and is exempt from the private-beta wall (see app.ts).
 
 import type { FastifyInstance } from 'fastify';
-import type { Store } from '../store.js';
+import type { Store } from '../platform/store.js';
 import { InvalidUnsubscribeTokenError, verifyUnsubscribeToken } from './unsubscribe-token.js';
 
 export interface EmailRoutesOptions {

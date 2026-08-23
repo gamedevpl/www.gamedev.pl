@@ -20,8 +20,8 @@ import {
   mintAccessTokenFor,
   MintAccessTokenError,
   toPublicAccessToken,
-} from '../src/access-token-service.js';
-import { FirestoreStore } from '../src/store.js';
+} from '../src/platform/access-token-service.js';
+import { FirestoreStore } from '../src/platform/store.js';
 
 function usage(): never {
   console.error(

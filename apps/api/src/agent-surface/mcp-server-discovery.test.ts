@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildApp } from '../app.js';
+import { buildApp } from '../platform/app.js';
 import { OAUTH_PROTECTED_RESOURCE_PATH } from './mcp-oauth-metadata.js';
 import {
   buildMcpServerJsonDocument,
@@ -9,7 +9,7 @@ import {
   MCP_SERVER_REGISTRY_NAME,
 } from './mcp-server-discovery.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
-import { InMemoryStore } from '../store.js';
+import { InMemoryStore } from '../platform/store.js';
 
 describe('buildMcpServerJsonDocument (BY-18c)', () => {
   const envKeys = ['CANONICAL_HOST', 'APP_BASE_URL', 'MCP_AUTHORIZATION_SERVERS'] as const;

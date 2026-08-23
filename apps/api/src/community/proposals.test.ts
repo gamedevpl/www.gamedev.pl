@@ -15,7 +15,7 @@ import {
   withdrawProposal,
 } from './proposals.js';
 import { PROPOSAL_EXPIRY_MS } from './proposal-state.js';
-import { InMemoryStore } from '../store.js';
+import { InMemoryStore } from '../platform/store.js';
 
 const NOW = Date.parse('2026-08-04T12:00:00Z');
 

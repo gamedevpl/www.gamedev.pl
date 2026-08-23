@@ -15,8 +15,8 @@ import {
 import { editorKitV2Enabled } from './agent-surface/editor-kit-env.js';
 import { isLiveAgentRound } from './code-surface.js';
 import type { GamesStore } from './delivery/games-store.js';
-import { MAX_EDITOR_DRAFT_BYTES, type Store, type SubmissionRecord } from './store.js';
-import type { ContentChecker } from './moderation.js';
+import { MAX_EDITOR_DRAFT_BYTES, type Store, type SubmissionRecord } from './platform/store.js';
+import type { ContentChecker } from './platform/moderation.js';
 import { logModerationRejection } from './telemetry/moderation-metrics.js';
 import { MAX_UTTERANCE_LENGTH, applyAssistPatches, assistEnabled, type EditorAssistant } from './editor-assist.js';
 import type { EditingGate } from './creation-limits.js';

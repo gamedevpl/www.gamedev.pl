@@ -12,8 +12,8 @@ import {
   type InputKey,
   type RoomPhase,
 } from '@gamedevpl/contract';
-import { checkUserAccess } from '../auth.js';
-import type { InternalAuthVerifier } from '../internal-auth.js';
+import { checkUserAccess } from '../platform/auth.js';
+import type { InternalAuthVerifier } from '../platform/internal-auth.js';
 import type { RelayClient } from './mp-relay.js';
 
 /**

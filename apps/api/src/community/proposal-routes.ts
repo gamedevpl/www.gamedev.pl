@@ -19,10 +19,10 @@
 import { CONTRIBUTION_MODES, type ContributionMode } from '@gamedevpl/contract';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { isAdminSession } from '../admin-session.js';
+import { isAdminSession } from '../platform/admin-session.js';
 import type { GamesStore, SourceFile } from '../delivery/games-store.js';
 import { diffProposal } from './proposal-diff.js';
-import type { ContentChecker } from '../moderation.js';
+import type { ContentChecker } from '../platform/moderation.js';
 import { resolveOwnerOfRecord } from '../catalog/owner-of-record.js';
 import { DECLINE_REASONS, toPublicProposalState, type DeclineReason } from './proposal-state.js';
 import {
@@ -38,7 +38,7 @@ import {
   MIN_PROPOSAL_DESCRIPTION_LENGTH,
   type ProposalDeps,
 } from './proposals.js';
-import type { ProposalRecord, Store } from '../store.js';
+import type { ProposalRecord, Store } from '../platform/store.js';
 
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 

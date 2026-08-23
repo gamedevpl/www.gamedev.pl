@@ -9,14 +9,14 @@ import {
 import { NO_OPEN_ROUND_REASON, PLATFORM_ROUND_REASON, SLUG_NOT_ON_ACCOUNT_REASON } from './agent-game-key.js';
 import { mintGameAgentKey } from './agent-game-key.js';
 import { mintAgentToken } from './agent-token.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from '../auth.js';
-import { buildApp } from '../app.js';
+import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
+import { buildApp } from '../platform/app.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from '../catalog/github-client.js';
 import { mintMcpSessionKey } from './mcp-session-key.js';
-import { consentToken } from '../oauth-as.js';
-import { pkceChallengeS256 } from '../oauth-pkce.js';
-import { InMemoryStore } from '../store.js';
-import type { CreatorAgentKeyRecord } from '../store.js';
+import { consentToken } from '../platform/oauth-as.js';
+import { pkceChallengeS256 } from '../platform/oauth-pkce.js';
+import { InMemoryStore } from '../platform/store.js';
+import type { CreatorAgentKeyRecord } from '../platform/store.js';
 
 const secret = 'creator-agent-routes-secret';
 const sessionSecret = 'dev-session-secret-change-me';

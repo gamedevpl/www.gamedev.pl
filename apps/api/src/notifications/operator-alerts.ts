@@ -11,7 +11,7 @@
 // alert, because the number stops meaning anything.
 
 import { detectStall, isTerminal, resolveJobState, type JobStall } from '../job-state.js';
-import type { JobSeedOutcome, SubmissionRecord } from '../store.js';
+import type { JobSeedOutcome, SubmissionRecord } from '../platform/store.js';
 
 export type OperatorAlertKind =
   /** Gate green, waiting for the publish decision — the one thing only a human does. */

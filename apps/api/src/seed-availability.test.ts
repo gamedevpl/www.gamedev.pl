@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createSeedAvailabilityGate } from './seed-availability.js';
-import { InMemoryStore } from './store.js';
+import { InMemoryStore } from './platform/store.js';
 
 function gate(params: {
   store?: InMemoryStore;

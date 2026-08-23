@@ -29,7 +29,7 @@ import {
 } from './agent-upload-token.js';
 import { MAX_BUILD_PREVIEW_BYTES } from '../delivery/build-preview-limits.js';
 import { loadBuildTranscript } from '../delivery/build-transcript.js';
-import { canonicalAppBaseUrl } from '../canonical-app-url.js';
+import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
 import { deriveGateStatusString, readGateVerdict } from '../delivery/gate-verdict.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from '../delivery/gcs-sign.js';
 import { DEFAULT_MCP_DIGEST_MAX_BYTES, compactKitDigestForApi } from './kit-digest.js';
@@ -77,11 +77,11 @@ import {
   type CreatorMessage,
   type Store,
   type SubmissionRecord,
-} from '../store.js';
+} from '../platform/store.js';
 import { pickLatestChangelogText } from '../delivery/build-changelog.js';
-import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from '../submission-status.js';
-import { normalizeAtIntake, type IntakeText } from '../localize-intake.js';
-import { createTranslatorFromEnv, type Translator } from '../translate.js';
+import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from '../platform/submission-status.js';
+import { normalizeAtIntake, type IntakeText } from '../platform/localize-intake.js';
+import { createTranslatorFromEnv, type Translator } from '../platform/translate.js';
 
 // The build channel (docs/agent-live-channel-plan.md). Direct route for progress, staging, and status.
 // Invariant: agent input is untrusted, prompt-influenced text — sanitized, escaped on render, never model instructions.

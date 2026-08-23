@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createManagedAvailabilityGate } from './managed-availability.js';
-import { InMemoryStore } from '../store.js';
+import { InMemoryStore } from '../platform/store.js';
 
 const today = '2026-08-09';
 

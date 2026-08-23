@@ -15,9 +15,9 @@
 // standing proof of the §8 promise rather than something an operator must remember.
 
 import { randomBytes } from 'node:crypto';
-import { indexHint } from '../src/erase-player-signals.js';
-import { FirestoreStore } from '../src/store.js';
-import { mintVerificationUid, verifyEraseSignals } from '../src/verify-erase-signals.js';
+import { indexHint } from '../src/platform/erase-player-signals.js';
+import { FirestoreStore } from '../src/platform/store.js';
+import { mintVerificationUid, verifyEraseSignals } from '../src/platform/verify-erase-signals.js';
 
 async function main(): Promise<void> {
   const uid = mintVerificationUid(randomBytes(4).toString('hex'));

@@ -2,7 +2,7 @@ import { VOTE_VALUES } from '@gamedevpl/contract';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { PublishedSlugGate } from '../catalog/published-slugs.js';
-import type { Store } from '../store.js';
+import type { Store } from '../platform/store.js';
 
 /**
  * Thumbs up/down per game (docs/improvement-loop-plan.md, signal source #2 —

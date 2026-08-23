@@ -108,12 +108,12 @@ done
 # single fields only at COLLECTION scope, never COLLECTION_GROUP. Without these the query
 # fails with `9 FAILED_PRECONDITION` — not a slow query, a hard error:
 #
-#   scorecard.computedAt (DESC)  listScorecards, apps/api/src/store.ts
+#   scorecard.computedAt (DESC)  listScorecards, apps/api/src/platform/store.ts
 #     Backs GET /api/admin/scorecards and the /health scorecards panel. All four operator
 #     reads share one Promise.all and one error state, so this one missing index blanks
 #     the game-health table too, not just the panel that needs it.
 #
-#   playerFeedback.uid (ASC)     deletePlayerFeedbackByUid, apps/api/src/store.ts
+#   playerFeedback.uid (ASC)     deletePlayerFeedbackByUid, apps/api/src/platform/store.ts
 #     Backs `npm run player:erase` — the executable half of the privacy notice's promise
 #     to remove a person's votes and feedback on account deletion. This one fails at the
 #     worst possible moment: an operator running a deletion request they have already

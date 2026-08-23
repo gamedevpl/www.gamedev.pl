@@ -2,9 +2,9 @@
 import { ASSESSMENT_RESOLUTION_STATUSES, type AssessmentResolutionStatus } from '@gamedevpl/contract';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { isAdminSession } from '../admin-session.js';
-import { sanitizeCreatorText } from '../submission-status.js';
-import type { AssessmentResolution, GameAssessment, Store } from '../store.js';
+import { isAdminSession } from '../platform/admin-session.js';
+import { sanitizeCreatorText } from '../platform/submission-status.js';
+import type { AssessmentResolution, GameAssessment, Store } from '../platform/store.js';
 
 export const MAX_RESOLUTION_COMMENT = 2000;
 const MAX_RESOLUTION_LINK = 300;

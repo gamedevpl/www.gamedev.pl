@@ -2,7 +2,7 @@ import type { AgentTaskState } from '../../agent-state.js';
 import type { SeedFiles } from '../../agent-surface/agent-backend.js';
 import type { BuilderKind } from '../../builder.js';
 import type { JobState, JobTransition } from '../../job-state.js';
-import type { SubmissionStatus } from '../../submission-status.js';
+import type { SubmissionStatus } from '../../platform/submission-status.js';
 import type { AgentEndedBy, BuilderHandoff } from './rounds.js';
 import type { JobCostEntry, JobSeedOutcome } from './dispatch.js';
 

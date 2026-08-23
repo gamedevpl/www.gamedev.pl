@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createCombinedPublishedSlugGate, createPublishedSlugGate } from './published-slugs.js';
-import { InMemoryStore } from '../store.js';
+import { InMemoryStore } from '../platform/store.js';
 
 type Entry = { slug: string; status: string };
 

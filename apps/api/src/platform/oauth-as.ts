@@ -3,7 +3,7 @@ import type { Locale } from '@gamedevpl/contract';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
-import { endOpenAgentSessions } from './agent-surface/agent-session-revocation.js';
+import { endOpenAgentSessions } from '../agent-surface/agent-session-revocation.js';
 import { InvalidSessionError, readSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { escapeHtml, MASCOT_SVG, OAUTH_PAGE_STYLES } from './oauth-page-chrome.js';
 import { redirectUriAllowed } from './oauth-redirect.js';

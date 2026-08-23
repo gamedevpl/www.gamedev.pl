@@ -14,7 +14,7 @@
 import type { AgentTaskState } from './agent-state.js';
 import type { ManagedBudgetStop, ManagedSessionUsage } from './agent-surface/managed-agent.js';
 import { JOB_STALL_VALUES, JOB_STATES, type BuilderKind, type JobStall, type JobState } from '@gamedevpl/contract';
-import type { SubmissionStatus } from './submission-status.js';
+import type { SubmissionStatus } from './platform/submission-status.js';
 
 export { JOB_STALL_VALUES, JOB_STATES, type JobStall, type JobState };
 

@@ -20,7 +20,7 @@
 // with no ledger reads as unmeasured, not as free.
 
 import { resolveJobState, type JobState } from './job-state.js';
-import type { JobCostEntry, SubmissionRecord } from './store.js';
+import type { JobCostEntry, SubmissionRecord } from './platform/store.js';
 
 /**
  * GitHub fixes an AI credit at $0.01 — 100 credits to the dollar, a published rate rather

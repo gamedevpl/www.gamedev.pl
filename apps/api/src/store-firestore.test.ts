@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FirestoreStore } from './store.js';
+import { FirestoreStore } from './platform/store.js';
 import { fakeFirestore } from './store/fake-firestore.js';
 
 /**

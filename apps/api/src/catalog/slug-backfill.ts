@@ -7,7 +7,7 @@
 // second set of collision rules.
 
 import { mintGameSlug } from './slug.js';
-import type { SubmissionRecord } from '../store.js';
+import type { SubmissionRecord } from '../platform/store.js';
 
 /** The slice of the store a backfill touches. */
 export interface SlugBackfillStore {

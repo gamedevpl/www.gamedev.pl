@@ -20,7 +20,7 @@ import {
 } from './agent-game-key.js';
 import { creatorOwnsSlug, findActiveRoundForSlug } from './agent-game-key-resolve.js';
 import { InvalidAgentTokenError } from './agent-token.js';
-import type { CreatorAgentKeyRecord, Store, SubmissionRecord } from '../store.js';
+import type { CreatorAgentKeyRecord, Store, SubmissionRecord } from '../platform/store.js';
 
 export type VerifyCreatorAgentKeyResult =
   { ok: true; claims: CreatorAgentKeyClaims; keyRecord: CreatorAgentKeyRecord } | { ok: false; reason: string };

@@ -1,6 +1,6 @@
 // Whether round 0 runs right now, and which provider answers it.
 
-import type { CreationLimits, Store } from './store.js';
+import type { CreationLimits, Store } from './platform/store.js';
 
 export const DEFAULT_SEED_AVAILABILITY_TTL_MS = 60_000;
 

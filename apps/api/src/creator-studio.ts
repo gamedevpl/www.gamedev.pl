@@ -26,8 +26,8 @@ export type CreatorStudioGamesResponse = StudioGamesResponse;
 export type CreatorBuildsResponse = StudioBuildsResponse;
 import { composeWorkspaceArchive, WorkspaceCompositionError } from './delivery/workspace-archive.js';
 import type { GamesStore } from './delivery/games-store.js';
-import type { Store, TelemetryEvent } from './store.js';
-import { normalizeLocale } from './translate.js';
+import type { Store, TelemetryEvent } from './platform/store.js';
+import { normalizeLocale } from './platform/translate.js';
 
 /**
  * Creator control panel reads (docs/improvement-loop-plan.md IL-2 creator surface).

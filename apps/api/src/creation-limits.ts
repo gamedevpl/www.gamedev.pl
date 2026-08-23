@@ -1,4 +1,4 @@
-import { BOT_UID_PREFIX, type CreationLimits, type Store } from './store.js';
+import { BOT_UID_PREFIX, type CreationLimits, type Store } from './platform/store.js';
 
 /**
  * The global creation circuit-breaker (private ops repo, readiness item 6).

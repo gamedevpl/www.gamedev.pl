@@ -1,5 +1,5 @@
 import { detectStall, type JobStall } from '../job-state.js';
-import type { Scorecard, Store, SuggestionRecord } from '../store.js';
+import type { Scorecard, Store, SuggestionRecord } from '../platform/store.js';
 
 /**
  * Closing the loop (docs/improvement-loop-plan.md IL-3 "Closing the loop: measurement").

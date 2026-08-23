@@ -3,7 +3,7 @@ import Fastify from 'fastify';
 import fastifyWebsocket from '@fastify/websocket';
 import { registerMultiplayerRoutes, RoomRegistry } from './mp.js';
 import { HttpRelayClient, RelayUnavailableError, isRelayOnly, relayBaseUrl } from './mp-relay.js';
-import type { InternalAuthVerifier } from '../internal-auth.js';
+import type { InternalAuthVerifier } from '../platform/internal-auth.js';
 
 const SECRET = 'test-secret';
 

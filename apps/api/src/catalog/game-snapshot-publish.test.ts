@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { PNG } from 'pngjs';
-import { VARIANT_WIDTHS } from '../image-variants.js';
+import { VARIANT_WIDTHS } from '../platform/image-variants.js';
 import { publishSnapshot } from './game-snapshot-publish.js';
 import type { GameSnapshotWriter, SnapshotGame, SnapshotMedia, SnapshotPointer } from './game-snapshot.js';
 import type { CatalogGameEntry, GameSources, GitHubClient } from './github-client.js';

@@ -1,5 +1,5 @@
 // Arg parsing and formatting for scripts/assessments.ts.
-import type { GameAssessment } from '../store.js';
+import type { GameAssessment } from '../platform/store.js';
 
 // Flags whose next argv entry is their value, not the slug.
 export const VALUE_FLAGS = new Set([

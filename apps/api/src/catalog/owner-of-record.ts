@@ -17,7 +17,7 @@
 // and the case the proposal queue exists to serve.
 
 import { creatorOwnsSlug } from '../agent-surface/agent-game-key-resolve.js';
-import { BOT_UID_PREFIX, DELETED_ACCOUNT_UID, type Store } from '../store.js';
+import { BOT_UID_PREFIX, DELETED_ACCOUNT_UID, type Store } from '../platform/store.js';
 
 /**
  * Who reviews changes to a game.

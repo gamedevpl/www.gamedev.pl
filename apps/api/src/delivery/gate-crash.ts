@@ -2,7 +2,7 @@
 
 import { GoogleAuth } from 'google-auth-library';
 
-import type { JobCostEntry, SubmissionRecord } from '../store.js';
+import type { JobCostEntry, SubmissionRecord } from '../platform/store.js';
 import { canTransition, type JobStall, type JobTransition } from '../job-state.js';
 import { gateTriggerOptionsFromEnv } from './gate-trigger.js';
 

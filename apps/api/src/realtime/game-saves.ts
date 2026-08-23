@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { PublishedSlugGate } from '../catalog/published-slugs.js';
-import { MAX_GAME_SAVE_BYTES, type Store } from '../store.js';
+import { MAX_GAME_SAVE_BYTES, type Store } from '../platform/store.js';
 
 /**
  * Durable per-player game progress (docs/persistent-world-plan.md, phase P1).

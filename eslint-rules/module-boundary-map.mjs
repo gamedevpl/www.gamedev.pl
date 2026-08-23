@@ -277,7 +277,13 @@ const FILE_BUCKET = {
 };
 
 function isStorePath(relativePathNoExt) {
-  return relativePathNoExt === 'store' || relativePathNoExt.startsWith('store/');
+  return (
+    relativePathNoExt === 'store' ||
+    relativePathNoExt.startsWith('store/') ||
+    // Phase 3 Wave A moved the top-level orchestration file to platform/store.ts, alongside
+    // (not merged with) the pre-existing store/ directory of slices and records.
+    relativePathNoExt === 'platform/store'
+  );
 }
 
 /**

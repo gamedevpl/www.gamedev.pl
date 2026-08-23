@@ -36,7 +36,7 @@ import type { GamesStore, SourceFile } from './games-store.js';
 import { hasPlayableHowToPlay } from '../catalog/index-html-generator.js';
 import type { GitHubClient } from '../catalog/github-client.js';
 import { resolveRoundBaseVersion, type BaseVersionRecord, type BaseVersionStore } from '../round-base-version.js';
-import type { Store } from '../store.js';
+import type { Store } from '../platform/store.js';
 
 /**
  * The label is authored in both languages rather than machine translated, for the same

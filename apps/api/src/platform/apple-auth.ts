@@ -67,7 +67,14 @@ export function appleClaimFlag(value: unknown): boolean {
  */
 export function parseAppleClientIds(raw: string | undefined): string[] {
   if (!raw) return [];
-  return [...new Set(raw.split(',').map((id) => id.trim()).filter((id) => id !== ''))];
+  return [
+    ...new Set(
+      raw
+        .split(',')
+        .map((id) => id.trim())
+        .filter((id) => id !== ''),
+    ),
+  ];
 }
 
 export interface AppleAuthVerifierOptions {

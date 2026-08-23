@@ -7,7 +7,11 @@
 
 import type { Locale } from '@gamedevpl/contract';
 import type { EmailMessage } from './mailer.js';
-import type { OperatorNotificationType, ProposalNotificationType, SubmissionNotificationType } from '../store.js';
+import type {
+  OperatorNotificationType,
+  ProposalNotificationType,
+  SubmissionNotificationType,
+} from '../platform/store.js';
 
 export function normalizeLocale(value: string | undefined): Locale {
   return value?.toLowerCase().startsWith('pl') ? 'pl' : 'en';

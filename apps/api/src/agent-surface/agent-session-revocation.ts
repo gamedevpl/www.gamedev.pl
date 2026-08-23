@@ -1,5 +1,5 @@
 import { isActiveBuildRound } from '../builder.js';
-import type { Store } from '../store.js';
+import type { Store } from '../platform/store.js';
 
 /**
  * Invalidates every outstanding session key for a creator's open self-build rounds.

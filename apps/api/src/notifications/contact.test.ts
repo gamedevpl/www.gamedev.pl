@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildApp } from '../app.js';
+import { buildApp } from '../platform/app.js';
 import { ConsoleMailer, MailerError } from './mailer.js';
-import { InMemoryStore } from '../store.js';
+import { InMemoryStore } from '../platform/store.js';
 
 const sessionSecret = 'contact-test-secret';
 

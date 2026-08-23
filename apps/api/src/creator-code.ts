@@ -36,7 +36,7 @@ import {
   readDeliveredSources,
   type StagedPreviewPublisher,
 } from './delivery/staged-preview.js';
-import type { Store, SubmissionRecord } from './store.js';
+import type { Store, SubmissionRecord } from './platform/store.js';
 import { MAX_PREFIX_CHARS, MAX_SUFFIX_CHARS, tabCompleteEnabled, type TabCompleter } from './tab-complete.js';
 import { sharedSourcesFromKitTree } from './typecheck-preflight.js';
 import { typeCheckGame } from './type-check.js';

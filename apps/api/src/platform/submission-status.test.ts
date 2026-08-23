@@ -5,7 +5,7 @@ import {
   extractSlugFromChangedFiles,
   sanitizeCreatorText,
 } from './submission-status.js';
-import type { LinkedPullRequest } from './catalog/github-client.js';
+import type { LinkedPullRequest } from '../catalog/github-client.js';
 
 function pr(overrides: Partial<LinkedPullRequest> = {}): LinkedPullRequest {
   return {

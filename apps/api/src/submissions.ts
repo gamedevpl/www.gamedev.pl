@@ -51,7 +51,7 @@ import {
   overlayGameSources,
   type StagedPreviewOptions,
 } from './delivery/staged-preview.js';
-import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
+import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './platform/internal-auth.js';
 import type { AgentBackend, SeedDelivery, SeedFiles } from './agent-surface/agent-backend.js';
 import { PLAYTEST_CONTEXT_HEADER, stripPlaytestContext } from './delivery/build-transcript.js';
 import {
@@ -117,7 +117,7 @@ import { MAX_CHAT_TURNS, rememberChatTurn, type ChatTurn } from './chat-turns.js
 import { mintConnectPayload } from './agent-surface/self-build-connect.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './catalog/local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './notifications/mailer.js';
-import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
+import { createDefaultContentChecker, type ContentChecker } from './platform/moderation.js';
 import {
   emitOperatorAlert,
   emitSubmissionNotification,
@@ -127,7 +127,7 @@ import {
 import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './notifications/operator-alerts.js';
 import { pageOwnerGames } from './catalog/owner-games.js';
 import { seedOutcomeFor } from './seed-status.js';
-import { isAdminSession } from './admin-session.js';
+import { isAdminSession } from './platform/admin-session.js';
 import { peekQuota } from './quota-gate.js';
 import { mintGameSlug } from './catalog/slug.js';
 import { runSlugBackfill, settleSlugClaim } from './catalog/slug-backfill.js';
@@ -150,7 +150,7 @@ import {
   type SubmissionQueryStore,
   type SubmissionRecord,
   type SubmissionStore,
-} from './store.js';
+} from './platform/store.js';
 import {
   CREATOR_FEEDBACK_MARKER,
   countCreatorClarifications,
@@ -164,11 +164,11 @@ import {
   type PriorRoundHistory,
   type SubmissionStatus,
   type SubmissionStatusResponse,
-} from './submission-status.js';
-import { InvalidTokenError, mintToken, verifyToken } from './submission-token.js';
-import { normalizeAtIntake, type IntakeText } from './localize-intake.js';
-import { createTranslatorFromEnv, normalizeLocale, type Translator } from './translate.js';
-import { isVariantWidth } from './image-variants.js';
+} from './platform/submission-status.js';
+import { InvalidTokenError, mintToken, verifyToken } from './platform/submission-token.js';
+import { normalizeAtIntake, type IntakeText } from './platform/localize-intake.js';
+import { createTranslatorFromEnv, normalizeLocale, type Translator } from './platform/translate.js';
+import { isVariantWidth } from './platform/image-variants.js';
 import { logModerationRejection } from './telemetry/moderation-metrics.js';
 
 /**
@@ -427,7 +427,7 @@ export interface SubmissionRoutesOptions {
    * games-repo credentials already live.
    */
   resolveProposalBase?: (slug: string) => Promise<{
-    base: import('./store.js').ProposalBase;
+    base: import('./platform/store.js').ProposalBase;
     files: import('./delivery/games-store.js').SourceFile[];
   } | null>;
   submissionTokenSecret?: string;

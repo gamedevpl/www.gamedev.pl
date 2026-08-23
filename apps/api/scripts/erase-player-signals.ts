@@ -16,10 +16,10 @@
 // Note what this does *not* do: play telemetry is untouched because it carries no uid at
 // all. There is nothing there to erase, which is the intended property, not a gap.
 
-import { eraseAccount } from '../src/erase-account.js';
-import { scheduleAccountDeletion } from '../src/account-deletion.js';
-import { indexHint } from '../src/erase-player-signals.js';
-import { FirestoreStore } from '../src/store.js';
+import { eraseAccount } from '../src/platform/erase-account.js';
+import { scheduleAccountDeletion } from '../src/platform/account-deletion.js';
+import { indexHint } from '../src/platform/erase-player-signals.js';
+import { FirestoreStore } from '../src/platform/store.js';
 
 function usage(): never {
   console.error(

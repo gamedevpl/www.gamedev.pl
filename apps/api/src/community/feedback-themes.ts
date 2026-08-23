@@ -1,7 +1,7 @@
 import type { GenAIClient } from 'genaicode';
 import { z } from 'zod';
 import { createVertexClient, type VertexGenerationConfig } from '../agent-surface/genai.js';
-import { sanitizeCreatorText } from '../submission-status.js';
+import { sanitizeCreatorText } from '../platform/submission-status.js';
 
 /**
  * Distils written player feedback into a handful of recurring themes

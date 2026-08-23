@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildApp } from '../app.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from '../auth.js';
+import { buildApp } from '../platform/app.js';
+import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
 import type { GamesStore, SourceFile, VersionManifest } from '../delivery/games-store.js';
 import { openProposal, reconcileProposalGate } from './proposals.js';
-import { InMemoryStore, type ProposalRecord } from '../store.js';
+import { InMemoryStore, type ProposalRecord } from '../platform/store.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 const NOW = Date.parse('2026-08-04T12:00:00Z');

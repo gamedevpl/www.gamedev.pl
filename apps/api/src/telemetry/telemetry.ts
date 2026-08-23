@@ -1,9 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { MAX_MULTIPLAYER_SLOTS, ZONE_LINK_STEPS } from '@gamedevpl/contract';
-import { rememberBounded } from '../bounded-map.js';
+import { rememberBounded } from '../platform/bounded-map.js';
 import type { PublishedSlugGate } from '../catalog/published-slugs.js';
-import type { Store, TelemetryEvent } from '../store.js';
+import type { Store, TelemetryEvent } from '../platform/store.js';
 
 /**
  * Play-session telemetry intake (docs/improvement-loop-plan.md IL-1).

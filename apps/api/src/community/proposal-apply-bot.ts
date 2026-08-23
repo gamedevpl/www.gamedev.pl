@@ -19,7 +19,7 @@
 
 import type { GitHubClient } from '../catalog/github-client.js';
 import type { GamesStore, SourceFile } from '../delivery/games-store.js';
-import type { ProposalRecord, Store } from '../store.js';
+import type { ProposalRecord, Store } from '../platform/store.js';
 
 export interface ApplyBotDeps {
   store: Store;

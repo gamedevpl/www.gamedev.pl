@@ -1,5 +1,5 @@
 import { createGitHubClient, type GitHubClient } from './github-client.js';
-import type { Store } from '../store.js';
+import type { Store } from '../platform/store.js';
 
 /**
  * "Is this slug a published game?" — the gate on telemetry intake.

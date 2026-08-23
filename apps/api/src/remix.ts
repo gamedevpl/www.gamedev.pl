@@ -16,8 +16,8 @@ import { codeLaneDebugEnabled, codeLaneEnabled, type VertexCodeLane } from './co
 import { typeCheckGame } from './type-check.js';
 import { buildSuggestions } from './remix-suggestions.js';
 import type { GamesStore } from './delivery/games-store.js';
-import type { Store } from './store.js';
-import type { ContentChecker } from './moderation.js';
+import type { Store } from './platform/store.js';
+import type { ContentChecker } from './platform/moderation.js';
 import { logModerationRejection } from './telemetry/moderation-metrics.js';
 import { assembleGameHtml } from './catalog/assemble.js';
 import type { GitHubClient } from './catalog/github-client.js';
@@ -37,7 +37,7 @@ import {
   MIN_PROPOSAL_DESCRIPTION_LENGTH,
   type ProposalDeps,
 } from './community/proposals.js';
-import type { ProposalBase } from './store.js';
+import type { ProposalBase } from './platform/store.js';
 import type { SourceFile } from './delivery/games-store.js';
 
 /**

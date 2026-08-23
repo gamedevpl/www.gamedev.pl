@@ -1,5 +1,5 @@
 import type { AutonomyMode } from '@gamedevpl/contract';
-import type { SuggestionRecord } from './store.js';
+import type { SuggestionRecord } from './platform/store.js';
 
 /**
  * Bounded autonomy (docs/improvement-loop-plan.md IL-4).

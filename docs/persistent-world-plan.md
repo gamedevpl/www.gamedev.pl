@@ -54,9 +54,9 @@ shipped 2026-07-26) built several of the load-bearing pieces:
   (`sandbox="allow-scripts allow-pointer-lock"`, no-network CSP) talks `postMessage` to the trusted shell,
   which owns the socket. This is the platform's answer to "untrusted code in a multiplayer
   system" and it extends unchanged to everything below.
-- **Durable storage with real discipline** — [`apps/api/src/store.ts`](../apps/api/src/store.ts)
+- **Durable storage with real discipline** — [`apps/api/src/platform/store.ts`](../apps/api/src/platform/store.ts)
   (Firestore), including document-size awareness, TTL policies, and — importantly — a
-  working **data-erasure path** ([`erase-player-signals.ts`](../apps/api/src/erase-player-signals.ts)).
+  working **data-erasure path** ([`erase-player-signals.ts`](../apps/api/src/platform/erase-player-signals.ts)).
   Persistent character data would join an existing privacy regime, not invent one.
 - **Identity for signed-in users** — Google sign-in, sessions, the beta allowlist. Guests
   are anonymous by design; §9 discusses the tension.
@@ -66,7 +66,7 @@ shipped 2026-07-26) built several of the load-bearing pieces:
   repo), and every published game must pass a deterministic `CAPTURE.json` replay in CI.
   The platform already knows how to demand determinism from agent-written code and verify
   it mechanically. This is the single most valuable existing asset for §6.
-- **A moderation seam** — [`moderation.ts`](../apps/api/src/moderation.ts) deny-lists
+- **A moderation seam** — [`moderation.ts`](../apps/api/src/platform/moderation.ts) deny-lists
   nicknames that appear on shared screens. Persistent worlds multiply this surface (§9).
 - **The CI philosophy** — guarantees are _derived from game source and enforced by
   validation_, not declared in specs (touch support is the precedent). Every new contract
@@ -168,7 +168,7 @@ A `save` GameKit module: the game asks the bridge to persist a small versioned b
 | Author rules and CI               | games repo `tools/validate.ts` **Check 21** — `saves: player` frontmatter, module, and `createSave(` must all agree, in both directions |
 | Shell half of the bridge          | [`apps/web/src/gameSave.ts`](../apps/web/src/gameSave.ts), mounted by `GameTheater` on the published slug                               |
 | API                               | [`apps/api/src/realtime/game-saves.ts`](../apps/api/src/realtime/game-saves.ts) — `GET`/`PUT`/`DELETE /api/games/:slug/save`            |
-| Storage                           | `users/{uid}/gameSaves/{slug}` (`store.ts`), erasure in [`erase-player-signals.ts`](../apps/api/src/erase-player-signals.ts)            |
+| Storage                           | `users/{uid}/gameSaves/{slug}` (`store.ts`), erasure in [`erase-player-signals.ts`](../apps/api/src/platform/erase-player-signals.ts)   |
 
 1. **The save is an opaque JSON string, not a parsed object.** Firestore rejects nested
    arrays outright, strips `undefined`, and constrains field names — a game saving a 2D
@@ -239,7 +239,7 @@ string fields. Presence and light liveness ride the existing relay.
 | The declared shape           | each game's `GAME.json` `world` block, parsed by [`world-schema.ts`](../apps/api/src/realtime/world-schema.ts), fetched per slug by [`world-source.ts`](../apps/api/src/realtime/world-source.ts) |
 | Shell half of the bridge     | [`apps/web/src/world.ts`](../apps/web/src/world.ts), mounted by `GameTheater` on the published slug                                                                                               |
 | API                          | [`apps/api/src/realtime/worlds.ts`](../apps/api/src/realtime/worlds.ts) — public `GET /api/games/:slug/world`, session-gated `PUT`/`DELETE .../world/:key`                                        |
-| Storage                      | `worlds/{worldId}/worldEntries/{key}` (`store.ts`), erasure in [`erase-player-signals.ts`](../apps/api/src/erase-player-signals.ts)                                                               |
+| Storage                      | `worlds/{worldId}/worldEntries/{key}` (`store.ts`), erasure in [`erase-player-signals.ts`](../apps/api/src/platform/erase-player-signals.ts)                                                      |
 
 1. **A world entry is stored as real fields, unlike a save.** The inversion is
    deliberate: a save's shape is the game's private business, so it is an opaque blob;

@@ -3,13 +3,13 @@ import { createHash } from 'node:crypto';
 import type { GenAIClient } from 'genaicode';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { checkUserAccess } from './auth.js';
+import { checkUserAccess } from './platform/auth.js';
 import { createVertexClient, type VertexGenerationConfig } from './agent-surface/genai.js';
-import type { ContentChecker } from './moderation.js';
-import { sanitizeCreatorText } from './submission-status.js';
-import { BOT_UID_PREFIX, type Store } from './store.js';
+import type { ContentChecker } from './platform/moderation.js';
+import { sanitizeCreatorText } from './platform/submission-status.js';
+import { BOT_UID_PREFIX, type Store } from './platform/store.js';
 import { logModerationRejection } from './telemetry/moderation-metrics.js';
-import { normalizeLocale } from './translate.js';
+import { normalizeLocale } from './platform/translate.js';
 
 /** Full names the model is asked to write in — a bare `pl` tag is easy to ignore. */
 const LANGUAGE_NAMES: Record<string, string> = {

@@ -10,7 +10,7 @@ import {
   STALE_AGENT_TOKEN_REASON,
 } from './agent-token.js';
 import { mintGameAgentKey } from './agent-game-key.js';
-import { buildApp } from '../app.js';
+import { buildApp } from '../platform/app.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { GcsObjectStore } from '../delivery/gcs-sign.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from '../catalog/github-client.js';
@@ -18,7 +18,7 @@ import type { KnowledgeQueryResult, QueryKnowledgeFn } from '../knowledge-search
 import { mintMcpSessionKey, verifyMcpSessionKey } from './mcp-session-key.js';
 import { MCP_UNADVERTISED_TOOLS } from './mcp-server.js';
 import { KIT_ROOT_DIR } from './kit-registry.js';
-import { InMemoryStore } from '../store.js';
+import { InMemoryStore } from '../platform/store.js';
 
 const secret = 'test-secret';
 const ISSUE = 55;
