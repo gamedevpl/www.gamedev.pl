@@ -101,18 +101,25 @@ to prevent.
 
 ## Domain verification
 
-The route is already live: `apps/api/src/openai-apps-challenge.ts` serves
-`GET /.well-known/openai-apps-challenge` from `OPENAI_APPS_CHALLENGE_TOKEN`, 404 when
-unset. Nothing to build — only owner steps remain:
+The route is already live and already wired: `apps/api/src/openai-apps-challenge.ts`
+serves `GET /.well-known/openai-apps-challenge` from `OPENAI_APPS_CHALLENGE_TOKEN`
+(404 when unset), and `.github/workflows/deploy.yml` — the actual CI/CD path, not
+`infra/deploy-api.sh` (that one is owner-run, local-only, never invoked by CI) —
+already threads it from the GitHub Actions repo **variable** `vars.OPENAI_APPS_CHALLENGE_TOKEN`
+into every automated deploy, same pattern as `MP_RELAY_URL`/`ZONE_HOST_URL`/`REMIX_DEBUG`.
+Confirmed live 2026-08-23: the endpoint already returns a token, so this variable is
+already set. Nothing to build, nothing to redo on every deploy — only owner steps:
 
 1. Start (or resume) the submission on the OpenAI Platform portal; it issues a token
    for domain verification.
-2. Set `OPENAI_APPS_CHALLENGE_TOKEN` on the Cloud Run service (not a secret — it is
-   public per its own design, and rotates per submission) — `infra/deploy-api.sh` now
-   carries it through redeploys as long as the shell variable is exported when the
-   script runs, same pattern as `ADMIN_UIDS`/`REVIEWER_UIDS`.
-3. Let OpenAI fetch and verify it, then clear the variable once verification is done
-   (it is not needed outside an active submission).
+2. Set (or confirm) the **Actions variable** `OPENAI_APPS_CHALLENGE_TOKEN` in this
+   repo's Settings → Secrets and variables → Actions → Variables (a variable, not a
+   secret — the whole point is that it's public). A merge to `master` deploys it
+   automatically from there; no manual Cloud Run edit, no `infra/deploy-api.sh` run
+   needed for the normal path.
+3. Let OpenAI fetch and verify it, then clear the Actions variable once verification
+   is done (it is not needed outside an active submission) — clearing it takes effect
+   on the next deploy, same threading rule in reverse.
 
 ## Directory change (2026-07-09) and submission notes
 
