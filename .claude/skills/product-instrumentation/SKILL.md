@@ -37,7 +37,7 @@ together**, plus tests:
 
 - [apps/web/src/telemetry.ts](../../../apps/web/src/telemetry.ts) — browser batching,
   caps, normalization. `TelemetrySession` is deliberately DOM-free so limits are testable.
-- [apps/api/src/telemetry.ts](../../../apps/api/src/telemetry.ts) — zod schema, rate
+- [apps/api/src/telemetry/telemetry.ts](../../../apps/api/src/telemetry/telemetry.ts) — zod schema, rate
   limits, published-slug gating, server-anchored timestamps.
 - [apps/api/src/store/records/telemetry.ts](../../../apps/api/src/store/records/telemetry.ts)
   — `TelemetryEvent`. Daily-partition storage is
@@ -53,9 +53,9 @@ Visit telemetry is the second, separate stream — the funnel before and between
 
 - [apps/web/src/visitTelemetry.ts](../../../apps/web/src/visitTelemetry.ts) — per-tab
   identity, acquisition capture, navigation subscription.
-- [apps/api/src/visit-telemetry.ts](../../../apps/api/src/visit-telemetry.ts) —
+- [apps/api/src/telemetry/visit-telemetry.ts](../../../apps/api/src/telemetry/visit-telemetry.ts) —
   `POST /api/telemetry/visit`, schema and caps.
-- [apps/api/src/visit-funnel.ts](../../../apps/api/src/visit-funnel.ts) — the read-side
+- [apps/api/src/telemetry/visit-funnel.ts](../../../apps/api/src/telemetry/visit-funnel.ts) — the read-side
   aggregator (`summarizeVisitFunnel`).
 - `VisitEvent` / `VISIT_COLLECTION` in
   [store/records/telemetry.ts](../../../apps/api/src/store/records/telemetry.ts) — the
@@ -146,7 +146,7 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
   - ~~`startVisitTracking` patches `history.pushState`~~ — **closed**: `App` emits a
     `gdpl:navigate` event (`5fe02928`) and the listener uses it (`79dd4026`).
 - ~~Nothing reads the visit stream~~ — **closed 2026-07-26**: `summarizeVisitFunnel`
-  ([visit-funnel.ts](../../../apps/api/src/visit-funnel.ts)) behind
+  ([visit-funnel.ts](../../../apps/api/src/telemetry/visit-funnel.ts)) behind
   `GET /api/admin/telemetry/visits`, rendered by `VisitFunnelPanel` beside game health
   on the operator page. Both admin reads share one partition-scan budget, so the two
   views cannot drift in how they report truncation.

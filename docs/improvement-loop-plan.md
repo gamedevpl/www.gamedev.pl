@@ -25,7 +25,7 @@
 > ([telemetry.ts](../apps/web/src/telemetry.ts), mounted in
 > [PublishedGameFrame.tsx](../apps/web/src/PublishedGameFrame.tsx)); and
 > `POST /api/telemetry` validates, caps, and stores them unattributed
-> ([telemetry.ts](../apps/api/src/telemetry.ts)). Votes, `end`/`score` depth
+> ([telemetry.ts](../apps/api/src/telemetry/telemetry.ts)). Votes, `end`/`score` depth
 > events, and written player feedback
 > ([player-feedback.ts](../apps/api/src/player-feedback.ts)) have since shipped
 > too (2026-07-26) — see the phased-plan checklist below for the current state.
@@ -556,7 +556,7 @@ at all and feeds the only autonomous-eligible class.
   the funnel. `game_opened` is sent immediately rather than batched, because a tab
   killed outright runs no cleanup and a lost open is a hole in every downstream
   denominator.
-- ✅ **Intake** ([telemetry.ts](../apps/api/src/telemetry.ts)): fixed vocabulary,
+- ✅ **Intake** ([telemetry.ts](../apps/api/src/telemetry/telemetry.ts)): fixed vocabulary,
   50 events/request, 400/session, 120 flushes/minute/IP, server-assigned
   timestamps, published games only, and **nothing that identifies a player** — no
   uid, no IP, no user agent stored.
@@ -585,7 +585,7 @@ at all and feeds the only autonomous-eligible class.
   `report()` funnel emits both automatically, so all 83 games gained it in one
   change with no per-game opt-in.
 - 🚧 **`progress` markers**, per game, in the games repo. The vocabulary, the
-  session cap, and the read-side funnel ([telemetry-health.ts](../apps/api/src/telemetry-health.ts)
+  session cap, and the read-side funnel ([telemetry-health.ts](../apps/api/src/telemetry/telemetry-health.ts)
   `progressLabels`) all exist and are tested — `GameKit.progress(label)` is
   callable today, and **13 of ~82 games call it** as of 2026-07-26 (see the list
   above), added a few at a time by maintenance touching those games rather than
@@ -611,7 +611,7 @@ at all and feeds the only autonomous-eligible class.
 
 - ✅ **Operator health view** — `GET /api/admin/telemetry/health?days=N`
   ([admin.ts](../apps/api/src/admin.ts)) over a pure aggregator
-  ([telemetry-health.ts](../apps/api/src/telemetry-health.ts)), rendered at the
+  ([telemetry-health.ts](../apps/api/src/telemetry/telemetry-health.ts)), rendered at the
   unlisted `#/health` route. Per game: sessions, bounces, median play time, median
   fps, stall rate, and grouped error messages, worst first.
 
@@ -662,7 +662,7 @@ at all and feeds the only autonomous-eligible class.
     accepted cost is that a game with votes but no recent plays gets none either.
 
   The window scan shares `scanPartitions` with the operator page (in
-  [telemetry-health.ts](../apps/api/src/telemetry-health.ts)) so a number shown to a human
+  [telemetry-health.ts](../apps/api/src/telemetry/telemetry-health.ts)) so a number shown to a human
   and the same number written into a scorecard cannot disagree about what `truncated`
   means; only the budget differs, since a nightly batch and an interactive click are
   paying for different things.
