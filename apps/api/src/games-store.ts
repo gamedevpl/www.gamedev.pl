@@ -719,6 +719,8 @@ export interface GamesStore {
     paths?: string[];
   }): Promise<{ cleared: number }>;
   getManifest(slug: string, version: string): Promise<VersionManifest | null>;
+  // Fills or replaces the changelog sentence on a version.
+  setVersionSummary?(slug: string, version: string, summary: string): Promise<void>;
   /**
    * Version history for one game, newest first — the manifests under
    * `games/<slug>/versions/`. Version ids are sortable timestamps (see
@@ -1184,6 +1186,19 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
     async getManifest(slug, version) {
       const body = await readObject(`${versionPrefix(slug, version)}/manifest.json`);
       return body ? (JSON.parse(body.toString('utf8')) as VersionManifest) : null;
+    },
+
+    async setVersionSummary(slug, version, summary) {
+      assertSlug(slug);
+      const trimmed = summary.trim();
+      if (!trimmed) return;
+      const prefix = versionPrefix(slug, version);
+      const existing = await readObject(`${prefix}/manifest.json`);
+      if (!existing) return;
+      const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
+      if (manifest.summary === trimmed) return;
+      manifest.summary = trimmed.slice(0, 1024);
+      await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
     },
 
     async getSourceFile(slug, version, path) {

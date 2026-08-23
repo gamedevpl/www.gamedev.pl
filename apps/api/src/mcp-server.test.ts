@@ -88,7 +88,7 @@ function stubGamesStore(gate?: {
   status?: string;
   lane?: 'preview' | 'publish';
 }) {
-  const stored: Array<{ slug: string; files: unknown[]; kitEngineRef?: string }> = [];
+  const stored: Array<{ slug: string; files: unknown[]; kitEngineRef?: string; summary?: string }> = [];
   const staged = new Map<string, { path: string; content: string; bytes: number }>();
   const gamesStore = {
     putCandidateSources: async (input: {
@@ -96,6 +96,7 @@ function stubGamesStore(gate?: {
       issueNumber: number;
       files: Array<{ path: string; content: string }>;
       kitEngineRef?: string;
+      summary?: string;
     }) => {
       const { validateSourceUpload } = await import('./games-store.js');
       validateSourceUpload(input.files);
@@ -1875,6 +1876,33 @@ declare const GameKit: { defineGame(): unknown };
     const warnings = (submitted.structured as { warnings?: Array<{ code: string }> }).warnings ?? [];
     expect(warnings.some((w) => w.code === 'gate_not_started')).toBe(false);
     expect(warnings.some((w) => w.code === 'call_end')).toBe(true);
+  });
+
+  it('submit_sources forwards summary onto the candidate sources', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const { gamesStore, stored } = stubGamesStore();
+    app = await createApp(store, gamesStore, undefined, {
+      onSourcesDelivered: async () => ({ buildId: 'build-xyz' }),
+    });
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const submitted = await callTool(
+      app,
+      'submit_sources',
+      {
+        sessionKey,
+        kitEngineRef: ENGINE,
+        files: MINIMAL_FILES.map((f) => ({ ...f, encoding: 'utf8' })),
+        summary: 'Added a second lane of traffic.',
+      },
+      { 'mcp-session-id': sessionId },
+    );
+
+    expect(submitted.isError).toBe(false);
+    expect(stored[0]).toMatchObject({ summary: 'Added a second lane of traffic.' });
   });
 
   it('submit_sources treats accepted-without-buildId as gateStarted (no retry warning)', async () => {

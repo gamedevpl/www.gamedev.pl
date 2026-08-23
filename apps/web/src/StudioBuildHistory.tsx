@@ -60,7 +60,7 @@ export function StudioBuildHistory({
     if (!showAll && status.slug && totalCount > builds.length && !extraBuilds) {
       setLoadingOlder(true);
       try {
-        const res = await fetchGameBuilds(status.slug, { limit: 100 });
+        const res = await fetchGameBuilds(status.slug, { limit: 100, locale: i18n.language });
         setExtraBuilds(res.builds);
       } catch {
         // Fall back to showing whatever we already have

@@ -60,6 +60,7 @@
     "apps/api/src/bearer.ts": 35,
     "apps/api/src/bounded-map.test.ts": 28,
     "apps/api/src/bounded-map.ts": 208,
+    "apps/api/src/build-transcript.ts": 48,
     "apps/api/src/builder.test.ts": 27,
     "apps/api/src/builder.ts": 217,
     "apps/api/src/canonical-app-url.ts": 113,

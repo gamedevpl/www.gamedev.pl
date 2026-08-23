@@ -2138,6 +2138,7 @@ describe('submission routes', () => {
         total: 6,
         finishedInMs: 120000,
         fileCount: 0,
+        issueNumber: 731,
       },
       {
         version: 'v2',
@@ -2147,6 +2148,7 @@ describe('submission routes', () => {
         total: 12,
         finishedInMs: 120000,
         fileCount: 0,
+        issueNumber: 731,
       },
       {
         version: 'v1',
@@ -2155,9 +2157,66 @@ describe('submission routes', () => {
         verdict: 'pending',
         total: 12,
         fileCount: 0,
+        issueNumber: 731,
       },
     ]);
     expect(status.json().totalBuildsCount).toBe(3);
+
+    await app.close();
+  });
+
+  it('fills an empty build changelog from the round done event', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 732 });
+    const { backend } = createBackendStub();
+    let issueNumber = 732;
+    const gamesStore = {
+      getManifest: async () => null,
+      listVersions: async () => [
+        {
+          slug: 'space-parcels',
+          version: 'v1',
+          createdAt: '2026-08-10T07:00:00.000Z',
+          issueNumber,
+          sourceFiles: ['game.ts'],
+        },
+      ],
+    } as unknown as GamesStore;
+
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    issueNumber = job.issueNumber;
+    await store.setSubmissionSlug(job.issueNumber, 'space-parcels');
+    await store.appendBuildEvent(job.issueNumber, {
+      kind: 'done',
+      text: 'Added a second lane of traffic.',
+      textLocalized: 'Dodałem drugi pas ruchu.',
+      locale: 'pl',
+      createdAt: '2026-08-10T07:05:00.000Z',
+    });
+
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}?locale=pl`,
+      headers: authHeaders,
+    });
+
+    expect(status.statusCode).toBe(200);
+    expect(status.json().recentBuilds[0]).toMatchObject({
+      version: 'v1',
+      summary: 'Dodałem drugi pas ruchu.',
+    });
 
     await app.close();
   });

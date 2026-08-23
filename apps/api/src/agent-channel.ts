@@ -78,6 +78,7 @@ import {
   type Store,
   type SubmissionRecord,
 } from './store.js';
+import { pickLatestChangelogText } from './build-changelog.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
 import { normalizeAtIntake, type IntakeText } from './localize-intake.js';
 import { createTranslatorFromEnv, type Translator } from './translate.js';
@@ -2003,6 +2004,11 @@ export async function registerAgentChannelRoutes(
         if (!options.sourceDelivery) {
           return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
         }
+        let summary = parsed.data.summary;
+        if (!summary && store) {
+          const recent = await store.listBuildEvents(issueNumber, { limit: 20 });
+          summary = pickLatestChangelogText(recent);
+        }
         const delivery = await options.sourceDelivery.deliver({
           issueNumber,
           slug,
@@ -2010,7 +2016,7 @@ export async function registerAgentChannelRoutes(
           mode,
           bindSlug: true,
           ...(parsed.data.kitEngineRef ? { kitEngineRef: parsed.data.kitEngineRef } : {}),
-          ...(parsed.data.summary ? { summary: parsed.data.summary } : {}),
+          ...(summary ? { summary } : {}),
           ...(record.dispatch?.backend || record.builder
             ? { backend: record.dispatch?.backend ?? record.builder }
             : {}),
@@ -2235,6 +2241,10 @@ export async function registerAgentChannelRoutes(
         });
         if (!event) return false;
         await store!.appendBuildEvent(issueNumber, event);
+        const version = record.previewVersion ?? record.deliveredVersion;
+        if (record.slug && version && options.gamesStore?.setVersionSummary) {
+          await options.gamesStore.setVersionSummary(record.slug, version, event.text).catch(() => {});
+        }
         return true;
       };
 

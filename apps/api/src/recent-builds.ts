@@ -41,6 +41,7 @@ export function toRecentBuild(manifest: VersionManifest): RecentBuild {
     ...(manifest.authorship ? { authorship: manifest.authorship } : {}),
     ...(manifest.summary ? { summary: manifest.summary } : {}),
     ...(manifest.sourceFiles ? { fileCount: manifest.sourceFiles.length } : {}),
+    ...(manifest.issueNumber ? { issueNumber: manifest.issueNumber } : {}),
   };
 }
 
