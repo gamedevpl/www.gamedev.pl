@@ -161,9 +161,13 @@ export async function signedInApiContext(): Promise<APIRequestContext> {
   return request.newContext({ baseURL: BASE_URL, storageState, ...proxyOptions() });
 }
 
-/** A browser context carrying the bot's session cookie. */
+// Service workers blocked: the app's SW intercepts /api/games/:slug ahead of page.route().
 export async function signedInContext(browser: Browser, api: APIRequestContext): Promise<BrowserContext> {
-  return browser.newContext({ storageState: await api.storageState(), viewport: { width: 1280, height: 900 } });
+  return browser.newContext({
+    storageState: await api.storageState(),
+    viewport: { width: 1280, height: 900 },
+    serviceWorkers: 'block',
+  });
 }
 
 export type Problem = { kind: string; text: string };

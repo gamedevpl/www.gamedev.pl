@@ -464,7 +464,7 @@
     "apps/api/vitest.setup.ts": 16,
     "apps/e2e/src/anonymous-and-mobile.test.ts": 75,
     "apps/e2e/src/auth.test.ts": 94,
-    "apps/e2e/src/browser.ts": 308,
+    "apps/e2e/src/browser.ts": 312,
     "apps/e2e/src/config.ts": 31,
     "apps/e2e/src/creation-smoke.test.ts": 37,
     "apps/e2e/src/editor-sensing.test.ts": 77,
