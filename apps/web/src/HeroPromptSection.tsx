@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { recordCreateStep, type PlayVia } from './visitTelemetry.js';
-import type { CatalogEntry } from './catalog.js';
+import { catalogMediaUrl, defaultScreenshotIndex, type CatalogEntry } from './catalog.js';
 import { SketchModal } from './SketchModal.js';
 import { PixelIcon } from './PixelIcon.js';
 import { getQuota, type PlatformBuilderAvailability } from './submissionApi.js';
@@ -249,6 +249,13 @@ export function HeroPromptSection({
   };
 
   const matchedGame = useMemo(() => findMatchingGame(promptText, catalogEntries), [promptText, catalogEntries]);
+
+  const matchedPoster = useMemo(() => {
+    if (!matchedGame?.media?.screenshots?.length) return null;
+    const idx = defaultScreenshotIndex(matchedGame.media.screenshots);
+    const file = matchedGame.media.screenshots[idx]?.file;
+    return file ? catalogMediaUrl(matchedGame.slug, file, 320) : null;
+  }, [matchedGame]);
 
   const handleFiles = (files: FileList | File[]) => {
     if (submissionStatus !== 'idle') return;
@@ -531,14 +538,35 @@ export function HeroPromptSection({
 
           {matchedGame && (
             <div className="smart-intent-card matched-card">
+              {matchedPoster && (
+                <div className="matched-thumb-wrap">
+                  <img
+                    src={matchedPoster}
+                    alt={matchedGame.title}
+                    className="matched-thumb"
+                    loading="eager"
+                    decoding="async"
+                  />
+                </div>
+              )}
               <div className="matched-info">
-                <span className="smart-badge">
-                  <PixelIcon name="gamepad" size={14} /> {t('catalog.genre')}: {matchedGame.genre}
-                </span>
+                <div className="matched-badges">
+                  <span className="smart-badge">
+                    <PixelIcon name="gamepad" size={12} /> {t('catalog.genre')}: {matchedGame.genre}
+                  </span>
+                  {matchedGame.multiplayer && (
+                    <span className="smart-badge smart-badge-secondary">
+                      <PixelIcon name="user" size={12} /> {t('catalog.categories.multiplayer_party')}
+                    </span>
+                  )}
+                </div>
                 <h3 className="matched-title">{matchedGame.title}</h3>
-                <p className="matched-desc">
-                  {t('catalog.controls')}: {matchedGame.controls}
-                </p>
+                {matchedGame.controls && (
+                  <p className="matched-desc">
+                    {t('catalog.controls')}: {matchedGame.controls}
+                  </p>
+                )}
+                <p className="matched-hint">{t('hero.smartMatchHint')}</p>
               </div>
               <div className="matched-actions">
                 <button

@@ -539,4 +539,79 @@ describe('HeroPromptSection', () => {
     await act(async () => root.unmount());
     delete (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition;
   });
+
+  it('renders a matched game card with thumbnail, genre badge, and play button', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const onPlayGame = vi.fn();
+
+    const mockCatalog = [
+      {
+        slug: 'mexico-86',
+        title: "Mexico '86 Arcade Football",
+        genre: 'sports',
+        controls: 'Arrows / Enter / Tap to navigate; 1–4 to pick action',
+        status: 'published',
+        media: {
+          screenshots: [
+            { name: 'opening', file: 'opening.png' },
+            { name: 'action', file: 'action.png' },
+          ],
+          video: null,
+        },
+        multiplayer: { mode: 'controllers' as const, minPlayers: 1, maxPlayers: 2 },
+        saves: null,
+        world: null,
+        sensing: null,
+        orientation: 'landscape' as const,
+        submittedBy: null,
+      },
+    ];
+
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'mexico',
+          catalogEntries: mockCatalog,
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+          onPlayGame,
+        }),
+      );
+      await flushEffects();
+    });
+
+    const card = container.querySelector('.matched-card');
+    expect(card).not.toBeNull();
+
+    const thumb = container.querySelector<HTMLImageElement>('.matched-thumb');
+    expect(thumb).not.toBeNull();
+    expect(thumb?.getAttribute('src')).toBe('/api/games/mexico-86/media/action.png?w=320');
+
+    const title = container.querySelector('.matched-title');
+    expect(title?.textContent).toBe("Mexico '86 Arcade Football");
+
+    const badges = container.querySelectorAll('.smart-badge');
+    expect(badges.length).toBeGreaterThanOrEqual(1);
+    expect(badges[0].textContent).toContain('sports');
+
+    const playBtn = container.querySelector<HTMLButtonElement>('.play-match-btn');
+    expect(playBtn).not.toBeNull();
+    expect(playBtn?.textContent).toContain("Play Mexico '86 Arcade Football Now");
+
+    await act(async () => {
+      playBtn?.click();
+      await flushEffects();
+    });
+
+    expect(onPlayGame).toHaveBeenCalledTimes(1);
+    expect(onPlayGame).toHaveBeenCalledWith(mockCatalog[0], 'composer_match');
+
+    await act(async () => root.unmount());
+  });
 });
