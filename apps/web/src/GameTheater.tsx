@@ -262,10 +262,24 @@ export function GameTheater({
     requestExit();
   }, [requestExit, closeHowTo]);
 
+  const quitGame = useCallback(() => {
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+    onExitRef.current();
+  }, []);
+
   // Escape is handled twice on purpose: the window listener below covers the app's
   // own chrome, and this covers the game iframe, which holds focus while playing
   // and swallows its own key events.
-  const player = useGamePlayer(frameRef, true, escapeOrExit, dismissMore, notePlayerActivity, notePlayerEnd);
+  const player = useGamePlayer(
+    frameRef,
+    true,
+    escapeOrExit,
+    dismissMore,
+    notePlayerActivity,
+    notePlayerEnd,
+    undefined,
+    quitGame,
+  );
 
   // What the game says about itself, falling back to what the catalog says about it.
   // Derived every render rather than memoized on first value, because both sources

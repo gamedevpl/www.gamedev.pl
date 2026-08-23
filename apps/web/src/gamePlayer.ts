@@ -45,8 +45,10 @@ const PLAYER = 'gdpl-player';
 //      the home route only). Everything reported here is agent-authored text and is
 //      validated and rendered as text by the host, never as markup.
 const BRIDGE = `(function(){
+  // Shared with GameKit's postSignal — lets the host tell a fresh document from a resend.
+  window.__GDPL_LOAD_ID__=window.__GDPL_LOAD_ID__||Math.random();
   function el(id){return document.getElementById(id);}
-  function post(m){m.source='${PLAYER}';parent.postMessage(m,'*');}
+  function post(m){m.source='${PLAYER}';m.loadId=window.__GDPL_LOAD_ID__;parent.postMessage(m,'*');}
   function isMuted(){var s=el('sound-toggle');return s?s.getAttribute('aria-pressed')==='true':false;}
   function sendMeta(){
     var t=el('game-title'),d=el('game-desc');
@@ -712,6 +714,7 @@ export function useGamePlayer(
   onEnd?: () => void,
   // A pointer or touch is held down, or released.
   onPointerHeldChange?: (held: boolean) => void,
+  onExitGame?: () => void,
 ) {
   const [meta, setMeta] = useState<GamePlayerMeta | null>(null);
   const [controls, setControls] = useState<ReportedControls | null>(null);
@@ -728,6 +731,8 @@ export function useGamePlayer(
   onEndRef.current = onEnd;
   const onPointerHeldChangeRef = useRef(onPointerHeldChange);
   onPointerHeldChangeRef.current = onPointerHeldChange;
+  const onExitGameRef = useRef(onExitGame);
+  onExitGameRef.current = onExitGame;
 
   useEffect(() => {
     if (!active) {
@@ -736,6 +741,9 @@ export function useGamePlayer(
       setMuted(false);
       return;
     }
+    let hasShellMenu = false;
+    // A changed loadId (window.__GDPL_LOAD_ID__) means a new document swapped in.
+    let lastLoadId: unknown;
     function onMessage(event: MessageEvent) {
       // Opaque-origin sandboxed iframe → origin string is "null".
       if (event.origin !== 'null') return;
@@ -751,8 +759,13 @@ export function useGamePlayer(
         muted?: boolean;
         key?: string;
         held?: boolean;
+        loadId?: unknown;
       };
       if (!data || data.source !== PLAYER) return;
+      if (data.loadId !== lastLoadId) {
+        lastLoadId = data.loadId;
+        hasShellMenu = false;
+      }
       if (data.type === 'meta') {
         setMeta({ title: String(data.title ?? ''), desc: String(data.desc ?? '') });
         setMuted(Boolean(data.muted));
@@ -765,8 +778,12 @@ export function useGamePlayer(
         if (next) setControls(next);
       } else if (data.type === 'sound') {
         setMuted(Boolean(data.muted));
+      } else if (data.type === 'shell-menu') {
+        hasShellMenu = true;
+      } else if (data.type === 'exit-game') {
+        onExitGameRef.current?.();
       } else if (data.type === 'key' && data.key === 'Escape') {
-        onEscapeRef.current?.();
+        if (!hasShellMenu) onEscapeRef.current?.();
       } else if (data.type === 'pointer') {
         onPointerRef.current?.();
         onActivityRef.current?.();
