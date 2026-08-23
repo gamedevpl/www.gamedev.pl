@@ -118,14 +118,14 @@ Two concrete instances of that (observed 2026-07-23):
   website PR. Website `contract:games-repo` fails when games-repo introduces a name the
   serve side does not recognize; play/draft then 502s for every game that selects it.
   Merge order is website first — same rule as a budget raise
-  (`apps/api/src/games-repo-contract.ts`). Diff the module array against *current*
+  (`apps/api/src/catalog/games-repo-contract.ts`). Diff the module array against _current_
   `main`, not the PR's merge-base: that branch was ~20 commits behind and its array had
   dropped `cards` and `ui` that main had added, so a 2-line "add platformer" diff against
   a stale base is a module deletion against current main.
 - **`validate` does not catch leftover create-template copy.** Observed (same PR):
   `moon-hopper` playtest emitted `first-ledge` / `halfway` / `moon` and `end=won`, but
   `SPEC.md` and `GAME.json` still said "Collect five stars in the arena." Check 33 only
-  requires that `howToPlay` *exists*. Read SPEC / description / howToPlay against what
+  requires that `howToPlay` _exists_. Read SPEC / description / howToPlay against what
   the game actually does — especially on a game that started from `npm run create`.
 - **Ambient `declare function` in a tsconfig `include` is a catalog-wide type lie.**
   Observed (same PR): `shared/genres/platformer.d.ts` is included for every game, so
@@ -202,7 +202,7 @@ Two concrete instances of that (observed 2026-07-23):
   only in an issue comment.** Observed (www.gamedev.pl-games#807, 2026-08-19): the
   first pass posted 32 inline findings plus a separate issue comment for two
   `zone.ts` defects that were not in the diff (restart slot stranding, host-disconnect
-  zombie actors). The later "all 32 findings fixed" body was true of the *threads*;
+  zombie actors). The later "all 32 findings fixed" body was true of the _threads_;
   the issue-comment item (host close leaves remotes latched and farmable) was still
   on HEAD. When verifying a "we fixed the review" push, re-probe every promised
   fix — including ones that could not be inlined — and do not treat resolved-thread
@@ -242,7 +242,7 @@ Two concrete instances of that (observed 2026-07-23):
   with `ghostCount: 0`. Capture drives the intended path; agency only fails idle / one
   held key; ACCEPTANCE that restates the capture floor (`roomsCleared >= 2`) cannot see a
   skip. For puzzle games, import the pure model in a throwaway clone and prove a
-  no-mechanic control *fails* (walk-only into the door, jump-over) in the same session as
+  no-mechanic control _fails_ (walk-only into the door, jump-over) in the same session as
   the intended solve.
 - **A training-lab / per-mode closer can be TRACE-green on one happy path.** Observed
   (mexico-86 / www.gamedev.pl-games#811, 2026-08-19): SPEC promised every drill ends in a

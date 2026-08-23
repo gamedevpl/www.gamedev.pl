@@ -44,7 +44,7 @@
 > 1. **The intake wrote nothing at all.** It gated on the submission document, which
 >    34 of 42 catalog games do not have, so every flush was accepted and silently
 >    discarded. Fixed by keying on the games-repo slug and gating on catalog
->    membership ([published-slugs.ts](../apps/api/src/published-slugs.ts)). The drop
+>    membership ([published-slugs.ts](../apps/api/src/catalog/published-slugs.ts)). The drop
 >    path now counts and logs itself, because a deliberately silent branch is what hid
 >    this for a day.
 > 2. **Receipt time is not event time.** Events are batched, so the first real session
@@ -118,7 +118,7 @@ Games are offline-only, self-contained HTML/CSS/JS running in an iframe with
 `sandbox="allow-scripts allow-pointer-lock"` and **no** `allow-same-origin`
 ([GameFrame.tsx](../apps/web/src/GameFrame.tsx)); preview builds additionally get
 a `default-src 'none'` CSP with no `connect-src`, which blocks fetch, XHR,
-WebSocket and beacons outright ([assemble.ts](../apps/api/src/assemble.ts)). A
+WebSocket and beacons outright ([assemble.ts](../apps/api/src/catalog/assemble.ts)). A
 game cannot phone home, and must not be able to.
 
 It does not need to. [gamePlayer.ts](../apps/web/src/gamePlayer.ts) already

@@ -1,6 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { InvalidAgentTokenError, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
-import { DEFAULT_SIGNED_URL_TTL_SECONDS } from './gcs-sign.js';
+import { DEFAULT_SIGNED_URL_TTL_SECONDS } from './delivery/gcs-sign.js';
 
 // Short-lived PUT URLs for curl --upload-file.
 

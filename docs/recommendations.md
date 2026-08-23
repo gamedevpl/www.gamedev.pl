@@ -8,13 +8,13 @@
 
 ## Sort modes
 
-| Mode        | Signal                                                                                                         |
-| ----------- | -------------------------------------------------------------------------------------------------------------- |
-| Recommended | Scorecards + signed-in play affinity / anonymous recent hints ([`recommend.ts`](../apps/api/src/recommend.ts)) |
-| Newest      | Submission `publishedAt` when known; otherwise reverse catalog order                                           |
-| Most played | Scorecard session counts                                                                                       |
-| Last played | Signed-in play affinity timestamps, else device-local recent plays                                             |
-| A–Z         | Title, case-insensitive                                                                                        |
+| Mode        | Signal                                                                                                                 |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Recommended | Scorecards + signed-in play affinity / anonymous recent hints ([`recommend.ts`](../apps/api/src/catalog/recommend.ts)) |
+| Newest      | Submission `publishedAt` when known; otherwise reverse catalog order                                                   |
+| Most played | Scorecard session counts                                                                                               |
+| Last played | Signed-in play affinity timestamps, else device-local recent plays                                                     |
+| A–Z         | Title, case-insensitive                                                                                                |
 
 ## Your games (merged into Games)
 

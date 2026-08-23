@@ -14,7 +14,7 @@ import {
 } from './editor-contract.js';
 import { editorKitV2Enabled } from './editor-kit-env.js';
 import { isLiveAgentRound } from './code-surface.js';
-import type { GamesStore } from './games-store.js';
+import type { GamesStore } from './delivery/games-store.js';
 import { MAX_EDITOR_DRAFT_BYTES, type Store, type SubmissionRecord } from './store.js';
 import type { ContentChecker } from './moderation.js';
 import { logModerationRejection } from './telemetry/moderation-metrics.js';

@@ -961,7 +961,7 @@ empty `connect_domains` and `resource_domains`.
 
 Screenshots reach the card as inline data and need no CSP entry. But `get_round_media`
 returns the gameplay **video as a URL**, and our object store signs those against
-`storage.googleapis.com` (`apps/api/src/gcs-sign.ts`). An empty `resource_domains` will
+`storage.googleapis.com` (`apps/api/src/delivery/gcs-sign.ts`). An empty `resource_domains` will
 most likely stop that video rendering, or draw a review question.
 
 Confirm whether `storage.googleapis.com` belongs in `resource_domains` before submitting.

@@ -5,7 +5,7 @@ config, and which controls still need an owner-side GCP console (or `gcloud`) ch
 No product/strategy content — ops runbooks for non-engineering topics live elsewhere.
 
 Related config: [`cloudbuild-gate.yaml`](./cloudbuild-gate.yaml),
-[`setup-gcp.sh`](./setup-gcp.sh), [`apps/api/src/gate-trigger.ts`](../apps/api/src/gate-trigger.ts),
+[`setup-gcp.sh`](./setup-gcp.sh), [`apps/api/src/delivery/gate-trigger.ts`](../apps/api/src/delivery/gate-trigger.ts),
 [`apps/api/scripts/run-gate.ts`](../apps/api/scripts/run-gate.ts).
 
 ## Invariant

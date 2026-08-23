@@ -3,7 +3,7 @@ import type { AssessmentSource, VoteValue, WaitlistStatus } from '@gamedevpl/con
 import type { AgentTaskState } from './agent-state.js';
 import type { SeedFiles } from './agent-backend.js';
 import type { BuilderKind } from './builder.js';
-import type { PublicationHealthCheck, PublicationRecord } from './games-store.js';
+import type { PublicationHealthCheck, PublicationRecord } from './delivery/games-store.js';
 import type { AvatarMode } from './creator-profile.js';
 import type { AgentSessionTokens, JobTransition } from './job-state.js';
 import type { ProposalState } from './community/proposal-state.js';

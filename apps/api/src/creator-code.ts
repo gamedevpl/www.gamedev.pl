@@ -1,18 +1,18 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
+import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './catalog/assemble.js';
 import { isActiveBuildRound } from './builder.js';
 import { codeSurfaceEnabled, isLiveAgentRound, isOpenAgentRound } from './code-surface.js';
-import type { GcsObjectStore } from './gcs-sign.js';
+import type { GcsObjectStore } from './delivery/gcs-sign.js';
 import {
   InvalidUploadError,
   MAX_UPLOAD_FILES,
   type GamesStore,
   type SourceFile,
   type StagedSourceEntry,
-} from './games-store.js';
+} from './delivery/games-store.js';
 import type { TabCompleteGate } from './creation-limits.js';
-import type { GitHubClient } from './github-client.js';
+import type { GitHubClient } from './catalog/github-client.js';
 import { resolveJobState } from './job-state.js';
 import { createKitFileStore, type KitFileStore } from './kit-files.js';
 import { parseKitRegistry } from './kit-registry.js';
@@ -29,13 +29,13 @@ import {
   createSourceDeliveryService,
   SourceDeliveryValidationError,
   type SourceDeliveryService,
-} from './source-delivery.js';
+} from './delivery/source-delivery.js';
 import {
   hasPlayableOverlay,
   overlayGameSources,
   readDeliveredSources,
   type StagedPreviewPublisher,
-} from './staged-preview.js';
+} from './delivery/staged-preview.js';
 import type { Store, SubmissionRecord } from './store.js';
 import { MAX_PREFIX_CHARS, MAX_SUFFIX_CHARS, tabCompleteEnabled, type TabCompleter } from './tab-complete.js';
 import { sharedSourcesFromKitTree } from './typecheck-preflight.js';

@@ -1,13 +1,13 @@
 import { gunzipSync } from 'node:zlib';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './gcs-sign.js';
+import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './delivery/gcs-sign.js';
 import { KitRegistryError, parseKitRegistry, parseKitSidecar } from './kit-registry.js';
 import { codeSurfaceEnabled } from './code-surface.js';
-import { collapseJobsToOwnerGames, MAX_OWNER_GAMES, pageOwnerGames } from './owner-games.js';
-import { readTarEntries, type TarEntry } from './tar.js';
-import { hydrateRecentBuildSummaries } from './build-changelog.js';
-import { toRecentBuilds } from './recent-builds.js';
+import { collapseJobsToOwnerGames, MAX_OWNER_GAMES, pageOwnerGames } from './catalog/owner-games.js';
+import { readTarEntries, type TarEntry } from './delivery/tar.js';
+import { hydrateRecentBuildSummaries } from './delivery/build-changelog.js';
+import { toRecentBuilds } from './delivery/recent-builds.js';
 import type {
   StudioBuildsResponse,
   StudioGame,
@@ -24,8 +24,8 @@ export type CreatorScorecardSummary = StudioScorecard;
 export type CreatorScorecardsResponse = StudioScorecardsResponse;
 export type CreatorStudioGamesResponse = StudioGamesResponse;
 export type CreatorBuildsResponse = StudioBuildsResponse;
-import { composeWorkspaceArchive, WorkspaceCompositionError } from './workspace-archive.js';
-import type { GamesStore } from './games-store.js';
+import { composeWorkspaceArchive, WorkspaceCompositionError } from './delivery/workspace-archive.js';
+import type { GamesStore } from './delivery/games-store.js';
 import type { Store, TelemetryEvent } from './store.js';
 import { normalizeLocale } from './translate.js';
 

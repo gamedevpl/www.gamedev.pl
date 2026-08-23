@@ -15,8 +15,8 @@ import {
   type AvatarMode,
   type PublicCreatorProfile,
 } from './creator-profile.js';
-import { catalogEntryFromSpec, type CatalogGameEntry } from './github-client.js';
-import type { GamesStore } from './games-store.js';
+import { catalogEntryFromSpec, type CatalogGameEntry } from './catalog/github-client.js';
+import type { GamesStore } from './delivery/games-store.js';
 import type { Store } from './store.js';
 
 /**

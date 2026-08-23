@@ -50,10 +50,10 @@ Games declare the schema; the body fragment is generated.
 **Two implementations, one output.** Neither repo can import the other, so the generator
 exists twice:
 
-| Repo    | File                                   |
-| ------- | -------------------------------------- |
-| website | `apps/api/src/index-html-generator.ts` |
-| games   | `tools/lib/index-html.ts`              |
+| Repo    | File                                           |
+| ------- | ---------------------------------------------- |
+| website | `apps/api/src/catalog/index-html-generator.ts` |
+| games   | `tools/lib/index-html.ts`                      |
 
 Divergence is silent and worse than a contract mismatch: the games repo would write one
 body and the website generate a different one at serve time, so the game a creator

@@ -1,6 +1,6 @@
 # The build brief — what every agent is told, and why each part is there
 
-`apps/api/src/build-prompt.ts` composes the one message that starts a round. It is shared
+`apps/api/src/delivery/build-prompt.ts` composes the one message that starts a round. It is shared
 by every backend that runs a platform build, so the reasoning behind it belongs here rather
 than in comments inside one backend's file.
 

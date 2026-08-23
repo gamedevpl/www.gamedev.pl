@@ -28,21 +28,21 @@ Planned, not yet written: `event-mode.md` (pre-warm before a meetup or launch sp
 
 Provisioned by [`infra/setup-monitoring.sh`](../../infra/setup-monitoring.sh).
 
-| #   | Policy name                                     | Fires when                                                               | Go to                                            |
-| --- | ----------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------ |
-| A1  | `A1 <service> site down (uptime check failing)` | That service's uptime check fails from most probers for 5 min            | [`site-down-triage.md`](./site-down-triage.md)   |
-| A2  | `A2 <service> Cloud Run 5xx rate elevated`      | That service's Cloud Run 5xx sustained over 10 min                       | [`site-down-triage.md`](./site-down-triage.md)   |
-| A3  | `A3 notify-sweep failing`                       | >2 failed Cloud Scheduler attempts in 15 min, any job (log-based)        | §below                                           |
-| A4  | `A4 no successful Firestore export`             | No successful export logged in 23h30m (inert until the first one)        | [`restore-firestore.md`](./restore-firestore.md) |
-| A5  | (billing budget, created by hand)               | Billing budget at 50 / 90 / 100%                                         | Cost review — see the ops repo's readiness plan  |
-| A6  | `A6 zone admission failing`                     | The zone host could not start a zone (log-based, rate-limited to hourly) | [`zones-down-triage.md`](./zones-down-triage.md) |
-| A7  | `A7 world service 5xx rate elevated`            | `gamedev-world` 5xx sustained over 10 min                                | [`zones-down-triage.md`](./zones-down-triage.md) |
-| A14 | `A14 moderation rejection burst`                | >60 moderation rejections in 10 min on `gamedev-app` (log-based)         | [`moderation-burst.md`](./moderation-burst.md)   |
-| A23 | `A23 seeded builds cannot place their drafts`   | >1 seed staging failure in an hour (log-based)                           | §Vertex spend below                              |
-| A24 | `A24 Vertex call volume abnormally high`        | Vertex calls >0.25/s sustained 10 min, project-wide                      | §Vertex spend below                              |
-| A25 | `A25 Vertex output token rate abnormally high`  | Vertex output tokens >300/s sustained 10 min, project-wide               | §Vertex spend below                              |
-| A27 | `A27 typecheck preflight budget chronically exceeded` | >2 preflight skips (budget exceeded) in 30 min on `gamedev-app` (log-based) | §below                                     |
-| A28 | `A28 gate build died without a verdict`         | Any gate build finishes without writing a verdict (log-based)            | §Gate crashes below                              |
+| #   | Policy name                                           | Fires when                                                                  | Go to                                            |
+| --- | ----------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------ |
+| A1  | `A1 <service> site down (uptime check failing)`       | That service's uptime check fails from most probers for 5 min               | [`site-down-triage.md`](./site-down-triage.md)   |
+| A2  | `A2 <service> Cloud Run 5xx rate elevated`            | That service's Cloud Run 5xx sustained over 10 min                          | [`site-down-triage.md`](./site-down-triage.md)   |
+| A3  | `A3 notify-sweep failing`                             | >2 failed Cloud Scheduler attempts in 15 min, any job (log-based)           | §below                                           |
+| A4  | `A4 no successful Firestore export`                   | No successful export logged in 23h30m (inert until the first one)           | [`restore-firestore.md`](./restore-firestore.md) |
+| A5  | (billing budget, created by hand)                     | Billing budget at 50 / 90 / 100%                                            | Cost review — see the ops repo's readiness plan  |
+| A6  | `A6 zone admission failing`                           | The zone host could not start a zone (log-based, rate-limited to hourly)    | [`zones-down-triage.md`](./zones-down-triage.md) |
+| A7  | `A7 world service 5xx rate elevated`                  | `gamedev-world` 5xx sustained over 10 min                                   | [`zones-down-triage.md`](./zones-down-triage.md) |
+| A14 | `A14 moderation rejection burst`                      | >60 moderation rejections in 10 min on `gamedev-app` (log-based)            | [`moderation-burst.md`](./moderation-burst.md)   |
+| A23 | `A23 seeded builds cannot place their drafts`         | >1 seed staging failure in an hour (log-based)                              | §Vertex spend below                              |
+| A24 | `A24 Vertex call volume abnormally high`              | Vertex calls >0.25/s sustained 10 min, project-wide                         | §Vertex spend below                              |
+| A25 | `A25 Vertex output token rate abnormally high`        | Vertex output tokens >300/s sustained 10 min, project-wide                  | §Vertex spend below                              |
+| A27 | `A27 typecheck preflight budget chronically exceeded` | >2 preflight skips (budget exceeded) in 30 min on `gamedev-app` (log-based) | §below                                           |
+| A28 | `A28 gate build died without a verdict`               | Any gate build finishes without writing a verdict (log-based)               | §Gate crashes below                              |
 
 **A1 and A2 name the service; the rest do not.** A1/A2 exist once per Cloud Run service
 answering requests (`gamedev-app`, and the party relay when it takes traffic), so the
@@ -166,18 +166,18 @@ A gate Cloud Build that runs and dies without writing `manifest.gate` or
 nothing will ever verify it.
 
 **This is always our fault, by construction.** A game that merely fails its checks writes
-a *red* verdict, and `reconcileGateVerdict` moves the job on it. A red gate also exits the
+a _red_ verdict, and `reconcileGateVerdict` moves the job on it. A red gate also exits the
 build non-zero, which is why A28 is keyed on a log line from
-[`apps/api/src/gate-crash.ts`](../../apps/api/src/gate-crash.ts) rather than on Cloud Build
+[`apps/api/src/delivery/gate-crash.ts`](../../apps/api/src/delivery/gate-crash.ts) rather than on Cloud Build
 failure — the latter fires on every legitimately failing game and would be muted within a
-day. That module reads the build back only *after* confirming no verdict exists, so a red
+day. That module reads the build back only _after_ confirming no verdict exists, so a red
 verdict can never be reported as a crash.
 
 Triage:
 
 1. Logs Explorer, `jsonPayload.msg="delivery gate crashed"`.
 2. Take `jsonPayload.delivery.buildId`, then `gcloud builds log <id> --project=gamedevpl`.
-3. Read what killed it *before* the gate's own output starts.
+3. Read what killed it _before_ the gate's own output starts.
 
 The usual cause is the container failing before `gate:run` can execute: a workspace package
 that `npm ci` symlinks but never builds (`infra/cloudbuild-gate.yaml` must run

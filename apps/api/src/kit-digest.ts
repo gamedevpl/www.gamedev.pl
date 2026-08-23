@@ -1,6 +1,6 @@
 // Loads the immutable digest paired with the current Creator Kit.
 
-import type { GcsObjectStore } from './gcs-sign.js';
+import type { GcsObjectStore } from './delivery/gcs-sign.js';
 import { readFile } from 'node:fs/promises';
 
 export const KIT_REGISTRY_OBJECT = 'kits/current.json';

@@ -3,7 +3,7 @@
 // The wire shapes now live in @gamedevpl/contract; what stays here is the
 // derivation of GitHub state into our status vocabulary — no I/O of its own.
 
-import type { LinkedPullRequest } from './github-client.js';
+import type { LinkedPullRequest } from './catalog/github-client.js';
 import type { SubmissionState } from '@gamedevpl/contract';
 import {
   BUILD_EVENT_KINDS,
@@ -42,7 +42,7 @@ export const CREATOR_FEEDBACK_MARKER = '<!-- gamedevpl:creator-feedback -->';
 // Same values apps/web/src/submissionApi.ts calls BuildStep/BuildEventKind.
 export { BUILD_STEPS, BUILD_EVENT_KINDS, type BuildStep, type BuildEventKind };
 
-export type { RecentBuild } from './recent-builds.js';
+export type { RecentBuild } from './delivery/recent-builds.js';
 
 /**
  * Newest line of an agent progress journal. The file is a newest-first list, so we

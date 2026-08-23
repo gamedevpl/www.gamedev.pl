@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { MAX_MULTIPLAYER_SLOTS, ZONE_LINK_STEPS } from '@gamedevpl/contract';
 import { rememberBounded } from '../bounded-map.js';
-import type { PublishedSlugGate } from '../published-slugs.js';
+import type { PublishedSlugGate } from '../catalog/published-slugs.js';
 import type { Store, TelemetryEvent } from '../store.js';
 
 /**

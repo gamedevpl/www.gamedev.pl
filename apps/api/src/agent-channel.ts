@@ -27,11 +27,11 @@ import {
   type UploadKind,
   type UploadTokenClaims,
 } from './agent-upload-token.js';
-import { MAX_BUILD_PREVIEW_BYTES } from './build-preview-limits.js';
-import { loadBuildTranscript } from './build-transcript.js';
+import { MAX_BUILD_PREVIEW_BYTES } from './delivery/build-preview-limits.js';
+import { loadBuildTranscript } from './delivery/build-transcript.js';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
-import { deriveGateStatusString, readGateVerdict } from './gate-verdict.js';
-import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './gcs-sign.js';
+import { deriveGateStatusString, readGateVerdict } from './delivery/gate-verdict.js';
+import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './delivery/gcs-sign.js';
 import { DEFAULT_MCP_DIGEST_MAX_BYTES, compactKitDigestForApi } from './kit-digest.js';
 import {
   forbiddenIndexHtmlWriteReason,
@@ -40,10 +40,10 @@ import {
   MAX_UPLOAD_FILES,
   type DeliveryMode,
   type GamesStore,
-} from './games-store.js';
-import { parseGameMedia } from './github-client.js';
+} from './delivery/games-store.js';
+import { parseGameMedia } from './catalog/github-client.js';
 import { canTransition, resolveJobState, type JobState } from './job-state.js';
-import { gateCrashStall } from './gate-crash.js';
+import { gateCrashStall } from './delivery/gate-crash.js';
 import {
   KitFilesError,
   createKitFileStore,
@@ -65,12 +65,12 @@ import {
 } from './kit-registry.js';
 import { seedPayload } from './seed-status.js';
 import { largeSourceFileHint } from './module-size.js';
-import { gameManifestHint } from './game-manifest-hint.js';
+import { gameManifestHint } from './catalog/game-manifest-hint.js';
 import { resolveRoundBaseVersion } from './round-base-version.js';
-import { computeStageAdvisories } from './stage-hints.js';
+import { computeStageAdvisories } from './delivery/stage-hints.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from './source-patch.js';
-import { overlayGameSources } from './staged-preview.js';
-import { SourceDeliveryValidationError, type SourceDeliveryService } from './source-delivery.js';
+import { overlayGameSources } from './delivery/staged-preview.js';
+import { SourceDeliveryValidationError, type SourceDeliveryService } from './delivery/source-delivery.js';
 import {
   dispatchAttempt,
   type BuilderHandoff,
@@ -78,7 +78,7 @@ import {
   type Store,
   type SubmissionRecord,
 } from './store.js';
-import { pickLatestChangelogText } from './build-changelog.js';
+import { pickLatestChangelogText } from './delivery/build-changelog.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
 import { normalizeAtIntake, type IntakeText } from './localize-intake.js';
 import { createTranslatorFromEnv, type Translator } from './translate.js';

@@ -306,7 +306,7 @@ There are four levels of test:
 ```bash
 npx vitest run apps/api/src/managed-agent.test.ts apps/api/src/managed-backend.test.ts \
   apps/api/src/managed-provider-anthropic.test.ts apps/api/src/managed-provider-gemini.test.ts \
-  apps/api/src/managed-provider-openai.test.ts apps/api/src/build-prompt.test.ts
+  apps/api/src/managed-provider-openai.test.ts apps/api/src/delivery/build-prompt.test.ts
 ```
 
 **2. The probe.** One whole round through the real backend, over MCP, requires a real

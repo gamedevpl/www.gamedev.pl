@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import type { BuildBrief } from '../src/agent-backend.js';
 import { mintManagedMcpOpener } from '../src/agent-token.js';
-import { buildPrompt } from '../src/build-prompt.js';
+import { buildPrompt } from '../src/delivery/build-prompt.js';
 import { createManagedProvider } from '../src/managed-agent.js';
 import '../src/managed-provider-anthropic.js';
 import '../src/managed-provider-copilot.js';

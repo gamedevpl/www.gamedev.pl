@@ -34,7 +34,7 @@ The API picks the first of these that applies:
 4. **Otherwise** — the two fixture games in `apps/api/fixtures/games-repo`.
 
 The startup log says which one you got. Cases 2–4 all run through
-`apps/api/src/local-games-repo.ts`, which fakes GitHub at the `fetch` boundary rather than
+`apps/api/src/catalog/local-games-repo.ts`, which fakes GitHub at the `fetch` boundary rather than
 reimplementing the client — so catalog parsing, TypeScript bundling and asset embedding are
 the same code that runs in production, and a bug you find locally is a real bug.
 

@@ -3,13 +3,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mintAgentToken, mintLegacyAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
 import { verifyUploadToken } from './agent-upload-token.js';
 import type { AgentChannelOptions } from './agent-channel.js';
-import { MAX_TRANSCRIPT_LIST_ENTRIES } from './build-transcript.js';
+import { MAX_TRANSCRIPT_LIST_ENTRIES } from './delivery/build-transcript.js';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
-import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
+import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
 import type { AgentBackend } from './agent-backend.js';
 import type { GameSeeder } from './game-seed.js';
-import { InvalidUploadError, type GamesStore } from './games-store.js';
+import { InvalidUploadError, type GamesStore } from './delivery/games-store.js';
 import type { KnowledgeQueryResult } from './knowledge-search.js';
 import { InMemoryStore } from './store.js';
 import { mintToken } from './submission-token.js';
@@ -1336,7 +1336,7 @@ describe('agent build channel', () => {
           summary?: string;
         }) => {
           stored.push(input);
-          const { validateSourceUpload } = await import('./games-store.js');
+          const { validateSourceUpload } = await import('./delivery/games-store.js');
           validateSourceUpload(input.files as Array<{ path: string; content: string }>, input.mode ?? 'publish');
           return { version: 'v1', manifest: {} as never };
         },

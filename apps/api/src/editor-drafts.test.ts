@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
-import type { GamesStore } from './games-store.js';
+import type { GamesStore } from './delivery/games-store.js';
 import { InMemoryStore } from './store.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
@@ -71,7 +71,7 @@ function stubGamesStore(options: { hasEditor?: boolean; sealed?: boolean } = {})
       engineRef?: string;
     }) => {
       stored.push(input);
-      const { validateSourceUpload } = await import('./games-store.js');
+      const { validateSourceUpload } = await import('./delivery/games-store.js');
       validateSourceUpload(input.files);
       return { version: 'v2-editor', manifest: {} as never };
     },

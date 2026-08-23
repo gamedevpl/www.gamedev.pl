@@ -17,8 +17,8 @@
 // commit takes. The apply-bot's whole contribution is turning a stored version into a
 // branch; every safety property after that is the one the games repo already had.
 
-import type { GitHubClient } from '../github-client.js';
-import type { GamesStore, SourceFile } from '../games-store.js';
+import type { GitHubClient } from '../catalog/github-client.js';
+import type { GamesStore, SourceFile } from '../delivery/games-store.js';
 import type { ProposalRecord, Store } from '../store.js';
 
 export interface ApplyBotDeps {

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { AGENT_CHANNEL_ROUTES, GATE_STATUS_VALUES } from '@gamedevpl/contract';
 import { looksLikeCreatorAgentKey } from './agent-creator-key.js';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
-import { DEFAULT_TRANSCRIPT_WINDOW_ENTRIES, MAX_TRANSCRIPT_WINDOW_ENTRIES } from './build-transcript.js';
+import { DEFAULT_TRANSCRIPT_WINDOW_ENTRIES, MAX_TRANSCRIPT_WINDOW_ENTRIES } from './delivery/build-transcript.js';
 import {
   resolveCreatorAgentKeyForOpenRound,
   resolveCreatorAgentKeyForStart,
@@ -53,12 +53,12 @@ import {
   InvalidUploadError,
   MAX_UPLOAD_FILES,
   type GamesStore,
-} from './games-store.js';
-import { deriveGateStatusString, readGateVerdict } from './gate-verdict.js';
-import { gameManifestHint } from './game-manifest-hint.js';
+} from './delivery/games-store.js';
+import { deriveGateStatusString, readGateVerdict } from './delivery/gate-verdict.js';
+import { gameManifestHint } from './catalog/game-manifest-hint.js';
 import { detectStall, resolveJobState, toSubmissionStatus } from './job-state.js';
 import { largeSourceFileHint, moduleSizeWarnings } from './module-size.js';
-import type { GcsObjectStore } from './gcs-sign.js';
+import type { GcsObjectStore } from './delivery/gcs-sign.js';
 import {
   assertMcpSessionKeyUnexpired,
   looksLikeMcpSessionId,
@@ -100,7 +100,7 @@ import {
   PROPOSAL_NO_JOB,
 } from './community/proposals.js';
 import { isProposerTurn, toPublicProposalState } from './community/proposal-state.js';
-import type { SourceFile } from './games-store.js';
+import type { SourceFile } from './delivery/games-store.js';
 import type { ProposalBase } from './store.js';
 import { seedPayload } from './seed-status.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';

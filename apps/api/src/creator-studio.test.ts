@@ -263,7 +263,7 @@ describe('GET /api/me/studio', () => {
               sourceFiles: sourceFilesByVersion[version],
             }
           : null,
-    } as unknown as import('./games-store.js').GamesStore;
+    } as unknown as import('./delivery/games-store.js').GamesStore;
   }
 
   it('is editable off a mode=preview build mid-round, before anything is delivered', async () => {
@@ -631,7 +631,7 @@ describe('GET /api/me/studio/scorecards', () => {
       const gamesStore = {
         listVersions: async () => manifests,
         countVersions: async () => 2,
-      } as unknown as import('./games-store.js').GamesStore;
+      } as unknown as import('./delivery/games-store.js').GamesStore;
 
       const app = await buildApp({
         store,
@@ -684,7 +684,7 @@ describe('GET /api/me/studio/scorecards', () => {
           },
         ],
         countVersions: async () => 1,
-      } as unknown as import('./games-store.js').GamesStore;
+      } as unknown as import('./delivery/games-store.js').GamesStore;
 
       const app = await buildApp({
         store,
@@ -716,7 +716,7 @@ describe('GET /api/me/studio/scorecards', () => {
           agentChannel: {
             gamesStore: {
               listVersions: async () => [],
-            } as unknown as import('./games-store.js').GamesStore,
+            } as unknown as import('./delivery/games-store.js').GamesStore,
           },
         },
       });
