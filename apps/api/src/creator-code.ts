@@ -59,6 +59,7 @@ export interface CreatorCodeRoutesOptions {
   kitFileStore?: KitFileStore | null;
   // Track 2: the fast-lane synchronous preview route's engine half.
   githubClient?: Pick<GitHubClient, 'getGameSources'>;
+  engineRef?: string;
   now?: () => number;
   /** Busts the cached status response after an owner write — see submissions.ts. */
   invalidateStatusCache?: (issueNumber: number) => void;
@@ -196,7 +197,18 @@ export async function registerCreatorCodeRoutes(
             store: options.store,
             gamesStore: options.gamesStore,
             kitFileStore,
+            githubClient: options.githubClient,
+            engineRef: options.engineRef,
+            stagedPreviews: options.scheduleStagedPreview
+              ? {
+                  publishNow: async (issueNumber: number) => {
+                    options.scheduleStagedPreview!(issueNumber);
+                    return 'published';
+                  },
+                }
+              : undefined,
             onSourcesDelivered: options.onSourcesDelivered,
+            onEvent: (issueNumber) => options.scheduleStagedPreview?.(issueNumber),
             log: options.log,
           })
         : null;

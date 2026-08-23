@@ -11,6 +11,8 @@ import {
   SourceDeliveryAuthorityError,
   type SourceDeliveryAuthority,
 } from './source-delivery.js';
+import type { GitHubClient } from './github-client.js';
+import type { StagedPreviewPublisher } from './staged-preview.js';
 
 const ISSUE = 701;
 const SLUG = 'managed-comet';
@@ -73,6 +75,8 @@ async function setup(opts?: {
   kitFileStore?: KitFileStore | null;
   failPutCandidateSources?: boolean;
   translator?: Translator;
+  githubClient?: Pick<GitHubClient, 'getGameSources'>;
+  stagedPreviews?: Pick<StagedPreviewPublisher, 'publishNow'>;
 }) {
   const store = new InMemoryStore();
   await store.createSubmission(ISSUE, 'owner', 'Original title');
@@ -92,13 +96,16 @@ async function setup(opts?: {
     const version = `v-managed-${versionNumber}`;
     return { version, manifest: manifest(input.files, version) };
   });
-  const gamesStore = { putCandidateSources } as unknown as GamesStore;
+  const putDerivedArtifact = vi.fn(async () => {});
+  const gamesStore = { putCandidateSources, putDerivedArtifact } as unknown as GamesStore;
   const gate = vi.fn(async () => ({ buildId: 'build-managed-1' }));
   const log = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
   const service = createSourceDeliveryService({
     store,
     gamesStore,
     kitFileStore: opts?.kitFileStore,
+    githubClient: opts?.githubClient,
+    stagedPreviews: opts?.stagedPreviews,
     onSourcesDelivered: gate,
     onEvent: vi.fn(),
     log,
@@ -109,7 +116,7 @@ async function setup(opts?: {
     sessionRef: SESSION,
     roundGeneration: 1,
   };
-  return { store, putCandidateSources, gate, service, authority, log };
+  return { store, putCandidateSources, putDerivedArtifact, gate, service, authority, log };
 }
 
 describe('shared source delivery', () => {
@@ -557,5 +564,50 @@ export function tick(round: Round) {
       expect(result.accepted).toBe(true);
       expect((await store.getSubmission(ISSUE))?.agentEndedAt).toBe('2026-08-19T07:00:00.000Z');
     });
+
+    it('assembles and stores fast in-process preview.html on candidate delivery when githubClient is provided', async () => {
+      const githubClient = {
+        getGameSources: vi.fn(async () => ({
+          title: 'Fast Preview Title',
+          indexHtml: '<!doctype html><html><head></head><body><div id="game"></div></body></html>',
+          gameJs: 'console.log("ready");',
+          styleCss: 'body { margin: 0; }',
+        })),
+      };
+      const stagedPreviews = {
+        publishNow: vi.fn(async () => 'published'),
+      };
+      const { store, putDerivedArtifact, service, authority } = await setup({ githubClient, stagedPreviews });
+
+      const files: SourceFile[] = [
+        { path: 'GAME.json', content: JSON.stringify({ title: 'Fast Game', theme: { bg: '#000' } }) },
+        { path: 'game.ts', content: 'export function start() {}' },
+        { path: 'index.html', content: '<!doctype html><html><body></body></html>' },
+        { path: 'SPEC.md', content: '---\ntitle: Fast Game\n---\n# Fast Game' },
+      ];
+
+      const result = await service.deliver({
+        issueNumber: ISSUE,
+        slug: SLUG,
+        files,
+        mode: 'publish',
+        backend: BACKEND,
+        authority,
+      });
+
+      expect(result.accepted).toBe(true);
+      expect(githubClient.getGameSources).toHaveBeenCalledWith('main', SLUG, expect.any(Object));
+      expect(putDerivedArtifact).toHaveBeenCalledWith(
+        SLUG,
+        expect.any(String),
+        'preview.html',
+        expect.any(Buffer),
+        'text/html; charset=utf-8',
+      );
+      expect(stagedPreviews.publishNow).toHaveBeenCalledWith(ISSUE);
+      const previews = await store.listBuildPreviews(ISSUE);
+      expect(previews.length).toBeGreaterThan(0);
+    });
   });
 });
+

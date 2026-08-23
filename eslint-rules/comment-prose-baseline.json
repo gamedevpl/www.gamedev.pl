@@ -281,7 +281,7 @@
     "apps/api/src/slug-backfill.ts": 335,
     "apps/api/src/slug.test.ts": 135,
     "apps/api/src/slug.ts": 596,
-    "apps/api/src/source-delivery.ts": 59,
+    "apps/api/src/source-delivery.ts": 76,
     "apps/api/src/source-patch.test.ts": 25,
     "apps/api/src/source-patch.ts": 320,
     "apps/api/src/spa-paths.test.ts": 101,
