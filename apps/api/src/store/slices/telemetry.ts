@@ -10,20 +10,16 @@ import {
 } from '../records/telemetry.js';
 
 export interface TelemetryStore {
-  /**
-   * Appends validated play-session events. Date-partitioned so a TTL policy can
-   * expire a whole day at once and the aggregation job reads one partition rather
-   * than fanning out across every submission.
-   */
+  // Date-partitioned so a TTL policy expires a whole day at once.
   appendTelemetryEvents(dateStr: string, events: TelemetryEvent[]): Promise<void>;
 
-  /** One day's events for a game — the read the aggregation job (IL-2) will use. */
+  // One day's events for a game -- IL-2's aggregation read.
   listTelemetryEvents(dateStr: string, opts?: { slug?: string; limit?: number }): Promise<TelemetryEvent[]>;
 
-  /** Appends visit-level events to one day's partition. */
+  // Appends visit-level events to one day's partition.
   appendVisitEvents(dateStr: string, events: VisitEvent[]): Promise<void>;
 
-  /** One day's visit events — funnel, depth, and acquisition reads. */
+  // One day's visit events -- funnel, depth, and acquisition reads.
   listVisitEvents(
     dateStr: string,
     opts?: { visitId?: string; limit?: number; type?: VisitEvent['type']; excludeType?: VisitEvent['type'] },
@@ -108,13 +104,11 @@ export class FirestoreTelemetryStore implements TelemetryStore {
 
   async appendTelemetryEvents(dateStr: string, events: TelemetryEvent[]): Promise<void> {
     if (events.length === 0) return;
-    // One batch per flush: a play session sends a handful of events at a time, well
-    // inside Firestore's 500-write batch limit (the route caps a request long before).
+    // One batch per flush; well inside Firestore's 500-write batch limit.
     const collection = this.telemetryCollection(dateStr);
     const batch = this.db.batch();
     events.forEach((event) =>
-      // `expiresAt` is written as a Date so the driver stores a real Timestamp: a TTL
-      // policy ignores a field of any other type, which would leave the row forever.
+      // A Date, not a string -- TTL only expires a real Timestamp.
       batch.set(collection.doc(randomUUID()), { ...event, [TELEMETRY_TTL_FIELD]: telemetryExpiresAt(event.at) }),
     );
     await batch.commit();
@@ -126,9 +120,7 @@ export class FirestoreTelemetryStore implements TelemetryStore {
     const query = opts?.slug === undefined ? base : base.where('slug', '==', opts.slug);
     const snap = await query.limit(opts?.limit ?? 1000).get();
     return snap.docs.map((doc) => {
-      // Retention plumbing stays out of the domain object, so a reader cannot mistake
-      // it for signal and the privacy field-allowlist stays exactly the event's fields.
-      // `data()` hands back a fresh object per call, so dropping the field is local.
+      // Retention plumbing stays out of the domain object handed to callers.
       const event = doc.data();
       delete event[TELEMETRY_TTL_FIELD];
       return event as TelemetryEvent;

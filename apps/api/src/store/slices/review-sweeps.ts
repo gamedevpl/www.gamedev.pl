@@ -1,19 +1,7 @@
 import type { Firestore } from '@google-cloud/firestore';
 import { REVIEW_SWEEPS_COLLECTION, type ReviewSweep, type Scorecard } from '../records/review.js';
 
-/**
- * Presentation order for scorecards: newest computation first, slug as the tie-break.
- *
- * The tie-break is the load-bearing half, not a nicety. A sweep stamps **one**
- * `computedAt` onto every game it writes, so equal timestamps are not an edge case —
- * they are every row. Ordering on the timestamp alone leaves the result order undefined
- * (Firestore guarantees nothing among equal values), which would make the operator table
- * reshuffle between reads and, past the read limit, change *which* games appear at all.
- *
- * Shared by both stores so the in-memory one used by tests cannot quietly disagree with
- * the Firestore one used in production — that divergence is what makes an ordering bug
- * invisible until it is in front of a person.
- */
+// Newest-computedAt first, slug tie-break; keeps ordering identical across stores.
 export function compareScorecards(a: Scorecard, b: Scorecard): number {
   return b.computedAt.localeCompare(a.computedAt) || a.slug.localeCompare(b.slug);
 }
@@ -32,20 +20,13 @@ export interface ReviewSweepStore {
     patch: Partial<Omit<ReviewSweep, 'id' | 'createdAt' | 'createdBy' | 'slugs' | 'source'>>,
   ): Promise<ReviewSweep | null>;
 
-  /** Overwrites a game's current scorecard (docs/improvement-loop-plan.md IL-2). */
+  // Overwrites a game's current scorecard (IL-2).
   putScorecard(slug: string, scorecard: Scorecard): Promise<void>;
 
-  /** A game's current scorecard, or null before the first sweep has run for it. */
+  // A game's current scorecard, null before its first sweep.
   getScorecard(slug: string): Promise<Scorecard | null>;
 
-  /**
-   * Every game's current scorecard, newest computation first.
-   *
-   * Exists so the sweep's output is *readable*. Writing an aggregate nobody can look at
-   * is the same shape of mistake as a silently-dropping branch: the first sign it had
-   * been producing nonsense would be an agent acting on the nonsense. Bounded, because
-   * this is one query behind an operator page rather than a paginated surface.
-   */
+  // Every current scorecard, newest first; bounded, behind an operator page.
   listScorecards(opts?: { limit?: number }): Promise<Scorecard[]>;
 }
 
@@ -191,16 +172,13 @@ export class FirestoreReviewSweepStore implements ReviewSweepStore {
     return this.hydrateReviewSweep(id, snap.data() as Omit<ReviewSweep, 'id'>);
   }
 
-  // `current` is a fixed doc id, so a game has exactly one scorecard and the sweep
-  // overwrites rather than accumulating a history nobody reads.
+  // `current` is a fixed doc id -- one scorecard per game, overwritten.
   private scorecardRef(slug: string) {
     return this.db.collection('games').doc(slug).collection('scorecard').doc('current');
   }
 
   async putScorecard(slug: string, scorecard: Scorecard): Promise<void> {
-    // `set` without merge: a scorecard is a whole snapshot, and merging would leave
-    // fields from a previous window alive next to a newer one — a row that never
-    // existed as a measurement.
+    // set without merge -- a scorecard is a whole snapshot, not a patch.
     await this.scorecardRef(slug).set(scorecard);
   }
 
@@ -210,22 +188,7 @@ export class FirestoreReviewSweepStore implements ReviewSweepStore {
   }
 
   async listScorecards(opts?: { limit?: number }): Promise<Scorecard[]> {
-    // A collection-group query over `scorecard` reads every game's `current` doc in one
-    // round trip, instead of one read per catalog slug. Safe as a group name: nothing
-    // else in the schema uses it, unlike the `events` collision that forced play
-    // telemetry into its own group.
-    //
-    // Ordered by `computedAt` rather than by any metric, because the question this read
-    // exists to answer is "did the sweep run, and how fresh is the freshest" — a stale
-    // scorecard is the failure worth seeing first.
-    //
-    // The `orderBy` selects *which* docs the limit keeps (the freshest, if the catalog
-    // ever outgrows it); the sort below decides the order they are presented in. Both
-    // are needed: a sweep stamps one `computedAt` on every game it writes, so equal
-    // timestamps are the normal case rather than a rare tie, and Firestore promises
-    // nothing about order among equal values. Sorting here rather than adding
-    // `.orderBy('slug')` avoids provisioning a composite index for a listing that is
-    // already bounded to a couple of hundred rows.
+    // Collection-group query across all games' current docs, ordered by computedAt.
     const snap = await this.db
       .collectionGroup('scorecard')
       .orderBy('computedAt', 'desc')

@@ -2,70 +2,37 @@ import type { Firestore } from '@google-cloud/firestore';
 import type { GameAgentKeyRecord, CreatorAgentKeyRecord } from '../records/agent-keys.js';
 
 export interface AgentKeysStore {
-  /**
-   * Durable per-game opener state (BY-23). Returns null when no key has been issued
-   * for this slug yet.
-   */
+  // BY-23 opener state; null when no key issued for this slug.
   getGameAgentKey(slug: string): Promise<GameAgentKeyRecord | null>;
 
-  /**
-   * Ensures a gameAgentKeys doc exists for (slug, ownerUid), creating generation 1
-   * when absent. If the doc exists for a different owner, returns null (caller must
-   * refuse — the slug is not theirs to key).
-   */
+  // Creates gen 1 if absent; null if slug belongs to someone else.
   ensureGameAgentKey(slug: string, ownerUid: string, at: string): Promise<GameAgentKeyRecord | null>;
 
-  /**
-   * Transactionally bumps `keyGeneration` for an owned slug. Returns the new record,
-   * or null when missing / not owned by `ownerUid`.
-   */
+  // Bumps keyGeneration for an owned slug; null if missing/not owned.
   rotateGameAgentKey(slug: string, ownerUid: string, at: string): Promise<GameAgentKeyRecord | null>;
 
-  /**
-   * BY-24: admit at most one in-flight `open_round` per slug. Returns false when another
-   * caller already holds the lock.
-   */
+  // BY-24: admits one in-flight open_round per slug; false if locked.
   beginAgentOpenRound(slug: string, at: string): Promise<boolean>;
 
-  /** BY-24: release the admission lock after `open_round` completes or aborts. */
+  // BY-24: release the admission lock after open_round completes or aborts.
   finishAgentOpenRound(slug: string, at: string): Promise<void>;
 
-  /** Creator-wide opener record, or null when the creator has never minted one. */
+  // Creator-wide opener record, null if never minted.
   getCreatorAgentKey(ownerUid: string): Promise<CreatorAgentKeyRecord | null>;
 
-  /**
-   * Ensures a creatorAgentKeys doc exists for ownerUid, creating generation 1 when
-   * absent. Does not clear `revokedAt` — mint after revoke is an explicit reactivate.
-   */
+  // Creates gen 1 if absent; never clears revokedAt (use reactivate).
   ensureCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord>;
 
-  /**
-   * Clears `revokedAt` so a post-revoke mint can issue at the current (already bumped)
-   * generation. Creates generation 1 when absent. Does not bump `keyGeneration`.
-   */
+  // Clears revokedAt at the current generation; creates gen 1 if absent.
   reactivateCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord>;
 
-  /**
-   * Transactionally bumps `keyGeneration` and clears `revokedAt`. Returns the new
-   * record, or null when the creator has no key yet (caller should ensure first).
-   */
+  // Bumps keyGeneration, clears revokedAt; null if no key exists yet.
   rotateCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null>;
 
-  /**
-   * Transactionally bumps `keyGeneration` and sets `revokedAt`. Returns the new
-   * record, or null when missing. Keeps the doc so generation never resets to 1.
-   */
+  // Bumps keyGeneration, sets revokedAt; keeps the doc (gen never resets).
   revokeCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null>;
 
-  /**
-   * Re-dates a generation without bumping it, so it mints a valid key again.
-   *
-   * Mints are anchored to `updatedAt` (one generation, one key), which means a
-   * generation older than the key TTL would otherwise mint an expired key forever —
-   * and the only escape the panel offers is the destructive Rotate. Re-dating keeps
-   * the generation, so nothing that was already dead comes back: every key of this
-   * generation had expired before this could run.
-   */
+  // Re-dates updatedAt without bumping the generation, avoiding a destructive rotate.
   touchCreatorAgentKey(ownerUid: string, at: string): Promise<CreatorAgentKeyRecord | null>;
 }
 

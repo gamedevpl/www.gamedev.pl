@@ -2,20 +2,13 @@ import type { Firestore } from '@google-cloud/firestore';
 import type { WorldEntryRecord } from '../records/player-data.js';
 
 export interface WorldEntriesStore {
-  /** Every entry in one shared world. The public read — no uid involved. */
+  // Every entry in one shared world. The public read -- no uid involved.
   listWorldEntries(worldId: string): Promise<WorldEntryRecord[]>;
 
-  /** One entry, or null. Used to settle ownership before a write. */
+  // One entry, or null. Used to settle ownership before a write.
   getWorldEntry(worldId: string, key: string): Promise<WorldEntryRecord | null>;
 
-  /**
-   * Claims or updates one entry, atomically.
-   *
-   * Returns `conflict` when the key already belongs to somebody else, and `quota` when
-   * this would take the player past `maxPerPlayer`. Both are decided inside the same
-   * transaction as the write: checking first and writing after would let two browsers
-   * on one account, or two players racing for the same plot, both pass the check.
-   */
+  // Atomic claim/update; transaction prevents two racers both passing the check.
   putWorldEntry(options: {
     worldId: string;
     key: string;
@@ -25,16 +18,16 @@ export interface WorldEntriesStore {
     maxEntries: number;
   }): Promise<{ ok: true; entry: WorldEntryRecord } | { ok: false; reason: 'conflict' | 'quota' | 'full' }>;
 
-  /** Deletes an entry the player owns. False when it is missing or somebody else's. */
+  // Deletes an entry the player owns; false if missing/not theirs.
   deleteWorldEntry(worldId: string, key: string, uid: string): Promise<boolean>;
 
-  /** How many entries a player owns in one world — the quota read. */
+  // How many entries a player owns in one world -- the quota read.
   countWorldEntries(worldId: string, uid: string): Promise<number>;
 
-  /** Worlds where a person has written something — the erase path's read. */
+  // Worlds where a person has written something -- the erase path's read.
   listWorldsForUser(uid: string): Promise<string[]>;
 
-  /** Deletes everything one person wrote across every world. Returns how many went. */
+  // Deletes everything one person wrote across every world. Returns how many went.
   deleteWorldEntriesForUser(uid: string): Promise<number>;
 }
 
@@ -120,9 +113,7 @@ export class InMemoryWorldEntriesStore implements WorldEntriesStore {
 export class FirestoreWorldEntriesStore implements WorldEntriesStore {
   constructor(private db: Firestore) {}
 
-  // Worlds are top-level, not under a user: a world belongs to a game and outlives
-  // every individual player of it. `worldId` is opaque (today it equals the slug), so
-  // per-creator or seasonal worlds later are a new id rather than a migration.
+  // Worlds are top-level (not per-user); worldId is opaque, today == slug.
   private worldCollection(worldId: string) {
     return this.db.collection('worlds').doc(worldId).collection('worldEntries');
   }
@@ -160,19 +151,14 @@ export class FirestoreWorldEntriesStore implements WorldEntriesStore {
     maxEntries: number;
   }): Promise<{ ok: true; entry: WorldEntryRecord } | { ok: false; reason: 'conflict' | 'quota' | 'full' }> {
     const ref = this.worldCollection(options.worldId).doc(options.key);
-    // A transaction, because both rules this enforces are exactly the kind that a
-    // check-then-write silently loses: two players claiming the same empty plot in the
-    // same second, and one player with two tabs open spending their last quota slot
-    // twice. Reading inside the transaction is what makes the decision binding.
+    // Transaction: check-then-write would let two racers double-claim a plot.
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const existing = snap.exists ? this.toWorldEntry(options.key, snap.data() ?? {}) : null;
       if (existing && existing.ownerUid !== options.uid) return { ok: false as const, reason: 'conflict' as const };
 
       if (!existing) {
-        // Counted only when claiming a new key. Re-editing an entry the player already
-        // owns cannot change either total, and charging a read for it would make the
-        // common case — a player tidying their own plot — the expensive one.
+        // Counted only on a new claim; re-editing owned entries is free.
         const [owned, total] = await Promise.all([
           tx.get(this.worldCollection(options.worldId).where('ownerUid', '==', options.uid).count()),
           tx.get(this.worldCollection(options.worldId).count()),
@@ -189,8 +175,7 @@ export class FirestoreWorldEntriesStore implements WorldEntriesStore {
         createdAt: existing?.createdAt || now,
         updatedAt: now,
       };
-      // No merge: `fields` is the whole entry, and merging would leave a value from a
-      // shape the game has since stopped writing alive next to the current one.
+      // No merge -- fields is the whole entry, not a partial patch.
       tx.set(ref, {
         fields: entry.fields,
         ownerUid: entry.ownerUid,
@@ -206,8 +191,7 @@ export class FirestoreWorldEntriesStore implements WorldEntriesStore {
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) return false;
-      // Ownership re-read inside the transaction: the route checked it too, but only
-      // this read is ordered against a concurrent write to the same key.
+      // Re-checked inside the transaction, ordered against a concurrent write.
       if (this.toWorldEntry(key, snap.data() ?? {}).ownerUid !== uid) return false;
       tx.delete(ref);
       return true;
@@ -219,13 +203,7 @@ export class FirestoreWorldEntriesStore implements WorldEntriesStore {
     return snap.data().count;
   }
 
-  /**
-   * A collection-group query, because erasure has to reach into every world at once and
-   * there is no list of which ones a person touched. Needs the COLLECTION_GROUP index on
-   * `worldEntries.ownerUid` provisioned in infra/setup-gcp.sh — Firestore's automatic
-   * single-field indexes are COLLECTION scope only, so this is the one query here that
-   * does not get an index for free.
-   */
+  // Collection-group query; needs the COLLECTION_GROUP index in setup-gcp.sh.
   private worldEntriesOwnedBy(uid: string) {
     return this.db.collectionGroup('worldEntries').where('ownerUid', '==', uid);
   }
@@ -244,10 +222,7 @@ export class FirestoreWorldEntriesStore implements WorldEntriesStore {
   async deleteWorldEntriesForUser(uid: string): Promise<number> {
     const snap = await this.worldEntriesOwnedBy(uid).get();
     if (snap.empty) return 0;
-    // Chunked batches, same as `deleteGameSaves`: this runs inside an erasure request
-    // an operator has already accepted, and somebody who built in several worlds is
-    // exactly the person whose deletion would otherwise be a long run of round trips.
-    // 400 per batch leaves headroom under Firestore's 500-write limit.
+    // Chunked batches (400/batch), like deleteGameSaves -- an accepted erasure request.
     for (let index = 0; index < snap.docs.length; index += 400) {
       const batch = this.db.batch();
       for (const doc of snap.docs.slice(index, index + 400)) batch.delete(doc.ref);

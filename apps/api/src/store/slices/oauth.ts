@@ -9,7 +9,7 @@ import type {
 } from '../records/oauth.js';
 
 export interface OAuthStore {
-  /** Persist a dynamically registered or CIMD-cached OAuth client. */
+  // Persists a dynamically registered or CIMD-cached OAuth client.
   createOAuthClient(record: OAuthClientRecord): Promise<void>;
 
   getOAuthClient(clientId: string): Promise<OAuthClientRecord | null>;
@@ -32,17 +32,10 @@ export interface OAuthStore {
 
   createOAuthAuthCode(record: OAuthAuthCodeRecord): Promise<void>;
 
-  /**
-   * Single-use: returns the record with `usedAt` set, then deletes the stored
-   * row. Already-used or expired codes are deleted and yield null. Wrong-hash
-   * presentations leave the row in place.
-   */
+  // Single-use; deletes used/expired codes. Wrong-hash presentations stay untouched.
   consumeOAuthAuthCode(codeId: string, codeHash: string, nowMs: number): Promise<OAuthAuthCodeRecord | null>;
 
-  /**
-   * Rotate refresh credentials. When the presented refresh id is not the grant's
-   * current one, the whole grant is revoked (reuse detection).
-   */
+  // Rotating a stale refresh id revokes the whole grant (reuse detection).
   rotateOAuthRefreshToken(input: {
     refreshTokenId: string;
     refreshSecretHash: string;
@@ -53,7 +46,7 @@ export interface OAuthStore {
     nowMs: number;
   }): Promise<RotateRefreshTokenResult>;
 
-  /** First token issue after authorization_code exchange (grant has no refresh yet). */
+  // First token issue after authorization_code exchange (no refresh yet).
   issueOAuthTokensFromGrant(input: {
     grantId: string;
     refreshTokenId: string;
@@ -70,7 +63,7 @@ export class InMemoryOAuthStore implements OAuthStore {
   oauthGrants = new Map<string, OAuthGrantRecord>();
   oauthAccessTokens = new Map<string, OAuthAccessTokenRecord>();
   oauthAuthCodes = new Map<string, OAuthAuthCodeRecord>();
-  /** refresh token id -> grant id — enables reuse detection after rotation. */
+  // refresh token id -> grant id, for reuse detection after rotation.
   oauthRefreshTokenIndex = new Map<string, string>();
 
   async createOAuthClient(record: OAuthClientRecord): Promise<void> {
