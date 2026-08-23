@@ -2038,22 +2038,13 @@ declare const GameKit: { defineGame(): unknown };
     const { gamesStore } = stubGamesStore();
     app = await createApp(store, gamesStore);
     const sessionId = await initialize(app);
-    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
-    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+    const sid = { 'mcp-session-id': sessionId };
+    const started = await callTool(app, 'start', { key: roundKey() }, sid);
+    const sessionKey = (started.structured as Record<string, string>).sessionKey;
 
-    const minted = await callTool(
-      app,
-      'stage_upload_url',
-      { sessionKey, path: 'game/extra.ts' },
-      { 'mcp-session-id': sessionId },
-    );
+    const minted = await callTool(app, 'stage_upload_url', { sessionKey, path: 'game/extra.ts' }, sid);
     expect(minted.isError).toBe(false);
-    const { url, path, maxBytes, upload } = minted.structured as {
-      url: string;
-      path: string;
-      maxBytes: number;
-      upload: string;
-    };
+    const { url, path, maxBytes, upload } = minted.structured as Record<string, string | number>;
     expect(path).toBe('game/extra.ts');
     expect(maxBytes).toBe(1_000_000);
     expect(upload).toMatch(/^curl -H 'Content-Type: text\/plain; charset=utf-8' --upload-file game\/extra\.ts '/);
@@ -2061,7 +2052,7 @@ declare const GameKit: { defineGame(): unknown };
     const content = 'export const stagedViaCurl = true;\n';
     const put = await app.inject({
       method: 'PUT',
-      url: url.replace(/^https?:\/\/[^/]+/, ''),
+      url: (url as string).replace(/^https?:\/\/[^/]+/, ''),
       headers: { 'content-type': 'text/plain; charset=utf-8' },
       payload: Buffer.from(content, 'utf8'),
     });
@@ -2073,7 +2064,7 @@ declare const GameKit: { defineGame(): unknown };
       control: { stop: false },
     });
 
-    const listed = await callTool(app, 'list_staged_sources', { sessionKey }, { 'mcp-session-id': sessionId });
+    const listed = await callTool(app, 'list_staged_sources', { sessionKey }, sid);
     expect(listed.isError).toBe(false);
     const files = (listed.structured as { files: Array<{ path: string; bytes: number }> }).files;
     expect(files).toEqual(
@@ -2081,34 +2072,24 @@ declare const GameKit: { defineGame(): unknown };
     );
 
     // Path allowlisting and batch caps apply at mint time.
-    const bad = await callTool(
-      app,
-      'stage_upload_url',
-      { sessionKey, path: '../evil.ts' },
-      { 'mcp-session-id': sessionId },
-    );
+    const bad = await callTool(app, 'stage_upload_url', { sessionKey, path: '../evil.ts' }, sid);
     expect(bad.isError).toBe(true);
     expect(JSON.stringify(bad.structured)).toMatch(/illegal path/i);
     const tooMany = await callTool(
       app,
       'stage_upload_url',
       { sessionKey, paths: Array.from({ length: 51 }, (_, i) => `game/m${i}.ts`) },
-      { 'mcp-session-id': sessionId },
+      sid,
     );
     expect(tooMany.isError).toBe(true);
     expect(JSON.stringify(tooMany.structured)).toMatch(/too many paths in one request \(max 50/);
 
     // Batch path minting with paths: string[] (testing 20 concurrent PUTs)
     const testPaths = Array.from({ length: 20 }, (_, i) => `game/module-${i}.ts`);
-    const batchMinted = await callTool(
-      app,
-      'stage_upload_url',
-      { sessionKey, paths: testPaths },
-      { 'mcp-session-id': sessionId },
-    );
+    const batchMinted = await callTool(app, 'stage_upload_url', { sessionKey, paths: testPaths }, sid);
     expect(batchMinted.isError).toBe(false);
     const batchStructured = batchMinted.structured as {
-      uploads: Array<{ path: string; url: string; upload: string; maxBytes: number }>;
+      uploads: Array<{ path: string; url: string }>;
       uploadScript?: string;
     };
     expect(batchStructured.uploads).toHaveLength(20);
@@ -2131,7 +2112,7 @@ declare const GameKit: { defineGame(): unknown };
       expect(res.json()).toMatchObject({ accepted: true, path: testPaths[i] });
     });
 
-    const afterBatchList = await callTool(app, 'list_staged_sources', { sessionKey }, { 'mcp-session-id': sessionId });
+    const afterBatchList = await callTool(app, 'list_staged_sources', { sessionKey }, sid);
     expect(afterBatchList.isError).toBe(false);
     const afterFiles = (afterBatchList.structured as { files: Array<{ path: string; bytes: number }> }).files;
     expect(afterFiles.map((f) => f.path)).toEqual(expect.arrayContaining(['game/extra.ts', ...testPaths]));
