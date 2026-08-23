@@ -16,7 +16,7 @@ import {
   type GameAgentKeyClaims,
 } from './agent-game-key.js';
 import { InvalidAgentTokenError } from './agent-token.js';
-import { isActiveBuildRound } from '../builder.js';
+import { isActiveBuildRound } from '../creation/builder.js';
 import type { GameAgentKeyRecord, Store, SubmissionRecord } from '../platform/store.js';
 
 export type ResolveGameKeyResult =

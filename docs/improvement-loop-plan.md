@@ -79,17 +79,17 @@ never-raw-text-in, never auto-merge. What changed is that most of the plumbing
 it proposed to build now exists for other reasons, and two of its decisions were
 made from stale premises.
 
-| First draft assumed                                                       | Reality on 2026-07-25                                                                                                                                                                                                                                | Consequence for this plan                                                                              |
-| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Telemetry needs a new games-repo `postMessage` convention before it works | The app **already injects a bridge** into every game it plays ([gamePlayer.ts](../apps/web/src/gamePlayer.ts)), with a `gdpl-host` / `gdpl-player` envelope                                                                                          | Funnel + error capture ship with **zero games-repo changes**. Only progression depth needs game opt-in |
-| Games are addressed as `games/{gameId}`                                   | Half right, and the half that was wrong cost a day: a **submission** is `submissions/{issueNumber}`, but a **game** is a games-repo slug, and only 8 of 42 catalog games have a submission at all                                                    | Keyed by `slug`. Re-keying on the submission was tried first and silently dropped ~95% of play         |
-| "No email sender exists", so the digest is on-site only                   | Mailer, templates, unsubscribe tokens, Web Push and an in-app bell all shipped                                                                                                                                                                       | **Decision reversed**: the digest rides the existing notification seam                                 |
-| The improvement quota would need new quota machinery                      | `UsageCounters` is already a named-kind counter set (`submissions`, `previews`, `mocks`, `refines`, `feedback`)                                                                                                                                      | The separate improvement quota is one new counter kind                                                 |
-| Theme extraction uses "Vertex Flash-Lite plumbing"                        | Vertex calls now route through the genaicode seam ([genai.ts](../apps/api/src/agent-surface/genai.ts)); moderation runs Gemini 3 Flash                                                                                                               | Naming corrected; the seam is the integration point, not Vertex directly                               |
-| Written feedback → agent is a thing to design                             | `POST /api/submissions/:token/feedback` already does it: moderate → sanitize → fenced PR comment → queue into the agent inbox                                                                                                                        | The Act plane's delivery path is **built and proven**; player feedback is the missing sibling          |
-| An agent's progress arrives by git                                        | The build channel ([agent-channel.ts](../apps/api/src/agent-surface/agent-channel.ts)) takes progress, screenshots, and hands back queued creator requests                                                                                           | Improvement runs get live progress and before/after shots for free                                     |
-| "Assign the issue to Copilot" is a solved primitive                       | **Superseded (2026-07-29/30).** The relay is gone: the platform owns dispatch through the agent-tasks API and a job state machine ([agent-backend.ts](../apps/api/src/agent-surface/agent-backend.ts), [job-state.ts](../apps/api/src/job-state.ts)) | The autonomy story is **no longer gated on a relay**. IL-3/IL-4 dispatch work, they do not file issues |
-| Games are single-player, one player per session                           | Party mode ships: one shared screen, 2–8 phone controllers, guests with no account and ephemeral rooms                                                                                                                                               | Sessions are no longer 1:1 with players; guest privacy constrains what may be recorded                 |
+| First draft assumed                                                       | Reality on 2026-07-25                                                                                                                                                                                                                                         | Consequence for this plan                                                                              |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Telemetry needs a new games-repo `postMessage` convention before it works | The app **already injects a bridge** into every game it plays ([gamePlayer.ts](../apps/web/src/gamePlayer.ts)), with a `gdpl-host` / `gdpl-player` envelope                                                                                                   | Funnel + error capture ship with **zero games-repo changes**. Only progression depth needs game opt-in |
+| Games are addressed as `games/{gameId}`                                   | Half right, and the half that was wrong cost a day: a **submission** is `submissions/{issueNumber}`, but a **game** is a games-repo slug, and only 8 of 42 catalog games have a submission at all                                                             | Keyed by `slug`. Re-keying on the submission was tried first and silently dropped ~95% of play         |
+| "No email sender exists", so the digest is on-site only                   | Mailer, templates, unsubscribe tokens, Web Push and an in-app bell all shipped                                                                                                                                                                                | **Decision reversed**: the digest rides the existing notification seam                                 |
+| The improvement quota would need new quota machinery                      | `UsageCounters` is already a named-kind counter set (`submissions`, `previews`, `mocks`, `refines`, `feedback`)                                                                                                                                               | The separate improvement quota is one new counter kind                                                 |
+| Theme extraction uses "Vertex Flash-Lite plumbing"                        | Vertex calls now route through the genaicode seam ([genai.ts](../apps/api/src/agent-surface/genai.ts)); moderation runs Gemini 3 Flash                                                                                                                        | Naming corrected; the seam is the integration point, not Vertex directly                               |
+| Written feedback → agent is a thing to design                             | `POST /api/submissions/:token/feedback` already does it: moderate → sanitize → fenced PR comment → queue into the agent inbox                                                                                                                                 | The Act plane's delivery path is **built and proven**; player feedback is the missing sibling          |
+| An agent's progress arrives by git                                        | The build channel ([agent-channel.ts](../apps/api/src/agent-surface/agent-channel.ts)) takes progress, screenshots, and hands back queued creator requests                                                                                                    | Improvement runs get live progress and before/after shots for free                                     |
+| "Assign the issue to Copilot" is a solved primitive                       | **Superseded (2026-07-29/30).** The relay is gone: the platform owns dispatch through the agent-tasks API and a job state machine ([agent-backend.ts](../apps/api/src/agent-surface/agent-backend.ts), [job-state.ts](../apps/api/src/creation/job-state.ts)) | The autonomy story is **no longer gated on a relay**. IL-3/IL-4 dispatch work, they do not file issues |
+| Games are single-player, one player per session                           | Party mode ships: one shared screen, 2–8 phone controllers, guests with no account and ephemeral rooms                                                                                                                                                        | Sessions are no longer 1:1 with players; guest privacy constrains what may be recorded                 |
 
 Two things the first draft got right and this revision keeps unchanged: the
 router's Defect / Friction / Design-change split, and the measurement plane.
@@ -405,9 +405,9 @@ human's PAT — so everything in IL-3 and IL-4 that said "assign Copilot" inheri
 relay's failure modes.
 
 None of that is true any more. The platform owns build orchestration: a job state
-machine ([job-state.ts](../apps/api/src/job-state.ts)), a backend seam every coding agent
+machine ([job-state.ts](../apps/api/src/creation/job-state.ts)), a backend seam every coding agent
 plugs into ([agent-backend.ts](../apps/api/src/agent-surface/agent-backend.ts)), and dispatch through
-the Copilot **agent tasks** API ([agent-tasks.ts](../apps/api/src/agent-tasks.ts)) that
+the Copilot **agent tasks** API ([agent-tasks.ts](../apps/api/src/creation/agent-tasks.ts)) that
 starts work from a bare prompt with no issue, no label, and no relay.
 
 What that changes for this plan, concretely:
@@ -641,7 +641,7 @@ at all and feeds the only autonomous-eligible class.
   leak — not redacted at read time, never written at all.
 
 - ✅ **Daily aggregation job** (2026-07-27): `POST /api/internal/scorecard-sweep`
-  ([scorecard.ts](../apps/api/src/scorecard.ts)), Cloud Scheduler → OIDC internal
+  ([scorecard.ts](../apps/api/src/creation/scorecard.ts)), Cloud Scheduler → OIDC internal
   endpoint, the same pattern as the notify sweep. Rolls a 28-day telemetry window plus
   vote and feedback counts into `games/{slug}/scorecard/current`.
 
@@ -776,7 +776,7 @@ at all and feeds the only autonomous-eligible class.
   Closed until that job and env var exist, like every other internal sweep.
 
 - ✅ **Votes and feedback themes in the studio** (2026-07-28, #289):
-  [creator-studio.ts](../apps/api/src/creator-studio.ts) serves votes, feedback counts and
+  [creator-studio.ts](../apps/api/src/creation/creator-studio.ts) serves votes, feedback counts and
   themes for a creator's own games, rendered in
   [CreatorStudioView.tsx](../apps/web/src/CreatorStudioView.tsx). `/api/me/studio/health`
   recomputes from raw events and so could never answer "what do they say" at any window
@@ -964,7 +964,7 @@ at all and feeds the only autonomous-eligible class.
 ### Phase IL-4 — Bounded autonomy
 
 - ✅ **Autonomy is per game, and the default acts on nothing** (2026-07-30):
-  [autonomy.ts](../apps/api/src/autonomy.ts), set from the studio's stats tab.
+  [autonomy.ts](../apps/api/src/creation/autonomy.ts), set from the studio's stats tab.
   `digest-only` / `suggest` (default) / `auto-fix-defects` / `auto-tune`. Per game rather
   than per account, because a creator can reasonably want a crash fixed unasked on the
   game they no longer play and to be consulted about everything on the one they are still

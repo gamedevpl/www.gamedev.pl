@@ -8,7 +8,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { isAdminSession } from './admin-session.js';
 import { MANAGED_AGENT_VENDORS } from '../agent-surface/agent-backend-env.js';
-import { DEFAULT_SEED_PROVIDER } from '../game-seed.js';
+import { DEFAULT_SEED_PROVIDER } from '../creation/game-seed.js';
 import {
   recentPartitions,
   scanPartitions,
@@ -17,9 +17,9 @@ import {
   type PartitionScanBudget,
 } from '../telemetry/telemetry-health.js';
 import { routeAll, type Suggestion } from '../community/suggestions.js';
-import { buildJobQueue } from '../job-admin-routes.js';
-import type { JobState } from '../job-state.js';
-import { buildCostReport } from '../job-costs.js';
+import { buildJobQueue } from '../creation/job-admin-routes.js';
+import type { JobState } from '../creation/job-state.js';
+import { buildCostReport } from '../creation/job-costs.js';
 import {
   detectOperatorAlerts,
   detectSeedingDegraded,
@@ -41,7 +41,7 @@ import {
   DEFAULT_CREATION_LIMITS_TTL_MS,
   resolveDefaultGlobalDailyCap,
   resolveDefaultGlobalDailyTabCompleteTokenCap,
-} from '../creation-limits.js';
+} from '../creation/creation-limits.js';
 import {
   BOT_UID_PREFIX,
   type BetaInvite,

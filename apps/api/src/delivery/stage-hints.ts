@@ -1,9 +1,9 @@
 // Runs submit_sources' typecheck/audio checks per staged file, as hints.
 import type { KitFileStore } from '../agent-surface/kit-files.js';
 import type { GamesStore } from './games-store.js';
-import type { BaseVersionRecord, BaseVersionStore } from '../round-base-version.js';
+import type { BaseVersionRecord, BaseVersionStore } from '../creation/round-base-version.js';
 import { overlayGameSources, readDeliveredSources } from './staged-preview.js';
-import { runTypecheckPreflight, sharedSourcesFromKitTree } from '../typecheck-preflight.js';
+import { runTypecheckPreflight, sharedSourcesFromKitTree } from '../creation/typecheck-preflight.js';
 import { KIT_ROOT_DIR } from '../agent-surface/kit-registry.js';
 import {
   mergeMusicTrackMaps,

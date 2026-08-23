@@ -5,7 +5,7 @@ import {
   profileBylineName,
   toPublicCreatorProfile,
   type PublicCreatorProfile,
-} from '../creator-profile.js';
+} from '../creation/creator-profile.js';
 import { catalogEntryFromSpec, type CatalogGameEntry, type GitHubClient } from './github-client.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { DELETED_ACCOUNT_UID, type Store } from '../platform/store.js';

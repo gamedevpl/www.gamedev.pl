@@ -1,4 +1,4 @@
-import type { AgentSessionTokens } from '../../job-state.js';
+import type { AgentSessionTokens } from '../../creation/job-state.js';
 import type { Store } from '../../platform/store.js';
 import type { SubmissionRecord } from './submission.js';
 

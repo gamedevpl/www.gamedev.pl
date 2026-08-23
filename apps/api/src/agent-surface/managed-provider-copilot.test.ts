@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { randomBytes } from 'node:crypto';
-import type { AgentTask, AgentTaskInput, AgentTasksClient } from '../agent-tasks.js';
+import type { AgentTask, AgentTaskInput, AgentTasksClient } from '../creation/agent-tasks.js';
 import { buildPrompt } from '../delivery/build-prompt.js';
 import type { BuildBrief } from './agent-backend.js';
 import {

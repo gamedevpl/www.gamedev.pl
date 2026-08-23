@@ -7,7 +7,7 @@
 // of who is typing on the other end.
 
 import type { AgentBackend, BuildBrief, DispatchResult, SeedDelivery, SeedFiles } from './agent-backend.js';
-import type { AgentObservation } from '../job-state.js';
+import type { AgentObservation } from '../creation/job-state.js';
 
 export interface SelfBuildSignals {
   lastAgentSignalAt?: string;

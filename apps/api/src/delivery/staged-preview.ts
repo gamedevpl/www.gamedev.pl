@@ -35,7 +35,11 @@ import { MAX_BUILD_PREVIEW_BYTES } from './build-preview-limits.js';
 import type { GamesStore, SourceFile } from './games-store.js';
 import { hasPlayableHowToPlay } from '../catalog/index-html-generator.js';
 import type { GitHubClient } from '../catalog/github-client.js';
-import { resolveRoundBaseVersion, type BaseVersionRecord, type BaseVersionStore } from '../round-base-version.js';
+import {
+  resolveRoundBaseVersion,
+  type BaseVersionRecord,
+  type BaseVersionStore,
+} from '../creation/round-base-version.js';
 import type { Store } from '../platform/store.js';
 
 /**

@@ -146,7 +146,7 @@ export function canTransitionProposal(from: ProposalState, to: ProposalState): b
   return ALLOWED_TRANSITIONS[from].includes(to);
 }
 
-/** Who moved a proposal. Mirrors {@link import('../job-state.js').TransitionActor}. */
+/** Who moved a proposal. Mirrors {@link import('../creation/job-state.js').TransitionActor}. */
 export type ProposalActor = 'proposer' | 'reviewer' | 'operator' | 'gate' | 'system';
 
 export interface ProposalTransition {

@@ -1,4 +1,4 @@
-import type { BuilderKind } from '../../builder.js';
+import type { BuilderKind } from '../../creation/builder.js';
 
 export interface BuilderHandoff {
   from: BuilderKind;

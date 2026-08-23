@@ -1,4 +1,4 @@
-import { detectStall, type JobStall } from '../job-state.js';
+import { detectStall, type JobStall } from '../creation/job-state.js';
 import type { Scorecard, Store, SuggestionRecord } from '../platform/store.js';
 
 /**
