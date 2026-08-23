@@ -11,7 +11,7 @@ import { mintGameAgentKey } from './agent-game-key.js';
 import { mintAgentToken } from './agent-token.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { buildApp } from './app.js';
-import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
+import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
 import { mintMcpSessionKey } from './mcp-session-key.js';
 import { consentToken } from './oauth-as.js';
 import { pkceChallengeS256 } from './oauth-pkce.js';

@@ -1,5 +1,5 @@
 import type { Firestore } from '@google-cloud/firestore';
-import type { PublicationHealthCheck, PublicationRecord } from '../../games-store.js';
+import type { PublicationHealthCheck, PublicationRecord } from '../../delivery/games-store.js';
 
 export interface PublicationStore {
   // Currently published for a slug, or null when nothing ever was.

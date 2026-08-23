@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { GamesStore, SourceFile, VersionManifest } from '../games-store.js';
-import { isPublishableMode } from '../games-store.js';
+import type { GamesStore, SourceFile, VersionManifest } from '../delivery/games-store.js';
+import { isPublishableMode } from '../delivery/games-store.js';
 import {
   acceptProposal,
   canProposeTo,

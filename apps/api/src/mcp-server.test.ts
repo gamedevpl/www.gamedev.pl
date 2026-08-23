@@ -11,9 +11,9 @@ import {
 } from './agent-token.js';
 import { mintGameAgentKey } from './agent-game-key.js';
 import { buildApp } from './app.js';
-import type { GamesStore } from './games-store.js';
-import type { GcsObjectStore } from './gcs-sign.js';
-import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
+import type { GamesStore } from './delivery/games-store.js';
+import type { GcsObjectStore } from './delivery/gcs-sign.js';
+import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
 import type { KnowledgeQueryResult, QueryKnowledgeFn } from './knowledge-search.js';
 import { mintMcpSessionKey, verifyMcpSessionKey } from './mcp-session-key.js';
 import { MCP_UNADVERTISED_TOOLS } from './mcp-server.js';
@@ -98,7 +98,7 @@ function stubGamesStore(gate?: {
       kitEngineRef?: string;
       summary?: string;
     }) => {
-      const { validateSourceUpload } = await import('./games-store.js');
+      const { validateSourceUpload } = await import('./delivery/games-store.js');
       validateSourceUpload(input.files);
       stored.push(input);
       return { version: 'v1', manifest: {} as never };

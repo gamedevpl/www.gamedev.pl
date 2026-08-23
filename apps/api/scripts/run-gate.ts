@@ -39,9 +39,9 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { gateProgressFor, type GateProgressLane, type GateProgressStage } from '../src/gate-progress.js';
-import { runGate } from '../src/gate-runner.js';
-import { createGcsGamesStore } from '../src/games-store.js';
+import { gateProgressFor, type GateProgressLane, type GateProgressStage } from '../src/delivery/gate-progress.js';
+import { runGate } from '../src/delivery/gate-runner.js';
+import { createGcsGamesStore } from '../src/delivery/games-store.js';
 
 function arg(name: string): string | undefined {
   const index = process.argv.indexOf(`--${name}`);

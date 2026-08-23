@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { registerRemixRoutes, MAX_REMIX_ID_LENGTH, REMIX_TTL_MS } from './remix.js';
 import { InMemoryStore } from './store.js';
-import type { GamesStore } from './games-store.js';
-import type { GitHubClient } from './github-client.js';
+import type { GamesStore } from './delivery/games-store.js';
+import type { GitHubClient } from './catalog/github-client.js';
 import type { EditorAssistant } from './editor-assist.js';
 
 /*

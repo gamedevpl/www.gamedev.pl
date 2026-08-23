@@ -22,7 +22,7 @@
  * Usage: npm run contract:games-repo -w @gamedevpl/api
  */
 
-import { runGamesRepoContractCheck } from '../src/games-repo-contract-check.js';
+import { runGamesRepoContractCheck } from '../src/catalog/games-repo-contract-check.js';
 
 const repo = (process.env.GAMES_REPO ?? 'gamedevpl/www.gamedev.pl-games').trim();
 const ref = (process.env.GAMES_PUBLISHED_REF ?? 'main').trim();

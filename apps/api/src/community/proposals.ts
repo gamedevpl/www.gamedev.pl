@@ -28,8 +28,8 @@ import type { ContributionMode } from '@gamedevpl/contract';
 import type { FastifyBaseLogger } from 'fastify';
 import { logModerationRejection } from '../telemetry/moderation-metrics.js';
 import type { ContentChecker } from '../moderation.js';
-import type { GamesStore, SourceFile } from '../games-store.js';
-import { ownerUidOf, resolveOwnerOfRecord, reviewerKindOf, type OwnerOfRecord } from '../owner-of-record.js';
+import type { GamesStore, SourceFile } from '../delivery/games-store.js';
+import { ownerUidOf, resolveOwnerOfRecord, reviewerKindOf, type OwnerOfRecord } from '../catalog/owner-of-record.js';
 import { isRepoBaseStale } from './proposal-base.js';
 import {
   countsAsOpen,

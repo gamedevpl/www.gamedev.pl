@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateIndexHtml, hasPlayableHowToPlay } from '../index-html-generator.js';
+import { generateIndexHtml, hasPlayableHowToPlay } from '../catalog/index-html-generator.js';
 
 describe('index-html-generator', () => {
   it('generates a basic index.html fragment', () => {

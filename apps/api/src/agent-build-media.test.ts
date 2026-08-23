@@ -2,9 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
 import { buildApp } from './app.js';
-import type { GamesStore } from './games-store.js';
-import type { GcsObjectStore } from './gcs-sign.js';
-import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
+import type { GamesStore } from './delivery/games-store.js';
+import type { GcsObjectStore } from './delivery/gcs-sign.js';
+import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
 import { InMemoryStore } from './store.js';
 
 /**

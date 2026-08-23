@@ -44,7 +44,7 @@ main-branch publishing. Human review is the merge gate, and remains so.
 **Shipped differently — the cookieless games origin decision was overtaken.** The
 plan was to pick GitHub Pages or a bucket/CDN. Instead, published games are fetched
 from the games repo by the API and served through the app
-([github-client.ts](../apps/api/src/github-client.ts) builds the catalog straight
+([github-client.ts](../apps/api/src/catalog/github-client.ts) builds the catalog straight
 from `games/` directories rather than depending on a public `catalog.json`), then run
 in the sandboxed iframe via `srcDoc`. Isolation comes from
 `sandbox="allow-scripts allow-pointer-lock"` with no `allow-same-origin` plus an opaque origin — not

@@ -19,8 +19,8 @@
 // fails the run stops rather than mint a name that may collide; --skip-catalog proceeds
 // anyway, which is only safe when you know the backlog's titles.
 
-import { createGcsSnapshotStore } from '../src/game-snapshot.js';
-import { runSlugBackfill } from '../src/slug-backfill.js';
+import { createGcsSnapshotStore } from '../src/catalog/game-snapshot.js';
+import { runSlugBackfill } from '../src/catalog/slug-backfill.js';
 import { FirestoreStore } from '../src/store.js';
 
 // Same default as infra/deploy-api.sh: ${PROJECT_ID}-games-snapshots.

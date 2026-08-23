@@ -8,7 +8,7 @@ import {
 import { mintGameAgentKey, verifyGameAgentKey } from './agent-game-key.js';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
-import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
+import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
 import {
   assertInstallLinksHaveNoCredentials,
   decodeCursorInstallConfig,

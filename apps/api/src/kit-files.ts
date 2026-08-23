@@ -10,10 +10,10 @@
 
 import { Readable } from 'node:stream';
 import { createGunzip } from 'node:zlib';
-import type { GcsObjectStore } from './gcs-sign.js';
+import type { GcsObjectStore } from './delivery/gcs-sign.js';
 import { KIT_ENTRY, KIT_ROOT_DIR, KitRegistryError, parseKitRegistry, parseKitSidecar } from './kit-registry.js';
 import { isKitEngineRefSupported } from './kit-window.js';
-import { readTarEntries } from './tar.js';
+import { readTarEntries } from './delivery/tar.js';
 
 /** Whole-file reads above this must use fragments instead. */
 export const KIT_READ_MAX_BYTES = 48 * 1024;

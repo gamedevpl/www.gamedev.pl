@@ -14,7 +14,7 @@ was inference from reading the code, not a measurement. This closes that gap.
 
 ## What is instrumented
 
-### `GitHubClient.getGameSources` (`apps/api/src/github-client.ts`)
+### `GitHubClient.getGameSources` (`apps/api/src/catalog/github-client.ts`)
 
 Returns an optional `timings` field on a successful assembly:
 

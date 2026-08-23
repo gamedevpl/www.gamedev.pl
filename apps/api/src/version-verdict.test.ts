@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { toRecentBuild } from './recent-builds.js';
+import { toRecentBuild } from './delivery/recent-builds.js';
 import { applyGateVerdict, applyPreviewGateVerdict, applyHealthVerdict } from './version-verdict.js';
-import type { VersionManifest } from './games-store.js';
+import type { VersionManifest } from './delivery/games-store.js';
 
 const RAN_AT = '2026-08-21T09:00:00.000Z';
 

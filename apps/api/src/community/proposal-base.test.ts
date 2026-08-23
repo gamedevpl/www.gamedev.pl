@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { GamesStore, VersionManifest } from '../games-store.js';
+import type { GamesStore, VersionManifest } from '../delivery/games-store.js';
 import { isRepoBaseStale, ProposalBaseUnavailableError, resolveProposalBase } from './proposal-base.js';
 import { InMemoryStore } from '../store.js';
 

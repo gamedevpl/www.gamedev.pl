@@ -16,7 +16,7 @@ import { createManagedBackend, type ManagedRoundSignals } from './managed-backen
 import type { KitDigestLoader } from './kit-digest.js';
 import type { QueryKnowledgeFn } from './knowledge-search.js';
 import { createArchiveSeedContextSource } from './seed-context.js';
-import type { GameSnapshotReader } from './game-snapshot.js';
+import type { GameSnapshotReader } from './catalog/game-snapshot.js';
 import { createSelfBuildBackend, type SelfBuildBackendOptions } from './self-build-backend.js';
 import type { SeedProviderConfig } from './seed-provider.js';
 import './seed-provider-vertex.js';

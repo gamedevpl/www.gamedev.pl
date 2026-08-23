@@ -20,7 +20,7 @@
 // not — but because it is the one whose output a reader can predict, and a review diff
 // that occasionally rearranges hunks cleverly is worse than one that never surprises.
 
-import type { SourceFile } from '../games-store.js';
+import type { SourceFile } from '../delivery/games-store.js';
 
 export type DiffLine = { kind: 'context' | 'add' | 'del'; text: string; a?: number; b?: number };
 

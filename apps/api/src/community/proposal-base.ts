@@ -17,9 +17,9 @@
 // proposal round can see `shared/`, `tools/`, or another game — the same property the
 // delivery allowlist gives the write side. A proposer reads one game and writes one game.
 
-import { fetchGamesRepoArchive } from '../games-repo-archive.js';
-import type { GamesStore, SourceFile } from '../games-store.js';
-import type { GameSnapshotStore } from '../game-snapshot.js';
+import { fetchGamesRepoArchive } from '../catalog/games-repo-archive.js';
+import type { GamesStore, SourceFile } from '../delivery/games-store.js';
+import type { GameSnapshotStore } from '../catalog/game-snapshot.js';
 import type { ProposalBase, Store } from '../store.js';
 
 /** A game's current sources, plus what to pin a proposal built from them to. */

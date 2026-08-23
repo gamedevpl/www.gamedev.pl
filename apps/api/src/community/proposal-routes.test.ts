@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from '../auth.js';
-import type { GamesStore, SourceFile, VersionManifest } from '../games-store.js';
+import type { GamesStore, SourceFile, VersionManifest } from '../delivery/games-store.js';
 import { openProposal, reconcileProposalGate } from './proposals.js';
 import { InMemoryStore, type ProposalRecord } from '../store.js';
 

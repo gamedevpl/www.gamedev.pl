@@ -1,6 +1,6 @@
-import type { GitHubClient } from '../github-client.js';
-import type { PublishedSlugGate } from '../published-slugs.js';
-import { createGamesRepoClientFromEnv, createManifestBlockSource } from '../manifest-source.js';
+import type { GitHubClient } from '../catalog/github-client.js';
+import type { PublishedSlugGate } from '../catalog/published-slugs.js';
+import { createGamesRepoClientFromEnv, createManifestBlockSource } from '../delivery/manifest-source.js';
 import { parseWorldSchema, type WorldSchema } from './world-schema.js';
 
 /**

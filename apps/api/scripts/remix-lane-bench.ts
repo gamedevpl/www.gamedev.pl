@@ -7,13 +7,12 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { assembleGameHtml } from '../src/assemble.js';
-import { createLocalGamesClient } from '../src/local-games-repo.js';
+import { assembleGameHtml } from '../src/catalog/assemble.js';
+import { createLocalGamesClient } from '../src/catalog/local-games-repo.js';
 import { typeCheckGame } from '../src/type-check.js';
 
 export const GAMES_ROOT =
-  process.env.GAMES_DIR ??
-  path.resolve(fileURLToPath(new URL('../../..', import.meta.url)), '../www.gamedev.pl-games');
+  process.env.GAMES_DIR ?? path.resolve(fileURLToPath(new URL('../../..', import.meta.url)), '../www.gamedev.pl-games');
 
 /** The ref is inert: the local client serves the working tree, not a commit. */
 export const REF = 'main';

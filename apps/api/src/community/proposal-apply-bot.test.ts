@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { GamesStore, VersionManifest } from '../games-store.js';
-import type { GitHubClient } from '../github-client.js';
+import type { GamesStore, VersionManifest } from '../delivery/games-store.js';
+import type { GitHubClient } from '../catalog/github-client.js';
 import { applyProposalToRepo, proposalBranchName, proposalPullRequestBody } from './proposal-apply-bot.js';
 import { InMemoryStore, type ProposalRecord } from '../store.js';
 

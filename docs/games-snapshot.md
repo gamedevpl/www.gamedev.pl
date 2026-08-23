@@ -137,7 +137,7 @@ thousand requests per run. `GAMES_REPO_TOKEN` is shared with CI's `contract:game
 check, so at a bake per push to the games repo those bursts emptied the PAT's hourly
 budget and 403'd both jobs (2026-07-28).
 
-`fetchGamesRepoArchive` ([`games-repo-archive.ts`](../apps/api/src/games-repo-archive.ts))
+`fetchGamesRepoArchive` ([`games-repo-archive.ts`](../apps/api/src/catalog/games-repo-archive.ts))
 downloads `GET /repos/<repo>/tarball/<ref>` once and hands `createGitHubClient` a
 `RepoFileSource` backed by it. Assembly logic is untouched — the same
 `getGameSources` / `getGameMedia` / `getCatalog` run against archive bytes instead of
