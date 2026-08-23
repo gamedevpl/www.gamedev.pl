@@ -2,19 +2,19 @@ import type { Firestore } from '@google-cloud/firestore';
 import type { AccessTokenRecord } from '../records/access-tokens.js';
 
 export interface AccessTokensStore {
-  /** Persist a newly minted personal access token. */
+  // Persist a newly minted personal access token.
   createAccessToken(record: AccessTokenRecord): Promise<void>;
 
-  /** Point lookup by token id — the hot path on every bearer-authenticated request. */
+  // Point lookup by token id -- the bearer-auth hot path.
   getAccessToken(tokenId: string): Promise<AccessTokenRecord | null>;
 
-  /** Every token issued to a user, newest first. Never includes secrets (only hashes). */
+  // Every token for a user, newest first; hashes only, never secrets.
   listAccessTokens(uid: string): Promise<AccessTokenRecord[]>;
 
-  /** Revoke by id. Returns false when the token did not exist. */
+  // Revoke by id. Returns false when the token did not exist.
   deleteAccessToken(tokenId: string): Promise<boolean>;
 
-  /** Best-effort last-use stamp; callers must not let a failure fail the request. */
+  // Best-effort stamp; a failure here must not fail the request.
   touchAccessToken(tokenId: string, at: string): Promise<void>;
 }
 
@@ -63,8 +63,7 @@ export class FirestoreAccessTokensStore implements AccessTokensStore {
 
   async listAccessTokens(uid: string): Promise<AccessTokenRecord[]> {
     const snap = await this.db.collection('accessTokens').where('uid', '==', uid).get();
-    // Sorted in memory rather than with orderBy: a composite (uid, createdAt) index is
-    // not worth provisioning for a listing whose result set is a handful of rows.
+    // Sorted in memory -- not worth a composite index for this small list.
     return snap.docs
       .map((doc) => doc.data() as AccessTokenRecord)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -79,9 +78,7 @@ export class FirestoreAccessTokensStore implements AccessTokensStore {
   }
 
   async touchAccessToken(tokenId: string, at: string): Promise<void> {
-    // `update` (not merge-set): a revoked token's doc is gone, and merge-set
-    // would resurrect a partial record that later auth reads crash on. Missing
-    // docs throw; callers already treat touch as best-effort.
+    // update, not merge -- a revoked doc is gone; merge would resurrect it.
     await this.db.collection('accessTokens').doc(tokenId).update({ lastUsedAt: at });
   }
 }

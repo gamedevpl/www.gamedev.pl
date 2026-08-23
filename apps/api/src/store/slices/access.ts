@@ -19,24 +19,13 @@ export interface AccessStore {
 
   setWaitlistStatus(uid: string, status: WaitlistStatus): Promise<WaitlistEntry | null>;
 
-  /**
-   * Operator listing of the closed-beta waitlist.
-   *
-   * Sorted newest-request first. When `status` is set, only that status is returned.
-   * Bounded by `limit` (default 200) so a growing list cannot ship the whole collection
-   * in one console poll — at closed-beta scale the cap is generous; past that the panel
-   * filters by status rather than paging.
-   */
+  // Operator waitlist listing, newest first, bounded by limit (default 200).
   listWaitlistEntries(opts?: { status?: WaitlistStatus; limit?: number }): Promise<WaitlistEntry[]>;
 
-  /** Cheap count for the console tab badge. Optional status filter. */
+  // Cheap count for the console tab badge. Optional status filter.
   countWaitlistEntries(status?: WaitlistStatus): Promise<number>;
 
-  /**
-   * Approve / reject / reset by email — including pre-approval before the person has
-   * ever visited. Mirrors `npm run beta:approve`: finds an existing row by email, or
-   * creates `waitlist/email:<lower>` with the requested status.
-   */
+  // Approve/reject/reset by email, including pre-approval before first visit.
   setWaitlistStatusByEmail(email: string, status: WaitlistStatus): Promise<WaitlistEntry>;
 
   // Invite claim becomes membership; keeps requestedAt. See docs/deployment.md.
@@ -57,8 +46,7 @@ export interface AccessStore {
 }
 
 export class InMemoryAccessStore implements AccessStore {
-  // Not private -- deleteAccountIdentity and waitlistEntries reach across these
-  // (documented exception, see PR).
+  // Not private -- deleteAccountIdentity/waitlistEntries reach these (see PR).
   waitlist = new Map<string, WaitlistEntry>();
   betaInvites = new Map<string, BetaInvite>();
 
@@ -70,8 +58,7 @@ export class InMemoryAccessStore implements AccessStore {
   }): Promise<WaitlistEntry> {
     const now = new Date().toISOString();
     const existing = this.waitlist.get(entry.uid);
-    // Lowercase at write so equality queries (Firestore `where email ==`) and the
-    // pre-approve path agree — mixed-case joins used to miss and mint a second row.
+    // Lowercase at write so equality queries and pre-approve joins agree.
     const rawEmail = entry.email ?? existing?.email;
 
     const updated: WaitlistEntry = {
@@ -241,9 +228,7 @@ export class FirestoreAccessStore implements AccessStore {
     const docRef = this.db.collection('waitlist').doc(entry.uid);
     const snap = await docRef.get();
     const existing = snap.exists ? (snap.data() as WaitlistEntry) : null;
-    // Same normalisation as InMemoryStore: email queries are case-sensitive in
-    // Firestore, and setWaitlistStatusByEmail / isWaitlistApproved look up the
-    // lowercased form.
+    // Same normalisation as InMemoryStore -- Firestore email queries are case-sensitive.
     const rawEmail = entry.email !== undefined ? entry.email : existing?.email;
 
     const record: WaitlistEntry = {
@@ -292,10 +277,7 @@ export class FirestoreAccessStore implements AccessStore {
   }
 
   async listWaitlistEntries(opts?: { status?: WaitlistStatus; limit?: number }): Promise<WaitlistEntry[]> {
-    // Equality-only (no orderBy) so a status filter needs no composite index; sort and
-    // slice in memory. The waitlist stays small at closed-beta scale, and the same
-    // posture as `listAccessTokens` keeps an operator page from depending on a new
-    // index that only fails in production.
+    // Equality-only, no orderBy -- avoids a composite index; sorts in memory.
     const limit = opts?.limit ?? 200;
     const collection = this.db.collection('waitlist');
     const snap =
@@ -320,9 +302,7 @@ export class FirestoreAccessStore implements AccessStore {
       await doc.ref.update({ status });
       return { ...(doc.data() as WaitlistEntry), status, email: emailLower };
     }
-    // Rows written before email was normalised may still hold mixed case; find and
-    // heal them so an approve does not mint a duplicate `email:` doc beside the
-    // original join. Cheap at closed-beta scale (one collection read, operator-only).
+    // Heals pre-normalisation mixed-case rows so an approve doesn't duplicate.
     const legacySnap = await this.db.collection('waitlist').get();
     const legacy = legacySnap.docs.find((doc) => (doc.data() as WaitlistEntry).email?.toLowerCase() === emailLower);
     if (legacy) {

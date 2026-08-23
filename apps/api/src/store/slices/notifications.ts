@@ -2,18 +2,13 @@ import { createHash } from 'node:crypto';
 import type { Firestore } from '@google-cloud/firestore';
 import type { StoredNotification, PushSubscriptionRecord } from '../records/notifications.js';
 
-// Stable doc id for a subscription: a hash of its endpoint URL. Endpoints are long
-// and contain characters illegal in Firestore doc ids, and hashing gives idempotent
-// re-subscribes for free.
+// Endpoint hash: stable id despite characters illegal in Firestore doc ids.
 export function pushSubscriptionId(endpoint: string): string {
   return createHash('sha256').update(endpoint).digest('hex');
 }
 
 export interface NotificationsStore {
-  /**
-   * Idempotent by notification id: a second emit for the same id is a no-op and
-   * returns `created: false` (a crashed/re-run sweep can safely re-emit).
-   */
+  // Idempotent by id -- a repeat emit is a no-op, returns false.
   createNotification(
     uid: string,
     notification: Omit<StoredNotification, 'readAt' | 'emailedAt'> & { createdAt?: string },
@@ -23,19 +18,19 @@ export interface NotificationsStore {
 
   markNotificationsRead(uid: string, ids: string[] | 'all'): Promise<void>;
 
-  /** Delete notifications by id, or all of them ('all') — the bell's dismiss/clear. */
+  // Deletes by id, or all -- the bell's dismiss/clear action.
   deleteNotifications(uid: string, ids: string[] | 'all'): Promise<void>;
 
-  /** Stamp emailedAt after a successful send so retries don't re-send. */
+  // Stamp emailedAt after a successful send so retries don't re-send.
   markNotificationEmailed(uid: string, id: string, at?: string): Promise<void>;
 
-  /** Upsert a browser push subscription (idempotent by endpoint). */
+  // Upsert a browser push subscription (idempotent by endpoint).
   savePushSubscription(uid: string, subscription: Omit<PushSubscriptionRecord, 'createdAt'>): Promise<void>;
 
-  /** All push subscriptions for a user — the push fan-out sends to each. */
+  // All push subscriptions for a user -- the fan-out target list.
   listPushSubscriptions(uid: string): Promise<PushSubscriptionRecord[]>;
 
-  /** Remove a subscription (client unsubscribe, or pruning a dead endpoint). */
+  // Remove a subscription (client unsubscribe, or pruning a dead endpoint).
   deletePushSubscription(uid: string, endpoint: string): Promise<void>;
 }
 

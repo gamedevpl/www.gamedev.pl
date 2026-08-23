@@ -8,34 +8,24 @@ import {
 } from '../records/player-data.js';
 
 export interface PlayerDataStore {
-  /** One player's save for one game, or null if they have none. */
+  // One player's save for one game, null if none exists.
   getGameSave(uid: string, slug: string): Promise<GameSaveRecord | null>;
 
-  /** Writes (or replaces) one player's save. The caller has already size-checked `data`. */
+  // Writes/replaces one save; caller has already size-checked data.
   putGameSave(uid: string, slug: string, data: string, version: number): Promise<GameSaveRecord>;
 
   deleteGameSave(uid: string, slug: string): Promise<void>;
 
-  /** Every save a person has, across games — the erase path's read. */
+  // Every save a person has, across games -- the erase path's read.
   listGameSaves(uid: string): Promise<GameSaveRecord[]>;
 
-  /** Deletes every save a person has. Returns how many went. */
+  // Deletes every save a person has. Returns how many went.
   deleteGameSaves(uid: string): Promise<number>;
 
-  /** A creator's editor draft for one of their games, or null when none exists. */
+  // A creator's editor draft for one game, null if none exists.
   getEditorDraft(uid: string, slug: string): Promise<EditorDraftRecord | null>;
 
-  /**
-   * Writes a creator's draft, incrementing its revision. The caller has already
-   * validated and size-checked `content`.
-   *
-   * `expectedRevision` makes the multi-tab guard real rather than advisory: the
-   * compare and the increment happen in one transaction, so two saves racing on
-   * the same base cannot both succeed. A mismatch resolves to
-   * `{ conflict: true }` with the revision that actually won — never a throw,
-   * because losing that race is an ordinary outcome the caller reports as 409.
-   * Omit it to take over deliberately (last write wins).
-   */
+  // Increments revision; expectedRevision makes multi-tab writes compare-and-swap.
   putEditorDraft(
     uid: string,
     slug: string,
@@ -45,23 +35,19 @@ export interface PlayerDataStore {
 
   deleteEditorDraft(uid: string, slug: string): Promise<void>;
 
-  /** Every editor draft a person has — the erase path's read, used for preview and for real. */
+  // Every editor draft a person has -- erase path's preview + real read.
   listEditorDrafts(uid: string): Promise<EditorDraftRecord[]>;
 
-  /** Deletes every editor draft a person has — the erase path. Returns how many went. */
+  // Deletes every editor draft a person has (erase path).
   deleteEditorDrafts(uid: string): Promise<number>;
 
-  /**
-   * Records that a signed-in player opened a published game. Upserts the affinity
-   * row, bumps `openCount`, and trims the oldest rows when the per-user ceiling is
-   * exceeded so the map cannot grow without bound.
-   */
+  // Upserts affinity on open, bumps openCount, trims oldest past the ceiling.
   recordPlayAffinity(uid: string, slug: string, at?: string): Promise<PlayAffinityRecord>;
 
-  /** Every game a person has opened while signed in — recommendations + erase read. */
+  // Every game a person has opened while signed in -- recommendations + erase read.
   listPlayAffinity(uid: string): Promise<PlayAffinityRecord[]>;
 
-  /** Deletes every play-affinity row a person has. Returns how many went. */
+  // Deletes every play-affinity row a person has. Returns how many went.
   deletePlayAffinity(uid: string): Promise<number>;
 }
 
@@ -176,8 +162,7 @@ export class InMemoryPlayerDataStore implements PlayerDataStore {
 export class FirestorePlayerDataStore implements PlayerDataStore {
   constructor(private db: Firestore) {}
 
-  // Under the player, keyed by slug — see GameSaveRecord for why this is not
-  // `games/{slug}/saves/{uid}` the way votes are.
+  // Under the player, keyed by slug (see GameSaveRecord for why).
   private gameSaveRef(uid: string, slug: string) {
     return this.db.collection('users').doc(uid).collection('gameSaves').doc(slug);
   }
@@ -196,9 +181,7 @@ export class FirestorePlayerDataStore implements PlayerDataStore {
 
   async putGameSave(uid: string, slug: string, data: string, version: number): Promise<GameSaveRecord> {
     const record: GameSaveRecord = { slug, data, version, updatedAt: new Date().toISOString() };
-    // `set` without merge: a save is a whole snapshot of the player's progress, and
-    // merging would leave fields from an older shape alive beside a newer one — a
-    // state the game never actually wrote.
+    // set without merge -- a save is a whole snapshot, not a patch.
     await this.gameSaveRef(uid, slug).set({ data, version, updatedAt: record.updatedAt });
     return record;
   }
@@ -221,16 +204,11 @@ export class FirestorePlayerDataStore implements PlayerDataStore {
   }
 
   async deleteGameSaves(uid: string): Promise<number> {
-    // `listDocuments` rather than `get`: this only needs the references to delete, and
-    // a person's saves may be tens of kilobytes each that nobody is going to read.
+    // listDocuments -- only refs are needed; saves can be large.
     const refs = await this.db.collection('users').doc(uid).collection('gameSaves').listDocuments();
     if (refs.length === 0) return 0;
 
-    // Chunked batches rather than a delete per document, for the same reason
-    // `deletePlayerFeedbackByUid` uses them: this runs inside an erasure request an
-    // operator has already accepted, and somebody who plays a lot of games is exactly
-    // the person whose deletion would otherwise be a long sequence of round trips.
-    // 400 per batch leaves headroom under Firestore's 500-write limit.
+    // Chunked batches (400/batch), like deletePlayerFeedbackByUid -- accepted erasure.
     for (let index = 0; index < refs.length; index += 400) {
       const batch = this.db.batch();
       for (const ref of refs.slice(index, index + 400)) batch.delete(ref);
@@ -239,8 +217,7 @@ export class FirestorePlayerDataStore implements PlayerDataStore {
     return refs.length;
   }
 
-  // Under the creator, keyed by slug — one private draft per (creator, game),
-  // same placement reasoning as gameSaves.
+  // Under the creator, keyed by slug -- same placement as gameSaves.
   private editorDraftRef(uid: string, slug: string) {
     return this.db.collection('users').doc(uid).collection('editorDrafts').doc(slug);
   }
@@ -264,10 +241,7 @@ export class FirestorePlayerDataStore implements PlayerDataStore {
     expectedRevision?: number,
   ): Promise<{ conflict: false; record: EditorDraftRecord } | { conflict: true; revision: number }> {
     const ref = this.editorDraftRef(uid, slug);
-    // A transaction, not a read followed by a `set`: two tabs saving against the
-    // same base revision would both read it, both write, and both be told they
-    // won, with one edit silently gone. Compare and increment together or not
-    // at all.
+    // Transaction, not read-then-set -- two tabs must not both silently win.
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const data = snap.exists ? (snap.data() ?? {}) : {};
@@ -281,7 +255,7 @@ export class FirestorePlayerDataStore implements PlayerDataStore {
         revision: current + 1,
         updatedAt: new Date().toISOString(),
       };
-      // `set` without merge, like saves: a draft is a whole snapshot of the content.
+      // set without merge, like saves -- a draft is a whole snapshot.
       tx.set(ref, { content, revision: record.revision, updatedAt: record.updatedAt });
       return { conflict: false as const, record };
     });
@@ -334,8 +308,7 @@ export class FirestorePlayerDataStore implements PlayerDataStore {
       return next;
     });
 
-    // Trim outside the transaction: the ceiling is a soft bound, and racing two opens
-    // past 100 is harmless compared to holding a transaction across a collection list.
+    // Trimmed outside the transaction -- ceiling is a soft bound.
     const col = this.db.collection('users').doc(uid).collection('playAffinity');
     const listed = await col.get();
     if (listed.size > MAX_PLAY_AFFINITY_GAMES) {
