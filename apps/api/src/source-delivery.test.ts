@@ -11,6 +11,7 @@ import {
   SourceDeliveryAuthorityError,
   type SourceDeliveryAuthority,
 } from './source-delivery.js';
+import type { StagedPreviewPublisher } from './staged-preview.js';
 
 const ISSUE = 701;
 const SLUG = 'managed-comet';
@@ -73,6 +74,7 @@ async function setup(opts?: {
   kitFileStore?: KitFileStore | null;
   failPutCandidateSources?: boolean;
   translator?: Translator;
+  stagedPreviews?: Pick<StagedPreviewPublisher, 'publishCandidate'>;
 }) {
   const store = new InMemoryStore();
   await store.createSubmission(ISSUE, 'owner', 'Original title');
@@ -92,13 +94,15 @@ async function setup(opts?: {
     const version = `v-managed-${versionNumber}`;
     return { version, manifest: manifest(input.files, version) };
   });
-  const gamesStore = { putCandidateSources } as unknown as GamesStore;
+  const putDerivedArtifact = vi.fn(async () => {});
+  const gamesStore = { putCandidateSources, putDerivedArtifact } as unknown as GamesStore;
   const gate = vi.fn(async () => ({ buildId: 'build-managed-1' }));
   const log = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
   const service = createSourceDeliveryService({
     store,
     gamesStore,
     kitFileStore: opts?.kitFileStore,
+    stagedPreviews: opts?.stagedPreviews,
     onSourcesDelivered: gate,
     onEvent: vi.fn(),
     log,
@@ -109,7 +113,7 @@ async function setup(opts?: {
     sessionRef: SESSION,
     roundGeneration: 1,
   };
-  return { store, putCandidateSources, gate, service, authority, log };
+  return { store, putCandidateSources, putDerivedArtifact, gate, service, authority, log };
 }
 
 describe('shared source delivery', () => {
@@ -557,5 +561,40 @@ export function tick(round: Round) {
       expect(result.accepted).toBe(true);
       expect((await store.getSubmission(ISSUE))?.agentEndedAt).toBe('2026-08-19T07:00:00.000Z');
     });
+
+    it('calls stagedPreviews.publishCandidate on candidate delivery when stagedPreviews is provided', async () => {
+      const stagedPreviews = {
+        publishCandidate: vi.fn(async () => 'published' as const),
+      };
+      const { service, authority } = await setup({ stagedPreviews });
+
+      const files: SourceFile[] = [
+        { path: 'GAME.json', content: JSON.stringify({ title: 'Fast Game', theme: { bg: '#000' } }) },
+        { path: 'game.ts', content: 'export function start() {}' },
+        { path: 'index.html', content: '<!doctype html><html><body></body></html>' },
+        { path: 'SPEC.md', content: '---\ntitle: Fast Game\n---\n# Fast Game' },
+      ];
+
+      const result = await service.deliver({
+        issueNumber: ISSUE,
+        slug: SLUG,
+        files,
+        mode: 'publish',
+        backend: BACKEND,
+        authority,
+      });
+
+      expect(result.accepted).toBe(true);
+      expect(stagedPreviews.publishCandidate).toHaveBeenCalledWith({
+        issueNumber: ISSUE,
+        slug: SLUG,
+        version: expect.any(String),
+        roundGeneration: 1,
+        files,
+        kitEngineRef: undefined,
+        locale: undefined,
+      });
+    });
   });
 });
+

@@ -813,19 +813,6 @@ export async function registerSubmissionRoutes(
   const kitFileStoreForDelivery = options.agentChannel?.objectStore
     ? createKitFileStore(options.agentChannel.objectStore)
     : null;
-  const sourceDelivery =
-    store && gamesStoreForSeed
-      ? createSourceDeliveryService({
-          store,
-          gamesStore: gamesStoreForSeed,
-          kitFileStore: kitFileStoreForDelivery,
-          now,
-          maxSubmitsPerWindow: options.agentChannel?.maxSubmitsPerWindow,
-          onSourcesDelivered: options.agentChannel?.onSourcesDelivered,
-          onEvent: invalidateDeliveryCaches,
-          log: app.log,
-        })
-      : undefined;
 
   function buildAgentRegistry(): AgentBackendRegistry {
     const selfOptions = store
@@ -6062,6 +6049,20 @@ export async function registerSubmissionRoutes(
           },
         })
       : null;
+  const sourceDelivery =
+    store && stagedPreviewStore
+      ? createSourceDeliveryService({
+          store,
+          gamesStore: stagedPreviewStore,
+          kitFileStore: kitFileStoreForDelivery,
+          stagedPreviews: stagedPreviews ?? undefined,
+          now,
+          maxSubmitsPerWindow: options.agentChannel?.maxSubmitsPerWindow,
+          onSourcesDelivered: options.agentChannel?.onSourcesDelivered,
+          onEvent: invalidateDeliveryCaches,
+          log: app.log,
+        })
+      : undefined;
 
   // The agent's side of the wire. Registered here rather than in app.ts so it shares
   // the store, the token secret, and the caches it has to invalidate.

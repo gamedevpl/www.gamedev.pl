@@ -248,7 +248,9 @@ export interface StagedPreviewOptions {
     Store,
     'getSubmission' | 'getPublication' | 'listSubmissionsByOwner' | 'appendBuildPreview' | 'pruneBuildPreviews'
   >;
-  gamesStore: Pick<GamesStore, 'getStagedSourceFiles' | 'getManifest' | 'getSourceFile'>;
+  gamesStore: Pick<GamesStore, 'getStagedSourceFiles' | 'getManifest' | 'getSourceFile'> & {
+    putDerivedArtifact?: GamesStore['putDerivedArtifact'];
+  };
   /** Supplies the *engine* half only — every game file comes from the overlay. */
   githubClient: Pick<GitHubClient, 'getGameSources'>;
   /**
@@ -279,6 +281,16 @@ export interface StagedPreviewOptions {
   busyRetryMs?: number;
 }
 
+export interface CandidatePreviewInput {
+  issueNumber: number;
+  slug: string;
+  version: string;
+  roundGeneration?: number;
+  files: SourceFile[];
+  kitEngineRef?: string;
+  locale?: string;
+}
+
 export interface StagedPreviewPublisher {
   /**
    * Note that a file was staged. Coalesces into one assembly per burst and never
@@ -287,6 +299,11 @@ export interface StagedPreviewPublisher {
   schedule(issueNumber: number): void;
   /** Runs one attempt now, bypassing the timers. The seam the tests drive. */
   publishNow(issueNumber: number): Promise<StagedPreviewOutcome>;
+  /**
+   * Assembles and stores an immediate fast preview for a delivered candidate version,
+   * bounded by the publisher's concurrency limit, without ref fallback.
+   */
+  publishCandidate(input: CandidatePreviewInput): Promise<StagedPreviewOutcome>;
   /** Drops pending timers. For tests and shutdown; not needed in normal operation. */
   stop(): void;
 }
@@ -471,5 +488,97 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
     pending.clear();
   }
 
-  return { schedule, publishNow, stop };
+  async function publishCandidate(input: CandidatePreviewInput): Promise<StagedPreviewOutcome> {
+    const { issueNumber, slug, version, files } = input;
+    const existing = pending.get(issueNumber);
+    if (existing) {
+      clearTimeout(existing.timer);
+      pending.delete(issueNumber);
+    }
+
+    if (running.has(issueNumber) || inFlight >= maxConcurrent) {
+      return 'skipped';
+    }
+
+    running.add(issueNumber);
+    inFlight += 1;
+    const attemptStartedAt = Date.now();
+    try {
+      const overlay: Record<string, string> = Object.create(null) as Record<string, string>;
+      for (const file of files) {
+        overlay[file.path] = file.content;
+      }
+      if (!hasPlayableOverlay(overlay)) return 'incomplete';
+
+      const engineRef = input.kitEngineRef || options.engineRef;
+      const sources = await options.githubClient.getGameSources(engineRef, slug, overlay, { noRefFallback: true });
+      if (!sources) return 'incomplete';
+
+      const assembleStartedAt = Date.now();
+      const html = assembleGameHtml(
+        {
+          title: sources.title ?? slug,
+          description: '',
+          html: sources.indexHtml,
+          js: sources.gameJs,
+          css: sources.styleCss,
+        },
+        { restrictNetwork: true },
+      );
+      const assembleMs = Date.now() - assembleStartedAt;
+      if (Buffer.byteLength(html, 'utf8') > maxBytes) return 'too_large';
+
+      if (options.gamesStore.putDerivedArtifact) {
+        await options.gamesStore.putDerivedArtifact(
+          slug,
+          version,
+          'preview.html',
+          Buffer.from(html, 'utf8'),
+          'text/html; charset=utf-8',
+        );
+      }
+
+      const roundGen = input.roundGeneration ?? 1;
+      const digestKey = `${issueNumber}:${roundGen}`;
+      const digest = createHash('sha256').update(html).digest('hex');
+      noteJob(lastDigest, digestKey, digest);
+
+      const storeWriteStartedAt = Date.now();
+      const locale = input.locale ?? '';
+      await options.store.appendBuildPreview(issueNumber, {
+        data: Buffer.from(html, 'utf8').toString('base64'),
+        slug,
+        label: STAGED_PREVIEW_LABEL,
+        ...(locale.startsWith('pl') ? { labelLocalized: STAGED_PREVIEW_LABEL_PL, locale } : {}),
+      });
+      await options.store.pruneBuildPreviews(issueNumber, keepPreviews).catch(() => 0);
+      const storeWriteMs = Date.now() - storeWriteStartedAt;
+
+      options.onPublished?.(issueNumber);
+      options.log.info?.(
+        {
+          issueNumber,
+          version,
+          totalMs: Date.now() - attemptStartedAt,
+          getGameSourcesMs: sources.timings?.totalMs,
+          assembleMs,
+          storeWriteMs,
+        },
+        'candidate preview assembled',
+      );
+      return 'published';
+    } catch (error) {
+      options.log.warn(
+        { issueNumber, version, err: error },
+        'candidate preview could not be assembled',
+      );
+      return 'failed';
+    } finally {
+      running.delete(issueNumber);
+      inFlight -= 1;
+      noteJob(lastAttemptAt, issueNumber, now());
+    }
+  }
+
+  return { schedule, publishNow, publishCandidate, stop };
 }

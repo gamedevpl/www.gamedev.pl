@@ -51,6 +51,7 @@ function harness(input: HarnessInput = {}) {
   const delivered = input.delivered ?? null;
   const previews: Array<Record<string, unknown>> = [];
   const getGameSources = vi.fn(input.assemble ?? (async () => GAME_SOURCES));
+  const putDerivedArtifact = vi.fn(async () => {});
   const log = { warn: vi.fn(), error: vi.fn() };
 
   const options: StagedPreviewOptions = {
@@ -71,6 +72,7 @@ function harness(input: HarnessInput = {}) {
       getManifest: async () => (delivered ? { sourceFiles: delivered.files.map((file) => file.path) } : null),
       getSourceFile: async (_slug: string, _version: string, path: string) =>
         delivered?.files.find((file) => file.path === path)?.content ?? null,
+      putDerivedArtifact,
     } as unknown as StagedPreviewOptions['gamesStore'],
     githubClient: { getGameSources } as unknown as StagedPreviewOptions['githubClient'],
     engineRef: 'main',
@@ -83,7 +85,7 @@ function harness(input: HarnessInput = {}) {
     ...(input.onPublished ? { onPublished: input.onPublished } : {}),
   };
 
-  return { publisher: createStagedPreviewPublisher(options), previews, getGameSources, log };
+  return { publisher: createStagedPreviewPublisher(options), previews, getGameSources, putDerivedArtifact, log };
 }
 
 /** The stored preview, decoded back to the document a creator would be served. */
@@ -572,6 +574,64 @@ describe('createStagedPreviewPublisher', () => {
       expect(() => publisher.schedule(7)).not.toThrow();
       await vi.advanceTimersByTimeAsync(100);
       expect(log.error).not.toHaveBeenCalled();
+      publisher.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('assembles and stores candidate preview without ref fallback', async () => {
+    const { publisher, previews, getGameSources, putDerivedArtifact } = harness();
+    const outcome = await publisher.publishCandidate({
+      issueNumber: 7,
+      slug: 'comet-courier',
+      version: 'v20260823T120000Z-abcdef',
+      roundGeneration: 2,
+      files: PLAYABLE_TREE,
+    });
+
+    expect(outcome).toBe('published');
+    expect(getGameSources).toHaveBeenCalledWith(
+      'main',
+      'comet-courier',
+      expect.any(Object),
+      { noRefFallback: true },
+    );
+    expect(putDerivedArtifact).toHaveBeenCalledWith(
+      'comet-courier',
+      'v20260823T120000Z-abcdef',
+      'preview.html',
+      expect.any(Buffer),
+      'text/html; charset=utf-8',
+    );
+    expect(previews).toHaveLength(1);
+    expect(previews[0].label).toBe(STAGED_PREVIEW_LABEL);
+  });
+
+  it('candidate assembly cancels pending debounce and sets digest preventing redundant staged assembly', async () => {
+    vi.useFakeTimers();
+    try {
+      const { publisher, previews } = harness({ debounceMs: 1_000 });
+      publisher.schedule(7);
+
+      const outcome = await publisher.publishCandidate({
+        issueNumber: 7,
+        slug: 'comet-courier',
+        version: 'v20260823T120000Z-abcdef',
+        roundGeneration: 2,
+        files: PLAYABLE_TREE,
+      });
+      expect(outcome).toBe('published');
+      expect(previews).toHaveLength(1);
+
+      // Advance past debounce — pending timer was cleared and digest matched, so no second preview
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(previews).toHaveLength(1);
+
+      // Explicit publishNow on identical staged tree answers unchanged
+      const stagedOutcome = await publisher.publishNow(7);
+      expect(stagedOutcome).toBe('unchanged');
+      expect(previews).toHaveLength(1);
       publisher.stop();
     } finally {
       vi.useRealTimers();
