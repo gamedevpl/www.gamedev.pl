@@ -101,9 +101,18 @@ to prevent.
 
 ## Domain verification
 
-OpenAI may require a challenge file at `/.well-known/openai-apps-challenge` on the MCP
-host (or parent). **Do not add that route until the owner starts a real submission** —
-the token is issued by the portal per submission.
+The route is already live: `apps/api/src/openai-apps-challenge.ts` serves
+`GET /.well-known/openai-apps-challenge` from `OPENAI_APPS_CHALLENGE_TOKEN`, 404 when
+unset. Nothing to build — only owner steps remain:
+
+1. Start (or resume) the submission on the OpenAI Platform portal; it issues a token
+   for domain verification.
+2. Set `OPENAI_APPS_CHALLENGE_TOKEN` on the Cloud Run service (not a secret — it is
+   public per its own design, and rotates per submission) — `infra/deploy-api.sh` now
+   carries it through redeploys as long as the shell variable is exported when the
+   script runs, same pattern as `ADMIN_UIDS`/`REVIEWER_UIDS`.
+3. Let OpenAI fetch and verify it, then clear the variable once verification is done
+   (it is not needed outside an active submission).
 
 ## Directory change (2026-07-09) and submission notes
 
