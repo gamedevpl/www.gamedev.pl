@@ -225,4 +225,32 @@ describe('useStageSource', () => {
 
     root.unmount();
   });
+
+  it('refetches the published document once the round that used it as a fallback itself publishes', async () => {
+    mockedFetchPublishedGame.mockResolvedValueOnce({ slug: 'sky-dodge', title: 'Sky Dodge', html: '<p>pre-round</p>' });
+
+    const { render, latest, root } = probe();
+    await render('token-a', { status: 'dispatched', slug: 'sky-dodge' } as unknown as SubmissionStatus);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(latest().rawHtml).toBe('<p>pre-round</p>');
+
+    mockedFetchPublishedGame.mockResolvedValueOnce({
+      slug: 'sky-dodge',
+      title: 'Sky Dodge',
+      html: '<p>just-published</p>',
+    });
+    await render('token-a', { status: 'published', slug: 'sky-dodge' } as unknown as SubmissionStatus);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockedFetchPublishedGame).toHaveBeenCalledTimes(2);
+    expect(latest().rawHtml).toBe('<p>just-published</p>');
+
+    root.unmount();
+  });
 });

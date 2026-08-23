@@ -258,20 +258,23 @@ export function useStageSource(
   useEffect(() => {
     const slug = status?.slug;
     if (!slug) return;
-    if (loadedPublishedSlugRef.current === slug || publishedInFlightRef.current) return;
+    // Distinct key per published-ness — a round must refetch once it publishes.
+    const isPublishedNow = status?.status === 'published';
+    const key = isPublishedNow ? slug : `${slug}:fallback`;
+    if (loadedPublishedSlugRef.current === key || publishedInFlightRef.current) return;
 
     publishedInFlightRef.current = true;
     const requestToken = token;
     fetchPublishedGame(slug)
       .then((game) => {
         if (activeTokenRef.current !== requestToken) return;
-        loadedPublishedSlugRef.current = slug;
+        loadedPublishedSlugRef.current = key;
         publishedRetryRef.current = 0;
         setPublished({ html: game.html, slug });
       })
       .catch(() => {
         if (activeTokenRef.current !== requestToken) return;
-        // Leave the slug unmarked so this effect retries — a transient failure here
+        // Leave the key unmarked so this effect retries — a transient failure here
         // must not permanently blank a published game's stage. Cap attempts so a
         // genuinely broken slug doesn't retry forever.
         if (publishedRetryRef.current < 3) {
@@ -280,7 +283,7 @@ export function useStageSource(
             if (activeTokenRef.current === requestToken) setPublishedRetryTick((tick) => tick + 1);
           }, 4_000);
         } else {
-          loadedPublishedSlugRef.current = slug;
+          loadedPublishedSlugRef.current = key;
         }
       })
       .finally(() => {
