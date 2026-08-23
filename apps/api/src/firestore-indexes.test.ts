@@ -40,10 +40,16 @@ const setupScript = readFileSync(resolve(repoRoot, 'infra/setup-gcp.sh'), 'utf8'
  * somebody breaks it — silently, which is the failure mode this whole file exists to
  * prevent.
  */
+function apiSourceFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return apiSourceFiles(path);
+    return entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts') ? [path] : [];
+  });
+}
+
 function apiSources(): string[] {
-  return readdirSync(here)
-    .filter((name) => name.endsWith('.ts') && !name.endsWith('.test.ts'))
-    .map((name) => readFileSync(join(here, name), 'utf8'));
+  return apiSourceFiles(here).map((path) => readFileSync(path, 'utf8'));
 }
 
 type IndexOrder = 'ASCENDING' | 'DESCENDING';
