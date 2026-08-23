@@ -15,7 +15,7 @@ import {
   summarizeGameHealth,
   type GameHealth,
   type PartitionScanBudget,
-} from './telemetry-health.js';
+} from './telemetry/telemetry-health.js';
 import { routeAll, type Suggestion } from './suggestions.js';
 import { buildJobQueue } from './job-admin-routes.js';
 import type { JobState } from './job-state.js';
@@ -25,9 +25,9 @@ import {
   detectSeedingDegraded,
   SEEDING_DEGRADED_WINDOW_MS,
   type OperatorAlert,
-} from './operator-alerts.js';
-import { summarizeVisitFunnel, type VisitFunnel } from './visit-funnel.js';
-import { summarizeCreatorMetrics, type CreatorMetrics } from './creator-metrics.js';
+} from './notifications/operator-alerts.js';
+import { summarizeVisitFunnel, type VisitFunnel } from './telemetry/visit-funnel.js';
+import { summarizeCreatorMetrics, type CreatorMetrics } from './telemetry/creator-metrics.js';
 import {
   summarizeRetentionByEligibilityDay,
   summarizeVisitDay,
@@ -36,7 +36,7 @@ import {
   type DailyMcpPoint,
   type DailyRetentionPoint,
   type TelemetryTrends,
-} from './telemetry-trends.js';
+} from './telemetry/telemetry-trends.js';
 import {
   DEFAULT_CREATION_LIMITS_TTL_MS,
   resolveDefaultGlobalDailyCap,

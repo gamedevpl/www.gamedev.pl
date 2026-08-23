@@ -101,7 +101,7 @@ import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
 import { BUILD_STEPS, sanitizeCreatorText } from './submission-status.js';
 import { dispatchAttempt, type Store, type SubmissionRecord } from './store.js';
 import type { ContentChecker } from './moderation.js';
-import { logModerationRejection } from './moderation-metrics.js';
+import { logModerationRejection } from './telemetry/moderation-metrics.js';
 
 /**
  * Streamable-HTTP MCP endpoint (BY-05 / BY-23).

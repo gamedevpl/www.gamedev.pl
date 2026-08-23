@@ -26,7 +26,7 @@
 import { randomUUID } from 'node:crypto';
 import type { ContributionMode } from '@gamedevpl/contract';
 import type { FastifyBaseLogger } from 'fastify';
-import { logModerationRejection } from './moderation-metrics.js';
+import { logModerationRejection } from './telemetry/moderation-metrics.js';
 import type { ContentChecker } from './moderation.js';
 import type { GamesStore, SourceFile } from './games-store.js';
 import { ownerUidOf, resolveOwnerOfRecord, reviewerKindOf, type OwnerOfRecord } from './owner-of-record.js';

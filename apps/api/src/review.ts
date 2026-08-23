@@ -21,7 +21,7 @@ import {
   registerAssessmentResolutionRoute,
   summarizeResolutions,
 } from './assessment-resolution.js';
-import { emitReviewSweep, type EmitDeps } from './notify.js';
+import { emitReviewSweep, type EmitDeps } from './notifications/notify.js';
 import { ASSESSMENT_CHECKLIST_KEYS, isAssessmentChecklist } from './review-checklist.js';
 import {
   effectiveReleasedCount,

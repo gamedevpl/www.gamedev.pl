@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { InMemoryStore, type TelemetryEvent } from './store.js';
 import { buildScorecard, runScorecardSweep } from './scorecard.js';
-import { summarizeGameHealth } from './telemetry-health.js';
+import { summarizeGameHealth } from './telemetry/telemetry-health.js';
 import type { InternalAuthVerifier } from './internal-auth.js';
 import { MIN_FEEDBACK_FOR_THEMES, type FeedbackTheme, type ThemeExtractor } from './feedback-themes.js';
 

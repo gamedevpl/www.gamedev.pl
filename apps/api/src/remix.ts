@@ -18,7 +18,7 @@ import { buildSuggestions } from './remix-suggestions.js';
 import type { GamesStore } from './games-store.js';
 import type { Store } from './store.js';
 import type { ContentChecker } from './moderation.js';
-import { logModerationRejection } from './moderation-metrics.js';
+import { logModerationRejection } from './telemetry/moderation-metrics.js';
 import { assembleGameHtml } from './assemble.js';
 import type { GitHubClient } from './github-client.js';
 import { type EditingGate, type CreationGate } from './creation-limits.js';
