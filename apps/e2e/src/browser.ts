@@ -161,9 +161,23 @@ export async function signedInApiContext(): Promise<APIRequestContext> {
   return request.newContext({ baseURL: BASE_URL, storageState, ...proxyOptions() });
 }
 
-/** A browser context carrying the bot's session cookie. */
-export async function signedInContext(browser: Browser, api: APIRequestContext): Promise<BrowserContext> {
-  return browser.newContext({ storageState: await api.storageState(), viewport: { width: 1280, height: 900 } });
+/**
+ * A browser context carrying the bot's session cookie.
+ *
+ * `options` merges into `newContext` — added for `serviceWorkers: 'block'`, which
+ * Playwright's own docs recommend: `page.route()` misses requests once a real
+ * Service Worker controls the page, even one that passes them straight through.
+ */
+export async function signedInContext(
+  browser: Browser,
+  api: APIRequestContext,
+  options?: Parameters<Browser['newContext']>[0],
+): Promise<BrowserContext> {
+  return browser.newContext({
+    storageState: await api.storageState(),
+    viewport: { width: 1280, height: 900 },
+    ...options,
+  });
 }
 
 export type Problem = { kind: string; text: string };

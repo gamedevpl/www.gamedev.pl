@@ -173,7 +173,8 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
   beforeAll(async () => {
     api = await signedInApiContext();
     browser = await launchSiteBrowser();
-    const context = await signedInContext(browser, api);
+    // Blocked so the stubbed routes below are reliable — see signedInContext's doc.
+    const context = await signedInContext(browser, api, { serviceWorkers: 'block' });
     page = await context.newPage();
     await stubStudioThreadData(page);
     await stubCodeSurfaceData(page);
