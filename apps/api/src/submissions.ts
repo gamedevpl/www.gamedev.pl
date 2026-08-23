@@ -45,6 +45,7 @@ import {
   SnapshotUnavailableError,
   type GameSnapshotReader,
 } from './catalog/game-snapshot.js';
+import { attachCatalogEnrichments } from './catalog/catalog-enricher.js';
 import { startHealthCheck } from './catalog/game-health.js';
 import {
   createStagedPreviewPublisher,
@@ -5826,7 +5827,8 @@ export async function registerSubmissionRoutes(
       const entries = await getCatalogEntries(githubClient);
       const published = entries.filter((entry) => entry.status === 'published');
       const combined = [...published, ...(await storeCatalogEntries(published.map((entry) => entry.slug)))];
-      return reply.send(await deattributeDeletedOwners(combined));
+      const deattributed = await deattributeDeletedOwners(combined);
+      return reply.send(await attachCatalogEnrichments(deattributed, store));
     } catch (error) {
       if (error instanceof SnapshotUnavailableError) {
         request.log.error({ err: error }, 'snapshot catalog unavailable');

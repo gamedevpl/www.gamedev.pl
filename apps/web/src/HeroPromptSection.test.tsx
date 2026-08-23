@@ -614,4 +614,61 @@ describe('HeroPromptSection', () => {
 
     await act(async () => root.unmount());
   });
+
+  it('matches games by searchKeywords and displays enriched tagline', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const mockCatalog = [
+      {
+        slug: 'mexico-86',
+        title: "Mexico '86 Arcade Football",
+        genre: 'sports',
+        controls: 'Arrows / Enter / Tap to navigate; 1–4 to pick action',
+        status: 'published',
+        media: null,
+        multiplayer: null,
+        saves: null,
+        world: null,
+        sensing: null,
+        orientation: 'landscape' as const,
+        submittedBy: null,
+        tagline: {
+          en: 'Retro 11v11 arcade soccer tournament.',
+          pl: 'Turniej piłkarski retro 11v11.',
+        },
+        shortControls: {
+          en: 'Arrows + Enter / Tap',
+          pl: 'Strzałki + Enter / Dotyk',
+        },
+        searchKeywords: ['mundial', 'soccer', 'maradona', 'football'],
+      },
+    ];
+
+    // Search by semantic keyword "mundial"
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'mundial',
+          catalogEntries: mockCatalog,
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    const card = container.querySelector('.matched-card');
+    expect(card).not.toBeNull();
+
+    const desc = container.querySelector('.matched-desc');
+    expect(desc?.textContent).toBe('Retro 11v11 arcade soccer tournament.');
+
+    await act(async () => root.unmount());
+  });
 });
