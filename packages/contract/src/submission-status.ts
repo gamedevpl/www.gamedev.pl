@@ -121,6 +121,8 @@ export interface RecentBuild {
   summary?: string;
   // Number of source files in this build.
   fileCount?: number;
+  // Producing job, used to attach the changelog.
+  issueNumber?: number;
 }
 
 // Whether platform can be picked now; absent means no opinion.

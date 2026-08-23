@@ -4540,6 +4540,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         'Subject to delivery cap and filename allowlist. Reply includes stop and pendingMessages. ' +
         'gateStarted is true when Cloud Build accepted the gate create — not merely when the upload was accepted. ' +
         'A successful delivery unlocks creator handoff (agentEndedAt); still call end when you will not deliver more (warnings.code=call_end). ' +
+        'Pass summary — one sentence of what changed this delivery; Studio shows it on the build list. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',
@@ -4586,6 +4587,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           },
           slug: { type: 'string' },
           note: { type: 'string' },
+          summary: {
+            type: 'string',
+            description:
+              'One sentence of what changed in this delivery (≤1024 chars). Studio shows it on the build list. ' +
+              'Write what the creator should read — not a file dump. end({ summary }) can refine the same sentence later.',
+          },
         },
         required: ['kitEngineRef'],
       },
@@ -4649,6 +4656,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
         const slug =
           typeof args.slug === 'string' && args.slug.trim() ? args.slug.trim() : (auth.record.slug ?? 'game');
+        const summary =
+          typeof args.summary === 'string' && args.summary.trim()
+            ? args.summary.trim()
+            : typeof args.note === 'string' && args.note.trim()
+              ? args.note.trim()
+              : undefined;
 
         const res = await injectChannel(ctx.request, 'POST', AGENT_CHANNEL_ROUTES.SOURCES, auth.channelToken, {
           slug,
@@ -4657,6 +4670,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           ...(fromLatestDelivery ? { fromLatestDelivery: true } : {}),
           kitEngineRef,
           ...(mode ? { mode } : {}),
+          ...(summary ? { summary } : {}),
         });
         const body = res.json() as {
           error?: string;

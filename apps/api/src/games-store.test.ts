@@ -656,6 +656,16 @@ describe('GCS games store', () => {
     expect((await store.getManifest('g', version))?.roundGeneration).toBe(4);
   });
 
+  it('writes a changelog sentence onto an existing version', async () => {
+    const { impl } = stubGcs();
+    const store = createGcsGamesStore({ ...base, fetchImpl: impl });
+    const { version } = await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
+
+    await store.setVersionSummary('g', version, '  Jump feels tighter.  ');
+
+    expect((await store.getManifest('g', version))?.summary).toBe('Jump feels tighter.');
+  });
+
   it('lists versions newest first, skipping directories without a manifest', async () => {
     const { impl, objects } = stubGcs();
     let tick = 0;

@@ -6,6 +6,7 @@ import { KitRegistryError, parseKitRegistry, parseKitSidecar } from './kit-regis
 import { codeSurfaceEnabled } from './code-surface.js';
 import { collapseJobsToOwnerGames, MAX_OWNER_GAMES, pageOwnerGames } from './owner-games.js';
 import { readTarEntries, type TarEntry } from './tar.js';
+import { hydrateRecentBuildSummaries } from './build-changelog.js';
 import { toRecentBuilds } from './recent-builds.js';
 import type {
   StudioBuildsResponse,
@@ -26,6 +27,7 @@ export type CreatorBuildsResponse = StudioBuildsResponse;
 import { composeWorkspaceArchive, WorkspaceCompositionError } from './workspace-archive.js';
 import type { GamesStore } from './games-store.js';
 import type { Store, TelemetryEvent } from './store.js';
+import { normalizeLocale } from './translate.js';
 
 /**
  * Creator control panel reads (docs/improvement-loop-plan.md IL-2 creator surface).
@@ -306,6 +308,7 @@ export async function registerCreatorStudioRoutes(
   const BuildsQuerySchema = z.object({
     limit: z.coerce.number().int().min(1).max(100).optional(),
     offset: z.coerce.number().int().min(0).optional(),
+    locale: z.string().trim().max(10).optional(),
   });
 
   // List build history for an owned game.
@@ -338,9 +341,14 @@ export async function registerCreatorStudioRoutes(
     const totalCount = options.gamesStore.countVersions
       ? await options.gamesStore.countVersions(slug)
       : allVersions.length;
+    const locale = normalizeLocale(parsed.data.locale ?? records.find((record) => record.slug === slug)?.locale);
 
     const body: CreatorBuildsResponse = {
-      builds: toRecentBuilds(pagedVersions),
+      builds: await hydrateRecentBuildSummaries({
+        builds: toRecentBuilds(pagedVersions),
+        ...(locale ? { locale } : {}),
+        loadEvents: (issueNumber) => store.listBuildEvents(issueNumber, { limit: 20 }),
+      }),
       totalCount,
     };
     return reply.send(body);

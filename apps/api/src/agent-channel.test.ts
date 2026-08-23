@@ -1317,7 +1317,9 @@ describe('agent build channel', () => {
         files: unknown[];
         kitEngineRef?: string;
         mode?: string;
+        summary?: string;
       }> = [];
+      const versionSummaries: Array<{ slug: string; version: string; summary: string }> = [];
       const staged = new Map<string, string>();
       const deletedPaths = new Set<string>();
       const stagedEntries = () => [
@@ -1331,6 +1333,7 @@ describe('agent build channel', () => {
           files: unknown[];
           kitEngineRef?: string;
           mode?: 'preview' | 'publish';
+          summary?: string;
         }) => {
           stored.push(input);
           const { validateSourceUpload } = await import('./games-store.js');
@@ -1394,6 +1397,9 @@ describe('agent build channel', () => {
           }
           return { cleared };
         },
+        setVersionSummary: async (slug: string, version: string, summary: string) => {
+          versionSummaries.push({ slug, version, summary });
+        },
         getManifest: async () => null,
         getSourceFile: async () => null,
         putGateResult: async () => {},
@@ -1402,7 +1408,7 @@ describe('agent build channel', () => {
         getDerivedArtifact: async () => null,
         getKitRegistry: async () => null,
       } as unknown as GamesStore;
-      return { gamesStore, stored, staged };
+      return { gamesStore, stored, staged, versionSummaries };
     }
 
     it('stores a delivered game as a candidate version', async () => {
@@ -2096,6 +2102,57 @@ describe('agent build channel', () => {
       expect(stored[0]).toMatchObject({
         summary: 'Fix collisions and audio bugs',
       });
+    });
+
+    it('derives a changelog from the latest progress when submit omits summary', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore, stored } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/progress',
+        headers: agentHeaders(),
+        payload: { kind: 'step', text: 'Tuned jump height and landing lag.' },
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          files: MINIMAL,
+          mode: 'publish',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(stored[0]).toMatchObject({
+        summary: 'Tuned jump height and landing lag.',
+      });
+    });
+
+    it('writes the closing end summary onto the latest version', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSubmissionSlug(ISSUE, 'comet-courier');
+      await store.setSubmissionPreviewVersion(ISSUE, 'v1');
+      const { gamesStore, versionSummaries } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/end',
+        headers: agentHeaders(),
+        payload: { summary: 'Jump feels tighter and the HUD is readable.' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(versionSummaries).toEqual([
+        { slug: 'comet-courier', version: 'v1', summary: 'Jump feels tighter and the HUD is readable.' },
+      ]);
     });
 
     it('accepts old+new exact replace without a unified diff', async () => {

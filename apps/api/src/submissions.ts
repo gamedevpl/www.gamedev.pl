@@ -87,7 +87,13 @@ import {
 } from './job-state.js';
 import { isMcpPresenceEventText } from './mcp-presence.js';
 import { gateCrashStall, probeGateCrash } from './gate-crash.js';
-import { clearObserveFailures, noteObserveFailure, sessionCrashStall, sessionCrashTransition } from './session-crash.js';
+import {
+  clearObserveFailures,
+  noteObserveFailure,
+  sessionCrashStall,
+  sessionCrashTransition,
+} from './session-crash.js';
+import { hydrateRecentBuildSummaries } from './build-changelog.js';
 import { toRecentBuilds } from './recent-builds.js';
 import {
   builderLabelFromRecord,
@@ -2446,6 +2452,18 @@ export async function registerSubmissionRoutes(
       delete next.priorRounds;
     }
 
+    if (next.recentBuilds && next.recentBuilds.length > 0) {
+      try {
+        next.recentBuilds = await hydrateRecentBuildSummaries({
+          builds: next.recentBuilds,
+          locale,
+          loadEvents: async (id) => (id === issueNumber ? loadedEvents : loadBuildEvents(id)),
+        });
+      } catch (error) {
+        void error;
+      }
+    }
+
     return next;
   }
 
@@ -2824,7 +2842,9 @@ export async function registerSubmissionRoutes(
         agentEndedAt: record.agentEndedAt,
         now: now(),
         builder: builderOf(record),
-      }) ?? gateCrashStall(record) ?? sessionCrashStall(record);
+      }) ??
+      gateCrashStall(record) ??
+      sessionCrashStall(record);
     if (stall) status.stall = stall;
     // Mid-gate milestones from GCS.
     if (record.slug && playableVersion) {
