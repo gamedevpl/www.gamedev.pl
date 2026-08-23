@@ -93,6 +93,18 @@ export const STAGED_PREVIEW_MAX_WAIT_MS = 20_000;
 export const STAGED_PREVIEW_BUSY_RETRY_MS = 1_000;
 
 /**
+ * How long {@link StagedPreviewPublisher.publishCandidate} may wait for a busy slot before
+ * giving up.
+ *
+ * A delivered candidate is not a courtesy background pass — the creator's Play button is
+ * gated on it landing. A background assembly for the same job is typically done in a few
+ * seconds (see the `totalMs` logged on success), so a bounded wait almost always finds a
+ * free slot; skipping outright on the first busy check is what let a delivered version go
+ * un-previewed with no signal anywhere.
+ */
+export const STAGED_PREVIEW_CANDIDATE_BUSY_WAIT_MS = 15_000;
+
+/**
  * Assemblies allowed to run at once across the process.
  *
  * The bound exists because this work is the exact fan-out `game-snapshot.ts` was written
@@ -496,8 +508,13 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
       pending.delete(issueNumber);
     }
 
-    if (running.has(issueNumber) || inFlight >= maxConcurrent) {
-      return 'skipped';
+    const busyDeadline = now() + STAGED_PREVIEW_CANDIDATE_BUSY_WAIT_MS;
+    while (running.has(issueNumber) || inFlight >= maxConcurrent) {
+      if (now() >= busyDeadline) {
+        options.log.warn({ issueNumber, version }, 'candidate preview skipped: assembly slot never freed');
+        return 'skipped';
+      }
+      await new Promise((resolve) => setTimeout(resolve, busyRetryMs));
     }
 
     running.add(issueNumber);
@@ -508,11 +525,17 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
       for (const file of files) {
         overlay[file.path] = file.content;
       }
-      if (!hasPlayableOverlay(overlay)) return 'incomplete';
+      if (!hasPlayableOverlay(overlay)) {
+        options.log.warn({ issueNumber, version }, 'candidate preview incomplete: overlay not playable');
+        return 'incomplete';
+      }
 
       const engineRef = input.kitEngineRef || options.engineRef;
       const sources = await options.githubClient.getGameSources(engineRef, slug, overlay, { noRefFallback: true });
-      if (!sources) return 'incomplete';
+      if (!sources) {
+        options.log.warn({ issueNumber, version }, 'candidate preview incomplete: sources did not resolve');
+        return 'incomplete';
+      }
 
       const assembleStartedAt = Date.now();
       const html = assembleGameHtml(
@@ -526,7 +549,13 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
         { restrictNetwork: true },
       );
       const assembleMs = Date.now() - assembleStartedAt;
-      if (Buffer.byteLength(html, 'utf8') > maxBytes) return 'too_large';
+      if (Buffer.byteLength(html, 'utf8') > maxBytes) {
+        options.log.warn(
+          { issueNumber, version, bytes: Buffer.byteLength(html, 'utf8') },
+          'candidate preview too large',
+        );
+        return 'too_large';
+      }
 
       if (options.gamesStore.putDerivedArtifact) {
         await options.gamesStore.putDerivedArtifact(
