@@ -96,6 +96,8 @@ export const STAGED_PREVIEW_MAX_WAIT_MS = 20_000;
  */
 export const STAGED_PREVIEW_BUSY_RETRY_MS = 1_000;
 
+export const STAGED_PREVIEW_CANDIDATE_BUSY_WAIT_MS = 15_000;
+
 /**
  * Assemblies allowed to run at once across the process.
  *
@@ -500,8 +502,14 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
       pending.delete(issueNumber);
     }
 
-    if (running.has(issueNumber) || inFlight >= maxConcurrent) {
-      return 'skipped';
+    // Count-based: `now` is injectable and may be frozen.
+    const maxBusyRetries = Math.max(1, Math.ceil(STAGED_PREVIEW_CANDIDATE_BUSY_WAIT_MS / busyRetryMs));
+    for (let retries = 0; running.has(issueNumber) || inFlight >= maxConcurrent; retries++) {
+      if (retries >= maxBusyRetries) {
+        options.log.warn({ issueNumber, version }, 'candidate preview skipped: assembly slot never freed');
+        return 'skipped';
+      }
+      await new Promise((resolve) => setTimeout(resolve, busyRetryMs));
     }
 
     running.add(issueNumber);
@@ -512,11 +520,17 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
       for (const file of files) {
         overlay[file.path] = file.content;
       }
-      if (!hasPlayableOverlay(overlay)) return 'incomplete';
+      if (!hasPlayableOverlay(overlay)) {
+        options.log.warn({ issueNumber, version }, 'candidate preview incomplete: overlay not playable');
+        return 'incomplete';
+      }
 
       const engineRef = input.kitEngineRef || options.engineRef;
       const sources = await options.githubClient.getGameSources(engineRef, slug, overlay, { noRefFallback: true });
-      if (!sources) return 'incomplete';
+      if (!sources) {
+        options.log.warn({ issueNumber, version }, 'candidate preview incomplete: sources did not resolve');
+        return 'incomplete';
+      }
 
       const assembleStartedAt = Date.now();
       const html = assembleGameHtml(
@@ -530,7 +544,13 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
         { restrictNetwork: true },
       );
       const assembleMs = Date.now() - assembleStartedAt;
-      if (Buffer.byteLength(html, 'utf8') > maxBytes) return 'too_large';
+      if (Buffer.byteLength(html, 'utf8') > maxBytes) {
+        options.log.warn(
+          { issueNumber, version, bytes: Buffer.byteLength(html, 'utf8') },
+          'candidate preview too large',
+        );
+        return 'too_large';
+      }
 
       if (options.gamesStore.putDerivedArtifact) {
         await options.gamesStore.putDerivedArtifact(
