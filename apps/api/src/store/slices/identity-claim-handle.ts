@@ -2,10 +2,7 @@ import type { Firestore } from '@google-cloud/firestore';
 import { stripUndefined } from '../firestore-util.js';
 import type { User, HandleRecord, ClaimHandleResult } from '../records/identity.js';
 
-/**
- * Claim or rename a handle. Transactional against the `handles` reservation so two
- * creators cannot both win the same name.
- */
+// Transactional against handles so two creators can't collide.
 export async function claimHandleInMemory(
   users: Map<string, User>,
   handles: Map<string, HandleRecord>,
