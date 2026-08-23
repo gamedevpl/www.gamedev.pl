@@ -23,9 +23,7 @@ function build(overrides: Partial<RecentBuild> = {}): RecentBuild {
 describe('medianGateMinutes', () => {
   it('ignores a single slow outlier', () => {
     // One game's real spread, plus a straggler.
-    const builds = [174, 176, 188, 203, 210, 540].map((s) =>
-      build({ verdict: 'green', finishedInMs: s * 1000 }),
-    );
+    const builds = [174, 176, 188, 203, 210, 540].map((s) => build({ verdict: 'green', finishedInMs: s * 1000 }));
 
     expect(medianGateMinutes(builds)).toBe(3);
   });
@@ -58,10 +56,7 @@ describe('buildBarModel', () => {
   });
 
   it('freezes a red build where it died, and stays red', () => {
-    const model = buildBarModel(
-      status({ recentBuilds: [build({ verdict: 'red', failedIndex: 1, total: 12 })] }),
-      t,
-    );
+    const model = buildBarModel(status({ recentBuilds: [build({ verdict: 'red', failedIndex: 1, total: 12 })] }), t);
 
     expect(model?.state).toBe('red');
     expect(model?.fraction).toBeCloseTo(2 / 12);
@@ -83,6 +78,24 @@ describe('buildBarModel', () => {
   it('shows nothing at all before the first delivery', () => {
     expect(buildBarModel(status({ recentBuilds: [] }), t)).toBeNull();
     expect(buildBarModel(undefined, t)).toBeNull();
+  });
+
+  it('reads "round in progress" when the newest build belongs to a prior round', () => {
+    const model = buildBarModel(
+      status({ issueNumber: 42, recentBuilds: [build({ verdict: 'green', issueNumber: 41 })] }),
+      t,
+    );
+
+    expect(model).toMatchObject({ state: 'starting', fraction: null, label: 'studioPanel.buildBar.roundInProgress' });
+  });
+
+  it('trusts the newest build once it belongs to the current round', () => {
+    const model = buildBarModel(
+      status({ issueNumber: 42, recentBuilds: [build({ verdict: 'green', issueNumber: 42 })] }),
+      t,
+    );
+
+    expect(model).toMatchObject({ state: 'green' });
   });
 
   it('counts preview lanes out of six', () => {
