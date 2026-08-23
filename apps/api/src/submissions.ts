@@ -127,6 +127,7 @@ import {
   isStudioOrigin,
   type AgentKeysStore,
   type BuildLogStore,
+  type BuildMediaStore,
   type BuildPreviewSummary,
   type BuildShotSummary,
   type CreatorMessageOrigin,
@@ -172,6 +173,7 @@ export type SubmissionRoutesStore = IdentityStore &
   DispatchStore &
   SubmissionStore &
   BuildLogStore &
+  BuildMediaStore &
   PublicationStore &
   QuotaStore &
   AgentKeysStore;
@@ -350,7 +352,7 @@ function revisionOriginOf(message: { origin?: CreatorMessageOrigin }): 'agent' |
 
 // Validates and persists a base64 PNG as a build shot.
 async function storeCreatorImage(
-  store: BuildLogStore,
+  store: BuildMediaStore,
   issueNumber: number,
   pngBase64: string | undefined,
   label: 'creator-playtest' | 'creator-reference',
@@ -372,7 +374,7 @@ async function storeCreatorImage(
 }
 
 async function storeCreatorPlaytestShot(
-  store: BuildLogStore,
+  store: BuildMediaStore,
   issueNumber: number,
   pngBase64: string | undefined,
 ): Promise<string | undefined> {
@@ -381,7 +383,7 @@ async function storeCreatorPlaytestShot(
 
 // Persists up to MAX_REFERENCE_IMAGES images; also returns validated bytes for chat.
 async function storeCreatorReferenceImages(
-  store: BuildLogStore,
+  store: BuildMediaStore,
   issueNumber: number,
   pngBase64List: string[] | undefined,
 ): Promise<{ ids: string[]; images: ChatAgentImage[] }> {
