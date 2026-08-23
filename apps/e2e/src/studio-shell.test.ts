@@ -159,6 +159,20 @@ async function stubStudioThreadData(page: Page) {
     }
     await route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not found"}' });
   });
+
+  // Published-game fallback route, stubbed read-only (#980 fetches on slug alone —
+  // this fixture's round is 'needs_changes', so useStageSource hits this unconditionally).
+  await page.route(`**/api/games/${FIXTURE_SLUG}`, async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fulfill({ status: 405, contentType: 'application/json', body: '{"error":"method not allowed"}' });
+      return;
+    }
+    await fulfillJson(route, {
+      slug: FIXTURE_SLUG,
+      title: 'E2E Studio Shell Fixture',
+      html: '<!doctype html><title>E2E Studio Shell Fixture</title>',
+    });
+  });
 }
 
 describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
