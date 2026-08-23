@@ -267,6 +267,7 @@ describe('POST /api/admin/jobs/:issueNumber/publish', () => {
     expect(response.statusCode).toBe(200);
     const older = await store.getSubmission(1_000_000);
     expect(older?.lastStatus).toBe('abandoned');
+    expect(older?.abandonedAt).toBeTruthy();
     const transitions = older?.transitions ?? [];
     expect(transitions[transitions.length - 1]).toMatchObject({
       to: 'abandoned',

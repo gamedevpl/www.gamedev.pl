@@ -229,6 +229,7 @@ export async function registerJobAdminRoutes(
           by: 'system',
           reason: 'superseded_by_publish',
         });
+        await store.setSubmissionAbandoned(other.issueNumber, at);
         await store.setSubmissionLastStatus(other.issueNumber, 'abandoned');
       }
     }

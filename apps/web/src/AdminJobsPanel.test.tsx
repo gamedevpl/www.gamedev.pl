@@ -114,13 +114,14 @@ describe('AdminJobsPanel', () => {
     await act(async () => root.unmount());
   });
 
-  it('deduplicates multiple builds for the same game under ready filter, showing only latest', async () => {
+  it('deduplicates multiple builds for the same game under ready filter, showing only latest by issue order', async () => {
+    // Deliberately pass older builds earlier in the queue array (e.g. API priority sort)
     mocked.fetchJobQueue.mockResolvedValue(
       queue([
+        job({ issueNumber: 1000010, title: 'Wargame', slug: 'wargame', state: 'ready_for_review' }),
         job({ issueNumber: 1000042, title: 'Wargame', slug: 'wargame', state: 'ready_for_review' }),
-        job({ issueNumber: 1000041, title: 'Wargame', slug: 'wargame', state: 'ready_for_review' }),
-        job({ issueNumber: 1000040, title: 'Wargame', slug: 'wargame', state: 'ready_for_review' }),
-        job({ issueNumber: 1000010, title: 'Miniature Warfare', slug: 'miniature-warfare', state: 'ready_for_review' }),
+        job({ issueNumber: 1000020, title: 'Wargame', slug: 'wargame', state: 'ready_for_review' }),
+        job({ issueNumber: 1000005, title: 'Miniature Warfare', slug: 'miniature-warfare', state: 'ready_for_review' }),
       ]),
     );
 
@@ -130,7 +131,8 @@ describe('AdminJobsPanel', () => {
     expect(container.querySelectorAll('.admin-job-row')).toHaveLength(2);
     expect(container.textContent).toContain('+2 superseded');
     expect(container.textContent).toContain('#1000042');
-    expect(container.textContent).not.toContain('#1000040');
+    expect(container.textContent).not.toContain('#1000010');
+    expect(container.textContent).not.toContain('#1000020');
 
     await act(async () => root.unmount());
   });

@@ -429,6 +429,9 @@ export function AdminJobsPanel() {
       list.push(j);
       map.set(key, list);
     }
+    for (const list of map.values()) {
+      list.sort((a, b) => b.issueNumber - a.issueNumber);
+    }
     return map;
   }, [jobs]);
 
