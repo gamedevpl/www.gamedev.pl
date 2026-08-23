@@ -4,7 +4,7 @@ import type { GenAIClient } from 'genaicode';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { checkUserAccess } from './auth.js';
-import { createVertexClient, type VertexGenerationConfig } from './genai.js';
+import { createVertexClient, type VertexGenerationConfig } from './agent-surface/genai.js';
 import type { ContentChecker } from './moderation.js';
 import { sanitizeCreatorText } from './submission-status.js';
 import { BOT_UID_PREFIX, type Store } from './store.js';

@@ -6,7 +6,7 @@ import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { createGcsObjectStore, type GcsObjectStore } from './delivery/gcs-sign.js';
 import { createGcsGamesStore, type GamesStore } from './delivery/games-store.js';
 import type { GitHubClient } from './catalog/github-client.js';
-import { KIT_ROOT_DIR } from './kit-registry.js';
+import { KIT_ROOT_DIR } from './agent-surface/kit-registry.js';
 import { InMemoryStore, type SourceFile } from './store.js';
 import { StubTabCompleter, type TabCompleter } from './tab-complete.js';
 import type { SourceDeliveryService } from './delivery/source-delivery.js';

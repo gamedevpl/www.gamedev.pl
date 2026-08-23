@@ -14,8 +14,8 @@ import {
 import type { TabCompleteGate } from './creation-limits.js';
 import type { GitHubClient } from './catalog/github-client.js';
 import { resolveJobState } from './job-state.js';
-import { createKitFileStore, type KitFileStore } from './kit-files.js';
-import { parseKitRegistry } from './kit-registry.js';
+import { createKitFileStore, type KitFileStore } from './agent-surface/kit-files.js';
+import { parseKitRegistry } from './agent-surface/kit-registry.js';
 import {
   assessModuleSize,
   isGameTsModule,

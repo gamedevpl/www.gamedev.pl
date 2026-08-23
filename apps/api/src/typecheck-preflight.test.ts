@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { KIT_ROOT_DIR } from './kit-registry.js';
-import type { KitTree } from './kit-files.js';
+import { KIT_ROOT_DIR } from './agent-surface/kit-registry.js';
+import type { KitTree } from './agent-surface/kit-files.js';
 import { sharedSourcesFromKitTree, typecheckDeliverySources } from './typecheck-preflight.js';
 
 const KIT_DTS = `

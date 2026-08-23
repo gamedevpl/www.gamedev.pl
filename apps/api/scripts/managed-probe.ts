@@ -2,16 +2,16 @@
 
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
-import type { BuildBrief } from '../src/agent-backend.js';
-import { mintManagedMcpOpener } from '../src/agent-token.js';
+import type { BuildBrief } from '../src/agent-surface/agent-backend.js';
+import { mintManagedMcpOpener } from '../src/agent-surface/agent-token.js';
 import { buildPrompt } from '../src/delivery/build-prompt.js';
-import { createManagedProvider } from '../src/managed-agent.js';
-import '../src/managed-provider-anthropic.js';
-import '../src/managed-provider-copilot.js';
-import '../src/managed-provider-gemini.js';
-import '../src/managed-provider-openai.js';
-import { createManagedBackend } from '../src/managed-backend.js';
-import { createFileKitDigestLoader } from '../src/kit-digest.js';
+import { createManagedProvider } from '../src/agent-surface/managed-agent.js';
+import '../src/agent-surface/managed-provider-anthropic.js';
+import '../src/agent-surface/managed-provider-copilot.js';
+import '../src/agent-surface/managed-provider-gemini.js';
+import '../src/agent-surface/managed-provider-openai.js';
+import { createManagedBackend } from '../src/agent-surface/managed-backend.js';
+import { createFileKitDigestLoader } from '../src/agent-surface/kit-digest.js';
 
 const args = process.argv.slice(2);
 const flag = (name: string) => args.includes(`--${name}`);

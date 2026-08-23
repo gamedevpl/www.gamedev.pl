@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { ROUND_STATUS_RESOURCE_URI, readUiResource } from '../src/mcp-ui.ts';
+import { ROUND_STATUS_RESOURCE_URI, readUiResource } from '../src/agent-surface/mcp-ui.ts';
 
 const DEFAULT_OUT = '/opt/cursor/artifacts/mcp-card-states';
 const outFlag = process.argv.indexOf('--out');

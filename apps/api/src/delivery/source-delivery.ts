@@ -14,7 +14,7 @@ import {
   type JobState,
   type TransitionActor,
 } from '../job-state.js';
-import type { KitFileStore } from '../kit-files.js';
+import type { KitFileStore } from '../agent-surface/kit-files.js';
 import { normalizeAtIntake } from '../localize-intake.js';
 import { sanitizeCreatorText } from '../submission-status.js';
 import type { Store, SubmissionRecord } from '../store.js';

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ASSIST_LANES, type AssistLane } from '@gamedevpl/contract';
-import { createVertexClient, type VertexGenerationConfig } from './genai.js';
+import { createVertexClient, type VertexGenerationConfig } from './agent-surface/genai.js';
 import type { GenAIClient } from 'genaicode';
 import {
   PARAMS_KEY,

@@ -1,12 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
-import { mintCreatorAgentKey } from './agent-creator-key.js';
+import { mintCreatorAgentKey } from './agent-surface/agent-creator-key.js';
 import {
   DRAFT_NOT_CONTINUABLE_REASON,
   GAME_ALREADY_PUBLISHED_REASON,
   NO_OPEN_ROUND_REASON,
   SLUG_NOT_ON_ACCOUNT_REASON,
-} from './agent-game-key.js';
+} from './agent-surface/agent-game-key.js';
 import { buildApp } from './app.js';
 import type { ContentChecker } from './moderation.js';
 import type { GamesStore } from './delivery/games-store.js';

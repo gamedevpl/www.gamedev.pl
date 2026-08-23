@@ -12,7 +12,7 @@ import {
   type EditorContentDocument,
   type EditorDefinition,
 } from './editor-contract.js';
-import { editorKitV2Enabled } from './editor-kit-env.js';
+import { editorKitV2Enabled } from './agent-surface/editor-kit-env.js';
 import { isLiveAgentRound } from './code-surface.js';
 import type { GamesStore } from './delivery/games-store.js';
 import { MAX_EDITOR_DRAFT_BYTES, type Store, type SubmissionRecord } from './store.js';

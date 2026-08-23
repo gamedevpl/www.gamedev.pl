@@ -7,7 +7,7 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { isAdminSession } from './admin-session.js';
-import { MANAGED_AGENT_VENDORS } from './agent-backend-env.js';
+import { MANAGED_AGENT_VENDORS } from './agent-surface/agent-backend-env.js';
 import { DEFAULT_SEED_PROVIDER } from './game-seed.js';
 import {
   recentPartitions,

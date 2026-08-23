@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 // A real call once burned the output cap on invisible thinking tokens.
 const createVertexClient = vi.fn(() => vi.fn());
-vi.mock('./genai.js', () => ({ createVertexClient }));
+vi.mock('./agent-surface/genai.js', () => ({ createVertexClient }));
 
 const { MAX_COMPLETION_OUTPUT_TOKENS, StubTabCompleter, tabCompleteEnabled, VertexTabCompleter } =
   await import('./tab-complete.js');

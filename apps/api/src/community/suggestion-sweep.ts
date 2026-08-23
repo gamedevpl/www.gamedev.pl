@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { BuilderKind } from '../builder.js';
-import type { ManagedUnavailableReason } from '../managed-availability.js';
+import type { ManagedUnavailableReason } from '../agent-surface/managed-availability.js';
 import type { InternalAuthVerifier } from '../internal-auth.js';
 import {
   aggregateCreatorAssessments,
