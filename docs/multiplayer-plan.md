@@ -2,7 +2,7 @@
 
 Status: ✅ **Shipped and live** (verified 2026-07-26). Party mode runs in production: one
 shared screen, phones as controllers, with `arena-tag` and `tactics-duel` in the catalog.
-The relay lives in [`apps/api/src/mp.ts`](../apps/api/src/mp.ts) and keeps rooms **in the
+The relay lives in [`apps/api/src/realtime/mp.ts`](../apps/api/src/realtime/mp.ts) and keeps rooms **in the
 memory of one process**, which is why the service deploys with `--max-instances 1` — see
 [`deployment.md`](./deployment.md). Raising that cap requires moving room state out of
 process first.
@@ -138,7 +138,7 @@ The join page is part of our own web shell (trusted code, normal origin) — **n
 The load-bearing invariant of this codebase: games run in an iframe with
 `sandbox="allow-scripts allow-pointer-lock"`, **no** `allow-same-origin` (`GameFrame.tsx`), and served bundles
 carry a CSP with no `connect-src` — fetch/XHR/WebSocket are all blocked inside the game
-([assemble.ts](../apps/api/src/assemble.ts)). Games are also validated to be offline-only and
+([assemble.ts](../apps/api/src/catalog/assemble.ts)). Games are also validated to be offline-only and
 self-contained ([validate.mjs](https://github.com/gamedevpl/www.gamedev.pl-games) Check 6:
 no `fetch(`, no `XMLHttpRequest`, no remote assets).
 
@@ -292,7 +292,7 @@ gameplay, drawing, actors, gfx, effects, audio, party`) in both `tools/lib/assem
   service therefore runs **`--max-instances 1`** while multiplayer is enabled: with an
   allowlisted handful of users and Cloud Run's default concurrency of 80, one instance is
   ample. This is the one genuine trade in this design.
-- **The split is now built** ([`mp-relay.ts`](../apps/api/src/mp-relay.ts),
+- **The split is now built** ([`mp-relay.ts`](../apps/api/src/realtime/mp-relay.ts),
   [`infra/deploy-relay.sh`](../infra/deploy-relay.sh)) and takes the first of the two upgrade
   paths above: a `gamedev-mp-relay` service pinned to one instance, running the **same image**
   with `MP_RELAY_ONLY=1`, while the app service loses the pin. One correction to what this
@@ -356,7 +356,7 @@ gameplay, drawing, actors, gfx, effects, audio, party`) in both `tools/lib/assem
 
 ## 6. Implementation plan
 
-**M1 — Room relay** (`apps/api/src/mp.ts`) · room store, HMAC join tokens, admission control,
+**M1 — Room relay** (`apps/api/src/realtime/mp.ts`) · room store, HMAC join tokens, admission control,
 relay, rate limits, beta-wall exemption, full unit-test matrix.
 
 **M2 — Party module + two seed games** (games repo) · `shared/modules/party.js`, validate

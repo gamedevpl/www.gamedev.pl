@@ -33,10 +33,10 @@
  * the branch pointed at during each request. See `ref` below.
  */
 
-import { publishSnapshot } from '../src/game-snapshot-publish.js';
-import { createGcsSnapshotStore, type GameSnapshotWriter, type SnapshotPointer } from '../src/game-snapshot.js';
-import { fetchGamesRepoArchive } from '../src/games-repo-archive.js';
-import { createGitHubClient, type RepoFileSource } from '../src/github-client.js';
+import { publishSnapshot } from '../src/catalog/game-snapshot-publish.js';
+import { createGcsSnapshotStore, type GameSnapshotWriter, type SnapshotPointer } from '../src/catalog/game-snapshot.js';
+import { fetchGamesRepoArchive } from '../src/catalog/games-repo-archive.js';
+import { createGitHubClient, type RepoFileSource } from '../src/catalog/github-client.js';
 
 function readFlag(name: string): string | null {
   const index = process.argv.indexOf(`--${name}`);

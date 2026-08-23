@@ -687,7 +687,7 @@ cat > "${POLICY_DIR}/a26.json" <<EOF
   "notificationChannels": ["${CHANNEL_NAME}"],
   "alertStrategy": { "autoClose": "86400s" },
   "documentation": {
-    "content": "knowledge_query is being called far more than expected in a day. This protects against cost runaway on Discovery Engine's SEARCH_ADD_ON_LLM (:answer), which is billed per call unlike plain chunk retrieval. Triage: Logs Explorer, jsonPayload.msg=\"knowledge_query answered\", group by jsonPayload.knowledgeQuery.mode (answer costs ~3.7x chunks) and .issueNumber (one round looping vs many rounds using it normally). The per-round soft caps live in apps/api/src/agent-channel.ts (maxKnowledgeAnswersPerWindow / maxKnowledgeChunksPerWindow); a single round cannot exceed them, so sustained volume above this threshold means many rounds, not one runaway loop.",
+    "content": "knowledge_query is being called far more than expected in a day. This protects against cost runaway on Discovery Engine's SEARCH_ADD_ON_LLM (:answer), which is billed per call unlike plain chunk retrieval. Triage: Logs Explorer, jsonPayload.msg=\"knowledge_query answered\", group by jsonPayload.knowledgeQuery.mode (answer costs ~3.7x chunks) and .issueNumber (one round looping vs many rounds using it normally). The per-round soft caps live in apps/api/src/agent-surface/agent-channel.ts (maxKnowledgeAnswersPerWindow / maxKnowledgeChunksPerWindow); a single round cannot exceed them, so sustained volume above this threshold means many rounds, not one runaway loop.",
     "mimeType": "text/markdown"
   }
 }

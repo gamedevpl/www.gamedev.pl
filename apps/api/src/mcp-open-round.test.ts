@@ -1,19 +1,19 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
-import { mintCreatorAgentKey } from './agent-creator-key.js';
+import { mintCreatorAgentKey } from './agent-surface/agent-creator-key.js';
 import {
   GAME_NOT_PUBLISHED_REASON,
   IMPROVEMENT_QUOTA_EXHAUSTED_REASON,
   mintGameAgentKey,
   SLUG_NOT_ON_ACCOUNT_REASON,
-} from './agent-game-key.js';
-import { resolveGameAgentKeyForOpenRound } from './agent-game-key-resolve.js';
-import { mintAgentToken } from './agent-token.js';
+} from './agent-surface/agent-game-key.js';
+import { resolveGameAgentKeyForOpenRound } from './agent-surface/agent-game-key-resolve.js';
+import { mintAgentToken } from './agent-surface/agent-token.js';
 import { buildApp } from './app.js';
 import type { ContentChecker } from './moderation.js';
-import type { GamesStore } from './games-store.js';
-import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
-import { mintMcpSessionKey } from './mcp-session-key.js';
+import type { GamesStore } from './delivery/games-store.js';
+import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
+import { mintMcpSessionKey } from './agent-surface/mcp-session-key.js';
 import { InMemoryStore } from './store.js';
 import { mintToken } from './submission-token.js';
 

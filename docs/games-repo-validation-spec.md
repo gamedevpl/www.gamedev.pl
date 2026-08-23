@@ -27,7 +27,7 @@ This specification defines the quality gates enforced on incoming pull requests 
 - On top of that sits a single serve-compat platform ceiling for the touch pad, restart
   button, music glue, opt-in reserves, and friends. The served cap is author budget +
   that ceiling. The live numbers are `GAME_BUDGET_BYTES` and `GAMEKIT_PLATFORM_BYTES` in
-  `apps/api/src/games-repo-contract.ts`, which `apps/api/src/assemble.ts` re-exports as
+  `apps/api/src/catalog/games-repo-contract.ts`, which `apps/api/src/catalog/assemble.ts` re-exports as
   `MAX_PROJECT_BYTES` — do not restate them here, or this page becomes a third copy to
   keep in lockstep.
 

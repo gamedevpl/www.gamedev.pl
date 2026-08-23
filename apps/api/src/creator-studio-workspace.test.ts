@@ -2,10 +2,10 @@ import { gunzipSync, gzipSync } from 'node:zlib';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
-import type { GamesStore, VersionManifest } from './games-store.js';
-import type { GcsObjectStore } from './gcs-sign.js';
+import type { GamesStore, VersionManifest } from './delivery/games-store.js';
+import type { GcsObjectStore } from './delivery/gcs-sign.js';
 import { InMemoryStore } from './store.js';
-import { readTarEntries, writeTarGz, type TarEntry } from './tar.js';
+import { readTarEntries, writeTarGz, type TarEntry } from './delivery/tar.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 const ENGINE = 'deadbeef0123456789abcdef0123456789abcdef';

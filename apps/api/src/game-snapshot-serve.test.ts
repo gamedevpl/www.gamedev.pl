@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from './app.js';
-import type { GameSnapshotReader, SnapshotGame } from './game-snapshot.js';
-import type { CatalogGameEntry, GameSources, GitHubClient } from './github-client.js';
+import type { GameSnapshotReader, SnapshotGame } from './catalog/game-snapshot.js';
+import type { CatalogGameEntry, GameSources, GitHubClient } from './catalog/github-client.js';
 import { InMemoryStore } from './store.js';
 
 /**

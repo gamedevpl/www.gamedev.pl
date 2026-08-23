@@ -10,12 +10,12 @@ import {
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { splitConceptBrief } from './agent-build-brief.js';
-import { creatorOwnsSlug } from './agent-game-key-resolve.js';
-import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-channel.js';
-import { mintAgentToken, mintManagedMcpOpener } from './agent-token.js';
-import { registerMcpServerRoutes } from './mcp-server.js';
-import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
-import { MAX_BUILD_PREVIEW_BYTES } from './build-preview-limits.js';
+import { creatorOwnsSlug } from './agent-surface/agent-game-key-resolve.js';
+import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-surface/agent-channel.js';
+import { mintAgentToken, mintManagedMcpOpener } from './agent-surface/agent-token.js';
+import { registerMcpServerRoutes } from './agent-surface/mcp-server.js';
+import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './catalog/assemble.js';
+import { MAX_BUILD_PREVIEW_BYTES } from './delivery/build-preview-limits.js';
 import {
   createCreationGate,
   createChatGate,
@@ -28,8 +28,8 @@ import {
   MANAGED_UNAVAILABLE_ERROR,
   type ManagedAvailabilityGate,
   type ManagedUnavailableReason,
-} from './managed-availability.js';
-import { postGateScreenshotToThread } from './gate-screenshot.js';
+} from './agent-surface/managed-availability.js';
+import { postGateScreenshotToThread } from './delivery/gate-screenshot.js';
 import { profileBylineName, toPublicCreatorProfile } from './creator-profile.js';
 import {
   catalogEntryFromSpec,
@@ -38,25 +38,29 @@ import {
   parseSpecTitle,
   type CatalogGameEntry,
   type GitHubClient,
-} from './github-client.js';
+} from './catalog/github-client.js';
 import {
   createSnapshotReaderFromEnv,
   SnapshotIncompleteError,
   SnapshotUnavailableError,
   type GameSnapshotReader,
-} from './game-snapshot.js';
-import { startHealthCheck } from './game-health.js';
-import { createStagedPreviewPublisher, overlayGameSources, type StagedPreviewOptions } from './staged-preview.js';
+} from './catalog/game-snapshot.js';
+import { startHealthCheck } from './catalog/game-health.js';
+import {
+  createStagedPreviewPublisher,
+  overlayGameSources,
+  type StagedPreviewOptions,
+} from './delivery/staged-preview.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
-import type { AgentBackend, SeedDelivery, SeedFiles } from './agent-backend.js';
-import { PLAYTEST_CONTEXT_HEADER, stripPlaytestContext } from './build-transcript.js';
+import type { AgentBackend, SeedDelivery, SeedFiles } from './agent-surface/agent-backend.js';
+import { PLAYTEST_CONTEXT_HEADER, stripPlaytestContext } from './delivery/build-transcript.js';
 import {
   createAgentBackendRegistryFromEnv,
   createSeedProvidersFromEnv,
   resolveBuilderBackend,
   type AgentBackendRegistry,
   type ManagedBackendDeps,
-} from './agent-backend-env.js';
+} from './agent-surface/agent-backend-env.js';
 import { createSeedAvailabilityGate, type SeedAvailabilityGate } from './seed-availability.js';
 import {
   allowsCreatorBuilderHandoff,
@@ -70,9 +74,9 @@ import {
 } from './builder.js';
 import { codeSurfaceEnabled, isLiveAgentRound } from './code-surface.js';
 import { DEFAULT_SEED_PROVIDER, type GameSeeder, type SeedDraft, type SeedFile } from './game-seed.js';
-import { createSourceDeliveryService } from './source-delivery.js';
-import { createKitFileStore } from './kit-files.js';
-import type { GamesStore } from './games-store.js';
+import { createSourceDeliveryService } from './delivery/source-delivery.js';
+import { createKitFileStore } from './agent-surface/kit-files.js';
+import type { GamesStore } from './delivery/games-store.js';
 import {
   canTransition,
   detectStall,
@@ -85,16 +89,22 @@ import {
   type JobState,
   type JobTransition,
 } from './job-state.js';
-import { isMcpPresenceEventText } from './mcp-presence.js';
-import { gateCrashStall, probeGateCrash } from './gate-crash.js';
-import { clearObserveFailures, noteObserveFailure, sessionCrashStall, sessionCrashTransition } from './session-crash.js';
-import { toRecentBuilds } from './recent-builds.js';
+import { isMcpPresenceEventText } from './agent-surface/mcp-presence.js';
+import { gateCrashStall, probeGateCrash } from './delivery/gate-crash.js';
+import {
+  clearObserveFailures,
+  noteObserveFailure,
+  sessionCrashStall,
+  sessionCrashTransition,
+} from './session-crash.js';
+import { hydrateRecentBuildSummaries } from './delivery/build-changelog.js';
+import { toRecentBuilds } from './delivery/recent-builds.js';
 import {
   builderLabelFromRecord,
   failedStageFromProgress,
   logDeliveryGateVerdict,
   type DeliveryGateStatus,
-} from './delivery-metrics.js';
+} from './telemetry/delivery-metrics.js';
 import {
   VertexStudioChatAgent,
   type ChatAgentImage,
@@ -102,25 +112,31 @@ import {
   type ChatAgentStatus,
   type StudioChatAgent,
 } from './chat-agent.js';
-import { asChatAgentLogger, logChatAgentDecision, logChatAgentFailOpen } from './chat-agent-metrics.js';
+import { asChatAgentLogger, logChatAgentDecision, logChatAgentFailOpen } from './telemetry/chat-agent-metrics.js';
 import { MAX_CHAT_TURNS, rememberChatTurn, type ChatTurn } from './chat-turns.js';
-import { mintConnectPayload } from './self-build-connect.js';
-import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
-import { createMailerFromEnv, type Mailer } from './mailer.js';
+import { mintConnectPayload } from './agent-surface/self-build-connect.js';
+import { createLocalGamesClient, resolveLocalGamesDir } from './catalog/local-games-repo.js';
+import { createMailerFromEnv, type Mailer } from './notifications/mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
-import { emitOperatorAlert, emitSubmissionNotification, notifyOnTransition, type EmitDeps } from './notify.js';
-import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './operator-alerts.js';
-import { pageOwnerGames } from './owner-games.js';
+import {
+  emitOperatorAlert,
+  emitSubmissionNotification,
+  notifyOnTransition,
+  type EmitDeps,
+} from './notifications/notify.js';
+import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './notifications/operator-alerts.js';
+import { pageOwnerGames } from './catalog/owner-games.js';
 import { seedOutcomeFor } from './seed-status.js';
 import { isAdminSession } from './admin-session.js';
 import { peekQuota } from './quota-gate.js';
-import { mintGameSlug } from './slug.js';
-import { runSlugBackfill, settleSlugClaim } from './slug-backfill.js';
+import { mintGameSlug } from './catalog/slug.js';
+import { runSlugBackfill, settleSlugClaim } from './catalog/slug-backfill.js';
 import {
   DELETED_ACCOUNT_UID,
   isStudioOrigin,
   type AgentKeysStore,
   type BuildLogStore,
+  type BuildMediaStore,
   type BuildPreviewSummary,
   type BuildShotSummary,
   type CreatorMessageOrigin,
@@ -128,8 +144,10 @@ import {
   type IdentityStore,
   type PublicationStore,
   type QuotaStore,
+  type RoundBudgetStore,
   type RoundsStore,
   type Store,
+  type SubmissionQueryStore,
   type SubmissionRecord,
   type SubmissionStore,
 } from './store.js';
@@ -151,7 +169,7 @@ import { InvalidTokenError, mintToken, verifyToken } from './submission-token.js
 import { normalizeAtIntake, type IntakeText } from './localize-intake.js';
 import { createTranslatorFromEnv, normalizeLocale, type Translator } from './translate.js';
 import { isVariantWidth } from './image-variants.js';
-import { logModerationRejection } from './moderation-metrics.js';
+import { logModerationRejection } from './telemetry/moderation-metrics.js';
 
 /**
  * The store slices `registerSubmissionRoutes` actually reaches into — every domain this
@@ -163,9 +181,12 @@ import { logModerationRejection } from './moderation-metrics.js';
  */
 export type SubmissionRoutesStore = IdentityStore &
   RoundsStore &
+  RoundBudgetStore &
   DispatchStore &
   SubmissionStore &
+  SubmissionQueryStore &
   BuildLogStore &
+  BuildMediaStore &
   PublicationStore &
   QuotaStore &
   AgentKeysStore;
@@ -344,7 +365,7 @@ function revisionOriginOf(message: { origin?: CreatorMessageOrigin }): 'agent' |
 
 // Validates and persists a base64 PNG as a build shot.
 async function storeCreatorImage(
-  store: BuildLogStore,
+  store: BuildMediaStore,
   issueNumber: number,
   pngBase64: string | undefined,
   label: 'creator-playtest' | 'creator-reference',
@@ -366,7 +387,7 @@ async function storeCreatorImage(
 }
 
 async function storeCreatorPlaytestShot(
-  store: BuildLogStore,
+  store: BuildMediaStore,
   issueNumber: number,
   pngBase64: string | undefined,
 ): Promise<string | undefined> {
@@ -375,7 +396,7 @@ async function storeCreatorPlaytestShot(
 
 // Persists up to MAX_REFERENCE_IMAGES images; also returns validated bytes for chat.
 async function storeCreatorReferenceImages(
-  store: BuildLogStore,
+  store: BuildMediaStore,
   issueNumber: number,
   pngBase64List: string[] | undefined,
 ): Promise<{ ids: string[]; images: ChatAgentImage[] }> {
@@ -405,9 +426,10 @@ export interface SubmissionRoutesOptions {
    * round's one read. Injected from `buildApp`, which is where the snapshot reader and
    * games-repo credentials already live.
    */
-  resolveProposalBase?: (
-    slug: string,
-  ) => Promise<{ base: import('./store.js').ProposalBase; files: import('./games-store.js').SourceFile[] } | null>;
+  resolveProposalBase?: (slug: string) => Promise<{
+    base: import('./store.js').ProposalBase;
+    files: import('./delivery/games-store.js').SourceFile[];
+  } | null>;
   submissionTokenSecret?: string;
   platformConnectorSecret?: string;
   /**
@@ -796,19 +818,6 @@ export async function registerSubmissionRoutes(
   const kitFileStoreForDelivery = options.agentChannel?.objectStore
     ? createKitFileStore(options.agentChannel.objectStore)
     : null;
-  const sourceDelivery =
-    store && gamesStoreForSeed
-      ? createSourceDeliveryService({
-          store,
-          gamesStore: gamesStoreForSeed,
-          kitFileStore: kitFileStoreForDelivery,
-          now,
-          maxSubmitsPerWindow: options.agentChannel?.maxSubmitsPerWindow,
-          onSourcesDelivered: options.agentChannel?.onSourcesDelivered,
-          onEvent: invalidateDeliveryCaches,
-          log: app.log,
-        })
-      : undefined;
 
   function buildAgentRegistry(): AgentBackendRegistry {
     const selfOptions = store
@@ -2446,6 +2455,18 @@ export async function registerSubmissionRoutes(
       delete next.priorRounds;
     }
 
+    if (next.recentBuilds && next.recentBuilds.length > 0) {
+      try {
+        next.recentBuilds = await hydrateRecentBuildSummaries({
+          builds: next.recentBuilds,
+          locale,
+          loadEvents: async (id) => (id === issueNumber ? loadedEvents : loadBuildEvents(id)),
+        });
+      } catch (error) {
+        void error;
+      }
+    }
+
     return next;
   }
 
@@ -2824,7 +2845,9 @@ export async function registerSubmissionRoutes(
         agentEndedAt: record.agentEndedAt,
         now: now(),
         builder: builderOf(record),
-      }) ?? gateCrashStall(record) ?? sessionCrashStall(record);
+      }) ??
+      gateCrashStall(record) ??
+      sessionCrashStall(record);
     if (stall) status.stall = stall;
     // Mid-gate milestones from GCS.
     if (record.slug && playableVersion) {
@@ -6031,6 +6054,20 @@ export async function registerSubmissionRoutes(
           },
         })
       : null;
+  const sourceDelivery =
+    store && stagedPreviewStore
+      ? createSourceDeliveryService({
+          store,
+          gamesStore: stagedPreviewStore,
+          kitFileStore: kitFileStoreForDelivery,
+          stagedPreviews: stagedPreviews ?? undefined,
+          now,
+          maxSubmitsPerWindow: options.agentChannel?.maxSubmitsPerWindow,
+          onSourcesDelivered: options.agentChannel?.onSourcesDelivered,
+          onEvent: invalidateDeliveryCaches,
+          log: app.log,
+        })
+      : undefined;
 
   // The agent's side of the wire. Registered here rather than in app.ts so it shares
   // the store, the token secret, and the caches it has to invalidate.

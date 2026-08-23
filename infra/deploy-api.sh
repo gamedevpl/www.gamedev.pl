@@ -413,6 +413,12 @@ fi
 if [ -n "${REVIEWER_UIDS:-}" ]; then
   ENV_VARS="${ENV_VARS}|REVIEWER_UIDS=${REVIEWER_UIDS}"
 fi
+# OpenAI Apps domain-verification token (openai-apps-challenge.ts). Per-submission,
+# not a secret, and rotates — a repo/shell variable, not Secret Manager. Unset means
+# the route 404s, which is the correct default outside an active submission.
+if [ -n "${OPENAI_APPS_CHALLENGE_TOKEN:-}" ]; then
+  ENV_VARS="${ENV_VARS}|OPENAI_APPS_CHALLENGE_TOKEN=${OPENAI_APPS_CHALLENGE_TOKEN}"
+fi
 if [ -n "$MAIL_FROM" ]; then
   ENV_VARS="${ENV_VARS}|MAIL_FROM=${MAIL_FROM}"
 fi

@@ -263,7 +263,7 @@ describe('GET /api/me/studio', () => {
               sourceFiles: sourceFilesByVersion[version],
             }
           : null,
-    } as unknown as import('./games-store.js').GamesStore;
+    } as unknown as import('./delivery/games-store.js').GamesStore;
   }
 
   it('is editable off a mode=preview build mid-round, before anything is delivered', async () => {
@@ -631,7 +631,7 @@ describe('GET /api/me/studio/scorecards', () => {
       const gamesStore = {
         listVersions: async () => manifests,
         countVersions: async () => 2,
-      } as unknown as import('./games-store.js').GamesStore;
+      } as unknown as import('./delivery/games-store.js').GamesStore;
 
       const app = await buildApp({
         store,
@@ -659,6 +659,54 @@ describe('GET /api/me/studio/scorecards', () => {
       await app.close();
     });
 
+    it('fills missing changelogs from the round done event', async () => {
+      await store.createSubmission(10, 'g:creator', 'Sky Dodge');
+      await store.setSubmissionSlug(10, 'sky-dodge');
+      await store.setSubmissionLocale(10, 'pl');
+      await store.appendBuildEvent(10, {
+        kind: 'done',
+        text: 'Added a shield pickup.',
+        textLocalized: 'Dodałem tarczę.',
+        locale: 'pl',
+        createdAt: `${today}T12:10:00.000Z`,
+      });
+
+      const gamesStore = {
+        listVersions: async () => [
+          {
+            slug: 'sky-dodge',
+            version: 'v2',
+            createdAt: `${today}T12:00:00.000Z`,
+            issueNumber: 10,
+            deliveryMode: 'publish' as const,
+            sourceFiles: ['game.ts'],
+            gate: { green: true, ranAt: `${today}T12:05:00.000Z` },
+          },
+        ],
+        countVersions: async () => 1,
+      } as unknown as import('./delivery/games-store.js').GamesStore;
+
+      const app = await buildApp({
+        store,
+        sessionSecret,
+        submissionRoutes: { submissionTokenSecret, agentChannel: { gamesStore } },
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/me/studio/games/sky-dodge/builds?locale=pl',
+        headers: authHeaders('g:creator'),
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().builds[0]).toMatchObject({
+        version: 'v2',
+        summary: 'Dodałem tarczę.',
+      });
+
+      await app.close();
+    });
+
     it('404s when game is not owned by user', async () => {
       const app = await buildApp({
         store,
@@ -668,7 +716,7 @@ describe('GET /api/me/studio/scorecards', () => {
           agentChannel: {
             gamesStore: {
               listVersions: async () => [],
-            } as unknown as import('./games-store.js').GamesStore,
+            } as unknown as import('./delivery/games-store.js').GamesStore,
           },
         },
       });

@@ -3,7 +3,7 @@
  * spec + qa, and the static rules digest agents read once per round.
  */
 
-import { MAX_PROJECT_BYTES } from './games-repo-contract.js';
+import { MAX_PROJECT_BYTES } from './catalog/games-repo-contract.js';
 
 /** Short static digest — not the full SKILL.md; just the invariants that must not be forgotten. */
 export const AGENT_BUILD_RULES_DIGEST =

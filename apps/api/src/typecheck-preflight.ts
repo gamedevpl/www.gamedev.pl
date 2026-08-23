@@ -2,8 +2,8 @@
 
 import path from 'node:path';
 import ts from 'typescript';
-import type { KitTree } from './kit-files.js';
-import { KIT_ROOT_DIR } from './kit-registry.js';
+import type { KitTree } from './agent-surface/kit-files.js';
+import { KIT_ROOT_DIR } from './agent-surface/kit-registry.js';
 
 const COMPILER_OPTIONS: ts.CompilerOptions = {
   noEmit: true,

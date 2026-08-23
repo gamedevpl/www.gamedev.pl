@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
-import type { GamesStore } from './games-store.js';
+import type { GamesStore } from './delivery/games-store.js';
 import { buildJobQueue } from './job-admin-routes.js';
 import { InMemoryStore, type SubmissionRecord } from './store.js';
 

@@ -474,11 +474,12 @@ export async function setGameAutonomy(slug: string, mode: AutonomyMode): Promise
 
 export async function fetchGameBuilds(
   slug: string,
-  options?: { limit?: number; offset?: number },
+  options?: { limit?: number; offset?: number; locale?: string },
 ): Promise<StudioBuildsResponse> {
   const params = new URLSearchParams();
   if (options?.limit) params.set('limit', String(options.limit));
   if (options?.offset) params.set('offset', String(options.offset));
+  if (options?.locale) params.set('locale', options.locale);
   const query = params.toString() ? `?${params.toString()}` : '';
   const response = await fetch(`${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/builds${query}`, {
     credentials: 'include',

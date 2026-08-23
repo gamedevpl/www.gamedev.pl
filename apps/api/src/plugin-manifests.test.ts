@@ -2,9 +2,9 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { MCP_INSTALL_LINK_CREDENTIAL_MARKERS } from './mcp-install-links.js';
-import { MCP_UNADVERTISED_TOOLS, MCP_VISIBLE_TOOLS } from './mcp-server.js';
-import { MCP_UI_APP_ONLY_TOOLS } from './mcp-ui.js';
+import { MCP_INSTALL_LINK_CREDENTIAL_MARKERS } from './agent-surface/mcp-install-links.js';
+import { MCP_UNADVERTISED_TOOLS, MCP_VISIBLE_TOOLS } from './agent-surface/mcp-server.js';
+import { MCP_UI_APP_ONLY_TOOLS } from './agent-surface/mcp-ui.js';
 
 // Copy in several places drifts — the closed-beta clause already did.
 // Every manifest must match the registry and its endpoint.

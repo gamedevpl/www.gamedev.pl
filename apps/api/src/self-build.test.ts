@@ -1,11 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AgentBackend, BuildBrief, SeedFiles } from './agent-backend.js';
-import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
+import type { AgentBackend, BuildBrief, SeedFiles } from './agent-surface/agent-backend.js';
+import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-surface/agent-token.js';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
-import type { GamesStore } from './games-store.js';
-import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
+import type { GamesStore } from './delivery/games-store.js';
+import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
 import { InMemoryStore } from './store.js';
 import { mintToken } from './submission-token.js';
 

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
-import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
+import { MCP_ENDPOINT_PATH } from './agent-surface/self-build-connect.js';
 import { InMemoryStore } from './store.js';
 
 const secret = 'oauth-handshake-secret';

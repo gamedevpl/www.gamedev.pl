@@ -74,7 +74,7 @@ build round; the authoritative list is whatever `tools/list` returns, and
 | `delete_source_file`     | Delete one staged source file           | destructive |
 | `clear_staged_sources`   | Clear staged source files               | destructive |
 | `list_staged_sources`    | List staged source files                | read        |
-| `stage_upload_url`       | Get a stage upload URL                  | write       |
+| `stage_upload_url`       | Get stage upload URL(s)                 | write       |
 | `submit_sources`         | Deliver sources to the gate             | destructive |
 | `end`                    | End (commit) this round                 | destructive |
 | `get_gate_verdict`       | Check the gate once                     | read        |

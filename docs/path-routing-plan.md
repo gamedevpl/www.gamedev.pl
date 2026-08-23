@@ -40,17 +40,17 @@ Custom router in [`apps/web/src/router.ts`](../apps/web/src/router.ts) — no Re
 
 **Call sites that emit or consume hashes** (non-exhaustive but complete enough to drive the PR):
 
-| Area                       | Files / notes                                                                       |
-| -------------------------- | ----------------------------------------------------------------------------------- |
-| Router + builders          | `apps/web/src/router.ts`, `router.test.ts`, `mp/protocol.test.ts`                   |
-| App navigation             | `App.tsx` (`navigateHash`, `hashchange`), `App.catalog.test.ts`                     |
-| Links in UI                | `NavHeader.tsx`, `DraftView.tsx`, `GameHealthView.tsx`, `SubmissionStatusView.tsx`  |
-| In-app notifications       | Stored `link` field (`#/play/…` or `#/status/…`); bell uses `href={n.link}`         |
-| Email + Web Push           | `apps/api/src/notify.ts` joins `APP_BASE_URL + '/' + link` → absolute URL           |
-| Multiplayer QR / join path | `apps/api/src/mp.ts` → `joinPath: /#/join/...`                                      |
-| Service worker             | `apps/web/public/sw.js` `notificationclick` already `client.navigate(url)`          |
-| SPA serving                | Fastify static + not-found → `index.html` (comment still says "hash-routed")        |
-| Docs                       | `steel-thread-plan`, `multiplayer-plan`, `notifications-plan`, `mobile-app-plan`, … |
+| Area                       | Files / notes                                                                           |
+| -------------------------- | --------------------------------------------------------------------------------------- |
+| Router + builders          | `apps/web/src/router.ts`, `router.test.ts`, `mp/protocol.test.ts`                       |
+| App navigation             | `App.tsx` (`navigateHash`, `hashchange`), `App.catalog.test.ts`                         |
+| Links in UI                | `NavHeader.tsx`, `DraftView.tsx`, `GameHealthView.tsx`, `SubmissionStatusView.tsx`      |
+| In-app notifications       | Stored `link` field (`#/play/…` or `#/status/…`); bell uses `href={n.link}`             |
+| Email + Web Push           | `apps/api/src/notifications/notify.ts` joins `APP_BASE_URL + '/' + link` → absolute URL |
+| Multiplayer QR / join path | `apps/api/src/realtime/mp.ts` → `joinPath: /#/join/...`                                 |
+| Service worker             | `apps/web/public/sw.js` `notificationclick` already `client.navigate(url)`              |
+| SPA serving                | Fastify static + not-found → `index.html` (comment still says "hash-routed")            |
+| Docs                       | `steel-thread-plan`, `multiplayer-plan`, `notifications-plan`, `mobile-app-plan`, …     |
 
 Section anchors like `#studio` in `SplitHero.tsx` are **not** app routes; leave them alone.
 

@@ -1,6 +1,6 @@
 import { gzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
-import type { GcsObjectStore } from './gcs-sign.js';
+import type { GcsObjectStore } from './delivery/gcs-sign.js';
 import {
   EXAMPLE_READ_MAX_BYTES,
   ExampleFilesError,

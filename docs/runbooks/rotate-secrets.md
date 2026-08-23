@@ -32,7 +32,7 @@ _user-to-server_ tokens — App installation tokens are explicitly unsupported �
 necessarily a human's fine-grained PAT, carrying a human's expiry. There is no version of
 it a service account can hold, which makes the calendar reminder the only mitigation. It is
 deliberately separate from `github-token` so that a dispatch outage cannot become a serving
-outage: see `createManagedPlatformBackendFromEnv` in `apps/api/src/agent-backend-env.ts`,
+outage: see `createManagedPlatformBackendFromEnv` in `apps/api/src/agent-surface/agent-backend-env.ts`,
 which returns `undefined` rather than throwing when the token is absent. **Since MP-04**
 (the direct Copilot backend's retirement), this token alone is not sufficient either —
 `MANAGED_AGENT_VENDOR=copilot` must also be selected, or the managed backend never starts

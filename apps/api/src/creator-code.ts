@@ -1,21 +1,21 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
+import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './catalog/assemble.js';
 import { isActiveBuildRound } from './builder.js';
 import { codeSurfaceEnabled, isLiveAgentRound, isOpenAgentRound } from './code-surface.js';
-import type { GcsObjectStore } from './gcs-sign.js';
+import type { GcsObjectStore } from './delivery/gcs-sign.js';
 import {
   InvalidUploadError,
   MAX_UPLOAD_FILES,
   type GamesStore,
   type SourceFile,
   type StagedSourceEntry,
-} from './games-store.js';
+} from './delivery/games-store.js';
 import type { TabCompleteGate } from './creation-limits.js';
-import type { GitHubClient } from './github-client.js';
+import type { GitHubClient } from './catalog/github-client.js';
 import { resolveJobState } from './job-state.js';
-import { createKitFileStore, type KitFileStore } from './kit-files.js';
-import { parseKitRegistry } from './kit-registry.js';
+import { createKitFileStore, type KitFileStore } from './agent-surface/kit-files.js';
+import { parseKitRegistry } from './agent-surface/kit-registry.js';
 import {
   assessModuleSize,
   isGameTsModule,
@@ -29,8 +29,13 @@ import {
   createSourceDeliveryService,
   SourceDeliveryValidationError,
   type SourceDeliveryService,
-} from './source-delivery.js';
-import { hasPlayableOverlay, overlayGameSources, readDeliveredSources } from './staged-preview.js';
+} from './delivery/source-delivery.js';
+import {
+  hasPlayableOverlay,
+  overlayGameSources,
+  readDeliveredSources,
+  type StagedPreviewPublisher,
+} from './delivery/staged-preview.js';
 import type { Store, SubmissionRecord } from './store.js';
 import { MAX_PREFIX_CHARS, MAX_SUFFIX_CHARS, tabCompleteEnabled, type TabCompleter } from './tab-complete.js';
 import { sharedSourcesFromKitTree } from './typecheck-preflight.js';
@@ -59,6 +64,8 @@ export interface CreatorCodeRoutesOptions {
   kitFileStore?: KitFileStore | null;
   // Track 2: the fast-lane synchronous preview route's engine half.
   githubClient?: Pick<GitHubClient, 'getGameSources'>;
+  engineRef?: string;
+  stagedPreviews?: Pick<StagedPreviewPublisher, 'publishCandidate'> | null;
   now?: () => number;
   /** Busts the cached status response after an owner write — see submissions.ts. */
   invalidateStatusCache?: (issueNumber: number) => void;
@@ -196,7 +203,9 @@ export async function registerCreatorCodeRoutes(
             store: options.store,
             gamesStore: options.gamesStore,
             kitFileStore,
+            stagedPreviews: options.stagedPreviews,
             onSourcesDelivered: options.onSourcesDelivered,
+            onEvent: (issueNumber) => options.scheduleStagedPreview?.(issueNumber),
             log: options.log,
           })
         : null;

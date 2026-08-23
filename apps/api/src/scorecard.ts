@@ -6,7 +6,7 @@ import {
   summarizeGameHealth,
   type GameHealth,
   type PartitionScanBudget,
-} from './telemetry-health.js';
+} from './telemetry/telemetry-health.js';
 import {
   createDefaultThemeExtractor,
   MAX_FEEDBACK_ROWS,
@@ -14,7 +14,7 @@ import {
   NoopThemeExtractor,
   type FeedbackTheme,
   type ThemeExtractor,
-} from './feedback-themes.js';
+} from './community/feedback-themes.js';
 import type { Scorecard, Store, TelemetryEvent } from './store.js';
 
 /**

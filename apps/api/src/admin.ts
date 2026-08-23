@@ -7,7 +7,7 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { isAdminSession } from './admin-session.js';
-import { MANAGED_AGENT_VENDORS } from './agent-backend-env.js';
+import { MANAGED_AGENT_VENDORS } from './agent-surface/agent-backend-env.js';
 import { DEFAULT_SEED_PROVIDER } from './game-seed.js';
 import {
   recentPartitions,
@@ -15,8 +15,8 @@ import {
   summarizeGameHealth,
   type GameHealth,
   type PartitionScanBudget,
-} from './telemetry-health.js';
-import { routeAll, type Suggestion } from './suggestions.js';
+} from './telemetry/telemetry-health.js';
+import { routeAll, type Suggestion } from './community/suggestions.js';
 import { buildJobQueue } from './job-admin-routes.js';
 import type { JobState } from './job-state.js';
 import { buildCostReport } from './job-costs.js';
@@ -25,9 +25,9 @@ import {
   detectSeedingDegraded,
   SEEDING_DEGRADED_WINDOW_MS,
   type OperatorAlert,
-} from './operator-alerts.js';
-import { summarizeVisitFunnel, type VisitFunnel } from './visit-funnel.js';
-import { summarizeCreatorMetrics, type CreatorMetrics } from './creator-metrics.js';
+} from './notifications/operator-alerts.js';
+import { summarizeVisitFunnel, type VisitFunnel } from './telemetry/visit-funnel.js';
+import { summarizeCreatorMetrics, type CreatorMetrics } from './telemetry/creator-metrics.js';
 import {
   summarizeRetentionByEligibilityDay,
   summarizeVisitDay,
@@ -36,7 +36,7 @@ import {
   type DailyMcpPoint,
   type DailyRetentionPoint,
   type TelemetryTrends,
-} from './telemetry-trends.js';
+} from './telemetry/telemetry-trends.js';
 import {
   DEFAULT_CREATION_LIMITS_TTL_MS,
   resolveDefaultGlobalDailyCap,

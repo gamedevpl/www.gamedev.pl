@@ -1,13 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from './app.js';
-import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
-import { mintGameAgentKey } from './agent-game-key.js';
+import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-surface/agent-token.js';
+import { mintGameAgentKey } from './agent-surface/agent-game-key.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { cimdSupportsPublicClientAuth, consentToken, OAUTH_AS_METADATA_PATH } from './oauth-as.js';
 import { pkceChallengeS256 } from './oauth-pkce.js';
 import { AS_ACCESS_TOKEN_TTL_MS, generateAsAccessToken, generateAsRefreshToken } from './oauth-tokens.js';
-import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
+import { MCP_ENDPOINT_PATH } from './agent-surface/self-build-connect.js';
 import { InMemoryStore } from './store.js';
 
 const SESSION_SECRET = 'dev-session-secret-change-me';

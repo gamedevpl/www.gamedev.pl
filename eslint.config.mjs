@@ -3,7 +3,7 @@ import tsPlugin from '@typescript-eslint/eslint-plugin';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import globals from 'globals';
-import gamedevRules from './eslint-rules/relative-import-extensions.mjs';
+import gamedevRules from './eslint-rules/index.mjs';
 
 // Flat config lints a file only when some block's `files` pattern matches it, so the
 // ts/tsx blocks below are what define the lint surface — the same one `--ext ts,tsx` gave.
@@ -54,6 +54,8 @@ export default [
       // apps/api (where Node would crash without it) and drifted in apps/web (where
       // Vite covers for it), which left reviewers flagging it by hand forever.
       'gamedev/relative-import-extensions': 'error',
+      // Not enabled here: it would trip --max-warnings 0 on pre-existing cross-module
+      // debt. Run explicitly via `npm run module-boundary` (see eslint-rules/module-boundary.mjs).
     },
   },
   {

@@ -13,8 +13,8 @@
 
 import { Firestore } from '@google-cloud/firestore';
 import type { WaitlistEntry } from '../src/store.js';
-import { createMailerFromEnv, ConsoleMailer } from '../src/mailer.js';
-import { betaInviteMessage, normalizeLocale } from '../src/email-templates.js';
+import { createMailerFromEnv, ConsoleMailer } from '../src/notifications/mailer.js';
+import { betaInviteMessage, normalizeLocale } from '../src/notifications/email-templates.js';
 
 function usage(): never {
   console.error('Usage: npm run beta:invite -- <email> [--locale en|pl] [--dry-run]');

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
-import type { GamesStore } from './games-store.js';
-import type { CatalogGameEntry, GitHubClient, LinkedPullRequest } from './github-client.js';
+import type { GamesStore } from './delivery/games-store.js';
+import type { CatalogGameEntry, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
 import type { InternalAuthVerifier } from './internal-auth.js';
 import { InMemoryStore } from './store.js';
 

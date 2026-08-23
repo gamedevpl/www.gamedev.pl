@@ -1,19 +1,19 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { assertAgentTokenActive, mintAgentToken, verifyAgentToken } from './agent-token.js';
+import { assertAgentTokenActive, mintAgentToken, verifyAgentToken } from './agent-surface/agent-token.js';
 import { buildApp } from './app.js';
 import type { GameSeeder, SeedDraft } from './game-seed.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
-import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
+import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
 import type { ContentChecker } from './moderation.js';
 import { InMemoryStore, type Store } from './store.js';
 import { mintToken, verifyToken } from './submission-token.js';
 import { canTransition } from './job-state.js';
-import type { AgentBackend, BuildBrief } from './agent-backend.js';
-import type { GamesStore } from './games-store.js';
-import { DELIVERY_GATE_VERDICT_MSG } from './delivery-metrics.js';
+import type { AgentBackend, BuildBrief } from './agent-surface/agent-backend.js';
+import type { GamesStore } from './delivery/games-store.js';
+import { DELIVERY_GATE_VERDICT_MSG } from './telemetry/delivery-metrics.js';
 import { JOB_ID_FLOOR } from './store.js';
-import { createManagedAvailabilityGate, type ManagedAvailabilityGate } from './managed-availability.js';
+import { createManagedAvailabilityGate, type ManagedAvailabilityGate } from './agent-surface/managed-availability.js';
 import { StubStudioChatAgent, type ChatAgentRequest, type StudioChatAgent } from './chat-agent.js';
 import type { ChatGate } from './creation-limits.js';
 import type { InternalAuthVerifier } from './internal-auth.js';
@@ -2138,6 +2138,7 @@ describe('submission routes', () => {
         total: 6,
         finishedInMs: 120000,
         fileCount: 0,
+        issueNumber: 731,
       },
       {
         version: 'v2',
@@ -2147,6 +2148,7 @@ describe('submission routes', () => {
         total: 12,
         finishedInMs: 120000,
         fileCount: 0,
+        issueNumber: 731,
       },
       {
         version: 'v1',
@@ -2155,9 +2157,66 @@ describe('submission routes', () => {
         verdict: 'pending',
         total: 12,
         fileCount: 0,
+        issueNumber: 731,
       },
     ]);
     expect(status.json().totalBuildsCount).toBe(3);
+
+    await app.close();
+  });
+
+  it('fills an empty build changelog from the round done event', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 732 });
+    const { backend } = createBackendStub();
+    let issueNumber = 732;
+    const gamesStore = {
+      getManifest: async () => null,
+      listVersions: async () => [
+        {
+          slug: 'space-parcels',
+          version: 'v1',
+          createdAt: '2026-08-10T07:00:00.000Z',
+          issueNumber,
+          sourceFiles: ['game.ts'],
+        },
+      ],
+    } as unknown as GamesStore;
+
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    issueNumber = job.issueNumber;
+    await store.setSubmissionSlug(job.issueNumber, 'space-parcels');
+    await store.appendBuildEvent(job.issueNumber, {
+      kind: 'done',
+      text: 'Added a second lane of traffic.',
+      textLocalized: 'Dodałem drugi pas ruchu.',
+      locale: 'pl',
+      createdAt: '2026-08-10T07:05:00.000Z',
+    });
+
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}?locale=pl`,
+      headers: authHeaders,
+    });
+
+    expect(status.statusCode).toBe(200);
+    expect(status.json().recentBuilds[0]).toMatchObject({
+      version: 'v1',
+      summary: 'Dodałem drugi pas ruchu.',
+    });
 
     await app.close();
   });

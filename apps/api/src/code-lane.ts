@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { resultText, type GenAIClient, type GenerationResult } from 'genaicode';
-import { createVertexClient, type VertexGenerationConfig } from './genai.js';
+import { createVertexClient, type VertexGenerationConfig } from './agent-surface/genai.js';
 import {
   buildSymbolMap,
   findRegion,

@@ -1,7 +1,7 @@
 # Agent live channel
 
 > Status: ✅ **Live** (verified 2026-07-26). Agents report progress over
-> `/api/agent/build/*` ([`apps/api/src/agent-channel.ts`](../apps/api/src/agent-channel.ts)) —
+> `/api/agent/build/*` ([`apps/api/src/agent-surface/agent-channel.ts`](../apps/api/src/agent-surface/agent-channel.ts)) —
 > one HTTP call, no commit, and the reply carries any change requests the creator has sent.
 >
 > Supersedes the transport in [agent-progress-notes.md](./agent-progress-notes.md). That contract

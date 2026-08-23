@@ -3,13 +3,13 @@ import { gzipSync } from 'node:zlib';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
-import { createGcsObjectStore, type GcsObjectStore } from './gcs-sign.js';
-import { createGcsGamesStore, type GamesStore } from './games-store.js';
-import type { GitHubClient } from './github-client.js';
-import { KIT_ROOT_DIR } from './kit-registry.js';
+import { createGcsObjectStore, type GcsObjectStore } from './delivery/gcs-sign.js';
+import { createGcsGamesStore, type GamesStore } from './delivery/games-store.js';
+import type { GitHubClient } from './catalog/github-client.js';
+import { KIT_ROOT_DIR } from './agent-surface/kit-registry.js';
 import { InMemoryStore, type SourceFile } from './store.js';
 import { StubTabCompleter, type TabCompleter } from './tab-complete.js';
-import type { SourceDeliveryService } from './source-delivery.js';
+import type { SourceDeliveryService } from './delivery/source-delivery.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 const submissionTokenSecret = 'test-submission-secret';

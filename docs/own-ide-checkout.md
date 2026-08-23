@@ -48,7 +48,7 @@ not a fork: sources without the engine do not run.
 
 Nothing built is accepted back, either — the site assembles the bundle, because that is
 where serve-time policy lives (CSP, AI-Act provenance marking, the credential scan, the byte
-budget). See `apps/api/src/workspace-archive.ts`.
+budget). See `apps/api/src/delivery/workspace-archive.ts`.
 
 ## Engine pinning and coming back after a while
 

@@ -10,10 +10,10 @@ import {
   type EditorContentDocument,
   type EditorDefinition,
 } from './editor-contract.js';
-import type { GamesStore, SourceFile, VersionManifest } from './games-store.js';
-import { InvalidUploadError } from './games-store.js';
-import { mintGameSlug } from './slug.js';
-import { settleSlugClaim } from './slug-backfill.js';
+import type { GamesStore, SourceFile, VersionManifest } from './delivery/games-store.js';
+import { InvalidUploadError } from './delivery/games-store.js';
+import { mintGameSlug } from './catalog/slug.js';
+import { settleSlugClaim } from './catalog/slug-backfill.js';
 import type { Store } from './store.js';
 import { sanitizeCreatorText } from './submission-status.js';
 import { mintToken } from './submission-token.js';

@@ -19,7 +19,7 @@ firewall does not cover MCP servers, so the round-key boundary is the isolation 
 ## Session loop (what agents must do)
 
 Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
-`apps/api/src/mcp-server.ts` (returned by `start`, appended to every tool description).
+`apps/api/src/agent-surface/mcp-server.ts` (returned by `start`, appended to every tool description).
 
 1. `start` → `show_round` (once) → `get_brief` → `get_sources` → `get_kit` as needed
    - `get_sources` is the first read of **every** round. A new game arrives with a
@@ -33,8 +33,8 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
    base64 `send_screenshot` — PNG bytes must never enter the model. Without shell
    egress, skip mid-build screenshots; the gate still captures on delivery
 3. Prefer staging then `submit_sources({ fromStaged: true, mode, kitEngineRef })`
-   - **New/full rewrite with shell:** `stage_upload_url({ path })` or batch `stage_upload_url({ paths: [...] })` then
-     `curl --upload-file <file> "$url"` — bytes never re-enter the model; mint multiple URLs in one turn instead of looping
+   - **New/full rewrite with shell:** batch `stage_upload_url({ paths: [...] })` (or `stage_upload_url({ path })` for a single lone file) then
+     `curl --upload-file <file> "$url"` — bytes never re-enter the model; ALWAYS mint URLs in batch with `paths: [...]` up to 50 paths per call (chunking into batches of 50 if staging more), rather than looping or emitting multiple stage_upload_url calls per file
    - **New/full rewrite without shell:** `stage_source_file({ path, content })`
    - **Edits:** prefer `patch_source_file({ path, old, new })` (exact unique substring
      replace — no diff format), or `patch_source_file({ path, patches: [{ old, new }, ...] })`
@@ -102,7 +102,7 @@ The fix has two halves, and both matter when editing either:
   instead; only a fresh round still inlines its spec, because at creation the spec _is_
   the conversation. `build-prompt.test.ts` pins that the feedback text stays out.
 - **`get_transcript`** (`GET /api/agent/build/transcript`, assembled by
-  `apps/api/src/build-transcript.ts`) serves creator requests, agent notes and build
+  `apps/api/src/delivery/build-transcript.ts`) serves creator requests, agent notes and build
   events across the current job and up to five earlier sibling rounds,
   playtest-instrumentation stripped, presence leftovers hidden. Read-only: it never
   acks — `read_inbox`/`ack_inbox` keep that.
@@ -252,7 +252,7 @@ host answers with a permission denial. A managed round on 2026-08-09 spent three
 that way and then shipped a game with the audio module stripped out, because the sound-id
 lookup it had been pointed at did not exist for it. The MCP layer still filters `browse` down
 to advertised tools (now the whole list, so the block survives intact) and drops it when none
-remain; `apps/api/src/mcp-server.test.ts` fails if an unadvertised name reappears in the
+remain; `apps/api/src/agent-surface/mcp-server.test.ts` fails if an unadvertised name reappears in the
 descriptions, the workflow, or a `get_kit` reply. When you remove a tool from
 `MCP_VISIBLE_TOOLS`, grep the prose for its name in the same change.
 
@@ -270,7 +270,7 @@ keep the full contract single-copy; a short creator-text safety reminder may sta
 **`get_kit_api` — the orientation path that did not exist before 2026-08-09.** `get_kit`
 returns tarball metadata only (engineRef, sha256, unpack one-liner) — it was never the API
 reference its own description claimed to be pointing at, because nothing injected a digest
-into the MCP surface. `appendKitDigest` (`apps/api/src/kit-digest.ts`) had exactly one
+into the MCP surface. `appendKitDigest` (`apps/api/src/agent-surface/kit-digest.ts`) had exactly one
 caller, the platform Copilot system prompt (`managed-backend.ts`); a BYOCA agent with no
 shell egress and no system prompt carrying the kit had no in-band way to answer "what can
 this platform build" at all. Observed consequence: an agent asked for a party/multiplayer
@@ -279,7 +279,7 @@ never published there — turns wasted on nothing, with third-party multiplayer 
 different engine's networking model entirely) as the real risk if it had read them as
 authoritative.
 
-`get_kit_api` (`GET /api/agent/build/kit/api`, `apps/api/src/agent-channel.ts`) serves the
+`get_kit_api` (`GET /api/agent/build/kit/api`, `apps/api/src/agent-surface/agent-channel.ts`) serves the
 same digest object the platform lane compacts, through `compactKitDigestForApi` — a larger
 budget (`DEFAULT_MCP_DIGEST_MAX_BYTES`, 50 KiB vs the platform's 20 KiB) since it is paid
 once per round by an agent that chose to call it, not injected into every turn. That budget
@@ -292,7 +292,7 @@ bump cannot mix kit revisions. `get_kit` and `get_kit_api` both carry
 unanswered capability question is answered by `get_kit_api` / browse, never a web search.
 
 **The digest itself had a silent-drop bug the surface fix didn't touch.**
-`compactKitDigestForPrompt` (`apps/api/src/kit-digest.ts`) used to keep only API lines
+`compactKitDigestForPrompt` (`apps/api/src/agent-surface/kit-digest.ts`) used to keep only API lines
 matching a hardcoded regex allowlist, every pattern of which described single-player core
 API — `GameKitParty`, `GameKitZone`, `GameKitCommons`, `GameKitPresence` matched nothing, so
 same-screen multiplayer, real-time shared zones and persistent worlds were invisible to any
@@ -346,7 +346,7 @@ EditorKit internals, how the allowlisted example games are actually put together
 platform docs/process, and a capability question that falls outside its digest previously
 had nowhere to go but a web search for gamedev.pl documentation that does not exist
 publicly — the same trap `get_kit_api` itself was built to close for the kit surface.
-`knowledge_query` (`GET /api/agent/build/knowledge/query`, `apps/api/src/agent-channel.ts`,
+`knowledge_query` (`GET /api/agent/build/knowledge/query`, `apps/api/src/agent-surface/agent-channel.ts`,
 backed by the Discovery Engine seam in `apps/api/src/knowledge-search.ts`) answers that
 gap over a corpus the games repo builds and republishes from GameKit/EditorKit source,
 the allowlisted examples, and process docs. `mode` defaults to `answer` (synthesized prose
@@ -399,7 +399,7 @@ an edge case, and the description says so, pointing at the browse tools for what
 `shared/game-kit.d.ts`'s byte count. Generate the real digest for the current kit, run it
 through `compactKitDigestForApi`, JSON-encode it the way the MCP response actually ships,
 and measure real tokens (a tokenizer proxy is fine; character-count guessing is what broke
-this). `apps/api/src/kit-digest.test.ts` ("caps get_kit_api output well under a single MCP
+this). `apps/api/src/agent-surface/kit-digest.test.ts` ("caps get_kit_api output well under a single MCP
 tool-result limit") now guards this — a synthetic ~120-declaration API at the real kit's
 byte scale, run through the default budget, asserted under a byte proxy for the ~25k-token
 ceiling — but it is a proxy fixture, not the real kit content or a real tokenizer; re-verify
@@ -481,7 +481,7 @@ it up — the job sat in `submitted` (reads as "building" to the creator) indefi
   reconnects and calls `start` first (the normal first call of any session) got no
   signal unless it happened to call one of those three next. `start`'s response now
   carries an optional `gate: { status, deliveryId }` (mirroring `show_round`'s shape,
-  via the shared `apps/api/src/gate-verdict.ts`) whenever the last delivery still needs
+  via the shared `apps/api/src/delivery/gate-verdict.ts`) whenever the last delivery still needs
   a fix, with `warnings.code=must_fix_gate` riding the same reply. Absent when nothing
   is outstanding — a passing round's `start` response is unchanged.
 
@@ -613,15 +613,15 @@ editing this copy: a seed that can silently override the creator's spec is worse
 
 ### index.html can never be freshly written again — only carried forward or deleted
 
-It is generated from GAME.json `howToPlay` (`apps/api/src/index-html-generator.ts`) —
+It is generated from GAME.json `howToPlay` (`apps/api/src/catalog/index-html-generator.ts`) —
 an agent should never write one. `stage_source_file` / `patch_source_file` (both funnel
 through `putStagedSourceFile`) and a direct/inline `submit_sources({ files: [...] })`
 both refuse a non-blank `index.html` write outright — a 400, or for `patch_source_file`
 a `failed[]` entry naming the reason (`forbiddenIndexHtmlWriteReason` in
-`apps/api/src/games-store.ts`, checked against the request's own `files[]` in the
+`apps/api/src/delivery/games-store.ts`, checked against the request's own `files[]` in the
 submit route before any overlay runs) — not a soft `warnings` entry an agent could
 ignore. This replaced an earlier, weaker fix: a shape-checked advisory in
-`apps/api/src/game-manifest-hint.ts` that only flagged a full-document or
+`apps/api/src/catalog/game-manifest-hint.ts` that only flagged a full-document or
 non-standard-chrome shape, after transport-tycoon-remake (2026-08-18) delivered a
 hand-written full-document `index.html` whose stray `<main>` title/description block
 rendered as visible text under the canvas — the assembler inlines the file into the
@@ -653,7 +653,7 @@ that fixed an unrelated typecheck bug in `game.ts` never looked at GAME.json aga
 because nothing pointed it there until a Cloud Build log did, minutes later.
 
 `stage_source_file` and `patch_source_file` now run a shallow shape check
-(`apps/api/src/game-manifest-hint.ts`) whenever the staged/patched path is `GAME.json`,
+(`apps/api/src/catalog/game-manifest-hint.ts`) whenever the staged/patched path is `GAME.json`,
 and emit `warnings.code=game_manifest_invalid` on the _same_ reply if it's missing
 `engine.modules` (or `audio` is selected without `audio.sounds`/`audio.music`). This is
 deliberately shallow — it does not know the kit's module catalog, canonical order, or
@@ -678,7 +678,7 @@ genuine breaking change, not that the repo merged twice while the agent was work
 
 It used to mean the latter, and often did: on 2026-08-05 seven kits published in ten hours, a
 `get_kit` answer was good for 45–90 minutes, and three consecutive rounds were refused for age —
-one over a commit that added an internal probe script. `apps/api/src/kit-window.ts` is the rule;
+one over a commit that added an internal probe script. `apps/api/src/agent-surface/kit-window.ts` is the rule;
 the games repo's `docs/kit-versioning.md` is when to bump.
 
 ### One round builds against one engine
@@ -703,7 +703,7 @@ above: take the new `engineRef` and submit against that.
 
 ### Staging is creator-visible (live staged preview)
 
-`apps/api/src/staged-preview.ts` assembles the **staging buffer itself** and stores it as
+`apps/api/src/delivery/staged-preview.ts` assembles the **staging buffer itself** and stores it as
 an ordinary `BuildPreview`, so the creator plays what the agent has staged long before a
 delivery or a gate run. Studio floats it as a muted, non-interactive frame above the
 composer (`apps/web/src/StudioLivePreview.tsx`); clicking opens the normal theater.
@@ -852,7 +852,7 @@ cache), so a resume cannot keep showing “finished this round” next to live p
 
 ### The handshake carries the OAuth challenge, not the first `tools/call`
 
-`shouldIssueMcpOAuthChallenge` (`apps/api/src/mcp-oauth-metadata.ts`) answers a
+`shouldIssueMcpOAuthChallenge` (`apps/api/src/agent-surface/mcp-oauth-metadata.ts`) answers a
 credential-less `initialize` with the 401 + `WWW-Authenticate` challenge. That 401 is the
 **only** in-band signal that starts OAuth discovery (RFC 9728 / the MCP auth flow): a
 client that handshakes to a clean 200 concludes the server needs no auth, never probes the
@@ -1043,26 +1043,26 @@ queued.
 
 | Area                               | Path                                                                                                                                                                                                       |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| MCP tools                          | `apps/api/src/mcp-server.ts` (`screenshot_upload_url` / `stage_upload_url` → signed PUT; no base64 shot tool)                                                                                              |
-| Kit API digest (get_kit_api)       | `apps/api/src/kit-digest.ts` (`compactKitDigestForApi`, `splitDeclarationBlocks`, `selectApiBlocks`) + `GET /api/agent/build/kit/api` in `agent-channel.ts`                                                |
+| MCP tools                          | `apps/api/src/agent-surface/mcp-server.ts` (`screenshot_upload_url` / `stage_upload_url` → signed PUT; no base64 shot tool)                                                                                |
+| Kit API digest (get_kit_api)       | `apps/api/src/agent-surface/kit-digest.ts` (`compactKitDigestForApi`, `splitDeclarationBlocks`, `selectApiBlocks`) + `GET /api/agent/build/kit/api` in `agent-channel.ts`                                  |
 | Knowledge query (Discovery Engine) | `apps/api/src/knowledge-search.ts` (the one Discovery Engine seam) + `GET /api/agent/build/knowledge/query` in `agent-channel.ts` + `knowledge_query` in `mcp-server.ts`                                   |
 | Engine modules catalog             | games repo `tools/lib/pack-kit.ts` (`digestEngineModules`) — generated from `shared/modules/*.ts` header comments, not hand-maintained                                                                     |
-| Upload tokens                      | `apps/api/src/agent-upload-token.ts` + `POST …/shot/upload-url` + `PUT …/shot/upload` + `PUT …/sources/stage/upload`                                                                                       |
-| Presence pulses                    | `apps/api/src/mcp-presence.ts` (`start` → `joining_round` in the MCP dispatcher)                                                                                                                           |
-| Conversation transcript            | `apps/api/src/build-transcript.ts` (`loadBuildTranscript`) + `GET /api/agent/build/transcript` in `agent-channel.ts` + `get_transcript` in `mcp-server.ts`                                                 |
-| Gate milestones                    | `apps/api/src/gate-progress.ts` + `GamesStore.putGateProgress` (GCS; Studio/MCP poll while checks run)                                                                                                     |
-| Gate verdict (shared)              | `apps/api/src/gate-verdict.ts` — `readGateVerdict` / `deriveGateStatusString`, used by the channel's `/api/agent/build/gate` route and by `start`'s reconnect visibility                                   |
+| Upload tokens                      | `apps/api/src/agent-surface/agent-upload-token.ts` + `POST …/shot/upload-url` + `PUT …/shot/upload` + `PUT …/sources/stage/upload`                                                                         |
+| Presence pulses                    | `apps/api/src/agent-surface/mcp-presence.ts` (`start` → `joining_round` in the MCP dispatcher)                                                                                                             |
+| Conversation transcript            | `apps/api/src/delivery/build-transcript.ts` (`loadBuildTranscript`) + `GET /api/agent/build/transcript` in `agent-channel.ts` + `get_transcript` in `mcp-server.ts`                                        |
+| Gate milestones                    | `apps/api/src/delivery/gate-progress.ts` + `GamesStore.putGateProgress` (GCS; Studio/MCP poll while checks run)                                                                                            |
+| Gate verdict (shared)              | `apps/api/src/delivery/gate-verdict.ts` — `readGateVerdict` / `deriveGateStatusString`, used by the channel's `/api/agent/build/gate` route and by `start`'s reconnect visibility                          |
 | Preview-gate reconciliation        | `apps/api/src/submissions.ts` (`reconcileGateVerdict`) — red `previewGate` → `needs_changes`/`gate_red`; green preview never promotes                                                                      |
-| GAME.json staging shape check      | `apps/api/src/game-manifest-hint.ts` (`gameManifestHint`) — wired into the stage/patch routes in `agent-channel.ts`                                                                                        |
+| GAME.json staging shape check      | `apps/api/src/catalog/game-manifest-hint.ts` (`gameManifestHint`) — wired into the stage/patch routes in `agent-channel.ts`                                                                                |
 | Round-0 seed generation            | `apps/api/src/game-seed.ts` (`ModelGameSeeder`) + `seedBuild`/`seedStagingMutedUntil` in `submissions.ts` — mute is `builder === 'platform'`-scoped and honours the cooldown only for `workspace` delivery |
 | Seed regeneration                  | `regenerateSeed` in `submissions.ts` + `POST /api/agent/build/seed/regenerate` in `agent-channel.ts` + `regenerate_seed` in `mcp-server.ts`; cap via `store.incrementSeedRegenerations`                    |
 | "How would this round get a seed?" | `AgentBackend.seedDelivery` → `workspace` / `channel`; read before generating, and `seedDeliveryFor` in `submissions.ts` backstops a backend that does not declare it                                      |
-| Seed → managed session wiring      | `apps/api/src/managed-backend.ts` (`start`) — checks `provider.supportsSeedFiles` before attaching `workspaceFiles`; drops `brief.seed` from the prompt too when unsupported                               |
-| Account-session invalidation       | `apps/api/src/agent-session-revocation.ts`                                                                                                                                                                 |
-| Channel (`POST …/end`, …)          | `apps/api/src/agent-channel.ts`                                                                                                                                                                            |
+| Seed → managed session wiring      | `apps/api/src/agent-surface/managed-backend.ts` (`start`) — checks `provider.supportsSeedFiles` before attaching `workspaceFiles`; drops `brief.seed` from the prompt too when unsupported                 |
+| Account-session invalidation       | `apps/api/src/agent-surface/agent-session-revocation.ts`                                                                                                                                                   |
+| Channel (`POST …/end`, …)          | `apps/api/src/agent-surface/agent-channel.ts`                                                                                                                                                              |
 | Stall / `ended`                    | `apps/api/src/job-state.ts` (`detectStall`)                                                                                                                                                                |
 | Handoff gate                       | `apps/api/src/builder.ts` (`allowsCreatorBuilderHandoff`)                                                                                                                                                  |
-| Live staged preview                | `apps/api/src/staged-preview.ts`                                                                                                                                                                           |
+| Live staged preview                | `apps/api/src/delivery/staged-preview.ts`                                                                                                                                                                  |
 | Studio live-preview frame          | `apps/web/src/StudioLivePreview.tsx`                                                                                                                                                                       |
 | Studio status poll cadence         | `apps/web/src/studioStatusPoll.ts` (tight poll on `ended` / `quiet` / `no_agent_yet` / `dispatched`)                                                                                                       |
 | Feedback / resume                  | `apps/api/src/submissions.ts`                                                                                                                                                                              |

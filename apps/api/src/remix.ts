@@ -15,12 +15,12 @@ import { rememberRemixTurn, type RemixTurn } from './remix-turns.js';
 import { codeLaneDebugEnabled, codeLaneEnabled, type VertexCodeLane } from './code-lane.js';
 import { typeCheckGame } from './type-check.js';
 import { buildSuggestions } from './remix-suggestions.js';
-import type { GamesStore } from './games-store.js';
+import type { GamesStore } from './delivery/games-store.js';
 import type { Store } from './store.js';
 import type { ContentChecker } from './moderation.js';
-import { logModerationRejection } from './moderation-metrics.js';
-import { assembleGameHtml } from './assemble.js';
-import type { GitHubClient } from './github-client.js';
+import { logModerationRejection } from './telemetry/moderation-metrics.js';
+import { assembleGameHtml } from './catalog/assemble.js';
+import type { GitHubClient } from './catalog/github-client.js';
 import { type EditingGate, type CreationGate } from './creation-limits.js';
 import {
   bakeRemixEditorDefaults,
@@ -36,9 +36,9 @@ import {
   MAX_PROPOSAL_TITLE_LENGTH,
   MIN_PROPOSAL_DESCRIPTION_LENGTH,
   type ProposalDeps,
-} from './proposals.js';
+} from './community/proposals.js';
 import type { ProposalBase } from './store.js';
-import type { SourceFile } from './games-store.js';
+import type { SourceFile } from './delivery/games-store.js';
 
 /**
  * Remix: a player bends a published game while playing it.

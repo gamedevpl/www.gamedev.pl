@@ -15,8 +15,8 @@ import {
   formatResolutionLine,
   hasFlag,
   resolveTarget,
-} from '../src/assessment-cli.js';
-import { applyResolution, prepareResolution, summarizeResolutions } from '../src/assessment-resolution.js';
+} from '../src/community/assessment-cli.js';
+import { applyResolution, prepareResolution, summarizeResolutions } from '../src/community/assessment-resolution.js';
 import { FirestoreStore } from '../src/store.js';
 
 function usage(): never {
