@@ -174,8 +174,10 @@ Everything below needs the owner; none of it can be prepared in-repo:
    rejection. Note the tension with the account requirement: the reviewer needs an account
    that can actually open a round, so this is a real provisioning decision, not a form
    field.
-4. **Starting the submission**, which mints the `/.well-known/openai-apps-challenge` token.
-   The route stays unbuilt until then.
+4. **Starting the submission**, which mints the `/.well-known/openai-apps-challenge` token —
+   set (or confirm) it as the `OPENAI_APPS_CHALLENGE_TOKEN` Actions variable per the Domain
+   verification section above. The route itself is already built and live; only the token
+   value is per-submission.
 
 The eight test cases above and the field table are ready to paste; the four items here are
 the whole remaining cost.
