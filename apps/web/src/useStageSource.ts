@@ -251,24 +251,30 @@ export function useStageSource(
   }, [preview, status?.playable, token, channelRetryTick]);
 
   // Once the game has published, the stage shows the delivered build itself — the
-  // same document a player sees — rather than a stale staged/channel copy.
+  // same document a player sees — rather than a stale staged/channel copy. Fetched
+  // whenever a slug exists, not only while the round is currently `published`: an
+  // improvement round on an already-live game keeps this as the fallback under the
+  // "building" card, instead of the stage going blank the moment a new round opens.
   useEffect(() => {
-    const slug = status?.status === 'published' ? status.slug : undefined;
+    const slug = status?.slug;
     if (!slug) return;
-    if (loadedPublishedSlugRef.current === slug || publishedInFlightRef.current) return;
+    // Distinct key per published-ness — a round must refetch once it publishes.
+    const isPublishedNow = status?.status === 'published';
+    const key = isPublishedNow ? slug : `${slug}:fallback`;
+    if (loadedPublishedSlugRef.current === key || publishedInFlightRef.current) return;
 
     publishedInFlightRef.current = true;
     const requestToken = token;
     fetchPublishedGame(slug)
       .then((game) => {
         if (activeTokenRef.current !== requestToken) return;
-        loadedPublishedSlugRef.current = slug;
+        loadedPublishedSlugRef.current = key;
         publishedRetryRef.current = 0;
         setPublished({ html: game.html, slug });
       })
       .catch(() => {
         if (activeTokenRef.current !== requestToken) return;
-        // Leave the slug unmarked so this effect retries — a transient failure here
+        // Leave the key unmarked so this effect retries — a transient failure here
         // must not permanently blank a published game's stage. Cap attempts so a
         // genuinely broken slug doesn't retry forever.
         if (publishedRetryRef.current < 3) {
@@ -277,7 +283,7 @@ export function useStageSource(
             if (activeTokenRef.current === requestToken) setPublishedRetryTick((tick) => tick + 1);
           }, 4_000);
         } else {
-          loadedPublishedSlugRef.current = slug;
+          loadedPublishedSlugRef.current = key;
         }
       })
       .finally(() => {
@@ -299,7 +305,7 @@ export function useStageSource(
       ? (published?.html ?? null)
       : showChannel
         ? channel!.html
-        : (preview?.html ?? channel?.html ?? null);
+        : (preview?.html ?? channel?.html ?? published?.html ?? null);
   const html = rawHtml ? embedGameHtml(withGameLocale(rawHtml, i18n.language)) : null;
 
   let origin: StageOrigin = NONE_ORIGIN;
@@ -313,6 +319,8 @@ export function useStageSource(
     origin = { kind: 'staged', at: preview.at, versionLabel: null };
   } else if (channel) {
     origin = { kind: 'staged', at: channel.at, versionLabel: channel.label };
+  } else if (published) {
+    origin = { kind: 'delivered', at: null, versionLabel: null };
   } else if (status && !status.preview && !status.playable?.length) {
     origin = NONE_ORIGIN;
   }

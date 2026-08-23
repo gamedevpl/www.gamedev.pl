@@ -2759,6 +2759,7 @@ export async function registerSubmissionRoutes(
       // The unprojected state travels alongside the projection: `toSubmissionStatus` is
       // lossy by design, and the page needs the loss back to describe the wait honestly.
       ...(record.abandonedAt ? {} : { phase: state }),
+      issueNumber: record.issueNumber,
       ...(record.slug ? { slug: record.slug } : {}),
       // Remix save-as-yours records `remix_saved` on the queued→building→ready path.
       // Surface that so Studio can tell a private remix draft from a gate-green build.
