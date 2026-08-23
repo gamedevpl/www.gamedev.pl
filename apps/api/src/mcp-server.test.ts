@@ -2080,7 +2080,7 @@ declare const GameKit: { defineGame(): unknown };
       expect.arrayContaining([{ path: 'game/extra.ts', bytes: Buffer.byteLength(content, 'utf8') }]),
     );
 
-    // Path allowlisting still applies at mint time.
+    // Path allowlisting and batch caps apply at mint time.
     const bad = await callTool(
       app,
       'stage_upload_url',
@@ -2089,6 +2089,14 @@ declare const GameKit: { defineGame(): unknown };
     );
     expect(bad.isError).toBe(true);
     expect(JSON.stringify(bad.structured)).toMatch(/illegal path/i);
+    const tooMany = await callTool(
+      app,
+      'stage_upload_url',
+      { sessionKey, paths: Array.from({ length: 51 }, (_, i) => `game/m${i}.ts`) },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(tooMany.isError).toBe(true);
+    expect(JSON.stringify(tooMany.structured)).toMatch(/too many paths in one request \(max 50/);
 
     // Batch path minting with paths: string[] (testing 20 concurrent PUTs)
     const testPaths = Array.from({ length: 20 }, (_, i) => `game/module-${i}.ts`);
