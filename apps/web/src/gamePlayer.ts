@@ -702,8 +702,7 @@ export type GamePlayerMeta = { title: string; desc: string };
 export function useGamePlayer(
   frameRef: MutableRefObject<HTMLIFrameElement | null>,
   active: boolean,
-  /** Called when Escape is pressed *inside* the game, for a game with no shell menu of its
-   *  own (see the bridge's job 4, and 'shell-menu' below). */
+  /** Called when Escape is pressed *inside* the game (see the bridge's job 4). */
   onEscape?: () => void,
   /** Called on pointerdown inside the game (see the bridge's job 5). */
   onPointer?: () => void,
@@ -713,7 +712,6 @@ export function useGamePlayer(
   onEnd?: () => void,
   // A pointer or touch is held down, or released.
   onPointerHeldChange?: (held: boolean) => void,
-  /** Called when the game's own pause menu asks to leave the theater (Quit Game row). */
   onExitGame?: () => void,
 ) {
   const [meta, setMeta] = useState<GamePlayerMeta | null>(null);
@@ -741,10 +739,6 @@ export function useGamePlayer(
       setMuted(false);
       return;
     }
-    // A GameKit shell-scenes game (docs/shell-scenes.md in the games repo) owns Escape
-    // itself once it reports in — the theater must stop treating Escape as "leave the
-    // game" for it, or the game's own resume-from-pause races this component's exit.
-    // Reset alongside meta/controls/muted above: a fresh game load always toggles `active`.
     let hasShellMenu = false;
     function onMessage(event: MessageEvent) {
       // Opaque-origin sandboxed iframe → origin string is "null".

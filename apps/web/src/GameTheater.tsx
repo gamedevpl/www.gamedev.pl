@@ -262,9 +262,6 @@ export function GameTheater({
     requestExit();
   }, [requestExit, closeHowTo]);
 
-  // The pause menu's Quit Game row (games/*/shared/modules/core.ts, 'exit-game' signal) is
-  // a deliberate, explicit action, unlike an Escape press — skip requestExit's fullscreen
-  // grace step and just leave, exiting fullscreen along the way if it was active.
   const quitGame = useCallback(() => {
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
     onExitRef.current();
@@ -272,8 +269,7 @@ export function GameTheater({
 
   // Escape is handled twice on purpose: the window listener below covers the app's
   // own chrome, and this covers the game iframe, which holds focus while playing
-  // and swallows its own key events. A shell-scenes game (useGamePlayer's 'shell-menu'
-  // tracking) handles Escape itself, so escapeOrExit stops firing for it automatically.
+  // and swallows its own key events.
   const player = useGamePlayer(
     frameRef,
     true,
