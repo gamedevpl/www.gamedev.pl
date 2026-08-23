@@ -10,10 +10,10 @@ import {
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { splitConceptBrief } from './agent-build-brief.js';
-import { creatorOwnsSlug } from './agent-game-key-resolve.js';
-import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-channel.js';
-import { mintAgentToken, mintManagedMcpOpener } from './agent-token.js';
-import { registerMcpServerRoutes } from './mcp-server.js';
+import { creatorOwnsSlug } from './agent-surface/agent-game-key-resolve.js';
+import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-surface/agent-channel.js';
+import { mintAgentToken, mintManagedMcpOpener } from './agent-surface/agent-token.js';
+import { registerMcpServerRoutes } from './agent-surface/mcp-server.js';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './catalog/assemble.js';
 import { MAX_BUILD_PREVIEW_BYTES } from './delivery/build-preview-limits.js';
 import {
@@ -28,7 +28,7 @@ import {
   MANAGED_UNAVAILABLE_ERROR,
   type ManagedAvailabilityGate,
   type ManagedUnavailableReason,
-} from './managed-availability.js';
+} from './agent-surface/managed-availability.js';
 import { postGateScreenshotToThread } from './delivery/gate-screenshot.js';
 import { profileBylineName, toPublicCreatorProfile } from './creator-profile.js';
 import {
@@ -52,7 +52,7 @@ import {
   type StagedPreviewOptions,
 } from './delivery/staged-preview.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
-import type { AgentBackend, SeedDelivery, SeedFiles } from './agent-backend.js';
+import type { AgentBackend, SeedDelivery, SeedFiles } from './agent-surface/agent-backend.js';
 import { PLAYTEST_CONTEXT_HEADER, stripPlaytestContext } from './delivery/build-transcript.js';
 import {
   createAgentBackendRegistryFromEnv,
@@ -60,7 +60,7 @@ import {
   resolveBuilderBackend,
   type AgentBackendRegistry,
   type ManagedBackendDeps,
-} from './agent-backend-env.js';
+} from './agent-surface/agent-backend-env.js';
 import { createSeedAvailabilityGate, type SeedAvailabilityGate } from './seed-availability.js';
 import {
   allowsCreatorBuilderHandoff,
@@ -75,7 +75,7 @@ import {
 import { codeSurfaceEnabled, isLiveAgentRound } from './code-surface.js';
 import { DEFAULT_SEED_PROVIDER, type GameSeeder, type SeedDraft, type SeedFile } from './game-seed.js';
 import { createSourceDeliveryService } from './delivery/source-delivery.js';
-import { createKitFileStore } from './kit-files.js';
+import { createKitFileStore } from './agent-surface/kit-files.js';
 import type { GamesStore } from './delivery/games-store.js';
 import {
   canTransition,
@@ -89,7 +89,7 @@ import {
   type JobState,
   type JobTransition,
 } from './job-state.js';
-import { isMcpPresenceEventText } from './mcp-presence.js';
+import { isMcpPresenceEventText } from './agent-surface/mcp-presence.js';
 import { gateCrashStall, probeGateCrash } from './delivery/gate-crash.js';
 import {
   clearObserveFailures,
@@ -114,7 +114,7 @@ import {
 } from './chat-agent.js';
 import { asChatAgentLogger, logChatAgentDecision, logChatAgentFailOpen } from './telemetry/chat-agent-metrics.js';
 import { MAX_CHAT_TURNS, rememberChatTurn, type ChatTurn } from './chat-turns.js';
-import { mintConnectPayload } from './self-build-connect.js';
+import { mintConnectPayload } from './agent-surface/self-build-connect.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './catalog/local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './notifications/mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';

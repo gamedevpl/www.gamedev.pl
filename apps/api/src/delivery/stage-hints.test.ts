@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { KitTree, KitFileStore } from '../kit-files.js';
+import type { KitTree, KitFileStore } from '../agent-surface/kit-files.js';
 import type { GamesStore, SourceFile, VersionManifest } from './games-store.js';
 import type { Store } from '../store.js';
-import { KIT_ROOT_DIR } from '../kit-registry.js';
+import { KIT_ROOT_DIR } from '../agent-surface/kit-registry.js';
 import { computeStageAdvisories } from './stage-hints.js';
 
 const KIT_DTS = `

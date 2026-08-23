@@ -8,7 +8,7 @@ import {
   PLAYTEST_CONTEXT_HEADER,
   stripPlaytestContext,
 } from './build-transcript.js';
-import { mcpPresenceText } from '../mcp-presence.js';
+import { mcpPresenceText } from '../agent-surface/mcp-presence.js';
 import type { CreatorMessage, Store, SubmissionRecord } from '../store.js';
 import type { BuildEvent } from '../submission-status.js';
 

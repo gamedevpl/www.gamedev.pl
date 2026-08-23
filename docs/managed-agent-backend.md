@@ -53,7 +53,7 @@ and budget-stop record.
 
 ## The seam
 
-[`managed-agent.ts`](../apps/api/src/managed-agent.ts) is three capabilities and nothing
+[`managed-agent.ts`](../apps/api/src/agent-surface/managed-agent.ts) is three capabilities and nothing
 else:
 
 | Capability | Method          | Why it is the whole surface            |
@@ -304,9 +304,9 @@ There are four levels of test:
 **1. The suites.** Fake provider, no network:
 
 ```bash
-npx vitest run apps/api/src/managed-agent.test.ts apps/api/src/managed-backend.test.ts \
-  apps/api/src/managed-provider-anthropic.test.ts apps/api/src/managed-provider-gemini.test.ts \
-  apps/api/src/managed-provider-openai.test.ts apps/api/src/delivery/build-prompt.test.ts
+npx vitest run apps/api/src/agent-surface/managed-agent.test.ts apps/api/src/agent-surface/managed-backend.test.ts \
+  apps/api/src/agent-surface/managed-provider-anthropic.test.ts apps/api/src/agent-surface/managed-provider-gemini.test.ts \
+  apps/api/src/agent-surface/managed-provider-openai.test.ts apps/api/src/delivery/build-prompt.test.ts
 ```
 
 **2. The probe.** One whole round through the real backend, over MCP, requires a real

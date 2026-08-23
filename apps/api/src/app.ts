@@ -6,7 +6,7 @@ import path from 'node:path';
 import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyServerOptions } from 'fastify';
 import { registerAccessTokenRoutes } from './access-token-routes.js';
 import { registerJobAdminRoutes } from './job-admin-routes.js';
-import { createGameSeederFromEnv } from './agent-backend-env.js';
+import { createGameSeederFromEnv } from './agent-surface/agent-backend-env.js';
 import { createGcsGamesStore } from './delivery/games-store.js';
 import { createGcsObjectStore } from './delivery/gcs-sign.js';
 import { createQueryKnowledgeFromEnv } from './knowledge-search.js';
@@ -72,12 +72,12 @@ import { createCombinedPublishedSlugGate, createPublishedSlugGateFromEnv } from 
 import { createCatalogGenreSourceFromEnv } from './catalog/catalog-genre-source.js';
 import { registerRateLimit } from './rate-limit.js';
 import { isKnownSpaShellPath, looksLikeStaticAsset } from './spa-paths.js';
-import { registerOAuthProtectedResourceRoutes } from './mcp-oauth-metadata.js';
-import { registerMcpServerDiscoveryRoutes } from './mcp-server-discovery.js';
+import { registerOAuthProtectedResourceRoutes } from './agent-surface/mcp-oauth-metadata.js';
+import { registerMcpServerDiscoveryRoutes } from './agent-surface/mcp-server-discovery.js';
 import { registerOpenAiAppsChallengeRoute } from './openai-apps-challenge.js';
 import { registerOAuthAuthorizationServerRoutes } from './oauth-as.js';
 import { registerTokenLoginRoutes } from './oauth-token-login.js';
-import { registerCreatorAgentKeyRoutes } from './creator-agent-key-routes.js';
+import { registerCreatorAgentKeyRoutes } from './agent-surface/creator-agent-key-routes.js';
 
 const GAME_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 

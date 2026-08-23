@@ -1,7 +1,7 @@
 # Tool annotation justifications — paste-ready
 
 One block per tool, one code block per form field. Copy each block into the matching box.
-Derived from `apps/api/src/mcp-server.ts`, so the tool list and annotation values are the
+Derived from `apps/api/src/agent-surface/mcp-server.ts`, so the tool list and annotation values are the
 server's, not a transcription.
 
 Covers exactly the tools `tools/list` advertises (`MCP_VISIBLE_TOOLS`), in the order the

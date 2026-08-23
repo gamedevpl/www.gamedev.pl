@@ -1,6 +1,6 @@
 // Creator conversation, served in windows — get_kit_api hit a token ceiling at whole.
 
-import { isMcpPresenceEventText } from '../mcp-presence.js';
+import { isMcpPresenceEventText } from '../agent-surface/mcp-presence.js';
 import { isStudioOrigin, type Store, type SubmissionRecord } from '../store.js';
 
 // Fenced instrumentation block the feedback relay staples onto a creator message.

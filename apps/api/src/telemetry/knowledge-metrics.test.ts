@@ -54,7 +54,7 @@ describe('the alert that reads these logs', () => {
 
 describe('the only place that reports knowledge_query calls', () => {
   it('is agent-channel.ts, through this module', () => {
-    const agentChannel = readFileSync(resolve(here, '..', 'agent-channel.ts'), 'utf8');
+    const agentChannel = readFileSync(resolve(here, '..', 'agent-surface', 'agent-channel.ts'), 'utf8');
     expect(agentChannel).toContain('logKnowledgeQuery(');
   });
 });

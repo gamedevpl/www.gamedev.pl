@@ -32,7 +32,7 @@ import {
   type GateProgressStage,
 } from './gate-progress.js';
 import type { GamesStore, VersionManifest } from './games-store.js';
-import { isKitEngineRefSupported, kitOutdatedReport, type KitRegistry } from '../kit-window.js';
+import { isKitEngineRefSupported, kitOutdatedReport, type KitRegistry } from '../agent-surface/kit-window.js';
 import { createLocalGamesClient } from '../catalog/local-games-repo.js';
 
 export interface GateOutcome {

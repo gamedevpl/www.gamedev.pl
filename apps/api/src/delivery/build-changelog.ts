@@ -1,7 +1,7 @@
 // Sentence changelog for a version, from the round's own events.
 
 import type { RecentBuild } from '@gamedevpl/contract';
-import { isMcpPresenceEventText } from '../mcp-presence.js';
+import { isMcpPresenceEventText } from '../agent-surface/mcp-presence.js';
 
 const CHANGELOG_KINDS = new Set(['done', 'step']);
 

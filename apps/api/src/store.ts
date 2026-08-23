@@ -1,7 +1,7 @@
 import { FieldValue, Firestore } from '@google-cloud/firestore';
 import type { AssessmentSource, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
 import type { AgentTaskState } from './agent-state.js';
-import type { SeedFiles } from './agent-backend.js';
+import type { SeedFiles } from './agent-surface/agent-backend.js';
 import type { BuilderKind } from './builder.js';
 import type { PublicationHealthCheck, PublicationRecord } from './delivery/games-store.js';
 import type { AvatarMode } from './creator-profile.js';

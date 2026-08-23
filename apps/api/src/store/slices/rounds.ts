@@ -1,6 +1,6 @@
 import type { Firestore } from '@google-cloud/firestore';
 import type { AgentTaskState } from '../../agent-state.js';
-import type { SeedFiles } from '../../agent-backend.js';
+import type { SeedFiles } from '../../agent-surface/agent-backend.js';
 import type { BuilderKind } from '../../builder.js';
 import { nextRoundGeneration } from '../../job-state.js';
 import type { BuilderHandoff } from '../records/rounds.js';

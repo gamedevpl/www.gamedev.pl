@@ -30,8 +30,8 @@ import {
 import type { GateProgress, GateProgressStage } from './gate-progress.js';
 import { applyGateVerdict, applyPreviewGateVerdict, applyHealthVerdict } from '../version-verdict.js';
 import { hasPlayableHowToPlay } from '../catalog/index-html-generator.js';
-import { parseKitSidecar } from '../kit-registry.js';
-import { KIT_REGISTRY_OBJECT, parseKitRegistry, type KitRegistry } from '../kit-window.js';
+import { parseKitSidecar } from '../agent-surface/kit-registry.js';
+import { KIT_REGISTRY_OBJECT, parseKitRegistry, type KitRegistry } from '../agent-surface/kit-window.js';
 import { findUnresolvedSourceLinks, formatSourceLinkError, sourceFilesToMap } from '../source-link-check.js';
 import { BANNED_ANY_GUIDANCE, describeBannedAnyFinding, findBannedAnyUsages } from '../ts-any-scan.js';
 

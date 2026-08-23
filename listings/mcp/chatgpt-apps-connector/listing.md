@@ -41,7 +41,7 @@ Four findings, verbatim themes from the rejection email, with where each stands:
    language."** Names are unchanged (snake_case verbs, unique, behavior-matching
    `annotations.title` on each), but descriptions carried "Preferred way to…",
    "PREFERRED:", "Prefer X over Y", "better for…", and one competitor product name
-   ("Claude Chat") — all in `apps/api/src/mcp-server.ts`. **Fixed in repo:** every
+   ("Claude Chat") — all in `apps/api/src/agent-surface/mcp-server.ts`. **Fixed in repo:** every
    advertised tool description and schema property description now states neutrally when
    to use the tool ("Use X when…"); the competitor mention is gone. Deploy before
    re-submitting so the reviewed `tools/list` reflects it.
@@ -144,9 +144,9 @@ tools; the earlier gap flagged during BY-18c has been closed.
 Verify before submitting:
 
 - Annotation sets are the `READS` / `WRITES` / `WRITES_ONCE` / `CONSUMES` constants in
-  `apps/api/src/mcp-server.ts` (search for "Tool annotations, and why every tool needs
+  `apps/api/src/agent-surface/mcp-server.ts` (search for "Tool annotations, and why every tool needs
   them"), spread into each tool's `annotations`.
-- The regression test is `apps/api/src/mcp-server.test.ts` → _"annotates every tool, so a
+- The regression test is `apps/api/src/agent-surface/mcp-server.test.ts` → _"annotates every tool, so a
   reader is not advertised as destructive"_ (~L1149), which asserts every tool has
   `title` + a boolean `destructiveHint`, and pins the reader/writer split per tool name.
 
