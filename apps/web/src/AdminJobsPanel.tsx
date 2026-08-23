@@ -228,31 +228,18 @@ function duration(ms: number | undefined): string {
   return `${Math.floor(hours / 24)}d ${hours % 24}h`;
 }
 
-type FilterKind = 'all' | 'ready' | 'stalled' | 'in_flight' | 'failed';
-
-function matchesFilter(job: JobQueueEntry, filter: FilterKind): boolean {
-  if (filter === 'ready') return job.state === 'ready_for_review';
-  if (filter === 'stalled') return job.stall !== null;
-  if (filter === 'in_flight') {
-    return (
-      job.state === 'building' ||
-      job.state === 'dispatched' ||
-      job.state === 'queued' ||
-      job.state === 'gating'
-    );
-  }
-  if (filter === 'failed') return job.state === 'failed' || job.state === 'needs_changes';
-  return true;
-}
+type FilterKind = 'ready' | 'stalled' | 'in_flight' | 'all';
 
 function JobRow({
   job,
+  supersededCount,
   selected,
   onToggleSelect,
   onPreview,
   onPublished,
 }: {
   job: JobQueueEntry;
+  supersededCount?: number;
   selected: boolean;
   onToggleSelect: (issueNumber: number) => void;
   onPreview: (job: JobQueueEntry) => void;
@@ -343,6 +330,9 @@ function JobRow({
         <div className="admin-job-sub">
           #{job.issueNumber}
           {job.slug ? ` · ${job.slug}` : ''}
+          {supersededCount && supersededCount > 0 ? (
+            <span className="admin-job-superseded-badge">+{supersededCount} superseded</span>
+          ) : null}
         </div>
       </td>
       <td>
@@ -394,8 +384,9 @@ function JobRow({
 export function AdminJobsPanel() {
   const [queue, setQueue] = useState<JobQueueResponse | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'forbidden' | 'error'>('loading');
-  const [filter, setFilter] = useState<FilterKind>('all');
+  const [filter, setFilter] = useState<FilterKind>('ready');
   const [search, setSearch] = useState('');
+  const [latestOnly, setLatestOnly] = useState(true);
   const [groupByGame, setGroupByGame] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [selectedIssues, setSelectedIssues] = useState<Set<number>>(new Set());
@@ -430,47 +421,108 @@ export function AdminJobsPanel() {
 
   const jobs = useMemo(() => queue?.jobs ?? [], [queue]);
 
-  const counts = useMemo(() => {
-    let ready = 0;
-    let stalled = 0;
-    let inFlight = 0;
-    let failed = 0;
+  const gameGroups = useMemo(() => {
+    const map = new Map<string, JobQueueEntry[]>();
     for (const j of jobs) {
-      if (j.state === 'ready_for_review') ready++;
-      if (j.stall !== null) stalled++;
-      if (
-        j.state === 'building' ||
-        j.state === 'dispatched' ||
-        j.state === 'queued' ||
-        j.state === 'gating'
-      ) {
-        inFlight++;
-      }
-      if (j.state === 'failed' || j.state === 'needs_changes') failed++;
+      const key = j.slug || String(j.issueNumber);
+      const list = map.get(key) ?? [];
+      list.push(j);
+      map.set(key, list);
     }
-    return { all: jobs.length, ready, stalled, in_flight: inFlight, failed };
+    return map;
   }, [jobs]);
 
-  const filteredJobs = useMemo(() => {
+  const counts = useMemo(() => {
+    let readyGames = 0;
+    let stalledCount = 0;
+    let inFlightCount = 0;
+
+    for (const list of gameGroups.values()) {
+      if (list.some((j) => j.state === 'ready_for_review')) readyGames++;
+      if (list.some((j) => j.stall !== null)) stalledCount++;
+      if (
+        list.some(
+          (j) =>
+            j.state === 'building' ||
+            j.state === 'dispatched' ||
+            j.state === 'queued' ||
+            j.state === 'gating',
+        )
+      ) {
+        inFlightCount++;
+      }
+    }
+
+    return {
+      ready: readyGames,
+      stalled: stalledCount,
+      in_flight: inFlightCount,
+      all: jobs.length,
+    };
+  }, [gameGroups, jobs.length]);
+
+  const filteredItems = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return jobs.filter((j) => {
-      if (!matchesFilter(j, filter)) return false;
+    const results: Array<{ job: JobQueueEntry; supersededCount: number }> = [];
+
+    for (const list of gameGroups.values()) {
+      if (filter === 'ready') {
+        const readyJobs = list.filter((j) => j.state === 'ready_for_review');
+        if (readyJobs.length === 0) continue;
+        if (latestOnly) {
+          results.push({ job: readyJobs[0], supersededCount: list.length - 1 });
+        } else {
+          for (const j of readyJobs) results.push({ job: j, supersededCount: 0 });
+        }
+      } else if (filter === 'stalled') {
+        const stalledJobs = list.filter((j) => j.stall !== null);
+        if (stalledJobs.length === 0) continue;
+        if (latestOnly) {
+          results.push({ job: stalledJobs[0], supersededCount: list.length - 1 });
+        } else {
+          for (const j of stalledJobs) results.push({ job: j, supersededCount: 0 });
+        }
+      } else if (filter === 'in_flight') {
+        const inFlight = list.filter(
+          (j) =>
+            j.state === 'building' ||
+            j.state === 'dispatched' ||
+            j.state === 'queued' ||
+            j.state === 'gating',
+        );
+        if (inFlight.length === 0) continue;
+        if (latestOnly) {
+          results.push({ job: inFlight[0], supersededCount: list.length - 1 });
+        } else {
+          for (const j of inFlight) results.push({ job: j, supersededCount: 0 });
+        }
+      } else {
+        // all
+        if (latestOnly) {
+          results.push({ job: list[0], supersededCount: list.length - 1 });
+        } else {
+          for (const j of list) results.push({ job: j, supersededCount: 0 });
+        }
+      }
+    }
+
+    return results.filter(({ job }) => {
       if (!term) return true;
       return (
-        j.title.toLowerCase().includes(term) ||
-        (j.slug && j.slug.toLowerCase().includes(term)) ||
-        String(j.issueNumber).includes(term)
+        job.title.toLowerCase().includes(term) ||
+        (job.slug && job.slug.toLowerCase().includes(term)) ||
+        String(job.issueNumber).includes(term)
       );
     });
-  }, [jobs, filter, search]);
+  }, [gameGroups, filter, latestOnly, search]);
 
   const groups = useMemo(() => {
     if (!groupByGame) return null;
     const map = new Map<string, JobQueueEntry[]>();
-    for (const j of filteredJobs) {
-      const key = j.slug || j.title;
+    for (const { job } of filteredItems) {
+      const key = job.slug || job.title;
       const list = map.get(key) ?? [];
-      list.push(j);
+      list.push(job);
       map.set(key, list);
     }
     return [...map.entries()].map(([key, list]) => ({
@@ -481,7 +533,7 @@ export function AdminJobsPanel() {
       latest: list[0],
       readyCount: list.filter((j) => j.state === 'ready_for_review').length,
     }));
-  }, [groupByGame, filteredJobs]);
+  }, [groupByGame, filteredItems]);
 
   const toggleSelect = useCallback((issueNumber: number) => {
     setSelectedIssues((prev) => {
@@ -493,12 +545,12 @@ export function AdminJobsPanel() {
   }, []);
 
   const toggleSelectAll = useCallback(() => {
-    if (selectedIssues.size >= filteredJobs.length && filteredJobs.length > 0) {
+    if (selectedIssues.size >= filteredItems.length && filteredItems.length > 0) {
       setSelectedIssues(new Set());
     } else {
-      setSelectedIssues(new Set(filteredJobs.map((j) => j.issueNumber)));
+      setSelectedIssues(new Set(filteredItems.map(({ job }) => job.issueNumber)));
     }
-  }, [selectedIssues.size, filteredJobs]);
+  }, [selectedIssues.size, filteredItems]);
 
   const onBatchPublish = useCallback(
     async (targets: JobQueueEntry[]) => {
@@ -520,6 +572,7 @@ export function AdminJobsPanel() {
         }
       }
       setBatchProgress({ running: false, current: publishable.length, total: publishable.length, success, failed });
+      setSelectedIssues(new Set());
       void load();
     },
     [load],
@@ -560,39 +613,42 @@ export function AdminJobsPanel() {
   if (state === 'loading') return <p className="health-empty">Reading the queue…</p>;
   if (state === 'error') return <p className="health-empty">Could not read the queue.</p>;
 
+  const readyJobsToPublish = filteredItems
+    .map(({ job }) => job)
+    .filter((j) => j.state === 'ready_for_review');
+
   return (
     <section className="admin-jobs">
       <div className="admin-jobs-header-row">
         <div>
           <h2 className="health-section-title">Build queue</h2>
           <p className="health-summary">
-            {jobs.length} active {jobs.length === 1 ? 'job' : 'jobs'}
-            {queue?.stalled ? ` · ${queue.stalled} stalled` : ''}
-            {counts.ready > 0 ? ` · ${counts.ready} ready to publish` : ''}
+            {counts.ready} {counts.ready === 1 ? 'game' : 'games'} ready to publish
+            {counts.stalled > 0 ? ` · ${counts.stalled} stalled` : ''}
+            {counts.in_flight > 0 ? ` · ${counts.in_flight} in flight` : ''}
           </p>
         </div>
 
-        {counts.ready > 0 && (
+        {readyJobsToPublish.length > 0 && (
           <button
             type="button"
             className="admin-bulk-publish-cta"
-            onClick={() => void onBatchPublish(jobs.filter((j) => j.state === 'ready_for_review'))}
+            onClick={() => void onBatchPublish(readyJobsToPublish)}
             disabled={batchProgress?.running}
           >
-            ⚡ Publish all ready ({counts.ready})
+            ⚡ Publish all ready ({readyJobsToPublish.length})
           </button>
         )}
       </div>
 
       <div className="admin-jobs-toolbar">
         <div className="admin-jobs-filter-chips">
-          {(['all', 'ready', 'stalled', 'in_flight', 'failed'] as const).map((kind) => {
+          {(['ready', 'stalled', 'in_flight', 'all'] as const).map((kind) => {
             const labels: Record<FilterKind, string> = {
-              all: 'All',
               ready: 'Ready to publish',
               stalled: 'Stalled',
               in_flight: 'In flight',
-              failed: 'Failed',
+              all: 'All history',
             };
             return (
               <button
@@ -616,6 +672,15 @@ export function AdminJobsPanel() {
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Search jobs"
           />
+
+          <label className="admin-jobs-group-toggle" title="Show only the latest valid version per game">
+            <input
+              type="checkbox"
+              checked={latestOnly}
+              onChange={(e) => setLatestOnly(e.target.checked)}
+            />
+            Latest only
+          </label>
 
           <label className="admin-jobs-group-toggle">
             <input
@@ -680,7 +745,7 @@ export function AdminJobsPanel() {
         </div>
       )}
 
-      {filteredJobs.length === 0 ? (
+      {filteredItems.length === 0 ? (
         <p className="health-empty">
           {jobs.length === 0 ? 'Nothing building.' : 'No jobs match the current filter/search.'}
         </p>
@@ -692,7 +757,7 @@ export function AdminJobsPanel() {
                 <th className="admin-job-select-header">
                   <input
                     type="checkbox"
-                    checked={selectedIssues.size > 0 && selectedIssues.size >= filteredJobs.length}
+                    checked={selectedIssues.size > 0 && selectedIssues.size >= filteredItems.length}
                     onChange={toggleSelectAll}
                     aria-label="Select all matching jobs"
                   />
@@ -767,10 +832,11 @@ export function AdminJobsPanel() {
                       </tr>
                     );
                   })
-                : filteredJobs.map((job) => (
+                : filteredItems.map(({ job, supersededCount }) => (
                     <JobRow
                       key={job.issueNumber}
                       job={job}
+                      supersededCount={supersededCount}
                       selected={selectedIssues.has(job.issueNumber)}
                       onToggleSelect={toggleSelect}
                       onPreview={(entry) => setPreviewTarget(entry)}

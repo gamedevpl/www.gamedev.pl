@@ -251,6 +251,31 @@ describe('POST /api/admin/jobs/:issueNumber/publish', () => {
     await app.close();
   });
 
+  it('supersedes older active submissions for the same slug when publishing', async () => {
+    const { app, store } = await appWithJob(gamesStoreWith({ green: true }));
+    // Create an older submission for the same slug
+    await store.createSubmission(1_000_000, 'g:boss', 'Comet Courier v0');
+    await store.setSubmissionSlug(1_000_000, 'comet-courier');
+    await store.setSubmissionDeliveredVersion(1_000_000, 'v0');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/jobs/1000001/publish',
+      headers: adminHeaders,
+    });
+
+    expect(response.statusCode).toBe(200);
+    const older = await store.getSubmission(1_000_000);
+    expect(older?.lastStatus).toBe('abandoned');
+    const transitions = older?.transitions ?? [];
+    expect(transitions[transitions.length - 1]).toMatchObject({
+      to: 'abandoned',
+      reason: 'superseded_by_publish',
+    });
+
+    await app.close();
+  });
+
   it('refuses to publish when the creator has no profile', async () => {
     const { app, store } = await appWithJob(gamesStoreWith({ green: true }), { claimProfile: false });
 

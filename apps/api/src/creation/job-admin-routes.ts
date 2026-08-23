@@ -219,6 +219,20 @@ export async function registerJobAdminRoutes(
     // is left alone so the next sweep can still emit the published notification.
     await store.setSubmissionLastStatus(issueNumber, 'published');
 
+    // Supersede earlier rounds for this slug on publish.
+    const activeRecords = await store.listActiveSubmissions();
+    for (const other of activeRecords) {
+      if (other.slug === record.slug && other.issueNumber !== issueNumber) {
+        await store.recordJobTransition(other.issueNumber, {
+          to: 'abandoned',
+          at,
+          by: 'system',
+          reason: 'superseded_by_publish',
+        });
+        await store.setSubmissionLastStatus(other.issueNumber, 'abandoned');
+      }
+    }
+
     // Tell the people who follow this game that it moved. Best-effort and after the
     // publish has already happened: a notification that fails must never leave a game
     // half-published, and the creator's own `submission.published` note comes from the
