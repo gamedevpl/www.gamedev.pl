@@ -36,7 +36,7 @@ import {
   MAX_PROPOSAL_TITLE_LENGTH,
   MIN_PROPOSAL_DESCRIPTION_LENGTH,
   type ProposalDeps,
-} from './proposals.js';
+} from './community/proposals.js';
 import type { ProposalBase } from './store.js';
 import type { SourceFile } from './games-store.js';
 

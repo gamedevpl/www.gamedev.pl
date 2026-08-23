@@ -92,8 +92,14 @@ import {
   type NudgeWarning,
 } from './mcp-session-nudges.js';
 import { looksLikeAsAccessToken, verifyAsAccessToken } from './oauth-tokens.js';
-import { canProposeTo, openProposal, reconcileProposalGate, transitionProposal, PROPOSAL_NO_JOB } from './proposals.js';
-import { isProposerTurn, toPublicProposalState } from './proposal-state.js';
+import {
+  canProposeTo,
+  openProposal,
+  reconcileProposalGate,
+  transitionProposal,
+  PROPOSAL_NO_JOB,
+} from './community/proposals.js';
+import { isProposerTurn, toPublicProposalState } from './community/proposal-state.js';
 import type { SourceFile } from './games-store.js';
 import type { ProposalBase } from './store.js';
 import { seedPayload } from './seed-status.js';

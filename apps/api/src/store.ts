@@ -6,7 +6,7 @@ import type { BuilderKind } from './builder.js';
 import type { PublicationHealthCheck, PublicationRecord } from './games-store.js';
 import type { AvatarMode } from './creator-profile.js';
 import type { AgentSessionTokens, JobTransition } from './job-state.js';
-import type { ProposalState } from './proposal-state.js';
+import type { ProposalState } from './community/proposal-state.js';
 import type { BuildEvent, SubmissionStatus } from './submission-status.js';
 import type { PublicationStore } from './store/slices/publication.js';
 export type { PublicationStore };

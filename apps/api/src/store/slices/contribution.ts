@@ -1,5 +1,5 @@
 import type { Firestore } from '@google-cloud/firestore';
-import type { ProposalState } from '../../proposal-state.js';
+import type { ProposalState } from '../../community/proposal-state.js';
 import { stripUndefined } from '../firestore-util.js';
 import type {
   SuggestionStatus,

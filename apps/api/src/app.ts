@@ -19,9 +19,9 @@ import { registerGamePageRoutes, type GamePageRoutesOptions } from './game-page-
 import { registerGameFollowRoutes, type GameFollowRoutesOptions } from './notifications/game-follow-routes.js';
 import { createFollowerFanout } from './notifications/game-follow-notify.js';
 import { createGitHubClient } from './github-client.js';
-import { registerProposalRoutes } from './proposal-routes.js';
-import { resolveProposalBase } from './proposal-base.js';
-import { applyProposalToRepo } from './proposal-apply-bot.js';
+import { registerProposalRoutes } from './community/proposal-routes.js';
+import { resolveProposalBase } from './community/proposal-base.js';
+import { applyProposalToRepo } from './community/proposal-apply-bot.js';
 import { createSnapshotReaderFromEnv, type GameSnapshotStore } from './game-snapshot.js';
 import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
 import { registerCreatorCodeRoutes, type CreatorCodeRoutesOptions } from './creator-code.js';
@@ -35,29 +35,29 @@ import { createEditingGate, createCreationGate, createTabCompleteGate } from './
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { registerContactRoutes, type ContactRoutesOptions } from './notifications/contact.js';
 import { registerEmailRoutes } from './notifications/email-routes.js';
-import { registerGameSaveRoutes, type GameSaveRoutesOptions } from './game-saves.js';
-import { registerPresenceRoutes, type PresenceRoutesOptions } from './presence.js';
-import { registerWorldRoutes, type WorldRoutesOptions } from './worlds.js';
-import { createWorldSchemaSourceFromEnv } from './world-source.js';
-import { registerZoneRoutes, type ZoneRoutesOptions } from './zones.js';
-import { createZoneSchemaSourceFromEnv } from './zone-source.js';
+import { registerGameSaveRoutes, type GameSaveRoutesOptions } from './realtime/game-saves.js';
+import { registerPresenceRoutes, type PresenceRoutesOptions } from './realtime/presence.js';
+import { registerWorldRoutes, type WorldRoutesOptions } from './realtime/worlds.js';
+import { createWorldSchemaSourceFromEnv } from './realtime/world-source.js';
+import { registerZoneRoutes, type ZoneRoutesOptions } from './realtime/zones.js';
+import { createZoneSchemaSourceFromEnv } from './realtime/zone-source.js';
 import { resolveLocalGamesDir } from './local-games-repo.js';
-import { registerMultiplayerRoutes, type MultiplayerRoutesOptions } from './mp.js';
-import { createRelayClientFromEnv, isRelayOnly } from './mp-relay.js';
+import { registerMultiplayerRoutes, type MultiplayerRoutesOptions } from './realtime/mp.js';
+import { createRelayClientFromEnv, isRelayOnly } from './realtime/mp-relay.js';
 import { registerNotificationRoutes } from './notifications/notifications.js';
 import { emitProposalNotification } from './notifications/notify.js';
-import { registerPlayerFeedbackRoutes, type PlayerFeedbackRoutesOptions } from './player-feedback.js';
-import { registerReviewRoutes, type ReviewRoutesOptions } from './review.js';
+import { registerPlayerFeedbackRoutes, type PlayerFeedbackRoutesOptions } from './community/player-feedback.js';
+import { registerReviewRoutes, type ReviewRoutesOptions } from './community/review.js';
 import { registerPushRoutes } from './notifications/push-routes.js';
 import { registerDigestRoutes, type DigestRoutesOptions } from './digest.js';
 import { parseBatchSize, registerHealthSweepRoutes, type HealthSweepRoutesOptions } from './game-health.js';
-import { registerSuggestionSweepRoutes, type SuggestionSweepRoutesOptions } from './suggestion-sweep.js';
+import { registerSuggestionSweepRoutes, type SuggestionSweepRoutesOptions } from './community/suggestion-sweep.js';
 import { registerDispatchReaperRoutes, type DispatchReaperRoutesOptions } from './dispatch-reaper.js';
 import {
   buildImprovementBrief,
   registerSuggestionInboxRoutes,
   type SuggestionInboxRoutesOptions,
-} from './suggestion-inbox.js';
+} from './community/suggestion-inbox.js';
 import { registerScorecardRoutes, type ScorecardRoutesOptions } from './scorecard.js';
 import { createInternalAuthVerifierFromEnv } from './internal-auth.js';
 import { registerRefineRoute, type SpecRefiner } from './refine.js';
@@ -66,7 +66,7 @@ import { registerSubmissionRoutes, type SubmissionRoutesOptions } from './submis
 import { mintToken } from './submission-token.js';
 import { registerTelemetryRoutes, type TelemetryRoutesOptions } from './telemetry/telemetry.js';
 import { registerVisitTelemetryRoutes } from './telemetry/visit-telemetry.js';
-import { registerVoteRoutes, type VoteRoutesOptions } from './votes.js';
+import { registerVoteRoutes, type VoteRoutesOptions } from './community/votes.js';
 import { registerRecommendationRoutes, type RecommendationRoutesOptions } from './recommendations.js';
 import { createCombinedPublishedSlugGate, createPublishedSlugGateFromEnv } from './published-slugs.js';
 import { createCatalogGenreSourceFromEnv } from './catalog-genre-source.js';

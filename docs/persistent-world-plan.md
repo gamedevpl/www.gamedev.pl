@@ -46,7 +46,7 @@ More than expected. The party-mode work ([multiplayer-plan.md](./multiplayer-pla
 shipped 2026-07-26) built several of the load-bearing pieces:
 
 - **A realtime transport with rooms, admission control, and join tokens** —
-  [`apps/api/src/mp.ts`](../apps/api/src/mp.ts): WebSocket relay, HMAC-signed join tokens,
+  [`apps/api/src/realtime/mp.ts`](../apps/api/src/realtime/mp.ts): WebSocket relay, HMAC-signed join tokens,
   per-connection rate limits (40 frames/s, 2 KB frames), zod-validated wire protocol,
   room lifecycle. Today it relays only controller inputs for one shared screen, but the
   session plumbing (create/join/kick/reconnect-into-slot) is exactly what a "zone" needs.
@@ -167,7 +167,7 @@ A `save` GameKit module: the game asks the bridge to persist a small versioned b
 | `GameKit.createSave({ version })` | games repo `shared/modules/save.ts` (+ `save` in `GAME_KIT_MODULES`, both copies of the lockstep contract)                              |
 | Author rules and CI               | games repo `tools/validate.ts` **Check 21** — `saves: player` frontmatter, module, and `createSave(` must all agree, in both directions |
 | Shell half of the bridge          | [`apps/web/src/gameSave.ts`](../apps/web/src/gameSave.ts), mounted by `GameTheater` on the published slug                               |
-| API                               | [`apps/api/src/game-saves.ts`](../apps/api/src/game-saves.ts) — `GET`/`PUT`/`DELETE /api/games/:slug/save`                              |
+| API                               | [`apps/api/src/realtime/game-saves.ts`](../apps/api/src/realtime/game-saves.ts) — `GET`/`PUT`/`DELETE /api/games/:slug/save`            |
 | Storage                           | `users/{uid}/gameSaves/{slug}` (`store.ts`), erasure in [`erase-player-signals.ts`](../apps/api/src/erase-player-signals.ts)            |
 
 1. **The save is an opaque JSON string, not a parsed object.** Firestore rejects nested
@@ -232,14 +232,14 @@ string fields. Presence and light liveness ride the existing relay.
 
 **What shipped**, and the decisions worth knowing before extending it:
 
-| Piece                        | Where                                                                                                                                                                           |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GameKit.createCommons(...)` | games repo `shared/modules/commons.ts` (+ `commons` in `GAME_KIT_MODULES`, both copies of the lockstep contract)                                                                |
-| Author rules and CI          | games repo `tools/validate.ts` **Check 22** — `world: shared` frontmatter, the module, a `createCommons(` call, and a typed field spec must all agree                           |
-| The declared shape           | each game's `GAME.json` `world` block, parsed by [`world-schema.ts`](../apps/api/src/world-schema.ts), fetched per slug by [`world-source.ts`](../apps/api/src/world-source.ts) |
-| Shell half of the bridge     | [`apps/web/src/world.ts`](../apps/web/src/world.ts), mounted by `GameTheater` on the published slug                                                                             |
-| API                          | [`apps/api/src/worlds.ts`](../apps/api/src/worlds.ts) — public `GET /api/games/:slug/world`, session-gated `PUT`/`DELETE .../world/:key`                                        |
-| Storage                      | `worlds/{worldId}/worldEntries/{key}` (`store.ts`), erasure in [`erase-player-signals.ts`](../apps/api/src/erase-player-signals.ts)                                             |
+| Piece                        | Where                                                                                                                                                                                             |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GameKit.createCommons(...)` | games repo `shared/modules/commons.ts` (+ `commons` in `GAME_KIT_MODULES`, both copies of the lockstep contract)                                                                                  |
+| Author rules and CI          | games repo `tools/validate.ts` **Check 22** — `world: shared` frontmatter, the module, a `createCommons(` call, and a typed field spec must all agree                                             |
+| The declared shape           | each game's `GAME.json` `world` block, parsed by [`world-schema.ts`](../apps/api/src/realtime/world-schema.ts), fetched per slug by [`world-source.ts`](../apps/api/src/realtime/world-source.ts) |
+| Shell half of the bridge     | [`apps/web/src/world.ts`](../apps/web/src/world.ts), mounted by `GameTheater` on the published slug                                                                                               |
+| API                          | [`apps/api/src/realtime/worlds.ts`](../apps/api/src/realtime/worlds.ts) — public `GET /api/games/:slug/world`, session-gated `PUT`/`DELETE .../world/:key`                                        |
+| Storage                      | `worlds/{worldId}/worldEntries/{key}` (`store.ts`), erasure in [`erase-player-signals.ts`](../apps/api/src/erase-player-signals.ts)                                                               |
 
 1. **A world entry is stored as real fields, unlike a save.** The inversion is
    deliberate: a save's shape is the game's private business, so it is an opaque blob;
@@ -303,9 +303,9 @@ under option B, and everything that needs an arbiter stays in P3.
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GameKit.createPresence()` | games repo `shared/modules/presence.ts` (+ `presence` in `GAME_KIT_MODULES`, both copies of the lockstep contract)                                                                                                    |
 | Author rules and CI        | games repo `tools/validate.ts` **Check 24** — `presence: live` frontmatter, the module, a `createPresence(` call and a `world.presence` grid must all agree, and only on a game that already declares `world: shared` |
-| The declared grid          | each game's `GAME.json` `world.presence` block, parsed by [`world-schema.ts`](../apps/api/src/world-schema.ts)                                                                                                        |
+| The declared grid          | each game's `GAME.json` `world.presence` block, parsed by [`world-schema.ts`](../apps/api/src/realtime/world-schema.ts)                                                                                               |
 | Shell half of the bridge   | [`apps/web/src/presence.ts`](../apps/web/src/presence.ts), mounted by `GameTheater` on the published slug                                                                                                             |
-| API                        | [`apps/api/src/presence.ts`](../apps/api/src/presence.ts) — public `GET`, session-gated `POST`/`DELETE /api/games/:slug/presence`                                                                                     |
+| API                        | [`apps/api/src/realtime/presence.ts`](../apps/api/src/realtime/presence.ts) — public `GET`, session-gated `POST`/`DELETE /api/games/:slug/presence`                                                                   |
 | Storage                    | **none** — an in-process `PresenceRegistry` with a TTL                                                                                                                                                                |
 
 **Polling, not push, and the shell owns the clock.** The obvious alternative was a socket

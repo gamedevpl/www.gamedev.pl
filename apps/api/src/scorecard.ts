@@ -14,7 +14,7 @@ import {
   NoopThemeExtractor,
   type FeedbackTheme,
   type ThemeExtractor,
-} from './feedback-themes.js';
+} from './community/feedback-themes.js';
 import type { Scorecard, Store, TelemetryEvent } from './store.js';
 
 /**
