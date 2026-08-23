@@ -87,6 +87,7 @@ import {
 } from './job-state.js';
 import { isMcpPresenceEventText } from './mcp-presence.js';
 import { gateCrashStall, probeGateCrash } from './gate-crash.js';
+import { clearObserveFailures, noteObserveFailure, sessionCrashStall, sessionCrashTransition } from './session-crash.js';
 import { toRecentBuilds } from './recent-builds.js';
 import {
   builderLabelFromRecord,
@@ -2823,7 +2824,7 @@ export async function registerSubmissionRoutes(
         agentEndedAt: record.agentEndedAt,
         now: now(),
         builder: builderOf(record),
-      }) ?? gateCrashStall(record);
+      }) ?? gateCrashStall(record) ?? sessionCrashStall(record);
     if (stall) status.stall = stall;
     // Mid-gate milestones from GCS.
     if (record.slug && playableVersion) {
@@ -2990,10 +2991,13 @@ export async function registerSubmissionRoutes(
     ) {
       return null;
     }
+    // The last ref is the session that owns the job now; earlier ones were superseded
+    // by a resume and their fate stopped mattering when it started. Kept as its own
+    // try so a vendor error here — never a store error further down — counts toward
+    // session_crashed; see session-crash.ts.
+    let observation;
     try {
-      // The last ref is the session that owns the job now; earlier ones were
-      // superseded by a resume and their fate stopped mattering when it started.
-      const observation = await selected.observe(lastRef, {
+      observation = await selected.observe(lastRef, {
         hasCandidate: Boolean(record.deliveredVersion) || (record.roundDeliveryCount ?? 0) > 0,
         // Pull-delivery backends harvest inside observe.
         issueNumber: record.issueNumber,
@@ -3001,6 +3005,16 @@ export async function registerSubmissionRoutes(
         // Durable generation — process memory is empty after restart.
         roundGeneration: record.roundGeneration ?? 1,
       });
+      clearObserveFailures(lastRef);
+    } catch (error) {
+      app.log.error({ err: error, issueNumber: record.issueNumber }, 'agent observation failed');
+      if (!noteObserveFailure(lastRef)) return null;
+      const transition = sessionCrashTransition(state, now);
+      if (!transition) return null;
+      const recorded = await store.recordJobTransition(record.issueNumber, transition);
+      return recorded ? transition : null;
+    }
+    try {
       if (!observation) return null;
       if (observation.sessionTokens) {
         try {

@@ -230,6 +230,10 @@ describe('loadBuildTranscript', () => {
     expect(stripPlaytestContext('hello')).toBe('hello');
   });
 
+  it('stripPlaytestContext tolerates a phantom message with no text', () => {
+    expect(stripPlaytestContext(undefined as unknown as string)).toBe('');
+  });
+
   it('surfaces the founding spec as a synthetic entry — creation never appends it as a message', async () => {
     // Creation writes the concept to `spec`, never as a message.
     const current = job(1, '2026-08-16T00:00:00.000Z', 'comet-courier', 'A game about delivering parcels.');
