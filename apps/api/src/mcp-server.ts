@@ -3799,8 +3799,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       annotations: { title: 'Get stage upload URL(s)', ...WRITES },
       description:
         'Stage new or fully rewritten source file(s) when you have curl/shell egress. ' +
-        'ALWAYS mint all upload URLs in a single call: pass `paths: ["file1.ts", "file2.ts", ...]` for multiple files ' +
-        '(do NOT make multiple stage_upload_url calls in parallel or loop them). Pass `path` only for a lone single file. ' +
+        'ALWAYS mint upload URLs in batch: pass `paths: ["file1.ts", "file2.ts", ...]` for multiple files ' +
+        `(up to ${MAX_UPLOAD_FILES} paths per call; split into batches if staging more; do NOT make multiple parallel calls per individual file). Pass \`path\` only for a lone single file. ` +
         'Returns short-lived signed PUT URL(s) — run the returned `upload` one-liner(s) ' +
         '(curl --upload-file <file> "$url") or `uploadScript`. The file bytes never enter the model; the PUT applies the same ' +
         'validation as stage_source_file (path allowlist, size caps, module_too_large hint) and returns the ' +
@@ -3815,7 +3815,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             type: 'array',
             items: { type: 'string' },
             description:
-              'Array of game-relative paths (e.g. ["game.ts", "game/render.ts", "GAME.json"]). MANDATORY FOR MULTIPLE FILES: Always pass all changed files in this array in a single call to mint all URLs in batch. Never emit multiple stage_upload_url calls.',
+              'Array of game-relative paths (e.g. ["game.ts", "game/render.ts", "GAME.json"]). MANDATORY FOR MULTIPLE FILES: Always pass all changed files in this array in a single call to mint all URLs in batch (up to 200). Never emit multiple stage_upload_url calls.',
           },
           path: {
             type: 'string',
@@ -3843,8 +3843,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         if (rawPaths.length === 0) {
           return toolErr('paths must contain at least one valid path');
         }
-        if (rawPaths.length > 50) {
-          return toolErr('too many paths in one request (max 50)');
+        if (rawPaths.length > MAX_UPLOAD_FILES) {
+          return toolErr(`too many paths in one request (max ${MAX_UPLOAD_FILES})`);
         }
 
         const validPaths: string[] = [];
@@ -3884,13 +3884,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             ttlSeconds,
           });
           const url = `${canonicalAppBaseUrl()}${AGENT_CHANNEL_ROUTES.SOURCES_STAGE_UPLOAD}?token=${encodeURIComponent(token)}`;
-          const localHint = path.includes('/') ? path.split('/').pop()! : path;
           return toolOk({
             url,
             expiresAt,
             expiresInSeconds: ttlSeconds,
             path,
-            upload: uploadCurlCommand(url, localHint, 'text/plain; charset=utf-8'),
+            upload: uploadCurlCommand(url, path, 'text/plain; charset=utf-8'),
             maxBytes: 1_000_000,
           });
         }
@@ -3905,11 +3904,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             ttlSeconds,
           });
           const url = `${canonicalAppBaseUrl()}${AGENT_CHANNEL_ROUTES.SOURCES_STAGE_UPLOAD}?token=${encodeURIComponent(token)}`;
-          const localHint = path.includes('/') ? path.split('/').pop()! : path;
           return {
             path,
             url,
-            upload: uploadCurlCommand(url, localHint, 'text/plain; charset=utf-8'),
+            upload: uploadCurlCommand(url, path, 'text/plain; charset=utf-8'),
             expiresAt,
             expiresInSeconds: ttlSeconds,
             maxBytes: 1_000_000,

@@ -2056,7 +2056,7 @@ declare const GameKit: { defineGame(): unknown };
     };
     expect(path).toBe('game/extra.ts');
     expect(maxBytes).toBe(1_000_000);
-    expect(upload).toMatch(/^curl -H 'Content-Type: text\/plain; charset=utf-8' --upload-file extra\.ts '/);
+    expect(upload).toMatch(/^curl -H 'Content-Type: text\/plain; charset=utf-8' --upload-file game\/extra\.ts '/);
 
     const content = 'export const stagedViaCurl = true;\n';
     const put = await app.inject({
