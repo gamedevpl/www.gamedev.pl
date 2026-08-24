@@ -163,6 +163,8 @@ async function stubStudioThreadData(page: Page) {
   await page.route(`**/api/games/${FIXTURE_SLUG}`, async (route) => {
     await fulfillJson(route, { slug: FIXTURE_SLUG, title: 'E2E Studio Shell Fixture', html: '<p>fixture</p>' });
   });
+
+  await page.route('**/sw.js', (route) => route.fulfill({ status: 200, contentType: 'text/javascript', body: '' }));
 }
 
 describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
@@ -173,8 +175,7 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
   beforeAll(async () => {
     api = await signedInApiContext();
     browser = await launchSiteBrowser();
-    // Blocked so the stubbed routes below are reliable — see signedInContext's doc.
-    const context = await signedInContext(browser, api, { serviceWorkers: 'block' });
+    const context = await signedInContext(browser, api);
     page = await context.newPage();
     await stubStudioThreadData(page);
     await stubCodeSurfaceData(page);

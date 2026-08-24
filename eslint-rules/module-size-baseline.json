@@ -472,7 +472,7 @@
     "apps/e2e/src/gate-prerequisites.test.ts": 38,
     "apps/e2e/src/globalSetup.ts": 61,
     "apps/e2e/src/resilience.test.ts": 145,
-    "apps/e2e/src/studio-shell.test.ts": 602,
+    "apps/e2e/src/studio-shell.test.ts": 605,
     "apps/e2e/src/walkthrough.test.ts": 235,
     "apps/e2e/vitest.config.ts": 20,
     "apps/web/src/AccessTokensPanel.test.tsx": 181,
