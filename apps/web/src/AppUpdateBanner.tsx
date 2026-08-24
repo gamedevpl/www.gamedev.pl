@@ -27,6 +27,13 @@ export function AppUpdateBanner() {
 
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
+    let serviceWorker: ServiceWorkerContainer;
+    try {
+      serviceWorker = navigator.serviceWorker;
+    } catch {
+      // A sandboxed context throws on access; treat it as unsupported.
+      return;
+    }
 
     function show() {
       setUpdated(true);
@@ -42,13 +49,13 @@ export function AppUpdateBanner() {
       if (pendingShellUpdate()) show();
     }
 
-    navigator.serviceWorker.addEventListener('message', onMessage);
+    serviceWorker.addEventListener('message', onMessage);
     window.addEventListener(SHELL_UPDATED_EVENT, onParked);
     // Re-read in case the early listener won the race between first render and effect.
     onParked();
 
     return () => {
-      navigator.serviceWorker.removeEventListener('message', onMessage);
+      serviceWorker.removeEventListener('message', onMessage);
       window.removeEventListener(SHELL_UPDATED_EVENT, onParked);
     };
   }, []);

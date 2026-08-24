@@ -13,10 +13,23 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
 export type PushPermission = 'default' | 'granted' | 'denied' | 'unsupported';
 
+// A sandboxed context throws on the getter itself rather than lacking it.
+function serviceWorkerContainer(): ServiceWorkerContainer | null {
+  if (!('serviceWorker' in navigator)) return null;
+  try {
+    return navigator.serviceWorker;
+  } catch {
+    return null;
+  }
+}
+
 /** Whether this browser has the APIs Web Push needs at all. */
 export function isPushSupported(): boolean {
   return (
-    typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
+    typeof window !== 'undefined' &&
+    serviceWorkerContainer() !== null &&
+    'PushManager' in window &&
+    'Notification' in window
   );
 }
 
@@ -51,15 +64,18 @@ function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
 }
 
 async function ensureRegistration(): Promise<ServiceWorkerRegistration> {
-  const existing = await navigator.serviceWorker.getRegistration('/sw.js');
+  const sw = serviceWorkerContainer();
+  if (!sw) throw new Error('service worker unavailable');
+  const existing = await sw.getRegistration('/sw.js');
   if (existing) return existing;
-  return navigator.serviceWorker.register('/sw.js');
+  return sw.register('/sw.js');
 }
 
 /** True if this browser already holds an active push subscription. */
 export async function isSubscribed(): Promise<boolean> {
-  if (!isPushSupported()) return false;
-  const reg = await navigator.serviceWorker.getRegistration('/sw.js');
+  const sw = serviceWorkerContainer();
+  if (!sw || !isPushSupported()) return false;
+  const reg = await sw.getRegistration('/sw.js');
   if (!reg) return false;
   return Boolean(await reg.pushManager.getSubscription());
 }
@@ -70,7 +86,8 @@ export async function isSubscribed(): Promise<boolean> {
  * Returns the resulting permission so the UI can explain a denial.
  */
 export async function subscribeToPush(): Promise<PushPermission> {
-  if (!isPushSupported()) return 'unsupported';
+  const sw = serviceWorkerContainer();
+  if (!sw || !isPushSupported()) return 'unsupported';
 
   const config = await fetchPushConfig();
   if (!config.enabled || !config.vapidPublicKey) return 'unsupported';
@@ -79,7 +96,7 @@ export async function subscribeToPush(): Promise<PushPermission> {
   if (permission !== 'granted') return permission as PushPermission;
 
   const reg = await ensureRegistration();
-  await navigator.serviceWorker.ready;
+  await sw.ready;
 
   const existing = await reg.pushManager.getSubscription();
   const subscription =
@@ -126,8 +143,9 @@ export async function pushUiState(): Promise<PushUiState> {
 
 /** Opt out: drop the browser subscription and tell the server to forget it. */
 export async function unsubscribeFromPush(): Promise<void> {
-  if (!isPushSupported()) return;
-  const reg = await navigator.serviceWorker.getRegistration('/sw.js');
+  const sw = serviceWorkerContainer();
+  if (!sw || !isPushSupported()) return;
+  const reg = await sw.getRegistration('/sw.js');
   const subscription = reg ? await reg.pushManager.getSubscription() : null;
   if (!subscription) return;
 
