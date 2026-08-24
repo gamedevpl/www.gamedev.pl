@@ -1071,7 +1071,13 @@
       "sending": "Abandoning…",
       "error": "We couldn't abandon this build right now. Please try again in a moment."
     },
-    "playableHint": "An early build, straight from the workshop — rough, unfinished, and already playable. Tell them what to change while it is easy."
+    "playableHint": "An early build, straight from the workshop — rough, unfinished, and already playable. Tell them what to change while it is easy.",
+    "seal": {
+      "body": "Your game passed its checks and is ready. Send it for publication — we run the full check one more time, then it goes to review.",
+      "action": "Send for publication",
+      "sending": "Sending…",
+      "error": "Could not send it for publication. Try again in a moment."
+    }
   },
   "suggestions": {
     "dodge": "Dodge the falling rocks",

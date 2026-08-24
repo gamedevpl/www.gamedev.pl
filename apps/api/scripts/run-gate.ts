@@ -186,6 +186,7 @@ async function main(): Promise<void> {
       ...(outcome.status ? { status: outcome.status } : {}),
       ...(outcome.behaviouralDiff ? { behaviouralDiff: true } : {}),
       ...(outcome.screenshot ? { screenshot: outcome.screenshot } : {}),
+      ...(outcome.derivedSourceFiles ? { derivedSourceFiles: outcome.derivedSourceFiles } : {}),
     });
   }
 

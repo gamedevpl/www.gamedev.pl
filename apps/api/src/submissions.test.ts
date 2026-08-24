@@ -1900,6 +1900,199 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('seals a green preview into a publishable candidate the gate can judge', async () => {
+    // A platform round only ever delivers previews (its agents cannot record TRACE.json),
+    // so without this the job sits in ready_for_review with no deliveredVersion and the
+    // one publish route answers nothing_delivered — unpublishable by anyone.
+    const { githubClient } = createGithubClientStub({ issueNumber: 501 });
+    const { backend } = createBackendStub();
+    const sealed: Array<{ origin?: string; mode?: string; files: string[] }> = [];
+    const gated: Array<{ version: string }> = [];
+    const gamesStore = {
+      getManifest: async () => ({
+        slug: 'space-parcels',
+        version: 'v1',
+        roundGeneration: 1,
+        sourceFiles: ['SPEC.md', 'game.ts', 'GAME.json'],
+        previewGate: { green: true, ranAt: '2026-08-24T10:30:00.000Z' },
+      }),
+      getSourceFile: async (_s: string, _v: string, path: string) => `contents of ${path}`,
+      putCandidateSources: async (input: { origin?: string; mode?: string; files: Array<{ path: string }> }) => {
+        sealed.push({ origin: input.origin, mode: input.mode, files: input.files.map((f) => f.path) });
+        return { version: 'v2-sealed', manifest: {} };
+      },
+    } as unknown as GamesStore;
+
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      agentChannel: {
+        gamesStore,
+        onSourcesDelivered: async ({ version }) => {
+          gated.push({ version });
+          return { buildId: 'build-1' };
+        },
+      },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionSlug(job.issueNumber, 'space-parcels');
+    await store.setSubmissionPreviewVersion(job.issueNumber, 'v1');
+    for (const to of ['submitted', 'ready_for_review'] as const) {
+      await store.recordJobTransition(job.issueNumber, {
+        to,
+        at: new Date().toISOString(),
+        by: 'gate',
+        reason: to === 'ready_for_review' ? 'gate_green' : 'sources_delivered',
+      });
+    }
+
+    const token = mintToken(job.issueNumber, secret);
+    const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    expect(status.json().canSeal).toBe(true);
+
+    const seal = await app.inject({ method: 'POST', url: `/api/submissions/${token}/seal`, headers: authHeaders });
+
+    expect(seal.statusCode).toBe(200);
+    expect(seal.json()).toMatchObject({ ok: true, version: 'v2-sealed' });
+    // origin drives the gate's golden derivation; publish is the lane being entered.
+    expect(sealed[0]).toMatchObject({ origin: 'seal', mode: 'publish' });
+    // The landmark declaration the agent had no reason to write.
+    expect(sealed[0]?.files).toContain('PLAYTEST.json');
+    expect(gated).toEqual([{ version: 'v2-sealed' }]);
+
+    const after = await store.getSubmission(job.issueNumber);
+    expect(after?.deliveredVersion).toBe('v2-sealed');
+    // Back into the lane reconcileGateVerdict actually walks.
+    expect(after?.state).toBe('submitted');
+
+    // Second press is refused — the round is being gated, which is the truer answer
+    // here than "already delivered": the state check is what a double-click hits.
+    const again = await app.inject({ method: 'POST', url: `/api/submissions/${token}/seal`, headers: authHeaders });
+    expect(again.statusCode).toBe(409);
+    expect(again.json()).toMatchObject({ error: 'not_reviewable' });
+    expect(sealed).toHaveLength(1);
+
+    await app.close();
+  });
+
+  it('claims a seal atomically — two concurrent requests spend only one gate run', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 503 });
+    const { backend } = createBackendStub();
+    let sealCount = 0;
+    const gamesStore = {
+      getManifest: async () => ({
+        slug: 'space-parcels',
+        version: 'v1',
+        roundGeneration: 1,
+        sourceFiles: ['game.ts', 'PLAYTEST.json'],
+        previewGate: { green: true, ranAt: '2026-08-24T10:30:00.000Z' },
+      }),
+      getSourceFile: async (_s: string, _v: string, path: string) => `contents of ${path}`,
+      putCandidateSources: async () => {
+        sealCount += 1;
+        return { version: `v${sealCount}-sealed`, manifest: {} };
+      },
+    } as unknown as GamesStore;
+
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore, onSourcesDelivered: async () => ({ buildId: 'build-1' }) },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionSlug(job.issueNumber, 'space-parcels');
+    await store.setSubmissionPreviewVersion(job.issueNumber, 'v1');
+    for (const to of ['submitted', 'ready_for_review'] as const) {
+      await store.recordJobTransition(job.issueNumber, {
+        to,
+        at: new Date().toISOString(),
+        by: 'gate',
+        reason: to === 'ready_for_review' ? 'gate_green' : 'sources_delivered',
+      });
+    }
+
+    const token = mintToken(job.issueNumber, secret);
+    const [first, second] = await Promise.all([
+      app.inject({ method: 'POST', url: `/api/submissions/${token}/seal`, headers: authHeaders }),
+      app.inject({ method: 'POST', url: `/api/submissions/${token}/seal`, headers: authHeaders }),
+    ]);
+
+    const statuses = [first.statusCode, second.statusCode].sort();
+    expect(statuses).toEqual([200, 409]);
+    expect(sealCount).toBe(1);
+
+    await app.close();
+  });
+
+  it('refuses to seal a preview the gate has not passed', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 502 });
+    const { backend } = createBackendStub();
+    const putCandidateSources = vi.fn();
+    const gamesStore = {
+      getManifest: async () => ({
+        slug: 'space-parcels',
+        version: 'v1',
+        sourceFiles: ['game.ts'],
+        previewGate: { green: false, ranAt: '2026-08-24T10:30:00.000Z' },
+      }),
+      getSourceFile: async () => 'x',
+      putCandidateSources,
+    } as unknown as GamesStore;
+
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore, onSourcesDelivered: async () => ({ buildId: 'b' }) },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionSlug(job.issueNumber, 'space-parcels');
+    await store.setSubmissionPreviewVersion(job.issueNumber, 'v1');
+    for (const to of ['submitted', 'ready_for_review'] as const) {
+      await store.recordJobTransition(job.issueNumber, {
+        to,
+        at: new Date().toISOString(),
+        by: 'gate',
+        reason: to === 'ready_for_review' ? 'gate_green' : 'sources_delivered',
+      });
+    }
+
+    const seal = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/seal`,
+      headers: authHeaders,
+    });
+
+    expect(seal.statusCode).toBe(409);
+    expect(seal.json()).toMatchObject({ error: 'preview_not_green' });
+    expect(putCandidateSources).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
   it('ignores carried-over gate verdicts from an older round', async () => {
     const { githubClient } = createGithubClientStub({ issueNumber: 99 });
     const { backend } = createBackendStub();

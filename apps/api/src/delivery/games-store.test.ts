@@ -41,6 +41,27 @@ describe('validateSourceUpload — the delivery contract', () => {
     expect(validateSourceUpload(MINIMAL)).toHaveLength(MINIMAL.length);
   });
 
+  it('refuses a publish with no behavioural golden', () => {
+    const withoutTrace = MINIMAL.filter((file) => file.path !== 'TRACE.json');
+    expect(() => validateSourceUpload(withoutTrace)).toThrow(/TRACE.json is required/);
+  });
+
+  it('accepts a publish with no golden when the gate will derive one', () => {
+    // The seal lane: preview-lane sources have no golden and no agent could record one,
+    // so the gate derives it. "Dead on arrival" — the reason for the refusal above — is
+    // what stops being true, and nothing downstream is waived.
+    const withoutTrace = MINIMAL.filter((file) => file.path !== 'TRACE.json');
+    expect(validateSourceUpload(withoutTrace, 'publish', true)).toHaveLength(withoutTrace.length);
+  });
+
+  it('still requires the progress landmarks when the gate derives the golden', () => {
+    // Only the golden is derivable. PLAYTEST.json declares what the capture must reach,
+    // which is a claim about the game, not a recording of it — the seal route supplies
+    // the documented minimum rather than the gate inventing one.
+    const withoutEither = MINIMAL.filter((file) => file.path !== 'TRACE.json' && file.path !== 'PLAYTEST.json');
+    expect(() => validateSourceUpload(withoutEither, 'publish', true)).toThrow(/PLAYTEST.json is required/);
+  });
+
   it('accepts the game’s own modules', () => {
     expect(validateSourceUpload([...MINIMAL, { path: 'entities/player.ts', content: 'export {};' }])).toHaveLength(
       MINIMAL.length + 1,

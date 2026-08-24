@@ -119,6 +119,66 @@ describe('runGate', () => {
     expect(check?.[1]).not.toContain('--accept');
   });
 
+  it('derives and persists the golden for a sealed preview, which carries none', async () => {
+    // A seal promotes preview-lane sources, and no preview-lane agent can record a
+    // golden — the harness that does it is not in their sandbox. Without deriving one
+    // the trace stage has nothing to replay and the version is unpublishable forever.
+    const { store, derived } = stubStore({
+      getManifest: async () => ({ ...MANIFEST, origin: 'seal' as const }),
+    });
+    const run = vi.fn(async (command: string, args: string[], cwd: string) => {
+      if (command === 'npm' && args.includes('trace')) {
+        // What `npm run trace -- --accept` actually leaves behind.
+        await mkdir(path.join(cwd, 'games/comet-courier'), { recursive: true });
+        await writeFile(path.join(cwd, 'games/comet-courier/TRACE.json'), '{"samples":[]}');
+      }
+      return { code: 0, output: '' };
+    });
+
+    const outcome = await runGate('comet-courier', 'v1', {
+      store,
+      prepareHarness: harnessDir,
+      run,
+      assembleBundle: stubAssemble,
+    });
+
+    const traceCall = run.mock.calls.find(
+      ([command, args]) => command === 'npm' && (args as string[]).includes('trace'),
+    );
+    expect(traceCall?.[1]).toContain('--accept');
+    expect(outcome.green).toBe(true);
+    expect(outcome.derivedSourceFiles).toEqual(['TRACE.json']);
+    expect(derived.some((artifact) => artifact.name === 'source/TRACE.json')).toBe(true);
+  });
+
+  it('refuses green when the derived golden cannot be persisted', async () => {
+    // Best-effort here would leave a publishable version with no durable golden on a
+    // transient store failure — worse than the refusal this replaces.
+    const { store } = stubStore({
+      getManifest: async () => ({ ...MANIFEST, origin: 'seal' as const }),
+      putDerivedArtifact: async () => {
+        throw new Error('store unavailable');
+      },
+    });
+    const run = vi.fn(async (command: string, args: string[], cwd: string) => {
+      if (command === 'npm' && args.includes('trace')) {
+        await mkdir(path.join(cwd, 'games/comet-courier'), { recursive: true });
+        await writeFile(path.join(cwd, 'games/comet-courier/TRACE.json'), '{"samples":[]}');
+      }
+      return { code: 0, output: '' };
+    });
+
+    const outcome = await runGate('comet-courier', 'v1', {
+      store,
+      prepareHarness: harnessDir,
+      run,
+      assembleBundle: stubAssemble,
+    });
+
+    expect(outcome.green).toBe(false);
+    expect(outcome.report).toContain('store unavailable');
+  });
+
   it('preview lane runs check:game --preview and stores only preview.html', async () => {
     const harness = await harnessDir();
     const { store, derived } = stubStore();

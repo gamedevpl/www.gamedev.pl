@@ -2,7 +2,8 @@ import type { Firestore } from '@google-cloud/firestore';
 import type { AgentTaskState } from '../../creation/agent-state.js';
 import type { SeedFiles } from '../../agent-surface/agent-backend.js';
 import type { BuilderKind } from '../../creation/builder.js';
-import { nextRoundGeneration } from '../../creation/job-state.js';
+import { nextRoundGeneration, type JobTransition } from '../../creation/job-state.js';
+import { MAX_JOB_TRANSITIONS } from '../records/dispatch.js';
 import type { BuilderHandoff } from '../records/rounds.js';
 import type { SubmissionRecord } from '../records/submission.js';
 
@@ -52,8 +53,19 @@ export interface RoundsStore {
   // Stores (or clears) the generated seed draft on a self-build job.
   setSubmissionSeed(issueNumber: number, seed: SeedFiles | null): Promise<void>;
 
+  // Atomically claims a ready_for_review round for sealing; null if ineligible.
+  // Two concurrent seals must not both start a paid gate run — see the /seal route.
+  claimSeal(issueNumber: number, at: string): Promise<SubmissionRecord | null>;
+
   // Marks seed generation pending/unavailable; a stored draft is never downgraded.
   setSeedStatus(issueNumber: number, status: 'pending' | 'unavailable'): Promise<void>;
+}
+
+// Mirrors delivery/seal-preview.ts's sealRefusal — store cannot import delivery.
+function isSealable(record: Pick<SubmissionRecord, 'state' | 'slug' | 'previewVersion' | 'deliveredVersion'>): boolean {
+  return (
+    record.state === 'ready_for_review' && !record.deliveredVersion && Boolean(record.slug && record.previewVersion)
+  );
 }
 
 export class InMemoryRoundsStore implements RoundsStore {
@@ -98,6 +110,19 @@ export class InMemoryRoundsStore implements RoundsStore {
     if (from === to) return false;
     this.submissions.set(issueNumber, { ...sub, builderHandoff: { from, to, requestedAt, awaitsAgentAck } });
     return true;
+  }
+
+  async claimSeal(issueNumber: number, at: string): Promise<SubmissionRecord | null> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub || !isSealable(sub)) return null;
+    const transition: JobTransition = { to: 'building', at, by: 'creator', reason: 'seal_claimed' };
+    this.submissions.set(issueNumber, {
+      ...sub,
+      state: 'building',
+      stateSince: at,
+      transitions: [...(sub.transitions ?? []), transition].slice(-MAX_JOB_TRANSITIONS),
+    });
+    return sub;
   }
 
   async acknowledgeBuilderHandoff(issueNumber: number, acknowledgedAt: string): Promise<BuilderHandoff | null> {
@@ -250,6 +275,27 @@ export class FirestoreRoundsStore implements RoundsStore {
       if (from === to) return false;
       tx.set(ref, { builderHandoff: { from, to, requestedAt, awaitsAgentAck } }, { merge: true });
       return true;
+    });
+  }
+
+  async claimSeal(issueNumber: number, at: string): Promise<SubmissionRecord | null> {
+    const ref = this.ref(issueNumber);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return null;
+      const current = snap.data() as SubmissionRecord;
+      if (!isSealable(current)) return null;
+      const transition: JobTransition = { to: 'building', at, by: 'creator', reason: 'seal_claimed' };
+      tx.set(
+        ref,
+        {
+          state: 'building',
+          stateSince: at,
+          transitions: [...(current.transitions ?? []), transition].slice(-MAX_JOB_TRANSITIONS),
+        },
+        { merge: true },
+      );
+      return current;
     });
   }
 
