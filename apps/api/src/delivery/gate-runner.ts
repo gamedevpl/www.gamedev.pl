@@ -22,7 +22,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { GameProject } from '@gamedevpl/contract';
-import { assembleGameHtml } from '../catalog/assemble.js';
+import { assembleGameHtml } from '../platform/assemble.js';
 import { firstGateScreenshotPath } from './gate-screenshot.js';
 import {
   createGateStageBannerParser,
@@ -32,7 +32,7 @@ import {
   type GateProgressStage,
 } from './gate-progress.js';
 import type { GamesStore, VersionManifest } from './games-store.js';
-import { isKitEngineRefSupported, kitOutdatedReport, type KitRegistry } from '../agent-surface/kit-window.js';
+import { isKitEngineRefSupported, kitOutdatedReport, type KitRegistry } from '../platform/kit-window.js';
 import { createLocalGamesClient } from '../catalog/local-games-repo.js';
 
 export interface GateOutcome {

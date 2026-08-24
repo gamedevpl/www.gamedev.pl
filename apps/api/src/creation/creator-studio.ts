@@ -2,7 +2,7 @@ import { gunzipSync } from 'node:zlib';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from '../delivery/gcs-sign.js';
-import { KitRegistryError, parseKitRegistry, parseKitSidecar } from '../agent-surface/kit-registry.js';
+import { KitRegistryError, parseKitRegistry, parseKitSidecar } from '../platform/kit-registry.js';
 import { codeSurfaceEnabled } from './code-surface.js';
 import { collapseJobsToOwnerGames, MAX_OWNER_GAMES, pageOwnerGames } from '../catalog/owner-games.js';
 import { readTarEntries, type TarEntry } from '../platform/tar.js';

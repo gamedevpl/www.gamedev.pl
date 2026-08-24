@@ -1,4 +1,4 @@
-import { selfBuildDeliveryCap } from '../creation/builder.js';
+import { selfBuildDeliveryCap } from '../platform/self-build-delivery-cap.js';
 import {
   asDeliveryLogger,
   builderLabelFromRecord,

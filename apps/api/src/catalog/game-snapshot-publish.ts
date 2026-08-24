@@ -1,5 +1,5 @@
 import type { GameProject } from '@gamedevpl/contract';
-import { assembleGameHtml } from './assemble.js';
+import { assembleGameHtml } from '../platform/assemble.js';
 import {
   generateSnapshotId,
   mediaContentType,

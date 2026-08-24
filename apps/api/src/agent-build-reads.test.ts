@@ -5,10 +5,10 @@ import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-surface/agent-
 import { AGENT_BUILD_RULES_DIGEST } from './creation/agent-build-brief.js';
 import { listAgentBuildExamples } from './creation/agent-build-examples.js';
 import { buildApp } from './platform/app.js';
-import { MAX_PROJECT_BYTES } from './catalog/games-repo-contract.js';
+import { MAX_PROJECT_BYTES } from './platform/games-repo-contract.js';
 import type { GcsObjectStore } from './delivery/gcs-sign.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
-import { KIT_ROOT_DIR } from './agent-surface/kit-registry.js';
+import { KIT_ROOT_DIR } from './platform/kit-registry.js';
 import { InMemoryStore } from './platform/store.js';
 
 const secret = 'test-secret';

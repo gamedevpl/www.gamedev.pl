@@ -19,7 +19,7 @@ import type { GamesStore } from '../delivery/games-store.js';
 import type { Store } from '../platform/store.js';
 import type { ContentChecker } from '../platform/moderation.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
-import { assembleGameHtml } from '../catalog/assemble.js';
+import { assembleGameHtml } from '../platform/assemble.js';
 import type { GitHubClient } from '../catalog/github-client.js';
 import { type EditingGate, type CreationGate } from './creation-limits.js';
 import {

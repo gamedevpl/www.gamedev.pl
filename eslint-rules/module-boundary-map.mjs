@@ -98,6 +98,15 @@ const FILE_BUCKET = {
   // A single Store-querying ownership check, factored out of agent-game-key-resolve.ts
   // because catalog needed the same question without the agent-key machinery around it.
   'slug-ownership': 'platform',
+  // Shared build/serve contract read by delivery, creation, and community alike --
+  // pure schema, HTML assembly, or directory/archive-parsing plumbing, not domain
+  // business logic of any one bucket.
+  assemble: 'platform',
+  'games-repo-archive': 'platform',
+  'games-repo-contract': 'platform',
+  'kit-registry': 'platform',
+  'kit-window': 'platform',
+  'round-base-version': 'platform',
 
   // creation: jobs, rounds, dispatch, seed, refine
   'job-state': 'creation',
@@ -105,17 +114,14 @@ const FILE_BUCKET = {
   'job-admin-routes': 'creation',
   'dispatch-reaper': 'creation',
   refine: 'creation',
-  'round-base-version': 'creation',
   'creation-limits': 'creation',
   'quota-gate': 'creation',
-  autonomy: 'creation',
   builder: 'creation',
   'typecheck-preflight': 'creation',
   'source-patch': 'creation',
   'code-lane': 'creation',
   'code-surface': 'creation',
   'symbol-map': 'creation',
-  'ts-any-scan': 'creation',
   'type-check': 'creation',
   'tab-complete': 'creation',
   'editor-assist': 'creation',
@@ -145,12 +151,10 @@ const FILE_BUCKET = {
   'seed-provider-openai': 'creation',
   'seed-provider-openrouter': 'creation',
   'seed-provider-vertex': 'creation',
-  'version-verdict': 'creation',
   'module-size': 'creation',
   'game-seed': 'creation',
   'session-crash': 'creation',
   scorecard: 'creation',
-  'source-link-check': 'creation',
   'knowledge-search': 'creation',
   'example-files': 'creation',
 
@@ -186,8 +190,6 @@ const FILE_BUCKET = {
   'creator-agent-key-routes': 'agent-surface',
   'kit-digest': 'agent-surface',
   'kit-files': 'agent-surface',
-  'kit-registry': 'agent-surface',
-  'kit-window': 'agent-surface',
   'editor-kit-env': 'agent-surface',
 
   // delivery: staging, games-store, gate
@@ -208,6 +210,11 @@ const FILE_BUCKET = {
   'gate-verdict': 'delivery',
   'gate-crash': 'delivery',
   'gate-screenshot': 'delivery',
+  // Writes verdicts onto delivery's own VersionManifest, and validates a delivery's
+  // sources at gate time -- delivery-domain checks that had drifted into creation/.
+  'version-verdict': 'delivery',
+  'source-link-check': 'delivery',
+  'ts-any-scan': 'delivery',
 
   // catalog: github-client, snapshots, assemble, play
   'music-tracks': 'catalog',
@@ -218,20 +225,16 @@ const FILE_BUCKET = {
   'github-rate-limit': 'catalog',
   'game-snapshot': 'catalog',
   'game-snapshot-publish': 'catalog',
-  assemble: 'catalog',
   'catalog-genre-source': 'catalog',
   'catalog-touch': 'catalog',
   recommend: 'catalog',
   recommendations: 'catalog',
   'published-slugs': 'catalog',
   'owner-games': 'catalog',
-  'owner-of-record': 'catalog',
   'game-page-routes': 'catalog',
   'game-manifest-hint': 'catalog',
   'game-health': 'catalog',
-  'games-repo-archive': 'catalog',
   'games-repo-client': 'catalog',
-  'games-repo-contract': 'catalog',
   'games-repo-contract-check': 'catalog',
   'local-games-repo': 'catalog',
   'index-html-generator': 'catalog',
@@ -259,6 +262,10 @@ const FILE_BUCKET = {
   'suggestion-sweep': 'community',
   suggestions: 'community',
   'editorial-suggestions': 'community',
+  // "Who reviews this game" and "may the platform act on my behalf" are proposal/
+  // suggestion routing rules, not catalog or creation business logic.
+  'owner-of-record': 'community',
+  autonomy: 'community',
 
   // realtime: mp, presence, worlds, zones
   mp: 'realtime',

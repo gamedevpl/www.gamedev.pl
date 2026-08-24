@@ -1,7 +1,7 @@
 // Writes a verdict onto a version manifest, in memory.
 
-import type { GateProgressStage } from '../delivery/gate-progress.js';
-import type { VersionManifest } from '../delivery/games-store.js';
+import type { GateProgressStage } from './gate-progress.js';
+import type { VersionManifest } from './games-store.js';
 
 export interface GateResultInput {
   green: boolean;

@@ -7,7 +7,7 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { assembleGameHtml } from '../src/catalog/assemble.js';
+import { assembleGameHtml } from '../src/platform/assemble.js';
 import { createLocalGamesClient } from '../src/catalog/local-games-repo.js';
 import { typeCheckGame } from '../src/creation/type-check.js';
 

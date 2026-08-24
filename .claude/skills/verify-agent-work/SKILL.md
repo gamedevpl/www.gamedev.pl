@@ -118,7 +118,7 @@ Two concrete instances of that (observed 2026-07-23):
   website PR. Website `contract:games-repo` fails when games-repo introduces a name the
   serve side does not recognize; play/draft then 502s for every game that selects it.
   Merge order is website first — same rule as a budget raise
-  (`apps/api/src/catalog/games-repo-contract.ts`). Diff the module array against _current_
+  (`apps/api/src/platform/games-repo-contract.ts`). Diff the module array against _current_
   `main`, not the PR's merge-base: that branch was ~20 commits behind and its array had
   dropped `cards` and `ui` that main had added, so a 2-line "add platformer" diff against
   a stale base is a module deletion against current main.

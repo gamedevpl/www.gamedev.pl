@@ -35,7 +35,7 @@
 
 import { publishSnapshot } from '../src/catalog/game-snapshot-publish.js';
 import { createGcsSnapshotStore, type GameSnapshotWriter, type SnapshotPointer } from '../src/catalog/game-snapshot.js';
-import { fetchGamesRepoArchive } from '../src/catalog/games-repo-archive.js';
+import { fetchGamesRepoArchive } from '../src/platform/games-repo-archive.js';
 import { createGitHubClient, type RepoFileSource } from '../src/catalog/github-client.js';
 
 function readFlag(name: string): string | null {

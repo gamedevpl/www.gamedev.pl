@@ -13,7 +13,7 @@ import {
   GAME_KIT_VERTICAL_ENTRIES,
   MAX_PROJECT_BYTES,
   TS_ANY_SCAN_PATH,
-} from './games-repo-contract.js';
+} from '../platform/games-repo-contract.js';
 
 /** Deliberately different header prose — proves only the code below it must match. */
 const EDITOR_CONTRACT_CODE = `export const EDITOR_FILE = 'EDITOR.json';\nexport function noop() {}\n`;

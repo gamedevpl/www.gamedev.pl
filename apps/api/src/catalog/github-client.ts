@@ -22,7 +22,7 @@ import {
   MUSIC_CONTRACT,
   SOURCE_GRAPH_BUDGET_BYTES,
   type GameKitModuleName,
-} from './games-repo-contract.js';
+} from '../platform/games-repo-contract.js';
 import { isRateLimitResponse } from './github-rate-limit.js';
 import {
   generateIndexHtml,

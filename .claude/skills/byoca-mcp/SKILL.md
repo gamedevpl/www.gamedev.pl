@@ -678,7 +678,7 @@ genuine breaking change, not that the repo merged twice while the agent was work
 
 It used to mean the latter, and often did: on 2026-08-05 seven kits published in ten hours, a
 `get_kit` answer was good for 45–90 minutes, and three consecutive rounds were refused for age —
-one over a commit that added an internal probe script. `apps/api/src/agent-surface/kit-window.ts` is the rule;
+one over a commit that added an internal probe script. `apps/api/src/platform/kit-window.ts` is the rule;
 the games repo's `docs/kit-versioning.md` is when to bump.
 
 ### One round builds against one engine

@@ -30,7 +30,12 @@
 // publish, and is served back under the same sandbox as any other unreviewed agent output.
 
 import { createHash } from 'node:crypto';
-import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from '../catalog/assemble.js';
+import {
+  assembleGameHtml,
+  CredentialLeakError,
+  EmptyProjectError,
+  ProjectTooLargeError,
+} from '../platform/assemble.js';
 import { MAX_BUILD_PREVIEW_BYTES } from './build-preview-limits.js';
 import type { GamesStore, SourceFile } from './games-store.js';
 import { hasPlayableHowToPlay } from '../catalog/index-html-generator.js';
@@ -39,7 +44,7 @@ import {
   resolveRoundBaseVersion,
   type BaseVersionRecord,
   type BaseVersionStore,
-} from '../creation/round-base-version.js';
+} from '../platform/round-base-version.js';
 import type { Store } from '../platform/store.js';
 
 /**

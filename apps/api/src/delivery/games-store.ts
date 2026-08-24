@@ -26,14 +26,14 @@ import {
   DELIVERY_MAX_FILES,
   DELIVERY_MAX_UPLOAD_BYTES,
   DELIVERY_RESERVED_SEGMENTS,
-} from '../catalog/games-repo-contract.js';
+} from '../platform/games-repo-contract.js';
 import type { GateProgress, GateProgressStage } from './gate-progress.js';
-import { applyGateVerdict, applyPreviewGateVerdict, applyHealthVerdict } from '../creation/version-verdict.js';
+import { applyGateVerdict, applyPreviewGateVerdict, applyHealthVerdict } from './version-verdict.js';
 import { hasPlayableHowToPlay } from '../catalog/index-html-generator.js';
-import { parseKitSidecar } from '../agent-surface/kit-registry.js';
-import { KIT_REGISTRY_OBJECT, parseKitRegistry, type KitRegistry } from '../agent-surface/kit-window.js';
-import { findUnresolvedSourceLinks, formatSourceLinkError, sourceFilesToMap } from '../creation/source-link-check.js';
-import { BANNED_ANY_GUIDANCE, describeBannedAnyFinding, findBannedAnyUsages } from '../creation/ts-any-scan.js';
+import { parseKitSidecar } from '../platform/kit-registry.js';
+import { KIT_REGISTRY_OBJECT, parseKitRegistry, type KitRegistry } from '../platform/kit-window.js';
+import { findUnresolvedSourceLinks, formatSourceLinkError, sourceFilesToMap } from './source-link-check.js';
+import { BANNED_ANY_GUIDANCE, describeBannedAnyFinding, findBannedAnyUsages } from './ts-any-scan.js';
 
 export type { GateProgress } from './gate-progress.js';
 

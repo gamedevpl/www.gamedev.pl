@@ -4,7 +4,7 @@
 
 // Without the fallback the staging buffer becomes the whole delivery.
 
-import type { Store, SubmissionRecord } from '../platform/store.js';
+import type { Store, SubmissionRecord } from './store.js';
 
 export type BaseVersionStore = Pick<Store, 'getPublication' | 'listSubmissionsByOwner'>;
 
