@@ -319,7 +319,7 @@ export function buildGeneratePrompt(input: {
     '  canvasBorderColor/pixelArt) generates style.css the same way — never write that file either.',
     '- Follow the reference games exactly for imports, GameKit usage, file layout, and bilingual en/pl text.',
     `- SPEC.md frontmatter must be valid and carry title: ${input.title} and slug: ${input.slug}.`,
-prompt compact
+    '- GAME.json lists only the engine modules and sounds the code actually uses, like the references do. Every seed must ship an editor: declare at least three meaningful tunables or one content collection in EDITOR.ts/EDITOR.json, keep generated editor artifacts in sync, and have the game consume game/editor-content.ts.',
     '- ACCEPTANCE.json is exactly {"objective": "<one sentence a player would say>", "achieved": [<conditions>]},',
     '  each condition {"field": "<a field your snapshot() reports>", "atLeast"|"atMost"|"equals": <value>}.',
     '- No external assets, no network calls, no new dependencies.',
