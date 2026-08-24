@@ -35,7 +35,17 @@ import type { QueryKnowledgeFn } from './knowledge-search.js';
  * objective ("collect at least one star"), and a seed that leaves it there fails the
  * gate's accept stage structurally, for every game, no matter how good the draft is.
  */
-const TOP_LEVEL_ALLOWED = new Set(['SPEC.md', 'GAME.json', 'game.ts', 'index.html', 'style.css', 'ACCEPTANCE.json']);
+const TOP_LEVEL_ALLOWED = new Set([
+  'SPEC.md',
+  'GAME.json',
+  'game.ts',
+  'index.html',
+  'style.css',
+  'ACCEPTANCE.json',
+  'EDITOR.json',
+  'EDITOR.ts',
+  'EDITOR.content.json',
+]);
 
 /** The fence label carrying the hand-off note rather than a file. */
 const NOTES_FENCE = 'NOTES';
@@ -269,7 +279,8 @@ export function collectSeedFiles(parsed: ParsedSeedResponse, slug: string): Seed
 export function isUsableSeed(files: SeedFile[]): boolean {
   const paths = new Set(files.map((file) => file.path));
   const hasModule = files.some((file) => file.path.startsWith('game/') && file.path.endsWith('.ts'));
-  return paths.has('game.ts') && paths.has('SPEC.md') && hasModule;
+  const hasEditor = paths.has('EDITOR.json') || paths.has('EDITOR.ts');
+  return paths.has('game.ts') && paths.has('SPEC.md') && hasModule && hasEditor;
 }
 
 function usageOf(result: GenerationResult, provider: string, fallbackModel: string): SeedUsage {
@@ -312,14 +323,15 @@ export function buildGeneratePrompt(input: {
     'your draft is its starting point, so completeness and idiomatic engine use matter more than polish.',
     '',
     'Rules:',
-    `- Write files only under games/${input.slug}/: SPEC.md, GAME.json, game.ts, ACCEPTANCE.json,`,
-    '  and game/*.ts modules.',
+    `- Write files only under games/${input.slug}/: SPEC.md, GAME.json, ACCEPTANCE.json,`,
+    '  EDITOR.ts, EDITOR.json, EDITOR.content.json, game.ts, and game/*.ts modules.',
     '- howToPlay in GAME.json (goal, hint, optional controls/scoring/mode) generates index.html —',
     '  never write that file. theme in GAME.json (optional accent/canvasBackground/',
     '  canvasBorderColor/pixelArt) generates style.css the same way — never write that file either.',
     '- Follow the reference games exactly for imports, GameKit usage, file layout, and bilingual en/pl text.',
     `- SPEC.md frontmatter must be valid and carry title: ${input.title} and slug: ${input.slug}.`,
     '- GAME.json lists only the engine modules and sounds the code actually uses, like the references do.',
+    '- Every seed must ship an editor: declare at least three meaningful tunables or one content collection in EDITOR.ts/EDITOR.json, keep generated editor artifacts in sync, and have the game consume game/editor-content.ts.',
     '- ACCEPTANCE.json is exactly {"objective": "<one sentence a player would say>", "achieved": [<conditions>]},',
     '  each condition {"field": "<a field your snapshot() reports>", "atLeast"|"atMost"|"equals": <value>}.',
     '- No external assets, no network calls, no new dependencies.',
