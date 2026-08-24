@@ -536,6 +536,10 @@ export class InMemoryStore implements Store {
     return this.roundsStore.requestBuilderHandoff(issueNumber, to, requestedAt, awaitsAgentAck);
   }
 
+  async claimSeal(issueNumber: number, at: string): Promise<SubmissionRecord | null> {
+    return this.roundsStore.claimSeal(issueNumber, at);
+  }
+
   async acknowledgeBuilderHandoff(issueNumber: number, acknowledgedAt: string): Promise<BuilderHandoff | null> {
     return this.roundsStore.acknowledgeBuilderHandoff(issueNumber, acknowledgedAt);
   }
@@ -1816,6 +1820,10 @@ export class FirestoreStore implements Store {
     awaitsAgentAck = true,
   ): Promise<boolean> {
     return this.roundsStore.requestBuilderHandoff(issueNumber, to, requestedAt, awaitsAgentAck);
+  }
+
+  async claimSeal(issueNumber: number, at: string): Promise<SubmissionRecord | null> {
+    return this.roundsStore.claimSeal(issueNumber, at);
   }
 
   async acknowledgeBuilderHandoff(issueNumber: number, acknowledgedAt: string): Promise<BuilderHandoff | null> {

@@ -765,6 +765,8 @@ export interface GamesStore {
       screenshot?: string;
       /** Proposal lane only — see {@link GateVerdict.behaviouralDiff}. */
       behaviouralDiff?: boolean;
+      /** Golden the gate derived itself (editor/seal lanes) — merged into sourceFiles. */
+      derivedSourceFiles?: string[];
     },
   ): Promise<void>;
   /** Mid-gate milestone overwrite. */
@@ -1304,6 +1306,12 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       // First writer wins: the ref the *first* gate run checked against is the one the
       // verdict is reproducible against, and a re-run must not quietly repin it.
       if (result.engineRef && !manifest.engineRef) manifest.engineRef = result.engineRef;
+      if (result.derivedSourceFiles) {
+        const known = new Set(manifest.sourceFiles);
+        for (const path of result.derivedSourceFiles) {
+          if (!known.has(path)) manifest.sourceFiles.push(path);
+        }
+      }
       await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
     },
 

@@ -1983,6 +1983,63 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('claims a seal atomically — two concurrent requests spend only one gate run', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 503 });
+    const { backend } = createBackendStub();
+    let sealCount = 0;
+    const gamesStore = {
+      getManifest: async () => ({
+        slug: 'space-parcels',
+        version: 'v1',
+        roundGeneration: 1,
+        sourceFiles: ['game.ts', 'PLAYTEST.json'],
+        previewGate: { green: true, ranAt: '2026-08-24T10:30:00.000Z' },
+      }),
+      getSourceFile: async (_s: string, _v: string, path: string) => `contents of ${path}`,
+      putCandidateSources: async () => {
+        sealCount += 1;
+        return { version: `v${sealCount}-sealed`, manifest: {} };
+      },
+    } as unknown as GamesStore;
+
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore, onSourcesDelivered: async () => ({ buildId: 'build-1' }) },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionSlug(job.issueNumber, 'space-parcels');
+    await store.setSubmissionPreviewVersion(job.issueNumber, 'v1');
+    for (const to of ['submitted', 'ready_for_review'] as const) {
+      await store.recordJobTransition(job.issueNumber, {
+        to,
+        at: new Date().toISOString(),
+        by: 'gate',
+        reason: to === 'ready_for_review' ? 'gate_green' : 'sources_delivered',
+      });
+    }
+
+    const token = mintToken(job.issueNumber, secret);
+    const [first, second] = await Promise.all([
+      app.inject({ method: 'POST', url: `/api/submissions/${token}/seal`, headers: authHeaders }),
+      app.inject({ method: 'POST', url: `/api/submissions/${token}/seal`, headers: authHeaders }),
+    ]);
+
+    const statuses = [first.statusCode, second.statusCode].sort();
+    expect(statuses).toEqual([200, 409]);
+    expect(sealCount).toBe(1);
+
+    await app.close();
+  });
+
   it('refuses to seal a preview the gate has not passed', async () => {
     const { githubClient } = createGithubClientStub({ issueNumber: 502 });
     const { backend } = createBackendStub();

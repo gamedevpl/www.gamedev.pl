@@ -2777,9 +2777,6 @@ export async function registerSubmissionRoutes(
       ...((record.transitions ?? []).some((transition) => transition.reason === 'remix_saved')
         ? { draftOrigin: 'remix' as const }
         : {}),
-      // A preview-only round is finished but unpublishable until it is sealed; the
-      // gate verdict is checked by the route, not here (see seal-preview.ts).
-      ...(sealRefusal(record) === null ? { canSeal: true as const } : {}),
     };
     // Studio's play surface only fetches `/preview` when `preview.slug` is set (the
     // same signal the PR-derived path used to emit). A self-build delivery has no PR
@@ -2880,6 +2877,11 @@ export async function registerSubmissionRoutes(
           }
           if (manifest?.gateProgress && !manifest.gate && !manifest.previewGate) {
             status.gateProgress = manifest.gateProgress;
+          }
+          // `playableVersion` is `previewVersion` exactly when sealRefusal admits the
+          // record (it requires no deliveredVersion) — the same manifest /seal reads.
+          if (sealRefusal(record) === null && manifest?.previewGate?.green) {
+            status.canSeal = true;
           }
         } catch {
           /* advisory */
@@ -4081,97 +4083,122 @@ export async function registerSubmissionRoutes(
    * `reconcileGateVerdict` walks `building`/`submitted`/`gating` — so the creator keeps
    * one thread instead of finding the result on a job they never saw.
    */
-  app.post('/api/submissions/:token/seal', async (request, reply) => {
-    if (!submissionTokenSecret) {
-      return reply.status(503).send({ error: 'submissions are not configured' });
-    }
-    if (!checkUserAccess(request, reply)) return;
-    const gamesStore = options.agentChannel?.gamesStore;
-    const gateTrigger = options.agentChannel?.onSourcesDelivered;
-    if (!store || !gamesStore || !gateTrigger) {
-      return reply.status(503).send({ error: 'store_unavailable' });
-    }
-
-    const token = z.string().parse((request.params as { token?: string }).token);
-    let issueNumber: number;
-    try {
-      issueNumber = verifyToken(token, submissionTokenSecret);
-    } catch (error) {
-      if (error instanceof InvalidTokenError) {
-        return reply.status(400).send({ error: 'invalid submission token' });
+  app.post(
+    '/api/submissions/:token/seal',
+    // A seal spends a real, paid gate run — tighter than /handoff's 20/hour, which
+    // spends nothing on its own.
+    { config: { rateLimit: { max: 10, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (!submissionTokenSecret) {
+        return reply.status(503).send({ error: 'submissions are not configured' });
       }
-      throw error;
-    }
+      if (!checkUserAccess(request, reply)) return;
+      const gamesStore = options.agentChannel?.gamesStore;
+      const gateTrigger = options.agentChannel?.onSourcesDelivered;
+      if (!store || !gamesStore || !gateTrigger) {
+        return reply.status(503).send({ error: 'store_unavailable' });
+      }
 
-    const record = await store.getSubmission(issueNumber);
-    if (!record || record.ownerUid !== request.user!.uid) {
-      return reply.status(403).send({ error: 'only the creator can seal this build' });
-    }
-    const refusal = sealRefusal(record);
-    if (refusal) return reply.status(409).send({ error: refusal });
+      const token = z.string().parse((request.params as { token?: string }).token);
+      let issueNumber: number;
+      try {
+        issueNumber = verifyToken(token, submissionTokenSecret);
+      } catch (error) {
+        if (error instanceof InvalidTokenError) {
+          return reply.status(400).send({ error: 'invalid submission token' });
+        }
+        throw error;
+      }
 
-    const slug = record.slug!;
-    const previewVersion = record.previewVersion!;
-    const manifest = await gamesStore.getManifest(slug, previewVersion);
-    if (!manifest?.previewGate?.green) {
-      return reply.status(409).send({ error: 'preview_not_green' });
-    }
+      const owner = await store.getSubmission(issueNumber);
+      if (!owner || owner.ownerUid !== request.user!.uid) {
+        return reply.status(403).send({ error: 'only the creator can seal this build' });
+      }
 
-    const files: { path: string; content: string }[] = [];
-    for (const path of manifest.sourceFiles) {
-      const content = await gamesStore.getSourceFile(slug, previewVersion, path);
-      if (content === null) return reply.status(409).send({ error: 'preview_incomplete' });
-      files.push({ path, content });
-    }
-    // The documented floor, from the refusal this would otherwise hit. A preview-lane
-    // agent has no reason to have written one, and the landmark it declares is the one
-    // every game reaches; a game whose capture cannot even start a round fails validate
-    // regardless, so this cannot make a broken game look publishable.
-    if (!files.some((file) => file.path === 'PLAYTEST.json')) {
-      files.push({
-        path: 'PLAYTEST.json',
-        content: `${JSON.stringify({ expectProgress: ['round-start'] }, null, 2)}\n`,
+      const at = () => new Date(now()).toISOString();
+      // Atomic: the record this claims is the one and only writer past this point —
+      // a second concurrent request reads the post-claim state and is refused here,
+      // before either request has spent anything on a candidate or a gate run.
+      const claimed = await store.claimSeal(issueNumber, at());
+      if (!claimed) {
+        const fresh = await store.getSubmission(issueNumber);
+        return reply.status(409).send({ error: (fresh && sealRefusal(fresh)) ?? 'not_reviewable' });
+      }
+
+      // Reverts the claim so the round is retryable, rather than stranding it in
+      // `building` with nothing dispatched to it.
+      const abort = async (reason: string) => {
+        await store
+          .recordJobTransition(issueNumber, { to: 'ready_for_review', at: at(), by: 'system', reason })
+          .catch(() => {});
+      };
+
+      const slug = claimed.slug!;
+      const previewVersion = claimed.previewVersion!;
+      const manifest = await gamesStore.getManifest(slug, previewVersion);
+      if (!manifest?.previewGate?.green) {
+        await abort('seal_not_green');
+        return reply.status(409).send({ error: 'preview_not_green' });
+      }
+
+      const files: { path: string; content: string }[] = [];
+      for (const path of manifest.sourceFiles) {
+        const content = await gamesStore.getSourceFile(slug, previewVersion, path);
+        if (content === null) {
+          await abort('seal_incomplete');
+          return reply.status(409).send({ error: 'preview_incomplete' });
+        }
+        files.push({ path, content });
+      }
+      // The documented floor, from the refusal this would otherwise hit. A preview-lane
+      // agent has no reason to have written one, and the landmark it declares is the one
+      // every game reaches; a game whose capture cannot even start a round fails validate
+      // regardless, so this cannot make a broken game look publishable.
+      if (!files.some((file) => file.path === 'PLAYTEST.json')) {
+        files.push({
+          path: 'PLAYTEST.json',
+          content: `${JSON.stringify({ expectProgress: ['round-start'] }, null, 2)}\n`,
+        });
+      }
+
+      let version: string;
+      try {
+        ({ version } = await gamesStore.putCandidateSources({
+          slug,
+          issueNumber,
+          roundGeneration: claimed.roundGeneration ?? 1,
+          files,
+          backend: claimed.dispatch?.backend ?? claimed.builder,
+          origin: 'seal',
+          mode: 'publish',
+          ...(manifest.kitEngineRef ? { kitEngineRef: manifest.kitEngineRef } : {}),
+          ...(manifest.engineRef ? { engineRef: manifest.engineRef } : {}),
+        }));
+      } catch (error) {
+        request.log.error({ err: error, issueNumber }, 'sealing a preview failed');
+        await abort('seal_failed');
+        return reply.status(502).send({ error: 'seal_failed' });
+      }
+
+      await store.setSubmissionDeliveredVersion(issueNumber, version);
+      await store.recordJobTransition(issueNumber, {
+        to: 'submitted',
+        at: at(),
+        by: 'creator',
+        reason: 'seal_delivered',
       });
-    }
 
-    let version: string;
-    try {
-      ({ version } = await gamesStore.putCandidateSources({
-        slug,
-        issueNumber,
-        roundGeneration: record.roundGeneration ?? 1,
-        files,
-        backend: record.dispatch?.backend ?? record.builder,
-        origin: 'seal',
-        mode: 'publish',
-        ...(manifest.kitEngineRef ? { kitEngineRef: manifest.kitEngineRef } : {}),
-        ...(manifest.engineRef ? { engineRef: manifest.engineRef } : {}),
-      }));
-    } catch (error) {
-      request.log.error({ err: error, issueNumber }, 'sealing a preview failed');
-      return reply.status(502).send({ error: 'seal_failed' });
-    }
+      const gate = await gateTrigger({ issueNumber, slug, version });
+      if (gate?.buildId) {
+        await store
+          .recordJobCost(issueNumber, { kind: 'gate_run', at: at(), by: 'cloud-build', ref: gate.buildId })
+          .catch(() => {});
+      }
+      invalidateStatusCache(issueNumber);
 
-    const at = () => new Date(now()).toISOString();
-    await store.setSubmissionDeliveredVersion(issueNumber, version);
-    await store.recordJobTransition(issueNumber, { to: 'building', at: at(), by: 'creator', reason: 'seal_preview' });
-    await store.recordJobTransition(issueNumber, {
-      to: 'submitted',
-      at: at(),
-      by: 'creator',
-      reason: 'seal_delivered',
-    });
-
-    const gate = await gateTrigger({ issueNumber, slug, version });
-    if (gate?.buildId) {
-      await store
-        .recordJobCost(issueNumber, { kind: 'gate_run', at: at(), by: 'cloud-build', ref: gate.buildId })
-        .catch(() => {});
-    }
-    invalidateStatusCache(issueNumber);
-
-    return reply.send({ ok: true, version });
-  });
+      return reply.send({ ok: true, version });
+    },
+  );
 
   app.get('/api/submissions/mine', async (request, reply) => {
     if (!submissionTokenSecret) {
