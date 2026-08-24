@@ -4,19 +4,22 @@ import { isBuildLive, newestBuildIsCurrentRound } from './buildLive.js';
 import { PixelIcon } from './PixelIcon.js';
 import { formatRelativeTime } from './relativeTime.js';
 import { fetchGameBuilds } from './studioApi.js';
-import { revertGameVersion, type RecentBuild, type SubmissionStatus } from './submissionApi.js';
+import { revertGameVersion, sealPreview, type RecentBuild, type SubmissionStatus } from './submissionApi.js';
 import { StudioLiveRoundRow } from './StudioLiveRoundRow.js';
 
 const DEFAULT_INITIAL_LIMIT = 5;
 
 export function StudioBuildHistory({
   status,
+  token,
   emptyLabel,
   onSelectPreviewVersion,
   activePreviewVersion,
   onReverted,
 }: {
   status: SubmissionStatus;
+  // Only sealing needs this — the rest of the panel is slug-keyed.
+  token?: string;
   // Shown when there's no live round and no build history.
   emptyLabel?: string;
   onSelectPreviewVersion?: (version: string | null) => void;
@@ -31,6 +34,9 @@ export function StudioBuildHistory({
   const [revertingVersion, setRevertingVersion] = useState<string | null>(null);
   const [revertError, setRevertError] = useState<string | null>(null);
   const [revertSuccess, setRevertSuccess] = useState<string | null>(null);
+  const [sealing, setSealing] = useState(false);
+  const [sealError, setSealError] = useState<string | null>(null);
+  const [sealSuccess, setSealSuccess] = useState(false);
 
   const statusBuilds = status.recentBuilds ?? [];
   const builds = extraBuilds ?? statusBuilds;
@@ -93,6 +99,20 @@ export function StudioBuildHistory({
     }
   };
 
+  const handleSeal = async () => {
+    if (!token) return;
+    setSealing(true);
+    setSealError(null);
+    try {
+      await sealPreview(token);
+      setSealSuccess(true);
+    } catch (err) {
+      setSealError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSealing(false);
+    }
+  };
+
   return (
     <div className="studio-build-history" data-testid="studio-build-history">
       <div className={`studio-build-history-live${live ? ' is-live' : ''}`}>
@@ -119,6 +139,16 @@ export function StudioBuildHistory({
       {revertError ? (
         <div className="studio-build-history-alert is-error" role="alert">
           {revertError}
+        </div>
+      ) : null}
+      {sealSuccess ? (
+        <div className="studio-build-history-alert is-success" role="status">
+          {t('statusView.seal.sent')}
+        </div>
+      ) : null}
+      {sealError ? (
+        <div className="studio-build-history-alert is-error" role="alert">
+          {sealError}
         </div>
       ) : null}
 
@@ -197,6 +227,18 @@ export function StudioBuildHistory({
                   ) : null}
 
                   <div className="studio-build-history-actions">
+                    {index === 0 && token && status.canSeal && build.mode === 'preview' ? (
+                      <button
+                        type="button"
+                        className="studio-build-action-btn is-seal"
+                        disabled={sealing}
+                        onClick={() => void handleSeal()}
+                      >
+                        <PixelIcon name="sparkle" size={12} />
+                        <span>{sealing ? t('statusView.seal.sending') : t('statusView.seal.action')}</span>
+                      </button>
+                    ) : null}
+
                     {canPreview ? (
                       <button
                         type="button"

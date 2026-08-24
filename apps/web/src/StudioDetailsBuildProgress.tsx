@@ -55,6 +55,7 @@ export function StudioDetailsBuildProgress({
   return (
     <StudioBuildHistory
       status={status}
+      token={token}
       emptyLabel={emptyLabel}
       onSelectPreviewVersion={onSelectPreviewVersion}
       activePreviewVersion={activePreviewVersion}

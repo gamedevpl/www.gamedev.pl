@@ -545,6 +545,7 @@
     "apps/web/src/SiteFooter.tsx": 214,
     "apps/web/src/splashMascotPullups.test.ts": 34,
     "apps/web/src/studioApi.ts": 684,
+    "apps/web/src/StudioBuildHistory.test.tsx": 15,
     "apps/web/src/StudioChatRail.tsx": 230,
     "apps/web/src/StudioConnectCard.test.tsx": 66,
     "apps/web/src/StudioConnectCard.tsx": 472,

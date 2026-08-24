@@ -7,14 +7,14 @@ import i18n from './i18n/index.js';
 import { StudioBuildHistory } from './StudioBuildHistory.js';
 import type { SubmissionStatus } from './submissionApi.js';
 
-async function mount(status: SubmissionStatus) {
+async function mount(status: SubmissionStatus, token?: string) {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   await i18n.changeLanguage('en');
   const host = document.createElement('div');
   document.body.appendChild(host);
   const root = createRoot(host);
   await act(async () => {
-    root.render(<StudioBuildHistory status={status} />);
+    root.render(<StudioBuildHistory status={status} token={token} />);
   });
   return {
     host,
@@ -179,6 +179,52 @@ describe('StudioBuildHistory', () => {
     expect(details?.textContent).toContain('Added jump physics and double-jump mechanic');
     expect(details?.querySelector('.is-revert')).not.toBeNull();
 
+    unmount();
+  });
+
+  it('offers to seal only the newest preview build when the record is eligible', async () => {
+    const { host, unmount } = await mount(
+      {
+        ...base,
+        slug: 'my-game',
+        canSeal: true,
+        recentBuilds: [
+          { version: 'v2', createdAt: new Date().toISOString(), mode: 'preview', verdict: 'green' },
+          { version: 'v1', createdAt: new Date(Date.now() - 60_000).toISOString(), mode: 'preview', verdict: 'green' },
+        ],
+      },
+      'tok',
+    );
+
+    // Only one row expands at a time — check the newest, then the older, in turn.
+    const summaries = host.querySelectorAll('.studio-build-history-summary');
+    await act(async () => {
+      (summaries[0] as HTMLElement).click();
+    });
+    expect(host.querySelector('[data-testid="build-details-v2"]')?.querySelector('.is-seal')).not.toBeNull();
+
+    await act(async () => {
+      (host.querySelectorAll('.studio-build-history-summary')[1] as HTMLElement).click();
+    });
+    expect(host.querySelector('[data-testid="build-details-v1"]')?.querySelector('.is-seal')).toBeNull();
+
+    unmount();
+  });
+
+  it('does not offer to seal when the record is not eligible', async () => {
+    const { host, unmount } = await mount(
+      {
+        ...base,
+        slug: 'my-game',
+        recentBuilds: [{ version: 'v1', createdAt: new Date().toISOString(), mode: 'preview', verdict: 'green' }],
+      },
+      'tok',
+    );
+    const summary = host.querySelector('.studio-build-history-summary') as HTMLElement;
+    await act(async () => {
+      summary.click();
+    });
+    expect(host.querySelector('.is-seal')).toBeNull();
     unmount();
   });
 });

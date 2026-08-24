@@ -13,7 +13,6 @@ import {
   getSubmissionStatus,
   handoffToPlatform,
   handoffToSelf,
-  sealPreview,
   submitFeedback,
   buildMediaUrl,
   type BuildEvent,
@@ -333,44 +332,6 @@ type SubmissionStatusViewProps = {
   draft?: { text: string; seq: number } | null;
   onDraftConsumed?: () => void;
 };
-
-/**
- * The one exit from a preview-only round.
- *
- * A platform-built game finishes in `ready_for_review` with nothing publishable — its
- * agents deliver previews and cannot deliver publish (see the /seal route). Sealing
- * re-runs the full gate against the same sources, so this is a real check, not a
- * rubber stamp: the round comes back green or lands on `needs_changes`.
- */
-function SealPreviewCard({ token, onSealed }: { token: string; onSealed: () => void }) {
-  const { t } = useTranslation();
-  const [state, setState] = useState<'idle' | 'sending'>('idle');
-  const [error, setError] = useState<string | null>(null);
-
-  const seal = async () => {
-    setState('sending');
-    setError(null);
-    try {
-      await sealPreview(token);
-      onSealed();
-    } catch {
-      setError(t('statusView.seal.error'));
-    } finally {
-      setState('idle');
-    }
-  };
-
-  return (
-    <div className="studio-seal-card" role="group">
-      <p className="studio-seal-body">{t('statusView.seal.body')}</p>
-      <button type="button" className="primary-btn" onClick={() => void seal()} disabled={state === 'sending'}>
-        <PixelIcon name="sparkle" size={13} />{' '}
-        {state === 'sending' ? t('statusView.seal.sending') : t('statusView.seal.action')}
-      </button>
-      {error ? <p className="error">{error}</p> : null}
-    </div>
-  );
-}
 
 export function SubmissionStatusView({
   token,
@@ -987,10 +948,6 @@ export function SubmissionStatusView({
                     heartbeatAt={isAwaitingOwnAgent(status) ? null : heartbeatAt}
                     active={false}
                   />
-                ) : null}
-
-                {status.canSeal ? (
-                  <SealPreviewCard token={token} onSealed={() => requestStatusRefreshRef.current()} />
                 ) : null}
 
                 {status.status !== 'abandoned' && selfCopy !== 'no_agent_yet' ? (
