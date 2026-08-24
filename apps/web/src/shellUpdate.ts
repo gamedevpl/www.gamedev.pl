@@ -10,6 +10,8 @@
  * for a new worker when the user comes back.
  */
 
+import { hasServiceWorkerSupport } from './serviceWorkerSupport.js';
+
 const PENDING_KEY = 'gamedev_shell_update_pending';
 export const SHELL_UPDATED_EVENT = 'gamedev:shell-updated';
 
@@ -58,7 +60,7 @@ export function clearPendingShellUpdate(): void {
  * Safe to call once at boot; no-ops where service workers do not exist.
  */
 export function watchShellUpdates(): void {
-  if (!('serviceWorker' in navigator)) return;
+  if (!hasServiceWorkerSupport()) return;
 
   navigator.serviceWorker.addEventListener('message', (event: MessageEvent) => {
     const data = event.data as { type?: string; revision?: string } | null;
