@@ -114,6 +114,13 @@ export const GAME_BUDGET_BYTES = 936 * 1024;
 export const SOURCE_GRAPH_BUDGET_BYTES = 1062 * 1024;
 
 /**
+ * Raw TypeScript source-graph module ceiling for the bake/play/seed bundlers
+ * (`MAX_SOURCE_GRAPH_MODULES` in `github-client.ts`, `MAX_GAME_MODULES` in
+ * `seed-bundle.ts`). Raised 64 → 128 for mexico-86.
+ */
+export const MAX_SOURCE_GRAPH_MODULES = 128;
+
+/**
  * Platform half of the serve cap — games-repo `GAMEKIT_PLATFORM_BYTES` /
  * `assemble-contract.json` `platformCeilingBytes`. Together with
  * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`

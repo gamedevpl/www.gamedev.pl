@@ -19,6 +19,7 @@ import {
   DELIVERY_FIXED_FILES,
   GAME_KIT_MODULES,
   GAME_KIT_VERTICAL_ENTRIES,
+  MAX_SOURCE_GRAPH_MODULES,
   MUSIC_CONTRACT,
   SOURCE_GRAPH_BUDGET_BYTES,
   type GameKitModuleName,
@@ -160,7 +161,6 @@ function generateStyleCssFromManifest(manifestSource: string): string | null {
 
 // GAME_KIT_MODULES lives in games-repo-contract.ts — CI re-checks the live
 // games repo copy when GAMES_REPO_TOKEN is set (issue #247).
-const MAX_SOURCE_GRAPH_MODULES = 64;
 /** Alias of {@link SOURCE_GRAPH_BUDGET_BYTES} — keep the local name at the call sites. */
 const MAX_SOURCE_GRAPH_BYTES = SOURCE_GRAPH_BUDGET_BYTES;
 /**
