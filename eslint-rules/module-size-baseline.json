@@ -436,7 +436,7 @@
     "apps/api/src/static-serving.test.ts": 95,
     "apps/api/src/store-firestore.test.ts": 710,
     "apps/api/src/submissions.test.ts": 7173,
-    "apps/api/src/submissions.ts": 6259,
+    "apps/api/src/submissions.ts": 6280,
     "apps/api/src/tab-complete-deploy-flag.test.ts": 26,
     "apps/api/src/telemetry-trends.route.test.ts": 75,
     "apps/api/src/telemetry/chat-agent-metrics.test.ts": 53,
