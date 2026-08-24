@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { isBuildLive } from './buildLive.js';
+import { isBuildLive, newestBuildIsCurrentRound } from './buildLive.js';
 import { PixelIcon } from './PixelIcon.js';
 import { formatRelativeTime } from './relativeTime.js';
 import { fetchGameBuilds } from './studioApi.js';
@@ -41,7 +41,7 @@ export function StudioBuildHistory({
   }, [status.slug]);
 
   const live = isBuildLive(status);
-  const showLiveRoundRow = live && builds.length === 0;
+  const showLiveRoundRow = live && !newestBuildIsCurrentRound(builds, status);
   if (!showLiveRoundRow && builds.length === 0) {
     return emptyLabel ? <p className="studio-rail-empty">{emptyLabel}</p> : null;
   }

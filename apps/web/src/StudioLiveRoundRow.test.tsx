@@ -42,12 +42,30 @@ describe('StudioLiveRoundRow (via StudioBuildHistory)', () => {
     unmount();
   });
 
-  it('does not show a live-round row once a build exists for the round', async () => {
+  it('does not show a live-round row once this round has its own pending build', async () => {
     const { host, unmount } = await mount({
       status: 'building',
-      recentBuilds: [{ version: 'v1', createdAt: new Date().toISOString(), mode: 'publish', verdict: 'pending' }],
+      issueNumber: 7,
+      recentBuilds: [
+        { version: 'v1', createdAt: new Date().toISOString(), mode: 'publish', verdict: 'pending', issueNumber: 7 },
+      ],
     });
     expect(host.querySelector('[data-testid="studio-build-history-live-round"]')).toBeNull();
+    unmount();
+  });
+
+  it('shows the live round on a later round even though slug history is non-empty', async () => {
+    const { host, unmount } = await mount({
+      status: 'building',
+      issueNumber: 12,
+      lastAgentSignalAt: new Date().toISOString(),
+      recentBuilds: [
+        { version: 'v1', createdAt: new Date().toISOString(), mode: 'publish', verdict: 'green', issueNumber: 7 },
+      ],
+    });
+    expect(host.querySelector('[data-testid="studio-build-history-live-round"]')).not.toBeNull();
+    // The prior round's delivery still lists below the live row.
+    expect(host.querySelectorAll('.studio-build-history-row').length).toBe(2);
     unmount();
   });
 
