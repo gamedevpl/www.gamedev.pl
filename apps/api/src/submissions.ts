@@ -9,7 +9,7 @@ import {
 } from '@gamedevpl/contract';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { splitConceptBrief } from './creation/agent-build-brief.js';
+import { splitConceptBrief } from './agent-surface/agent-build-brief.js';
 import { creatorOwnsSlug } from './platform/slug-ownership.js';
 import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-surface/agent-channel.js';
 import { mintAgentToken, mintManagedMcpOpener } from './agent-surface/agent-token.js';
@@ -133,8 +133,8 @@ import {
   type EmitDeps,
 } from './notifications/notify.js';
 import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './notifications/operator-alerts.js';
-import { pageOwnerGames } from './catalog/owner-games.js';
-import { seedOutcomeFor } from './creation/seed-status.js';
+import { pageOwnerGames } from './creation/owner-games.js';
+import { seedOutcomeFor } from './agent-surface/seed-status.js';
 import { isAdminSession } from './platform/admin-session.js';
 import { peekQuota } from './creation/quota-gate.js';
 import { mintGameSlug } from './catalog/slug.js';

@@ -16,7 +16,7 @@
 //   3. `model` echoes back namespaced, not as sent            (see normalizeModel)
 
 import { isAgentTaskState, type AgentTaskState } from './agent-state.js';
-import { isRateLimitResponse } from '../catalog/github-rate-limit.js';
+import { isRateLimitResponse } from '../platform/github-rate-limit.js';
 
 const AGENT_TASKS_API_VERSION = '2026-03-10';
 

@@ -621,7 +621,7 @@ a `failed[]` entry naming the reason (`forbiddenIndexHtmlWriteReason` in
 `apps/api/src/delivery/games-store.ts`, checked against the request's own `files[]` in the
 submit route before any overlay runs) — not a soft `warnings` entry an agent could
 ignore. This replaced an earlier, weaker fix: a shape-checked advisory in
-`apps/api/src/catalog/game-manifest-hint.ts` that only flagged a full-document or
+`apps/api/src/agent-surface/game-manifest-hint.ts` that only flagged a full-document or
 non-standard-chrome shape, after transport-tycoon-remake (2026-08-18) delivered a
 hand-written full-document `index.html` whose stray `<main>` title/description block
 rendered as visible text under the canvas — the assembler inlines the file into the
@@ -653,7 +653,7 @@ that fixed an unrelated typecheck bug in `game.ts` never looked at GAME.json aga
 because nothing pointed it there until a Cloud Build log did, minutes later.
 
 `stage_source_file` and `patch_source_file` now run a shallow shape check
-(`apps/api/src/catalog/game-manifest-hint.ts`) whenever the staged/patched path is `GAME.json`,
+(`apps/api/src/agent-surface/game-manifest-hint.ts`) whenever the staged/patched path is `GAME.json`,
 and emit `warnings.code=game_manifest_invalid` on the _same_ reply if it's missing
 `engine.modules` (or `audio` is selected without `audio.sounds`/`audio.music`). This is
 deliberately shallow — it does not know the kit's module catalog, canonical order, or
@@ -1053,7 +1053,7 @@ queued.
 | Gate milestones                    | `apps/api/src/delivery/gate-progress.ts` + `GamesStore.putGateProgress` (GCS; Studio/MCP poll while checks run)                                                                                                     |
 | Gate verdict (shared)              | `apps/api/src/delivery/gate-verdict.ts` — `readGateVerdict` / `deriveGateStatusString`, used by the channel's `/api/agent/build/gate` route and by `start`'s reconnect visibility                                   |
 | Preview-gate reconciliation        | `apps/api/src/submissions.ts` (`reconcileGateVerdict`) — red `previewGate` → `needs_changes`/`gate_red`; green preview never promotes                                                                               |
-| GAME.json staging shape check      | `apps/api/src/catalog/game-manifest-hint.ts` (`gameManifestHint`) — wired into the stage/patch routes in `agent-channel.ts`                                                                                         |
+| GAME.json staging shape check      | `apps/api/src/agent-surface/game-manifest-hint.ts` (`gameManifestHint`) — wired into the stage/patch routes in `agent-channel.ts`                                                                                   |
 | Round-0 seed generation            | `apps/api/src/creation/game-seed.ts` (`ModelGameSeeder`) + `seedBuild`/`seedStagingMutedUntil` in `submissions.ts` — mute is `builder === 'platform'`-scoped and honours the cooldown only for `workspace` delivery |
 | Seed regeneration                  | `regenerateSeed` in `submissions.ts` + `POST /api/agent/build/seed/regenerate` in `agent-channel.ts` + `regenerate_seed` in `mcp-server.ts`; cap via `store.incrementSeedRegenerations`                             |
 | "How would this round get a seed?" | `AgentBackend.seedDelivery` → `workspace` / `channel`; read before generating, and `seedDeliveryFor` in `submissions.ts` backstops a backend that does not declare it                                               |

@@ -53,7 +53,7 @@ import {
   type DeliveryContract,
   type GameKitModuleName,
 } from '../platform/games-repo-contract.js';
-import { isRateLimitResponse } from './github-rate-limit.js';
+import { isRateLimitResponse } from '../platform/github-rate-limit.js';
 
 const LOCAL_EDITOR_CONTRACT_PATH = path.join(
   path.dirname(fileURLToPath(import.meta.url)),

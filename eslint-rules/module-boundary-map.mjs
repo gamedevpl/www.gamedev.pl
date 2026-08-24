@@ -111,6 +111,10 @@ const FILE_BUCKET = {
   'kit-registry': 'platform',
   'kit-window': 'platform',
   'round-base-version': 'platform',
+  // A generic HTTP rate-limit classifier with no domain deps at all, and a bare
+  // env-flag reader -- neither has business logic tied to any one bucket.
+  'github-rate-limit': 'platform',
+  'editor-kit-env': 'platform',
 
   // creation: jobs, rounds, dispatch, seed, refine
   'job-state': 'creation',
@@ -135,8 +139,6 @@ const FILE_BUCKET = {
   'remix-save': 'creation',
   'remix-suggestions': 'creation',
   'remix-turns': 'creation',
-  'agent-build-brief': 'creation',
-  'agent-build-examples': 'creation',
   'agent-state': 'creation',
   'agent-tasks': 'creation',
   'chat-agent': 'creation',
@@ -147,7 +149,6 @@ const FILE_BUCKET = {
   'seed-context': 'creation',
   'seed-bundle': 'creation',
   'seed-availability': 'creation',
-  'seed-status': 'creation',
   'seed-stream': 'creation',
   'seed-provider': 'creation',
   'seed-provider-anthropic': 'creation',
@@ -161,6 +162,9 @@ const FILE_BUCKET = {
   scorecard: 'creation',
   'knowledge-search': 'creation',
   'example-files': 'creation',
+  // Collapses jobs to distinct games for the Studio shelf -- pure Store-record
+  // grouping, no catalog dependency, only ever read by creator-studio.ts.
+  'owner-games': 'creation',
 
   // agent-surface: channel + MCP + kit
   'agent-channel': 'agent-surface',
@@ -194,7 +198,15 @@ const FILE_BUCKET = {
   'creator-agent-key-routes': 'agent-surface',
   'kit-digest': 'agent-surface',
   'kit-files': 'agent-surface',
-  'editor-kit-env': 'agent-surface',
+  // Content and status for BYOCA/MCP agents specifically (get_examples, the build
+  // brief, round-0 draft availability) -- read only by agent-channel.ts/mcp-server.ts,
+  // never by creation's own files, despite having lived in creation/.
+  'agent-build-brief': 'agent-surface',
+  'agent-build-examples': 'agent-surface',
+  'seed-status': 'agent-surface',
+  // GAME.json shape hint surfaced by the MCP tools -- reads catalog's own
+  // games-repo-contract.js but is never consumed inside catalog/ itself.
+  'game-manifest-hint': 'agent-surface',
 
   // delivery: staging, games-store, gate
   'staged-preview': 'delivery',
@@ -226,7 +238,6 @@ const FILE_BUCKET = {
   'catalog-vector-index': 'catalog',
   'embedding-service': 'catalog',
   'github-client': 'catalog',
-  'github-rate-limit': 'catalog',
   'game-snapshot': 'catalog',
   'game-snapshot-publish': 'catalog',
   'catalog-genre-source': 'catalog',
@@ -234,9 +245,7 @@ const FILE_BUCKET = {
   recommend: 'catalog',
   recommendations: 'catalog',
   'published-slugs': 'catalog',
-  'owner-games': 'catalog',
   'game-page-routes': 'catalog',
-  'game-manifest-hint': 'catalog',
   'game-health': 'catalog',
   'games-repo-client': 'catalog',
   'games-repo-contract-check': 'catalog',

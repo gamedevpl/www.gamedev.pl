@@ -24,7 +24,7 @@ import {
   SOURCE_GRAPH_BUDGET_BYTES,
   type GameKitModuleName,
 } from '../platform/games-repo-contract.js';
-import { isRateLimitResponse } from './github-rate-limit.js';
+import { isRateLimitResponse } from '../platform/github-rate-limit.js';
 import {
   generateIndexHtml,
   hasPlayableHowToPlay,
