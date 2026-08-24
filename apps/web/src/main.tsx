@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { App } from './App.js';
 import { AuthProvider } from './AuthContext.js';
 import { recordVisit, watchInstallPrompt } from './pwa.js';
+import { hasServiceWorkerSupport } from './serviceWorkerSupport.js';
 import { watchShellUpdates } from './shellUpdate.js';
 import { startVisitTracking } from './visitTelemetry.js';
 import './i18n/index.js';
@@ -55,7 +56,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
  * After `load` so it never competes with the first render for bandwidth. Registering
  * twice is harmless — the browser dedupes by script URL and scope.
  */
-if ('serviceWorker' in navigator) {
+if (hasServiceWorkerSupport()) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(() => {
       // A blocked or unsupported worker costs the install prompt and offline page,
