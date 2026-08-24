@@ -28,7 +28,7 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
    - The draft is a starting point, not an authority: where it and the brief disagree, the
      brief wins. `regenerate_seed({ steer })` once if it is plainly not the game the brief
      describes — then keep building rather than waiting on it
-2. Build; `report_progress`; screenshot when something draws via
+2. Build; `report_progress`; every game delivery must include an EditorKit declaration (`EDITOR.ts` preferred, or `EDITOR.json`) with at least three meaningful tunables or one content collection. Keep generated editor content (`EDITOR.content.json` when applicable and `game/editor-content.ts`) in sync and consumed by the game. Screenshot when something draws via
    `screenshot_upload_url` then `curl --upload-file <png> "$url"`. There is **no**
    base64 `send_screenshot` — PNG bytes must never enter the model. Without shell
    egress, skip mid-build screenshots; the gate still captures on delivery

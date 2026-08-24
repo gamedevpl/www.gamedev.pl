@@ -62,6 +62,8 @@ export interface GateOutcome {
    * a thing a gate refuses.
    */
   behaviouralDiff?: boolean;
+  /** Golden the gate derived itself (editor/seal lanes) — the caller merges it into sourceFiles. */
+  derivedSourceFiles?: string[];
 }
 
 export interface GateRunOptions {
@@ -290,6 +292,8 @@ export async function runGate(
     .then((head) => (head.code === 0 ? head.output.trim().split('\n').pop()?.trim() : undefined))
     .catch(() => undefined);
   const gameDir = path.join(harness, 'games', slug);
+  // Set only when the golden below is derived and durably stored — never guessed.
+  let derivedSourceFiles: string[] | undefined;
 
   try {
     await materializeCandidate(deps.store, manifest, gameDir);
@@ -304,7 +308,13 @@ export async function runGate(
     // content for real; `--accept` here only retires the has-it-changed question,
     // which for a content edit is always answered "yes, that was the point".
     // Preview lane skips this: it never reaches the trace stage.
-    if (!previewRun && manifest.origin === 'editor') {
+    //
+    // A sealed preview (`origin: 'seal'`) carries no golden at all: the sources come
+    // from a preview-lane delivery, and no agent on that lane can record one — the
+    // harness that does it is not in their sandbox. Same remedy, and the same limit:
+    // deriving the golden only settles what the game *does*, and every stage after
+    // still has to pass on its own.
+    if (!previewRun && (manifest.origin === 'editor' || manifest.origin === 'seal')) {
       const trace = await deps.run('npm', ['run', 'trace', '--', slug, '--accept'], harness);
       if (trace.code !== 0) {
         return {
@@ -316,11 +326,30 @@ export async function runGate(
         };
       }
       const golden = await readFile(path.join(gameDir, 'TRACE.json')).catch(() => null);
-      if (golden) {
-        await deps.store
-          .putDerivedArtifact(slug, version, 'source/TRACE.json', golden, 'text/plain; charset=utf-8')
-          .catch(() => {});
+      if (!golden) {
+        return {
+          green: false,
+          report: '`npm run trace -- --accept` produced no TRACE.json to derive from',
+          artifacts: [],
+          durationMs: now() - startedAt,
+          ...(engineCommit ? { engineCommit } : {}),
+        };
       }
+      try {
+        await deps.store.putDerivedArtifact(slug, version, 'source/TRACE.json', golden, 'text/plain; charset=utf-8');
+      } catch (error) {
+        // Best-effort here would leave a green, publishable version with no durable
+        // golden on a store hiccup — refused rather than risked, same as any other
+        // stage this function refuses on.
+        return {
+          green: false,
+          report: `could not persist the derived golden: ${error instanceof Error ? error.message : String(error)}`,
+          artifacts: [],
+          durationMs: now() - startedAt,
+          ...(engineCommit ? { engineCommit } : {}),
+        };
+      }
+      derivedSourceFiles = ['TRACE.json'];
     }
 
     // Preview: typecheck→smoke→build only. Publish: full check:game without `--accept`
@@ -476,6 +505,7 @@ export async function runGate(
       ...(engineCommit ? { engineCommit } : {}),
       ...(screenshot ? { screenshot } : {}),
       ...(behaviouralDiff ? { behaviouralDiff: true } : {}),
+      ...(derivedSourceFiles ? { derivedSourceFiles } : {}),
     };
   } finally {
     await flushProgress();

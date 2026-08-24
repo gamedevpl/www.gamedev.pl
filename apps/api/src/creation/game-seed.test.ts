@@ -112,7 +112,7 @@ describe('seed path containment', () => {
       'game.ts',
       'index.html',
       'style.css',
-      'ACCEPTANCE.json',
+      'ACCEPTANCE.json', 'EDITOR.json', 'EDITOR.ts', 'EDITOR.content.json',
       'game/model.ts',
       'game/ai/steering.ts',
     ]) {
@@ -190,15 +190,15 @@ describe('collectSeedFiles', () => {
 describe('isUsableSeed', () => {
   const file = (path: string): SeedFile => ({ path, content: 'x\n' });
 
-  it('accepts a draft with an entry point, a spec and a module', () => {
-    expect(isUsableSeed([file('game.ts'), file('SPEC.md'), file('game/model.ts')])).toBe(true);
+  it('accepts a draft with an editor, entry point, spec and module', () => {
+    expect(isUsableSeed([file('EDITOR.json'), file('game.ts'), file('SPEC.md'), file('game/model.ts')])).toBe(true);
   });
 
   it('rejects a draft that is only prose', () => {
     // The failure mode this exists for: a seed branch that claims a scaffold exists
     // while containing nothing the agent could continue.
     expect(isUsableSeed([file('SPEC.md')])).toBe(false);
-    expect(isUsableSeed([file('SPEC.md'), file('game.ts')])).toBe(false);
+    expect(isUsableSeed([file('SPEC.md'), file('game.ts'), file('game/model.ts')])).toBe(false); expect(isUsableSeed([file('SPEC.md'), file('game.ts')])).toBe(false);
     expect(isUsableSeed([])).toBe(false);
   });
 });
@@ -367,7 +367,7 @@ const draftFor = (slug: string) =>
     `slug: ${slug}`,
     '---',
     '## Concept',
-    'A game.',
+    'A game.\n--- games/${slug}/EDITOR.json ---\n{"version":1,"params":{"speed":{"type":"number","default":3}}}',
     `--- games/${slug}/game.ts ---`,
     "import { SPEED } from './game/model.ts';",
     'console.log(SPEED);',
@@ -384,7 +384,7 @@ const GOOD_DRAFT = [
   'slug: my-game',
   '---',
   '## Concept',
-  'A game.',
+  'A game.\n--- games/my-game/EDITOR.json ---\n{"version":1,"params":{"speed":{"type":"number","default":3}}}',
   '--- games/my-game/game.ts ---',
   "import { SPEED } from './game/model.ts';",
   'console.log(SPEED);',
@@ -442,7 +442,7 @@ describe('ModelGameSeeder', () => {
 
     expect(draft).not.toBeNull();
     expect(draft!.references).toEqual(['apex-sprint', 'word-forge']);
-    expect(draft!.files.map((file) => file.path)).toEqual(['SPEC.md', 'game.ts', 'game/model.ts']);
+    expect(draft!.files.map((file) => file.path)).toEqual(['SPEC.md', 'EDITOR.json', 'game.ts', 'game/model.ts']);
     expect(draft!.notes).toBe('The trace still needs recording.');
     expect(draft!.typeChecked).toBe(false);
     expect(draft!.typeErrors).toBe(0);
@@ -501,7 +501,7 @@ describe('ModelGameSeeder', () => {
     const draft = await new ModelGameSeeder({ context: stubContext(), client, log }).seed(request);
 
     expect(draft).not.toBeNull();
-    expect(progressFiles).toEqual([
+    expect(progressFiles.filter((file) => file !== 'games/my-game/EDITOR.json')).toEqual([
       'games/my-game/SPEC.md',
       'games/my-game/game.ts',
       'games/my-game/game/model.ts',
@@ -754,7 +754,7 @@ describe('ModelGameSeeder', () => {
     expect(draft!.compiles).toBe(true);
     expect(draft!.repaired).toBe(true);
     expect(draft!.files.find((file) => file.path === 'game/model.ts')!.content).toBe('export const SPEED = 4;\n');
-    expect(draft!.files.map((file) => file.path).sort()).toEqual(['SPEC.md', 'game.ts', 'game/model.ts']);
+    expect(draft!.files.map((file) => file.path).sort()).toEqual(['EDITOR.json', 'SPEC.md', 'game.ts', 'game/model.ts']);
     // The repair round is billed like the rounds before it.
     expect(draft!.usage.inputTokens).toBe(400 + 30_000 + 9_000);
     expect(draft!.usage.outputTokens).toBe(10 + 8_000 + 700);
@@ -876,7 +876,7 @@ describe('ModelGameSeeder', () => {
     });
 
     const draft = await seeder.seed(request);
-    expect(draft!.files.map((file) => file.path)).toEqual(['SPEC.md', 'game.ts', 'game/model.ts']);
+    expect(draft!.files.map((file) => file.path)).toEqual(['SPEC.md', 'EDITOR.json', 'game.ts', 'game/model.ts']);
   });
 });
 

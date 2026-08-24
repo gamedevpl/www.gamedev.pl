@@ -83,6 +83,10 @@ a real acceptance objective, and the progress landmarks that need a running game
 The brief also states plainly that the draft has never been run, typechecked or gated, so
 the agent expects those parts to be missing rather than trusting them.
 
+## The editor is part of every delivery
+
+Every newly seeded or built game ships an EditorKit declaration. Prefer `EDITOR.ts`; otherwise deliver `EDITOR.json`, declaring at least three meaningful tunables or one content collection. Keep `EDITOR.content.json` (when the schema uses content) and the generated `game/editor-content.ts` in sync, and make the game read those typed values instead of shadowing defaults. The kit exposes `npm run editor:gen -- <slug>` and `npm run edit -- <slug>` for regeneration and local verification.
+
 ## Scope is stated as a fact, not a request
 
 "Please do not edit `shared/`" is advice an agent may weigh against its task. "Changes

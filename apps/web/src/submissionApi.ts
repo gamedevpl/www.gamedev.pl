@@ -249,6 +249,19 @@ export async function handoffToSelf(token: string): Promise<BuilderHandoffRespon
   return (await response.json()) as BuilderHandoffResponse;
 }
 
+/** Promotes a green preview to a publish candidate; the full gate then judges it. */
+export async function sealPreview(token: string): Promise<{ version: string }> {
+  const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/seal`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  return (await response.json()) as { version: string };
+}
+
 /** Today's submission allowance, so a creator sees it before they hit a 429. */
 export async function getQuota(): Promise<{
   submissions: { used: number; limit: number | null };

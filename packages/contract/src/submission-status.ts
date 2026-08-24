@@ -143,6 +143,8 @@ export interface SubmissionStatusResponseBase {
   slug?: string;
   // 'remix' means a private save-as-yours fork that never gates.
   draftOrigin?: 'remix';
+  // Preview is green but nothing publishable exists yet; POST :token/seal makes one.
+  canSeal?: true;
   // Signal to try loading a draft, not a 200 guarantee.
   preview?: { slug: string };
   previewGate?: { green: boolean; ranAt: string; report?: string; status?: 'kit_outdated' };
