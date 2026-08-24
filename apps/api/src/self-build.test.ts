@@ -829,6 +829,142 @@ describe('self builder (BY-02)', () => {
     expect(staleReport.json().error).toBe(STALE_AGENT_TOKEN_REASON);
   });
 
+  it('resumes a pending handoff itself when the gate closes the round before the agent acks', async () => {
+    // Gate-green can close the round before the agent ever acks the pending handoff.
+    const { backend, briefs } = platformStub();
+    const gamesStore = {
+      getManifest: async (_slug: string, version: string) =>
+        version === 'v1'
+          ? {
+              slug: 'gate-closes-handoff',
+              version,
+              createdAt: new Date().toISOString(),
+              issueNumber: 0,
+              roundGeneration: 1,
+              sourceFiles: [],
+              gate: { green: true, ranAt: new Date().toISOString() },
+            }
+          : null,
+    } as unknown as GamesStore;
+    const created = await createApp({ platform: backend, gamesStore });
+    app = created.app;
+    const { store } = created;
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Gate Closes Handoff', concept: CONCEPT, builder: 'self' },
+    });
+    expect(submit.statusCode).toBe(200);
+    let issueNumber = 0;
+    await vi.waitFor(async () => {
+      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+      expect((await store.getSubmission(issueNumber))?.state).toBe('dispatched');
+    });
+    await store.touchLastAgentSignalAt(issueNumber, new Date().toISOString());
+    await store.setSubmissionSlug(issueNumber, 'gate-closes-handoff');
+    await store.setSubmissionDeliveredVersion(issueNumber, 'v1');
+    await store.recordJobTransition(issueNumber, {
+      to: 'submitted',
+      at: new Date().toISOString(),
+      by: 'agent',
+      reason: 'sources_delivered',
+    });
+
+    const token = mintToken(issueNumber, secret);
+    const handoff = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/handoff`,
+      headers: authHeaders(),
+      payload: { stopActiveSelfAgent: true },
+    });
+    expect(handoff.statusCode).toBe(202);
+    expect((await store.getSubmission(issueNumber))?.builderHandoff?.awaitsAgentAck).toBe(true);
+
+    // Gate goes green before the (now-stopping) self agent ever calls `end`.
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}`,
+      headers: authHeaders(),
+    });
+    expect(status.statusCode).toBe(200);
+
+    // Resume dispatches a fresh round (state moves past ready_for_review again).
+    await vi.waitFor(async () => {
+      const record = await store.getSubmission(issueNumber);
+      expect(record?.builder).toBe('platform');
+      expect(record?.dispatch?.backend).toBe('copilot');
+      expect(record?.builderHandoff).toBeUndefined();
+      expect(record?.transitions?.some((t) => t.to === 'ready_for_review')).toBe(true);
+    });
+    expect(briefs.at(-1)?.spec).toBe(CONCEPT);
+  });
+
+  it('refuses a ready_for_review handoff if the round starts publishing mid-request', async () => {
+    // A stale snapshot must not dispatch a replacement agent onto a publishing job.
+    const { backend, briefs } = platformStub();
+    const { gamesStore } = stubGamesStore();
+    const created = await createApp({ platform: backend, gamesStore });
+    app = created.app;
+    const { store } = created;
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Race To Publish', concept: CONCEPT, builder: 'self' },
+    });
+    const slug = submit.json().slug as string;
+    let issueNumber = 0;
+    await vi.waitFor(async () => {
+      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/sources',
+      headers: agentHeaders(issueNumber),
+      payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
+    });
+    await store.recordJobTransition(issueNumber, {
+      to: 'ready_for_review',
+      at: new Date().toISOString(),
+      by: 'gate',
+      reason: 'gate_green',
+    });
+
+    // Simulate an operator approval landing between the read and the recheck.
+    const originalGetSubmission = store.getSubmission.bind(store);
+    let reads = 0;
+    store.getSubmission = async (num: number) => {
+      reads += 1;
+      const record = await originalGetSubmission(num);
+      if (reads === 1) {
+        await store.recordJobTransition(num, {
+          to: 'publishing',
+          at: new Date().toISOString(),
+          by: 'operator',
+          reason: 'approved',
+        });
+      }
+      return record;
+    };
+
+    const handoff = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(issueNumber, secret)}/handoff`,
+      headers: authHeaders(),
+      payload: { builder: 'platform' },
+    });
+
+    expect(handoff.statusCode).toBe(409);
+    expect(handoff.json()).toMatchObject({ error: 'builder_locked' });
+    expect(briefs).toHaveLength(0);
+    const record = await originalGetSubmission(issueNumber);
+    expect(record?.state).toBe('publishing');
+    expect(record?.builder).toBe('self');
+  });
+
   it('hands a live platform round to the self agent only after an explicit creator stop', async () => {
     const { backend, briefs, canceledRefs } = platformStub();
     const { gamesStore } = stubGamesStore();
