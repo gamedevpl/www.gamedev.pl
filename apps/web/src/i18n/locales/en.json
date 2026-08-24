@@ -111,7 +111,7 @@
     "upCreator": "Back to the creator's page"
   },
   "hero": {
-    "bigPromptPlaceholder": "Describe a game…",
+    "bigPromptPlaceholder": "Type a game to play or describe your idea for AI…",
     "buildGameButton": "Build My Game",
     "attachMenu": "Add",
     "attachMenuAria": "Add an image or sketch",
@@ -119,7 +119,8 @@
     "smartFoundTitle": "Found matching game: {{title}}",
     "smartPlayBtn": "Play {{title}} Now",
     "smartRemixBtn": "Remix this game with AI",
-    "smartNoMatchTitle": "No exact game found yet for \"{{query}}\"",
+    "smartMatchHint": "Looking for something else? Add more details above to build a new game.",
+    "smartNoMatchTitle": "Describe your game idea: \"{{query}}\"",
     "smartNoMatchSub": "Become the creator — let AI agents build your game idea!",
     "smartBuildBtn": "Build \"{{query}}\" with AI",
     "keyboardShortcutHint": "Press ⌘+Enter or Ctrl+Enter to submit",

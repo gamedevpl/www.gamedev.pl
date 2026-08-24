@@ -45,6 +45,13 @@ import {
   SnapshotUnavailableError,
   type GameSnapshotReader,
 } from './catalog/game-snapshot.js';
+import {
+  attachCatalogEnrichments,
+  createDefaultEnricherClient,
+  getOrEnrichCatalogGame,
+} from './catalog/catalog-enricher.js';
+import { VertexEmbeddingService } from './catalog/embedding-service.js';
+import { CatalogVectorIndex } from './catalog/catalog-vector-index.js';
 import { startHealthCheck } from './catalog/game-health.js';
 import {
   createStagedPreviewPublisher,
@@ -5826,7 +5833,8 @@ export async function registerSubmissionRoutes(
       const entries = await getCatalogEntries(githubClient);
       const published = entries.filter((entry) => entry.status === 'published');
       const combined = [...published, ...(await storeCatalogEntries(published.map((entry) => entry.slug)))];
-      return reply.send(await deattributeDeletedOwners(combined));
+      const deattributed = await deattributeDeletedOwners(combined);
+      return reply.send(await attachCatalogEnrichments(deattributed, store));
     } catch (error) {
       if (error instanceof SnapshotUnavailableError) {
         request.log.error({ err: error }, 'snapshot catalog unavailable');
@@ -5836,6 +5844,123 @@ export async function registerSubmissionRoutes(
       return reply.status(502).send({ error: 'failed to load catalog' });
     }
   });
+
+  const embeddingService = new VertexEmbeddingService({
+    log: (msg) => app.log.warn(msg),
+  });
+  const catalogVectorIndex = new CatalogVectorIndex();
+  let indexBuildPromise: Promise<void> | null = null;
+  let lastIndexBuildAttemptTime = 0;
+  let lastIndexBuildSuccessTime = 0;
+  const INDEX_TTL_MS = 10 * 60 * 1000;
+  const RETRY_BACKOFF_MS = 60 * 1000;
+
+  async function buildCatalogVectorIndex(): Promise<void> {
+    if (!githubClient) return;
+    lastIndexBuildAttemptTime = Date.now();
+    try {
+      const entries = await getCatalogEntries(githubClient);
+      const published = entries.filter((entry) => entry.status === 'published');
+      const enricherClient = createDefaultEnricherClient();
+
+      if (store) {
+        for (const entry of published) {
+          try {
+            const spec = await githubClient.getGameFile(publishedRef, entry.slug, 'SPEC.md');
+            if (spec) {
+              await getOrEnrichCatalogGame(entry, spec, {
+                store,
+                genAIClient: enricherClient,
+                log: (msg) => app.log.warn(msg),
+              });
+            }
+          } catch {
+            // Non-blocking per-game enrichment
+          }
+        }
+      }
+
+      const enriched = await attachCatalogEnrichments(published, store);
+      for (const entry of enriched) {
+        const docText = `${entry.title}. ${entry.genre || ''}. ${entry.tagline?.en || ''} ${entry.tagline?.pl || ''} ${(entry.searchKeywords || []).join(', ')}`;
+        const vec = await embeddingService.embedText(docText);
+        if (vec.length > 0) {
+          catalogVectorIndex.upsert({
+            slug: entry.slug,
+            title: entry.title,
+            genre: entry.genre,
+            tagline: entry.tagline,
+            shortControls: entry.shortControls,
+            searchKeywords: entry.searchKeywords,
+            embedding: vec,
+          });
+        }
+      }
+      lastIndexBuildSuccessTime = Date.now();
+    } catch (err) {
+      app.log.warn({ err }, 'failed to build catalog vector index');
+    }
+  }
+
+  function ensureCatalogVectorIndex(): Promise<void> {
+    const isStale = Date.now() - lastIndexBuildSuccessTime > INDEX_TTL_MS;
+    const isRecentAttempt = Date.now() - lastIndexBuildAttemptTime < RETRY_BACKOFF_MS;
+    if ((catalogVectorIndex.size() > 0 && !isStale) || (catalogVectorIndex.size() === 0 && isRecentAttempt)) {
+      return Promise.resolve();
+    }
+    if (!indexBuildPromise) {
+      indexBuildPromise = buildCatalogVectorIndex().finally(() => {
+        indexBuildPromise = null;
+      });
+    }
+    return indexBuildPromise;
+  }
+
+  // Multimodal semantic vector search across catalog games.
+  app.get(
+    '/api/catalog/search',
+    { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const query =
+        typeof request.query === 'object' && request.query !== null && 'q' in request.query
+          ? String((request.query as { q: unknown }).q || '').trim()
+          : '';
+      if (!query || query.length < 2) {
+        return reply.send({ match: null, score: 0 });
+      }
+
+      try {
+        if (catalogVectorIndex.size() === 0) {
+          void ensureCatalogVectorIndex();
+          return reply.send({ match: null, score: 0 });
+        }
+
+        void ensureCatalogVectorIndex();
+
+        const queryVector = await embeddingService.embedText(query);
+        if (queryVector.length === 0) {
+          return reply.send({ match: null, score: 0 });
+        }
+        const best = catalogVectorIndex.findBestMatch(queryVector, 0.65);
+        if (best) {
+          return reply.send({
+            match: {
+              slug: best.game.slug,
+              title: best.game.title,
+              genre: best.game.genre,
+              tagline: best.game.tagline,
+              shortControls: best.game.shortControls,
+              searchKeywords: best.game.searchKeywords,
+            },
+            score: best.score,
+          });
+        }
+        return reply.send({ match: null, score: 0 });
+      } catch {
+        return reply.send({ match: null, score: 0 });
+      }
+    },
+  );
 
   // Curated flagship pool, public like the catalog itself; no join.
   app.get('/api/featured', async (_request, reply) => {
