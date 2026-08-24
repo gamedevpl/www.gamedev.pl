@@ -265,7 +265,7 @@ export function collectProblems(page: Page, expectedStatuses: number[] = []) {
     if (!isExpected(text)) problems.push({ kind, text: text.slice(0, 400) });
   };
 
-  page.on('pageerror', (error) => push('pageerror', String(error)));
+  page.on('pageerror', (error) => push('pageerror', error.stack || String(error)));
 
   page.on('console', (message) => {
     if (message.type() !== 'error') return;
