@@ -93,6 +93,7 @@ export type {
   BuildEvent,
   BuildMediaItem,
   BuildPlayableItem,
+  BuildPlayableOrigin,
   BuildProgress,
   ChecklistItem,
   CreatorRevision,

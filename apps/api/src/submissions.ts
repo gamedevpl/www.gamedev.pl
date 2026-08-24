@@ -1228,6 +1228,8 @@ export async function registerSubmissionRoutes(
     await store.appendBuildPreview(input.issueNumber, {
       data: Buffer.from(html, 'utf8').toString('base64'),
       slug: input.slug,
+      // Provisional: the agent has not run yet.
+      origin: 'seed',
       label: SEED_PREVIEW_LABEL,
       ...(input.locale.startsWith('pl') ? { labelLocalized: SEED_PREVIEW_LABEL_PL, locale: input.locale } : {}),
     });
@@ -2225,6 +2227,7 @@ export async function registerSubmissionRoutes(
         ref: preview.id,
         ...(preview.slug ? { slug: preview.slug } : {}),
         ...(caption ? { label: caption } : {}),
+        ...(preview.origin ? { origin: preview.origin } : {}),
         createdAt: preview.createdAt,
       };
     });

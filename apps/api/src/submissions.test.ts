@@ -6863,6 +6863,8 @@ describe('seeded dispatch', () => {
 
     expect(previews[0].slug).toBe('comet-courier');
     expect(previews[0].label).toContain('rough draft');
+    // Marked provisional at the source: the agent has not run yet.
+    expect(previews[0].origin).toBe('seed');
     const stored = await store.getBuildPreview(briefs[0].issueNumber, previews[0].id);
     const html = Buffer.from(stored!.data, 'base64').toString('utf8');
     // The full serve hygiene, not a weaker preview variant: sandbox CSP and the AI Act

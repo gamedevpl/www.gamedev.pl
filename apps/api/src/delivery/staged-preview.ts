@@ -392,6 +392,8 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
     await options.store.appendBuildPreview(issueNumber, {
       data: Buffer.from(html, 'utf8').toString('base64'),
       slug,
+      // A tree mid-upload: worth showing, never worth calling ready.
+      origin: 'staged',
       label: STAGED_PREVIEW_LABEL,
       ...(locale.startsWith('pl') ? { labelLocalized: STAGED_PREVIEW_LABEL_PL, locale } : {}),
     });
@@ -572,6 +574,8 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
       await options.store.appendBuildPreview(issueNumber, {
         data: Buffer.from(html, 'utf8').toString('base64'),
         slug,
+        // Submitted, unlike the debounced assembly: the agent handed this over.
+        origin: 'candidate',
         label: STAGED_PREVIEW_LABEL,
         ...(locale.startsWith('pl') ? { labelLocalized: STAGED_PREVIEW_LABEL_PL, locale } : {}),
       });

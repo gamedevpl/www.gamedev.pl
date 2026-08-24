@@ -1163,6 +1163,8 @@ describe('agent build channel', () => {
     expect(status.json().playable).toEqual([
       expect.objectContaining({ ref: previewId, slug: 'puppy-stroll', label: 'You can walk the puppy now.' }),
     ]);
+    // No origin: the agent pushed these bytes itself.
+    expect(status.json().playable[0].origin).toBeUndefined();
 
     const page = await app.inject({
       method: 'GET',
@@ -2662,6 +2664,11 @@ describe('agent build channel', () => {
       expect(html).toContain('console.log("staged play")');
       // Unreviewed agent output: the same network-restricted document the play path serves.
       expect(html).toContain("default-src 'none'");
+
+      // The status response says where it came from.
+      const token = mintToken(ISSUE, secret);
+      const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}` });
+      expect(status.json().playable).toEqual([expect.objectContaining({ ref: preview!.id, origin: 'staged' })]);
     });
 
     it('does not preview a staging buffer that cannot make a game yet', async () => {

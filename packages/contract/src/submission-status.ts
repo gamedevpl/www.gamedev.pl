@@ -70,6 +70,9 @@ export interface BuildMediaItem {
   createdAt?: string;
 }
 
+// Provisional: 'seed' predates the agent, 'staged' is a tree mid-upload.
+export type BuildPlayableOrigin = 'seed' | 'staged' | 'candidate';
+
 // One playable build, pushed before any commit exists.
 export interface BuildPlayableItem {
   ref: string;
@@ -77,6 +80,8 @@ export interface BuildPlayableItem {
   // Agent-authored caption, in the reader's language when supplied.
   label?: string;
   createdAt?: string;
+  // Absent means the agent pushed this itself.
+  origin?: BuildPlayableOrigin;
 }
 
 // One row inside a prior round's collapsed history block.
