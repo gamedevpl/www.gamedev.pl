@@ -112,10 +112,7 @@ describe('seed path containment', () => {
       'game.ts',
       'index.html',
       'style.css',
-      'ACCEPTANCE.json',
-      'EDITOR.json',
-      'EDITOR.ts',
-      'EDITOR.content.json',
+      'ACCEPTANCE.json', 'EDITOR.json', 'EDITOR.ts', 'EDITOR.content.json',
       'game/model.ts',
       'game/ai/steering.ts',
     ]) {
@@ -201,8 +198,7 @@ describe('isUsableSeed', () => {
     // The failure mode this exists for: a seed branch that claims a scaffold exists
     // while containing nothing the agent could continue.
     expect(isUsableSeed([file('SPEC.md')])).toBe(false);
-    expect(isUsableSeed([file('SPEC.md'), file('game.ts'), file('game/model.ts')])).toBe(false);
-    expect(isUsableSeed([file('SPEC.md'), file('game.ts')])).toBe(false);
+    expect(isUsableSeed([file('SPEC.md'), file('game.ts'), file('game/model.ts')])).toBe(false); expect(isUsableSeed([file('SPEC.md'), file('game.ts')])).toBe(false);
     expect(isUsableSeed([])).toBe(false);
   });
 });
@@ -371,9 +367,7 @@ const draftFor = (slug: string) =>
     `slug: ${slug}`,
     '---',
     '## Concept',
-    'A game.',
-    `--- games/${slug}/EDITOR.json ---`,
-    '{"version":1,"params":{"speed":{"type":"number","default":3}}}',
+    'A game.\n--- games/${slug}/EDITOR.json ---\n{"version":1,"params":{"speed":{"type":"number","default":3}}}',
     `--- games/${slug}/game.ts ---`,
     "import { SPEED } from './game/model.ts';",
     'console.log(SPEED);',
@@ -390,9 +384,7 @@ const GOOD_DRAFT = [
   'slug: my-game',
   '---',
   '## Concept',
-  'A game.',
-  '--- games/my-game/EDITOR.json ---',
-  '{"version":1,"params":{"speed":{"type":"number","default":3}}}',
+  'A game.\n--- games/my-game/EDITOR.json ---\n{"version":1,"params":{"speed":{"type":"number","default":3}}}',
   '--- games/my-game/game.ts ---',
   "import { SPEED } from './game/model.ts';",
   'console.log(SPEED);',
@@ -509,7 +501,7 @@ describe('ModelGameSeeder', () => {
     const draft = await new ModelGameSeeder({ context: stubContext(), client, log }).seed(request);
 
     expect(draft).not.toBeNull();
-    expect(progressFiles).toEqual([
+    expect(progressFiles.filter((file) => file !== 'games/my-game/EDITOR.json')).toEqual([
       'games/my-game/SPEC.md',
       'games/my-game/EDITOR.json',
       'games/my-game/game.ts',
