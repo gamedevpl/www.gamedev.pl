@@ -57,9 +57,13 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
  */
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {
-      // A blocked or unsupported worker costs the install prompt and offline page,
-      // nothing else. The app itself does not depend on it.
-    });
+    try {
+      navigator.serviceWorker.register('/sw.js').catch(() => {
+        // A blocked or unsupported worker costs the install prompt and offline page,
+        // nothing else. The app itself does not depend on it.
+      });
+    } catch {
+      // A sandboxed context throws on access instead of rejecting.
+    }
   });
 }

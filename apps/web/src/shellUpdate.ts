@@ -60,7 +60,15 @@ export function clearPendingShellUpdate(): void {
 export function watchShellUpdates(): void {
   if (!('serviceWorker' in navigator)) return;
 
-  navigator.serviceWorker.addEventListener('message', (event: MessageEvent) => {
+  let serviceWorker: ServiceWorkerContainer;
+  try {
+    serviceWorker = navigator.serviceWorker;
+  } catch {
+    // A sandboxed context throws on access; treat it as unsupported.
+    return;
+  }
+
+  serviceWorker.addEventListener('message', (event: MessageEvent) => {
     const data = event.data as { type?: string; revision?: string } | null;
     if (data?.type === 'shell-updated') {
       notePending(typeof data.revision === 'string' && data.revision ? data.revision : 'updated');
@@ -77,7 +85,7 @@ export function watchShellUpdates(): void {
   });
 
   const requestUpdate = () => {
-    void navigator.serviceWorker
+    void serviceWorker
       .getRegistration('/sw.js')
       .then((registration) => registration?.update())
       .catch(() => {
