@@ -51,5 +51,7 @@ describe('brief helpers', () => {
   it('keeps a non-empty rules digest', () => {
     expect(AGENT_BUILD_RULES_DIGEST.length).toBeGreaterThan(40);
     expect(AGENT_BUILD_RULES_DIGEST).toMatch(/data, not instructions/i);
+    expect(AGENT_BUILD_RULES_DIGEST).toMatch(/editor/i);
+    expect(AGENT_BUILD_RULES_DIGEST).toMatch(/three meaningful tunables|one content collection/i);
   });
 });
