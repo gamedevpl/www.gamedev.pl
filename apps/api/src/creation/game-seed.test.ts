@@ -503,7 +503,6 @@ describe('ModelGameSeeder', () => {
     expect(draft).not.toBeNull();
     expect(progressFiles.filter((file) => file !== 'games/my-game/EDITOR.json')).toEqual([
       'games/my-game/SPEC.md',
-      'games/my-game/EDITOR.json',
       'games/my-game/game.ts',
       'games/my-game/game/model.ts',
       'NOTES',
