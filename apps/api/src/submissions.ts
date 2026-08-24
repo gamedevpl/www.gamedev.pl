@@ -5962,9 +5962,6 @@ export async function registerSubmissionRoutes(
     },
   );
 
-  // Warm up vector search index in background on boot
-  void ensureCatalogVectorIndex();
-
   // Curated flagship pool, public like the catalog itself; no join.
   app.get('/api/featured', async (_request, reply) => {
     if (!store) {
