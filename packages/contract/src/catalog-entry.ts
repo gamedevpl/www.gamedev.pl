@@ -52,4 +52,10 @@ export interface CatalogEntry {
   creatorHandle?: string | null;
   // Handles whose proposals were merged into the live version.
   contributorHandles?: string[];
+  // AI-generated punchy summary/taglines (e.g. from Flash-Lite).
+  tagline?: { en?: string; pl?: string } | null;
+  // AI-generated concise keybindings summary.
+  shortControls?: { en?: string; pl?: string } | null;
+  // AI-generated search keywords for intent matching.
+  searchKeywords?: string[] | null;
 }

@@ -539,4 +539,213 @@ describe('HeroPromptSection', () => {
     await act(async () => root.unmount());
     delete (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition;
   });
+
+  it('renders a matched game card with thumbnail, genre badge, and play button', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const onPlayGame = vi.fn();
+
+    const mockCatalog = [
+      {
+        slug: 'mexico-86',
+        title: "Mexico '86 Arcade Football",
+        genre: 'sports',
+        controls: 'Arrows / Enter / Tap to navigate; 1–4 to pick action',
+        status: 'published',
+        media: {
+          screenshots: [
+            { name: 'opening', file: 'opening.png' },
+            { name: 'action', file: 'action.png' },
+          ],
+          video: null,
+        },
+        multiplayer: { mode: 'controllers' as const, minPlayers: 1, maxPlayers: 2 },
+        saves: null,
+        world: null,
+        sensing: null,
+        orientation: 'landscape' as const,
+        submittedBy: null,
+      },
+    ];
+
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'mexico',
+          catalogEntries: mockCatalog,
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+          onPlayGame,
+        }),
+      );
+      await flushEffects();
+    });
+
+    const card = container.querySelector('.matched-card');
+    expect(card).not.toBeNull();
+
+    const thumb = container.querySelector<HTMLImageElement>('.matched-thumb');
+    expect(thumb).not.toBeNull();
+    expect(thumb?.getAttribute('src')).toBe('/api/games/mexico-86/media/action.png?w=320');
+
+    const title = container.querySelector('.matched-title');
+    expect(title?.textContent).toBe("Mexico '86 Arcade Football");
+
+    const badges = container.querySelectorAll('.smart-badge');
+    expect(badges.length).toBeGreaterThanOrEqual(1);
+    expect(badges[0].textContent).toContain('sports');
+
+    const playBtn = container.querySelector<HTMLButtonElement>('.play-match-btn');
+    expect(playBtn).not.toBeNull();
+    expect(playBtn?.textContent).toContain("Play Mexico '86 Arcade Football Now");
+
+    await act(async () => {
+      playBtn?.click();
+      await flushEffects();
+    });
+
+    expect(onPlayGame).toHaveBeenCalledTimes(1);
+    expect(onPlayGame).toHaveBeenCalledWith(mockCatalog[0], 'composer_match');
+
+    await act(async () => root.unmount());
+  });
+
+  it('matches games by searchKeywords and displays enriched tagline', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const mockCatalog = [
+      {
+        slug: 'mexico-86',
+        title: "Mexico '86 Arcade Football",
+        genre: 'sports',
+        controls: 'Arrows / Enter / Tap to navigate; 1–4 to pick action',
+        status: 'published',
+        media: null,
+        multiplayer: null,
+        saves: null,
+        world: null,
+        sensing: null,
+        orientation: 'landscape' as const,
+        submittedBy: null,
+        tagline: {
+          en: 'Retro 11v11 arcade soccer tournament.',
+          pl: 'Turniej piłkarski retro 11v11.',
+        },
+        shortControls: {
+          en: 'Arrows + Enter / Tap',
+          pl: 'Strzałki + Enter / Dotyk',
+        },
+        searchKeywords: ['mundial', 'soccer', 'maradona', 'football'],
+      },
+    ];
+
+    // Search by semantic keyword "mundial"
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'mundial',
+          catalogEntries: mockCatalog,
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    const card = container.querySelector('.matched-card');
+    expect(card).not.toBeNull();
+
+    const desc = container.querySelector('.matched-desc');
+    expect(desc?.textContent).toBe('Retro 11v11 arcade soccer tournament.');
+
+    await act(async () => root.unmount());
+  });
+
+  it('updates matched game when vector search returns high confidence match', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const mockCatalog = [
+      {
+        slug: 'cosmic-rift',
+        title: 'Cosmic Rift',
+        genre: 'Sci-Fi',
+        controls: 'WASD to fly',
+        status: 'published',
+        media: null,
+        multiplayer: null,
+        saves: null,
+        world: null,
+        sensing: null,
+        orientation: 'landscape' as const,
+        submittedBy: null,
+        tagline: { en: 'Deep space dogfights in a shattered galaxy.', pl: 'Walki w kosmosie.' },
+      },
+    ];
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (String(url).includes('/api/catalog/search')) {
+        return {
+          ok: true,
+          json: async () => ({
+            match: {
+              slug: 'cosmic-rift',
+              title: 'Cosmic Rift',
+              genre: 'Sci-Fi',
+              tagline: { en: 'Deep space dogfights in a shattered galaxy.', pl: 'Walki w kosmosie.' },
+            },
+            score: 0.88,
+          }),
+        } as Response;
+      }
+      return { ok: false } as Response;
+    });
+
+    // An ambiguous natural language prompt that local search wouldn't direct match
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'shooting aliens in deep space with laser cannons',
+          catalogEntries: mockCatalog,
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    // Advance timer for 200ms debounce
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250));
+      await flushEffects();
+    });
+
+    const card = container.querySelector('.matched-card');
+    expect(card).not.toBeNull();
+
+    const title = container.querySelector('.matched-title');
+    expect(title?.textContent).toBe('Cosmic Rift');
+
+    const desc = container.querySelector('.matched-desc');
+    expect(desc?.textContent).toBe('Deep space dogfights in a shattered galaxy.');
+
+    fetchSpy.mockRestore();
+    await act(async () => root.unmount());
+  });
 });

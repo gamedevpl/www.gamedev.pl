@@ -111,7 +111,7 @@
     "upCreator": "Wróć do strony twórcy"
   },
   "hero": {
-    "bigPromptPlaceholder": "Opisz grę…",
+    "bigPromptPlaceholder": "Wpisz w co chcesz zagrać lub opisz pomysł dla AI…",
     "buildGameButton": "Stwórz Moją Grę",
     "attachMenu": "Dodaj",
     "attachMenuAria": "Dodaj obraz lub szkic",
@@ -119,7 +119,8 @@
     "smartFoundTitle": "Znaleziono pasującą grę: {{title}}",
     "smartPlayBtn": "Zagraj w {{title}} teraz",
     "smartRemixBtn": "Stwórz nową wersję z AI",
-    "smartNoMatchTitle": "Nie znaleziono jeszcze dokładnie takiej gry: \"{{query}}\"",
+    "smartMatchHint": "Chcesz stworzyć coś innego? Dopisz więcej szczegółów powyżej i stwórz nową grę.",
+    "smartNoMatchTitle": "Opisz swój pomysł na grę: \"{{query}}\"",
     "smartNoMatchSub": "Zostań twórcą — pozwól agentom AI stworzyć Twój pomysł!",
     "smartBuildBtn": "Stwórz \"{{query}}\" z AI",
     "keyboardShortcutHint": "Naciśnij ⌘+Enter lub Ctrl+Enter, aby wysłać",

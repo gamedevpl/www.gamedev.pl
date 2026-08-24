@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { recordCreateStep, type PlayVia } from './visitTelemetry.js';
-import type { CatalogEntry } from './catalog.js';
+import { catalogMediaUrl, defaultScreenshotIndex, type CatalogEntry } from './catalog.js';
 import { SketchModal } from './SketchModal.js';
 import { PixelIcon } from './PixelIcon.js';
 import { getQuota, type PlatformBuilderAvailability } from './submissionApi.js';
@@ -50,7 +50,17 @@ function findMatchingGame(query: string, catalog: CatalogEntry[]): CatalogEntry 
       return entry;
     }
 
-    // 2. Special aliases
+    // 2. Keyword or search tag match (e.g. from Flash-Lite enrichment)
+    if (
+      entry.searchKeywords?.some((k) => {
+        const kw = k.toLowerCase().trim();
+        return kw.length > 2 && tokens.includes(kw);
+      })
+    ) {
+      return entry;
+    }
+
+    // 3. Special aliases
     if (normalized.includes('mario') && (slug.includes('plumber') || title.includes('plumber'))) {
       return entry;
     }
@@ -70,8 +80,13 @@ function findMatchingGame(query: string, catalog: CatalogEntry[]): CatalogEntry 
       return entry;
     }
 
-    // 3. Token match
-    const matchCount = tokens.filter((t) => title.includes(t) || genre.includes(t) || controls.includes(t)).length;
+    // 4. Token match
+    const keywords = (entry.searchKeywords || []).map((k) => k.toLowerCase()).join(' ');
+    const taglines = `${entry.tagline?.en || ''} ${entry.tagline?.pl || ''}`.toLowerCase();
+    const matchCount = tokens.filter(
+      (t) =>
+        title.includes(t) || genre.includes(t) || controls.includes(t) || keywords.includes(t) || taglines.includes(t),
+    ).length;
     if (matchCount > 0 && matchCount >= Math.ceil(tokens.length / 2)) {
       return entry;
     }
@@ -118,7 +133,7 @@ export function HeroPromptSection({
   onPlatformBuilderAvailability,
   exampleChips,
 }: HeroPromptSectionProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   // Skip autofocus on phone — keyboard would hide the composer.
   const shouldAutoFocusPrompt = typeof matchMedia !== 'function' || !matchMedia('(max-width: 768px)').matches;
   const [promptText, setPromptText] = useState(initialPrompt);
@@ -248,7 +263,56 @@ export function HeroPromptSection({
     }
   };
 
-  const matchedGame = useMemo(() => findMatchingGame(promptText, catalogEntries), [promptText, catalogEntries]);
+  const localMatchedGame = useMemo(() => findMatchingGame(promptText, catalogEntries), [promptText, catalogEntries]);
+  const [vectorMatchedGame, setVectorMatchedGame] = useState<CatalogEntry | null>(null);
+
+  useEffect(() => {
+    const trimmed = promptText.trim();
+    if (trimmed.length < 3) {
+      setVectorMatchedGame(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    const handle = setTimeout(() => {
+      fetch(`/api/catalog/search?q=${encodeURIComponent(trimmed)}`, { signal: controller.signal })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data: { match?: CatalogEntry | null; score?: number } | null) => {
+          if (data?.match && typeof data.score === 'number' && data.score >= 0.65) {
+            const found = catalogEntries.find((e) => e.slug === data.match?.slug);
+            if (found) {
+              setVectorMatchedGame({
+                ...found,
+                tagline: data.match.tagline || found.tagline,
+                shortControls: data.match.shortControls || found.shortControls,
+                searchKeywords: data.match.searchKeywords || found.searchKeywords,
+              });
+              return;
+            }
+          }
+          setVectorMatchedGame(null);
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) {
+            setVectorMatchedGame(null);
+          }
+        });
+    }, 200);
+
+    return () => {
+      clearTimeout(handle);
+      controller.abort();
+    };
+  }, [promptText, catalogEntries]);
+
+  const matchedGame = vectorMatchedGame || localMatchedGame;
+
+  const matchedPoster = useMemo(() => {
+    if (!matchedGame?.media?.screenshots?.length) return null;
+    const idx = defaultScreenshotIndex(matchedGame.media.screenshots);
+    const file = matchedGame.media.screenshots[idx]?.file;
+    return file ? catalogMediaUrl(matchedGame.slug, file, 320) : null;
+  }, [matchedGame]);
 
   const handleFiles = (files: FileList | File[]) => {
     if (submissionStatus !== 'idle') return;
@@ -531,14 +595,43 @@ export function HeroPromptSection({
 
           {matchedGame && (
             <div className="smart-intent-card matched-card">
+              {matchedPoster && (
+                <div className="matched-thumb-wrap">
+                  <img
+                    src={matchedPoster}
+                    alt={matchedGame.title}
+                    className="matched-thumb"
+                    loading="eager"
+                    decoding="async"
+                  />
+                </div>
+              )}
               <div className="matched-info">
-                <span className="smart-badge">
-                  <PixelIcon name="gamepad" size={14} /> {t('catalog.genre')}: {matchedGame.genre}
-                </span>
+                <div className="matched-badges">
+                  <span className="smart-badge">
+                    <PixelIcon name="gamepad" size={12} /> {t('catalog.genre')}: {matchedGame.genre}
+                  </span>
+                  {matchedGame.multiplayer && (
+                    <span className="smart-badge smart-badge-secondary">
+                      <PixelIcon name="user" size={12} /> {t('catalog.categories.multiplayer_party')}
+                    </span>
+                  )}
+                </div>
                 <h3 className="matched-title">{matchedGame.title}</h3>
-                <p className="matched-desc">
-                  {t('catalog.controls')}: {matchedGame.controls}
-                </p>
+                {(() => {
+                  const isPl = (i18n?.language || '').startsWith('pl');
+                  const tagline = isPl ? matchedGame.tagline?.pl : matchedGame.tagline?.en;
+                  const shortControls = isPl ? matchedGame.shortControls?.pl : matchedGame.shortControls?.en;
+                  const descText =
+                    tagline ||
+                    (shortControls
+                      ? `${t('catalog.controls')}: ${shortControls}`
+                      : matchedGame.controls
+                        ? `${t('catalog.controls')}: ${matchedGame.controls}`
+                        : '');
+                  return descText ? <p className="matched-desc">{descText}</p> : null;
+                })()}
+                <p className="matched-hint">{t('hero.smartMatchHint')}</p>
               </div>
               <div className="matched-actions">
                 <button

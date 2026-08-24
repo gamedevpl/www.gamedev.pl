@@ -32,6 +32,11 @@ import { InMemoryBuildLogStore, FirestoreBuildLogStore } from '../store/slices/b
 import type { BuildMediaStore } from '../store/slices/build-media.js';
 export type { BuildMediaStore };
 import { InMemoryBuildMediaStore, FirestoreBuildMediaStore } from '../store/slices/build-media.js';
+import type { CatalogEnrichmentStore } from '../store/slices/catalog-enrichment.js';
+export type { CatalogEnrichmentStore };
+import { InMemoryCatalogEnrichmentStore, FirestoreCatalogEnrichmentStore } from '../store/slices/catalog-enrichment.js';
+import type { CatalogEnrichmentRecord } from '../store/records/catalog-enrichment.js';
+export type { CatalogEnrichmentRecord };
 
 /**
  * Uid namespace for automation accounts (docs/agent-access-tokens.md).
@@ -322,6 +327,7 @@ export interface Store
     ContributionStore,
     AccessTokensStore,
     AgentKeysStore,
+    CatalogEnrichmentStore,
     OAuthStore {}
 
 // compareSuggestions moved to ./store/slices/contribution.js; emptyUsageCounters moved
@@ -339,6 +345,7 @@ export class InMemoryStore implements Store {
   private submissionQueryStore = new InMemorySubmissionQueryStore(this.submissions);
   private buildLogStore = new InMemoryBuildLogStore(this.submissions);
   private buildMediaStore = new InMemoryBuildMediaStore();
+  private catalogEnrichmentStore = new InMemoryCatalogEnrichmentStore();
   private quotaStore = new InMemoryQuotaStore((uid) => this.identityStore.getUser(uid));
   private globalQuotaStore = new InMemoryGlobalQuotaStore();
   private accessStore = new InMemoryAccessStore();
@@ -654,6 +661,18 @@ export class InMemoryStore implements Store {
 
   async listPublications(): Promise<PublicationRecord[]> {
     return this.publicationStore.listPublications();
+  }
+
+  async getCatalogEnrichment(slug: string): Promise<CatalogEnrichmentRecord | null> {
+    return this.catalogEnrichmentStore.getCatalogEnrichment(slug);
+  }
+
+  async setCatalogEnrichment(record: CatalogEnrichmentRecord): Promise<void> {
+    return this.catalogEnrichmentStore.setCatalogEnrichment(record);
+  }
+
+  async listCatalogEnrichments(): Promise<CatalogEnrichmentRecord[]> {
+    return this.catalogEnrichmentStore.listCatalogEnrichments();
   }
 
   async setSubmissionSlug(issueNumber: number, slug: string): Promise<void> {
@@ -1543,6 +1562,7 @@ export class FirestoreStore implements Store {
   private submissionQueryStore: FirestoreSubmissionQueryStore;
   private buildLogStore: FirestoreBuildLogStore;
   private buildMediaStore: FirestoreBuildMediaStore;
+  private catalogEnrichmentStore: FirestoreCatalogEnrichmentStore;
 
   constructor(db?: Firestore) {
     this.db = db ?? new Firestore();
@@ -1569,6 +1589,7 @@ export class FirestoreStore implements Store {
     this.submissionQueryStore = new FirestoreSubmissionQueryStore(this.db);
     this.buildLogStore = new FirestoreBuildLogStore(this.db);
     this.buildMediaStore = new FirestoreBuildMediaStore(this.db);
+    this.catalogEnrichmentStore = new FirestoreCatalogEnrichmentStore(this.db);
   }
 
   async getUser(uid: string): Promise<User | null> {
@@ -1922,6 +1943,18 @@ export class FirestoreStore implements Store {
 
   async listPublications(): Promise<PublicationRecord[]> {
     return this.publicationStore.listPublications();
+  }
+
+  async getCatalogEnrichment(slug: string): Promise<CatalogEnrichmentRecord | null> {
+    return this.catalogEnrichmentStore.getCatalogEnrichment(slug);
+  }
+
+  async setCatalogEnrichment(record: CatalogEnrichmentRecord): Promise<void> {
+    return this.catalogEnrichmentStore.setCatalogEnrichment(record);
+  }
+
+  async listCatalogEnrichments(): Promise<CatalogEnrichmentRecord[]> {
+    return this.catalogEnrichmentStore.listCatalogEnrichments();
   }
 
   async setSubmissionSlug(issueNumber: number, slug: string): Promise<void> {
