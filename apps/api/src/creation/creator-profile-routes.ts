@@ -14,7 +14,7 @@ import {
   validateHandleShape,
   type AvatarMode,
   type PublicCreatorProfile,
-} from './creator-profile.js';
+} from '../platform/creator-profile.js';
 import { catalogEntryFromSpec, type CatalogGameEntry } from '../catalog/github-client.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { Store } from '../platform/store.js';

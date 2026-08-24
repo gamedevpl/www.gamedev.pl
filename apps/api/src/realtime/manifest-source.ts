@@ -78,30 +78,3 @@ export function createManifestBlockSource<T>(options: ManifestBlockSourceOptions
     },
   };
 }
-
-/**
- * Builds a games-repo client from the environment, or null when there is none.
- *
- * Null makes every route that depends on it answer 404, exactly as an absent slug gate
- * already does for votes and saves — the feature is simply not there, rather than there
- * and broken.
- */
-export async function createGamesRepoClientFromEnv(
-  fetchImpl?: typeof fetch,
-): Promise<Pick<GitHubClient, 'getGameManifest'> | null> {
-  const token = process.env.GITHUB_TOKEN?.trim();
-  const repo = process.env.GAMES_REPO?.trim();
-  if (token && repo) {
-    const { createGitHubClient } = await import('../catalog/github-client.js');
-    return createGitHubClient({ token, repo, fetchImpl });
-  }
-
-  const nodeEnv = process.env.NODE_ENV;
-  if (nodeEnv !== 'production' && nodeEnv !== 'test') {
-    const { resolveLocalGamesDir, createLocalGamesClient } = await import('../catalog/local-games-repo.js');
-    const local = await resolveLocalGamesDir();
-    return createLocalGamesClient({ rootDir: local.rootDir });
-  }
-
-  return null;
-}

@@ -18,7 +18,8 @@ import {
   PLATFORM_ROUND_REASON,
   SLUG_NOT_ON_ACCOUNT_REASON,
 } from './agent-game-key.js';
-import { creatorOwnsSlug, findActiveRoundForSlug } from './agent-game-key-resolve.js';
+import { findActiveRoundForSlug } from './agent-game-key-resolve.js';
+import { creatorOwnsSlug } from '../platform/slug-ownership.js';
 import { InvalidAgentTokenError } from './agent-token.js';
 import type { CreatorAgentKeyRecord, Store, SubmissionRecord } from '../platform/store.js';
 

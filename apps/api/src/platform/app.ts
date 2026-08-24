@@ -41,6 +41,7 @@ import { registerWorldRoutes, type WorldRoutesOptions } from '../realtime/worlds
 import { createWorldSchemaSourceFromEnv } from '../realtime/world-source.js';
 import { registerZoneRoutes, type ZoneRoutesOptions } from '../realtime/zones.js';
 import { createZoneSchemaSourceFromEnv } from '../realtime/zone-source.js';
+import { createGamesRepoClientFromEnv } from '../catalog/games-repo-client.js';
 import { resolveLocalGamesDir } from '../catalog/local-games-repo.js';
 import { registerMultiplayerRoutes, type MultiplayerRoutesOptions } from '../realtime/mp.js';
 import { createRelayClientFromEnv, isRelayOnly } from '../realtime/mp-relay.js';
@@ -523,7 +524,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // gating it would show an empty field to exactly the visitor deciding whether to
   // care. Writes need a session, are validated against the game's declared schema, and
   // run every text field past the same moderator written feedback uses.
-  const worldSchemas = await createWorldSchemaSourceFromEnv(envPublishedSlugs);
+  const manifestGamesRepoClient = await createGamesRepoClientFromEnv();
+  const worldSchemas = createWorldSchemaSourceFromEnv(envPublishedSlugs, manifestGamesRepoClient);
   await registerWorldRoutes(app, {
     store,
     contentChecker,
@@ -547,7 +549,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // session. With ZONE_HOST_URL unset there is no host, so the route 404s and every
   // game plays on exactly as it did — the same posture push takes without its keys.
   await registerZoneRoutes(app, {
-    zones: await createZoneSchemaSourceFromEnv(envPublishedSlugs),
+    zones: createZoneSchemaSourceFromEnv(envPublishedSlugs, manifestGamesRepoClient),
     ...options.zoneRoutes,
   });
 

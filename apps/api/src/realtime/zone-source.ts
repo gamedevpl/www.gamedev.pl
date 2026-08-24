@@ -1,6 +1,6 @@
 import type { GitHubClient } from '../catalog/github-client.js';
 import type { PublishedSlugGate } from '../catalog/published-slugs.js';
-import { createGamesRepoClientFromEnv, createManifestBlockSource } from '../delivery/manifest-source.js';
+import { createManifestBlockSource } from './manifest-source.js';
 import { parseZoneSchema, type ZoneSchema } from '@gamedevpl/zone-core';
 
 /**
@@ -29,13 +29,12 @@ export interface ZoneSchemaSourceOptions {
   now?: () => number;
 }
 
-export async function createZoneSchemaSourceFromEnv(
+export function createZoneSchemaSourceFromEnv(
   publishedSlugs: PublishedSlugGate | null,
-  fetchImpl?: typeof fetch,
-): Promise<ZoneSchemaSource | null> {
-  if (!publishedSlugs) return null;
-  const client = await createGamesRepoClientFromEnv(fetchImpl);
-  return client ? createZoneSchemaSource({ client, publishedSlugs }) : null;
+  client: Pick<GitHubClient, 'getGameManifest'> | null,
+): ZoneSchemaSource | null {
+  if (!publishedSlugs || !client) return null;
+  return createZoneSchemaSource({ client, publishedSlugs });
 }
 
 export function createZoneSchemaSource(options: ZoneSchemaSourceOptions): ZoneSchemaSource {

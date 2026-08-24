@@ -5,7 +5,7 @@ import { mintSessionToken, SESSION_COOKIE_NAME } from './platform/auth.js';
 import type { GamesStore, VersionManifest } from './delivery/games-store.js';
 import type { GcsObjectStore } from './delivery/gcs-sign.js';
 import { InMemoryStore } from './platform/store.js';
-import { readTarEntries, writeTarGz, type TarEntry } from './delivery/tar.js';
+import { readTarEntries, writeTarGz, type TarEntry } from './platform/tar.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 const ENGINE = 'deadbeef0123456789abcdef0123456789abcdef';
