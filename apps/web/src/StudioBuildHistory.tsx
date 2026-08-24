@@ -1,30 +1,24 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { isBuildLive, newestBuildIsCurrentRound } from './buildLive.js';
 import { PixelIcon } from './PixelIcon.js';
 import { formatRelativeTime } from './relativeTime.js';
 import { fetchGameBuilds } from './studioApi.js';
 import { revertGameVersion, type RecentBuild, type SubmissionStatus } from './submissionApi.js';
-
-// Not 'in_review': the gate already resolved, it's waiting on platform review.
-const CURRENTLY_MOVING_STATUSES = new Set<SubmissionStatus['status']>(['building', 'publishing']);
-
-// The gate owning a delivery outranks an agent stall.
-function isBuildLive(status: SubmissionStatus): boolean {
-  if (status.gateProgress) return true;
-  if (status.phase === 'submitted' || status.phase === 'gating') return true;
-  if (status.stall) return false;
-  return CURRENTLY_MOVING_STATUSES.has(status.status);
-}
+import { StudioLiveRoundRow } from './StudioLiveRoundRow.js';
 
 const DEFAULT_INITIAL_LIMIT = 5;
 
 export function StudioBuildHistory({
   status,
+  emptyLabel,
   onSelectPreviewVersion,
   activePreviewVersion,
   onReverted,
 }: {
   status: SubmissionStatus;
+  // Shown when there's no live round and no build history.
+  emptyLabel?: string;
   onSelectPreviewVersion?: (version: string | null) => void;
   activePreviewVersion?: string | null;
   onReverted?: (result: { version: string; token?: string; roundOpened?: number }) => void;
@@ -46,9 +40,12 @@ export function StudioBuildHistory({
     setExtraBuilds(null);
   }, [status.slug]);
 
-  if (builds.length === 0) return null;
-
   const live = isBuildLive(status);
+  const showLiveRoundRow = live && !newestBuildIsCurrentRound(builds, status);
+  if (!showLiveRoundRow && builds.length === 0) {
+    return emptyLabel ? <p className="studio-rail-empty">{emptyLabel}</p> : null;
+  }
+
   const totalCount = status.totalBuildsCount ?? builds.length;
   const displayedBuilds = showAll ? builds : builds.slice(0, DEFAULT_INITIAL_LIMIT);
 
@@ -126,6 +123,7 @@ export function StudioBuildHistory({
       ) : null}
 
       <ul className="studio-build-history-list">
+        {showLiveRoundRow ? <StudioLiveRoundRow status={status} emptyLabel={t('studioPanel.rail.buildEmpty')} /> : null}
         {displayedBuilds.map((build, index) => {
           const isExpanded = expandedBuildVersion === build.version;
           const isPreviewing = activePreviewVersion === build.version;
