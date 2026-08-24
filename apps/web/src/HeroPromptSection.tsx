@@ -33,11 +33,65 @@ export type VisualAttachment = {
   dataUrl: string;
 };
 
+const STOP_WORDS = new Set([
+  'chce',
+  'chcę',
+  'chcialbym',
+  'chciałbym',
+  'pograc',
+  'pograć',
+  'zagrac',
+  'zagrać',
+  'gra',
+  'gre',
+  'grę',
+  'grac',
+  'grać',
+  'gry',
+  'gier',
+  'jakas',
+  'jakaś',
+  'fajna',
+  'fajne',
+  'fajną',
+  'super',
+  'dla',
+  'mnie',
+  'w',
+  'z',
+  'na',
+  'do',
+  'o',
+  'i',
+  'oraz',
+  'lub',
+  'albo',
+  'po',
+  'od',
+  'jak',
+  'play',
+  'game',
+  'games',
+  'want',
+  'to',
+  'a',
+  'an',
+  'the',
+  'in',
+  'on',
+  'with',
+  'for',
+  'like',
+  'some',
+]);
+
 function findMatchingGame(query: string, catalog: CatalogEntry[]): CatalogEntry | null {
   const normalized = query.trim().toLowerCase();
   if (!normalized || normalized.length < 2) return null;
 
   const tokens = normalized.split(/\s+/).filter((t) => t.length > 1);
+  const meaningfulTokens = tokens.filter((t) => !STOP_WORDS.has(t) && t.length > 2);
+  const queryTokens = meaningfulTokens.length > 0 ? meaningfulTokens : tokens;
 
   for (const entry of catalog) {
     const title = entry.title.toLowerCase();
@@ -50,17 +104,83 @@ function findMatchingGame(query: string, catalog: CatalogEntry[]): CatalogEntry 
       return entry;
     }
 
-    // 2. Keyword or search tag match (e.g. from Flash-Lite enrichment)
+    // 2. Keyword or search tag match
     if (
       entry.searchKeywords?.some((k) => {
         const kw = k.toLowerCase().trim();
-        return kw.length > 2 && tokens.includes(kw);
+        return kw.length > 2 && queryTokens.some((t) => kw.includes(t) || t.includes(kw));
       })
     ) {
       return entry;
     }
 
-    // 3. Special aliases
+    // 3. Special intent aliases (sports, vehicles, classics, themes)
+    if (
+      (normalized.includes('piłk') ||
+        normalized.includes('pilk') ||
+        normalized.includes('football') ||
+        normalized.includes('soccer') ||
+        normalized.includes('mecz') ||
+        normalized.includes('mundial') ||
+        normalized.includes('gol')) &&
+      (slug.includes('mexico') || slug.includes('soccer') || slug.includes('football'))
+    ) {
+      return entry;
+    }
+    if (
+      (normalized.includes('samochod') ||
+        normalized.includes('aut') ||
+        normalized.includes('wyścig') ||
+        normalized.includes('wyscig') ||
+        normalized.includes('racer') ||
+        normalized.includes('drive') ||
+        normalized.includes('car')) &&
+      (slug.includes('racer') || slug.includes('carjack') || slug.includes('karts'))
+    ) {
+      return entry;
+    }
+    if (
+      (normalized.includes('farma') ||
+        normalized.includes('rolnik') ||
+        normalized.includes('sadz') ||
+        normalized.includes('farm')) &&
+      slug.includes('farm')
+    ) {
+      return entry;
+    }
+    if (
+      (normalized.includes('czołg') ||
+        normalized.includes('czolg') ||
+        normalized.includes('tank') ||
+        normalized.includes('cannon')) &&
+      (slug.includes('cannon') || slug.includes('tank'))
+    ) {
+      return entry;
+    }
+    if (
+      (normalized.includes('szachy') ||
+        normalized.includes('warcab') ||
+        normalized.includes('checker') ||
+        normalized.includes('chess')) &&
+      slug.includes('checker')
+    ) {
+      return entry;
+    }
+    if (
+      (normalized.includes('flipper') || normalized.includes('pinball') || normalized.includes('bila')) &&
+      slug.includes('pinball')
+    ) {
+      return entry;
+    }
+    if (
+      (normalized.includes('wąż') ||
+        normalized.includes('waz') ||
+        normalized.includes('snake') ||
+        normalized.includes('serpent')) &&
+      slug.includes('serpent')
+    ) {
+      return entry;
+    }
     if (normalized.includes('mario') && (slug.includes('plumber') || title.includes('plumber'))) {
       return entry;
     }
@@ -72,22 +192,23 @@ function findMatchingGame(query: string, catalog: CatalogEntry[]): CatalogEntry 
     }
     if (
       (normalized.includes('space') ||
+        normalized.includes('kosmos') ||
         normalized.includes('ship') ||
         normalized.includes('rocket') ||
         normalized.includes('fly')) &&
-      slug.includes('asteroid')
+      (slug.includes('asteroid') || slug.includes('starweb') || slug.includes('space'))
     ) {
       return entry;
     }
 
-    // 4. Token match
+    // 4. Token match against metadata
     const keywords = (entry.searchKeywords || []).map((k) => k.toLowerCase()).join(' ');
     const taglines = `${entry.tagline?.en || ''} ${entry.tagline?.pl || ''}`.toLowerCase();
-    const matchCount = tokens.filter(
+    const matchCount = queryTokens.filter(
       (t) =>
         title.includes(t) || genre.includes(t) || controls.includes(t) || keywords.includes(t) || taglines.includes(t),
     ).length;
-    if (matchCount > 0 && matchCount >= Math.ceil(tokens.length / 2)) {
+    if (matchCount > 0 && matchCount >= Math.ceil(queryTokens.length / 2)) {
       return entry;
     }
   }

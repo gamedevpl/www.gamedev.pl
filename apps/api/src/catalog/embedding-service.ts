@@ -1,11 +1,13 @@
 import { GoogleAuth } from 'google-auth-library';
 import { resolveProjectId } from '../platform/genai.js';
 
-export const GEMINI_EMBEDDING_MODEL = process.env.VERTEX_EMBEDDING_MODEL || 'text-embedding-005';
+export const GEMINI_EMBEDDING_MODEL =
+  process.env.GEMINI_EMBEDDING_MODEL || process.env.VERTEX_EMBEDDING_MODEL || 'gemini-embedding-2';
 const SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
 
-// Options for Vertex AI embedding client.
+// Options for Gemini / Vertex AI embedding client.
 export interface VertexEmbeddingOptions {
+  apiKey?: string;
   projectId?: string;
   region?: string;
   model?: string;
@@ -39,9 +41,10 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   return denom > 0 ? dotProduct / denom : 0;
 }
 
-// Generates embeddings using Vertex AI.
+// Generates embeddings using Gemini API (Google AI Studio) or Vertex AI.
 export class VertexEmbeddingService {
   private auth: GoogleAuth;
+  private apiKey?: string;
   private projectId: string;
   private region: string;
   private model: string;
@@ -50,6 +53,7 @@ export class VertexEmbeddingService {
   private static readonly MAX_CACHE_SIZE = 500;
 
   constructor(options: VertexEmbeddingOptions = {}) {
+    this.apiKey = options.apiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
     this.projectId = resolveProjectId(options.projectId);
     this.region = options.region ?? process.env.VERTEX_REGION ?? 'global';
     this.model = options.model ?? GEMINI_EMBEDDING_MODEL;
@@ -66,41 +70,66 @@ export class VertexEmbeddingService {
     if (cached) return cached;
 
     try {
-      const client = await this.auth.getClient();
-      const accessToken = await client.getAccessToken();
-      const token = accessToken.token;
-      if (!token) throw new Error('No access token available for Vertex AI');
+      let values: number[] | undefined;
 
-      const host = this.region === 'global' ? 'aiplatform.googleapis.com' : `${this.region}-aiplatform.googleapis.com`;
-      const url = `https://${host}/v1/projects/${this.projectId}/locations/${this.region}/publishers/google/models/${this.model}:predict`;
+      // 1. Direct Gemini Developer API (via GEMINI_API_KEY)
+      if (this.apiKey) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:embedContent?key=${this.apiKey}`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: { parts: [{ text: trimmed }] },
+            taskType: 'RETRIEVAL_QUERY',
+          }),
+        });
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          instances: [{ content: trimmed }],
-        }),
-      });
+        if (!response.ok) {
+          throw new Error(`Gemini embedding API error: ${response.status} ${response.statusText}`);
+        }
 
-      if (!response.ok) {
-        throw new Error(`Vertex embedding API error: ${response.status} ${response.statusText}`);
+        const data = (await response.json()) as {
+          embedding?: { values?: number[] };
+        };
+        values = data.embedding?.values;
+      } else {
+        // 2. Vertex AI API (via ambient GoogleAuth ADC)
+        const client = await this.auth.getClient();
+        const accessToken = await client.getAccessToken();
+        const token = accessToken.token;
+        if (!token) throw new Error('No access token available for Vertex AI');
+
+        const host =
+          this.region === 'global' ? 'aiplatform.googleapis.com' : `${this.region}-aiplatform.googleapis.com`;
+        const url = `https://${host}/v1/projects/${this.projectId}/locations/${this.region}/publishers/google/models/${this.model}:predict`;
+
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            instances: [{ content: trimmed }],
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Vertex embedding API error: ${response.status} ${response.statusText}`);
+        }
+
+        const data = (await response.json()) as {
+          predictions?: Array<{
+            embeddings?: { values?: number[] };
+            values?: number[];
+          }>;
+        };
+
+        values = data.predictions?.[0]?.embeddings?.values || data.predictions?.[0]?.values;
       }
 
-      const data = (await response.json()) as {
-        predictions?: Array<{
-          embeddings?: {
-            values?: number[];
-          };
-          values?: number[];
-        }>;
-      };
-
-      const values = data.predictions?.[0]?.embeddings?.values || data.predictions?.[0]?.values;
       if (!values || !Array.isArray(values) || values.length === 0) {
-        throw new Error('Malformed embedding response from Vertex AI');
+        throw new Error('Malformed embedding response from embedding service');
       }
 
       const normalized = normalizeVector(values);
@@ -111,7 +140,7 @@ export class VertexEmbeddingService {
       this.cache.set(trimmed, normalized);
       return normalized;
     } catch (err) {
-      this.log?.(`Vertex embedding generation failed for "${trimmed.slice(0, 40)}": ${String(err)}`);
+      this.log?.(`Embedding generation failed for "${trimmed.slice(0, 40)}": ${String(err)}`);
       return [];
     }
   }

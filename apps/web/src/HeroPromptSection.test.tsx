@@ -751,4 +751,53 @@ describe('HeroPromptSection', () => {
     fetchSpy.mockRestore();
     await act(async () => root.unmount());
   });
+
+  it('matches Polish sports intent query "chcę pograć w piłkę" to mexico-86', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('pl');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const mockCatalog = [
+      {
+        slug: 'mexico-86',
+        title: "Mexico '86 Arcade Football",
+        genre: 'sports',
+        controls: 'Arrows / Enter',
+        media: null,
+        multiplayer: null,
+        saves: null,
+        world: null,
+        sensing: null,
+        orientation: 'landscape' as const,
+        status: 'published' as const,
+        submittedBy: null,
+        tagline: { en: 'Tournament football.', pl: 'Turniej piłkarski.' },
+        searchKeywords: ['football', 'soccer', 'piłka', 'mundial'],
+      },
+    ];
+
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'chcę pograć w piłkę',
+          catalogEntries: mockCatalog,
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    const card = container.querySelector('.matched-card');
+    expect(card).not.toBeNull();
+
+    const title = container.querySelector('.matched-title');
+    expect(title?.textContent).toBe("Mexico '86 Arcade Football");
+
+    await act(async () => root.unmount());
+  });
 });
