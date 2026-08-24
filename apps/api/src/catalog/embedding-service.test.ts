@@ -60,10 +60,18 @@ describe('embedding-service', () => {
   });
 
   it('returns empty array cleanly when Vertex AI is offline or fails', async () => {
-    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network error'));
+    const logs: string[] = [];
+    const service = new VertexEmbeddingService({
+      log: (msg) => logs.push(msg),
+    });
+    vi.spyOn(
+      (service as unknown as { auth: { getClient: () => Promise<unknown> } }).auth,
+      'getClient',
+    ).mockRejectedValue(new Error('Auth resolution failed'));
 
-    const service = new VertexEmbeddingService();
     const vec = await service.embedText('arcade football');
     expect(vec).toEqual([]);
+    expect(logs.length).toBe(1);
+    expect(logs[0]).toContain('Vertex embedding generation failed');
   });
 });

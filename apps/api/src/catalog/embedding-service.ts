@@ -9,6 +9,7 @@ export interface VertexEmbeddingOptions {
   projectId?: string;
   region?: string;
   model?: string;
+  log?: (message: string) => void;
 }
 
 // Compute L2 Euclidean norm of a vector.
@@ -44,6 +45,7 @@ export class VertexEmbeddingService {
   private projectId: string;
   private region: string;
   private model: string;
+  private log?: (message: string) => void;
   private cache = new Map<string, number[]>();
   private static readonly MAX_CACHE_SIZE = 500;
 
@@ -51,6 +53,7 @@ export class VertexEmbeddingService {
     this.projectId = resolveProjectId(options.projectId);
     this.region = options.region ?? process.env.VERTEX_REGION ?? 'global';
     this.model = options.model ?? GEMINI_EMBEDDING_MODEL;
+    this.log = options.log;
     this.auth = new GoogleAuth({ scopes: [SCOPE] });
   }
 
@@ -107,8 +110,8 @@ export class VertexEmbeddingService {
       }
       this.cache.set(trimmed, normalized);
       return normalized;
-    } catch {
-      // Returns empty vector on Vertex AI failure or unconfigured credentials
+    } catch (err) {
+      this.log?.(`Vertex embedding generation failed for "${trimmed.slice(0, 40)}": ${String(err)}`);
       return [];
     }
   }
