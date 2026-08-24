@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AGENT_BUILD_RULES_DIGEST, briefLocales, buildConstraints, splitConceptBrief } from './agent-build-brief.js';
-import { MAX_PROJECT_BYTES } from '../catalog/games-repo-contract.js';
+import { MAX_PROJECT_BYTES } from '../platform/games-repo-contract.js';
 
 describe('splitConceptBrief', () => {
   it('returns the whole concept when there is no QA block', () => {

@@ -138,7 +138,7 @@ The join page is part of our own web shell (trusted code, normal origin) — **n
 The load-bearing invariant of this codebase: games run in an iframe with
 `sandbox="allow-scripts allow-pointer-lock"`, **no** `allow-same-origin` (`GameFrame.tsx`), and served bundles
 carry a CSP with no `connect-src` — fetch/XHR/WebSocket are all blocked inside the game
-([assemble.ts](../apps/api/src/catalog/assemble.ts)). Games are also validated to be offline-only and
+([assemble.ts](../apps/api/src/platform/assemble.ts)). Games are also validated to be offline-only and
 self-contained ([validate.mjs](https://github.com/gamedevpl/www.gamedev.pl-games) Check 6:
 no `fetch(`, no `XMLHttpRequest`, no remote assets).
 

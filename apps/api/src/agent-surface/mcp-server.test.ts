@@ -17,7 +17,7 @@ import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } f
 import type { KnowledgeQueryResult, QueryKnowledgeFn } from '../creation/knowledge-search.js';
 import { mintMcpSessionKey, verifyMcpSessionKey } from './mcp-session-key.js';
 import { MCP_UNADVERTISED_TOOLS } from './mcp-server.js';
-import { KIT_ROOT_DIR } from './kit-registry.js';
+import { KIT_ROOT_DIR } from '../platform/kit-registry.js';
 import { InMemoryStore } from '../platform/store.js';
 
 const secret = 'test-secret';

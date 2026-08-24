@@ -52,14 +52,14 @@ import {
   TS_ANY_SCAN_PATH,
   type DeliveryContract,
   type GameKitModuleName,
-} from './games-repo-contract.js';
+} from '../platform/games-repo-contract.js';
 import { isRateLimitResponse } from './github-rate-limit.js';
 
 const LOCAL_EDITOR_CONTRACT_PATH = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   '../creation/editor-contract.ts',
 );
-const LOCAL_TS_ANY_SCAN_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '../creation/ts-any-scan.ts');
+const LOCAL_TS_ANY_SCAN_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '../delivery/ts-any-scan.ts');
 
 export type ContractCheckOutcome =
   /** No token configured — forks and fresh clones still go green. */
@@ -398,7 +398,7 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
       reason:
         `GAME_KIT_VERTICALS mismatch.\n${verticalDrift.map((entry) => `  ${entry}`).join('\n')}\n` +
         `  Every games-repo vertical must resolve to the same entry path in ` +
-        `GAME_KIT_VERTICAL_ENTRIES in apps/api/src/catalog/games-repo-contract.ts, or the bake cannot ` +
+        `GAME_KIT_VERTICAL_ENTRIES in apps/api/src/platform/games-repo-contract.ts, or the bake cannot ` +
         `find the module's source and every game selecting it fails to publish.`,
     };
   }
@@ -421,7 +421,7 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
         `MAX_BUNDLE_BYTES mismatch: games-repo=${remoteBudget} website MAX_PROJECT_BYTES=${MAX_PROJECT_BYTES}\n` +
         `  games-repo assignment: ${assignLine}\n` +
         `  Website is behind the build ceiling — raise GAMEKIT_PLATFORM_BYTES / MAX_PROJECT_BYTES ` +
-        `in apps/api/src/catalog/games-repo-contract.ts (website-first).`,
+        `in apps/api/src/platform/games-repo-contract.ts (website-first).`,
     };
   }
   if (MAX_PROJECT_BYTES > remoteBudget) {
@@ -471,7 +471,7 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
       return {
         kind: 'drift',
         reason:
-          `ts-any-scan mismatch (${TS_ANY_SCAN_PATH} vs apps/api/src/creation/ts-any-scan.ts): ` +
+          `ts-any-scan mismatch (${TS_ANY_SCAN_PATH} vs apps/api/src/delivery/ts-any-scan.ts): ` +
           `${describeTextDrift(remoteAnyScan, localAnyScan)}\n` +
           `  The two files must stay byte-equivalent below their own header comments. This side ` +
           `refuses an upload for \`any\` and the games repo fails validate Check 37 for it; if they ` +
@@ -614,7 +614,7 @@ function describeDeliveryDrift(remote: DeliveryContract): { drift: string | null
   }
   return {
     drift:
-      `delivery contract mismatch (${DELIVERY_CONTRACT_PATH} vs apps/api/src/catalog/games-repo-contract.ts):\n` +
+      `delivery contract mismatch (${DELIVERY_CONTRACT_PATH} vs apps/api/src/platform/games-repo-contract.ts):\n` +
       problems.map((problem) => `  - ${problem}`).join('\n'),
     notes,
   };

@@ -16,8 +16,8 @@
 
 import { createGunzip } from 'node:zlib';
 import { Readable } from 'node:stream';
-import type { RepoFileSource } from './github-client.js';
-import { readTarEntries } from '../platform/tar.js';
+import type { RepoFileSource } from '../catalog/github-client.js';
+import { readTarEntries } from './tar.js';
 
 export interface FetchGamesRepoArchiveOptions {
   repo: string;

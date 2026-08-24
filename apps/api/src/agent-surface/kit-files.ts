@@ -11,8 +11,14 @@
 import { Readable } from 'node:stream';
 import { createGunzip } from 'node:zlib';
 import type { GcsObjectStore } from '../delivery/gcs-sign.js';
-import { KIT_ENTRY, KIT_ROOT_DIR, KitRegistryError, parseKitRegistry, parseKitSidecar } from './kit-registry.js';
-import { isKitEngineRefSupported } from './kit-window.js';
+import {
+  KIT_ENTRY,
+  KIT_ROOT_DIR,
+  KitRegistryError,
+  parseKitRegistry,
+  parseKitSidecar,
+} from '../platform/kit-registry.js';
+import { isKitEngineRefSupported } from '../platform/kit-window.js';
 import { readTarEntries } from '../platform/tar.js';
 
 /** Whole-file reads above this must use fragments instead. */

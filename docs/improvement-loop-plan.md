@@ -118,7 +118,7 @@ Games are offline-only, self-contained HTML/CSS/JS running in an iframe with
 `sandbox="allow-scripts allow-pointer-lock"` and **no** `allow-same-origin`
 ([GameFrame.tsx](../apps/web/src/GameFrame.tsx)); preview builds additionally get
 a `default-src 'none'` CSP with no `connect-src`, which blocks fetch, XHR,
-WebSocket and beacons outright ([assemble.ts](../apps/api/src/catalog/assemble.ts)). A
+WebSocket and beacons outright ([assemble.ts](../apps/api/src/platform/assemble.ts)). A
 game cannot phone home, and must not be able to.
 
 It does not need to. [gamePlayer.ts](../apps/web/src/gamePlayer.ts) already
@@ -964,7 +964,7 @@ at all and feeds the only autonomous-eligible class.
 ### Phase IL-4 — Bounded autonomy
 
 - ✅ **Autonomy is per game, and the default acts on nothing** (2026-07-30):
-  [autonomy.ts](../apps/api/src/creation/autonomy.ts), set from the studio's stats tab.
+  [autonomy.ts](../apps/api/src/community/autonomy.ts), set from the studio's stats tab.
   `digest-only` / `suggest` (default) / `auto-fix-defects` / `auto-tune`. Per game rather
   than per account, because a creator can reasonably want a crash fixed unasked on the
   game they no longer play and to be consulted about everything on the one they are still

@@ -24,7 +24,7 @@ import {
   mayActAutonomously,
   wantsSuggestions,
   type AutonomyMode,
-} from '../creation/autonomy.js';
+} from './autonomy.js';
 import { hypothesisMetric, metricFromScorecard } from './suggestion-outcomes.js';
 
 /**

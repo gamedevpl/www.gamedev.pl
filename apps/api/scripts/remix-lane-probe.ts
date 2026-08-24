@@ -23,7 +23,7 @@
  */
 
 import { writeFileSync } from 'node:fs';
-import { assembleGameHtml } from '../src/catalog/assemble.js';
+import { assembleGameHtml } from '../src/platform/assemble.js';
 import { VertexCodeLane } from '../src/creation/code-lane.js';
 import { createLocalGamesClient } from '../src/catalog/local-games-repo.js';
 import { buildSymbolMap, renderSymbolMap, sliceRegion } from '../src/creation/symbol-map.js';

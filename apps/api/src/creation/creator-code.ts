@@ -1,6 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from '../catalog/assemble.js';
+import {
+  assembleGameHtml,
+  CredentialLeakError,
+  EmptyProjectError,
+  ProjectTooLargeError,
+} from '../platform/assemble.js';
 import { isActiveBuildRound } from './builder.js';
 import { codeSurfaceEnabled, isLiveAgentRound, isOpenAgentRound } from './code-surface.js';
 import type { GcsObjectStore } from '../delivery/gcs-sign.js';
@@ -15,7 +20,7 @@ import type { TabCompleteGate } from './creation-limits.js';
 import type { GitHubClient } from '../catalog/github-client.js';
 import { resolveJobState } from './job-state.js';
 import { createKitFileStore, type KitFileStore } from '../agent-surface/kit-files.js';
-import { parseKitRegistry } from '../agent-surface/kit-registry.js';
+import { parseKitRegistry } from '../platform/kit-registry.js';
 import {
   assessModuleSize,
   isGameTsModule,
@@ -23,7 +28,7 @@ import {
   MODULE_SOFT_LIMIT_BYTES,
   MODULE_SOFT_LIMIT_LINES,
 } from './module-size.js';
-import { resolveRoundBaseVersion } from './round-base-version.js';
+import { resolveRoundBaseVersion } from '../platform/round-base-version.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from './source-patch.js';
 import {
   createSourceDeliveryService,

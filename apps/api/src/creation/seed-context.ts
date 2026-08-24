@@ -6,7 +6,7 @@
 // Sources come from the games-repo tarball, cached across dispatches — one request
 // instead of a thousand, on a token whose budget is shared with serving.
 
-import { fetchGamesRepoArchive, type GamesRepoArchive } from '../catalog/games-repo-archive.js';
+import { fetchGamesRepoArchive, type GamesRepoArchive } from '../platform/games-repo-archive.js';
 
 /** Text-only: sources, specs, manifests, and the catalog. No media. */
 const TEXT_EXTENSIONS = ['.ts', '.json', '.md', '.css', '.html'];

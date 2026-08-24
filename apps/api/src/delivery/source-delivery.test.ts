@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { GamesStore, SourceFile, VersionManifest } from './games-store.js';
 import { InvalidUploadError } from './games-store.js';
 import type { KitFileStore, KitTree } from '../agent-surface/kit-files.js';
-import { KIT_ROOT_DIR } from '../agent-surface/kit-registry.js';
+import { KIT_ROOT_DIR } from '../platform/kit-registry.js';
 import { InMemoryStore } from '../platform/store.js';
 import { NoopTranslator, type BilingualText, type Translator } from '../platform/translate.js';
 import { DELIVERY_ACCEPTED_MSG, DELIVERY_PREFLIGHT_REFUSED_MSG } from '../platform/delivery-metrics.js';

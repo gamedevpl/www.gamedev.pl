@@ -1,4 +1,4 @@
-import { GAME_KIT_MODULES } from './games-repo-contract.js';
+import { GAME_KIT_MODULES } from '../platform/games-repo-contract.js';
 
 // Shallow shape check — catches assemble.ts crashes before the gate does.
 

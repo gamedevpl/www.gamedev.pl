@@ -14,7 +14,7 @@ import { creatorOwnsSlug } from './platform/slug-ownership.js';
 import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-surface/agent-channel.js';
 import { mintAgentToken, mintManagedMcpOpener } from './agent-surface/agent-token.js';
 import { registerMcpServerRoutes } from './agent-surface/mcp-server.js';
-import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './catalog/assemble.js';
+import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './platform/assemble.js';
 import { MAX_BUILD_PREVIEW_BYTES } from './delivery/build-preview-limits.js';
 import {
   createCreationGate,

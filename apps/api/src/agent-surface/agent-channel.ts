@@ -72,11 +72,11 @@ import {
   kitUnpackCommand,
   parseKitRegistry,
   parseKitSidecar,
-} from './kit-registry.js';
+} from '../platform/kit-registry.js';
 import { seedPayload } from '../creation/seed-status.js';
 import { largeSourceFileHint } from '../creation/module-size.js';
 import { gameManifestHint } from '../catalog/game-manifest-hint.js';
-import { resolveRoundBaseVersion } from '../creation/round-base-version.js';
+import { resolveRoundBaseVersion } from '../platform/round-base-version.js';
 import { computeStageAdvisories } from '../delivery/stage-hints.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from '../creation/source-patch.js';
 import { overlayGameSources } from '../delivery/staged-preview.js';
