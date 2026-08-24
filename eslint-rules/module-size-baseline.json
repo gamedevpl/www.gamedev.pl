@@ -29,7 +29,7 @@
     "apps/api/src/agent-surface/agent-backend-env.test.ts": 417,
     "apps/api/src/agent-surface/agent-backend-env.ts": 382,
     "apps/api/src/agent-surface/agent-backend.ts": 122,
-    "apps/api/src/agent-surface/agent-build-brief.test.ts": 55,
+    "apps/api/src/agent-surface/agent-build-brief.test.ts": 57,
     "apps/api/src/agent-surface/agent-build-brief.ts": 52,
     "apps/api/src/agent-surface/agent-build-examples.ts": 62,
     "apps/api/src/agent-surface/agent-channel.test.ts": 3408,
