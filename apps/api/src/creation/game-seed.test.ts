@@ -754,7 +754,7 @@ describe('ModelGameSeeder', () => {
     expect(draft!.compiles).toBe(true);
     expect(draft!.repaired).toBe(true);
     expect(draft!.files.find((file) => file.path === 'game/model.ts')!.content).toBe('export const SPEED = 4;\n');
-    expect(draft!.files.map((file) => file.path).sort()).toEqual(['SPEC.md', 'EDITOR.json', 'game.ts', 'game/model.ts']);
+    expect(draft!.files.map((file) => file.path).sort()).toEqual(['EDITOR.json', 'SPEC.md', 'game.ts', 'game/model.ts']);
     // The repair round is billed like the rounds before it.
     expect(draft!.usage.inputTokens).toBe(400 + 30_000 + 9_000);
     expect(draft!.usage.outputTokens).toBe(10 + 8_000 + 700);
