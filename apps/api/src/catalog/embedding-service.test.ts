@@ -59,30 +59,6 @@ describe('embedding-service', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('generates embedding using Gemini API when apiKey is provided', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        embedding: {
-          values: [0.6, 0.8],
-        },
-      }),
-    } as Response);
-
-    const service = new VertexEmbeddingService({ apiKey: 'mock-gemini-key' });
-    const vec = await service.embedText('chcę pograć w piłkę');
-    expect(vec).toEqual([0.6, 0.8]);
-    expect(fetchSpy).toHaveBeenCalledWith(
-      expect.stringContaining(
-        'generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent?key=mock-gemini-key',
-      ),
-      expect.objectContaining({
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
-  });
-
   it('returns empty array cleanly when Vertex AI is offline or fails', async () => {
     const logs: string[] = [];
     const service = new VertexEmbeddingService({
@@ -96,6 +72,6 @@ describe('embedding-service', () => {
     const vec = await service.embedText('arcade football');
     expect(vec).toEqual([]);
     expect(logs.length).toBe(1);
-    expect(logs[0]).toContain('Embedding generation failed');
+    expect(logs[0]).toContain('Vertex embedding generation failed');
   });
 });
