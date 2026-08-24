@@ -261,8 +261,17 @@ export function assertDeliverableSourcePath(rawPath: string): string {
  * `mode: 'preview'` skips publish-stage seals (TRACE / PLAYTEST) so a first playable
  * draft can land without burning the agent on capture tooling. Publish (default) keeps
  * the hard requirements — a TRACE-less publishable candidate is still dead on arrival.
+ *
+ * `tracederivedByGate` is the one exception, and it is narrow: a `'seal'` version is a
+ * green preview re-delivered for the full gate, and the gate derives the golden itself
+ * before replaying it (see gate-runner). "Dead on arrival" is the reason the refusal
+ * exists, and it does not apply when the golden is about to be recorded.
  */
-export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = 'publish'): SourceFile[] {
+export function validateSourceUpload(
+  files: SourceFile[],
+  mode: DeliveryMode = 'publish',
+  traceDerivedByGate = false,
+): SourceFile[] {
   if (files.length === 0) throw new InvalidUploadError('no files in upload');
   if (files.length > MAX_UPLOAD_FILES) {
     throw new InvalidUploadError(`too many files: ${files.length} > ${MAX_UPLOAD_FILES}`);
@@ -347,7 +356,7 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
     //
     // Preview deliveries skip this: they run `check:game --preview` (typecheck→smoke→build)
     // and only produce Studio-playable preview.html — never a publishable green.
-    if (!seen.has('TRACE.json')) {
+    if (!seen.has('TRACE.json') && !traceDerivedByGate) {
       throw new InvalidUploadError(
         'TRACE.json is required for publish — the gate diffs your game against it and cannot ' +
           'verify a publishable delivery without one. Record it with `npm run trace -- <slug> --accept`, ' +
@@ -463,8 +472,13 @@ export interface VersionManifest {
    * `'remix'` marks a private Studio draft forked from a published game via the
    * player remix panel — sources copied (with baked editor defaults), no agent.
    * Never a catalog publication by itself; see {@link forkedFrom}.
+   *
+   * `'seal'` marks a green preview promoted to a publish candidate without an agent:
+   * the same sources, re-delivered so the full gate judges them. It carries no
+   * TRACE.json because no agent could record one — the gate derives it, the same way
+   * it does for `'editor'`.
    */
-  origin?: 'editor' | 'remix';
+  origin?: 'editor' | 'remix' | 'seal';
   /**
    * Parent game this version was forked from, when {@link origin} is `'remix'`.
    * Attribution / genealogy — not a publish path.
@@ -643,8 +657,8 @@ export interface GamesStore {
     engineRef?: string;
     /** Creator Kit engineRef the sources were built against (BY-06). */
     kitEngineRef?: string;
-    /** Content-only Studio publish or remix fork — see {@link VersionManifest.origin}. */
-    origin?: 'editor' | 'remix';
+    /** Content-only Studio publish, remix fork, or sealed preview — see {@link VersionManifest.origin}. */
+    origin?: 'editor' | 'remix' | 'seal';
     /** Parent provenance for remix forks — see {@link VersionManifest.forkedFrom}. */
     forkedFrom?: { slug: string; version?: string };
     /** Preview skips TRACE/PLAYTEST; default publish. */
@@ -944,7 +958,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         input.mode === 'preview' ? 'preview' : input.mode === 'proposal' ? 'proposal' : 'publish';
       // A proposal is a sealed candidate — it must carry everything a publish carries,
       // because the reviewer judges a full gate run, not a compile.
-      const files = validateSourceUpload(input.files, mode === 'proposal' ? 'publish' : mode);
+      const files = validateSourceUpload(input.files, mode === 'proposal' ? 'publish' : mode, input.origin === 'seal');
       const at = new Date(now());
       const version = versionId(at);
       const prefix = versionPrefix(input.slug, version);

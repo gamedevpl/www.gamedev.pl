@@ -304,7 +304,13 @@ export async function runGate(
     // content for real; `--accept` here only retires the has-it-changed question,
     // which for a content edit is always answered "yes, that was the point".
     // Preview lane skips this: it never reaches the trace stage.
-    if (!previewRun && manifest.origin === 'editor') {
+    //
+    // A sealed preview (`origin: 'seal'`) carries no golden at all: the sources come
+    // from a preview-lane delivery, and no agent on that lane can record one — the
+    // harness that does it is not in their sandbox. Same remedy, and the same limit:
+    // deriving the golden only settles what the game *does*, and every stage after
+    // still has to pass on its own.
+    if (!previewRun && (manifest.origin === 'editor' || manifest.origin === 'seal')) {
       const trace = await deps.run('npm', ['run', 'trace', '--', slug, '--accept'], harness);
       if (trace.code !== 0) {
         return {

@@ -98,6 +98,7 @@ import {
 } from './creation/job-state.js';
 import { isMcpPresenceEventText } from './agent-surface/mcp-presence.js';
 import { gateCrashStall, probeGateCrash } from './delivery/gate-crash.js';
+import { sealRefusal } from './delivery/seal-preview.js';
 import {
   clearObserveFailures,
   noteObserveFailure,
@@ -2776,6 +2777,9 @@ export async function registerSubmissionRoutes(
       ...((record.transitions ?? []).some((transition) => transition.reason === 'remix_saved')
         ? { draftOrigin: 'remix' as const }
         : {}),
+      // A preview-only round is finished but unpublishable until it is sealed; the
+      // gate verdict is checked by the route, not here (see seal-preview.ts).
+      ...(sealRefusal(record) === null ? { canSeal: true as const } : {}),
     };
     // Studio's play surface only fetches `/preview` when `preview.slug` is set (the
     // same signal the PR-derived path used to emit). A self-build delivery has no PR
@@ -4055,6 +4059,119 @@ export async function registerSubmissionRoutes(
       return reply.send({ ok: true });
     },
   );
+
+  /**
+   * Promotes a green preview to a publish candidate, without an agent.
+   *
+   * The preview lane is the only lane a platform-built game ever reaches: its agents
+   * deliver `mode=preview` and stop, and they cannot deliver publish because that needs
+   * a TRACE.json recorded by running the game against the games-repo harness, which is
+   * not in their sandbox. So a finished game sat in `ready_for_review` with no
+   * `deliveredVersion`, and the one publish route on the platform answers
+   * `nothing_delivered` — no creator and no operator could publish it.
+   *
+   * This re-delivers the same sources as `origin: 'seal'`, which is what tells the gate
+   * to derive the behavioural golden itself before replaying it (gate-runner). Nothing
+   * is waived downstream: the full acceptance gate still judges the game, and it lands
+   * on `needs_changes`/`gate_red` if it fails.
+   *
+   * Onto the same job rather than a new one (the editor path allocates one, because
+   * `published` is terminal and a candidate hung off it would be gated and stranded).
+   * `ready_for_review` is not terminal — it transitions to `building` legally, and
+   * `reconcileGateVerdict` walks `building`/`submitted`/`gating` — so the creator keeps
+   * one thread instead of finding the result on a job they never saw.
+   */
+  app.post('/api/submissions/:token/seal', async (request, reply) => {
+    if (!submissionTokenSecret) {
+      return reply.status(503).send({ error: 'submissions are not configured' });
+    }
+    if (!checkUserAccess(request, reply)) return;
+    const gamesStore = options.agentChannel?.gamesStore;
+    const gateTrigger = options.agentChannel?.onSourcesDelivered;
+    if (!store || !gamesStore || !gateTrigger) {
+      return reply.status(503).send({ error: 'store_unavailable' });
+    }
+
+    const token = z.string().parse((request.params as { token?: string }).token);
+    let issueNumber: number;
+    try {
+      issueNumber = verifyToken(token, submissionTokenSecret);
+    } catch (error) {
+      if (error instanceof InvalidTokenError) {
+        return reply.status(400).send({ error: 'invalid submission token' });
+      }
+      throw error;
+    }
+
+    const record = await store.getSubmission(issueNumber);
+    if (!record || record.ownerUid !== request.user!.uid) {
+      return reply.status(403).send({ error: 'only the creator can seal this build' });
+    }
+    const refusal = sealRefusal(record);
+    if (refusal) return reply.status(409).send({ error: refusal });
+
+    const slug = record.slug!;
+    const previewVersion = record.previewVersion!;
+    const manifest = await gamesStore.getManifest(slug, previewVersion);
+    if (!manifest?.previewGate?.green) {
+      return reply.status(409).send({ error: 'preview_not_green' });
+    }
+
+    const files: { path: string; content: string }[] = [];
+    for (const path of manifest.sourceFiles) {
+      const content = await gamesStore.getSourceFile(slug, previewVersion, path);
+      if (content === null) return reply.status(409).send({ error: 'preview_incomplete' });
+      files.push({ path, content });
+    }
+    // The documented floor, from the refusal this would otherwise hit. A preview-lane
+    // agent has no reason to have written one, and the landmark it declares is the one
+    // every game reaches; a game whose capture cannot even start a round fails validate
+    // regardless, so this cannot make a broken game look publishable.
+    if (!files.some((file) => file.path === 'PLAYTEST.json')) {
+      files.push({
+        path: 'PLAYTEST.json',
+        content: `${JSON.stringify({ expectProgress: ['round-start'] }, null, 2)}\n`,
+      });
+    }
+
+    let version: string;
+    try {
+      ({ version } = await gamesStore.putCandidateSources({
+        slug,
+        issueNumber,
+        roundGeneration: record.roundGeneration ?? 1,
+        files,
+        backend: record.dispatch?.backend ?? record.builder,
+        origin: 'seal',
+        mode: 'publish',
+        ...(manifest.kitEngineRef ? { kitEngineRef: manifest.kitEngineRef } : {}),
+        ...(manifest.engineRef ? { engineRef: manifest.engineRef } : {}),
+      }));
+    } catch (error) {
+      request.log.error({ err: error, issueNumber }, 'sealing a preview failed');
+      return reply.status(502).send({ error: 'seal_failed' });
+    }
+
+    const at = () => new Date(now()).toISOString();
+    await store.setSubmissionDeliveredVersion(issueNumber, version);
+    await store.recordJobTransition(issueNumber, { to: 'building', at: at(), by: 'creator', reason: 'seal_preview' });
+    await store.recordJobTransition(issueNumber, {
+      to: 'submitted',
+      at: at(),
+      by: 'creator',
+      reason: 'seal_delivered',
+    });
+
+    const gate = await gateTrigger({ issueNumber, slug, version });
+    if (gate?.buildId) {
+      await store
+        .recordJobCost(issueNumber, { kind: 'gate_run', at: at(), by: 'cloud-build', ref: gate.buildId })
+        .catch(() => {});
+    }
+    invalidateStatusCache(issueNumber);
+
+    return reply.send({ ok: true, version });
+  });
 
   app.get('/api/submissions/mine', async (request, reply) => {
     if (!submissionTokenSecret) {

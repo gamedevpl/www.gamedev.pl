@@ -1081,7 +1081,13 @@
       "sending": "Porzucam…",
       "error": "Nie udało się teraz porzucić tego buildu. Spróbuj ponownie za chwilę."
     },
-    "playableHint": "Wczesna wersja prosto z warsztatu — surowa, niedokończona i już grywalna. Powiedz, co zmienić, póki to łatwe."
+    "playableHint": "Wczesna wersja prosto z warsztatu — surowa, niedokończona i już grywalna. Powiedz, co zmienić, póki to łatwe.",
+    "seal": {
+      "body": "Twoja gra przeszła testy i jest gotowa. Wyślij ją do publikacji — zrobimy jeszcze pełny sprawdzian, potem trafia do przeglądu.",
+      "action": "Wyślij do publikacji",
+      "sending": "Wysyłam…",
+      "error": "Nie udało się wysłać do publikacji. Spróbuj za chwilę."
+    }
   },
   "suggestions": {
     "dodge": "Unikaj spadających skał",

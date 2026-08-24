@@ -119,6 +119,23 @@ describe('runGate', () => {
     expect(check?.[1]).not.toContain('--accept');
   });
 
+  it('derives the behavioural golden for a sealed preview, which carries none', async () => {
+    // A seal promotes preview-lane sources, and no preview-lane agent can record a
+    // golden — the harness that does it is not in their sandbox. Without deriving one
+    // the trace stage has nothing to replay and the version is unpublishable forever.
+    const { store } = stubStore({
+      getManifest: async () => ({ ...MANIFEST, origin: 'seal' as const }),
+    });
+    const run = vi.fn(async () => ({ code: 0, output: '' }));
+
+    await runGate('comet-courier', 'v1', { store, prepareHarness: harnessDir, run, assembleBundle: stubAssemble });
+
+    const traceCall = run.mock.calls.find(
+      ([command, args]) => command === 'npm' && (args as string[]).includes('trace'),
+    );
+    expect(traceCall?.[1]).toContain('--accept');
+  });
+
   it('preview lane runs check:game --preview and stores only preview.html', async () => {
     const harness = await harnessDir();
     const { store, derived } = stubStore();
