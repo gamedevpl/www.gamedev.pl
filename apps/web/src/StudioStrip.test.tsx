@@ -121,4 +121,26 @@ describe('StudioStrip layout structure', () => {
     expect(statusBlock?.querySelector('.studio-build-bar')).toBeTruthy();
     expect(statusBlock?.querySelector('.studio-strip-heartbeat')).toBeTruthy();
   });
+
+  it('makes the phase pill clickable and opens the build panel on the very first round', async () => {
+    const onOpenBuild = vi.fn();
+    const firstRoundStatus = {
+      status: 'building',
+      lastAgentSignalAt: new Date().toISOString(),
+    } as unknown as SubmissionStatus;
+    const host = await renderStrip({ status: firstRoundStatus, onOpenBuild });
+
+    // No build has ever landed yet — the bar has nothing to show.
+    expect(host.querySelector('.studio-build-bar')).toBeNull();
+
+    const button = host.querySelector<HTMLButtonElement>('.studio-strip-phase-button');
+    expect(button).toBeTruthy();
+    expect(button?.querySelector('.studio-strip-phase-pill')).toBeTruthy();
+    expect(button?.querySelector('.studio-strip-heartbeat')).toBeTruthy();
+
+    await act(async () => {
+      button?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onOpenBuild).toHaveBeenCalledTimes(1);
+  });
 });

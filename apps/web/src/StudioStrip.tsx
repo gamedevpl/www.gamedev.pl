@@ -142,12 +142,27 @@ export function StudioStrip({
 
       <div className="studio-strip-status">
         <StudioBuildBar status={status} onOpen={onOpenBuild} />
-        {showPhasePill ? <span className="studio-strip-phase-pill">{phaseLabel}</span> : null}
-        {heartbeatAt != null ? (
-          <span className="studio-strip-heartbeat">
-            {t('statusView.updatedAgo', { time: formatRelativeTime(heartbeatAt, i18n.language) })}
-          </span>
-        ) : null}
+        {showPhasePill ? (
+          <button
+            type="button"
+            className="studio-strip-phase-button"
+            onClick={onOpenBuild}
+            aria-label={t('studioPanel.buildBar.open')}
+          >
+            <span className="studio-strip-phase-pill">{phaseLabel}</span>
+            {heartbeatAt != null ? (
+              <span className="studio-strip-heartbeat">
+                {t('statusView.updatedAgo', { time: formatRelativeTime(heartbeatAt, i18n.language) })}
+              </span>
+            ) : null}
+          </button>
+        ) : (
+          heartbeatAt != null && (
+            <span className="studio-strip-heartbeat">
+              {t('statusView.updatedAgo', { time: formatRelativeTime(heartbeatAt, i18n.language) })}
+            </span>
+          )
+        )}
       </div>
 
       <div className="studio-strip-spacer" />
