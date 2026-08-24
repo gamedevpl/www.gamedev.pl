@@ -23,7 +23,7 @@ const FILES: Record<string, string> = {
   [`games/${SEED_SCAFFOLD_SLUG}/SPEC.md`]: '---\ntitle: Block Cascade\n---\n',
   [`games/${SEED_SCAFFOLD_SLUG}/game.ts`]: "import { startGame } from './game/runtime.ts';\n",
   [`games/${SEED_SCAFFOLD_SLUG}/game/runtime.ts`]: 'export function startGame() {}\n',
-  'games/apex-sprint/SPEC.md': '---\ntitle: Apex Sprint\n---\n',
+  'games/apex-sprint/SPEC.md': '---\ntitle: Apex Sprint\n---\n', 'games/apex-sprint/EDITOR.ts': 'export default {};\n', 'games/apex-sprint/EDITOR.json': '{"version":2}\n', 'games/apex-sprint/EDITOR.content.json': '{"params":{}}\n',
   'games/apex-sprint/game.ts': 'export {};\n',
   'games/apex-sprint/game/model.ts': 'export const SPEED = 1;\n',
   'games/apex-sprint/game/render.ts': 'export function paint() {}\n',
@@ -57,7 +57,7 @@ describe('buildSeedContext', () => {
     const rendered = buildSeedContext(indexOf(FILES))!.renderReferences(['apex-sprint'], 100_000);
 
     expect(rendered).toContain('--- games/apex-sprint/SPEC.md ---');
-    expect(rendered).toContain('--- games/apex-sprint/game.ts ---');
+    expect(rendered).toContain('--- games/apex-sprint/game.ts ---'); expect(rendered).toContain('--- games/apex-sprint/EDITOR.json ---');
     // Sorted so the same picks always produce the same prompt; a prompt that varies run
     // to run makes any comparison between runs meaningless.
     expect(rendered.indexOf('game/model.ts')).toBeLessThan(rendered.indexOf('game/render.ts'));
