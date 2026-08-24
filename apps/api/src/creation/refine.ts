@@ -4,11 +4,11 @@ import type { GenAIClient } from 'genaicode';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { checkUserAccess } from '../platform/auth.js';
-import { createVertexClient, type VertexGenerationConfig } from '../agent-surface/genai.js';
+import { createVertexClient, type VertexGenerationConfig } from '../platform/genai.js';
 import type { ContentChecker } from '../platform/moderation.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { BOT_UID_PREFIX, type Store } from '../platform/store.js';
-import { logModerationRejection } from '../telemetry/moderation-metrics.js';
+import { logModerationRejection } from '../platform/moderation-metrics.js';
 import { normalizeLocale } from '../platform/translate.js';
 
 /** Full names the model is asked to write in — a bare `pl` tag is easy to ignore. */

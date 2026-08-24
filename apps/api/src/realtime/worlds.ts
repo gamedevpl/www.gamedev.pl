@@ -10,7 +10,7 @@ import {
   type WorldSchema,
 } from './world-schema.js';
 import type { WorldSchemaSource } from './world-source.js';
-import { logModerationRejection } from '../telemetry/moderation-metrics.js';
+import { logModerationRejection } from '../platform/moderation-metrics.js';
 
 /**
  * Shared asynchronous worlds (docs/persistent-world-plan.md, phase P2).

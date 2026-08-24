@@ -16,7 +16,7 @@ import type {
   StudioScorecard,
   StudioScorecardsResponse,
 } from '@gamedevpl/contract';
-import { recentPartitions, summarizeGameHealth } from '../telemetry/telemetry-health.js';
+import { recentPartitions, summarizeGameHealth } from '../platform/telemetry-health.js';
 
 export type CreatorStudioGame = StudioGame;
 export type CreatorHealthResponse = StudioHealthResponse;

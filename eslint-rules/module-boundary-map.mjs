@@ -24,6 +24,15 @@ export const MODULE_BUCKETS = [
   'notifications',
 ];
 
+/**
+ * Buckets whose own files are error-clean as importers -- every real (value-level) edge
+ * out of the bucket stays inside platform/ or its own bucket. eslint.config.mjs turns
+ * `gamedev/module-boundary` to 'error' for exactly these buckets' directories in the main
+ * `eslint .` pass; every other bucket stays warn-only via `npm run module-boundary` until
+ * its own turn. Append to this list, never edit its enforcement elsewhere.
+ */
+export const ENFORCED_BUCKETS = ['telemetry'];
+
 const DEFAULT_BUCKET = 'platform';
 
 /** Filename (no directory, no .ts/.test.ts) -> bucket. A name with no entry is unclassified. */
@@ -72,6 +81,14 @@ const FILE_BUCKET = {
   // Cross-domain status vocabulary read by every phase of the pipeline -- the
   // N2 contract plan moves it to packages/contract; platform until then.
   'submission-status': 'platform',
+  // Same reasoning, same precedent -- each depends only on platform/ or external
+  // packages, and is a leaf sink or single-client-factory called from most domains,
+  // not domain business logic of its own bucket.
+  genai: 'platform',
+  'moderation-metrics': 'platform',
+  'knowledge-metrics': 'platform',
+  'telemetry-health': 'platform',
+  'delivery-metrics': 'platform',
 
   // creation: jobs, rounds, dispatch, seed, refine
   'job-state': 'creation',
@@ -164,7 +181,6 @@ const FILE_BUCKET = {
   'kit-registry': 'agent-surface',
   'kit-window': 'agent-surface',
   'editor-kit-env': 'agent-surface',
-  genai: 'agent-surface',
 
   // delivery: staging, games-store, gate
   'staged-preview': 'delivery',
@@ -189,6 +205,8 @@ const FILE_BUCKET = {
 
   // catalog: github-client, snapshots, assemble, play
   'music-tracks': 'catalog',
+  'catalog-enricher': 'catalog',
+  'embedding-service': 'catalog',
   'github-client': 'catalog',
   'github-rate-limit': 'catalog',
   'game-snapshot': 'catalog',
@@ -247,15 +265,11 @@ const FILE_BUCKET = {
 
   // telemetry
   telemetry: 'telemetry',
-  'telemetry-health': 'telemetry',
   'telemetry-trends': 'telemetry',
   'visit-funnel': 'telemetry',
   'visit-telemetry': 'telemetry',
-  'delivery-metrics': 'telemetry',
   'creator-metrics': 'telemetry',
   'chat-agent-metrics': 'telemetry',
-  'knowledge-metrics': 'telemetry',
-  'moderation-metrics': 'telemetry',
 
   // notifications
   notify: 'notifications',

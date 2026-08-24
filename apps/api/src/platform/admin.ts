@@ -15,7 +15,7 @@ import {
   summarizeGameHealth,
   type GameHealth,
   type PartitionScanBudget,
-} from '../telemetry/telemetry-health.js';
+} from './telemetry-health.js';
 import { routeAll, type Suggestion } from '../community/suggestions.js';
 import { buildJobQueue } from '../creation/job-admin-routes.js';
 import type { JobState } from '../creation/job-state.js';

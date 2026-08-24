@@ -111,7 +111,7 @@ import {
   failedStageFromProgress,
   logDeliveryGateVerdict,
   type DeliveryGateStatus,
-} from './telemetry/delivery-metrics.js';
+} from './platform/delivery-metrics.js';
 import {
   VertexStudioChatAgent,
   type ChatAgentImage,
@@ -176,7 +176,7 @@ import { InvalidTokenError, mintToken, verifyToken } from './platform/submission
 import { normalizeAtIntake, type IntakeText } from './platform/localize-intake.js';
 import { createTranslatorFromEnv, normalizeLocale, type Translator } from './platform/translate.js';
 import { isVariantWidth } from './platform/image-variants.js';
-import { logModerationRejection } from './telemetry/moderation-metrics.js';
+import { logModerationRejection } from './platform/moderation-metrics.js';
 
 /**
  * The store slices `registerSubmissionRoutes` actually reaches into — every domain this
