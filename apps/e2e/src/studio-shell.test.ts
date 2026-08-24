@@ -164,8 +164,7 @@ async function stubStudioThreadData(page: Page) {
     await fulfillJson(route, { slug: FIXTURE_SLUG, title: 'E2E Studio Shell Fixture', html: '<p>fixture</p>' });
   });
 
-  // Fails the SW script rather than context-level block (playwright#32292).
-  await page.route('**/sw.js', (route) => route.fulfill({ status: 404, body: 'not found' }));
+  await page.route('**/sw.js', (route) => route.fulfill({ status: 200, contentType: 'text/javascript', body: '' }));
 }
 
 describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
