@@ -99,10 +99,9 @@ export const moduleBoundary = {
     const directory = path.dirname(filename);
 
     function check(node, source) {
-      // Erased at compile time -- a type-only edge is the contract N2 plans to give its own
-      // package, not runtime coupling. Only the whole-statement form (`import type { X }
-      // from`) is exempt; a mixed statement (`import { type X, y }`) still imports a real
-      // value and is checked like any other.
+      // Erased at compile time, so a type-only edge carries no runtime coupling. Only the
+      // whole-statement form (`import type { X } from`) is exempt; a mixed statement
+      // (`import { type X, y }`) still imports a real value and is checked like any other.
       if (node.importKind === 'type' || node.exportKind === 'type') return;
       if (!source || source.type !== 'Literal' || typeof source.value !== 'string') return;
       const specifier = source.value;
