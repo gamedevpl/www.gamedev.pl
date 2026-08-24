@@ -108,13 +108,18 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
   const [primerExpanded] = useState(() => !isStudioOnboarded());
   const [now, setNow] = useState<number>(() => Date.now());
 
+  // Seed and staged builds share this rail while the agent still writes.
+  const hasDeliveredPlayable = (status?.playable ?? []).some(
+    (item) => item.origin !== 'seed' && item.origin !== 'staged',
+  );
+
   const isReady =
     status != null &&
     (status.status === 'in_review' ||
       status.status === 'published' ||
       status.phase === 'ready_for_review' ||
       status.phase === 'published' ||
-      (status.playable != null && status.playable.length > 0) ||
+      hasDeliveredPlayable ||
       status.preview != null);
 
   const isNeedsChanges =

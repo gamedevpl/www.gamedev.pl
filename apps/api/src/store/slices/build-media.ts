@@ -173,7 +173,7 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
   async listBuildPreviews(issueNumber: number, opts?: { limit?: number }): Promise<BuildPreviewSummary[]> {
     // `select()` matters more here -- a preview doc runs a few hundred KB.
     const snap = await this.previewsCollection(issueNumber)
-      .select('id', 'slug', 'label', 'labelLocalized', 'locale', 'createdAt')
+      .select('id', 'slug', 'label', 'labelLocalized', 'locale', 'origin', 'createdAt')
       .orderBy('createdAt', 'desc')
       .limit(opts?.limit ?? 4)
       .get();
