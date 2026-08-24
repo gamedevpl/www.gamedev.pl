@@ -7,7 +7,11 @@ describe('hasServiceWorkerSupport', () => {
   const original = Object.getOwnPropertyDescriptor(Navigator.prototype, 'serviceWorker');
 
   afterEach(() => {
-    if (original) Object.defineProperty(Navigator.prototype, 'serviceWorker', original);
+    if (original) {
+      Object.defineProperty(Navigator.prototype, 'serviceWorker', original);
+    } else {
+      delete (Navigator.prototype as { serviceWorker?: unknown }).serviceWorker;
+    }
   });
 
   it('returns false instead of throwing when the property access itself throws', () => {
