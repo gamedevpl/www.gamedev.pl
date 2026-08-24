@@ -6,8 +6,8 @@ import {
   briefLocales,
   buildConstraints,
   DEFAULT_BUILD_ORIENTATION,
-} from '../creation/agent-build-brief.js';
-import { getAgentBuildExample, listAgentBuildExamples } from '../creation/agent-build-examples.js';
+} from './agent-build-brief.js';
+import { getAgentBuildExample, listAgentBuildExamples } from './agent-build-examples.js';
 import {
   ExampleFilesError,
   createExampleFileStore,
@@ -73,9 +73,9 @@ import {
   parseKitRegistry,
   parseKitSidecar,
 } from '../platform/kit-registry.js';
-import { seedPayload } from '../creation/seed-status.js';
+import { seedPayload } from './seed-status.js';
 import { largeSourceFileHint } from '../creation/module-size.js';
-import { gameManifestHint } from '../catalog/game-manifest-hint.js';
+import { gameManifestHint } from './game-manifest-hint.js';
 import { resolveRoundBaseVersion } from '../platform/round-base-version.js';
 import { computeStageAdvisories } from '../delivery/stage-hints.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from '../creation/source-patch.js';
