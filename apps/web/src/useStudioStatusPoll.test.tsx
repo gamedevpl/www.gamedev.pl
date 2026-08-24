@@ -87,4 +87,29 @@ describe('useStudioStatusPoll', () => {
     expect(vi.mocked(getSubmissionStatus)).toHaveBeenCalledTimes(1);
     spy.mockRestore();
   });
+
+  it('polls again on window focus, for a sleep/wake that never toggled visibility', async () => {
+    // A tab already focused when the machine sleeps wakes back up still reporting
+    // `visible` — there is no hidden→visible edge to catch, so the stale pre-sleep
+    // schedule needs a second way to notice somebody is looking again.
+    await mount('token-1');
+    expect(vi.mocked(getSubmissionStatus)).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    expect(vi.mocked(getSubmissionStatus)).toHaveBeenCalledTimes(2);
+  });
+
+  it('polls again on pageshow, for a bfcache restore', async () => {
+    await mount('token-1');
+    expect(vi.mocked(getSubmissionStatus)).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      window.dispatchEvent(new Event('pageshow'));
+    });
+
+    expect(vi.mocked(getSubmissionStatus)).toHaveBeenCalledTimes(2);
+  });
 });

@@ -66,17 +66,31 @@ export function useStudioStatusPoll(token: string | null): SubmissionStatus | nu
     // A backgrounded tab's timers get throttled, sometimes for minutes — exactly the
     // window a self-build agent uses to open and finish a round unwatched. Poll again
     // the moment the tab is looked at, rather than waiting out the clamp.
+    //
+    // `visibilitychange` misses a real case: a machine that sleeps with this tab
+    // already focused wakes back up still reporting `visible` — there is no
+    // hidden→visible edge to catch, so the stale schedule from before sleep just sits
+    // there. `focus` and `pageshow` (bfcache restore) cover that: both say "somebody is
+    // looking now" even without a visibility transition.
     const onVisibility = () => {
       if (document.visibilityState !== 'visible') return;
       if (timer) clearTimeout(timer);
       void tick();
     };
+    const onWake = () => {
+      if (timer) clearTimeout(timer);
+      void tick();
+    };
     document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onWake);
+    window.addEventListener('pageshow', onWake);
 
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', onWake);
+      window.removeEventListener('pageshow', onWake);
     };
   }, [token, locale]);
 

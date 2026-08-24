@@ -383,12 +383,26 @@ export function SubmissionStatusView({
   // Same reasoning as presence.ts's onVisibility: a backgrounded tab's poll timer gets
   // throttled by the browser, so a self-build round can finish unwatched for minutes.
   // Reuse the same ref send/handoff already use, rather than a second poll loop.
+  //
+  // `visibilitychange` alone missed a real case: a laptop that sleeps with this tab
+  // already focused wakes back up still reporting `visible` — there was never a
+  // hidden→visible edge to fire on, so the poll stayed on its last pre-sleep schedule
+  // for hours until a manual reload. `focus` and `pageshow` (bfcache restore) catch
+  // that: the OS handing the window focus back, or the page becoming current again,
+  // both say "somebody is looking now" even without a visibility transition.
   useEffect(() => {
     const onVisibility = () => {
       if (document.visibilityState === 'visible') requestStatusRefreshRef.current();
     };
+    const onWake = () => requestStatusRefreshRef.current();
     document.addEventListener('visibilitychange', onVisibility);
-    return () => document.removeEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onWake);
+    window.addEventListener('pageshow', onWake);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', onWake);
+      window.removeEventListener('pageshow', onWake);
+    };
   }, []);
 
   const currentTrackingUrl = useMemo(
@@ -797,10 +811,10 @@ export function SubmissionStatusView({
     // ready_for_review branches already say something accurate regardless of staleness.
     const footBarShowing = Boolean(
       status &&
-        !agentWorking &&
-        status.stall !== 'ended' &&
-        !status.agentEndedAt &&
-        (status.stall !== 'quiet' || isAwaitingOwnAgent(status) || status.phase === 'ready_for_review'),
+      !agentWorking &&
+      status.stall !== 'ended' &&
+      !status.agentEndedAt &&
+      (status.stall !== 'quiet' || isAwaitingOwnAgent(status) || status.phase === 'ready_for_review'),
     );
     return (
       <>
