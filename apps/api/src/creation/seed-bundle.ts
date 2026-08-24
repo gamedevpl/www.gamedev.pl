@@ -18,10 +18,10 @@
 import { build, type Message } from 'esbuild';
 import type { SeedFile } from './game-seed.js';
 import { resolveGameTypeScriptPath } from '../catalog/github-client.js';
-import { SOURCE_GRAPH_BUDGET_BYTES } from '../catalog/games-repo-contract.js';
+import { MAX_SOURCE_GRAPH_MODULES, SOURCE_GRAPH_BUDGET_BYTES } from '../catalog/games-repo-contract.js';
 
 /** Same ceilings as the play-path bundler, so agreement between the two is by value. */
-const MAX_GAME_MODULES = 64;
+const MAX_GAME_MODULES = MAX_SOURCE_GRAPH_MODULES;
 const MAX_GAME_SOURCE_BYTES = SOURCE_GRAPH_BUDGET_BYTES;
 
 export type SeedBundleResult = { ok: true } | { ok: false; errors: string[] };

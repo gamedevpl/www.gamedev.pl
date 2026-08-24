@@ -74,7 +74,7 @@
     "apps/api/src/catalog/games-repo-contract-check.test.ts": 291,
     "apps/api/src/catalog/games-repo-contract-check.ts": 1172,
     "apps/api/src/catalog/games-repo-contract.test.ts": 240,
-    "apps/api/src/catalog/games-repo-contract.ts": 2176,
+    "apps/api/src/catalog/games-repo-contract.ts": 2204,
     "apps/api/src/catalog/github-client.test.ts": 846,
     "apps/api/src/catalog/github-client.ts": 4294,
     "apps/api/src/catalog/github-rate-limit.ts": 92,
