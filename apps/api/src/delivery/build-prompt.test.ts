@@ -18,11 +18,7 @@ describe('buildPrompt', () => {
     expect(prompt).toContain('Stage source content directly');
     expect(prompt).toContain('audio.sounds');
     expect(prompt).toContain('engine.modules array');
-    expect(prompt).toContain('Before the first preview');
-    expect(prompt).toContain('EDITOR.content.json');
-    expect(prompt).toContain('game/editor-content.ts');
-    expect(prompt).not.toContain('After staging `game.ts` and `GAME.json`, submit immediately.');
-    expect(prompt).not.toContain('Do not stage metadata files before the first preview delivery.');
+    expect(prompt).toContain('Before the first preview'); expect(prompt).toContain('EDITOR.content.json'); expect(prompt).toContain('game/editor-content.ts'); expect(prompt).not.toContain('After staging `game.ts` and `GAME.json`, submit immediately.'); expect(prompt).not.toContain('Do not stage metadata files before the first preview delivery.');
     expect(prompt).toContain('audio.music must be one music id string');
     expect(prompt).toContain('submit_sources');
     expect(prompt).toContain('"key": "tok_abc"');
