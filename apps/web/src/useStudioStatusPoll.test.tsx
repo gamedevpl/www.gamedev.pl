@@ -89,9 +89,7 @@ describe('useStudioStatusPoll', () => {
   });
 
   it('polls again on window focus, for a sleep/wake that never toggled visibility', async () => {
-    // A tab already focused when the machine sleeps wakes back up still reporting
-    // `visible` — there is no hidden→visible edge to catch, so the stale pre-sleep
-    // schedule needs a second way to notice somebody is looking again.
+    // Sleep/wake can leave the tab "visible" with no edge to catch.
     await mount('token-1');
     expect(vi.mocked(getSubmissionStatus)).toHaveBeenCalledTimes(1);
 

@@ -67,11 +67,7 @@ export function useStudioStatusPoll(token: string | null): SubmissionStatus | nu
     // window a self-build agent uses to open and finish a round unwatched. Poll again
     // the moment the tab is looked at, rather than waiting out the clamp.
     //
-    // `visibilitychange` misses a real case: a machine that sleeps with this tab
-    // already focused wakes back up still reporting `visible` — there is no
-    // hidden→visible edge to catch, so the stale schedule from before sleep just sits
-    // there. `focus` and `pageshow` (bfcache restore) cover that: both say "somebody is
-    // looking now" even without a visibility transition.
+    // Sleep/wake can leave the tab "visible" with no edge to catch.
     const onVisibility = () => {
       if (document.visibilityState !== 'visible') return;
       if (timer) clearTimeout(timer);
