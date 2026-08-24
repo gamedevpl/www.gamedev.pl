@@ -248,7 +248,7 @@
     "apps/api/src/platform/games-repo-archive.test.ts": 26,
     "apps/api/src/platform/games-repo-archive.ts": 341,
     "apps/api/src/platform/games-repo-contract.test.ts": 240,
-    "apps/api/src/platform/games-repo-contract.ts": 2176,
+    "apps/api/src/platform/games-repo-contract.ts": 2204,
     "apps/api/src/platform/genai.ts": 148,
     "apps/api/src/platform/image-variants.test.ts": 98,
     "apps/api/src/platform/image-variants.ts": 261,
