@@ -30,7 +30,7 @@ function seedInclude(relativePath: string): boolean {
 }
 
 /** Order matters: this is the shape a game has, and the order the model sees it in. */
-const GAME_TOP_LEVEL_FILES = ['SPEC.md', 'GAME.json', 'game.ts', 'index.html', 'style.css', 'ACCEPTANCE.json'];
+const GAME_TOP_LEVEL_FILES = ['SPEC.md', 'GAME.json', 'EDITOR.json', 'EDITOR.ts', 'EDITOR.content.json', 'game.ts', 'index.html', 'style.css', 'ACCEPTANCE.json'];
 
 /** One reference file this big is a generated blob, not something to learn a style from. */
 const MAX_REFERENCE_FILE_BYTES = 80_000;
