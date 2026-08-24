@@ -3216,6 +3216,16 @@ export async function registerSubmissionRoutes(
         };
         const recorded = await store.recordJobTransition(record.issueNumber, transition);
         if (!recorded) return null;
+        // The outgoing token just died — resume any pending handoff now, not in 10m.
+        if (to === 'ready_for_review' && record.builderHandoff?.awaitsAgentAck) {
+          await acknowledgeBuilderHandoff({
+            issueNumber: record.issueNumber,
+            acknowledgedAt: transition.at,
+            log: app.log,
+          }).catch((error) => {
+            app.log.error({ err: error, issueNumber: record.issueNumber }, 'failed to resume handoff at round close');
+          });
+        }
         // First time we act on this verdict: post the capture frame into the thread so the
         // creator sees what the platform check saw, on the same path as agent-sent shots.
         if (verdict.screenshot) {
@@ -3941,16 +3951,18 @@ export async function registerSubmissionRoutes(
         now: now(),
         builder: currentBuilder,
       });
+      const roundAlreadyClosed = record.state === 'ready_for_review';
       if (
         record.state === 'publishing' ||
-        !isActiveBuildRound(record) ||
-        !allowsCreatorBuilderHandoff({
-          currentBuilder,
-          requestedBuilder,
-          stall,
-          agentEndedAt: record.agentEndedAt,
-          creatorRequested,
-        })
+        (!isActiveBuildRound(record) && !roundAlreadyClosed) ||
+        (!roundAlreadyClosed &&
+          !allowsCreatorBuilderHandoff({
+            currentBuilder,
+            requestedBuilder,
+            stall,
+            agentEndedAt: record.agentEndedAt,
+            creatorRequested,
+          }))
       ) {
         return reply.status(409).send({ error: 'builder_locked', reason: 'active_round', builder: currentBuilder });
       }
@@ -3975,7 +3987,7 @@ export async function registerSubmissionRoutes(
       // An already-`ended` agent cannot ack again — resume immediately instead.
       // Same if never dispatched: no agent exists to ack.
       const neverDispatched = !record.dispatch?.refs?.length;
-      const awaitsAgentAck = creatorRequested && stall !== 'ended' && !neverDispatched;
+      const awaitsAgentAck = creatorRequested && stall !== 'ended' && !neverDispatched && !roundAlreadyClosed;
       const requestedAt = new Date(now()).toISOString();
       const accepted = await store.requestBuilderHandoff(issueNumber, requestedBuilder, requestedAt, awaitsAgentAck);
       if (!accepted) {
@@ -3990,6 +4002,15 @@ export async function registerSubmissionRoutes(
           target: requestedBuilder,
           requestedAt,
         });
+      }
+
+      // Recheck: a reviewer may have approved this since the read at handler top.
+      if (roundAlreadyClosed) {
+        const fresh = await store.getSubmission(issueNumber);
+        if (!fresh || fresh.state === 'publishing' || fresh.state === 'published') {
+          await store.clearBuilderHandoff(issueNumber).catch(() => {});
+          return reply.status(409).send({ error: 'builder_locked', reason: 'active_round', builder: currentBuilder });
+        }
       }
 
       const outcome = await resumeBuild({
