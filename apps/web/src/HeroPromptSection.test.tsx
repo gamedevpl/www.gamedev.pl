@@ -372,7 +372,7 @@ describe('HeroPromptSection', () => {
         value: { files: [file] },
       });
       card.dispatchEvent(drop);
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 50));
     });
 
     await act(async () => {
