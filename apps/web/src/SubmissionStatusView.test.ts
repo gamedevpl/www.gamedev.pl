@@ -2772,6 +2772,35 @@ describe('SubmissionStatusView', () => {
       root.unmount();
     });
   });
+
+  it('re-reads status on window focus, for a sleep/wake that never toggled visibility', async () => {
+    // Sleep/wake can leave the tab "visible" with no edge to catch.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({ status: 'in_review', phase: 'ready_for_review' });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/status/focus-token');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'focus-token' }));
+      await flushEffects();
+    });
+    const callsBefore = mockedGetSubmissionStatus.mock.calls.length;
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+      await flushEffects();
+    });
+
+    expect(mockedGetSubmissionStatus.mock.calls.length).toBeGreaterThan(callsBefore);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });
 
 describe('SubmissionStatusView expectations & failures', () => {

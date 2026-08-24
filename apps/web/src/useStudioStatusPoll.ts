@@ -66,17 +66,27 @@ export function useStudioStatusPoll(token: string | null): SubmissionStatus | nu
     // A backgrounded tab's timers get throttled, sometimes for minutes — exactly the
     // window a self-build agent uses to open and finish a round unwatched. Poll again
     // the moment the tab is looked at, rather than waiting out the clamp.
+    //
+    // Sleep/wake can leave the tab "visible" with no edge to catch.
     const onVisibility = () => {
       if (document.visibilityState !== 'visible') return;
       if (timer) clearTimeout(timer);
       void tick();
     };
+    const onWake = () => {
+      if (timer) clearTimeout(timer);
+      void tick();
+    };
     document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onWake);
+    window.addEventListener('pageshow', onWake);
 
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', onWake);
+      window.removeEventListener('pageshow', onWake);
     };
   }, [token, locale]);
 
