@@ -678,6 +678,55 @@ describe('self builder (BY-02)', () => {
     });
   });
 
+  it('hands a self round off to platform via /handoff once it reaches ready_for_review', async () => {
+    // ready_for_review already closed the round — no live writer to interrupt.
+    const { backend, briefs } = platformStub();
+    const { gamesStore } = stubGamesStore();
+    const created = await createApp({ platform: backend, gamesStore });
+    app = created.app;
+    const { store } = created;
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Ready For Review Handoff', concept: CONCEPT, builder: 'self' },
+    });
+    const slug = submit.json().slug as string;
+    let issueNumber = 0;
+    await vi.waitFor(async () => {
+      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/sources',
+      headers: agentHeaders(issueNumber),
+      payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
+    });
+    await store.recordJobTransition(issueNumber, {
+      to: 'ready_for_review',
+      at: new Date().toISOString(),
+      by: 'gate',
+      reason: 'gate_green',
+    });
+    const generationBefore = (await store.getSubmission(issueNumber))?.roundGeneration ?? 1;
+
+    const handoff = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(issueNumber, secret)}/handoff`,
+      headers: authHeaders(),
+      payload: { builder: 'platform' },
+    });
+
+    expect(handoff.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs.length).toBeGreaterThan(0));
+    const afterHandoff = await store.getSubmission(issueNumber);
+    expect(afterHandoff?.builder).toBe('platform');
+    expect(afterHandoff?.dispatch?.backend).toBe('copilot');
+    expect(afterHandoff?.roundGeneration).toBeGreaterThan(generationBefore);
+  });
+
   it('hands a self round with no agent yet to the platform agent without feedback', async () => {
     const { backend, briefs } = platformStub();
     const { gamesStore } = stubGamesStore();

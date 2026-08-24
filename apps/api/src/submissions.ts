@@ -3941,16 +3941,18 @@ export async function registerSubmissionRoutes(
         now: now(),
         builder: currentBuilder,
       });
+      const roundAlreadyClosed = record.state === 'ready_for_review';
       if (
         record.state === 'publishing' ||
-        !isActiveBuildRound(record) ||
-        !allowsCreatorBuilderHandoff({
-          currentBuilder,
-          requestedBuilder,
-          stall,
-          agentEndedAt: record.agentEndedAt,
-          creatorRequested,
-        })
+        (!isActiveBuildRound(record) && !roundAlreadyClosed) ||
+        (!roundAlreadyClosed &&
+          !allowsCreatorBuilderHandoff({
+            currentBuilder,
+            requestedBuilder,
+            stall,
+            agentEndedAt: record.agentEndedAt,
+            creatorRequested,
+          }))
       ) {
         return reply.status(409).send({ error: 'builder_locked', reason: 'active_round', builder: currentBuilder });
       }
@@ -3975,7 +3977,7 @@ export async function registerSubmissionRoutes(
       // An already-`ended` agent cannot ack again — resume immediately instead.
       // Same if never dispatched: no agent exists to ack.
       const neverDispatched = !record.dispatch?.refs?.length;
-      const awaitsAgentAck = creatorRequested && stall !== 'ended' && !neverDispatched;
+      const awaitsAgentAck = creatorRequested && stall !== 'ended' && !neverDispatched && !roundAlreadyClosed;
       const requestedAt = new Date(now()).toISOString();
       const accepted = await store.requestBuilderHandoff(issueNumber, requestedBuilder, requestedAt, awaitsAgentAck);
       if (!accepted) {
