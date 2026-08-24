@@ -4,7 +4,7 @@ import type { ContentChecker } from '../platform/moderation.js';
 import type { PublishedSlugGate } from '../catalog/published-slugs.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import type { Store } from '../platform/store.js';
-import { logModerationRejection } from '../telemetry/moderation-metrics.js';
+import { logModerationRejection } from '../platform/moderation-metrics.js';
 
 /**
  * Written player feedback (docs/improvement-loop-plan.md, signal source #1) — free

@@ -4,7 +4,7 @@ import type { Store } from '../platform/store.js';
 import type { CatalogEnrichmentRecord } from '../store/records/catalog-enrichment.js';
 import { extractSpecDescription } from './game-page-routes.js';
 import type { GenAIClient } from 'genaicode';
-import { createVertexClient } from '../agent-surface/genai.js';
+import { createVertexClient } from '../platform/genai.js';
 
 export const GEMINI_ENRICHMENT_MODEL = 'gemini-3.5-flash-lite';
 

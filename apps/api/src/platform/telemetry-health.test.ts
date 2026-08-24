@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { recentPartitions, summarizeGameHealth } from './telemetry-health.js';
-import type { TelemetryEvent } from '../platform/store.js';
+import type { TelemetryEvent } from './store.js';
 
 /**
  * Builds a session's events from offsets, dating each one from a base wall clock so the

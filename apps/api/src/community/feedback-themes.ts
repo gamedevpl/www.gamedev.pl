@@ -1,6 +1,6 @@
 import type { GenAIClient } from 'genaicode';
 import { z } from 'zod';
-import { createVertexClient, type VertexGenerationConfig } from '../agent-surface/genai.js';
+import { createVertexClient, type VertexGenerationConfig } from '../platform/genai.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 
 /**

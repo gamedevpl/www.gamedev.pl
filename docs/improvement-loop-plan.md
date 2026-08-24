@@ -85,7 +85,7 @@ made from stale premises.
 | Games are addressed as `games/{gameId}`                                   | Half right, and the half that was wrong cost a day: a **submission** is `submissions/{issueNumber}`, but a **game** is a games-repo slug, and only 8 of 42 catalog games have a submission at all                                                             | Keyed by `slug`. Re-keying on the submission was tried first and silently dropped ~95% of play         |
 | "No email sender exists", so the digest is on-site only                   | Mailer, templates, unsubscribe tokens, Web Push and an in-app bell all shipped                                                                                                                                                                                | **Decision reversed**: the digest rides the existing notification seam                                 |
 | The improvement quota would need new quota machinery                      | `UsageCounters` is already a named-kind counter set (`submissions`, `previews`, `mocks`, `refines`, `feedback`)                                                                                                                                               | The separate improvement quota is one new counter kind                                                 |
-| Theme extraction uses "Vertex Flash-Lite plumbing"                        | Vertex calls now route through the genaicode seam ([genai.ts](../apps/api/src/agent-surface/genai.ts)); moderation runs Gemini 3 Flash                                                                                                                        | Naming corrected; the seam is the integration point, not Vertex directly                               |
+| Theme extraction uses "Vertex Flash-Lite plumbing"                        | Vertex calls now route through the genaicode seam ([genai.ts](../apps/api/src/platform/genai.ts)); moderation runs Gemini 3 Flash                                                                                                                             | Naming corrected; the seam is the integration point, not Vertex directly                               |
 | Written feedback → agent is a thing to design                             | `POST /api/submissions/:token/feedback` already does it: moderate → sanitize → fenced PR comment → queue into the agent inbox                                                                                                                                 | The Act plane's delivery path is **built and proven**; player feedback is the missing sibling          |
 | An agent's progress arrives by git                                        | The build channel ([agent-channel.ts](../apps/api/src/agent-surface/agent-channel.ts)) takes progress, screenshots, and hands back queued creator requests                                                                                                    | Improvement runs get live progress and before/after shots for free                                     |
 | "Assign the issue to Copilot" is a solved primitive                       | **Superseded (2026-07-29/30).** The relay is gone: the platform owns dispatch through the agent-tasks API and a job state machine ([agent-backend.ts](../apps/api/src/agent-surface/agent-backend.ts), [job-state.ts](../apps/api/src/creation/job-state.ts)) | The autonomy story is **no longer gated on a relay**. IL-3/IL-4 dispatch work, they do not file issues |
@@ -585,7 +585,7 @@ at all and feeds the only autonomous-eligible class.
   `report()` funnel emits both automatically, so all 83 games gained it in one
   change with no per-game opt-in.
 - 🚧 **`progress` markers**, per game, in the games repo. The vocabulary, the
-  session cap, and the read-side funnel ([telemetry-health.ts](../apps/api/src/telemetry/telemetry-health.ts)
+  session cap, and the read-side funnel ([telemetry-health.ts](../apps/api/src/platform/telemetry-health.ts)
   `progressLabels`) all exist and are tested — `GameKit.progress(label)` is
   callable today, and **13 of ~82 games call it** as of 2026-07-26 (see the list
   above), added a few at a time by maintenance touching those games rather than
@@ -611,7 +611,7 @@ at all and feeds the only autonomous-eligible class.
 
 - ✅ **Operator health view** — `GET /api/admin/telemetry/health?days=N`
   ([admin.ts](../apps/api/src/platform/admin.ts)) over a pure aggregator
-  ([telemetry-health.ts](../apps/api/src/telemetry/telemetry-health.ts)), rendered at the
+  ([telemetry-health.ts](../apps/api/src/platform/telemetry-health.ts)), rendered at the
   unlisted `#/health` route. Per game: sessions, bounces, median play time, median
   fps, stall rate, and grouped error messages, worst first.
 
@@ -662,7 +662,7 @@ at all and feeds the only autonomous-eligible class.
     accepted cost is that a game with votes but no recent plays gets none either.
 
   The window scan shares `scanPartitions` with the operator page (in
-  [telemetry-health.ts](../apps/api/src/telemetry/telemetry-health.ts)) so a number shown to a human
+  [telemetry-health.ts](../apps/api/src/platform/telemetry-health.ts)) so a number shown to a human
   and the same number written into a scorecard cannot disagree about what `truncated`
   means; only the budget differs, since a nightly batch and an interactive click are
   paying for different things.

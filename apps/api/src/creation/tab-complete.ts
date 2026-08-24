@@ -1,5 +1,5 @@
 import { resultText, type GenAIClient, type GenerationResult } from 'genaicode';
-import { createVertexClient, type VertexGenerationConfig } from '../agent-surface/genai.js';
+import { createVertexClient, type VertexGenerationConfig } from '../platform/genai.js';
 
 // TA-01: prompt-based FIM — Vertex Gemini has no suffix field.
 export const DEFAULT_TAB_COMPLETE_MODEL = 'gemini-3.7-flash';

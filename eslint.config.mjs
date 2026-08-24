@@ -4,6 +4,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import globals from 'globals';
 import gamedevRules from './eslint-rules/index.mjs';
+import { ENFORCED_BUCKETS } from './eslint-rules/module-boundary-map.mjs';
 
 // Flat config lints a file only when some block's `files` pattern matches it, so the
 // ts/tsx blocks below are what define the lint surface — the same one `--ext ts,tsx` gave.
@@ -54,8 +55,15 @@ export default [
       // apps/api (where Node would crash without it) and drifted in apps/web (where
       // Vite covers for it), which left reviewers flagging it by hand forever.
       'gamedev/relative-import-extensions': 'error',
-      // Not enabled here: it would trip --max-warnings 0 on pre-existing cross-module
-      // debt. Run explicitly via `npm run module-boundary` (see eslint-rules/module-boundary.mjs).
+      // Not enabled repo-wide here: it would trip --max-warnings 0 on the cross-module
+      // debt still warn-only via `npm run module-boundary`. The block below turns it on
+      // at 'error' per bucket, once ENFORCED_BUCKETS says that bucket's imports are clean.
+    },
+  },
+  {
+    files: ENFORCED_BUCKETS.map((bucket) => `apps/api/src/${bucket}/**/*.ts`),
+    rules: {
+      'gamedev/module-boundary': 'error',
     },
   },
   {

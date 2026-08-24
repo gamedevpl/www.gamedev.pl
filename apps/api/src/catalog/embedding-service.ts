@@ -1,5 +1,5 @@
 import { GoogleAuth } from 'google-auth-library';
-import { resolveProjectId } from '../agent-surface/genai.js';
+import { resolveProjectId } from '../platform/genai.js';
 
 export const GEMINI_EMBEDDING_MODEL = process.env.VERTEX_EMBEDDING_MODEL || 'text-embedding-005';
 const SCOPE = 'https://www.googleapis.com/auth/cloud-platform';

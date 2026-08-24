@@ -4,7 +4,7 @@ import { renderContactEmail } from './email-templates.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { moderateFields } from '../platform/moderation.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
-import { logModerationRejection } from '../telemetry/moderation-metrics.js';
+import { logModerationRejection } from '../platform/moderation-metrics.js';
 
 /**
  * Public contact form → transactional email to the published operator address

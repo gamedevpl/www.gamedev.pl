@@ -1,6 +1,6 @@
 import type { ChatAgentScope } from '@gamedevpl/contract';
 import { image, resultText, resultToolCalls, user, type GenAIClient, type ToolDefinition } from 'genaicode';
-import { createVertexClient } from '../agent-surface/genai.js';
+import { createVertexClient } from '../platform/genai.js';
 import type { ChatTurn } from './chat-turns.js';
 import type { JobStall } from './job-state.js';
 

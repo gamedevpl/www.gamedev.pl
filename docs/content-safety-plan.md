@@ -181,7 +181,7 @@ reopen it, and neither is in scope today:
      legally operative text rather than UI wording. Building it first would mean writing it
      twice.
    - **Moderation metrics — built.** Every rejection now emits one structured line from
-     [`moderation-metrics.ts`](../apps/api/src/telemetry/moderation-metrics.ts), carrying surface,
+     [`moderation-metrics.ts`](../apps/api/src/platform/moderation-metrics.ts), carrying surface,
      category and uid, and never the rejected text. A log-based metric backs alert **A14**
      ([`moderation-burst.md`](./runbooks/moderation-burst.md)).
 

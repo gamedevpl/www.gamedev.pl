@@ -1,6 +1,6 @@
 import type { GameHealth } from '@gamedevpl/contract';
 export type { GameHealth };
-import type { TelemetryEvent } from '../platform/store.js';
+import type { TelemetryEvent } from './store.js';
 
 /**
  * Turns raw play events into a per-game health picture (docs/improvement-loop-plan.md IL-2).
