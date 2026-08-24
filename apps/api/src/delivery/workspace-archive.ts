@@ -27,7 +27,7 @@
  * time, because this is the side that actually hands bytes to a creator.
  */
 
-import { writeTarGz, type TarEntry, type TarInput } from './tar.js';
+import { writeTarGz, type TarEntry, type TarInput } from '../platform/tar.js';
 
 /** What the site adds to every workspace so `setup.mjs` knows what to fetch. */
 export interface WorkspaceLock {

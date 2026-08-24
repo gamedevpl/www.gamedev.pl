@@ -7,13 +7,13 @@ import {
   mintGameAgentKey,
 } from './agent-game-key.js';
 import {
-  creatorOwnsSlug,
   resolveGameAgentKeyForOpenRound,
   resolveGameAgentKeyForStart,
   verifyDurableGameAgentKey,
 } from './agent-game-key-resolve.js';
 import type { SubmissionRecord } from '../platform/store.js';
 import { InMemoryStore } from '../platform/store.js';
+import { creatorOwnsSlug } from '../platform/slug-ownership.js';
 
 const secret = 'resolve-game-key-secret';
 const slug = 'comet-courier';

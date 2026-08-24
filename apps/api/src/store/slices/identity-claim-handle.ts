@@ -11,7 +11,7 @@ export async function claimHandleInMemory(
   at: string,
 ): Promise<ClaimHandleResult> {
   const { normalizeHandle, validateHandleShape, HANDLE_RENAME_COOLDOWN_MS } =
-    await import('../../creation/creator-profile.js');
+    await import('../../platform/creator-profile.js');
   const key = normalizeHandle(handle);
   const shape = validateHandleShape(key);
   if (shape) return { ok: false, reason: shape };
@@ -68,7 +68,7 @@ export async function claimHandleFirestore(
   at: string,
 ): Promise<ClaimHandleResult> {
   const { normalizeHandle, validateHandleShape, HANDLE_RENAME_COOLDOWN_MS } =
-    await import('../../creation/creator-profile.js');
+    await import('../../platform/creator-profile.js');
   const key = normalizeHandle(handle);
   const shape = validateHandleShape(key);
   if (shape) return { ok: false, reason: shape };

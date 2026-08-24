@@ -22,7 +22,8 @@ import {
   SESSION_KEY_IS_NOT_AN_OPENER_REASON,
   SLUG_NOT_ON_ACCOUNT_REASON,
 } from './agent-game-key.js';
-import { creatorOwnsSlug, findActiveRoundForSlug, findDraftJobForSlug } from './agent-game-key-resolve.js';
+import { findActiveRoundForSlug, findDraftJobForSlug } from './agent-game-key-resolve.js';
+import { creatorOwnsSlug } from '../platform/slug-ownership.js';
 import {
   JOINING_ROUND_PRESENCE,
   mcpPresenceKey,

@@ -10,7 +10,7 @@ import {
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { splitConceptBrief } from './creation/agent-build-brief.js';
-import { creatorOwnsSlug } from './agent-surface/agent-game-key-resolve.js';
+import { creatorOwnsSlug } from './platform/slug-ownership.js';
 import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-surface/agent-channel.js';
 import { mintAgentToken, mintManagedMcpOpener } from './agent-surface/agent-token.js';
 import { registerMcpServerRoutes } from './agent-surface/mcp-server.js';
@@ -30,7 +30,7 @@ import {
   type ManagedUnavailableReason,
 } from './agent-surface/managed-availability.js';
 import { postGateScreenshotToThread } from './delivery/gate-screenshot.js';
-import { profileBylineName, toPublicCreatorProfile } from './creation/creator-profile.js';
+import { profileBylineName, toPublicCreatorProfile } from './platform/creator-profile.js';
 import {
   catalogEntryFromSpec,
   createGitHubClient,

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { isAdminSession } from '../platform/admin-session.js';
-import { hasPublishableProfile } from './creator-profile.js';
+import { hasPublishableProfile } from '../platform/creator-profile.js';
 import {
   detectStall,
   isTerminal,
@@ -290,4 +290,3 @@ export async function registerJobAdminRoutes(
     });
   });
 }
-

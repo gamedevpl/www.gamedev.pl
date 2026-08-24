@@ -31,7 +31,7 @@ export const MODULE_BUCKETS = [
  * `eslint .` pass; every other bucket stays warn-only via `npm run module-boundary` until
  * its own turn. Append to this list, never edit its enforcement elsewhere.
  */
-export const ENFORCED_BUCKETS = ['telemetry'];
+export const ENFORCED_BUCKETS = ['telemetry', 'catalog', 'realtime'];
 
 const DEFAULT_BUCKET = 'platform';
 
@@ -89,6 +89,15 @@ const FILE_BUCKET = {
   'knowledge-metrics': 'platform',
   'telemetry-health': 'platform',
   'delivery-metrics': 'platform',
+  // Pure vocabulary and formatting for a creator's public identity -- read by every
+  // surface that renders a byline, not creation-domain business logic.
+  'creator-profile': 'platform',
+  // A tar reader/writer with no domain dependencies at all (node:zlib only), used by
+  // four different buckets.
+  tar: 'platform',
+  // A single Store-querying ownership check, factored out of agent-game-key-resolve.ts
+  // because catalog needed the same question without the agent-key machinery around it.
+  'slug-ownership': 'platform',
 
   // creation: jobs, rounds, dispatch, seed, refine
   'job-state': 'creation',
@@ -124,7 +133,6 @@ const FILE_BUCKET = {
   'chat-turns': 'creation',
   'creator-code': 'creation',
   'creator-studio': 'creation',
-  'creator-profile': 'creation',
   'creator-profile-routes': 'creation',
   'seed-context': 'creation',
   'seed-bundle': 'creation',
@@ -188,12 +196,10 @@ const FILE_BUCKET = {
   'games-store': 'delivery',
   'gcs-sign': 'delivery',
   'workspace-archive': 'delivery',
-  tar: 'delivery',
   'build-transcript': 'delivery',
   'build-changelog': 'delivery',
   'build-preview-limits': 'delivery',
   'build-prompt': 'delivery',
-  'manifest-source': 'delivery',
   'source-delivery': 'delivery',
   'recent-builds': 'delivery',
   'gate-runner': 'delivery',
@@ -206,6 +212,7 @@ const FILE_BUCKET = {
   // catalog: github-client, snapshots, assemble, play
   'music-tracks': 'catalog',
   'catalog-enricher': 'catalog',
+  'catalog-vector-index': 'catalog',
   'embedding-service': 'catalog',
   'github-client': 'catalog',
   'github-rate-limit': 'catalog',
@@ -223,6 +230,7 @@ const FILE_BUCKET = {
   'game-manifest-hint': 'catalog',
   'game-health': 'catalog',
   'games-repo-archive': 'catalog',
+  'games-repo-client': 'catalog',
   'games-repo-contract': 'catalog',
   'games-repo-contract-check': 'catalog',
   'local-games-repo': 'catalog',
@@ -262,6 +270,9 @@ const FILE_BUCKET = {
   'game-saves': 'realtime',
   zones: 'realtime',
   'zone-source': 'realtime',
+  // Declared-shape cache backing P2 shared worlds and P3 zones -- only ever consumed
+  // by realtime's own source files, despite having lived in delivery/ since Wave A.
+  'manifest-source': 'realtime',
 
   // telemetry
   telemetry: 'telemetry',

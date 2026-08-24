@@ -9,7 +9,7 @@
  * hash and never reaches the server (see docs/path-routing-plan.md § Join).
  */
 
-import { PLATFORM_HANDLE, RESERVED_HANDLES } from '../creation/creator-profile.js';
+import { PLATFORM_HANDLE, RESERVED_HANDLES } from './creator-profile.js';
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const PLAY_PREFIX_PATTERN = /^\/(play|ay|ai)\/([^/]+)$/;

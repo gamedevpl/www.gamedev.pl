@@ -11,7 +11,7 @@ import {
   toPublicCreatorProfile,
   validateHandleShape,
 } from './creator-profile.js';
-import { InMemoryStore } from '../platform/store.js';
+import { InMemoryStore } from './store.js';
 
 describe('creator-profile validation', () => {
   it('accepts lowercase handles with underscores', () => {
