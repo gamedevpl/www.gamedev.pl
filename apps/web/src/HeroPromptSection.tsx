@@ -52,7 +52,10 @@ function findMatchingGame(query: string, catalog: CatalogEntry[]): CatalogEntry 
 
     // 2. Keyword or search tag match (e.g. from Flash-Lite enrichment)
     if (
-      entry.searchKeywords?.some((k) => normalized.includes(k.toLowerCase()) || k.toLowerCase().includes(normalized))
+      entry.searchKeywords?.some((k) => {
+        const kw = k.toLowerCase().trim();
+        return kw.length > 2 && tokens.includes(kw);
+      })
     ) {
       return entry;
     }
@@ -270,8 +273,9 @@ export function HeroPromptSection({
       return;
     }
 
+    const controller = new AbortController();
     const handle = setTimeout(() => {
-      fetch(`/api/catalog/search?q=${encodeURIComponent(trimmed)}`)
+      fetch(`/api/catalog/search?q=${encodeURIComponent(trimmed)}`, { signal: controller.signal })
         .then((res) => (res.ok ? res.json() : null))
         .then((data: { match?: CatalogEntry | null; score?: number } | null) => {
           if (data?.match && typeof data.score === 'number' && data.score >= 0.65) {
@@ -289,11 +293,16 @@ export function HeroPromptSection({
           setVectorMatchedGame(null);
         })
         .catch(() => {
-          setVectorMatchedGame(null);
+          if (!controller.signal.aborted) {
+            setVectorMatchedGame(null);
+          }
         });
     }, 200);
 
-    return () => clearTimeout(handle);
+    return () => {
+      clearTimeout(handle);
+      controller.abort();
+    };
   }, [promptText, catalogEntries]);
 
   const matchedGame = vectorMatchedGame || localMatchedGame;

@@ -38,12 +38,14 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   return denom > 0 ? dotProduct / denom : 0;
 }
 
-// Generates embeddings using Vertex AI or fallback.
+// Generates embeddings using Vertex AI.
 export class VertexEmbeddingService {
   private auth: GoogleAuth;
   private projectId: string;
   private region: string;
   private model: string;
+  private cache = new Map<string, number[]>();
+  private static readonly MAX_CACHE_SIZE = 500;
 
   constructor(options: VertexEmbeddingOptions = {}) {
     this.projectId = resolveProjectId(options.projectId);
@@ -56,6 +58,9 @@ export class VertexEmbeddingService {
   async embedText(text: string): Promise<number[]> {
     const trimmed = text.trim();
     if (!trimmed) return [];
+
+    const cached = this.cache.get(trimmed);
+    if (cached) return cached;
 
     try {
       const client = await this.auth.getClient();
@@ -91,25 +96,20 @@ export class VertexEmbeddingService {
       };
 
       const values = data.predictions?.[0]?.embeddings?.values || data.predictions?.[0]?.values;
-      if (!values || !Array.isArray(values)) {
+      if (!values || !Array.isArray(values) || values.length === 0) {
         throw new Error('Malformed embedding response from Vertex AI');
       }
 
-      return normalizeVector(values);
+      const normalized = normalizeVector(values);
+      if (this.cache.size >= VertexEmbeddingService.MAX_CACHE_SIZE) {
+        const firstKey = this.cache.keys().next().value;
+        if (firstKey) this.cache.delete(firstKey);
+      }
+      this.cache.set(trimmed, normalized);
+      return normalized;
     } catch {
-      // Deterministic fallback embedding for testing / offline environments
-      return this.generateDeterministicFallback(trimmed);
+      // Returns empty vector on Vertex AI failure or unconfigured credentials
+      return [];
     }
-  }
-
-  // Generates pseudo-vector for local development when offline.
-  generateDeterministicFallback(text: string, dimensions = 64): number[] {
-    const vec = new Array<number>(dimensions).fill(0);
-    for (let i = 0; i < text.length; i++) {
-      const code = text.charCodeAt(i);
-      const idx = (code + i * 31) % dimensions;
-      vec[idx] += 1;
-    }
-    return normalizeVector(vec);
   }
 }

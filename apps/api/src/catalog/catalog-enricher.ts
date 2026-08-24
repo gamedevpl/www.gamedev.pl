@@ -25,6 +25,7 @@ export function extractShortControls(controlsText: string): string {
 export function extractFallbackKeywords(entry: CatalogGameEntry): string[] {
   const words = new Set<string>();
   const addTokens = (str: string) => {
+    if (!str) return;
     str
       .toLowerCase()
       .split(/[^a-z0-9ąćęłńóśźż]+/i)
@@ -33,7 +34,7 @@ export function extractFallbackKeywords(entry: CatalogGameEntry): string[] {
   };
   addTokens(entry.slug);
   addTokens(entry.title);
-  addTokens(entry.genre);
+  addTokens(entry.genre || '');
   return Array.from(words);
 }
 
@@ -107,7 +108,7 @@ Respond with STRICT JSON only, matching this schema:
             pl: parsed.shortControls?.pl?.trim() || extractShortControls(entry.controls),
           },
           searchKeywords: Array.isArray(parsed.searchKeywords)
-            ? parsed.searchKeywords.map((k) => String(k).trim()).filter(Boolean)
+            ? parsed.searchKeywords.map((k) => String(k).trim()).filter((k) => k.length > 2)
             : extractFallbackKeywords(entry),
           updatedAt: new Date().toISOString(),
         };

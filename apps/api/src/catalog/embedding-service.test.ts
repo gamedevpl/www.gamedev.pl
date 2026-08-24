@@ -1,7 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { l2Norm, normalizeVector, cosineSimilarity, VertexEmbeddingService } from './embedding-service.js';
 
 describe('embedding-service', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('computes L2 norm and normalizes vector to unit length', () => {
     const vec = [3, 4];
     expect(l2Norm(vec)).toBe(5);
@@ -22,16 +26,44 @@ describe('embedding-service', () => {
     expect(cosineSimilarity(a, d)).toBeCloseTo(-1);
   });
 
-  it('generates deterministic fallback embeddings when offline', async () => {
-    const service = new VertexEmbeddingService();
-    const vec1 = await service.embedText('arcade football');
-    const vec2 = await service.embedText('arcade football');
-    const vec3 = await service.embedText('space shooter');
+  it('generates embedding and caches repeated queries with mocked Vertex API', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        predictions: [
+          {
+            embeddings: {
+              values: [0.6, 0.8],
+            },
+          },
+        ],
+      }),
+    } as Response);
 
-    expect(vec1.length).toBeGreaterThan(0);
-    expect(vec1).toEqual(vec2);
-    expect(cosineSimilarity(vec1, vec2)).toBeCloseTo(1);
-    // Distinct texts should have similarity < 1
-    expect(cosineSimilarity(vec1, vec3)).toBeLessThan(1);
+    const service = new VertexEmbeddingService();
+    // Stub auth client getAccessToken
+    vi.spyOn(
+      (service as unknown as { auth: { getClient: () => Promise<unknown> } }).auth,
+      'getClient',
+    ).mockResolvedValue({
+      getAccessToken: async () => ({ token: 'mock-token' }),
+    });
+
+    const vec1 = await service.embedText('arcade football');
+    expect(vec1).toEqual([0.6, 0.8]);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    // Second call should hit the in-memory cache
+    const vec2 = await service.embedText('arcade football');
+    expect(vec2).toEqual([0.6, 0.8]);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns empty array cleanly when Vertex AI is offline or fails', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network error'));
+
+    const service = new VertexEmbeddingService();
+    const vec = await service.embedText('arcade football');
+    expect(vec).toEqual([]);
   });
 });

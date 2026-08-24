@@ -45,7 +45,11 @@ import {
   SnapshotUnavailableError,
   type GameSnapshotReader,
 } from './catalog/game-snapshot.js';
-import { attachCatalogEnrichments } from './catalog/catalog-enricher.js';
+import {
+  attachCatalogEnrichments,
+  createDefaultEnricherClient,
+  getOrEnrichCatalogGame,
+} from './catalog/catalog-enricher.js';
 import { VertexEmbeddingService } from './catalog/embedding-service.js';
 import { CatalogVectorIndex } from './catalog/catalog-vector-index.js';
 import { startHealthCheck } from './catalog/game-health.js';
@@ -5843,15 +5847,39 @@ export async function registerSubmissionRoutes(
 
   const embeddingService = new VertexEmbeddingService();
   const catalogVectorIndex = new CatalogVectorIndex();
+  let indexBuildPromise: Promise<void> | null = null;
+  let lastIndexBuildTime = 0;
+  const INDEX_TTL_MS = 10 * 60 * 1000;
 
-  async function ensureCatalogVectorIndex(): Promise<void> {
-    if (catalogVectorIndex.size() > 0 || !githubClient) return;
+  async function buildCatalogVectorIndex(): Promise<void> {
+    if (!githubClient) return;
     try {
       const entries = await getCatalogEntries(githubClient);
       const published = entries.filter((entry) => entry.status === 'published');
+      const enricherClient = createDefaultEnricherClient();
+
+      if (store) {
+        for (const entry of published) {
+          try {
+            const existing = await store.getCatalogEnrichment(entry.slug);
+            if (!existing) {
+              const spec = await githubClient.getGameFile(publishedRef, entry.slug, 'SPEC.md');
+              if (spec) {
+                await getOrEnrichCatalogGame(entry, spec, {
+                  store,
+                  genAIClient: enricherClient,
+                });
+              }
+            }
+          } catch {
+            // Non-blocking per-game enrichment
+          }
+        }
+      }
+
       const enriched = await attachCatalogEnrichments(published, store);
       for (const entry of enriched) {
-        const docText = `${entry.title}. ${entry.genre}. ${entry.tagline?.en || ''} ${entry.tagline?.pl || ''} ${(entry.searchKeywords || []).join(', ')}`;
+        const docText = `${entry.title}. ${entry.genre || ''}. ${entry.tagline?.en || ''} ${entry.tagline?.pl || ''} ${(entry.searchKeywords || []).join(', ')}`;
         const vec = await embeddingService.embedText(docText);
         if (vec.length > 0) {
           catalogVectorIndex.upsert({
@@ -5865,43 +5893,64 @@ export async function registerSubmissionRoutes(
           });
         }
       }
+      lastIndexBuildTime = Date.now();
     } catch {
       // Non-blocking index sync
     }
   }
 
-  // Multimodal semantic vector search across catalog games.
-  app.get('/api/catalog/search', async (request, reply) => {
-    const query =
-      typeof request.query === 'object' && request.query !== null && 'q' in request.query
-        ? String((request.query as { q: unknown }).q || '').trim()
-        : '';
-    if (!query || query.length < 2) {
-      return reply.send({ match: null, score: 0 });
+  function ensureCatalogVectorIndex(): Promise<void> {
+    const isStale = Date.now() - lastIndexBuildTime > INDEX_TTL_MS;
+    if (catalogVectorIndex.size() > 0 && !isStale) {
+      return Promise.resolve();
     }
+    if (!indexBuildPromise) {
+      indexBuildPromise = buildCatalogVectorIndex().finally(() => {
+        indexBuildPromise = null;
+      });
+    }
+    return indexBuildPromise;
+  }
 
-    try {
-      await ensureCatalogVectorIndex();
-      const queryVector = await embeddingService.embedText(query);
-      const best = catalogVectorIndex.findBestMatch(queryVector, 0.65);
-      if (best) {
-        return reply.send({
-          match: {
-            slug: best.game.slug,
-            title: best.game.title,
-            genre: best.game.genre,
-            tagline: best.game.tagline,
-            shortControls: best.game.shortControls,
-            searchKeywords: best.game.searchKeywords,
-          },
-          score: best.score,
-        });
+  // Multimodal semantic vector search across catalog games.
+  app.get(
+    '/api/catalog/search',
+    { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const query =
+        typeof request.query === 'object' && request.query !== null && 'q' in request.query
+          ? String((request.query as { q: unknown }).q || '').trim()
+          : '';
+      if (!query || query.length < 2) {
+        return reply.send({ match: null, score: 0 });
       }
-      return reply.send({ match: null, score: 0 });
-    } catch {
-      return reply.send({ match: null, score: 0 });
-    }
-  });
+
+      try {
+        await ensureCatalogVectorIndex();
+        const queryVector = await embeddingService.embedText(query);
+        if (queryVector.length === 0) {
+          return reply.send({ match: null, score: 0 });
+        }
+        const best = catalogVectorIndex.findBestMatch(queryVector, 0.65);
+        if (best) {
+          return reply.send({
+            match: {
+              slug: best.game.slug,
+              title: best.game.title,
+              genre: best.game.genre,
+              tagline: best.game.tagline,
+              shortControls: best.game.shortControls,
+              searchKeywords: best.game.searchKeywords,
+            },
+            score: best.score,
+          });
+        }
+        return reply.send({ match: null, score: 0 });
+      } catch {
+        return reply.send({ match: null, score: 0 });
+      }
+    },
+  );
 
   // Curated flagship pool, public like the catalog itself; no join.
   app.get('/api/featured', async (_request, reply) => {
