@@ -1,7 +1,7 @@
 import { GoogleAuth } from 'google-auth-library';
 import { resolveProjectId } from '../platform/genai.js';
 
-export const VERTEX_EMBEDDING_MODEL = process.env.VERTEX_EMBEDDING_MODEL || 'text-multilingual-embedding-002';
+export const VERTEX_EMBEDDING_MODEL = process.env.VERTEX_EMBEDDING_MODEL || 'gemini-embedding-2';
 const SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
 
 // Options for Vertex AI embedding client.
