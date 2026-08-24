@@ -132,6 +132,25 @@ describe('useStageSource', () => {
     root.unmount();
   });
 
+  it('names the round-0 scaffold for what it is, so the ribbon does not call it a draft version', async () => {
+    mockedGetChannelPlayable.mockResolvedValue('<p>seeded</p>');
+
+    const { render, latest, root } = probe();
+    await render('token-a', {
+      status: 'building',
+      playable: [{ ref: 'seed-1', origin: 'seed', createdAt: new Date().toISOString() }],
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(latest().rawHtml).toBe('<p>seeded</p>');
+    expect(latest().origin.kind).toBe('seed');
+
+    root.unmount();
+  });
+
   it('keeps showing the loaded preview when the newest playable is not actually newer', async () => {
     // A channel item that predates (or has no timestamp relative to) the loaded
     // preview must not flip the display to a stale document — the freshness check

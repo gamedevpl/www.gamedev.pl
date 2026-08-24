@@ -269,6 +269,13 @@ describe('createStagedPreviewPublisher', () => {
     expect(previews).toHaveLength(1);
   });
 
+  it('marks the preview provisional, so nothing downstream calls a half-written tree a ready draft', async () => {
+    const { publisher, previews } = harness();
+
+    expect(await publisher.publishNow(7)).toBe('published');
+    expect(previews[0]!.origin).toBe('staged');
+  });
+
   it('marks the assembled document network-restricted, like every other unreviewed preview', async () => {
     const { publisher, previews } = harness();
 
@@ -601,6 +608,8 @@ describe('createStagedPreviewPublisher', () => {
     );
     expect(previews).toHaveLength(1);
     expect(previews[0].label).toBe(STAGED_PREVIEW_LABEL);
+    // Submitted, not caught mid-upload: the agent handed this over.
+    expect(previews[0].origin).toBe('candidate');
   });
 
   it('candidate assembly cancels pending debounce and sets digest preventing redundant staged assembly', async () => {

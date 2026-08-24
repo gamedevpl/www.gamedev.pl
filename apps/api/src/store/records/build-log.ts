@@ -80,6 +80,9 @@ export type BuildShotSummary = Omit<BuildShot, 'data'>;
  * This is unreviewed agent output. It has passed a build and a smoke run and nothing
  * else — no gate, no review, no merge. Whatever serves it must treat it as hostile.
  */
+// Mirrors `BuildPlayableOrigin`; absent means the agent pushed the bytes.
+export type BuildPreviewOrigin = 'seed' | 'staged' | 'candidate';
+
 export interface BuildPreview {
   id: string;
   /** base64-encoded self-contained HTML document. */
@@ -91,6 +94,8 @@ export interface BuildPreview {
   /** The same caption in `locale`, authored rather than machine translated. */
   labelLocalized?: string;
   locale?: string;
+  // A provisional origin must never be announced as a ready draft.
+  origin?: BuildPreviewOrigin;
   createdAt: string;
 }
 
