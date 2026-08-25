@@ -320,8 +320,8 @@ export const DELIVERY_FIXED_FILES = [
   // promote to a required upload (same path TRACE/PLAYTEST already took) in
   // `validateSourceUpload`.
   'AGENT.json',
-  // Fresh games require this; revisions may carry legacy sources without it.
-  // Generated game/editor-content.ts matches DELIVERY_EXTRA_MODULE_PATTERN.
+  // Fresh games require compiled EDITOR.json; revisions may carry legacy sources.
+  // Optional EDITOR.ts is authoring source; Check 31 proves its JSON is current.
   'EDITOR.json',
   'EDITOR.ts',
   'EDITOR.content.json',
