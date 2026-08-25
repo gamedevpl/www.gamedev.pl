@@ -112,6 +112,29 @@ Two concrete instances of that (observed 2026-07-23):
   edited dependency ranges in `package.json` without regenerating the lock — every local
   check green, CI dead on arrival at `npm ci` (EUSAGE). After ANY `package.json` edit,
   `npm install --package-lock-only` must produce a zero lockfile diff before committing.
+- **Swapping a Vertex / Gemini model id is not a one-line default change.** Observed
+  (#1007, 2026-08-25): `text-embedding-005` → `gemini-embedding-2` kept the legacy
+  `:predict` URL and `{ instances: [{ content }] }` body. Google dropped `:predict` for
+  that family (`400 FAILED_PRECONDITION`); live `embedText` swallows the error to `[]`,
+  so the vector index stays empty and every search returns `{ match: null, score: 0 }`.
+  The suite stayed green because it mocked the *old* prediction shape and never asserted
+  the request URL. When a model id changes, grep the RPC (`:predict` vs `:embedContent`
+  vs `:generateContent`), the request body, and the response parse path — and add a test
+  that the constructed URL contains the verb the new model actually serves.
+- **A lowered server threshold is a no-op if the client still gates the old value.**
+  Same PR: `/api/catalog/search` dropped `findBestMatch` from 0.65 to 0.55 for
+  "cross-lingual sensitivity", but `HeroPromptSection` still accepts a vector hit only
+  when `data.score >= 0.65`. Scores in the newly admitted band are discarded. When a
+  PR changes an accept-set, grep every caller for the old constant; a split threshold
+  is a behaviour change that no unit test will see if each side is tested in isolation.
+- **A widened substring / alias matcher needs negative controls, not just the prompt
+  that motivated it.** Same PR: the new local matcher made `chcę pograć w piłkę` →
+  `mexico-86` (intended) and also `I want to play a card game` → `carjack-city`
+  (`includes('car')`), `gold rush` / `golden axe` → `mexico-86` (`includes('gol')`),
+  `author` / `autumn leaves` → `carjack-city` (`includes('aut')`), `chess` / `szachy` →
+  `checker-champ`. The added test only mounted the happy-path prompt. When a matcher
+  grows `includes` / alias tables, run the same function on the pre-change branch and
+  require a control query that must *not* match.
 - **A games-repo PR that adds a GameKit module can 502 play/draft even when its own
   gate is green.** Observed (www.gamedev.pl-games#690, 2026-08-12): `platformer` was
   inserted into `GAME_KIT_MODULES` / `shared/assemble-contract.json` with no paired
