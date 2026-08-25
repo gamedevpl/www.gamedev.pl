@@ -37,6 +37,7 @@ import {
   type GameSnapshotReader,
 } from './catalog/game-snapshot.js';
 import { registerAdminGameRoutes } from './catalog/admin-game-routes.js';
+import { registerSelfBuildConnectRoutes } from './agent-surface/self-build-connect-routes.js';
 import { registerCatalogRoutes } from './catalog/catalog-routes.js';
 import { registerCatalogSearchRoutes } from './catalog/catalog-search-routes.js';
 import { registerDraftPreviewRoutes } from './delivery/draft-preview-routes.js';
@@ -108,7 +109,6 @@ import {
   type DeliveryGateStatus,
 } from './platform/delivery-metrics.js';
 import { type ChatAgentImage, type StudioChatAgent } from './creation/chat-agent.js';
-import { mintConnectPayload } from './agent-surface/self-build-connect.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './catalog/local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './notifications/mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './platform/moderation.js';
@@ -1895,6 +1895,14 @@ export async function registerSubmissionRoutes(
     isSlugClaimed,
     confirmSlugClaim,
   });
+  await registerSelfBuildConnectRoutes(app, {
+    store,
+    now,
+    submissionTokenSecret,
+    appBaseUrl: notifyAppBaseUrl,
+    checkUserAccess,
+    ensureSubmissionSlug,
+  });
 
   // Single source of GitHub-state → status derivation, shared by the on-demand
   // status route and the notification sweep so they never diverge.
@@ -2697,145 +2705,6 @@ export async function registerSubmissionRoutes(
       ...(platformBuilder ? { platformBuilder } : {}),
     });
   });
-
-  /**
-   * Everything a creator needs to connect their own coding agent to a self-build round.
-   *
-   * Creator-session auth, owner only. Valid only while the active round's builder is
-   * `self`. Install snippets configure the MCP URL plus a masked Authorization header
-   * for the creator-wide key (BY-27b); the kickoff prompt is keyless (slug only).
-   * Regenerating remints a creator key with a new signed `exp` at the same
-   * keyGeneration — it does NOT rotate. Pending, undelivered creator inbox lines
-   * are embedded under "also apply:" so a re-copy never drops queued feedback.
-   * See self-build-connect.ts for the templates.
-   */
-  app.get(
-    '/api/submissions/:id/connect',
-    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      if (!submissionTokenSecret) {
-        return reply.status(503).send({ error: 'submissions are not configured' });
-      }
-      if (!checkUserAccess(request, reply)) return;
-      if (!store) {
-        return reply.status(503).send({ error: 'submissions are not configured' });
-      }
-
-      const id = z.string().parse((request.params as { id?: string }).id);
-      let issueNumber: number;
-      try {
-        issueNumber = verifyToken(id, submissionTokenSecret);
-      } catch (error) {
-        if (error instanceof InvalidTokenError) {
-          return reply.status(400).send({ error: 'invalid submission token' });
-        }
-        throw error;
-      }
-
-      const record = await store.getSubmission(issueNumber);
-      // Same shape as share/abandon: missing and not-yours both 403 so existence is not
-      // confirmed to a stranger who holds (or forges) a status link.
-      if (!record || record.ownerUid !== request.user!.uid) {
-        return reply.status(403).send({ error: 'only the creator can connect a build' });
-      }
-
-      // Gate on the *active round's* builder field, not `builderOf` (which falls back to
-      // `defaultBuilder`). A legacy/platform round that once used self must not unlock
-      // connect just because defaultBuilder still says self.
-      const builder = record.builder ?? 'platform';
-      if (builder !== 'self' || !isActiveBuildRound(record)) {
-        return reply.status(409).send({
-          error: 'connect_unavailable',
-          reason: builder !== 'self' ? 'not_self_round' : 'inactive_round',
-          builder,
-        });
-      }
-
-      await store.ensureRoundGeneration(issueNumber);
-      // Re-read after ensureRoundGeneration: a closing transition can race between the
-      // first snapshot and minting. Without this we could mint against a round that just
-      // closed to ready_for_review (Codex P1).
-      const fresh = await store.getSubmission(issueNumber);
-      const freshBuilder = fresh?.builder ?? 'platform';
-      if (!fresh || freshBuilder !== 'self' || !isActiveBuildRound(fresh)) {
-        return reply.status(409).send({
-          error: 'connect_unavailable',
-          reason: freshBuilder !== 'self' ? 'not_self_round' : 'inactive_round',
-          builder: freshBuilder,
-        });
-      }
-
-      const slug = await ensureSubmissionSlug(issueNumber, fresh);
-      if (!slug) {
-        return reply.status(409).send({
-          error: 'connect_unavailable',
-          reason: 'missing_slug',
-          builder: freshBuilder,
-        });
-      }
-
-      const at = new Date(now()).toISOString();
-      // BY-27b: connect hands out the creator-wide key (config header) + a keyless
-      // slug prompt. The former per-game key path is intentionally retired.
-      const keyRecord = await store.ensureCreatorAgentKey(fresh.ownerUid, at);
-
-      const pendingMessages = await store.listPendingCreatorMessages(issueNumber);
-      const payload = mintConnectPayload({
-        slug,
-        ownerUid: fresh.ownerUid,
-        keyGeneration: keyRecord.keyGeneration,
-        title: fresh.title,
-        submissionTokenSecret,
-        appBaseUrl: notifyAppBaseUrl,
-        pendingMessages,
-        now: now(),
-      });
-      const stall = detectStall({
-        state: fresh.state ?? 'queued',
-        stateSince: fresh.stateSince ?? fresh.createdAt,
-        lastAgentSignalAt: fresh.lastAgentSignalAt,
-        agentState: fresh.agentState,
-        agentEndedAt: fresh.agentEndedAt,
-        now: now(),
-        builder: freshBuilder,
-      });
-      // Payload carries a capability for Copy — never let intermediaries cache it.
-      return reply.header('Cache-Control', 'no-store').send({
-        ...payload,
-        canSwitchToPlatform: allowsSelfToPlatformHandoff({
-          currentBuilder: freshBuilder,
-          requestedBuilder: 'platform',
-          stall,
-          agentEndedAt: fresh.agentEndedAt,
-        }),
-      });
-    },
-  );
-
-  /** Closed-beta retirement: old clients get an explicit upgrade response, never a key. */
-  app.get(
-    '/api/submissions/:id/agent-key',
-    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      if (!checkUserAccess(request, reply)) return;
-      return reply.status(410).send({
-        error: 'per_game_keys_retired',
-        reason: 'Reconnect this coding agent from Studio using OAuth or the creator-wide key.',
-      });
-    },
-  );
-
-  app.post(
-    '/api/submissions/:id/agent-key/rotate',
-    { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      if (!checkUserAccess(request, reply)) return;
-      return reply.status(410).send({
-        error: 'per_game_keys_retired',
-        reason: 'Reconnect this coding agent from Studio using OAuth or the creator-wide key.',
-      });
-    },
-  );
 
   /**
    * The creator decides whether anyone else may play their game before it is published.

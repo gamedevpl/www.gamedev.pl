@@ -198,6 +198,7 @@ const FILE_BUCKET = {
   'managed-provider-openai': 'agent-surface',
   'self-build-backend': 'agent-surface',
   'self-build-connect': 'agent-surface',
+  'self-build-connect-routes': 'agent-surface',
   'creator-agent-key-routes': 'agent-surface',
   'kit-digest': 'agent-surface',
   'kit-files': 'agent-surface',
