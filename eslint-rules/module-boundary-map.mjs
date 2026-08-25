@@ -246,6 +246,7 @@ const FILE_BUCKET = {
   // catalog: github-client, snapshots, assemble, play
   'admin-game-routes': 'catalog',
   'game-play-route': 'catalog',
+  'slug-resolver': 'catalog',
   'music-tracks': 'catalog',
   'catalog-enricher': 'catalog',
   'catalog-vector-index': 'catalog',

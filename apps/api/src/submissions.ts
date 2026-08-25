@@ -28,6 +28,7 @@ import { postGateScreenshotToThread } from './delivery/gate-screenshot.js';
 import { createGitHubClient, type CatalogGameEntry, type GitHubClient } from './catalog/github-client.js';
 import { createSnapshotReaderFromEnv, type GameSnapshotReader } from './catalog/game-snapshot.js';
 import { registerAdminGameRoutes } from './catalog/admin-game-routes.js';
+import { createSlugResolver } from './catalog/slug-resolver.js';
 import { registerSelfBuildConnectRoutes } from './agent-surface/self-build-connect-routes.js';
 import { registerDraftLifecycleRoutes } from './creation/draft-lifecycle-routes.js';
 import { createSeedPipeline } from './creation/seed-pipeline.js';
@@ -105,7 +106,6 @@ import { seedOutcomeFor } from './agent-surface/seed-status.js';
 import { isAdminSession } from './platform/admin-session.js';
 import { peekQuota } from './creation/quota-gate.js';
 import { mintGameSlug } from './catalog/slug.js';
-import { settleSlugClaim } from './catalog/slug-backfill.js';
 import {
   type AgentKeysStore,
   type BuildLogStore,
@@ -1637,60 +1637,10 @@ export async function registerSubmissionRoutes(
     catalogRoutes.invalidatePublishedGameCache(slug);
   }
 
-  // The cache-cold path is the dangerous one: with min-instances 0, a fresh
-  /**
-   * Reads back a slug this job just wrote, and settles who actually holds it.
-   *
-   * The settling itself is {@link settleSlugClaim}, shared with the backfill CLI; this
-   * binds it to this server's store and its GitHub-aware `isSlugClaimed`.
-   */
-  async function confirmSlugClaim(issueNumber: number, slug: string, title: string): Promise<string | null> {
-    // No store means nothing can hold a name against us, so the claim stands as written.
-    if (!store) return slug;
-    return settleSlugClaim(store, issueNumber, slug, title, isSlugClaimed);
-  }
-
-  /**
-   * Ensures a submission has a settled slug, minting one on demand for legacy rounds
-   * that predated slug-at-submission.
-   */
-  async function ensureSubmissionSlug(issueNumber: number, record: SubmissionRecord): Promise<string | null> {
-    if (record.slug) return record.slug;
-    const wanted = await mintGameSlug(record.title, async (candidate) => isSlugClaimed(candidate, issueNumber));
-    return confirmSlugClaim(issueNumber, wanted, record.title);
-  }
-
-  /**
-   * Whether anything already answers to this name.
-   *
-   * Three namespaces, because a game can exist in three places and a new build must not
-   * be given an address that already means something else: another submission (building
-   * or built), a game published through the store, and a game published in the games
-   * repo's catalog. `except` lets a job ask about a name it may already hold itself.
-   *
-   * Deliberately forgiving of its own failures. This runs inside submission creation, and
-   * a GitHub outage that made every name look taken would refuse builds the creator has
-   * already paid a quota slot for; a name that is wrongly *available* costs far less than
-   * a submission that will not start, and the delivery path checks again before writing.
-   */
-  async function isSlugClaimed(slug: string, except?: number): Promise<boolean> {
-    if (store) {
-      try {
-        const existing = await store.getSubmissionBySlug(slug);
-        if (existing && existing.issueNumber !== except) return true;
-        const publication = await store.getPublication(slug);
-        if (publication) return true;
-      } catch {
-        // Fall through: see above — an unavailable store must not block creation.
-      }
-    }
-    try {
-      if (await catalogRoutes.isSlugPublished(slug)) return true;
-    } catch {
-      // Same reasoning, and this one is the likeliest to fail: it reads GitHub.
-    }
-    return false;
-  }
+  const { isSlugClaimed, confirmSlugClaim, ensureSubmissionSlug } = createSlugResolver({
+    store,
+    isSlugPublished: catalogRoutes.isSlugPublished,
+  });
 
   await registerAdminGameRoutes(app, {
     store,
