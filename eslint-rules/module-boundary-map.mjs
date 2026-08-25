@@ -183,6 +183,7 @@ const FILE_BUCKET = {
   'mcp-seed-tools': 'agent-surface',
   'mcp-round-card-tools': 'agent-surface',
   'mcp-gate-media-tools': 'agent-surface',
+  'mcp-proposal-tools': 'agent-surface',
   'mcp-server-discovery': 'agent-surface',
   'mcp-ui': 'agent-surface',
   'mcp-oauth-metadata': 'agent-surface',

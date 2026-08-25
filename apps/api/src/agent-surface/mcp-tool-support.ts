@@ -1,5 +1,6 @@
 // Pure MCP tool-result shaping shared across the tool clusters.
 
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { BUILDERS, type BuilderKind } from '@gamedevpl/contract';
 
 // text is the JSON body; image is a rendered frame (get_gate_media).
@@ -189,6 +190,16 @@ export function channelControlFields(
     ...(body.control?.builderHandoff ? { builderHandoff: body.control.builderHandoff } : {}),
     ...(warnings.length > 0 ? { warnings } : {}),
   };
+}
+
+export const PLATFORM_CONNECTOR_ONLY_REASON =
+  'the Copilot MCP connector must be paired with a live round key in start()';
+
+export function matchesPlatformConnectorSecret(presented: string | null, expected: string | undefined): boolean {
+  if (!presented || !expected) return false;
+  const left = createHash('sha256').update(presented).digest();
+  const right = createHash('sha256').update(expected).digest();
+  return timingSafeEqual(left, right);
 }
 
 export const CREATOR_TEXT_SAFETY =
