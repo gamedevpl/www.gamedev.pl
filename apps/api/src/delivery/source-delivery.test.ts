@@ -159,12 +159,9 @@ describe('shared source delivery', () => {
 
   it('uses the same service for publish side effects and transition', async () => {
     const { store, putCandidateSources, service, authority } = await setup();
-    await store.setPublication({
-      slug: SLUG,
-      state: 'published',
-      currentVersion: 'v-live',
-      publishedAt: '2026-08-01T00:00:00.000Z',
-    });
+    await store.createSubmission(700, 'owner', 'Published catalog game');
+    await store.setSubmissionSlug(700, SLUG);
+    await store.setSubmissionPublishedAt(700, '2026-08-01T00:00:00.000Z');
 
     const result = await service.deliver({
       issueNumber: ISSUE,
