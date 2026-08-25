@@ -35,42 +35,73 @@ export async function registerCatalogSearchRoutes(
     try {
       const entries = await getCatalogEntries();
       const published = entries.filter((entry) => entry.status === 'published');
-      const enricherClient = createDefaultEnricherClient();
+      const enriched = await attachCatalogEnrichments(published, store);
 
-      if (store) {
-        for (const entry of published) {
-          try {
-            const spec = await githubClient.getGameFile(publishedRef, entry.slug, 'SPEC.md');
-            if (spec) {
-              await getOrEnrichCatalogGame(entry, spec, {
-                store,
-                genAIClient: enricherClient,
-                log: (msg) => app.log.warn(msg),
+      // Parallel chunked vector index generation for instantaneous cold-starts.
+      const CHUNK_SIZE = 10;
+      for (let i = 0; i < enriched.length; i += CHUNK_SIZE) {
+        const chunk = enriched.slice(i, i + CHUNK_SIZE);
+        await Promise.all(
+          chunk.map(async (entry) => {
+            const docText = `${entry.title}. ${entry.genre || ''}. ${entry.tagline?.en || ''} ${entry.tagline?.pl || ''} ${(entry.searchKeywords || []).join(', ')}`;
+            const vec = await embeddingService.embedText(docText);
+            if (vec.length > 0) {
+              catalogVectorIndex.upsert({
+                slug: entry.slug,
+                title: entry.title,
+                genre: entry.genre,
+                tagline: entry.tagline,
+                shortControls: entry.shortControls,
+                searchKeywords: entry.searchKeywords,
+                embedding: vec,
               });
             }
-          } catch {
-            // Non-blocking per-game enrichment
-          }
-        }
+          }),
+        );
       }
+      lastIndexBuildSuccessTime = Date.now();
 
-      const enriched = await attachCatalogEnrichments(published, store);
-      for (const entry of enriched) {
-        const docText = `${entry.title}. ${entry.genre || ''}. ${entry.tagline?.en || ''} ${entry.tagline?.pl || ''} ${(entry.searchKeywords || []).join(', ')}`;
-        const vec = await embeddingService.embedText(docText);
-        if (vec.length > 0) {
-          catalogVectorIndex.upsert({
-            slug: entry.slug,
-            title: entry.title,
-            genre: entry.genre,
-            tagline: entry.tagline,
-            shortControls: entry.shortControls,
-            searchKeywords: entry.searchKeywords,
-            embedding: vec,
+      // Enrich missing metadata with LLM asynchronously in the background.
+      if (store) {
+        const enricherClient = createDefaultEnricherClient();
+        const unEnriched = published.filter(
+          (entry) =>
+            !entry.tagline?.en && !entry.tagline?.pl && (!entry.searchKeywords || entry.searchKeywords.length === 0),
+        );
+        if (unEnriched.length > 0) {
+          queueMicrotask(() => {
+            void (async () => {
+              for (const entry of unEnriched) {
+                try {
+                  const spec = await githubClient.getGameFile(publishedRef, entry.slug, 'SPEC.md');
+                  if (spec) {
+                    const enrichedRecord = await getOrEnrichCatalogGame(entry, spec, {
+                      store,
+                      genAIClient: enricherClient,
+                      log: (msg) => app.log.warn(msg),
+                    });
+                    const docText = `${entry.title}. ${entry.genre || ''}. ${enrichedRecord.tagline?.en || ''} ${enrichedRecord.tagline?.pl || ''} ${(enrichedRecord.searchKeywords || []).join(', ')}`;
+                    const vec = await embeddingService.embedText(docText);
+                    if (vec.length > 0) {
+                      catalogVectorIndex.upsert({
+                        slug: entry.slug,
+                        title: entry.title,
+                        genre: entry.genre,
+                        tagline: enrichedRecord.tagline,
+                        shortControls: enrichedRecord.shortControls,
+                        searchKeywords: enrichedRecord.searchKeywords,
+                        embedding: vec,
+                      });
+                    }
+                  }
+                } catch {
+                  // Non-blocking per-game enrichment
+                }
+              }
+            })();
           });
         }
       }
-      lastIndexBuildSuccessTime = Date.now();
     } catch (err) {
       app.log.warn({ err }, 'failed to build catalog vector index');
     }
@@ -104,17 +135,16 @@ export async function registerCatalogSearchRoutes(
 
       try {
         if (catalogVectorIndex.size() === 0) {
+          await ensureCatalogVectorIndex();
+        } else {
           void ensureCatalogVectorIndex();
-          return reply.send({ match: null, score: 0 });
         }
-
-        void ensureCatalogVectorIndex();
 
         const queryVector = await embeddingService.embedText(query);
         if (queryVector.length === 0) {
           return reply.send({ match: null, score: 0 });
         }
-        const best = catalogVectorIndex.findBestMatch(queryVector, 0.65);
+        const best = catalogVectorIndex.findBestMatch(queryVector, 0.55);
         if (best) {
           return reply.send({
             match: {

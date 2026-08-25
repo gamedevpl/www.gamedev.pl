@@ -772,6 +772,7 @@ describe('HeroPromptSection', () => {
         world: null,
         sensing: null,
         orientation: 'landscape' as const,
+        editor: null,
         status: 'published' as const,
         submittedBy: null,
         tagline: { en: 'Tournament football.', pl: 'Turniej piłkarski.' },
