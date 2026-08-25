@@ -80,6 +80,7 @@ function stubGamesStore(captures?: {
         deliveryMode: input.mode ?? 'publish',
         origin: input.origin,
         forkedFrom: input.forkedFrom,
+        requireCompiledEditor: input.requireCompiledEditor,
         sourceFiles: input.files.map((file) => file.path),
       };
       captures?.puts?.push({ slug: input.slug, files: input.files, manifest });
@@ -807,7 +808,6 @@ describe('remix across the two catalog eras', () => {
       headers: alice,
       payload: { utterance: 'add a double jump' },
     });
-    // A fact about this game, not a failure of the request.
     expect(response.statusCode).toBe(409);
   });
 
@@ -1001,6 +1001,7 @@ describe('remix save as yours', () => {
     expect(body.openPath).toBe(`/play/${body.slug}`);
     expect(body.token).toBeTruthy();
     expect(puts).toHaveLength(1);
+    expect((puts[0].manifest as { requireCompiledEditor?: boolean }).requireCompiledEditor).toBe(true);
     expect(puts[0].slug).toBe(body.slug);
     expect(
       (puts[0].manifest as { origin?: string; forkedFrom?: { slug: string; version?: string }; deliveryMode?: string })
@@ -1019,7 +1020,6 @@ describe('remix save as yours', () => {
     expect(job?.previewVersion).toBe('v-saved');
     expect(job?.deliveredVersion).toBe('v-saved');
     expect(job?.transitions?.some((transition) => transition.reason === 'remix_saved')).toBe(true);
-    // The parent publication is untouched — this is a fork, not an overwrite.
     expect(await built.store.getPublication('dog-dash')).toMatchObject({ state: 'published', currentVersion: 'v1' });
     expect(await built.store.getPublication(body.slug)).toBeNull();
 

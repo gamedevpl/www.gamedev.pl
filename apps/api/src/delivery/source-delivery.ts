@@ -47,10 +47,7 @@ export interface SourceDeliveryInput {
   /** Who wrote this delivery — see {@link VersionManifest.authorship} (CE-20). */
   authorship?: 'agent' | 'owner' | 'mixed';
   summary?: string;
-  /** Who *called this route* — distinct from `authorship`'s file-level provenance.
-   * Drives the `by` field on the job transitions this delivery records. Defaults to
-   * `'agent'` (the agent channel and managed-harvest callers never set this); the Code
-   * surface's manual delivery route is the one caller that passes `'creator'`. */
+  // Caller identity is distinct from file authorship.
   actor?: 'agent' | 'creator';
 }
 
@@ -403,6 +400,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
 
       const transitionActor: TransitionActor = input.actor === 'creator' ? 'creator' : 'agent';
       const stateAfterSignal = await markBuilding(input.issueNumber, record, transitionActor);
+      const requireCompiledEditor = !(await options.store.getPublication(input.slug)) && !(await options.store.getPublishedSubmissionBySlug(input.slug));
       let version: string;
       try {
         ({ version } = await options.gamesStore.putCandidateSources({
@@ -410,6 +408,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
           issueNumber: input.issueNumber,
           roundGeneration,
           files: input.files,
+          requireCompiledEditor,
           backend: input.backend ?? record.dispatch?.backend ?? record.builder,
           mode: input.mode,
           ...(input.kitEngineRef ? { kitEngineRef: input.kitEngineRef } : {}),

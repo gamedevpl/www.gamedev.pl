@@ -198,7 +198,7 @@ describe('isUsableSeed', () => {
     // The failure mode this exists for: a seed branch that claims a scaffold exists
     // while containing nothing the agent could continue.
     expect(isUsableSeed([file('SPEC.md')])).toBe(false);
-    expect(isUsableSeed([file('SPEC.md'), file('game.ts'), file('game/model.ts')])).toBe(false); expect(isUsableSeed([file('SPEC.md'), file('game.ts')])).toBe(false);
+    expect(isUsableSeed([file('EDITOR.ts'), file('SPEC.md'), file('game.ts'), file('game/model.ts')])).toBe(false); expect(isUsableSeed([file('SPEC.md'), file('game.ts')])).toBe(false);
     expect(isUsableSeed([])).toBe(false);
   });
 });

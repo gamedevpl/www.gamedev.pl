@@ -316,6 +316,7 @@ export async function saveRemixAsStudioDraft(input: RemixSaveInput): Promise<Rem
         slug,
         issueNumber: jobId,
         files,
+        requireCompiledEditor: true,
         backend: 'remix',
         origin: 'remix',
         mode: 'preview',
@@ -344,7 +345,6 @@ export async function saveRemixAsStudioDraft(input: RemixSaveInput): Promise<Rem
     );
 
     await input.store.setSubmissionPreviewVersion(jobId, version);
-    // Also delivered so Studio treats the draft as having sources (edit, improve,
     // shelf) without waiting on a gate that will never run for a preview fork.
     await input.store.setSubmissionDeliveredVersion(jobId, version);
     await input.store.recordJobTransition(jobId, {

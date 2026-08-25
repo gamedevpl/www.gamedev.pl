@@ -251,26 +251,11 @@ export function assertDeliverableSourcePath(rawPath: string): string {
   return path;
 }
 
-/**
- * Validates an upload against the delivery contract.
- *
- * Returns the files to store; throws {@link InvalidUploadError} with a message meant for
- * the agent, since the agent is the only one who can fix it and a vague rejection costs a
- * whole session.
- *
- * `mode: 'preview'` skips publish-stage seals (TRACE / PLAYTEST) so a first playable
- * draft can land without burning the agent on capture tooling. Publish (default) keeps
- * the hard requirements — a TRACE-less publishable candidate is still dead on arrival.
- *
- * `tracederivedByGate` is the one exception, and it is narrow: a `'seal'` version is a
- * green preview re-delivered for the full gate, and the gate derives the golden itself
- * before replaying it (see gate-runner). "Dead on arrival" is the reason the refusal
- * exists, and it does not apply when the golden is about to be recorded.
- */
 export function validateSourceUpload(
   files: SourceFile[],
   mode: DeliveryMode = 'publish',
   traceDerivedByGate = false,
+  requireCompiledEditor = false,
 ): SourceFile[] {
   if (files.length === 0) throw new InvalidUploadError('no files in upload');
   if (files.length > MAX_UPLOAD_FILES) {
@@ -295,6 +280,13 @@ export function validateSourceUpload(
   }
   if (!seen.has('game.ts')) {
     throw new InvalidUploadError('game.ts is required — a game must be playable', undefined, ['game.ts']);
+  }
+  if (requireCompiledEditor && !seen.has('EDITOR.json')) {
+    throw new InvalidUploadError(
+      'EDITOR.json is required for a new game — deliver the compiled editor contract before preview or publish',
+      undefined,
+      ['EDITOR.json'],
+    );
   }
   const gameJson = files.find((file) => file.path.trim() === 'GAME.json');
 
@@ -652,6 +644,7 @@ export interface GamesStore {
     // Producing round, persisted with the candidate manifest.
     roundGeneration?: number;
     files: SourceFile[];
+    requireCompiledEditor?: boolean;
     backend?: string;
     model?: string;
     engineRef?: string;
@@ -960,7 +953,12 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         input.mode === 'preview' ? 'preview' : input.mode === 'proposal' ? 'proposal' : 'publish';
       // A proposal is a sealed candidate — it must carry everything a publish carries,
       // because the reviewer judges a full gate run, not a compile.
-      const files = validateSourceUpload(input.files, mode === 'proposal' ? 'publish' : mode, input.origin === 'seal');
+      const files = validateSourceUpload(
+        input.files,
+        mode === 'proposal' ? 'publish' : mode,
+        input.origin === 'seal',
+        input.requireCompiledEditor === true,
+      );
       const at = new Date(now());
       const version = versionId(at);
       const prefix = versionPrefix(input.slug, version);
