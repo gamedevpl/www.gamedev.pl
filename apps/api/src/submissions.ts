@@ -43,12 +43,11 @@ import {
   storeCreatorPlaytestShot,
   storeCreatorReferenceImages,
 } from './delivery/creator-media.js';
-import { createBuildStatusAssembler, revisionOriginOf } from './delivery/build-status.js';
+import { createBuildStatusAssembler } from './delivery/build-status.js';
 import { createChatOrchestration } from './creation/chat-orchestration.js';
 import { createStagedPreviewPublisher, type StagedPreviewOptions } from './delivery/staged-preview.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './platform/internal-auth.js';
 import type { AgentBackend, SeedFiles } from './agent-surface/agent-backend.js';
-import { stripPlaytestContext } from './delivery/build-transcript.js';
 import {
   createAgentBackendRegistryFromEnv,
   createSeedProvidersFromEnv,
@@ -64,10 +63,8 @@ import {
   isBuilderKind,
   shouldSteerFeedbackViaInbox,
   selfBuildConnectDays,
-  selfBuildDeliveryCap,
   type BuilderKind,
 } from './creation/builder.js';
-import { codeSurfaceEnabled, isLiveAgentRound } from './creation/code-surface.js';
 import { DEFAULT_SEED_PROVIDER, type GameSeeder } from './creation/game-seed.js';
 import { createSourceDeliveryService } from './delivery/source-delivery.js';
 import { createKitFileStore } from './agent-surface/kit-files.js';
@@ -80,19 +77,13 @@ import {
   reconcileAgentObservation,
   resolveJobState,
   shouldAutoAbandonSelfRound,
-  toSubmissionStatus,
   type JobState,
   type JobTransition,
 } from './creation/job-state.js';
-import { gateCrashStall, probeGateCrash } from './delivery/gate-crash.js';
+import { probeGateCrash } from './delivery/gate-crash.js';
 import { sealRefusal } from './delivery/seal-preview.js';
-import {
-  clearObserveFailures,
-  noteObserveFailure,
-  sessionCrashStall,
-  sessionCrashTransition,
-} from './creation/session-crash.js';
-import { toRecentBuilds } from './delivery/recent-builds.js';
+import { clearObserveFailures, noteObserveFailure, sessionCrashTransition } from './creation/session-crash.js';
+import { createNativeJobStatusAssembler } from './delivery/native-job-status.js';
 import {
   builderLabelFromRecord,
   failedStageFromProgress,
@@ -1740,205 +1731,13 @@ export async function registerSubmissionRoutes(
     managedAvailabilityGate,
   });
 
-  // Single source of GitHub-state → status derivation, shared by the on-demand
-  // status route and the notification sweep so they never diverge.
-  /**
-   * Status for a job we created ourselves, read from its own record.
-   *
-   * There is no issue and no pull request to derive from — that is the point — so this
-   * is a projection of the job state, not an inference about somebody else's UI. It is
-   * also why a GitHub outage can no longer affect a creator watching their build: the
-   * events, screenshots and playable drafts on the page all come from Firestore already.
-   */
-  async function nativeJobStatus(record: SubmissionRecord): Promise<SubmissionStatusResponse> {
-    const state = record.state ?? 'queued';
-    const status: SubmissionStatusResponse = {
-      status: record.abandonedAt ? 'abandoned' : toSubmissionStatus(state),
-      // The unprojected state travels alongside the projection: `toSubmissionStatus` is
-      // lossy by design, and the page needs the loss back to describe the wait honestly.
-      ...(record.abandonedAt ? {} : { phase: state }),
-      issueNumber: record.issueNumber,
-      ...(record.slug ? { slug: record.slug } : {}),
-      // Remix save-as-yours records `remix_saved` on the queued→building→ready path.
-      // Surface that so Studio can tell a private remix draft from a gate-green build.
-      ...((record.transitions ?? []).some((transition) => transition.reason === 'remix_saved')
-        ? { draftOrigin: 'remix' as const }
-        : {}),
-    };
-    // Studio's play surface only fetches `/preview` when `preview.slug` is set (the
-    // same signal the PR-derived path used to emit). A self-build delivery has no PR
-    // and often no channel `playable[]` either — sources land in the games store and
-    // the gate writes `bundle.html` / `preview.html`. Without this field the thread
-    // never asked for that document, so a gate-green ready_for_review job looked
-    // unplayable to its own creator (BY-14c).
-    //
-    // Advertise only once a gate-built artifact exists for the delivered version —
-    // not merely once `deliveredVersion` is set. `onSourcesDelivered` persists the
-    // version before the async gate writes the HTML, and Studio's preview effect
-    // keys on slug + headSha only: a first-delivery 409 is never retried while those
-    // stay unchanged (Codex P1). Presence of `preview.slug` is therefore a readiness
-    // signal to attempt loading, not a promise that the route is warm on the same
-    // tick — but it must not flip on until something is actually storable.
-    const playableVersion = record.previewVersion ?? record.deliveredVersion;
-    if (record.slug && playableVersion) {
-      const gamesStore = options.agentChannel?.gamesStore;
-      if (gamesStore?.getDerivedArtifact) {
-        try {
-          const [bundle, previewHtml] = await Promise.all([
-            gamesStore.getDerivedArtifact(record.slug, playableVersion, 'bundle.html'),
-            gamesStore.getDerivedArtifact(record.slug, playableVersion, 'preview.html'),
-          ]);
-          if (bundle || previewHtml) {
-            status.preview = { slug: record.slug };
-          }
-        } catch {
-          // Preview readiness is advisory. A store miss or stub without artifacts must
-          // not 502 the status page the creator is polling.
-        }
-      }
-    }
-    // `failed` and a gate bounce both project onto public `needs_changes`. Without a
-    // reason the Studio page only says the label — creators click the notification,
-    // land on a thread of old planning notes, and never learn *why* the build stopped
-    // or that sending feedback below is what starts the next round. Name the
-    // transition's own cause so the page can render translated copy for it.
-    if ((state === 'failed' || state === 'needs_changes') && !record.abandonedAt) {
-      const lastBounce = [...(record.transitions ?? [])].reverse().find((transition) => transition.to === state);
-      status.failure = {
-        reason: lastBounce?.reason ?? (state === 'failed' ? 'unknown' : 'gate_red'),
-      };
-    }
-    // Echo the creator's change requests from the store. On jobs without a pull
-    // request the store copy is the only durable record — the page used to render
-    // these from its own unsent-state memory, so they vanished on the first reload.
-    if (store) {
-      const messages = await store.listCreatorMessages(record.issueNumber, { limit: 20 });
-      if (messages.length > 0 || playableVersion) {
-        status.progress = {
-          // The preview refreshes when headSha changes; for a native job the moment
-          // with something new to show is a delivery, so the version plays that role.
-          // Prefer previewVersion so mode=preview iterations reload Studio.
-          headSha: playableVersion ?? '',
-          commits: [],
-          checklist: [],
-          // textLocalized/locale ride along and are resolved per reader in
-          // `localizeRevisions`; they never reach the wire.
-          revisions: messages.map((message) => ({
-            text: stripPlaytestContext(message.text),
-            createdAt: message.createdAt,
-            ...(revisionOriginOf(message) ? { origin: revisionOriginOf(message) } : {}),
-            delivered: Boolean(message.deliveredAt),
-            ...(message.textLocalized && message.locale
-              ? { textLocalized: stripPlaytestContext(message.textLocalized), locale: message.locale }
-              : {}),
-          })),
-        };
-      }
-    }
-    const stall =
-      detectStall({
-        state,
-        stateSince: record.stateSince ?? record.createdAt,
-        lastAgentSignalAt: record.lastAgentSignalAt,
-        agentState: record.agentState,
-        agentEndedAt: record.agentEndedAt,
-        now: now(),
-        builder: builderOf(record),
-      }) ??
-      gateCrashStall(record) ??
-      sessionCrashStall(record);
-    if (stall) status.stall = stall;
-    // Mid-gate milestones from GCS.
-    if (record.slug && playableVersion) {
-      const gamesStore = options.agentChannel?.gamesStore;
-      if (gamesStore?.getManifest) {
-        try {
-          const manifest = await gamesStore.getManifest(record.slug, playableVersion);
-          if (manifest?.previewGate) {
-            status.previewGate = {
-              green: manifest.previewGate.green,
-              ranAt: manifest.previewGate.ranAt,
-              ...(manifest.previewGate.report ? { report: manifest.previewGate.report } : {}),
-              ...(manifest.previewGate.status ? { status: manifest.previewGate.status } : {}),
-            };
-          }
-          if (manifest?.gateProgress && !manifest.gate && !manifest.previewGate) {
-            status.gateProgress = manifest.gateProgress;
-          }
-          // `playableVersion` is `previewVersion` exactly when sealRefusal admits the
-          // record (it requires no deliveredVersion) — the same manifest /seal reads.
-          if (sealRefusal(record) === null && manifest?.previewGate?.green) {
-            status.canSeal = true;
-          }
-        } catch {
-          /* advisory */
-        }
-      }
-    }
-    // Rides the cached status poll; listVersions alone is too costly.
-    if (record.slug) {
-      const gamesStore = options.agentChannel?.gamesStore;
-      if (gamesStore?.listVersions) {
-        try {
-          const versions = await gamesStore.listVersions(record.slug, { limit: 8 });
-          status.recentBuilds = toRecentBuilds(versions);
-          if (gamesStore.countVersions) {
-            status.totalBuildsCount = await gamesStore.countVersions(record.slug);
-          } else {
-            status.totalBuildsCount = versions.length;
-          }
-        } catch {
-          /* advisory */
-        }
-      }
-    }
-    // Heartbeat + thought flash — presence pulses refresh these without chat rows.
-    if (record.lastAgentSignalAt) status.lastAgentSignalAt = record.lastAgentSignalAt;
-    if (record.lastAgentPresence) status.lastAgentPresence = record.lastAgentPresence;
-    if (record.agentEndedAt) status.agentEndedAt = record.agentEndedAt;
-    // Echo builder fields so Studio does not invent `platform` from empty localStorage
-    // when the server already knows the game's last-used choice (Codex P2 on BY-07).
-    const roundBuilder = record.builder;
-    if (roundBuilder) status.builder = roundBuilder;
-    const lastBuilder = record.defaultBuilder ?? record.builder;
-    if (lastBuilder) status.defaultBuilder = lastBuilder;
-    // Code surface probe (CE-05). Nothing to edit before the job has a bound slug.
-    if (record.slug) {
-      const killed = !codeSurfaceEnabled();
-      const liveAgent = isLiveAgentRound(record);
-      status.codeSurface = {
-        available: !killed,
-        readOnly: killed || liveAgent,
-        ...(killed ? { reason: 'killed' as const } : liveAgent ? { reason: 'agent_round' as const } : {}),
-      };
-    }
-    if (managedAvailabilityGate) {
-      status.platformBuilder = await managedAvailabilityGate.peek(
-        record.ownerUid,
-        new Date(now()).toISOString().slice(0, 10),
-      );
-    }
-    if (record.builderHandoff && record.builderHandoff.awaitsAgentAck !== false) {
-      status.builderHandoff = {
-        target: record.builderHandoff.to,
-        requestedAt: record.builderHandoff.requestedAt,
-        ...(record.builderHandoff.acknowledgedAt ? { acknowledgedAt: record.builderHandoff.acknowledgedAt } : {}),
-      };
-    }
-    // Delivery-cap is refused to the agent over the channel; echo it on status so the
-    // Studio can show honest copy without a new endpoint (BY-08). Only when nothing
-    // stronger (gate_red, task_failed, …) already explains the stop.
-    if (builderOf(record) === 'self' && !status.failure && (record.roundDeliveryCount ?? 0) >= selfBuildDeliveryCap()) {
-      status.failure = { reason: 'self_build_delivery_cap' };
-    }
-    const queuedTransition = (record.transitions ?? []).find((transition) => transition.to === 'queued');
-    if (queuedTransition?.reason === 'agent_open_round') {
-      status.openedBy = 'agent';
-    } else if (queuedTransition?.reason === 'improvement_requested') {
-      status.openedBy = 'creator';
-    }
-    return status;
-  }
+  const { nativeJobStatus } = createNativeJobStatusAssembler({
+    store,
+    now,
+    builderOf,
+    managedAvailabilityGate,
+    gamesStore: options.agentChannel?.gamesStore,
+  });
 
   /**
    * Quiet long enough that asking the backend is cheaper than guessing. Well under the

@@ -236,6 +236,7 @@ const FILE_BUCKET = {
   'gate-verdict': 'delivery',
   'gate-crash': 'delivery',
   'gate-screenshot': 'delivery',
+  'native-job-status': 'delivery',
   // Writes verdicts onto delivery's own VersionManifest, and validates a delivery's
   // sources at gate time -- delivery-domain checks that had drifted into creation/.
   'version-verdict': 'delivery',
