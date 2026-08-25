@@ -213,6 +213,7 @@ const FILE_BUCKET = {
 
   // delivery: staging, games-store, gate
   'build-status': 'delivery',
+  'creator-media': 'delivery',
   'draft-preview-routes': 'delivery',
   'staged-preview': 'delivery',
   'stage-hints': 'delivery',
