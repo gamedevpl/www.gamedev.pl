@@ -926,6 +926,58 @@ describe('HeroPromptSection', () => {
     const szachy = await checkPrompt('szachy');
     expect(szachy).toBeNull();
 
+    // "web" must NOT false-match a game named starweb-4x by substring
+    const webMatch = await checkPrompt('web');
+    expect(webMatch).toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it('does not match cards game for query "car" via genre substring', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const cardsOnlyCatalog = [
+      {
+        slug: 'classic-solitaire',
+        title: 'Classic Solitaire',
+        genre: 'cards',
+        controls: 'Mouse',
+        media: null,
+        multiplayer: null,
+        saves: null,
+        world: null,
+        sensing: null,
+        orientation: 'landscape' as const,
+        editor: null,
+        status: 'published' as const,
+        submittedBy: null,
+        tagline: { en: 'Klondike card solitaire.', pl: 'Pasjans karciany.' },
+        searchKeywords: ['solitaire', 'pasjans'],
+      },
+    ];
+
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          key: 'car',
+          initialPrompt: 'car',
+          catalogEntries: cardsOnlyCatalog,
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    const card = container.querySelector('.matched-card');
+    expect(card).toBeNull();
+
     await act(async () => root.unmount());
   });
 });

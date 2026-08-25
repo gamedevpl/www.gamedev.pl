@@ -39,6 +39,12 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   return denom > 0 ? dotProduct / denom : 0;
 }
 
+// Options for single text embedding call.
+export interface EmbedOptions {
+  role?: 'query' | 'document';
+  title?: string;
+}
+
 // Generates embeddings using Vertex AI.
 export class VertexEmbeddingService {
   private auth: GoogleAuth;
@@ -57,12 +63,24 @@ export class VertexEmbeddingService {
     this.auth = new GoogleAuth({ scopes: [SCOPE] });
   }
 
+  // Embed a search query.
+  embedQuery(query: string): Promise<number[]> {
+    return this.embedText(query, { role: 'query' });
+  }
+
+  // Embed a catalog document.
+  embedDocument(docText: string, title?: string): Promise<number[]> {
+    return this.embedText(docText, { role: 'document', title });
+  }
+
   // Generate embedding vector for a text query or document.
-  async embedText(text: string): Promise<number[]> {
+  async embedText(text: string, options: EmbedOptions = {}): Promise<number[]> {
     const trimmed = text.trim();
     if (!trimmed) return [];
 
-    const cached = this.cache.get(trimmed);
+    const role = options.role ?? 'query';
+    const cacheKey = `${role}:${options.title ?? ''}:${trimmed}`;
+    const cached = this.cache.get(cacheKey);
     if (cached) return cached;
 
     try {
@@ -76,13 +94,30 @@ export class VertexEmbeddingService {
       const action = isGemini ? 'embedContent' : 'predict';
       const url = `https://${host}/v1/projects/${this.projectId}/locations/${this.region}/publishers/google/models/${this.model}:${action}`;
 
+      // Gemini uses prompt prefixes; legacy models pass task_type in payload.
+      let promptText = trimmed;
+      if (isGemini) {
+        if (role === 'query') {
+          promptText = `task: search query | query: ${trimmed}`;
+        } else {
+          promptText = options.title
+            ? `title: ${options.title} | task: search result | text: ${trimmed}`
+            : `task: search result | text: ${trimmed}`;
+        }
+      }
+
       const requestBody = isGemini
         ? JSON.stringify({
-            content: { parts: [{ text: trimmed }] },
-            taskType: 'RETRIEVAL_QUERY',
+            content: { parts: [{ text: promptText }] },
           })
         : JSON.stringify({
-            instances: [{ content: trimmed }],
+            instances: [
+              {
+                content: trimmed,
+                task_type: role === 'query' ? 'RETRIEVAL_QUERY' : 'RETRIEVAL_DOCUMENT',
+                ...(options.title ? { title: options.title } : {}),
+              },
+            ],
           });
 
       const response = await fetch(url, {
@@ -117,7 +152,7 @@ export class VertexEmbeddingService {
         const firstKey = this.cache.keys().next().value;
         if (firstKey) this.cache.delete(firstKey);
       }
-      this.cache.set(trimmed, normalized);
+      this.cache.set(cacheKey, normalized);
       return normalized;
     } catch (err) {
       this.log?.(`Vertex embedding generation failed for "${trimmed.slice(0, 40)}": ${String(err)}`);

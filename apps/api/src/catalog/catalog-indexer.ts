@@ -58,7 +58,7 @@ export class CatalogIndexer {
         await Promise.all(
           chunk.map(async (entry) => {
             const docText = `${entry.title}. ${entry.genre || ''}. ${entry.tagline?.en || ''} ${entry.tagline?.pl || ''} ${(entry.searchKeywords || []).join(', ')}`;
-            const vec = await this.embeddingService.embedText(docText);
+            const vec = await this.embeddingService.embedDocument(docText, entry.title);
             if (vec.length > 0) {
               indexed.push({
                 slug: entry.slug,
@@ -112,7 +112,7 @@ export class CatalogIndexer {
                 log: this.log,
               });
               const docText = `${entry.title}. ${entry.genre || ''}. ${enrichedRecord.tagline?.en || ''} ${enrichedRecord.tagline?.pl || ''} ${(enrichedRecord.searchKeywords || []).join(', ')}`;
-              const vec = await this.embeddingService.embedText(docText);
+              const vec = await this.embeddingService.embedDocument(docText, entry.title);
               if (vec.length > 0) {
                 this.vectorIndex.upsert({
                   slug: entry.slug,

@@ -26,7 +26,7 @@ describe('embedding-service', () => {
     expect(cosineSimilarity(a, d)).toBeCloseTo(-1);
   });
 
-  it('generates embedding with :embedContent for gemini models and caches repeated queries', async () => {
+  it('generates query embedding with task prompt prefix for gemini models', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -44,7 +44,7 @@ describe('embedding-service', () => {
       getAccessToken: async () => ({ token: 'mock-token' }),
     });
 
-    const vec1 = await service.embedText('arcade football');
+    const vec1 = await service.embedQuery('arcade football');
     expect(vec1).toEqual([0.6, 0.8]);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(fetchSpy).toHaveBeenCalledWith(
@@ -56,16 +56,45 @@ describe('embedding-service', () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          content: { parts: [{ text: 'arcade football' }] },
-          taskType: 'RETRIEVAL_QUERY',
+          content: { parts: [{ text: 'task: search query | query: arcade football' }] },
         }),
       }),
     );
 
     // Second call should hit the in-memory cache
-    const vec2 = await service.embedText('arcade football');
+    const vec2 = await service.embedQuery('arcade football');
     expect(vec2).toEqual([0.6, 0.8]);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('generates document embedding with title/result prefix for gemini models', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        embedding: {
+          values: [0.6, 0.8],
+        },
+      }),
+    } as Response);
+
+    const service = new VertexEmbeddingService({ model: 'gemini-embedding-2' });
+    vi.spyOn(
+      (service as unknown as { auth: { getClient: () => Promise<unknown> } }).auth,
+      'getClient',
+    ).mockResolvedValue({
+      getAccessToken: async () => ({ token: 'mock-token' }),
+    });
+
+    const vec = await service.embedDocument('Tournament soccer game.', "Mexico '86");
+    expect(vec).toEqual([0.6, 0.8]);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining('/publishers/google/models/gemini-embedding-2:embedContent'),
+      expect.objectContaining({
+        body: JSON.stringify({
+          content: { parts: [{ text: "title: Mexico '86 | task: search result | text: Tournament soccer game." }] },
+        }),
+      }),
+    );
   });
 
   it('generates embedding with :predict for legacy text-* models', async () => {
@@ -90,7 +119,7 @@ describe('embedding-service', () => {
       getAccessToken: async () => ({ token: 'mock-token' }),
     });
 
-    const vec = await service.embedText('arcade football');
+    const vec = await service.embedQuery('arcade football');
     expect(vec).toEqual([0.6, 0.8]);
     expect(fetchSpy).toHaveBeenCalledWith(
       expect.stringContaining('/publishers/google/models/text-multilingual-embedding-002:predict'),
@@ -101,7 +130,7 @@ describe('embedding-service', () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          instances: [{ content: 'arcade football' }],
+          instances: [{ content: 'arcade football', task_type: 'RETRIEVAL_QUERY' }],
         }),
       }),
     );

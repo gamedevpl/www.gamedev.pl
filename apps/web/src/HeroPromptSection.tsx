@@ -182,12 +182,17 @@ function findMatchingGame(query: string, catalog: CatalogEntry[]): CatalogEntry 
     const title = entry.title.toLowerCase();
     const slug = entry.slug.toLowerCase();
     const genre = entry.genre.toLowerCase();
+    const titleTokens = title.split(/[\s-]+/);
+    const slugTokens = slug.split(/[\s-]+/);
+    const genreTokens = genre.split(/[\s-]+/);
 
-    // 1. Direct title or slug full match / substring if query length >= 3
-    if (title === normalized || slug === normalized) {
-      return entry;
-    }
-    if (normalized.length >= 3 && (title.includes(normalized) || slug.includes(normalized))) {
+    // 1. Direct exact or whole-word token match in title or slug
+    if (
+      title === normalized ||
+      slug === normalized ||
+      titleTokens.includes(normalized) ||
+      slugTokens.includes(normalized)
+    ) {
       return entry;
     }
 
@@ -203,9 +208,11 @@ function findMatchingGame(query: string, catalog: CatalogEntry[]): CatalogEntry 
         if (
           targets.some(
             (target) =>
+              slugTokens.includes(target) ||
               slug.includes(target) ||
+              titleTokens.includes(target) ||
               title.includes(target) ||
-              genre.includes(target) ||
+              genreTokens.includes(target) ||
               entry.searchKeywords?.some((k) => k.toLowerCase().includes(target)),
           )
         ) {
@@ -215,11 +222,9 @@ function findMatchingGame(query: string, catalog: CatalogEntry[]): CatalogEntry 
     }
 
     // 4. Word-boundary token match against title / keywords / genre
-    const titleTokens = title.split(/[\s-]+/);
-    const slugTokens = slug.split(/[\s-]+/);
     const keywordTokens = (entry.searchKeywords || []).map((k) => k.toLowerCase());
     const matchedTokenCount = queryTokens.filter(
-      (t) => titleTokens.includes(t) || slugTokens.includes(t) || genre.includes(t) || keywordTokens.includes(t),
+      (t) => titleTokens.includes(t) || slugTokens.includes(t) || genreTokens.includes(t) || keywordTokens.includes(t),
     ).length;
 
     if (matchedTokenCount > 0 && matchedTokenCount >= Math.ceil(queryTokens.length / 2)) {

@@ -52,7 +52,7 @@ export async function registerCatalogSearchRoutes(
           void indexer.ensureIndex();
         }
 
-        const queryVector = await embeddingService.embedText(query);
+        const queryVector = await embeddingService.embedQuery(query);
         if (queryVector.length === 0) {
           return reply.send({ match: null, score: 0 });
         }
