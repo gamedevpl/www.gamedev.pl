@@ -4,7 +4,6 @@ import {
   derivePreviewGateStatus,
   MAX_SHOT_BYTES,
   MAX_TITLE_LENGTH,
-  type GameProject,
 } from '@gamedevpl/contract';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -12,7 +11,7 @@ import { splitConceptBrief } from './agent-surface/agent-build-brief.js';
 import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-surface/agent-channel.js';
 import { mintAgentToken, mintManagedMcpOpener } from './agent-surface/agent-token.js';
 import { registerMcpServerRoutes } from './agent-surface/mcp-server.js';
-import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './platform/assemble.js';
+import { assembleGameHtml } from './platform/assemble.js';
 import { MAX_BUILD_PREVIEW_BYTES } from './delivery/build-preview-limits.js';
 import {
   createCreationGate,
@@ -29,16 +28,12 @@ import {
 } from './agent-surface/managed-availability.js';
 import { postGateScreenshotToThread } from './delivery/gate-screenshot.js';
 import { createGitHubClient, type CatalogGameEntry, type GitHubClient } from './catalog/github-client.js';
-import {
-  createSnapshotReaderFromEnv,
-  SnapshotIncompleteError,
-  SnapshotUnavailableError,
-  type GameSnapshotReader,
-} from './catalog/game-snapshot.js';
+import { createSnapshotReaderFromEnv, type GameSnapshotReader } from './catalog/game-snapshot.js';
 import { registerAdminGameRoutes } from './catalog/admin-game-routes.js';
 import { registerSelfBuildConnectRoutes } from './agent-surface/self-build-connect-routes.js';
 import { registerDraftLifecycleRoutes } from './creation/draft-lifecycle-routes.js';
 import { registerCatalogRoutes } from './catalog/catalog-routes.js';
+import { registerGamePlayRoute } from './catalog/game-play-route.js';
 import { registerCatalogSearchRoutes } from './catalog/catalog-search-routes.js';
 import { registerDraftPreviewRoutes } from './delivery/draft-preview-routes.js';
 import {
@@ -1778,18 +1773,13 @@ export async function registerSubmissionRoutes(
     checkUserAccess,
     maxCachedDraftPreviews: options.maxCachedDraftPreviews,
   });
-  const { canPlayDraft, replyWithDraft } = draftPreviewRoutes;
-
   // Feedback posts a GitHub comment (which re-triggers the agent), so cap it tightly.
   const feedbackRateLimitWindowMs = 60 * 60 * 1000;
   const maxFeedbackPerWindow = 10;
   const feedbackByIp = new Map<string, number[]>();
 
-  const gameTtlMs = 5 * 60_000;
-  const gameCache = new Map<string, { expiresAt: number; value: { slug: string; title: string; html: string } }>();
   const gamesRateLimitWindowMs = 60 * 1000;
   const maxGamesPerWindow = 60;
-  const gamesByIp = new Map<string, number[]>();
 
   // A single catalog page render can request a poster, a video, and up to 4
   // screenshots per card across every published game — a much bigger, legitimate
@@ -1823,10 +1813,21 @@ export async function registerSubmissionRoutes(
     maxMediaPerWindow,
     mediaRateLimitWindowMs: gamesRateLimitWindowMs,
   });
+  const gamePlayRoute = await registerGamePlayRoute(app, {
+    store,
+    githubClient,
+    snapshotReader,
+    publishedRef,
+    now,
+    catalog: catalogRoutes,
+    draftPreview: draftPreviewRoutes,
+    maxGamesPerWindow,
+    gamesRateLimitWindowMs,
+  });
 
   // Trusts a cache hit without re-checking publication state.
   function invalidatePublishedGameCaches(slug: string): void {
-    gameCache.delete(slug);
+    gamePlayRoute.invalidateGameCache(slug);
     catalogRoutes.invalidatePublishedGameCache(slug);
   }
 
@@ -4115,113 +4116,6 @@ export async function registerSubmissionRoutes(
       });
     },
   );
-
-  // Play a published game. When the snapshot is configured, the baked document
-  // is required; otherwise sources are fetched from the games repo's default
-  // branch and assembled into one document for the sandboxed, opaque-origin
-  // iframe — the same trust model as the preview endpoint. Only slugs present
-  // in the catalog as published are served.
-  app.get('/api/games/:slug', async (request, reply) => {
-    if (!githubClient) {
-      return reply.status(503).send({ error: 'games are not configured' });
-    }
-
-    const slug = z.string().parse((request.params as { slug?: string }).slug);
-    const currentTime = now();
-    if (isRateLimited(gamesByIp, request.ip, currentTime, maxGamesPerWindow, gamesRateLimitWindowMs)) {
-      return reply.status(429).send({ error: 'too many game requests, please try again later' });
-    }
-
-    const cached = gameCache.get(slug);
-    if (cached && cached.expiresAt > currentTime) {
-      return reply.send(cached.value);
-    }
-
-    try {
-      // Store-published first: a delivered game is never committed, so the repo catalog
-      // does not know it exists and would 404 a game the operator published. Its document
-      // is the one the gate assembled — same assembler, same CSP, provenance and
-      // credential scan as the bake applies to a repo game — so this serves an artifact
-      // rather than building one.
-      const stored = await catalogRoutes.storePublishedGame(slug);
-      if (stored) {
-        gameCache.set(slug, { value: stored, expiresAt: currentTime + gameTtlMs });
-        return reply.send(stored);
-      }
-
-      if (!(await catalogRoutes.isSlugPublished(slug))) {
-        // Not published — but a game has this address from the moment it is submitted,
-        // and its creator can play it, as can anyone they have chosen to share the link
-        // with. One permalink for a game's whole life, before and after it goes live.
-        //
-        // Deliberately after both published paths and outside `gameCache`: that cache is
-        // keyed by slug alone and read before any gate, so a draft written into it would
-        // be served to whoever asked next, share toggle or not.
-        if (await canPlayDraft(request, slug)) {
-          const record = await store?.getSubmissionBySlug(slug);
-          if (record) return replyWithDraft(request, reply, record.issueNumber);
-        }
-        return reply.status(404).send({ error: 'game not found' });
-      }
-
-      if (snapshotReader) {
-        // Baked at merge time by the same assembler the GitHub path would use,
-        // with the same CSP, provenance meta and credential scan already applied.
-        const snapshotGame = await catalogRoutes.readSnapshotGame(slug);
-        if (!snapshotGame) {
-          throw new SnapshotIncompleteError(`published game "${slug}" is missing from the snapshot`);
-        }
-        gameCache.set(slug, { value: snapshotGame, expiresAt: currentTime + gameTtlMs });
-        return reply.send(snapshotGame);
-      }
-
-      const sources = await githubClient.getGameSources(publishedRef, slug);
-      if (!sources) {
-        return reply.status(404).send({ error: 'game not found' });
-      }
-
-      const project: GameProject = {
-        title: sources.title ?? slug,
-        description: '',
-        html: sources.indexHtml,
-        js: sources.gameJs,
-        css: sources.styleCss,
-      };
-
-      // restrictNetwork: published games are self-contained by repo policy, so
-      // lock them to their own inline assets just like unreviewed previews.
-      const html = assembleGameHtml(project, { restrictNetwork: true });
-      const value = { slug, title: project.title, html };
-      gameCache.set(slug, { value, expiresAt: currentTime + gameTtlMs });
-      return reply.send(value);
-    } catch (error) {
-      if (error instanceof SnapshotUnavailableError) {
-        request.log.error({ err: error, slug }, 'snapshot game unavailable');
-        return reply.status(503).send({ error: 'game snapshot unavailable' });
-      }
-      if (error instanceof SnapshotIncompleteError) {
-        request.log.error({ err: error, slug }, 'snapshot game incomplete');
-        return reply.status(502).send({
-          error: 'game snapshot incomplete',
-          detail: error.message.replace(/\s+/g, ' ').trim().slice(0, 240),
-        });
-      }
-      if (
-        error instanceof EmptyProjectError ||
-        error instanceof ProjectTooLargeError ||
-        error instanceof CredentialLeakError
-      ) {
-        request.log.warn({ err: error, slug }, 'published game failed hygiene checks');
-        return reply.status(422).send({ error: 'this game could not be served' });
-      }
-      request.log.error({ err: error, slug }, 'failed to serve game');
-      // Surface a short, non-sensitive reason so a broken play route is diagnosable
-      // from the response body (and from the deploy smoke test) without scraping
-      // Cloud Run logs. Truncate — esbuild messages can be long.
-      const detail = error instanceof Error ? error.message.replace(/\s+/g, ' ').trim().slice(0, 240) : 'unknown error';
-      return reply.status(502).send({ error: 'failed to load game', detail });
-    }
-  });
 
   // Renders the staging buffer while the agent is still filling it, so a creator is not
   // left watching sentences for the minutes between "the game exists" and "the gate
