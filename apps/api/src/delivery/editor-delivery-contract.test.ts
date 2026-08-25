@@ -19,8 +19,8 @@ const FILES: SourceFile[] = [
 ];
 
 describe('new-game editor delivery contract', () => {
-  it.each(['preview', 'publish'] as const)('requires EDITOR.json for %s delivery', (mode) => {
-    expect(() => validateSourceUpload(FILES, mode, false, true)).toThrow(/EDITOR\.json is required for a new game/);
+  it.each(['preview', 'publish'] as const)('requires an editor declaration for %s delivery', (mode) => {
+    expect(() => validateSourceUpload(FILES, mode, false, true)).toThrow(/EDITOR\.json or EDITOR\.ts is required/);
   });
 
   it('accepts an editor and reports the missing path precisely', () => {
