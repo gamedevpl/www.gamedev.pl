@@ -179,6 +179,7 @@ const FILE_BUCKET = {
   'mcp-example-tools': 'agent-surface',
   'mcp-kit-tools': 'agent-surface',
   'mcp-kit-file-tools': 'agent-surface',
+  'mcp-inbox-tools': 'agent-surface',
   'mcp-server-discovery': 'agent-surface',
   'mcp-ui': 'agent-surface',
   'mcp-oauth-metadata': 'agent-surface',
