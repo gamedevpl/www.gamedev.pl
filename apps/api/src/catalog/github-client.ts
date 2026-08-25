@@ -4,6 +4,7 @@ import {
   CATALOG_ORIENTATIONS,
   MAX_MULTIPLAYER_SLOTS,
   CATALOG_TOUCH_VALUES as CONTRACT_CATALOG_TOUCH_VALUES,
+  type CatalogEditor,
   type CatalogEntry,
   type CatalogMedia,
   type CatalogMultiplayer,
@@ -305,6 +306,7 @@ export type CatalogGameEntry = CatalogEntry;
 export type CatalogGameSaves = CatalogSaves;
 export type CatalogGameWorld = CatalogWorld;
 export type CatalogGameSensing = CatalogSensing;
+export type CatalogGameEditor = CatalogEditor;
 
 /**
  * `player` is the only mode that exists. Anything else — a typo, a value from a newer
@@ -321,6 +323,10 @@ function parseWorld(value: unknown): CatalogGameWorld | null {
 
 function parseSensing(value: unknown): CatalogGameSensing | null {
   return value === 'tilt' || value === 'backdrop' ? value : null;
+}
+
+function parseEditor(value: unknown): CatalogGameEditor | null {
+  return value === 'content' ? 'content' : null;
 }
 
 /** Platform ceiling on player slots — mirrors SLOT_COLORS in mp.ts. */
@@ -1849,6 +1855,7 @@ function parseCommittedCatalog(raw: string): CatalogGameEntry[] | null {
       saves: parseSaves(candidate.saves),
       world: parseWorld(candidate.world),
       sensing: parseSensing(candidate.sensing),
+      editor: parseEditor(candidate.editor),
       orientation: GAME_ORIENTATIONS.has(orientationRaw as CatalogGameOrientation)
         ? (orientationRaw as CatalogGameOrientation)
         : 'any',
@@ -1992,6 +1999,7 @@ export function catalogEntryFromSpec(
     saves: parseSaves(frontmatter.saves),
     world: parseWorld(frontmatter.world),
     sensing: parseSensing(frontmatter.sensing),
+    editor: parseEditor(frontmatter.editor),
     orientation: parseOrientation(frontmatter),
     submittedBy: parseSubmittedBy(frontmatter.submitted_by),
   };

@@ -384,6 +384,7 @@ describe('catalog playback', () => {
               status: 'published',
               media: null,
               multiplayer: null,
+              editor: 'content',
               submittedBy: 'nightshift',
               creatorHandle: 'nightshift',
             },

@@ -10,6 +10,7 @@ export { BUILDER_UNAVAILABLE_REASONS, type BuilderUnavailableReason } from './bu
 export { BUILDERS, isBuilderKind, type BuilderKind } from './builder-kind.js';
 export type {
   CatalogEntry,
+  CatalogEditor,
   CatalogMedia,
   CatalogMultiplayer,
   CatalogSaves,

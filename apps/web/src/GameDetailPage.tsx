@@ -37,7 +37,7 @@ export function GameDetailPage({ game, state, onPlay, onPlayTogether, onRemix, o
 
   useEffect(() => {
     if (!game) return;
-    recordRemixStep('offered', { control: 'page' });
+    recordRemixStep(game.editor === 'content' ? 'offered' : 'no_lane', { control: 'page' });
   }, [game]);
 
   if (state === 'loading') {
@@ -82,6 +82,11 @@ export function GameDetailPage({ game, state, onPlay, onPlayTogether, onRemix, o
         <div className="game-page-kicker">
           {authorPath ? <a href={authorPath}>{authorLabel}</a> : <span>{authorLabel}</span>}
           {game.genre ? <span className="game-page-genre">{game.genre}</span> : null}
+          {game.editor === 'content' ? (
+            <span className="game-page-genre game-page-editor-badge">
+              <PixelIcon name="pencil" size={11} /> {t('catalog.editorBadge')}
+            </span>
+          ) : null}
         </div>
         <h1>{game.title}</h1>
 
@@ -100,9 +105,11 @@ export function GameDetailPage({ game, state, onPlay, onPlayTogether, onRemix, o
               <PixelIcon name="wrench" size={13} /> {t('gamePage.openStudio')}
             </a>
           ) : null}
-          <button type="button" className="secondary-btn game-page-remix" onClick={remix}>
-            <PixelIcon name="wrench" size={13} /> {t('catalog.remix')}
-          </button>
+          {game.editor === 'content' ? (
+            <button type="button" className="secondary-btn game-page-remix" onClick={remix}>
+              <PixelIcon name="wrench" size={13} /> {t('catalog.remix')}
+            </button>
+          ) : null}
           <ShareGameButton slug={game.slug} title={game.title} />
         </div>
       </header>

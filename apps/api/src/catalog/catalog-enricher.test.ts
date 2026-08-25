@@ -20,6 +20,7 @@ const MOCK_ENTRY: CatalogGameEntry = {
   saves: null,
   world: null,
   sensing: null,
+  editor: null,
   orientation: 'landscape',
   submittedBy: 'platform',
 };

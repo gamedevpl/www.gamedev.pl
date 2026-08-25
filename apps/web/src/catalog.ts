@@ -16,10 +16,11 @@ export type { CatalogOrientation };
  * `controllers` = playable only with phones as controllers on a second screen,
  * `none` = keyboard only. null when the API served a catalog without the field.
  */
-import type { CatalogEntry, CatalogMedia, CatalogMultiplayer, CatalogScreenshot } from '@gamedevpl/contract';
+import type { CatalogEditor, CatalogEntry, CatalogMedia, CatalogMultiplayer, CatalogScreenshot } from '@gamedevpl/contract';
 
 export type { CatalogTouch };
 export type {
+  CatalogEditor,
   CatalogEntry,
   CatalogMedia,
   CatalogMultiplayer,
@@ -129,6 +130,10 @@ function parseCatalogOrientation(value: unknown): CatalogOrientation {
   return (CATALOG_ORIENTATIONS as readonly unknown[]).includes(value) ? (value as CatalogOrientation) : 'any';
 }
 
+function parseCatalogEditor(value: unknown): CatalogEditor | null {
+  return value === 'content' ? 'content' : null;
+}
+
 /**
  * null rather than a guess when the field is missing or unrecognised: the UI only
  * warns a phone visitor off a game it *knows* is keyboard-only, so an absent value
@@ -192,6 +197,7 @@ export function normalizeCatalogEntry(value: unknown): CatalogEntry | null {
     saves: entry.saves === 'player' ? 'player' : null,
     world: entry.world === 'shared' ? 'shared' : null,
     sensing: entry.sensing === 'tilt' || entry.sensing === 'backdrop' ? entry.sensing : null,
+    editor: parseCatalogEditor(entry.editor),
     orientation: parseCatalogOrientation(entry.orientation),
     touch: parseCatalogTouch(entry.touch),
     submittedBy: parseCatalogSubmittedBy(entry.submittedBy ?? entry.submitted_by),

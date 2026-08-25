@@ -87,7 +87,7 @@ export function GamePage({
   useEffect(() => {
     if (!page) return;
     onGameLoaded?.(page.entry.title);
-    recordRemixStep('offered', { control: 'page' });
+    recordRemixStep(page.entry.editor === 'content' ? 'offered' : 'no_lane', { control: 'page' });
   }, [page, onGameLoaded]);
 
   const canonicalHandle = page?.entry.creatorHandle ?? null;
@@ -202,6 +202,7 @@ export function GamePage({
   const playTogether = () => onPlayTogether?.(entry, arrivalVia);
 
   const openRemixEntry = () => {
+    if (entry.editor !== 'content') return;
     recordRemixStep('opened', { control: 'page' });
     setRemixEntryOpen(true);
   };
@@ -210,6 +211,7 @@ export function GamePage({
 
   const startRemix = (event: FormEvent) => {
     event.preventDefault();
+    if (entry.editor !== 'content') return;
     const request = remixRequest.trim();
     if (request.length < 2) return;
     setRemixEntryOpen(false);
@@ -232,6 +234,11 @@ export function GamePage({
           <span aria-hidden="true"> / </span>
           <span className="game-page-breadcrumb-slug">{slug}</span>
           {entry.genre ? <span className="game-page-genre">{entry.genre}</span> : null}
+          {entry.editor === 'content' ? (
+            <span className="game-page-genre game-page-editor-badge">
+              <PixelIcon name="pencil" size={11} /> {t('catalog.editorBadge')}
+            </span>
+          ) : null}
         </nav>
         <h1>{entry.title}</h1>
         {page.description ? <p className="game-page-description">{page.description}</p> : null}
@@ -254,9 +261,11 @@ export function GamePage({
               <PixelIcon name="wrench" size={13} /> {t('gamePage.openStudio')}
             </a>
           ) : null}
-          <button type="button" className="secondary-btn game-page-remix" onClick={openRemixEntry} ref={remixButtonRef}>
-            <PixelIcon name="wrench" size={13} /> {t('gamePage.remix')}
-          </button>
+          {entry.editor === 'content' ? (
+            <button type="button" className="secondary-btn game-page-remix" onClick={openRemixEntry} ref={remixButtonRef}>
+              <PixelIcon name="wrench" size={13} /> {t('gamePage.remix')}
+            </button>
+          ) : null}
           <ShareGameButton slug={slug} title={entry.title} path={gamePath(shareHandle, slug)} />
         </div>
       </header>

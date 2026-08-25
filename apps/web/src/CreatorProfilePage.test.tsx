@@ -109,6 +109,7 @@ function creatorPageWithGame() {
         saves: null,
         world: null,
         sensing: null,
+        editor: null,
       },
     ],
   };

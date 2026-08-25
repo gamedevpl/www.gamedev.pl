@@ -18,6 +18,7 @@ const partyGame: CatalogEntry = {
   saves: null,
   world: null,
   sensing: null,
+  editor: null,
   orientation: 'any',
   touch: null,
   submittedBy: null,

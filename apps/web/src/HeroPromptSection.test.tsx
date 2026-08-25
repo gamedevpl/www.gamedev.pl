@@ -567,6 +567,7 @@ describe('HeroPromptSection', () => {
         saves: null,
         world: null,
         sensing: null,
+        editor: null,
         orientation: 'landscape' as const,
         submittedBy: null,
       },
@@ -635,6 +636,7 @@ describe('HeroPromptSection', () => {
         saves: null,
         world: null,
         sensing: null,
+        editor: null,
         orientation: 'landscape' as const,
         submittedBy: null,
         tagline: {
@@ -692,6 +694,7 @@ describe('HeroPromptSection', () => {
         saves: null,
         world: null,
         sensing: null,
+        editor: null,
         orientation: 'landscape' as const,
         submittedBy: null,
         tagline: { en: 'Deep space dogfights in a shattered galaxy.', pl: 'Walki w kosmosie.' },

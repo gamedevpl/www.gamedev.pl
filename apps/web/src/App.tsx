@@ -912,6 +912,7 @@ export function App() {
           creatorHandle={stageContent.game.creatorHandle}
           controls={stageContent.game.controls}
           touch={stageContent.game.touch}
+          editor={stageContent.game.editor}
           via={stageContent.via}
           initialRemixOpen={stageContent.initialRemixOpen}
           initialRemixRequest={stageContent.initialRemixRequest}
