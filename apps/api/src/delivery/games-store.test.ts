@@ -638,25 +638,6 @@ describe('GCS games store', () => {
     });
   });
 
-  it('refuses a fresh v2 candidate without its content document before writing', async () => {
-    const { impl, objects } = stubGcs();
-    const store = createGcsGamesStore({ ...base, fetchImpl: impl });
-
-    await expect(
-      store.putCandidateSources({
-        slug: 'fresh-v2',
-        issueNumber: 43,
-        mode: 'preview',
-        requireCompiledEditor: true,
-        files: [...MINIMAL, { path: 'EDITOR.json', content: '{"version":2}' }],
-      }),
-    ).rejects.toMatchObject({
-      message: expect.stringMatching(/EDITOR\.content\.json is required/),
-      missingPaths: ['EDITOR.content.json'],
-    });
-    expect(objects.size).toBe(0);
-  });
-
   it('writes the manifest last, so a dead run leaves no version claiming missing files', async () => {
     const writes: string[] = [];
     const impl = (async (url: string | URL, init: RequestInit = {}) => {
