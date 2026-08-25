@@ -85,7 +85,7 @@ the agent expects those parts to be missing rather than trusting them.
 
 ## The editor is part of every delivery
 
-Every newly seeded or built game ships an EditorKit declaration. Prefer `EDITOR.ts`; otherwise deliver `EDITOR.json`, declaring at least three meaningful tunables or one content collection. Keep `EDITOR.content.json` (when the schema uses content) and the generated `game/editor-content.ts` in sync, and make the game read those typed values instead of shadowing defaults. The kit exposes `npm run editor:gen -- <slug>` and `npm run edit -- <slug>` for regeneration and local verification.
+Every newly seeded or built game ships compiled `EDITOR.json`, declaring at least three meaningful tunables or one content collection. `EDITOR.ts` is optional authoring source; when present, run `npm run editor:gen -- <slug>` and ship both files because the gate rejects a stale pair. Keep `EDITOR.content.json` (when the schema uses content) and generated `game/editor-content.ts` in sync, and make the game read those typed values instead of shadowing defaults. The kit also exposes `npm run edit -- <slug>` for local verification.
 
 ## Scope is stated as a fact, not a request
 
