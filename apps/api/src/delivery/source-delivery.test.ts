@@ -144,7 +144,7 @@ describe('shared source delivery', () => {
         slug: SLUG,
         backend: BACKEND,
         mode: 'preview',
-        requireEditorJson: true,
+        requireEditorDeclaration: true,
       }),
     );
     expect(gate).toHaveBeenCalledWith({ issueNumber: ISSUE, slug: SLUG, version: 'v-managed-1', mode: 'preview' });
@@ -176,7 +176,7 @@ describe('shared source delivery', () => {
     });
 
     expect(result).toMatchObject({ accepted: true, mode: 'publish' });
-    expect(putCandidateSources).toHaveBeenCalledWith(expect.objectContaining({ requireEditorJson: false }));
+    expect(putCandidateSources).toHaveBeenCalledWith(expect.objectContaining({ requireEditorDeclaration: false }));
     expect((await store.getSubmission(ISSUE)) ?? {}).toMatchObject({
       deliveredVersion: 'v-managed-1',
       previewVersion: 'v-managed-1',
