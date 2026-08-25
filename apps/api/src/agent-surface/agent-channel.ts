@@ -49,15 +49,8 @@ import {
 import { parseGameMedia } from '../catalog/github-client.js';
 import { canTransition, resolveJobState, type JobState } from '../creation/job-state.js';
 import { gateCrashStall } from '../delivery/gate-crash.js';
-import {
-  KitFilesError,
-  createKitFileStore,
-  listKitFiles,
-  readKitFile,
-  readKitFileFragment,
-  readKitFiles,
-  searchKitFiles,
-} from './kit-files.js';
+import { createKitFileStore } from './kit-files.js';
+import { registerAgentChannelKitFileRoutes } from './agent-channel-kit-files.js';
 import { logKnowledgeQuery } from '../platform/knowledge-metrics.js';
 import type {
   KnowledgeMode,
@@ -720,27 +713,6 @@ export async function registerAgentChannelRoutes(
             ? 404
             : 400;
       return reply.status(status).send({ error: error.code, message: error.message });
-    }
-    return null;
-  }
-
-  function sendKitFilesError(reply: FastifyReply, error: unknown): FastifyReply | null {
-    if (error instanceof KitFilesError) {
-      const status =
-        error.code === 'kit_store_unavailable'
-          ? 503
-          : error.code === 'kit_registry_missing' ||
-              error.code === 'kit_registry_invalid' ||
-              error.code === 'kit_artifact_missing' ||
-              error.code === 'kit_file_missing'
-            ? 404
-            : error.code === 'kit_revision_unsupported'
-              ? 409
-              : 400;
-      return reply.status(status).send({ error: error.code, message: error.message });
-    }
-    if (error instanceof KitRegistryError) {
-      return reply.status(404).send({ error: error.code, message: error.message });
     }
     return null;
   }
@@ -2598,180 +2570,7 @@ export async function registerAgentChannelRoutes(
     },
   );
 
-  /**
-   * List files inside the current Creator Kit without downloading the tarball to the agent.
-   */
-  app.get(
-    AGENT_CHANNEL_ROUTES.KIT_FILES,
-    { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      const resolved = await resolveBuild(request, reply);
-      if (!resolved) return reply;
-      if (!kitFileStore) {
-        return reply.status(503).send({ error: 'kit_store_unavailable', message: 'the kit store is not configured' });
-      }
-      try {
-        const query = request.query as {
-          prefix?: string;
-          glob?: string;
-          limit?: string;
-          offset?: string;
-          engineRef?: string;
-        };
-        const tree = await kitFileStore.loadTree(query.engineRef);
-        return reply.send(
-          listKitFiles(tree, {
-            prefix: query.prefix,
-            glob: query.glob,
-            limit: optionalFiniteQuery(query.limit),
-            offset: optionalFiniteQuery(query.offset),
-          }),
-        );
-      } catch (error) {
-        const sent = sendKitFilesError(reply, error);
-        if (sent) return sent;
-        throw error;
-      }
-    },
-  );
-
-  /** Grep text files in the current Creator Kit. */
-  app.get(
-    AGENT_CHANNEL_ROUTES.KIT_SEARCH,
-    { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      const resolved = await resolveBuild(request, reply);
-      if (!resolved) return reply;
-      if (!kitFileStore) {
-        return reply.status(503).send({ error: 'kit_store_unavailable', message: 'the kit store is not configured' });
-      }
-      try {
-        const query = request.query as {
-          q?: string;
-          query?: string;
-          prefix?: string;
-          limit?: string;
-          engineRef?: string;
-        };
-        const tree = await kitFileStore.loadTree(query.engineRef);
-        return reply.send(
-          searchKitFiles(tree, {
-            query: query.q ?? query.query ?? '',
-            prefix: query.prefix,
-            limit: optionalFiniteQuery(query.limit),
-          }),
-        );
-      } catch (error) {
-        const sent = sendKitFilesError(reply, error);
-        if (sent) return sent;
-        throw error;
-      }
-    },
-  );
-
-  /** Read one small kit file (refuse oversized — use /fragment). */
-  app.get(
-    AGENT_CHANNEL_ROUTES.KIT_FILE,
-    { config: { rateLimit: { max: 240, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      const resolved = await resolveBuild(request, reply);
-      if (!resolved) return reply;
-      if (!kitFileStore) {
-        return reply.status(503).send({ error: 'kit_store_unavailable', message: 'the kit store is not configured' });
-      }
-      try {
-        const query = request.query as { path?: string; encoding?: string; engineRef?: string };
-        if (!query.path?.trim()) {
-          return reply.status(400).send({ error: 'kit_path_invalid', message: 'path is required' });
-        }
-        const encoding = query.encoding === 'base64' || query.encoding === 'utf8' ? query.encoding : undefined;
-        const tree = await kitFileStore.loadTree(query.engineRef);
-        return reply.send(readKitFile(tree, query.path, { encoding }));
-      } catch (error) {
-        const sent = sendKitFilesError(reply, error);
-        if (sent) return sent;
-        throw error;
-      }
-    },
-  );
-
-  /**
-   * Read several small kit files in one request — collapses ChatGPT/Claude per-turn
-   * tool-call budgets when browsing a scaffold.
-   */
-  app.post(
-    AGENT_CHANNEL_ROUTES.KIT_FILES_READ,
-    { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      const resolved = await resolveBuild(request, reply);
-      if (!resolved) return reply;
-      if (!kitFileStore) {
-        return reply.status(503).send({ error: 'kit_store_unavailable', message: 'the kit store is not configured' });
-      }
-      try {
-        const body = (request.body ?? {}) as {
-          paths?: unknown;
-          encoding?: string;
-          engineRef?: string;
-        };
-        if (!Array.isArray(body.paths)) {
-          return reply.status(400).send({ error: 'kit_query_invalid', message: 'paths must be an array of strings' });
-        }
-        const paths = body.paths.filter((path): path is string => typeof path === 'string');
-        if (paths.length === 0) {
-          return reply.status(400).send({ error: 'kit_query_invalid', message: 'paths must be a non-empty array' });
-        }
-        const encoding = body.encoding === 'base64' || body.encoding === 'utf8' ? body.encoding : undefined;
-        const tree = await kitFileStore.loadTree(body.engineRef);
-        return reply.send(readKitFiles(tree, paths, { encoding }));
-      } catch (error) {
-        const sent = sendKitFilesError(reply, error);
-        if (sent) return sent;
-        throw error;
-      }
-    },
-  );
-
-  /** Read a byte/line window of one kit file. */
-  app.get(
-    AGENT_CHANNEL_ROUTES.KIT_FILE_FRAGMENT,
-    { config: { rateLimit: { max: 240, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      const resolved = await resolveBuild(request, reply);
-      if (!resolved) return reply;
-      if (!kitFileStore) {
-        return reply.status(503).send({ error: 'kit_store_unavailable', message: 'the kit store is not configured' });
-      }
-      try {
-        const query = request.query as {
-          path?: string;
-          offset?: string;
-          limit?: string;
-          unit?: string;
-          encoding?: string;
-          engineRef?: string;
-        };
-        if (!query.path?.trim()) {
-          return reply.status(400).send({ error: 'kit_path_invalid', message: 'path is required' });
-        }
-        const encoding = query.encoding === 'base64' || query.encoding === 'utf8' ? query.encoding : undefined;
-        const unit = query.unit === 'bytes' || query.unit === 'lines' ? query.unit : undefined;
-        const tree = await kitFileStore.loadTree(query.engineRef);
-        return reply.send(
-          readKitFileFragment(tree, query.path, {
-            offset: optionalFiniteQuery(query.offset),
-            limit: optionalFiniteQuery(query.limit),
-            unit,
-            encoding,
-          }),
-        );
-      } catch (error) {
-        const sent = sendKitFilesError(reply, error);
-        if (sent) return sent;
-        throw error;
-      }
-    },
-  );
+  registerAgentChannelKitFileRoutes(app, { resolveBuild, kitFileStore });
 
   // knowledge_query's route. A capped round still returns 200, not an error.
   app.get(
