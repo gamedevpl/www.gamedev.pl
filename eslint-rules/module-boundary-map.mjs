@@ -121,6 +121,7 @@ const FILE_BUCKET = {
   // creation: jobs, rounds, dispatch, seed, refine
   'draft-lifecycle-routes': 'creation',
   'seed-pipeline': 'creation',
+  'creator-self-routes': 'creation',
   'job-state': 'creation',
   'job-costs': 'creation',
   'job-admin-routes': 'creation',
