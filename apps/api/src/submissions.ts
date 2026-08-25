@@ -29,18 +29,14 @@ import {
   type ManagedUnavailableReason,
 } from './agent-surface/managed-availability.js';
 import { postGateScreenshotToThread } from './delivery/gate-screenshot.js';
-import {
-  createGitHubClient,
-  parseSpecTitle,
-  type CatalogGameEntry,
-  type GitHubClient,
-} from './catalog/github-client.js';
+import { createGitHubClient, type CatalogGameEntry, type GitHubClient } from './catalog/github-client.js';
 import {
   createSnapshotReaderFromEnv,
   SnapshotIncompleteError,
   SnapshotUnavailableError,
   type GameSnapshotReader,
 } from './catalog/game-snapshot.js';
+import { registerAdminGameRoutes } from './catalog/admin-game-routes.js';
 import { registerCatalogRoutes } from './catalog/catalog-routes.js';
 import { registerCatalogSearchRoutes } from './catalog/catalog-search-routes.js';
 import { registerDraftPreviewRoutes } from './delivery/draft-preview-routes.js';
@@ -53,7 +49,6 @@ import {
 } from './delivery/creator-media.js';
 import { createBuildStatusAssembler, revisionOriginOf } from './delivery/build-status.js';
 import { createChatOrchestration } from './creation/chat-orchestration.js';
-import { startHealthCheck } from './catalog/game-health.js';
 import {
   createStagedPreviewPublisher,
   overlayGameSources,
@@ -129,7 +124,7 @@ import { seedOutcomeFor } from './agent-surface/seed-status.js';
 import { isAdminSession } from './platform/admin-session.js';
 import { peekQuota } from './creation/quota-gate.js';
 import { mintGameSlug } from './catalog/slug.js';
-import { runSlugBackfill, settleSlugClaim } from './catalog/slug-backfill.js';
+import { settleSlugClaim } from './catalog/slug-backfill.js';
 import {
   type AgentKeysStore,
   type BuildLogStore,
@@ -1889,6 +1884,17 @@ export async function registerSubmissionRoutes(
     }
     return false;
   }
+
+  await registerAdminGameRoutes(app, {
+    store,
+    adminUids,
+    now,
+    gamesStore: options.agentChannel?.gamesStore,
+    onSourcesDelivered: options.agentChannel?.onSourcesDelivered,
+    invalidatePublishedGameCaches,
+    isSlugClaimed,
+    confirmSlugClaim,
+  });
 
   // Single source of GitHub-state → status derivation, shared by the on-demand
   // status route and the notification sweep so they never diverge.
@@ -4160,186 +4166,6 @@ export async function registerSubmissionRoutes(
     // One credit: the retry is an agent session like any other, booked by resumeBuild.
     // Report the real phase — `dispatched` until GitHub says `in_progress`.
     return reply.send({ ok: true, state: after?.state ?? 'dispatched', creditsSpent: 1 });
-  });
-
-  /**
-   * The published shelf, as the operator sees it: what is live, at which version, and
-   * what the last health re-gate said. Slugs only — a publication's identity is its
-   * slug, and joining titles back through manifests would cost a read per game on a
-   * list that exists to be glanced at.
-   */
-  app.get('/api/admin/games', async (request, reply) => {
-    if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
-    if (!store) return reply.status(503).send({ error: 'store_unavailable' });
-    const publications = await store.listPublications();
-    return reply.send({
-      games: publications.sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt)),
-    });
-  });
-
-  /**
-   * Re-gates a published game against the *current* engine — the manual trigger of the
-   * break-and-nudge loop.
-   *
-   * The published bundle froze the engine it shipped with, so serving is immune to
-   * engine changes; what drifts is whether the game would still pass a rebuild. This
-   * runs the same gate on the game's current version with the engine pin overridden,
-   * records the verdict as `manifest.health` (never touching the acceptance verdict,
-   * which is provenance), and leaves the read-back to the sweep — the same pattern the
-   * acceptance gate uses, for the same reason: the verdict is durable in the store, and
-   * a callback would be a second source of a fact the manifest already holds.
-   *
-   * A red verdict nudges the creator rather than pulling the game: an improvement round
-   * rebuilds it against the current engine, and inviting one is the point.
-   */
-  app.post<{ Params: { slug: string } }>('/api/admin/games/:slug/regate', async (request, reply) => {
-    if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
-    if (!store) return reply.status(503).send({ error: 'store_unavailable' });
-    const gamesStore = options.agentChannel?.gamesStore;
-    const gateTrigger = options.agentChannel?.onSourcesDelivered;
-    if (!gamesStore || !gateTrigger) return reply.status(503).send({ error: 'gate_unavailable' });
-
-    const slug = request.params.slug;
-    const publication = await store.getPublication(slug);
-    if (!publication) return reply.status(404).send({ error: 'not_found' });
-    if (publication.state !== 'published') {
-      return reply.status(409).send({ error: 'not_published', state: publication.state });
-    }
-
-    // Same starter the scheduled sweep uses (game-health.ts), so a run an operator asks
-    // for and a run the schedule asks for produce identical records. The one thing the
-    // button ignores is the sweep's recheck cooldown — clicking it *is* the judgement
-    // call the cooldown exists to make on nobody's behalf.
-    const start = await startHealthCheck({ store, gamesStore, gateTrigger, now }, publication);
-    if (!start.started) return reply.status(409).send({ error: start.reason });
-
-    return reply.send({ ok: true, slug, version: start.version, ...(start.buildId ? { buildId: start.buildId } : {}) });
-  });
-
-  app.post<{ Params: { slug: string }; Body: { reason?: string } }>(
-    '/api/admin/games/:slug/delete',
-    async (request, reply) => {
-      if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
-      if (!store) return reply.status(503).send({ error: 'store_unavailable' });
-
-      const slug = request.params.slug;
-      const publication = await store.getPublication(slug);
-      if (!publication) return reply.status(404).send({ error: 'not_found' });
-      if (publication.state !== 'published') {
-        return reply.status(409).send({ error: 'not_published', state: publication.state });
-      }
-
-      const reason =
-        typeof request.body?.reason === 'string' && request.body.reason.trim()
-          ? request.body.reason.trim()
-          : 'deleted by operator';
-      await store.archivePublication(slug, reason, new Date(now()).toISOString());
-      invalidatePublishedGameCaches(slug);
-
-      return reply.send({ ok: true, slug });
-    },
-  );
-
-  /**
-   * Gives an address to every game still missing one.
-   *
-   * A slug is minted at submission now, so this exists for the records that predate
-   * that and for anything that died between the record being written and its slug
-   * being set. Those games still work — the studio addresses them by status token —
-   * but a token in the URL bar is the thing slugs were introduced to stop, and a
-   * fallback nobody sweeps up is a fallback that becomes permanent.
-   *
-   * An operator button rather than a scheduled sweep: the backlog is finite and
-   * shrinking, so a nightly job would spend most of its life finding nothing. Run it
-   * with `?dryRun=1` first — that reports exactly what it would name each game and
-   * writes nothing.
-   *
-   * Sequential on purpose. Each mint asks the store what is taken, so the previous
-   * write has to be visible before the next candidate is judged; running these
-   * concurrently would reintroduce the race the claim read-back exists to settle.
-   *
-   * The loop itself lives in `slug-backfill.ts`, shared with the `slug:backfill` CLI —
-   * the operator path for when nobody can reach an admin browser session.
-   */
-  app.post<{ Querystring: { dryRun?: string } }>('/api/admin/slug-backfill', async (request, reply) => {
-    if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
-    if (!store) return reply.status(503).send({ error: 'store_unavailable' });
-
-    const dryRun = request.query.dryRun === '1' || request.query.dryRun === 'true';
-    // This route's own settle path, so the retry mint still consults the games-repo
-    // catalog through `isSlugClaimed` as it does everywhere else in the server.
-    const result = await runSlugBackfill({ store, isSlugClaimed, dryRun, confirmSlugClaim });
-    const { named } = result;
-    // Logged as well as returned: this changes permanent addresses, and the response
-    // goes to one browser tab that may not be open the next time anyone asks what ran.
-    request.log.info({ dryRun, scanned: result.scanned, named, failed: result.failed }, 'slug backfill complete');
-    return reply.send(result);
-  });
-
-  /**
-   * Gives the delivered SPEC title to games still showing the truncated prompt.
-   *
-   * Delivery adopts the SPEC title now, so this exists for records that arrived before
-   * that — the production example was "A game tycoon like where I run a tv busi" on the
-   * shelf while SPEC.md already said "TV Tycoon". Publish already prefers the SPEC title
-   * for the catalog; this makes the shelf, studio, and notifications agree with it.
-   *
-   * Same shape as the slug backfill: operator-only, `?dryRun=1` rehearses, abandoned
-   * builds are left alone. Games whose shelf title already matches the SPEC are reported
-   * as unchanged rather than rewritten.
-   */
-  app.post<{ Querystring: { dryRun?: string } }>('/api/admin/title-backfill', async (request, reply) => {
-    if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
-    if (!store) return reply.status(503).send({ error: 'store_unavailable' });
-    const gamesStore = options.agentChannel?.gamesStore;
-    if (!gamesStore) return reply.status(503).send({ error: 'games_store_unavailable' });
-
-    const dryRun = request.query.dryRun === '1' || request.query.dryRun === 'true';
-    const pending = await store.listSubmissionsWithDelivery();
-    const games: Array<{
-      issueNumber: number;
-      slug: string;
-      from: string;
-      to: string | null;
-      changed: boolean;
-    }> = [];
-
-    for (const record of pending) {
-      const slug = record.slug!;
-      const version = record.deliveredVersion!;
-      const spec = await gamesStore.getSourceFile(slug, version, 'SPEC.md');
-      const parsed = spec ? parseSpecTitle(spec) : null;
-      const next = parsed ? sanitizeCreatorText(parsed, { singleLine: true }).slice(0, 80) : null;
-      const usable = next && next.length >= 3 ? next : null;
-      const changed = Boolean(usable && usable !== record.title);
-
-      if (!dryRun && changed && usable) {
-        await store.setSubmissionTitle(record.issueNumber, usable);
-      }
-
-      games.push({
-        issueNumber: record.issueNumber,
-        slug,
-        from: record.title,
-        to: usable,
-        changed,
-      });
-    }
-
-    const renamed = games.filter((game) => game.changed).length;
-    const result = {
-      ok: true,
-      dryRun,
-      scanned: pending.length,
-      renamed,
-      unchanged: pending.length - renamed,
-      games,
-    };
-    request.log.info(
-      { dryRun, scanned: result.scanned, renamed, unchanged: result.unchanged },
-      'title backfill complete',
-    );
-    return reply.send(result);
   });
 
   // The notification sweep (docs/notifications-plan.md N1): the closed-tab backstop

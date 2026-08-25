@@ -239,6 +239,7 @@ const FILE_BUCKET = {
   'ts-any-scan': 'delivery',
 
   // catalog: github-client, snapshots, assemble, play
+  'admin-game-routes': 'catalog',
   'music-tracks': 'catalog',
   'catalog-enricher': 'catalog',
   'catalog-vector-index': 'catalog',
