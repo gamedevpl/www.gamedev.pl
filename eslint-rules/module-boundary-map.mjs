@@ -211,6 +211,7 @@ const FILE_BUCKET = {
   'game-manifest-hint': 'agent-surface',
 
   // delivery: staging, games-store, gate
+  'build-status': 'delivery',
   'draft-preview-routes': 'delivery',
   'staged-preview': 'delivery',
   'stage-hints': 'delivery',
