@@ -31,6 +31,7 @@ import { registerAdminGameRoutes } from './catalog/admin-game-routes.js';
 import { registerSelfBuildConnectRoutes } from './agent-surface/self-build-connect-routes.js';
 import { registerDraftLifecycleRoutes } from './creation/draft-lifecycle-routes.js';
 import { createSeedPipeline } from './creation/seed-pipeline.js';
+import { registerCreatorSelfRoutes } from './creation/creator-self-routes.js';
 import { registerCatalogRoutes } from './catalog/catalog-routes.js';
 import { registerGamePlayRoute } from './catalog/game-play-route.js';
 import { registerCatalogSearchRoutes } from './catalog/catalog-search-routes.js';
@@ -109,7 +110,6 @@ import {
   type EmitDeps,
 } from './notifications/notify.js';
 import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './notifications/operator-alerts.js';
-import { pageOwnerGames } from './creation/owner-games.js';
 import { seedOutcomeFor } from './agent-surface/seed-status.js';
 import { isAdminSession } from './platform/admin-session.js';
 import { peekQuota } from './creation/quota-gate.js';
@@ -1731,6 +1731,14 @@ export async function registerSubmissionRoutes(
     invalidateStatusCache,
     invalidatePublishedGameCaches,
   });
+  await registerCreatorSelfRoutes(app, {
+    store,
+    now,
+    checkUserAccess,
+    dailySubmissionQuota,
+    submissionTokenSecret,
+    managedAvailabilityGate,
+  });
 
   // Single source of GitHub-state → status derivation, shared by the on-demand
   // status route and the notification sweep so they never diverge.
@@ -2502,38 +2510,6 @@ export async function registerSubmissionRoutes(
     return reply.send({ token, slug: created.slug, statusUrl: `/api/submissions/${token}` });
   });
 
-  // What's left of today's allowance. Read-only (never increments), so the hero can
-  // show it before a creator spends their last submission on a surprise 429.
-  app.get('/api/me/quota', async (request, reply) => {
-    if (!checkUserAccess(request, reply)) {
-      return;
-    }
-    const dateStr = new Date(now()).toISOString().slice(0, 10);
-    if (!store) {
-      return reply.send({
-        submissions: { used: 0, limit: dailySubmissionQuota },
-        ...(managedAvailabilityGate
-          ? { platformBuilder: await managedAvailabilityGate.peek(request.user!.uid, dateStr) }
-          : {}),
-      });
-    }
-
-    const [usage, user, platformBuilder] = await Promise.all([
-      store.getUsage(request.user!.uid, dateStr),
-      store.getUser(request.user!.uid),
-      managedAvailabilityGate ? managedAvailabilityGate.peek(request.user!.uid, dateStr) : undefined,
-    ]);
-    return reply.send({
-      submissions: {
-        used: usage.submissions,
-        // Trusted accounts bypass the counter entirely — report no ceiling rather
-        // than a number that will never be enforced.
-        limit: user?.tier === 'trusted' ? null : dailySubmissionQuota,
-      },
-      ...(platformBuilder ? { platformBuilder } : {}),
-    });
-  });
-
   /** Lets a creator replace the current builder without creating feedback. */
   app.post(
     '/api/submissions/:token/handoff',
@@ -2853,40 +2829,6 @@ export async function registerSubmissionRoutes(
       return reply.send({ ok: true, version });
     },
   );
-
-  app.get('/api/submissions/mine', async (request, reply) => {
-    if (!submissionTokenSecret) {
-      return reply.status(503).send({ error: 'submissions are not configured' });
-    }
-    if (!checkUserAccess(request, reply)) {
-      return;
-    }
-    if (!store) {
-      return reply.send({ submissions: [] });
-    }
-
-    const records = await store.listSubmissionsByOwner(request.user!.uid);
-    const { games: shelf, truncated, total } = pageOwnerGames(records, 'shelf');
-    return reply.send({
-      submissions: shelf.map(({ tip, catalogPublishedAt }) => ({
-        token: mintToken(tip.issueNumber, submissionTokenSecret),
-        title: tip.title,
-        createdAt: tip.createdAt,
-        // The last derived status, kept current by the two-minute sweep. This is
-        // what the rail renders — it used to be a hint the rail immediately went
-        // and re-derived per card, six GitHub fan-outs every thirty seconds from
-        // one open tab, which is what was rate-limiting the whole token.
-        // lastNotifiedStatus is the fallback for records written before this.
-        lastKnownStatus: tip.lastStatus ?? tip.lastNotifiedStatus ?? null,
-        // So a published card can offer Play without deriving the slug itself.
-        slug: tip.slug ?? null,
-        ...(tip.publishedAt ? { publishedAt: tip.publishedAt } : {}),
-        ...(catalogPublishedAt ? { livePublishedAt: catalogPublishedAt } : {}),
-      })),
-      truncated,
-      totalGames: total,
-    });
-  });
 
   /**
    * Derives one submission's status from GitHub and caches it.
