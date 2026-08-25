@@ -34,6 +34,7 @@ import { parseKitSidecar } from '../platform/kit-registry.js';
 import { KIT_REGISTRY_OBJECT, parseKitRegistry, type KitRegistry } from '../platform/kit-window.js';
 import { findUnresolvedSourceLinks, formatSourceLinkError, sourceFilesToMap } from './source-link-check.js';
 import { BANNED_ANY_GUIDANCE, describeBannedAnyFinding, findBannedAnyUsages } from './ts-any-scan.js';
+import { missingFreshEditorFile } from './editor-upload-requirements.js';
 
 export type { GateProgress } from './gate-progress.js';
 
@@ -281,12 +282,9 @@ export function validateSourceUpload(
   if (!seen.has('game.ts')) {
     throw new InvalidUploadError('game.ts is required — a game must be playable', undefined, ['game.ts']);
   }
-  if (requireCompiledEditor && !seen.has('EDITOR.json')) {
-    throw new InvalidUploadError(
-      'EDITOR.json is required for a new game — deliver the compiled editor contract before preview or publish',
-      undefined,
-      ['EDITOR.json'],
-    );
+  const missingEditorFile = requireCompiledEditor ? missingFreshEditorFile(files) : null;
+  if (missingEditorFile) {
+    throw new InvalidUploadError(missingEditorFile.message, undefined, [missingEditorFile.path]);
   }
   const gameJson = files.find((file) => file.path.trim() === 'GAME.json');
 
