@@ -41,6 +41,7 @@ describe('catalog helpers', () => {
         saves: null,
         world: null,
         sensing: null,
+        editor: null,
         orientation: 'any',
         touch: null,
         submittedBy: null,
@@ -120,6 +121,21 @@ describe('catalog helpers', () => {
 
     const entries = await fetchCatalog();
     expect(entries.map((entry) => entry.orientation)).toEqual(['landscape', 'portrait', 'adaptive', 'any', 'any']);
+  });
+
+  it('keeps the content editor flag and treats anything else as no editor', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          { slug: 'editable', title: 'Editable', genre: '', controls: '', status: 'published', editor: 'content' },
+          { slug: 'legacy', title: 'Legacy', genre: '', controls: '', status: 'published', editor: 'CONTENT' },
+          { slug: 'missing', title: 'Missing', genre: '', controls: '', status: 'published' },
+        ]),
+      ),
+    );
+
+    const entries = await fetchCatalog();
+    expect(entries.map((entry) => entry.editor)).toEqual(['content', null, null]);
   });
 
   it('keeps a known touch class and treats anything else as unknown', async () => {

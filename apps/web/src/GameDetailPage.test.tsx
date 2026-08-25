@@ -38,6 +38,7 @@ const game: CatalogEntry = {
   saves: null,
   world: null,
   sensing: null,
+  editor: 'content',
   orientation: 'any',
   touch: 'gamekit',
   submittedBy: 'Grzegorz',
@@ -62,14 +63,20 @@ afterEach(() => {
   container.remove();
 });
 
-function render(overrides: { onPlay?: (entry: CatalogEntry) => void; onRemix?: (entry: CatalogEntry) => void } = {}) {
+function render(
+  overrides: {
+    game?: CatalogEntry;
+    onPlay?: (entry: CatalogEntry) => void;
+    onRemix?: (entry: CatalogEntry) => void;
+  } = {},
+) {
   const onPlay = overrides.onPlay ?? vi.fn();
   const onRemix = overrides.onRemix ?? vi.fn();
   root = createRoot(container);
   act(() => {
     root!.render(
       createElement(GameDetailPage, {
-        game,
+        game: overrides.game ?? game,
         state: 'ready',
         onPlay,
         onPlayTogether: vi.fn(),
@@ -127,6 +134,14 @@ describe('GameDetailPage', () => {
     });
     expect(recordRemixStep).toHaveBeenCalledWith('opened', { control: 'page' });
     expect(onRemix).toHaveBeenCalledWith(game);
+  });
+
+  it('hides Remix and records no_lane when the catalog has no editor', () => {
+    const { onRemix } = render({ game: { ...game, editor: null } });
+
+    expect(recordRemixStep).toHaveBeenCalledWith('no_lane', { control: 'page' });
+    expect(container.querySelector('.game-page-remix')).toBeNull();
+    expect(onRemix).not.toHaveBeenCalled();
   });
 
   it('hides Open in Studio from visitors', () => {

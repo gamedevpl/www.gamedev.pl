@@ -21,6 +21,7 @@ const withVideo: CatalogEntry = {
   saves: null,
   world: null,
   sensing: null,
+  editor: 'content',
   orientation: 'any',
   touch: 'gamekit',
   submittedBy: 'gamedev.pl',
@@ -66,6 +67,11 @@ function render(entries: CatalogEntry[]) {
 }
 
 describe('RailCard hover video preview', () => {
+  it('shows the editor capability badge on editable rail cards', () => {
+    render([withVideo]);
+    expect(container.querySelector('[title="This game has a built-in content editor"]')).not.toBeNull();
+  });
+
   it('arms the trailer after a mouse hover dwell and drops it on leave', async () => {
     vi.useFakeTimers();
     render([withVideo]);

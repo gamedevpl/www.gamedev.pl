@@ -427,6 +427,11 @@ function CatalogCard({
                   <PixelIcon name="star" size={12} /> {t('catalog.worldBadge')}
                 </span>
               )}
+              {entry.editor === 'content' && (
+                <span className="card-party-badge" title={t('catalog.editorTooltip')}>
+                  <PixelIcon name="pencil" size={12} /> {t('catalog.editorBadge')}
+                </span>
+              )}
               {/* Advisory, like saves: says the game answers tilt where the device offers
                 it, while the keyboard stays the whole game everywhere else. Reuses the
                 party pill style — it is the same "how you can drive this" family. */}

@@ -112,6 +112,7 @@ describe('getCatalog', () => {
         saves: null,
         world: null,
         sensing: null,
+        editor: null,
         orientation: 'any',
         submittedBy: null,
       },
@@ -145,6 +146,7 @@ describe('getCatalog', () => {
         saves: null,
         world: null,
         sensing: null,
+        editor: null,
         orientation: 'any',
         submittedBy: null,
       },
@@ -224,6 +226,21 @@ describe('getCatalog', () => {
     expect(bySlug.vague).toBeNull();
   });
 
+  it('reads the editor capability from SPEC frontmatter', async () => {
+    const fetchImpl = catalogFetchImpl(['editable', 'legacy'], {
+      'games/editable/SPEC.md': specMd({ title: 'Editable', editor: 'content' }),
+      'games/editable/media/metadata.json': null,
+      'games/legacy/SPEC.md': specMd({ title: 'Legacy', editor: 'params' }),
+      'games/legacy/media/metadata.json': null,
+    });
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+    const catalog = await client.getCatalog('main');
+    expect(catalog.map((entry) => [entry.slug, entry.editor])).toEqual([
+      ['editable', 'content'],
+      ['legacy', null],
+    ]);
+  });
+
   it('reads the orientation a game asks for, degrading anything odd to "any"', async () => {
     const specs: Record<string, Record<string, string>> = {
       wide: { title: 'Wide', status: 'published', orientation: 'landscape' },
@@ -285,6 +302,7 @@ describe('getCatalog', () => {
         saves: null,
         world: null,
         sensing: null,
+        editor: null,
         media: { screenshots: [{ name: 'opening', file: 'opening.png' }], video: 'gameplay.mp4' },
       },
       {
@@ -325,6 +343,7 @@ describe('getCatalog', () => {
         saves: null,
         world: null,
         sensing: null,
+        editor: null,
         media: { screenshots: [{ name: 'opening', file: 'opening.png' }], video: 'gameplay.mp4' },
         submittedBy: null,
       },
@@ -341,6 +360,7 @@ describe('getCatalog', () => {
         saves: null,
         world: null,
         sensing: null,
+        editor: null,
         media: null,
         submittedBy: null,
       },
@@ -429,6 +449,7 @@ describe('getCatalog', () => {
         saves: null,
         world: null,
         sensing: null,
+        editor: null,
         media: null,
         submittedBy: null,
       },

@@ -156,6 +156,8 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
     visits: row.visits,
     plays: row.plays,
   }));
+  const remixRows = (funnel.remixing ?? []).filter((row) => row.step !== 'no_lane');
+  const remixNoLane = (funnel.remixing ?? []).find((row) => row.step === 'no_lane')?.visits ?? 0;
 
   return (
     <section className="funnel">
@@ -346,7 +348,7 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
 
         <div className="funnel-block">
           <h3>Remix</h3>
-          {(funnel.remixing ?? []).every((row) => row.visits === 0) ? (
+          {remixRows.every((row) => row.visits === 0) ? (
             <p className="health-empty">Nobody opened a remix in this window.</p>
           ) : (
             <table className="health-table">
@@ -362,7 +364,7 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
                 </tr>
               </thead>
               <tbody>
-                {(funnel.remixing ?? []).map((row) => (
+                {remixRows.map((row) => (
                   <tr key={row.step}>
                     <td>{REMIX_LABELS[row.step] ?? row.step}</td>
                     <td className="num">{row.visits}</td>
@@ -372,12 +374,13 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
                      * is read the same way rather than as a strict ladder — sharing
                      * without typing is a normal path, not a leak.
                      */}
-                    <td className="num">{percent(row.visits, funnel.remixing?.[0]?.visits ?? 0)}</td>
+                    <td className="num">{percent(row.visits, remixRows[0]?.visits ?? 0)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
+          {remixNoLane > 0 ? <p className="health-note">No editor lane: {remixNoLane}</p> : null}
           {(funnel.remixPaintedVia ?? []).some((row) => row.visits > 0) ? (
             /*
              * One line, not a table: the door split exists to settle a single

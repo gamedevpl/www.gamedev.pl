@@ -23,6 +23,7 @@ function entry(partial: Partial<CatalogEntry> & Pick<CatalogEntry, 'slug' | 'tit
     saves: null,
     world: null,
     sensing: null,
+    editor: null,
     orientation: 'any',
     touch: null,
     submittedBy: null,

@@ -48,6 +48,7 @@ function pageData(overrides: Partial<GamePageData> = {}): GamePageData {
       saves: null,
       world: null,
       sensing: null,
+      editor: 'content',
       orientation: 'any',
       touch: null,
       submittedBy: 'nightshift',
@@ -256,6 +257,19 @@ describe('GamePage', () => {
     expect(document.activeElement).toBe(container.querySelector('#game-page-remix-request'));
     expect(remixAction).not.toHaveBeenCalled();
     expect(container.querySelector('iframe')).toBeNull();
+  });
+
+  it('does not offer Remix when the catalog has no editor lane', async () => {
+    fetchGamePage.mockResolvedValue(
+      pageData({
+        entry: { ...pageData().entry, editor: null },
+      }),
+    );
+    await renderPage();
+
+    expect(container.querySelector('.game-page-remix')).toBeNull();
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(remixAction).not.toHaveBeenCalled();
   });
 
   it('follows the visual viewport so the mobile keyboard cannot cover the actions', async () => {

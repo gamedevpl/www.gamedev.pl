@@ -298,6 +298,7 @@ async function listCreatorPublishedGames(
         saves: null,
         world: null,
         sensing: null,
+        editor: null,
         orientation: 'any',
         submittedBy: profileBylineName(profile),
       };

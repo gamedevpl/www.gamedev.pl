@@ -1542,11 +1542,17 @@ button:disabled {
   text-transform: uppercase;
 }
 
-.rail-card-party-badge {
+.rail-card-capabilities {
   position: absolute;
   z-index: 1;
   bottom: 8px;
   left: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.rail-card-party-badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -1567,6 +1573,13 @@ button:disabled {
 }
 
 @media (pointer: coarse), (max-width: 768px) {
+  .rail-card-capabilities {
+    right: 44px;
+    max-width: calc(100% - 52px);
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .rail-card-preview-toggle {
     display: inline-flex;
     align-items: center;

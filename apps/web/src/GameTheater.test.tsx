@@ -84,6 +84,7 @@ async function draw(
         badge={{ icon: 'sparkle', label: 'AI' }}
         source={{ slug: 'brick-storm' }}
         reportSlug="brick-storm"
+        editor="content"
         onExit={props.onExit ?? (() => undefined)}
         controls={props.controls}
         initialRemixOpen={props.initialRemixOpen}
@@ -779,6 +780,27 @@ describe('GameTheater how-to-play visit telemetry', () => {
     });
     session.flush();
     expect(batches.flatMap((batch) => batch.events).filter((event) => event.type === 'remix_step')).toEqual([]);
+    expect(container.querySelector('.remix-btn')).toBeNull();
+  });
+
+  it('records no_lane and hides remix for games without an editor', async () => {
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <GameTheater
+          title="No editor"
+          badge={{ icon: 'star', label: 'Play' }}
+          source={{ slug: 'no-editor' }}
+          reportSlug="no-editor"
+          editor={null}
+          onExit={() => undefined}
+        />,
+      );
+    });
+    session.flush();
+    expect(batches.flatMap((batch) => batch.events).filter((event) => event.type === 'remix_step')).toEqual([
+      expect.objectContaining({ type: 'remix_step', step: 'no_lane' }),
+    ]);
     expect(container.querySelector('.remix-btn')).toBeNull();
   });
 

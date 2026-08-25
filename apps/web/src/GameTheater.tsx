@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { gamePageHandle, isPlatformAuthor, type CatalogTouch } from './catalog.js';
+import { gamePageHandle, isPlatformAuthor, type CatalogEditor, type CatalogTouch } from './catalog.js';
 import { GameFrame } from './GameFrame.js';
 import { HowToPlayPanel } from './HowToPlayPanel.js';
 import { PublishedGameFrame } from './PublishedGameFrame.js';
@@ -92,6 +92,7 @@ type GameTheaterProps = {
   controls?: string;
   /** Catalog touch support; `none` adds the keyboard-only line to the panel. */
   touch?: CatalogTouch | null;
+  editor?: CatalogEditor | null;
   // Which home page surface launched this play, if it did.
   via?: PlayVia;
   /** Open the remix sheet on the first frame (the game-page Remix entry). */
@@ -155,6 +156,7 @@ export function GameTheater({
   creatorHandle = null,
   controls,
   touch = null,
+  editor = null,
   via,
   initialRemixOpen = false,
   initialRemixRequest,
@@ -475,6 +477,7 @@ export function GameTheater({
   // control would have vanished entirely.
   const showMoreMenu =
     Boolean(reportSlug) || isNarrow || (hasControls && isMidWidth) || (voiceMeter.available && isMidWidth);
+  const canRemix = remixable && editor === 'content' && 'slug' in source;
 
   const soundControl = (className: string) => (
     <button
@@ -529,7 +532,7 @@ export function GameTheater({
    * again) should be made against a number.
    */
   const remixControl = (className: string, control: 'bar' | 'more') =>
-    remixable && 'slug' in source ? (
+    canRemix ? (
       <button
         type="button"
         className={className}
@@ -553,8 +556,8 @@ export function GameTheater({
   // client can honestly claim to know.
   useEffect(() => {
     if (!remixable || !('slug' in source)) return;
-    recordRemixStep('offered');
-  }, [remixable, source]);
+    recordRemixStep(editor === 'content' ? 'offered' : 'no_lane');
+  }, [editor, remixable, source]);
 
   // The one thing a player needs before the first key press, and the game's own copy of
   // it is hidden inside the frame by HIDE_CHROME. Reuses `theater-menu-item` in the
@@ -727,7 +730,7 @@ export function GameTheater({
                   {micControl('theater-menu-item mic-menu')}
                   {soundControl('theater-menu-item theater-mobile-chrome')}
                   {fullscreenControl('theater-menu-item theater-mobile-chrome')}
-                  {remixable && 'slug' in source ? (
+                  {canRemix ? (
                     <>
                       {remixControl('theater-menu-item theater-mobile-chrome', 'more')}
                       {remixHasPainter ? (
@@ -799,7 +802,7 @@ export function GameTheater({
             frameRef={frameRef}
             embed
             via={via}
-            remixable={remixable}
+            remixable={canRemix}
             trackPlay={trackPlay}
             remixOpenNonce={remixOpenNonce}
             initialRemixRequest={initialRemixRequest}

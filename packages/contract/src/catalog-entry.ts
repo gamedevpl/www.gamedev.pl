@@ -28,6 +28,9 @@ export type CatalogWorld = 'shared';
 // Extra ways a game can be steered beyond keys and touch.
 export type CatalogSensing = 'tilt' | 'backdrop';
 
+// Whether the game exposes an EditorKit content editor.
+export type CatalogEditor = 'content';
+
 // One game's catalog entry, derived from its SPEC frontmatter.
 export interface CatalogEntry {
   slug: string;
@@ -43,6 +46,7 @@ export interface CatalogEntry {
   // Advisory like saves, but it promises other people are here.
   world: CatalogWorld | null;
   sensing: CatalogSensing | null;
+  editor: CatalogEditor | null;
   orientation: CatalogOrientation;
   // Absent on the SPEC-only GraphQL fallback, null once normalized.
   touch?: CatalogTouch | null;
