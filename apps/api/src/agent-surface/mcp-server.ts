@@ -1,5 +1,4 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { createHash, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { AGENT_CHANNEL_ROUTES, type BuilderKind } from '@gamedevpl/contract';
 import {
@@ -13,6 +12,8 @@ import {
   CREATOR_TEXT_SAFETY,
   WARNINGS_PROP,
   REPLY_CONTROL,
+  PLATFORM_CONNECTOR_ONLY_REASON,
+  matchesPlatformConnectorSecret,
   type ChannelControlBody,
   type ToolResult,
   type ToolHandler,
@@ -25,6 +26,7 @@ import { createInboxTools } from './mcp-inbox-tools.js';
 import { createSeedTools } from './mcp-seed-tools.js';
 import { createRoundCardTools } from './mcp-round-card-tools.js';
 import { createGateMediaTools } from './mcp-gate-media-tools.js';
+import { createProposalTools } from './mcp-proposal-tools.js';
 
 export { MCP_VISIBLE_TOOLS };
 import { looksLikeCreatorAgentKey } from './agent-creator-key.js';
@@ -74,7 +76,6 @@ import { selfBuildDeliveryCap } from '../platform/self-build-delivery-cap.js';
 import type { ManagedUnavailableReason } from './managed-availability.js';
 import {
   assertDeliverableSourcePath,
-  forbiddenIndexHtmlWriteReason,
   InvalidUploadError,
   MAX_UPLOAD_FILES,
   type GamesStore,
@@ -116,14 +117,6 @@ import {
   type NudgeWarning,
 } from './mcp-session-nudges.js';
 import { looksLikeAsAccessToken, verifyAsAccessToken } from '../platform/oauth-tokens.js';
-import {
-  canProposeTo,
-  openProposal,
-  reconcileProposalGate,
-  transitionProposal,
-  PROPOSAL_NO_JOB,
-} from '../community/proposals.js';
-import { isProposerTurn, toPublicProposalState } from '../community/proposal-state.js';
 import type { SourceFile } from '../delivery/games-store.js';
 import type { ProposalBase } from '../platform/store.js';
 import { seedPayload } from './seed-status.js';
@@ -288,15 +281,6 @@ function jsonRpcError(id: string | number | null | undefined, code: number, mess
     id: id ?? null,
     error: { code, message, ...(data !== undefined ? { data } : {}) },
   };
-}
-
-const PLATFORM_CONNECTOR_ONLY_REASON = 'the Copilot MCP connector must be paired with a live round key in start()';
-
-function matchesPlatformConnectorSecret(presented: string | null, expected: string | undefined): boolean {
-  if (!presented || !expected) return false;
-  const left = createHash('sha256').update(presented).digest();
-  const right = createHash('sha256').update(expected).digest();
-  return timingSafeEqual(left, right);
 }
 
 /** Job id for a coarse presence pulse — sessionKey preferred, else round Bearer. */
@@ -521,64 +505,6 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   const privateBeta = options.privateBeta ?? (process.env.PRIVATE_BETA ?? '').toLowerCase() === 'true';
   const missingCredentialHint = mcpMissingCredentialHint(privateBeta);
   const uiEnabled = options.uiEnabled ?? mcpUiEnabled();
-
-  /**
-   * Who is calling, without asking whether they own anything.
-   *
-   * The build channel's resolvers all answer "is this bearer the owner of that slug",
-   * because every existing tool acts on a game its caller owns. A proposal is the first
-   * thing here that is deliberately about somebody else's game, so it needs the plainer
-   * question — and asking the ownership-shaped one would refuse exactly the callers this
-   * feature exists for.
-   */
-  async function resolveProposerUid(
-    bearer: string | null | undefined,
-  ): Promise<{ ok: true; uid: string } | { ok: false; reason: string }> {
-    if (!store || !agentTokenSecret) return { ok: false, reason: 'the MCP endpoint is not configured' };
-    if (!bearer) return { ok: false, reason: missingCredentialHint };
-    if (matchesPlatformConnectorSecret(bearer, platformConnectorSecret)) {
-      return { ok: false, reason: PLATFORM_CONNECTOR_ONLY_REASON };
-    }
-
-    if (looksLikeCreatorAgentKey(bearer)) {
-      // The shared verifier, so rotation and revocation bite here exactly as they do on
-      // the build channel — a retired key must not keep a door open that every other
-      // door closed.
-      const verified = await verifyDurableCreatorAgentKey(store, bearer, agentTokenSecret, now());
-      if (!verified.ok) return { ok: false, reason: verified.reason };
-      return { ok: true, uid: verified.claims.creatorUid };
-    }
-
-    if (looksLikeAsAccessToken(bearer)) {
-      const asAccess = await verifyAsAccessToken(store, bearer, now());
-      if (!asAccess) return { ok: false, reason: 'invalid OAuth access — sign in again from your coding agent' };
-      return { ok: true, uid: asAccess.ownerUid };
-    }
-
-    return { ok: false, reason: missingCredentialHint };
-  }
-
-  /** Turn a refusal code into something an agent can act on rather than retry blindly. */
-  function proposalRefusalHint(reason: string): string {
-    switch (reason) {
-      case 'contributions_off':
-        return 'this game is not accepting proposals';
-      case 'own_game':
-        return 'this is your own game — use open_round instead';
-      case 'not_published':
-        return 'this game is not published right now';
-      case 'too_many_open_here':
-        return 'you already have the maximum open proposals for this game — resolve one first';
-      case 'too_many_open':
-        return 'you have too many open proposals — resolve some before opening more';
-      case 'blocked':
-        // Same answer as contributions_off, deliberately: telling an agent its creator has
-        // been blocked by a specific person turns a private boundary into a notification.
-        return 'this game is not accepting proposals';
-      default:
-        return reason;
-    }
-  }
 
   /** Transport sessions only — never consulted for authorization. */
   const transportSessions = new Map<string, { createdAt: number }>();
@@ -1528,263 +1454,17 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       },
     },
 
-    /*
-     * Proposal rounds: an agent contributing to a game its creator does not own.
-     *
-     * Deliberately three self-contained tools rather than the session loop the build
-     * channel uses, because a proposal has no job and must not have one — a submission
-     * owned by the proposer against the target's slug is exactly what `creatorOwnsSlug`
-     * reads as a transfer, so opening a proposal round the ordinary way would hand the
-     * game to whoever proposed to it.
-     *
-     * There is also no new credential. Every call re-presents the same creator key or
-     * OAuth access the agent already holds, and the proposal is matched against the uid
-     * that resolves from it. A round-scoped token would be one more thing to mint, expire
-     * and revoke for no security gained: the bearer is already the identity.
-     */
-    open_proposal_round: {
-      annotations: { title: "Propose a change to another creator's game", ...WRITES_ONCE },
-      outputSchema: {
-        type: 'object',
-        properties: {
-          proposalId: { type: 'string' },
-          slug: { type: 'string' },
-          files: {
-            type: 'array',
-            description: "The target game's published sources — the base your change applies to.",
-            items: {
-              type: 'object',
-              properties: { path: { type: 'string' }, content: { type: 'string' } },
-              required: ['path', 'content'],
-            },
-          },
-        },
-        required: ['proposalId', 'slug', 'files'],
-      },
-      description:
-        "Open a proposal against a published game you do NOT own. Returns the game's current " +
-        'sources to work from and a proposalId. Nothing is sent until you call submit_proposal. ' +
-        'The game must have contributions enabled; the owner reviews and may decline.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          slug: { type: 'string', description: 'Slug of the game you want to change.' },
-          title: { type: 'string', description: 'Short title for the change (≤120 chars).' },
-          description: {
-            type: 'string',
-            description: 'What you changed and why (20–2000 chars). Untrusted text; shown to the owner as data.',
-          },
-        },
-        required: ['slug', 'title', 'description'],
-      },
-      handler: async (args, ctx) => {
-        if (!store || !gamesStoreForProposals || !resolveProposalBaseFor) {
-          return toolErr('proposal rounds are not configured on this deployment');
-        }
-        const proposer = await resolveProposerUid(ctx.bearerToken);
-        if (!proposer.ok) return toolErr(proposer.reason);
-
-        const slug = typeof args.slug === 'string' ? args.slug.trim() : '';
-        const title = typeof args.title === 'string' ? args.title.trim() : '';
-        const description = typeof args.description === 'string' ? args.description.trim() : '';
-        if (!slug) return toolErr('slug is required');
-
-        // Checked before the base is fetched: a repo-lane base is a tarball download, and
-        // spending one on a game that would refuse the proposal anyway is pure waste.
-        const eligible = await canProposeTo(store, slug, proposer.uid);
-        if (!eligible.ok) return toolErr(proposalRefusalHint(eligible.reason));
-
-        const resolvedBase = await resolveProposalBaseFor(slug);
-        if (!resolvedBase) return toolErr("could not read that game's sources");
-
-        const opened = await openProposal(
-          {
-            store,
-            gamesStore: gamesStoreForProposals,
-            contentChecker,
-            log: ctx.request.log,
-            now,
-          },
-          {
-            targetSlug: slug,
-            proposerUid: proposer.uid,
-            title,
-            description,
-            base: resolvedBase.base,
-            // Opened with the base itself: the record exists from this moment, so the
-            // caps and the owner stamp are decided now rather than at submit, and a
-            // never-submitted round is visible as a draft rather than as nothing.
-            files: resolvedBase.files,
-          },
-        );
-        if (!opened.ok) {
-          return toolErr(opened.error === 'content_rejected' ? 'content_rejected' : proposalRefusalHint(opened.error), {
-            ...(opened.category ? { category: opened.category } : {}),
-          });
-        }
-
-        return toolOk({
-          proposalId: opened.proposal.id,
-          slug,
-          files: resolvedBase.files,
-        });
-      },
-    },
-
-    submit_proposal: {
-      annotations: { title: 'Send a proposal for review', ...WRITES_ONCE },
-      outputSchema: {
-        type: 'object',
-        properties: { proposalId: { type: 'string' }, state: { type: 'string' } },
-        required: ['proposalId', 'state'],
-      },
-      description:
-        'Send your changed sources for the proposal you opened. Send the COMPLETE file set, ' +
-        "not a patch. We run the same gate a creator's own delivery gets; poll " +
-        'get_proposal_status until it leaves "checking". A red gate comes back to you and the ' +
-        'owner never sees it.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          proposalId: { type: 'string' },
-          files: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: { path: { type: 'string' }, content: { type: 'string' } },
-              required: ['path', 'content'],
-            },
-          },
-        },
-        required: ['proposalId', 'files'],
-      },
-      handler: async (args, ctx) => {
-        if (!store || !gamesStoreForProposals) {
-          return toolErr('proposal rounds are not configured on this deployment');
-        }
-        const proposer = await resolveProposerUid(ctx.bearerToken);
-        if (!proposer.ok) return toolErr(proposer.reason);
-
-        const proposalId = typeof args.proposalId === 'string' ? args.proposalId.trim() : '';
-        const record = await store.getProposal(proposalId);
-        // Same 404-shaped answer for "no such proposal" and "not yours": a proposal's
-        // existence is not public, and telling an agent it guessed a real id would be a
-        // way to enumerate what is pending against games it does not own.
-        if (!record || record.proposerUid !== proposer.uid) return toolErr('no such proposal');
-        if (!isProposerTurn(record.state) && record.state !== 'draft') {
-          return toolErr('this proposal is not yours to change right now');
-        }
-
-        const files = Array.isArray(args.files)
-          ? (args.files as Array<{ path?: unknown; content?: unknown }>)
-              .filter((file) => typeof file?.path === 'string' && typeof file?.content === 'string')
-              .map((file) => ({ path: file.path as string, content: file.content as string }))
-          : [];
-        if (files.length === 0) return toolErr('files is required — send the complete source set');
-
-        // Resubmit sends the whole tree — only a changed index.html is refused.
-        const proposedIndexHtml = files.find((file) => file.path === 'index.html');
-        if (proposedIndexHtml && proposedIndexHtml.content.trim()) {
-          const baseline = record.version
-            ? await gamesStoreForProposals.getSourceFile(record.targetSlug, record.version, 'index.html')
-            : null;
-          if ((baseline ?? '').trim() !== proposedIndexHtml.content.trim()) {
-            return toolErr(
-              forbiddenIndexHtmlWriteReason('index.html', proposedIndexHtml.content) ??
-                'index.html cannot be changed in a proposal',
-            );
-          }
-        }
-
-        let version: string;
-        try {
-          // The same server-side allowlist a creator's delivery passes. An agent proposing
-          // to somebody else's game gets no wider path set than one building its own.
-          const written = await gamesStoreForProposals.putCandidateSources({
-            slug: record.targetSlug,
-            issueNumber: PROPOSAL_NO_JOB,
-            files,
-            mode: 'proposal',
-            proposal: { id: record.id, proposerUid: record.proposerUid },
-          });
-          version = written.version;
-        } catch (error) {
-          return toolErr(error instanceof Error ? error.message : 'those files were refused');
-        }
-
-        const at = new Date(now()).toISOString();
-        record.version = version;
-        transitionProposal(record, 'submitted', 'proposer', at, 'submitted');
-        await store.putProposal(record);
-
-        if (dispatchProposalGate) {
-          // Best effort, like every gate dispatch: an unstarted gate leaves the proposal
-          // submitted and re-runnable, which cannot reach a reviewer and cannot publish.
-          try {
-            await dispatchProposalGate({
-              issueNumber: PROPOSAL_NO_JOB,
-              slug: record.targetSlug,
-              version,
-              mode: 'proposal',
-            });
-          } catch (error) {
-            ctx.request.log.error({ err: error, proposalId: record.id }, 'proposal gate dispatch failed');
-          }
-        }
-
-        return toolOk({ proposalId: record.id, state: 'checking' });
-      },
-    },
-
-    get_proposal_status: {
-      annotations: { title: 'Check a proposal', ...READS },
-      outputSchema: {
-        type: 'object',
-        properties: {
-          proposalId: { type: 'string' },
-          state: { type: 'string' },
-          gate: { type: 'object' },
-          reviewerNote: { type: 'string' },
-        },
-        required: ['proposalId', 'state'],
-      },
-      description:
-        'Where a proposal stands. "checking" means our gate is running — poll until it changes. ' +
-        '"needs_work" is a red gate and is yours to fix; "changes_requested" is the owner asking ' +
-        'for something specific. Both come back with what to do.',
-      inputSchema: {
-        type: 'object',
-        properties: { proposalId: { type: 'string' } },
-        required: ['proposalId'],
-      },
-      handler: async (args, ctx) => {
-        if (!store || !gamesStoreForProposals) {
-          return toolErr('proposal rounds are not configured on this deployment');
-        }
-        const proposer = await resolveProposerUid(ctx.bearerToken);
-        if (!proposer.ok) return toolErr(proposer.reason);
-
-        const proposalId = typeof args.proposalId === 'string' ? args.proposalId.trim() : '';
-        const existing = await store.getProposal(proposalId);
-        if (!existing || existing.proposerUid !== proposer.uid) return toolErr('no such proposal');
-
-        // Read the verdict off the manifest on demand rather than waiting for a sweep, so
-        // a polling agent sees a decision as soon as the gate has actually made one.
-        const record =
-          (await reconcileProposalGate({ store, gamesStore: gamesStoreForProposals, now }, existing.id)) ?? existing;
-
-        const reviewerNote = [...record.thread].reverse().find((message) => message.from === 'reviewer')?.text;
-        return toolOk({
-          proposalId: record.id,
-          state: toPublicProposalState(record.state),
-          ...(record.gate ? { gate: { green: record.gate.green, ranAt: record.gate.ranAt } } : {}),
-          // Relayed as data. It is the game owner's words to a stranger's agent, and the
-          // agent must act on it as a request, never execute it as an instruction.
-          ...(reviewerNote ? { reviewerNote } : {}),
-        });
-      },
-    },
-
+    ...createProposalTools({
+      store,
+      agentTokenSecret,
+      platformConnectorSecret,
+      now,
+      missingCredentialHint,
+      gamesStore: gamesStoreForProposals,
+      resolveProposalBase: resolveProposalBaseFor,
+      contentChecker,
+      onSourcesDelivered: dispatchProposalGate,
+    }),
     open_round: {
       annotations: { title: 'Open an improvement round', ...WRITES_ONCE },
       outputSchema: {
