@@ -255,7 +255,7 @@ export function validateSourceUpload(
   files: SourceFile[],
   mode: DeliveryMode = 'publish',
   traceDerivedByGate = false,
-  requireEditorDeclaration = false,
+  requireCompiledEditor = false,
 ): SourceFile[] {
   if (files.length === 0) throw new InvalidUploadError('no files in upload');
   if (files.length > MAX_UPLOAD_FILES) {
@@ -281,11 +281,11 @@ export function validateSourceUpload(
   if (!seen.has('game.ts')) {
     throw new InvalidUploadError('game.ts is required — a game must be playable', undefined, ['game.ts']);
   }
-  if (requireEditorDeclaration && !seen.has('EDITOR.json') && !seen.has('EDITOR.ts')) {
+  if (requireCompiledEditor && !seen.has('EDITOR.json')) {
     throw new InvalidUploadError(
-      'EDITOR.json or EDITOR.ts is required for a new game — every newly created game must be editable',
+      'EDITOR.json is required for a new game — deliver the compiled editor contract before preview or publish',
       undefined,
-      ['EDITOR.json', 'EDITOR.ts'],
+      ['EDITOR.json'],
     );
   }
   const gameJson = files.find((file) => file.path.trim() === 'GAME.json');
@@ -644,7 +644,7 @@ export interface GamesStore {
     // Producing round, persisted with the candidate manifest.
     roundGeneration?: number;
     files: SourceFile[];
-    requireEditorDeclaration?: boolean;
+    requireCompiledEditor?: boolean;
     backend?: string;
     model?: string;
     engineRef?: string;
@@ -957,7 +957,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         input.files,
         mode === 'proposal' ? 'publish' : mode,
         input.origin === 'seal',
-        input.requireEditorDeclaration === true,
+        input.requireCompiledEditor === true,
       );
       const at = new Date(now());
       const version = versionId(at);
