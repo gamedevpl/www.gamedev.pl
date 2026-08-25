@@ -11,8 +11,6 @@ import { splitConceptBrief } from './agent-surface/agent-build-brief.js';
 import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-surface/agent-channel.js';
 import { mintAgentToken, mintManagedMcpOpener } from './agent-surface/agent-token.js';
 import { registerMcpServerRoutes } from './agent-surface/mcp-server.js';
-import { assembleGameHtml } from './platform/assemble.js';
-import { MAX_BUILD_PREVIEW_BYTES } from './delivery/build-preview-limits.js';
 import {
   createCreationGate,
   createChatGate,
@@ -32,6 +30,7 @@ import { createSnapshotReaderFromEnv, type GameSnapshotReader } from './catalog/
 import { registerAdminGameRoutes } from './catalog/admin-game-routes.js';
 import { registerSelfBuildConnectRoutes } from './agent-surface/self-build-connect-routes.js';
 import { registerDraftLifecycleRoutes } from './creation/draft-lifecycle-routes.js';
+import { createSeedPipeline } from './creation/seed-pipeline.js';
 import { registerCatalogRoutes } from './catalog/catalog-routes.js';
 import { registerGamePlayRoute } from './catalog/game-play-route.js';
 import { registerCatalogSearchRoutes } from './catalog/catalog-search-routes.js';
@@ -45,13 +44,9 @@ import {
 } from './delivery/creator-media.js';
 import { createBuildStatusAssembler, revisionOriginOf } from './delivery/build-status.js';
 import { createChatOrchestration } from './creation/chat-orchestration.js';
-import {
-  createStagedPreviewPublisher,
-  overlayGameSources,
-  type StagedPreviewOptions,
-} from './delivery/staged-preview.js';
+import { createStagedPreviewPublisher, type StagedPreviewOptions } from './delivery/staged-preview.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './platform/internal-auth.js';
-import type { AgentBackend, SeedDelivery, SeedFiles } from './agent-surface/agent-backend.js';
+import type { AgentBackend, SeedFiles } from './agent-surface/agent-backend.js';
 import { stripPlaytestContext } from './delivery/build-transcript.js';
 import {
   createAgentBackendRegistryFromEnv,
@@ -72,7 +67,7 @@ import {
   type BuilderKind,
 } from './creation/builder.js';
 import { codeSurfaceEnabled, isLiveAgentRound } from './creation/code-surface.js';
-import { DEFAULT_SEED_PROVIDER, type GameSeeder, type SeedDraft, type SeedFile } from './creation/game-seed.js';
+import { DEFAULT_SEED_PROVIDER, type GameSeeder } from './creation/game-seed.js';
 import { createSourceDeliveryService } from './delivery/source-delivery.js';
 import { createKitFileStore } from './agent-surface/kit-files.js';
 import type { GamesStore } from './delivery/games-store.js';
@@ -691,11 +686,6 @@ export async function registerSubmissionRoutes(
     return resolveBuilderBackend(agentBackends, resolvedBuilder, vendor);
   }
 
-  // A self round has no workspace, whatever a backend forgot to declare.
-  function seedDeliveryFor(backend: AgentBackend | undefined, builder: BuilderKind): SeedDelivery {
-    return backend?.seedDelivery?.() ?? (builder === 'self' ? 'channel' : 'workspace');
-  }
-
   function backendByStoredName(name: string | undefined): AgentBackend | undefined {
     if (!name) return undefined;
     if (agentBackends.self.name === name) return agentBackends.self;
@@ -818,193 +808,6 @@ export async function registerSubmissionRoutes(
     } catch {
       return undefined;
     }
-  }
-
-  /**
-   * Books what a seed cost, in the unit it was actually billed in.
-   *
-   * The first entry in this ledger with real token counts. Copilot bills a premium
-   * request and reports no tokens, so `agent_session` entries can only ever say
-   * "one credit"; a seed is a direct Vertex call, priced per token, and the SDK hands
-   * the count back — so the money question stops being unanswerable for the part of a
-   * build we run ourselves.
-   */
-  async function recordSeedCost(
-    issueNumber: number,
-    draft: SeedDraft,
-    log: { error: (context: object, message: string) => void },
-  ): Promise<void> {
-    if (!store) return;
-    try {
-      await store.recordJobCost(issueNumber, {
-        kind: 'seed',
-        at: new Date(now()).toISOString(),
-        by: draft.usage.model,
-        tokens: { input: draft.usage.inputTokens, output: draft.usage.outputTokens },
-        ...(draft.usage.provider ? { provider: draft.usage.provider } : {}),
-      });
-    } catch (error) {
-      log.error({ err: error, issueNumber }, 'could not record the cost of a seed');
-    }
-  }
-
-  /**
-   * Generates round 0, or returns null and lets the build start from nothing.
-   *
-   * Only for builds that are starting a game. A revision restores the delivered sources
-   * from the store and continues them, so seeding one would mean handing the agent a
-   * freshly invented draft of a game the creator has already played — the opposite of
-   * what they asked for.
-   *
-   * The slug comes from the job, which already has one: a submission mints and
-   * race-confirms its address before dispatch, so there is nothing here to decide.
-   */
-  async function seedBuild(input: {
-    issueNumber: number;
-    slug: string;
-    spec: string;
-    delivery: SeedDelivery;
-    steer?: string;
-    log: { error: (context: object, message: string) => void };
-  }): Promise<{ draft: SeedDraft } | { draft?: undefined; reason: string; provider?: string }> {
-    if (!gameSeeder) return { reason: 'not_configured' };
-    if (!store) return { reason: 'no_store' };
-    // Checked before the paid call, so "off" costs nothing.
-    if (!(await seedAvailabilityGate.seedingEnabled())) return { reason: 'seeding_off' };
-    // Resolved before the try so a failed attempt still names the vendor.
-    const provider = await seedAvailabilityGate.resolveProvider();
-    try {
-      const record = await store.getSubmission(input.issueNumber);
-      if (!record) return { reason: 'job_not_found', provider };
-
-      const draft = await gameSeeder.seed({
-        slug: input.slug,
-        title: record.title,
-        spec: input.spec,
-        provider,
-        ...(input.steer ? { steer: input.steer } : {}),
-      });
-      if (!draft) return { reason: 'seeder_declined', provider };
-
-      await recordSeedCost(input.issueNumber, draft, input.log);
-      return { draft };
-    } catch (error) {
-      // Fail-open survives round 0 becoming mandatory; the caller records the failure.
-      input.log.error({ err: error, issueNumber: input.issueNumber }, 'seeding failed, dispatching unseeded');
-      return { reason: error instanceof Error ? `threw: ${error.message}` : 'threw', provider };
-    }
-  }
-
-  // Each regeneration is a paid generation, so this is a spend ceiling.
-  const MAX_SEED_REGENERATIONS = 2;
-
-  // Queues a replacement draft, for rounds that read the job's copy.
-  async function regenerateSeed(input: {
-    issueNumber: number;
-    steer?: string;
-    log: { error: (context: object, message: string) => void; info?: (context: object, message: string) => void };
-  }): Promise<
-    | { ok: true; status: 'pending'; regenerationsRemaining: number }
-    | {
-        ok: false;
-        reason:
-          'not_configured' | 'not_found' | 'seed_not_readable' | 'already_delivered' | 'cap_reached' | 'seeding_off';
-      }
-  > {
-    if (!gameSeeder || !store) return { ok: false, reason: 'not_configured' };
-    const record = await store.getSubmission(input.issueNumber);
-    if (!record || !record.slug) return { ok: false, reason: 'not_found' };
-    // A round handed a workspace already forked it; a rewrite cannot catch up.
-    const roundBuilder = builderOf(record);
-    if (seedDeliveryFor(await backendFor(roundBuilder), roundBuilder) !== 'channel') {
-      return { ok: false, reason: 'seed_not_readable' };
-    }
-    // A delivered round was already judged; do not move its starting point.
-    if ((record.roundDeliveryCount ?? 0) > 0) return { ok: false, reason: 'already_delivered' };
-    // Checked before spending quota, which never resets when seeding comes back on.
-    if (!(await seedAvailabilityGate.seedingEnabled())) return { ok: false, reason: 'seeding_off' };
-
-    const used = await store.incrementSeedRegenerations(input.issueNumber);
-    if (used > MAX_SEED_REGENERATIONS) return { ok: false, reason: 'cap_reached' };
-
-    await store.setSeedStatus(input.issueNumber, 'pending');
-    const slug = record.slug;
-    void (async () => {
-      const { draft } = await seedBuild({
-        issueNumber: input.issueNumber,
-        slug,
-        spec: record.spec ?? '',
-        delivery: 'channel',
-        ...(input.steer ? { steer: input.steer } : {}),
-        log: input.log,
-      });
-      if (draft) {
-        await store!.setSubmissionSeed(input.issueNumber, {
-          slug: draft.slug,
-          files: draft.files,
-          references: draft.references,
-          ...(draft.notes ? { notes: draft.notes } : {}),
-        });
-      } else {
-        await store!.setSeedStatus(input.issueNumber, 'unavailable');
-      }
-    })().catch((error) => {
-      input.log.error({ err: error, issueNumber: input.issueNumber }, 'seed regeneration failed');
-    });
-
-    return { ok: true, status: 'pending', regenerationsRemaining: MAX_SEED_REGENERATIONS - used };
-  }
-
-  /**
-   * The label is authored in both languages rather than machine translated, like the
-   * status page's own vocabulary: it is one fixed sentence, and a creator's very first
-   * impression of their game should not depend on a translation call succeeding.
-   */
-  const SEED_PREVIEW_LABEL = 'First rough draft \u2014 the agent is improving it';
-  const SEED_PREVIEW_LABEL_PL = 'Pierwszy szkic gry \u2014 agent w\u0142a\u015bnie j\u0105 ulepsza';
-
-  /**
-   * Assembles the draft's own files into a playable preview on the creator's status page.
-   *
-   * Reuses the entire published-game serve path — `getGameSources` bundles the overlay
-   * against the engine on the published ref, `assembleGameHtml` applies the CSP, the AI
-   * Act provenance marking and the credential scan — so the round-0 preview passes
-   * exactly the hygiene a published game does, not a weaker preview-only variant. Takes
-   * the draft's files directly rather than a git ref: nothing about a round-0 draft is
-   * ever staged as a branch, so this is the only copy of it there is. The result lands
-   * in the same `BuildPreview` slot the agent's own pushes use, so the status page needs
-   * no new rendering: the agent's first real preview simply supersedes this one on the
-   * same rail.
-   */
-  async function publishSeedPreview(input: {
-    issueNumber: number;
-    slug: string;
-    files: SeedFile[];
-    locale: string;
-  }): Promise<void> {
-    if (!store || !githubClient) return;
-    const overlay = overlayGameSources({ seed: input.files });
-    const sources = await githubClient.getGameSources(publishedRef, input.slug, overlay);
-    if (!sources) return;
-    const html = assembleGameHtml(
-      {
-        title: sources.title ?? input.slug,
-        description: '',
-        html: sources.indexHtml,
-        js: sources.gameJs,
-        css: sources.styleCss,
-      },
-      { restrictNetwork: true },
-    );
-    if (Buffer.byteLength(html, 'utf8') > MAX_BUILD_PREVIEW_BYTES) return;
-    await store.appendBuildPreview(input.issueNumber, {
-      data: Buffer.from(html, 'utf8').toString('base64'),
-      slug: input.slug,
-      // Provisional: the agent has not run yet.
-      origin: 'seed',
-      label: SEED_PREVIEW_LABEL,
-      ...(input.locale.startsWith('pl') ? { labelLocalized: SEED_PREVIEW_LABEL_PL, locale: input.locale } : {}),
-    });
   }
 
   async function dispatchBuild(input: {
@@ -1717,6 +1520,18 @@ export async function registerSubmissionRoutes(
         : 'no GITHUB_TOKEN: serving games from a local checkout',
     );
   }
+
+  const seedPipeline = createSeedPipeline({
+    store,
+    now,
+    gameSeeder,
+    seedAvailabilityGate,
+    builderOf,
+    backendFor,
+    githubClient,
+    publishedRef,
+  });
+  const { seedDeliveryFor, seedBuild, regenerateSeed, publishSeedPreview } = seedPipeline;
 
   const rateLimitWindowMs = 60 * 60 * 1000;
   const maxSubmissionsPerWindow = 5;
