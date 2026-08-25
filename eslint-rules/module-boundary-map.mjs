@@ -78,6 +78,8 @@ const FILE_BUCKET = {
   translate: 'platform',
   'localize-intake': 'platform',
   'image-variants': 'platform',
+  'ip-rate-limit': 'platform',
+  'media-response': 'platform',
   // Cross-domain status vocabulary read by every phase of the pipeline -- the
   // N2 contract plan moves it to packages/contract; platform until then.
   'submission-status': 'platform',
@@ -236,6 +238,8 @@ const FILE_BUCKET = {
   'music-tracks': 'catalog',
   'catalog-enricher': 'catalog',
   'catalog-vector-index': 'catalog',
+  'catalog-routes': 'catalog',
+  'catalog-search-routes': 'catalog',
   'embedding-service': 'catalog',
   'github-client': 'catalog',
   'game-snapshot': 'catalog',

@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import {
   BUILDERS,
   deriveGateStatusString,
@@ -30,11 +29,8 @@ import {
   type ManagedUnavailableReason,
 } from './agent-surface/managed-availability.js';
 import { postGateScreenshotToThread } from './delivery/gate-screenshot.js';
-import { profileBylineName, toPublicCreatorProfile } from './platform/creator-profile.js';
 import {
-  catalogEntryFromSpec,
   createGitHubClient,
-  parseGameMedia,
   parseSpecTitle,
   type CatalogGameEntry,
   type GitHubClient,
@@ -45,13 +41,8 @@ import {
   SnapshotUnavailableError,
   type GameSnapshotReader,
 } from './catalog/game-snapshot.js';
-import {
-  attachCatalogEnrichments,
-  createDefaultEnricherClient,
-  getOrEnrichCatalogGame,
-} from './catalog/catalog-enricher.js';
-import { VertexEmbeddingService } from './catalog/embedding-service.js';
-import { CatalogVectorIndex } from './catalog/catalog-vector-index.js';
+import { registerCatalogRoutes } from './catalog/catalog-routes.js';
+import { registerCatalogSearchRoutes } from './catalog/catalog-search-routes.js';
 import { startHealthCheck } from './catalog/game-health.js';
 import {
   createStagedPreviewPublisher,
@@ -140,7 +131,6 @@ import { peekQuota } from './creation/quota-gate.js';
 import { mintGameSlug } from './catalog/slug.js';
 import { runSlugBackfill, settleSlugClaim } from './catalog/slug-backfill.js';
 import {
-  DELETED_ACCOUNT_UID,
   isStudioOrigin,
   type AgentKeysStore,
   type BuildLogStore,
@@ -176,8 +166,9 @@ import {
 import { InvalidTokenError, mintToken, verifyToken } from './platform/submission-token.js';
 import { normalizeAtIntake, type IntakeText } from './platform/localize-intake.js';
 import { createTranslatorFromEnv, normalizeLocale, type Translator } from './platform/translate.js';
-import { isVariantWidth } from './platform/image-variants.js';
 import { logModerationRejection } from './platform/moderation-metrics.js';
+import { isRateLimited } from './platform/ip-rate-limit.js';
+import { sendMedia } from './platform/media-response.js';
 
 /**
  * The store slices `registerSubmissionRoutes` actually reaches into — every domain this
@@ -560,104 +551,6 @@ function checkUserAccess(request: FastifyRequest, reply: FastifyReply): boolean 
     return false;
   }
   return true;
-}
-
-function isRateLimited(
-  buckets: Map<string, number[]>,
-  ip: string,
-  currentTime: number,
-  maxRequests: number,
-  windowMs: number,
-): boolean {
-  const requests = (buckets.get(ip) ?? []).filter((timestamp) => currentTime - timestamp < windowMs);
-  if (requests.length >= maxRequests) {
-    buckets.set(ip, requests);
-    return true;
-  }
-
-  requests.push(currentTime);
-  buckets.set(ip, requests);
-  return false;
-}
-
-/**
- * Gallery media is immutable for as long as a game isn't republished, so it is
- * worth a long browser TTL. The ETag is what keeps that honest: once the TTL
- * lapses the browser revalidates and we answer 304 with no body (and, because
- * the entry is already cached server-side, no GitHub call either).
- *
- * Accept-Ranges matters for MP4 previews: without it the browser cannot seek /
- * fetch only the moov atom and ends up pulling (or aborting) the whole file
- * through Cloud Run on every card that armed a `<video>`.
- */
-function parseBytesRange(header: string | undefined, size: number): { start: number; end: number } | 'invalid' | null {
-  if (!header) return null;
-  const match = /^bytes=(\d*)-(\d*)$/i.exec(header.trim());
-  if (!match) return 'invalid';
-  const startRaw = match[1] ?? '';
-  const endRaw = match[2] ?? '';
-  if (startRaw === '' && endRaw === '') return 'invalid';
-
-  let start: number;
-  let end: number;
-  if (startRaw === '') {
-    const suffix = Number(endRaw);
-    if (!Number.isInteger(suffix) || suffix <= 0) return 'invalid';
-    start = Math.max(0, size - suffix);
-    end = size - 1;
-  } else {
-    start = Number(startRaw);
-    end = endRaw === '' ? size - 1 : Number(endRaw);
-    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start) {
-      return 'invalid';
-    }
-    if (start >= size) return 'invalid';
-    end = Math.min(end, size - 1);
-  }
-  return { start, end };
-}
-
-function sendMedia(
-  request: FastifyRequest,
-  reply: FastifyReply,
-  entry: { etag: string; contentType: string; body: Buffer },
-): FastifyReply {
-  reply
-    .header('ETag', entry.etag)
-    .header('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800')
-    .header('Accept-Ranges', 'bytes');
-
-  // A conditional request may carry a list, and "*" matches anything we hold.
-  const ifNoneMatch = request.headers['if-none-match'];
-  if (ifNoneMatch) {
-    const candidates = ifNoneMatch.split(',').map((value) => value.trim().replace(/^W\//, ''));
-    if (candidates.includes(entry.etag) || candidates.includes('*')) {
-      return reply.status(304).send();
-    }
-  }
-
-  const size = entry.body.length;
-  const range = parseBytesRange(typeof request.headers.range === 'string' ? request.headers.range : undefined, size);
-  if (range === 'invalid') {
-    return reply.status(416).header('Content-Range', `bytes */${size}`).send();
-  }
-  // If-Range: only honour Range when the validator still matches this representation.
-  // A mismatched ETag means the client may stitch bytes from two video versions.
-  const ifRangeRaw = request.headers['if-range'];
-  const ifRange = typeof ifRangeRaw === 'string' ? ifRangeRaw.trim() : undefined;
-  const rangeAllowed =
-    !ifRange || ifRange === entry.etag || ifRange.replace(/^W\//, '') === entry.etag.replace(/^W\//, '');
-  if (range && rangeAllowed) {
-    const chunk = entry.body.subarray(range.start, range.end + 1);
-    return reply
-      .status(206)
-      .header('Content-Range', `bytes ${range.start}-${range.end}/${size}`)
-      .header('Content-Length', String(chunk.length))
-      .type(entry.contentType)
-      .send(chunk);
-  }
-
-  return reply.type(entry.contentType).header('Content-Length', String(size)).send(entry.body);
 }
 
 /** What `registerSubmissionRoutes` hands back for other route modules to build on. */
@@ -2519,18 +2412,6 @@ export async function registerSubmissionRoutes(
   const maxFeedbackPerWindow = 10;
   const feedbackByIp = new Map<string, number[]>();
 
-  // The catalog and published games are read through the authenticated GitHub
-  // API (not public Pages), so the games repo can be private. Both are cached:
-  // the catalog for minutes (membership only changes on a merge to main; the
-  // previous 60s TTL forced a cold-start rebuild far too often), games longer so
-  // a published game only changes on a new merge to main.
-  const catalogTtlMs = 10 * 60_000;
-  let catalogCache: { expiresAt: number; entries: CatalogGameEntry[] } | null = null;
-  // Store-published games, cached on the same window as the repo catalog above: this
-  // route is hit by every visitor, and each entry costs a stored-object read.
-  const storeCatalogTtlMs = catalogTtlMs;
-  let storeCatalogCache: { expiresAt: number; value: CatalogGameEntry[] } | null = null;
-  let catalogRefresh: Promise<CatalogGameEntry[]> | null = null;
   const gameTtlMs = 5 * 60_000;
   const gameCache = new Map<string, { expiresAt: number; value: { slug: string; title: string; html: string } }>();
   const gamesRateLimitWindowMs = 60 * 1000;
@@ -2538,143 +2419,36 @@ export async function registerSubmissionRoutes(
   const gamesByIp = new Map<string, number[]>();
 
   // A single catalog page render can request a poster, a video, and up to 4
-  // screenshots per card across every published game — easily 100+ requests
-  // in one load. That's a much bigger, legitimate burst than actually loading
-  // a game bundle, so gallery media gets its own, more generous bucket.
+  // screenshots per card across every published game — a much bigger, legitimate
+  // burst than loading a game bundle, so gallery media gets its own bucket.
   const maxMediaPerWindow = 400;
   const mediaByIp = new Map<string, number[]>();
 
-  // Gallery media was the one GitHub-backed read with no cache at all, so every
-  // card on every catalog render hit the contents API — the highest-volume, least
-  // dynamic consumer of the token budget shared with submission status polls.
-  // The whole corpus is a few MB (tens of KB per asset), so it lives in memory
-  // comfortably. Entries are keyed by slug/filename and carry a content ETag so
-  // repeat visitors revalidate into a 304 instead of re-downloading.
-  const mediaTtlMs = 60 * 60_000;
-  const maxCachedMediaEntries = 400;
-  const mediaCache = new Map<string, { expiresAt: number; etag: string; contentType: string; body: Buffer }>();
+  const catalogRoutes = await registerCatalogRoutes(app, {
+    store,
+    gamesStore: options.agentChannel?.gamesStore,
+    now,
+    githubClient,
+    snapshotReader,
+    publishedRef,
+    mediaByIp,
+    maxMediaPerWindow,
+    mediaRateLimitWindowMs: gamesRateLimitWindowMs,
+  });
+  await registerCatalogSearchRoutes(app, {
+    store,
+    githubClient,
+    publishedRef,
+    getCatalogEntries: catalogRoutes.getCatalogEntries,
+  });
 
-  // These three trust a cache hit without re-checking publication state.
+  // Trusts a cache hit without re-checking publication state.
   function invalidatePublishedGameCaches(slug: string): void {
     gameCache.delete(slug);
-    storeCatalogCache = null;
-    for (const key of mediaCache.keys()) {
-      if (key.startsWith(`${slug}/`)) mediaCache.delete(key);
-    }
+    catalogRoutes.invalidatePublishedGameCache(slug);
   }
 
   // The cache-cold path is the dangerous one: with min-instances 0, a fresh
-  // instance takes a page load's several catalog-touching requests at once.
-  // getCatalog itself is now a handful of GraphQL round-trips (not ~2N Contents
-  // reads), but misses still coalesce into one in-flight refresh, and a failed
-  // refresh falls back to the last catalog this instance built — for data that
-  // changes only on a merge, briefly stale beats a visitor-facing 502.
-  /**
-   * Where a catalog read actually comes from.
-   *
-   * When the snapshot is configured, published routes require it: a missing
-   * pointer or Storage error fails the request (503).
-   *
-   */
-  async function loadCatalog(client: GitHubClient): Promise<CatalogGameEntry[]> {
-    if (snapshotReader) {
-      try {
-        const entries = await snapshotReader.getCatalog();
-        if (entries) {
-          return entries;
-        }
-      } catch (error) {
-        if (error instanceof SnapshotUnavailableError) throw error;
-        app.log.warn({ err: error }, 'snapshot catalog unavailable');
-        throw new SnapshotUnavailableError('snapshot catalog unavailable', { cause: error });
-      }
-      throw new SnapshotUnavailableError('snapshot catalog is not published');
-    }
-    return client.getCatalog(publishedRef);
-  }
-
-  /**
-   * Snapshot lookups for published routes. Transport errors throw
-   * SnapshotUnavailableError (503); a genuine miss returns null so the caller
-   * can decide between bake-inconsistency (502) and not-found (404). There is
-   * no GitHub escape hatch when snapshotReader is present.
-   */
-  async function readSnapshotGame(slug: string): Promise<{ slug: string; title: string; html: string } | null> {
-    if (!snapshotReader) return null;
-    try {
-      return await snapshotReader.getGame(slug);
-    } catch (error) {
-      if (error instanceof SnapshotUnavailableError) throw error;
-      app.log.warn({ err: error, slug }, 'snapshot game unavailable');
-      throw new SnapshotUnavailableError('snapshot game unavailable', { cause: error });
-    }
-  }
-
-  async function readSnapshotMedia(
-    slug: string,
-    filename: string,
-    width?: number,
-  ): Promise<{ body: Buffer; contentType: string } | null> {
-    if (!snapshotReader) return null;
-    try {
-      if (width !== undefined) {
-        // Fall back rather than 404: snapshots baked before variants existed have
-        // none, and a bake skips a variant it could not produce. Either way the
-        // original is the right answer, and it is what was served before this.
-        const variant = await snapshotReader.getMedia(slug, filename, width);
-        if (variant) return variant;
-      }
-      return await snapshotReader.getMedia(slug, filename);
-    } catch (error) {
-      if (error instanceof SnapshotUnavailableError) throw error;
-      app.log.warn({ err: error, slug, filename }, 'snapshot media unavailable');
-      throw new SnapshotUnavailableError('snapshot media unavailable', { cause: error });
-    }
-  }
-
-  async function getCatalogEntries(client: GitHubClient): Promise<CatalogGameEntry[]> {
-    if (catalogCache && catalogCache.expiresAt > now()) {
-      return catalogCache.entries;
-    }
-
-    const remember = (entries: CatalogGameEntry[]): CatalogGameEntry[] => {
-      catalogCache = { entries, expiresAt: now() + catalogTtlMs };
-      return entries;
-    };
-    // A refresh that fails still beats a visitor-facing 502 when this instance has
-    // built a catalog before: the data changes only on a merge, so briefly stale is
-    // nearly always right.
-    const serveStaleOrRethrow = (error: unknown): CatalogGameEntry[] => {
-      if (catalogCache) {
-        app.log.warn({ err: error }, 'catalog refresh failed; serving last known entries');
-        return catalogCache.entries;
-      }
-      throw error;
-    };
-
-    catalogRefresh ??= loadCatalog(client)
-      .then(remember)
-      .finally(() => {
-        catalogRefresh = null;
-      });
-
-    try {
-      return await catalogRefresh;
-    } catch (error) {
-      return serveStaleOrRethrow(error);
-    }
-  }
-
-  async function isSlugPublished(client: GitHubClient, slug: string): Promise<boolean> {
-    const entries = await getCatalogEntries(client);
-    return entries.some((entry) => entry.slug === slug && entry.status === 'published');
-  }
-
-  async function getPublishedCatalogEntry(client: GitHubClient, slug: string): Promise<CatalogGameEntry | null> {
-    const entries = await getCatalogEntries(client);
-    return entries.find((entry) => entry.slug === slug && entry.status === 'published') ?? null;
-  }
-
   /**
    * Reads back a slug this job just wrote, and settles who actually holds it.
    *
@@ -2743,12 +2517,10 @@ export async function registerSubmissionRoutes(
         // Fall through: see above — an unavailable store must not block creation.
       }
     }
-    if (githubClient) {
-      try {
-        if (await isSlugPublished(githubClient, slug)) return true;
-      } catch {
-        // Same reasoning, and this one is the likeliest to fail: it reads GitHub.
-      }
+    try {
+      if (await catalogRoutes.isSlugPublished(slug)) return true;
+    } catch {
+      // Same reasoning, and this one is the likeliest to fail: it reads GitHub.
     }
     return false;
   }
@@ -5812,413 +5584,6 @@ export async function registerSubmissionRoutes(
     return replyWithDraft(request, reply, record.issueNumber);
   });
 
-  /**
-   * The playable document for a store-published game, or null if this is not one.
-   *
-   * Returns the gate's own `bundle.html`: the gate assembles it through the same
-   * `assembleGameHtml` the bake uses, so the CSP, the AI Act provenance marking and the
-   * credential scan are already applied to the exact bytes that passed the check. There
-   * is nothing left to build at serve time, which is why store games need no bake.
-   *
-   * A publication whose bundle is missing returns null rather than throwing, so the
-   * request falls through to the repo path — during the migration a slug can legitimately
-   * exist on both sides, and a store record with no artifact must not take a working
-   * game off the site.
-   */
-  async function storePublishedGame(slug: string): Promise<{ slug: string; title: string; html: string } | null> {
-    const gamesStore = options.agentChannel?.gamesStore;
-    if (!store || !gamesStore) return null;
-    const publication = await store.getPublication(slug);
-    if (publication?.state !== 'published') return null;
-    const bundle = await gamesStore.getDerivedArtifact(slug, publication.currentVersion, 'bundle.html');
-    if (!bundle) {
-      app.log.error({ slug, version: publication.currentVersion }, 'published game has no stored bundle');
-      return null;
-    }
-    const spec = await gamesStore.getSourceFile(slug, publication.currentVersion, 'SPEC.md');
-    const title = (spec && catalogEntryFromSpec(slug, spec, () => null)?.title) || slug;
-    return { slug, title, html: bundle.toString('utf8') };
-  }
-
-  /**
-   * Gallery bytes for a store-published game, or null when this slug is not one / the
-   * filename is not on its media allowlist.
-   *
-   * Same allowlist rule as the repo path: only filenames declared by the validated
-   * `media/metadata.json` are readable. The gate stores that metadata (and the png/mp4)
-   * as derived artifacts on the published version.
-   */
-  async function readStorePublishedMedia(slug: string, filename: string): Promise<Buffer | null> {
-    const gamesStore = options.agentChannel?.gamesStore;
-    if (!store || !gamesStore) return null;
-    const publication = await store.getPublication(slug);
-    if (publication?.state !== 'published') return null;
-    const mediaMetadata = await gamesStore.getDerivedArtifact(slug, publication.currentVersion, 'media/metadata.json');
-    const media = parseGameMedia(mediaMetadata?.toString('utf8') ?? null);
-    if (!media) return null;
-    const allowed = new Set([
-      ...media.screenshots.map((screenshot) => screenshot.file),
-      ...(media.video ? [media.video] : []),
-    ]);
-    if (!allowed.has(filename)) return null;
-    return gamesStore.getDerivedArtifact(slug, publication.currentVersion, `media/${filename}`);
-  }
-
-  /**
-   * The catalog entries for games published from the store rather than from the repo.
-   *
-   * A delivered game is never committed, so the games-repo catalog cannot see it and a
-   * published game would be invisible on the site that published it. Read from the
-   * publication registry, described by the same `catalogEntryFromSpec` the repo path
-   * uses, and given the same cache window as the rest of the catalog: this is one
-   * Firestore read plus a small object read per store game, on a route the whole site
-   * hits.
-   *
-   * Repo slugs win. During the migration a game can exist on both sides — delivered to
-   * the store and still committed — and listing it twice would put two cards for one
-   * game in front of players. The repo copy is the one the snapshot bake serves, so it
-   * is the one that keeps the slug.
-   */
-  async function storeCatalogEntries(repoSlugs: string[]): Promise<CatalogGameEntry[]> {
-    const gamesStore = options.agentChannel?.gamesStore;
-    if (!store || !gamesStore) return [];
-    const cached = storeCatalogCache;
-    if (cached && cached.expiresAt > now()) return cached.value;
-
-    try {
-      const taken = new Set(repoSlugs);
-      const publications = (await store.listPublications()).filter(
-        (record) => record.state === 'published' && !taken.has(record.slug),
-      );
-      const entries: CatalogGameEntry[] = [];
-      for (const record of publications) {
-        const spec = await gamesStore.getSourceFile(record.slug, record.currentVersion, 'SPEC.md');
-        if (spec === null) continue;
-        // Media lives as derived artifacts (`media/metadata.json` + png/mp4), produced by
-        // the gate — not as source. The repo path supplies a real sibling reader; stubbing
-        // it here is why every store-published card came back with `media: null` even
-        // though the bytes were already in the bucket and `/api/games/:slug/media/:file`
-        // was already wired.
-        const mediaMetadata = await gamesStore.getDerivedArtifact(
-          record.slug,
-          record.currentVersion,
-          'media/metadata.json',
-        );
-        const entry = catalogEntryFromSpec(record.slug, spec, (name) =>
-          name === 'media/metadata.json' && mediaMetadata ? mediaMetadata.toString('utf8') : null,
-        );
-        // Published is a decision the operator already made and recorded here; the
-        // spec's own `status` describes the repo workflow this game never went through.
-        if (!entry) continue;
-        // Attribution joins at read time from the owner's profile — never from SPEC.
-        // Missing profile → platform byline (same as seed games).
-        const submission = await store.getSubmissionBySlug(record.slug);
-        const owner = submission ? await store.getUser(submission.ownerUid) : null;
-        const profile = owner ? toPublicCreatorProfile(owner) : null;
-        // Contributor credit, from the same read-time join and the same rule: the live
-        // version's manifest records which proposal it was adopted from, so the handle
-        // comes from that person's profile rather than from anything written into SPEC.
-        // Publish-gated like the owner byline — an unclaimed handle credits nobody, which
-        // is the same answer the catalog gives for an unclaimed creator.
-        const contributors: string[] = [];
-        try {
-          const manifest = await gamesStore.getManifest(record.slug, record.currentVersion);
-          if (manifest?.proposal?.proposerUid) {
-            const contributor = await store.getUser(manifest.proposal.proposerUid);
-            const contributorProfile = contributor ? toPublicCreatorProfile(contributor) : null;
-            if (contributorProfile?.handle) contributors.push(contributorProfile.handle);
-          }
-        } catch {
-          // A credit we cannot read is a credit we omit. Failing the catalog entry over a
-          // byline would take a working game off the site to protect a courtesy.
-        }
-        entries.push({
-          ...entry,
-          status: 'published',
-          submittedBy: profile ? profileBylineName(profile) : entry.submittedBy,
-          creatorHandle: profile?.handle ?? null,
-          ...(contributors.length > 0 ? { contributorHandles: contributors } : {}),
-        });
-      }
-      storeCatalogCache = { value: entries, expiresAt: now() + storeCatalogTtlMs };
-      return entries;
-    } catch (error) {
-      // The repo catalog is already in hand and is most of the site. Failing the whole
-      // list because the store half could not be read would take down games that have
-      // nothing to do with this path.
-      app.log.error({ err: error }, 'could not read store-published games for the catalog');
-      return cached?.value ?? [];
-    }
-  }
-
-  /**
-   * Account erasure must win over both catalog sources and their caches. Repo SPECs
-   * can carry a historical `submitted_by`, while store entries are cached for ten
-   * minutes with the profile join already applied. The non-personal owner marker is
-   * the durable source of truth, so scrub those bylines on every catalog response.
-   */
-  async function deattributeDeletedOwners(entries: CatalogGameEntry[]): Promise<CatalogGameEntry[]> {
-    if (!store) return entries;
-    const erased = await store.listSubmissionsByOwner(DELETED_ACCOUNT_UID);
-    const slugs = new Set(erased.flatMap((submission) => (submission.slug ? [submission.slug] : [])));
-    if (slugs.size === 0) return entries;
-    return entries.map((entry) =>
-      slugs.has(entry.slug) ? { ...entry, submittedBy: 'gamedev-platform', creatorHandle: null } : entry,
-    );
-  }
-
-  // The public game catalog, derived from SPEC.md frontmatter on the games repo's
-  // default branch via the authenticated API. This (not public GitHub Pages) is
-  // what the web app lists, so the games repo itself can be private — the app's
-  // own access gate is the single boundary.
-  app.get('/api/catalog', async (request, reply) => {
-    if (!githubClient) {
-      return reply.status(503).send({ error: 'catalog is not configured' });
-    }
-
-    try {
-      const entries = await getCatalogEntries(githubClient);
-      const published = entries.filter((entry) => entry.status === 'published');
-      const combined = [...published, ...(await storeCatalogEntries(published.map((entry) => entry.slug)))];
-      const deattributed = await deattributeDeletedOwners(combined);
-      return reply.send(await attachCatalogEnrichments(deattributed, store));
-    } catch (error) {
-      if (error instanceof SnapshotUnavailableError) {
-        request.log.error({ err: error }, 'snapshot catalog unavailable');
-        return reply.status(503).send({ error: 'catalog snapshot unavailable' });
-      }
-      request.log.error({ err: error }, 'failed to load catalog');
-      return reply.status(502).send({ error: 'failed to load catalog' });
-    }
-  });
-
-  const embeddingService = new VertexEmbeddingService({
-    log: (msg) => app.log.warn(msg),
-  });
-  const catalogVectorIndex = new CatalogVectorIndex();
-  let indexBuildPromise: Promise<void> | null = null;
-  let lastIndexBuildAttemptTime = 0;
-  let lastIndexBuildSuccessTime = 0;
-  const INDEX_TTL_MS = 10 * 60 * 1000;
-  const RETRY_BACKOFF_MS = 60 * 1000;
-
-  async function buildCatalogVectorIndex(): Promise<void> {
-    if (!githubClient) return;
-    lastIndexBuildAttemptTime = Date.now();
-    try {
-      const entries = await getCatalogEntries(githubClient);
-      const published = entries.filter((entry) => entry.status === 'published');
-      const enricherClient = createDefaultEnricherClient();
-
-      if (store) {
-        for (const entry of published) {
-          try {
-            const spec = await githubClient.getGameFile(publishedRef, entry.slug, 'SPEC.md');
-            if (spec) {
-              await getOrEnrichCatalogGame(entry, spec, {
-                store,
-                genAIClient: enricherClient,
-                log: (msg) => app.log.warn(msg),
-              });
-            }
-          } catch {
-            // Non-blocking per-game enrichment
-          }
-        }
-      }
-
-      const enriched = await attachCatalogEnrichments(published, store);
-      for (const entry of enriched) {
-        const docText = `${entry.title}. ${entry.genre || ''}. ${entry.tagline?.en || ''} ${entry.tagline?.pl || ''} ${(entry.searchKeywords || []).join(', ')}`;
-        const vec = await embeddingService.embedText(docText);
-        if (vec.length > 0) {
-          catalogVectorIndex.upsert({
-            slug: entry.slug,
-            title: entry.title,
-            genre: entry.genre,
-            tagline: entry.tagline,
-            shortControls: entry.shortControls,
-            searchKeywords: entry.searchKeywords,
-            embedding: vec,
-          });
-        }
-      }
-      lastIndexBuildSuccessTime = Date.now();
-    } catch (err) {
-      app.log.warn({ err }, 'failed to build catalog vector index');
-    }
-  }
-
-  function ensureCatalogVectorIndex(): Promise<void> {
-    const isStale = Date.now() - lastIndexBuildSuccessTime > INDEX_TTL_MS;
-    const isRecentAttempt = Date.now() - lastIndexBuildAttemptTime < RETRY_BACKOFF_MS;
-    if ((catalogVectorIndex.size() > 0 && !isStale) || (catalogVectorIndex.size() === 0 && isRecentAttempt)) {
-      return Promise.resolve();
-    }
-    if (!indexBuildPromise) {
-      indexBuildPromise = buildCatalogVectorIndex().finally(() => {
-        indexBuildPromise = null;
-      });
-    }
-    return indexBuildPromise;
-  }
-
-  // Multimodal semantic vector search across catalog games.
-  app.get(
-    '/api/catalog/search',
-    { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } },
-    async (request, reply) => {
-      const query =
-        typeof request.query === 'object' && request.query !== null && 'q' in request.query
-          ? String((request.query as { q: unknown }).q || '').trim()
-          : '';
-      if (!query || query.length < 2) {
-        return reply.send({ match: null, score: 0 });
-      }
-
-      try {
-        if (catalogVectorIndex.size() === 0) {
-          void ensureCatalogVectorIndex();
-          return reply.send({ match: null, score: 0 });
-        }
-
-        void ensureCatalogVectorIndex();
-
-        const queryVector = await embeddingService.embedText(query);
-        if (queryVector.length === 0) {
-          return reply.send({ match: null, score: 0 });
-        }
-        const best = catalogVectorIndex.findBestMatch(queryVector, 0.65);
-        if (best) {
-          return reply.send({
-            match: {
-              slug: best.game.slug,
-              title: best.game.title,
-              genre: best.game.genre,
-              tagline: best.game.tagline,
-              shortControls: best.game.shortControls,
-              searchKeywords: best.game.searchKeywords,
-            },
-            score: best.score,
-          });
-        }
-        return reply.send({ match: null, score: 0 });
-      } catch {
-        return reply.send({ match: null, score: 0 });
-      }
-    },
-  );
-
-  // Curated flagship pool, public like the catalog itself; no join.
-  app.get('/api/featured', async (_request, reply) => {
-    if (!store) {
-      return reply.send({ slugs: [] });
-    }
-    const config = await store.getFeaturedPoolConfig();
-    return reply.send({ slugs: config?.slugs ?? [] });
-  });
-
-  // Gallery media is committed alongside each published game. Only filenames
-  // declared by the validated media metadata are proxyable; this keeps the
-  // private repository and arbitrary repository files behind the API boundary.
-  app.get('/api/games/:slug/media/:filename', async (request, reply) => {
-    if (!githubClient) {
-      return reply.status(503).send({ error: 'games are not configured' });
-    }
-
-    const parsedParams = z
-      .object({
-        slug: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
-        filename: z.string().regex(/^[a-z0-9][a-z0-9-]*\.(?:png|mp4)$/),
-      })
-      .safeParse(request.params);
-    if (!parsedParams.success) {
-      return reply.status(404).send({ error: 'media not found' });
-    }
-
-    // An allowlist, not a number: `?w=` naming an arbitrary size would be an invitation
-    // to fill the cache with one entry per width somebody felt like asking for. Variants
-    // are a PNG-only idea — an MP4 with `?w=` would only add a useless extra read and a
-    // duplicate cache entry. Anything else is ignored and the original is served.
-    const requestedWidth = Number((request.query as { w?: string } | undefined)?.w);
-    const variantWidth =
-      parsedParams.data.filename.endsWith('.png') && isVariantWidth(requestedWidth) ? requestedWidth : undefined;
-
-    const currentTime = now();
-    if (isRateLimited(mediaByIp, request.ip, currentTime, maxMediaPerWindow, gamesRateLimitWindowMs)) {
-      return reply.status(429).send({ error: 'too many game requests, please try again later' });
-    }
-
-    // Serving from cache still respects the allowlist below on the first fetch;
-    // a cached entry can only exist for a filename that already passed it.
-    const cacheKey = `${parsedParams.data.slug}/${variantWidth ?? 'full'}/${parsedParams.data.filename}`;
-    const cachedMedia = mediaCache.get(cacheKey);
-    if (cachedMedia && cachedMedia.expiresAt > currentTime) {
-      return sendMedia(request, reply, cachedMedia);
-    }
-
-    try {
-      const entry = await getPublishedCatalogEntry(githubClient, parsedParams.data.slug);
-      const allowedFiles = new Set([
-        ...(entry?.media?.screenshots.map((screenshot) => screenshot.file) ?? []),
-        ...(entry?.media?.video ? [entry.media.video] : []),
-      ]);
-
-      // The catalog allowlist above still gates every read, so the snapshot can
-      // only ever answer for a filename the validated metadata already vouches for.
-      let body: Buffer | null = null;
-      if (entry && allowedFiles.has(parsedParams.data.filename)) {
-        if (snapshotReader) {
-          const snapshotMedia = await readSnapshotMedia(
-            parsedParams.data.slug,
-            parsedParams.data.filename,
-            variantWidth,
-          );
-          body = snapshotMedia?.body ?? null;
-        } else {
-          const media = await githubClient.getGameMedia(
-            publishedRef,
-            parsedParams.data.slug,
-            parsedParams.data.filename,
-          );
-          body = media ? Buffer.from(media) : null;
-        }
-      }
-
-      // Store-published games never land in the repo catalog or the snapshot bake, so
-      // the allowlist and the bytes both come from the version the operator published.
-      if (!body) {
-        body = await readStorePublishedMedia(parsedParams.data.slug, parsedParams.data.filename);
-      }
-      if (!body) {
-        return reply.status(404).send({ error: 'media not found' });
-      }
-
-      const cacheEntry = {
-        expiresAt: currentTime + mediaTtlMs,
-        etag: `"${createHash('sha256').update(body).digest('base64url').slice(0, 27)}"`,
-        contentType: parsedParams.data.filename.endsWith('.png') ? 'image/png' : 'video/mp4',
-        body,
-      };
-      // Bounded so a growing catalog can't wander into the container's memory
-      // limit; insertion order makes the oldest key the first one out.
-      if (mediaCache.size >= maxCachedMediaEntries) {
-        const oldestKey = mediaCache.keys().next().value;
-        if (oldestKey !== undefined) mediaCache.delete(oldestKey);
-      }
-      mediaCache.set(cacheKey, cacheEntry);
-
-      return sendMedia(request, reply, cacheEntry);
-    } catch (error) {
-      if (error instanceof SnapshotUnavailableError) {
-        request.log.error({ err: error }, 'snapshot media unavailable');
-        return reply.status(503).send({ error: 'media snapshot unavailable' });
-      }
-      request.log.error({ err: error }, 'failed to serve game media');
-      return reply.status(502).send({ error: 'failed to load game media' });
-    }
-  });
-
   // Play a published game. When the snapshot is configured, the baked document
   // is required; otherwise sources are fetched from the games repo's default
   // branch and assembled into one document for the sandboxed, opaque-origin
@@ -6246,13 +5611,13 @@ export async function registerSubmissionRoutes(
       // is the one the gate assembled — same assembler, same CSP, provenance and
       // credential scan as the bake applies to a repo game — so this serves an artifact
       // rather than building one.
-      const stored = await storePublishedGame(slug);
+      const stored = await catalogRoutes.storePublishedGame(slug);
       if (stored) {
         gameCache.set(slug, { value: stored, expiresAt: currentTime + gameTtlMs });
         return reply.send(stored);
       }
 
-      if (!(await isSlugPublished(githubClient, slug))) {
+      if (!(await catalogRoutes.isSlugPublished(slug))) {
         // Not published — but a game has this address from the moment it is submitted,
         // and its creator can play it, as can anyone they have chosen to share the link
         // with. One permalink for a game's whole life, before and after it goes live.
@@ -6270,7 +5635,7 @@ export async function registerSubmissionRoutes(
       if (snapshotReader) {
         // Baked at merge time by the same assembler the GitHub path would use,
         // with the same CSP, provenance meta and credential scan already applied.
-        const snapshotGame = await readSnapshotGame(slug);
+        const snapshotGame = await catalogRoutes.readSnapshotGame(slug);
         if (!snapshotGame) {
           throw new SnapshotIncompleteError(`published game "${slug}" is missing from the snapshot`);
         }
@@ -6416,8 +5781,7 @@ export async function registerSubmissionRoutes(
     ...(agentBackends.defaultVendor ? { defaultVendor: agentBackends.defaultVendor } : {}),
     configuredSeedProviders: [...configuredSeedProviders],
     defaultSeedProvider: seedProviderEnv.defaultProvider,
-    getRepoPublishedCatalogEntry: (slug) =>
-      githubClient ? getPublishedCatalogEntry(githubClient, slug) : Promise.resolve(null),
+    getRepoPublishedCatalogEntry: catalogRoutes.getPublishedCatalogEntry,
     startImprovementRound,
     buildNotifyDeps,
     invalidateStatusCache,
