@@ -56,7 +56,7 @@ describe('embedding-service', () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          content: { parts: [{ text: 'task: search query | query: arcade football' }] },
+          content: { parts: [{ text: 'task: search result | query: arcade football' }] },
         }),
       }),
     );
@@ -91,7 +91,37 @@ describe('embedding-service', () => {
       expect.stringContaining('/publishers/google/models/gemini-embedding-2:embedContent'),
       expect.objectContaining({
         body: JSON.stringify({
-          content: { parts: [{ text: "title: Mexico '86 | task: search result | text: Tournament soccer game." }] },
+          content: { parts: [{ text: "title: Mexico '86 | text: Tournament soccer game." }] },
+        }),
+      }),
+    );
+  });
+
+  it('generates untitled document embedding with title: none prefix for gemini models', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        embedding: {
+          values: [0.6, 0.8],
+        },
+      }),
+    } as Response);
+
+    const service = new VertexEmbeddingService({ model: 'gemini-embedding-2' });
+    vi.spyOn(
+      (service as unknown as { auth: { getClient: () => Promise<unknown> } }).auth,
+      'getClient',
+    ).mockResolvedValue({
+      getAccessToken: async () => ({ token: 'mock-token' }),
+    });
+
+    const vec = await service.embedDocument('Tournament soccer game.');
+    expect(vec).toEqual([0.6, 0.8]);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining('/publishers/google/models/gemini-embedding-2:embedContent'),
+      expect.objectContaining({
+        body: JSON.stringify({
+          content: { parts: [{ text: 'title: none | text: Tournament soccer game.' }] },
         }),
       }),
     );

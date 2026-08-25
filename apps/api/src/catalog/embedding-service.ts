@@ -94,15 +94,15 @@ export class VertexEmbeddingService {
       const action = isGemini ? 'embedContent' : 'predict';
       const url = `https://${host}/v1/projects/${this.projectId}/locations/${this.region}/publishers/google/models/${this.model}:${action}`;
 
-      // Gemini uses prompt prefixes; legacy models pass task_type in payload.
+      // Gemini uses documented retrieval prefixes; legacy models pass task_type in payload.
       let promptText = trimmed;
       if (isGemini) {
         if (role === 'query') {
-          promptText = `task: search query | query: ${trimmed}`;
+          promptText = `task: search result | query: ${trimmed}`;
         } else {
           promptText = options.title
-            ? `title: ${options.title} | task: search result | text: ${trimmed}`
-            : `task: search result | text: ${trimmed}`;
+            ? `title: ${options.title} | text: ${trimmed}`
+            : `title: none | text: ${trimmed}`;
         }
       }
 

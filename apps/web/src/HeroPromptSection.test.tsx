@@ -879,6 +879,23 @@ describe('HeroPromptSection', () => {
         tagline: { en: 'Klondike card solitaire.', pl: 'Pasjans karciany.' },
         searchKeywords: ['cards', 'solitaire', 'karty', 'pasjans'],
       },
+      {
+        slug: 'starweb-4x',
+        title: 'Starweb 4X',
+        genre: 'strategy',
+        controls: 'Mouse',
+        media: null,
+        multiplayer: null,
+        saves: null,
+        world: null,
+        sensing: null,
+        orientation: 'landscape' as const,
+        editor: null,
+        status: 'published' as const,
+        submittedBy: null,
+        tagline: { en: 'Galactic strategy.', pl: 'Galaktyczna strategia.' },
+        searchKeywords: ['4x', 'space', 'strategy'],
+      },
     ];
 
     const checkPrompt = async (prompt: string) => {
