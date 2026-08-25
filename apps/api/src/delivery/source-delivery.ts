@@ -400,7 +400,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
 
       const transitionActor: TransitionActor = input.actor === 'creator' ? 'creator' : 'agent';
       const stateAfterSignal = await markBuilding(input.issueNumber, record, transitionActor);
-      const requireEditorJson = !(await options.store.getPublication(input.slug));
+      const requireEditorDeclaration = !(await options.store.getPublication(input.slug));
       let version: string;
       try {
         ({ version } = await options.gamesStore.putCandidateSources({
@@ -408,7 +408,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
           issueNumber: input.issueNumber,
           roundGeneration,
           files: input.files,
-          requireEditorJson,
+          requireEditorDeclaration,
           backend: input.backend ?? record.dispatch?.backend ?? record.builder,
           mode: input.mode,
           ...(input.kitEngineRef ? { kitEngineRef: input.kitEngineRef } : {}),
