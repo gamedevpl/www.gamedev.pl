@@ -70,6 +70,11 @@ jobs:
 
       - run: npm ci
 
+      # tsx follows package.json exports into packages/contract/dist (and
+      # zone-core). npm ci does not emit those. The 2026-08-24/25 nightlies
+      # died on ERR_MODULE_NOT_FOUND and the §8 proof never ran.
+      - run: npm run build:packages
+
       - name: Authenticate to GCP via Workload Identity Federation
         uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
