@@ -96,7 +96,7 @@
     "apps/api/src/apple-routes.test.ts": 244,
     "apps/api/src/canonical-host.test.ts": 54,
     "apps/api/src/catalog/catalog-genre-source.ts": 75,
-    "apps/api/src/catalog/catalog-search-routes.ts": 166,
+    "apps/api/src/catalog/catalog-search-routes.ts": 167,
     "apps/api/src/catalog/catalog-touch.test.ts": 32,
     "apps/api/src/catalog/catalog-touch.ts": 29,
     "apps/api/src/catalog/embedding-service.test.ts": 77,
