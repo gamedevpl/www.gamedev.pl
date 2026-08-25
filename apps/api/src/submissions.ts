@@ -44,6 +44,7 @@ import {
 import { registerCatalogRoutes } from './catalog/catalog-routes.js';
 import { registerCatalogSearchRoutes } from './catalog/catalog-search-routes.js';
 import { registerDraftPreviewRoutes } from './delivery/draft-preview-routes.js';
+import { createBuildStatusAssembler, revisionOriginOf } from './delivery/build-status.js';
 import { startHealthCheck } from './catalog/game-health.js';
 import {
   createStagedPreviewPublisher,
@@ -97,7 +98,6 @@ import {
   sessionCrashStall,
   sessionCrashTransition,
 } from './creation/session-crash.js';
-import { hydrateRecentBuildSummaries } from './delivery/build-changelog.js';
 import { toRecentBuilds } from './delivery/recent-builds.js';
 import {
   builderLabelFromRecord,
@@ -132,12 +132,9 @@ import { peekQuota } from './creation/quota-gate.js';
 import { mintGameSlug } from './catalog/slug.js';
 import { runSlugBackfill, settleSlugClaim } from './catalog/slug-backfill.js';
 import {
-  isStudioOrigin,
   type AgentKeysStore,
   type BuildLogStore,
   type BuildMediaStore,
-  type BuildPreviewSummary,
-  type BuildShotSummary,
   type CreatorMessageOrigin,
   type DispatchStore,
   type IdentityStore,
@@ -155,12 +152,6 @@ import {
   countCreatorClarifications,
   MAX_REVISION_CHARS,
   sanitizeCreatorText,
-  type BuildEvent,
-  type BuildMediaItem,
-  type BuildPlayableItem,
-  type CreatorRevision,
-  type PriorRoundEntry,
-  type PriorRoundHistory,
   type SubmissionStatus,
   type SubmissionStatusResponse,
 } from './platform/submission-status.js';
@@ -354,13 +345,6 @@ function formatPlaytestContextBlock(
   }
   if (lines.length === 0) return null;
   return [PLAYTEST_CONTEXT_HEADER, '```text', ...lines, '```'].join('\n');
-}
-
-// 'studio_ack' displays exactly like 'studio' — only the backend tells them apart.
-function revisionOriginOf(message: { origin?: CreatorMessageOrigin }): 'agent' | 'studio' | undefined {
-  if (message.origin === 'agent') return 'agent';
-  if (isStudioOrigin(message.origin)) return 'studio';
-  return undefined;
 }
 
 // Validates and persists a base64 PNG as a build shot.
@@ -714,7 +698,7 @@ export async function registerSubmissionRoutes(
   const gameSeeder = options.gameSeeder;
   const gamesStoreForSeed = options.agentChannel?.gamesStore;
   function invalidateDeliveryCaches(issueNumber: number): void {
-    eventsCache.delete(issueNumber);
+    buildStatus.invalidateEvents(issueNumber);
     invalidateStatusCache(issueNumber);
   }
   const kitFileStoreForDelivery = options.agentChannel?.objectStore
@@ -2051,329 +2035,13 @@ export async function registerSubmissionRoutes(
     statusCacheEpoch.set(issueNumber, (statusCacheEpoch.get(issueNumber) ?? 0) + 1);
   }
 
-  // Agent progress events are read on every poll but change rarely, so they get a
-  // short cache of their own rather than riding the 60s status cache — the entire
-  // point of the build channel is that an update reaches the creator in seconds.
-  // Appending an event drops the entry outright; the TTL only covers the case where
-  // the event landed on a different Cloud Run instance than the one being polled.
-  const eventsCacheTtlMs = 5_000;
-  const maxEventsShown = 20;
-  const eventsCache = new Map<number, { expiresAt: number; value: BuildEvent[] }>();
-
-  async function loadBuildEvents(issueNumber: number): Promise<BuildEvent[]> {
-    if (!store) return [];
-    const currentTime = now();
-    const cached = eventsCache.get(issueNumber);
-    if (cached && cached.expiresAt > currentTime) {
-      return cached.value;
-    }
-    const value = await store.listBuildEvents(issueNumber, { limit: maxEventsShown });
-    eventsCache.set(issueNumber, { value, expiresAt: currentTime + eventsCacheTtlMs });
-    return value;
-  }
-
-  // Only the newest few previews are kept at all (the channel prunes on write), and the
-  // creator only ever wants the latest playable thing plus a little history.
-  const maxPreviewsShown = 4;
-  const previewsCache = new Map<number, { expiresAt: number; value: BuildPreviewSummary[] }>();
-
-  async function loadBuildPreviews(issueNumber: number): Promise<BuildPreviewSummary[]> {
-    if (!store) return [];
-    const currentTime = now();
-    const cached = previewsCache.get(issueNumber);
-    if (cached && cached.expiresAt > currentTime) {
-      return cached.value;
-    }
-    const value = await store.listBuildPreviews(issueNumber, { limit: maxPreviewsShown });
-    previewsCache.set(issueNumber, { value, expiresAt: currentTime + eventsCacheTtlMs });
-    return value;
-  }
-
-  const maxShotsShown = 12;
-  const shotsCache = new Map<number, { expiresAt: number; value: BuildShotSummary[] }>();
-
-  async function loadBuildShots(issueNumber: number): Promise<BuildShotSummary[]> {
-    if (!store) return [];
-    const currentTime = now();
-    const cached = shotsCache.get(issueNumber);
-    if (cached && cached.expiresAt > currentTime) {
-      return cached.value;
-    }
-    const value = await store.listBuildShots(issueNumber, { limit: maxShotsShown });
-    shotsCache.set(issueNumber, { value, expiresAt: currentTime + eventsCacheTtlMs });
-    return value;
-  }
-
-  /** Pictures of this build: the screenshots the agent pushed over the channel. */
-  async function buildMedia(issueNumber: number, locale: string): Promise<BuildMediaItem[]> {
-    return [
-      ...(await loadBuildShots(issueNumber)).map((shot): BuildMediaItem => {
-        // The caption the agent wrote in the reader's own language when it has one,
-        // and the English it always writes otherwise.
-        const caption = shot.locale === locale && shot.labelLocalized ? shot.labelLocalized : shot.label;
-        return {
-          source: 'channel',
-          ref: shot.id,
-          ...(caption ? { label: caption } : {}),
-          createdAt: shot.createdAt,
-        };
-      }),
-    ];
-  }
-
-  /** Playable builds pushed over the channel, newest first. */
-  async function buildPlayables(issueNumber: number, locale: string): Promise<BuildPlayableItem[]> {
-    return (await loadBuildPreviews(issueNumber)).map((preview): BuildPlayableItem => {
-      const caption = preview.locale === locale && preview.labelLocalized ? preview.labelLocalized : preview.label;
-      return {
-        ref: preview.id,
-        ...(preview.slug ? { slug: preview.slug } : {}),
-        ...(caption ? { label: caption } : {}),
-        ...(preview.origin ? { origin: preview.origin } : {}),
-        createdAt: preview.createdAt,
-      };
-    });
-  }
-
-  /**
-   * Resolves each event to one sentence in the reader's language, using only what the
-   * agent already sent. Pure by design: this runs on a 3s-polled endpoint, and the
-   * version that called a model here instead billed one Vertex request per poll per
-   * viewer — a failed call cached nothing, so the same lines were re-translated every
-   * 3 seconds for as long as anyone watched. Localization belongs at intake, where it
-   * costs one call per event; see `report_progress`, which asks agents for the pair.
-   *
-   * An event without a matching `textLocalized` shows its English text. That is the
-   * same fail-open contract the translating version had, minus the retry loop.
-   */
-  /**
-   * The revision counterpart to `localizeEvents`, and pure for the same reason: this runs
-   * on a 3s-polled endpoint, so it may only choose between strings that are already
-   * stored. A relayed request with no matching translation shows the agent's own wording.
-   */
-  function localizeRevisions(revisions: CreatorRevision[], locale: string): CreatorRevision[] {
-    return revisions.map((revision) => {
-      const text = revision.locale === locale && revision.textLocalized ? revision.textLocalized : revision.text;
-      const resolved: CreatorRevision = { ...revision, text };
-      delete resolved.textLocalized;
-      delete resolved.locale;
-      return resolved;
-    });
-  }
-
-  function localizeEvents(events: BuildEvent[], locale: string): BuildEvent[] {
-    return events.map((event) => {
-      const text = event.locale === locale && event.textLocalized ? event.textLocalized : event.text;
-      // The wire carries one resolved sentence — the client never has to pick, and
-      // never sees a language it didn't ask for.
-      const resolved: BuildEvent = { ...event, text };
-      delete resolved.textLocalized;
-      delete resolved.locale;
-      return resolved;
-    });
-  }
-
-  /**
-   * Attaches what the agent sent us directly — its updates, in the reader's language,
-   * and its pictures — plus the live heartbeat / ended fields from the job record.
-   *
-   * All of these sit outside the 60s status cache: after MCP submit auto-marks
-   * `agentEndedAt`, a Claude-class agent often keeps staging and reporting progress.
-   * Serving a cached `stall: ended` beside fresh "now" events made Studio claim the
-   * round finished while the thread was still moving.
-   */
-  // Prior-round history is read on every status poll for a tip job, but changes only
-  // when a sibling gains messages — so a short cache avoids N sibling reads every 3s.
-  const priorRoundsCacheTtlMs = 30_000;
-  const maxPriorRounds = 6;
-  const maxPriorEntriesPerRound = 10;
-  const maxCachedPriorRounds = 100;
-  const priorRoundsCache = new Map<string, { expiresAt: number; value: PriorRoundHistory[] }>();
-
-  function rememberPriorRounds(cacheKey: string, entry: { expiresAt: number; value: PriorRoundHistory[] }): void {
-    // Drop expired keys first so TTL is not a soft leak on a busy instance (Copilot).
-    const nowMs = entry.expiresAt - priorRoundsCacheTtlMs;
-    for (const [key, cached] of priorRoundsCache) {
-      if (cached.expiresAt <= nowMs) priorRoundsCache.delete(key);
-    }
-    // Insertion-order Map: delete-before-set moves this key to newest; drop the
-    // oldest when full.
-    priorRoundsCache.delete(cacheKey);
-    if (priorRoundsCache.size >= maxCachedPriorRounds) {
-      const oldestKey = priorRoundsCache.keys().next().value;
-      if (oldestKey !== undefined) priorRoundsCache.delete(oldestKey);
-    }
-    priorRoundsCache.set(cacheKey, entry);
-  }
-
-  /**
-   * Older jobs on the same slug, owned by the same creator — transcripts only, capped.
-   * Publishing is terminal, so an improve opens a new empty thread; without this the
-   * previous days of Studio chat look deleted even though they still live on those jobs.
-   */
-  async function loadPriorRounds(record: SubmissionRecord, locale: string): Promise<PriorRoundHistory[]> {
-    if (!store || !record.slug) return [];
-    const cacheKey = `${record.slug}:${record.issueNumber}:${locale}`;
-    const cached = priorRoundsCache.get(cacheKey);
-    const currentTime = now();
-    if (cached && cached.expiresAt > currentTime) return cached.value;
-
-    // Only jobs that started *before* this one (Codex): an old status token must not
-    // surface later improve rounds as "earlier" history. Newest-first from the store;
-    // keep the most recent superseded jobs, then reverse so the chat log reads
-    // oldest → newest above the live round.
-    const siblings = (await store.listSubmissionsBySlug(record.slug))
-      .filter(
-        (sibling) =>
-          sibling.issueNumber !== record.issueNumber &&
-          sibling.ownerUid === record.ownerUid &&
-          sibling.createdAt < record.createdAt,
-      )
-      .slice(0, maxPriorRounds)
-      .reverse();
-
-    const rounds = await Promise.all(
-      siblings.map(async (sibling): Promise<PriorRoundHistory | null> => {
-        const [messages, rawEvents] = await Promise.all([
-          store!.listCreatorMessages(sibling.issueNumber, { limit: maxPriorEntriesPerRound }),
-          store!.listBuildEvents(sibling.issueNumber, { limit: maxPriorEntriesPerRound }),
-        ]);
-        const events = rawEvents.filter((event) => !isMcpPresenceEventText(event.text, event.createdAt));
-        const revisionEntries: PriorRoundEntry[] = localizeRevisions(
-          messages.map((message) => ({
-            text: stripPlaytestContext(message.text),
-            createdAt: message.createdAt,
-            ...(revisionOriginOf(message) ? { origin: revisionOriginOf(message) } : {}),
-            ...(message.textLocalized && message.locale
-              ? { textLocalized: stripPlaytestContext(message.textLocalized), locale: message.locale }
-              : {}),
-          })),
-          locale,
-        ).map((revision) => ({
-          kind: 'revision' as const,
-          text: revision.text,
-          createdAt: revision.createdAt,
-          ...(revision.origin === 'agent' || revision.origin === 'studio' ? { origin: revision.origin } : {}),
-        }));
-        const eventEntries: PriorRoundEntry[] = localizeEvents(events, locale).map((event) => ({
-          kind: 'event' as const,
-          text: event.text,
-          createdAt: event.createdAt,
-          ...(event.step ? { step: event.step } : {}),
-        }));
-        const entries = [...revisionEntries, ...eventEntries]
-          .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-          .slice(-maxPriorEntriesPerRound);
-        if (entries.length === 0) return null;
-        const state = sibling.state ?? 'queued';
-        return {
-          id: String(sibling.issueNumber),
-          createdAt: sibling.createdAt,
-          ...(sibling.publishedAt ? { publishedAt: sibling.publishedAt } : {}),
-          status: sibling.abandonedAt ? 'abandoned' : toSubmissionStatus(state),
-          entries,
-        };
-      }),
-    );
-
-    const value = rounds.filter((round): round is PriorRoundHistory => round !== null);
-    rememberPriorRounds(cacheKey, { value, expiresAt: currentTime + priorRoundsCacheTtlMs });
-    return value;
-  }
-
-  async function attachBuildEvents(
-    status: SubmissionStatusResponse,
-    issueNumber: number,
-    locale: string,
-  ): Promise<SubmissionStatusResponse> {
-    const [loadedEvents, media, playable, record] = await Promise.all([
-      loadBuildEvents(issueNumber),
-      buildMedia(issueNumber, locale),
-      buildPlayables(issueNumber, locale),
-      // Soft: a store blip must not 500 a cached status poll — keep cached stall/ended.
-      store ? store.getSubmission(issueNumber).catch(() => null) : Promise.resolve(null),
-    ]);
-    // Drop leftover synthetic presence steps from before heartbeats stopped writing chat.
-    const events = loadedEvents.filter((event) => !isMcpPresenceEventText(event.text, event.createdAt));
-    const next: SubmissionStatusResponse = {
-      ...status,
-      ...(events.length > 0 ? { events: localizeEvents(events, locale) } : {}),
-      ...(media.length > 0 ? { media } : {}),
-      ...(playable.length > 0 ? { playable } : {}),
-      // Relayed change requests resolve here rather than in nativeJobStatus, so the
-      // cached status body stays language-neutral and one entry serves every reader.
-      ...(status.progress
-        ? { progress: { ...status.progress, revisions: localizeRevisions(status.progress.revisions, locale) } }
-        : {}),
-    };
-    if (!record) return next;
-
-    // Overlay must clear stale keys, not only set present ones — a cached ended
-    // snapshot has to lose agentEndedAt/stall when the agent resumes.
-    if (record.lastAgentSignalAt) next.lastAgentSignalAt = record.lastAgentSignalAt;
-    else delete next.lastAgentSignalAt;
-    if (record.lastAgentPresence) next.lastAgentPresence = record.lastAgentPresence;
-    else delete next.lastAgentPresence;
-    if (record.agentEndedAt) next.agentEndedAt = record.agentEndedAt;
-    else delete next.agentEndedAt;
-    if (managedAvailabilityGate) {
-      next.platformBuilder = await managedAvailabilityGate.peek(
-        record.ownerUid,
-        new Date(now()).toISOString().slice(0, 10),
-      );
-    }
-
-    const stall = detectStall({
-      state: record.state ?? 'queued',
-      stateSince: record.stateSince ?? record.createdAt,
-      lastAgentSignalAt: record.lastAgentSignalAt,
-      agentState: record.agentState,
-      agentEndedAt: record.agentEndedAt,
-      now: now(),
-      builder: builderOf(record),
-    });
-    if (stall) next.stall = stall;
-    else delete next.stall;
-
-    // Gate milestones — refresh outside the 60s cache.
-    const playableVersion = record.previewVersion ?? record.deliveredVersion;
-    const gamesStore = options.agentChannel?.gamesStore;
-    if (record.slug && playableVersion && gamesStore?.getManifest) {
-      try {
-        const manifest = await gamesStore.getManifest(record.slug, playableVersion);
-        if (manifest?.gateProgress && !manifest.gate && !manifest.previewGate) {
-          next.gateProgress = manifest.gateProgress;
-        } else {
-          delete next.gateProgress;
-        }
-      } catch {
-        /* keep cached */
-      }
-    }
-
-    // Soft: sibling history must not 500 the live thread poll.
-    try {
-      const priorRounds = await loadPriorRounds(record, locale);
-      if (priorRounds.length > 0) next.priorRounds = priorRounds;
-      else delete next.priorRounds;
-    } catch {
-      delete next.priorRounds;
-    }
-
-    if (next.recentBuilds && next.recentBuilds.length > 0) {
-      try {
-        next.recentBuilds = await hydrateRecentBuildSummaries({
-          builds: next.recentBuilds,
-          locale,
-          loadEvents: async (id) => (id === issueNumber ? loadedEvents : loadBuildEvents(id)),
-        });
-      } catch (error) {
-        void error;
-      }
-    }
-
-    return next;
-  }
+  const buildStatus = createBuildStatusAssembler({
+    store,
+    gamesStore: options.agentChannel?.gamesStore,
+    now,
+    managedAvailabilityGate,
+  });
+  const { attachBuildEvents } = buildStatus;
 
   const draftPreviewRoutes = await registerDraftPreviewRoutes(app, {
     store,
@@ -5446,7 +5114,7 @@ export async function registerSubmissionRoutes(
           now,
           log: app.log,
           onPublished: (issueNumber) => {
-            eventsCache.delete(issueNumber);
+            buildStatus.invalidateEvents(issueNumber);
             invalidateStatusCache(issueNumber);
           },
         })
@@ -5475,7 +5143,7 @@ export async function registerSubmissionRoutes(
     agentTokenSecret: submissionTokenSecret,
     now,
     onEvent: (issueNumber) => {
-      eventsCache.delete(issueNumber);
+      buildStatus.invalidateEvents(issueNumber);
       // Heartbeat / ended / phase move with channel writes; do not keep serving a
       // minute-old stall next to fresh progress (submit auto-end + continue loop).
       invalidateStatusCache(issueNumber);
