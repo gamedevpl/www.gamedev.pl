@@ -19,27 +19,27 @@ const FILES: SourceFile[] = [
 ];
 
 describe('new-game editor delivery contract', () => {
-  it.each(['preview', 'publish'] as const)('requires an editor declaration for %s delivery', (mode) => {
-    expect(() => validateSourceUpload(FILES, mode, false, true)).toThrow(/EDITOR\.json or EDITOR\.ts is required/);
+  it.each(['preview', 'publish'] as const)('requires compiled EDITOR.json for %s delivery', (mode) => {
+    expect(() => validateSourceUpload(FILES, mode, false, true)).toThrow(/EDITOR\.json is required/);
   });
 
-  it('accepts an editor and reports the missing path precisely', () => {
+  it('accepts compiled JSON and rejects authoring source alone', () => {
     expect(
       validateSourceUpload([...FILES, { path: 'EDITOR.json', content: '{}' }], 'preview', false, true),
     ).toHaveLength(FILES.length + 1);
-    expect(
+    expect(() =>
       validateSourceUpload(
         [...FILES, { path: 'EDITOR.ts', content: 'export default {}' }],
         'preview',
         false,
         true,
       ),
-    ).toHaveLength(FILES.length + 1);
+    ).toThrow(/EDITOR\.json is required/);
 
     try {
       validateSourceUpload(FILES, 'preview', false, true);
     } catch (error) {
-      expect(error).toMatchObject({ missingPaths: ['EDITOR.json', 'EDITOR.ts'] });
+      expect(error).toMatchObject({ missingPaths: ['EDITOR.json'] });
     }
   });
 
