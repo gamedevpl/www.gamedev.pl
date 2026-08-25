@@ -144,6 +144,7 @@ describe('shared source delivery', () => {
         slug: SLUG,
         backend: BACKEND,
         mode: 'preview',
+        requireEditorJson: true,
       }),
     );
     expect(gate).toHaveBeenCalledWith({ issueNumber: ISSUE, slug: SLUG, version: 'v-managed-1', mode: 'preview' });
@@ -157,7 +158,13 @@ describe('shared source delivery', () => {
   });
 
   it('uses the same service for publish side effects and transition', async () => {
-    const { store, service, authority } = await setup();
+    const { store, putCandidateSources, service, authority } = await setup();
+    await store.setPublication({
+      slug: SLUG,
+      state: 'published',
+      currentVersion: 'v-live',
+      publishedAt: '2026-08-01T00:00:00.000Z',
+    });
 
     const result = await service.deliver({
       issueNumber: ISSUE,
@@ -169,6 +176,7 @@ describe('shared source delivery', () => {
     });
 
     expect(result).toMatchObject({ accepted: true, mode: 'publish' });
+    expect(putCandidateSources).toHaveBeenCalledWith(expect.objectContaining({ requireEditorJson: false }));
     expect((await store.getSubmission(ISSUE)) ?? {}).toMatchObject({
       deliveredVersion: 'v-managed-1',
       previewVersion: 'v-managed-1',
@@ -309,7 +317,6 @@ export function tick(round: Round) {
         loadRegistry: async () => ({ engineRef: CURRENT, previous: PINNED, sha256: 'a'.repeat(64) }),
         loadTree: async (engineRef?: string) => {
           loaded = engineRef ?? CURRENT;
-          // Empty current kit would skip if pin ignored.
           if (loaded === PINNED) return treeFor(PINNED, KIT_DTS);
           return treeFor(CURRENT, '');
         },
@@ -365,7 +372,6 @@ export function tick(round: Round) {
       expect(record?.roundTypecheckPreflightRefusals).toBe(2);
       expect(record?.roundTypecheckPreflightBypassErrors).toMatch(/Typecheck preflight failed/);
       expect(log.warn.mock.calls[0]?.[0]).toMatchObject({ message: record?.roundTypecheckPreflightBypassErrors });
-      // Regression: bypass diagnostics never reached the thread, only a log line.
       const events = await store.listBuildEvents(ISSUE);
       expect(events).toContainEqual(
         expect.objectContaining({ kind: 'blocked', text: expect.stringContaining('without a passing typecheck') }),
@@ -373,7 +379,6 @@ export function tick(round: Round) {
     });
 
     it('does not post the bypass warning when the delivery itself fails to store', async () => {
-      // Regression: bypass event used to post before storage could fail.
       const kitFileStore = fakeKitStore({ [PINNED]: treeFor(PINNED, KIT_DTS) });
       const { store, service, authority } = await setup({ kitFileStore, failPutCandidateSources: true });
       await store.pinRoundKitEngineRef(ISSUE, PINNED);
@@ -406,7 +411,6 @@ export function tick(round: Round) {
     });
 
     it('localizes the bypass warning like any other build event', async () => {
-      // Regression: this event skipped intake localization, unlike agent progress events.
       const kitFileStore = fakeKitStore({ [PINNED]: treeFor(PINNED, KIT_DTS) });
       const { store, service, authority } = await setup({
         kitFileStore,
@@ -466,7 +470,6 @@ export function tick(round: Round) {
       expect(result.accepted).toBe(true);
       expect((await store.getSubmission(ISSUE))?.roundTypecheckPreflightBypassErrors).toBeUndefined();
 
-      // Regression: the stale 'blocked' warning was never superseded for a reader.
       const events = await store.listBuildEvents(ISSUE);
       expect(events).toContainEqual(
         expect.objectContaining({ kind: 'milestone', text: expect.stringContaining('no longer applies') }),
@@ -474,7 +477,6 @@ export function tick(round: Round) {
     });
 
     it('does not resolve the bypass when the check only skipped, not passed', async () => {
-      // Regression: a skipped check is not a real pass.
       const emptyKit = { engineRef: PINNED, sha256: 'a'.repeat(64), files: new Map() };
       const kitFileStore = fakeKitStore({ [PINNED]: emptyKit });
       const { store, service, authority } = await setup({ kitFileStore });
@@ -500,7 +502,6 @@ export function tick(round: Round) {
     });
 
     it('does not let a thread-event write failure roll back an accepted delivery', async () => {
-      // Regression: a decorative event write used to reject deliver() after storage.
       const kitFileStore = fakeKitStore({ [PINNED]: treeFor(PINNED, KIT_DTS) });
       const { store, service, authority } = await setup({ kitFileStore });
       await store.pinRoundKitEngineRef(ISSUE, PINNED);
@@ -534,7 +535,6 @@ export function tick(round: Round) {
     });
 
     it('does not relock a creator manual delivery as a resumed agent round', async () => {
-      // Regression: any delivery always cleared agentEndedAt, faking agent liveness.
       const kitFileStore = fakeKitStore({ [PINNED]: treeFor(PINNED, KIT_DTS) });
       const { store, service } = await setup({ kitFileStore });
       await store.pinRoundKitEngineRef(ISSUE, PINNED);
