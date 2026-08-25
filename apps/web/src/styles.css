@@ -4388,24 +4388,6 @@ body.player-open {
   font-size: 0.82rem;
 }
 
-.studio-seal-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  margin: 0;
-  padding: 12px;
-  border: 1px solid var(--panel-border);
-  border-radius: 10px;
-  background: var(--panel-card);
-}
-
-.studio-seal-body {
-  margin: 0;
-  font-size: 0.85rem;
-  line-height: 1.45;
-}
-
 .studio-status-chip-body {
   display: inline-flex;
   align-items: flex-start;
