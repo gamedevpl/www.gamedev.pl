@@ -2,19 +2,26 @@
 
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
+
+const { sealPreview } = vi.hoisted(() => ({ sealPreview: vi.fn(async () => ({ version: 'v3' })) }));
+vi.mock('./submissionApi.js', async () => {
+  const actual = await vi.importActual<typeof import('./submissionApi.js')>('./submissionApi.js');
+  return { ...actual, sealPreview };
+});
+
 import { StudioBuildHistory } from './StudioBuildHistory.js';
 import type { SubmissionStatus } from './submissionApi.js';
 
-async function mount(status: SubmissionStatus) {
+async function mount(status: SubmissionStatus, token?: string, onSealed?: () => void) {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   await i18n.changeLanguage('en');
   const host = document.createElement('div');
   document.body.appendChild(host);
   const root = createRoot(host);
   await act(async () => {
-    root.render(<StudioBuildHistory status={status} />);
+    root.render(<StudioBuildHistory status={status} token={token} onSealed={onSealed} />);
   });
   return {
     host,
@@ -179,6 +186,116 @@ describe('StudioBuildHistory', () => {
     expect(details?.textContent).toContain('Added jump physics and double-jump mechanic');
     expect(details?.querySelector('.is-revert')).not.toBeNull();
 
+    unmount();
+  });
+
+  it('offers to seal only the current round build, by issueNumber — not by row position', async () => {
+    // A newer sibling round on the same slug can outrank the current one in the list
+    // (contract note on RecentBuild.issueNumber). Sealing must still bind to the round
+    // this token/status actually is, not to whichever row happens to be newest.
+    const { host, unmount } = await mount(
+      {
+        ...base,
+        slug: 'my-game',
+        issueNumber: 1000058,
+        canSeal: true,
+        recentBuilds: [
+          {
+            version: 'v2',
+            createdAt: new Date().toISOString(),
+            mode: 'preview',
+            verdict: 'green',
+            issueNumber: 1000059,
+          },
+          {
+            version: 'v1',
+            createdAt: new Date(Date.now() - 60_000).toISOString(),
+            mode: 'preview',
+            verdict: 'green',
+            issueNumber: 1000058,
+          },
+        ],
+      },
+      'tok',
+    );
+
+    // Only one row expands at a time — check the newest (a sibling round), then the
+    // current round's own row, in turn.
+    const summaries = host.querySelectorAll('.studio-build-history-summary');
+    await act(async () => {
+      (summaries[0] as HTMLElement).click();
+    });
+    expect(host.querySelector('[data-testid="build-details-v2"]')?.querySelector('.is-seal')).toBeNull();
+
+    await act(async () => {
+      (host.querySelectorAll('.studio-build-history-summary')[1] as HTMLElement).click();
+    });
+    expect(host.querySelector('[data-testid="build-details-v1"]')?.querySelector('.is-seal')).not.toBeNull();
+
+    unmount();
+  });
+
+  it('refreshes status immediately on seal and stays disabled after, so a stale canSeal cannot double-send', async () => {
+    sealPreview.mockClear();
+    const onSealed = vi.fn();
+    const { host, unmount } = await mount(
+      {
+        ...base,
+        slug: 'my-game',
+        issueNumber: 1000058,
+        canSeal: true,
+        recentBuilds: [
+          {
+            version: 'v1',
+            createdAt: new Date().toISOString(),
+            mode: 'preview',
+            verdict: 'green',
+            issueNumber: 1000058,
+          },
+        ],
+      },
+      'tok',
+      onSealed,
+    );
+    const summary = host.querySelector('.studio-build-history-summary') as HTMLElement;
+    await act(async () => {
+      summary.click();
+    });
+    const button = host.querySelector('.is-seal') as HTMLButtonElement;
+    await act(async () => {
+      button.click();
+      await Promise.resolve();
+    });
+
+    expect(sealPreview).toHaveBeenCalledTimes(1);
+    // The caller's own poll would otherwise leave `canSeal` stale for its whole interval.
+    expect(onSealed).toHaveBeenCalledTimes(1);
+    // Disabled past success, not just while the request is in flight — a second click
+    // during that stale window must not fire a second (409-doomed) request.
+    expect(button.disabled).toBe(true);
+
+    await act(async () => {
+      button.click();
+    });
+    expect(sealPreview).toHaveBeenCalledTimes(1);
+
+    unmount();
+  });
+
+  it('does not offer to seal when the record is not eligible', async () => {
+    const { host, unmount } = await mount(
+      {
+        ...base,
+        slug: 'my-game',
+        recentBuilds: [{ version: 'v1', createdAt: new Date().toISOString(), mode: 'preview', verdict: 'green' }],
+      },
+      'tok',
+    );
+    const summary = host.querySelector('.studio-build-history-summary') as HTMLElement;
+    await act(async () => {
+      summary.click();
+    });
+    expect(host.querySelector('.is-seal')).toBeNull();
     unmount();
   });
 });
