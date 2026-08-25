@@ -301,8 +301,6 @@ export function validateSourceUpload(
           );
         }
       } catch (error) {
-        // Malformed declarations are reported by the authoritative editor parser in
-        // the gate. This preflight only enforces the structural v2 file pair.
         if (error instanceof InvalidUploadError) throw error;
       }
     }
