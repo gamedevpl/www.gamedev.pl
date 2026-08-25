@@ -43,6 +43,37 @@ describe('new-game editor delivery contract', () => {
     }
   });
 
+  it('requires the content document paired with a fresh v2 declaration', () => {
+    const v2Files = [...FILES, { path: 'EDITOR.json', content: '{"version":2}' }];
+
+    expect(() => validateSourceUpload(v2Files, 'preview', false, true)).toThrow(
+      /EDITOR\.content\.json is required/,
+    );
+    try {
+      validateSourceUpload(v2Files, 'preview', false, true);
+    } catch (error) {
+      expect(error).toMatchObject({ missingPaths: ['EDITOR.content.json'] });
+    }
+
+    expect(
+      validateSourceUpload(
+        [...v2Files, { path: 'EDITOR.content.json', content: '{"params":{}}' }],
+        'preview',
+        false,
+        true,
+      ),
+    ).toHaveLength(v2Files.length + 1);
+  });
+
+  it('keeps v1 and malformed declarations on their existing gate-validation path', () => {
+    expect(
+      validateSourceUpload([...FILES, { path: 'EDITOR.json', content: '{"version":1}' }], 'preview', false, true),
+    ).toHaveLength(FILES.length + 1);
+    expect(
+      validateSourceUpload([...FILES, { path: 'EDITOR.json', content: '{' }], 'preview', false, true),
+    ).toHaveLength(FILES.length + 1);
+  });
+
   it('keeps legacy revision uploads compatible by default', () => {
     expect(validateSourceUpload(FILES, 'preview')).toHaveLength(FILES.length);
   });
