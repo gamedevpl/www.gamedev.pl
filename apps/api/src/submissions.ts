@@ -43,6 +43,7 @@ import {
 } from './catalog/game-snapshot.js';
 import { registerCatalogRoutes } from './catalog/catalog-routes.js';
 import { registerCatalogSearchRoutes } from './catalog/catalog-search-routes.js';
+import { registerDraftPreviewRoutes } from './delivery/draft-preview-routes.js';
 import { startHealthCheck } from './catalog/game-health.js';
 import {
   createStagedPreviewPublisher,
@@ -2195,8 +2196,8 @@ export async function registerSubmissionRoutes(
     for (const [key, cached] of priorRoundsCache) {
       if (cached.expiresAt <= nowMs) priorRoundsCache.delete(key);
     }
-    // Insertion-order Map: delete-before-set moves this key to newest; drop the oldest
-    // when full, matching draftPreviewCache.
+    // Insertion-order Map: delete-before-set moves this key to newest; drop the
+    // oldest when full.
     priorRoundsCache.delete(cacheKey);
     if (priorRoundsCache.size >= maxCachedPriorRounds) {
       const oldestKey = priorRoundsCache.keys().next().value;
@@ -2374,38 +2375,16 @@ export async function registerSubmissionRoutes(
     return next;
   }
 
-  // Draft previews are heavier (several GitHub Contents reads + esbuild) and used
-  // to hit GitHub on every request. Status polls were coalesced + stale-served after
-  // the same token got rate-limited; the preview path was not, so a creator watching
-  // a build saw a working channel draft and a red "couldn't load preview" under it
-  // whenever GitHub 403'd the fan-out. Cache by head SHA (a push still refreshes),
-  // coalesce concurrent misses, and fall back to the last assembled document for
-  // this issue when a refresh throws. Cap per IP still applies as a safety net.
-  //
-  // The entry count is bounded: each value holds a full assembled HTML document,
-  // so an uncapped Map would grow with every Studio build this instance has ever
-  // served. Insertion order + delete-before-set makes the oldest (or longest-idle)
-  // entry the first one out, matching mediaCache.
-  const previewRateLimitWindowMs = 60 * 1000;
-  const maxPreviewsPerWindow = 30;
-  const previewsByIp = new Map<string, number[]>();
-  const draftPreviewTtlMs = 5 * 60_000;
-  const maxCachedDraftPreviews = options.maxCachedDraftPreviews ?? 50;
-  type DraftPreviewValue = { slug: string; title: string; html: string };
-  /** `revision` is the delivered candidate's games-store version id. */
-  type CachedDraftPreview = { value: DraftPreviewValue; revision: string; expiresAt: number };
-  const draftPreviewCache = new Map<number, CachedDraftPreview>();
-
-  function rememberDraftPreview(issueNumber: number, entry: CachedDraftPreview): void {
-    // Move to the newest slot so a creator still watching their build outlives
-    // abandoned ones when we have to prune.
-    draftPreviewCache.delete(issueNumber);
-    if (draftPreviewCache.size >= maxCachedDraftPreviews) {
-      const oldestKey = draftPreviewCache.keys().next().value;
-      if (oldestKey !== undefined) draftPreviewCache.delete(oldestKey);
-    }
-    draftPreviewCache.set(issueNumber, entry);
-  }
+  const draftPreviewRoutes = await registerDraftPreviewRoutes(app, {
+    store,
+    gamesStore: options.agentChannel?.gamesStore,
+    now,
+    submissionTokenSecret,
+    githubConfigured: Boolean(githubClient),
+    checkUserAccess,
+    maxCachedDraftPreviews: options.maxCachedDraftPreviews,
+  });
+  const { canPlayDraft, replyWithDraft } = draftPreviewRoutes;
 
   // Feedback posts a GitHub comment (which re-triggers the agent), so cap it tightly.
   const feedbackRateLimitWindowMs = 60 * 60 * 1000;
@@ -2469,28 +2448,6 @@ export async function registerSubmissionRoutes(
     if (record.slug) return record.slug;
     const wanted = await mintGameSlug(record.title, async (candidate) => isSlugClaimed(candidate, issueNumber));
     return confirmSlugClaim(issueNumber, wanted, record.title);
-  }
-
-  /**
-   * Whether this request may play the unpublished game at `slug`.
-   *
-   * Two ways in, and no third: you made it, or its creator turned sharing on. There is
-   * no separate draft surface to share — a game keeps one permalink for its whole life
-   * — so this is what stands between "my friend can watch it take shape" and "anyone who
-   * guesses a name can read an unreviewed game".
-   *
-   * Sharing is off until the creator says otherwise. Before this existed, any signed-in
-   * visitor who knew a slug could read any draft, which made every in-progress game
-   * unlisted rather than private and gave its creator no say in it.
-   */
-  async function canPlayDraft(request: FastifyRequest, slug: string): Promise<boolean> {
-    if (!store) return false;
-    const record = await store.getSubmissionBySlug(slug);
-    // An abandoned build is nobody's to play, including its creator's: they stopped it.
-    if (!record || record.abandonedAt) return false;
-    if (record.draftSharedAt) return true;
-    const uid = request.user?.uid;
-    return Boolean(uid && uid === record.ownerUid);
   }
 
   /**
@@ -5230,183 +5187,6 @@ export async function registerSubmissionRoutes(
     },
   );
 
-  /**
-   * Serves the preview for a job that has no pull request.
-   *
-   * Every native job is one of these, so without it a creator watches an hour of build
-   * activity behind "this game isn't available yet" — the preview's source of truth
-   * disappeared with the PR, and nothing replaced it.
-   *
-   * It serves the **gate's own bundle**, not the delivered sources. That is not a
-   * shortcut, it is the only correct option: a game is not three files. `game.ts` is
-   * TypeScript that imports the GameKit modules its `GAME.json` declares, and the PR
-   * path assembles a playable document by reading those modules, inlining audio and
-   * music assets, and transpiling the whole thing. Inlining raw `game.ts` into a script
-   * tag would produce a page that loads and is dead on arrival — strictly worse than
-   * saying nothing is ready, because it looks like the creator's game is broken.
-   *
-   * The bundle is also the artifact that will actually ship, with serve-time policy
-   * already applied by the side that owns it, so the creator plays the exact document a
-   * player would. It exists once the gate has run.
-   *
-   * Returns `false` for exactly one reason: **there is nothing to serve yet** — no
-   * delivery, or a delivery the gate has not bundled. Anything else throws, because a
-   * broken preview and an unstarted one are different facts, and a creator told "not
-   * yet" about a failure will wait for something that is not coming.
-   *
-   * Fastify 5's Reply is a thenable. Returning `reply.send(...)` from an async helper
-   * and then `await`ing that helper resolves to `undefined` (the thenable's settle
-   * value), so `if (stored) return stored` falls through and tries to send again —
-   * "Reply was already sent". Prod logs for every successful Studio preview showed
-   * exactly that (served gate-built → no delivery yet → already sent). Return a plain
-   * boolean instead (`true` after sending), and never await a Reply.
-   */
-  async function replyWithStoredDraft(
-    request: FastifyRequest,
-    reply: FastifyReply,
-    record: SubmissionRecord,
-    versionOverride?: string,
-  ): Promise<boolean> {
-    const gamesStore = options.agentChannel?.gamesStore;
-    const { slug } = record;
-    const playableVersion = versionOverride ?? record.previewVersion ?? record.deliveredVersion;
-    if (!gamesStore || !slug || !playableVersion) return false;
-
-    if (!versionOverride) {
-      const cached = draftPreviewCache.get(record.issueNumber);
-      if (cached && cached.revision === playableVersion && cached.expiresAt > now()) {
-        reply.send(cached.value);
-        return true;
-      }
-    }
-
-    // The verified bundle first, then the gate's red-run / preview-lane document. Both
-    // are assembled by the same code from the same sources, so this is not a choice
-    // between a good and a degraded document — it is only about whether the run that
-    // produced it also passed. Falling back is the point: a creator being unable to
-    // look at their own build because it failed a check is the least useful moment to
-    // hide it from them, and for a while that is what happened — a red gate stored
-    // nothing, so the studio showed an empty panel and said nothing about why.
-    let bundle = await gamesStore.getDerivedArtifact(slug, playableVersion, 'bundle.html');
-    const artifact = bundle ? 'bundle.html' : 'preview.html';
-    bundle ??= await gamesStore.getDerivedArtifact(slug, playableVersion, 'preview.html');
-    // Absent rather than broken: the gate has not finished, or it went red early enough
-    // that there was nothing assemblable to keep. Both are "not ready", and the channel's
-    // own pushed previews cover the window. A store that *errors* throws out of here
-    // instead, and is reported as the failure it is.
-    if (bundle === null) return false;
-
-    const value: DraftPreviewValue = { slug, title: record.title || slug, html: bundle.toString('utf8') };
-    if (!versionOverride) {
-      rememberDraftPreview(record.issueNumber, {
-        value,
-        revision: playableVersion,
-        expiresAt: now() + draftPreviewTtlMs,
-      });
-    }
-    request.log.info(
-      { issueNumber: record.issueNumber, slug, version: playableVersion, artifact },
-      'served gate-built preview for a delivered version',
-    );
-    reply.send(value);
-    return true;
-  }
-
-  async function replyWithDraft(
-    request: FastifyRequest,
-    reply: FastifyReply,
-    issueNumber: number,
-    versionOverride?: string,
-  ): Promise<void> {
-    const serveLastKnown = (reason: string, err?: unknown): boolean => {
-      if (versionOverride) return false;
-      const lastKnown = draftPreviewCache.get(issueNumber);
-      if (!lastKnown) return false;
-      request.log.warn({ err, issueNumber, revision: lastKnown.revision }, reason);
-      reply.send(lastKnown.value);
-      return true;
-    };
-
-    // The stored delivery is the whole path now: there is no PR to resolve and no branch
-    // to assemble from.
-    //
-    // Guarded on the games store rather than read unconditionally: this endpoint is
-    // polled for the whole length of a build, and without a store the record could not
-    // change the answer — so fetching it would be a Firestore read per poll, per
-    // watcher, bought with nothing.
-    const gamesStore = options.agentChannel?.gamesStore;
-    const record = gamesStore ? await store?.getSubmission(issueNumber) : null;
-    if (record) {
-      try {
-        if (await replyWithStoredDraft(request, reply, record, versionOverride)) return;
-      } catch (error) {
-        // No hygiene-error branch here on purpose. This path serves the gate's own
-        // bundle byte-for-byte and never assembles anything, so EmptyProjectError and
-        // friends cannot arise — and catching them would only mislabel a store read
-        // failure as "this game could not be previewed", which is a claim about the
-        // game rather than about us.
-        if (serveLastKnown('stored draft read failed; serving last known draft', error)) return;
-        // There is no second source, so this is the end of the line and it is a failure,
-        // not a state. Answering 409 here would tell a creator whose game was delivered
-        // an hour ago that it has not been — and they would keep waiting.
-        request.log.error({ err: error, issueNumber }, 'stored draft preview failed');
-        reply.status(502).send({ error: 'failed to load preview' });
-        return;
-      }
-    }
-    if (serveLastKnown('no delivery yet for native job; serving last known draft')) return;
-    // Without a store this deployment can never preview a native job — there is no PR
-    // to fall back to and nowhere for a delivery to land. 409 would say "not yet"
-    // about something that is never coming, which is the same lie as reporting a
-    // failure as a pending state, just told to an operator instead of a creator.
-    if (!gamesStore) {
-      request.log.error({ issueNumber }, 'preview requested for a native job with no games store configured');
-      reply.status(503).send({ error: 'previews are not configured on this deployment' });
-      return;
-    }
-    reply.status(409).send({ error: 'no preview available for this submission yet' });
-  }
-
-  // Play the in-progress game straight from its (unmerged) PR branch. This runs the
-  // same trust model as any generated game: the assembled document is served into a
-  // sandboxed, opaque-origin iframe on the client, so the human merge is a curation
-  // gate, not the safety boundary. A preview is only reachable by the token holder for
-  // that specific submission, and only resolves the PR cross-linked to their issue.
-  app.get(
-    '/api/submissions/:token/preview',
-    { config: { rateLimit: { max: maxPreviewsPerWindow, timeWindow: previewRateLimitWindowMs } } },
-    async (request, reply) => {
-      if (!githubClient || !submissionTokenSecret) {
-        return reply.status(503).send({ error: 'submissions are not configured' });
-      }
-
-      if (!checkUserAccess(request, reply)) {
-        return;
-      }
-
-      const token = z.string().parse((request.params as { token?: string }).token);
-      const query = request.query as { version?: string } | undefined;
-      const requestedVersion =
-        typeof query?.version === 'string' && /^[a-zA-Z0-9_-]+$/.test(query.version) ? query.version : undefined;
-      const currentTime = now();
-      if (isRateLimited(previewsByIp, request.ip, currentTime, maxPreviewsPerWindow, previewRateLimitWindowMs)) {
-        return reply.status(429).send({ error: 'too many preview requests, please try again later' });
-      }
-
-      let issueNumber: number;
-      try {
-        issueNumber = verifyToken(token, submissionTokenSecret);
-      } catch (error) {
-        if (error instanceof InvalidTokenError) {
-          return reply.status(400).send({ error: 'invalid submission token' });
-        }
-        throw error;
-      }
-
-      return replyWithDraft(request, reply, issueNumber, requestedVersion);
-    },
-  );
-
   app.get(
     '/api/submissions/:token/shot/:id',
     { config: { rateLimit: { max: maxMediaPerWindow, timeWindow: gamesRateLimitWindowMs } } },
@@ -5541,48 +5321,6 @@ export async function registerSubmissionRoutes(
       }
     },
   );
-
-  /**
-   * Legacy draft fetch — prefer `GET /api/games/:slug`, which is the lifetime
-   * permalink for both drafts and published games. Kept for older clients; the SPA
-   * rewrites `/draft/<slug>` → `/play/<slug>` and loads through `/api/games/:slug`.
-   * Read-only by construction — no status token, so a friend can watch but cannot
-   * send change requests or spend the creator's quota.
-   */
-  app.get('/api/drafts/:slug', async (request, reply) => {
-    if (!githubClient) {
-      return reply.status(503).send({ error: 'submissions are not configured' });
-    }
-    if (!checkUserAccess(request, reply)) {
-      return;
-    }
-    if (!store) {
-      return reply.status(503).send({ error: 'submissions are not configured' });
-    }
-
-    const parsedParams = z
-      .object({ slug: z.string().regex(/^[a-z0-9][a-z0-9-]*$/) })
-      .safeParse(request.params as { slug?: string });
-    if (!parsedParams.success) {
-      return reply.status(404).send({ error: 'draft not found' });
-    }
-
-    if (isRateLimited(previewsByIp, request.ip, now(), maxPreviewsPerWindow, previewRateLimitWindowMs)) {
-      return reply.status(429).send({ error: 'too many preview requests, please try again later' });
-    }
-
-    const record = await store.getSubmissionBySlug(parsedParams.data.slug);
-    // Same rule as `/play/<slug>`, which is now where a draft is shared from: the
-    // creator, or anyone at all once they have turned sharing on. This route used to
-    // serve any draft to any signed-in visitor who knew a slug, which made every
-    // in-progress game unlisted rather than private. Kept working because `/draft/`
-    // links exist in the wild; the app emits `/play/` now.
-    if (!record || !(await canPlayDraft(request, parsedParams.data.slug))) {
-      return reply.status(404).send({ error: 'draft not found' });
-    }
-
-    return replyWithDraft(request, reply, record.issueNumber);
-  });
 
   // Play a published game. When the snapshot is configured, the baked document
   // is required; otherwise sources are fetched from the games repo's default
