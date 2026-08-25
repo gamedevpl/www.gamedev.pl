@@ -9,7 +9,6 @@ import {
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { splitConceptBrief } from './agent-surface/agent-build-brief.js';
-import { creatorOwnsSlug } from './platform/slug-ownership.js';
 import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-surface/agent-channel.js';
 import { mintAgentToken, mintManagedMcpOpener } from './agent-surface/agent-token.js';
 import { registerMcpServerRoutes } from './agent-surface/mcp-server.js';
@@ -38,6 +37,7 @@ import {
 } from './catalog/game-snapshot.js';
 import { registerAdminGameRoutes } from './catalog/admin-game-routes.js';
 import { registerSelfBuildConnectRoutes } from './agent-surface/self-build-connect-routes.js';
+import { registerDraftLifecycleRoutes } from './creation/draft-lifecycle-routes.js';
 import { registerCatalogRoutes } from './catalog/catalog-routes.js';
 import { registerCatalogSearchRoutes } from './catalog/catalog-search-routes.js';
 import { registerDraftPreviewRoutes } from './delivery/draft-preview-routes.js';
@@ -1903,6 +1903,18 @@ export async function registerSubmissionRoutes(
     checkUserAccess,
     ensureSubmissionSlug,
   });
+  await registerDraftLifecycleRoutes(app, {
+    store,
+    now,
+    submissionTokenSecret,
+    githubClient,
+    checkUserAccess,
+    backendFor,
+    builderOf,
+    releaseWorkspace,
+    invalidateStatusCache,
+    invalidatePublishedGameCaches,
+  });
 
   // Single source of GitHub-state → status derivation, shared by the on-demand
   // status route and the notification sweep so they never diverge.
@@ -2705,192 +2717,6 @@ export async function registerSubmissionRoutes(
       ...(platformBuilder ? { platformBuilder } : {}),
     });
   });
-
-  /**
-   * The creator decides whether anyone else may play their game before it is published.
-   *
-   * There is no separate draft link to hand out: the game answers at `/play/<slug>` for
-   * its whole life, and this decides who that includes. Off by default, and off is
-   * genuinely off — the game is not in the catalog, not in any rail, and 404s for
-   * everyone but its creator, so the link is the only way in and the creator controls
-   * whether it works.
-   *
-   * Ownership is checked against the store rather than against the token, for the same
-   * reason abandoning is: holding a link somebody shared with you must not be enough to
-   * change who else can see the game.
-   */
-  app.post(
-    '/api/submissions/:token/share',
-    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      if (!submissionTokenSecret) {
-        return reply.status(503).send({ error: 'submissions are not configured' });
-      }
-      if (!checkUserAccess(request, reply)) return;
-      if (!store) {
-        return reply.status(503).send({ error: 'submissions are not configured' });
-      }
-
-      const parsedBody = z.object({ shared: z.boolean() }).safeParse(request.body ?? {});
-      if (!parsedBody.success) {
-        return reply.status(400).send({ error: 'shared must be true or false' });
-      }
-
-      const token = z.string().parse((request.params as { token?: string }).token);
-      let issueNumber: number;
-      try {
-        issueNumber = verifyToken(token, submissionTokenSecret);
-      } catch (error) {
-        if (error instanceof InvalidTokenError) {
-          return reply.status(400).send({ error: 'invalid token' });
-        }
-        throw error;
-      }
-
-      const record = await store.getSubmission(issueNumber);
-      if (!record || record.ownerUid !== request.user!.uid) {
-        return reply.status(403).send({ error: 'only the creator can share this game' });
-      }
-      if (!record.slug) {
-        return reply.status(409).send({ error: 'this game has no address yet' });
-      }
-
-      await store.setDraftShared(issueNumber, parsedBody.data.shared ? new Date(now()).toISOString() : null);
-      return reply.send({ shared: parsedBody.data.shared, slug: record.slug });
-    },
-  );
-
-  /**
-   * The creator gives up on a build. Closes the issue and the agent's open PR, so
-   * neither the agent nor the human merge queue keeps working on something nobody
-   * wants. Deliberately does NOT refund the daily quota — the agent time was spent.
-   * Ownership is checked against the store, not just the token: abandoning is
-   * destructive, so holding a shared link must not be enough.
-   */
-  app.post(
-    '/api/submissions/:token/abandon',
-    { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      if (!githubClient || !submissionTokenSecret) {
-        return reply.status(503).send({ error: 'submissions are not configured' });
-      }
-      if (!checkUserAccess(request, reply)) {
-        return;
-      }
-      if (!store) {
-        return reply.status(503).send({ error: 'submissions are not configured' });
-      }
-
-      const token = z.string().parse((request.params as { token?: string }).token);
-      let issueNumber: number;
-      try {
-        issueNumber = verifyToken(token, submissionTokenSecret);
-      } catch (error) {
-        if (error instanceof InvalidTokenError) {
-          return reply.status(400).send({ error: 'invalid submission token' });
-        }
-        throw error;
-      }
-
-      const record = await store.getSubmission(issueNumber);
-      if (!record || record.ownerUid !== request.user!.uid) {
-        return reply.status(403).send({ error: 'only the creator can abandon this build' });
-      }
-      if (record.abandonedAt) {
-        return reply.send({ ok: true, alreadyAbandoned: true });
-      }
-
-      // Nothing to close: there is no issue and no pull request. Cancellation is asked
-      // of the backend and its honesty is respected — Copilot has no cancel endpoint,
-      // so a live session keeps running and the guarantee we actually give the creator
-      // is that the job is terminal and whatever arrives afterwards is discarded.
-      const ref = record.dispatch?.refs.at(-1);
-      const cancelBackend = await backendFor(builderOf(record));
-      if (cancelBackend && ref) {
-        try {
-          await cancelBackend.cancel(ref, record.dispatch?.credentialRefs?.[ref]);
-        } catch (cancelError) {
-          request.log.error({ err: cancelError, issueNumber }, 'agent cancel failed');
-        }
-      }
-      await store.recordJobTransition(issueNumber, {
-        to: 'canceled',
-        at: new Date(now()).toISOString(),
-        by: 'creator',
-        reason: 'abandoned',
-      });
-      // The job is terminal, so its workspace has no next round to serve. Deleted
-      // after the transition is recorded: a build nobody will ever resume must not
-      // keep a branch alive on the strength of a delete that might fail.
-      if (record.dispatch?.workspace) {
-        await releaseWorkspace(issueNumber, record.dispatch.workspace, request.log, record.dispatch.backend);
-      }
-      // The seed branch outlives the dispatch that used it — the agent forks from it, so
-      // it cannot be deleted the moment the task is created — but it has no reader once
-      // the job is terminal. Released by the same path: deleting a branch is the same
-      // operation whichever branch it is.
-      if (record.dispatch?.seedWorkspace) {
-        await releaseWorkspace(issueNumber, record.dispatch.seedWorkspace, request.log, record.dispatch.backend);
-        // Forgotten as well as deleted. Leaving the name on the record would have a
-        // second abandon — or any later cleanup path — asking GitHub to delete a ref
-        // that is already gone, against the one credential that also dispatches.
-        await store.clearDispatchSeedWorkspace(issueNumber);
-      }
-
-      await store.setSubmissionAbandoned(issueNumber, new Date(now()).toISOString());
-      invalidateStatusCache(issueNumber);
-
-      return reply.send({ ok: true });
-    },
-  );
-
-  app.post(
-    '/api/submissions/:token/delete-game',
-    { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      if (!submissionTokenSecret) {
-        return reply.status(503).send({ error: 'submissions are not configured' });
-      }
-      if (!checkUserAccess(request, reply)) return;
-      if (!store) {
-        return reply.status(503).send({ error: 'submissions are not configured' });
-      }
-
-      const token = z.string().parse((request.params as { token?: string }).token);
-      let issueNumber: number;
-      try {
-        issueNumber = verifyToken(token, submissionTokenSecret);
-      } catch (error) {
-        if (error instanceof InvalidTokenError) {
-          return reply.status(400).send({ error: 'invalid submission token' });
-        }
-        throw error;
-      }
-
-      const record = await store.getSubmission(issueNumber);
-      if (!record) {
-        return reply.status(403).send({ error: 'only the creator can delete this game' });
-      }
-      if (!record.slug) {
-        return reply.status(409).send({ error: 'this game has no address yet' });
-      }
-      // Not record.ownerUid — a slug transfer can move ownership on.
-      if (!(await creatorOwnsSlug(store, record.slug, request.user!.uid))) {
-        return reply.status(403).send({ error: 'only the creator can delete this game' });
-      }
-
-      const publication = await store.getPublication(record.slug);
-      if (!publication || publication.state !== 'published') {
-        return reply.status(409).send({ error: 'not_published' });
-      }
-
-      await store.archivePublication(record.slug, 'deleted by creator', new Date(now()).toISOString());
-      invalidatePublishedGameCaches(record.slug);
-      invalidateStatusCache(issueNumber);
-
-      return reply.send({ ok: true, slug: record.slug });
-    },
-  );
 
   /** Lets a creator replace the current builder without creating feedback. */
   app.post(

@@ -119,6 +119,7 @@ const FILE_BUCKET = {
   'editor-kit-env': 'platform',
 
   // creation: jobs, rounds, dispatch, seed, refine
+  'draft-lifecycle-routes': 'creation',
   'job-state': 'creation',
   'job-costs': 'creation',
   'job-admin-routes': 'creation',
