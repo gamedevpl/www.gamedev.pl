@@ -26,7 +26,108 @@ describe('embedding-service', () => {
     expect(cosineSimilarity(a, d)).toBeCloseTo(-1);
   });
 
-  it('generates embedding and caches repeated queries with mocked Vertex API', async () => {
+  it('generates query embedding with task prompt prefix for gemini models', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        embedding: {
+          values: [0.6, 0.8],
+        },
+      }),
+    } as Response);
+
+    const service = new VertexEmbeddingService({ model: 'gemini-embedding-2' });
+    vi.spyOn(
+      (service as unknown as { auth: { getClient: () => Promise<unknown> } }).auth,
+      'getClient',
+    ).mockResolvedValue({
+      getAccessToken: async () => ({ token: 'mock-token' }),
+    });
+
+    const vec1 = await service.embedQuery('arcade football');
+    expect(vec1).toEqual([0.6, 0.8]);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining('/publishers/google/models/gemini-embedding-2:embedContent'),
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer mock-token',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          content: { parts: [{ text: 'task: search result | query: arcade football' }] },
+        }),
+      }),
+    );
+
+    // Second call should hit the in-memory cache
+    const vec2 = await service.embedQuery('arcade football');
+    expect(vec2).toEqual([0.6, 0.8]);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('generates document embedding with title/result prefix for gemini models', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        embedding: {
+          values: [0.6, 0.8],
+        },
+      }),
+    } as Response);
+
+    const service = new VertexEmbeddingService({ model: 'gemini-embedding-2' });
+    vi.spyOn(
+      (service as unknown as { auth: { getClient: () => Promise<unknown> } }).auth,
+      'getClient',
+    ).mockResolvedValue({
+      getAccessToken: async () => ({ token: 'mock-token' }),
+    });
+
+    const vec = await service.embedDocument('Tournament soccer game.', "Mexico '86");
+    expect(vec).toEqual([0.6, 0.8]);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining('/publishers/google/models/gemini-embedding-2:embedContent'),
+      expect.objectContaining({
+        body: JSON.stringify({
+          content: { parts: [{ text: "title: Mexico '86 | text: Tournament soccer game." }] },
+        }),
+      }),
+    );
+  });
+
+  it('generates untitled document embedding with title: none prefix for gemini models', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        embedding: {
+          values: [0.6, 0.8],
+        },
+      }),
+    } as Response);
+
+    const service = new VertexEmbeddingService({ model: 'gemini-embedding-2' });
+    vi.spyOn(
+      (service as unknown as { auth: { getClient: () => Promise<unknown> } }).auth,
+      'getClient',
+    ).mockResolvedValue({
+      getAccessToken: async () => ({ token: 'mock-token' }),
+    });
+
+    const vec = await service.embedDocument('Tournament soccer game.');
+    expect(vec).toEqual([0.6, 0.8]);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining('/publishers/google/models/gemini-embedding-2:embedContent'),
+      expect.objectContaining({
+        body: JSON.stringify({
+          content: { parts: [{ text: 'title: none | text: Tournament soccer game.' }] },
+        }),
+      }),
+    );
+  });
+
+  it('generates embedding with :predict for legacy text-* models', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -40,8 +141,7 @@ describe('embedding-service', () => {
       }),
     } as Response);
 
-    const service = new VertexEmbeddingService();
-    // Stub auth client getAccessToken
+    const service = new VertexEmbeddingService({ model: 'text-multilingual-embedding-002' });
     vi.spyOn(
       (service as unknown as { auth: { getClient: () => Promise<unknown> } }).auth,
       'getClient',
@@ -49,14 +149,21 @@ describe('embedding-service', () => {
       getAccessToken: async () => ({ token: 'mock-token' }),
     });
 
-    const vec1 = await service.embedText('arcade football');
-    expect(vec1).toEqual([0.6, 0.8]);
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-
-    // Second call should hit the in-memory cache
-    const vec2 = await service.embedText('arcade football');
-    expect(vec2).toEqual([0.6, 0.8]);
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const vec = await service.embedQuery('arcade football');
+    expect(vec).toEqual([0.6, 0.8]);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining('/publishers/google/models/text-multilingual-embedding-002:predict'),
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer mock-token',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          instances: [{ content: 'arcade football', task_type: 'RETRIEVAL_QUERY' }],
+        }),
+      }),
+    );
   });
 
   it('returns empty array cleanly when Vertex AI is offline or fails', async () => {
