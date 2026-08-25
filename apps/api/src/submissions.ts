@@ -45,6 +45,7 @@ import { registerCatalogRoutes } from './catalog/catalog-routes.js';
 import { registerCatalogSearchRoutes } from './catalog/catalog-search-routes.js';
 import { registerDraftPreviewRoutes } from './delivery/draft-preview-routes.js';
 import { createBuildStatusAssembler, revisionOriginOf } from './delivery/build-status.js';
+import { createChatOrchestration } from './creation/chat-orchestration.js';
 import { startHealthCheck } from './catalog/game-health.js';
 import {
   createStagedPreviewPublisher,
@@ -89,7 +90,6 @@ import {
   type JobState,
   type JobTransition,
 } from './creation/job-state.js';
-import { isMcpPresenceEventText } from './agent-surface/mcp-presence.js';
 import { gateCrashStall, probeGateCrash } from './delivery/gate-crash.js';
 import { sealRefusal } from './delivery/seal-preview.js';
 import {
@@ -105,15 +105,7 @@ import {
   logDeliveryGateVerdict,
   type DeliveryGateStatus,
 } from './platform/delivery-metrics.js';
-import {
-  VertexStudioChatAgent,
-  type ChatAgentImage,
-  type ChatAgentScope,
-  type ChatAgentStatus,
-  type StudioChatAgent,
-} from './creation/chat-agent.js';
-import { asChatAgentLogger, logChatAgentDecision, logChatAgentFailOpen } from './telemetry/chat-agent-metrics.js';
-import { MAX_CHAT_TURNS, rememberChatTurn, type ChatTurn } from './creation/chat-turns.js';
+import { type ChatAgentImage, type StudioChatAgent } from './creation/chat-agent.js';
 import { mintConnectPayload } from './agent-surface/self-build-connect.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './catalog/local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './notifications/mailer.js';
@@ -150,14 +142,12 @@ import {
 import {
   CREATOR_FEEDBACK_MARKER,
   countCreatorClarifications,
-  MAX_REVISION_CHARS,
   sanitizeCreatorText,
   type SubmissionStatus,
   type SubmissionStatusResponse,
 } from './platform/submission-status.js';
 import { InvalidTokenError, mintToken, verifyToken } from './platform/submission-token.js';
-import { normalizeAtIntake, type IntakeText } from './platform/localize-intake.js';
-import { createTranslatorFromEnv, normalizeLocale, type Translator } from './platform/translate.js';
+import { normalizeLocale, type Translator } from './platform/translate.js';
 import { logModerationRejection } from './platform/moderation-metrics.js';
 import { isRateLimited } from './platform/ip-rate-limit.js';
 import { sendMedia } from './platform/media-response.js';
@@ -670,13 +660,6 @@ export async function registerSubmissionRoutes(
   // Start small (docs/improvement-loop-plan.md): agent runs are scarce, and a published
   // improvement is a real implementer job — not a draft tweak.
   const dailyImprovementQuota = options.dailyImprovementQuota ?? Number(process.env.DAILY_IMPROVEMENT_QUOTA ?? '2');
-  // See chat-agent.ts. Lazy Vertex client — cheap to construct unconditionally.
-  const chatAgent = options.chatAgent ?? new VertexStudioChatAgent();
-  const chatAgentLog = asChatAgentLogger(app.log);
-  // Per-IP burst limit — independent of the per-user daily quota below.
-  const chatTurnsByIp = new Map<string, number[]>();
-  const chatTurnRateLimitWindowMs = 60_000;
-  const maxChatTurnsPerWindow = 20;
   // Per-creator daily ceiling, same UsageCounters mechanism as feedback/improve.
   const dailyChatQuota = options.dailyChatQuota ?? Number(process.env.DAILY_CHAT_QUOTA ?? '300');
   // See creation-limits.ts.
@@ -1562,172 +1545,6 @@ export async function registerSubmissionRoutes(
    * suggestion — so that they cannot disagree about how work reaches an agent. When the
    * legacy issue leg is retired this is one branch to delete rather than two that drifted.
    */
-  // Facts the mini chat agent may speak from (chat-agent.ts).
-  async function buildChatAgentStatus(record: SubmissionRecord, scope: ChatAgentScope): Promise<ChatAgentStatus> {
-    const state = record.state ?? 'queued';
-    // A fresh improvement job has no round to classify a stall for.
-    const stall =
-      scope === 'draft'
-        ? detectStall({
-            state,
-            stateSince: record.stateSince ?? record.createdAt,
-            lastAgentSignalAt: record.lastAgentSignalAt,
-            agentState: record.agentState,
-            agentEndedAt: record.agentEndedAt,
-            now: now(),
-            builder: builderOf(record),
-          })
-        : null;
-    const [pending, events] = store
-      ? await Promise.all([
-          store.listPendingCreatorMessages(record.issueNumber, { limit: 20 }),
-          store.listBuildEvents(record.issueNumber, { limit: 3 }),
-        ])
-      : [[], []];
-    return {
-      scope,
-      state,
-      ...(stall ? { stall } : {}),
-      hasDelivered: Boolean(record.deliveredVersion),
-      ...(scope === 'improve' ? { isPublished: Boolean(record.publishedAt) } : {}),
-      pendingCount: pending.length,
-      // listBuildEvents is newest-first; describeStatus labels these oldest-first.
-      recentEvents: events
-        .filter((event) => !isMcpPresenceEventText(event.text, event.createdAt))
-        .map((event) => event.text)
-        .reverse(),
-      minutesSinceLastSignal: record.lastAgentSignalAt
-        ? Math.max(0, Math.round((now() - Date.parse(record.lastAgentSignalAt)) / 60_000))
-        : null,
-    };
-  }
-
-  // Recent turns for the chat agent's history (chat-turns.ts), oldest first.
-  async function recentChatTurns(issueNumber: number): Promise<ChatTurn[]> {
-    if (!store) return [];
-    const raw = await store.listCreatorMessages(issueNumber, { limit: MAX_CHAT_TURNS * 3 });
-    let turns: ChatTurn[] = [];
-    let pending: string | null = null;
-    for (const message of raw) {
-      if (message.origin === 'studio') {
-        if (pending !== null) {
-          turns = rememberChatTurn(turns, { message: pending, reply: message.text });
-          pending = null;
-        }
-        continue;
-      }
-      if (message.origin === 'studio_ack') {
-        if (pending !== null) {
-          turns = rememberChatTurn(turns, { message: pending, built: true, ackText: message.text });
-          pending = null;
-        }
-        continue;
-      }
-      // Unpaired: sent to the builder either way, ack or not.
-      if (pending !== null) turns = rememberChatTurn(turns, { message: pending, built: true });
-      pending = stripPlaytestContext(message.text);
-    }
-    if (pending !== null) turns = rememberChatTurn(turns, { message: pending, built: true });
-    return turns;
-  }
-
-  type ChatAgentOutcome = { kind: 'build'; ackText?: string } | { kind: 'replied'; replyText: string };
-
-  // Runs the mini chat agent; null takes the pre-existing path unchanged.
-  async function runChatAgent(input: {
-    issueNumber: number;
-    // The clean creator sentence, never the fenced playtest context block.
-    message: string;
-    scope: ChatAgentScope;
-    record: SubmissionRecord;
-    locale: string;
-    ip: string;
-    uid: string;
-    // Reference images the creator attached to this turn, already validated PNGs.
-    images?: ChatAgentImage[];
-  }): Promise<ChatAgentOutcome | null> {
-    if (!store || !chatAgentLog) return null;
-    if (isRateLimited(chatTurnsByIp, input.ip, now(), maxChatTurnsPerWindow, chatTurnRateLimitWindowMs)) {
-      return null;
-    }
-    // The gate/quota reads sit inside this same fail-open boundary too.
-    try {
-      const dateStr = new Date(now()).toISOString().slice(0, 10);
-      if (chatGate) {
-        const gate = await chatGate.checkAndSpend(input.uid, dateStr);
-        if (!gate.allowed) {
-          logChatAgentFailOpen(chatAgentLog, {
-            issueNumber: input.issueNumber,
-            scope: input.scope,
-            reason: gate.reason,
-          });
-          return null;
-        }
-      }
-      const quota = await store.checkAndIncrementQuota(input.uid, dateStr, dailyChatQuota, 'chats');
-      if (!quota.allowed) {
-        logChatAgentFailOpen(chatAgentLog, {
-          issueNumber: input.issueNumber,
-          scope: input.scope,
-          reason: 'daily_quota',
-        });
-        return null;
-      }
-      const [status, history] = await Promise.all([
-        buildChatAgentStatus(input.record, input.scope),
-        recentChatTurns(input.issueNumber),
-      ]);
-      const decision = await chatAgent.decide({
-        message: input.message,
-        status,
-        history,
-        locale: input.locale,
-        ...(input.record.title || input.record.spec
-          ? { game: { title: input.record.title, concept: input.record.spec } }
-          : {}),
-        ...(input.images?.length ? { images: input.images } : {}),
-      });
-      logChatAgentDecision(chatAgentLog, {
-        issueNumber: input.issueNumber,
-        scope: input.scope,
-        outcome: decision.kind,
-      });
-      if (decision.tokens) {
-        await store
-          .recordJobCost(input.issueNumber, {
-            kind: 'chat',
-            at: new Date(now()).toISOString(),
-            by: decision.model ?? 'vertex',
-            tokens: decision.tokens,
-          })
-          .catch(() => {});
-      }
-      return decision.kind === 'build'
-        ? { kind: 'build', ...(decision.text ? { ackText: decision.text } : {}) }
-        : { kind: 'replied', replyText: decision.text };
-    } catch (error) {
-      logChatAgentFailOpen(chatAgentLog, {
-        issueNumber: input.issueNumber,
-        scope: input.scope,
-        reason: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
-  }
-
-  // Localization pair for a relayed request, or nothing — only 'agent' translates.
-  async function relayedMessageLocalization(
-    origin: CreatorMessageOrigin | undefined,
-    text: string,
-  ): Promise<IntakeText> {
-    // A creator's own words are stored exactly as typed, in whatever language they chose.
-    // Normalizing those would rewrite someone's own request back at them.
-    if (origin !== 'agent') return { text };
-    // kind 'message', never 'log': a change request runs to numbered points and the log
-    // prompt would compress it into a summary with the creator's own details missing.
-    return normalizeAtIntake(translator, text, { kind: 'message', maxLength: MAX_REVISION_CHARS });
-  }
-
   async function startImprovementRound(input: {
     /** The job that owns the published game. Its slug and owner seed the new job. */
     issueNumber: number;
@@ -2004,16 +1821,6 @@ export async function registerSubmissionRoutes(
   const statusRateLimitWindowMs = 60 * 1000;
   const maxStatusChecksPerWindow = 120;
   const statusChecksByIp = new Map<string, number[]>();
-  /**
-   * Used by `relayedMessageLocalization` and by nothing else in this file.
-   *
-   * A translator lived here once and was called from the status read, which is polled
-   * every 3s per watcher; when those calls began timing out nothing cached and every poll
-   * re-sent the batch — ~9,250 billed-and-discarded Vertex calls in a day (2026-08-04).
-   * It is back only to serve the two *writes* that store an agent-relayed change request.
-   * If a future change makes a read path reach for this, that is the bug.
-   */
-  const translator: Translator = options.translator ?? createTranslatorFromEnv();
   // Keyed by `${issueNumber}:${locale}` — the response body is localized, so two
   // languages must not share an entry.
   const statusCache = new Map<string, CachedStatus>();
@@ -2042,6 +1849,17 @@ export async function registerSubmissionRoutes(
     managedAvailabilityGate,
   });
   const { attachBuildEvents } = buildStatus;
+
+  const chatOrchestration = createChatOrchestration({
+    store,
+    now,
+    log: app.log,
+    chatAgent: options.chatAgent,
+    chatGate,
+    dailyChatQuota,
+    translator: options.translator,
+  });
+  const { runChatAgent, relayedMessageLocalization } = chatOrchestration;
 
   const draftPreviewRoutes = await registerDraftPreviewRoutes(app, {
     store,

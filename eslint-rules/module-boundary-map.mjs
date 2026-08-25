@@ -144,6 +144,7 @@ const FILE_BUCKET = {
   'agent-state': 'creation',
   'agent-tasks': 'creation',
   'chat-agent': 'creation',
+  'chat-orchestration': 'creation',
   'chat-turns': 'creation',
   'creator-code': 'creation',
   'creator-studio': 'creation',
