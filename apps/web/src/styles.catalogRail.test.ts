@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import styles from './styles.css?raw';
+
+const styles = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
 
 describe('catalog rail capability layout', () => {
   it('keeps mobile capability badges stacked before the preview toggle', () => {
