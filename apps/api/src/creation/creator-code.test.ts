@@ -1043,7 +1043,6 @@ describe('the Code surface routes (creator-code.ts)', () => {
             stagedBy: 'owner',
           });
         await stage('SPEC.md', '# Sky Dodge');
-        // index.html is refused as an upload — GAME.json.howToPlay supplies markup.
         await stage(
           'GAME.json',
           JSON.stringify({
@@ -1052,6 +1051,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
           }),
         );
         await stage('game.ts', 'export const boot = () => {};');
+        await stage('EDITOR.json', '{}');
 
         const res = await app.inject({
           method: 'POST',
@@ -1087,7 +1087,6 @@ describe('the Code surface routes (creator-code.ts)', () => {
             ...(agentAssisted ? { agentAssisted: true } : {}),
           });
         await stage('SPEC.md', '# Sky Dodge', true);
-        // index.html is refused as an upload — GAME.json.howToPlay supplies markup.
         await stage(
           'GAME.json',
           JSON.stringify({
@@ -1097,6 +1096,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
           true,
         );
         await stage('game.ts', 'export const boot = () => {};', true);
+        await stage('EDITOR.json', '{}', true);
 
         const res = await app.inject({
           method: 'POST',
@@ -1137,9 +1137,8 @@ describe('the Code surface routes (creator-code.ts)', () => {
           content,
           stagedBy: 'agent',
         });
-      const paths = ['SPEC.md', 'GAME.json', 'game.ts'] as const;
+      const paths = ['SPEC.md', 'GAME.json', 'game.ts', 'EDITOR.json'] as const;
       await stageAgent('SPEC.md', '# Sky Dodge');
-      // index.html is refused as an upload — GAME.json.howToPlay supplies markup.
       await stageAgent(
         'GAME.json',
         JSON.stringify({
@@ -1148,6 +1147,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
         }),
       );
       await stageAgent('game.ts', 'export const boot = () => {};');
+      await stageAgent('EDITOR.json', '{}');
 
       // A separate `withApp` each time — its per-slug deliver cooldown is process-local
       // to that app instance, so this does not need to wait it out between the two.
@@ -1193,7 +1193,6 @@ describe('the Code surface routes (creator-code.ts)', () => {
             stagedBy: 'owner',
           });
         await stage('SPEC.md', '# Sky Dodge');
-        // index.html is refused as an upload — GAME.json.howToPlay supplies markup.
         await stage(
           'GAME.json',
           JSON.stringify({
@@ -1202,6 +1201,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
           }),
         );
         await stage('game.ts', 'export const boot = () => {};');
+        await stage('EDITOR.json', '{}');
         await stage('TRACE.json', '{"samples":[]}');
         await stage('PLAYTEST.json', '{"expectProgress":["round-start"]}');
 
