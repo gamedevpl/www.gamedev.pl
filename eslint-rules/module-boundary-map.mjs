@@ -181,6 +181,8 @@ const FILE_BUCKET = {
   'mcp-kit-file-tools': 'agent-surface',
   'mcp-inbox-tools': 'agent-surface',
   'mcp-seed-tools': 'agent-surface',
+  'mcp-round-card-tools': 'agent-surface',
+  'mcp-gate-media-tools': 'agent-surface',
   'mcp-server-discovery': 'agent-surface',
   'mcp-ui': 'agent-surface',
   'mcp-oauth-metadata': 'agent-surface',
