@@ -24,6 +24,9 @@ export function StudioDetailsBuildProgress({
   const { t, i18n } = useTranslation();
   const [status, setStatus] = useState<SubmissionStatus | null>(null);
   const [loaded, setLoaded] = useState(false);
+  // Bumped to force an immediate re-poll (e.g. right after sealing) instead of waiting
+  // out DETAILS_POLL_MS — canSeal would otherwise read stale for that whole window.
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,7 +49,7 @@ export function StudioDetailsBuildProgress({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [token, i18n.language]);
+  }, [token, i18n.language, refreshNonce]);
 
   if (!status) {
     return loaded ? null : <p className="studio-rail-empty">{t('statusView.loading')}</p>;
@@ -60,6 +63,7 @@ export function StudioDetailsBuildProgress({
       onSelectPreviewVersion={onSelectPreviewVersion}
       activePreviewVersion={activePreviewVersion}
       onReverted={onReverted}
+      onSealed={() => setRefreshNonce((n) => n + 1)}
     />
   );
 }

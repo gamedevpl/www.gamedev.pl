@@ -1482,7 +1482,10 @@ function DetailsPanel({
   }
 
   const showConnect = game.lastKnownStatus !== 'abandoned' && game.lastKnownStatus !== 'published';
-  const showProgress = showConnect;
+  // A published game's own status hides Build — but an improvement handoff runs a live
+  // round under `mediaToken`, distinct from `game.token`, while `game` still reads published.
+  const inHandoffRound = Boolean(mediaToken && mediaToken !== game.token);
+  const showProgress = showConnect || inHandoffRound;
   const panes: DetailsPaneDef[] = [
     { id: 'overview', icon: 'eye', labelKey: 'studioPanel.rail.overview' },
     ...(showConnect ? [{ id: 'connect' as const, icon: 'signal' as const, labelKey: 'studioPanel.rail.connect' }] : []),
@@ -1633,7 +1636,7 @@ function DetailsPanel({
         {activePane === 'build' ? (
           showProgress ? (
             <StudioDetailsBuildProgress
-              token={game.token}
+              token={shotToken}
               emptyLabel={t('studioPanel.rail.buildEmpty')}
               onSelectPreviewVersion={onSelectPreviewVersion}
               activePreviewVersion={activePreviewVersion}

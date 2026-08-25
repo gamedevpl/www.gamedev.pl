@@ -250,6 +250,21 @@ describe('CreatorStudioView publish→improve handoff', () => {
       expect(container.querySelector('[data-testid="studio-details-media"]')).not.toBeNull();
       expect(container.textContent).toContain('New round');
       expect(container.textContent).not.toContain('Old');
+
+      // Build must be reachable too: `game` here is still the published shelf entry
+      // (lastKnownStatus published), which alone would hide the pane entirely and, if
+      // shown, poll the wrong (published) token — see the Codex finding on #1011.
+      expect(container.querySelector('[data-testid="studio-rail-icon-build"]')).not.toBeNull();
+      mockedGetSubmissionStatus.mockClear();
+      await act(async () => {
+        container
+          .querySelector('[data-testid="studio-rail-icon-build"]')!
+          .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+        await flushEffects();
+      });
+      expect(mockedGetSubmissionStatus).toHaveBeenCalledWith('new-self-job', expect.anything());
+      expect(mockedGetSubmissionStatus).not.toHaveBeenCalledWith('pub-self-shelf', expect.anything());
     } finally {
       await act(async () => {
         root.unmount();

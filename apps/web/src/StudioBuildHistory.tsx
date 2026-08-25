@@ -16,6 +16,7 @@ export function StudioBuildHistory({
   onSelectPreviewVersion,
   activePreviewVersion,
   onReverted,
+  onSealed,
 }: {
   status: SubmissionStatus;
   // Only sealing needs this — the rest of the panel is slug-keyed.
@@ -25,6 +26,9 @@ export function StudioBuildHistory({
   onSelectPreviewVersion?: (version: string | null) => void;
   activePreviewVersion?: string | null;
   onReverted?: (result: { version: string; token?: string; roundOpened?: number }) => void;
+  // Called right after a successful seal, so the caller can refresh status immediately
+  // rather than wait out its own poll — `canSeal` would otherwise stay stale that long.
+  onSealed?: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const [expandedBuildVersion, setExpandedBuildVersion] = useState<string | null>(null);
@@ -106,6 +110,7 @@ export function StudioBuildHistory({
     try {
       await sealPreview(token);
       setSealSuccess(true);
+      onSealed?.();
     } catch (err) {
       setSealError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -227,11 +232,11 @@ export function StudioBuildHistory({
                   ) : null}
 
                   <div className="studio-build-history-actions">
-                    {index === 0 && token && status.canSeal && build.mode === 'preview' ? (
+                    {build.issueNumber === status.issueNumber && token && status.canSeal && build.mode === 'preview' ? (
                       <button
                         type="button"
                         className="studio-build-action-btn is-seal"
-                        disabled={sealing}
+                        disabled={sealing || sealSuccess}
                         onClick={() => void handleSeal()}
                       >
                         <PixelIcon name="sparkle" size={12} />
