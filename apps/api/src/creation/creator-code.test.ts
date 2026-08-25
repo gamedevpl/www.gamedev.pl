@@ -799,6 +799,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
             }),
           },
           { path: 'game.ts', content: 'export const boot = 1;' },
+          { path: 'EDITOR.json', content: '{}' },
         ],
         mode: 'preview',
       });
@@ -810,7 +811,6 @@ describe('the Code surface routes (creator-code.ts)', () => {
     it('an edit that opens a fresh round still sees the files the previous round delivered', async () =>
       withApp(async (app) => {
         await deliverBase();
-        // Closed round: the next write opens a manual one.
         await store.recordJobTransition(10, { to: 'published', at: new Date().toISOString(), by: 'operator' });
 
         const staged = await app.inject({
@@ -830,7 +830,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
         expect(listed.statusCode).toBe(200);
         const files = listed.json().files as Array<{ path: string; content: string; base?: string }>;
         // Editing one file must not read as "the others are gone".
-        expect(files.map((file) => file.path)).toEqual(['GAME.json', 'SPEC.md', 'game.ts']);
+        expect(files.map((file) => file.path)).toEqual(['EDITOR.json', 'GAME.json', 'SPEC.md', 'game.ts']);
         expect(files.find((file) => file.path === 'game.ts')?.base).toBe('export const boot = 1;');
       }));
 
@@ -853,7 +853,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
         });
         expect(res.statusCode).toBe(200);
         const manifest = await games.getManifest('sky-dodge', res.json().version as string);
-        expect([...(manifest?.sourceFiles ?? [])].sort()).toEqual(['GAME.json', 'SPEC.md', 'game.ts']);
+        expect([...(manifest?.sourceFiles ?? [])].sort()).toEqual(['EDITOR.json', 'GAME.json', 'SPEC.md', 'game.ts']);
       }));
 
     it('ignores an abandoned round when it looks for the base', async () =>
