@@ -249,6 +249,7 @@ const FILE_BUCKET = {
   'slug-resolver': 'catalog',
   'music-tracks': 'catalog',
   'catalog-enricher': 'catalog',
+  'catalog-indexer': 'catalog',
   'catalog-vector-index': 'catalog',
   'catalog-routes': 'catalog',
   'catalog-search-routes': 'catalog',

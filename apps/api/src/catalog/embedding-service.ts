@@ -72,7 +72,18 @@ export class VertexEmbeddingService {
       if (!token) throw new Error('No access token available for Vertex AI');
 
       const host = this.region === 'global' ? 'aiplatform.googleapis.com' : `${this.region}-aiplatform.googleapis.com`;
-      const url = `https://${host}/v1/projects/${this.projectId}/locations/${this.region}/publishers/google/models/${this.model}:predict`;
+      const isGemini = this.model.startsWith('gemini');
+      const action = isGemini ? 'embedContent' : 'predict';
+      const url = `https://${host}/v1/projects/${this.projectId}/locations/${this.region}/publishers/google/models/${this.model}:${action}`;
+
+      const requestBody = isGemini
+        ? JSON.stringify({
+            content: { parts: [{ text: trimmed }] },
+            taskType: 'RETRIEVAL_QUERY',
+          })
+        : JSON.stringify({
+            instances: [{ content: trimmed }],
+          });
 
       const response = await fetch(url, {
         method: 'POST',
@@ -80,9 +91,7 @@ export class VertexEmbeddingService {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          instances: [{ content: trimmed }],
-        }),
+        body: requestBody,
       });
 
       if (!response.ok) {
@@ -90,13 +99,15 @@ export class VertexEmbeddingService {
       }
 
       const data = (await response.json()) as {
+        embedding?: { values?: number[] };
         predictions?: Array<{
           embeddings?: { values?: number[] };
           values?: number[];
         }>;
       };
 
-      const values = data.predictions?.[0]?.embeddings?.values || data.predictions?.[0]?.values;
+      const values =
+        data.embedding?.values || data.predictions?.[0]?.embeddings?.values || data.predictions?.[0]?.values;
       if (!values || !Array.isArray(values) || values.length === 0) {
         throw new Error('Malformed embedding response from Vertex AI');
       }

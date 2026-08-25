@@ -801,4 +801,131 @@ describe('HeroPromptSection', () => {
 
     await act(async () => root.unmount());
   });
+
+  it('correctly handles negative control queries without false positive matches', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const mockCatalog = [
+      {
+        slug: 'carjack-city',
+        title: 'Carjack City',
+        genre: 'action',
+        controls: 'WASD',
+        media: null,
+        multiplayer: null,
+        saves: null,
+        world: null,
+        sensing: null,
+        orientation: 'landscape' as const,
+        editor: null,
+        status: 'published' as const,
+        submittedBy: null,
+        tagline: { en: 'Top-down driving.', pl: 'Jazda samochodem.' },
+        searchKeywords: ['driving', 'car', 'cars'],
+      },
+      {
+        slug: 'mexico-86',
+        title: "Mexico '86 Arcade Football",
+        genre: 'sports',
+        controls: 'Arrows / Enter',
+        media: null,
+        multiplayer: null,
+        saves: null,
+        world: null,
+        sensing: null,
+        orientation: 'landscape' as const,
+        editor: null,
+        status: 'published' as const,
+        submittedBy: null,
+        tagline: { en: 'Tournament football.', pl: 'Turniej piłkarski.' },
+        searchKeywords: ['football', 'soccer', 'piłka', 'mundial'],
+      },
+      {
+        slug: 'checker-champ',
+        title: 'Checker Champ',
+        genre: 'board',
+        controls: 'Mouse',
+        media: null,
+        multiplayer: null,
+        saves: null,
+        world: null,
+        sensing: null,
+        orientation: 'landscape' as const,
+        editor: null,
+        status: 'published' as const,
+        submittedBy: null,
+        tagline: { en: 'Classic checkers.', pl: 'Klasyczne warcaby.' },
+        searchKeywords: ['checkers', 'warcaby'],
+      },
+      {
+        slug: 'classic-solitaire',
+        title: 'Classic Solitaire',
+        genre: 'cards',
+        controls: 'Mouse',
+        media: null,
+        multiplayer: null,
+        saves: null,
+        world: null,
+        sensing: null,
+        orientation: 'landscape' as const,
+        editor: null,
+        status: 'published' as const,
+        submittedBy: null,
+        tagline: { en: 'Klondike card solitaire.', pl: 'Pasjans karciany.' },
+        searchKeywords: ['cards', 'solitaire', 'karty', 'pasjans'],
+      },
+    ];
+
+    const checkPrompt = async (prompt: string) => {
+      await act(async () => {
+        root.render(
+          createElement(HeroPromptSection, {
+            key: prompt,
+            initialPrompt: prompt,
+            catalogEntries: mockCatalog,
+            submissionStatus: 'idle',
+            submissionError: null,
+            onSubmitSpec: vi.fn(),
+          }),
+        );
+        await flushEffects();
+      });
+      return container.querySelector('.matched-card');
+    };
+
+    // "card" query should NOT false-match carjack-city
+    const cardMatch = await checkPrompt('I want to play a card game');
+    expect(cardMatch).not.toBeNull();
+    expect(container.querySelector('.matched-title')?.textContent).toBe('Classic Solitaire');
+
+    // Polish cards intent
+    const plCardMatch = await checkPrompt('chcę pograć w karty');
+    expect(plCardMatch).not.toBeNull();
+    expect(container.querySelector('.matched-title')?.textContent).toBe('Classic Solitaire');
+
+    // "gold rush" must NOT false-match mexico-86 via 'gol'
+    const goldRush = await checkPrompt('gold rush');
+    expect(goldRush).toBeNull();
+
+    // "author" and "autumn leaves" must NOT false-match carjack-city via 'aut'
+    const author = await checkPrompt('author');
+    expect(author).toBeNull();
+
+    const autumn = await checkPrompt('autumn leaves');
+    expect(autumn).toBeNull();
+
+    // "chess" / "szachy" must NOT false-match checker-champ
+    const chess = await checkPrompt('chess');
+    expect(chess).toBeNull();
+
+    const szachy = await checkPrompt('szachy');
+    expect(szachy).toBeNull();
+
+    await act(async () => root.unmount());
+  });
 });

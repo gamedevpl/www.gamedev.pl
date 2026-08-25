@@ -24,6 +24,14 @@ export class CatalogVectorIndex {
     this.games.set(game.slug, { ...game });
   }
 
+  // Atomically replace all indexed games with fresh set.
+  replaceAll(games: IndexedGameVector[]): void {
+    this.games.clear();
+    for (const game of games) {
+      this.games.set(game.slug, { ...game });
+    }
+  }
+
   // Remove a game by slug.
   remove(slug: string): boolean {
     return this.games.delete(slug);

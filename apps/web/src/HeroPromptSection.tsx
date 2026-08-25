@@ -85,130 +85,144 @@ const STOP_WORDS = new Set([
   'some',
 ]);
 
+// Token-boundary synonyms mapping specific query words to matching catalog game concepts.
+const INTENT_TOKENS: Record<string, string[]> = {
+  // Football / Soccer
+  piłka: ['mexico-86', 'soccer', 'football'],
+  pilka: ['mexico-86', 'soccer', 'football'],
+  piłkę: ['mexico-86', 'soccer', 'football'],
+  pilke: ['mexico-86', 'soccer', 'football'],
+  piłkarski: ['mexico-86', 'soccer', 'football'],
+  pilkarski: ['mexico-86', 'soccer', 'football'],
+  piłkarskie: ['mexico-86', 'soccer', 'football'],
+  pilkarskie: ['mexico-86', 'soccer', 'football'],
+  futbol: ['mexico-86', 'soccer', 'football'],
+  football: ['mexico-86', 'soccer', 'football'],
+  soccer: ['mexico-86', 'soccer', 'football'],
+  mundial: ['mexico-86', 'soccer', 'football'],
+  mecz: ['mexico-86', 'soccer', 'football'],
+
+  // Cars / Racing
+  auto: ['carjack-city', 'racer', 'karts'],
+  auta: ['carjack-city', 'racer', 'karts'],
+  samochód: ['carjack-city', 'racer', 'karts'],
+  samochod: ['carjack-city', 'racer', 'karts'],
+  samochody: ['carjack-city', 'racer', 'karts'],
+  wyścigi: ['carjack-city', 'racer', 'karts'],
+  wyscigi: ['carjack-city', 'racer', 'karts'],
+  wyścig: ['carjack-city', 'racer', 'karts'],
+  wyscig: ['carjack-city', 'racer', 'karts'],
+  racing: ['carjack-city', 'racer', 'karts'],
+  racer: ['carjack-city', 'racer', 'karts'],
+  driving: ['carjack-city', 'racer', 'karts'],
+
+  // Snake
+  wąż: ['serpent-loop', 'snake'],
+  waz: ['serpent-loop', 'snake'],
+  snake: ['serpent-loop', 'snake'],
+  serpent: ['serpent-loop', 'snake'],
+
+  // Cards / Pasjans
+  karty: ['cards', 'solitaire', 'blackjack', 'poker', 'card'],
+  karta: ['cards', 'solitaire', 'blackjack', 'poker', 'card'],
+  karciane: ['cards', 'solitaire', 'blackjack', 'poker', 'card'],
+  karciana: ['cards', 'solitaire', 'blackjack', 'poker', 'card'],
+  cards: ['cards', 'solitaire', 'blackjack', 'poker', 'card'],
+  card: ['cards', 'solitaire', 'blackjack', 'poker', 'card'],
+  pasjans: ['cards', 'solitaire', 'blackjack', 'poker', 'card'],
+  solitaire: ['cards', 'solitaire', 'blackjack', 'poker', 'card'],
+
+  // Farm
+  farma: ['farm'],
+  farm: ['farm'],
+  farming: ['farm'],
+  rolnik: ['farm'],
+
+  // Tanks / Cannon
+  czołg: ['cannon', 'tank'],
+  czolg: ['cannon', 'tank'],
+  czołgi: ['cannon', 'tank'],
+  czolgi: ['cannon', 'tank'],
+  tank: ['cannon', 'tank'],
+  tanks: ['cannon', 'tank'],
+  cannon: ['cannon', 'tank'],
+
+  // Checkers
+  warcaby: ['checker'],
+  warcab: ['checker'],
+  checkers: ['checker'],
+  draughts: ['checker'],
+
+  // Pinball / Flipper
+  flipper: ['pinball'],
+  pinball: ['pinball'],
+
+  // Mario / Plumber
+  mario: ['plumber'],
+
+  // Space
+  kosmos: ['starweb', 'asteroid', 'space'],
+  space: ['starweb', 'asteroid', 'space'],
+  asteroids: ['starweb', 'asteroid', 'space'],
+  asteroidy: ['starweb', 'asteroid', 'space'],
+};
+
 function findMatchingGame(query: string, catalog: CatalogEntry[]): CatalogEntry | null {
   const normalized = query.trim().toLowerCase();
   if (!normalized || normalized.length < 2) return null;
 
-  const tokens = normalized.split(/\s+/).filter((t) => t.length > 1);
-  const meaningfulTokens = tokens.filter((t) => !STOP_WORDS.has(t) && t.length > 2);
-  const queryTokens = meaningfulTokens.length > 0 ? meaningfulTokens : tokens;
+  const rawTokens = normalized
+    .replace(/[^a-ząćęłńóśźż0-9\s-]/g, ' ')
+    .split(/\s+/)
+    .filter((t) => t.length > 0);
+  const meaningfulTokens = rawTokens.filter((t) => !STOP_WORDS.has(t) && t.length > 1);
+  const queryTokens = meaningfulTokens.length > 0 ? meaningfulTokens : rawTokens;
 
   for (const entry of catalog) {
     const title = entry.title.toLowerCase();
-    const genre = entry.genre.toLowerCase();
-    const controls = entry.controls.toLowerCase();
     const slug = entry.slug.toLowerCase();
+    const genre = entry.genre.toLowerCase();
 
-    // 1. Direct match in title or slug
-    if (title.includes(normalized) || normalized.includes(title) || slug.includes(normalized)) {
+    // 1. Direct title or slug full match / substring if query length >= 3
+    if (title === normalized || slug === normalized) {
       return entry;
     }
-
-    // 2. Keyword or search tag match
-    if (
-      entry.searchKeywords?.some((k) => {
-        const kw = k.toLowerCase().trim();
-        return kw.length > 2 && queryTokens.some((t) => kw.includes(t) || t.includes(kw));
-      })
-    ) {
+    if (normalized.length >= 3 && (title.includes(normalized) || slug.includes(normalized))) {
       return entry;
     }
 
-    // 3. Special intent aliases (sports, vehicles, classics, themes)
-    if (
-      (normalized.includes('piłk') ||
-        normalized.includes('pilk') ||
-        normalized.includes('football') ||
-        normalized.includes('soccer') ||
-        normalized.includes('mecz') ||
-        normalized.includes('mundial') ||
-        normalized.includes('gol')) &&
-      (slug.includes('mexico') || slug.includes('soccer') || slug.includes('football'))
-    ) {
-      return entry;
-    }
-    if (
-      (normalized.includes('samochod') ||
-        normalized.includes('aut') ||
-        normalized.includes('wyścig') ||
-        normalized.includes('wyscig') ||
-        normalized.includes('racer') ||
-        normalized.includes('drive') ||
-        normalized.includes('car')) &&
-      (slug.includes('racer') || slug.includes('carjack') || slug.includes('karts'))
-    ) {
-      return entry;
-    }
-    if (
-      (normalized.includes('farma') ||
-        normalized.includes('rolnik') ||
-        normalized.includes('sadz') ||
-        normalized.includes('farm')) &&
-      slug.includes('farm')
-    ) {
-      return entry;
-    }
-    if (
-      (normalized.includes('czołg') ||
-        normalized.includes('czolg') ||
-        normalized.includes('tank') ||
-        normalized.includes('cannon')) &&
-      (slug.includes('cannon') || slug.includes('tank'))
-    ) {
-      return entry;
-    }
-    if (
-      (normalized.includes('szachy') ||
-        normalized.includes('warcab') ||
-        normalized.includes('checker') ||
-        normalized.includes('chess')) &&
-      slug.includes('checker')
-    ) {
-      return entry;
-    }
-    if (
-      (normalized.includes('flipper') || normalized.includes('pinball') || normalized.includes('bila')) &&
-      slug.includes('pinball')
-    ) {
-      return entry;
-    }
-    if (
-      (normalized.includes('wąż') ||
-        normalized.includes('waz') ||
-        normalized.includes('snake') ||
-        normalized.includes('serpent')) &&
-      slug.includes('serpent')
-    ) {
-      return entry;
-    }
-    if (normalized.includes('mario') && (slug.includes('plumber') || title.includes('plumber'))) {
-      return entry;
-    }
-    if (normalized.includes('coin') && slug.includes('coin')) {
-      return entry;
-    }
-    if ((normalized.includes('rock') || normalized.includes('dodge')) && slug.includes('rock')) {
-      return entry;
-    }
-    if (
-      (normalized.includes('space') ||
-        normalized.includes('kosmos') ||
-        normalized.includes('ship') ||
-        normalized.includes('rocket') ||
-        normalized.includes('fly')) &&
-      (slug.includes('asteroid') || slug.includes('starweb') || slug.includes('space'))
-    ) {
+    // 2. Keyword exact token match
+    if (entry.searchKeywords?.some((k) => queryTokens.includes(k.toLowerCase().trim()))) {
       return entry;
     }
 
-    // 4. Token match against metadata
-    const keywords = (entry.searchKeywords || []).map((k) => k.toLowerCase()).join(' ');
-    const taglines = `${entry.tagline?.en || ''} ${entry.tagline?.pl || ''}`.toLowerCase();
-    const matchCount = queryTokens.filter(
-      (t) =>
-        title.includes(t) || genre.includes(t) || controls.includes(t) || keywords.includes(t) || taglines.includes(t),
+    // 3. Exact intent token matching (avoids substring false positives)
+    for (const token of queryTokens) {
+      const targets = INTENT_TOKENS[token];
+      if (targets) {
+        if (
+          targets.some(
+            (target) =>
+              slug.includes(target) ||
+              title.includes(target) ||
+              genre.includes(target) ||
+              entry.searchKeywords?.some((k) => k.toLowerCase().includes(target)),
+          )
+        ) {
+          return entry;
+        }
+      }
+    }
+
+    // 4. Word-boundary token match against title / keywords / genre
+    const titleTokens = title.split(/[\s-]+/);
+    const slugTokens = slug.split(/[\s-]+/);
+    const keywordTokens = (entry.searchKeywords || []).map((k) => k.toLowerCase());
+    const matchedTokenCount = queryTokens.filter(
+      (t) => titleTokens.includes(t) || slugTokens.includes(t) || genre.includes(t) || keywordTokens.includes(t),
     ).length;
-    if (matchCount > 0 && matchCount >= Math.ceil(queryTokens.length / 2)) {
+
+    if (matchedTokenCount > 0 && matchedTokenCount >= Math.ceil(queryTokens.length / 2)) {
       return entry;
     }
   }
@@ -389,8 +403,8 @@ export function HeroPromptSection({
 
   useEffect(() => {
     const trimmed = promptText.trim();
+    setVectorMatchedGame(null);
     if (trimmed.length < 3) {
-      setVectorMatchedGame(null);
       return;
     }
 
@@ -399,7 +413,7 @@ export function HeroPromptSection({
       fetch(`/api/catalog/search?q=${encodeURIComponent(trimmed)}`, { signal: controller.signal })
         .then((res) => (res.ok ? res.json() : null))
         .then((data: { match?: CatalogEntry | null; score?: number } | null) => {
-          if (data?.match && typeof data.score === 'number' && data.score >= 0.65) {
+          if (data?.match && typeof data.score === 'number' && data.score >= 0.55) {
             const found = catalogEntries.find((e) => e.slug === data.match?.slug);
             if (found) {
               setVectorMatchedGame({

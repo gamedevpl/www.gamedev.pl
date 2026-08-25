@@ -58,4 +58,15 @@ describe('catalog-vector-index', () => {
     const lowMatch = index.findBestMatch([0, 1, 0], 0.7);
     expect(lowMatch).toBeNull();
   });
+
+  it('atomically replaces all entries via replaceAll', () => {
+    const index = new CatalogVectorIndex();
+    index.upsert(footballGame);
+    expect(index.size()).toBe(1);
+
+    index.replaceAll([spaceGame]);
+    expect(index.size()).toBe(1);
+    expect(index.findBestMatch([0, 1, 0], 0.7)?.game.slug).toBe('asteroids');
+    expect(index.findBestMatch([1, 0, 0], 0.7)).toBeNull();
+  });
 });
