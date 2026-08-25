@@ -400,7 +400,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
 
       const transitionActor: TransitionActor = input.actor === 'creator' ? 'creator' : 'agent';
       const stateAfterSignal = await markBuilding(input.issueNumber, record, transitionActor);
-      const requireCompiledEditor = !(await options.store.getPublication(input.slug));
+      const requireCompiledEditor = !(await options.store.getPublication(input.slug)) && !(await options.store.getPublishedSubmissionBySlug(input.slug));
       let version: string;
       try {
         ({ version } = await options.gamesStore.putCandidateSources({
