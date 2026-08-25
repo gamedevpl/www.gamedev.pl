@@ -61,3 +61,50 @@ export const SESSION_KEY_PROP = {
     'Short-lived session capability from start(). Present this argument OR configure Authorization: Bearer <round key> — not both required. ' +
     'Mcp-Session-Id is a transport correlator only (never authority). If the transport session is lost, call start() again — it re-binds and re-mints.',
 };
+
+// Pin kit browse/read calls to the engineRef get_kit returned.
+export const KIT_ENGINE_REF_PROP = {
+  type: 'string' as const,
+  description:
+    'Creator Kit engineRef from get_kit. Pass on every browse/read call so a mid-round registry bump cannot mix kit revisions.',
+};
+
+export const MCP_VISIBLE_TOOLS = new Set([
+  'create_game',
+  'start',
+  'open_round',
+  'continue_draft',
+  'get_brief',
+  'get_seed',
+  'regenerate_seed',
+  'get_sources',
+  'get_kit',
+  // get_kit_api is the orientation path; browse tools are the depth path.
+  'get_kit_api',
+  'list_kit_files',
+  'search_kit_files',
+  'read_kit_file',
+  'read_kit_files',
+  'read_kit_file_fragment',
+  'knowledge_query',
+  'report_progress',
+  'screenshot_upload_url',
+  'stage_upload_url',
+  'stage_source_file',
+  'patch_source_file',
+  'list_staged_sources',
+  'clear_staged_sources',
+  'delete_source_file',
+  'submit_sources',
+  'end',
+  'show_round',
+  'show_media',
+  'get_round_status',
+  'get_gate_verdict',
+  'get_gate_media',
+  'get_round_media',
+  'get_reference_images',
+  'read_inbox',
+  'ack_inbox',
+  'get_transcript',
+]);
