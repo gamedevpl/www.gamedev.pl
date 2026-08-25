@@ -44,6 +44,13 @@ import {
 import { registerCatalogRoutes } from './catalog/catalog-routes.js';
 import { registerCatalogSearchRoutes } from './catalog/catalog-search-routes.js';
 import { registerDraftPreviewRoutes } from './delivery/draft-preview-routes.js';
+import {
+  formatPlaytestContextBlock,
+  MAX_REFERENCE_IMAGES,
+  registerCreatorMediaRoutes,
+  storeCreatorPlaytestShot,
+  storeCreatorReferenceImages,
+} from './delivery/creator-media.js';
 import { createBuildStatusAssembler, revisionOriginOf } from './delivery/build-status.js';
 import { createChatOrchestration } from './creation/chat-orchestration.js';
 import { startHealthCheck } from './catalog/game-health.js';
@@ -54,7 +61,7 @@ import {
 } from './delivery/staged-preview.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './platform/internal-auth.js';
 import type { AgentBackend, SeedDelivery, SeedFiles } from './agent-surface/agent-backend.js';
-import { PLAYTEST_CONTEXT_HEADER, stripPlaytestContext } from './delivery/build-transcript.js';
+import { stripPlaytestContext } from './delivery/build-transcript.js';
 import {
   createAgentBackendRegistryFromEnv,
   createSeedProvidersFromEnv,
@@ -150,7 +157,6 @@ import { InvalidTokenError, mintToken, verifyToken } from './platform/submission
 import { normalizeLocale, type Translator } from './platform/translate.js';
 import { logModerationRejection } from './platform/moderation-metrics.js';
 import { isRateLimited } from './platform/ip-rate-limit.js';
-import { sendMedia } from './platform/media-response.js';
 
 /**
  * The store slices `registerSubmissionRoutes` actually reaches into — every domain this
@@ -175,8 +181,6 @@ export type SubmissionRoutesStore = IdentityStore &
 // Base64 PNG, no data: prefix — same shape as a playtest screenshot.
 const MAX_SHOT_BASE64_CHARS = Math.ceil((MAX_SHOT_BYTES * 4) / 3) + 1024;
 const referenceImageSchema = z.string().max(MAX_SHOT_BASE64_CHARS, 'reference image is too large');
-
-const MAX_REFERENCE_IMAGES = 4;
 
 // 4 images at the cap above exceed Fastify's default 1 MiB bodyLimit.
 const REFERENCE_IMAGES_BODY_LIMIT_BYTES = MAX_REFERENCE_IMAGES * MAX_SHOT_BASE64_CHARS + 64 * 1024;
@@ -293,99 +297,8 @@ const FeedbackRequestSchema = z.object({
     .optional(),
 });
 
-const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-const MAX_CREATOR_SHOT_BYTES = MAX_SHOT_BYTES;
 // Max wait for a handoff ack before the sweep forces it.
 const HANDOFF_ACK_STALL_MS = 10 * 60 * 1000;
-
-/** Fenced playtest context block + optional stored screenshot id for agent fetch. */
-function formatPlaytestContextBlock(
-  context: z.infer<typeof FeedbackRequestSchema>['context'],
-  shotId?: string,
-  referenceImageShotIds?: string[],
-): string | null {
-  if (!context) return null;
-  const lines: string[] = [];
-  const instrumentation = context.instrumentation;
-  if (instrumentation) {
-    if (typeof instrumentation.playSeconds === 'number') {
-      lines.push(`playSeconds: ${instrumentation.playSeconds}`);
-    }
-    if (instrumentation.lastAliveFrames != null) {
-      lines.push(`lastAliveFrames: ${instrumentation.lastAliveFrames}`);
-    }
-    if (instrumentation.errors?.length) {
-      lines.push('errors:');
-      for (const error of instrumentation.errors) lines.push(`- ${error}`);
-    }
-    if (instrumentation.progress?.length) {
-      lines.push('progress:');
-      for (const label of instrumentation.progress) lines.push(`- ${label}`);
-    }
-  }
-  if (shotId) {
-    lines.push(`screenshotShotId: ${shotId}`);
-  } else if (context.screenshotPng) {
-    lines.push('screenshot: (capture failed validation — text context only)');
-  }
-  if (referenceImageShotIds && referenceImageShotIds.length > 0) {
-    lines.push(`referenceImageShotIds: ${referenceImageShotIds.join(', ')}`);
-  } else if (context.referenceImages && context.referenceImages.length > 0) {
-    lines.push('referenceImages: (capture failed validation — text context only)');
-  }
-  if (lines.length === 0) return null;
-  return [PLAYTEST_CONTEXT_HEADER, '```text', ...lines, '```'].join('\n');
-}
-
-// Validates and persists a base64 PNG as a build shot.
-async function storeCreatorImage(
-  store: BuildMediaStore,
-  issueNumber: number,
-  pngBase64: string | undefined,
-  label: 'creator-playtest' | 'creator-reference',
-): Promise<string | undefined> {
-  if (!pngBase64) return undefined;
-  let bytes: Buffer;
-  try {
-    bytes = Buffer.from(pngBase64, 'base64');
-  } catch {
-    return undefined;
-  }
-  if (bytes.length === 0 || bytes.length > MAX_CREATOR_SHOT_BYTES) return undefined;
-  if (!bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) return undefined;
-  const stored = await store.appendBuildShot(issueNumber, {
-    data: bytes.toString('base64'),
-    label,
-  });
-  return stored.id;
-}
-
-async function storeCreatorPlaytestShot(
-  store: BuildMediaStore,
-  issueNumber: number,
-  pngBase64: string | undefined,
-): Promise<string | undefined> {
-  return storeCreatorImage(store, issueNumber, pngBase64, 'creator-playtest');
-}
-
-// Persists up to MAX_REFERENCE_IMAGES images; also returns validated bytes for chat.
-async function storeCreatorReferenceImages(
-  store: BuildMediaStore,
-  issueNumber: number,
-  pngBase64List: string[] | undefined,
-): Promise<{ ids: string[]; images: ChatAgentImage[] }> {
-  if (!pngBase64List || pngBase64List.length === 0) return { ids: [], images: [] };
-  const ids: string[] = [];
-  const images: ChatAgentImage[] = [];
-  for (const png of pngBase64List.slice(0, MAX_REFERENCE_IMAGES)) {
-    const id = await storeCreatorImage(store, issueNumber, png, 'creator-reference');
-    if (id) {
-      ids.push(id);
-      images.push({ data: png, mediaType: 'image/png' });
-    }
-  }
-  return { ids, images };
-}
 
 interface CachedStatus {
   expiresAt: number;
@@ -1905,6 +1818,15 @@ export async function registerSubmissionRoutes(
     githubClient,
     publishedRef,
     getCatalogEntries: catalogRoutes.getCatalogEntries,
+  });
+  await registerCreatorMediaRoutes(app, {
+    store,
+    now,
+    submissionTokenSecret,
+    checkUserAccess,
+    mediaByIp,
+    maxMediaPerWindow,
+    mediaRateLimitWindowMs: gamesRateLimitWindowMs,
   });
 
   // Trusts a cache hit without re-checking publication state.
@@ -4670,141 +4592,6 @@ export async function registerSubmissionRoutes(
         healthResolved,
         unhealthy,
       });
-    },
-  );
-
-  app.get(
-    '/api/submissions/:token/shot/:id',
-    { config: { rateLimit: { max: maxMediaPerWindow, timeWindow: gamesRateLimitWindowMs } } },
-    async (request, reply) => {
-      if (!submissionTokenSecret || !store) {
-        return reply.status(503).send({ error: 'submissions are not configured' });
-      }
-      if (!checkUserAccess(request, reply)) {
-        return;
-      }
-
-      const parsedParams = z.object({ token: z.string(), id: z.string().max(64) }).safeParse(request.params);
-      if (!parsedParams.success) {
-        return reply.status(404).send({ error: 'media not found' });
-      }
-
-      const currentTime = now();
-      if (isRateLimited(mediaByIp, request.ip, currentTime, maxMediaPerWindow, gamesRateLimitWindowMs)) {
-        return reply.status(429).send({ error: 'too many game requests, please try again later' });
-      }
-
-      let issueNumber: number;
-      try {
-        issueNumber = verifyToken(parsedParams.data.token, submissionTokenSecret);
-      } catch (error) {
-        if (error instanceof InvalidTokenError) {
-          return reply.status(400).send({ error: 'invalid submission token' });
-        }
-        throw error;
-      }
-
-      try {
-        const shot = await store.getBuildShot(issueNumber, parsedParams.data.id);
-        if (!shot) {
-          return reply.status(404).send({ error: 'media not found' });
-        }
-
-        const body = Buffer.from(shot.data, 'base64');
-        return sendMedia(request, reply, {
-          // Immutable once stored, so the id is a sound ETag on its own.
-          etag: `"${shot.id}"`,
-          contentType: 'image/png',
-          body,
-        });
-      } catch (error) {
-        request.log.error({ err: error }, 'failed to serve build screenshot');
-        return reply.status(502).send({ error: 'failed to load game media' });
-      }
-    },
-  );
-
-  /**
-   * A playable build the agent pushed over the channel, before it committed anything.
-   *
-   * This serves unreviewed agent output as executable HTML, which is the most dangerous
-   * thing in this file, so the defences are layered and none of them is decorative:
-   *
-   *  - `Content-Security-Policy: sandbox` is the header form of the iframe attribute, so
-   *    the restriction holds even if the document is opened directly rather than framed.
-   *    `allow-scripts` is granted because a game is nothing without it, and
-   *    `allow-pointer-lock` so scene3d previews behave like the published GameFrame
-   *    (the effective sandbox is the intersection of this header and the framing
-   *    iframe's attribute); `allow-same-origin` deliberately is not, which leaves the
-   *    document in an opaque origin with no access to storage or cookies anywhere.
-   *  - `default-src 'none'` with inline script and style allowed matches what an assembled
-   *    bundle actually is — everything embedded, nothing fetched. Any attempt to call home
-   *    fails, so an injected exfiltration payload has nowhere to send anything.
-   *  - `X-Content-Type-Options: nosniff` and `Content-Disposition: inline` keep the
-   *    response from being reinterpreted as anything other than what it is.
-   *
-   * No `frame-ancestors`: the web app may be served from a different origin than this API
-   * (`VITE_API_BASE_URL`), and restricting it would block the status page from framing the
-   * preview in exactly those deployments. It would also buy nothing — the URL is reachable
-   * only with the creator's submission token, and a document already confined to an opaque
-   * origin has nothing worth clickjacking.
-   *
-   * Caching is short and private. A preview is superseded within minutes and belongs to
-   * one creator's build; it must not sit in a shared cache the way published media can.
-   */
-  app.get(
-    '/api/submissions/:token/preview/:id',
-    { config: { rateLimit: { max: maxMediaPerWindow, timeWindow: gamesRateLimitWindowMs } } },
-    async (request, reply) => {
-      if (!submissionTokenSecret || !store) {
-        return reply.status(503).send({ error: 'submissions are not configured' });
-      }
-      if (!checkUserAccess(request, reply)) {
-        return;
-      }
-
-      const parsedParams = z.object({ token: z.string(), id: z.string().max(64) }).safeParse(request.params);
-      if (!parsedParams.success) {
-        return reply.status(404).send({ error: 'preview not found' });
-      }
-
-      const currentTime = now();
-      if (isRateLimited(mediaByIp, request.ip, currentTime, maxMediaPerWindow, gamesRateLimitWindowMs)) {
-        return reply.status(429).send({ error: 'too many game requests, please try again later' });
-      }
-
-      let issueNumber: number;
-      try {
-        issueNumber = verifyToken(parsedParams.data.token, submissionTokenSecret);
-      } catch (error) {
-        if (error instanceof InvalidTokenError) {
-          return reply.status(400).send({ error: 'invalid submission token' });
-        }
-        throw error;
-      }
-
-      try {
-        const preview = await store.getBuildPreview(issueNumber, parsedParams.data.id);
-        if (!preview) {
-          return reply.status(404).send({ error: 'preview not found' });
-        }
-
-        return reply
-          .header(
-            'Content-Security-Policy',
-            "sandbox allow-scripts allow-pointer-lock; default-src 'none'; script-src 'unsafe-inline'; " +
-              "style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; " +
-              "connect-src 'none'; form-action 'none'; base-uri 'none'",
-          )
-          .header('X-Content-Type-Options', 'nosniff')
-          .header('Content-Disposition', 'inline')
-          .header('Cache-Control', 'private, max-age=60')
-          .type('text/html; charset=utf-8')
-          .send(Buffer.from(preview.data, 'base64'));
-      } catch (error) {
-        request.log.error({ err: error }, 'failed to serve build preview');
-        return reply.status(502).send({ error: 'failed to load preview' });
-      }
     },
   );
 
