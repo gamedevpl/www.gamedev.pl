@@ -195,6 +195,9 @@ export function channelControlFields(
 export const PLATFORM_CONNECTOR_ONLY_REASON =
   'the Copilot MCP connector must be paired with a live round key in start()';
 
+export const RETIRED_GAME_KEY_REASON =
+  'per-game keys are retired — reconnect with OAuth or your creator key and pass the game slug';
+
 export function matchesPlatformConnectorSecret(presented: string | null, expected: string | undefined): boolean {
   if (!presented || !expected) return false;
   const left = createHash('sha256').update(presented).digest();
