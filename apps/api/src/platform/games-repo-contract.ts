@@ -320,11 +320,8 @@ export const DELIVERY_FIXED_FILES = [
   // promote to a required upload (same path TRACE/PLAYTEST already took) in
   // `validateSourceUpload`.
   'AGENT.json',
-  // The editor declaration (EditorKit L0, games-repo Check 31). Optional — only
-  // born-editable games ship one — but same drift class as TRACE/PLAYTEST/AGENT
-  // above: the games repo already sends it, and refusing it here would 400 every
-  // born-editable delivery at upload. The generated `game/editor-content.ts` needs no
-  // entry, it matches {@link DELIVERY_EXTRA_MODULE_PATTERN}.
+  // Fresh games require this; revisions may carry legacy sources without it.
+  // Generated game/editor-content.ts matches DELIVERY_EXTRA_MODULE_PATTERN.
   'EDITOR.json',
   'EDITOR.ts',
   'EDITOR.content.json',
