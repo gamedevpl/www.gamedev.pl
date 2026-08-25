@@ -268,7 +268,7 @@ export function collectSeedFiles(parsed: ParsedSeedResponse, slug: string): Seed
  */
 export function isUsableSeed(files: SeedFile[]): boolean {
   const paths = new Set(files.map((file) => file.path));
-  const hasModule = files.some((file) => file.path.startsWith('game/') && file.path.endsWith('.ts')); const hasEditor = paths.has('EDITOR.json') || paths.has('EDITOR.ts');
+  const hasModule = files.some((file) => file.path.startsWith('game/') && file.path.endsWith('.ts')); const hasEditor = paths.has('EDITOR.json');
   return paths.has('game.ts') && paths.has('SPEC.md') && hasModule && hasEditor;
 }
 
@@ -319,7 +319,7 @@ export function buildGeneratePrompt(input: {
     '  canvasBorderColor/pixelArt) generates style.css the same way — never write that file either.',
     '- Follow the reference games exactly for imports, GameKit usage, file layout, and bilingual en/pl text.',
     `- SPEC.md frontmatter must be valid and carry title: ${input.title} and slug: ${input.slug}.`,
-    '- GAME.json lists only the engine modules and sounds the code actually uses, like the references do. Every seed must ship an editor: declare at least three meaningful tunables or one content collection in EDITOR.ts/EDITOR.json, keep generated editor artifacts in sync, and have the game consume game/editor-content.ts.',
+    '- GAME.json lists only the engine modules and sounds the code actually uses, like the references do. Every seed must ship compiled EDITOR.json with at least three meaningful tunables or one content collection. EDITOR.ts is optional authoring source; when present it must match editor:gen output. Keep generated artifacts in sync and have the game consume game/editor-content.ts.',
     '- ACCEPTANCE.json is exactly {"objective": "<one sentence a player would say>", "achieved": [<conditions>]},',
     '  each condition {"field": "<a field your snapshot() reports>", "atLeast"|"atMost"|"equals": <value>}.',
     '- No external assets, no network calls, no new dependencies.',
