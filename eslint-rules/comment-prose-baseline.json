@@ -330,7 +330,7 @@
     "apps/api/src/store/records/telemetry.ts": 1136,
     "apps/api/src/store/slices/rounds.ts": 25,
     "apps/api/src/submissions.test.ts": 4637,
-    "apps/api/src/submissions.ts": 10288,
+    "apps/api/src/submissions.ts": 10014,
     "apps/api/src/telemetry/creator-metrics.test.ts": 81,
     "apps/api/src/telemetry/creator-metrics.ts": 310,
     "apps/api/src/telemetry/telemetry-trends.ts": 476,
