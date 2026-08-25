@@ -27,11 +27,19 @@ describe('new-game editor delivery contract', () => {
     expect(
       validateSourceUpload([...FILES, { path: 'EDITOR.json', content: '{}' }], 'preview', false, true),
     ).toHaveLength(FILES.length + 1);
+    expect(
+      validateSourceUpload(
+        [...FILES, { path: 'EDITOR.ts', content: 'export default {}' }],
+        'preview',
+        false,
+        true,
+      ),
+    ).toHaveLength(FILES.length + 1);
 
     try {
       validateSourceUpload(FILES, 'preview', false, true);
     } catch (error) {
-      expect(error).toMatchObject({ missingPaths: ['EDITOR.json'] });
+      expect(error).toMatchObject({ missingPaths: ['EDITOR.json', 'EDITOR.ts'] });
     }
   });
 
