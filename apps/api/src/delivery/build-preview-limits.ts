@@ -1,2 +1,2 @@
-// 320KB decoded — clears the games-repo bundle cap; never duplicate this number.
-export const MAX_BUILD_PREVIEW_BYTES = 320 * 1024;
+// base64-encoded, own doc per preview — stays under Firestore's 1MiB cap.
+export const MAX_BUILD_PREVIEW_BYTES = 700 * 1024;
