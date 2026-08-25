@@ -289,7 +289,7 @@
     "apps/api/src/delivery/staged-preview.ts": 614,
     "apps/api/src/delivery/workspace-archive.test.ts": 189,
     "apps/api/src/delivery/workspace-archive.ts": 192,
-    "apps/api/src/erase-verification-workflow.test.ts": 79,
+    "apps/api/src/erase-verification-workflow.test.ts": 85,
     "apps/api/src/firestore-indexes.test.ts": 158,
     "apps/api/src/game-snapshot-serve.test.ts": 438,
     "apps/api/src/mcp-continue-draft.test.ts": 427,
