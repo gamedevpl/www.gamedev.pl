@@ -2,8 +2,11 @@ import type { EditorDefinition } from './studioApi.js';
 
 export type EditorSurfaceMode = 'docked' | 'full';
 
-export function editorSurfaceModeForDefinition(definition: EditorDefinition): EditorSurfaceMode {
-  if (definition.controller === true) return 'docked';
+export function editorSurfaceModeForDefinition(
+  definition: EditorDefinition,
+  controllerActive = false,
+): EditorSurfaceMode {
+  if (definition.controller === true && controllerActive) return 'docked';
   const hasBoard =
     Object.keys(definition.layers ?? {}).length > 0 ||
     Object.values(definition.content).some(
