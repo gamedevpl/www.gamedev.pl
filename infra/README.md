@@ -24,6 +24,7 @@ project, which agent tooling can read but not write.
 | `setup-monitoring.sh`       | Per-service uptime check + A1/A2, project-wide A3/A4 and A6/A7, email channel   | **Once per service** (`SERVICE=…`), per `ALERT_EMAIL`. Prints the manual step for A5 (billing budget) |
 | `deploy-api.sh`             | Manual deploy of the app service                                                | Rarely — CI deploys on merge to `master`                                                              |
 | `deploy-world.sh`           | Manual deploy of the zone host                                                  | Rarely; inert unless `ZONE_HOST_URL` is set                                                           |
+| `check-env-manifest.mjs`    | Asserts both deploy paths thread the same service env map                       | Never by hand — runs inside `npm run lint`                                                            |
 
 Backups and alerting exist because neither Cloud Run nor Firestore provides them by
 default: without `setup-backups.sh` a wrong delete is unrecoverable, and without

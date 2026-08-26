@@ -38,7 +38,7 @@ build / image-boot run once (in CI), and deploy does not re-pay for them. Manual
 2. **Keyless OIDC Auth:** Authenticates via GCP Workload Identity Federation (no long-lived service account keys).
 3. **Cloud Build Image Creation:** Submits image build using `infra/cloudbuild.yaml` to Artifact Registry. The WIF deployer service account must also have `roles/serviceusage.serviceUsageConsumer` and storage access for the default Cloud Build staging bucket; `infra/setup-wif.sh` grants both.
 4. **Staging / Candidate Revision:** Deploys revision to Cloud Run with `--no-traffic --tag candidate`.
-5. **Candidate Smoke Test:** Anonymous checks (health, shell, beta wall on catalog/games, waitlist open, forged bearer token rejected) plus an **authenticated smoke** when the `GAMEDEV_ACCESS_TOKEN` repo secret exists — bearer auth, token→cookie exchange, a session-walled route, and catalog/play assemble, run as the CI bot (see [`agent-access-tokens.md`](./agent-access-tokens.md)). Skips loudly when the secret is absent.
+5. **Candidate Smoke Test:** Anonymous checks (health, shell, beta wall on catalog/games, waitlist open, forged bearer token rejected) plus an **authenticated smoke** when the `GAMEDEV_ACCESS_TOKEN` repo secret exists — bearer auth, token→cookie exchange, a session-walled route, and catalog/play assemble, run as the CI bot (see [`agent-access-tokens.md`](./agent-access-tokens.md)). Skips loudly when the secret is absent. The step also reads `/api/auth/token-info` and warns when the CI token has **seven days or fewer** left: expiry is mandatory and a lapsed token fails this step, which blocks promotion, so the warning is the only lead time there is. It never fails the step on the expiry check alone — an expired token is already caught by the bearer 401 above it.
 6. **Browser gate (`apps/e2e`):** Drives real Chromium against the candidate and asserts the site works where HTTP checks cannot see — most importantly that **published games actually run**. See below for why this blocks.
 7. **Traffic Promotion & Tag Cleanup:** Promotes traffic to the latest revision (`--to-latest`) and removes the candidate tag (`--remove-tags candidate`) only if **both** the curl smoke checks and the browser gate succeed.
 
@@ -82,6 +82,24 @@ Secrets live only in GCP Secret Manager (never in the repo); the Cloud Run runti
 account (`<project-number>-compute@developer.gserviceaccount.com`) needs
 `roles/secretmanager.secretAccessor` on each. `deploy.yml` and `infra/deploy-api.sh` wire whichever exist into
 a single `--set-secrets` list.
+
+### The env manifest
+
+Both deploy paths build the service's environment independently, and `--set-env-vars`
+**replaces the whole map** — so a variable one path threads and the other does not is not
+half-configured, it is deleted the next time the other path runs. That is the 2026-08-04
+incident recorded in [`infra/deploy-api.sh`](../infra/deploy-api.sh): a hand-set
+`TRANSLATE_BUILD_LOG=false` stopped a Vertex spend leak, then vanished under an unrelated
+deploy ten minutes later.
+
+[`infra/env-manifest.json`](../infra/env-manifest.json) declares every service variable and
+secret once. [`infra/check-env-manifest.mjs`](../infra/check-env-manifest.mjs) asserts both
+paths thread exactly that set, and runs as part of `npm run lint`, so adding a variable to
+one path alone now fails CI instead of reverting itself in production months later.
+
+**Adding a variable:** add it to the manifest _and_ to both deploy paths in the same
+change. A name that only looks like a service variable — a step-local, or something read by
+a CLI rather than the service — goes under `notServiceVars` with a reason.
 
 | Secret                                 | Purpose                                                                                                                                                                                                                                                        | State (2026-07-26)                                                                                  |
 | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
