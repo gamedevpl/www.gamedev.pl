@@ -6,12 +6,12 @@ import { registerAgentChannelExamplesRoutes } from './agent-channel-examples.js'
 import { registerAgentChannelBriefRoutes } from './agent-channel-brief.js';
 import { registerAgentChannelSeedRoutes } from './agent-channel-seed.js';
 import { registerAgentChannelKitRoutes } from './agent-channel-kit.js';
+import { registerAgentChannelGateMediaRoutes } from './agent-channel-gate-media.js';
 import {
   assertAgentTokenActive,
   classifyAgentTokenAccess,
   InvalidAgentTokenError,
   readBearerToken,
-  STALE_AGENT_TOKEN_REASON,
   verifyAgentToken,
   type AgentTokenAccess,
 } from './agent-token.js';
@@ -27,8 +27,8 @@ import {
 import { MAX_BUILD_PREVIEW_BYTES } from '../delivery/build-preview-limits.js';
 import { loadBuildTranscript } from '../delivery/build-transcript.js';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
-import { deriveGateStatusString, readGateVerdict } from '../delivery/gate-verdict.js';
-import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from '../delivery/gcs-sign.js';
+import { readGateVerdict } from '../delivery/gate-verdict.js';
+import type { GcsObjectStore } from '../delivery/gcs-sign.js';
 import {
   forbiddenIndexHtmlWriteReason,
   InvalidUploadError,
@@ -37,9 +37,7 @@ import {
   type DeliveryMode,
   type GamesStore,
 } from '../delivery/games-store.js';
-import { parseGameMedia } from '../catalog/github-client.js';
 import { canTransition, resolveJobState, type JobState } from '../creation/job-state.js';
-import { gateCrashStall } from '../delivery/gate-crash.js';
 import { createKitFileStore } from './kit-files.js';
 import { registerAgentChannelKitFileRoutes } from './agent-channel-kit-files.js';
 import { logKnowledgeQuery } from '../platform/knowledge-metrics.js';
@@ -128,17 +126,6 @@ const MAX_SHOT_LABEL = 120;
  * number alone or uploads pass validation and 500 at `.set()`.
  */
 const maxShotBytes = 700 * 1024;
-/**
- * Ceilings on frames carried inline by the gate-media read.
- *
- * Not a bandwidth limit — a context limit. Every inlined frame is base64 in a tool
- * reply that some model has to hold, so `frames=all` on an eight-frame capture would
- * cost more than it informs. Two frames answer nearly every question an agent has
- * about how its game looks; the rest stay one signed URL away for clients that can
- * follow one.
- */
-const MAX_INLINE_FRAMES = 3;
-const MAX_INLINE_FRAME_BYTES = 1_400 * 1024;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 const ShotUploadUrlInputSchema = z.object({
@@ -2295,349 +2282,10 @@ export async function registerAgentChannelRoutes(
 
   registerAgentChannelExamplesRoutes(app, { resolveBuild, objectStore: options.objectStore, exampleFileStore });
 
-  /**
-   * Gate verdict for the job's delivery (BY-05 terminal receipt).
-   *
-   * Unlike every other channel read, a capability whose generation is exactly one
-   * behind current is accepted — limited to this delivery's own verdict — so an agent
-   * can observe the green that closed its round. Writes and other reads still 401.
-   * Query `?version=` to name a delivery; default is the job's latest playable pointer
-   * (`previewVersion`, then `deliveredVersion`) — same order as Studio and restore.
-   */
-  app.get(
-    AGENT_CHANNEL_ROUTES.GATE,
-    { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      const resolved = await resolveBuild(request, reply, { allowTerminalReceipt: true });
-      if (!resolved) return reply;
-      const { record, access } = resolved;
-
-      const query = request.query as { version?: string };
-      const requestedVersion = typeof query.version === 'string' && query.version.trim() ? query.version.trim() : null;
-      const version = requestedVersion ?? record.previewVersion ?? record.deliveredVersion ?? null;
-
-      if (!version || !record.slug) {
-        return reply.send({
-          status: 'pending',
-          deliveryId: null,
-          summary:
-            'nothing has been delivered yet — continue building and call submit_sources first; do not call get_gate_verdict again before a delivery',
-          retryAfterSeconds: 30,
-          access,
-        });
-      }
-
-      // Receipt mode may only read the delivery the closed round owns — the job's
-      // current pointer. Asking for any other version is not a receipt grant.
-      if (access === 'terminal_receipt' && version !== record.deliveredVersion) {
-        return reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
-      }
-
-      const gate = await gateVerdict({
-        ...record,
-        deliveredVersion: record.deliveredVersion === version ? version : undefined,
-        previewVersion: version,
-      });
-      if (!gate) {
-        let progress: {
-          lane: string;
-          stage: string;
-          index: number;
-          total: number;
-          at: string;
-        } | null = null;
-        try {
-          const manifest = await options.gamesStore?.getManifest(record.slug, version);
-          if (manifest?.gateProgress && !manifest.gate && !manifest.previewGate) {
-            progress = manifest.gateProgress;
-          }
-        } catch {
-          /* ignore */
-        }
-        // A recorded crash is our build dying, not a slow one.
-        const crashed = gateCrashStall(record) !== null;
-        return reply.send({
-          status: crashed ? 'crashed' : 'pending',
-          deliveryId: version,
-          summary: crashed
-            ? 'our gate build failed before it could check your game — this is a platform fault, not your code. Deliver again to start a fresh gate run; the round is still open.'
-            : 'gate has not reported yet — do not loop on get_gate_verdict; stop this run and let Studio show the eventual result',
-          retryAfterSeconds: 30,
-          access,
-          ...(progress
-            ? {
-                progress,
-                lane: progress.lane === 'preview' ? 'preview' : 'publish',
-              }
-            : {}),
-        });
-      }
-
-      const status = deriveGateStatusString(gate);
-      return reply.send({
-        status,
-        deliveryId: version,
-        version: gate.version,
-        green: gate.green,
-        lane: gate.lane,
-        ranAt: gate.ranAt,
-        summary: gate.green
-          ? 'gate accepted this delivery'
-          : gate.status === 'preview_passed'
-            ? 'preview check passed — continue iterating, then submit_sources with mode=publish (TRACE required)'
-            : gate.status === 'preview_failed'
-              ? (gate.report?.split('\n').at(-1) ?? 'preview check refused this delivery')
-              : (gate.report?.split('\n').at(-1) ?? 'gate refused this delivery'),
-        ...(gate.report ? { report: gate.report } : {}),
-        ...(gate.status ? { gateStatus: gate.status } : {}),
-        ...('previewPassed' in gate && gate.previewPassed !== undefined ? { previewPassed: gate.previewPassed } : {}),
-        access,
-      });
-    },
-  );
-
-  /**
-   * Gate-produced media for a delivery (BY-28).
-   *
-   * Exists for the agent that cannot run the game — a connector-surface client
-   * (ChatGPT, claude.ai) with no shell and no browser builds and submits fine, but
-   * iterates blind on verdict text and finishes with nothing to show the creator.
-   * The gate already produced the missing evidence on every run: capture PNGs and a
-   * gameplay MP4, stored as derived artifacts on the version. This is the read back.
-   *
-   * Read-only over runs that already happened — deliberately *not* an on-demand
-   * capture: rendering agent code is gate compute, and it stays behind the delivery
-   * cap. Filenames come exclusively from the validated `media/metadata.json` (the
-   * same allowlist rule as the published-media route), with the manifest's own
-   * `gate.screenshot` as the fallback for runs capture abandoned partway. Terminal
-   * receipt is accepted exactly as on the verdict read, and for the same reason:
-   * green closes the round, and post-green is when there is something worth showing.
-   */
-  app.get(
-    AGENT_CHANNEL_ROUTES.MEDIA,
-    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      const resolved = await resolveBuild(request, reply, { allowTerminalReceipt: true });
-      if (!resolved) return reply;
-      const { record, access } = resolved;
-
-      if (!options.gamesStore || !options.objectStore) {
-        return reply.status(503).send({ error: 'the media store is not configured' });
-      }
-
-      const query = request.query as { version?: string; frames?: string };
-      const requestedVersion = typeof query.version === 'string' && query.version.trim() ? query.version.trim() : null;
-      const version = requestedVersion ?? record.previewVersion ?? record.deliveredVersion ?? null;
-
-      if (!version || !record.slug) {
-        return reply.send({
-          available: false,
-          deliveryId: null,
-          reason: 'nothing has been delivered yet — media is produced by the gate, after submit',
-          access,
-        });
-      }
-
-      // Same receipt rule as the verdict read: a closed round may only look at the
-      // delivery it owns.
-      if (access === 'terminal_receipt' && version !== record.deliveredVersion) {
-        return reply.status(401).send({ error: STALE_AGENT_TOKEN_REASON });
-      }
-
-      // Version ids are ours (timestamp + suffix), but this one arrived in a query
-      // string and is about to be interpolated into a signed object path — shape-check
-      // it rather than trusting the round to have asked nicely.
-      if (!/^[A-Za-z0-9-]+$/.test(version)) {
-        return reply.status(400).send({ error: 'invalid version' });
-      }
-
-      const slug = record.slug;
-      // The manifest proves this version exists — but a slug is not a job. Every
-      // improvement round is a *new* job that inherits the published slug, so a
-      // version delivered by an earlier round resolves perfectly well under this
-      // one's slug, and after a slug transfer that earlier job can belong to a
-      // different creator entirely. The manifest records the job that produced it;
-      // that is the ownership check, and the slug never was one.
-      //
-      // Absent and not-yours answer identically on purpose: distinguishing them
-      // would let a round enumerate which versions its predecessors delivered.
-      const manifest = await options.gamesStore.getManifest(slug, version);
-      if (!manifest || manifest.issueNumber !== record.issueNumber) {
-        return reply.send({
-          available: false,
-          deliveryId: version,
-          reason: 'no such delivery for this build',
-          access,
-        });
-      }
-
-      // Either lane's verdict can own frames. Publish wins when both exist: it is the
-      // later, fuller run, and its media is what a creator would be shown. Preview
-      // frames (BY-28a) are what make this read useful *during* a round — before
-      // BY-28a a preview delivery had no media at all, so an agent iterating on the
-      // cheap lane could only read prose.
-      const verdict = manifest.gate
-        ? { ...manifest.gate, lane: 'publish' as const }
-        : manifest.previewGate
-          ? { ...manifest.previewGate, lane: 'preview' as const }
-          : null;
-      // Publish wins the *verdict* — it is the later, fuller run — but not the frame.
-      // A publish run that failed before capture names no screenshot, and preferring
-      // its silence over a preview frame that exists would report "no media" while the
-      // bytes sit in the bucket. Verdict precedence and evidence precedence are
-      // different questions; only the first one publish should win by default.
-      const verdictScreenshot = manifest.gate?.screenshot ?? manifest.previewGate?.screenshot ?? null;
-
-      const metadataBody = await options.gamesStore.getDerivedArtifact(slug, version, 'media/metadata.json');
-      const media = parseGameMedia(metadataBody?.toString('utf8') ?? null);
-
-      // Runs that failed mid-capture store frames without metadata; the verdict names
-      // the first stored frame (`media/opening.png` shape).
-      const fallbackShot =
-        !media && verdictScreenshot && /^media\/[a-z0-9][a-z0-9_.-]*\.png$/i.test(verdictScreenshot)
-          ? verdictScreenshot.slice('media/'.length)
-          : null;
-
-      const screenshotFiles = media
-        ? media.screenshots.map((shot) => ({ name: shot.name, file: shot.file }))
-        : fallbackShot
-          ? [{ name: 'opening', file: fallbackShot }]
-          : [];
-      const videoFile = media?.video ?? null;
-
-      if (screenshotFiles.length === 0 && !videoFile) {
-        return reply.send({
-          available: false,
-          deliveryId: version,
-          reason: 'the gate stored no media for this delivery',
-          access,
-        });
-      }
-
-      const mediaObject = (file: string) => `games/${slug}/versions/${version}/media/${file}`;
-
-      // Metadata names what capture *intended* to store, which is not the same as what
-      // landed: the gate writes each media file independently and swallows a per-file
-      // failure to protect the verdict (gate-runner `storeCaptureMedia`), so a run can
-      // store metadata.json and lose the mp4. Signing a name we never confirmed hands
-      // the agent a URL that 404s — and the agent then tells the creator their video is
-      // ready. Probe before advertising; a signed URL is a promise about bytes.
-      const probed = await Promise.all(
-        screenshotFiles.map(async (shot) =>
-          (await options.objectStore!.objectExists(mediaObject(shot.file))) ? shot : null,
-        ),
-      );
-      const storedShots = probed.filter((shot): shot is { name: string; file: string } => shot !== null);
-      const storedVideo =
-        videoFile && (await options.objectStore.objectExists(mediaObject(videoFile))) ? videoFile : null;
-
-      if (storedShots.length === 0 && !storedVideo) {
-        return reply.send({
-          available: false,
-          deliveryId: version,
-          reason: 'the gate stored no media for this delivery',
-          access,
-        });
-      }
-
-      const screenshots = await Promise.all(
-        storedShots.map(async (shot) => ({
-          ...shot,
-          url: await options.objectStore!.signReadUrl(mediaObject(shot.file), DEFAULT_SIGNED_URL_TTL_SECONDS),
-        })),
-      );
-      const video = storedVideo
-        ? {
-            file: storedVideo,
-            url: await options.objectStore.signReadUrl(mediaObject(storedVideo), DEFAULT_SIGNED_URL_TTL_SECONDS),
-          }
-        : null;
-
-      // Frames carried *through* the channel, not pointed at.
-      //
-      // A signed URL assumes the reader can open a socket. The agent this endpoint was
-      // built for cannot: a ChatGPT-side connector runs our tools and nothing else — no
-      // shell, no fetch, no egress at all (owner test, 2026-08-03). For that client a
-      // URL is not a degraded experience, it is a blank one, and the same is true of
-      // `get_kit`'s tarball (which is why #510 added file-reading tools rather than
-      // another link). So the bytes ride the reply.
-      //
-      // Bounded, because context is the cost here rather than bandwidth: capture stores
-      // up to eight frames and each may be ~700 KB, which no client should be made to
-      // swallow by default. `opening` answers "did it draw"; `all` is for "show the
-      // creator what it looks like". Whatever the budget drops is reported — a caller
-      // told it has every frame when it has three is worse off than one that knows.
-      const requestedFrames = typeof query.frames === 'string' ? query.frames : 'opening';
-      const frameMode: 'opening' | 'all' | 'none' =
-        requestedFrames === 'all' || requestedFrames === 'none' ? requestedFrames : 'opening';
-
-      const openingFirst = [
-        ...storedShots.filter((shot) => shot.name === 'opening'),
-        ...storedShots.filter((shot) => shot.name !== 'opening'),
-      ];
-      const wanted = frameMode === 'none' ? [] : frameMode === 'all' ? openingFirst : openingFirst.slice(0, 1);
-
-      const frames: Array<{ file: string; name: string; png: string }> = [];
-      let framesOmitted = 0;
-      let inlineBytes = 0;
-      for (const shot of wanted) {
-        if (frames.length >= MAX_INLINE_FRAMES) {
-          framesOmitted += 1;
-          continue;
-        }
-        const body = await options.gamesStore.getDerivedArtifact(slug, version, `media/${shot.file}`).catch(() => null);
-        // An unreadable or oversized frame is skipped, not fatal: the URLs still stand
-        // for clients that can use them, and a partial answer beats a 500.
-        if (!body || body.length === 0 || body.length > maxShotBytes) {
-          framesOmitted += 1;
-          continue;
-        }
-        // Measured with this frame included, not before it. Checking the running total
-        // first makes the budget a floor rather than a ceiling: three frames just under
-        // the line individually still land ~2.1 MB together. A frame that would cross
-        // the line is dropped and the scan continues, so a smaller later frame can
-        // still be carried. No starvation: maxShotBytes is below the budget, so the
-        // first frame always fits.
-        if (inlineBytes + body.length > MAX_INLINE_FRAME_BYTES) {
-          framesOmitted += 1;
-          continue;
-        }
-        inlineBytes += body.length;
-        frames.push({ file: shot.file, name: shot.name, png: body.toString('base64') });
-      }
-
-      return reply.send({
-        available: true,
-        deliveryId: version,
-        ...(verdict
-          ? {
-              gate: {
-                green: verdict.green,
-                ranAt: verdict.ranAt,
-                ...(verdict.status ? { status: verdict.status } : {}),
-                // Which lane took these frames. A preview pass is not publish
-                // readiness, and an agent that reads `green` without this would
-                // report a game sealed when it has only typechecked.
-                lane: verdict.lane,
-              },
-            }
-          : {}),
-        screenshots,
-        video,
-        frames,
-        ...(framesOmitted > 0 ? { framesOmitted } : {}),
-        // Said in the payload, not only in the tool description, because the agent that
-        // needs to know is the one that cannot test a URL to find out.
-        ...(video
-          ? {
-              videoNote:
-                'The video is available only as a URL. If you cannot fetch URLs, do not try — ' +
-                'give the link to the creator, who can open it, and describe the game from the frames.',
-            }
-          : {}),
-        expiresInSeconds: DEFAULT_SIGNED_URL_TTL_SECONDS,
-        access,
-      });
-    },
-  );
+  registerAgentChannelGateMediaRoutes(app, {
+    resolveBuild,
+    gamesStore: options.gamesStore,
+    objectStore: options.objectStore,
+    gateVerdict,
+  });
 }
