@@ -240,6 +240,8 @@ const FILE_BUCKET = {
   'build-status': 'delivery',
   'creator-media': 'delivery',
   'draft-preview-routes': 'delivery',
+  'editor-upload-requirements': 'delivery',
+  'seal-preview': 'delivery',
   'staged-preview': 'delivery',
   'stage-hints': 'delivery',
   'games-store': 'delivery',
