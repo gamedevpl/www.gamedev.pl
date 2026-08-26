@@ -1124,7 +1124,7 @@ export function CreatorStudioView({
                         {tab === 'edit' ? (
                           <div
                             className="studio-edit-overlay"
-                            data-surface={editorController?.status === 'ready' ? 'full' : editorSurfaceMode}
+                            data-surface={editorSurfaceMode}
                           >
                             <EditorPanel
                               key={activeGame.token}
