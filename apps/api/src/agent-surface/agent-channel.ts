@@ -5,6 +5,7 @@ import { createExampleFileStore } from '../creation/example-files.js';
 import { registerAgentChannelExamplesRoutes } from './agent-channel-examples.js';
 import { registerAgentChannelBriefRoutes } from './agent-channel-brief.js';
 import { registerAgentChannelSeedRoutes } from './agent-channel-seed.js';
+import { registerAgentChannelKitRoutes } from './agent-channel-kit.js';
 import {
   assertAgentTokenActive,
   classifyAgentTokenAccess,
@@ -28,7 +29,6 @@ import { loadBuildTranscript } from '../delivery/build-transcript.js';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
 import { deriveGateStatusString, readGateVerdict } from '../delivery/gate-verdict.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from '../delivery/gcs-sign.js';
-import { DEFAULT_MCP_DIGEST_MAX_BYTES, compactKitDigestForApi } from './kit-digest.js';
 import {
   forbiddenIndexHtmlWriteReason,
   InvalidUploadError,
@@ -49,13 +49,6 @@ import type {
   KnowledgeScope,
   QueryKnowledgeFn,
 } from '../creation/knowledge-search.js';
-import {
-  KIT_ENTRY,
-  KitRegistryError,
-  kitUnpackCommand,
-  parseKitRegistry,
-  parseKitSidecar,
-} from '../platform/kit-registry.js';
 import { seedPayload } from './seed-status.js';
 import { largeSourceFileHint } from '../creation/module-size.js';
 import { gameManifestHint } from './game-manifest-hint.js';
@@ -2251,128 +2244,7 @@ export async function registerAgentChannelRoutes(
     onRegenerateSeed: options.onRegenerateSeed,
   });
 
-  /**
-   * Current Creator Kit — engine-pinned tarball from `kits/current.json`.
-   *
-   * Missing registry is a clear machine-readable error (bucket empty until the first
-   * games-repo publish), never a fabricated engineRef.
-   */
-  app.get(
-    AGENT_CHANNEL_ROUTES.KIT,
-    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      const resolved = await resolveBuild(request, reply);
-      if (!resolved) return reply;
-
-      if (!options.objectStore) {
-        return reply.status(503).send({ error: 'kit_store_unavailable', message: 'the kit store is not configured' });
-      }
-
-      try {
-        const registryBody = await options.objectStore.readObject('kits/current.json');
-        if (!registryBody) {
-          return reply.status(404).send({
-            error: 'kit_registry_missing',
-            message: 'kits/current.json is not published yet — the games-repo kit publisher has not run',
-          });
-        }
-        const registry = parseKitRegistry(registryBody.toString('utf8'));
-        // The pointer can advance mid-round; the round builds against one engine.
-        const previousPin = resolved.record.roundKitEngineRef;
-        const outdated = (await gateVerdict(resolved.record))?.status === 'kit_outdated';
-        let engineRef =
-          (await store!.pinRoundKitEngineRef(resolved.issueNumber, registry.current, outdated)) ?? registry.current;
-        // Re-pin when the pinned kit has aged out of retention.
-        if (engineRef !== registry.current && !(await options.objectStore.objectExists(`kits/${engineRef}.tgz`))) {
-          engineRef =
-            (await store!.pinRoundKitEngineRef(resolved.issueNumber, registry.current, true)) ?? registry.current;
-        }
-        const kitEngineChanged = Boolean(previousPin) && previousPin !== engineRef;
-        const sidecarBody = await options.objectStore.readObject(`kits/${engineRef}.json`);
-        if (!sidecarBody) {
-          return reply.status(404).send({
-            error: 'kit_artifact_missing',
-            message: `kits/${engineRef}.json sidecar is missing for the current registry entry`,
-          });
-        }
-        const sidecar = parseKitSidecar(sidecarBody.toString('utf8'));
-        // Metadata probe only — do not pull the multi-MB kit into the request path.
-        if (!(await options.objectStore.objectExists(`kits/${engineRef}.tgz`))) {
-          return reply.status(404).send({
-            error: 'kit_artifact_missing',
-            message: `kits/${engineRef}.tgz is missing for the current registry entry`,
-          });
-        }
-
-        const kitUrl = await options.objectStore.signReadUrl(`kits/${engineRef}.tgz`, DEFAULT_SIGNED_URL_TTL_SECONDS);
-        return reply.send({
-          engineRef,
-          kitUrl,
-          sha256: sidecar.sha256,
-          unpack: kitUnpackCommand(kitUrl),
-          entry: KIT_ENTRY,
-          // The round's engine moved: rebuild against the one in this reply.
-          ...(kitEngineChanged ? { kitEngineChanged: true } : {}),
-          // Shell-less clients browse via these tools instead of unpacking.
-          browse: {
-            list: 'list_kit_files',
-            search: 'search_kit_files',
-            read: 'read_kit_file',
-            readMany: 'read_kit_files',
-            fragment: 'read_kit_file_fragment',
-          },
-        });
-      } catch (error) {
-        if (error instanceof KitRegistryError) {
-          return reply.status(404).send({ error: error.code, message: error.message });
-        }
-        throw error;
-      }
-    },
-  );
-
-  // Prompt-ready API reference for MCP get_kit_api — see byoca-mcp SKILL.md.
-  app.get(
-    AGENT_CHANNEL_ROUTES.KIT_API,
-    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      const resolved = await resolveBuild(request, reply);
-      if (!resolved) return reply;
-      if (!options.objectStore) {
-        return reply.status(503).send({ error: 'kit_store_unavailable', message: 'the kit store is not configured' });
-      }
-      try {
-        const query = request.query as { engineRef?: string };
-        let engineRef = query.engineRef?.trim();
-        if (!engineRef) {
-          const registryBody = await options.objectStore.readObject('kits/current.json');
-          if (!registryBody) {
-            return reply.status(404).send({
-              error: 'kit_registry_missing',
-              message: 'kits/current.json is not published yet — the games-repo kit publisher has not run',
-            });
-          }
-          engineRef = parseKitRegistry(registryBody.toString('utf8')).current;
-        }
-        const digestBody = await options.objectStore.readObject(`kits/${engineRef}.digest.md`);
-        if (!digestBody) {
-          return reply.status(404).send({
-            error: 'kit_artifact_missing',
-            message: `kits/${engineRef}.digest.md is missing for engineRef ${engineRef}`,
-          });
-        }
-        return reply.send({
-          engineRef,
-          digest: compactKitDigestForApi(digestBody.toString('utf8'), DEFAULT_MCP_DIGEST_MAX_BYTES),
-        });
-      } catch (error) {
-        if (error instanceof KitRegistryError) {
-          return reply.status(404).send({ error: error.code, message: error.message });
-        }
-        throw error;
-      }
-    },
-  );
+  registerAgentChannelKitRoutes(app, { resolveBuild, store, objectStore: options.objectStore, gateVerdict });
 
   registerAgentChannelKitFileRoutes(app, { resolveBuild, kitFileStore });
 
