@@ -118,7 +118,7 @@ a CLI rather than the service — goes under `notServiceVars` with a reason.
 | `openrouter-api-key`                   | Round-0 seed provider credential → `SEED_OPENROUTER_API_KEY`; OpenRouter routes to `SEED_OPENROUTER_MODEL` (repo var), default `google/gemini-3.5-flash-lite`                                                                                                  | ✅ set                                                                                              |
 | `resend-api-key`                       | Outbound email → `RESEND_API_KEY` (see below)                                                                                                                                                                                                                  | ✅ set                                                                                              |
 | `vapid-private-key`                    | Web push signing → `VAPID_PRIVATE_KEY`                                                                                                                                                                                                                         | ✅ set                                                                                              |
-| `site-basic-auth`                      | Former "not public yet" lock → `SITE_BASIC_AUTH`                                                                                                                                                                                                               | ⚠️ exists but **unused**                                                                            |
+| `site-basic-auth`                      | Former "not public yet" lock → `SITE_BASIC_AUTH`                                                                                                                                                                                                               | 🗑️ orphaned — no code or config references it; safe to delete (below)                               |
 
 ### Managed agent configuration
 
@@ -156,7 +156,18 @@ backward-compatible probe escape hatch.
 
 `site-basic-auth` is a leftover: the running revision does not wire it, and the site answers
 without an auth challenge. Access is controlled by `PRIVATE_BETA` and the beta allowlist
-instead. Delete the secret when you are sure nothing references it.
+instead.
+
+**Nothing references it — verified 2026-08-26.** No `.ts`, `.sh`, `.yml` or `.yaml` in the
+repo mentions `site-basic-auth` or `SITE_BASIC_AUTH`, and it is absent from
+[`infra/env-manifest.json`](../infra/env-manifest.json), which both deploy paths are now
+asserted against. The remaining copies are this page, the M3 note in
+[`auth-and-usage-plan.md`](./auth-and-usage-plan.md) and the historical snapshot in
+[`steel-thread-plan.md`](./steel-thread-plan.md). Deleting it is an owner action:
+
+```bash
+gcloud secrets delete site-basic-auth --project gamedevpl
+```
 
 **`GAMES_REPO_TOKEN` is one hourly REST budget shared by two very different consumers.**
 The CI lockstep check spends 2 requests per run. The snapshot bake used to spend roughly a
