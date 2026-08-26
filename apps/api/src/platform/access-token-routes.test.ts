@@ -5,13 +5,11 @@ import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { InMemoryStore } from './store.js';
 
-/**
- * Every test here drives the **fully assembled app** (`buildApp`), never the route
- * plugin alone. That is deliberate: this repo has a cross-cutting private-beta wall
- * that lives in `app.ts`, and a previous route shipped green unit tests while the wall
- * 401'd it in production. A credential whose entire purpose is getting through that
- * wall has to be tested against it.
- */
+// Every test drives the fully assembled app, never the route plugin.
+
+// The private beta wall once 401'd a route with green tests.
+
+// A credential for getting through that wall must be tested against it.
 
 const sessionSecret = 'dev-session-secret-change-me';
 const HOUR = 60 * 60 * 1000;
@@ -298,14 +296,14 @@ describe('authenticating with a personal access token', () => {
     const res = await app.inject({ method: 'GET', url: '/api/auth/token-info', headers: bearer(token) });
     expect(res.statusCode).toBe(200);
     expect(res.json().name).toBe('github actions');
-    // A whole day may or may not have been consumed by the time this reads back.
+    // A day may already be consumed by this read.
     expect(res.json().expiresInDays).toBeGreaterThanOrEqual(DEFAULT_EXPIRY_DAYS - 1);
     expect(res.json().expiresInDays).toBeLessThanOrEqual(DEFAULT_EXPIRY_DAYS);
     // The date has to be readable, not just the day count.
     expect(Date.parse(res.json().expiresAt)).toBeGreaterThan(Date.now());
   });
 
-  // Minted off-clock so the half-day remainder is real, not a race.
+  // Minted off-clock, so the remainder is real.
   it.each([
     [12 * HOUR, 7],
     [-12 * HOUR, 6],
