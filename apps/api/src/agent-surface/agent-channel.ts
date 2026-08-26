@@ -1,14 +1,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
-import {
-  AGENT_BUILD_RULES_DIGEST,
-  briefLocales,
-  buildConstraints,
-  DEFAULT_BUILD_ORIENTATION,
-} from './agent-build-brief.js';
 import { createExampleFileStore } from '../creation/example-files.js';
 import { registerAgentChannelExamplesRoutes } from './agent-channel-examples.js';
+import { registerAgentChannelBriefRoutes } from './agent-channel-brief.js';
 import {
   assertAgentTokenActive,
   classifyAgentTokenAccess,
@@ -68,13 +63,7 @@ import { computeStageAdvisories } from '../delivery/stage-hints.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from '../creation/source-patch.js';
 import { overlayGameSources } from '../delivery/staged-preview.js';
 import { SourceDeliveryValidationError, type SourceDeliveryService } from '../delivery/source-delivery.js';
-import {
-  dispatchAttempt,
-  type BuilderHandoff,
-  type CreatorMessage,
-  type Store,
-  type SubmissionRecord,
-} from '../platform/store.js';
+import { type BuilderHandoff, type CreatorMessage, type Store, type SubmissionRecord } from '../platform/store.js';
 import { pickLatestChangelogText } from '../delivery/build-changelog.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from '../platform/submission-status.js';
 import { normalizeAtIntake, type IntakeText } from '../platform/localize-intake.js';
@@ -2267,67 +2256,7 @@ export async function registerAgentChannelRoutes(
     },
   );
 
-  /**
-   * Everything an agent needs to start a round without reading a GitHub issue.
-   *
-   * Spec/qa live on the job document (written at submission). Rules and the byte
-   * ceiling are static / contract-derived — never invented per job.
-   */
-  app.get(
-    AGENT_CHANNEL_ROUTES.BRIEF,
-    { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      const resolved = await resolveBuild(request, reply);
-      if (!resolved) return reply;
-      const { issueNumber, record } = resolved;
-
-      const pending = await store!.listPendingCreatorMessages(issueNumber);
-      const seed = seedPayload(record);
-      const referenceShots = (await store!.listBuildShots(issueNumber)).filter(
-        (shot) => shot.label === 'creator-reference',
-      );
-      return reply.send({
-        title: record.title,
-        slug: record.slug ?? null,
-        spec: record.spec ?? '',
-        qa: record.qa ?? [],
-        rules: AGENT_BUILD_RULES_DIGEST,
-        constraints: buildConstraints(DEFAULT_BUILD_ORIENTATION),
-        locales: briefLocales(record.locale),
-        ...seed,
-        // > 1 means get_transcript may know more than this brief's spec.
-        dispatchAttempt: await dispatchAttempt(store!, record),
-        pendingMessages: pending.map((message) => ({
-          id: message.id,
-          text: message.text,
-          createdAt: message.createdAt,
-        })),
-        // Ids only — fetch pixels via get_reference_images / GET .../reference-images.
-        referenceImages: referenceShots.map((shot) => ({ id: shot.id, createdAt: shot.createdAt })),
-      });
-    },
-  );
-
-  // Creator-attached reference images, with bytes — mirrors /build/media.
-  app.get(
-    AGENT_CHANNEL_ROUTES.REFERENCE_IMAGES,
-    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      const resolved = await resolveBuild(request, reply);
-      if (!resolved) return reply;
-      const { issueNumber } = resolved;
-
-      const summaries = (await store!.listBuildShots(issueNumber)).filter((shot) => shot.label === 'creator-reference');
-      const images = await Promise.all(
-        summaries.map(async (summary) => {
-          const shot = await store!.getBuildShot(issueNumber, summary.id);
-          if (!shot) return null;
-          return { id: shot.id, createdAt: shot.createdAt, png: shot.data };
-        }),
-      );
-      return reply.send({ images: images.filter((image): image is NonNullable<typeof image> => image !== null) });
-    },
-  );
+  registerAgentChannelBriefRoutes(app, { resolveBuild, store });
 
   /**
    * Round-0 seed draft stored on the job (self builds and platform seeds that persisted).
