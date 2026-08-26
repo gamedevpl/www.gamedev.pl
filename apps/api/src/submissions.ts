@@ -32,6 +32,7 @@ import { registerAdminGameRoutes } from './catalog/admin-game-routes.js';
 import { createSlugResolver } from './catalog/slug-resolver.js';
 import { registerSelfBuildConnectRoutes } from './agent-surface/self-build-connect-routes.js';
 import { registerDraftLifecycleRoutes } from './creation/draft-lifecycle-routes.js';
+import { registerHandoffSealRoutes } from './creation/handoff-seal-routes.js';
 import { createSeedPipeline } from './creation/seed-pipeline.js';
 import { registerCreatorSelfRoutes } from './creation/creator-self-routes.js';
 import { registerCatalogRoutes } from './catalog/catalog-routes.js';
@@ -59,7 +60,6 @@ import {
 } from './agent-surface/agent-backend-env.js';
 import { createSeedAvailabilityGate, type SeedAvailabilityGate } from './creation/seed-availability.js';
 import {
-  allowsCreatorBuilderHandoff,
   allowsSelfToPlatformHandoff,
   isActiveBuildRound,
   isBuilderKind,
@@ -81,7 +81,6 @@ import {
   type JobTransition,
 } from './creation/job-state.js';
 import { probeGateCrash } from './delivery/gate-crash.js';
-import { sealRefusal } from './delivery/seal-preview.js';
 import { clearObserveFailures, noteObserveFailure, sessionCrashTransition } from './creation/session-crash.js';
 import { createNativeJobStatusAssembler } from './delivery/native-job-status.js';
 import {
@@ -2249,325 +2248,19 @@ export async function registerSubmissionRoutes(
     return reply.send({ token, slug: created.slug, statusUrl: `/api/submissions/${token}` });
   });
 
-  /** Lets a creator replace the current builder without creating feedback. */
-  app.post(
-    '/api/submissions/:token/handoff',
-    { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      if (!githubClient || !submissionTokenSecret) {
-        return reply.status(503).send({ error: 'submissions are not configured' });
-      }
-      if (!checkUserAccess(request, reply)) return;
-      if (!store) {
-        return reply.status(503).send({ error: 'submissions are not configured' });
-      }
-
-      const token = z.string().parse((request.params as { token?: string }).token);
-      let issueNumber: number;
-      try {
-        issueNumber = verifyToken(token, submissionTokenSecret);
-      } catch (error) {
-        if (error instanceof InvalidTokenError) {
-          return reply.status(400).send({ error: 'invalid submission token' });
-        }
-        throw error;
-      }
-
-      const record = await store.getSubmission(issueNumber);
-      if (!record || record.ownerUid !== request.user!.uid) {
-        return reply.status(403).send({ error: 'only the creator can hand off this build' });
-      }
-
-      const parsedBody = z
-        .object({
-          builder: z.enum(BUILDERS).optional(),
-          stopActiveSelfAgent: z.boolean().optional(),
-          stopActivePlatformAgent: z.boolean().optional(),
-        })
-        .safeParse(request.body ?? {});
-      if (!parsedBody.success) {
-        return reply.status(400).send({ error: 'invalid builder handoff request' });
-      }
-      const requestedBuilder: BuilderKind = parsedBody.data.builder ?? 'platform';
-      const creatorRequested =
-        requestedBuilder === 'self'
-          ? parsedBody.data.stopActivePlatformAgent === true
-          : parsedBody.data.stopActiveSelfAgent === true;
-
-      const currentBuilder = builderOf(record);
-      if (requestedBuilder === 'platform' && managedAvailabilityGate) {
-        const availability = await managedAvailabilityGate.peek(
-          record.ownerUid,
-          new Date(now()).toISOString().slice(0, 10),
-        );
-        if (!availability.available) {
-          return reply.status(409).send({ error: MANAGED_UNAVAILABLE_ERROR, reason: availability.reason });
-        }
-      }
-      if (record.builderHandoff?.acknowledgedAt && record.builderHandoff.to === requestedBuilder) {
-        const retry = await resumeBuild({
-          issueNumber,
-          feedback: record.spec ?? `Continue building "${record.title}" for gamedev.pl.`,
-          locale: record.locale ?? 'en',
-          log: request.log,
-          builder: requestedBuilder,
-          preserveRoundBudget: true,
-          transition: {
-            by: 'creator',
-            reason: requestedBuilder === 'self' ? 'platform_builder_handoff_retry' : 'self_builder_handoff_retry',
-          },
-        });
-        if (retry.started) await store.clearBuilderHandoff(issueNumber);
-        invalidateStatusCache(issueNumber);
-        if (!retry.started) {
-          if (retry.reason === 'platform_unavailable') {
-            return reply.status(409).send({ error: MANAGED_UNAVAILABLE_ERROR, reason: retry.unavailableReason });
-          }
-          return reply.status(502).send({ error: retry.reason });
-        }
-        return reply.send({ ok: true });
-      }
-      const stall = detectStall({
-        state: record.state ?? 'queued',
-        stateSince: record.stateSince ?? record.createdAt,
-        lastAgentSignalAt: record.lastAgentSignalAt,
-        agentState: record.agentState,
-        agentEndedAt: record.agentEndedAt,
-        now: now(),
-        builder: currentBuilder,
-      });
-      const roundAlreadyClosed = record.state === 'ready_for_review';
-      if (
-        record.state === 'publishing' ||
-        (!isActiveBuildRound(record) && !roundAlreadyClosed) ||
-        (!roundAlreadyClosed &&
-          !allowsCreatorBuilderHandoff({
-            currentBuilder,
-            requestedBuilder,
-            stall,
-            agentEndedAt: record.agentEndedAt,
-            creatorRequested,
-          }))
-      ) {
-        return reply.status(409).send({ error: 'builder_locked', reason: 'active_round', builder: currentBuilder });
-      }
-
-      if (record.builderHandoff) {
-        if (record.builderHandoff.to !== requestedBuilder) {
-          return reply.status(409).send({ error: 'builder_handoff_in_progress', builder: currentBuilder });
-        }
-        if (record.builderHandoff.awaitsAgentAck === false) {
-          return reply.status(409).send({ error: 'builder_handoff_in_progress', builder: currentBuilder });
-        }
-        return reply.status(202).send({
-          ok: true,
-          pending: true,
-          builder: currentBuilder,
-          target: record.builderHandoff.to,
-          requestedAt: record.builderHandoff.requestedAt,
-          ...(record.builderHandoff.acknowledgedAt ? { acknowledgedAt: record.builderHandoff.acknowledgedAt } : {}),
-        });
-      }
-
-      // An already-`ended` agent cannot ack again — resume immediately instead.
-      // Same if never dispatched: no agent exists to ack.
-      const neverDispatched = !record.dispatch?.refs?.length;
-      const awaitsAgentAck = creatorRequested && stall !== 'ended' && !neverDispatched && !roundAlreadyClosed;
-      const requestedAt = new Date(now()).toISOString();
-      const accepted = await store.requestBuilderHandoff(issueNumber, requestedBuilder, requestedAt, awaitsAgentAck);
-      if (!accepted) {
-        return reply.status(409).send({ error: 'builder_handoff_in_progress', builder: currentBuilder });
-      }
-      if (awaitsAgentAck) {
-        invalidateStatusCache(issueNumber);
-        return reply.status(202).send({
-          ok: true,
-          pending: true,
-          builder: currentBuilder,
-          target: requestedBuilder,
-          requestedAt,
-        });
-      }
-
-      // Recheck: a reviewer may have approved this since the read at handler top.
-      if (roundAlreadyClosed) {
-        const fresh = await store.getSubmission(issueNumber);
-        if (!fresh || fresh.state === 'publishing' || fresh.state === 'published') {
-          await store.clearBuilderHandoff(issueNumber).catch(() => {});
-          return reply.status(409).send({ error: 'builder_locked', reason: 'active_round', builder: currentBuilder });
-        }
-      }
-
-      const outcome = await resumeBuild({
-        issueNumber,
-        feedback: record.spec ?? `Continue building "${record.title}" for gamedev.pl.`,
-        locale: record.locale ?? 'en',
-        log: request.log,
-        builder: requestedBuilder,
-        preserveRoundBudget: true,
-        transition: {
-          by: 'creator',
-          reason: requestedBuilder === 'self' ? 'platform_builder_handoff' : 'self_builder_handoff',
-        },
-      });
-      if (outcome.started) {
-        await store.clearBuilderHandoff(issueNumber);
-      } else {
-        // The quiet/no-agent path has no process to acknowledge the nudge, so it
-        // can start immediately. Keep a failed replacement retryable, though:
-        // the builder transition may already have been persisted by resumeBuild.
-        await store.acknowledgeBuilderHandoff(issueNumber, new Date(now()).toISOString());
-      }
-      invalidateStatusCache(issueNumber);
-
-      if (!outcome.started) {
-        if (outcome.reason === 'platform_unavailable') {
-          return reply.status(409).send({ error: MANAGED_UNAVAILABLE_ERROR, reason: outcome.unavailableReason });
-        }
-        const status = outcome.reason === 'not_configured' ? 503 : 502;
-        return reply.status(status).send({ error: outcome.reason });
-      }
-      return reply.send({ ok: true });
-    },
-  );
-
-  /**
-   * Promotes a green preview to a publish candidate, without an agent.
-   *
-   * The preview lane is the only lane a platform-built game ever reaches: its agents
-   * deliver `mode=preview` and stop, and they cannot deliver publish because that needs
-   * a TRACE.json recorded by running the game against the games-repo harness, which is
-   * not in their sandbox. So a finished game sat in `ready_for_review` with no
-   * `deliveredVersion`, and the one publish route on the platform answers
-   * `nothing_delivered` — no creator and no operator could publish it.
-   *
-   * This re-delivers the same sources as `origin: 'seal'`, which is what tells the gate
-   * to derive the behavioural golden itself before replaying it (gate-runner). Nothing
-   * is waived downstream: the full acceptance gate still judges the game, and it lands
-   * on `needs_changes`/`gate_red` if it fails.
-   *
-   * Onto the same job rather than a new one (the editor path allocates one, because
-   * `published` is terminal and a candidate hung off it would be gated and stranded).
-   * `ready_for_review` is not terminal — it transitions to `building` legally, and
-   * `reconcileGateVerdict` walks `building`/`submitted`/`gating` — so the creator keeps
-   * one thread instead of finding the result on a job they never saw.
-   */
-  app.post(
-    '/api/submissions/:token/seal',
-    // A seal spends a real, paid gate run — tighter than /handoff's 20/hour, which
-    // spends nothing on its own.
-    { config: { rateLimit: { max: 10, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      if (!submissionTokenSecret) {
-        return reply.status(503).send({ error: 'submissions are not configured' });
-      }
-      if (!checkUserAccess(request, reply)) return;
-      const gamesStore = options.agentChannel?.gamesStore;
-      const gateTrigger = options.agentChannel?.onSourcesDelivered;
-      if (!store || !gamesStore || !gateTrigger) {
-        return reply.status(503).send({ error: 'store_unavailable' });
-      }
-
-      const token = z.string().parse((request.params as { token?: string }).token);
-      let issueNumber: number;
-      try {
-        issueNumber = verifyToken(token, submissionTokenSecret);
-      } catch (error) {
-        if (error instanceof InvalidTokenError) {
-          return reply.status(400).send({ error: 'invalid submission token' });
-        }
-        throw error;
-      }
-
-      const owner = await store.getSubmission(issueNumber);
-      if (!owner || owner.ownerUid !== request.user!.uid) {
-        return reply.status(403).send({ error: 'only the creator can seal this build' });
-      }
-
-      const at = () => new Date(now()).toISOString();
-      // Atomic: the record this claims is the one and only writer past this point —
-      // a second concurrent request reads the post-claim state and is refused here,
-      // before either request has spent anything on a candidate or a gate run.
-      const claimed = await store.claimSeal(issueNumber, at());
-      if (!claimed) {
-        const fresh = await store.getSubmission(issueNumber);
-        return reply.status(409).send({ error: (fresh && sealRefusal(fresh)) ?? 'not_reviewable' });
-      }
-
-      // Reverts the claim so the round is retryable, rather than stranding it in
-      // `building` with nothing dispatched to it.
-      const abort = async (reason: string) => {
-        await store
-          .recordJobTransition(issueNumber, { to: 'ready_for_review', at: at(), by: 'system', reason })
-          .catch(() => {});
-      };
-
-      const slug = claimed.slug!;
-      const previewVersion = claimed.previewVersion!;
-      const manifest = await gamesStore.getManifest(slug, previewVersion);
-      if (!manifest?.previewGate?.green) {
-        await abort('seal_not_green');
-        return reply.status(409).send({ error: 'preview_not_green' });
-      }
-
-      const files: { path: string; content: string }[] = [];
-      for (const path of manifest.sourceFiles) {
-        const content = await gamesStore.getSourceFile(slug, previewVersion, path);
-        if (content === null) {
-          await abort('seal_incomplete');
-          return reply.status(409).send({ error: 'preview_incomplete' });
-        }
-        files.push({ path, content });
-      }
-      // The documented floor, from the refusal this would otherwise hit. A preview-lane
-      // agent has no reason to have written one, and the landmark it declares is the one
-      // every game reaches; a game whose capture cannot even start a round fails validate
-      // regardless, so this cannot make a broken game look publishable.
-      if (!files.some((file) => file.path === 'PLAYTEST.json')) {
-        files.push({
-          path: 'PLAYTEST.json',
-          content: `${JSON.stringify({ expectProgress: ['round-start'] }, null, 2)}\n`,
-        });
-      }
-
-      let version: string;
-      try {
-        ({ version } = await gamesStore.putCandidateSources({
-          slug,
-          issueNumber,
-          roundGeneration: claimed.roundGeneration ?? 1,
-          files,
-          backend: claimed.dispatch?.backend ?? claimed.builder,
-          origin: 'seal',
-          mode: 'publish',
-          ...(manifest.kitEngineRef ? { kitEngineRef: manifest.kitEngineRef } : {}),
-          ...(manifest.engineRef ? { engineRef: manifest.engineRef } : {}),
-        }));
-      } catch (error) {
-        request.log.error({ err: error, issueNumber }, 'sealing a preview failed');
-        await abort('seal_failed');
-        return reply.status(502).send({ error: 'seal_failed' });
-      }
-
-      await store.setSubmissionDeliveredVersion(issueNumber, version);
-      await store.recordJobTransition(issueNumber, {
-        to: 'submitted',
-        at: at(),
-        by: 'creator',
-        reason: 'seal_delivered',
-      });
-
-      const gate = await gateTrigger({ issueNumber, slug, version });
-      if (gate?.buildId) {
-        await store
-          .recordJobCost(issueNumber, { kind: 'gate_run', at: at(), by: 'cloud-build', ref: gate.buildId })
-          .catch(() => {});
-      }
-      invalidateStatusCache(issueNumber);
-
-      return reply.send({ ok: true, version });
-    },
-  );
+  registerHandoffSealRoutes(app, {
+    store,
+    gamesStore: options.agentChannel?.gamesStore,
+    githubClient,
+    submissionTokenSecret,
+    managedAvailabilityGate,
+    now,
+    checkUserAccess,
+    builderOf,
+    invalidateStatusCache,
+    resumeBuild,
+    gateTrigger: options.agentChannel?.onSourcesDelivered,
+  });
 
   /**
    * Derives one submission's status from GitHub and caches it.
