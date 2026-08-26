@@ -31,7 +31,7 @@ export const MODULE_BUCKETS = [
  * `eslint .` pass; every other bucket stays warn-only via `npm run module-boundary` until
  * its own turn. Append to this list, never edit its enforcement elsewhere.
  */
-export const ENFORCED_BUCKETS = ['telemetry', 'catalog', 'realtime'];
+export const ENFORCED_BUCKETS = ['telemetry', 'catalog', 'realtime', 'notifications'];
 
 const DEFAULT_BUCKET = 'platform';
 
@@ -104,6 +104,7 @@ const FILE_BUCKET = {
   // agent-surface, and submissions.ts all need the cap without the rest of builder.ts's
   // handoff-authorization logic.
   'self-build-delivery-cap': 'platform',
+  'self-build-connect-days': 'platform',
   // Shared build/serve contract read by delivery, creation, and community alike --
   // pure schema, HTML assembly, or directory/archive-parsing plumbing, not domain
   // business logic of any one bucket.
@@ -113,6 +114,13 @@ const FILE_BUCKET = {
   'kit-registry': 'platform',
   'kit-window': 'platform',
   'round-base-version': 'platform',
+  // Job vocabulary and its transition table, read by eight buckets. Its only
+  // domain import is type-only, so nothing follows it at runtime.
+  'job-state': 'platform',
+  // Signed-URL minting over GCS. No relative imports at all.
+  'gcs-sign': 'platform',
+  // A line counter. No relative imports at all.
+  'module-size': 'platform',
   // A generic HTTP rate-limit classifier with no domain deps at all, and a bare
   // env-flag reader -- neither has business logic tied to any one bucket.
   'github-rate-limit': 'platform',
@@ -122,7 +130,6 @@ const FILE_BUCKET = {
   'draft-lifecycle-routes': 'creation',
   'seed-pipeline': 'creation',
   'creator-self-routes': 'creation',
-  'job-state': 'creation',
   'job-costs': 'creation',
   'job-admin-routes': 'creation',
   'dispatch-reaper': 'creation',
@@ -162,7 +169,6 @@ const FILE_BUCKET = {
   'seed-provider-openai': 'creation',
   'seed-provider-openrouter': 'creation',
   'seed-provider-vertex': 'creation',
-  'module-size': 'creation',
   'game-seed': 'creation',
   'session-crash': 'creation',
   scorecard: 'creation',
@@ -245,7 +251,6 @@ const FILE_BUCKET = {
   'staged-preview': 'delivery',
   'stage-hints': 'delivery',
   'games-store': 'delivery',
-  'gcs-sign': 'delivery',
   'workspace-archive': 'delivery',
   'build-transcript': 'delivery',
   'build-changelog': 'delivery',
