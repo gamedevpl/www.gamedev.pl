@@ -1,81 +1,42 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { PROPERTY_TYPES, type PropertyType } from '@gamedevpl/contract';
-import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { fetchGameEditor, type EditorContentDoc } from './studioApi.js';
 import { recordEditorStep } from './visitTelemetry.js';
+import {
+  BRIDGE_NAMESPACE,
+  PROTOCOL_VERSION,
+  parseEditorControllerEnvelope,
+  type EditorCanvasBox,
+  type EditorControllerChange,
+  type EditorControllerOutbound,
+  type EditorControllerSelection,
+  type EditorSelection,
+  type EditorUiDocument,
+  type EditorUiRequest,
+} from './editorControllerProtocol.js';
 
-// Collection item the painter is showing.
-export type EditorSelection = {
-  collection: string;
-  index: number;
-};
+export type {
+  EditorCanvasBox,
+  EditorControllerChange,
+  EditorControllerSelection,
+  EditorSelection,
+  EditorUiDocument,
+  EditorUiField,
+  EditorUiLabel,
+  EditorUiNode,
+  EditorUiRequest,
+} from './editorControllerProtocol.js';
 
 export type EditorContentPush = (content: EditorContentDoc, selection?: EditorSelection | null) => void;
 
-export type EditorControllerSelection = { layer: string; index: number | null };
-export type EditorUiLabel = string | { en: string; pl: string };
-export type EditorUiField = {
-  name: string;
-  label: EditorUiLabel;
-  type: PropertyType;
-  value?: string | number | boolean;
-  min?: number;
-  max?: number;
-  options?: string[];
-};
-export type EditorUiNode =
-  | { type: 'rail' | 'panel' | 'group'; children: EditorUiNode[]; title?: EditorUiLabel }
-  | { type: 'tabs'; tabs: Array<{ id: string; label: EditorUiLabel }>; active?: string }
-  | {
-      type: 'board';
-      layers: string[];
-      active?: string;
-      rows?: string[];
-      tiles?: Array<{ char: string; color?: string }>;
-    }
-  | { type: 'toolbar'; tools: string[]; active?: string }
-  | {
-      type: 'palette';
-      layer?: string;
-      tiles?: Array<{ key: string; char: string; label: EditorUiLabel; color?: string }>;
-    }
-  | { type: 'propertySheet'; layer: string; index: number; fields?: EditorUiField[] }
-  | {
-      type: 'list';
-      items: Array<{ id: string; label: EditorUiLabel; detail?: EditorUiLabel }>;
-      selected?: string;
-    }
-  | { type: 'note'; text: EditorUiLabel }
-  | { type: 'check'; ok: boolean; text: EditorUiLabel };
-
-export type EditorUiRequest = {
-  id: string;
-  spec: {
-    kind: 'form' | 'confirm' | 'toast';
-    title?: EditorUiLabel;
-    message?: EditorUiLabel;
-    text?: EditorUiLabel;
-    fields?: EditorUiField[];
-  };
-};
-export type EditorControllerChange = { id: string; patch: unknown };
 export type EditorControllerState = {
   status: 'connecting' | 'ready' | 'failed';
-  view: EditorUiNode | EditorUiNode[] | null;
+  view: EditorUiDocument | null;
   reason: string | null;
   selected: EditorControllerSelection | null;
   pendingChange: EditorControllerChange | null;
   uiRequest: EditorUiRequest | null;
   checks: { ok: boolean; problems: string[] } | null;
-  canvasBox: {
-    width: number;
-    height: number;
-    x: number;
-    y: number;
-    insetX?: number;
-    insetY?: number;
-    scale?: number;
-  } | null;
+  canvasBox: EditorCanvasBox | null;
   sendEvent: (event: Record<string, unknown>) => void;
   sendSelection: (selection: EditorControllerSelection | null) => void;
   sendUiResult: (id: string, value: unknown, cancelled?: boolean) => void;
@@ -83,175 +44,10 @@ export type EditorControllerState = {
   useFallback: (reason: string) => void;
 };
 
-function isLabel(value: unknown): value is EditorUiLabel {
-  return (
-    typeof value === 'string' ||
-    (typeof value === 'object' &&
-      value !== null &&
-      typeof (value as { en?: unknown }).en === 'string' &&
-      typeof (value as { pl?: unknown }).pl === 'string')
-  );
-}
-
-function parseUiField(value: unknown): EditorUiField | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const raw = value as Record<string, unknown>;
-  if (typeof raw.name !== 'string' || !isLabel(raw.label)) return null;
-  if (!(PROPERTY_TYPES as readonly string[]).includes(String(raw.type))) return null;
-  if (raw.value !== undefined && !['string', 'number', 'boolean'].includes(typeof raw.value)) return null;
-  const field: EditorUiField = { name: raw.name, label: raw.label, type: raw.type as EditorUiField['type'] };
-  if (typeof raw.value === 'string' || typeof raw.value === 'number' || typeof raw.value === 'boolean')
-    field.value = raw.value;
-  if (typeof raw.min === 'number' && Number.isFinite(raw.min)) field.min = raw.min;
-  if (typeof raw.max === 'number' && Number.isFinite(raw.max)) field.max = raw.max;
-  if (Array.isArray(raw.options) && raw.options.every((entry) => typeof entry === 'string'))
-    field.options = raw.options.slice(0, 32) as string[];
-  return field;
-}
-
-function parseUiPaletteTile(
-  value: unknown,
-): { key: string; char: string; label: EditorUiLabel; color?: string } | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const raw = value as Record<string, unknown>;
-  if (
-    typeof raw.key !== 'string' ||
-    raw.key.length === 0 ||
-    raw.key.length > 64 ||
-    typeof raw.char !== 'string' ||
-    raw.char.length === 0 ||
-    raw.char.length > 4 ||
-    !isLabel(raw.label)
-  )
-    return null;
-  if (raw.color !== undefined && typeof raw.color !== 'string') return null;
-  return {
-    key: raw.key,
-    char: raw.char,
-    label: raw.label,
-    ...(typeof raw.color === 'string' ? { color: raw.color } : {}),
-  };
-}
-
-function parseUiNode(value: unknown, depth = 0): EditorUiNode | null {
-  if (depth > 5 || !value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const raw = value as Record<string, unknown>;
-  const type = raw.type;
-  if (type === 'rail' || type === 'panel' || type === 'group') {
-    if (!Array.isArray(raw.children) || raw.children.length > 32) return null;
-    const children = raw.children.map((child) => parseUiNode(child, depth + 1));
-    if (children.some((child) => child === null)) return null;
-    if (raw.title !== undefined && !isLabel(raw.title)) return null;
-    return { type, children: children as EditorUiNode[], ...(raw.title === undefined ? {} : { title: raw.title }) };
-  }
-  if (type === 'tabs') {
-    if (!Array.isArray(raw.tabs) || raw.tabs.length > 32) return null;
-    const tabs = raw.tabs.map((tab) => {
-      if (!tab || typeof tab !== 'object') return null;
-      const entry = tab as Record<string, unknown>;
-      return typeof entry.id === 'string' && isLabel(entry.label) ? { id: entry.id, label: entry.label } : null;
-    });
-    if (tabs.some((tab) => tab === null)) return null;
-    return {
-      type,
-      tabs: tabs as Array<{ id: string; label: EditorUiLabel }>,
-      ...(typeof raw.active === 'string' ? { active: raw.active } : {}),
-    };
-  }
-  if (type === 'board') {
-    if (!Array.isArray(raw.layers) || raw.layers.length > 32 || !raw.layers.every((layer) => typeof layer === 'string'))
-      return null;
-    const node: EditorUiNode = { type, layers: raw.layers as string[] };
-    if (typeof raw.active === 'string') (node as { active?: string }).active = raw.active;
-    if (Array.isArray(raw.rows) && raw.rows.length <= 128 && raw.rows.every((row) => typeof row === 'string'))
-      (node as { rows?: string[] }).rows = raw.rows as string[];
-    return node;
-  }
-  if (type === 'toolbar') {
-    return Array.isArray(raw.tools) && raw.tools.length <= 32 && raw.tools.every((tool) => typeof tool === 'string')
-      ? { type, tools: raw.tools as string[], ...(typeof raw.active === 'string' ? { active: raw.active } : {}) }
-      : null;
-  }
-  if (type === 'palette') {
-    if (raw.layer !== undefined && typeof raw.layer !== 'string') return null;
-    if (raw.tiles !== undefined && (!Array.isArray(raw.tiles) || raw.tiles.length > 32)) return null;
-    const tiles = raw.tiles === undefined ? undefined : raw.tiles.map(parseUiPaletteTile);
-    if (tiles?.some((tile) => tile === null)) return null;
-    return {
-      type,
-      ...(typeof raw.layer === 'string' ? { layer: raw.layer } : {}),
-      ...(tiles === undefined
-        ? {}
-        : { tiles: tiles as Array<{ key: string; char: string; label: EditorUiLabel; color?: string }> }),
-    };
-  }
-  if (type === 'propertySheet') {
-    if (typeof raw.layer !== 'string' || typeof raw.index !== 'number' || !Number.isInteger(raw.index) || raw.index < 0)
-      return null;
-    if (raw.fields !== undefined && (!Array.isArray(raw.fields) || raw.fields.length > 32)) return null;
-    const fields = raw.fields === undefined ? undefined : raw.fields.map(parseUiField);
-    if (fields?.some((field) => field === null)) return null;
-    return { type, layer: raw.layer, index: raw.index, ...(fields ? { fields: fields as EditorUiField[] } : {}) };
-  }
-  if (type === 'list') {
-    if (!Array.isArray(raw.items) || raw.items.length > 128) return null;
-    const items = raw.items.map((item) => {
-      if (!item || typeof item !== 'object') return null;
-      const entry = item as Record<string, unknown>;
-      return typeof entry.id === 'string' && isLabel(entry.label)
-        ? {
-            id: entry.id,
-            label: entry.label,
-            ...(entry.detail === undefined ? {} : { detail: isLabel(entry.detail) ? entry.detail : null }),
-          }
-        : null;
-    });
-    if (items.some((item) => item === null || ('detail' in item && item.detail === null))) return null;
-    return {
-      type,
-      items: items as Array<{ id: string; label: EditorUiLabel; detail?: EditorUiLabel }>,
-      ...(typeof raw.selected === 'string' ? { selected: raw.selected } : {}),
-    };
-  }
-  if (type === 'note') return isLabel(raw.text) ? { type, text: raw.text } : null;
-  if (type === 'check')
-    return typeof raw.ok === 'boolean' && isLabel(raw.text) ? { type, ok: raw.ok, text: raw.text } : null;
-  return null;
-}
-
-function parseUiDocument(value: unknown): EditorUiNode | EditorUiNode[] | null {
-  if (Array.isArray(value)) {
-    if (value.length > 32) return null;
-    const nodes = value.map((node) => parseUiNode(node));
-    return nodes.some((node) => node === null) ? null : (nodes as EditorUiNode[]);
-  }
-  return parseUiNode(value);
-}
-
-function parseUiRequest(value: unknown): EditorUiRequest | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const raw = value as Record<string, unknown>;
-  if (typeof raw.id !== 'string' || raw.id.length === 0 || raw.id.length > 128) return null;
-  if (!raw.spec || typeof raw.spec !== 'object' || Array.isArray(raw.spec)) return null;
-  const spec = raw.spec as Record<string, unknown>;
-  if (!['form', 'confirm', 'toast'].includes(String(spec.kind))) return null;
-  const parsedSpec: EditorUiRequest['spec'] = { kind: spec.kind as EditorUiRequest['spec']['kind'] };
-  for (const key of ['title', 'message', 'text'] as const) {
-    if (spec[key] !== undefined) {
-      if (!isLabel(spec[key])) return null;
-      parsedSpec[key] = spec[key];
-    }
-  }
-  if (spec.fields !== undefined) {
-    if (!Array.isArray(spec.fields) || spec.fields.length > 32) return null;
-    const fields = spec.fields.map(parseUiField);
-    if (fields.some((field) => field === null)) return null;
-    parsedSpec.fields = fields as EditorUiField[];
-  }
-  return { id: raw.id, spec: parsedSpec };
-}
-
-export function editorContentMessage(content: EditorContentDoc, selection?: EditorSelection | null) {
+export function editorContentMessage(
+  content: EditorContentDoc,
+  selection?: EditorSelection | null,
+): Extract<EditorControllerOutbound, { t: 'editor:content' }> {
   return {
     ns: BRIDGE_NAMESPACE,
     v: PROTOCOL_VERSION,
@@ -294,7 +90,7 @@ export function useEditorDraftBridge(
   const controllerHelloRef = useRef(false);
   const controllerTimerRef = useRef<number | null>(null);
   const [controllerStatus, setControllerStatus] = useState<EditorControllerState['status'] | null>(null);
-  const [controllerView, setControllerView] = useState<EditorUiNode | EditorUiNode[] | null>(null);
+  const [controllerView, setControllerView] = useState<EditorUiDocument | null>(null);
   const [controllerReason, setControllerReason] = useState<string | null>(null);
   const [controllerSelection, setControllerSelection] = useState<EditorControllerSelection | null>(null);
   const [pendingChange, setPendingChange] = useState<EditorControllerChange | null>(null);
@@ -371,70 +167,38 @@ export function useEditorDraftBridge(
       if (event.origin !== 'null') return;
       const frame = frameRef.current;
       if (!frame || event.source !== frame.contentWindow) return;
-      const data = event.data as Record<string, unknown> | null;
-      if (!data || data.ns !== BRIDGE_NAMESPACE || data.v !== PROTOCOL_VERSION) return;
-      if (data.t === 'editor:hello' && data.controller === true) {
+      const data = parseEditorControllerEnvelope(event.data);
+      if (!data) {
+        const raw = event.data as Record<string, unknown> | null;
+        if (raw?.ns === BRIDGE_NAMESPACE && raw.v === PROTOCOL_VERSION && raw.t === 'editor:ui') {
+          failController('The game editor sent an invalid view.');
+        }
+        return;
+      }
+      if (data.t === 'editor:hello' && data.controller) {
         controllerHelloRef.current = true;
         expectController();
       } else if (data.t === 'editor:ui') {
-        const parsed = parseUiDocument(data.doc);
-        if (!parsed) {
-          failController('The game editor sent an invalid view.');
-          return;
-        }
         if (controllerTimerRef.current !== null) window.clearTimeout(controllerTimerRef.current);
         controllerTimerRef.current = null;
-        setControllerView(parsed);
+        setControllerView(data.doc);
         setControllerStatus('ready');
         setControllerReason(null);
         recordEditorStep('controller_loaded');
       } else if (data.t === 'editor:change') {
-        if (typeof data.id !== 'string') return;
         setPendingChange({ id: data.id, patch: data.patch });
       } else if (data.t === 'editor:select') {
-        const rawSelection = data.selection;
-        if (rawSelection !== null && (!rawSelection || typeof rawSelection !== 'object')) return;
-        const layer =
-          rawSelection && typeof rawSelection === 'object' ? (rawSelection as { layer?: unknown }).layer : null;
-        const index =
-          rawSelection && typeof rawSelection === 'object' ? (rawSelection as { index?: unknown }).index : null;
-        if (
-          rawSelection !== null &&
-          (typeof layer !== 'string' || (index !== null && (!Number.isInteger(index) || (index as number) < 0)))
-        )
-          return;
-        setControllerSelection(
-          rawSelection === null ? null : { layer: layer as string, index: index as number | null },
-        );
+        setControllerSelection(data.selection);
       } else if (data.t === 'editor:canvas') {
-        const box = data.box;
-        if (!box || typeof box !== 'object') return;
-        const raw = box as Record<string, unknown>;
-        if ([raw.width, raw.height, raw.x, raw.y].some((value) => typeof value !== 'number' || !Number.isFinite(value)))
-          return;
-        setCanvasBox({
-          width: raw.width as number,
-          height: raw.height as number,
-          x: raw.x as number,
-          y: raw.y as number,
-          ...(typeof raw.insetX === 'number' ? { insetX: raw.insetX } : {}),
-          ...(typeof raw.insetY === 'number' ? { insetY: raw.insetY } : {}),
-          ...(typeof raw.scale === 'number' ? { scale: raw.scale } : {}),
-        });
+        setCanvasBox(data.box);
       } else if (data.t === 'editor:ui-request') {
-        const request = parseUiRequest({ id: data.id, spec: data.spec });
-        if (!request) return;
-        setUiRequest(request);
+        setUiRequest({ id: data.id, spec: data.spec });
       } else if (data.t === 'editor:check') {
-        if (typeof data.ok !== 'boolean' || !Array.isArray(data.problems)) return;
-        setControllerChecks({
-          ok: data.ok,
-          problems: data.problems.filter((problem): problem is string => typeof problem === 'string').slice(0, 12),
-        });
-      } else if (data.t === 'editor:ack' && data.ok === false && controllerStatusRef.current !== null) {
-        failController(typeof data.error === 'string' ? data.error : 'The game refused this content change.');
+        setControllerChecks({ ok: data.ok, problems: data.problems });
+      } else if (data.t === 'editor:ack' && !data.ok && controllerStatusRef.current !== null) {
+        failController(data.error ?? 'The game refused this content change.');
       } else if (data.t === 'editor:controller-error') {
-        failController(typeof data.error === 'string' ? data.error : 'The game editor stopped responding.');
+        failController(data.error ?? 'The game editor stopped responding.');
       } else if (data.t === 'editor:hello') {
         // A non-controller editor still receives the declaration-driven content push.
       } else {
@@ -473,8 +237,8 @@ export function useEditorDraftBridge(
   );
 
   const send = useCallback(
-    (payload: Record<string, unknown>) => {
-      frameRef.current?.contentWindow?.postMessage({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload }, '*');
+    (message: EditorControllerOutbound) => {
+      frameRef.current?.contentWindow?.postMessage(message, '*');
     },
     [frameRef],
   );
@@ -489,20 +253,28 @@ export function useEditorDraftBridge(
       uiRequest,
       checks: controllerChecks,
       canvasBox,
-      sendEvent: (event) => send({ t: 'editor:event', event }),
+      sendEvent: (event) => send({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t: 'editor:event', event }),
       sendSelection: (selection) => {
         setControllerSelection(selection);
-        send({ t: 'editor:select', selection });
+        send({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t: 'editor:select', selection });
       },
       sendUiResult: (id, value, cancelled = false) => {
         setUiRequest(null);
-        send({ t: 'editor:ui-result', id, value, cancelled });
+        send({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t: 'editor:ui-result', id, value, cancelled });
       },
-      acknowledgeChange: (id, ok, error) => send({ t: 'editor:change:ack', id, ok, ...(error ? { error } : {}) }),
+      acknowledgeChange: (id, ok, error) =>
+        send({
+          ns: BRIDGE_NAMESPACE,
+          v: PROTOCOL_VERSION,
+          t: 'editor:change:ack',
+          id,
+          ok,
+          ...(error ? { error } : {}),
+        }),
       useFallback: (reason) => {
         setControllerStatus('failed');
         setControllerReason(reason);
-        send({ t: 'editor:mode', mode: 'fallback' });
+        send({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t: 'editor:mode', mode: 'fallback' });
       },
     };
   }, [
