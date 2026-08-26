@@ -42,15 +42,10 @@
 > scheduler job posts to it with an OIDC token. Region-sensitive — the service runs in
 > `europe-west1`:
 >
+> Set `NOTIFY_SWEEP_AUDIENCE` (and `NOTIFY_SWEEP_SA`) as repo variables, redeploy, then:
+>
 > ```bash
-> SWEEP_URL="$(gcloud run services describe gamedev-app --region europe-west1 \
->   --project gamedevpl --format 'value(status.url)')/api/internal/notify-sweep"
-> SA=notify-sweep@gamedevpl.iam.gserviceaccount.com
-> gcloud iam service-accounts create notify-sweep --project gamedevpl || true
-> # Redeploy with NOTIFY_SWEEP_AUDIENCE="$SWEEP_URL" NOTIFY_SWEEP_SA="$SA" set, then:
-> gcloud scheduler jobs create http notify-sweep --location europe-west1 --project gamedevpl \
->   --schedule '*/2 * * * *' --uri "$SWEEP_URL" --http-method POST \
->   --oidc-service-account-email "$SA" --oidc-token-audience "$SWEEP_URL"
+> ./infra/setup-sweeps.sh notify-sweep
 > ```
 >
 > The endpoint no-ops fast when no submissions are open, so the 2-minute cadence keeps

@@ -671,17 +671,10 @@ at all and feeds the only autonomous-eligible class.
   `SCORECARD_SWEEP_AUDIENCE` — a token minted for the notify sweep is correctly rejected
   here, and vice versa; the scheduler service account is shared):
 
+  Set `SCORECARD_SWEEP_AUDIENCE` as a repo variable, redeploy, then:
+
   ```bash
-  # The host is the project-number one, hardcoded on purpose: `status.url` returns the
-  # *hash* host (gamedev-app-ll6xk4myya-ew.a.run.app), and an audience that disagrees by a
-  # hostname is rejected exactly like a missing one — a silent 401 that looks like a sweep
-  # that simply found nothing. Deriving it has now been wrong twice.
-  SWEEP_URL="https://gamedev-app-334141807880.europe-west1.run.app/api/internal/scorecard-sweep"
-  SA=notify-sweep@gamedevpl.iam.gserviceaccount.com
-  # Redeploy with SCORECARD_SWEEP_AUDIENCE="$SWEEP_URL" set (NOTIFY_SWEEP_SA already is), then:
-  gcloud scheduler jobs create http scorecard-sweep --location europe-west1 --project gamedevpl \
-    --schedule '20 3 * * *' --uri "$SWEEP_URL" --http-method POST \
-    --oidc-service-account-email "$SA" --oidc-token-audience "$SWEEP_URL"
+  ./infra/setup-sweeps.sh scorecard-sweep
   ```
 
   Until that job and env var exist the endpoint is present and **closed** — the verifier
@@ -763,14 +756,10 @@ at all and feeds the only autonomous-eligible class.
 
   Provisioning — again its own audience, since the audience is the endpoint URL:
 
+  Set `DIGEST_SWEEP_AUDIENCE` as a repo variable, redeploy, then:
+
   ```bash
-  # Project-number host, not `status.url` — see the note on the scorecard block above.
-  SWEEP_URL="https://gamedev-app-334141807880.europe-west1.run.app/api/internal/digest-sweep"
-  SA=notify-sweep@gamedevpl.iam.gserviceaccount.com
-  # Redeploy with DIGEST_SWEEP_AUDIENCE="$SWEEP_URL" set, then:
-  gcloud scheduler jobs create http digest-sweep --location europe-west1 --project gamedevpl \
-    --schedule '0 9 * * 1' --uri "$SWEEP_URL" --http-method POST \
-    --oidc-service-account-email "$SA" --oidc-token-audience "$SWEEP_URL"
+  ./infra/setup-sweeps.sh digest-sweep
   ```
 
   Closed until that job and env var exist, like every other internal sweep.
@@ -879,20 +868,10 @@ at all and feeds the only autonomous-eligible class.
 
   Provisioning — again its own audience, since an audience is the endpoint's own URL:
 
+  Set `SUGGESTION_SWEEP_AUDIENCE` as a repo variable, redeploy, then:
+
   ```bash
-  # Use the SAME host form as the other sweeps' audiences. Do NOT derive it from
-  # `--format 'value(status.url)'`: Cloud Run answers on two hostnames
-  # (`gamedev-app-334141807880.europe-west1.run.app` and `gamedev-app-<hash>-ew.a.run.app`),
-  # `status.url` returns the second, and the deployed audiences use the first. The
-  # verifier compares the `aud` claim exactly, so a job built from `status.url` while the
-  # env var holds the other form 401s on every fire — silently, until someone reads the
-  # logs. This nearly shipped for the digest sweep on 2026-07-28.
-  SWEEP_URL="https://gamedev-app-334141807880.europe-west1.run.app/api/internal/suggestion-sweep"
-  SA=notify-sweep@gamedevpl.iam.gserviceaccount.com
-  # Redeploy with SUGGESTION_SWEEP_AUDIENCE="$SWEEP_URL" set, then:
-  gcloud scheduler jobs create http suggestion-sweep --location europe-west1 --project gamedevpl \
-    --schedule '30 3 * * *' --uri "$SWEEP_URL" --http-method POST \
-    --oidc-service-account-email "$SA" --oidc-token-audience "$SWEEP_URL"
+  ./infra/setup-sweeps.sh suggestion-sweep
   ```
 
   Scheduled after the 03:20 scorecard sweep, because it reads what that run wrote.
