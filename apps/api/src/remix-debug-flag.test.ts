@@ -21,7 +21,11 @@ const script = readFileSync(new URL('../../../infra/deploy-api.sh', import.meta.
 
 describe('the remix debug flag', () => {
   it('is threaded by both deploy paths, so neither drops what the other set', () => {
-    expect(workflow).toContain('REMIX_DEBUG_VAL="${{ vars.REMIX_DEBUG }}"');
+    // The workflow reads repo variables as step env, not as ${{ }} inside the run body:
+    // a run: body carrying expressions is compiled as one, and this step's blew past the
+    // 21,000-character expression ceiling, which failed every deploy before it started.
+    expect(workflow).toContain('REMIX_DEBUG: ${{ vars.REMIX_DEBUG }}');
+    expect(workflow).toContain('REMIX_DEBUG_VAL="${REMIX_DEBUG}"');
     expect(workflow).toContain('ENV_VARS="${ENV_VARS}|REMIX_DEBUG=${REMIX_DEBUG_VAL}"');
     expect(script).toContain('ENV_VARS="${ENV_VARS}|REMIX_DEBUG=${REMIX_DEBUG}"');
   });

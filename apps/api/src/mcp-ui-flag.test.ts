@@ -21,7 +21,11 @@ const script = readFileSync(new URL('../../../infra/deploy-api.sh', import.meta.
 
 describe('the MCP Apps views flag', () => {
   it('is threaded by both deploy paths, so neither drops what the other set', () => {
-    expect(workflow).toContain('MCP_UI_VAL="${{ vars.MCP_UI }}"');
+    // The workflow reads repo variables as step env, not as ${{ }} inside the run body:
+    // a run: body carrying expressions is compiled as one, and this step's blew past the
+    // 21,000-character expression ceiling, which failed every deploy before it started.
+    expect(workflow).toContain('MCP_UI: ${{ vars.MCP_UI }}');
+    expect(workflow).toContain('MCP_UI_VAL="${MCP_UI}"');
     expect(workflow).toContain('ENV_VARS="${ENV_VARS}|MCP_UI=${MCP_UI_VAL}"');
     // The script threads it through the shared flag loop rather than its own block.
     expect(script).toMatch(/for FLAG_VAR in [^;]*\bMCP_UI\b/);
