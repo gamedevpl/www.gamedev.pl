@@ -1,10 +1,4 @@
-import {
-  BUILDERS,
-  deriveGateStatusString,
-  derivePreviewGateStatus,
-  MAX_SHOT_BYTES,
-  MAX_TITLE_LENGTH,
-} from '@gamedevpl/contract';
+import { BUILDERS, deriveGateStatusString, derivePreviewGateStatus, MAX_TITLE_LENGTH } from '@gamedevpl/contract';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { splitConceptBrief } from './agent-surface/agent-build-brief.js';
@@ -32,20 +26,17 @@ import { registerAdminGameRoutes } from './catalog/admin-game-routes.js';
 import { createSlugResolver } from './catalog/slug-resolver.js';
 import { registerSelfBuildConnectRoutes } from './agent-surface/self-build-connect-routes.js';
 import { registerDraftLifecycleRoutes } from './creation/draft-lifecycle-routes.js';
+import { REFERENCE_IMAGES_BODY_LIMIT_BYTES, ReferenceImagesSchema } from './creation/feedback-request.js';
 import { registerHandoffSealRoutes } from './creation/handoff-seal-routes.js';
+import { registerFeedbackRoutes } from './creation/feedback-routes.js';
+import { registerImproveRoutes } from './creation/improve-routes.js';
 import { createSeedPipeline } from './creation/seed-pipeline.js';
 import { registerCreatorSelfRoutes } from './creation/creator-self-routes.js';
 import { registerCatalogRoutes } from './catalog/catalog-routes.js';
 import { registerGamePlayRoute } from './catalog/game-play-route.js';
 import { registerCatalogSearchRoutes } from './catalog/catalog-search-routes.js';
 import { registerDraftPreviewRoutes } from './delivery/draft-preview-routes.js';
-import {
-  formatPlaytestContextBlock,
-  MAX_REFERENCE_IMAGES,
-  registerCreatorMediaRoutes,
-  storeCreatorPlaytestShot,
-  storeCreatorReferenceImages,
-} from './delivery/creator-media.js';
+import { registerCreatorMediaRoutes, storeCreatorReferenceImages } from './delivery/creator-media.js';
 import { createBuildStatusAssembler } from './delivery/build-status.js';
 import { createChatOrchestration } from './creation/chat-orchestration.js';
 import { createStagedPreviewPublisher, type StagedPreviewOptions } from './delivery/staged-preview.js';
@@ -59,20 +50,13 @@ import {
   type ManagedBackendDeps,
 } from './agent-surface/agent-backend-env.js';
 import { createSeedAvailabilityGate, type SeedAvailabilityGate } from './creation/seed-availability.js';
-import {
-  allowsSelfToPlatformHandoff,
-  isActiveBuildRound,
-  isBuilderKind,
-  shouldSteerFeedbackViaInbox,
-  type BuilderKind,
-} from './creation/builder.js';
+import { isActiveBuildRound, type BuilderKind } from './creation/builder.js';
 import { DEFAULT_SEED_PROVIDER, type GameSeeder } from './creation/game-seed.js';
 import { createSourceDeliveryService } from './delivery/source-delivery.js';
 import { createKitFileStore } from './agent-surface/kit-files.js';
 import type { GamesStore } from './delivery/games-store.js';
 import {
   canTransition,
-  detectStall,
   isTerminal,
   planObservedStatusTransition,
   reconcileAgentObservation,
@@ -89,7 +73,7 @@ import {
   logDeliveryGateVerdict,
   type DeliveryGateStatus,
 } from './platform/delivery-metrics.js';
-import { type ChatAgentImage, type StudioChatAgent } from './creation/chat-agent.js';
+import { type StudioChatAgent } from './creation/chat-agent.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './catalog/local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './notifications/mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './platform/moderation.js';
@@ -147,11 +131,6 @@ export type SubmissionRoutesStore = IdentityStore &
   AgentKeysStore;
 
 // Base64 PNG, no data: prefix — same shape as a playtest screenshot.
-const MAX_SHOT_BASE64_CHARS = Math.ceil((MAX_SHOT_BYTES * 4) / 3) + 1024;
-const referenceImageSchema = z.string().max(MAX_SHOT_BASE64_CHARS, 'reference image is too large');
-
-// 4 images at the cap above exceed Fastify's default 1 MiB bodyLimit.
-const REFERENCE_IMAGES_BODY_LIMIT_BYTES = MAX_REFERENCE_IMAGES * MAX_SHOT_BASE64_CHARS + 64 * 1024;
 
 const TITLE_TOO_LONG_MSG = `title must be at most ${MAX_TITLE_LENGTH} characters`;
 const CreateSubmissionRequestSchema = z.object({
@@ -170,7 +149,7 @@ const CreateSubmissionRequestSchema = z.object({
    */
   builder: z.enum(BUILDERS).optional(),
   // Moodboard reference for the builder agent, not instructions.
-  referenceImages: z.array(referenceImageSchema).max(MAX_REFERENCE_IMAGES).optional(),
+  referenceImages: ReferenceImagesSchema.optional(),
 });
 
 // Re-exported for callers (and tests) that knew it here; it now lives with the status
@@ -231,39 +210,6 @@ export function reconstructDispatchSpec(record: Pick<SubmissionRecord, 'title' |
   const concept = [record.spec, ...(record.qa ?? [])].join('\n\n');
   return buildDispatchIssueBody({ title: record.title, concept });
 }
-
-const FeedbackRequestSchema = z.object({
-  feedback: z
-    .string()
-    .trim()
-    .min(10, 'feedback must be at least 10 characters')
-    .max(2000, 'feedback must be at most 2000 characters'),
-  /**
-   * Builder for the *new* round this feedback opens. Refused while the current round
-   * is still active — switching is a round-boundary decision only.
-   */
-  builder: z.enum(BUILDERS).optional(),
-  /**
-   * Optional playtest attachment from Creator Studio: a paused-frame PNG (base64,
-   * no data: prefix) plus a small instrumentation digest. Treated as data, never
-   * instructions — same fencing as the free-text feedback itself.
-   */
-  context: z
-    .object({
-      screenshotPng: z.string().max(MAX_SHOT_BASE64_CHARS, 'screenshot is too large').optional(),
-      instrumentation: z
-        .object({
-          playSeconds: z.number().int().min(0).max(86_400).optional(),
-          lastAliveFrames: z.number().int().min(0).max(1_000_000).nullable().optional(),
-          errors: z.array(z.string().max(200)).max(10).optional(),
-          progress: z.array(z.string().max(80)).max(20).optional(),
-        })
-        .optional(),
-      // Same shape as screenshotPng, plural — a steering message may carry several.
-      referenceImages: z.array(referenceImageSchema).max(MAX_REFERENCE_IMAGES).optional(),
-    })
-    .optional(),
-});
 
 interface CachedStatus {
   expiresAt: number;
@@ -2390,503 +2336,39 @@ export async function registerSubmissionRoutes(
     },
   );
 
-  // Post-play revision loop: the token holder relays "here's what to change" after
-  // trying the draft. It lands as a comment on the agent's open PR (which the coding
-  // agent iterates on) — or on the issue if no PR exists yet. Creator text is
-  // sanitized and fenced as data, never as instructions to the agent (same privacy/
-  // injection boundary as the original spec). A published game can't be revised here.
-  app.post(
-    '/api/submissions/:token/feedback',
-    {
-      bodyLimit: REFERENCE_IMAGES_BODY_LIMIT_BYTES,
-      config: { rateLimit: { max: maxFeedbackPerWindow, timeWindow: feedbackRateLimitWindowMs } },
-    },
-    async (request, reply) => {
-      if (!githubClient || !submissionTokenSecret) {
-        return reply.status(503).send({ error: 'submissions are not configured' });
-      }
+  registerFeedbackRoutes(app, {
+    store,
+    githubClient,
+    submissionTokenSecret,
+    contentChecker,
+    now,
+    dailyFeedbackQuota,
+    maxFeedbackPerWindow,
+    feedbackRateLimitWindowMs,
+    feedbackByIp,
+    checkUserAccess,
+    builderOf,
+    invalidateStatusCache,
+    runChatAgent,
+    resumeBuild,
+  });
 
-      if (!checkUserAccess(request, reply)) {
-        return;
-      }
-
-      const token = z.string().parse((request.params as { token?: string }).token);
-
-      let issueNumber: number;
-      try {
-        issueNumber = verifyToken(token, submissionTokenSecret);
-      } catch (error) {
-        if (error instanceof InvalidTokenError) {
-          return reply.status(400).send({ error: 'invalid submission token' });
-        }
-        throw error;
-      }
-
-      const parsed = FeedbackRequestSchema.safeParse(request.body);
-      if (!parsed.success) {
-        return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
-      }
-
-      // 1. Content moderation before spending any quota / GitHub write.
-      const moderation = await contentChecker.checkFields([parsed.data.feedback]);
-      if (!moderation.allowed) {
-        logModerationRejection(request.log, {
-          surface: 'creator_feedback',
-          uid: request.user?.uid,
-          category: moderation.category,
-        });
-        return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
-      }
-
-      const currentTime = now();
-
-      // 2. Coarse per-IP rate limit.
-      if (isRateLimited(feedbackByIp, request.ip, currentTime, maxFeedbackPerWindow, feedbackRateLimitWindowMs)) {
-        return reply.status(429).send({ error: 'too many feedback requests, please try again later' });
-      }
-
-      const dateStr = new Date(currentTime).toISOString().slice(0, 10);
-
-      // 3. A published game is done; a revision is a new idea, not a change request.
-      //    The record is the authority — there is no PR to consult any more.
-      const record = store ? await store.getSubmission(issueNumber) : null;
-      if (record?.publishedAt) {
-        return reply.status(409).send({ error: 'this game is already published; submit a new idea to make changes' });
-      }
-      // Publishing already closed the round (token generation bumped). No session can
-      // collect inbox mail, and starting a fresh resume mid-bake would race the bake.
-      if (record?.state === 'publishing') {
-        return reply.status(409).send({ error: 'this game is currently publishing; try again in a moment' });
-      }
-
-      const sanitizedFeedback = sanitizeCreatorText(parsed.data.feedback, { singleLine: false });
-      const creatorLocale = record?.locale ?? 'en';
-      let shotId: string | undefined;
-      let referenceImageShotIds: string[] = [];
-      let referenceImages: ChatAgentImage[] = [];
-      if (store && parsed.data.context?.screenshotPng) {
-        try {
-          shotId = await storeCreatorPlaytestShot(store, issueNumber, parsed.data.context.screenshotPng);
-        } catch (shotError) {
-          request.log.error({ err: shotError }, 'failed to store creator playtest screenshot');
-        }
-      }
-      if (store && parsed.data.context?.referenceImages?.length) {
-        try {
-          const stored = await storeCreatorReferenceImages(store, issueNumber, parsed.data.context.referenceImages);
-          referenceImageShotIds = stored.ids;
-          referenceImages = stored.images;
-        } catch (shotError) {
-          request.log.error({ err: shotError }, 'failed to store creator reference images');
-        }
-      }
-      const contextBlock = formatPlaytestContextBlock(parsed.data.context, shotId, referenceImageShotIds);
-      const inboxText = contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback;
-
-      // A revision is a new task on the job's existing workspace, dispatched by us. This
-      // used to be a GitHub comment carrying a marker, which a games-repo workflow then
-      // re-posted under a Copilot-licensed human because a mention from our machine
-      // account is silently ignored. That whole apparatus — the marker, the relay
-      // workflow, the licensed PAT — existed only to get a message to an agent through
-      // someone else's system, and none of it is needed now that we dispatch directly.
-      //
-      // When nothing was ever delivered, this is not a revision: the store has nothing
-      // to restore, and briefing the agent as if it were one spends the opening of the
-      // prompt on a `npm run restore` that cannot work. The record already knows
-      // (`deliveredVersion`); pass that through so `buildPrompt` leads with recovery
-      // of the previous branch instead.
-      const requestedBuilder = parsed.data.builder;
-      const builderChanging = Boolean(
-        record && requestedBuilder && isBuilderKind(requestedBuilder) && requestedBuilder !== builderOf(record),
-      );
-      const currentStall = record
-        ? detectStall({
-            state: record.state ?? 'queued',
-            stateSince: record.stateSince ?? record.createdAt,
-            lastAgentSignalAt: record.lastAgentSignalAt,
-            agentState: record.agentState,
-            agentEndedAt: record.agentEndedAt,
-            now: now(),
-            builder: builderOf(record),
-          })
-        : null;
-      if (record && requestedBuilder && isActiveBuildRound(record)) {
-        const current = builderOf(record);
-        if (requestedBuilder !== current) {
-          // Ended (MCP `end`) or quiet self → platform is the handoff escape hatch.
-          // Anything else mid-round stays locked (two agents must not write the same round).
-          if (
-            !allowsSelfToPlatformHandoff({
-              currentBuilder: current,
-              requestedBuilder,
-              stall: currentStall,
-              agentEndedAt: record.agentEndedAt,
-            })
-          ) {
-            return reply.status(409).send({
-              error: 'builder_locked',
-              reason: 'active_round',
-              builder: current,
-            });
-          }
-        }
-      }
-      // Fronts the message (chat-agent.ts); null takes this route unchanged.
-      let studioAckText: string | undefined;
-      // Guards the fallback queuing step below against a duplicate write.
-      let creatorMessageQueued = false;
-      // An explicit builder switch is routing intent, not chat. Letting the chat agent
-      // answer it would prevent the requested new round from starting.
-      if (record && !builderChanging) {
-        const chatOutcome = await runChatAgent({
-          issueNumber,
-          message: sanitizedFeedback,
-          scope: 'draft',
-          record,
-          locale: creatorLocale,
-          ip: request.ip,
-          uid: request.user!.uid,
-          images: referenceImages,
-        });
-        if (chatOutcome?.kind === 'replied' && store) {
-          try {
-            // Marked delivered once the reply lands too — see markCreatorMessagesDelivered below.
-            const creatorMessage = await store.appendCreatorMessage(issueNumber, inboxText);
-            creatorMessageQueued = true;
-            await store.appendCreatorMessage(issueNumber, chatOutcome.replyText, {
-              origin: 'studio',
-              delivered: true,
-            });
-            await store.markCreatorMessagesDelivered(issueNumber, [creatorMessage.id]);
-            invalidateStatusCache(issueNumber);
-            return reply.send({ ok: true, ...(shotId ? { shotId } : {}) });
-          } catch (queueError) {
-            // A failed write must not claim success — fail open instead.
-            request.log.error({ err: queueError }, 'failed to record studio chat reply; failing open to the builder');
-          }
-        }
-        if (chatOutcome?.kind === 'build') studioAckText = chatOutcome.ackText;
-      }
-
-      // 4. Daily per-user quota — a conversational reply above already returned.
-      if (store) {
-        const quota = await store.checkAndIncrementQuota(request.user!.uid, dateStr, dailyFeedbackQuota, 'feedback');
-        if (!quota.allowed) {
-          if (quota.tier === 'blocked') {
-            return reply.status(403).send({ error: 'account is blocked' });
-          }
-          return reply.status(429).send({ error: 'daily feedback quota exceeded' });
-        }
-      }
-
-      // Queue *before* dispatch. resumeBuild awaits the agent-tasks API, and a slow or
-      // hung upstream used to hold this handler open with the creator's words still only
-      // in the request body — so a timed-out send lost the note. The inbox is the durable
-      // copy; the dispatch is the head start.
-      let queued = creatorMessageQueued;
-      if (store && !creatorMessageQueued) {
-        try {
-          await store.appendCreatorMessage(issueNumber, inboxText);
-          queued = true;
-        } catch (queueError) {
-          request.log.error({ err: queueError }, 'failed to queue feedback for the agent');
-        }
-      }
-      const appendStudioAck = async () => {
-        if (!store || !queued || !studioAckText) return;
-        await store
-          .appendCreatorMessage(issueNumber, studioAckText, { origin: 'studio_ack', delivered: true })
-          .catch(() => {});
-      };
-
-      // An in-flight round that already has a dispatch ref steers via the inbox (every
-      // progress reply carries pending messages) — including gate-wait and gate-red
-      // repair, where the same session is often still alive. Starting another Copilot
-      // task on top is what produced concurrent Subaru sessions, and the agent-tasks
-      // API cannot steer or cancel the first one. Queue only — and only after a successful
-      // append: with the inbox as the sole path, a queue failure must not look like a send.
-      //
-      // A queued job with no refs is the opposite: dispatch never landed, so nobody
-      // will poll — fall through to resumeBuild so feedback can still start a session.
-      //
-      // Self→platform handoff must resume (generation bump + platform dispatch),
-      // not drop mail for the agent we are about to invalidate.
-      if (record && shouldSteerFeedbackViaInbox(record, { builderChanging, stall: currentStall })) {
-        if (!queued) {
-          return reply.status(503).send({ error: 'failed to queue feedback for the agent' });
-        }
-        // The current agent accepted the note, so its acknowledgement is truthful.
-        await appendStudioAck();
-        // Inbox-only: still drop the status cache so the creator's note appears on the
-        // next poll instead of riding a stale 60s snapshot.
-        invalidateStatusCache(issueNumber);
-        return reply.send({
-          ok: true,
-          ...(shotId ? { shotId } : {}),
-        });
-      }
-
-      const handoffStall = builderChanging && record ? currentStall : null;
-      const handoffReason =
-        record?.agentEndedAt || handoffStall === 'ended'
-          ? 'agent_ended_handoff'
-          : builderChanging
-            ? 'quiet_builder_handoff'
-            : 'creator_feedback';
-
-      const outcome = await resumeBuild({
-        issueNumber,
-        feedback: inboxText,
-        locale: creatorLocale,
-        log: request.log,
-        // Handoff always opens a new round generation even when a candidate exists —
-        // that bump is what kills the self agent's token.
-        ...(builderChanging ? {} : record?.deliveredVersion ? {} : { undelivered: true }),
-        ...(requestedBuilder && isBuilderKind(requestedBuilder) ? { builder: requestedBuilder } : {}),
-        ...(builderChanging ? { preserveRoundBudget: true } : {}),
-        // Inbox write above failed but this path still dispatches — see BuildBrief.
-        ...(!queued ? { feedbackQueueFailed: true } : {}),
-        // Name the actor so a ready_for_review → dispatched reopen does not look like a
-        // GitHub-derived observation in the job history.
-        transition: {
-          by: 'creator',
-          reason: handoffReason,
-        },
-      });
-
-      // Store the acknowledgement only after a new session is accepted.
-      if (outcome.started) await appendStudioAck();
-      // Drop the cached status: without this, Studio kept serving the previous self
-      // round (`no_agent_yet` / ended) for up to a minute while Copilot was already
-      // queued on GitHub — exactly the "agent not connected" false warning.
-      invalidateStatusCache(issueNumber);
-
-      // Accepted, and honest about what it bought. The message is kept either way — it is
-      // on the record and in the thread, and the next round to start will read it — but a
-      // creator whose round never started must not be shown the same silence as one whose
-      // agent is already working. That silence is what turned an exhausted premium-request
-      // allowance into a game that appeared to be thinking for hours.
-      return reply.send({
-        ok: true,
-        ...(shotId ? { shotId } : {}),
-        ...(outcome.started ? {} : { roundStarted: false, reason: outcome.reason }),
-      });
-    },
-  );
-
-  /**
-   * Creator-requested improvement on an already-published game (studio control panel).
-   *
-   * Draft revisions still use POST .../feedback on the open PR. Once the game has
-   * shipped, that path returns 409 — this is the successor: a new games-repo issue
-   * that amends the live SPEC, with the same "data, not instructions" fencing as
-   * creation. Ownership is store-checked (holding a shared status link is not enough).
-   */
-  // Per-route @fastify/rate-limit (registered in app.ts via registerRateLimit).
-  // CodeQL's js/missing-rate-limiting Fastify model recognizes config.rateLimit.
-  app.post(
-    '/api/submissions/:token/improve',
-    {
-      bodyLimit: REFERENCE_IMAGES_BODY_LIMIT_BYTES,
-      config: {
-        rateLimit: {
-          max: maxImprovementsPerWindow,
-          timeWindow: improvementRateLimitWindowMs,
-          errorResponseBuilder: () => ({
-            error: 'too many improvement requests, please try again later',
-          }),
-        },
-      },
-    },
-    async (request, reply) => {
-      if (!githubClient || !submissionTokenSecret) {
-        return reply.status(503).send({ error: 'submissions are not configured' });
-      }
-      if (!store) {
-        return reply.status(503).send({ error: 'submissions are not configured' });
-      }
-
-      if (!checkUserAccess(request, reply)) {
-        return;
-      }
-
-      const token = z.string().parse((request.params as { token?: string }).token);
-      let issueNumber: number;
-      try {
-        issueNumber = verifyToken(token, submissionTokenSecret);
-      } catch (error) {
-        if (error instanceof InvalidTokenError) {
-          return reply.status(400).send({ error: 'invalid submission token' });
-        }
-        throw error;
-      }
-
-      const parsed = FeedbackRequestSchema.safeParse(request.body);
-      if (!parsed.success) {
-        return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
-      }
-
-      const record = await store.getSubmission(issueNumber);
-      if (!record || record.ownerUid !== request.user!.uid) {
-        return reply.status(403).send({ error: 'only the creator can request improvements' });
-      }
-      if (record.abandonedAt) {
-        return reply.status(409).send({ error: 'this build was abandoned' });
-      }
-      if (!record.publishedAt || !record.slug) {
-        return reply.status(409).send({
-          error: 'this game is not published yet; use feedback on the draft instead',
-        });
-      }
-
-      const moderation = await contentChecker.checkFields([parsed.data.feedback]);
-      if (!moderation.allowed) {
-        logModerationRejection(request.log, {
-          surface: 'creator_feedback',
-          uid: request.user?.uid,
-          category: moderation.category,
-        });
-        return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
-      }
-
-      const currentTime = now();
-      const dateStr = new Date(currentTime).toISOString().slice(0, 10);
-      const sanitizedFeedback = sanitizeCreatorText(parsed.data.feedback, { singleLine: false });
-      const sanitizedTitle = sanitizeCreatorText(`Improve ${record.title}`, { singleLine: true });
-      let shotId: string | undefined;
-      let referenceImageShotIds: string[] = [];
-      let referenceImages: ChatAgentImage[] = [];
-      if (parsed.data.context?.screenshotPng) {
-        try {
-          shotId = await storeCreatorPlaytestShot(store, issueNumber, parsed.data.context.screenshotPng);
-        } catch (shotError) {
-          request.log.error({ err: shotError }, 'failed to store creator playtest screenshot');
-        }
-      }
-      if (parsed.data.context?.referenceImages?.length) {
-        try {
-          const stored = await storeCreatorReferenceImages(store, issueNumber, parsed.data.context.referenceImages);
-          referenceImageShotIds = stored.ids;
-          referenceImages = stored.images;
-        } catch (shotError) {
-          request.log.error({ err: shotError }, 'failed to store creator reference images');
-        }
-      }
-      const contextBlock = formatPlaytestContextBlock(parsed.data.context, shotId, referenceImageShotIds);
-      const inboxText = contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback;
-      const requestedBuilder = parsed.data.builder;
-
-      // Classify before spending any build-only quota or availability check.
-      let studioAckText: string | undefined;
-      // A pending copy left on this job by a failed reply attempt, if any.
-      let orphanedChatMessageId: string | undefined;
-      const chatOutcome = await runChatAgent({
-        issueNumber,
-        message: sanitizedFeedback,
-        scope: 'improve',
-        record,
-        locale: record.locale ?? 'en',
-        ip: request.ip,
-        uid: request.user!.uid,
-        images: referenceImages,
-      });
-      if (chatOutcome?.kind === 'replied') {
-        try {
-          // Avoids an orphaned "delivered" copy if the reply write below fails.
-          const creatorMessage = await store.appendCreatorMessage(issueNumber, inboxText);
-          orphanedChatMessageId = creatorMessage.id;
-          await store.appendCreatorMessage(issueNumber, chatOutcome.replyText, { origin: 'studio', delivered: true });
-          await store.markCreatorMessagesDelivered(issueNumber, [creatorMessage.id]);
-          orphanedChatMessageId = undefined;
-          invalidateStatusCache(issueNumber);
-          return reply.send({ ok: true, ...(shotId ? { shotId } : {}) });
-        } catch (queueError) {
-          // A failed write must not claim success — fail open instead.
-          request.log.error({ err: queueError }, 'failed to record studio chat reply; failing open to the builder');
-        }
-      }
-      if (chatOutcome?.kind === 'build') studioAckText = chatOutcome.ackText;
-
-      const requestedBuilderForCheck = parsed.data.builder;
-      const effectiveBuilder =
-        requestedBuilderForCheck && isBuilderKind(requestedBuilderForCheck)
-          ? requestedBuilderForCheck
-          : builderOf(record);
-      // Ahead of quota spend — a refused request must not cost a slot.
-      if (effectiveBuilder === 'platform' && managedAvailabilityGate) {
-        const availability = await managedAvailabilityGate.peek(request.user!.uid, dateStr);
-        if (!availability.available) {
-          return reply.status(409).send({ error: MANAGED_UNAVAILABLE_ERROR, reason: availability.reason });
-        }
-      }
-
-      const quota = await store.checkAndIncrementQuota(
-        request.user!.uid,
-        dateStr,
-        dailyImprovementQuota,
-        'improvements',
-      );
-      if (!quota.allowed) {
-        if (quota.tier === 'blocked') {
-          return reply.status(403).send({ error: 'account is blocked' });
-        }
-        return reply.status(429).send({ error: 'daily improvement quota exceeded' });
-      }
-
-      const started = await startImprovementRound({
-        issueNumber,
-        text: inboxText,
-        title: sanitizedTitle,
-        // Their own words, typed in the improve composer — the new round's thread opens
-        // with them instead of empty. `stripPlaytestContext` keeps the instrumentation
-        // block we stapled on out of the echo.
-        requestedBy: 'creator',
-        // The record was already loaded above for the ownership check.
-        locale: record.locale ?? 'en',
-        log: request.log,
-        // Publishing is terminal — this opens a *new* job, so builder choice is always
-        // a round-boundary decision (no active-round lock like draft feedback).
-        ...(requestedBuilder && isBuilderKind(requestedBuilder) ? { builder: requestedBuilder } : {}),
-      });
-      if (!started) {
-        return reply.status(502).send({ error: 'failed to submit improvement request' });
-      }
-      if (started.route === 'unavailable') {
-        return reply.status(409).send({ error: MANAGED_UNAVAILABLE_ERROR, reason: started.reason });
-      }
-      // Resolve it now — the new round carries this request forward.
-      if (orphanedChatMessageId) {
-        await store.markCreatorMessagesDelivered(issueNumber, [orphanedChatMessageId]).catch(() => {});
-      }
-      // The ack belongs on the new job's thread, where the creator lands next.
-      if (studioAckText) {
-        await store
-          .appendCreatorMessage(started.jobId, studioAckText, { origin: 'studio_ack', delivered: true })
-          .catch(() => {});
-      }
-      // Re-store under the new job — the brief/reference-image endpoint reads started.jobId, not issueNumber.
-      if (parsed.data.context?.referenceImages?.length) {
-        try {
-          await storeCreatorReferenceImages(store, started.jobId, parsed.data.context.referenceImages);
-        } catch (shotError) {
-          request.log.error({ err: shotError }, 'failed to store creator reference images on the new job');
-        }
-      }
-      // Publishing is terminal, so this is a *new* job with its own capability. The
-      // creator's thread has to move onto it — the old (published) token cannot address
-      // the new round, and its round key is dead. Minted exactly as GET
-      // /api/submissions/mine mints one per shelf record: owner-session-authed, same
-      // exposure class as the shelf the creator already reads.
-      const jobToken = mintToken(started.jobId, submissionTokenSecret);
-      return reply.send({
-        ok: true,
-        jobId: started.jobId,
-        token: jobToken,
-        slug: record.slug,
-        ...(shotId ? { shotId } : {}),
-      });
-    },
-  );
+  registerImproveRoutes(app, {
+    store,
+    githubClient,
+    submissionTokenSecret,
+    managedAvailabilityGate,
+    contentChecker,
+    now,
+    dailyImprovementQuota,
+    maxImprovementsPerWindow,
+    improvementRateLimitWindowMs,
+    checkUserAccess,
+    builderOf,
+    invalidateStatusCache,
+    runChatAgent,
+    startImprovementRound,
+  });
 
   /**
    * The operator's two verbs on a build beyond publish: stop it, and run it again.

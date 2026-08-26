@@ -106,6 +106,8 @@ describe('every moderating module reports its rejections', () => {
       'community/player-feedback.ts',
       'community/proposals.ts',
       'creation/editor-drafts.ts',
+      'creation/feedback-routes.ts',
+      'creation/improve-routes.ts',
       'creation/refine.ts',
       'creation/remix.ts',
       'notifications/contact.ts',
