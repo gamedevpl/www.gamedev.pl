@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
+import { AGENT_CHANNEL_ROUTES, MAX_AGENT_SHOT_BYTES } from '@gamedevpl/contract';
 import { STALE_AGENT_TOKEN_REASON } from './agent-token.js';
 import type { AgentTokenAccess } from './agent-token.js';
 import { deriveGateStatusString, type GateVerdictSummary } from '../delivery/gate-verdict.js';
@@ -9,8 +9,6 @@ import { parseGameMedia } from '../catalog/github-client.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { SubmissionRecord } from '../platform/store.js';
 
-// Duplicated from agent-channel.ts SHOT routes — keep both ceilings synced.
-const maxShotBytes = 700 * 1024;
 // Frame caps guard context cost, not bandwidth — most need one or two.
 const MAX_INLINE_FRAMES = 3;
 const MAX_INLINE_FRAME_BYTES = 1_400 * 1024;
@@ -254,11 +252,11 @@ export function registerAgentChannelGateMediaRoutes(app: FastifyInstance, deps: 
         }
         const body = await gamesStore.getDerivedArtifact(slug, version, `media/${shot.file}`).catch(() => null);
         // A bad or oversized frame is skipped, not fatal — signed URLs work.
-        if (!body || body.length === 0 || body.length > maxShotBytes) {
+        if (!body || body.length === 0 || body.length > MAX_AGENT_SHOT_BYTES) {
           framesOmitted += 1;
           continue;
         }
-        // First frame always fits: maxShotBytes is under the frame budget.
+        // First frame always fits: MAX_AGENT_SHOT_BYTES is under the frame budget.
         if (inlineBytes + body.length > MAX_INLINE_FRAME_BYTES) {
           framesOmitted += 1;
           continue;

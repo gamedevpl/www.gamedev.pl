@@ -41,7 +41,13 @@ export { DELIVERY_MODES, type DeliveryMode } from './delivery-mode.js';
 export { DISMISS_REASONS, type DismissReason } from './dismiss-reason.js';
 export type { GameHealth } from './game-health.js';
 export type { GameProject } from './game-project.js';
-export { MAX_GAME_SAVE_BYTES, MAX_MULTIPLAYER_SLOTS, MAX_SHOT_BYTES, MAX_TITLE_LENGTH } from './game-limits.js';
+export {
+  MAX_AGENT_SHOT_BYTES,
+  MAX_GAME_SAVE_BYTES,
+  MAX_MULTIPLAYER_SLOTS,
+  MAX_SHOT_BYTES,
+  MAX_TITLE_LENGTH,
+} from './game-limits.js';
 export {
   GATE_PROGRESS_LANES,
   GATE_PROGRESS_STAGES,

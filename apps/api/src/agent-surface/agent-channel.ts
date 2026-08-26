@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
+import { AGENT_CHANNEL_ROUTES, MAX_AGENT_SHOT_BYTES } from '@gamedevpl/contract';
 import { createExampleFileStore } from '../creation/example-files.js';
 import { registerAgentChannelExamplesRoutes } from './agent-channel-examples.js';
 import { registerAgentChannelBriefRoutes } from './agent-channel-brief.js';
@@ -119,13 +119,6 @@ const EndRequestSchema = z.object({
 });
 
 const MAX_SHOT_LABEL = 120;
-/**
- * Decoded PNG ceiling. Shots are stored as canonical base64 in a single Firestore
- * document (1 MiB hard limit); leave headroom for id/labels/timestamps. The MCP
- * brief's "≤2 MB" needs object storage before it can be honest — do not raise this
- * number alone or uploads pass validation and 500 at `.set()`.
- */
-const maxShotBytes = 700 * 1024;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 const ShotUploadUrlInputSchema = z.object({
@@ -1083,7 +1076,7 @@ export async function registerAgentChannelRoutes(
         expiresAt,
         expiresInSeconds: ttlSeconds,
         upload: uploadCurlCommand(url, 'shot.png', 'image/png'),
-        maxBytes: maxShotBytes,
+        maxBytes: MAX_AGENT_SHOT_BYTES,
         ...(await channelState(issueNumber, record)),
       });
     },
@@ -1093,7 +1086,7 @@ export async function registerAgentChannelRoutes(
   app.put(
     AGENT_CHANNEL_ROUTES.SHOT_UPLOAD,
     {
-      bodyLimit: maxShotBytes + 1024,
+      bodyLimit: MAX_AGENT_SHOT_BYTES + 1024,
       config: { rateLimit: { max: 120, timeWindow: '1 hour' } },
     },
     async (request, reply) => {
@@ -1125,7 +1118,7 @@ export async function registerAgentChannelRoutes(
       if (!bytes || bytes.length === 0) {
         return reply.status(400).send({ error: 'png body is required' });
       }
-      if (bytes.length > maxShotBytes) {
+      if (bytes.length > MAX_AGENT_SHOT_BYTES) {
         return reply.status(413).send({ error: 'screenshot is too large' });
       }
       if (!bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
