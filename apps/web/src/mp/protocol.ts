@@ -10,10 +10,10 @@
  */
 
 import { INPUT_KEYS, ROOM_PHASES, type InputKey, type RoomPhase } from '@gamedevpl/contract';
-import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from '../editorControllerProtocol.js';
+import { BRIDGE_NAMESPACE, PROTOCOL_VERSION, type GdpEnvelope } from '../editorControllerProtocol.js';
 
 export { INPUT_KEYS, ROOM_PHASES, type InputKey, type RoomPhase };
-export { BRIDGE_NAMESPACE, PROTOCOL_VERSION };
+export { BRIDGE_NAMESPACE, PROTOCOL_VERSION, type GdpEnvelope };
 
 export interface RosterSlot {
   slot: number;
