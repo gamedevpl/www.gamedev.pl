@@ -177,6 +177,7 @@ const FILE_BUCKET = {
   'agent-channel-kit-files': 'agent-surface',
   'agent-channel-examples': 'agent-surface',
   'agent-channel-brief': 'agent-surface',
+  'agent-channel-seed': 'agent-surface',
   'mcp-server': 'agent-surface',
   'mcp-tool-support': 'agent-surface',
   'mcp-example-tools': 'agent-surface',
