@@ -5,16 +5,10 @@
 import { BUILDERS, isBuilderKind, type BuilderKind } from '@gamedevpl/contract';
 import type { JobState, JobStall, JobTransition } from './job-state.js';
 import { DEFAULT_SELF_BUILD_DELIVERY_CAP, selfBuildDeliveryCap } from '../platform/self-build-delivery-cap.js';
+import { DEFAULT_SELF_BUILD_CONNECT_DAYS, selfBuildConnectDays } from '../platform/self-build-connect-days.js';
 
 export { BUILDERS, isBuilderKind, type BuilderKind, DEFAULT_SELF_BUILD_DELIVERY_CAP, selfBuildDeliveryCap };
-
-/** Default lifetime before a self round with no agent signal is auto-abandoned. */
-export const DEFAULT_SELF_BUILD_CONNECT_DAYS = 14;
-
-export function selfBuildConnectDays(): number {
-  const parsed = Number(process.env.SELF_BUILD_CONNECT_DAYS ?? DEFAULT_SELF_BUILD_CONNECT_DAYS);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : DEFAULT_SELF_BUILD_CONNECT_DAYS;
-}
+export { DEFAULT_SELF_BUILD_CONNECT_DAYS, selfBuildConnectDays };
 
 /** Whether the current round is still live. */
 export function isActiveBuildRound(record: { state?: JobState; transitions?: JobTransition[] }): boolean {

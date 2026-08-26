@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
-import { selfBuildConnectDays, type BuilderKind } from '../creation/builder.js';
+import type { BuilderKind } from '../creation/builder.js';
+import { selfBuildConnectDays } from '../platform/self-build-connect-days.js';
 import { shouldAutoAbandonSelfRound, type JobTransition } from '../creation/job-state.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { GitHubClient } from '../catalog/github-client.js';
