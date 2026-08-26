@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "PORT=3001 tsx watch src/platform/server.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && npm run build:assets",
     "start": "node dist/platform/server.js",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
@@ -30,7 +30,9 @@
     "verify:erase": "tsx scripts/verify-erase-signals.ts",
     "remix:sweep": "tsx scripts/remix-lane-sweep.ts",
     "remix:judge": "tsx scripts/remix-lane-judge.ts",
-    "remix:calibrate": "tsx scripts/remix-lane-calibrate.ts"
+    "remix:calibrate": "tsx scripts/remix-lane-calibrate.ts",
+    "// build:assets": "tsc emits only .js; the MCP round card is real .html and has to be copied beside it.",
+    "build:assets": "cp src/agent-surface/mcp-ui-round-status.html dist/agent-surface/"
   },
   "dependencies": {
     "@babel/parser": "^7.29.8",

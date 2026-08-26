@@ -1,0 +1,1522 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>gamedev.pl — round</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --gd-accent: #00e4ac;
+        --gd-bg: var(--color-background-secondary, var(--color-background-primary, #1d2123));
+        --gd-fg: var(--color-text-primary, #f2f4f5);
+        --gd-muted: var(--color-text-secondary, #9aa3a7);
+        --gd-border: var(--color-border-primary, rgba(255, 255, 255, 0.12));
+        --gd-radius: var(--border-radius-md, 10px);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 12px;
+        font-family: var(--font-sans, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
+        background: transparent;
+        color: var(--gd-fg);
+      }
+      .card {
+        background: var(--gd-bg);
+        border: 1px solid var(--gd-border);
+        border-radius: var(--gd-radius);
+        padding: 14px 16px;
+        max-width: 640px;
+      }
+      .head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 4px;
+      }
+      .brand { font-weight: 600; letter-spacing: -0.01em; }
+      /* Links the host opens for us, so they are spans rather than anchors — an <a> in
+         a sandboxed frame with no navigation permission does nothing when clicked. */
+      .linked { cursor: pointer; }
+      .linked:hover { text-decoration: underline; }
+      .brand .dot { color: var(--gd-accent); }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding: 3px 9px;
+        border-radius: 999px;
+        border: 1px solid currentColor;
+        white-space: nowrap;
+      }
+      .pill-waiting, .pill-pending, .pill-queued, .pill-dispatched, .pill-stopped { color: var(--gd-muted); }
+      .pill-building, .pill-submitted, .pill-gating, .pill-publishing { color: #6fb3ff; }
+      .pill-green, .pill-preview_passed, .pill-published { color: var(--gd-accent); }
+      .pill-red, .pill-preview_failed, .pill-failed { color: #ff6b6b; }
+      .pill-kit_outdated, .pill-needs_changes { color: #ffb454; }
+      /* Pulse live pills so a 30s poll does not look frozen. */
+      .pulse-sq {
+        display: none;
+        width: 7px;
+        height: 7px;
+        flex: 0 0 auto;
+        background: currentColor;
+        border-radius: 1px;
+      }
+      .pill-live .pulse-sq {
+        display: inline-block;
+        animation: gd-pulse-sq 1.15s ease-in-out infinite;
+      }
+      @keyframes gd-pulse-sq {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.3; transform: scale(0.82); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .pill-live .pulse-sq,
+        .activity .pulse-sq,
+        .stages li.current .mark {
+          animation: none;
+        }
+      }
+      .title { margin: 0 0 8px; font-size: 12.5px; color: var(--gd-muted); }
+      .summary { margin: 0; font-size: 14px; line-height: 1.5; }
+      .activity {
+        margin: 10px 0 0;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--gd-fg);
+      }
+      .activity .pulse-sq {
+        display: inline-block;
+        margin-right: 8px;
+        vertical-align: middle;
+        color: var(--gd-accent);
+        animation: gd-pulse-sq 1.15s ease-in-out infinite;
+      }
+      .activity .when { display: block; margin: 2px 0 0 15px; font-size: 11.5px; color: var(--gd-muted); }
+      .stages {
+        list-style: none;
+        margin: 10px 0 0;
+        padding: 0;
+        display: grid;
+        gap: 5px;
+      }
+      .stages li {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12.5px;
+        color: var(--gd-muted);
+      }
+      .stages li.current { color: var(--gd-fg); }
+      .stages li.done { color: var(--gd-accent); }
+      .stages .mark {
+        width: 7px;
+        height: 7px;
+        border-radius: 1px;
+        background: currentColor;
+        flex: 0 0 auto;
+        opacity: 0.45;
+      }
+      .stages li.current .mark {
+        opacity: 1;
+        animation: gd-pulse-sq 1.15s ease-in-out infinite;
+      }
+      .stages li.done .mark { opacity: 1; }
+      .note {
+        margin: 10px 0 0;
+        padding-left: 10px;
+        border-left: 2px solid var(--gd-accent);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .note .when { display: block; margin-top: 2px; font-size: 11.5px; color: var(--gd-muted); }
+      .shot {
+        margin: 12px 0 0;
+        border: 1px solid var(--gd-border);
+        border-radius: 8px;
+        overflow: hidden;
+        line-height: 0;
+      }
+      /* Cap the frame: a tall screenshot would otherwise push the gate verdict and the
+         report off the bottom of an inline card. */
+      .shot img { width: 100%; max-height: 240px; object-fit: contain; display: block; background: #0c0e0f; }
+      .shot figcaption {
+        padding: 6px 8px;
+        font-size: 11.5px;
+        line-height: 1.3;
+        color: var(--gd-muted);
+        background: rgba(127, 127, 127, 0.08);
+      }
+      .details {
+        margin: 12px 0 0;
+        border: 1px solid var(--gd-border);
+        border-radius: 8px;
+        padding: 0 10px;
+        font-size: 12.5px;
+        color: var(--gd-muted);
+      }
+      .details > summary {
+        cursor: pointer;
+        list-style: none;
+        padding: 8px 0;
+        user-select: none;
+      }
+      .details > summary::-webkit-details-marker { display: none; }
+      .details > summary::before {
+        content: '';
+        display: inline-block;
+        width: 0;
+        height: 0;
+        border-top: 4px solid transparent;
+        border-bottom: 4px solid transparent;
+        border-left: 5px solid currentColor;
+        margin-right: 8px;
+        vertical-align: middle;
+      }
+      .details[open] > summary::before {
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        border-top: 5px solid currentColor;
+        border-bottom: 0;
+        margin-right: 7px;
+      }
+      .meta {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 4px 14px;
+        margin: 0 0 10px;
+        font-size: 12.5px;
+      }
+      .meta dt { color: var(--gd-muted); }
+      .meta dd { margin: 0; color: var(--gd-fg); word-break: break-word; }
+      .report {
+        margin: 0 0 10px;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid var(--gd-border);
+        background: rgba(127, 127, 127, 0.08);
+        font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+        font-size: 12px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        max-height: 220px;
+        overflow: auto;
+        color: var(--gd-fg);
+      }
+      .report-fail { margin: 12px 0 0; }
+      /* The gate's own frames: a strip, so several fit without pushing the verdict off. */
+      .gallery {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: 1fr;
+        gap: 6px;
+        margin: 12px 0 0;
+      }
+      .gallery img {
+        width: 100%;
+        max-height: 150px;
+        object-fit: contain;
+        background: #0c0e0f;
+        border: 1px solid var(--gd-border);
+        border-radius: 6px;
+        display: block;
+      }
+      .galleryCap { margin: 6px 0 0; font-size: 11.5px; color: var(--gd-muted); }
+      .actions { margin: 12px 0 0; }
+      .action {
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--gd-accent);
+        background: transparent;
+        border: 1px solid var(--gd-accent);
+        border-radius: 999px;
+        padding: 7px 14px;
+        cursor: pointer;
+      }
+      .action:hover:not(:disabled) { background: rgba(0, 228, 172, 0.12); }
+      /* Custom colours can leave the platform focus ring invisible on this card. */
+      .action:focus-visible { outline: 2px solid var(--gd-accent); outline-offset: 2px; }
+      .action:disabled { color: var(--gd-muted); border-color: var(--gd-border); cursor: default; }
+      .hint {
+        margin: 8px 0 0;
+        padding: 8px;
+        border: 1px solid var(--gd-border);
+        border-radius: 8px;
+        font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+        font-size: 11.5px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        color: var(--gd-muted);
+      }
+      /* One click selects the whole instruction. The creator is copying this by hand
+         on every host that will not post for them, so make that the easy path. */
+      .hintText { display: block; margin-top: 6px; color: var(--gd-fg); user-select: all; }
+      .foot { margin: 12px 0 0; font-size: 11.5px; color: var(--gd-muted); }
+      .live { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--gd-accent); margin-right: 6px; vertical-align: middle; }
+      [hidden] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <div class="head">
+        <span id="brand" class="brand">gamedev<span class="dot">.pl</span></span>
+        <span id="pill" class="pill pill-waiting"><span class="pulse-sq" aria-hidden="true"></span><span id="pillLabel">waiting</span></span>
+      </div>
+      <p id="title" class="title" hidden></p>
+      <p id="summary" class="summary">Reading round status…</p>
+      <p id="activity" class="activity" hidden></p>
+      <ul id="stages" class="stages" hidden></ul>
+      <blockquote id="note" class="note" hidden></blockquote>
+      <figure id="shot" class="shot" hidden><img id="shotImg" alt="Latest frame from the build" /><figcaption id="shotCap"></figcaption></figure>
+      <div id="gallery" class="gallery" hidden></div>
+      <p id="galleryCap" class="galleryCap" hidden></p>
+      <pre id="failReport" class="report report-fail" hidden></pre>
+      <details id="details" class="details" hidden>
+        <summary>Technical details</summary>
+        <dl id="meta" class="meta"></dl>
+        <pre id="report" class="report" hidden></pre>
+      </details>
+      <div id="playRow" class="actions" hidden>
+        <button id="playBtn" type="button" class="action"></button>
+      </div>
+      <div id="actionRow" class="actions" hidden>
+        <button id="actionBtn" type="button" class="action"></button>
+        <p id="actionHint" class="hint" hidden></p>
+      </div>
+      <p id="foot" class="foot"></p>
+    </main>
+    <script>
+      (function () {
+        'use strict';
+
+        var host = window.parent;
+        var nextId = 1;
+        var initializeId = null;
+        var initialized = false;
+        // Null-prototype: ids come off the wire, so {} would match toString and friends.
+        var pendingCalls = Object.create(null);
+
+        var sessionKey = null;
+        var lastShotId = null;
+        var live = false;
+        var seed = null;
+        /** Whether anything real is on screen yet, from a poll or from the opening result. */
+        var painted = false;
+        var inFlight = false;
+        var attempts = 0;
+        var speculative = false;
+        var giveUpTimer = null;
+        var contextKey = null;
+        var lastFailure = null;
+        var mediaKey = null;
+        var mediaTriesFor = null;
+        var mediaTries = 0;
+        var hostCaps = null;
+        var REPORT_CONTEXT_LIMIT = 4000;
+        var stopped = false;
+        var timer = null;
+
+        var pill = document.getElementById('pill');
+        var pillLabel = document.getElementById('pillLabel');
+        var titleEl = document.getElementById('title');
+        var summary = document.getElementById('summary');
+        var activityEl = document.getElementById('activity');
+        var stagesEl = document.getElementById('stages');
+        var noteEl = document.getElementById('note');
+        var shotEl = document.getElementById('shot');
+        var shotImg = document.getElementById('shotImg');
+        var shotCap = document.getElementById('shotCap');
+        var playRow = document.getElementById('playRow');
+        var playBtn = document.getElementById('playBtn');
+        var brandEl = document.getElementById('brand');
+        var actionRow = document.getElementById('actionRow');
+        var actionBtn = document.getElementById('actionBtn');
+        var actionHint = document.getElementById('actionHint');
+        var gallery = document.getElementById('gallery');
+        var galleryCap = document.getElementById('galleryCap');
+        var detailsEl = document.getElementById('details');
+        var metaList = document.getElementById('meta');
+        var report = document.getElementById('report');
+        var failReport = document.getElementById('failReport');
+        var foot = document.getElementById('foot');
+
+        function post(payload) {
+          if (!host || host === window) return null;
+          host.postMessage(payload, '*');
+          return payload.id === undefined ? null : payload.id;
+        }
+
+        function request(method, params) {
+          var id = nextId++;
+          post({ jsonrpc: '2.0', id: id, method: method, params: params || {} });
+          return id;
+        }
+
+        function notify(method, params) {
+          post({ jsonrpc: '2.0', method: method, params: params || {} });
+        }
+
+        function log(level, text) {
+          notify('notifications/message', { level: level, logger: 'gamedevpl-round-status', data: text });
+        }
+
+        /**
+         * Report what the content needs, never what the frame currently is.
+         *
+         * This used to send documentElement.scrollHeight, which was the content height
+         * until applyContainerDimensions started setting html{height:100%} to fill a
+         * host-declared frame. After that the two became the same number: the card
+         * filled 400px, reported 400px, and the host had no reason to ever shrink —
+         * leaving a slab of empty space under the content (owner, 2026-08-06).
+         *
+         * Measuring the card instead breaks the loop. Filling the frame stays a
+         * cosmetic choice; the size we ask for stays honest either way.
+         */
+        function reportSize() {
+          var card = document.querySelector('.card');
+          var height = card
+            ? Math.ceil(card.getBoundingClientRect().height) + BODY_PADDING * 2
+            : document.documentElement.scrollHeight;
+          notify('ui/notifications/size-changed', {
+            height: height,
+            width: card ? Math.ceil(card.getBoundingClientRect().width) + BODY_PADDING * 2 : document.documentElement.scrollWidth
+          });
+        }
+
+        /** Keep in step with body{padding} in the stylesheet above. */
+        var BODY_PADDING = 12;
+
+        var hostLocale = undefined;
+        var hostTimeZone = undefined;
+
+        function applyThemeVariables(variables) {
+          if (!variables || typeof variables !== 'object') return;
+          var names = Object.keys(variables);
+          for (var i = 0; i < names.length; i++) {
+            var name = names[i];
+            if (name.indexOf('--') !== 0) continue;
+            var value = variables[name];
+            if (typeof value === 'string') document.documentElement.style.setProperty(name, value);
+          }
+        }
+
+        function applyHostContext(context) {
+          if (!context || typeof context !== 'object') return;
+          if (typeof context.theme === 'string') document.documentElement.setAttribute('data-theme', context.theme);
+          if (typeof context.locale === 'string') hostLocale = context.locale;
+          if (typeof context.timeZone === 'string') hostTimeZone = context.timeZone;
+          applyThemeVariables(context.themeVariables || context.theme_variables || context.cssVariables);
+          applyContainerDimensions(context.containerDimensions);
+        }
+
+        /**
+         * Honour the frame the host actually gave us.
+         *
+         * SEP-1865 says a view should read containerDimensions and size itself to match:
+         * a height is fixed and the view fills it, a maxHeight is a ceiling the view may
+         * grow up to, and an absent field means unbounded. We ignored it entirely,
+         *
+         * (No backticks in this comment on purpose — the whole view is a TS template
+         * literal, and one would end it. tsc catches that; it is still a wasted round.)
+         * which is fine in a host that sizes to our size-changed notification and wrong in
+         * one that does not — ChatGPT left the card sitting at the top of a much taller
+         * frame with dead space under it (owner, 2026-08-05).
+         *
+         * Filling a fixed frame does not conjure content, but it makes the card look
+         * deliberate rather than broken, and it is what the spec asks for.
+         */
+        function applyContainerDimensions(dimensions) {
+          if (!dimensions || typeof dimensions !== 'object') return;
+          var root = document.documentElement;
+          if (typeof dimensions.height === 'number' && dimensions.height > 0) {
+            root.style.height = '100%';
+            document.body.style.minHeight = '100%';
+            document.body.style.boxSizing = 'border-box';
+          } else if (typeof dimensions.maxHeight === 'number' && dimensions.maxHeight > 0) {
+            root.style.maxHeight = dimensions.maxHeight + 'px';
+          }
+          if (typeof dimensions.width === 'number' && dimensions.width > 0) {
+            root.style.width = '100%';
+          } else if (typeof dimensions.maxWidth === 'number' && dimensions.maxWidth > 0) {
+            root.style.maxWidth = dimensions.maxWidth + 'px';
+          }
+        }
+
+        /** Gate timestamps are ISO; show them in the reader's locale and zone. */
+        function formatTime(value) {
+          if (typeof value !== 'string' || !value) return value;
+          var parsed = new Date(value);
+          if (isNaN(parsed.getTime())) return value;
+          try {
+            return parsed.toLocaleString(hostLocale || undefined, {
+              dateStyle: 'medium',
+              timeStyle: 'short',
+              timeZone: hostTimeZone || undefined
+            });
+          } catch (error) {
+            return parsed.toISOString();
+          }
+        }
+
+        function shotCaption(shot) {
+          return (shot.label ? shot.label + ' · ' : '') + formatTime(shot.createdAt);
+        }
+
+        function addRow(term, value) {
+          if (value === undefined || value === null || value === '') return;
+          var dt = document.createElement('dt');
+          dt.textContent = term;
+          var dd = document.createElement('dd');
+          dd.textContent = String(value);
+          metaList.appendChild(dt);
+          metaList.appendChild(dd);
+        }
+
+        function setPill(headline, isLive) {
+          var key = String(headline || 'waiting');
+          var label = key === 'green' ? 'published' : key;
+          pillLabel.textContent = label.replace(/_/g, ' ');
+          pill.className = 'pill pill-' + key + (isLive ? ' pill-live' : '');
+        }
+
+        function looksAgentFacing(text) {
+          return /submit_sources|TRACE|get_kit|mode=publish|kitEngineRef|call_end|get_gate_/i.test(text);
+        }
+
+        function setActivity(text, when) {
+          if (!text) {
+            activityEl.hidden = true;
+            activityEl.textContent = '';
+            return;
+          }
+          activityEl.textContent = '';
+          var mark = document.createElement('span');
+          mark.className = 'pulse-sq';
+          mark.setAttribute('aria-hidden', 'true');
+          activityEl.appendChild(mark);
+          activityEl.appendChild(document.createTextNode(text));
+          if (when) {
+            var stamp = document.createElement('span');
+            stamp.className = 'when';
+            stamp.textContent = formatTime(when);
+            activityEl.appendChild(stamp);
+          }
+          activityEl.hidden = false;
+        }
+
+        function setStages(lane, active, progressIndex) {
+          if (!active) {
+            stagesEl.hidden = true;
+            stagesEl.textContent = '';
+            return;
+          }
+          var labels = lane === 'publish' ? PUBLISH_GATE_STAGES : PREVIEW_GATE_STAGES;
+          var current =
+            typeof progressIndex === 'number' && progressIndex >= 0 ? progressIndex : -1;
+          stagesEl.textContent = '';
+          for (var i = 0; i < labels.length; i++) {
+            var li = document.createElement('li');
+            // -1 = indeterminate (all current) until gateProgress arrives.
+            li.className = current < 0 ? 'current' : i < current ? 'done' : i === current ? 'current' : '';
+            var mark = document.createElement('span');
+            mark.className = 'mark';
+            mark.setAttribute('aria-hidden', 'true');
+            li.appendChild(mark);
+            li.appendChild(document.createTextNode(labels[i]));
+            stagesEl.appendChild(li);
+          }
+          stagesEl.hidden = false;
+        }
+
+        function setDetailsVisible(hasRows, detailText, preferFailSurface) {
+          var hasDetail = typeof detailText === 'string' && detailText.trim().length > 0;
+          if (preferFailSurface && hasDetail) {
+            failReport.textContent = detailText.trim();
+            failReport.hidden = false;
+            report.hidden = true;
+            report.textContent = '';
+          } else {
+            failReport.hidden = true;
+            failReport.textContent = '';
+            if (hasDetail) {
+              report.textContent = detailText.trim();
+              report.hidden = false;
+            } else {
+              report.hidden = true;
+              report.textContent = '';
+            }
+          }
+          detailsEl.hidden = !(hasRows || (hasDetail && !preferFailSurface));
+        }
+
+        /**
+         * Hosts differ in how they wrap a tool result, so dig for the payload rather
+         * than assuming one shape.
+         */
+        function unwrap(params, probe) {
+          if (!params || typeof params !== 'object') return null;
+          var candidates = [
+            params.structuredContent,
+            params.result && params.result.structuredContent,
+            params.toolResult && params.toolResult.structuredContent,
+            params.result,
+            params
+          ];
+          for (var i = 0; i < candidates.length; i++) {
+            if (candidates[i] && typeof candidates[i] === 'object' && probe(candidates[i])) return candidates[i];
+          }
+          var content =
+            params.content ||
+            (params.result && params.result.content) ||
+            (params.toolResult && params.toolResult.content);
+          if (Array.isArray(content)) {
+            for (var j = 0; j < content.length; j++) {
+              var part = content[j];
+              if (!part || part.type !== 'text' || typeof part.text !== 'string') continue;
+              try {
+                var parsed = JSON.parse(part.text);
+                if (parsed && typeof parsed === 'object' && probe(parsed)) return parsed;
+              } catch (error) {
+                /* not our JSON body — keep looking */
+              }
+            }
+          }
+          return null;
+        }
+
+        function looksLikeStatus(value) {
+          return typeof value.phase === 'string' && typeof value.status === 'string';
+        }
+
+        function looksLikeVerdict(value) {
+          return typeof value.status === 'string' && ('deliveryId' in value || 'lane' in value);
+        }
+
+        var PHASE_COPY = {
+          queued: 'In the queue — waiting to start.',
+          dispatched: 'Starting the agent…',
+          building: 'The agent is building your game.',
+          submitted: 'Sources delivered. Automated checks are starting…',
+          gating: 'Running automated checks on this build.',
+          ready_for_review: 'Ready for review.',
+          publishing: 'Publishing…',
+          published: 'Published.',
+          needs_changes: 'Needs changes.',
+          failed: 'The round failed.',
+          canceled: 'The round was canceled.',
+          abandoned: 'The round was abandoned.'
+        };
+
+        var GATE_COPY = {
+          pending: 'Checks are still running.',
+          green: 'Published — this round is complete.',
+          red: 'Publish check failed. See what broke below.',
+          preview_passed:
+            'Preview check passed. Keep iterating, then publish when you are happy with it.',
+          preview_failed: 'Preview check failed. See what broke below.',
+          kit_outdated: 'The Creator Kit changed mid-round, so this delivery has to be rebuilt against the new one.'
+        };
+
+        var STALL_COPY = {
+          no_agent_yet: 'Waiting for an agent to connect.',
+          not_dispatched: 'Not picked up yet.',
+          quiet: 'No signal from the agent for a while.',
+          ended: 'The agent has stopped.',
+          gate_not_started: 'The gate did not start.',
+          awaiting_input: 'Waiting on the creator.'
+        };
+
+        /** Closed presence keys — same vocabulary as mcp-presence.ts. */
+        var PRESENCE_COPY = {
+          joining_round: 'Joining the build round…',
+          reading_brief: 'Reading the build brief…',
+          loading_seed: 'Loading the seed draft…',
+          fetching_kit: 'Fetching Creator Kit metadata…',
+          browsing_kit: 'Browsing the Creator Kit…',
+          searching_kit: 'Searching the Creator Kit…',
+          reading_kit: 'Reading Creator Kit files…',
+          loading_sources: 'Loading existing game sources…',
+          browsing_examples: 'Browsing example games…',
+          reading_example: 'Reading an example game…',
+          checking_staged: 'Checking staged sources…',
+          checking_inbox: 'Checking creator notes…',
+          waiting_checks: 'Waiting on automated checks…',
+          reviewing_captures: 'Reviewing gate captures…',
+          staging_sources: 'Staging source files…',
+          preparing: 'Preparing the check environment…',
+          installing: 'Installing the game harness…',
+          typecheck: 'Typechecking…',
+          smoke: 'Running smoke test…',
+          build: 'Building the game…',
+          trace: 'Checking behaviour trace…',
+          capture: 'Capturing gameplay…',
+          validate: 'Validating packaging…',
+          accept: 'Checking acceptance…',
+          'agent-play': 'Running agent play…',
+          agency: 'Checking agency…',
+          playtest: 'Running playtest…'
+        };
+
+        var GATE_CHECKLIST = {
+          preview: ['typecheck', 'smoke', 'build'],
+          publish: ['typecheck', 'smoke', 'build', 'trace', 'capture', 'validate']
+        };
+
+        var LIVE_HEADLINES = {
+          queued: 1,
+          dispatched: 1,
+          building: 1,
+          submitted: 1,
+          gating: 1,
+          pending: 1,
+          publishing: 1
+        };
+
+        /** Gate check chain — shown while checks run (no fake step progress). */
+        // Preview omits Capture: stills are advisory and killable via GATE_PREVIEW_STILLS=0.
+        var PREVIEW_GATE_STAGES = ['Typecheck', 'Smoke', 'Build'];
+        var PUBLISH_GATE_STAGES = ['Typecheck', 'Smoke', 'Build', 'Trace', 'Capture', 'Validate'];
+
+        var ACTIONS = {
+          kit_outdated: {
+            label: 'Rebuild against the new kit',
+            text:
+              'The gate refused the last delivery with kit_outdated. Re-run get_kit for a fresh engineRef, then ' +
+              'submit_sources({ fromLatestDelivery: true, mode, kitEngineRef }) using the same mode as that ' +
+              'delivery. Do not re-stage or re-upload the whole tree.'
+          },
+          red: {
+            label: 'Ask the agent to fix it',
+            text: 'The publish gate came back red. Read the gate report, fix what failed, and resubmit on the same key.'
+          },
+          preview_failed: {
+            label: 'Ask the agent to fix it',
+            text: 'The preview gate failed. Read the gate report, fix what broke, and re-preview on the same key.'
+          },
+          preview_passed: {
+            label: 'Ask the agent to publish',
+            text:
+              'The preview gate passed. Record TRACE and PLAYTEST, then submit_sources with mode=publish to seal ' +
+              'this round.'
+          }
+        };
+
+        /**
+         * The invitation to play — the step the whole flow exists for.
+         *
+         * The card shows what the agent built; the theater is where it is played. This
+         * is the hand-off between them, and it is a link rather than an embedded game on
+         * purpose: gamedev.pl's theater already does fullscreen, pointer lock and touch,
+         * and a chat card cannot.
+         *
+         * Only offered when there is genuinely something to play. A round that has not
+         * delivered yet would open a page saying so, which is a worse answer than no
+         * button at all.
+         */
+        /**
+         * Make an element open a URL through the host.
+         *
+         * Not an anchor: the view is sandboxed without allow-top-navigation, so a real
+         * href is inert. ui/open-link is the only way out, and the origin is on the
+         * card's redirect allowlist by construction (both come from canonicalAppBaseUrl).
+         *
+         * No backticks anywhere in this file below the template literal opener — one
+         * ends the literal. That has cost four iterations in this workstream.
+         */
+        function linkify(element, url, label) {
+          if (!element || typeof url !== 'string' || !url) {
+            if (element) {
+              element.className = element.className.replace(/ ?linked/, '');
+              element.onclick = null;
+              element.removeAttribute('role');
+              element.removeAttribute('title');
+            }
+            return;
+          }
+          if (element.className.indexOf('linked') === -1) element.className += ' linked';
+          element.setAttribute('role', 'link');
+          if (label) element.setAttribute('title', label);
+          element.onclick = function () {
+            request('ui/open-link', { url: url });
+          };
+        }
+
+        function renderPlay(status, gateStatus) {
+          // The URL is built server-side (playUrlFor): this view is one string served to
+          // every environment, so an origin baked in here would send a staging card's
+          // Play button to production.
+          var url = typeof status.playUrl === 'string' ? status.playUrl : '';
+          // Every state here implies assembly succeeded. needs_changes was in this list
+          // and should not have been: a publish run that fails before assembly lands
+          // there with neither a bundle nor a preview stored, so the button would have
+          // sent the creator to the exact "not available yet" page it exists to avoid
+          // (Codex, #617). A red gate is precisely when there may be nothing to play.
+          var playable =
+            url &&
+            (status.phase === 'ready_for_review' ||
+              status.phase === 'published' ||
+              gateStatus === 'green' ||
+              gateStatus === 'preview_passed');
+          if (!playable) {
+            playRow.hidden = true;
+            return;
+          }
+          playBtn.textContent = status.phase === 'published' ? 'Play it' : 'Play the latest build';
+          playBtn.onclick = function () {
+            request('ui/open-link', { url: url });
+          };
+          playRow.hidden = false;
+        }
+
+        function renderAction(status, gateStatus) {
+          // Only once the agent has stopped: while it is still working it will act on a
+          // red gate itself, and a second instruction would just talk over it.
+          var action = gateStatus && status.agentEnded ? ACTIONS[gateStatus] : null;
+          if (!action) {
+            actionRow.hidden = true;
+            return;
+          }
+          actionBtn.textContent = action.label;
+          actionBtn.disabled = false;
+          actionHint.hidden = true;
+          actionRow.hidden = false;
+          actionBtn.onclick = function () {
+            actionBtn.disabled = true;
+            actionBtn.textContent = 'Sending…';
+            var id = nextId++;
+            pendingCalls[id] = function (result, error) {
+              if (error) {
+                offerToCopy(action);
+              } else {
+                actionBtn.textContent = 'Sent to the agent';
+              }
+              reportSize();
+            };
+            post({
+              jsonrpc: '2.0',
+              id: id,
+              method: 'ui/message',
+              params: { role: 'user', content: { type: 'text', text: action.text } }
+            });
+          };
+        }
+
+        /**
+         * What the button becomes when the host will not post for us.
+         *
+         * Claude refuses ui/message (owner test, 2026-08-05), and the spec version we
+         * target has no host capability to ask in advance — so this path is the normal
+         * one, not the exception. Restoring the original label and quietly printing the
+         * text below it read as "the button did nothing": the creator has no idea the
+         * words are now theirs to carry. So the button changes job instead, and says so.
+         */
+        function offerToCopy(action) {
+          actionBtn.disabled = false;
+          actionBtn.textContent = 'Copy for your agent';
+          actionBtn.onclick = function () {
+            // Selecting the text needs no permission, so try it first: whatever the
+            // clipboard does, the click should visibly do something. A Copy button that
+            // silently fails is the dead button again — which is the whole bug here, so
+            // the recovery must not be able to reintroduce it. Hence: attempt, verify,
+            // and only claim success when the selection actually took.
+            var selected = false;
+            try {
+              var target = document.getElementById('hintText');
+              var selection = window.getSelection && window.getSelection();
+              if (target && selection) {
+                var range = document.createRange();
+                range.selectNodeContents(target);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                selected = String(selection).length > 0;
+              }
+            } catch (e) {}
+            if (selected) actionBtn.textContent = 'Selected — press Ctrl/Cmd+C';
+
+            // Clipboard access needs a sandbox permission the host may not have granted,
+            // so this is the shortcut, never the mechanism.
+            try {
+              var written = navigator.clipboard && navigator.clipboard.writeText(action.text);
+              if (written && written.then) {
+                written.then(function () {
+                  actionBtn.textContent = 'Copied — paste it to your agent';
+                }, function () {});
+              }
+            } catch (e) {}
+          };
+
+          actionHint.textContent = '';
+          var lead = document.createElement('span');
+          lead.textContent = 'This chat app will not send it for you. Give your agent these words:';
+          var body = document.createElement('span');
+          body.className = 'hintText';
+          body.id = 'hintText';
+          body.textContent = action.text;
+          actionHint.appendChild(lead);
+          actionHint.appendChild(body);
+          actionHint.hidden = false;
+        }
+
+        /** Terminal for a *round*: nothing further will arrive, so stop polling. */
+        function isFinished(status) {
+          var gate = status.gate;
+          if (gate && gate.status === 'green') return true;
+          // Terminal phases win over a leftover fixable gate status — otherwise a
+          // canceled/abandoned/failed round whose last gate was preview_failed would
+          // poll forever (review, #627).
+          if (
+            status.phase === 'published' ||
+            status.phase === 'canceled' ||
+            status.phase === 'abandoned' ||
+            status.phase === 'failed'
+          ) {
+            return true;
+          }
+          // Fixable refusals are not terminal. Freezing here left creators staring at
+          // PREVIEW FAILED while the agent staged fixes above the card (2026-08-06) —
+          // and a resumed agent clears agentEndedAt, but a stopped poll never notices.
+          if (
+            gate &&
+            (gate.status === 'preview_failed' ||
+              gate.status === 'red' ||
+              gate.status === 'kit_outdated')
+          ) {
+            return false;
+          }
+          // Agent gone and a non-fixable verdict already in: nothing further will arrive
+          // until somebody acts, and that act opens a fresh card.
+          if (status.agentEnded && gate && gate.status && gate.status !== 'pending') return true;
+          return false;
+        }
+
+        function renderGateOnly(verdict) {
+          var status = typeof verdict.status === 'string' ? verdict.status : 'pending';
+          var gateLive = status === 'pending' && Boolean(verdict.deliveryId);
+          setPill(status, gateLive);
+          var gateSummary = typeof verdict.summary === 'string' ? verdict.summary : '';
+          summary.textContent =
+            (gateSummary && !looksAgentFacing(gateSummary) ? gateSummary : '') ||
+            GATE_COPY[status] ||
+            gateSummary ||
+            'Gate status: ' + status;
+
+          setActivity(null);
+          setStages(verdict.lane, gateLive);
+
+          metaList.textContent = '';
+          addRow('Lane', verdict.lane);
+          addRow('Delivery', verdict.deliveryId);
+          addRow('Ran at', formatTime(verdict.ranAt));
+          if (status === 'pending') {
+            addRow('Next step', verdict.deliveryId ? 'Watch Studio' : 'Continue building');
+          }
+          var detail = typeof verdict.report === 'string' ? verdict.report : '';
+          if (!detail && gateSummary && looksAgentFacing(gateSummary)) detail = gateSummary;
+          var failed =
+            status === 'red' || status === 'preview_failed' || status === 'kit_outdated';
+          setDetailsVisible(metaList.childNodes.length > 0, detail, failed);
+
+          noteEl.hidden = true;
+          actionRow.hidden = true;
+          playRow.hidden = true;
+          gallery.hidden = true;
+          galleryCap.hidden = true;
+          foot.textContent =
+            status === 'pending'
+              ? verdict.deliveryId
+                ? 'This card is a static snapshot. The agent has stopped; Studio will show the eventual result.'
+                : 'Nothing has been delivered yet. Continue building and submit before checking again.'
+              : '';
+          reportSize();
+        }
+
+        function render(status) {
+          var gate = status.gate && typeof status.gate === 'object' ? status.gate : null;
+          var gateStatus = gate && typeof gate.status === 'string' ? gate.status : null;
+          // The pill has to agree with the sentence under it. The phase lags reality —
+          // an agent that has stopped still reads as 'dispatched' for a while — so a
+          // card showed DISPATCHED above "The agent has stopped without delivering."
+          // (owner, 2026-08-06). The summary below already ranks the phase last; the
+          // pill was left on the old rule and contradicted it.
+          var headline =
+            gateStatus && gateStatus !== 'pending'
+              ? gateStatus
+              : gate && gate.deliveryId
+                ? 'gating'
+                : status.agentEnded
+                  ? 'stopped'
+                  : status.phase;
+
+          var showStages =
+            headline === 'gating' ||
+            headline === 'submitted' ||
+            (gateStatus === 'pending' && gate && gate.deliveryId);
+          // Quiet/ended mean the agent is not working — do not pulse a stale presence
+          // line. Gating still pulses: the gate (not the agent) is the live actor.
+          var agentQuiet = status.stall === 'quiet' || status.stall === 'ended';
+          var live =
+            (LIVE_HEADLINES[headline] || showStages) && !(agentQuiet && !showStages);
+
+          setPill(headline, live);
+
+          if (status.title) {
+            titleEl.textContent = status.slug ? status.title + ' · ' + status.slug : status.title;
+            titleEl.hidden = false;
+          } else {
+            titleEl.hidden = true;
+          }
+          // The wordmark goes to the site; the game name goes to its round in Studio,
+          // which is valid whether or not anything is playable yet.
+          linkify(brandEl, status.siteUrl, 'Open gamedev.pl');
+          linkify(titleEl, status.studioUrl, 'Open this round in Creator Studio');
+
+          // Order matters, and the job's own phase comes last: it lags reality. An agent
+          // that has delivered and called end still reads as 'building' for a while, so
+          // leading with the phase told a creator the agent was working while the note
+          // right below it said the agent had stopped.
+          var line = null;
+          var gateSummary = gate && typeof gate.summary === 'string' ? gate.summary : '';
+          if (gateStatus && gateStatus !== 'pending') {
+            // Creator-facing GATE_COPY; channel summaries stay in details.
+            line = GATE_COPY[gateStatus] || gateSummary;
+          } else if (gate && gate.deliveryId) {
+            line = 'Delivered — automated checks are running.';
+          } else if (status.agentEnded) {
+            line = 'The agent has stopped without delivering.';
+          } else if (agentQuiet && STALL_COPY[status.stall]) {
+            // Prefer the stall over "The agent is building…" when the agent went quiet.
+            line = STALL_COPY[status.stall];
+          }
+          if (!line) line = PHASE_COPY[status.phase];
+          if (!line && gateStatus) line = GATE_COPY[gateStatus];
+          summary.textContent = line || 'Round status: ' + status.phase;
+
+          // Presence or latest note while live; settled cards use the bordered note.
+          var presence =
+            status.presence && typeof status.presence === 'object' ? status.presence : null;
+          var presenceKey = presence && typeof presence.key === 'string' ? presence.key : '';
+          var presenceLine = presenceKey && PRESENCE_COPY[presenceKey] ? PRESENCE_COPY[presenceKey] : '';
+          var noteText =
+            status.note && typeof status.note.text === 'string' ? status.note.text : '';
+          var gateProgress =
+            gate && gate.progress && typeof gate.progress === 'object' ? gate.progress : null;
+          var gateStage =
+            gateProgress && typeof gateProgress.stage === 'string' ? gateProgress.stage : '';
+          var gateStageLine = gateStage && PRESENCE_COPY[gateStage] ? PRESENCE_COPY[gateStage] : '';
+
+          if (live && showStages && gateStageLine) {
+            setActivity(gateStageLine, gateProgress.at);
+          } else if (live && presenceLine && !showStages) {
+            setActivity(presenceLine, presence.at);
+          } else if (live && noteText && (headline === 'building' || headline === 'dispatched')) {
+            setActivity(noteText, status.note.createdAt);
+          } else if (live && headline === 'queued') {
+            setActivity(STALL_COPY[status.stall] || 'Waiting for an agent to pick this up…', null);
+          } else {
+            setActivity(null);
+          }
+
+          var progressIndex = -1;
+          if (showStages && gateStage) {
+            var checklist =
+              GATE_CHECKLIST[gate && gate.lane === 'preview' ? 'preview' : 'publish'] ||
+              GATE_CHECKLIST.publish;
+            var mapped =
+              gateStage === 'accept' ||
+              gateStage === 'agent-play' ||
+              gateStage === 'agency' ||
+              gateStage === 'playtest'
+                ? 'validate'
+                : gateStage;
+            if (mapped !== 'preparing' && mapped !== 'installing') {
+              progressIndex = checklist.indexOf(mapped);
+            }
+          }
+          setStages(gate && gate.lane, showStages, progressIndex);
+
+          // Avoid duplicating the note when the activity line already shows it.
+          if (noteText && !(live && (headline === 'building' || headline === 'dispatched'))) {
+            noteEl.textContent = noteText;
+            var when = document.createElement('span');
+            when.className = 'when';
+            when.textContent = formatTime(status.note.createdAt);
+            noteEl.appendChild(when);
+            noteEl.hidden = false;
+          } else {
+            noteEl.hidden = true;
+          }
+
+          // Three cases, and the middle one is why this is not a one-liner: bytes arrive
+          // only when the frame changed, so an unchanged shot must keep the image it
+          // already has, and a round with no shot at all must clear a stale one.
+          if (status.shot && status.shot.png) {
+            shotImg.src = 'data:image/png;base64,' + status.shot.png;
+            shotCap.textContent = shotCaption(status.shot);
+            shotEl.hidden = false;
+          } else if (status.shot && shotImg.getAttribute('src')) {
+            shotCap.textContent = shotCaption(status.shot);
+            shotEl.hidden = false;
+          } else {
+            shotEl.hidden = true;
+            shotImg.removeAttribute('src');
+          }
+          lastShotId = status.shot && status.shot.id ? status.shot.id : null;
+
+          metaList.textContent = '';
+          // Which round this card is watching.
+          //
+          // Useful to a creator on its own, and it settles a question screenshots could
+          // not: ChatGPT showed several near-identical cards for one session, and the
+          // call ledger proved start ran exactly twice. Two cards naming *different*
+          // rounds are one per start and correct; two naming the *same* round are the
+          // host rendering one call more than once, which is not ours to fix. Until a
+          // card says which, both stories fit the pixels equally well.
+          if (typeof status.round === 'number' && status.round > 0) addRow('Round', status.round);
+          if (gate) {
+            addRow('Lane', gate.lane);
+            addRow('Delivery', gate.deliveryId);
+            addRow('Ran at', formatTime(gate.ranAt));
+          }
+          if (typeof status.deliveriesRemaining === 'number') {
+            addRow('Deliveries left', status.deliveriesRemaining);
+          }
+          // Say it once. The stall row used to compare whole strings, so "The agent has
+          // stopped." sat under a summary reading "The agent has stopped without
+          // delivering." — the same fact twice, in two shapes.
+          var stallLine = status.stall ? STALL_COPY[status.stall] : '';
+          // Escape doubled: this file is a TS template literal, so a single backslash
+          // here emits /.$/ — "strip any last character" rather than "strip a period".
+          if (stallLine && summary.textContent.indexOf(stallLine.replace(/\.$/, '')) === -1) {
+            addRow('Note', stallLine);
+          }
+
+          var detail = gate && typeof gate.report === 'string' ? gate.report.trim() : '';
+          // Unused channel summary still belongs in Technical details.
+          if (
+            gateSummary &&
+            gateSummary.trim() &&
+            gateSummary.trim() !== summary.textContent &&
+            (looksAgentFacing(gateSummary) || gateSummary.length > 180 || !detail)
+          ) {
+            detail = detail
+              ? gateSummary.trim() + '\n\n' + detail
+              : gateSummary.trim();
+          }
+          if (detail && detail === summary.textContent) detail = '';
+          var failed =
+            gateStatus === 'red' ||
+            gateStatus === 'preview_failed' ||
+            gateStatus === 'kit_outdated';
+          setDetailsVisible(metaList.childNodes.length > 0, detail, failed);
+
+          renderPlay(status, gateStatus);
+          renderAction(status, gateStatus);
+
+          if (isFinished(status)) {
+            foot.textContent = '';
+          } else if (gateStatus === 'pending' && gate && !gate.deliveryId) {
+            foot.textContent = 'Nothing has been delivered yet. Continue building and submit before checking again.';
+          } else {
+            foot.innerHTML = '';
+            var dot = document.createElement('span');
+            dot.className = 'live';
+            foot.appendChild(dot);
+            foot.appendChild(document.createTextNode('Updating on its own — no need to ask the agent.'));
+          }
+          reportSize();
+        }
+
+        function giveUp() {
+          giveUpTimer = null;
+          if (live) return;
+          if (seed) {
+            renderGateOnly(seed);
+          } else {
+            summary.textContent = 'Could not read round status here.';
+          }
+          // Say which of the two ways it failed. Without this a screenshot of a broken
+          // card is indistinguishable between "the host never gave this view a round
+          // key" and "the host refused the call", and those need opposite fixes.
+          var diagnostic =
+            lastFailure ||
+            (sessionKey
+              ? 'The status call was refused.'
+              : 'This view was never given a round key, so it could not ask.');
+          // Appended, never substituted. renderGateOnly may have just put the gate's own
+          // report here, and that is what the creator came to read — a diagnostic about
+          // our polling is the footnote, not the headline.
+          // The escapes are doubled on purpose: this file is a template literal, so a
+          // bare \n here would emit a real line break inside a JS string and break the
+          // view. tsc and lint both pass it; only the browser notices.
+          report.textContent =
+            report.hidden || !report.textContent ? diagnostic : report.textContent + '\n\n' + diagnostic;
+          report.hidden = false;
+          detailsEl.hidden = false;
+          reportSize();
+        }
+
+        /**
+         * The last piece of watching-without-polling: when a verdict lands the agent is
+         * usually gone, so nothing in the conversation knows it. The host holds this
+         * until the next user message, so if the creator then says "fix it" the agent
+         * already has the verdict instead of spending a call to discover it. Sent once
+         * per distinct verdict — polling must not re-announce the same thing.
+         */
+        function pushModelContext(status) {
+          var gate = status.gate;
+          if (!gate || typeof gate.status !== 'string' || gate.status === 'pending') return;
+          var key = gate.status + ':' + (gate.deliveryId || '');
+          if (key === contextKey) return;
+          contextKey = key;
+          // The report, not the summary, is what says what broke — and the app-only
+          // status result never reaches the transcript, so without it here a follow-up
+          // 'fix it' still costs a tool call to discover the failure. Bounded, because
+          // this lands in the model's context whether or not it is ever used.
+          var report = typeof gate.report === 'string' ? gate.report.trim() : '';
+          if (report.length > REPORT_CONTEXT_LIMIT) {
+            report = report.slice(0, REPORT_CONTEXT_LIMIT) + '\n… (truncated; call get_gate_verdict for the rest)';
+          }
+          request('ui/update-model-context', {
+            structuredContent: {
+              slug: status.slug || null,
+              phase: status.phase,
+              gate: {
+                status: gate.status,
+                lane: gate.lane || null,
+                deliveryId: gate.deliveryId || null,
+                summary: typeof gate.summary === 'string' ? gate.summary : null,
+                report: report || null
+              }
+            }
+          });
+        }
+
+        /**
+         * The gate's frames, fetched once per delivery when a verdict exists.
+         *
+         * This is the picture the agent cannot take: it has no browser to run the game
+         * in, so its only honest options are a real gate capture or nothing. The gate
+         * captures on both lanes; the card is already here when the verdict lands.
+         */
+        function loadMedia(status) {
+          // Two ways in. Watching a round, the frames arrive when that round's gate
+          // settles. Asked to *show* media, the delivery is named up front and may
+          // belong to an earlier round entirely — which is the case the gallery could
+          // not serve: a creator asking "show me the screenshot" opens a round that has
+          // delivered nothing, so there is no gate here to hang the frames off.
+          var gate = status.gate;
+          var wanted =
+            typeof status.mediaDeliveryId === 'string' && status.mediaDeliveryId
+              ? status.mediaDeliveryId
+              : gate && gate.deliveryId && gate.status !== 'pending'
+                ? gate.deliveryId
+                : null;
+          if (!wanted) return;
+          if (mediaKey === wanted) return;
+          if (mediaTriesFor !== wanted) {
+            mediaTriesFor = wanted;
+            mediaTries = 0;
+          }
+          mediaKey = wanted;
+          var id = nextId++;
+          pendingCalls[id] = function (result, error) {
+            if (error) {
+              log('warning', 'gate media unavailable: ' + String(error));
+              // Frames are written by the gate a moment after the verdict, so the first
+              // read can lose a race it will win next poll. Retry once, then stop —
+              // a card that re-asks every 30s forever is worse than a card without a
+              // picture.
+              mediaTries++;
+              if (mediaTries < 2) mediaKey = null;
+              return;
+            }
+            var media = unwrap(result, function (value) {
+              return Array.isArray(value.frames);
+            });
+            if (!media) return;
+            renderMedia(media);
+          };
+          var args = { deliveryId: wanted };
+          if (sessionKey) args.sessionKey = sessionKey;
+          post({ jsonrpc: '2.0', id: id, method: 'tools/call', params: { name: 'get_round_media', arguments: args } });
+        }
+
+        function renderMedia(media) {
+          gallery.textContent = '';
+          var frames = media.frames || [];
+          for (var i = 0; i < frames.length; i++) {
+            if (!frames[i] || typeof frames[i].png !== 'string') continue;
+            var img = document.createElement('img');
+            img.src = 'data:image/png;base64,' + frames[i].png;
+            img.alt = frames[i].name || 'Frame captured by the gate';
+            gallery.appendChild(img);
+          }
+          gallery.hidden = gallery.childNodes.length === 0;
+
+          galleryCap.textContent = '';
+          galleryCap.hidden = true;
+          if (!gallery.hidden) {
+            var omitted = Number(media.framesOmitted) || 0;
+            galleryCap.textContent =
+              'Captured by the gate' +
+              (media.lane ? ' on the ' + media.lane + ' run' : '') +
+              '.' +
+              (omitted > 0 ? ' ' + omitted + ' more frame' + (omitted === 1 ? '' : 's') + ' too large to show.' : '');
+            galleryCap.hidden = false;
+          } else if (typeof media.reason === 'string' && media.reason) {
+            // No strip is a fact about the run, not a rendering failure. Say which.
+            galleryCap.textContent = 'No frames: ' + media.reason + '.';
+            galleryCap.hidden = false;
+          }
+          // A video is megabytes; it cannot ride a postMessage and the CSP declares no
+          // domains, so hand it to the host to open rather than trying to play it here.
+          if (media.video && typeof media.video.url === 'string' && media.video.url) {
+            var link = document.createElement('button');
+            link.type = 'button';
+            link.className = 'action';
+            link.style.marginTop = '8px';
+            link.textContent = 'Watch the gate recording';
+            link.onclick = (function (url) {
+              return function () {
+                request('ui/open-link', { url: url });
+              };
+            })(media.video.url);
+            galleryCap.hidden = false;
+            galleryCap.appendChild(document.createElement('br'));
+            galleryCap.appendChild(link);
+          }
+          reportSize();
+        }
+
+        function schedule(seconds) {
+          if (stopped || timer) return;
+          var delay = Math.max(10, Number(seconds) || 30) * 1000;
+          timer = setTimeout(function () {
+            timer = null;
+            poll();
+          }, delay);
+        }
+
+        function poll() {
+          if (stopped || inFlight) return;
+          inFlight = true;
+          attempts += 1;
+          // Without a key this is a guess: hosts differ on whether they carry the
+          // connection's own credential into an app-only call, and Claude does not.
+          speculative = !sessionKey;
+          // Observed in Claude: a view does not inherit the connection's credential, so
+          // a keyless call is refused. We still make it — a host that does carry the
+          // credential answers immediately, and the refusal costs nothing visible.
+          var args = {};
+          if (sessionKey) args.sessionKey = sessionKey;
+          if (lastShotId) args.sinceShotId = lastShotId;
+          // The reader's language, so the server can apply the same rule Studio does:
+          // show the agent's localized note only when it matches who is reading. Without
+          // it the card showed a Polish note to an English reader.
+          if (hostLocale) args.locale = hostLocale;
+          var id = nextId++;
+          pendingCalls[id] = function (result, error) {
+            inFlight = false;
+            var status = error ? null : unwrap(result, looksLikeStatus);
+            if (!status) {
+              // Never JSON.stringify a value the host handed us: structured clone
+              // carries cycles, and a throw here is inside the message handler, which
+              // would take the card's whole update path down with it. A plain coercion
+              // says less and cannot fail.
+              var reason = error ? 'call refused: ' + ourError(error.message || error.code || error) : 'the reply was not round status';
+              lastFailure = (sessionKey ? 'with a round key, ' : 'without a round key, ') + reason;
+              log('warning', 'round status unavailable: ' + lastFailure);
+              if (speculative) {
+                // The key can land while this very request is in flight, in which case
+                // noteSessionKey's own poll() was dropped as already in flight. Retry
+                // here, or the card waits out the whole give-up timer while holding a
+                // usable credential.
+                if (sessionKey) {
+                  poll();
+                  return;
+                }
+                // Stay quiet and wait for the opening tool to hand us its key. Only if
+                // one never arrives is this a real failure worth showing.
+                if (!giveUpTimer) giveUpTimer = setTimeout(giveUp, 20000);
+                return;
+              }
+              // Never trade real content for an error message. The card may already be
+              // showing the round from show_round's opening result, and in a host that
+              // refuses app-only calls that is the only state it will ever have —
+              // overwriting it with "Could not read round status here." would leave the
+              // creator worse off than if we had never polled.
+              if (!live && !painted) giveUp();
+              if (attempts >= 2) stopped = true;
+              return;
+            }
+            live = true;
+            painted = true;
+            pushModelContext(status);
+            loadMedia(status);
+            if (giveUpTimer) {
+              clearTimeout(giveUpTimer);
+              giveUpTimer = null;
+            }
+            render(status);
+            if (isFinished(status)) stopped = true;
+            else schedule(status.retryAfterSeconds);
+          };
+          post({
+            jsonrpc: '2.0',
+            id: id,
+            method: 'tools/call',
+            params: { name: 'get_round_status', arguments: args }
+          });
+        }
+
+        /**
+         * Our message, dug out of the host's wrapper.
+         *
+         * A refused call came back as "Error code: INVALID_ARGUMENT; Error:
+         * RuntimeException: Error calling MCP tool: [TextContent(type='text',
+         * text='{"error":"OAuth access proves your identity only — call start()..."
+         * and the card printed that verbatim, truncated mid-sentence (owner,
+         * 2026-08-06). The only part a creator can act on is the JSON inside it.
+         *
+         * The closing quote is optional on purpose: the host truncates its own wrapper,
+         * so the case that actually shows up is a message cut off mid-sentence with no
+         * terminator. Requiring one matched nothing and printed the whole blob.
+         *
+         * Escapes are doubled throughout: this whole view is a TS template literal.
+         */
+        function ourError(raw) {
+          var text = String(raw === null || raw === undefined ? '' : raw);
+          var match = /"error"\s*:\s*"((?:[^"\\]|\\.)*)/.exec(text);
+          if (match) {
+            try {
+              return JSON.parse('"' + match[1] + '"');
+            } catch (e) {
+              return match[1];
+            }
+          }
+          return text.length > 160 ? text.slice(0, 160) + '…' : text;
+        }
+
+        function noteSessionKey(value) {
+          if (typeof value !== 'string' || !value || sessionKey === value) return;
+          sessionKey = value;
+          // Worth another attempt: the keyless poll was refused for want of exactly this.
+          if (!live) {
+            if (giveUpTimer) {
+              clearTimeout(giveUpTimer);
+              giveUpTimer = null;
+            }
+            stopped = false;
+            attempts = 0;
+            poll();
+          }
+        }
+
+        function onHostMessage(event) {
+          if (host && host !== window && event.source !== host) return;
+          var message = event.data;
+          if (!message || typeof message !== 'object' || message.jsonrpc !== '2.0') return;
+
+          if (initializeId !== null && message.id === initializeId && !initialized) {
+            initialized = true;
+            if (message.result) {
+              applyHostContext(message.result.hostContext);
+              // Kept for the action button. The stable spec's HostCapabilities has no
+              // field for ui/message support at all — the draft adds one — so absence
+              // proves nothing today and we still have to try and see.
+              hostCaps = message.result.capabilities || null;
+            }
+            notify('ui/notifications/initialized', {});
+            log('debug', 'round view initialized');
+            reportSize();
+            poll();
+            return;
+          }
+
+          // Only ever dispatch a function this view itself registered.
+          var handler = message.id === undefined ? null : pendingCalls[message.id];
+          if (typeof handler === 'function') {
+            delete pendingCalls[message.id];
+            handler(message.result, message.error);
+            return;
+          }
+
+          // The arguments of the tool that opened this view carry the round's key.
+          if (message.method === 'ui/notifications/tool-input') {
+            var input = message.params && (message.params.arguments || message.params.input || message.params);
+            if (input && typeof input === 'object') noteSessionKey(input.sessionKey);
+            return;
+          }
+
+          if (message.method === 'ui/notifications/tool-result') {
+            // show_round returns the whole round, so the opening result is already the
+            // thing the card exists to display — paint it now rather than showing
+            // "Reading round status..." until a poll returns. In a host that refuses the
+            // app-only call this is also the *only* state the card will ever have, which
+            // is why it renders as live rather than as the static gate-only fallback.
+            var opening = unwrap(message.params, looksLikeStatus);
+            if (opening && !live) {
+              painted = true;
+              render(opening);
+              // show_media names a delivery that need not belong to this round, so the
+              // frames load from the opening result rather than waiting for a gate.
+              loadMedia(opening);
+              schedule(opening.retryAfterSeconds);
+            }
+            var verdict = opening ? null : unwrap(message.params, looksLikeVerdict);
+            if (verdict && !live) {
+              seed = verdict;
+              renderGateOnly(verdict);
+            }
+            // start returns the key in its result; the others carry it in their input.
+            var payload = unwrap(message.params, function (value) {
+              return typeof value.sessionKey === 'string';
+            });
+            if (payload) noteSessionKey(payload.sessionKey);
+            return;
+          }
+
+          if (message.method === 'ping') {
+            post({ jsonrpc: '2.0', id: message.id, result: {} });
+            return;
+          }
+
+          if (message.method === 'ui/resource-teardown') {
+            stopped = true;
+            if (timer) clearTimeout(timer);
+            if (giveUpTimer) clearTimeout(giveUpTimer);
+            window.removeEventListener('message', onHostMessage);
+            window.removeEventListener('resize', reportSize);
+          }
+        }
+
+        window.addEventListener('message', onHostMessage);
+
+        initializeId = request('ui/initialize', {
+          protocolVersion: '2026-01-26',
+          capabilities: {},
+          clientInfo: { name: 'gamedevpl-round-status', version: '0.2.0' }
+        });
+
+        window.addEventListener('resize', reportSize);
+
+        // Standalone harness only — hosts keep parent !== window.
+        if (host === window) {
+          window.__gamedevRoundCard = {
+            render: render,
+            renderGateOnly: renderGateOnly,
+            renderMedia: renderMedia
+          };
+        }
+      })();
+    </script>
+  </body>
+</html>
