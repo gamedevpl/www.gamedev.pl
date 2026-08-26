@@ -11,6 +11,7 @@ import { splitConceptBrief } from './agent-surface/agent-build-brief.js';
 import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-surface/agent-channel.js';
 import { mintAgentToken, mintManagedMcpOpener } from './agent-surface/agent-token.js';
 import { registerMcpServerRoutes } from './agent-surface/mcp-server.js';
+import { registerNotifySweepRoutes } from './notifications/notify-sweep-routes.js';
 import {
   createCreationGate,
   createChatGate,
@@ -63,7 +64,6 @@ import {
   isActiveBuildRound,
   isBuilderKind,
   shouldSteerFeedbackViaInbox,
-  selfBuildConnectDays,
   type BuilderKind,
 } from './creation/builder.js';
 import { DEFAULT_SEED_PROVIDER, type GameSeeder } from './creation/game-seed.js';
@@ -77,7 +77,6 @@ import {
   planObservedStatusTransition,
   reconcileAgentObservation,
   resolveJobState,
-  shouldAutoAbandonSelfRound,
   type JobState,
   type JobTransition,
 } from './creation/job-state.js';
@@ -95,13 +94,7 @@ import { type ChatAgentImage, type StudioChatAgent } from './creation/chat-agent
 import { createLocalGamesClient, resolveLocalGamesDir } from './catalog/local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './notifications/mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './platform/moderation.js';
-import {
-  emitOperatorAlert,
-  emitSubmissionNotification,
-  notifyOnTransition,
-  type EmitDeps,
-} from './notifications/notify.js';
-import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './notifications/operator-alerts.js';
+import { notifyOnTransition, type EmitDeps } from './notifications/notify.js';
 import { seedOutcomeFor } from './agent-surface/seed-status.js';
 import { isAdminSession } from './platform/admin-session.js';
 import { peekQuota } from './creation/quota-gate.js';
@@ -272,9 +265,6 @@ const FeedbackRequestSchema = z.object({
     })
     .optional(),
 });
-
-// Max wait for a handoff ack before the sweep forces it.
-const HANDOFF_ACK_STALL_MS = 10 * 60 * 1000;
 
 interface CachedStatus {
   expiresAt: number;
@@ -3370,258 +3360,23 @@ export async function registerSubmissionRoutes(
     return reply.send({ ok: true, state: after?.state ?? 'dispatched', creditsSpent: 1 });
   });
 
-  // The notification sweep (docs/notifications-plan.md N1): the closed-tab backstop
-  // for the opportunistic poll-path detection above. Cloud Scheduler POSTs here with
-  // an OIDC token; we derive the current status of every still-active submission and
-  // emit on transition, reusing the exact same derivation + idempotent emit. No
-  // session — the wall exempts /api/internal and the handler verifies OIDC itself.
-  // Cloud Scheduler hits this every 2–5 minutes (docs/notifications-plan.md N1),
-  // and retries on transient failures; 30/hour sits on that cadence with no headroom.
-  // OIDC already authenticates the caller — this IP ceiling is only a runaway guard.
-  app.post(
-    '/api/internal/notify-sweep',
-    { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
-    async (request, reply) => {
-      if (!(await internalAuthVerifier.verify(request.headers.authorization))) {
-        return reply.status(401).send({ error: 'unauthorized' });
-      }
-      if (!githubClient || !submissionTokenSecret || !store) {
-        return reply.status(503).send({ error: 'submissions are not configured' });
-      }
-
-      const active = await store.listActiveSubmissions();
-      let emitted = 0;
-      const stalledIssues: number[] = [];
-      // When each job's oldest uncollected change request arrived, collected as the
-      // loop goes so the alert pass below can see it without reading anything twice.
-      const pendingFeedback = new Map<number, string>();
-      for (const record of active) {
-        try {
-          // Self rounds with no agent signal ever: auto-abandon after the connect window
-          // so a forgotten kickoff does not leave a live channel capability forever.
-          if (
-            shouldAutoAbandonSelfRound({
-              builder: builderOf(record),
-              lastAgentSignalAt: record.lastAgentSignalAt,
-              abandonedAt: record.abandonedAt,
-              state: record.state,
-              roundOpenedAt: record.stateSince ?? record.createdAt,
-              now: now(),
-              connectDays: selfBuildConnectDays(),
-            })
-          ) {
-            const at = new Date(now()).toISOString();
-            const cancelBackend = await backendFor(builderOf(record));
-            const ref = record.dispatch?.refs.at(-1);
-            if (cancelBackend && ref) {
-              try {
-                await cancelBackend.cancel(ref, record.dispatch?.credentialRefs?.[ref]);
-              } catch (cancelError) {
-                request.log.error(
-                  { err: cancelError, issueNumber: record.issueNumber },
-                  'self no-connect cancel failed',
-                );
-              }
-            }
-            await store.recordJobTransition(record.issueNumber, {
-              to: 'abandoned',
-              at,
-              by: 'system',
-              reason: 'no_connect',
-            });
-            await store.setSubmissionAbandoned(record.issueNumber, at);
-            continue;
-          }
-
-          // Stale handoff ack: outgoing agent may be gone.
-          if (
-            record.builderHandoff &&
-            record.builderHandoff.awaitsAgentAck !== false &&
-            !record.builderHandoff.acknowledgedAt &&
-            now() - Date.parse(record.builderHandoff.requestedAt) > HANDOFF_ACK_STALL_MS
-          ) {
-            await acknowledgeBuilderHandoff({
-              issueNumber: record.issueNumber,
-              acknowledgedAt: new Date(now()).toISOString(),
-              log: request.log,
-            });
-            continue;
-          }
-
-          // Unread-request detection. A creator's change request is dispatched to the
-          // agent and queued here; the queue is what an agent already mid-session
-          // drains. If dispatch succeeded but no agent ever collects — a dead session,
-          // a backend that accepted and dropped it — nothing errors anywhere and the
-          // request simply sits. An undelivered message aging past the threshold is
-          // that silence made visible.
-          //
-          // This used to also cover a relay: the request went out as a marked PR
-          // comment that a games-repo workflow re-posted as an `@copilot` mention under
-          // a licensed identity, because bot-authored mentions are dropped. That whole
-          // path is gone along with the jobs that needed it, and so is its failure mode.
-          const pending = await store.listPendingCreatorMessages(record.issueNumber);
-          const oldest = pending[0];
-          if (oldest) {
-            pendingFeedback.set(record.issueNumber, oldest.createdAt);
-            if (now() - Date.parse(oldest.createdAt) > FEEDBACK_STALL_MS) {
-              stalledIssues.push(record.issueNumber);
-            }
-          }
-
-          // Same derivation the status poll uses, so the sweep and the page can never
-          // disagree about what a job's own record says.
-          const observed = (await reconcileNativeJob(record)) ?? (await reconcileGateVerdict(record, true));
-          const current = observed
-            ? {
-                ...record,
-                state: observed.to,
-                stateSince: observed.at,
-                transitions: [...(record.transitions ?? []), observed],
-              }
-            : record;
-          const status = await nativeJobStatus(current);
-          // Every two minutes, for exactly the submissions still in flight — which is
-          // what lets the rail stop deriving its own. Recorded whether or not the
-          // transition is one anybody gets notified about.
-          if (record.lastStatus !== status.status) {
-            await store.setSubmissionLastStatus(record.issueNumber, status.status);
-          }
-          // Use the post-reconcile snapshot: the gate/agent observation above may already
-          // have moved the job, and feeding the pre-reconcile record into the derived-status
-          // planner would plan the same destination again (ready_for_review → ready_for_review)
-          // and reset `stateSince` / overwrite the reason that actually moved it.
-          await recordDerivedJobState(current, status.status);
-          const statusToken = mintToken(record.issueNumber, submissionTokenSecret);
-          const result = await notifyOnTransition(buildNotifyDeps(), record, status, statusToken);
-          if (result.emitted) emitted += 1;
-        } catch (sweepError) {
-          // One bad submission (deleted issue, GitHub hiccup) must not abort the sweep.
-          request.log.error({ err: sweepError, issueNumber: record.issueNumber }, 'sweep item failed');
-        }
-      }
-      // Then the operator's own half of the sweep.
-      //
-      // Raised here rather than at each transition because the alerts are not all
-      // transitions: a stall is time passing, and there is no moment anybody could have
-      // written it. This loop already runs every couple of minutes over exactly the set
-      // of jobs that could be in trouble, so it is the one place all three kinds are
-      // observable. Idempotent per job and kind, so re-running it does not re-notify.
-      let alerted = 0;
-      const alerts = detectOperatorAlerts(active, now(), pendingFeedback);
-      // Seeding degradation is deliberately NOT emitted here, so an alert about the
-      // platform's own plumbing never shares a fate with the sweep, the store, the
-      // notification table and the mail provider it would otherwise travel through. It
-      // still reaches the console badge through /api/admin/summary (detectSeedingDegraded
-      // in operator-alerts.ts), which is where an operator would act on it.
-      if (adminUids && adminUids.size > 0) {
-        for (const alert of alerts) {
-          try {
-            const { created } = await emitOperatorAlert({ ...buildNotifyDeps(), adminUids }, alert);
-            alerted += created;
-          } catch (alertError) {
-            request.log.error({ err: alertError, alert: alert.id }, 'operator alert emit failed');
-          }
-        }
-      }
-
-      // The health half of the sweep: read back verdicts of re-gates in flight. The
-      // gate ran remotely, wrote to the manifest and exited — same read-back pattern as
-      // the acceptance verdict. Bounded: one manifest read per *pending* check, and a
-      // publication with no check (or a resolved one) costs nothing.
-      let healthResolved = 0;
-      let unhealthy = 0;
-      const healthGamesStore = options.agentChannel?.gamesStore;
-      if (healthGamesStore) {
-        const publications = await store.listPublications().catch(() => []);
-        for (const publication of publications) {
-          const check = publication.healthCheck;
-          if (!check || check.verdictAt) continue;
-          try {
-            const manifest = await healthGamesStore.getManifest(publication.slug, check.version);
-            const health = manifest?.health;
-            // A verdict older than the request is the previous run's answer, not this
-            // one's — the run we are waiting for has not written yet.
-            if (!health || Date.parse(health.ranAt) < Date.parse(check.requestedAt)) continue;
-
-            healthResolved += 1;
-            const resolved = { ...check, green: health.green, verdictAt: health.ranAt };
-            if (health.green) {
-              await store.setPublicationHealthCheck(publication.slug, resolved);
-              continue;
-            }
-
-            unhealthy += 1;
-            // Red: the game still serves — its baked bundle froze the engine it shipped
-            // with — but a rebuild would fail. Nudge the creator, whose improvement
-            // round is the fix, and copy the operator. Notified-at is written only
-            // after both, so an emit that dies retries next sweep; the emits themselves
-            // are idempotent by id.
-            const submission = manifest ? await store.getSubmission(manifest.issueNumber) : null;
-            if (submission) {
-              await emitSubmissionNotification(buildNotifyDeps(), {
-                uid: submission.ownerUid,
-                type: 'submission.game_health',
-                issueNumber: submission.issueNumber,
-                gameTitle: submission.title,
-                statusToken: mintToken(submission.issueNumber, submissionTokenSecret),
-              });
-            }
-            if (adminUids && adminUids.size > 0) {
-              await emitOperatorAlert(
-                { ...buildNotifyDeps(), adminUids },
-                {
-                  id: `op-health-${publication.slug}-${check.version}`,
-                  kind: 'game_unhealthy',
-                  issueNumber: manifest?.issueNumber ?? 0,
-                  title: submission?.title ?? publication.slug,
-                  ownerUid: submission?.ownerUid ?? '',
-                  slug: publication.slug,
-                  since: health.ranAt,
-                },
-              );
-            }
-            await store.setPublicationHealthCheck(publication.slug, {
-              ...resolved,
-              notifiedAt: new Date(now()).toISOString(),
-            });
-          } catch (healthError) {
-            // One unreadable manifest must not abort the sweep — same rule as above.
-            request.log.error({ err: healthError, slug: publication.slug }, 'health check read failed');
-          }
-        }
-      }
-
-      // Logged at error level so it surfaces without new infrastructure, the same way
-      // the scorecard sweep reports its failures — a nightly job nobody watches is
-      // exactly the kind that fails quietly for weeks.
-      const sweepLog =
-        stalledIssues.length > 0 ? request.log.error.bind(request.log) : request.log.info.bind(request.log);
-      sweepLog(
-        {
-          scanned: active.length,
-          emitted,
-          alerts: alerts.length,
-          alerted,
-          stalled: stalledIssues.length,
-          stalledIssues,
-          healthResolved,
-          unhealthy,
-        },
-        stalledIssues.length > 0
-          ? 'creator feedback undelivered past the stall threshold — the games-repo @copilot relay may be down'
-          : 'notify sweep complete',
-      );
-      return reply.send({
-        scanned: active.length,
-        emitted,
-        alerts: alerts.length,
-        alerted,
-        stalled: stalledIssues.length,
-        healthResolved,
-        unhealthy,
-      });
-    },
-  );
+  registerNotifySweepRoutes(app, {
+    internalAuthVerifier,
+    githubClient,
+    submissionTokenSecret,
+    store,
+    gamesStore: options.agentChannel?.gamesStore,
+    adminUids,
+    now,
+    builderOf,
+    backendFor,
+    acknowledgeBuilderHandoff,
+    recordDerivedJobState,
+    reconcileNativeJob,
+    reconcileGateVerdict,
+    nativeJobStatus,
+    buildNotifyDeps,
+  });
 
   // Renders the staging buffer while the agent is still filling it, so a creator is not
   // left watching sentences for the minutes between "the game exists" and "the gate

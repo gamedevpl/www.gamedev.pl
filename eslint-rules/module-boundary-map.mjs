@@ -355,6 +355,7 @@ const FILE_BUCKET = {
   'unsubscribe-token': 'notifications',
   contact: 'notifications',
   'operator-alerts': 'notifications',
+  'notify-sweep-routes': 'notifications',
 
   // submissions.ts is deliberately unmapped: it's the D2 mega-file (registerSubmissionRoutes,
   // ~5,400 lines) Phase 3 Wave B dismantles piece by piece, not a Wave A move target -- every
