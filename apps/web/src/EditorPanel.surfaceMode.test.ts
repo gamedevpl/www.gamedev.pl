@@ -20,7 +20,15 @@ const layered: EditorDefinition = {
 
 describe('EditorPanel surface mode', () => {
   it('docks declaration-only tuning beside the running game', () => {
-    expect(editorSurfaceModeForDefinition({ version: 1, content: {} })).toBe('docked');
+    expect(
+      editorSurfaceModeForDefinition({
+        version: 1,
+        content: {},
+        params: {
+          speed: { type: 'number', min: 0.5, max: 2, default: 1, label: { en: 'Speed', pl: 'Tempo' } },
+        },
+      }),
+    ).toBe('docked');
   });
 
   it('uses the full surface for a declaration-rendered board', () => {
