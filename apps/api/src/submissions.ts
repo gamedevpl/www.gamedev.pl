@@ -17,6 +17,7 @@ import { createSlugResolver } from './catalog/slug-resolver.js';
 import { registerSelfBuildConnectRoutes } from './agent-surface/self-build-connect-routes.js';
 import { registerDraftLifecycleRoutes } from './creation/draft-lifecycle-routes.js';
 import { buildDispatchIssueBody, createGameCreator, registerCreateGameRoute } from './creation/create-game.js';
+import { createResumeBuild, type ResumeOutcome } from './creation/resume-build.js';
 import { createJobReconciler } from './creation/job-reconciler.js';
 import { registerHandoffSealRoutes } from './creation/handoff-seal-routes.js';
 import { registerFeedbackRoutes } from './creation/feedback-routes.js';
@@ -111,35 +112,6 @@ export type SubmissionRoutesStore = IdentityStore &
 // Re-exported for callers (and tests) that knew it here; it now lives with the status
 // parser, which reads the same marker back off the PR to rebuild the revision history.
 export { CREATOR_FEEDBACK_MARKER };
-
-/**
- * Why a round did not start, when one did not.
- *
- * `no_capacity` is its own answer because it is the one failure that is nothing to do
- * with this job: the coding-agent account has run out of premium requests, every job on
- * the site is equally stuck, and retrying is not the fix. Told apart from an ordinary
- * dispatch fault so the creator can be told the truth ("not now") rather than a guess
- * ("something went wrong"), and so an operator reading the queue knows to go and look at
- * billing rather than at the build.
- */
-export type ResumeFailureReason = 'not_configured' | 'no_capacity' | 'dispatch_failed' | 'platform_unavailable';
-
-export type ResumeOutcome =
-  { started: true } | { started: false; reason: ResumeFailureReason; unavailableReason?: ManagedUnavailableReason };
-
-/**
- * Reads a dispatch failure for the one distinction a caller can act on.
- *
- * GitHub answers an exhausted premium-request allowance with 412 and a message saying so;
- * the status alone is enough, and the message is matched too because a 412 from this API
- * has meant nothing else and a future one would still be worth reporting as "not now".
- */
-export function classifyResumeFailure(error: unknown): ResumeFailureReason {
-  const status = (error as { status?: unknown } | null)?.status;
-  const message = error instanceof Error ? error.message : String(error ?? '');
-  if (status === 412 || /premium quota|insufficient .*quota/i.test(message)) return 'no_capacity';
-  return 'dispatch_failed';
-}
 
 // Rebuilds a dispatch spec from stored spec/qa; null if none.
 export function reconstructDispatchSpec(record: Pick<SubmissionRecord, 'title' | 'spec' | 'qa'>): string | null {
@@ -905,166 +877,19 @@ export async function registerSubmissionRoutes(
    * the outcome so they can say so; `no_capacity` is separated out because it is not a
    * fault in the job and it will not clear by trying again in a minute.
    */
-  async function resumeBuild(input: {
-    issueNumber: number;
-    feedback: string;
-    locale: string;
-    log: { error: (context: object, message: string) => void };
-    /** Set when this round exists only because the last one never uploaded. */
-    undelivered?: boolean;
-    // The appendCreatorMessage write for `feedback` failed; buildPrompt must inline it.
-    feedbackQueueFailed?: boolean;
-    /**
-     * Who asked for this round and why, when it was not the creator. The transition an
-     * operator's retry writes has to say so — a history reading `derived_from_github`
-     * for a round a person explicitly started would be the history lying about the one
-     * fact an audit of that job would want.
-     */
-    transition?: { by: JobTransition['by']; reason: string };
-    /** Builder for the new round. Ignored on undelivered nudges (same round). */
-    builder?: BuilderKind;
-    /** Handoffs keep the per-job delivery budget across builder changes. */
-    preserveRoundBudget?: boolean;
-  }): Promise<ResumeOutcome> {
-    if (!submissionTokenSecret || !store) return { started: false, reason: 'not_configured' };
-    const record = await store.getSubmission(input.issueNumber);
-    const previous = record?.dispatch;
-    const previousBuilder = builderOf(record);
-    const builder = input.undelivered ? previousBuilder : (input.builder ?? record?.defaultBuilder ?? previousBuilder);
-    const selected = await backendFor(builder);
-    if (!selected) return { started: false, reason: 'not_configured' };
-    // Skip for undelivered continuations — not a fresh dispatch.
-    if (builder === 'platform' && !input.undelivered && managedAvailabilityGate && record?.ownerUid) {
-      const dateStr = new Date(now()).toISOString().slice(0, 10);
-      const availability = await managedAvailabilityGate.checkAndSpend(record.ownerUid, dateStr);
-      if (!availability.available) {
-        return { started: false, reason: 'platform_unavailable', unavailableReason: availability.reason };
-      }
-    }
-    let builderActivated = false;
-    let dispatchSucceeded = false;
-    try {
-      // A new round closes the previous one's token. Bump *before* minting so the brief
-      // carries the generation that is now active. An undelivered nudge is the same
-      // round continuing — the agent never uploaded, so its token must keep working —
-      // but a legacy job still needs the field written so the reminted key validates.
-      const roundGeneration = input.undelivered
-        ? ((await store.ensureRoundGeneration(input.issueNumber)) ?? 1)
-        : ((await store.bumpRoundGeneration(input.issueNumber)) ?? (record?.roundGeneration ?? 0) + 1);
-      const previousBackend = backendByStoredName(previous?.backend) ?? (await backendFor(previousBuilder));
-      if (previous?.refs.length && (!input.undelivered || previousBackend?.name.startsWith('managed:'))) {
-        const previousRef = previous.refs[previous.refs.length - 1];
-        if (previousBackend && previousRef) {
-          try {
-            await previousBackend.cancel(previousRef, previous?.credentialRefs?.[previousRef]);
-          } catch (error) {
-            input.log.error(
-              { err: error, issueNumber: input.issueNumber },
-              'previous agent cancel failed before a replacement round',
-            );
-          }
-        }
-      }
-      const switchSeed =
-        !input.undelivered && previousBuilder !== builder && record ? await seedFromLatestDelivery(record) : undefined;
-      const preservedSeed = !input.undelivered && previousBuilder !== builder && !switchSeed ? record?.seed : undefined;
-      // After a round bump the stored seed was cleared; only an undelivered nudge
-      // (same round) still has one to reuse. `record` was loaded before the reset.
-      const reusedSelfSeed = input.undelivered && builder === 'self' ? record?.seed : undefined;
-      const brief = {
-        issueNumber: input.issueNumber,
-        roundGeneration,
-        slug: record?.slug,
-        spec: input.feedback,
-        feedback: input.feedback,
-        locale: input.locale,
-        channelToken: mintAgentToken(input.issueNumber, submissionTokenSecret, {
-          roundGeneration,
-          now: now(),
-        }),
-        mcpOpenerToken: mintManagedMcpOpener(input.issueNumber, submissionTokenSecret, {
-          roundGeneration,
-          now: now(),
-        }),
-        apiBaseUrl: notifyAppBaseUrl,
-        ...(input.undelivered ? { undelivered: true } : {}),
-        ...(input.feedbackQueueFailed ? { feedbackQueueFailed: true } : {}),
-        ...(switchSeed ? { seed: switchSeed } : preservedSeed ? { seed: preservedSeed } : {}),
-        ...(reusedSelfSeed ? { seed: reusedSelfSeed } : {}),
-      };
-      // Resume against the *selected* backend. When the builder changes at a round
-      // boundary the previous ref belongs to a different backend — start fresh.
-      const sameBackend = previous?.backend === selected.name && Boolean(previous?.refs.length);
-      if (!input.undelivered && builder !== previousBuilder) {
-        // Expose target builder before external session can call back through MCP.
-        await store.setRoundBuilder(input.issueNumber, builder, {
-          resetRoundBudget: !input.preserveRoundBudget,
-        });
-        builderActivated = true;
-      }
-      const result = sameBackend
-        ? await selected.resume(brief, {
-            ref: previous!.refs[previous!.refs.length - 1],
-            workspace: previous!.workspace,
-          })
-        : await selected.dispatch(brief);
-      dispatchSucceeded = true;
-      if (input.undelivered) {
-        await store.clearAgentEnded(input.issueNumber);
-      }
-      await store.recordDispatch(input.issueNumber, {
-        backend: selected.name,
-        ref: result.ref,
-        workspace: result.workspace,
-        credentialRef: result.credentialRef,
-      });
-      await recordSessionCost(input.issueNumber, result.ref, selected, input.log);
-      // The previous workspace is spent the moment a new round has one of its own: the
-      // round that follows restores the game from the store rather than from a branch.
-      // Deleted after the dispatch succeeds, never before — a round that failed to
-      // start is a round whose old branch is still the most recent thing we have.
-      //
-      // Except after a round that never delivered. Nothing was uploaded, so the store
-      // has nothing to restore and that branch is the only copy of the work — deleting
-      // it here would be deleting the very thing the new round was sent to recover.
-      if (!input.undelivered && previous?.workspace && previous.workspace !== result.workspace) {
-        await releaseWorkspace(input.issueNumber, previous.workspace, input.log, previous.backend);
-      }
-      // Land on `dispatched`, not `building`. Copilot's agent-tasks API accepts the
-      // task immediately and only later reports `in_progress` (often with
-      // `session_count: 0` on create) — claiming "writing code" here made Studio look
-      // stuck or "not connected" while GitHub was still booting the session. The
-      // reconciler advances to `building` from a real observation. Same shape as
-      // `dispatchBuild` for a first round.
-      const latest = await store.getSubmission(input.issueNumber);
-      const from = latest?.state;
-      // No prior state: adopt directly (recordJobTransition does not gate on canTransition).
-      // Otherwise only advance when the walk still allows it — a self agent can deliver
-      // before this line runs, and yanking past `submitted` would reopen CP-1 hazards.
-      if (!from || canTransition(from, 'dispatched')) {
-        await store.recordJobTransition(input.issueNumber, {
-          to: 'dispatched',
-          at: new Date(now()).toISOString(),
-          by: input.transition?.by ?? 'creator',
-          reason: input.transition?.reason ?? `dispatched_to_${selected.name}`,
-        });
-      }
-      return { started: true };
-    } catch (error) {
-      if (builderActivated && !dispatchSucceeded) {
-        try {
-          await store.setRoundBuilder(input.issueNumber, previousBuilder, { resetRoundBudget: false });
-        } catch (rollbackError) {
-          input.log.error({ err: rollbackError, issueNumber: input.issueNumber }, 'builder rollback failed');
-        }
-      }
-      // The creator's request is already queued on the build channel, so a failed
-      // resume costs the round its head start, not the request itself.
-      const reason = classifyResumeFailure(error);
-      input.log.error({ err: error, issueNumber: input.issueNumber, reason }, 'agent resume failed');
-      return { started: false, reason };
-    }
-  }
+  const resumeBuild = createResumeBuild({
+    store,
+    submissionTokenSecret,
+    managedAvailabilityGate,
+    now,
+    notifyAppBaseUrl,
+    backendFor,
+    backendByStoredName,
+    builderOf,
+    recordSessionCost,
+    releaseWorkspace,
+    seedFromLatestDelivery,
+  });
 
   // Acks a pending handoff and starts the target builder.
   async function acknowledgeBuilderHandoff(input: {

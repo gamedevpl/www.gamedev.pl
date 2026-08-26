@@ -1,0 +1,231 @@
+import type { AgentBackend, SeedFiles } from '../agent-surface/agent-backend.js';
+import { mintAgentToken, mintManagedMcpOpener } from '../agent-surface/agent-token.js';
+import type { ManagedAvailabilityGate, ManagedUnavailableReason } from '../agent-surface/managed-availability.js';
+import type { Store, SubmissionRecord } from '../platform/store.js';
+import type { BuilderKind } from './builder.js';
+import { canTransition, type JobTransition } from './job-state.js';
+
+// Why a round did not start, when one did not.
+
+// no_capacity is the one failure unrelated to this job.
+
+// The agent account is out of requests; every job is stuck.
+
+// Told apart so the creator hears "not now" rather than a guess.
+export type ResumeFailureReason = 'not_configured' | 'no_capacity' | 'dispatch_failed' | 'platform_unavailable';
+
+export type ResumeOutcome =
+  { started: true } | { started: false; reason: ResumeFailureReason; unavailableReason?: ManagedUnavailableReason };
+
+// Reads a dispatch failure for the distinction a caller can act on.
+
+// GitHub answers an exhausted allowance with 412 and a message saying so.
+
+// The message is matched too; a 412 has meant nothing else.
+export function classifyResumeFailure(error: unknown): ResumeFailureReason {
+  const status = (error as { status?: unknown } | null)?.status;
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  if (status === 412 || /premium quota|insufficient .*quota/i.test(message)) return 'no_capacity';
+  return 'dispatch_failed';
+}
+
+export interface ResumeBuildDeps {
+  store: Store | undefined;
+  submissionTokenSecret: string | undefined;
+  managedAvailabilityGate: ManagedAvailabilityGate | null | undefined;
+  now: () => number;
+  notifyAppBaseUrl: string;
+  backendFor: (builder: BuilderKind | undefined) => Promise<AgentBackend | undefined>;
+  backendByStoredName: (name: string | undefined) => AgentBackend | undefined;
+  builderOf: (record: SubmissionRecord | null | undefined) => BuilderKind;
+  recordSessionCost: (
+    issueNumber: number,
+    ref: string,
+    backend: AgentBackend,
+    log: { error: (context: object, message: string) => void },
+  ) => Promise<void>;
+  releaseWorkspace: (
+    issueNumber: number,
+    workspace: string,
+    log: { error: (context: object, message: string) => void },
+    backendName?: string,
+  ) => Promise<void>;
+  seedFromLatestDelivery: (record: SubmissionRecord) => Promise<SeedFiles | undefined>;
+}
+
+// Starts the next round on an existing job, keeping its thread.
+export function createResumeBuild(deps: ResumeBuildDeps) {
+  const {
+    store,
+    submissionTokenSecret,
+    managedAvailabilityGate,
+    now,
+    notifyAppBaseUrl,
+    backendFor,
+    backendByStoredName,
+    builderOf,
+    recordSessionCost,
+    releaseWorkspace,
+    seedFromLatestDelivery,
+  } = deps;
+
+  async function resumeBuild(input: {
+    issueNumber: number;
+    feedback: string;
+    locale: string;
+    log: { error: (context: object, message: string) => void };
+    // Set when this round exists only because the last never uploaded.
+    undelivered?: boolean;
+    // The appendCreatorMessage write for `feedback` failed; buildPrompt must inline it.
+    feedbackQueueFailed?: boolean;
+    // Who asked for this round, when it was not the creator.
+
+    // A history reading derived_from_github for a person's retry would lie.
+    transition?: { by: JobTransition['by']; reason: string };
+    // Builder for the new round. Ignored on undelivered nudges.
+    builder?: BuilderKind;
+    // Handoffs keep the per-job delivery budget across builder changes.
+    preserveRoundBudget?: boolean;
+  }): Promise<ResumeOutcome> {
+    if (!submissionTokenSecret || !store) return { started: false, reason: 'not_configured' };
+    const record = await store.getSubmission(input.issueNumber);
+    const previous = record?.dispatch;
+    const previousBuilder = builderOf(record);
+    const builder = input.undelivered ? previousBuilder : (input.builder ?? record?.defaultBuilder ?? previousBuilder);
+    const selected = await backendFor(builder);
+    if (!selected) return { started: false, reason: 'not_configured' };
+    // Skip for undelivered continuations — not a fresh dispatch.
+    if (builder === 'platform' && !input.undelivered && managedAvailabilityGate && record?.ownerUid) {
+      const dateStr = new Date(now()).toISOString().slice(0, 10);
+      const availability = await managedAvailabilityGate.checkAndSpend(record.ownerUid, dateStr);
+      if (!availability.available) {
+        return { started: false, reason: 'platform_unavailable', unavailableReason: availability.reason };
+      }
+    }
+    let builderActivated = false;
+    let dispatchSucceeded = false;
+    try {
+      // A new round closes the previous token, so bump before minting.
+
+      // An undelivered nudge is the same round: its token must keep working.
+
+      // A legacy job still needs the field written for the reminted key.
+      const roundGeneration = input.undelivered
+        ? ((await store.ensureRoundGeneration(input.issueNumber)) ?? 1)
+        : ((await store.bumpRoundGeneration(input.issueNumber)) ?? (record?.roundGeneration ?? 0) + 1);
+      const previousBackend = backendByStoredName(previous?.backend) ?? (await backendFor(previousBuilder));
+      if (previous?.refs.length && (!input.undelivered || previousBackend?.name.startsWith('managed:'))) {
+        const previousRef = previous.refs[previous.refs.length - 1];
+        if (previousBackend && previousRef) {
+          try {
+            await previousBackend.cancel(previousRef, previous?.credentialRefs?.[previousRef]);
+          } catch (error) {
+            input.log.error(
+              { err: error, issueNumber: input.issueNumber },
+              'previous agent cancel failed before a replacement round',
+            );
+          }
+        }
+      }
+      const switchSeed =
+        !input.undelivered && previousBuilder !== builder && record ? await seedFromLatestDelivery(record) : undefined;
+      const preservedSeed = !input.undelivered && previousBuilder !== builder && !switchSeed ? record?.seed : undefined;
+      // A round bump clears the stored seed; a nudge keeps one.
+
+      // The record above was loaded before that reset.
+      const reusedSelfSeed = input.undelivered && builder === 'self' ? record?.seed : undefined;
+      const brief = {
+        issueNumber: input.issueNumber,
+        roundGeneration,
+        slug: record?.slug,
+        spec: input.feedback,
+        feedback: input.feedback,
+        locale: input.locale,
+        channelToken: mintAgentToken(input.issueNumber, submissionTokenSecret, {
+          roundGeneration,
+          now: now(),
+        }),
+        mcpOpenerToken: mintManagedMcpOpener(input.issueNumber, submissionTokenSecret, {
+          roundGeneration,
+          now: now(),
+        }),
+        apiBaseUrl: notifyAppBaseUrl,
+        ...(input.undelivered ? { undelivered: true } : {}),
+        ...(input.feedbackQueueFailed ? { feedbackQueueFailed: true } : {}),
+        ...(switchSeed ? { seed: switchSeed } : preservedSeed ? { seed: preservedSeed } : {}),
+        ...(reusedSelfSeed ? { seed: reusedSelfSeed } : {}),
+      };
+      // Resume against the selected backend, never the previous one.
+
+      // At a builder change the old ref belongs elsewhere, so start fresh.
+      const sameBackend = previous?.backend === selected.name && Boolean(previous?.refs.length);
+      if (!input.undelivered && builder !== previousBuilder) {
+        // Expose target builder before external session can call back through MCP.
+        await store.setRoundBuilder(input.issueNumber, builder, {
+          resetRoundBudget: !input.preserveRoundBudget,
+        });
+        builderActivated = true;
+      }
+      const result = sameBackend
+        ? await selected.resume(brief, {
+            ref: previous!.refs[previous!.refs.length - 1],
+            workspace: previous!.workspace,
+          })
+        : await selected.dispatch(brief);
+      dispatchSucceeded = true;
+      if (input.undelivered) {
+        await store.clearAgentEnded(input.issueNumber);
+      }
+      await store.recordDispatch(input.issueNumber, {
+        backend: selected.name,
+        ref: result.ref,
+        workspace: result.workspace,
+        credentialRef: result.credentialRef,
+      });
+      await recordSessionCost(input.issueNumber, result.ref, selected, input.log);
+      // The old workspace is spent once the new round has its own.
+
+      // Deleted after dispatch succeeds: a failed start still needs that branch.
+
+      // Never after an undelivered round; that branch is the only copy.
+      if (!input.undelivered && previous?.workspace && previous.workspace !== result.workspace) {
+        await releaseWorkspace(input.issueNumber, previous.workspace, input.log, previous.backend);
+      }
+      // Land on dispatched, not building; the API accepts before it starts.
+
+      // Claiming to write code here made Studio look stuck while it booted.
+
+      // The reconciler advances to building from a real observation.
+      const latest = await store.getSubmission(input.issueNumber);
+      const from = latest?.state;
+      // No prior state: adopt directly, since the write does not gate.
+
+      // Otherwise advance only when the walk allows it.
+
+      // A self agent can deliver first; yanking past submitted is a hazard.
+      if (!from || canTransition(from, 'dispatched')) {
+        await store.recordJobTransition(input.issueNumber, {
+          to: 'dispatched',
+          at: new Date(now()).toISOString(),
+          by: input.transition?.by ?? 'creator',
+          reason: input.transition?.reason ?? `dispatched_to_${selected.name}`,
+        });
+      }
+      return { started: true };
+    } catch (error) {
+      if (builderActivated && !dispatchSucceeded) {
+        try {
+          await store.setRoundBuilder(input.issueNumber, previousBuilder, { resetRoundBudget: false });
+        } catch (rollbackError) {
+          input.log.error({ err: rollbackError, issueNumber: input.issueNumber }, 'builder rollback failed');
+        }
+      }
+      // The request is already queued; a failed resume costs the head start.
+      const reason = classifyResumeFailure(error);
+      input.log.error({ err: error, issueNumber: input.issueNumber, reason }, 'agent resume failed');
+      return { started: false, reason };
+    }
+  }
+
+  return resumeBuild;
+}
