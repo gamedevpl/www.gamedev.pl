@@ -301,7 +301,8 @@
         var nextId = 1;
         var initializeId = null;
         var initialized = false;
-        var pendingCalls = {};
+        // Null-prototype: ids come off the wire, so {} would match toString and friends.
+        var pendingCalls = Object.create(null);
 
         var sessionKey = null;
         var lastShotId = null;
@@ -1440,8 +1441,9 @@
             return;
           }
 
-          if (message.id !== undefined && pendingCalls[message.id]) {
-            var handler = pendingCalls[message.id];
+          // Only ever dispatch a function this view itself registered.
+          var handler = message.id === undefined ? null : pendingCalls[message.id];
+          if (typeof handler === 'function') {
             delete pendingCalls[message.id];
             handler(message.result, message.error);
             return;
