@@ -1,4 +1,4 @@
-import { BUILDERS, deriveGateStatusString, derivePreviewGateStatus, MAX_TITLE_LENGTH } from '@gamedevpl/contract';
+import { BUILDERS, MAX_TITLE_LENGTH } from '@gamedevpl/contract';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { splitConceptBrief } from './agent-surface/agent-build-brief.js';
@@ -19,7 +19,6 @@ import {
   type ManagedAvailabilityGate,
   type ManagedUnavailableReason,
 } from './agent-surface/managed-availability.js';
-import { postGateScreenshotToThread } from './delivery/gate-screenshot.js';
 import { createGitHubClient, type CatalogGameEntry, type GitHubClient } from './catalog/github-client.js';
 import { createSnapshotReaderFromEnv, type GameSnapshotReader } from './catalog/game-snapshot.js';
 import { registerAdminGameRoutes } from './catalog/admin-game-routes.js';
@@ -27,6 +26,7 @@ import { createSlugResolver } from './catalog/slug-resolver.js';
 import { registerSelfBuildConnectRoutes } from './agent-surface/self-build-connect-routes.js';
 import { registerDraftLifecycleRoutes } from './creation/draft-lifecycle-routes.js';
 import { REFERENCE_IMAGES_BODY_LIMIT_BYTES, ReferenceImagesSchema } from './creation/feedback-request.js';
+import { createJobReconciler } from './creation/job-reconciler.js';
 import { registerHandoffSealRoutes } from './creation/handoff-seal-routes.js';
 import { registerFeedbackRoutes } from './creation/feedback-routes.js';
 import { registerImproveRoutes } from './creation/improve-routes.js';
@@ -54,25 +54,15 @@ import { isActiveBuildRound, type BuilderKind } from './creation/builder.js';
 import { DEFAULT_SEED_PROVIDER, type GameSeeder } from './creation/game-seed.js';
 import { createSourceDeliveryService } from './delivery/source-delivery.js';
 import { createKitFileStore } from './agent-surface/kit-files.js';
-import type { GamesStore } from './delivery/games-store.js';
 import {
   canTransition,
   isTerminal,
   planObservedStatusTransition,
-  reconcileAgentObservation,
   resolveJobState,
   type JobState,
   type JobTransition,
 } from './creation/job-state.js';
-import { probeGateCrash } from './delivery/gate-crash.js';
-import { clearObserveFailures, noteObserveFailure, sessionCrashTransition } from './creation/session-crash.js';
 import { createNativeJobStatusAssembler } from './delivery/native-job-status.js';
-import {
-  builderLabelFromRecord,
-  failedStageFromProgress,
-  logDeliveryGateVerdict,
-  type DeliveryGateStatus,
-} from './platform/delivery-metrics.js';
 import { type StudioChatAgent } from './creation/chat-agent.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './catalog/local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './notifications/mailer.js';
@@ -1642,331 +1632,19 @@ export async function registerSubmissionRoutes(
    */
   const maxDeliveryNudges = options.maxDeliveryNudges ?? 1;
 
-  /**
-   * Asks the backend what actually happened to a job whose agent has gone quiet.
-   *
-   * This is what stands between a dead session and a page that says "building" until
-   * the end of time. The build channel only ever carries good news — an agent that
-   * crashes, times out, or is killed for quota mid-session reports nothing, and
-   * nothing else was listening. So a status poll that notices prolonged silence asks
-   * the backend directly and records what it learns: a session that died becomes
-   * `failed` (named on the page, retryable by feedback) instead of a spinner.
-   *
-   * Throttled twice over: the 60s status cache means at most one call per job per
-   * minute, and the quiet window means a healthy, chatty build never triggers it.
-   */
-  async function reconcileNativeJob(record: SubmissionRecord): Promise<JobTransition | null> {
-    if (!store) return null;
-    const selected = await backendFor(builderOf(record));
-    if (!selected) return null;
-    const refs = record.dispatch?.refs;
-    if (!refs || refs.length === 0) return null;
-    const state = record.state ?? 'queued';
-    const lastRef = refs[refs.length - 1];
-    // Cost reconciliation is independent of job state: usage is only final once the
-    // session completes, which can be after delivery has already moved the job past
-    // the agent. A placeholder of 1 credit stays until observation overwrites it.
-    // Tokens settle the entry too; credits never arrive token-billed.
-    const costPending = (record.costs ?? []).some(
-      (entry) => entry.kind === 'agent_session' && entry.ref === lastRef && !entry.creditsMeasured && !entry.tokens,
-    );
-    // Lifecycle observation only while the agent's own lifecycle is the open question.
-    // Once the job is past the agent (delivered, gated, terminal), sessions stop being
-    // authoritative for state — but we still observe when cost is unmeasured.
-    const agentActive = state === 'queued' || state === 'dispatched' || state === 'building';
-    if (!agentActive && !costPending) return null;
-    const quietFrom = record.lastAgentSignalAt ?? record.stateSince ?? record.createdAt;
-    const silence = now() - Date.parse(quietFrom);
-    // A job whose branch we never learned is asked about regardless of how chatty it
-    // is. Without the branch a revision cannot resume the work — `resume` degrades to
-    // a fresh dispatch and the creator's game starts again from nothing — so learning
-    // it is not an error path, it is the normal completion of a dispatch.
-    const needsWorkspace = !record.dispatch?.workspace && selected.name !== 'self';
-    // Self rounds project from channel signals; ask as soon as a signal exists so
-    // queued/dispatched advances to building without waiting out the quiet window.
-    const selfNeedsProjection =
-      selected.name === 'self' && agentActive && Boolean(record.lastAgentSignalAt) && state !== 'building';
-    // Platform tasks sit in `queued`/`dispatched` while GitHub boots the session
-    // (`session_count: 0`, task state still `queued`). That stretch is not "quiet
-    // building" — ask every status poll so `in_progress` flips us to `building`
-    // from a real Agent Tasks signal, not a timer.
-    const awaitingSessionStart = selected.name !== 'self' && (state === 'queued' || state === 'dispatched');
-    // Cost-only polls skip the quiet window: the session is already done, and waiting
-    // would only delay the ledger catching up with the bill.
-    if (
-      !needsWorkspace &&
-      !selfNeedsProjection &&
-      !awaitingSessionStart &&
-      agentActive &&
-      (!Number.isFinite(silence) || silence < observeQuietMs)
-    ) {
-      return null;
-    }
-    // The last ref is the session that owns the job now; earlier ones were superseded
-    // by a resume and their fate stopped mattering when it started. Kept as its own
-    // try so a vendor error here — never a store error further down — counts toward
-    // session_crashed; see session-crash.ts.
-    let observation;
-    try {
-      observation = await selected.observe(lastRef, {
-        hasCandidate: Boolean(record.deliveredVersion) || (record.roundDeliveryCount ?? 0) > 0,
-        // Pull-delivery backends harvest inside observe.
-        issueNumber: record.issueNumber,
-        ...(record.slug ? { slug: record.slug } : {}),
-        // Durable generation — process memory is empty after restart.
-        roundGeneration: record.roundGeneration ?? 1,
-      });
-      clearObserveFailures(lastRef);
-    } catch (error) {
-      app.log.error({ err: error, issueNumber: record.issueNumber }, 'agent observation failed');
-      if (!noteObserveFailure(lastRef)) return null;
-      const transition = sessionCrashTransition(state, now);
-      if (!transition) return null;
-      const recorded = await store.recordJobTransition(record.issueNumber, transition);
-      return recorded ? transition : null;
-    }
-    try {
-      if (!observation) return null;
-      if (observation.sessionTokens) {
-        try {
-          await store.setJobCostTokens(record.issueNumber, lastRef, observation.sessionTokens);
-        } catch (error) {
-          app.log.error({ err: error, issueNumber: record.issueNumber }, 'could not reconcile agent session tokens');
-        }
-      }
-      if (observation.sessionCredits !== undefined) {
-        try {
-          await store.setJobCostCredits(record.issueNumber, lastRef, observation.sessionCredits);
-        } catch (error) {
-          app.log.error({ err: error, issueNumber: record.issueNumber }, 'could not reconcile agent session cost');
-        }
-      }
-      // Persist the vendor state even when the job does not move — `waiting_for_user`
-      // stalls and operator views read it, and a create response that stays `queued`
-      // must not leave `agentState` blank until the first transition.
-      if (observation.state !== record.agentState) {
-        try {
-          await store.setSubmissionAgentState(record.issueNumber, observation.state);
-        } catch (error) {
-          app.log.error({ err: error, issueNumber: record.issueNumber }, 'could not store agent task state');
-        }
-      }
-      // Re-read after harvest; do not skip the gate.
-      const fresh = await store.getSubmission(record.issueNumber);
-      const stateAfterObserve = (fresh?.state ?? state) as JobState;
-      const stillAgentActive =
-        stateAfterObserve === 'queued' || stateAfterObserve === 'dispatched' || stateAfterObserve === 'building';
-      // A cost-only poll on a job past the agent: write the credits and stop. State
-      // transitions from a late observation would snatch a delivered candidate back.
-      if (!stillAgentActive) return null;
-      if (observation.workspace && observation.workspace !== record.dispatch?.workspace) {
-        await store.setDispatchWorkspace(record.issueNumber, observation.workspace);
-        // Learning the agent's own branch is proof it has forked, which is the exact
-        // moment the seed branch stops having a reader. Released here rather than at the
-        // end of the job because this is the tightest lifetime that is still safe: a
-        // seed branch deleted any earlier could be deleted out from under a session that
-        // had not started cloning yet.
-        if (record.dispatch?.seedWorkspace && record.dispatch.seedWorkspace !== observation.workspace) {
-          await releaseWorkspace(record.issueNumber, record.dispatch.seedWorkspace, app.log, record.dispatch.backend);
-          await store.clearDispatchSeedWorkspace(record.issueNumber);
-        }
-      }
-      const result = reconcileAgentObservation(stateAfterObserve, observation);
-      if (!result) return null;
-      // Stale: a handoff already dispatched a newer ref.
-      if (fresh?.dispatch?.refs.at(-1) !== lastRef) return null;
-
-      // A session that ran to completion and uploaded nothing is the one failure worth
-      // answering rather than recording. Everything else here is the agent being unable
-      // to continue — crashed, timed out, killed for quota — and sending it back would
-      // just buy the same ending twice. This one finished: the work is very likely done
-      // and sitting on a branch, and the only thing missing is the upload. That is
-      // recoverable by asking, and asking is far cheaper than the round it would
-      // otherwise cost the creator.
-      //
-      // Checked deterministically, from our own record of what was delivered, rather
-      // than from anything the session claims about itself.
-      if (result.reason === 'task_completed_without_delivery' && (record.deliveryNudges ?? 0) < maxDeliveryNudges) {
-        const nudges = await store.recordDeliveryNudge(record.issueNumber);
-        // Counted before dispatching, so a dispatch that throws still spends the budget.
-        // The alternative retries forever against whatever is refusing to start.
-        if (nudges <= maxDeliveryNudges) {
-          app.log.warn(
-            { issueNumber: record.issueNumber, nudge: nudges, workspace: record.dispatch?.workspace },
-            'session finished without delivering; sending it back',
-          );
-          await resumeBuild({
-            issueNumber: record.issueNumber,
-            feedback: '',
-            locale: record.locale ?? 'en',
-            log: app.log,
-            undelivered: true,
-          });
-          // `resumeBuild` has already moved the job back to dispatched. Reporting the
-          // failure here as well would show the creator an error about a round that is
-          // at this moment running again.
-          return null;
-        }
-      }
-
-      const transition: JobTransition = {
-        to: result.to,
-        at: new Date(now()).toISOString(),
-        by: 'reconciler',
-        reason: result.reason,
-      };
-      const recorded = await store.recordJobTransition(record.issueNumber, transition);
-      return recorded ? transition : null;
-    } catch (error) {
-      // Best effort by design: the answer to "observation failed" is the status the
-      // record already has, not an error on a page that was only ever polling.
-      app.log.error({ err: error, issueNumber: record.issueNumber }, 'agent observation failed');
-      return null;
-    }
-  }
-
-  /**
-   * Reads our own gate's verdict off the delivered version and moves the job on it.
-   *
-   * The gate runs in Cloud Build, writes its verdict to the version manifest, and exits.
-   * Nothing told the job — so a delivered game sat in `submitted` forever no matter what
-   * the gate said, and the creator watched a page that had stopped meaning anything.
-   *
-   * Read here rather than pushed back by the gate because the verdict is already durable
-   * in the store: a callback would need its own credential, its own retry, and would
-   * still be a second source of a fact the manifest already holds. A poll that reads it
-   * cannot disagree with the store, and a gate run that dies before reporting is
-   * indistinguishable from one that never ran — which is the honest reading.
-   */
-  async function reconcileGateVerdict(record: SubmissionRecord, sweep = false): Promise<JobTransition | null> {
-    const gamesStore = options.agentChannel?.gamesStore;
-    if (!gamesStore || !store || !record.slug) return null;
-    const state = record.state ?? 'queued';
-    if (state !== 'building' && state !== 'submitted' && state !== 'gating') return null;
-    try {
-      const roundGeneration = record.roundGeneration ?? 1;
-      // Retained versions may belong to an older round.
-      // Check previews first, accepting only this round's manifest.
-      const candidateVersions = [record.previewVersion, record.deliveredVersion].filter(
-        (version, index, versions): version is string => Boolean(version) && versions.indexOf(version) === index,
-      );
-      let version: string | undefined;
-      let manifest: Awaited<ReturnType<GamesStore['getManifest']>> = null;
-      for (const candidate of candidateVersions) {
-        const candidateManifest = await gamesStore.getManifest(record.slug, candidate);
-        if (candidateManifest?.roundGeneration === roundGeneration) {
-          version = candidate;
-          manifest = candidateManifest;
-          break;
-        }
-      }
-      if (!version || !manifest) return sweep ? probeGateCrash(record, { store, gamesStore, log: app.log, now }) : null;
-      const emitGateMetric = async (input: {
-        mode: 'preview' | 'publish';
-        outcome: 'passed' | 'failed';
-        status: DeliveryGateStatus;
-        failedStage?: ReturnType<typeof failedStageFromProgress>;
-      }) => {
-        const key = `${version}:${input.status}`;
-        if (record.roundLastGateMetricKey === key) return;
-        await store.setRoundLastGateMetricKey(record.issueNumber, key);
-        record.roundLastGateMetricKey = key;
-        logDeliveryGateVerdict(app.log, {
-          issueNumber: record.issueNumber,
-          roundGeneration,
-          builder: builderLabelFromRecord(record.builder, record.dispatch?.backend),
-          mode: input.mode,
-          outcome: input.outcome,
-          status: input.status,
-          ...(input.failedStage ? { failedStage: input.failedStage } : {}),
-        });
-      };
-
-      const verdict = manifest?.gate;
-      if (verdict && record.deliveredVersion) {
-        const status: DeliveryGateStatus = deriveGateStatusString(verdict);
-        await emitGateMetric({
-          mode: 'publish',
-          outcome: verdict.green ? 'passed' : 'failed',
-          status,
-          ...(verdict.green ? {} : { failedStage: failedStageFromProgress(manifest?.gateProgress?.stage) }),
-        });
-        // Green means publishable, never published: the human review this waits for is the
-        // moderation boundary, and a gate that promoted past it would quietly delete it.
-        const to = verdict.green ? 'ready_for_review' : 'needs_changes';
-        if (!canTransition(state, to)) return null;
-        const transition: JobTransition = {
-          to,
-          at: verdict.ranAt,
-          by: 'gate',
-          reason: verdict.green ? 'gate_green' : verdict.status === 'kit_outdated' ? 'kit_outdated' : 'gate_red',
-        };
-        const recorded = await store.recordJobTransition(record.issueNumber, transition);
-        if (!recorded) return null;
-        // The outgoing token just died — resume any pending handoff now, not in 10m.
-        if (to === 'ready_for_review' && record.builderHandoff?.awaitsAgentAck) {
-          await acknowledgeBuilderHandoff({
-            issueNumber: record.issueNumber,
-            acknowledgedAt: transition.at,
-            log: app.log,
-          }).catch((error) => {
-            app.log.error({ err: error, issueNumber: record.issueNumber }, 'failed to resume handoff at round close');
-          });
-        }
-        // First time we act on this verdict: post the capture frame into the thread so the
-        // creator sees what the platform check saw, on the same path as agent-sent shots.
-        if (verdict.screenshot) {
-          await postGateScreenshotToThread({
-            store,
-            gamesStore,
-            issueNumber: record.issueNumber,
-            slug: record.slug,
-            version: record.deliveredVersion,
-            screenshotPath: verdict.screenshot,
-          }).catch((error) => {
-            app.log.warn({ err: error, issueNumber: record.issueNumber }, 'could not post gate screenshot');
-          });
-        }
-        return transition;
-      }
-      // mode=preview never writes manifest.gate — still emit metrics for green/red.
-      const preview = manifest?.previewGate;
-      if (!preview) return sweep ? probeGateCrash(record, { store, gamesStore, log: app.log, now }) : null;
-      await emitGateMetric({
-        mode: 'preview',
-        outcome: preview.green ? 'passed' : 'failed',
-        status: derivePreviewGateStatus(preview),
-        ...(preview.green ? {} : { failedStage: failedStageFromProgress(manifest?.gateProgress?.stage) }),
-      });
-      if (preview.green) return null;
-      const to = 'needs_changes' as const;
-      if (!canTransition(state, to)) return null;
-      const transition: JobTransition = {
-        to,
-        at: preview.ranAt,
-        by: 'gate',
-        reason: preview.status === 'kit_outdated' ? 'kit_outdated' : 'gate_red',
-      };
-      const recorded = await store.recordJobTransition(record.issueNumber, transition);
-      if (!recorded) return null;
-      if (preview.screenshot) {
-        await postGateScreenshotToThread({
-          store,
-          gamesStore,
-          issueNumber: record.issueNumber,
-          slug: record.slug,
-          version,
-          screenshotPath: preview.screenshot,
-        }).catch((error) => {
-          app.log.warn({ err: error, issueNumber: record.issueNumber }, 'could not post gate screenshot');
-        });
-      }
-      return transition;
-    } catch (error) {
-      app.log.error({ err: error, issueNumber: record.issueNumber }, 'could not read the gate verdict');
-      return null;
-    }
-  }
+  const { reconcileNativeJob, reconcileGateVerdict } = createJobReconciler({
+    store,
+    gamesStore: options.agentChannel?.gamesStore,
+    log: app.log,
+    now,
+    observeQuietMs,
+    maxDeliveryNudges,
+    backendFor,
+    builderOf,
+    releaseWorkspace,
+    resumeBuild,
+    acknowledgeBuilderHandoff,
+  });
 
   /**
    * Creates a game. The whole of it: beta/blocked check, payload validation, per-IP
