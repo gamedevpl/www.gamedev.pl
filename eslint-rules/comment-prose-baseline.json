@@ -23,7 +23,7 @@
     "apps/api/src/agent-surface/agent-build-brief.ts": 95,
     "apps/api/src/agent-surface/agent-build-examples.ts": 103,
     "apps/api/src/agent-surface/agent-channel.test.ts": 1226,
-    "apps/api/src/agent-surface/agent-channel.ts": 4046,
+    "apps/api/src/agent-surface/agent-channel.ts": 4010,
     "apps/api/src/agent-surface/agent-creator-key-resolve.ts": 172,
     "apps/api/src/agent-surface/agent-creator-key.test.ts": 15,
     "apps/api/src/agent-surface/agent-creator-key.ts": 257,
