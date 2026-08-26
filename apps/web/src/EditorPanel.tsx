@@ -18,6 +18,7 @@ import {
 } from './editorContentTools.js';
 import { LayeredBoard, LayeredSidebar } from './LayeredEditorSurface.js';
 import { EditorSurface } from './EditorSurface.js';
+import { editorSurfaceModeForDefinition } from './editorSurfaceMode.js';
 import { useEditorDocument } from './useEditorDocument.js';
 import { recordAssistStep, recordEditorStep } from './visitTelemetry.js';
 import type { EditorContentPush, EditorControllerState, EditorSelection } from './editorBridge.js';
@@ -168,6 +169,9 @@ export function EditorPanel(props: {
   const [utterance, setUtterance] = useState('');
   const [assist, setAssist] = useState<AssistState>({ kind: 'idle' });
   const [controllerDisabled, setControllerDisabled] = useState(false);
+  const controllerActive = Boolean(
+    props.controller?.status === 'ready' && !controllerDisabled && props.controller.view,
+  );
   const lastControllerChangeRef = useRef<string | null>(null);
   const document = useEditorDocument({ slug, onPush: (next) => pushLive(next) });
   const {
@@ -212,12 +216,6 @@ export function EditorPanel(props: {
         // The revision funnel's first rung: this creator can edit and did open it.
         recordEditorStep('opened');
         setEditor(loaded);
-        const needsFullSurface =
-          Object.keys(loaded.definition.layers ?? {}).length > 0 ||
-          Object.values(loaded.definition.content).some(
-            (collection) => collection.item.widget === 'tilemap' || collection.item.widget === 'path',
-          );
-        onSurfaceModeChange?.(needsFullSurface ? 'full' : 'docked');
         const merged = mergeDraft(loaded);
         resetDocument(merged, loaded.draft?.revision ?? 0);
         const defaultKey = defaultCollectionKey(loaded.definition.content);
@@ -245,6 +243,11 @@ export function EditorPanel(props: {
       cancelled = true;
     };
   }, [onSurfaceModeChange, pushLive, resetDocument, slug]);
+
+  useEffect(() => {
+    if (!editor) return;
+    onSurfaceModeChange?.(editorSurfaceModeForDefinition(editor.definition, controllerActive));
+  }, [controllerActive, editor, onSurfaceModeChange]);
 
   // Guards a stale async reply from pushing into a game switched to since (editorPushRef
   // is shared, parent-owned).
@@ -601,10 +604,6 @@ export function EditorPanel(props: {
   const boardSpec = tilemapCollection(spec);
   const pathSpec = pathCollection(spec);
   const width = tilemapItem ? (tilemapItem.rows[0]?.length ?? 0) : 0;
-  const controllerActive = Boolean(
-    props.controller?.status === 'ready' && !controllerDisabled && props.controller.view,
-  );
-
   return (
     <div className="editor-panel">
       <div className="editor-panel-head">
