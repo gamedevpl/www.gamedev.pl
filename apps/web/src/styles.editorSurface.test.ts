@@ -11,7 +11,6 @@ function declarations(selector: string): string {
   expect(end, `unclosed ${selector} rule`).toBeGreaterThan(start);
   return css.slice(start, end);
 }
-
 describe('layered editor surface CSS contract', () => {
   it('pins the stacked board posture and active-layer interaction', () => {
     expect(declarations('.editor-layer-stack')).toMatch(/display:\s*grid/);
@@ -28,6 +27,7 @@ describe('layered editor surface CSS contract', () => {
 
   it('pins the edit overlay dock posture used by layered definitions', () => {
     const dock = ".studio-edit-overlay:not(.studio-code-overlay)[data-surface='docked']";
+    expect(css).not.toContain(':has(.editor-board-col)');
     expect(declarations(dock)).toMatch(/inset:\s*0 0 0 auto/);
     expect(declarations(dock)).toMatch(/width:\s*min\(360px, 100%\)/);
   });
