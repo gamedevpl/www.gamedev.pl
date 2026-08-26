@@ -369,6 +369,28 @@ jobs:
             fi
           done
 
+          # The last two variables infra/deploy-api.sh threaded and this workflow did not.
+          # Same bug class as the Vertex levers above, still open until now: set either by
+          # hand or via deploy-api.sh, and the next merge deploy wiped it.
+          #
+          #   MAIL_FROM          — the RFC 5322 sender. Reverting is silent: mailer.ts
+          #                        falls back to DEFAULT_MAIL_FROM and mail keeps sending
+          #                        from the wrong address with no error anywhere.
+          #   HEALTH_SWEEP_BATCH — how many health re-gates one sweep run may start
+          #                        (platform/app.ts). Reverting quietly restores the
+          #                        default batch size, so a deliberately throttled sweep
+          #                        speeds back up mid-incident.
+          for MAIL_HEALTH_VAR in MAIL_FROM HEALTH_SWEEP_BATCH; do
+            case "$MAIL_HEALTH_VAR" in
+              MAIL_FROM) MAIL_HEALTH_VAL="${{ vars.MAIL_FROM }}" ;;
+              HEALTH_SWEEP_BATCH) MAIL_HEALTH_VAL="${{ vars.HEALTH_SWEEP_BATCH }}" ;;
+            esac
+            if [ -n "$MAIL_HEALTH_VAL" ]; then
+              ENV_VARS="${ENV_VARS}|${MAIL_HEALTH_VAR}=${MAIL_HEALTH_VAL}"
+              echo "Threading ${MAIL_HEALTH_VAR}=${MAIL_HEALTH_VAL}"
+            fi
+          done
+
           # Same threading rule as the Vertex levers above: knowledge_query's Discovery
           # Engine client (knowledge-search.ts) stays off — 503, degrading everywhere it
           # is called — until KNOWLEDGE_SEARCH_ENGINE_ID is both set here AND the
@@ -540,6 +562,28 @@ jobs:
               ;;
           esac
 
+          # 2b. Warn before the cliff, not at it. Token expiry is mandatory and CI runs
+          #     on the shortest window, so without this the first signal is a failed
+          #     deploy that also blocks promotion — which is how five merges once sat
+          #     unpromoted for most of a day. Never fails the step: an expired token is
+          #     already caught by the 401 above, and a warning that can break a deploy
+          #     would just be the same cliff moved earlier.
+          EXPIRY_CODE=$(curl -s -o /tmp/smoke-token.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${GAMEDEV_ACCESS_TOKEN}" "${CANDIDATE_URL}/api/auth/token-info" || echo 000)
+          if [ "$EXPIRY_CODE" = "200" ]; then
+            DAYS_LEFT=$(jq -r '.expiresInDays // empty' /tmp/smoke-token.json)
+            EXPIRES_AT=$(jq -r '.expiresAt // empty' /tmp/smoke-token.json)
+            if [ -n "$DAYS_LEFT" ] && [ "$DAYS_LEFT" -le 7 ]; then
+              echo "::warning::GAMEDEV_ACCESS_TOKEN expires in ${DAYS_LEFT} day(s), on ${EXPIRES_AT}. When it lapses this step fails and promotion stops. Rotate: npm run token:mint -w @gamedevpl/api -- bot:ci --name 'github actions' --days 30, then update the GAMEDEV_ACCESS_TOKEN repo secret."
+            else
+              echo "CI token valid for ${DAYS_LEFT} more day(s) (expires ${EXPIRES_AT})."
+            fi
+          else
+            # A candidate that predates the route answers 404. Not a failure: the bearer
+            # check above already proved the credential works on this revision.
+            echo "::notice::token-info returned ${EXPIRY_CODE} — expiry lead-time check skipped on this candidate."
+          fi
+
           # 3. Cookie path: exchange the token for the session cookie the SPA sends,
           #    then prove that cookie passes a session-walled route.
           STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -c /tmp/smoke-cookies.txt -X POST \
@@ -683,6 +727,111 @@ jobs:
             exit 1
           fi
           echo "Relay healthy at ${RELAY_URL}"
+
+      - name: Keep the zone host on the same source revision
+        # gamedev-world was the one production service with no CI path at all: its image
+        # was only ever advanced by hand through infra/deploy-world.sh, so it could drift
+        # from the zone-core and contract versions the app was built against. That drift
+        # is invisible by construction — a zone that refuses admission drops the player
+        # into solo play while /health stays green and every page returns 200
+        # (docs/runbooks/zones-down-triage.md), and the browser gate cannot see it either.
+        #
+        # Deliberately NOT rebuilt on every deploy. apps/world/Dockerfile states the
+        # reason: the world deploys on its own cadence so that shipping a CSS change does
+        # not mass-hibernate every live world. A redeploy drains running zones, so it has
+        # to be caused by a change to the world's own inputs, not by any merge to master.
+        #
+        # Same placement and the same reasoning as the relay step above: before promotion,
+        # because the host is the server and the freshly promoted bundle is its client.
+        if: ${{ vars.ZONE_HOST_URL != '' }}
+        run: |
+          ZONE_SERVICE="${{ vars.ZONE_SERVICE || 'gamedev-world' }}"
+          # The same guard the relay step carries, for the same blast radius: a mis-set
+          # variable naming the app service would push an unrelated image straight onto
+          # production, past the candidate revision, the smoke tests and the browser gate.
+          if [ "$ZONE_SERVICE" = "$SERVICE" ]; then
+            echo "Error: vars.ZONE_SERVICE is '${ZONE_SERVICE}', which is the app service."
+            exit 1
+          fi
+
+          ZONE_URL=$(gcloud run services describe "$ZONE_SERVICE" --region "$REGION" \
+            --project "$PROJECT_ID" --format 'value(status.url)' 2>/dev/null || true)
+          if [ -z "$ZONE_URL" ]; then
+            echo "::warning::vars.ZONE_HOST_URL is set but ${ZONE_SERVICE} does not exist in ${REGION}. Run infra/deploy-world.sh once to create it."
+            exit 0
+          fi
+
+          # The app mints its OIDC-free ticket against the URL it was told about, so a
+          # mismatch means admission is pointed at something other than this service.
+          if [ "$ZONE_URL" != "${{ vars.ZONE_HOST_URL }}" ]; then
+            echo "Error: vars.ZONE_HOST_URL is '${{ vars.ZONE_HOST_URL }}' but ${ZONE_SERVICE} is at '${ZONE_URL}'."
+            exit 1
+          fi
+
+          # What the running image was built from. deploy-world.sh tags by timestamp, so
+          # an untagged-by-SHA image means "provenance unknown" — rebuild to establish the
+          # baseline rather than guess it is current.
+          CURRENT_IMAGE=$(gcloud run services describe "$ZONE_SERVICE" --region "$REGION" \
+            --project "$PROJECT_ID" --format 'value(spec.template.spec.containers[0].image)')
+          DEPLOYED_SHA="${CURRENT_IMAGE##*:sha-}"
+          TARGET_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/gamedev/world:sha-${DEPLOY_SHA}"
+
+          # These are exactly the paths apps/world/Dockerfile copies into the image.
+          # packages/contract is in the list on purpose: it carries the wire constants both
+          # sides read, so a contract change is the drift this step exists to stop.
+          WORLD_INPUTS="apps/world packages/zone-core packages/contract package.json package-lock.json"
+
+          NEEDS_BUILD=true
+          if [ "$CURRENT_IMAGE" = "$TARGET_IMAGE" ]; then
+            NEEDS_BUILD=false
+            echo "${ZONE_SERVICE} already runs ${DEPLOY_SHA}."
+          elif [ "$DEPLOYED_SHA" = "$CURRENT_IMAGE" ]; then
+            # No sha- tag to parse. deploy-world.sh tags by timestamp, so this is what a
+            # hand-deployed host looks like: provenance unknown, and guessing it is current
+            # is the failure this step exists to prevent.
+            echo "Cannot read provenance from '${CURRENT_IMAGE}' — rebuilding to establish it."
+          else
+            # The checkout is shallow, so the deployed commit is almost never present.
+            # Fetch just that one commit rather than deepening the whole clone.
+            git fetch --depth=1 origin "$DEPLOYED_SHA" 2>/dev/null || true
+            if git cat-file -e "${DEPLOYED_SHA}^{commit}" 2>/dev/null; then
+              if git diff --quiet "$DEPLOYED_SHA" "$DEPLOY_SHA" -- $WORLD_INPUTS; then
+                NEEDS_BUILD=false
+                echo "No change to the zone host's inputs since ${DEPLOYED_SHA}; leaving live zones alone."
+              else
+                echo "Zone host inputs changed since ${DEPLOYED_SHA}:"
+                git diff --name-only "$DEPLOYED_SHA" "$DEPLOY_SHA" -- $WORLD_INPUTS
+              fi
+            else
+              echo "Deployed commit ${DEPLOYED_SHA} is not reachable — rebuilding rather than assuming."
+            fi
+          fi
+
+          if [ "$NEEDS_BUILD" = true ]; then
+            echo "Building ${TARGET_IMAGE}"
+            gcloud builds submit . --config infra/cloudbuild-world.yaml \
+              --substitutions "_IMAGE=${TARGET_IMAGE}" --project "$PROJECT_ID"
+            # --image alone, never --set-env-vars: this step must not be able to
+            # reconfigure the zone host by omission. Its env and secrets are
+            # deploy-world.sh's business.
+            gcloud run services update "$ZONE_SERVICE" \
+              --region "$REGION" \
+              --project "$PROJECT_ID" \
+              --image "$TARGET_IMAGE"
+          fi
+
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${ZONE_URL}/health" || echo 000)
+          if [ "$STATUS_CODE" -ne 200 ]; then
+            if [ "$NEEDS_BUILD" = true ]; then
+              echo "Error: zone host health returned ${STATUS_CODE} after this deploy updated it."
+              exit 1
+            fi
+            # Not caused by this deploy, and zones failing does not stop the site serving
+            # games — so it warns rather than blocking every app release behind it.
+            echo "::warning::Zone host health returned ${STATUS_CODE}; it was not updated by this deploy. See docs/runbooks/zones-down-triage.md."
+          else
+            echo "Zone host healthy at ${ZONE_URL}"
+          fi
 
       - name: Promote candidate revision to 100% traffic
         run: |

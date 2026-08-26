@@ -154,7 +154,7 @@ the coarse outer layer (and is the only limiter on `/api/auth/*`).
   `submissions.ownerUid` + daily quota (default: 5 submissions/day, env-tunable; `trusted`
   tier bypasses), preview/mock gated.
 - **M2 — Read-side decision + UX.** (IN PROGRESS — quota UX & public read decision implemented) Owner decided public catalog/play reads; quota-exceeded and blocked UX; status links stay shareable read-only.
-- **M3 — Retire Basic-Auth.** (NOT STARTED — awaiting owner authorization) Delete `site-basic-auth` + hook; smoke tests flip to session-only checks. Google sign-in is the single auth boundary.
+- **M3 — Retire Basic-Auth.** (DONE in code — one owner action left) The hook is gone, no source reads `SITE_BASIC_AUTH`, the secret is mapped into none of the three Cloud Run services, and the smoke tests are session-only. Sign-in plus the `PRIVATE_BETA` allowlist is the single auth boundary. Remaining: delete the orphaned `site-basic-auth` secret in Secret Manager — see [`deployment.md`](./deployment.md).
 - **M4 — Visibility + reach.** Admin usage view (allowlisted uids) / BigQuery log sink; optionally add GitHub as a second provider for power-creators.
 
 ## The global cap and pause switch (built 2026-07-30)

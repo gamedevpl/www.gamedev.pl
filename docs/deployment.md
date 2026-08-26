@@ -38,9 +38,10 @@ build / image-boot run once (in CI), and deploy does not re-pay for them. Manual
 2. **Keyless OIDC Auth:** Authenticates via GCP Workload Identity Federation (no long-lived service account keys).
 3. **Cloud Build Image Creation:** Submits image build using `infra/cloudbuild.yaml` to Artifact Registry. The WIF deployer service account must also have `roles/serviceusage.serviceUsageConsumer` and storage access for the default Cloud Build staging bucket; `infra/setup-wif.sh` grants both.
 4. **Staging / Candidate Revision:** Deploys revision to Cloud Run with `--no-traffic --tag candidate`.
-5. **Candidate Smoke Test:** Anonymous checks (health, shell, beta wall on catalog/games, waitlist open, forged bearer token rejected) plus an **authenticated smoke** when the `GAMEDEV_ACCESS_TOKEN` repo secret exists — bearer auth, token→cookie exchange, a session-walled route, and catalog/play assemble, run as the CI bot (see [`agent-access-tokens.md`](./agent-access-tokens.md)). Skips loudly when the secret is absent.
+5. **Candidate Smoke Test:** Anonymous checks (health, shell, beta wall on catalog/games, waitlist open, forged bearer token rejected) plus an **authenticated smoke** when the `GAMEDEV_ACCESS_TOKEN` repo secret exists — bearer auth, token→cookie exchange, a session-walled route, and catalog/play assemble, run as the CI bot (see [`agent-access-tokens.md`](./agent-access-tokens.md)). Skips loudly when the secret is absent. The step also reads `/api/auth/token-info` and warns when the CI token has **seven days or fewer** left: expiry is mandatory and a lapsed token fails this step, which blocks promotion, so the warning is the only lead time there is. It never fails the step on the expiry check alone — an expired token is already caught by the bearer 401 above it.
 6. **Browser gate (`apps/e2e`):** Drives real Chromium against the candidate and asserts the site works where HTTP checks cannot see — most importantly that **published games actually run**. See below for why this blocks.
-7. **Traffic Promotion & Tag Cleanup:** Promotes traffic to the latest revision (`--to-latest`) and removes the candidate tag (`--remove-tags candidate`) only if **both** the curl smoke checks and the browser gate succeed.
+7. **Zone host (`gamedev-world`):** when `ZONE_HOST_URL` is set, CI advances the zone host's **image only** — never its env or secrets, which stay `infra/deploy-world.sh`'s business — and only when the world's own inputs changed (`apps/world`, `packages/zone-core`, `packages/contract`, the lockfile). It is deliberately not rebuilt on every deploy: a redeploy drains running zones, and `apps/world/Dockerfile` states the rule that shipping a CSS change must not mass-hibernate every live world. Runs before promotion, same as the relay, because the host is the server and the new bundle is its client.
+8. **Traffic Promotion & Tag Cleanup:** Promotes traffic to the latest revision (`--to-latest`) and removes the candidate tag (`--remove-tags candidate`) only if **both** the curl smoke checks and the browser gate succeed.
 
 ### Why the browser gate blocks a deploy
 
@@ -83,6 +84,24 @@ account (`<project-number>-compute@developer.gserviceaccount.com`) needs
 `roles/secretmanager.secretAccessor` on each. `deploy.yml` and `infra/deploy-api.sh` wire whichever exist into
 a single `--set-secrets` list.
 
+### The env manifest
+
+Both deploy paths build the service's environment independently, and `--set-env-vars`
+**replaces the whole map** — so a variable one path threads and the other does not is not
+half-configured, it is deleted the next time the other path runs. That is the 2026-08-04
+incident recorded in [`infra/deploy-api.sh`](../infra/deploy-api.sh): a hand-set
+`TRANSLATE_BUILD_LOG=false` stopped a Vertex spend leak, then vanished under an unrelated
+deploy ten minutes later.
+
+[`infra/env-manifest.json`](../infra/env-manifest.json) declares every service variable and
+secret once. [`infra/check-env-manifest.mjs`](../infra/check-env-manifest.mjs) asserts both
+paths thread exactly that set, and runs as part of `npm run lint`, so adding a variable to
+one path alone now fails CI instead of reverting itself in production months later.
+
+**Adding a variable:** add it to the manifest _and_ to both deploy paths in the same
+change. A name that only looks like a service variable — a step-local, or something read by
+a CLI rather than the service — goes under `notServiceVars` with a reason.
+
 | Secret                                 | Purpose                                                                                                                                                                                                                                                        | State (2026-07-26)                                                                                  |
 | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | `github-token`                         | Fine-grained PAT (Issues rw + PRs r + Contents r, games repo only)                                                                                                                                                                                             | ✅ set — submissions on                                                                             |
@@ -99,7 +118,7 @@ a single `--set-secrets` list.
 | `openrouter-api-key`                   | Round-0 seed provider credential → `SEED_OPENROUTER_API_KEY`; OpenRouter routes to `SEED_OPENROUTER_MODEL` (repo var), default `google/gemini-3.5-flash-lite`                                                                                                  | ✅ set                                                                                              |
 | `resend-api-key`                       | Outbound email → `RESEND_API_KEY` (see below)                                                                                                                                                                                                                  | ✅ set                                                                                              |
 | `vapid-private-key`                    | Web push signing → `VAPID_PRIVATE_KEY`                                                                                                                                                                                                                         | ✅ set                                                                                              |
-| `site-basic-auth`                      | Former "not public yet" lock → `SITE_BASIC_AUTH`                                                                                                                                                                                                               | ⚠️ exists but **unused**                                                                            |
+| `site-basic-auth`                      | Former "not public yet" lock → `SITE_BASIC_AUTH`                                                                                                                                                                                                               | 🗑️ orphaned — no code or config references it; safe to delete (below)                               |
 
 ### Managed agent configuration
 
@@ -137,7 +156,18 @@ backward-compatible probe escape hatch.
 
 `site-basic-auth` is a leftover: the running revision does not wire it, and the site answers
 without an auth challenge. Access is controlled by `PRIVATE_BETA` and the beta allowlist
-instead. Delete the secret when you are sure nothing references it.
+instead.
+
+**Nothing references it — verified 2026-08-26.** No `.ts`, `.sh`, `.yml` or `.yaml` in the
+repo mentions `site-basic-auth` or `SITE_BASIC_AUTH`, and it is absent from
+[`infra/env-manifest.json`](../infra/env-manifest.json), which both deploy paths are now
+asserted against. The remaining copies are this page, the M3 note in
+[`auth-and-usage-plan.md`](./auth-and-usage-plan.md) and the historical snapshot in
+[`steel-thread-plan.md`](./steel-thread-plan.md). Deleting it is an owner action:
+
+```bash
+gcloud secrets delete site-basic-auth --project gamedevpl
+```
 
 **`GAMES_REPO_TOKEN` is one hourly REST budget shared by two very different consumers.**
 The CI lockstep check spends 2 requests per run. The snapshot bake used to spend roughly a
@@ -215,9 +245,14 @@ gcloud secrets add-iam-policy-binding resend-api-key \
 printf '%s' '<new key>' | gcloud secrets versions add resend-api-key --data-file=- --project gamedevpl
 ```
 
-Optional plain env vars (both have code defaults, so only set to override):
-`MAIL_FROM` (default `gamedev.pl <noreply@mail.gamedev.pl>`) and `INVITE_URL`
-(default `https://www.gamedev.pl`).
+Optional plain env var on the service (has a code default, so only set to
+override): `MAIL_FROM` (default `gamedev.pl <noreply@mail.gamedev.pl>`). Set it
+as a repo variable — both deploy paths thread it, so a value set by hand on the
+revision is wiped by the next deploy.
+
+`INVITE_URL` (default `https://www.gamedev.pl`) is **not** a service variable:
+only `beta:invite` reads it, and that runs on the operator's machine, so set it
+in the shell you run the script from.
 
 ### Sending beta invites
 

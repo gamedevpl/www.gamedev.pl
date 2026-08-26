@@ -69,18 +69,18 @@ Do this once on a quiet afternoon:
    take effect at the edge.
 3. Verify `/api/health` and load the site.
 4. Shift back to latest: `gcloud run services update-traffic "$SERVICE" --to-latest
-   --region "$REGION" --project "$PROJECT_ID"`.
+--region "$REGION" --project "$PROJECT_ID"`.
 5. Record here: the date, and the wall-clock seconds from decision to healthy.
 
 ## Other services
 
 The same procedure applies to every Cloud Run service; only `SERVICE` changes.
 
-| Service | Deploy path | Notes |
-| --- | --- | --- |
-| `gamedev-app` | `.github/workflows/deploy.yml`, [`infra/deploy-api.sh`](../../infra/deploy-api.sh) | The site |
-| `gamedev-world` | [`infra/deploy-world.sh`](../../infra/deploy-world.sh) | Zone host; inert unless `ZONE_HOST_URL` is set |
-| party relay | see [`multiplayer-plan.md`](../multiplayer-plan.md) | Same image as the app, role chosen by env |
+| Service         | Deploy path                                                                                                                  | Notes                                                                                                                                                                 |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gamedev-app`   | `.github/workflows/deploy.yml`, [`infra/deploy-api.sh`](../../infra/deploy-api.sh)                                           | The site                                                                                                                                                              |
+| `gamedev-world` | `deploy.yml` (image only, when its inputs changed), [`infra/deploy-world.sh`](../../infra/deploy-world.sh) (env and secrets) | Zone host. Inert **only** while `ZONE_HOST_URL` is unset — once set it is serving, and its failures are silent (see [`zones-down-triage.md`](./zones-down-triage.md)) |
+| party relay     | see [`multiplayer-plan.md`](../multiplayer-plan.md)                                                                          | Same image as the app, role chosen by env                                                                                                                             |
 
 When more than one service is live, roll back **only the one that broke**, and check
 whether the two are version-coupled before assuming they are independent: the relay and
