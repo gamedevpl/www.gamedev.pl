@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { generateAccessToken } from './access-token.js';
-import { MAX_TOKENS_PER_UID } from './access-token-service.js';
+import { DEFAULT_EXPIRY_DAYS, MAX_TOKENS_PER_UID } from './access-token-service.js';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { InMemoryStore } from './store.js';
@@ -288,6 +288,61 @@ describe('authenticating with a personal access token', () => {
     // Unauthenticated, never a 500 — other bearer schemes on this API must pass through
     // to the handlers that understand them.
     expect(res.statusCode).toBe(401);
+  });
+
+  it('reports its own remaining lifetime to the holder', async () => {
+    const app = await appWith(store);
+    const { token } = (await mintFor(app, 'bot:ci', 'github actions')).json();
+
+    const res = await app.inject({ method: 'GET', url: '/api/auth/token-info', headers: bearer(token) });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().name).toBe('github actions');
+    expect(res.json().expiresInDays).toBe(DEFAULT_EXPIRY_DAYS - 1);
+    // The date has to be readable, not just the day count.
+    expect(Date.parse(res.json().expiresAt)).toBeGreaterThan(Date.now());
+  });
+
+  it('never leaks credential material through token-info', async () => {
+    const app = await appWith(store);
+    const { token } = (await mintFor(app, 'bot:ci')).json();
+
+    const res = await app.inject({ method: 'GET', url: '/api/auth/token-info', headers: bearer(token) });
+    const body = JSON.stringify(res.json());
+    expect(body).not.toContain('secretHash');
+    expect(body).not.toContain('tokenId');
+    expect(body).not.toContain(token);
+  });
+
+  it('refuses token-info to a browser session, which holds no token', async () => {
+    // Kept off the User object; a cookie must not reach it.
+    const app = await appWith(store);
+
+    const res = await app.inject({ method: 'GET', url: '/api/auth/token-info', headers: sessionHeaders('g:boss') });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it.each([
+    ['an expired token', -1],
+    ['a revoked token', 0],
+  ])('answers token-info with a bare 401 for %s', async (label, _marker) => {
+    const { token, tokenId, secretHash } = generateAccessToken();
+    await store.upsertUser({ uid: 'bot:ci' });
+    await store.createAccessToken({
+      tokenId,
+      uid: 'bot:ci',
+      secretHash,
+      name: 'stale',
+      createdAt: new Date(Date.now() - 200 * 86_400_000).toISOString(),
+      expiresAt: new Date(Date.now() - 86_400_000).toISOString(),
+      createdByUid: 'g:boss',
+    });
+    const app = await appWith(store);
+    if (label === 'a revoked token') await store.deleteAccessToken(tokenId);
+
+    const res = await app.inject({ method: 'GET', url: '/api/auth/token-info', headers: bearer(token) });
+    // Same answer for both: a stolen token learns nothing.
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ error: 'unauthenticated' });
   });
 
   it('prefers a browser session over a token when both are present', async () => {

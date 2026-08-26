@@ -156,6 +156,34 @@ export async function resolveAccessTokenUser(store: Store, token: string, nowMs 
   return user;
 }
 
+// Resolve a token to its own record, for its holder.
+
+// Same checks and same silence as resolveAccessTokenUser above.
+
+// Takes no tokenId: it asks about the presented credential only.
+export async function resolveAccessTokenRecord(
+  store: Store,
+  token: string,
+  nowMs = Date.now(),
+): Promise<AccessTokenRecord | null> {
+  if (!looksLikeAccessToken(token)) return null;
+
+  let tokenId: string;
+  let secret: string;
+  try {
+    ({ tokenId, secret } = parseAccessToken(token));
+  } catch {
+    return null;
+  }
+
+  const record = await store.getAccessToken(tokenId);
+  if (!record) return null;
+  if (!verifyTokenSecret(secret, record.secretHash)) return null;
+  if (isAccessTokenExpired(record.expiresAt, nowMs)) return null;
+
+  return record;
+}
+
 /** The safe projection of a token record — everything except the hash of the secret. */
 export interface PublicAccessToken {
   tokenId: string;

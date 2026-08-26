@@ -3,7 +3,7 @@ import cookie from '@fastify/cookie';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { OAuth2Client } from 'google-auth-library';
 import { z } from 'zod';
-import { resolveAccessTokenUser } from './access-token-service.js';
+import { resolveAccessTokenRecord, resolveAccessTokenUser } from './access-token-service.js';
 import { isAdmin, isAdminSession } from './admin-session.js';
 import { isReviewer, isReviewerSession } from '../community/review.js';
 import { resolveAppleAccount } from './apple-account.js';
@@ -918,6 +918,28 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
   app.post('/api/auth/logout', async (_request, reply) => {
     reply.clearCookie(SESSION_COOKIE_NAME, { path: '/' });
     return { status: 'ok' };
+  });
+
+  // Bearer only: token records are kept off the User object.
+
+  // Expiry is mandatory and arrives as a cliff; this warns early.
+  app.get('/api/auth/token-info', async (request, reply) => {
+    if (!isAuthConfigured) {
+      return reply.status(503).send({ error: 'authentication is not configured' });
+    }
+    const bearer = readBearerToken(request.headers.authorization);
+    const record = bearer ? await resolveAccessTokenRecord(store, bearer) : null;
+    // One answer for absent, malformed, unknown, revoked and expired alike.
+    if (!record) {
+      return reply.status(401).send({ error: 'unauthenticated' });
+    }
+    const expiresAtMs = Date.parse(record.expiresAt);
+    return {
+      name: record.name,
+      expiresAt: record.expiresAt,
+      // Floor, so "1" never means "expires in ninety minutes".
+      expiresInDays: Math.floor((expiresAtMs - Date.now()) / (24 * 60 * 60 * 1000)),
+    };
   });
 
   app.get('/api/auth/me', async (request, reply) => {

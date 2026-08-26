@@ -215,9 +215,14 @@ gcloud secrets add-iam-policy-binding resend-api-key \
 printf '%s' '<new key>' | gcloud secrets versions add resend-api-key --data-file=- --project gamedevpl
 ```
 
-Optional plain env vars (both have code defaults, so only set to override):
-`MAIL_FROM` (default `gamedev.pl <noreply@mail.gamedev.pl>`) and `INVITE_URL`
-(default `https://www.gamedev.pl`).
+Optional plain env var on the service (has a code default, so only set to
+override): `MAIL_FROM` (default `gamedev.pl <noreply@mail.gamedev.pl>`). Set it
+as a repo variable — both deploy paths thread it, so a value set by hand on the
+revision is wiped by the next deploy.
+
+`INVITE_URL` (default `https://www.gamedev.pl`) is **not** a service variable:
+only `beta:invite` reads it, and that runs on the operator's machine, so set it
+in the shell you run the script from.
 
 ### Sending beta invites
 

@@ -369,6 +369,28 @@ jobs:
             fi
           done
 
+          # The last two variables infra/deploy-api.sh threaded and this workflow did not.
+          # Same bug class as the Vertex levers above, still open until now: set either by
+          # hand or via deploy-api.sh, and the next merge deploy wiped it.
+          #
+          #   MAIL_FROM          — the RFC 5322 sender. Reverting is silent: mailer.ts
+          #                        falls back to DEFAULT_MAIL_FROM and mail keeps sending
+          #                        from the wrong address with no error anywhere.
+          #   HEALTH_SWEEP_BATCH — how many health re-gates one sweep run may start
+          #                        (platform/app.ts). Reverting quietly restores the
+          #                        default batch size, so a deliberately throttled sweep
+          #                        speeds back up mid-incident.
+          for MAIL_HEALTH_VAR in MAIL_FROM HEALTH_SWEEP_BATCH; do
+            case "$MAIL_HEALTH_VAR" in
+              MAIL_FROM) MAIL_HEALTH_VAL="${{ vars.MAIL_FROM }}" ;;
+              HEALTH_SWEEP_BATCH) MAIL_HEALTH_VAL="${{ vars.HEALTH_SWEEP_BATCH }}" ;;
+            esac
+            if [ -n "$MAIL_HEALTH_VAL" ]; then
+              ENV_VARS="${ENV_VARS}|${MAIL_HEALTH_VAR}=${MAIL_HEALTH_VAL}"
+              echo "Threading ${MAIL_HEALTH_VAR}=${MAIL_HEALTH_VAL}"
+            fi
+          done
+
           # Same threading rule as the Vertex levers above: knowledge_query's Discovery
           # Engine client (knowledge-search.ts) stays off — 503, degrading everywhere it
           # is called — until KNOWLEDGE_SEARCH_ENGINE_ID is both set here AND the
@@ -539,6 +561,28 @@ jobs:
               exit 1
               ;;
           esac
+
+          # 2b. Warn before the cliff, not at it. Token expiry is mandatory and CI runs
+          #     on the shortest window, so without this the first signal is a failed
+          #     deploy that also blocks promotion — which is how five merges once sat
+          #     unpromoted for most of a day. Never fails the step: an expired token is
+          #     already caught by the 401 above, and a warning that can break a deploy
+          #     would just be the same cliff moved earlier.
+          EXPIRY_CODE=$(curl -s -o /tmp/smoke-token.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${GAMEDEV_ACCESS_TOKEN}" "${CANDIDATE_URL}/api/auth/token-info" || echo 000)
+          if [ "$EXPIRY_CODE" = "200" ]; then
+            DAYS_LEFT=$(jq -r '.expiresInDays // empty' /tmp/smoke-token.json)
+            EXPIRES_AT=$(jq -r '.expiresAt // empty' /tmp/smoke-token.json)
+            if [ -n "$DAYS_LEFT" ] && [ "$DAYS_LEFT" -le 7 ]; then
+              echo "::warning::GAMEDEV_ACCESS_TOKEN expires in ${DAYS_LEFT} day(s), on ${EXPIRES_AT}. When it lapses this step fails and promotion stops. Rotate: npm run token:mint -w @gamedevpl/api -- bot:ci --name 'github actions' --days 30, then update the GAMEDEV_ACCESS_TOKEN repo secret."
+            else
+              echo "CI token valid for ${DAYS_LEFT} more day(s) (expires ${EXPIRES_AT})."
+            fi
+          else
+            # A candidate that predates the route answers 404. Not a failure: the bearer
+            # check above already proved the credential works on this revision.
+            echo "::notice::token-info returned ${EXPIRY_CODE} — expiry lead-time check skipped on this candidate."
+          fi
 
           # 3. Cookie path: exchange the token for the session cookie the SPA sends,
           #    then prove that cookie passes a session-walled route.
