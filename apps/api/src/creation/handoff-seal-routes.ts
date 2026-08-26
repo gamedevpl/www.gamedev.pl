@@ -1,11 +1,7 @@
 import { BUILDERS } from '@gamedevpl/contract';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import {
-  MANAGED_UNAVAILABLE_ERROR,
-  type ManagedAvailabilityGate,
-  type ManagedUnavailableReason,
-} from '../agent-surface/managed-availability.js';
+import { MANAGED_UNAVAILABLE_ERROR, type ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
 import type { GitHubClient } from '../catalog/github-client.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { sealRefusal } from '../delivery/seal-preview.js';
@@ -13,10 +9,7 @@ import type { Store, SubmissionRecord } from '../platform/store.js';
 import { InvalidTokenError, verifyToken } from '../platform/submission-token.js';
 import { allowsCreatorBuilderHandoff, isActiveBuildRound, type BuilderKind } from './builder.js';
 import { detectStall, type JobTransition } from './job-state.js';
-
-// Structural: the real ResumeOutcome lives in submissions.ts, which imports this.
-type ResumeResult =
-  { started: true } | { started: false; reason: string; unavailableReason?: ManagedUnavailableReason };
+import type { ResumeOutcome } from './resume-build.js';
 
 export interface HandoffSealRoutesOptions {
   store: Store | undefined;
@@ -36,7 +29,7 @@ export interface HandoffSealRoutesOptions {
     builder?: BuilderKind;
     preserveRoundBudget?: boolean;
     transition?: { by: JobTransition['by']; reason: string };
-  }) => Promise<ResumeResult>;
+  }) => Promise<ResumeOutcome>;
   gateTrigger:
     | ((input: {
         issueNumber: number;

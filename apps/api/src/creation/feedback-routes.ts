@@ -23,9 +23,7 @@ import type { ChatAgentImage } from './chat-agent.js';
 import type { ChatOrchestration } from './chat-orchestration.js';
 import { FeedbackRequestSchema, REFERENCE_IMAGES_BODY_LIMIT_BYTES } from './feedback-request.js';
 import { detectStall, type JobTransition } from './job-state.js';
-
-// Structural: the real ResumeOutcome lives in submissions.ts, which imports this.
-type ResumeResult = { started: true } | { started: false; reason: string };
+import type { ResumeOutcome } from './resume-build.js';
 
 export interface FeedbackRoutesOptions {
   store: Store | undefined;
@@ -51,7 +49,7 @@ export interface FeedbackRoutesOptions {
     builder?: BuilderKind;
     preserveRoundBudget?: boolean;
     transition?: { by: JobTransition['by']; reason: string };
-  }) => Promise<ResumeResult>;
+  }) => Promise<ResumeOutcome>;
 }
 
 // Change requests on a draft, before it ships; published games use improve.
