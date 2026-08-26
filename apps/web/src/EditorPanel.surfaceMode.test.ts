@@ -35,7 +35,11 @@ describe('EditorPanel surface mode', () => {
     expect(editorSurfaceModeForDefinition(layered)).toBe('full');
   });
 
-  it('keeps controller-rendered boards docked beside the running game', () => {
-    expect(editorSurfaceModeForDefinition({ ...layered, controller: true })).toBe('docked');
+  it('keeps an active controller docked beside the running game', () => {
+    expect(editorSurfaceModeForDefinition({ ...layered, controller: true }, true)).toBe('docked');
+  });
+
+  it('restores a controller board fallback to the full surface', () => {
+    expect(editorSurfaceModeForDefinition({ ...layered, controller: true }, false)).toBe('full');
   });
 });
