@@ -18,6 +18,7 @@ import {
 } from './editorContentTools.js';
 import { LayeredBoard, LayeredSidebar } from './LayeredEditorSurface.js';
 import { EditorSurface } from './EditorSurface.js';
+import { editorSurfaceModeForDefinition } from './editorSurfaceMode.js';
 import { useEditorDocument } from './useEditorDocument.js';
 import { recordAssistStep, recordEditorStep } from './visitTelemetry.js';
 import type { EditorContentPush, EditorControllerState, EditorSelection } from './editorBridge.js';
@@ -212,12 +213,7 @@ export function EditorPanel(props: {
         // The revision funnel's first rung: this creator can edit and did open it.
         recordEditorStep('opened');
         setEditor(loaded);
-        const needsFullSurface =
-          Object.keys(loaded.definition.layers ?? {}).length > 0 ||
-          Object.values(loaded.definition.content).some(
-            (collection) => collection.item.widget === 'tilemap' || collection.item.widget === 'path',
-          );
-        onSurfaceModeChange?.(needsFullSurface ? 'full' : 'docked');
+        onSurfaceModeChange?.(editorSurfaceModeForDefinition(loaded.definition));
         const merged = mergeDraft(loaded);
         resetDocument(merged, loaded.draft?.revision ?? 0);
         const defaultKey = defaultCollectionKey(loaded.definition.content);
