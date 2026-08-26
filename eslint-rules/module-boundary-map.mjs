@@ -132,6 +132,7 @@ const FILE_BUCKET = {
   'feedback-request': 'creation',
   'feedback-routes': 'creation',
   'improve-routes': 'creation',
+  'create-game': 'creation',
   'job-reconciler': 'creation',
   'seed-pipeline': 'creation',
   'creator-self-routes': 'creation',

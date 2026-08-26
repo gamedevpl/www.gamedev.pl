@@ -105,6 +105,7 @@ describe('every moderating module reports its rejections', () => {
       'agent-surface/mcp-round-reopen-tools.ts',
       'community/player-feedback.ts',
       'community/proposals.ts',
+      'creation/create-game.ts',
       'creation/editor-drafts.ts',
       'creation/feedback-routes.ts',
       'creation/improve-routes.ts',
@@ -112,7 +113,6 @@ describe('every moderating module reports its rejections', () => {
       'creation/remix.ts',
       'notifications/contact.ts',
       'realtime/worlds.ts',
-      'submissions.ts',
     ]);
   });
 
