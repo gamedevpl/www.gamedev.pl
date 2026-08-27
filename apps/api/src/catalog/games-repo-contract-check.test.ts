@@ -201,7 +201,7 @@ describe('runGamesRepoContractCheck', () => {
     // the bake looked for shared/modules/vehicles.ts and reported the game as missing.
     const assembleWithNewVertical = ASSEMBLE_SOURCE.replace(
       "urban: 'shared/verticals/urban/index.ts',",
-      "urban: 'shared/verticals/urban/index.ts',\n    gfx3d: 'shared/verticals/gfx3d/index.ts',",
+      "urban: 'shared/verticals/urban/index.ts',\n    actors: 'shared/verticals/actors/index.ts',",
     );
     const { fetchImpl } = createFetch({
       ...agreeingPages(),
@@ -211,7 +211,7 @@ describe('runGamesRepoContractCheck', () => {
     const outcome = await runGamesRepoContractCheck({ ...BASE, fetchImpl });
     expect(outcome.kind).toBe('drift');
     expect(outcome.kind === 'drift' && outcome.reason).toContain('GAME_KIT_VERTICALS mismatch');
-    expect(outcome.kind === 'drift' && outcome.reason).toContain('shared/modules/gfx3d.ts');
+    expect(outcome.kind === 'drift' && outcome.reason).toContain('shared/modules/actors.ts');
   });
 
   it('reports drift when a shared vertical resolves to a different entry path', async () => {
