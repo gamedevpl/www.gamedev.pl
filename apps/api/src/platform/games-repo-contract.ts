@@ -201,6 +201,7 @@ export const MUSIC_CONTRACT = {
  * the nightly bake had to be the thing that noticed.
  */
 export const GAME_KIT_VERTICAL_ENTRIES: Partial<Record<GameKitModuleName, string>> = {
+  gfx3d: 'shared/modules/gfx3d/index.ts',
   vehicles: 'shared/verticals/vehicles/index.ts',
   urban: 'shared/verticals/urban/index.ts',
   racing: 'shared/verticals/racing/index.ts',

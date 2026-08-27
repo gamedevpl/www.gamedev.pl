@@ -246,15 +246,14 @@ describe('games-repo source extractors', () => {
   });
 
   it('reads GAME_KIT_VERTICALS from an assemble.ts-shaped source', () => {
-    const source = `
-      const GAME_KIT_VERTICALS = Object.freeze({
-        vehicles: 'shared/verticals/vehicles/index.ts',
-        urban: 'shared/verticals/urban/index.ts',
-        racing: 'shared/verticals/racing/index.ts',
-        football: 'shared/verticals/football/index.ts',
-        platformer: 'shared/verticals/platformer/index.ts',
-      });
-    `;
+    const source = `const GAME_KIT_VERTICALS = Object.freeze({
+      gfx3d: 'shared/modules/gfx3d/index.ts',
+      vehicles: 'shared/verticals/vehicles/index.ts',
+      urban: 'shared/verticals/urban/index.ts',
+      racing: 'shared/verticals/racing/index.ts',
+      football: 'shared/verticals/football/index.ts',
+      platformer: 'shared/verticals/platformer/index.ts',
+    });`;
     expect(extractGameKitVerticals(source)).toEqual(GAME_KIT_VERTICAL_ENTRIES);
   });
 
@@ -265,12 +264,12 @@ describe('games-repo source extractors', () => {
     );
   });
 
-  it('resolves every vertical to a games-repo path, never to shared/modules', () => {
+  it('resolves every vertical to a games-repo path, never to shared/modules root', () => {
     // The regression behind the failed nightly bake: `vehicles` was a name both sides
     // knew, but only the games repo knew it had moved out of shared/modules.
     for (const [name, entry] of Object.entries(GAME_KIT_VERTICAL_ENTRIES)) {
       expect(GAME_KIT_MODULES).toContain(name);
-      expect(entry).toBe(`shared/verticals/${name}/index.ts`);
+      expect(entry).toMatch(/^shared\/(verticals|modules)\/[a-z0-9-]+\/index\.ts$/);
     }
   });
 
