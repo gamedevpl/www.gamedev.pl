@@ -63,6 +63,8 @@ import { registerScorecardRoutes, type ScorecardRoutesOptions } from '../creatio
 import { createInternalAuthVerifierFromEnv } from './internal-auth.js';
 import { registerRefineRoute, type SpecRefiner } from '../creation/refine.js';
 import { BOT_UID_PREFIX, InMemoryStore, type Store } from './store.js';
+import { registerAgentChannelRoutes } from '../agent-surface/agent-channel.js';
+import { registerMcpServerRoutes } from '../agent-surface/mcp-server.js';
 import { registerSubmissionRoutes, type SubmissionRoutesOptions } from '../submissions.js';
 import { mintToken } from './submission-token.js';
 import { registerTelemetryRoutes, type TelemetryRoutesOptions } from '../telemetry/telemetry.js';
@@ -132,6 +134,8 @@ export interface BuildAppOptions {
   /** Seam for Sign in with Apple; defaults to JWKS-or-deny-all from APPLE_CLIENT_IDS. */
   appleAuthVerifier?: AppleAuthVerifier;
   submissionRoutes?: SubmissionRoutesOptions;
+  // Shared secret the Copilot MCP connector authenticates with.
+  platformConnectorSecret?: string;
   contentChecker?: ContentChecker;
   specRefiner?: SpecRefiner;
   /** The editor's NL tuning router. Defaults to the Vertex one; stubbed in tests. */
@@ -333,10 +337,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
    * credentials, which degrades the feature to "reviewable but not yet merged back" rather
    * than breaking it.
    *
-   * Assembled here rather than beside the proposal routes because the MCP proposal tools
-   * are registered by `registerSubmissionRoutes` below and need the same base resolver —
-   * one definition, so an agent's proposal and a reviewer's diff cannot disagree about what
-   * a game's current sources are.
+   * One resolver, shared with the MCP proposal tools mounted below, so an agent's proposal
+   * and a reviewer's diff cannot disagree about a game's sources.
    */
   const proposalGithubToken = options.submissionRoutes?.githubToken ?? process.env.GITHUB_TOKEN;
   const snapshotReader = createSnapshotReaderFromEnv();
@@ -368,17 +370,26 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Env registry selects managed; explicit platform backends still win.
   const resolvedAgentBackends = options.submissionRoutes?.agentBackends;
 
+  const agentChannelOptions = {
+    ...options.submissionRoutes?.agentChannel,
+    // Without a bucket the delivery verb answers 503 rather than accepting an agent's
+    // work and silently dropping it — which is the right behaviour for local
+    // development, where there is no bucket at all.
+    gamesStore,
+    objectStore,
+    knowledgeSearch,
+    // Run the gate as soon as a game is delivered. Without this a candidate is stored
+    // and never verified, so it can never publish — the upload path would end in a
+    // queue nobody drains.
+    onSourcesDelivered: gateTrigger,
+  };
+
+  const platformConnectorSecret = options.platformConnectorSecret ?? process.env.COPILOT_MCP_CONNECTOR_SECRET;
+
   const submissionSeams = await registerSubmissionRoutes(app, {
     ...options.submissionRoutes,
-    resolveProposalBase: resolveBaseForProposal,
-    platformConnectorSecret:
-      options.submissionRoutes?.platformConnectorSecret ?? process.env.COPILOT_MCP_CONNECTOR_SECRET,
     store,
     contentChecker,
-    // So /api/mcp can tell a visitor the product is closed rather than sending them to
-    // hunt for a key that cannot exist yet. Not a gate — the endpoint stays reachable
-    // through the beta wall on purpose.
-    privateBeta,
     // Same allowlist the console is gated on: the people who can see the queue are the
     // people its alerts are addressed to. Two lists would drift, and the failure mode of
     // drift here is an alert nobody receives.
@@ -408,19 +419,28 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           }),
     gameSeeder:
       options.submissionRoutes?.gameSeeder ?? createGameSeederFromEnv(app.log, knowledgeSearch, snapshotReader),
-    agentChannel: {
-      ...options.submissionRoutes?.agentChannel,
-      // Without a bucket the delivery verb answers 503 rather than accepting an agent's
-      // work and silently dropping it — which is the right behaviour for local
-      // development, where there is no bucket at all.
-      gamesStore,
-      objectStore,
-      knowledgeSearch,
-      // Run the gate as soon as a game is delivered. Without this a candidate is stored
-      // and never verified, so it can never publish — the upload path would end in a
-      // queue nobody drains.
-      onSourcesDelivered: gateTrigger,
-    },
+    agentChannel: agentChannelOptions,
+  });
+
+  // The agent's wire and the MCP tools over it, mounted where the route table lives.
+
+  const { agentSurface } = submissionSeams;
+
+  await registerAgentChannelRoutes(app, { ...agentChannelOptions, ...agentSurface.channel, store });
+
+  // Remote MCP (BY-05): streamable-HTTP tools wrapping the channel above. Same secret
+  // and store — sessionKey is derived from the round key, never a new creator credential.
+  await registerMcpServerRoutes(app, {
+    ...agentSurface.mcp,
+    store,
+    platformConnectorSecret,
+    // So /api/mcp can say the product is closed. Not a gate.
+    privateBeta,
+    gamesStore,
+    objectStore,
+    // Proposal rounds: an agent contributing to a game its creator does not own.
+    resolveProposalBase: resolveBaseForProposal,
+    onSourcesDelivered: gateTrigger,
   });
 
   // Multiplayer room relay (docs/multiplayer-plan.md). Registered after the auth
