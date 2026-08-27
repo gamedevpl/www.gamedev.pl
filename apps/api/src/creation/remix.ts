@@ -39,6 +39,7 @@ import {
 } from '../community/proposals.js';
 import type { ProposalBase } from '../platform/store.js';
 import type { SourceFile } from '../delivery/games-store.js';
+import { isPublished } from '../platform/publication-state.js';
 
 /**
  * Remix: a player bends a published game while playing it.
@@ -439,7 +440,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
   } | null> {
     const gamesStore = options.gamesStore;
     const publication = options.store ? await options.store.getPublication(slug) : null;
-    if (gamesStore && publication?.state === 'published') {
+    if (gamesStore && isPublished(publication)) {
       const manifest = await gamesStore.getManifest(slug, publication.currentVersion);
       if (!manifest) return null;
       const entries = await Promise.all(
@@ -1009,7 +1010,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         // Test / degraded deployments that never wired the shared resolver: the session
         // already holds the store-lane sources, so propose can still work for those.
         const publication = await options.store.getPublication(session.slug);
-        if (publication?.state !== 'published' || !publication.currentVersion) {
+        if (!isPublished(publication) || !publication.currentVersion) {
           return reply.status(409).send({ error: 'not_published' });
         }
         base = { kind: 'store', version: publication.currentVersion };

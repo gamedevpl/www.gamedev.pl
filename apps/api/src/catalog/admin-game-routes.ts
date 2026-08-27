@@ -6,6 +6,7 @@ import type { GamesStore } from '../delivery/games-store.js';
 import { isAdminSession } from '../platform/admin-session.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import type { Store } from '../platform/store.js';
+import { isPublished } from '../platform/publication-state.js';
 
 export interface AdminGameRoutesOptions {
   store?: Store;
@@ -51,7 +52,7 @@ export async function registerAdminGameRoutes(app: FastifyInstance, options: Adm
     const slug = request.params.slug;
     const publication = await store.getPublication(slug);
     if (!publication) return reply.status(404).send({ error: 'not_found' });
-    if (publication.state !== 'published') {
+    if (!isPublished(publication)) {
       return reply.status(409).send({ error: 'not_published', state: publication.state });
     }
 
@@ -71,7 +72,7 @@ export async function registerAdminGameRoutes(app: FastifyInstance, options: Adm
       const slug = request.params.slug;
       const publication = await store.getPublication(slug);
       if (!publication) return reply.status(404).send({ error: 'not_found' });
-      if (publication.state !== 'published') {
+      if (!isPublished(publication)) {
         return reply.status(409).send({ error: 'not_published', state: publication.state });
       }
 

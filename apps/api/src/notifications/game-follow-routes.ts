@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Store } from '../platform/store.js';
+import { isPublished } from '../platform/publication-state.js';
 
 /**
  * Following a game — "Obserwuj".
@@ -43,7 +44,7 @@ export async function registerGameFollowRoutes(app: FastifyInstance, options: Ga
   /** A game has to exist and be live before anyone can follow it. */
   async function isLive(slug: string): Promise<boolean> {
     const publication = await store.getPublication(slug);
-    if (publication) return publication.state === 'published';
+    if (publication) return isPublished(publication);
     // Repo-migrated games have no publication record; a published job is the fallback
     // proof, same as the board's existence gate.
     return Boolean(await store.getPublishedSubmissionBySlug(slug));

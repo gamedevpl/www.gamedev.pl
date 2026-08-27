@@ -10,6 +10,7 @@ import { isRateLimited } from '../platform/ip-rate-limit.js';
 import { sendMedia } from '../platform/media-response.js';
 import { DELETED_ACCOUNT_UID, type Store } from '../platform/store.js';
 import type { GamesStore } from '../delivery/games-store.js';
+import { isPublished } from '../platform/publication-state.js';
 
 type PublishedGame = { slug: string; title: string; html: string };
 
@@ -149,7 +150,7 @@ export async function registerCatalogRoutes(
   async function storePublishedGame(slug: string): Promise<PublishedGame | null> {
     if (!store || !gamesStore) return null;
     const publication = await store.getPublication(slug);
-    if (publication?.state !== 'published') return null;
+    if (!isPublished(publication)) return null;
     const bundle = await gamesStore.getDerivedArtifact(slug, publication.currentVersion, 'bundle.html');
     if (!bundle) {
       app.log.error({ slug, version: publication.currentVersion }, 'published game has no stored bundle');
@@ -163,7 +164,7 @@ export async function registerCatalogRoutes(
   async function readStorePublishedMedia(slug: string, filename: string): Promise<Buffer | null> {
     if (!store || !gamesStore) return null;
     const publication = await store.getPublication(slug);
-    if (publication?.state !== 'published') return null;
+    if (!isPublished(publication)) return null;
     const mediaMetadata = await gamesStore.getDerivedArtifact(slug, publication.currentVersion, 'media/metadata.json');
     const media = parseGameMedia(mediaMetadata?.toString('utf8') ?? null);
     if (!media) return null;
@@ -183,7 +184,7 @@ export async function registerCatalogRoutes(
     try {
       const taken = new Set(repoSlugs);
       const publications = (await store.listPublications()).filter(
-        (record) => record.state === 'published' && !taken.has(record.slug),
+        (record) => isPublished(record) && !taken.has(record.slug),
       );
       const entries: CatalogGameEntry[] = [];
       for (const record of publications) {

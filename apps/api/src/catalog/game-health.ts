@@ -27,6 +27,7 @@ import type { GamesStore, PublicationRecord } from '../delivery/games-store.js';
 import type { GitHubClient } from './github-client.js';
 import type { InternalAuthVerifier } from '../platform/internal-auth.js';
 import type { Store } from '../platform/store.js';
+import { isPublished } from '../platform/publication-state.js';
 
 /** The configured Cloud Build gate trigger — the same seam the delivery path uses. */
 export type HealthGateTrigger = (input: {
@@ -190,7 +191,7 @@ export async function runHealthSweep(deps: HealthSweepDeps): Promise<HealthSweep
   const head = await deps.githubClient.getRefSha(engineRef).catch(() => null);
   if (!head) return emptyResult();
 
-  const publications = (await deps.store.listPublications()).filter((publication) => publication.state === 'published');
+  const publications = (await deps.store.listPublications()).filter(isPublished);
   const result: HealthSweepResult = { ...emptyResult(), head, published: publications.length };
 
   /** Stale games with the timestamp that decides who goes first. */

@@ -28,6 +28,7 @@ import { composeWorkspaceArchive, WorkspaceCompositionError } from '../delivery/
 import type { GamesStore } from '../delivery/games-store.js';
 import type { Store, TelemetryEvent } from '../platform/store.js';
 import { normalizeLocale } from '../platform/translate.js';
+import { isPublished } from '../platform/publication-state.js';
 
 /**
  * Creator control panel reads (docs/improvement-loop-plan.md IL-2 creator surface).
@@ -197,7 +198,7 @@ export async function registerCreatorStudioRoutes(
         .filter(({ tip, catalogPublishedAt }) => tip.slug && (tip.publishedAt || catalogPublishedAt))
         .map(async ({ tip }) => {
           const publication = await store.getPublication(tip.slug as string);
-          if (publication && publication.state !== 'published') notLiveSlugs.add(tip.slug as string);
+          if (publication && !isPublished(publication)) notLiveSlugs.add(tip.slug as string);
         }),
     );
 
@@ -413,7 +414,7 @@ export async function registerCreatorStudioRoutes(
       let version = tip.previewVersion ?? tip.deliveredVersion ?? null;
       if (!version) {
         const publication = await store.getPublication(slug);
-        if (publication?.state === 'published') version = publication.currentVersion;
+        if (isPublished(publication)) version = publication.currentVersion;
       }
       if (!version) {
         return reply.status(409).send({
