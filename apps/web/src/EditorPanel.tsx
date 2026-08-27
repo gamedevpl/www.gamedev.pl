@@ -42,6 +42,7 @@ import {
 } from './studioApi.js';
 import { getSubmissionStatus, listMySubmissions } from './submissionApi.js';
 import { pollDelayMs } from './studioStatusPoll.js';
+import { isRoundSealed } from './roundSealed.js';
 
 /**
  * The studio's Edit surface (EditorKit L3): renders a game's own editor
@@ -530,11 +531,7 @@ export function EditorPanel(props: {
         }
         const detail = await getSubmissionStatus(mine.token);
         if (cancelled) return;
-        const sealed =
-          detail.status === 'in_review' ||
-          detail.status === 'published' ||
-          detail.phase === 'ready_for_review' ||
-          detail.phase === 'published';
+        const sealed = isRoundSealed(detail);
         if (sealed) {
           void publishNowRef.current();
           return;
