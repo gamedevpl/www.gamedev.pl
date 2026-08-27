@@ -86,6 +86,7 @@ import { registerOpenAiAppsChallengeRoute } from './openai-apps-challenge.js';
 import { registerOAuthAuthorizationServerRoutes } from './oauth-as.js';
 import { registerTokenLoginRoutes } from './oauth-token-login.js';
 import { registerCreatorAgentKeyRoutes } from '../agent-surface/creator-agent-key-routes.js';
+import { isPublishedEntry } from '@gamedevpl/contract';
 
 const GAME_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -644,15 +645,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     }
     if (!reviewCatalogClient) return [];
     const entries = await reviewCatalogClient.getCatalog(publishedRef);
-    return entries
-      .filter((entry) => entry.status === 'published')
-      .map((entry) => ({
-        slug: entry.slug,
-        title: entry.title,
-        creatorHandle: entry.creatorHandle ?? null,
-        genre: entry.genre,
-        media: entry.media ?? null,
-      }));
+    return entries.filter(isPublishedEntry).map((entry) => ({
+      slug: entry.slug,
+      title: entry.title,
+      creatorHandle: entry.creatorHandle ?? null,
+      genre: entry.genre,
+      media: entry.media ?? null,
+    }));
   };
   await registerReviewRoutes(app, {
     store,

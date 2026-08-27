@@ -1,5 +1,6 @@
 import { createGitHubClient, type GitHubClient } from './github-client.js';
 import type { Store } from '../platform/store.js';
+import { isPublishedEntry } from '@gamedevpl/contract';
 
 /**
  * "Is this slug a published game?" — the gate on telemetry intake.
@@ -54,7 +55,7 @@ export function createPublishedSlugGate(options: PublishedSlugGateOptions): Publ
 
   async function load(): Promise<Set<string>> {
     const entries = await client.getCatalog(ref);
-    const slugs = new Set(entries.filter((entry) => entry.status === 'published').map((entry) => entry.slug));
+    const slugs = new Set(entries.filter(isPublishedEntry).map((entry) => entry.slug));
     cache = { slugs, expiresAt: now() + ttlMs };
     return slugs;
   }

@@ -3,6 +3,7 @@ import { attachCatalogEnrichments, createDefaultEnricherClient, getOrEnrichCatal
 import { VertexEmbeddingService } from './embedding-service.js';
 import { CatalogVectorIndex, type IndexedGameVector } from './catalog-vector-index.js';
 import type { Store } from '../platform/store.js';
+import { isPublishedEntry } from '@gamedevpl/contract';
 
 export interface CatalogIndexerOptions {
   store?: Store;
@@ -48,7 +49,7 @@ export class CatalogIndexer {
     this.lastIndexBuildAttemptTime = Date.now();
     try {
       const entries = await this.getCatalogEntries();
-      const published = entries.filter((entry) => entry.status === 'published');
+      const published = entries.filter(isPublishedEntry);
       const enriched = await attachCatalogEnrichments(published, this.store);
 
       const indexed: IndexedGameVector[] = [];

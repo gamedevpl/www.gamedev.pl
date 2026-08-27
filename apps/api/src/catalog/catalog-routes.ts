@@ -11,6 +11,7 @@ import { sendMedia } from '../platform/media-response.js';
 import { DELETED_ACCOUNT_UID, type Store } from '../platform/store.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { isPublished } from '../platform/publication-state.js';
+import { isPublishedEntry } from '@gamedevpl/contract';
 
 type PublishedGame = { slug: string; title: string; html: string };
 
@@ -138,13 +139,13 @@ export async function registerCatalogRoutes(
   async function isSlugPublished(slug: string): Promise<boolean> {
     if (!githubClient) return false;
     const entries = await getCatalogEntries();
-    return entries.some((entry) => entry.slug === slug && entry.status === 'published');
+    return entries.some((entry) => entry.slug === slug && isPublishedEntry(entry));
   }
 
   async function getPublishedCatalogEntry(slug: string): Promise<CatalogGameEntry | null> {
     if (!githubClient) return null;
     const entries = await getCatalogEntries();
-    return entries.find((entry) => entry.slug === slug && entry.status === 'published') ?? null;
+    return entries.find((entry) => entry.slug === slug && isPublishedEntry(entry)) ?? null;
   }
 
   async function storePublishedGame(slug: string): Promise<PublishedGame | null> {
@@ -255,7 +256,7 @@ export async function registerCatalogRoutes(
 
     try {
       const entries = await getCatalogEntries();
-      const published = entries.filter((entry) => entry.status === 'published');
+      const published = entries.filter(isPublishedEntry);
       const combined = [...published, ...(await storeCatalogEntries(published.map((entry) => entry.slug)))];
       const deattributed = await deattributeDeletedOwners(combined);
       return reply.send(await attachCatalogEnrichments(deattributed, store));
