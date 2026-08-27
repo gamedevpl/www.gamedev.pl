@@ -276,6 +276,9 @@ export interface SubmissionRecord {
 // Nothing entered it deliberately, so `submitted` is where such a job sat.
 export function fromStoredSubmission(data: unknown): SubmissionRecord {
   const record = data as SubmissionRecord;
+  // `gating` no longer typechecks as a JobState.
+
+  // A record written before it was removed can still hold the string.
   const stored: string | undefined = record.state;
   return stored === 'gating' ? { ...record, state: 'submitted' } : record;
 }

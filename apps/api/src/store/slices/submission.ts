@@ -223,7 +223,7 @@ export class FirestoreSubmissionStore implements SubmissionStore {
     const ref = this.ref(issueNumber);
     const snap = await ref.get();
     // First observation wins: a later re-derivation must not move the timestamp.
-    if (fromStoredSubmission(snap.data())?.publishedAt) return;
+    if (snap.exists && fromStoredSubmission(snap.data()).publishedAt) return;
     await ref.set({ publishedAt: at }, { merge: true });
   }
 
