@@ -3,7 +3,12 @@ import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyServerOptions } from 'fastify';
+import Fastify, {
+  type FastifyError,
+  type FastifyInstance,
+  type FastifyRequest,
+  type FastifyServerOptions,
+} from 'fastify';
 import { registerAccessTokenRoutes } from './access-token-routes.js';
 import { registerJobAdminRoutes } from '../creation/job-admin-routes.js';
 import { createGameSeederFromEnv } from '../agent-surface/agent-backend-env.js';
@@ -215,6 +220,18 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     trustProxy: 1,
     routerOptions: { maxParamLength: MAX_REMIX_ID_LENGTH },
   });
+
+  // Fastify's default 500 echoes err.message; 4xx replies pass through.
+  app.setErrorHandler((error: FastifyError, request, reply) => {
+    const statusCode = error.statusCode ?? 500;
+    if (statusCode >= 400 && statusCode < 500) {
+      void reply.send(error);
+      return;
+    }
+    request.log.error({ err: error, method: request.method, url: request.url }, 'unhandled route error');
+    void reply.code(500).send({ error: 'internal' });
+  });
+
   const store = options.store ?? new InMemoryStore();
 
   const isProd = process.env.NODE_ENV === 'production';

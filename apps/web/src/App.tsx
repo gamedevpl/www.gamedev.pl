@@ -640,7 +640,8 @@ export function App() {
       } else if (message.includes('blocked')) {
         setSubmissionError(t('auth.accountBlocked'));
       } else {
-        setSubmissionError(message);
+        // Every other code is a machine string (`dispatch_failed`), never a sentence.
+        setSubmissionError(t('errors.generic'));
       }
       setSubmissionStatus('idle');
     }
