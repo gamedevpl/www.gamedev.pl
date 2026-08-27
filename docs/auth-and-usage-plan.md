@@ -69,7 +69,7 @@ users/{uid}            # uid = "g:<Google sub claim>" (provider-prefixed for fut
   createdAt, lastLoginAt
   tier: 'standard' | 'trusted' | 'blocked'
 
-submissions/{issueNumber}
+submissions/{jobId}
   ownerUid, createdAt, title      # title sanitized, as sent to GitHub
 
 usage/{uid}/counters/{yyyy-mm-dd}

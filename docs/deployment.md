@@ -403,7 +403,7 @@ npm run slug:backfill -w @gamedevpl/api --             # name them
 ```
 
 Always rehearse first: a slug is a permanent public address. The dry run prints the exact
-`{issueNumber, title, slug}` it would write, including the collisions it resolves — two
+`{jobId, title, slug}` it would write, including the collisions it resolves — two
 games called "Space Miner" get `space-miner` and `space-miner-2`, in the same run.
 
 Abandoned builds are skipped on purpose. Their creator stopped them, so they need no
