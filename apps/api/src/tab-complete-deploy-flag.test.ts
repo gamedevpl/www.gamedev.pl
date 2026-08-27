@@ -8,9 +8,7 @@ const script = readFileSync(new URL('../../../infra/deploy-api.sh', import.meta.
 
 describe('the tab-complete flag', () => {
   it('is threaded by both deploy paths, so neither drops what the other set', () => {
-    // The workflow reads repo variables as step env, not as ${{ }} inside the run body:
-    // a run: body carrying expressions is compiled as one, and this step's blew past the
-    // 21,000-character expression ceiling, which failed every deploy before it started.
+    // Read as step env; expressions in a run body share one 21k ceiling.
     expect(workflow).toContain('TAB_COMPLETE: ${{ vars.TAB_COMPLETE }}');
     expect(workflow).toContain('TAB_COMPLETE_VAL="${TAB_COMPLETE}"');
     expect(workflow).toContain('ENV_VARS="${ENV_VARS}|TAB_COMPLETE=${TAB_COMPLETE_VAL}"');
