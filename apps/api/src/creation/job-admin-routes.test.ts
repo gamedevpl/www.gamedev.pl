@@ -9,7 +9,7 @@ const NOW = Date.parse('2026-07-30T12:00:00Z');
 const MINUTE = 60_000;
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
 
-function record(overrides: Partial<SubmissionRecord> & { issueNumber: number }): SubmissionRecord {
+function record(overrides: Partial<SubmissionRecord> & { jobId: number }): SubmissionRecord {
   return {
     ownerUid: 'g:1',
     title: 'A game',
@@ -24,13 +24,13 @@ describe('buildJobQueue', () => {
     // healthy ones that happen to be older.
     const queue = buildJobQueue(
       [
-        record({ issueNumber: 1, state: 'building', stateSince: ago(90 * MINUTE), lastAgentSignalAt: ago(MINUTE) }),
-        record({ issueNumber: 2, state: 'queued', stateSince: ago(20 * MINUTE) }),
+        record({ jobId: 1, state: 'building', stateSince: ago(90 * MINUTE), lastAgentSignalAt: ago(MINUTE) }),
+        record({ jobId: 2, state: 'queued', stateSince: ago(20 * MINUTE) }),
       ],
       NOW,
     );
 
-    expect(queue.jobs.map((job) => job.issueNumber)).toEqual([2, 1]);
+    expect(queue.jobs.map((job) => job.jobId)).toEqual([2, 1]);
     expect(queue.jobs[0].stall).toBe('not_dispatched');
     expect(queue.jobs[1].stall).toBeNull();
     expect(queue.stalled).toBe(1);
@@ -42,14 +42,14 @@ describe('buildJobQueue', () => {
     const queue = buildJobQueue(
       [
         record({
-          issueNumber: 1,
+          jobId: 1,
           createdAt: ago(10 * 60 * MINUTE),
           state: 'building',
           stateSince: ago(2 * MINUTE),
           lastAgentSignalAt: ago(MINUTE),
         }),
         record({
-          issueNumber: 2,
+          jobId: 2,
           createdAt: ago(60 * MINUTE),
           state: 'building',
           stateSince: ago(10 * MINUTE),
@@ -59,26 +59,26 @@ describe('buildJobQueue', () => {
       NOW,
     );
 
-    expect(queue.jobs.map((job) => job.issueNumber)).toEqual([2, 1]);
+    expect(queue.jobs.map((job) => job.jobId)).toEqual([2, 1]);
   });
 
   it('drops finished jobs — the queue is what still needs attention', () => {
     const queue = buildJobQueue(
       [
-        record({ issueNumber: 1, state: 'published', stateSince: ago(MINUTE) }),
-        record({ issueNumber: 2, state: 'canceled', stateSince: ago(MINUTE) }),
-        record({ issueNumber: 3, state: 'building', stateSince: ago(MINUTE), lastAgentSignalAt: ago(MINUTE) }),
+        record({ jobId: 1, state: 'published', stateSince: ago(MINUTE) }),
+        record({ jobId: 2, state: 'canceled', stateSince: ago(MINUTE) }),
+        record({ jobId: 3, state: 'building', stateSince: ago(MINUTE), lastAgentSignalAt: ago(MINUTE) }),
       ],
       NOW,
     );
 
-    expect(queue.jobs.map((job) => job.issueNumber)).toEqual([3]);
+    expect(queue.jobs.map((job) => job.jobId)).toEqual([3]);
   });
 
   it('includes jobs that predate adoption by falling back to the derived status', () => {
     // Otherwise the queue would fill in gradually as each job happened to be polled,
     // and would be misleadingly short exactly when it is first looked at.
-    const queue = buildJobQueue([record({ issueNumber: 7, lastStatus: 'building' })], NOW);
+    const queue = buildJobQueue([record({ jobId: 7, lastStatus: 'building' })], NOW);
 
     expect(queue.jobs).toHaveLength(1);
     expect(queue.jobs[0].state).toBe('building');
@@ -86,7 +86,7 @@ describe('buildJobQueue', () => {
   });
 
   it('shows both the internal state and what the creator is being told', () => {
-    const queue = buildJobQueue([record({ issueNumber: 1, state: 'submitted', stateSince: ago(MINUTE) })], NOW);
+    const queue = buildJobQueue([record({ jobId: 1, state: 'submitted', stateSince: ago(MINUTE) })], NOW);
 
     expect(queue.jobs[0].state).toBe('submitted');
     expect(queue.jobs[0].creatorStatus).toBe('building');
@@ -95,9 +95,9 @@ describe('buildJobQueue', () => {
   it('counts by state so the shape of the queue is answerable at a glance', () => {
     const queue = buildJobQueue(
       [
-        record({ issueNumber: 1, state: 'queued', stateSince: ago(MINUTE) }),
-        record({ issueNumber: 2, state: 'queued', stateSince: ago(MINUTE) }),
-        record({ issueNumber: 3, state: 'building', stateSince: ago(MINUTE), lastAgentSignalAt: ago(MINUTE) }),
+        record({ jobId: 1, state: 'queued', stateSince: ago(MINUTE) }),
+        record({ jobId: 2, state: 'queued', stateSince: ago(MINUTE) }),
+        record({ jobId: 3, state: 'building', stateSince: ago(MINUTE), lastAgentSignalAt: ago(MINUTE) }),
       ],
       NOW,
     );
@@ -109,7 +109,7 @@ describe('buildJobQueue', () => {
     const queue = buildJobQueue(
       [
         record({
-          issueNumber: 1,
+          jobId: 1,
           state: 'building',
           stateSince: ago(MINUTE),
           lastAgentSignalAt: ago(MINUTE),
@@ -130,7 +130,7 @@ describe('buildJobQueue', () => {
     const queue = buildJobQueue(
       [
         record({
-          issueNumber: 1,
+          jobId: 1,
           state: 'building',
           stateSince: ago(MINUTE),
           lastAgentSignalAt: ago(MINUTE),
@@ -144,7 +144,7 @@ describe('buildJobQueue', () => {
   });
 });
 
-describe('POST /api/admin/jobs/:issueNumber/publish', () => {
+describe('POST /api/admin/jobs/:jobId/publish', () => {
   const sessionSecret = 'dev-session-secret-change-me';
   const adminHeaders = { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:boss', sessionSecret)}` };
 
@@ -159,7 +159,7 @@ describe('POST /api/admin/jobs/:issueNumber/publish', () => {
         slug: 'comet-courier',
         version: 'v1',
         createdAt: '2026-07-30T10:00:00Z',
-        issueNumber: 1_000_001,
+        jobId: 1_000_001,
         sourceFiles: ['SPEC.md'],
         ...(deliveryMode ? { deliveryMode } : {}),
         ...(gate ? { gate: { ...gate, ranAt: '2026-07-30T11:00:00Z' } } : {}),
@@ -343,7 +343,7 @@ describe('POST /api/admin/jobs/:issueNumber/publish', () => {
   });
 });
 
-describe('GET /api/admin/jobs/:issueNumber/preview', () => {
+describe('GET /api/admin/jobs/:jobId/preview', () => {
   const sessionSecret = 'dev-session-secret-change-me';
   const adminHeaders = { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:boss', sessionSecret)}` };
 

@@ -11,7 +11,7 @@ describe('FirestoreStore / legacy gating normalization', () => {
     const { db } = fakeFirestore();
     const store = new FirestoreStore(db);
     await db.collection('submissions').doc('7').set({
-      issueNumber: 7,
+      jobId: 7,
       createdAt: '2026-01-01T00:00:00Z',
       state: 'gating',
     });

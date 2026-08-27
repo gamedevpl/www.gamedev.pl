@@ -19,7 +19,7 @@ function build(partial: Partial<RecentBuild> & Pick<RecentBuild, 'version' | 'cr
   return {
     mode: 'preview',
     verdict: 'green',
-    issueNumber: 10,
+    jobId: 10,
     ...partial,
   };
 }
@@ -140,8 +140,8 @@ describe('pickLatestChangelogText', () => {
 describe('applyChangelogSummaries', () => {
   it('fills empty summaries from the matching round events', () => {
     const builds = [
-      build({ version: 'v2', createdAt: '2026-08-23T02:00:00.000Z', issueNumber: 10 }),
-      build({ version: 'v1', createdAt: '2026-08-23T01:00:00.000Z', issueNumber: 10 }),
+      build({ version: 'v2', createdAt: '2026-08-23T02:00:00.000Z', jobId: 10 }),
+      build({ version: 'v1', createdAt: '2026-08-23T01:00:00.000Z', jobId: 10 }),
     ];
     const events = new Map<number, ChangelogEvent[]>([
       [
@@ -166,13 +166,13 @@ describe('hydrateRecentBuildSummaries', () => {
     const hydrated = await hydrateRecentBuildSummaries({
       locale: 'en',
       builds: [
-        build({ version: 'v2', createdAt: '2026-08-23T02:00:00.000Z', issueNumber: 10, summary: 'Kept.' }),
-        build({ version: 'v1', createdAt: '2026-08-23T01:00:00.000Z', issueNumber: 10 }),
-        build({ version: 'v9', createdAt: '2026-08-22T01:00:00.000Z', issueNumber: 9 }),
+        build({ version: 'v2', createdAt: '2026-08-23T02:00:00.000Z', jobId: 10, summary: 'Kept.' }),
+        build({ version: 'v1', createdAt: '2026-08-23T01:00:00.000Z', jobId: 10 }),
+        build({ version: 'v9', createdAt: '2026-08-22T01:00:00.000Z', jobId: 9 }),
       ],
-      loadEvents: async (issueNumber) => {
-        seen.push(issueNumber);
-        if (issueNumber === 10) {
+      loadEvents: async (jobId) => {
+        seen.push(jobId);
+        if (jobId === 10) {
           return [event({ kind: 'step', text: 'Filled from progress.', createdAt: '2026-08-23T01:05:00.000Z' })];
         }
         return [event({ kind: 'done', text: 'Earlier round.', createdAt: '2026-08-22T01:10:00.000Z' })];

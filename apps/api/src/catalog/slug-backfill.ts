@@ -12,7 +12,7 @@ import type { SubmissionRecord } from '../platform/store.js';
 /** The slice of the store a backfill touches. */
 export interface SlugBackfillStore {
   listSubmissionsMissingSlug(): Promise<SubmissionRecord[]>;
-  setSubmissionSlug(issueNumber: number, slug: string): Promise<void>;
+  setSubmissionSlug(jobId: number, slug: string): Promise<void>;
   getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null>;
 }
 
@@ -25,7 +25,7 @@ export interface SlugBackfillResult {
   scanned: number;
   named: number;
   failed: number;
-  games: Array<{ issueNumber: number; title: string; slug: string | null }>;
+  games: Array<{ jobId: number; title: string; slug: string | null }>;
 }
 
 /**
@@ -41,14 +41,14 @@ export interface SlugBackfillResult {
  */
 export async function settleSlugClaim(
   store: SlugBackfillStore,
-  issueNumber: number,
+  jobId: number,
   slug: string,
   title: string,
   isSlugClaimed: SlugClaimProbe,
 ): Promise<string | null> {
   const holds = async (candidate: string): Promise<boolean> => {
     const holder = await store.getSubmissionBySlug(candidate);
-    return holder?.issueNumber === issueNumber;
+    return holder?.jobId === jobId;
   };
 
   if (await holds(slug)) return slug;
@@ -58,9 +58,9 @@ export async function settleSlugClaim(
   // meaningful.
   const retry = await mintGameSlug(title, async (candidate) => {
     if (candidate === slug) return true;
-    return isSlugClaimed(candidate, issueNumber);
+    return isSlugClaimed(candidate, jobId);
   });
-  await store.setSubmissionSlug(issueNumber, retry);
+  await store.setSubmissionSlug(jobId, retry);
   return (await holds(retry)) ? retry : null;
 }
 
@@ -78,13 +78,12 @@ export async function runSlugBackfill(options: {
   isSlugClaimed: SlugClaimProbe;
   dryRun: boolean;
   /** Overridable so the HTTP route can keep using its own GitHub-aware settle path. */
-  confirmSlugClaim?: (issueNumber: number, slug: string, title: string) => Promise<string | null>;
+  confirmSlugClaim?: (jobId: number, slug: string, title: string) => Promise<string | null>;
 }): Promise<SlugBackfillResult> {
   const { store, isSlugClaimed, dryRun } = options;
   const confirm =
     options.confirmSlugClaim ??
-    ((issueNumber: number, slug: string, title: string) =>
-      settleSlugClaim(store, issueNumber, slug, title, isSlugClaimed));
+    ((jobId: number, slug: string, title: string) => settleSlugClaim(store, jobId, slug, title, isSlugClaimed));
 
   const pending = await store.listSubmissionsMissingSlug();
 
@@ -96,20 +95,20 @@ export async function runSlugBackfill(options: {
 
   for (const record of pending) {
     const isTaken = async (candidate: string): Promise<boolean> =>
-      mintedHere.has(candidate) || (await isSlugClaimed(candidate, record.issueNumber));
+      mintedHere.has(candidate) || (await isSlugClaimed(candidate, record.jobId));
     const wanted = await mintGameSlug(record.title, isTaken);
 
     if (dryRun) {
       mintedHere.add(wanted);
-      games.push({ issueNumber: record.issueNumber, title: record.title, slug: wanted });
+      games.push({ jobId: record.jobId, title: record.title, slug: wanted });
       continue;
     }
 
-    await store.setSubmissionSlug(record.issueNumber, wanted);
+    await store.setSubmissionSlug(record.jobId, wanted);
     // Same read-back as submission creation: the write is a claim, not a grant.
-    const settled = await confirm(record.issueNumber, wanted, record.title);
+    const settled = await confirm(record.jobId, wanted, record.title);
     if (settled) mintedHere.add(settled);
-    games.push({ issueNumber: record.issueNumber, title: record.title, slug: settled });
+    games.push({ jobId: record.jobId, title: record.title, slug: settled });
   }
 
   const named = games.filter((game) => game.slug !== null).length;

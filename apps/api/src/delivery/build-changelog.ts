@@ -76,15 +76,15 @@ export function applyChangelogSummaries(
 ): RecentBuild[] {
   const byIssue = new Map<number, RecentBuild[]>();
   for (const build of builds) {
-    if (typeof build.issueNumber !== 'number') continue;
-    const list = byIssue.get(build.issueNumber) ?? [];
+    if (typeof build.jobId !== 'number') continue;
+    const list = byIssue.get(build.jobId) ?? [];
     list.push(build);
-    byIssue.set(build.issueNumber, list);
+    byIssue.set(build.jobId, list);
   }
 
   const resolved = new Map<string, string>();
-  for (const [issueNumber, group] of byIssue) {
-    const events = eventsByIssue.get(issueNumber) ?? [];
+  for (const [jobId, group] of byIssue) {
+    const events = eventsByIssue.get(jobId) ?? [];
     const oldestFirst = [...group].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     for (let i = 0; i < oldestFirst.length; i++) {
       const build = oldestFirst[i]!;
@@ -104,10 +104,10 @@ export function applyChangelogSummaries(
 export async function hydrateRecentBuildSummaries(input: {
   builds: RecentBuild[];
   locale?: string;
-  loadEvents: (issueNumber: number) => Promise<readonly ChangelogEvent[]>;
+  loadEvents: (jobId: number) => Promise<readonly ChangelogEvent[]>;
 }): Promise<RecentBuild[]> {
   const ids = [
-    ...new Set(input.builds.map((build) => build.issueNumber).filter((id): id is number => typeof id === 'number')),
+    ...new Set(input.builds.map((build) => build.jobId).filter((id): id is number => typeof id === 'number')),
   ];
   if (ids.length === 0) return input.builds;
   const entries = await Promise.all(ids.map(async (id) => [id, await input.loadEvents(id)] as const));

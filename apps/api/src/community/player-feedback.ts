@@ -18,7 +18,7 @@ import { logModerationRejection } from '../platform/moderation-metrics.js';
  *    `submissions/{n}` document at all, so addressing by submission would silently
  *    drop the majority of real feedback, the exact bug telemetry and votes both hit
  *    and fixed. Storage follows suit: `games/{slug}/playerFeedback/{id}`, not
- *    `submissions/{issueNumber}/playerFeedback/{id}` (see store.ts `PlayerFeedbackRecord`
+ *    `submissions/{jobId}/playerFeedback/{id}` (see store.ts `PlayerFeedbackRecord`
  *    for the full correction — the plan doc originally specified the submission path).
  * 2. **Requires a session.** Votes chose public-read/session-write; free text is a
  *    materially larger abuse surface than a thumb (moderation bypass attempts, spam

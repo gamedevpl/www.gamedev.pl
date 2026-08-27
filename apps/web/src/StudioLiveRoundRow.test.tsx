@@ -45,9 +45,9 @@ describe('StudioLiveRoundRow (via StudioBuildHistory)', () => {
   it('does not show a live-round row once this round has its own pending build', async () => {
     const { host, unmount } = await mount({
       status: 'building',
-      issueNumber: 7,
+      jobId: 7,
       recentBuilds: [
-        { version: 'v1', createdAt: new Date().toISOString(), mode: 'publish', verdict: 'pending', issueNumber: 7 },
+        { version: 'v1', createdAt: new Date().toISOString(), mode: 'publish', verdict: 'pending', jobId: 7 },
       ],
     });
     expect(host.querySelector('[data-testid="studio-build-history-live-round"]')).toBeNull();
@@ -57,10 +57,10 @@ describe('StudioLiveRoundRow (via StudioBuildHistory)', () => {
   it('shows the live round on a later round even though slug history is non-empty', async () => {
     const { host, unmount } = await mount({
       status: 'building',
-      issueNumber: 12,
+      jobId: 12,
       lastAgentSignalAt: new Date().toISOString(),
       recentBuilds: [
-        { version: 'v1', createdAt: new Date().toISOString(), mode: 'publish', verdict: 'green', issueNumber: 7 },
+        { version: 'v1', createdAt: new Date().toISOString(), mode: 'publish', verdict: 'green', jobId: 7 },
       ],
     });
     expect(host.querySelector('[data-testid="studio-build-history-live-round"]')).not.toBeNull();

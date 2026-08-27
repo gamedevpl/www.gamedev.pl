@@ -12,7 +12,7 @@ export interface SelfBuildConnectRoutesOptions {
   submissionTokenSecret?: string;
   appBaseUrl: string;
   checkUserAccess: (request: FastifyRequest, reply: FastifyReply) => boolean;
-  ensureSubmissionSlug: (issueNumber: number, record: SubmissionRecord) => Promise<string | null>;
+  ensureSubmissionSlug: (jobId: number, record: SubmissionRecord) => Promise<string | null>;
 }
 
 // Connects a creator's agent to a self-build round.
@@ -44,9 +44,9 @@ export async function registerSelfBuildConnectRoutes(
       }
 
       const id = z.string().parse((request.params as { id?: string }).id);
-      let issueNumber: number;
+      let jobId: number;
       try {
-        issueNumber = verifyToken(id, submissionTokenSecret);
+        jobId = verifyToken(id, submissionTokenSecret);
       } catch (error) {
         if (error instanceof InvalidTokenError) {
           return reply.status(400).send({ error: 'invalid submission token' });
@@ -54,7 +54,7 @@ export async function registerSelfBuildConnectRoutes(
         throw error;
       }
 
-      const record = await store.getSubmission(issueNumber);
+      const record = await store.getSubmission(jobId);
       // Same shape as share/abandon — 403 hides which is true.
       if (!record || record.ownerUid !== request.user!.uid) {
         return reply.status(403).send({ error: 'only the creator can connect a build' });
@@ -70,9 +70,9 @@ export async function registerSelfBuildConnectRoutes(
         });
       }
 
-      await store.ensureRoundGeneration(issueNumber);
+      await store.ensureRoundGeneration(jobId);
       // Re-read after ensureRoundGeneration — a closing transition can race it.
-      const fresh = await store.getSubmission(issueNumber);
+      const fresh = await store.getSubmission(jobId);
       const freshBuilder = fresh?.builder ?? 'platform';
       if (!fresh || freshBuilder !== 'self' || !isActiveBuildRound(fresh)) {
         return reply.status(409).send({
@@ -82,7 +82,7 @@ export async function registerSelfBuildConnectRoutes(
         });
       }
 
-      const slug = await ensureSubmissionSlug(issueNumber, fresh);
+      const slug = await ensureSubmissionSlug(jobId, fresh);
       if (!slug) {
         return reply.status(409).send({
           error: 'connect_unavailable',
@@ -95,7 +95,7 @@ export async function registerSelfBuildConnectRoutes(
       // BY-27b: hands out the creator-wide key, never per-game.
       const keyRecord = await store.ensureCreatorAgentKey(fresh.ownerUid, at);
 
-      const pendingMessages = await store.listPendingCreatorMessages(issueNumber);
+      const pendingMessages = await store.listPendingCreatorMessages(jobId);
       const payload = mintConnectPayload({
         slug,
         ownerUid: fresh.ownerUid,

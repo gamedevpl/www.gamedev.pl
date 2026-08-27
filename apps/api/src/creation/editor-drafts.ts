@@ -87,7 +87,7 @@ export interface EditorRoutesOptions {
   dailyAssistQuota?: number;
   /** Same seam the delivery route uses — starts the gate on a new candidate. */
   onSourcesDelivered?: (input: {
-    issueNumber: number;
+    jobId: number;
     slug: string;
     version: string;
   }) => Promise<{ buildId?: string } | void> | void;
@@ -432,7 +432,7 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       // creator's tuning spend is visible in the same report as everything else.
       if (result.tokens) {
         await store
-          .recordJobCost(resolved.submission.issueNumber, {
+          .recordJobCost(resolved.submission.jobId, {
             kind: 'assist',
             at: new Date(now()).toISOString(),
             by: result.model ?? 'vertex',
@@ -605,7 +605,7 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       try {
         ({ version } = await gamesStore.putCandidateSources({
           slug,
-          issueNumber: jobId,
+          jobId,
           files,
           backend: 'editor',
           origin: 'editor',
@@ -628,7 +628,7 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       await store.setSubmissionDeliveredVersion(jobId, version);
       await store.recordJobTransition(jobId, { to: 'submitted', at: at(), by: 'creator', reason: 'content_delivered' });
 
-      const gate = await options.onSourcesDelivered?.({ issueNumber: jobId, slug, version });
+      const gate = await options.onSourcesDelivered?.({ jobId, slug, version });
       if (gate?.buildId) {
         await store
           .recordJobCost(jobId, {

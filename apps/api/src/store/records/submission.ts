@@ -7,7 +7,7 @@ import type { AgentEndedBy, BuilderHandoff } from './rounds.js';
 import type { JobCostEntry, JobSeedOutcome } from './dispatch.js';
 
 export interface SubmissionRecord {
-  issueNumber: number;
+  jobId: number;
   ownerUid: string;
   createdAt: string;
   title: string;

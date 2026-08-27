@@ -713,7 +713,7 @@ describe('NavHeader operator link', () => {
           {
             id: 'op-1-review_ready',
             kind: 'review_ready',
-            issueNumber: 1,
+            jobId: 1,
             title: 'X',
             ownerUid: 'g:1',
             since: '2026-07-30T11:00:00Z',

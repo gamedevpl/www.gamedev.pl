@@ -369,7 +369,7 @@ describe('POST /api/telemetry', () => {
   /**
    * The regression that made this whole path a no-op in production for a day.
    *
-   * Intake used to resolve the slug to `submissions/{issueNumber}` and require
+   * Intake used to resolve the slug to `submissions/{jobId}` and require
    * `publishedAt`. Of 42 playable games, 8 had a submission document and 2 had
    * `publishedAt` — so ~95% of real play was accepted with 202 and silently thrown
    * away. A game in the published catalog must record whether or not this platform

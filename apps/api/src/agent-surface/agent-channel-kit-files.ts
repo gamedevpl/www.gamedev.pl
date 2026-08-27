@@ -18,7 +18,7 @@ export interface AgentChannelKitFileRoutesDeps {
   resolveBuild: (
     request: FastifyRequest,
     reply: FastifyReply,
-  ) => Promise<{ issueNumber: number; record: SubmissionRecord; access: AgentTokenAccess } | null>;
+  ) => Promise<{ jobId: number; record: SubmissionRecord; access: AgentTokenAccess } | null>;
   kitFileStore: KitFileStore | null;
 }
 

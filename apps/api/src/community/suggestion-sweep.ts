@@ -127,7 +127,7 @@ export interface SuggestionSweepDeps {
    * regardless, unless its owner changed the setting.
    */
   startImprovementRound?: (input: {
-    issueNumber: number;
+    jobId: number;
     text: string;
     title: string;
     locale: string;
@@ -289,7 +289,7 @@ export async function runSuggestionSweep(deps: SuggestionSweepDeps): Promise<Sug
 
       const metric = hypothesisMetric(routed.class);
       const outcome = await deps.startImprovementRound({
-        issueNumber: submission.issueNumber,
+        jobId: submission.jobId,
         text: deps.buildBrief(fresh, card.untrusted),
         title: `Improve ${card.slug}: ${routed.class}`,
         locale: submission.locale ?? 'en',

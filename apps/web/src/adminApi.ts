@@ -22,7 +22,7 @@ export interface OperatorAlert {
   id: string;
   kind: OperatorAlertKind;
   /** Absent on alerts that are about the platform rather than one job. */
-  issueNumber?: number;
+  jobId?: number;
   title: string;
   ownerUid?: string;
   slug?: string;
@@ -332,7 +332,7 @@ export async function fetchSuggestions(): Promise<SuggestionsResponse | null> {
 }
 
 export interface JobCostSummary {
-  issueNumber: number;
+  jobId: number;
   title: string;
   slug?: string;
   state?: string;

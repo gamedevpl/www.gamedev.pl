@@ -38,13 +38,9 @@ export interface BuildStatusOptions {
 }
 
 export interface BuildStatusAssembler {
-  attachBuildEvents(
-    status: SubmissionStatusResponse,
-    issueNumber: number,
-    locale: string,
-  ): Promise<SubmissionStatusResponse>;
+  attachBuildEvents(status: SubmissionStatusResponse, jobId: number, locale: string): Promise<SubmissionStatusResponse>;
   // Drops the cached channel events for a job that just received one.
-  invalidateEvents(issueNumber: number): void;
+  invalidateEvents(jobId: number): void;
 }
 
 function builderOf(record: SubmissionRecord | null | undefined): BuilderKind {
@@ -60,15 +56,15 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
   const maxEventsShown = 20;
   const eventsCache = new Map<number, { expiresAt: number; value: BuildEvent[] }>();
 
-  async function loadBuildEvents(issueNumber: number): Promise<BuildEvent[]> {
+  async function loadBuildEvents(jobId: number): Promise<BuildEvent[]> {
     if (!store) return [];
     const currentTime = now();
-    const cached = eventsCache.get(issueNumber);
+    const cached = eventsCache.get(jobId);
     if (cached && cached.expiresAt > currentTime) {
       return cached.value;
     }
-    const value = await store.listBuildEvents(issueNumber, { limit: maxEventsShown });
-    eventsCache.set(issueNumber, { value, expiresAt: currentTime + eventsCacheTtlMs });
+    const value = await store.listBuildEvents(jobId, { limit: maxEventsShown });
+    eventsCache.set(jobId, { value, expiresAt: currentTime + eventsCacheTtlMs });
     return value;
   }
 
@@ -76,37 +72,37 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
   const maxPreviewsShown = 4;
   const previewsCache = new Map<number, { expiresAt: number; value: BuildPreviewSummary[] }>();
 
-  async function loadBuildPreviews(issueNumber: number): Promise<BuildPreviewSummary[]> {
+  async function loadBuildPreviews(jobId: number): Promise<BuildPreviewSummary[]> {
     if (!store) return [];
     const currentTime = now();
-    const cached = previewsCache.get(issueNumber);
+    const cached = previewsCache.get(jobId);
     if (cached && cached.expiresAt > currentTime) {
       return cached.value;
     }
-    const value = await store.listBuildPreviews(issueNumber, { limit: maxPreviewsShown });
-    previewsCache.set(issueNumber, { value, expiresAt: currentTime + eventsCacheTtlMs });
+    const value = await store.listBuildPreviews(jobId, { limit: maxPreviewsShown });
+    previewsCache.set(jobId, { value, expiresAt: currentTime + eventsCacheTtlMs });
     return value;
   }
 
   const maxShotsShown = 12;
   const shotsCache = new Map<number, { expiresAt: number; value: BuildShotSummary[] }>();
 
-  async function loadBuildShots(issueNumber: number): Promise<BuildShotSummary[]> {
+  async function loadBuildShots(jobId: number): Promise<BuildShotSummary[]> {
     if (!store) return [];
     const currentTime = now();
-    const cached = shotsCache.get(issueNumber);
+    const cached = shotsCache.get(jobId);
     if (cached && cached.expiresAt > currentTime) {
       return cached.value;
     }
-    const value = await store.listBuildShots(issueNumber, { limit: maxShotsShown });
-    shotsCache.set(issueNumber, { value, expiresAt: currentTime + eventsCacheTtlMs });
+    const value = await store.listBuildShots(jobId, { limit: maxShotsShown });
+    shotsCache.set(jobId, { value, expiresAt: currentTime + eventsCacheTtlMs });
     return value;
   }
 
   // Pictures of this build: the screenshots the agent pushed over the channel.
-  async function buildMedia(issueNumber: number, locale: string): Promise<BuildMediaItem[]> {
+  async function buildMedia(jobId: number, locale: string): Promise<BuildMediaItem[]> {
     return [
-      ...(await loadBuildShots(issueNumber)).map((shot): BuildMediaItem => {
+      ...(await loadBuildShots(jobId)).map((shot): BuildMediaItem => {
         // Reader's own language when the agent sent one, else English.
         const caption = shot.locale === locale && shot.labelLocalized ? shot.labelLocalized : shot.label;
         return {
@@ -120,8 +116,8 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
   }
 
   // Playable builds pushed over the channel, newest first.
-  async function buildPlayables(issueNumber: number, locale: string): Promise<BuildPlayableItem[]> {
-    return (await loadBuildPreviews(issueNumber)).map((preview): BuildPlayableItem => {
+  async function buildPlayables(jobId: number, locale: string): Promise<BuildPlayableItem[]> {
+    return (await loadBuildPreviews(jobId)).map((preview): BuildPlayableItem => {
       const caption = preview.locale === locale && preview.labelLocalized ? preview.labelLocalized : preview.label;
       return {
         ref: preview.id,
@@ -180,7 +176,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
   // Older jobs on the same slug and creator — capped transcripts only.
   async function loadPriorRounds(record: SubmissionRecord, locale: string): Promise<PriorRoundHistory[]> {
     if (!store || !record.slug) return [];
-    const cacheKey = `${record.slug}:${record.issueNumber}:${locale}`;
+    const cacheKey = `${record.slug}:${record.jobId}:${locale}`;
     const cached = priorRoundsCache.get(cacheKey);
     const currentTime = now();
     if (cached && cached.expiresAt > currentTime) return cached.value;
@@ -189,7 +185,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     const siblings = (await store.listSubmissionsBySlug(record.slug))
       .filter(
         (sibling) =>
-          sibling.issueNumber !== record.issueNumber &&
+          sibling.jobId !== record.jobId &&
           sibling.ownerUid === record.ownerUid &&
           sibling.createdAt < record.createdAt,
       )
@@ -199,8 +195,8 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     const rounds = await Promise.all(
       siblings.map(async (sibling): Promise<PriorRoundHistory | null> => {
         const [messages, rawEvents] = await Promise.all([
-          store!.listCreatorMessages(sibling.issueNumber, { limit: maxPriorEntriesPerRound }),
-          store!.listBuildEvents(sibling.issueNumber, { limit: maxPriorEntriesPerRound }),
+          store!.listCreatorMessages(sibling.jobId, { limit: maxPriorEntriesPerRound }),
+          store!.listBuildEvents(sibling.jobId, { limit: maxPriorEntriesPerRound }),
         ]);
         const events = rawEvents.filter((event) => !isMcpPresenceEventText(event.text, event.createdAt));
         const revisionEntries: PriorRoundEntry[] = localizeRevisions(
@@ -231,7 +227,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
         if (entries.length === 0) return null;
         const state = sibling.state ?? 'queued';
         return {
-          id: String(sibling.issueNumber),
+          id: String(sibling.jobId),
           createdAt: sibling.createdAt,
           ...(sibling.publishedAt ? { publishedAt: sibling.publishedAt } : {}),
           status: sibling.abandonedAt ? 'abandoned' : toSubmissionStatus(state),
@@ -248,15 +244,15 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
   // What the agent sent directly, plus live heartbeat fields.
   async function attachBuildEvents(
     status: SubmissionStatusResponse,
-    issueNumber: number,
+    jobId: number,
     locale: string,
   ): Promise<SubmissionStatusResponse> {
     const [loadedEvents, media, playable, record] = await Promise.all([
-      loadBuildEvents(issueNumber),
-      buildMedia(issueNumber, locale),
-      buildPlayables(issueNumber, locale),
+      loadBuildEvents(jobId),
+      buildMedia(jobId, locale),
+      buildPlayables(jobId, locale),
       // Soft: a store blip must not 500 a cached status poll.
-      store ? store.getSubmission(issueNumber).catch(() => null) : Promise.resolve(null),
+      store ? store.getSubmission(jobId).catch(() => null) : Promise.resolve(null),
     ]);
     // Drop leftover synthetic presence steps from before heartbeats stopped writing chat.
     const events = loadedEvents.filter((event) => !isMcpPresenceEventText(event.text, event.createdAt));
@@ -327,7 +323,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
         next.recentBuilds = await hydrateRecentBuildSummaries({
           builds: next.recentBuilds,
           locale,
-          loadEvents: async (id) => (id === issueNumber ? loadedEvents : loadBuildEvents(id)),
+          loadEvents: async (id) => (id === jobId ? loadedEvents : loadBuildEvents(id)),
         });
       } catch (error) {
         void error;
@@ -337,8 +333,8 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     return next;
   }
 
-  function invalidateEvents(issueNumber: number): void {
-    eventsCache.delete(issueNumber);
+  function invalidateEvents(jobId: number): void {
+    eventsCache.delete(jobId);
   }
 
   return { attachBuildEvents, invalidateEvents };

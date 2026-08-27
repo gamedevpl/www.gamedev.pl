@@ -430,7 +430,7 @@ export interface VersionManifest {
   version: string;
   createdAt: string;
   /** The job that produced it. */
-  issueNumber: number;
+  jobId: number;
   // Producing round, used to reject stale verdicts.
   roundGeneration?: number;
   /** Which backend and model built it — unattributable cost is how budgets get lost. */
@@ -627,7 +627,7 @@ export type StagedSourcesSummary = {
 
 type StagingManifest = {
   slug: string;
-  issueNumber: number;
+  jobId: number;
   roundGeneration: number;
   updatedAt: string;
   files: StagedSourceEntry[];
@@ -638,7 +638,7 @@ export interface GamesStore {
   /** Writes a candidate version's sources. Returns the version id assigned. */
   putCandidateSources(input: {
     slug: string;
-    issueNumber: number;
+    jobId: number;
     // Producing round, persisted with the candidate manifest.
     roundGeneration?: number;
     files: SourceFile[];
@@ -682,7 +682,7 @@ export interface GamesStore {
    */
   putStagedSourceFile(input: {
     slug: string;
-    issueNumber: number;
+    jobId: number;
     roundGeneration: number;
     path: string;
     content: string;
@@ -692,34 +692,30 @@ export interface GamesStore {
   }): Promise<StagedSourcesSummary & { path: string; bytes: number }>;
   deleteStagedSourceFile(input: {
     slug: string;
-    issueNumber: number;
+    jobId: number;
     roundGeneration: number;
     path: string;
     stagedBy?: 'agent' | 'owner';
   }): Promise<StagedSourcesSummary & { path: string }>;
   /** Lists staged paths + byte totals (no contents). */
-  listStagedSources(input: {
-    slug: string;
-    issueNumber: number;
-    roundGeneration: number;
-  }): Promise<StagedSourcesSummary>;
+  listStagedSources(input: { slug: string; jobId: number; roundGeneration: number }): Promise<StagedSourcesSummary>;
   /** Reads staged contents for finalize. */
   getStagedSourceFiles(input: {
     slug: string;
-    issueNumber: number;
+    jobId: number;
     roundGeneration: number;
   }): Promise<Array<SourceFile & { deleted?: true }>>;
   /** Reads one staged path (null when not in the buffer). Used by patch_source_file. */
   getStagedSourceFile(input: {
     slug: string;
-    issueNumber: number;
+    jobId: number;
     roundGeneration: number;
     path: string;
   }): Promise<string | null>;
   /** Clears the staging buffer (all paths, or a named subset). */
   clearStagedSources(input: {
     slug: string;
-    issueNumber: number;
+    jobId: number;
     roundGeneration: number;
     paths?: string[];
   }): Promise<{ cleared: number }>;
@@ -907,15 +903,15 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
   }
 
   const versionPrefix = (slug: string, version: string) => `games/${slug}/versions/${version}`;
-  const stagingPrefix = (slug: string, issueNumber: number, roundGeneration: number) =>
-    `games/${slug}/staging/${issueNumber}/g${roundGeneration}`;
+  const stagingPrefix = (slug: string, jobId: number, roundGeneration: number) =>
+    `games/${slug}/staging/${jobId}/g${roundGeneration}`;
 
   async function readStagingManifest(
     slug: string,
-    issueNumber: number,
+    jobId: number,
     roundGeneration: number,
   ): Promise<{ manifest: StagingManifest; generation: number } | null> {
-    const got = await readObjectWithGeneration(`${stagingPrefix(slug, issueNumber, roundGeneration)}/manifest.json`);
+    const got = await readObjectWithGeneration(`${stagingPrefix(slug, jobId, roundGeneration)}/manifest.json`);
     if (!got) return null;
     return {
       manifest: JSON.parse(got.body.toString('utf8')) as StagingManifest,
@@ -971,7 +967,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         slug: input.slug,
         version,
         createdAt: at.toISOString(),
-        issueNumber: input.issueNumber,
+        jobId: input.jobId,
         ...(input.roundGeneration !== undefined ? { roundGeneration: input.roundGeneration } : {}),
         backend: input.backend,
         model: input.model,
@@ -1003,16 +999,16 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         throw new InvalidUploadError(`file too large: ${path} is ${bytes} bytes (max 1000000 per file)`);
       }
 
-      const prefix = stagingPrefix(input.slug, input.issueNumber, input.roundGeneration);
+      const prefix = stagingPrefix(input.slug, input.jobId, input.roundGeneration);
       // Source bytes first — orphaned sources without a manifest entry are harmless;
       // a lost race on the manifest is retried below.
       await writeObject(`${prefix}/source/${path}`, Buffer.from(input.content, 'utf8'), 'text/plain; charset=utf-8');
 
       for (let attempt = 0; attempt < MAX_STAGING_MANIFEST_RETRIES; attempt++) {
-        const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+        const existing = await readStagingManifest(input.slug, input.jobId, input.roundGeneration);
         const base = existing?.manifest ?? {
           slug: input.slug,
-          issueNumber: input.issueNumber,
+          jobId: input.jobId,
           roundGeneration: input.roundGeneration,
           updatedAt: new Date(now()).toISOString(),
           files: [],
@@ -1040,7 +1036,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
 
         const manifest: StagingManifest = {
           slug: input.slug,
-          issueNumber: input.issueNumber,
+          jobId: input.jobId,
           roundGeneration: input.roundGeneration,
           updatedAt: new Date(now()).toISOString(),
           files: nextFiles,
@@ -1067,14 +1063,14 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
     async deleteStagedSourceFile(input) {
       assertSlug(input.slug);
       const path = assertDeliverableSourcePath(input.path);
-      const prefix = stagingPrefix(input.slug, input.issueNumber, input.roundGeneration);
+      const prefix = stagingPrefix(input.slug, input.jobId, input.roundGeneration);
       await deleteObject(`${prefix}/source/${path}`).catch(() => undefined);
 
       for (let attempt = 0; attempt < MAX_STAGING_MANIFEST_RETRIES; attempt++) {
-        const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+        const existing = await readStagingManifest(input.slug, input.jobId, input.roundGeneration);
         const base = existing?.manifest ?? {
           slug: input.slug,
-          issueNumber: input.issueNumber,
+          jobId: input.jobId,
           roundGeneration: input.roundGeneration,
           updatedAt: new Date(now()).toISOString(),
           files: [],
@@ -1090,7 +1086,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
 
         const manifest: StagingManifest = {
           slug: input.slug,
-          issueNumber: input.issueNumber,
+          jobId: input.jobId,
           roundGeneration: input.roundGeneration,
           updatedAt: new Date(now()).toISOString(),
           files: nextFiles,
@@ -1114,16 +1110,16 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
 
     async listStagedSources(input) {
       assertSlug(input.slug);
-      const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+      const existing = await readStagingManifest(input.slug, input.jobId, input.roundGeneration);
       return summaryFromManifest(existing?.manifest ?? null);
     },
 
     async getStagedSourceFiles(input) {
       assertSlug(input.slug);
-      const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+      const existing = await readStagingManifest(input.slug, input.jobId, input.roundGeneration);
       const manifest = existing?.manifest;
       if (!manifest || manifest.files.length === 0) return [];
-      const prefix = stagingPrefix(input.slug, input.issueNumber, input.roundGeneration);
+      const prefix = stagingPrefix(input.slug, input.jobId, input.roundGeneration);
       const files = await Promise.all(
         manifest.files.map(async (entry) => {
           if (entry.deleted) return { path: entry.path, content: '', deleted: true as const };
@@ -1142,20 +1138,18 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
     async getStagedSourceFile(input) {
       assertSlug(input.slug);
       const path = assertDeliverableSourcePath(input.path);
-      const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+      const existing = await readStagingManifest(input.slug, input.jobId, input.roundGeneration);
       if (!existing?.manifest.files.some((file) => file.path === path)) return null;
-      const body = await readObject(
-        `${stagingPrefix(input.slug, input.issueNumber, input.roundGeneration)}/source/${path}`,
-      );
+      const body = await readObject(`${stagingPrefix(input.slug, input.jobId, input.roundGeneration)}/source/${path}`);
       return body ? body.toString('utf8') : null;
     },
 
     async clearStagedSources(input) {
       assertSlug(input.slug);
-      const prefix = stagingPrefix(input.slug, input.issueNumber, input.roundGeneration);
+      const prefix = stagingPrefix(input.slug, input.jobId, input.roundGeneration);
 
       for (let attempt = 0; attempt < MAX_STAGING_MANIFEST_RETRIES; attempt++) {
-        const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+        const existing = await readStagingManifest(input.slug, input.jobId, input.roundGeneration);
         if (!existing || existing.manifest.files.length === 0) return { cleared: 0 };
 
         const removePaths = input.paths?.length

@@ -19,19 +19,19 @@ export interface SelfBuildBackendOptions {
    * Persists a generated seed on the job document. Self builds never commit a seed
    * branch — the draft lives on the record until the agent (or a later round) reads it.
    */
-  persistSeed?: (issueNumber: number, seed: SeedFiles) => Promise<void>;
+  persistSeed?: (jobId: number, seed: SeedFiles) => Promise<void>;
   /**
    * Returns a previously stored seed for this job, when one exists. Resume reuses it
    * rather than inventing a second draft of a game already in progress.
    */
-  readSeed?: (issueNumber: number) => Promise<SeedFiles | undefined>;
+  readSeed?: (jobId: number) => Promise<SeedFiles | undefined>;
   /** Channel-side signals the reconciler projects into an observation. */
-  readSignals?: (issueNumber: number) => Promise<SelfBuildSignals | null>;
+  readSignals?: (jobId: number) => Promise<SelfBuildSignals | null>;
 }
 
 /** Opaque ref recorded on the job. Parseable back to the job id for observe. */
-export function selfBuildRef(issueNumber: number): string {
-  return `self:${issueNumber}`;
+export function selfBuildRef(jobId: number): string {
+  return `self:${jobId}`;
 }
 
 export function parseSelfBuildRef(ref: string): number | null {
@@ -46,12 +46,12 @@ export function createSelfBuildBackend(options: SelfBuildBackendOptions = {}): A
     // Prefer a seed already stored on the job (resume of the same round) over inventing
     // another. A brief.seed from the caller still wins when nothing is stored yet —
     // that is the first-dispatch path after the seeder ran.
-    const existing = options.readSeed ? await options.readSeed(brief.issueNumber) : undefined;
+    const existing = options.readSeed ? await options.readSeed(brief.jobId) : undefined;
     const seed = existing ?? brief.seed;
     if (seed && options.persistSeed && !existing) {
-      await options.persistSeed(brief.issueNumber, seed);
+      await options.persistSeed(brief.jobId, seed);
     }
-    return { ref: selfBuildRef(brief.issueNumber) };
+    return { ref: selfBuildRef(brief.jobId) };
   }
 
   return {
@@ -76,9 +76,9 @@ export function createSelfBuildBackend(options: SelfBuildBackendOptions = {}): A
      * what keeps self rounds out of Copilot-style "not_dispatched" stalls.
      */
     async observe(ref: string, { hasCandidate }: { hasCandidate: boolean }): Promise<AgentObservation | null> {
-      const issueNumber = parseSelfBuildRef(ref);
-      if (issueNumber === null) return null;
-      const signals = options.readSignals ? await options.readSignals(issueNumber) : null;
+      const jobId = parseSelfBuildRef(ref);
+      if (jobId === null) return null;
+      const signals = options.readSignals ? await options.readSignals(jobId) : null;
       const delivered = hasCandidate || Boolean(signals?.deliveredVersion);
       if (delivered) {
         return { state: 'completed', hasCandidate: true };

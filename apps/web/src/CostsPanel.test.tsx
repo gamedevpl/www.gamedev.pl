@@ -23,7 +23,7 @@ const HOUR = 60 * 60_000;
 
 function job(overrides: Partial<JobCostSummary> = {}): JobCostSummary {
   return {
-    issueNumber: 1_000_001,
+    jobId: 1_000_001,
     title: 'Comet Courier',
     slug: 'comet-courier',
     state: 'published',
@@ -89,10 +89,7 @@ describe('CostsPanel', () => {
   it('shows what the failure rate costs, as a share of the whole', async () => {
     mocked.fetchCostReport.mockResolvedValue(
       report({
-        jobs: [
-          job(),
-          job({ issueNumber: 1_000_002, published: false, state: 'failed', credits: 2, sessions: 2, usd: 0.02 }),
-        ],
+        jobs: [job(), job({ jobId: 1_000_002, published: false, state: 'failed', credits: 2, sessions: 2, usd: 0.02 })],
         totals: { jobs: 2, sessions: 4, credits: 4, gateRuns: 1, published: 1, usd: 0.04 },
         creditsPerPublishedGame: 4,
         usdPerPublishedGame: 0.04,

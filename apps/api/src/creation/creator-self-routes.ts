@@ -65,7 +65,7 @@ export async function registerCreatorSelfRoutes(
     const { games: shelf, truncated, total } = pageOwnerGames(records, 'shelf');
     return reply.send({
       submissions: shelf.map(({ tip, catalogPublishedAt }) => ({
-        token: mintToken(tip.issueNumber, submissionTokenSecret),
+        token: mintToken(tip.jobId, submissionTokenSecret),
         title: tip.title,
         createdAt: tip.createdAt,
         // Last derived status, kept current by the two-minute sweep.

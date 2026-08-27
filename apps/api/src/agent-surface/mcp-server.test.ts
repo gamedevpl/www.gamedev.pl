@@ -93,7 +93,7 @@ function stubGamesStore(gate?: {
   const gamesStore = {
     putCandidateSources: async (input: {
       slug: string;
-      issueNumber: number;
+      jobId: number;
       files: Array<{ path: string; content: string }>;
       kitEngineRef?: string;
       summary?: string;
@@ -2864,9 +2864,9 @@ declare const GameKit: { defineGame(): unknown };
       return {
         getManifest: async (slug: string, version: string) =>
           slug === 'comet-courier' && version === 'v1'
-            ? // issueNumber is the ownership check the route makes — a slug is shared
+            ? // jobId is the ownership check the route makes — a slug is shared
               // by every improvement round on the same game.
-              { slug, version, issueNumber: ISSUE, gate: { green, ranAt: '2026-08-01T12:00:00.000Z' } }
+              { slug, version, jobId: ISSUE, gate: { green, ranAt: '2026-08-01T12:00:00.000Z' } }
             : null,
         getDerivedArtifact: async (slug: string, version: string, name: string) =>
           slug === 'comet-courier' && version === 'v1' ? (artifacts.get(name) ?? null) : null,
@@ -3542,7 +3542,7 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
         // and it is the one that carries lane 'preview'.
         getManifest: async (slug: string, version: string) =>
           slug === 'comet-courier' && version === 'v1'
-            ? { slug, version, issueNumber: ISSUE, previewGate: { green: true, ranAt: '2026-08-01T12:00:00.000Z' } }
+            ? { slug, version, jobId: ISSUE, previewGate: { green: true, ranAt: '2026-08-01T12:00:00.000Z' } }
             : null,
         getDerivedArtifact: async (slug: string, version: string, name: string) =>
           slug === 'comet-courier' && version === 'v1' ? (artifacts.get(name) ?? null) : null,

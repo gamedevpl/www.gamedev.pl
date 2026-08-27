@@ -18,7 +18,7 @@ export interface AgentChannelGateMediaRoutesDeps {
     request: FastifyRequest,
     reply: FastifyReply,
     options?: { allowTerminalReceipt?: boolean },
-  ) => Promise<{ issueNumber: number; record: SubmissionRecord; access: AgentTokenAccess } | null>;
+  ) => Promise<{ jobId: number; record: SubmissionRecord; access: AgentTokenAccess } | null>;
   gamesStore: GamesStore | undefined;
   objectStore: GcsObjectStore | undefined;
   gateVerdict: (record: SubmissionRecord) => Promise<GateVerdictSummary | null>;
@@ -155,9 +155,9 @@ export function registerAgentChannelGateMediaRoutes(app: FastifyInstance, deps: 
       }
 
       const slug = record.slug;
-      // Ownership check is issueNumber, not slug; absent and not-yours look identical.
+      // Ownership check is jobId, not slug; absent and not-yours look identical.
       const manifest = await gamesStore.getManifest(slug, version);
-      if (!manifest || manifest.issueNumber !== record.issueNumber) {
+      if (!manifest || manifest.jobId !== record.jobId) {
         return reply.send({
           available: false,
           deliveryId: version,

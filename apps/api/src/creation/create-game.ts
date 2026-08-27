@@ -81,9 +81,9 @@ export interface CreateGameDeps {
   rateLimitWindowMs: number;
   submissionsByIp: Map<string, number[]>;
   isSlugClaimed: (slug: string) => Promise<boolean>;
-  confirmSlugClaim: (issueNumber: number, wanted: string, title: string) => Promise<string | null>;
+  confirmSlugClaim: (jobId: number, wanted: string, title: string) => Promise<string | null>;
   dispatchBuild: (input: {
-    issueNumber: number;
+    jobId: number;
     slug: string;
     spec: string;
     locale: string;
@@ -248,7 +248,7 @@ export function createGameCreator(deps: CreateGameDeps): {
       const slug = await confirmSlugClaim(jobId, wanted, sanitizedTitle);
       if (!slug) {
         await store.setSubmissionAbandoned(jobId, new Date(now()).toISOString());
-        input.log.error({ issueNumber: jobId, slug: wanted }, 'could not claim a slug for a new submission');
+        input.log.error({ jobId, slug: wanted }, 'could not claim a slug for a new submission');
         return { ok: false, status: 409, error: 'name_unavailable' };
       }
 
@@ -272,20 +272,17 @@ export function createGameCreator(deps: CreateGameDeps): {
       // Persist before returning: Connect and Studio read `record.builder` immediately.
       await store.setRoundBuilder(jobId, builder, { resetRoundBudget: false });
       void dispatchBuild({
-        issueNumber: jobId,
+        jobId,
         slug,
         spec: issueBody,
         locale: creatorLocale,
         builder,
         log: dispatchLog,
       }).catch((error: unknown) => {
-        dispatchLog.error({ err: error, issueNumber: jobId }, 'background dispatch failed');
+        dispatchLog.error({ err: error, jobId }, 'background dispatch failed');
       });
 
-      input.log.info?.(
-        { issueNumber: jobId, slug, via: input.openedBy === 'agent' ? 'mcp' : 'studio' },
-        'game created',
-      );
+      input.log.info?.({ jobId, slug, via: input.openedBy === 'agent' ? 'mcp' : 'studio' }, 'game created');
       return { ok: true, jobId, slug };
     } catch (error) {
       input.log.error({ err: error }, 'failed to create submission');

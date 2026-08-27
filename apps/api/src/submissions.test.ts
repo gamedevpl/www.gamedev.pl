@@ -45,13 +45,13 @@ function catalogEntry(slug: string, overrides: Partial<CatalogGameEntry> = {}): 
 function createGithubClientStub(params: {
   issueState?: 'open' | 'closed';
   linkedPr?: LinkedPullRequest | null;
-  issueNumber?: number;
+  jobId?: number;
   gameSources?: GameSources | null;
   gameMedia?: Uint8Array | null;
   catalog?: CatalogGameEntry[];
   progressNotes?: string | null;
 }) {
-  const createIssue = vi.fn(async () => ({ number: params.issueNumber ?? 123 }));
+  const createIssue = vi.fn(async () => ({ number: params.jobId ?? 123 }));
   const getIssueState = vi.fn(async () => ({ state: params.issueState ?? 'open' }));
   const findLinkedPR = vi.fn(async () => params.linkedPr ?? null);
   const getGameSources = vi.fn(async () => params.gameSources ?? null);
@@ -130,7 +130,7 @@ async function createApp(params: {
   agentChannel?: {
     gamesStore?: GamesStore;
     onSourcesDelivered?: (input: {
-      issueNumber: number;
+      jobId: number;
       slug: string;
       version: string;
       mode?: 'health';
@@ -525,7 +525,7 @@ describe('submission routes', () => {
   it('files nothing on GitHub, and sends the sanitized spec straight to an agent', async () => {
     // Job identity is ours: no issue is created, so a build no longer waits on a work
     // item existing in someone else's system before it can be named.
-    const { githubClient, createIssue } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient, createIssue } = createGithubClientStub({ jobId: 77 });
     const { backend, briefs } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -550,9 +550,9 @@ describe('submission routes', () => {
     // The token addresses a job id of ours, allocated above the floor that separates
     // them from the era when identity came from an issue number.
     const jobs = await store.listSubmissionsByOwner('g:test-user');
-    expect(jobs[0].issueNumber).toBeGreaterThanOrEqual(JOB_ID_FLOOR);
+    expect(jobs[0].jobId).toBeGreaterThanOrEqual(JOB_ID_FLOOR);
     expect(response.json()).toEqual({
-      token: mintToken(jobs[0].issueNumber, secret),
+      token: mintToken(jobs[0].jobId, secret),
       // Minted here, from the sanitized title, and returned so the app can open the
       // studio on a readable address instead of on a capability token.
       slug: 'my-cool-title',
@@ -573,12 +573,12 @@ describe('submission routes', () => {
     // Round-scoped: same job + generation. `exp` is wall-clock, so compare claims
     // rather than the opaque string (a second boundary would flake an equality check).
     expect(verifyAgentToken(briefs[0].channelToken, secret)).toMatchObject({
-      jobId: jobs[0].issueNumber,
+      jobId: jobs[0].jobId,
       roundGeneration: jobs[0].roundGeneration ?? 1,
     });
   });
   it('gives two games of the same name addresses of their own', async () => {
-    const { githubClient } = createGithubClientStub({ issueNumber: 93 });
+    const { githubClient } = createGithubClientStub({ jobId: 93 });
     const store = new InMemoryStore();
     const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
 
@@ -608,7 +608,7 @@ describe('submission routes', () => {
     // agents deliver into the same games-store slug, and whichever job loses the by-slug
     // lookup becomes unplayable to its own creator. The claim is read back, so the loser
     // finds out while a different name still costs nothing.
-    const { githubClient } = createGithubClientStub({ issueNumber: 94 });
+    const { githubClient } = createGithubClientStub({ jobId: 94 });
     const store = new InMemoryStore();
     const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
 
@@ -618,7 +618,7 @@ describe('submission routes', () => {
     store.getSubmissionBySlug = async (slug: string) => {
       if (slug === 'space-miner' && !raced) {
         raced = true;
-        return { issueNumber: 999_999, ownerUid: 'g:someone-else', createdAt: '', title: 'Space Miner', slug };
+        return { jobId: 999_999, ownerUid: 'g:someone-else', createdAt: '', title: 'Space Miner', slug };
       }
       return realProbe(slug);
     };
@@ -646,7 +646,7 @@ describe('submission routes', () => {
   it('refuses the submission outright when it cannot claim any name', async () => {
     // Losing twice means something is racing us persistently rather than by coincidence.
     // Better a creator who is told to rename than a game that cannot be addressed.
-    const { githubClient } = createGithubClientStub({ issueNumber: 95 });
+    const { githubClient } = createGithubClientStub({ jobId: 95 });
     const { backend, briefs } = createBackendStub();
     const store = new InMemoryStore();
     const { app, authHeaders } = await createApp({
@@ -657,7 +657,7 @@ describe('submission routes', () => {
     });
 
     store.getSubmissionBySlug = async (slug: string) => ({
-      issueNumber: 999_999,
+      jobId: 999_999,
       ownerUid: 'g:someone-else',
       createdAt: '',
       title: 'Space Miner',
@@ -683,7 +683,7 @@ describe('submission routes', () => {
   });
 
   it('records how many QA answers came with the concept', async () => {
-    const { githubClient } = createGithubClientStub({ issueNumber: 92 });
+    const { githubClient } = createGithubClientStub({ jobId: 92 });
     const store = new InMemoryStore();
     const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
 
@@ -712,7 +712,7 @@ describe('submission routes', () => {
   });
 
   it('records zero clarifications when the creator skipped the questions', async () => {
-    const { githubClient } = createGithubClientStub({ issueNumber: 93 });
+    const { githubClient } = createGithubClientStub({ jobId: 93 });
     const store = new InMemoryStore();
     const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
 
@@ -732,7 +732,7 @@ describe('submission routes', () => {
   });
 
   it('tells the agent which language to report progress in', async () => {
-    const { githubClient } = createGithubClientStub({ issueNumber: 91 });
+    const { githubClient } = createGithubClientStub({ jobId: 91 });
     const { backend, briefs } = createBackendStub();
     const store = new InMemoryStore();
     const { app, authHeaders } = await createApp({
@@ -762,7 +762,7 @@ describe('submission routes', () => {
   it('serves a native job status from its own record, with no GitHub call at all', async () => {
     // The whole point of owning job identity: a creator watching their build is no
     // longer exposed to GitHub being slow, rate-limited, or down.
-    const { githubClient, getIssueState, findLinkedPR } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient, getIssueState, findLinkedPR } = createGithubClientStub({ jobId: 77 });
     const { backend } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -782,7 +782,7 @@ describe('submission routes', () => {
 
     const status = await app.inject({
       method: 'GET',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}`,
       headers: authHeaders,
     });
 
@@ -798,7 +798,7 @@ describe('submission routes', () => {
     // The agent-tasks API cannot steer or cancel a running Copilot session. Spawning a
     // second task on top of an in-flight round is what produced concurrent builds of the
     // same game; the inbox is the steering path the brief already tells the agent to poll.
-    const { githubClient, createIssueComment } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient, createIssueComment } = createGithubClientStub({ jobId: 77 });
     const { backend, briefs } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -818,7 +818,7 @@ describe('submission routes', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}/feedback`,
       headers: authHeaders,
       payload: { feedback: 'Make the parcels bigger and the asteroids slower.' },
     });
@@ -828,14 +828,14 @@ describe('submission routes', () => {
     expect(response.json()).not.toHaveProperty('roundStarted');
     expect(createIssueComment).not.toHaveBeenCalled();
     expect(briefs).toHaveLength(briefsBefore);
-    const pending = await store.listPendingCreatorMessages(job.issueNumber);
+    const pending = await store.listPendingCreatorMessages(job.jobId);
     expect(pending.some((message) => message.text.includes('Make the parcels bigger'))).toBe(true);
 
     await app.close();
   });
 
   it('restarts a platform round after its agent has ended', async () => {
-    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
     const { backend, briefs } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -852,26 +852,26 @@ describe('submission routes', () => {
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
     const briefsBefore = briefs.length;
-    await store.markAgentEnded(job.issueNumber, new Date().toISOString());
+    await store.markAgentEnded(job.jobId, new Date().toISOString());
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}/feedback`,
       headers: authHeaders,
       payload: { feedback: 'Please make the parcels bigger and the asteroids slower.' },
     });
 
     expect(response.statusCode).toBe(200);
     expect(briefs).toHaveLength(briefsBefore + 1);
-    expect((await store.getSubmission(job.issueNumber))?.state).toBe('dispatched');
-    const messages = await store.listCreatorMessages(job.issueNumber);
+    expect((await store.getSubmission(job.jobId))?.state).toBe('dispatched');
+    const messages = await store.listCreatorMessages(job.jobId);
     expect(messages.some((message) => message.origin === 'studio_ack')).toBe(true);
 
     await app.close();
   });
 
   it('keeps feedback in the inbox after an optimistic submit marker', async () => {
-    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
     const { backend, briefs } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -888,18 +888,18 @@ describe('submission routes', () => {
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
     const briefsBefore = briefs.length;
-    await store.markAgentEnded(job.issueNumber, new Date().toISOString(), 'submit');
+    await store.markAgentEnded(job.jobId, new Date().toISOString(), 'submit');
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}/feedback`,
       headers: authHeaders,
       payload: { feedback: 'Please make the parcels bigger and the asteroids slower.' },
     });
 
     expect(response.statusCode).toBe(200);
     expect(briefs).toHaveLength(briefsBefore);
-    expect((await store.getSubmission(job.issueNumber))?.agentEndedBy).toBe('submit');
+    expect((await store.getSubmission(job.jobId))?.agentEndedBy).toBe('submit');
 
     await app.close();
   });
@@ -907,7 +907,7 @@ describe('submission routes', () => {
   it('keeps gate-wait and gate-red rounds on inbox steering rather than a new session', async () => {
     // After submit the job is `submitted` while the same session waits on the gate; a
     // red verdict moves it to `needs_changes` with mustFixGate. Both must stay inbox-only.
-    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
     const { backend, briefs } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -922,8 +922,8 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v1');
+    await store.recordJobTransition(job.jobId, {
       to: 'submitted',
       at: new Date().toISOString(),
       by: 'agent',
@@ -933,14 +933,14 @@ describe('submission routes', () => {
 
     const duringGate = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}/feedback`,
       headers: authHeaders,
       payload: { feedback: 'Make the parcels bigger while the gate is still running.' },
     });
     expect(duringGate.statusCode).toBe(200);
     expect(briefs).toHaveLength(briefsAfterSubmit);
 
-    await store.recordJobTransition(job.issueNumber, {
+    await store.recordJobTransition(job.jobId, {
       to: 'needs_changes',
       at: new Date().toISOString(),
       by: 'gate',
@@ -950,7 +950,7 @@ describe('submission routes', () => {
 
     const duringRepair = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}/feedback`,
       headers: authHeaders,
       payload: { feedback: 'Also slow the asteroids down while you fix the gate.' },
     });
@@ -969,7 +969,7 @@ describe('submission routes', () => {
     await store.createSubmission(jobId, 'g:test-user', 'A game');
     expect((await store.getSubmission(jobId))?.dispatch?.refs).toBeUndefined();
 
-    const { githubClient } = createGithubClientStub({ issueNumber: jobId });
+    const { githubClient } = createGithubClientStub({ jobId });
     const { backend, briefs } = createBackendStub();
     const { app, authHeaders } = await createApp({
       store,
@@ -995,7 +995,7 @@ describe('submission routes', () => {
   it('does not claim success when inbox steering cannot queue the note', async () => {
     // Inbox is the sole delivery path for an in-flight round. A silent ok:true after a
     // queue failure would clear the composer while the agent never sees the words.
-    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
     const { backend, briefs } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -1017,7 +1017,7 @@ describe('submission routes', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}/feedback`,
       headers: authHeaders,
       payload: { feedback: 'Make the parcels bigger and the asteroids slower.' },
     });
@@ -1032,7 +1032,7 @@ describe('submission routes', () => {
   it('refuses feedback while the game is publishing', async () => {
     // Publishing already closed the round; no session can collect inbox mail, and a
     // fresh resume would race the bake.
-    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
     const { backend, briefs } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -1047,14 +1047,14 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v1');
+    await store.recordJobTransition(job.jobId, {
       to: 'ready_for_review',
       at: new Date().toISOString(),
       by: 'reconciler',
       reason: 'gate_green',
     });
-    await store.recordJobTransition(job.issueNumber, {
+    await store.recordJobTransition(job.jobId, {
       to: 'publishing',
       at: new Date().toISOString(),
       by: 'operator',
@@ -1064,7 +1064,7 @@ describe('submission routes', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}/feedback`,
       headers: authHeaders,
       payload: { feedback: 'Make the parcels bigger and the asteroids slower.' },
     });
@@ -1080,7 +1080,7 @@ describe('submission routes', () => {
     // Job #1000003: first round died on quota with nothing uploaded; creator feedback
     // then opened with "revise it, do not rebuild it" and `npm run restore` against an
     // empty store. The record already knows (`deliveredVersion`); use it.
-    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
     const { backend, briefs } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -1095,8 +1095,8 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.setDispatchWorkspace(job.issueNumber, 'copilot/partial-work');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.setDispatchWorkspace(job.jobId, 'copilot/partial-work');
+    await store.recordJobTransition(job.jobId, {
       to: 'failed',
       at: new Date().toISOString(),
       by: 'reconciler',
@@ -1105,7 +1105,7 @@ describe('submission routes', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}/feedback`,
       headers: authHeaders,
       payload: { feedback: 'Gdzie moja gra — I played nothing yet.' },
     });
@@ -1118,7 +1118,7 @@ describe('submission routes', () => {
   });
 
   it('briefs feedback on a delivered job as a revision that restores from the store', async () => {
-    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
     const { backend, briefs } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -1133,12 +1133,9 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.appendCreatorMessage(
-      job.issueNumber,
-      'The first draft had the right controls; keep them in the revision.',
-    );
-    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v20260731T153306124Z');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.appendCreatorMessage(job.jobId, 'The first draft had the right controls; keep them in the revision.');
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v20260731T153306124Z');
+    await store.recordJobTransition(job.jobId, {
       to: 'ready_for_review',
       at: new Date().toISOString(),
       by: 'reconciler',
@@ -1147,7 +1144,7 @@ describe('submission routes', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}/feedback`,
       headers: authHeaders,
       payload: { feedback: 'Make the parcels bigger and the asteroids slower.' },
     });
@@ -1161,7 +1158,7 @@ describe('submission routes', () => {
     // Gate-green closed the round; feedback must reopen the job, not leave it stuck
     // in ready_for_review while a session quietly starts underneath. Land on
     // `dispatched` — Copilot boots before GitHub reports `in_progress`.
-    const after = await store.getSubmission(job.issueNumber);
+    const after = await store.getSubmission(job.jobId);
     expect(after?.state).toBe('dispatched');
     expect(after?.transitions?.at(-1)).toMatchObject({
       to: 'dispatched',
@@ -1174,7 +1171,7 @@ describe('submission routes', () => {
 
   // ready_for_review isn't inbox-steered, so a failed queue write still dispatches.
   it('falls back to inlining feedback in the prompt when the queue write fails but the round still dispatches', async () => {
-    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
     const { backend, briefs } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -1189,8 +1186,8 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v20260731T153306124Z');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v20260731T153306124Z');
+    await store.recordJobTransition(job.jobId, {
       to: 'ready_for_review',
       at: new Date().toISOString(),
       by: 'reconciler',
@@ -1202,7 +1199,7 @@ describe('submission routes', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}/feedback`,
       headers: authHeaders,
       payload: { feedback: 'Make the parcels bigger and the asteroids slower.' },
     });
@@ -1218,7 +1215,7 @@ describe('submission routes', () => {
     // Submit marks agentEndedAt for ChatGPT-class stop-without-end. Claude often keeps
     // iterating: progress/stage clear ended in the store, but a 60s status cache used to
     // keep serving stall=ended beside fresh "now" events — Studio said finished and working.
-    const { githubClient } = createGithubClientStub({ issueNumber: 78 });
+    const { githubClient } = createGithubClientStub({ jobId: 78 });
     const { backend } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -1233,17 +1230,17 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    const token = mintToken(job.issueNumber, secret);
-    await store.setRoundBuilder(job.issueNumber, 'self');
-    await store.ensureRoundGeneration(job.issueNumber);
-    await store.recordJobTransition(job.issueNumber, {
+    const token = mintToken(job.jobId, secret);
+    await store.setRoundBuilder(job.jobId, 'self');
+    await store.ensureRoundGeneration(job.jobId);
+    await store.recordJobTransition(job.jobId, {
       to: 'building',
       at: new Date().toISOString(),
       by: 'agent',
       reason: 'self_signal',
     });
-    await store.touchLastAgentSignalAt(job.issueNumber, new Date().toISOString());
-    await store.markAgentEnded(job.issueNumber, new Date().toISOString());
+    await store.touchLastAgentSignalAt(job.jobId, new Date().toISOString());
+    await store.markAgentEnded(job.jobId, new Date().toISOString());
 
     const ended = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
     expect(ended.statusCode).toBe(200);
@@ -1253,11 +1250,11 @@ describe('submission routes', () => {
     const progress = await app.inject({
       method: 'POST',
       url: '/api/agent/build/progress',
-      headers: { authorization: `Bearer ${mintAgentToken(job.issueNumber, secret, { roundGeneration: 1 })}` },
+      headers: { authorization: `Bearer ${mintAgentToken(job.jobId, secret, { roundGeneration: 1 })}` },
       payload: { text: 'Fixing the roofline before the next preview.' },
     });
     expect(progress.statusCode).toBe(200);
-    expect((await store.getSubmission(job.issueNumber))?.agentEndedAt).toBeUndefined();
+    expect((await store.getSubmission(job.jobId))?.agentEndedAt).toBeUndefined();
 
     // Immediate poll must not keep the cached ended snapshot next to the new event.
     const resumed = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
@@ -1270,7 +1267,7 @@ describe('submission routes', () => {
   });
 
   it('drops cached stall=ended when an undelivered round is resumed via retry', async () => {
-    const { githubClient } = createGithubClientStub({ issueNumber: 79 });
+    const { githubClient } = createGithubClientStub({ jobId: 79 });
     const { backend } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -1287,19 +1284,19 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    const token = mintToken(job.issueNumber, secret);
-    await store.setRoundBuilder(job.issueNumber, 'self');
-    await store.ensureRoundGeneration(job.issueNumber);
-    await store.recordJobTransition(job.issueNumber, {
+    const token = mintToken(job.jobId, secret);
+    await store.setRoundBuilder(job.jobId, 'self');
+    await store.ensureRoundGeneration(job.jobId);
+    await store.recordJobTransition(job.jobId, {
       to: 'building',
       at: new Date().toISOString(),
       by: 'agent',
       reason: 'self_signal',
     });
-    await store.touchLastAgentSignalAt(job.issueNumber, new Date().toISOString());
-    await store.markAgentEnded(job.issueNumber, new Date().toISOString());
+    await store.touchLastAgentSignalAt(job.jobId, new Date().toISOString());
+    await store.markAgentEnded(job.jobId, new Date().toISOString());
 
-    const before = await store.getSubmission(job.issueNumber);
+    const before = await store.getSubmission(job.jobId);
     expect(before?.deliveredVersion).toBeFalsy();
 
     const ended = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
@@ -1309,12 +1306,12 @@ describe('submission routes', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.issueNumber}/retry`,
+      url: `/api/admin/jobs/${job.jobId}/retry`,
       headers: getAuthHeaders('g:boss'),
     });
     expect(response.statusCode).toBe(200);
 
-    const after = await store.getSubmission(job.issueNumber);
+    const after = await store.getSubmission(job.jobId);
     expect(after?.agentEndedAt).toBeUndefined();
 
     const resumed = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
@@ -1326,7 +1323,7 @@ describe('submission routes', () => {
   });
 
   it('keeps stall=ended when an undelivered retry fails to start', async () => {
-    const { githubClient } = createGithubClientStub({ issueNumber: 80 });
+    const { githubClient } = createGithubClientStub({ jobId: 80 });
     let failNext = false;
     const backend: AgentBackend = {
       name: 'stub',
@@ -1356,20 +1353,20 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    const token = mintToken(job.issueNumber, secret);
-    await store.ensureRoundGeneration(job.issueNumber);
-    await store.touchLastAgentSignalAt(job.issueNumber, new Date().toISOString());
-    await store.markAgentEnded(job.issueNumber, new Date().toISOString());
+    const token = mintToken(job.jobId, secret);
+    await store.ensureRoundGeneration(job.jobId);
+    await store.touchLastAgentSignalAt(job.jobId, new Date().toISOString());
+    await store.markAgentEnded(job.jobId, new Date().toISOString());
 
     failNext = true;
     const response = await app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.issueNumber}/retry`,
+      url: `/api/admin/jobs/${job.jobId}/retry`,
       headers: getAuthHeaders('g:boss'),
     });
     expect(response.statusCode).toBe(502);
 
-    const after = await store.getSubmission(job.issueNumber);
+    const after = await store.getSubmission(job.jobId);
     expect(after?.agentEndedAt).toBeTruthy();
 
     const resumed = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
@@ -1382,7 +1379,7 @@ describe('submission routes', () => {
   it('self→platform handoff lands on dispatched and busts the status cache', async () => {
     // Without the cache bust, Studio kept serving the previous self stall
     // (`no_agent_yet` / ended) for up to a minute while Copilot was already queued.
-    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
     const { backend } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -1397,15 +1394,15 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    const token = mintToken(job.issueNumber, secret);
-    await store.setRoundBuilder(job.issueNumber, 'self');
-    await store.recordJobTransition(job.issueNumber, {
+    const token = mintToken(job.jobId, secret);
+    await store.setRoundBuilder(job.jobId, 'self');
+    await store.recordJobTransition(job.jobId, {
       to: 'building',
       at: new Date().toISOString(),
       by: 'agent',
       reason: 'self_signal',
     });
-    await store.markAgentEnded(job.issueNumber, new Date().toISOString());
+    await store.markAgentEnded(job.jobId, new Date().toISOString());
 
     const before = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
     expect(before.statusCode).toBe(200);
@@ -1422,7 +1419,7 @@ describe('submission routes', () => {
     });
     expect(handoff.statusCode).toBe(200);
 
-    const after = await store.getSubmission(job.issueNumber);
+    const after = await store.getSubmission(job.jobId);
     expect(after?.builder).toBe('platform');
     expect(after?.state).toBe('dispatched');
     expect(after?.transitions?.at(-1)).toMatchObject({
@@ -1446,7 +1443,7 @@ describe('submission routes', () => {
 
   it('platform→self handoff on a never-dispatched round resumes immediately, not pending', async () => {
     // A never-dispatched round has no agent to ack a stop request.
-    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
     const { backend } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -1482,7 +1479,7 @@ describe('submission routes', () => {
   });
 
   it('busts the status cache when the agent acks an inbox message', async () => {
-    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
     const { app, authHeaders, store } = await createApp({
       githubClient,
       submissionTokenSecret: secret,
@@ -1495,16 +1492,16 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    const token = mintToken(job.issueNumber, secret);
-    await store.setRoundBuilder(job.issueNumber, 'self');
-    await store.ensureRoundGeneration(job.issueNumber);
-    await store.recordJobTransition(job.issueNumber, {
+    const token = mintToken(job.jobId, secret);
+    await store.setRoundBuilder(job.jobId, 'self');
+    await store.ensureRoundGeneration(job.jobId);
+    await store.recordJobTransition(job.jobId, {
       to: 'building',
       at: new Date().toISOString(),
       by: 'agent',
       reason: 'self_signal',
     });
-    const message = await store.appendCreatorMessage(job.issueNumber, 'Make the enemies slower.');
+    const message = await store.appendCreatorMessage(job.jobId, 'Make the enemies slower.');
 
     const before = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
     expect(before.json().progress.revisions[0]).toMatchObject({ delivered: false });
@@ -1512,7 +1509,7 @@ describe('submission routes', () => {
     const acked = await app.inject({
       method: 'POST',
       url: '/api/agent/build/inbox/ack',
-      headers: { authorization: `Bearer ${mintAgentToken(job.issueNumber, secret, { roundGeneration: 1 })}` },
+      headers: { authorization: `Bearer ${mintAgentToken(job.jobId, secret, { roundGeneration: 1 })}` },
       payload: { ids: [message.id] },
     });
     expect(acked.statusCode).toBe(200);
@@ -1525,18 +1522,18 @@ describe('submission routes', () => {
   });
 
   it('does not commit the requested builder when its dispatch fails', async () => {
-    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
     const activeStore = new InMemoryStore();
     let builderAtHandoff: string | undefined;
     const backend: AgentBackend = {
       name: 'stub',
       dispatch: async (brief) => {
-        const record = await activeStore?.getSubmission(brief.issueNumber);
+        const record = await activeStore?.getSubmission(brief.jobId);
         if (brief.feedback) builderAtHandoff = record?.builder;
         throw new Error('vendor rejected the session');
       },
       resume: async (brief) => {
-        const record = await activeStore?.getSubmission(brief.issueNumber);
+        const record = await activeStore?.getSubmission(brief.jobId);
         if (brief.feedback) builderAtHandoff = record?.builder;
         throw new Error('vendor rejected the session');
       },
@@ -1557,16 +1554,16 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    const token = mintToken(job.issueNumber, secret);
-    await store.setRoundBuilder(job.issueNumber, 'self');
-    await store.recordDispatch(job.issueNumber, { backend: 'self', ref: 'self:77' });
-    await store.recordJobTransition(job.issueNumber, {
+    const token = mintToken(job.jobId, secret);
+    await store.setRoundBuilder(job.jobId, 'self');
+    await store.recordDispatch(job.jobId, { backend: 'self', ref: 'self:77' });
+    await store.recordJobTransition(job.jobId, {
       to: 'building',
       at: new Date().toISOString(),
       by: 'agent',
       reason: 'self_signal',
     });
-    await store.markAgentEnded(job.issueNumber, new Date().toISOString());
+    await store.markAgentEnded(job.jobId, new Date().toISOString());
 
     const handoff = await app.inject({
       method: 'POST',
@@ -1581,7 +1578,7 @@ describe('submission routes', () => {
     expect(handoff.json()).toMatchObject({ ok: true, roundStarted: false });
 
     expect(builderAtHandoff).toBe('platform');
-    const after = await store.getSubmission(job.issueNumber);
+    const after = await store.getSubmission(job.jobId);
     expect(after?.builder).toBe('self');
     expect(after?.dispatch?.refs.at(-1)).toBe('self:77');
 
@@ -1592,7 +1589,7 @@ describe('submission routes', () => {
     // A native job has no PR conversation to re-read a revision from, so the store copy
     // is the durable record. The page used to show a sent revision from its own local
     // state only — one reload and the creator's request looked like it never happened.
-    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
     const { backend } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -1607,7 +1604,7 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    const token = mintToken(job.issueNumber, secret);
+    const token = mintToken(job.jobId, secret);
 
     await app.inject({
       method: 'POST',
@@ -1644,7 +1641,7 @@ describe('submission routes', () => {
     // It used to translate here instead, and when those calls started timing out nothing
     // was cached, so every poll re-sent the same request — ~9,250 billed-and-discarded
     // Vertex calls in a day. Localization belongs at intake; see `report_progress`.
-    const { githubClient } = createGithubClientStub({ issueNumber: 78 });
+    const { githubClient } = createGithubClientStub({ jobId: 78 });
     const { backend } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -1659,10 +1656,10 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    const token = mintToken(job.issueNumber, secret);
+    const token = mintToken(job.jobId, secret);
 
-    await store.appendCreatorMessage(job.issueNumber, 'Zrób paczki większe.');
-    await store.appendCreatorMessage(job.issueNumber, 'Major systems pass: zoom out the battlefield.', {
+    await store.appendCreatorMessage(job.jobId, 'Zrób paczki większe.');
+    await store.appendCreatorMessage(job.jobId, 'Major systems pass: zoom out the battlefield.', {
       origin: 'agent',
     });
 
@@ -1692,7 +1689,7 @@ describe('submission routes', () => {
   it('serves a relayed request in the reader’s language from what the write stored', async () => {
     // The other half of the same contract: the poll resolves language by *choosing*
     // between stored strings, never by producing one. See localize-intake.ts.
-    const { githubClient } = createGithubClientStub({ issueNumber: 79 });
+    const { githubClient } = createGithubClientStub({ jobId: 79 });
     const { backend } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -1707,9 +1704,9 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    const token = mintToken(job.issueNumber, secret);
+    const token = mintToken(job.jobId, secret);
 
-    await store.appendCreatorMessage(job.issueNumber, 'Zoom out the battlefield.', {
+    await store.appendCreatorMessage(job.jobId, 'Zoom out the battlefield.', {
       origin: 'agent',
       textLocalized: 'Oddal widok pola bitwy.',
       locale: 'pl',
@@ -1743,7 +1740,7 @@ describe('submission routes', () => {
     // A session that crashes, times out, or is killed for quota reports nothing on the
     // build channel — the channel only ever carries good news. Without this, the page
     // says "building" until the end of time and the creator has nothing to act on.
-    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
     const { backend } = createBackendStub();
     // Fresh `dispatched` jobs are observed immediately (session boot). First answer
     // advances to building; later answers (after the quiet window) name the death.
@@ -1770,18 +1767,18 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    const token = mintToken(job.issueNumber, secret);
+    const token = mintToken(job.jobId, secret);
 
     // Fresh dispatch: observe immediately so `in_progress` advances us to building.
     const early = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
     expect(early.statusCode).toBe(200);
     expect(observe).toHaveBeenCalledWith('task-1', {
       hasCandidate: false,
-      issueNumber: job.issueNumber,
+      jobId: job.jobId,
       slug: 'a-game',
       roundGeneration: 1,
     });
-    expect((await store.getSubmission(job.issueNumber))?.state).toBe('building');
+    expect((await store.getSubmission(job.jobId))?.state).toBe('building');
     expect(early.json().phase).toBe('building');
 
     // Three minutes of silence is past the window (and past the status cache).
@@ -1794,7 +1791,7 @@ describe('submission routes', () => {
     // without it the page reads "waiting for your input" about a session that died.
     expect(status.json().status).toBe('needs_changes');
     expect(status.json().failure).toEqual({ reason: 'task_failed' });
-    expect((await store.getSubmission(job.issueNumber))?.state).toBe('failed');
+    expect((await store.getSubmission(job.jobId))?.state).toBe('failed');
 
     await app.close();
   });
@@ -1802,7 +1799,7 @@ describe('submission routes', () => {
   it('names a gate bounce so Studio can say why the build needs another round', async () => {
     // Public status collapses `needs_changes` into a label; without `failure` the
     // creator who clicked the notification sees planning notes and an empty foot.
-    const { githubClient } = createGithubClientStub({ issueNumber: 88 });
+    const { githubClient } = createGithubClientStub({ jobId: 88 });
     const { backend } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -1817,8 +1814,8 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v1');
+    await store.recordJobTransition(job.jobId, {
       to: 'needs_changes',
       at: new Date().toISOString(),
       by: 'gate',
@@ -1827,7 +1824,7 @@ describe('submission routes', () => {
 
     const status = await app.inject({
       method: 'GET',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}`,
       headers: authHeaders,
     });
 
@@ -1846,14 +1843,14 @@ describe('submission routes', () => {
   // an exit and nothing writes `gating`. The reconciler computed `ready_for_review`,
   // canTransition refused it, and the job sat in `submitted` until the creator gave up.
   it('acts on a gate verdict for a job still sitting in submitted', async () => {
-    const { githubClient } = createGithubClientStub({ issueNumber: 97 });
+    const { githubClient } = createGithubClientStub({ jobId: 97 });
     const { backend } = createBackendStub();
     const gamesStore = {
       getManifest: async () => ({
         slug: 'space-parcels',
         version: 'v3',
         createdAt: '2026-07-31T10:00:00.000Z',
-        issueNumber: 97,
+        jobId: 97,
         roundGeneration: 1,
         sourceFiles: [],
         gate: { green: true, ranAt: '2026-07-31T10:30:00.000Z' },
@@ -1877,9 +1874,9 @@ describe('submission routes', () => {
 
     // The shape a real delivery leaves behind: the agent channel marked the sources
     // delivered, and the gate wrote its verdict to that version's manifest.
-    await store.setSubmissionSlug(job.issueNumber, 'space-parcels');
-    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v3');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.setSubmissionSlug(job.jobId, 'space-parcels');
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v3');
+    await store.recordJobTransition(job.jobId, {
       to: 'submitted',
       at: '2026-07-31T10:00:00.000Z',
       by: 'agent',
@@ -1888,7 +1885,7 @@ describe('submission routes', () => {
 
     const status = await app.inject({
       method: 'GET',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}`,
       headers: authHeaders,
     });
 
@@ -1904,7 +1901,7 @@ describe('submission routes', () => {
     // A platform round only ever delivers previews (its agents cannot record TRACE.json),
     // so without this the job sits in ready_for_review with no deliveredVersion and the
     // one publish route answers nothing_delivered — unpublishable by anyone.
-    const { githubClient } = createGithubClientStub({ issueNumber: 501 });
+    const { githubClient } = createGithubClientStub({ jobId: 501 });
     const { backend } = createBackendStub();
     const sealed: Array<{ origin?: string; mode?: string; files: string[] }> = [];
     const gated: Array<{ version: string }> = [];
@@ -1943,10 +1940,10 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.setSubmissionSlug(job.issueNumber, 'space-parcels');
-    await store.setSubmissionPreviewVersion(job.issueNumber, 'v1');
+    await store.setSubmissionSlug(job.jobId, 'space-parcels');
+    await store.setSubmissionPreviewVersion(job.jobId, 'v1');
     for (const to of ['submitted', 'ready_for_review'] as const) {
-      await store.recordJobTransition(job.issueNumber, {
+      await store.recordJobTransition(job.jobId, {
         to,
         at: new Date().toISOString(),
         by: 'gate',
@@ -1954,7 +1951,7 @@ describe('submission routes', () => {
       });
     }
 
-    const token = mintToken(job.issueNumber, secret);
+    const token = mintToken(job.jobId, secret);
     const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
     expect(status.json().canSeal).toBe(true);
 
@@ -1968,7 +1965,7 @@ describe('submission routes', () => {
     expect(sealed[0]?.files).toContain('PLAYTEST.json');
     expect(gated).toEqual([{ version: 'v2-sealed' }]);
 
-    const after = await store.getSubmission(job.issueNumber);
+    const after = await store.getSubmission(job.jobId);
     expect(after?.deliveredVersion).toBe('v2-sealed');
     // Back into the lane reconcileGateVerdict actually walks.
     expect(after?.state).toBe('submitted');
@@ -1984,7 +1981,7 @@ describe('submission routes', () => {
   });
 
   it('claims a seal atomically — two concurrent requests spend only one gate run', async () => {
-    const { githubClient } = createGithubClientStub({ issueNumber: 503 });
+    const { githubClient } = createGithubClientStub({ jobId: 503 });
     const { backend } = createBackendStub();
     let sealCount = 0;
     const gamesStore = {
@@ -2016,10 +2013,10 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.setSubmissionSlug(job.issueNumber, 'space-parcels');
-    await store.setSubmissionPreviewVersion(job.issueNumber, 'v1');
+    await store.setSubmissionSlug(job.jobId, 'space-parcels');
+    await store.setSubmissionPreviewVersion(job.jobId, 'v1');
     for (const to of ['submitted', 'ready_for_review'] as const) {
-      await store.recordJobTransition(job.issueNumber, {
+      await store.recordJobTransition(job.jobId, {
         to,
         at: new Date().toISOString(),
         by: 'gate',
@@ -2027,7 +2024,7 @@ describe('submission routes', () => {
       });
     }
 
-    const token = mintToken(job.issueNumber, secret);
+    const token = mintToken(job.jobId, secret);
     const [first, second] = await Promise.all([
       app.inject({ method: 'POST', url: `/api/submissions/${token}/seal`, headers: authHeaders }),
       app.inject({ method: 'POST', url: `/api/submissions/${token}/seal`, headers: authHeaders }),
@@ -2041,7 +2038,7 @@ describe('submission routes', () => {
   });
 
   it('refuses to seal a preview the gate has not passed', async () => {
-    const { githubClient } = createGithubClientStub({ issueNumber: 502 });
+    const { githubClient } = createGithubClientStub({ jobId: 502 });
     const { backend } = createBackendStub();
     const putCandidateSources = vi.fn();
     const gamesStore = {
@@ -2069,10 +2066,10 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.setSubmissionSlug(job.issueNumber, 'space-parcels');
-    await store.setSubmissionPreviewVersion(job.issueNumber, 'v1');
+    await store.setSubmissionSlug(job.jobId, 'space-parcels');
+    await store.setSubmissionPreviewVersion(job.jobId, 'v1');
     for (const to of ['submitted', 'ready_for_review'] as const) {
-      await store.recordJobTransition(job.issueNumber, {
+      await store.recordJobTransition(job.jobId, {
         to,
         at: new Date().toISOString(),
         by: 'gate',
@@ -2082,7 +2079,7 @@ describe('submission routes', () => {
 
     const seal = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/seal`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}/seal`,
       headers: authHeaders,
     });
 
@@ -2094,7 +2091,7 @@ describe('submission routes', () => {
   });
 
   it('ignores carried-over gate verdicts from an older round', async () => {
-    const { githubClient } = createGithubClientStub({ issueNumber: 99 });
+    const { githubClient } = createGithubClientStub({ jobId: 99 });
     const { backend } = createBackendStub();
     const getManifest = vi.fn(async (_slug: string, version: string) =>
       version === 'v1'
@@ -2123,20 +2120,20 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.setSubmissionSlug(job.issueNumber, 'space-parcels');
-    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
-    await store.setSubmissionPreviewVersion(job.issueNumber, 'v2');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.setSubmissionSlug(job.jobId, 'space-parcels');
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v1');
+    await store.setSubmissionPreviewVersion(job.jobId, 'v2');
+    await store.recordJobTransition(job.jobId, {
       to: 'submitted',
       at: '2026-07-31T10:00:00.000Z',
       by: 'agent',
       reason: 'sources_delivered',
     });
-    await store.bumpRoundGeneration(job.issueNumber);
+    await store.bumpRoundGeneration(job.jobId);
 
     const status = await app.inject({
       method: 'GET',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}`,
       headers: authHeaders,
     });
 
@@ -2150,14 +2147,14 @@ describe('submission routes', () => {
 
   // mode=preview writes manifest.previewGate, not manifest.gate (arena-brawlers).
   it('acts on a red preview-only gate verdict for a job still sitting in submitted', async () => {
-    const { githubClient } = createGithubClientStub({ issueNumber: 197 });
+    const { githubClient } = createGithubClientStub({ jobId: 197 });
     const { backend } = createBackendStub();
     const gamesStore = {
       getManifest: async () => ({
         slug: 'arena-brawlers',
         version: 'v3',
         createdAt: '2026-08-09T14:20:00.000Z',
-        issueNumber: 197,
+        jobId: 197,
         roundGeneration: 1,
         sourceFiles: [],
         previewGate: {
@@ -2183,9 +2180,9 @@ describe('submission routes', () => {
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
 
-    await store.setSubmissionSlug(job.issueNumber, 'arena-brawlers');
-    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v3');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.setSubmissionSlug(job.jobId, 'arena-brawlers');
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v3');
+    await store.recordJobTransition(job.jobId, {
       to: 'submitted',
       at: '2026-08-09T14:20:00.000Z',
       by: 'agent',
@@ -2194,7 +2191,7 @@ describe('submission routes', () => {
 
     const status = await app.inject({
       method: 'GET',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}`,
       headers: authHeaders,
     });
 
@@ -2208,14 +2205,14 @@ describe('submission routes', () => {
 
   // Mirror case: a green preview must never promote the round.
   it('does not promote a job on a green preview-only gate verdict', async () => {
-    const { githubClient } = createGithubClientStub({ issueNumber: 198 });
+    const { githubClient } = createGithubClientStub({ jobId: 198 });
     const { backend } = createBackendStub();
     const gamesStore = {
       getManifest: async () => ({
         slug: 'arena-brawlers',
         version: 'v4',
         createdAt: '2026-08-09T14:20:00.000Z',
-        issueNumber: 198,
+        jobId: 198,
         roundGeneration: 1,
         sourceFiles: [],
         previewGate: { green: true, ranAt: '2026-08-09T14:22:00.000Z' },
@@ -2237,9 +2234,9 @@ describe('submission routes', () => {
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
 
-    await store.setSubmissionSlug(job.issueNumber, 'arena-brawlers');
-    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v4');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.setSubmissionSlug(job.jobId, 'arena-brawlers');
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v4');
+    await store.recordJobTransition(job.jobId, {
       to: 'submitted',
       at: '2026-08-09T14:20:00.000Z',
       by: 'agent',
@@ -2248,7 +2245,7 @@ describe('submission routes', () => {
 
     const status = await app.inject({
       method: 'GET',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}`,
       headers: authHeaders,
     });
 
@@ -2261,7 +2258,7 @@ describe('submission routes', () => {
   });
 
   it('summarizes recent versions from listVersions, newest first', async () => {
-    const { githubClient } = createGithubClientStub({ issueNumber: 731 });
+    const { githubClient } = createGithubClientStub({ jobId: 731 });
     const { backend } = createBackendStub();
     const gamesStore = {
       getManifest: async () => null,
@@ -2270,7 +2267,7 @@ describe('submission routes', () => {
           slug: 'space-parcels',
           version: 'v3',
           createdAt: '2026-08-10T09:00:00.000Z',
-          issueNumber: 731,
+          jobId: 731,
           roundGeneration: 1,
           sourceFiles: [],
           deliveryMode: 'preview',
@@ -2280,7 +2277,7 @@ describe('submission routes', () => {
           slug: 'space-parcels',
           version: 'v2',
           createdAt: '2026-08-10T08:00:00.000Z',
-          issueNumber: 731,
+          jobId: 731,
           roundGeneration: 1,
           sourceFiles: [],
           gate: { green: true, ranAt: '2026-08-10T08:02:00.000Z' },
@@ -2289,7 +2286,7 @@ describe('submission routes', () => {
           slug: 'space-parcels',
           version: 'v1',
           createdAt: '2026-08-10T07:00:00.000Z',
-          issueNumber: 731,
+          jobId: 731,
           roundGeneration: 1,
           sourceFiles: [],
         },
@@ -2310,12 +2307,12 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.setSubmissionSlug(job.issueNumber, 'space-parcels');
-    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
+    await store.setSubmissionSlug(job.jobId, 'space-parcels');
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v1');
 
     const status = await app.inject({
       method: 'GET',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}`,
       headers: authHeaders,
     });
 
@@ -2331,7 +2328,7 @@ describe('submission routes', () => {
         total: 6,
         finishedInMs: 120000,
         fileCount: 0,
-        issueNumber: 731,
+        jobId: 731,
       },
       {
         version: 'v2',
@@ -2341,7 +2338,7 @@ describe('submission routes', () => {
         total: 12,
         finishedInMs: 120000,
         fileCount: 0,
-        issueNumber: 731,
+        jobId: 731,
       },
       {
         version: 'v1',
@@ -2350,7 +2347,7 @@ describe('submission routes', () => {
         verdict: 'pending',
         total: 12,
         fileCount: 0,
-        issueNumber: 731,
+        jobId: 731,
       },
     ]);
     expect(status.json().totalBuildsCount).toBe(3);
@@ -2359,9 +2356,9 @@ describe('submission routes', () => {
   });
 
   it('fills an empty build changelog from the round done event', async () => {
-    const { githubClient } = createGithubClientStub({ issueNumber: 732 });
+    const { githubClient } = createGithubClientStub({ jobId: 732 });
     const { backend } = createBackendStub();
-    let issueNumber = 732;
+    let jobId = 732;
     const gamesStore = {
       getManifest: async () => null,
       listVersions: async () => [
@@ -2369,7 +2366,7 @@ describe('submission routes', () => {
           slug: 'space-parcels',
           version: 'v1',
           createdAt: '2026-08-10T07:00:00.000Z',
-          issueNumber,
+          jobId,
           sourceFiles: ['game.ts'],
         },
       ],
@@ -2389,9 +2386,9 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    issueNumber = job.issueNumber;
-    await store.setSubmissionSlug(job.issueNumber, 'space-parcels');
-    await store.appendBuildEvent(job.issueNumber, {
+    jobId = job.jobId;
+    await store.setSubmissionSlug(job.jobId, 'space-parcels');
+    await store.appendBuildEvent(job.jobId, {
       kind: 'done',
       text: 'Added a second lane of traffic.',
       textLocalized: 'Dodałem drugi pas ruchu.',
@@ -2401,7 +2398,7 @@ describe('submission routes', () => {
 
     const status = await app.inject({
       method: 'GET',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}?locale=pl`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}?locale=pl`,
       headers: authHeaders,
     });
 
@@ -2416,14 +2413,14 @@ describe('submission routes', () => {
 
   it('emits a stable delivery gate verdict once per version/status', async () => {
     // Green preview stays submitted so dedupe can re-poll.
-    const { githubClient } = createGithubClientStub({ issueNumber: 727 });
+    const { githubClient } = createGithubClientStub({ jobId: 727 });
     const { backend } = createBackendStub();
     const gamesStore = {
       getManifest: async () => ({
         slug: 'space-parcels',
         version: 'v3',
         createdAt: '2026-08-09T22:00:00.000Z',
-        issueNumber: 727,
+        jobId: 727,
         roundGeneration: 1,
         sourceFiles: [],
         previewGate: { green: true, ranAt: '2026-08-09T22:30:00.000Z' },
@@ -2447,17 +2444,17 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.setSubmissionSlug(job.issueNumber, 'space-parcels');
-    await store.setSubmissionPreviewVersion(job.issueNumber, 'v3');
-    await store.recordDispatch(job.issueNumber, { backend: 'managed:anthropic', ref: 'sess-1' });
-    await store.recordJobTransition(job.issueNumber, {
+    await store.setSubmissionSlug(job.jobId, 'space-parcels');
+    await store.setSubmissionPreviewVersion(job.jobId, 'v3');
+    await store.recordDispatch(job.jobId, { backend: 'managed:anthropic', ref: 'sess-1' });
+    await store.recordJobTransition(job.jobId, {
       to: 'submitted',
       at: '2026-08-09T22:00:00.000Z',
       by: 'agent',
       reason: 'sources_delivered',
     });
 
-    const token = mintToken(job.issueNumber, secret);
+    const token = mintToken(job.jobId, secret);
     const first = await app.inject({
       method: 'GET',
       url: `/api/submissions/${token}`,
@@ -2470,7 +2467,7 @@ describe('submission routes', () => {
     expect(gateCalls).toHaveLength(1);
     expect(gateCalls[0]![0]).toEqual({
       delivery: {
-        issueNumber: job.issueNumber,
+        jobId: job.jobId,
         roundGeneration: 1,
         builder: 'managed',
         mode: 'preview',
@@ -2489,13 +2486,13 @@ describe('submission routes', () => {
     });
     expect(second.statusCode).toBe(200);
     expect(infoSpy.mock.calls.filter((call) => call[1] === DELIVERY_GATE_VERDICT_MSG)).toHaveLength(1);
-    expect((await store.getSubmission(job.issueNumber))?.roundLastGateMetricKey).toBe('v3:preview_passed');
+    expect((await store.getSubmission(job.jobId))?.roundLastGateMetricKey).toBe('v3:preview_passed');
 
     await app.close();
   });
 
   it('posts the gate capture screenshot into the build thread on reconcile', async () => {
-    const { githubClient } = createGithubClientStub({ issueNumber: 197 });
+    const { githubClient } = createGithubClientStub({ jobId: 197 });
     const { backend } = createBackendStub();
     const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x11]);
     const gamesStore = {
@@ -2503,7 +2500,7 @@ describe('submission routes', () => {
         slug: 'space-parcels',
         version: 'v3',
         createdAt: '2026-07-31T10:00:00.000Z',
-        issueNumber: 197,
+        jobId: 197,
         roundGeneration: 1,
         sourceFiles: [],
         gate: {
@@ -2530,9 +2527,9 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.setSubmissionSlug(job.issueNumber, 'space-parcels');
-    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v3');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.setSubmissionSlug(job.jobId, 'space-parcels');
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v3');
+    await store.recordJobTransition(job.jobId, {
       to: 'submitted',
       at: '2026-07-31T10:00:00.000Z',
       by: 'agent',
@@ -2541,20 +2538,20 @@ describe('submission routes', () => {
 
     await app.inject({
       method: 'GET',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}`,
       headers: authHeaders,
     });
 
-    const shots = await store.listBuildShots(job.issueNumber);
+    const shots = await store.listBuildShots(job.jobId);
     expect(shots).toHaveLength(1);
     expect(shots[0]?.label).toBe('Platform check');
     // Reconcile is once-only: a second poll must not double-post the frame.
     await app.inject({
       method: 'GET',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}`,
       headers: authHeaders,
     });
-    expect(await store.countBuildShots(job.issueNumber)).toBe(1);
+    expect(await store.countBuildShots(job.jobId)).toBe(1);
 
     await app.close();
   });
@@ -2566,7 +2563,7 @@ describe('submission routes', () => {
   // re-enter `submitted`, or its green verdict sits in a manifest nobody reads and the
   // creator is asked to start a round the agent already finished.
   it('reads the verdict on a redelivery the agent made after a gate refusal', async () => {
-    const { githubClient } = createGithubClientStub({ issueNumber: 98 });
+    const { githubClient } = createGithubClientStub({ jobId: 98 });
     const { backend } = createBackendStub();
     const gamesStore = {
       // Version-aware on purpose: v3 is what the gate refused, v4 is the repair.
@@ -2574,7 +2571,7 @@ describe('submission routes', () => {
         slug: 'space-parcels',
         version,
         createdAt: '2026-07-31T10:00:00.000Z',
-        issueNumber: 98,
+        jobId: 98,
         roundGeneration: 1,
         sourceFiles: [],
         gate:
@@ -2603,11 +2600,11 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    const url = `/api/submissions/${mintToken(job.issueNumber, secret)}`;
+    const url = `/api/submissions/${mintToken(job.jobId, secret)}`;
 
-    await store.setSubmissionSlug(job.issueNumber, 'space-parcels');
-    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v3');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.setSubmissionSlug(job.jobId, 'space-parcels');
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v3');
+    await store.recordJobTransition(job.jobId, {
       to: 'submitted',
       at: '2026-07-31T10:00:00.000Z',
       by: 'agent',
@@ -2621,8 +2618,8 @@ describe('submission routes', () => {
     // the transition is legal from where the refusal left the job.
     expect(canTransition('needs_changes', 'submitted')).toBe(true);
     clock.t += 61_000;
-    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v4');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v4');
+    await store.recordJobTransition(job.jobId, {
       to: 'submitted',
       at: '2026-07-31T11:00:00.000Z',
       by: 'agent',
@@ -2640,7 +2637,7 @@ describe('submission routes', () => {
     // word, and `ready_for_review` (delivered, checked, waiting on us) arrives as the
     // same "in_review" the page described as "checks are running". The finer state rides
     // along so the sentence under the timeline can be true for hours at a time.
-    const { githubClient } = createGithubClientStub({ issueNumber: 91 });
+    const { githubClient } = createGithubClientStub({ jobId: 91 });
     const { backend } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -2655,7 +2652,7 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.recordJobTransition(job.jobId, {
       to: 'ready_for_review',
       at: new Date().toISOString(),
       by: 'system',
@@ -2664,7 +2661,7 @@ describe('submission routes', () => {
 
     const status = await app.inject({
       method: 'GET',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}`,
       headers: authHeaders,
     });
 
@@ -2677,7 +2674,7 @@ describe('submission routes', () => {
   });
 
   it('marks a remix-saved draft so Studio can skip gate-green copy', async () => {
-    const { githubClient } = createGithubClientStub({ issueNumber: 92 });
+    const { githubClient } = createGithubClientStub({ jobId: 92 });
     const { backend } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -2692,13 +2689,13 @@ describe('submission routes', () => {
       payload: { title: 'A remix', concept: 'A sufficiently long concept about a private remix draft.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.recordJobTransition(job.jobId, {
       to: 'queued',
       at: new Date().toISOString(),
       by: 'creator',
       reason: 'remix_saved',
     });
-    await store.recordJobTransition(job.issueNumber, {
+    await store.recordJobTransition(job.jobId, {
       to: 'ready_for_review',
       at: new Date().toISOString(),
       by: 'creator',
@@ -2707,7 +2704,7 @@ describe('submission routes', () => {
 
     const status = await app.inject({
       method: 'GET',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}`,
       headers: authHeaders,
     });
 
@@ -2725,7 +2722,7 @@ describe('submission routes', () => {
     // The task API answers `startTask` before the agent has a branch, so this is the
     // only moment it can be learned. Without it `resume` degrades to a fresh dispatch
     // on a new branch and the creator's game silently starts again from nothing.
-    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
     const { backend } = createBackendStub();
     const observe = vi.fn(async () => ({
       state: 'in_progress' as const,
@@ -2745,20 +2742,20 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    expect((await store.getSubmission(job.issueNumber))?.dispatch?.workspace).toBe('copilot/x');
+    expect((await store.getSubmission(job.jobId))?.dispatch?.workspace).toBe('copilot/x');
 
     // A job whose branch is unknown is asked about on the very next poll, however
     // recently it spoke: without the branch a revision cannot resume the work at all.
-    await store.setDispatchWorkspace(job.issueNumber, '');
+    await store.setDispatchWorkspace(job.jobId, '');
     const status = await app.inject({
       method: 'GET',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}`,
       headers: authHeaders,
     });
 
     expect(status.statusCode).toBe(200);
     expect(observe).toHaveBeenCalled();
-    const dispatch = (await store.getSubmission(job.issueNumber))?.dispatch;
+    const dispatch = (await store.getSubmission(job.jobId))?.dispatch;
     expect(dispatch?.workspace).toBe('copilot/tv-tycoon');
     // Learning the branch is not another agent session, and counting it as one would
     // inflate the per-build cost figures the ref list exists to support.
@@ -2771,7 +2768,7 @@ describe('submission routes', () => {
     // Branches are per-round and disposable: the game lives in the store, so a branch
     // that has been superseded is litter in a repository people also read. Only applies
     // when the store actually has the game — an undelivered round keeps its branch.
-    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
     const { backend } = createBackendStub();
     const cleanup = vi.fn(async () => {});
     const { app, authHeaders, store } = await createApp({
@@ -2787,9 +2784,9 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.setDispatchWorkspace(job.issueNumber, 'copilot/old');
-    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.setDispatchWorkspace(job.jobId, 'copilot/old');
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v1');
+    await store.recordJobTransition(job.jobId, {
       to: 'ready_for_review',
       at: new Date().toISOString(),
       by: 'reconciler',
@@ -2798,7 +2795,7 @@ describe('submission routes', () => {
 
     await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}/feedback`,
       headers: authHeaders,
       payload: { feedback: 'Make the parcels bigger and the asteroids slower.' },
     });
@@ -2812,7 +2809,7 @@ describe('submission routes', () => {
 
   it('starts another round when the creator sends feedback after a failed one', async () => {
     // Retry is not a separate feature: feedback after a dead round *is* the retry.
-    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
     const { backend, briefs } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -2827,7 +2824,7 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.recordJobTransition(job.jobId, {
       to: 'failed',
       at: new Date().toISOString(),
       by: 'reconciler',
@@ -2836,7 +2833,7 @@ describe('submission routes', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}/feedback`,
       headers: authHeaders,
       payload: { feedback: 'Please pick this up again and finish the delivery.' },
     });
@@ -2845,7 +2842,7 @@ describe('submission routes', () => {
     expect(briefs.at(-1)?.feedback).toContain('pick this up again');
     // The dead round must not orphan the job: the retry hands it to an agent again.
     // `dispatched` until the session is observed `in_progress`.
-    expect((await store.getSubmission(job.issueNumber))?.state).toBe('dispatched');
+    expect((await store.getSubmission(job.jobId))?.state).toBe('dispatched');
     // Nothing to report when the round did start — the field exists to say otherwise.
     expect(response.json()).not.toHaveProperty('roundStarted');
 
@@ -2860,7 +2857,7 @@ describe('submission routes', () => {
     //
     // The previous session must already be dead — while one is live we only queue the
     // inbox and never call resume, so capacity is not the question.
-    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
     const { backend } = createBackendStub();
     backend.resume = async () => {
       throw Object.assign(new Error('agent tasks POST 412: insufficient premium quota to create assignment'), {
@@ -2882,7 +2879,7 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.recordJobTransition(job.jobId, {
       to: 'failed',
       at: new Date().toISOString(),
       by: 'reconciler',
@@ -2891,7 +2888,7 @@ describe('submission routes', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}/feedback`,
       headers: authHeaders,
       payload: { feedback: 'Please make the asteroids slower and the parcels bigger.' },
     });
@@ -2901,18 +2898,18 @@ describe('submission routes', () => {
     // of nothing: out of capacity is a billing problem, not a broken game.
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ ok: true, roundStarted: false, reason: 'no_capacity' });
-    const messages = await store.listCreatorMessages(job.issueNumber);
+    const messages = await store.listCreatorMessages(job.jobId);
     expect(messages).not.toHaveLength(0);
     // A failed dispatch must not leave a transcript claiming it started.
     expect(messages.some((message) => message.origin === 'studio_ack')).toBe(false);
     // And the job must not claim to be building when no session exists.
-    expect((await store.getSubmission(job.issueNumber))?.state).not.toBe('building');
+    expect((await store.getSubmission(job.jobId))?.state).not.toBe('building');
 
     await app.close();
   });
 
   it('abandons a native job without closing anything on GitHub', async () => {
-    const { githubClient, closeIssue, closePullRequest } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient, closeIssue, closePullRequest } = createGithubClientStub({ jobId: 77 });
     const { backend } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -2930,14 +2927,14 @@ describe('submission routes', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/abandon`,
+      url: `/api/submissions/${mintToken(job.jobId, secret)}/abandon`,
       headers: authHeaders,
     });
 
     expect(response.statusCode).toBe(200);
     expect(closeIssue).not.toHaveBeenCalled();
     expect(closePullRequest).not.toHaveBeenCalled();
-    expect((await store.getSubmission(job.issueNumber))?.state).toBe('canceled');
+    expect((await store.getSubmission(job.jobId))?.state).toBe('canceled');
 
     await app.close();
   });
@@ -3903,7 +3900,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
     const { backend } = createBackendStub();
     const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'Still building — nothing has shipped yet.' }));
     const { app, authHeaders, store } = await createApp({
-      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      githubClient: createGithubClientStub({ jobId: 90 }).githubClient,
       agentBackend: backend,
       submissionTokenSecret: secret,
       chatAgent: { decide },
@@ -3915,7 +3912,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    const token = mintToken(job.issueNumber, secret);
+    const token = mintToken(job.jobId, secret);
 
     const res = await app.inject({
       method: 'POST',
@@ -3927,11 +3924,11 @@ describe('the Studio mini chat agent (feedback route)', () => {
     expect(decide).toHaveBeenCalledTimes(1);
 
     // Never entered the builder's inbox — not collectable as work.
-    const pending = await store.listPendingCreatorMessages(job.issueNumber);
+    const pending = await store.listPendingCreatorMessages(job.jobId);
     expect(pending.some((m) => m.text === 'is it done yet?')).toBe(false);
 
     // Both turns land on the thread, in order and distinguishable.
-    const all = await store.listCreatorMessages(job.issueNumber);
+    const all = await store.listCreatorMessages(job.jobId);
     const tail = all.slice(-2);
     expect(tail[0].text).toBe('is it done yet?');
     expect(tail[0].origin).toBeUndefined();
@@ -3954,7 +3951,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
       return { kind: 'reply' as const, text: 'a reply' };
     });
     const { app, authHeaders, store } = await createApp({
-      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      githubClient: createGithubClientStub({ jobId: 90 }).githubClient,
       agentBackend: backend,
       submissionTokenSecret: secret,
       chatAgent: { decide },
@@ -3967,18 +3964,18 @@ describe('the Studio mini chat agent (feedback route)', () => {
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
 
-    await store.appendBuildEvent(job.issueNumber, {
+    await store.appendBuildEvent(job.jobId, {
       kind: 'step',
       text: 'Sketching the level layout.',
       createdAt: '2026-08-01T00:00:00.000Z',
     });
-    await store.appendBuildEvent(job.issueNumber, {
+    await store.appendBuildEvent(job.jobId, {
       kind: 'step',
       text: 'Fixed the jump bug.',
       createdAt: '2026-08-01T00:05:00.000Z',
     });
 
-    const token = mintToken(job.issueNumber, secret);
+    const token = mintToken(job.jobId, secret);
     const res = await app.inject({
       method: 'POST',
       url: `/api/submissions/${token}/feedback`,
@@ -3997,7 +3994,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
       throw new Error('vertex timeout');
     });
     const { app, authHeaders, store } = await createApp({
-      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      githubClient: createGithubClientStub({ jobId: 90 }).githubClient,
       agentBackend: backend,
       submissionTokenSecret: secret,
       chatAgent: { decide },
@@ -4009,7 +4006,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    const token = mintToken(job.issueNumber, secret);
+    const token = mintToken(job.jobId, secret);
 
     const res = await app.inject({
       method: 'POST',
@@ -4020,7 +4017,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
     expect(res.statusCode).toBe(200);
     expect(decide).toHaveBeenCalledTimes(1);
     // Lost nothing: the message still reached the builder's inbox.
-    const pending = await store.listPendingCreatorMessages(job.issueNumber);
+    const pending = await store.listPendingCreatorMessages(job.jobId);
     expect(pending.map((m) => m.text)).toContain('Make the robots water the flowers faster.');
     await app.close();
   });
@@ -4029,7 +4026,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
     const { backend } = createBackendStub();
     const decide = vi.fn(async () => ({ kind: 'build' as const, text: 'On it!' }));
     const { app, authHeaders, store } = await createApp({
-      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      githubClient: createGithubClientStub({ jobId: 90 }).githubClient,
       agentBackend: backend,
       submissionTokenSecret: secret,
       chatAgent: { decide },
@@ -4041,7 +4038,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    const token = mintToken(job.issueNumber, secret);
+    const token = mintToken(job.jobId, secret);
 
     const res = await app.inject({
       method: 'POST',
@@ -4052,10 +4049,10 @@ describe('the Studio mini chat agent (feedback route)', () => {
     expect(res.statusCode).toBe(200);
 
     // Dispatched the creator's own words verbatim, never the model's.
-    const pending = await store.listPendingCreatorMessages(job.issueNumber);
+    const pending = await store.listPendingCreatorMessages(job.jobId);
     expect(pending.map((m) => m.text)).toContain('Make the robots water the flowers faster.');
 
-    const all = await store.listCreatorMessages(job.issueNumber);
+    const all = await store.listCreatorMessages(job.jobId);
     const ack = all.find((m) => m.origin === 'studio_ack');
     expect(ack?.text).toBe('On it!');
     await app.close();
@@ -4069,7 +4066,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
       .mockResolvedValueOnce({ kind: 'build', text: 'On it!' })
       .mockResolvedValueOnce({ kind: 'reply', text: 'Still working on it.' });
     const { app, authHeaders, store } = await createApp({
-      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      githubClient: createGithubClientStub({ jobId: 90 }).githubClient,
       agentBackend: backend,
       submissionTokenSecret: secret,
       chatAgent: { decide },
@@ -4081,7 +4078,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    const token = mintToken(job.issueNumber, secret);
+    const token = mintToken(job.jobId, secret);
 
     await app.inject({
       method: 'POST',
@@ -4110,7 +4107,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
       .mockResolvedValueOnce({ kind: 'reply', text: 'Still building.' })
       .mockResolvedValueOnce({ kind: 'build' });
     const { app, authHeaders, store } = await createApp({
-      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      githubClient: createGithubClientStub({ jobId: 90 }).githubClient,
       agentBackend: backend,
       submissionTokenSecret: secret,
       chatAgent: { decide },
@@ -4124,7 +4121,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    const token = mintToken(job.issueNumber, secret);
+    const token = mintToken(job.jobId, secret);
 
     const question = await app.inject({
       method: 'POST',
@@ -4142,7 +4139,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
       payload: { feedback: 'Make the robots water the flowers faster.' },
     });
     expect(realFeedback.statusCode).toBe(200);
-    const pending = await store.listPendingCreatorMessages(job.issueNumber);
+    const pending = await store.listPendingCreatorMessages(job.jobId);
     expect(pending.map((m) => m.text)).toContain('Make the robots water the flowers faster.');
     await app.close();
   });
@@ -4156,7 +4153,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
       model: 'gemini-3.7-flash',
     }));
     const { app, authHeaders, store } = await createApp({
-      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      githubClient: createGithubClientStub({ jobId: 90 }).githubClient,
       agentBackend: backend,
       submissionTokenSecret: secret,
       chatAgent: { decide },
@@ -4168,7 +4165,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    const token = mintToken(job.issueNumber, secret);
+    const token = mintToken(job.jobId, secret);
 
     await app.inject({
       method: 'POST',
@@ -4177,7 +4174,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
       payload: { feedback: 'is it done yet?' },
     });
 
-    const record = await store.getSubmission(job.issueNumber);
+    const record = await store.getSubmission(job.jobId);
     const entry = record?.costs?.find((cost) => cost.kind === 'chat');
     expect(entry).toMatchObject({ by: 'gemini-3.7-flash', tokens: { input: 500, output: 40 } });
     await app.close();
@@ -4187,7 +4184,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
     const { backend } = createBackendStub();
     const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'a reply' }));
     const { app, authHeaders, store } = await createApp({
-      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      githubClient: createGithubClientStub({ jobId: 90 }).githubClient,
       agentBackend: backend,
       submissionTokenSecret: secret,
       chatAgent: { decide },
@@ -4200,7 +4197,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    const token = mintToken(job.issueNumber, secret);
+    const token = mintToken(job.jobId, secret);
 
     const first = await app.inject({
       method: 'POST',
@@ -4220,7 +4217,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
     });
     expect(second.statusCode).toBe(200);
     expect(decide).toHaveBeenCalledTimes(1);
-    const pending = await store.listPendingCreatorMessages(job.issueNumber);
+    const pending = await store.listPendingCreatorMessages(job.jobId);
     expect(pending.map((m) => m.text)).toContain('Please make the robots water the flowers faster.');
     await app.close();
   });
@@ -4231,7 +4228,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
     const store = new InMemoryStore();
     await store.setCreationLimits({ chatPaused: true }, 'operator');
     const { app, authHeaders } = await createApp({
-      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      githubClient: createGithubClientStub({ jobId: 90 }).githubClient,
       agentBackend: backend,
       submissionTokenSecret: secret,
       chatAgent: { decide },
@@ -4244,7 +4241,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    const token = mintToken(job.issueNumber, secret);
+    const token = mintToken(job.jobId, secret);
 
     const res = await app.inject({
       method: 'POST',
@@ -4254,7 +4251,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(decide).not.toHaveBeenCalled();
-    const pending = await store.listPendingCreatorMessages(job.issueNumber);
+    const pending = await store.listPendingCreatorMessages(job.jobId);
     expect(pending.map((m) => m.text)).toContain('Please make the robots water the flowers faster.');
     await app.close();
   });
@@ -4269,7 +4266,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
       },
     };
     const { app, authHeaders, store } = await createApp({
-      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      githubClient: createGithubClientStub({ jobId: 90 }).githubClient,
       agentBackend: backend,
       submissionTokenSecret: secret,
       chatAgent: { decide },
@@ -4282,7 +4279,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    const token = mintToken(job.issueNumber, secret);
+    const token = mintToken(job.jobId, secret);
 
     const res = await app.inject({
       method: 'POST',
@@ -4292,7 +4289,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(decide).not.toHaveBeenCalled();
-    const pending = await store.listPendingCreatorMessages(job.issueNumber);
+    const pending = await store.listPendingCreatorMessages(job.jobId);
     expect(pending.map((m) => m.text)).toContain('Please make the robots water the flowers faster.');
     await app.close();
   });
@@ -4300,19 +4297,19 @@ describe('the Studio mini chat agent (feedback route)', () => {
   it('a Firestore blip while recording the reply falls open to the builder’s inbox', async () => {
     class FlakyReplyStore extends InMemoryStore {
       async appendCreatorMessage(
-        issueNumber: number,
+        jobId: number,
         text: string,
         opts?: { origin?: 'agent' | 'studio'; delivered?: boolean; textLocalized?: string; locale?: string },
       ) {
         if (opts?.origin === 'studio') throw new Error('firestore unavailable');
-        return super.appendCreatorMessage(issueNumber, text, opts);
+        return super.appendCreatorMessage(jobId, text, opts);
       }
     }
     const store = new FlakyReplyStore();
     const { backend } = createBackendStub();
     const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'Still building.' }));
     const { app, authHeaders } = await createApp({
-      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      githubClient: createGithubClientStub({ jobId: 90 }).githubClient,
       agentBackend: backend,
       submissionTokenSecret: secret,
       store,
@@ -4325,7 +4322,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    const token = mintToken(job.issueNumber, secret);
+    const token = mintToken(job.jobId, secret);
 
     const res = await app.inject({
       method: 'POST',
@@ -4336,10 +4333,10 @@ describe('the Studio mini chat agent (feedback route)', () => {
 
     // The write failed, so this should fail open, not claim success.
     expect(res.statusCode).toBe(200);
-    const pending = await store.listPendingCreatorMessages(job.issueNumber);
+    const pending = await store.listPendingCreatorMessages(job.jobId);
     expect(pending.map((m) => m.text)).toContain('is it done yet?');
     // The fallback below must not queue a second, duplicate copy.
-    const all = await store.listCreatorMessages(job.issueNumber);
+    const all = await store.listCreatorMessages(job.jobId);
     expect(all.filter((m) => m.text === 'is it done yet?')).toHaveLength(1);
     await app.close();
   });
@@ -4351,7 +4348,7 @@ describe('POST /api/submissions/:token/improve', () => {
     // last caller of that path after #347 moved dispatch in-house — and nothing collects
     // such an issue any more, so the request went nowhere. An improvement is now a new
     // job carrying the game's slug.
-    const { githubClient, createIssue } = createGithubClientStub({ issueNumber: 501 });
+    const { githubClient, createIssue } = createGithubClientStub({ jobId: 501 });
     const store = new InMemoryStore();
     const { backend, briefs } = createBackendStub();
     const { app, authHeaders } = await createApp({
@@ -4422,7 +4419,7 @@ describe('POST /api/submissions/:token/improve', () => {
 
   describe('the Studio mini chat agent', () => {
     it('a conversational reply answers on the current job and opens no new one', async () => {
-      const { githubClient, createIssue } = createGithubClientStub({ issueNumber: 501 });
+      const { githubClient, createIssue } = createGithubClientStub({ jobId: 501 });
       const store = new InMemoryStore();
       const { backend, briefs } = createBackendStub();
       const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'You can tune difficulty from Settings.' }));
@@ -4458,7 +4455,7 @@ describe('POST /api/submissions/:token/improve', () => {
     });
 
     it('a build decision still opens a new improvement job as before', async () => {
-      const { githubClient } = createGithubClientStub({ issueNumber: 501 });
+      const { githubClient } = createGithubClientStub({ jobId: 501 });
       const store = new InMemoryStore();
       const { backend, briefs } = createBackendStub();
       const decide = vi.fn(async () => ({ kind: 'build' as const }));
@@ -4488,7 +4485,7 @@ describe('POST /api/submissions/:token/improve', () => {
     });
 
     it('a conversational reply does not spend the daily improvement quota', async () => {
-      const { githubClient, createIssue } = createGithubClientStub({ issueNumber: 501 });
+      const { githubClient, createIssue } = createGithubClientStub({ jobId: 501 });
       const store = new InMemoryStore();
       const { backend, briefs } = createBackendStub();
       const responses: Array<{ kind: 'reply'; text: string } | { kind: 'build' }> = [
@@ -4535,7 +4532,7 @@ describe('POST /api/submissions/:token/improve', () => {
     });
 
     it('a conversational reply is not blocked by platform unavailability', async () => {
-      const { githubClient } = createGithubClientStub({ issueNumber: 501 });
+      const { githubClient } = createGithubClientStub({ jobId: 501 });
       const store = new InMemoryStore();
       const { backend } = createBackendStub();
       const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'Still building.' }));
@@ -4564,15 +4561,15 @@ describe('POST /api/submissions/:token/improve', () => {
     });
 
     it('a Firestore blip while recording the reply falls open to a real improvement round', async () => {
-      const { githubClient } = createGithubClientStub({ issueNumber: 501 });
+      const { githubClient } = createGithubClientStub({ jobId: 501 });
       class FlakyReplyStore extends InMemoryStore {
         async appendCreatorMessage(
-          issueNumber: number,
+          jobId: number,
           text: string,
           opts?: { origin?: 'agent' | 'studio'; delivered?: boolean; textLocalized?: string; locale?: string },
         ) {
           if (opts?.origin === 'studio') throw new Error('firestore unavailable');
-          return super.appendCreatorMessage(issueNumber, text, opts);
+          return super.appendCreatorMessage(jobId, text, opts);
         }
       }
       const store = new FlakyReplyStore();
@@ -4698,11 +4695,11 @@ describe('GET /api/submissions/mine', () => {
     for (let game = 0; game < 3; game++) {
       const slug = `game-${game}`;
       for (let tip = 0; tip < 20; tip++) {
-        const issueNumber = game * 100 + tip + 1;
-        await store.createSubmission(issueNumber, 'g:test-user', `Game ${game} tip ${tip}`);
-        await store.setSubmissionSlug(issueNumber, slug);
+        const jobId = game * 100 + tip + 1;
+        await store.createSubmission(jobId, 'g:test-user', `Game ${game} tip ${tip}`);
+        await store.setSubmissionSlug(jobId, slug);
         if (tip === 0) {
-          await store.setSubmissionPublishedAt(issueNumber, `${today}T12:00:00.000Z`);
+          await store.setSubmissionPublishedAt(jobId, `${today}T12:00:00.000Z`);
         }
         if (tip < 19) await new Promise((resolve) => setTimeout(resolve, 2));
       }
@@ -4926,10 +4923,10 @@ describe('managed (platform) builder availability', () => {
     });
     expect(submit.statusCode).toBe(200);
     const { token } = submit.json() as { token: string };
-    let issueNumber = 0;
+    let jobId = 0;
     await vi.waitFor(async () => {
-      issueNumber = (await store.listSubmissionsByOwner('g:test-user'))[0]!.issueNumber;
-      expect((await store.getSubmission(issueNumber))?.state).toBe('dispatched');
+      jobId = (await store.listSubmissionsByOwner('g:test-user'))[0]!.jobId;
+      expect((await store.getSubmission(jobId))?.state).toBe('dispatched');
     });
 
     // Rebuild with the switch off — config lives on the store.
@@ -4951,7 +4948,7 @@ describe('managed (platform) builder availability', () => {
 
     expect(handoff.statusCode).toBe(409);
     expect(handoff.json()).toEqual({ error: 'platform_builder_unavailable', reason: 'outage' });
-    expect((await store.getSubmission(issueNumber))?.builder).toBe('self');
+    expect((await store.getSubmission(jobId))?.builder).toBe('self');
 
     await appWithGate.close();
   });
@@ -4977,11 +4974,11 @@ describe('status route under store pressure', () => {
   function spyStore(opts: { onGet?: () => Promise<void>; failOnCall?: number } = {}) {
     const inner = new InMemoryStore();
     let calls = 0;
-    const getSubmission = vi.fn(async (issueNumber: number) => {
+    const getSubmission = vi.fn(async (jobId: number) => {
       calls += 1;
       if (opts.failOnCall === calls) throw new Error('firestore unavailable');
       if (opts.onGet) await opts.onGet();
-      return inner.getSubmission(issueNumber);
+      return inner.getSubmission(jobId);
     });
     const store = new Proxy(inner, {
       get: (target, prop) => (prop === 'getSubmission' ? getSubmission : Reflect.get(target, prop)),
@@ -5310,7 +5307,7 @@ describe('a session that finishes without delivering', () => {
   }
 
   async function jobWithFinishedSession(overrides: { maxDeliveryNudges?: number } = {}) {
-    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
     const { backend, briefs } = finishedBackend();
     const clock = { t: Date.now() };
     const cleanup = vi.fn(async () => {});
@@ -5328,8 +5325,8 @@ describe('a session that finishes without delivering', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.setDispatchWorkspace(job.issueNumber, 'copilot/has-the-work');
-    return { app, store, job, briefs, clock, cleanup, token: mintToken(job.issueNumber, secret) };
+    await store.setDispatchWorkspace(job.jobId, 'copilot/has-the-work');
+    return { app, store, job, briefs, clock, cleanup, token: mintToken(job.jobId, secret) };
   }
 
   it('sends the session back to deliver instead of failing the build', async () => {
@@ -5345,7 +5342,7 @@ describe('a session that finishes without delivering', () => {
     expect(brief?.undelivered).toBe(true);
     // Dispatched again, not failed: the creator is not shown an error about a round that
     // is at this moment starting. `building` waits on a real `in_progress` observation.
-    expect((await store.getSubmission(job.issueNumber))?.state).toBe('dispatched');
+    expect((await store.getSubmission(job.jobId))?.state).toBe('dispatched');
 
     await app.close();
   });
@@ -5378,7 +5375,7 @@ describe('a session that finishes without delivering', () => {
     const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: getAuthHeaders() });
 
     expect(briefs.length).toBe(afterFirst);
-    expect((await store.getSubmission(job.issueNumber))?.state).toBe('failed');
+    expect((await store.getSubmission(job.jobId))?.state).toBe('failed');
     expect(status.json().failure).toEqual({ reason: 'task_completed_without_delivery' });
 
     await app.close();
@@ -5386,7 +5383,7 @@ describe('a session that finishes without delivering', () => {
 
   it('leaves a session that did deliver alone', async () => {
     const { app, store, job, briefs, clock, token } = await jobWithFinishedSession();
-    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v1');
 
     clock.t += 3 * 60 * 1000;
     await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: getAuthHeaders() });
@@ -5399,14 +5396,14 @@ describe('a session that finishes without delivering', () => {
   it('leaves a session that only delivered a preview alone too', async () => {
     // roundDeliveryCount proves a preview round submitted something.
     const { app, store, job, briefs, clock, token } = await jobWithFinishedSession();
-    await store.setSubmissionPreviewVersion(job.issueNumber, 'v1');
-    await store.incrementRoundDeliveryCount(job.issueNumber);
+    await store.setSubmissionPreviewVersion(job.jobId, 'v1');
+    await store.incrementRoundDeliveryCount(job.jobId);
 
     clock.t += 3 * 60 * 1000;
     await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: getAuthHeaders() });
 
     expect(briefs.at(-1)?.undelivered).toBeUndefined();
-    expect((await store.getSubmission(job.issueNumber))?.state).not.toBe('failed');
+    expect((await store.getSubmission(job.jobId))?.state).not.toBe('failed');
 
     await app.close();
   });
@@ -5419,18 +5416,18 @@ describe('a session that finishes without delivering', () => {
     const submissions = (
       store as unknown as { submissions: Map<number, import('./platform/store.js').SubmissionRecord> }
     ).submissions;
-    const before = await store.getSubmission(job.issueNumber);
-    submissions.set(job.issueNumber, { ...before!, roundGeneration: undefined });
+    const before = await store.getSubmission(job.jobId);
+    submissions.set(job.jobId, { ...before!, roundGeneration: undefined });
 
     clock.t += 3 * 60 * 1000;
     await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: getAuthHeaders() });
 
     const reminted = briefs.at(-1)?.channelToken;
     expect(reminted).toBeTruthy();
-    const after = await store.getSubmission(job.issueNumber);
+    const after = await store.getSubmission(job.jobId);
     expect(after?.roundGeneration).toBe(1);
     const claims = verifyAgentToken(reminted!, secret);
-    expect(claims).toMatchObject({ jobId: job.issueNumber, roundGeneration: 1 });
+    expect(claims).toMatchObject({ jobId: job.jobId, roundGeneration: 1 });
     expect(() => assertAgentTokenActive(claims, after!, clock.t)).not.toThrow();
 
     await app.close();
@@ -5442,7 +5439,7 @@ describe('a stale observation racing a handoff', () => {
     const { githubClient } = createGithubClientStub({});
     const briefs: BuildBrief[] = [];
     let observed = false;
-    const dispatched = { issueNumber: undefined as number | undefined };
+    const dispatched = { jobId: undefined as number | undefined };
     const backend: AgentBackend = {
       name: 'stub',
       dispatch: async (brief) => {
@@ -5455,9 +5452,9 @@ describe('a stale observation racing a handoff', () => {
       },
       // A handoff dispatches "task-2" mid-observation of "task-1".
       observe: async (ref) => {
-        if (ref === 'task-1' && !observed && dispatched.issueNumber !== undefined) {
+        if (ref === 'task-1' && !observed && dispatched.jobId !== undefined) {
           observed = true;
-          await store.recordDispatch(dispatched.issueNumber, {
+          await store.recordDispatch(dispatched.jobId, {
             backend: 'stub',
             ref: 'task-2',
             workspace: 'copilot/y',
@@ -5481,13 +5478,13 @@ describe('a stale observation racing a handoff', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about a stale-observation race.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    dispatched.issueNumber = job.issueNumber;
-    const token = mintToken(job.issueNumber, secret);
+    dispatched.jobId = job.jobId;
+    const token = mintToken(job.jobId, secret);
 
     clock.t += 3 * 60 * 1000;
     await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: getAuthHeaders() });
 
-    const after = await store.getSubmission(job.issueNumber);
+    const after = await store.getSubmission(job.jobId);
     expect(after?.dispatch?.refs).toEqual(['task-1', 'task-2']);
     expect(after?.state).not.toBe('canceled');
 
@@ -5546,8 +5543,8 @@ describe('what a build costs', () => {
     // A delivery so the feedback round is a real revision (not the undelivered path),
     // and the first session must be over — mid-build feedback only steers via the inbox.
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v1');
+    await store.recordJobTransition(job.jobId, {
       to: 'ready_for_review',
       at: new Date().toISOString(),
       by: 'reconciler',
@@ -5591,8 +5588,8 @@ describe('what a build costs', () => {
     const created = await app.inject({ method: 'POST', url: '/api/submissions', headers: authHeaders, payload: body });
     const { token } = created.json() as { token: string };
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v1');
+    await store.recordJobTransition(job.jobId, {
       to: 'submitted',
       at: new Date(clock.t).toISOString(),
       by: 'agent',
@@ -5602,7 +5599,7 @@ describe('what a build costs', () => {
     clock.t += 3 * 60 * 1000;
     await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
 
-    const costs = (await store.getSubmission(job.issueNumber))?.costs;
+    const costs = (await store.getSubmission(job.jobId))?.costs;
     expect(costs).toEqual([
       {
         kind: 'agent_session',
@@ -5658,7 +5655,7 @@ describe('POST /api/submissions/:token/improve', () => {
     const dispatched = briefs.at(-1)!;
     // A different job, carrying the slug and the request — which is what makes the agent
     // prompt say "continue that game, revise it" and restore the delivered sources.
-    expect(dispatched.issueNumber).not.toBe(published);
+    expect(dispatched.jobId).not.toBe(published);
     expect(dispatched.slug).toBe('crashy');
     expect(dispatched.feedback).toContain('falling through the floor');
     // The published job is left exactly as it was.
@@ -5735,7 +5732,7 @@ describe('POST /api/submissions/:token/improve', () => {
     expect(improvement?.builder).toBe('platform');
     expect(improvement?.defaultBuilder).toBe('platform');
     expect(improvement?.dispatch?.backend).toBe('stub');
-    expect(briefs.at(-1)?.issueNumber).toBe(jobId);
+    expect(briefs.at(-1)?.jobId).toBe(jobId);
     await app.close();
   });
 
@@ -5921,7 +5918,7 @@ describe('operator cancel and retry', () => {
     for (const verb of ['cancel', 'retry']) {
       const response = await app.inject({
         method: 'POST',
-        url: `/api/admin/jobs/${job.issueNumber}/${verb}`,
+        url: `/api/admin/jobs/${job.jobId}/${verb}`,
         headers: getAuthHeaders('g:someone-else'),
       });
       expect(response.statusCode).toBe(404);
@@ -5935,7 +5932,7 @@ describe('operator cancel and retry', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.issueNumber}/cancel`,
+      url: `/api/admin/jobs/${job.jobId}/cancel`,
       headers: bossHeaders(),
     });
 
@@ -5944,7 +5941,7 @@ describe('operator cancel and retry', () => {
     // endpoint, the session winds down when it next reads the channel.
     expect(response.json()).toEqual({ ok: true, state: 'canceled', stopEnforced: false });
 
-    const record = await store.getSubmission(job.issueNumber);
+    const record = await store.getSubmission(job.jobId);
     expect(record?.state).toBe('canceled');
     // Shelf filters on `abandonedAt`. Without it, an operator reject left the game
     // on the creator's studio with Playtest still offered.
@@ -5957,7 +5954,7 @@ describe('operator cancel and retry', () => {
 
   it('refuses to cancel a finished job rather than rewriting its ending', async () => {
     const { app, store, job } = await appWithJob();
-    await store.recordJobTransition(job.issueNumber, {
+    await store.recordJobTransition(job.jobId, {
       to: 'published',
       at: new Date().toISOString(),
       by: 'operator',
@@ -5966,7 +5963,7 @@ describe('operator cancel and retry', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.issueNumber}/cancel`,
+      url: `/api/admin/jobs/${job.jobId}/cancel`,
       headers: bossHeaders(),
     });
 
@@ -5978,7 +5975,7 @@ describe('operator cancel and retry', () => {
 
   it('refuses to cancel mid-publish, where a half-killed bake could lie', async () => {
     const { app, store, job } = await appWithJob();
-    await store.recordJobTransition(job.issueNumber, {
+    await store.recordJobTransition(job.jobId, {
       to: 'publishing',
       at: new Date().toISOString(),
       by: 'operator',
@@ -5987,7 +5984,7 @@ describe('operator cancel and retry', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.issueNumber}/cancel`,
+      url: `/api/admin/jobs/${job.jobId}/cancel`,
       headers: bossHeaders(),
     });
 
@@ -5999,8 +5996,8 @@ describe('operator cancel and retry', () => {
 
   it('retries a failed round that never delivered, preserving its branch', async () => {
     const { app, store, job, briefs } = await appWithJob();
-    await store.setDispatchWorkspace(job.issueNumber, 'copilot/has-the-work');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.setDispatchWorkspace(job.jobId, 'copilot/has-the-work');
+    await store.recordJobTransition(job.jobId, {
       to: 'failed',
       at: new Date().toISOString(),
       by: 'reconciler',
@@ -6009,7 +6006,7 @@ describe('operator cancel and retry', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.issueNumber}/retry`,
+      url: `/api/admin/jobs/${job.jobId}/retry`,
       headers: bossHeaders(),
     });
 
@@ -6019,7 +6016,7 @@ describe('operator cancel and retry', () => {
     const brief = briefs.at(-1);
     expect(brief?.undelivered).toBe(true);
 
-    const record = await store.getSubmission(job.issueNumber);
+    const record = await store.getSubmission(job.jobId);
     expect(record?.state).toBe('dispatched');
     // The history says who restarted it, not `derived_from_github`.
     expect(record?.transitions?.at(-1)).toMatchObject({ to: 'dispatched', by: 'operator', reason: 'operator_retry' });
@@ -6031,8 +6028,8 @@ describe('operator cancel and retry', () => {
 
   it('briefs a delivered-but-refused retry from the channel, not from a second copy', async () => {
     const { app, store, job, briefs } = await appWithJob();
-    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v1');
+    await store.recordJobTransition(job.jobId, {
       to: 'needs_changes',
       at: new Date().toISOString(),
       by: 'gate',
@@ -6041,7 +6038,7 @@ describe('operator cancel and retry', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.issueNumber}/retry`,
+      url: `/api/admin/jobs/${job.jobId}/retry`,
       headers: bossHeaders(),
     });
 
@@ -6058,7 +6055,7 @@ describe('operator cancel and retry', () => {
 
   it('kicks a quiet building job with a fresh session, and says so in the history', async () => {
     const { app, store, job } = await appWithJob();
-    await store.recordJobTransition(job.issueNumber, {
+    await store.recordJobTransition(job.jobId, {
       to: 'building',
       at: new Date().toISOString(),
       by: 'reconciler',
@@ -6067,12 +6064,12 @@ describe('operator cancel and retry', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.issueNumber}/retry`,
+      url: `/api/admin/jobs/${job.jobId}/retry`,
       headers: bossHeaders(),
     });
 
     expect(response.statusCode).toBe(200);
-    const record = await store.getSubmission(job.issueNumber);
+    const record = await store.getSubmission(job.jobId);
     // New session boots at `dispatched` — claiming `building` again would lie about
     // Copilot startup. History still names the operator retry.
     expect(record?.state).toBe('dispatched');
@@ -6095,7 +6092,7 @@ describe('operator cancel and retry', () => {
     await first.app.inject({ method: 'POST', url: '/api/submissions', headers: first.authHeaders, payload: body });
     await first.app.close();
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.recordJobTransition(job.jobId, {
       to: 'failed',
       at: new Date().toISOString(),
       by: 'system',
@@ -6111,7 +6108,7 @@ describe('operator cancel and retry', () => {
     });
     const response = await app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.issueNumber}/retry`,
+      url: `/api/admin/jobs/${job.jobId}/retry`,
       headers: bossHeaders(),
     });
 
@@ -6124,8 +6121,8 @@ describe('operator cancel and retry', () => {
 
   it('refuses states where a retry has nothing to redo', async () => {
     const { app, store, job } = await appWithJob();
-    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
-    await store.recordJobTransition(job.issueNumber, {
+    await store.setSubmissionDeliveredVersion(job.jobId, 'v1');
+    await store.recordJobTransition(job.jobId, {
       to: 'ready_for_review',
       at: new Date().toISOString(),
       by: 'gate',
@@ -6134,7 +6131,7 @@ describe('operator cancel and retry', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.issueNumber}/retry`,
+      url: `/api/admin/jobs/${job.jobId}/retry`,
       headers: bossHeaders(),
     });
 
@@ -6165,7 +6162,7 @@ describe('operator cancel and retry', () => {
       adminUids: 'g:boss',
       store,
     });
-    await store.recordJobTransition(job.issueNumber, {
+    await store.recordJobTransition(job.jobId, {
       to: 'failed',
       at: new Date().toISOString(),
       by: 'reconciler',
@@ -6174,7 +6171,7 @@ describe('operator cancel and retry', () => {
 
     const response = await second.app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.issueNumber}/retry`,
+      url: `/api/admin/jobs/${job.jobId}/retry`,
       headers: bossHeaders(),
     });
 
@@ -6199,7 +6196,7 @@ describe('operator cancel and retry', () => {
       },
     };
     const { app, store, job } = await appWithJob({ backend: outOfQuota });
-    await store.recordJobTransition(job.issueNumber, {
+    await store.recordJobTransition(job.jobId, {
       to: 'failed',
       at: new Date().toISOString(),
       by: 'reconciler',
@@ -6208,7 +6205,7 @@ describe('operator cancel and retry', () => {
 
     const response = await app.inject({
       method: 'POST',
-      url: `/api/admin/jobs/${job.issueNumber}/retry`,
+      url: `/api/admin/jobs/${job.jobId}/retry`,
       headers: bossHeaders(),
     });
 
@@ -6294,7 +6291,7 @@ describe('dispatch reaper', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ checked: 1, retried: 0, exhausted: 0, skipped: 1 });
     expect(briefs).toHaveLength(0);
-    expect((await store.getSubmission(job.issueNumber))?.state).toBe('queued');
+    expect((await store.getSubmission(job.jobId))?.state).toBe('queued');
     await app.close();
   });
 
@@ -6311,7 +6308,7 @@ describe('dispatch reaper', () => {
     expect(res.json()).toMatchObject({ checked: 1, retried: 1, exhausted: 0 });
     expect(briefs).toHaveLength(1);
     expect(briefs[0]?.spec).toContain('Game idea');
-    const record = await store.getSubmission(job.issueNumber);
+    const record = await store.getSubmission(job.jobId);
     expect(record?.state).toBe('dispatched');
     expect(record?.dispatch?.refs).toHaveLength(1);
     expect(record?.dispatchReaperAttemptedAt).toBeDefined();
@@ -6332,11 +6329,11 @@ describe('dispatch reaper', () => {
 
     const first = await app.inject({ method: 'POST', url: '/api/internal/dispatch-reaper' });
     expect(first.json()).toMatchObject({ retried: 1, exhausted: 0 });
-    expect((await store.getSubmission(job.issueNumber))?.state).toBe('queued');
+    expect((await store.getSubmission(job.jobId))?.state).toBe('queued');
 
     const second = await app.inject({ method: 'POST', url: '/api/internal/dispatch-reaper' });
     expect(second.json()).toMatchObject({ retried: 0, exhausted: 1 });
-    const record = await store.getSubmission(job.issueNumber);
+    const record = await store.getSubmission(job.jobId);
     expect(record?.state).toBe('failed');
     expect(record?.transitions?.at(-1)).toMatchObject({ by: 'system', reason: 'dispatch_reaper_exhausted' });
 
@@ -6364,13 +6361,13 @@ describe('operator health re-gate', () => {
       publishedAt: '2026-07-01T00:00:00.000Z',
     });
 
-    const triggered: Array<{ issueNumber: number; slug: string; version: string; mode?: 'health' }> = [];
+    const triggered: Array<{ jobId: number; slug: string; version: string; mode?: 'health' }> = [];
     const gamesStore = {
       getManifest: async () => ({
         slug: 'sky-dodge',
         version: 'v1',
         createdAt: '2026-06-30T00:00:00.000Z',
-        issueNumber: 1_000_042,
+        jobId: 1_000_042,
         sourceFiles: [],
       }),
     } as unknown as GamesStore;
@@ -6417,7 +6414,7 @@ describe('operator health re-gate', () => {
     expect(response.json()).toEqual({ ok: true, slug: 'sky-dodge', version: 'v1', buildId: 'health-build-1' });
     // Same configured trigger the delivery path uses, in health mode — a second
     // trigger would be a second definition of the gate.
-    expect(triggered).toEqual([{ issueNumber: 1_000_042, slug: 'sky-dodge', version: 'v1', mode: 'health' }]);
+    expect(triggered).toEqual([{ jobId: 1_000_042, slug: 'sky-dodge', version: 'v1', mode: 'health' }]);
 
     // The pending check is what the sweep will resolve.
     const publication = await store.getPublication('sky-dodge');
@@ -6745,7 +6742,7 @@ describe('seeded dispatch', () => {
 
     // The job id comes from the brief the backend was handed: the route answers with a
     // status token, and the seed is written before either of them exists.
-    const record = await store.getSubmission(briefs[0].issueNumber);
+    const record = await store.getSubmission(briefs[0].jobId);
     expect(record?.slug).toBe('comet-courier');
     expect(briefs[0].seed?.slug).toBe('comet-courier');
     expect(briefs[0].slug).toBe('comet-courier');
@@ -6781,7 +6778,7 @@ describe('seeded dispatch', () => {
     expect(seeded).toEqual([]);
     expect(briefs[0].seed).toBeUndefined();
 
-    const record = await store.getSubmission(briefs[0].issueNumber);
+    const record = await store.getSubmission(briefs[0].jobId);
     expect(record?.costs?.find((entry) => entry.kind === 'seed')).toBeUndefined();
 
     await app.close();
@@ -6822,7 +6819,7 @@ describe('seeded dispatch', () => {
     await vi.waitFor(() => expect(briefs).toHaveLength(1));
     expect(providersSeen).toEqual(['anthropic']);
 
-    const record = await store.getSubmission(briefs[0].issueNumber);
+    const record = await store.getSubmission(briefs[0].jobId);
     const seedCost = record?.costs?.find((entry) => entry.kind === 'seed');
     expect(seedCost?.provider).toBe('anthropic');
     expect(seedCost?.by).toBe('claude-haiku-4-5');
@@ -6891,7 +6888,7 @@ describe('seeded dispatch', () => {
     expect(response.statusCode).toBe(200);
     await vi.waitFor(() => expect(briefs).toHaveLength(1));
     const outcome = await vi.waitFor(async () => {
-      const record = await store.getSubmission(briefs[0].issueNumber);
+      const record = await store.getSubmission(briefs[0].jobId);
       expect(record?.seedOutcome).toBeDefined();
       return record!.seedOutcome!;
     });
@@ -6921,7 +6918,7 @@ describe('seeded dispatch', () => {
     expect(response.statusCode).toBe(200);
     await vi.waitFor(() => expect(briefs).toHaveLength(1));
     const outcome = await vi.waitFor(async () => {
-      const record = await store.getSubmission(briefs[0].issueNumber);
+      const record = await store.getSubmission(briefs[0].jobId);
       expect(record?.seedOutcome).toBeDefined();
       return record!.seedOutcome!;
     });
@@ -6930,7 +6927,7 @@ describe('seeded dispatch', () => {
     // The attempted provider survives a decline too, not only a successful draft.
     expect(outcome.provider).toBe('vertex');
     // Nothing generated, so nothing billed.
-    const record = await store.getSubmission(briefs[0].issueNumber);
+    const record = await store.getSubmission(briefs[0].jobId);
     expect(record?.costs ?? []).not.toContainEqual(expect.objectContaining({ kind: 'seed' }));
 
     await app.close();
@@ -6960,13 +6957,13 @@ describe('seeded dispatch', () => {
     expect(response.statusCode).toBe(200);
     await vi.waitFor(() => expect(briefs).toHaveLength(1));
     const outcome = await vi.waitFor(async () => {
-      const record = await store.getSubmission(briefs[0].issueNumber);
+      const record = await store.getSubmission(briefs[0].jobId);
       expect(record?.seedOutcome).toBeDefined();
       return record!.seedOutcome!;
     });
 
     expect(outcome).toMatchObject({ generated: true, staged: true });
-    const record = await store.getSubmission(briefs[0].issueNumber);
+    const record = await store.getSubmission(briefs[0].jobId);
     expect(record?.seed?.files).toHaveLength(1);
 
     await app.close();
@@ -6987,7 +6984,7 @@ describe('seeded dispatch', () => {
     expect(briefs[0].seed).toBeUndefined();
     // The job keeps the slug the submission gave it — seeding declining changes nothing
     // about the game's address — and nothing is billed for a seed that never happened.
-    const record = await store.getSubmission(briefs[0].issueNumber);
+    const record = await store.getSubmission(briefs[0].jobId);
     expect(record?.slug).toBe('comet-courier');
     expect(record?.costs ?? []).not.toContainEqual(expect.objectContaining({ kind: 'seed' }));
 
@@ -7049,7 +7046,7 @@ describe('seeded dispatch', () => {
     await vi.waitFor(() => expect(briefs).toHaveLength(1));
     // Deliberately off the submit response path, so the preview lands moments later.
     const previews = await vi.waitFor(async () => {
-      const listed = await store.listBuildPreviews(briefs[0].issueNumber);
+      const listed = await store.listBuildPreviews(briefs[0].jobId);
       expect(listed.length).toBeGreaterThan(0);
       return listed;
     });
@@ -7058,7 +7055,7 @@ describe('seeded dispatch', () => {
     expect(previews[0].label).toContain('rough draft');
     // Marked provisional at the source: the agent has not run yet.
     expect(previews[0].origin).toBe('seed');
-    const stored = await store.getBuildPreview(briefs[0].issueNumber, previews[0].id);
+    const stored = await store.getBuildPreview(briefs[0].jobId, previews[0].id);
     const html = Buffer.from(stored!.data, 'base64').toString('utf8');
     // The full serve hygiene, not a weaker preview variant: sandbox CSP and the AI Act
     // provenance marking both present in what the creator's iframe will run.
@@ -7106,7 +7103,7 @@ describe('seeded dispatch', () => {
     // only thing withheld is showing it to the creator.
     expect(briefs[0].seed).toBeDefined();
     await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(await store.listBuildPreviews(briefs[0].issueNumber)).toEqual([]);
+    expect(await store.listBuildPreviews(briefs[0].jobId)).toEqual([]);
     expect(stub.githubClient.getGameSources).not.toHaveBeenCalled();
 
     await app.close();
@@ -7144,7 +7141,7 @@ describe('seeded dispatch', () => {
     await vi.waitFor(() => expect(briefs).toHaveLength(1));
 
     // The seed is on the job, which is what get_seed reads.
-    const record = await store.getSubmission(briefs[0].issueNumber);
+    const record = await store.getSubmission(briefs[0].jobId);
     expect(record?.seed?.files).toHaveLength(1);
     expect(record?.seedStatus).toBe('available');
     // Still offered to the backend, which decides if it can place files.
@@ -7182,8 +7179,8 @@ describe('operator slug backfill', () => {
     await store.upsertUser({ uid: 'g:boss' });
     // createSubmission is what the flow used to do on its own: a record, no slug. It is
     // the exact shape of every game that predates minting at submission.
-    let issueNumber = 500;
-    for (const title of titles) await store.createSubmission(issueNumber++, 'g:test-user', title);
+    let jobId = 500;
+    for (const title of titles) await store.createSubmission(jobId++, 'g:test-user', title);
     return { app, store };
   }
 
@@ -7224,7 +7221,7 @@ describe('operator slug backfill', () => {
     });
 
     expect(response.json()).toMatchObject({ dryRun: true, scanned: 1, named: 1 });
-    expect(response.json().games).toEqual([{ issueNumber: 500, title: 'Space Miner', slug: 'space-miner' }]);
+    expect(response.json().games).toEqual([{ jobId: 500, title: 'Space Miner', slug: 'space-miner' }]);
     expect((await store.getSubmission(500))?.slug).toBeUndefined();
 
     await app.close();
@@ -7317,7 +7314,7 @@ describe('operator title backfill', () => {
       unchanged: 0,
     });
     expect(response.json().games[0]).toMatchObject({
-      issueNumber: 600,
+      jobId: 600,
       slug: 'tv-tycoon',
       from: 'A game tycoon like where I run a tv busi',
       to: 'TV Tycoon',

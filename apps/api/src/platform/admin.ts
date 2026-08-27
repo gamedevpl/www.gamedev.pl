@@ -505,8 +505,8 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
     const ages = new Map<number, string>();
     await Promise.all(
       records.map(async (record) => {
-        const [oldest] = await store.listPendingCreatorMessages(record.issueNumber, { limit: 1 });
-        if (oldest) ages.set(record.issueNumber, oldest.createdAt);
+        const [oldest] = await store.listPendingCreatorMessages(record.jobId, { limit: 1 });
+        if (oldest) ages.set(record.jobId, oldest.createdAt);
       }),
     );
     return ages;
@@ -682,7 +682,7 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
     // published", which a freshly published one still satisfies. Counting it twice would
     // double its credits in the very total the report exists for.
     const byIssue = new Map<number, SubmissionRecord>();
-    for (const record of [...active, ...published]) byIssue.set(record.issueNumber, record);
+    for (const record of [...active, ...published]) byIssue.set(record.jobId, record);
 
     return reply.status(200).send(buildCostReport([...byIssue.values()]));
   });

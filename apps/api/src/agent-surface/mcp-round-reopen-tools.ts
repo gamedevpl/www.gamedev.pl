@@ -48,7 +48,7 @@ export interface RoundReopenToolsDeps {
   platformConnectorSecret: string | undefined;
   startImprovementRound:
     | ((input: {
-        issueNumber: number;
+        jobId: number;
         text: string;
         title: string;
         locale: string;
@@ -63,7 +63,7 @@ export interface RoundReopenToolsDeps {
     | undefined;
   continueDraftRound:
     | ((input: {
-        issueNumber: number;
+        jobId: number;
         feedback: string;
         locale: string;
         log: { error: (context: object, message: string) => void };
@@ -225,7 +225,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
         if (resolved.activeRound) {
           await store.finishAgentOpenRound(resolved.slug, at);
           return toolOk({
-            jobId: resolved.activeRound.issueNumber,
+            jobId: resolved.activeRound.jobId,
             slug: resolved.slug,
             alreadyOpen: true,
           });
@@ -246,7 +246,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           const again = await findActiveRoundForSlug(store, resolved.slug, resolved.creatorUid);
           if (again) {
             return toolOk({
-              jobId: again.issueNumber,
+              jobId: again.jobId,
               slug: resolved.slug,
               alreadyOpen: true,
             });
@@ -258,7 +258,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           const racingRound = await findActiveRoundForSlug(store, resolved.slug, resolved.creatorUid);
           if (racingRound) {
             return toolOk({
-              jobId: racingRound.issueNumber,
+              jobId: racingRound.jobId,
               slug: resolved.slug,
               alreadyOpen: true,
             });
@@ -283,7 +283,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
             singleLine: true,
           });
           const started = await startImprovementRound({
-            issueNumber: resolved.publishedRecord.issueNumber,
+            jobId: resolved.publishedRecord.jobId,
             text: sanitizedFeedback,
             title: sanitizedTitle,
             locale: resolved.publishedRecord.locale ?? 'en',
@@ -422,7 +422,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
         const active = await findActiveRoundForSlug(store, resolved.slug, resolved.creatorUid);
         if (active) {
           return toolOk({
-            jobId: active.issueNumber,
+            jobId: active.jobId,
             slug: resolved.slug,
             alreadyOpen: true,
             next: 'call start({ slug }) to join the build round',
@@ -450,7 +450,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
 
         const sanitizedFeedback = sanitizeCreatorText(feedbackRaw, { singleLine: false });
         const continued = await continueDraftRound({
-          issueNumber: resolved.draft.issueNumber,
+          jobId: resolved.draft.jobId,
           feedback: sanitizedFeedback,
           locale: resolved.draft.locale ?? 'en',
           log: ctx.request.log,

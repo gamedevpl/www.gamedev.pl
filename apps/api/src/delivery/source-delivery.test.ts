@@ -35,7 +35,7 @@ function manifest(files: SourceFile[], version: string): VersionManifest {
     slug: SLUG,
     version,
     createdAt: '2026-08-09T18:00:00.000Z',
-    issueNumber: ISSUE,
+    jobId: ISSUE,
     sourceFiles: files.map((file) => file.path),
   };
 }
@@ -121,7 +121,7 @@ describe('shared source delivery', () => {
     const { store, putCandidateSources, gate, service, authority } = await setup();
 
     const result = await service.deliver({
-      issueNumber: ISSUE,
+      jobId: ISSUE,
       slug: SLUG,
       files: PREVIEW_FILES,
       mode: 'preview',
@@ -139,7 +139,7 @@ describe('shared source delivery', () => {
     });
     expect(putCandidateSources).toHaveBeenCalledWith(
       expect.objectContaining({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         roundGeneration: 1,
         slug: SLUG,
         backend: BACKEND,
@@ -147,7 +147,7 @@ describe('shared source delivery', () => {
         requireCompiledEditor: true,
       }),
     );
-    expect(gate).toHaveBeenCalledWith({ issueNumber: ISSUE, slug: SLUG, version: 'v-managed-1', mode: 'preview' });
+    expect(gate).toHaveBeenCalledWith({ jobId: ISSUE, slug: SLUG, version: 'v-managed-1', mode: 'preview' });
     const record = await store.getSubmission(ISSUE);
     expect(record).toMatchObject({
       slug: SLUG,
@@ -164,7 +164,7 @@ describe('shared source delivery', () => {
     await store.setSubmissionPublishedAt(700, '2026-08-01T00:00:00.000Z');
 
     const result = await service.deliver({
-      issueNumber: ISSUE,
+      jobId: ISSUE,
       slug: SLUG,
       files: PUBLISH_FILES,
       mode: 'publish',
@@ -190,7 +190,7 @@ describe('shared source delivery', () => {
 
     await expect(
       service.deliver({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         files: PREVIEW_FILES,
         mode: 'preview',
@@ -207,7 +207,7 @@ describe('shared source delivery', () => {
 
     await expect(
       service.deliver({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         files: PREVIEW_FILES,
         mode: 'preview',
@@ -229,7 +229,7 @@ describe('shared source delivery', () => {
 
     await expect(
       service.deliver({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         files: PREVIEW_FILES,
         mode: 'preview',
@@ -268,7 +268,7 @@ export function tick(round: Round) {
 
       await expect(
         service.deliver({
-          issueNumber: ISSUE,
+          jobId: ISSUE,
           slug: SLUG,
           files: brokenFiles,
           mode: 'preview',
@@ -289,7 +289,7 @@ export function tick(round: Round) {
     it('logs an accepted delivery with submitAttempts and refusals', async () => {
       const { store, service, authority, log } = await setup();
       await service.deliver({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         files: PREVIEW_FILES,
         mode: 'preview',
@@ -324,7 +324,7 @@ export function tick(round: Round) {
 
       await expect(
         service.deliver({
-          issueNumber: ISSUE,
+          jobId: ISSUE,
           slug: SLUG,
           files: brokenFiles,
           mode: 'preview',
@@ -344,7 +344,7 @@ export function tick(round: Round) {
       for (let i = 0; i < 2; i += 1) {
         await expect(
           service.deliver({
-            issueNumber: ISSUE,
+            jobId: ISSUE,
             slug: SLUG,
             files: brokenFiles,
             mode: 'preview',
@@ -356,7 +356,7 @@ export function tick(round: Round) {
       expect(putCandidateSources).not.toHaveBeenCalled();
 
       const result = await service.deliver({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         files: brokenFiles,
         mode: 'preview',
@@ -383,7 +383,7 @@ export function tick(round: Round) {
       for (let i = 0; i < 2; i += 1) {
         await expect(
           service.deliver({
-            issueNumber: ISSUE,
+            jobId: ISSUE,
             slug: SLUG,
             files: brokenFiles,
             mode: 'preview',
@@ -395,7 +395,7 @@ export function tick(round: Round) {
 
       await expect(
         service.deliver({
-          issueNumber: ISSUE,
+          jobId: ISSUE,
           slug: SLUG,
           files: brokenFiles,
           mode: 'preview',
@@ -417,7 +417,7 @@ export function tick(round: Round) {
 
       for (let i = 0; i < 3; i += 1) {
         await service
-          .deliver({ issueNumber: ISSUE, slug: SLUG, files: brokenFiles, mode: 'preview', backend: BACKEND, authority })
+          .deliver({ jobId: ISSUE, slug: SLUG, files: brokenFiles, mode: 'preview', backend: BACKEND, authority })
           .catch(() => {});
       }
 
@@ -434,7 +434,7 @@ export function tick(round: Round) {
     it('does not refuse when no kit store is configured', async () => {
       const { putCandidateSources, service, authority } = await setup({ kitFileStore: null });
       const result = await service.deliver({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         files: brokenFiles,
         mode: 'preview',
@@ -457,7 +457,7 @@ export function tick(round: Round) {
         { path: 'game.ts', content: 'export const n = 1;\n' },
       ];
       const result = await service.deliver({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         files: clean,
         mode: 'preview',
@@ -486,7 +486,7 @@ export function tick(round: Round) {
         { path: 'game.ts', content: 'export const n = 1;\n' },
       ];
       const result = await service.deliver({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         files: clean,
         mode: 'preview',
@@ -509,7 +509,7 @@ export function tick(round: Round) {
       for (let i = 0; i < 2; i += 1) {
         await expect(
           service.deliver({
-            issueNumber: ISSUE,
+            jobId: ISSUE,
             slug: SLUG,
             files: brokenFiles,
             mode: 'preview',
@@ -520,7 +520,7 @@ export function tick(round: Round) {
       }
 
       const result = await service.deliver({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         files: brokenFiles,
         mode: 'preview',
@@ -540,7 +540,7 @@ export function tick(round: Round) {
       for (let i = 0; i < 2; i += 1) {
         await expect(
           service.deliver({
-            issueNumber: ISSUE,
+            jobId: ISSUE,
             slug: SLUG,
             files: brokenFiles,
             mode: 'preview',
@@ -549,7 +549,7 @@ export function tick(round: Round) {
         ).rejects.toBeInstanceOf(InvalidUploadError);
       }
       const result = await service.deliver({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         files: brokenFiles,
         mode: 'preview',
@@ -573,7 +573,7 @@ export function tick(round: Round) {
       ];
 
       const result = await service.deliver({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         files,
         mode: 'publish',
@@ -583,7 +583,7 @@ export function tick(round: Round) {
 
       expect(result.accepted).toBe(true);
       expect(stagedPreviews.publishCandidate).toHaveBeenCalledWith({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         version: expect.any(String),
         roundGeneration: 1,

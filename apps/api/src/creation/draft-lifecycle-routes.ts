@@ -17,12 +17,12 @@ export interface DraftLifecycleRoutesOptions {
   backendFor: (builder: BuilderKind | undefined) => Promise<AgentBackend | undefined>;
   builderOf: (record: SubmissionRecord | null | undefined) => BuilderKind;
   releaseWorkspace: (
-    issueNumber: number,
+    jobId: number,
     workspace: string,
     log: { error: (context: object, message: string) => void },
     backendName?: string,
   ) => Promise<void>;
-  invalidateStatusCache: (issueNumber: number) => void;
+  invalidateStatusCache: (jobId: number) => void;
   invalidatePublishedGameCaches: (slug: string) => void;
 }
 
@@ -67,9 +67,9 @@ export async function registerDraftLifecycleRoutes(
       }
 
       const token = z.string().parse((request.params as { token?: string }).token);
-      let issueNumber: number;
+      let jobId: number;
       try {
-        issueNumber = verifyToken(token, submissionTokenSecret);
+        jobId = verifyToken(token, submissionTokenSecret);
       } catch (error) {
         if (error instanceof InvalidTokenError) {
           return reply.status(400).send({ error: 'invalid token' });
@@ -77,7 +77,7 @@ export async function registerDraftLifecycleRoutes(
         throw error;
       }
 
-      const record = await store.getSubmission(issueNumber);
+      const record = await store.getSubmission(jobId);
       if (!record || record.ownerUid !== request.user!.uid) {
         return reply.status(403).send({ error: 'only the creator can share this game' });
       }
@@ -85,7 +85,7 @@ export async function registerDraftLifecycleRoutes(
         return reply.status(409).send({ error: 'this game has no address yet' });
       }
 
-      await store.setDraftShared(issueNumber, parsedBody.data.shared ? new Date(now()).toISOString() : null);
+      await store.setDraftShared(jobId, parsedBody.data.shared ? new Date(now()).toISOString() : null);
       return reply.send({ shared: parsedBody.data.shared, slug: record.slug });
     },
   );
@@ -110,9 +110,9 @@ export async function registerDraftLifecycleRoutes(
       }
 
       const token = z.string().parse((request.params as { token?: string }).token);
-      let issueNumber: number;
+      let jobId: number;
       try {
-        issueNumber = verifyToken(token, submissionTokenSecret);
+        jobId = verifyToken(token, submissionTokenSecret);
       } catch (error) {
         if (error instanceof InvalidTokenError) {
           return reply.status(400).send({ error: 'invalid submission token' });
@@ -120,7 +120,7 @@ export async function registerDraftLifecycleRoutes(
         throw error;
       }
 
-      const record = await store.getSubmission(issueNumber);
+      const record = await store.getSubmission(jobId);
       if (!record || record.ownerUid !== request.user!.uid) {
         return reply.status(403).send({ error: 'only the creator can abandon this build' });
       }
@@ -135,10 +135,10 @@ export async function registerDraftLifecycleRoutes(
         try {
           await cancelBackend.cancel(ref, record.dispatch?.credentialRefs?.[ref]);
         } catch (cancelError) {
-          request.log.error({ err: cancelError, issueNumber }, 'agent cancel failed');
+          request.log.error({ err: cancelError, jobId }, 'agent cancel failed');
         }
       }
-      await store.recordJobTransition(issueNumber, {
+      await store.recordJobTransition(jobId, {
         to: 'canceled',
         at: new Date(now()).toISOString(),
         by: 'creator',
@@ -146,17 +146,17 @@ export async function registerDraftLifecycleRoutes(
       });
       // Workspace deleted after the transition, since nothing will resume it.
       if (record.dispatch?.workspace) {
-        await releaseWorkspace(issueNumber, record.dispatch.workspace, request.log, record.dispatch.backend);
+        await releaseWorkspace(jobId, record.dispatch.workspace, request.log, record.dispatch.backend);
       }
       // Seed branch released the same way — it outlives the dispatch.
       if (record.dispatch?.seedWorkspace) {
-        await releaseWorkspace(issueNumber, record.dispatch.seedWorkspace, request.log, record.dispatch.backend);
+        await releaseWorkspace(jobId, record.dispatch.seedWorkspace, request.log, record.dispatch.backend);
         // Forgotten too, so a later cleanup won't retry a deleted ref.
-        await store.clearDispatchSeedWorkspace(issueNumber);
+        await store.clearDispatchSeedWorkspace(jobId);
       }
 
-      await store.setSubmissionAbandoned(issueNumber, new Date(now()).toISOString());
-      invalidateStatusCache(issueNumber);
+      await store.setSubmissionAbandoned(jobId, new Date(now()).toISOString());
+      invalidateStatusCache(jobId);
 
       return reply.send({ ok: true });
     },
@@ -175,9 +175,9 @@ export async function registerDraftLifecycleRoutes(
       }
 
       const token = z.string().parse((request.params as { token?: string }).token);
-      let issueNumber: number;
+      let jobId: number;
       try {
-        issueNumber = verifyToken(token, submissionTokenSecret);
+        jobId = verifyToken(token, submissionTokenSecret);
       } catch (error) {
         if (error instanceof InvalidTokenError) {
           return reply.status(400).send({ error: 'invalid submission token' });
@@ -185,7 +185,7 @@ export async function registerDraftLifecycleRoutes(
         throw error;
       }
 
-      const record = await store.getSubmission(issueNumber);
+      const record = await store.getSubmission(jobId);
       if (!record) {
         return reply.status(403).send({ error: 'only the creator can delete this game' });
       }
@@ -204,7 +204,7 @@ export async function registerDraftLifecycleRoutes(
 
       await store.archivePublication(record.slug, 'deleted by creator', new Date(now()).toISOString());
       invalidatePublishedGameCaches(record.slug);
-      invalidateStatusCache(issueNumber);
+      invalidateStatusCache(jobId);
 
       return reply.send({ ok: true, slug: record.slug });
     },

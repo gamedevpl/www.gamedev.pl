@@ -35,11 +35,7 @@ export function buildBarModel(
   if (!latest) return null;
   const eta = medianGateMinutes(status?.recentBuilds);
 
-  if (
-    typeof status?.issueNumber === 'number' &&
-    typeof latest.issueNumber === 'number' &&
-    latest.issueNumber !== status.issueNumber
-  ) {
+  if (typeof status?.jobId === 'number' && typeof latest.jobId === 'number' && latest.jobId !== status.jobId) {
     return { state: 'starting', fraction: null, label: t('studioPanel.buildBar.roundInProgress'), etaMinutes: eta };
   }
 

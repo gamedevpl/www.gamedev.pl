@@ -986,7 +986,7 @@ describe('GET /api/admin/summary', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json() as AdminSummaryResponse;
     expect(body.alerts).toHaveLength(1);
-    expect(body.alerts[0]).toMatchObject({ kind: 'review_ready', issueNumber: 1_000_001, title: 'Comet Courier' });
+    expect(body.alerts[0]).toMatchObject({ kind: 'review_ready', jobId: 1_000_001, title: 'Comet Courier' });
     expect(body.queue).toMatchObject({ active: 1, stalled: 0, byState: { ready_for_review: 1 } });
     expect(body.limits.paused).toBe(false);
     expect(body.waitlist.pending).toBe(1);

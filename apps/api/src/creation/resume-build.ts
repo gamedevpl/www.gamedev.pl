@@ -39,13 +39,13 @@ export interface ResumeBuildDeps {
   backendByStoredName: (name: string | undefined) => AgentBackend | undefined;
   builderOf: (record: SubmissionRecord | null | undefined) => BuilderKind;
   recordSessionCost: (
-    issueNumber: number,
+    jobId: number,
     ref: string,
     backend: AgentBackend,
     log: { error: (context: object, message: string) => void },
   ) => Promise<void>;
   releaseWorkspace: (
-    issueNumber: number,
+    jobId: number,
     workspace: string,
     log: { error: (context: object, message: string) => void },
     backendName?: string,
@@ -77,7 +77,7 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
 
   // A round that never started looks like one that is thinking.
   async function resumeBuild(input: {
-    issueNumber: number;
+    jobId: number;
     feedback: string;
     locale: string;
     log: { error: (context: object, message: string) => void };
@@ -95,7 +95,7 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
     preserveRoundBudget?: boolean;
   }): Promise<ResumeOutcome> {
     if (!submissionTokenSecret || !store) return { started: false, reason: 'not_configured' };
-    const record = await store.getSubmission(input.issueNumber);
+    const record = await store.getSubmission(input.jobId);
     const previous = record?.dispatch;
     const previousBuilder = builderOf(record);
     const builder = input.undelivered ? previousBuilder : (input.builder ?? record?.defaultBuilder ?? previousBuilder);
@@ -118,8 +118,8 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
 
       // A legacy job still needs the field written for the reminted key.
       const roundGeneration = input.undelivered
-        ? ((await store.ensureRoundGeneration(input.issueNumber)) ?? 1)
-        : ((await store.bumpRoundGeneration(input.issueNumber)) ?? (record?.roundGeneration ?? 0) + 1);
+        ? ((await store.ensureRoundGeneration(input.jobId)) ?? 1)
+        : ((await store.bumpRoundGeneration(input.jobId)) ?? (record?.roundGeneration ?? 0) + 1);
       const previousBackend = backendByStoredName(previous?.backend) ?? (await backendFor(previousBuilder));
       if (previous?.refs.length && (!input.undelivered || previousBackend?.name.startsWith('managed:'))) {
         const previousRef = previous.refs[previous.refs.length - 1];
@@ -128,7 +128,7 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
             await previousBackend.cancel(previousRef, previous?.credentialRefs?.[previousRef]);
           } catch (error) {
             input.log.error(
-              { err: error, issueNumber: input.issueNumber },
+              { err: error, jobId: input.jobId },
               'previous agent cancel failed before a replacement round',
             );
           }
@@ -142,17 +142,17 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
       // The record above was loaded before that reset.
       const reusedSelfSeed = input.undelivered && builder === 'self' ? record?.seed : undefined;
       const brief = {
-        issueNumber: input.issueNumber,
+        jobId: input.jobId,
         roundGeneration,
         slug: record?.slug,
         spec: input.feedback,
         feedback: input.feedback,
         locale: input.locale,
-        channelToken: mintAgentToken(input.issueNumber, submissionTokenSecret, {
+        channelToken: mintAgentToken(input.jobId, submissionTokenSecret, {
           roundGeneration,
           now: now(),
         }),
-        mcpOpenerToken: mintManagedMcpOpener(input.issueNumber, submissionTokenSecret, {
+        mcpOpenerToken: mintManagedMcpOpener(input.jobId, submissionTokenSecret, {
           roundGeneration,
           now: now(),
         }),
@@ -168,7 +168,7 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
       const sameBackend = previous?.backend === selected.name && Boolean(previous?.refs.length);
       if (!input.undelivered && builder !== previousBuilder) {
         // Expose target builder before external session can call back through MCP.
-        await store.setRoundBuilder(input.issueNumber, builder, {
+        await store.setRoundBuilder(input.jobId, builder, {
           resetRoundBudget: !input.preserveRoundBudget,
         });
         builderActivated = true;
@@ -181,29 +181,29 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
         : await selected.dispatch(brief);
       dispatchSucceeded = true;
       if (input.undelivered) {
-        await store.clearAgentEnded(input.issueNumber);
+        await store.clearAgentEnded(input.jobId);
       }
-      await store.recordDispatch(input.issueNumber, {
+      await store.recordDispatch(input.jobId, {
         backend: selected.name,
         ref: result.ref,
         workspace: result.workspace,
         credentialRef: result.credentialRef,
       });
-      await recordSessionCost(input.issueNumber, result.ref, selected, input.log);
+      await recordSessionCost(input.jobId, result.ref, selected, input.log);
       // The old workspace is spent once the new round has its own.
 
       // Deleted after dispatch succeeds: a failed start still needs that branch.
 
       // Never after an undelivered round; that branch is the only copy.
       if (!input.undelivered && previous?.workspace && previous.workspace !== result.workspace) {
-        await releaseWorkspace(input.issueNumber, previous.workspace, input.log, previous.backend);
+        await releaseWorkspace(input.jobId, previous.workspace, input.log, previous.backend);
       }
       // Land on dispatched, not building; the API accepts before it starts.
 
       // Claiming to write code here made Studio look stuck while it booted.
 
       // The reconciler advances to building from a real observation.
-      const latest = await store.getSubmission(input.issueNumber);
+      const latest = await store.getSubmission(input.jobId);
       const from = latest?.state;
       // No prior state: adopt directly, since the write does not gate.
 
@@ -211,7 +211,7 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
 
       // A self agent can deliver first; yanking past submitted is a hazard.
       if (!from || canTransition(from, 'dispatched')) {
-        await store.recordJobTransition(input.issueNumber, {
+        await store.recordJobTransition(input.jobId, {
           to: 'dispatched',
           at: new Date(now()).toISOString(),
           by: input.transition?.by ?? 'creator',
@@ -222,14 +222,14 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
     } catch (error) {
       if (builderActivated && !dispatchSucceeded) {
         try {
-          await store.setRoundBuilder(input.issueNumber, previousBuilder, { resetRoundBudget: false });
+          await store.setRoundBuilder(input.jobId, previousBuilder, { resetRoundBudget: false });
         } catch (rollbackError) {
-          input.log.error({ err: rollbackError, issueNumber: input.issueNumber }, 'builder rollback failed');
+          input.log.error({ err: rollbackError, jobId: input.jobId }, 'builder rollback failed');
         }
       }
       // The request is already queued; a failed resume costs the head start.
       const reason = classifyResumeFailure(error);
-      input.log.error({ err: error, issueNumber: input.issueNumber, reason }, 'agent resume failed');
+      input.log.error({ err: error, jobId: input.jobId, reason }, 'agent resume failed');
       return { started: false, reason };
     }
   }

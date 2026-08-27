@@ -48,7 +48,7 @@ beforeEach(async () => {
         source: 'catalog',
         creatorHandle: 'sky-pilot',
         genre: 'arcade',
-        issueNumber: null,
+        jobId: null,
         media: {
           screenshots: [
             { name: 'opening', file: 'opening.png' },
@@ -63,7 +63,7 @@ beforeEach(async () => {
         source: 'catalog',
         creatorHandle: 'ada',
         genre: 'racing',
-        issueNumber: null,
+        jobId: null,
         media: { screenshots: [{ name: 'opening', file: 'opening.png' }], video: null },
       },
     ],
@@ -260,7 +260,7 @@ describe('ReviewDesk', () => {
           source: 'catalog',
           creatorHandle: 'sky-pilot',
           genre: 'arcade',
-          issueNumber: null,
+          jobId: null,
           media: { screenshots: [], video: null },
           reReview: { reason: 'Controls fix shipped.', gameVersion: 'v2', requestedAt: '2026-08-06T00:00:00.000Z' },
         },

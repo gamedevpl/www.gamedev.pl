@@ -34,7 +34,7 @@ export function createNativeJobStatusAssembler(options: NativeJobStatusOptions):
     const status: SubmissionStatusResponse = {
       status: record.abandonedAt ? 'abandoned' : toSubmissionStatus(state),
       ...(record.abandonedAt ? {} : { phase: state }),
-      issueNumber: record.issueNumber,
+      jobId: record.jobId,
       ...(record.slug ? { slug: record.slug } : {}),
       ...((record.transitions ?? []).some((transition) => transition.reason === 'remix_saved')
         ? { draftOrigin: 'remix' as const }
@@ -63,7 +63,7 @@ export function createNativeJobStatusAssembler(options: NativeJobStatusOptions):
       };
     }
     if (store) {
-      const messages = await store.listCreatorMessages(record.issueNumber, { limit: 20 });
+      const messages = await store.listCreatorMessages(record.jobId, { limit: 20 });
       if (messages.length > 0 || playableVersion) {
         status.progress = {
           headSha: playableVersion ?? '',

@@ -28,7 +28,7 @@ const CONSUMES = {
 const MAX_SUBMIT_FILES = MAX_UPLOAD_FILES;
 
 interface AuthedSubmitJob {
-  issueNumber: number;
+  jobId: number;
   record: SubmissionRecord;
   channelToken: string;
 }
@@ -344,13 +344,13 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
 
         const cap = auth.record.builder === 'self' ? selfBuildDeliveryCap() : null;
         const used =
-          (await store!.getSubmission(auth.issueNumber))?.roundDeliveryCount ?? auth.record.roundDeliveryCount ?? 0;
+          (await store!.getSubmission(auth.jobId))?.roundDeliveryCount ?? auth.record.roundDeliveryCount ?? 0;
 
         const accepted = body.accepted !== false;
         const gateStarted = body.gateStarted === true;
         // Marks ended here since agents often submit without calling end.
         if (accepted && store) {
-          await store.markAgentEnded(auth.issueNumber, undefined, 'submit').catch(() => {});
+          await store.markAgentEnded(auth.jobId, undefined, 'submit').catch(() => {});
         }
         const warnings: Array<{ code: string; message: string }> = [];
         if (accepted) {

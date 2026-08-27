@@ -20,7 +20,7 @@ import {
 
 export interface ManagedBackendOptions {
   provider: ManagedAgentProvider;
-  readSignals?: (issueNumber: number) => Promise<ManagedRoundSignals | null>;
+  readSignals?: (jobId: number) => Promise<ManagedRoundSignals | null>;
   // Cacheable prefix, typically the published Creator Kit digest.
   systemPrompt?: () => Promise<string | undefined>;
   kitDigest?: KitDigestLoader;
@@ -29,7 +29,7 @@ export interface ManagedBackendOptions {
   budget?: ManagedUsageBudget;
   tools: ManagedToolAccess;
   mcpBearerCredential?: (brief: BuildBrief) => ManagedMcpBearerCredential | undefined;
-  readCredentialRef?: (issueNumber: number, sessionRef: string) => Promise<string | undefined>;
+  readCredentialRef?: (jobId: number, sessionRef: string) => Promise<string | undefined>;
   nudgeIdle?: boolean;
   log?: {
     warn: (context: object, message: string) => void;
@@ -116,23 +116,23 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
   const idleNudged = new Set<string>();
   const credentialRefs = new Map<string, string>();
   const releasedCredentials = new Set<string>();
-  // So cancel/cleanup can still log issueNumber/slug without a caller hint.
-  const sessionJobs = new Map<string, { issueNumber: number; slug?: string }>();
+  // So cancel/cleanup can still log jobId/slug without a caller hint.
+  const sessionJobs = new Map<string, { jobId: number; slug?: string }>();
 
-  function jobContext(ref: string, issueNumber?: number): { issueNumber?: number; slug?: string } {
+  function jobContext(ref: string, jobId?: number): { jobId?: number; slug?: string } {
     const job = sessionJobs.get(ref);
-    const resolvedIssue = issueNumber ?? job?.issueNumber;
+    const resolvedIssue = jobId ?? job?.jobId;
     return {
-      ...(resolvedIssue !== undefined ? { issueNumber: resolvedIssue } : {}),
+      ...(resolvedIssue !== undefined ? { jobId: resolvedIssue } : {}),
       ...(job?.slug ? { slug: job.slug } : {}),
     };
   }
 
-  async function releaseCredential(ref: string, issueNumber?: number): Promise<void> {
-    const context = jobContext(ref, issueNumber);
+  async function releaseCredential(ref: string, jobId?: number): Promise<void> {
+    const context = jobContext(ref, jobId);
     const credentialRef =
       credentialRefs.get(ref) ??
-      (context.issueNumber !== undefined ? await options.readCredentialRef?.(context.issueNumber, ref) : undefined);
+      (context.jobId !== undefined ? await options.readCredentialRef?.(context.jobId, ref) : undefined);
     if (!credentialRef || releasedCredentials.has(credentialRef) || !options.provider.releaseCredential) return;
     releasedCredentials.add(credentialRef);
     try {
@@ -153,7 +153,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     // An unsupported seed must also drop from the brief, not just workspaceFiles.
     const effectiveBrief = seedSupported || !brief.seed ? brief : { ...brief, seed: undefined };
     const session = await options.provider.startSession({
-      correlationId: String(brief.issueNumber),
+      correlationId: String(brief.jobId),
       ...(systemPrompt ? { systemPrompt } : {}),
       prompt: buildPrompt(effectiveBrief),
       model: options.provider.model,
@@ -172,14 +172,14 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     });
     startedAt.set(session.id, Date.now());
     sessionJobs.set(session.id, {
-      issueNumber: brief.issueNumber,
+      jobId: brief.jobId,
       ...(brief.slug ? { slug: brief.slug } : {}),
     });
     if (session.credentialRef) {
       credentialRefs.set(session.id, session.credentialRef);
       options.log?.info?.(
         {
-          issueNumber: brief.issueNumber,
+          jobId: brief.jobId,
           ...(brief.slug ? { slug: brief.slug } : {}),
           ref: session.id,
           credentialRef: session.credentialRef,
@@ -247,7 +247,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
           enforced: cancellation.enforced,
         };
         budgetStops.set(ref, budgetStop);
-        await releaseCredential(ref, observeOptions.issueNumber);
+        await releaseCredential(ref, observeOptions.jobId);
         options.log?.warn(
           { ref, observed: budgetStop.observed, max: options.budget!.max, enforced: cancellation.enforced },
           'managed round stopped at its usage budget',
@@ -270,7 +270,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
         !['completed', 'failed', 'timed_out', 'cancelled'].includes(session.state);
       if (expired) {
         await options.provider.cancelSession(ref);
-        await releaseCredential(ref, observeOptions.issueNumber);
+        await releaseCredential(ref, observeOptions.jobId);
         return {
           state: 'timed_out',
           hasCandidate: observeOptions.hasCandidate,
@@ -298,8 +298,8 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
         (session.state === 'idle' && !hasCandidate && idleNudged.has(ref)) ||
         isManagedIdleBlockedOnAction(session.stopReason);
       const signals =
-        needsSignals && options.readSignals && observeOptions.issueNumber !== undefined
-          ? await options.readSignals(observeOptions.issueNumber)
+        needsSignals && options.readSignals && observeOptions.jobId !== undefined
+          ? await options.readSignals(observeOptions.jobId)
           : null;
       const roundDelivered = Boolean(signals?.deliveredVersion || signals?.previewVersion);
       const agentEnded = Boolean(signals?.agentEndedAt);
@@ -346,7 +346,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
         isManagedSessionHarvestable(session.state) &&
         (session.state !== 'idle' || agentEnded || spentWithoutDelivery)
       ) {
-        await releaseCredential(ref, observeOptions.issueNumber);
+        await releaseCredential(ref, observeOptions.jobId);
       }
 
       // Spent idle → completed so reconcile leaves building (no "Powstaje kod").

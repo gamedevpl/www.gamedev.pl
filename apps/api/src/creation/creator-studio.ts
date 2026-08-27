@@ -60,7 +60,7 @@ export interface CreatorStudioRoutesOptions {
   /** Read manifests to learn which games ship an editor definition (EditorKit). */
   gamesStore?: GamesStore;
   /** Mints status tokens so the studio can deep-link into the build page. */
-  mintStatusToken?: (issueNumber: number) => string;
+  mintStatusToken?: (jobId: number) => string;
   /** Reads the workspace scaffold and signs the kit URL the scaffold fetches. */
   objectStore?: GcsObjectStore;
   now?: () => number;
@@ -165,11 +165,11 @@ export async function registerCreatorStudioRoutes(
     const requested = parsed.data.game;
     if (requested) {
       const addressedRecord = records.find(
-        (record) => record.slug === requested || options.mintStatusToken!(record.issueNumber) === requested,
+        (record) => record.slug === requested || options.mintStatusToken!(record.jobId) === requested,
       );
       const addressedGame = addressedRecord
         ? collapsed.find(({ tip }) =>
-            addressedRecord.slug ? tip.slug === addressedRecord.slug : tip.issueNumber === addressedRecord.issueNumber,
+            addressedRecord.slug ? tip.slug === addressedRecord.slug : tip.jobId === addressedRecord.jobId,
           )
         : undefined;
       if (addressedGame && !shelf.includes(addressedGame)) shelf.push(addressedGame);
@@ -203,7 +203,7 @@ export async function registerCreatorStudioRoutes(
     );
 
     const games: CreatorStudioGame[] = shelf.map(({ tip, catalogPublishedAt }) => ({
-      token: options.mintStatusToken!(tip.issueNumber),
+      token: options.mintStatusToken!(tip.jobId),
       title: tip.title,
       createdAt: tip.createdAt,
       // Prefer `lastStatus` (kept current on every derivation, and written at publish)
@@ -348,7 +348,7 @@ export async function registerCreatorStudioRoutes(
       builds: await hydrateRecentBuildSummaries({
         builds: toRecentBuilds(pagedVersions),
         ...(locale ? { locale } : {}),
-        loadEvents: (issueNumber) => store.listBuildEvents(issueNumber, { limit: 20 }),
+        loadEvents: (jobId) => store.listBuildEvents(jobId, { limit: 20 }),
       }),
       totalCount,
     };

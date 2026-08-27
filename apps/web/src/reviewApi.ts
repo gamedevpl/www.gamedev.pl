@@ -20,7 +20,7 @@ export interface ReviewQueueItem {
   source: AssessmentSource;
   creatorHandle: string | null;
   genre: string | null;
-  issueNumber: number | null;
+  jobId: number | null;
   media: ReviewQueueMedia | null;
   // Set when an operator targeted this slug for re-review.
   reReview?: { reason: string | null; gameVersion: string | null; requestedAt: string } | null;

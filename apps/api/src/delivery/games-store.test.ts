@@ -618,7 +618,7 @@ describe('GCS games store', () => {
 
     const { version, manifest } = await store.putCandidateSources({
       slug: 'comet-courier',
-      issueNumber: 42,
+      jobId: 42,
       files: MINIMAL,
       backend: 'copilot',
       model: 'claude-sonnet-4.6',
@@ -631,7 +631,7 @@ describe('GCS games store', () => {
     expect(objects.has(`games/comet-courier/versions/${version}/source/game.ts`)).toBe(true);
     // Provenance is the point: which job, which backend, which model, which engine.
     expect(manifest).toMatchObject({
-      issueNumber: 42,
+      jobId: 42,
       backend: 'copilot',
       model: 'claude-sonnet-4.6',
       engineRef: 'abc123',
@@ -646,7 +646,7 @@ describe('GCS games store', () => {
     }) as unknown as typeof fetch;
 
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
-    await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
+    await store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL });
 
     expect(writes.at(-1)).toMatch(/manifest\.json$/);
   });
@@ -655,7 +655,7 @@ describe('GCS games store', () => {
     const { impl, objects } = stubGcs();
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
 
-    await expect(store.putCandidateSources({ slug: '../evil', issueNumber: 1, files: MINIMAL })).rejects.toThrow(
+    await expect(store.putCandidateSources({ slug: '../evil', jobId: 1, files: MINIMAL })).rejects.toThrow(
       InvalidUploadError,
     );
     expect(objects.size).toBe(0);
@@ -666,7 +666,7 @@ describe('GCS games store', () => {
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
     const { version } = await store.putCandidateSources({
       slug: 'g',
-      issueNumber: 1,
+      jobId: 1,
       roundGeneration: 4,
       files: MINIMAL,
     });
@@ -680,7 +680,7 @@ describe('GCS games store', () => {
   it('writes a changelog sentence onto an existing version', async () => {
     const { impl } = stubGcs();
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
-    const { version } = await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
+    const { version } = await store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL });
 
     await store.setVersionSummary('g', version, '  Jump feels tighter.  ');
 
@@ -691,15 +691,15 @@ describe('GCS games store', () => {
     const { impl, objects } = stubGcs();
     let tick = 0;
     const store = createGcsGamesStore({ ...base, fetchImpl: impl, versionId: () => `v${++tick}` });
-    await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
-    await store.putCandidateSources({ slug: 'g', issueNumber: 2, files: MINIMAL });
+    await store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL });
+    await store.putCandidateSources({ slug: 'g', jobId: 2, files: MINIMAL });
     // An interrupted upload: source objects landed, the manifest never did.
     objects.set('games/g/versions/v9/source/game.ts', Buffer.from('x'));
 
     const versions = await store.listVersions('g');
 
     expect(versions.map((manifest) => manifest.version)).toEqual(['v2', 'v1']);
-    expect(versions[0]).toMatchObject({ issueNumber: 2 });
+    expect(versions[0]).toMatchObject({ jobId: 2 });
 
     const limited = await store.listVersions('g', { limit: 1 });
     expect(limited.map((manifest) => manifest.version)).toEqual(['v2']);
@@ -716,34 +716,32 @@ describe('GCS games store', () => {
     for (const file of draft) {
       await store.putStagedSourceFile({
         slug: 'g',
-        issueNumber: 7,
+        jobId: 7,
         roundGeneration: 1,
         path: file.path,
         content: file.content,
       });
     }
 
-    const listed = await store.listStagedSources({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
+    const listed = await store.listStagedSources({ slug: 'g', jobId: 7, roundGeneration: 1 });
     expect(listed.files.map((f) => f.path).sort()).toEqual(draft.map((f) => f.path).sort());
     expect(objects.has('games/g/staging/7/g1/source/game.ts')).toBe(true);
-    expect(await store.getStagedSourceFile({ slug: 'g', issueNumber: 7, roundGeneration: 1, path: 'game.ts' })).toBe(
+    expect(await store.getStagedSourceFile({ slug: 'g', jobId: 7, roundGeneration: 1, path: 'game.ts' })).toBe(
       draft.find((f) => f.path === 'game.ts')!.content,
     );
-    expect(
-      await store.getStagedSourceFile({ slug: 'g', issueNumber: 7, roundGeneration: 1, path: 'missing.ts' }),
-    ).toBeNull();
+    expect(await store.getStagedSourceFile({ slug: 'g', jobId: 7, roundGeneration: 1, path: 'missing.ts' })).toBeNull();
 
-    const assembled = await store.getStagedSourceFiles({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
+    const assembled = await store.getStagedSourceFiles({ slug: 'g', jobId: 7, roundGeneration: 1 });
     const { version } = await store.putCandidateSources({
       slug: 'g',
-      issueNumber: 7,
+      jobId: 7,
       files: assembled,
       mode: 'preview',
     });
     expect(version).toBeTruthy();
 
-    await store.clearStagedSources({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
-    expect((await store.listStagedSources({ slug: 'g', issueNumber: 7, roundGeneration: 1 })).files).toEqual([]);
+    await store.clearStagedSources({ slug: 'g', jobId: 7, roundGeneration: 1 });
+    expect((await store.listStagedSources({ slug: 'g', jobId: 7, roundGeneration: 1 })).files).toEqual([]);
   });
 
   it('refuses to stage a non-blank index.html, but a blank one is a no-op', async () => {
@@ -753,7 +751,7 @@ describe('GCS games store', () => {
     await expect(
       store.putStagedSourceFile({
         slug: 'g',
-        issueNumber: 7,
+        jobId: 7,
         roundGeneration: 1,
         path: 'index.html',
         content: '<canvas id="game"></canvas>',
@@ -763,7 +761,7 @@ describe('GCS games store', () => {
     await expect(
       store.putStagedSourceFile({
         slug: 'g',
-        issueNumber: 7,
+        jobId: 7,
         roundGeneration: 1,
         path: 'index.html',
         content: '   \n  ',
@@ -777,7 +775,7 @@ describe('GCS games store', () => {
 
     await store.putStagedSourceFile({
       slug: 'g',
-      issueNumber: 7,
+      jobId: 7,
       roundGeneration: 1,
       path: 'game/old-module.ts',
       content: 'export const dead = 1;',
@@ -786,7 +784,7 @@ describe('GCS games store', () => {
 
     const deleted = await store.deleteStagedSourceFile({
       slug: 'g',
-      issueNumber: 7,
+      jobId: 7,
       roundGeneration: 1,
       path: 'game/old-module.ts',
     });
@@ -794,15 +792,15 @@ describe('GCS games store', () => {
     // Never re-read as content.
     expect(objects.has('games/g/staging/7/g1/source/game/old-module.ts')).toBe(false);
 
-    const listed = await store.listStagedSources({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
+    const listed = await store.listStagedSources({ slug: 'g', jobId: 7, roundGeneration: 1 });
     // CE-04: every staging write is now stamped with who wrote it; omitted here defaults to 'agent'.
     expect(listed.files).toEqual([{ path: 'game/old-module.ts', bytes: 0, deleted: true, stagedBy: 'agent' }]);
 
-    const assembled = await store.getStagedSourceFiles({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
+    const assembled = await store.getStagedSourceFiles({ slug: 'g', jobId: 7, roundGeneration: 1 });
     expect(assembled).toEqual([{ path: 'game/old-module.ts', content: '', deleted: true }]);
 
     expect(
-      await store.getStagedSourceFile({ slug: 'g', issueNumber: 7, roundGeneration: 1, path: 'game/old-module.ts' }),
+      await store.getStagedSourceFile({ slug: 'g', jobId: 7, roundGeneration: 1, path: 'game/old-module.ts' }),
     ).toBeNull();
   });
 
@@ -843,7 +841,7 @@ describe('GCS games store', () => {
       if (name.endsWith('/manifest.json') && manifestWrites >= 1 && !objects.has(name)) {
         const concurrent = {
           slug: 'g',
-          issueNumber: 7,
+          jobId: 7,
           roundGeneration: 1,
           updatedAt: '2026-07-30T10:00:00.000Z',
           files: [{ path: 'SPEC.md', bytes: 3 }],
@@ -863,7 +861,7 @@ describe('GCS games store', () => {
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
     const result = await store.putStagedSourceFile({
       slug: 'g',
-      issueNumber: 7,
+      jobId: 7,
       roundGeneration: 1,
       path: 'game.ts',
       content: 'export {};',
@@ -913,7 +911,7 @@ describe('GCS games store', () => {
       paths.map((path) =>
         store.putStagedSourceFile({
           slug: 'g',
-          issueNumber: 7,
+          jobId: 7,
           roundGeneration: 1,
           path,
           content: `export const mod = "${path}";`,
@@ -922,7 +920,7 @@ describe('GCS games store', () => {
     );
 
     expect(results).toHaveLength(20);
-    const listed = await store.listStagedSources({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
+    const listed = await store.listStagedSources({ slug: 'g', jobId: 7, roundGeneration: 1 });
     expect(listed.files.map((f) => f.path).sort()).toEqual(paths.sort());
   });
 
@@ -932,7 +930,7 @@ describe('GCS games store', () => {
     const draft = MINIMAL.filter((f) => f.path !== 'TRACE.json' && f.path !== 'PLAYTEST.json');
     const { version } = await store.putCandidateSources({
       slug: 'g',
-      issueNumber: 1,
+      jobId: 1,
       files: draft,
       mode: 'preview',
     });
@@ -955,7 +953,7 @@ describe('GCS games store', () => {
   it('records mid-gate progress and clears it when a verdict lands', async () => {
     const { impl } = stubGcs();
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
-    const { version } = await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
+    const { version } = await store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL });
 
     await store.putGateProgress('g', version, {
       lane: 'preview',
@@ -1015,7 +1013,7 @@ describe('GCS games store', () => {
     }) as unknown as typeof fetch;
 
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
-    const { version } = await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
+    const { version } = await store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL });
     const manifestName = `games/g/versions/${version}/manifest.json`;
     const genBefore = generations.get(manifestName) ?? 0;
 
@@ -1038,7 +1036,7 @@ describe('GCS games store', () => {
   it('pins the engine the first gate run checked against, and never repins', async () => {
     const { impl } = stubGcs();
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
-    const { version } = await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
+    const { version } = await store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL });
 
     await store.putGateResult('g', version, { green: true, engineRef: 'aaa111' });
     // A later re-run against a moved engine must not rewrite what the verdict was
@@ -1051,7 +1049,7 @@ describe('GCS games store', () => {
   it('records a health verdict beside the gate verdict, never over it', async () => {
     const { impl } = stubGcs();
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
-    const { version } = await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
+    const { version } = await store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL });
     await store.putGateResult('g', version, { green: true, report: 'accepted' });
 
     // The engine moved on and the same game now fails. The acceptance verdict is the
@@ -1067,7 +1065,7 @@ describe('GCS games store', () => {
   it('round-trips derived artifacts the gate produces', async () => {
     const { impl } = stubGcs();
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
-    const { version } = await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
+    const { version } = await store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL });
 
     await store.putDerivedArtifact('g', version, 'bundle.html', Buffer.from('<!doctype html>'), 'text/html');
 
@@ -1090,7 +1088,7 @@ describe('GCS games store', () => {
     }) as unknown as typeof fetch;
 
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
-    await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
+    await store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL });
 
     expect(headers[0]['cache-control']).toContain('immutable');
   });

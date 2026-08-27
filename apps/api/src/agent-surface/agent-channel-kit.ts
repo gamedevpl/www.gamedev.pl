@@ -17,7 +17,7 @@ export interface AgentChannelKitRoutesDeps {
   resolveBuild: (
     request: FastifyRequest,
     reply: FastifyReply,
-  ) => Promise<{ issueNumber: number; record: SubmissionRecord; access: AgentTokenAccess } | null>;
+  ) => Promise<{ jobId: number; record: SubmissionRecord; access: AgentTokenAccess } | null>;
   store: Store | undefined;
   objectStore: GcsObjectStore | undefined;
   gateVerdict: (record: SubmissionRecord) => Promise<GateVerdictSummary | null>;
@@ -50,10 +50,9 @@ export function registerAgentChannelKitRoutes(app: FastifyInstance, deps: AgentC
         const previousPin = resolved.record.roundKitEngineRef;
         const outdated = (await gateVerdict(resolved.record))?.status === 'kit_outdated';
         let engineRef =
-          (await store!.pinRoundKitEngineRef(resolved.issueNumber, registry.current, outdated)) ?? registry.current;
+          (await store!.pinRoundKitEngineRef(resolved.jobId, registry.current, outdated)) ?? registry.current;
         if (engineRef !== registry.current && !(await objectStore.objectExists(`kits/${engineRef}.tgz`))) {
-          engineRef =
-            (await store!.pinRoundKitEngineRef(resolved.issueNumber, registry.current, true)) ?? registry.current;
+          engineRef = (await store!.pinRoundKitEngineRef(resolved.jobId, registry.current, true)) ?? registry.current;
         }
         const kitEngineChanged = Boolean(previousPin) && previousPin !== engineRef;
         const sidecarBody = await objectStore.readObject(`kits/${engineRef}.json`);

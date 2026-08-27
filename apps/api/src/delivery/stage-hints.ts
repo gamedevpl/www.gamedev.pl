@@ -31,7 +31,7 @@ export async function computeStageAdvisories(input: {
     seed?: { files: { path: string; content: string }[] };
   };
   slug: string;
-  issueNumber: number;
+  jobId: number;
   roundGeneration: number;
   engineRef: string | undefined;
   path: string;
@@ -100,12 +100,12 @@ async function buildOverlay(input: {
     seed?: { files: { path: string; content: string }[] };
   };
   slug: string;
-  issueNumber: number;
+  jobId: number;
   roundGeneration: number;
 }): Promise<Record<string, string>> {
   const staged = await input.gamesStore.getStagedSourceFiles({
     slug: input.slug,
-    issueNumber: input.issueNumber,
+    jobId: input.jobId,
     roundGeneration: input.roundGeneration,
   });
   const delivered = await readDeliveredSources({

@@ -79,7 +79,7 @@ export interface ReviewQueueItem {
   source: AssessmentSource;
   creatorHandle: string | null;
   genre: string | null;
-  issueNumber: number | null;
+  jobId: number | null;
   media: ReviewCatalogMedia | null;
   // Set when an operator targeted this slug for re-review.
   reReview?: { reason: string | null; gameVersion: string | null; requestedAt: string } | null;
@@ -160,7 +160,7 @@ export function isReviewerSession(
 function titleFromSubmission(record: SubmissionRecord): string {
   const titled = record.title.trim();
   if (titled) return titled;
-  return record.slug ?? `issue-${record.issueNumber}`;
+  return record.slug ?? `issue-${record.jobId}`;
 }
 
 export function isReviewableCreatorDraft(record: SubmissionRecord): boolean {
@@ -206,7 +206,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
           source: 'catalog',
           creatorHandle: entry.creatorHandle,
           genre: entry.genre ?? null,
-          issueNumber: null,
+          jobId: null,
           media: entry.media ?? null,
         });
         if (items.length >= MAX_SWEEP_GAMES) return items;
@@ -230,7 +230,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
           source: 'creator',
           creatorHandle,
           genre: null,
-          issueNumber: record.issueNumber,
+          jobId: record.jobId,
           media: null,
         });
         if (items.length >= MAX_SWEEP_GAMES) break;
@@ -266,7 +266,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
         source: 'catalog',
         creatorHandle: entry.creatorHandle,
         genre: entry.genre ?? null,
-        issueNumber: null,
+        jobId: null,
         media: entry.media ?? null,
       };
     }
@@ -284,7 +284,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
       source: 'creator',
       creatorHandle,
       genre: null,
-      issueNumber: record.issueNumber,
+      jobId: record.jobId,
       media: null,
     };
   }

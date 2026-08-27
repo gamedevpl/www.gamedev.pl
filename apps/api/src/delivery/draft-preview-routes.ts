@@ -22,12 +22,7 @@ export interface DraftPreviewRoutesOptions {
 
 export interface DraftPreviewRoutesHandle {
   canPlayDraft(request: FastifyRequest, slug: string): Promise<boolean>;
-  replyWithDraft(
-    request: FastifyRequest,
-    reply: FastifyReply,
-    issueNumber: number,
-    versionOverride?: string,
-  ): Promise<void>;
+  replyWithDraft(request: FastifyRequest, reply: FastifyReply, jobId: number, versionOverride?: string): Promise<void>;
 }
 
 // Serves a build's playable HTML to its owner or sharer.
@@ -45,14 +40,14 @@ export async function registerDraftPreviewRoutes(
   const draftPreviewTtlMs = 5 * 60_000;
   const draftPreviewCache = new Map<number, CachedDraftPreview>();
 
-  function rememberDraftPreview(issueNumber: number, entry: CachedDraftPreview): void {
+  function rememberDraftPreview(jobId: number, entry: CachedDraftPreview): void {
     // Newest slot first so an active build outlives abandoned ones.
-    draftPreviewCache.delete(issueNumber);
+    draftPreviewCache.delete(jobId);
     if (draftPreviewCache.size >= maxCachedDraftPreviews) {
       const oldestKey = draftPreviewCache.keys().next().value;
       if (oldestKey !== undefined) draftPreviewCache.delete(oldestKey);
     }
-    draftPreviewCache.set(issueNumber, entry);
+    draftPreviewCache.set(jobId, entry);
   }
 
   // Playable only by its owner, or anyone the creator shared it with.
@@ -82,7 +77,7 @@ export async function registerDraftPreviewRoutes(
     if (!gamesStore || !slug || !playableVersion) return false;
 
     if (!versionOverride) {
-      const cached = draftPreviewCache.get(record.issueNumber);
+      const cached = draftPreviewCache.get(record.jobId);
       if (cached && cached.revision === playableVersion && cached.expiresAt > now()) {
         reply.send(cached.value);
         return true;
@@ -98,14 +93,14 @@ export async function registerDraftPreviewRoutes(
 
     const value: DraftPreviewValue = { slug, title: record.title || slug, html: bundle.toString('utf8') };
     if (!versionOverride) {
-      rememberDraftPreview(record.issueNumber, {
+      rememberDraftPreview(record.jobId, {
         value,
         revision: playableVersion,
         expiresAt: now() + draftPreviewTtlMs,
       });
     }
     request.log.info(
-      { issueNumber: record.issueNumber, slug, version: playableVersion, artifact },
+      { jobId: record.jobId, slug, version: playableVersion, artifact },
       'served gate-built preview for a delivered version',
     );
     reply.send(value);
@@ -115,20 +110,20 @@ export async function registerDraftPreviewRoutes(
   async function replyWithDraft(
     request: FastifyRequest,
     reply: FastifyReply,
-    issueNumber: number,
+    jobId: number,
     versionOverride?: string,
   ): Promise<void> {
     const serveLastKnown = (reason: string, err?: unknown): boolean => {
       if (versionOverride) return false;
-      const lastKnown = draftPreviewCache.get(issueNumber);
+      const lastKnown = draftPreviewCache.get(jobId);
       if (!lastKnown) return false;
-      request.log.warn({ err, issueNumber, revision: lastKnown.revision }, reason);
+      request.log.warn({ err, jobId, revision: lastKnown.revision }, reason);
       reply.send(lastKnown.value);
       return true;
     };
 
     // Guarded on gamesStore: without one, the record can't change the answer.
-    const record = gamesStore ? await store?.getSubmission(issueNumber) : null;
+    const record = gamesStore ? await store?.getSubmission(jobId) : null;
     if (record) {
       try {
         if (await replyWithStoredDraft(request, reply, record, versionOverride)) return;
@@ -137,7 +132,7 @@ export async function registerDraftPreviewRoutes(
         if (serveLastKnown('stored draft read failed; serving last known draft', error)) return;
 
         // No second source left — this is a failure, not a pending state.
-        request.log.error({ err: error, issueNumber }, 'stored draft preview failed');
+        request.log.error({ err: error, jobId }, 'stored draft preview failed');
         reply.status(502).send({ error: 'failed to load preview' });
         return;
       }
@@ -145,7 +140,7 @@ export async function registerDraftPreviewRoutes(
     if (serveLastKnown('no delivery yet for native job; serving last known draft')) return;
     // No store means no delivery can ever land — nothing to wait for.
     if (!gamesStore) {
-      request.log.error({ issueNumber }, 'preview requested for a native job with no games store configured');
+      request.log.error({ jobId }, 'preview requested for a native job with no games store configured');
       reply.status(503).send({ error: 'previews are not configured on this deployment' });
       return;
     }
@@ -174,9 +169,9 @@ export async function registerDraftPreviewRoutes(
         return reply.status(429).send({ error: 'too many preview requests, please try again later' });
       }
 
-      let issueNumber: number;
+      let jobId: number;
       try {
-        issueNumber = verifyToken(token, submissionTokenSecret);
+        jobId = verifyToken(token, submissionTokenSecret);
       } catch (error) {
         if (error instanceof InvalidTokenError) {
           return reply.status(400).send({ error: 'invalid submission token' });
@@ -184,7 +179,7 @@ export async function registerDraftPreviewRoutes(
         throw error;
       }
 
-      return replyWithDraft(request, reply, issueNumber, requestedVersion);
+      return replyWithDraft(request, reply, jobId, requestedVersion);
     },
   );
 
@@ -217,7 +212,7 @@ export async function registerDraftPreviewRoutes(
       return reply.status(404).send({ error: 'draft not found' });
     }
 
-    return replyWithDraft(request, reply, record.issueNumber);
+    return replyWithDraft(request, reply, record.jobId);
   });
 
   return { canPlayDraft, replyWithDraft };

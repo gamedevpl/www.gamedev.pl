@@ -403,7 +403,7 @@ describe('health re-gate verdicts on the notify sweep', () => {
         slug: 'sky-dodge',
         version: 'v1',
         createdAt: '2026-06-30T00:00:00.000Z',
-        issueNumber: 1_000_042,
+        jobId: 1_000_042,
         sourceFiles: [],
         ...(health ? { health: { ...health, report: 'trace diverged' } } : {}),
       }),

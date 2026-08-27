@@ -3,7 +3,7 @@
 export const KNOWLEDGE_QUERY_LOG_MSG = 'knowledge_query answered';
 
 export interface KnowledgeQueryTelemetry {
-  issueNumber: number;
+  jobId: number;
   mode: 'answer' | 'chunks';
   scope?: string;
   cacheHit: boolean;

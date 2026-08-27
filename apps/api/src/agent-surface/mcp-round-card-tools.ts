@@ -23,7 +23,7 @@ const READS = {
 } as const;
 
 interface AuthedRoundJob {
-  issueNumber: number;
+  jobId: number;
   record: SubmissionRecord;
   access: AgentTokenAccess;
   channelToken: string;
@@ -131,8 +131,8 @@ export function createRoundCardTools(deps: RoundCardToolsDeps): Record<string, R
     });
 
     const [events, shots] = await Promise.all([
-      store.listBuildEvents(auth.issueNumber, { limit: 1 }),
-      store.listBuildShots(auth.issueNumber, { limit: 1 }),
+      store.listBuildEvents(auth.jobId, { limit: 1 }),
+      store.listBuildShots(auth.jobId, { limit: 1 }),
     ]);
 
     const latestEvent = events[0];
@@ -141,7 +141,7 @@ export function createRoundCardTools(deps: RoundCardToolsDeps): Record<string, R
     let shot: Record<string, unknown> | null = null;
     if (latestShot) {
       // Bytes sent only when the view does not already hold this frame.
-      const full = latestShot.id !== sinceShotId ? await store.getBuildShot(auth.issueNumber, latestShot.id) : null;
+      const full = latestShot.id !== sinceShotId ? await store.getBuildShot(auth.jobId, latestShot.id) : null;
       shot = {
         id: latestShot.id,
         createdAt: latestShot.createdAt,

@@ -5,7 +5,7 @@ import type { SubmissionRecord, User } from '../platform/store.js';
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = Date.parse('2026-08-01T12:00:00.000Z');
 
-function submission(partial: Partial<SubmissionRecord> & { issueNumber: number }): SubmissionRecord {
+function submission(partial: Partial<SubmissionRecord> & { jobId: number }): SubmissionRecord {
   return {
     ownerUid: 'g:a',
     createdAt: '2026-07-01T10:00:00.000Z',
@@ -48,7 +48,7 @@ describe('summarizeCreatorMetrics', () => {
   it('excludes creators whose 7 days have not elapsed yet', () => {
     const justPublished = new Date(NOW - 2 * DAY).toISOString();
     const metrics = summarizeCreatorMetrics(
-      [submission({ issueNumber: 1, ownerUid: 'g:a', publishedAt: justPublished })],
+      [submission({ jobId: 1, ownerUid: 'g:a', publishedAt: justPublished })],
       new Map([['g:a', user('g:a', [])]]),
       NOW,
     );
@@ -63,8 +63,8 @@ describe('summarizeCreatorMetrics', () => {
   it('computes the return rate over eligible creators', () => {
     const metrics = summarizeCreatorMetrics(
       [
-        submission({ issueNumber: 1, ownerUid: 'g:a', publishedAt: '2026-07-10T09:00:00.000Z' }),
-        submission({ issueNumber: 2, ownerUid: 'g:b', publishedAt: '2026-07-10T09:00:00.000Z' }),
+        submission({ jobId: 1, ownerUid: 'g:a', publishedAt: '2026-07-10T09:00:00.000Z' }),
+        submission({ jobId: 2, ownerUid: 'g:b', publishedAt: '2026-07-10T09:00:00.000Z' }),
       ],
       new Map([
         ['g:a', user('g:a', ['2026-07-12'])],
@@ -81,9 +81,9 @@ describe('summarizeCreatorMetrics', () => {
   it('counts a prolific creator once, not once per game', () => {
     const metrics = summarizeCreatorMetrics(
       [
-        submission({ issueNumber: 1, ownerUid: 'g:a', publishedAt: '2026-07-10T09:00:00.000Z' }),
-        submission({ issueNumber: 2, ownerUid: 'g:a', publishedAt: '2026-07-11T09:00:00.000Z' }),
-        submission({ issueNumber: 3, ownerUid: 'g:a', publishedAt: '2026-07-12T09:00:00.000Z' }),
+        submission({ jobId: 1, ownerUid: 'g:a', publishedAt: '2026-07-10T09:00:00.000Z' }),
+        submission({ jobId: 2, ownerUid: 'g:a', publishedAt: '2026-07-11T09:00:00.000Z' }),
+        submission({ jobId: 3, ownerUid: 'g:a', publishedAt: '2026-07-12T09:00:00.000Z' }),
       ],
       new Map([['g:a', user('g:a', [])]]),
       NOW,
@@ -97,7 +97,7 @@ describe('summarizeCreatorMetrics', () => {
   it('reports build duration as median and slow tail', () => {
     const builds = [10, 20, 30, 40, 300].map((minutes, index) =>
       submission({
-        issueNumber: index + 1,
+        jobId: index + 1,
         ownerUid: `g:${index}`,
         createdAt: '2026-07-01T10:00:00.000Z',
         publishedAt: new Date(Date.parse('2026-07-01T10:00:00.000Z') + minutes * 60_000).toISOString(),
@@ -112,10 +112,7 @@ describe('summarizeCreatorMetrics', () => {
 
   it('ignores submissions that never published', () => {
     const metrics = summarizeCreatorMetrics(
-      [
-        submission({ issueNumber: 1, ownerUid: 'g:a' }),
-        submission({ issueNumber: 2, ownerUid: 'g:a', abandonedAt: 'x' }),
-      ],
+      [submission({ jobId: 1, ownerUid: 'g:a' }), submission({ jobId: 2, ownerUid: 'g:a', abandonedAt: 'x' })],
       new Map(),
       NOW,
     );

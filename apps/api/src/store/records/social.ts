@@ -17,7 +17,7 @@ export interface GameVoteCounts {
  *
  * Keyed by **slug**, not by the submission that built the game — `games/{slug}/playerFeedback/{id}`,
  * matching `games/{slug}/votes/{uid}`. The plan originally put this under
- * `submissions/{issueNumber}/playerFeedback/{id}` on the theory that a takedown removes it
+ * `submissions/{jobId}/playerFeedback/{id}` on the theory that a takedown removes it
  * with the submission; that repeats the exact mistake telemetry and votes both made and
  * corrected, since most published games (the ones with real play, i.e. real feedback) have
  * no submission document at all. Corrected here in the same change, like the votes move.

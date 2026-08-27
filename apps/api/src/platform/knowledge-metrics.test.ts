@@ -15,7 +15,7 @@ describe('logKnowledgeQuery', () => {
   it('uses a stable message, because a log filter matches on it', () => {
     const { infos, logger } = fakeLog();
     logKnowledgeQuery(logger, {
-      issueNumber: 9,
+      jobId: 9,
       mode: 'answer',
       scope: 'kit',
       cacheHit: false,
@@ -30,7 +30,7 @@ describe('logKnowledgeQuery', () => {
     expect(infos[0]?.msg).toBe(KNOWLEDGE_QUERY_LOG_MSG);
     expect(infos[0]?.obj).toEqual({
       knowledgeQuery: {
-        issueNumber: 9,
+        jobId: 9,
         mode: 'answer',
         scope: 'kit',
         cacheHit: false,

@@ -150,7 +150,7 @@ describe('resolveGameAgentKeyForOpenRound', () => {
     const result = await resolveGameAgentKeyForOpenRound(store, gameKey(), secret);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.publishedRecord.issueNumber).toBe(PUBLISHED_ISSUE);
+      expect(result.publishedRecord.jobId).toBe(PUBLISHED_ISSUE);
       expect(result.activeRound).toBeNull();
     }
   });
@@ -371,7 +371,7 @@ describe('MCP open_round (BY-24 / BY-27b)', () => {
     expect(newOpens).toHaveLength(1);
 
     const owned = await store.listSubmissionsByOwner(OWNER, { limit: 50 });
-    const active = owned.filter((job) => job.slug === SLUG && job.issueNumber !== PUBLISHED_ISSUE);
+    const active = owned.filter((job) => job.slug === SLUG && job.jobId !== PUBLISHED_ISSUE);
     expect(active).toHaveLength(1);
 
     const dateStr = new Date().toISOString().slice(0, 10);
@@ -394,7 +394,7 @@ describe('MCP open_round (BY-24 / BY-27b)', () => {
     expect(second.structured).toMatchObject({ jobId, alreadyOpen: true });
 
     const owned = await store.listSubmissionsByOwner(OWNER, { limit: 50 });
-    const active = owned.filter((job) => job.slug === SLUG && job.issueNumber !== PUBLISHED_ISSUE);
+    const active = owned.filter((job) => job.slug === SLUG && job.jobId !== PUBLISHED_ISSUE);
     expect(active).toHaveLength(1);
   });
 

@@ -21,7 +21,7 @@ vi.mock('./adminJobsApi.js', () => mocked);
 
 function job(overrides: Partial<JobQueueEntry> = {}): JobQueueEntry {
   return {
-    issueNumber: 1_000_001,
+    jobId: 1_000_001,
     title: 'Comet Courier',
     ownerUid: 'g:1',
     slug: 'comet-courier',
@@ -64,7 +64,7 @@ afterEach(() => {
 describe('AdminJobsPanel', () => {
   it('offers publish only for a build the gate has passed', async () => {
     mocked.fetchJobQueue.mockResolvedValue(
-      queue([job({ issueNumber: 1, state: 'building' }), job({ issueNumber: 2, state: 'ready_for_review' })]),
+      queue([job({ jobId: 1, state: 'building' }), job({ jobId: 2, state: 'ready_for_review' })]),
     );
 
     const { container, root } = await render();
@@ -118,10 +118,10 @@ describe('AdminJobsPanel', () => {
     // Deliberately pass older builds earlier in the queue array (e.g. API priority sort)
     mocked.fetchJobQueue.mockResolvedValue(
       queue([
-        job({ issueNumber: 1000010, title: 'Wargame', slug: 'wargame', state: 'ready_for_review' }),
-        job({ issueNumber: 1000042, title: 'Wargame', slug: 'wargame', state: 'ready_for_review' }),
-        job({ issueNumber: 1000020, title: 'Wargame', slug: 'wargame', state: 'ready_for_review' }),
-        job({ issueNumber: 1000005, title: 'Miniature Warfare', slug: 'miniature-warfare', state: 'ready_for_review' }),
+        job({ jobId: 1000010, title: 'Wargame', slug: 'wargame', state: 'ready_for_review' }),
+        job({ jobId: 1000042, title: 'Wargame', slug: 'wargame', state: 'ready_for_review' }),
+        job({ jobId: 1000020, title: 'Wargame', slug: 'wargame', state: 'ready_for_review' }),
+        job({ jobId: 1000005, title: 'Miniature Warfare', slug: 'miniature-warfare', state: 'ready_for_review' }),
       ]),
     );
 
@@ -212,11 +212,11 @@ describe('AdminJobsPanel', () => {
   it('offers retry on dead rounds and stalled builds in stalled/history filter', async () => {
     mocked.fetchJobQueue.mockResolvedValue(
       queue([
-        job({ issueNumber: 1, slug: 'g1', state: 'failed' }),
-        job({ issueNumber: 2, slug: 'g2', state: 'needs_changes' }),
-        job({ issueNumber: 3, slug: 'g3', state: 'building', stall: 'quiet' }),
-        job({ issueNumber: 4, slug: 'g4', state: 'building' }),
-        job({ issueNumber: 5, slug: 'g5', state: 'ready_for_review' }),
+        job({ jobId: 1, slug: 'g1', state: 'failed' }),
+        job({ jobId: 2, slug: 'g2', state: 'needs_changes' }),
+        job({ jobId: 3, slug: 'g3', state: 'building', stall: 'quiet' }),
+        job({ jobId: 4, slug: 'g4', state: 'building' }),
+        job({ jobId: 5, slug: 'g5', state: 'ready_for_review' }),
       ]),
     );
 
@@ -406,8 +406,8 @@ describe('AdminJobsPanel', () => {
   it('filters jobs using search input', async () => {
     mocked.fetchJobQueue.mockResolvedValue(
       queue([
-        job({ issueNumber: 101, title: 'Super Mario Clone', slug: 'mario-clone', state: 'ready_for_review' }),
-        job({ issueNumber: 102, title: 'Global Thermonuclear Strategy', slug: 'wargame', state: 'ready_for_review' }),
+        job({ jobId: 101, title: 'Super Mario Clone', slug: 'mario-clone', state: 'ready_for_review' }),
+        job({ jobId: 102, title: 'Global Thermonuclear Strategy', slug: 'wargame', state: 'ready_for_review' }),
       ]),
     );
 
@@ -430,7 +430,7 @@ describe('AdminJobsPanel', () => {
   });
 
   it('opens preview modal when Preview button is clicked', async () => {
-    mocked.fetchJobQueue.mockResolvedValue(queue([job({ issueNumber: 1234, title: 'Sky Dodge', slug: 'sky-dodge' })]));
+    mocked.fetchJobQueue.mockResolvedValue(queue([job({ jobId: 1234, title: 'Sky Dodge', slug: 'sky-dodge' })]));
     mocked.fetchJobPreview.mockResolvedValue({
       slug: 'sky-dodge',
       title: 'Sky Dodge',
@@ -469,10 +469,10 @@ describe('AdminJobsPanel', () => {
   it('executes batch publish on deduplicated ready jobs', async () => {
     mocked.fetchJobQueue.mockResolvedValue(
       queue([
-        job({ issueNumber: 10, slug: 'game-1', state: 'ready_for_review' }),
-        job({ issueNumber: 9, slug: 'game-1', state: 'ready_for_review' }), // older superseded build
-        job({ issueNumber: 11, slug: 'game-2', state: 'ready_for_review' }),
-        job({ issueNumber: 12, slug: 'game-3', state: 'building' }),
+        job({ jobId: 10, slug: 'game-1', state: 'ready_for_review' }),
+        job({ jobId: 9, slug: 'game-1', state: 'ready_for_review' }), // older superseded build
+        job({ jobId: 11, slug: 'game-2', state: 'ready_for_review' }),
+        job({ jobId: 12, slug: 'game-3', state: 'building' }),
       ]),
     );
     mocked.publishJob.mockResolvedValue({ ok: true, slug: 'game', version: 'v1', publishedAt: '2026-07-30T12:00:00Z' });
@@ -498,8 +498,8 @@ describe('AdminJobsPanel', () => {
   it('groups builds by game when toggle is checked', async () => {
     mocked.fetchJobQueue.mockResolvedValue(
       queue([
-        job({ issueNumber: 1, title: 'Wargame', slug: 'wargame', state: 'ready_for_review' }),
-        job({ issueNumber: 3, title: 'Asteroids', slug: 'asteroids', state: 'ready_for_review' }),
+        job({ jobId: 1, title: 'Wargame', slug: 'wargame', state: 'ready_for_review' }),
+        job({ jobId: 3, title: 'Asteroids', slug: 'asteroids', state: 'ready_for_review' }),
       ]),
     );
 
@@ -520,8 +520,8 @@ describe('AdminJobsPanel', () => {
   it('computes select-all strictly from matching filtered job IDs', async () => {
     mocked.fetchJobQueue.mockResolvedValue(
       queue([
-        job({ issueNumber: 101, title: 'Super Mario', slug: 'mario', state: 'ready_for_review' }),
-        job({ issueNumber: 102, title: 'Zelda', slug: 'zelda', state: 'ready_for_review' }),
+        job({ jobId: 101, title: 'Super Mario', slug: 'mario', state: 'ready_for_review' }),
+        job({ jobId: 102, title: 'Zelda', slug: 'zelda', state: 'ready_for_review' }),
       ]),
     );
 
@@ -560,7 +560,7 @@ describe('AdminJobsPanel', () => {
   });
 
   it('handles preview fetch failure/rejection gracefully with error state', async () => {
-    mocked.fetchJobQueue.mockResolvedValue(queue([job({ issueNumber: 9999, title: 'Broken Preview', slug: 'broken' })]));
+    mocked.fetchJobQueue.mockResolvedValue(queue([job({ jobId: 9999, title: 'Broken Preview', slug: 'broken' })]));
     mocked.fetchJobPreview.mockRejectedValue(new Error('Network error'));
 
     const { container, root } = await render();

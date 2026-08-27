@@ -41,8 +41,8 @@ function stubGitHub(): GitHubClient {
   };
 }
 
-function agentHeaders(issueNumber = ISSUE, roundGeneration = 1) {
-  return { authorization: `Bearer ${mintAgentToken(issueNumber, secret, { roundGeneration })}` };
+function agentHeaders(jobId = ISSUE, roundGeneration = 1) {
+  return { authorization: `Bearer ${mintAgentToken(jobId, secret, { roundGeneration })}` };
 }
 
 const METADATA = JSON.stringify({
@@ -75,7 +75,7 @@ function stubGamesStore(
           version: VERSION,
           // The job that produced this delivery — the ownership check, since a slug
           // is shared by every improvement round on the same game.
-          issueNumber: ISSUE,
+          jobId: ISSUE,
           gate: { green: true, ranAt: '2026-08-03T10:20:00.000Z' },
         }
       : overrides.manifest;
@@ -315,7 +315,7 @@ describe('GET /api/agent/build/media (BY-28)', () => {
     const manifest = {
       slug: SLUG,
       version: VERSION,
-      issueNumber: ISSUE,
+      jobId: ISSUE,
       gate: { green: false, ranAt: '2026-08-03T10:20:00.000Z', screenshot: 'media/opening.png' },
     };
     app = await createApp(store, stubGamesStore({ artifacts, manifest }), stubObjectStore().objectStore);
@@ -433,7 +433,7 @@ describe('GET /api/agent/build/media (BY-28)', () => {
     const manifest = {
       slug: SLUG,
       version: VERSION,
-      issueNumber: ISSUE,
+      jobId: ISSUE,
       previewGate: { green: true, ranAt: '2026-08-03T20:00:00.000Z', screenshot: 'media/opening.png' },
     };
     app = await createApp(store, stubGamesStore({ manifest }), stubObjectStore().objectStore);
@@ -459,7 +459,7 @@ describe('GET /api/agent/build/media (BY-28)', () => {
     const manifest = {
       slug: SLUG,
       version: VERSION,
-      issueNumber: ISSUE,
+      jobId: ISSUE,
       previewGate: { green: true, ranAt: '2026-08-05T06:00:00.000Z', screenshot: 'media/opening.png' },
     };
     app = await createApp(store, stubGamesStore({ artifacts, manifest }), stubObjectStore().objectStore);
@@ -484,7 +484,7 @@ describe('GET /api/agent/build/media (BY-28)', () => {
     const manifest = {
       slug: SLUG,
       version: VERSION,
-      issueNumber: ISSUE,
+      jobId: ISSUE,
       previewGate: { green: true, ranAt: '2026-08-05T06:00:00.000Z', screenshot: 'media/opening.png' },
       gate: { green: false, ranAt: '2026-08-05T06:30:00.000Z' },
     };
@@ -503,7 +503,7 @@ describe('GET /api/agent/build/media (BY-28)', () => {
     const manifest = {
       slug: SLUG,
       version: VERSION,
-      issueNumber: ISSUE,
+      jobId: ISSUE,
       previewGate: { green: true, ranAt: '2026-08-03T20:00:00.000Z' },
       gate: { green: false, ranAt: '2026-08-03T21:00:00.000Z' },
     };
@@ -518,7 +518,7 @@ describe('GET /api/agent/build/media (BY-28)', () => {
     // Every improvement round is a new job that inherits the published slug, so an
     // earlier round's version resolves fine under this one's slug — and after a slug
     // transfer that earlier job can belong to a different creator. The manifest's own
-    // issueNumber is the ownership check; the slug never was one. Codex #506 P2.
+    // jobId is the ownership check; the slug never was one. Codex #506 P2.
     const store = new InMemoryStore();
     await seedDeliveredJob(store);
     const EARLIER_JOB_VERSION = 'v20260101T090000000-aaaaaa';
@@ -526,7 +526,7 @@ describe('GET /api/agent/build/media (BY-28)', () => {
       getManifest: async (slug: string, version: string) =>
         slug === SLUG && version === EARLIER_JOB_VERSION
           ? // Same slug, different job — a predecessor round's delivery.
-            { slug: SLUG, version: EARLIER_JOB_VERSION, issueNumber: ISSUE - 7, gate: { green: true, ranAt: 'x' } }
+            { slug: SLUG, version: EARLIER_JOB_VERSION, jobId: ISSUE - 7, gate: { green: true, ranAt: 'x' } }
           : null,
       getDerivedArtifact: async () => Buffer.from(METADATA),
       getSourceFile: async () => null,

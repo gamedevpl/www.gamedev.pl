@@ -49,12 +49,7 @@ async function createApp(
     knowledgeSearch?: AgentChannelOptions['knowledgeSearch'];
     maxKnowledgeAnswersPerWindow?: number;
     maxKnowledgeChunksPerWindow?: number;
-    onSourcesDelivered?: (input: {
-      issueNumber: number;
-      slug: string;
-      version: string;
-      mode?: 'health' | 'preview';
-    }) => void;
+    onSourcesDelivered?: (input: { jobId: number; slug: string; version: string; mode?: 'health' | 'preview' }) => void;
     onBuilderHandoffAcknowledged?: AgentChannelOptions['onBuilderHandoffAcknowledged'];
   },
   extra?: {
@@ -85,14 +80,14 @@ function creatorHeaders(uid = 'g:owner') {
   return { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, sessionSecret)}` };
 }
 
-async function seedSubmission(store: InMemoryStore, issueNumber = ISSUE) {
-  await store.createSubmission(issueNumber, 'g:owner', 'Squad game');
-  await store.setSubmissionLocale(issueNumber, 'pl');
+async function seedSubmission(store: InMemoryStore, jobId = ISSUE) {
+  await store.createSubmission(jobId, 'g:owner', 'Squad game');
+  await store.setSubmissionLocale(jobId, 'pl');
 }
 
-function agentHeaders(issueNumber = ISSUE, roundGeneration = 1) {
+function agentHeaders(jobId = ISSUE, roundGeneration = 1) {
   return {
-    authorization: `Bearer ${mintAgentToken(issueNumber, secret, { roundGeneration })}`,
+    authorization: `Bearer ${mintAgentToken(jobId, secret, { roundGeneration })}`,
   };
 }
 
@@ -504,9 +499,9 @@ describe('agent build channel', () => {
     await seedSubmission(store);
     await store.requestBuilderHandoff(ISSUE, 'self', new Date().toISOString());
     app = await createApp(store, {
-      onBuilderHandoffAcknowledged: async ({ issueNumber, acknowledgedAt }) => {
-        const handoff = await store.acknowledgeBuilderHandoff(issueNumber, acknowledgedAt);
-        await store.clearBuilderHandoff(issueNumber);
+      onBuilderHandoffAcknowledged: async ({ jobId, acknowledgedAt }) => {
+        const handoff = await store.acknowledgeBuilderHandoff(jobId, acknowledgedAt);
+        await store.clearBuilderHandoff(jobId);
         return { started: handoff !== null };
       },
     });
@@ -689,9 +684,9 @@ describe('agent build channel', () => {
     await seedSubmission(store);
     await store.requestBuilderHandoff(ISSUE, 'self', new Date().toISOString());
     app = await createApp(store, {
-      onBuilderHandoffAcknowledged: async ({ issueNumber, acknowledgedAt }) => {
-        const handoff = await store.acknowledgeBuilderHandoff(issueNumber, acknowledgedAt);
-        await store.clearBuilderHandoff(issueNumber);
+      onBuilderHandoffAcknowledged: async ({ jobId, acknowledgedAt }) => {
+        const handoff = await store.acknowledgeBuilderHandoff(jobId, acknowledgedAt);
+        await store.clearBuilderHandoff(jobId);
         return { started: handoff !== null };
       },
     });
@@ -755,9 +750,9 @@ describe('agent build channel', () => {
     const msg = await store.appendCreatorMessage(ISSUE, 'feedback');
     await store.requestBuilderHandoff(ISSUE, 'self', new Date().toISOString());
     app = await createApp(store, {
-      onBuilderHandoffAcknowledged: async ({ issueNumber, acknowledgedAt }) => {
-        const handoff = await store.acknowledgeBuilderHandoff(issueNumber, acknowledgedAt);
-        await store.clearBuilderHandoff(issueNumber);
+      onBuilderHandoffAcknowledged: async ({ jobId, acknowledgedAt }) => {
+        const handoff = await store.acknowledgeBuilderHandoff(jobId, acknowledgedAt);
+        await store.clearBuilderHandoff(jobId);
         return { started: handoff !== null };
       },
     });
@@ -1316,7 +1311,7 @@ describe('agent build channel', () => {
     function stubGamesStore() {
       const stored: Array<{
         slug: string;
-        issueNumber: number;
+        jobId: number;
         files: unknown[];
         kitEngineRef?: string;
         mode?: string;
@@ -1332,7 +1327,7 @@ describe('agent build channel', () => {
       const gamesStore = {
         putCandidateSources: async (input: {
           slug: string;
-          issueNumber: number;
+          jobId: number;
           files: unknown[];
           kitEngineRef?: string;
           mode?: 'preview' | 'publish';
@@ -1434,7 +1429,7 @@ describe('agent build channel', () => {
       expect(response.json()).toMatchObject({ accepted: true, delivery: { slug: 'comet-courier', version: 'v1' } });
       expect(stored[0]).toMatchObject({
         slug: 'comet-courier',
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         kitEngineRef: 'abcdef1234567890',
       });
     });

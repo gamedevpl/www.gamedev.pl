@@ -13,16 +13,16 @@ describe('slug backfill', () => {
     (store: InMemoryStore) =>
     async (slug: string, except?: number): Promise<boolean> => {
       const existing = await store.getSubmissionBySlug(slug);
-      if (existing && existing.issueNumber !== except) return true;
+      if (existing && existing.jobId !== except) return true;
       return Boolean(await store.getPublication(slug));
     };
 
   async function storeWithTitles(titles: string[]) {
     const store = new InMemoryStore();
-    let issueNumber = 500;
+    let jobId = 500;
     // A record with no slug is exactly what the flow used to write, and what every game
     // predating minting-at-submission still looks like.
-    for (const title of titles) await store.createSubmission(issueNumber++, 'g:creator', title);
+    for (const title of titles) await store.createSubmission(jobId++, 'g:creator', title);
     return store;
   }
 

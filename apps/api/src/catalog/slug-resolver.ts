@@ -9,8 +9,8 @@ export interface SlugResolverOptions {
 
 export interface SlugResolver {
   isSlugClaimed(slug: string, except?: number): Promise<boolean>;
-  confirmSlugClaim(issueNumber: number, slug: string, title: string): Promise<string | null>;
-  ensureSubmissionSlug(issueNumber: number, record: SubmissionRecord): Promise<string | null>;
+  confirmSlugClaim(jobId: number, slug: string, title: string): Promise<string | null>;
+  ensureSubmissionSlug(jobId: number, record: SubmissionRecord): Promise<string | null>;
 }
 
 // Settles who holds a slug across the store, publications, and the catalog.
@@ -22,7 +22,7 @@ export function createSlugResolver(options: SlugResolverOptions): SlugResolver {
     if (store) {
       try {
         const existing = await store.getSubmissionBySlug(slug);
-        if (existing && existing.issueNumber !== except) return true;
+        if (existing && existing.jobId !== except) return true;
         const publication = await store.getPublication(slug);
         if (publication) return true;
       } catch {
@@ -37,15 +37,15 @@ export function createSlugResolver(options: SlugResolverOptions): SlugResolver {
     return false;
   }
 
-  async function confirmSlugClaim(issueNumber: number, slug: string, title: string): Promise<string | null> {
+  async function confirmSlugClaim(jobId: number, slug: string, title: string): Promise<string | null> {
     if (!store) return slug;
-    return settleSlugClaim(store, issueNumber, slug, title, isSlugClaimed);
+    return settleSlugClaim(store, jobId, slug, title, isSlugClaimed);
   }
 
-  async function ensureSubmissionSlug(issueNumber: number, record: SubmissionRecord): Promise<string | null> {
+  async function ensureSubmissionSlug(jobId: number, record: SubmissionRecord): Promise<string | null> {
     if (record.slug) return record.slug;
-    const wanted = await mintGameSlug(record.title, async (candidate) => isSlugClaimed(candidate, issueNumber));
-    return confirmSlugClaim(issueNumber, wanted, record.title);
+    const wanted = await mintGameSlug(record.title, async (candidate) => isSlugClaimed(candidate, jobId));
+    return confirmSlugClaim(jobId, wanted, record.title);
   }
 
   return { isSlugClaimed, confirmSlugClaim, ensureSubmissionSlug };

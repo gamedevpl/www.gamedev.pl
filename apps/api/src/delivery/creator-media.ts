@@ -67,7 +67,7 @@ export function formatPlaytestContextBlock(
 // Validates and persists a base64 PNG as a build shot.
 async function storeCreatorImage(
   store: BuildMediaStore,
-  issueNumber: number,
+  jobId: number,
   pngBase64: string | undefined,
   label: 'creator-playtest' | 'creator-reference',
 ): Promise<string | undefined> {
@@ -80,7 +80,7 @@ async function storeCreatorImage(
   }
   if (bytes.length === 0 || bytes.length > MAX_CREATOR_SHOT_BYTES) return undefined;
   if (!bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) return undefined;
-  const stored = await store.appendBuildShot(issueNumber, {
+  const stored = await store.appendBuildShot(jobId, {
     data: bytes.toString('base64'),
     label,
   });
@@ -89,23 +89,23 @@ async function storeCreatorImage(
 
 export async function storeCreatorPlaytestShot(
   store: BuildMediaStore,
-  issueNumber: number,
+  jobId: number,
   pngBase64: string | undefined,
 ): Promise<string | undefined> {
-  return storeCreatorImage(store, issueNumber, pngBase64, 'creator-playtest');
+  return storeCreatorImage(store, jobId, pngBase64, 'creator-playtest');
 }
 
 // Persists up to MAX_REFERENCE_IMAGES images; also returns validated bytes for chat.
 export async function storeCreatorReferenceImages(
   store: BuildMediaStore,
-  issueNumber: number,
+  jobId: number,
   pngBase64List: string[] | undefined,
 ): Promise<{ ids: string[]; images: ChatAgentImage[] }> {
   if (!pngBase64List || pngBase64List.length === 0) return { ids: [], images: [] };
   const ids: string[] = [];
   const images: ChatAgentImage[] = [];
   for (const png of pngBase64List.slice(0, MAX_REFERENCE_IMAGES)) {
-    const id = await storeCreatorImage(store, issueNumber, png, 'creator-reference');
+    const id = await storeCreatorImage(store, jobId, png, 'creator-reference');
     if (id) {
       ids.push(id);
       images.push({ data: png, mediaType: 'image/png' });
@@ -153,9 +153,9 @@ export async function registerCreatorMediaRoutes(
         return reply.status(429).send({ error: 'too many game requests, please try again later' });
       }
 
-      let issueNumber: number;
+      let jobId: number;
       try {
-        issueNumber = verifyToken(parsedParams.data.token, submissionTokenSecret);
+        jobId = verifyToken(parsedParams.data.token, submissionTokenSecret);
       } catch (error) {
         if (error instanceof InvalidTokenError) {
           return reply.status(400).send({ error: 'invalid submission token' });
@@ -164,7 +164,7 @@ export async function registerCreatorMediaRoutes(
       }
 
       try {
-        const shot = await store.getBuildShot(issueNumber, parsedParams.data.id);
+        const shot = await store.getBuildShot(jobId, parsedParams.data.id);
         if (!shot) {
           return reply.status(404).send({ error: 'media not found' });
         }
@@ -213,9 +213,9 @@ export async function registerCreatorMediaRoutes(
         return reply.status(429).send({ error: 'too many game requests, please try again later' });
       }
 
-      let issueNumber: number;
+      let jobId: number;
       try {
-        issueNumber = verifyToken(parsedParams.data.token, submissionTokenSecret);
+        jobId = verifyToken(parsedParams.data.token, submissionTokenSecret);
       } catch (error) {
         if (error instanceof InvalidTokenError) {
           return reply.status(400).send({ error: 'invalid submission token' });
@@ -224,7 +224,7 @@ export async function registerCreatorMediaRoutes(
       }
 
       try {
-        const preview = await store.getBuildPreview(issueNumber, parsedParams.data.id);
+        const preview = await store.getBuildPreview(jobId, parsedParams.data.id);
         if (!preview) {
           return reply.status(404).send({ error: 'preview not found' });
         }

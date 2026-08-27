@@ -15,14 +15,14 @@ import type { BuildEvent } from '../platform/submission-status.js';
 type TranscriptStore = Pick<Store, 'listSubmissionsBySlug' | 'listCreatorMessages' | 'listBuildEvents'>;
 
 function job(
-  issueNumber: number,
+  jobId: number,
   createdAt: string,
   slug = 'comet-courier',
   spec?: string,
   specIsSystemGenerated?: boolean,
 ): SubmissionRecord {
   return {
-    issueNumber,
+    jobId,
     ownerUid: 'g:owner',
     title: 'Comet Courier',
     slug,
@@ -40,15 +40,15 @@ function fakeStore(input: {
 }): TranscriptStore {
   return {
     listSubmissionsBySlug: async (slug) => (input.submissions ?? []).filter((submission) => submission.slug === slug),
-    listCreatorMessages: async (issueNumber) =>
-      (input.messages?.[issueNumber] ?? []).map((message, index) => ({
-        id: `m${issueNumber}-${index}`,
+    listCreatorMessages: async (jobId) =>
+      (input.messages?.[jobId] ?? []).map((message, index) => ({
+        id: `m${jobId}-${index}`,
         deliveredAt: null,
         ...message,
       })) as CreatorMessage[],
-    listBuildEvents: async (issueNumber) =>
-      (input.events?.[issueNumber] ?? []).map((event, index) => ({
-        id: `e${issueNumber}-${index}`,
+    listBuildEvents: async (jobId) =>
+      (input.events?.[jobId] ?? []).map((event, index) => ({
+        id: `e${jobId}-${index}`,
         kind: 'step',
         ...event,
       })) as BuildEvent[],

@@ -289,14 +289,14 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     });
     expect(submit.statusCode).toBe(200);
     const record = (await store.listSubmissionsByOwner(OWNER))[0]!;
-    await store.setSubmissionSlug(record.issueNumber, SLUG);
+    await store.setSubmissionSlug(record.jobId, SLUG);
 
     const minted = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
     const key = minted.json().key as string;
 
     const { structured, isError } = await callStart(app, { slug: SLUG }, { authorization: `Bearer ${key}` });
     expect(isError).toBe(false);
-    expect(structured).toMatchObject({ jobId: record.issueNumber, slug: SLUG });
+    expect(structured).toMatchObject({ jobId: record.jobId, slug: SLUG });
     expect((structured as { sessionKey: string }).sessionKey).toBeTruthy();
   });
 
@@ -451,7 +451,7 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     });
     expect(submit.statusCode).toBe(200);
     const record = (await store.listSubmissionsByOwner(OWNER))[0]!;
-    await store.setSubmissionSlug(record.issueNumber, SLUG);
+    await store.setSubmissionSlug(record.jobId, SLUG);
 
     const minted = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
     const key = minted.json().key as string;
@@ -487,8 +487,8 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     });
     expect(submit.statusCode).toBe(200);
     const record = (await store.listSubmissionsByOwner(OWNER))[0]!;
-    await store.setSubmissionSlug(record.issueNumber, SLUG);
-    await store.ensureRoundGeneration(record.issueNumber);
+    await store.setSubmissionSlug(record.jobId, SLUG);
+    await store.ensureRoundGeneration(record.jobId);
 
     const minted = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
     const creatorKey = minted.json().key as string;
@@ -524,8 +524,8 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     });
     expect(submit.statusCode).toBe(200);
     const record = (await store.listSubmissionsByOwner(OWNER))[0]!;
-    await store.setSubmissionSlug(record.issueNumber, SLUG);
-    await store.ensureRoundGeneration(record.issueNumber);
+    await store.setSubmissionSlug(record.jobId, SLUG);
+    await store.ensureRoundGeneration(record.jobId);
     await store.ensureGameAgentKey(SLUG, OWNER, new Date().toISOString());
 
     const gameKey = mintGameAgentKey(secret, {
@@ -537,14 +537,14 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     expect(gameStart.isError).toBe(true);
     expect((gameStart.structured as { error: string }).error).toMatch(/per-game keys are retired/i);
 
-    const roundKey = mintAgentToken(record.issueNumber, secret, { roundGeneration: 1 });
+    const roundKey = mintAgentToken(record.jobId, secret, { roundGeneration: 1 });
     const roundStart = await callStart(app, { key: roundKey });
     expect(roundStart.isError).toBe(false);
 
     // The round-scoped session credential shape remains supported.
     const sessionKey = mintMcpSessionKey(secret, {
       sessionId: 'sess-legacy',
-      jobId: record.issueNumber,
+      jobId: record.jobId,
       roundGeneration: 1,
     });
     expect(sessionKey).toBeTruthy();
@@ -566,8 +566,8 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     });
     expect(submit.statusCode).toBe(200);
     const record = (await store.listSubmissionsByOwner(OWNER))[0]!;
-    await store.setSubmissionSlug(record.issueNumber, SLUG);
-    await store.ensureRoundGeneration(record.issueNumber);
+    await store.setSubmissionSlug(record.jobId, SLUG);
+    await store.ensureRoundGeneration(record.jobId);
 
     const minted = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
     const creatorKey = minted.json().key as string;
@@ -661,10 +661,10 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     });
     expect(submit.statusCode).toBe(200);
     const record = (await store.listSubmissionsByOwner(OWNER))[0]!;
-    await store.setSubmissionSlug(record.issueNumber, SLUG);
-    await store.setRoundBuilder(record.issueNumber, 'platform');
-    await store.ensureRoundGeneration(record.issueNumber);
-    const before = (await store.getSubmission(record.issueNumber))?.roundGeneration;
+    await store.setSubmissionSlug(record.jobId, SLUG);
+    await store.setRoundBuilder(record.jobId, 'platform');
+    await store.ensureRoundGeneration(record.jobId);
+    const before = (await store.getSubmission(record.jobId))?.roundGeneration;
 
     const rotated = await app.inject({
       method: 'POST',
@@ -673,7 +673,7 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     });
     expect(rotated.statusCode).toBe(200);
     expect((rotated.json() as { sessionsEnded: number }).sessionsEnded).toBe(0);
-    expect((await store.getSubmission(record.issueNumber))?.roundGeneration).toBe(before);
+    expect((await store.getSubmission(record.jobId))?.roundGeneration).toBe(before);
   });
 
   // Review (#488): if the revocation persisted but ending sessions then failed, a 404
@@ -691,13 +691,13 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     });
     expect(submit.statusCode).toBe(200);
     const record = (await store.listSubmissionsByOwner(OWNER))[0]!;
-    await store.setSubmissionSlug(record.issueNumber, SLUG);
-    await store.ensureRoundGeneration(record.issueNumber);
+    await store.setSubmissionSlug(record.jobId, SLUG);
+    await store.ensureRoundGeneration(record.jobId);
 
     // Stand in for the interrupted attempt: revocation persisted, cleanup never ran.
     await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
     await store.revokeCreatorAgentKey(OWNER, new Date().toISOString());
-    const stranded = (await store.getSubmission(record.issueNumber))?.roundGeneration;
+    const stranded = (await store.getSubmission(record.jobId))?.roundGeneration;
 
     const retry = await app.inject({
       method: 'DELETE',
@@ -705,7 +705,7 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
       headers: authHeaders(),
     });
     expect(retry.statusCode).toBe(204);
-    expect((await store.getSubmission(record.issueNumber))?.roundGeneration).toBe((stranded ?? 1) + 1);
+    expect((await store.getSubmission(record.jobId))?.roundGeneration).toBe((stranded ?? 1) + 1);
   });
 
   // Review (#488): anchoring every mint to updatedAt means a generation older than the

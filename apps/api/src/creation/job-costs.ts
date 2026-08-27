@@ -39,7 +39,7 @@ function cents(usd: number): number {
 }
 
 export interface JobCostSummary {
-  issueNumber: number;
+  jobId: number;
   title: string;
   slug?: string;
   state?: JobState;
@@ -157,7 +157,7 @@ function summarize(record: SubmissionRecord): JobCostSummary {
   const usd = cents(credits * USD_PER_CREDIT + entries.reduce((sum, entry) => sum + (entry.usd ?? 0), 0));
 
   return {
-    issueNumber: record.issueNumber,
+    jobId: record.jobId,
     title: record.title,
     ...(record.slug ? { slug: record.slug } : {}),
     ...(state ? { state } : {}),

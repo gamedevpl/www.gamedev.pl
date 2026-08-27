@@ -32,10 +32,10 @@ export interface ImproveRoutesOptions {
   improvementRateLimitWindowMs: number;
   checkUserAccess: (request: FastifyRequest, reply: FastifyReply) => boolean;
   builderOf: (record: SubmissionRecord | null | undefined) => BuilderKind;
-  invalidateStatusCache: (issueNumber: number) => void;
+  invalidateStatusCache: (jobId: number) => void;
   runChatAgent: ChatOrchestration['runChatAgent'];
   startImprovementRound: (input: {
-    issueNumber: number;
+    jobId: number;
     text: string;
     title: string;
     locale: string;
@@ -102,9 +102,9 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
       }
 
       const token = z.string().parse((request.params as { token?: string }).token);
-      let issueNumber: number;
+      let jobId: number;
       try {
-        issueNumber = verifyToken(token, submissionTokenSecret);
+        jobId = verifyToken(token, submissionTokenSecret);
       } catch (error) {
         if (error instanceof InvalidTokenError) {
           return reply.status(400).send({ error: 'invalid submission token' });
@@ -117,7 +117,7 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
         return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
       }
 
-      const record = await store.getSubmission(issueNumber);
+      const record = await store.getSubmission(jobId);
       if (!record || record.ownerUid !== request.user!.uid) {
         return reply.status(403).send({ error: 'only the creator can request improvements' });
       }
@@ -149,14 +149,14 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
       let referenceImages: ChatAgentImage[] = [];
       if (parsed.data.context?.screenshotPng) {
         try {
-          shotId = await storeCreatorPlaytestShot(store, issueNumber, parsed.data.context.screenshotPng);
+          shotId = await storeCreatorPlaytestShot(store, jobId, parsed.data.context.screenshotPng);
         } catch (shotError) {
           request.log.error({ err: shotError }, 'failed to store creator playtest screenshot');
         }
       }
       if (parsed.data.context?.referenceImages?.length) {
         try {
-          const stored = await storeCreatorReferenceImages(store, issueNumber, parsed.data.context.referenceImages);
+          const stored = await storeCreatorReferenceImages(store, jobId, parsed.data.context.referenceImages);
           referenceImageShotIds = stored.ids;
           referenceImages = stored.images;
         } catch (shotError) {
@@ -172,7 +172,7 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
       // A pending copy left here by a failed reply attempt.
       let orphanedChatMessageId: string | undefined;
       const chatOutcome = await runChatAgent({
-        issueNumber,
+        jobId,
         message: sanitizedFeedback,
         scope: 'improve',
         record,
@@ -184,12 +184,12 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
       if (chatOutcome?.kind === 'replied') {
         try {
           // Avoids an orphaned "delivered" copy if the reply write below fails.
-          const creatorMessage = await store.appendCreatorMessage(issueNumber, inboxText);
+          const creatorMessage = await store.appendCreatorMessage(jobId, inboxText);
           orphanedChatMessageId = creatorMessage.id;
-          await store.appendCreatorMessage(issueNumber, chatOutcome.replyText, { origin: 'studio', delivered: true });
-          await store.markCreatorMessagesDelivered(issueNumber, [creatorMessage.id]);
+          await store.appendCreatorMessage(jobId, chatOutcome.replyText, { origin: 'studio', delivered: true });
+          await store.markCreatorMessagesDelivered(jobId, [creatorMessage.id]);
           orphanedChatMessageId = undefined;
-          invalidateStatusCache(issueNumber);
+          invalidateStatusCache(jobId);
           return reply.send({ ok: true, ...(shotId ? { shotId } : {}) });
         } catch (queueError) {
           // A failed write must not claim success — fail open instead.
@@ -225,7 +225,7 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
       }
 
       const started = await startImprovementRound({
-        issueNumber,
+        jobId,
         text: inboxText,
         title: sanitizedTitle,
         // Their own words, so the new round's thread opens with them.
@@ -244,7 +244,7 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
       }
       // Resolve it now — the new round carries this request forward.
       if (orphanedChatMessageId) {
-        await store.markCreatorMessagesDelivered(issueNumber, [orphanedChatMessageId]).catch(() => {});
+        await store.markCreatorMessagesDelivered(jobId, [orphanedChatMessageId]).catch(() => {});
       }
       // The ack belongs on the new thread, not the old one.
       if (studioAckText) {

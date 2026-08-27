@@ -36,7 +36,7 @@ export function asDeliveryLogger(log: { info?: (context: object, message: string
 export function logDeliveryPreflightRefused(
   log: Logger,
   input: {
-    issueNumber: number;
+    jobId: number;
     roundGeneration: number;
     builder: DeliveryBuilderLabel;
     mode: DeliveryModeLabel;
@@ -47,7 +47,7 @@ export function logDeliveryPreflightRefused(
   log.info(
     {
       delivery: {
-        issueNumber: input.issueNumber,
+        jobId: input.jobId,
         roundGeneration: input.roundGeneration,
         builder: input.builder,
         mode: input.mode,
@@ -62,7 +62,7 @@ export function logDeliveryPreflightRefused(
 export function logDeliveryAccepted(
   log: Logger,
   input: {
-    issueNumber: number;
+    jobId: number;
     roundGeneration: number;
     builder: DeliveryBuilderLabel;
     mode: DeliveryModeLabel;
@@ -75,7 +75,7 @@ export function logDeliveryAccepted(
   log.info(
     {
       delivery: {
-        issueNumber: input.issueNumber,
+        jobId: input.jobId,
         roundGeneration: input.roundGeneration,
         builder: input.builder,
         mode: input.mode,
@@ -92,7 +92,7 @@ export function logDeliveryAccepted(
 export function logDeliveryGateVerdict(
   log: Logger,
   input: {
-    issueNumber: number;
+    jobId: number;
     roundGeneration: number;
     builder: DeliveryBuilderLabel;
     mode: DeliveryModeLabel;
@@ -104,7 +104,7 @@ export function logDeliveryGateVerdict(
   log.info(
     {
       delivery: {
-        issueNumber: input.issueNumber,
+        jobId: input.jobId,
         roundGeneration: input.roundGeneration,
         builder: input.builder,
         mode: input.mode,

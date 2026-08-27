@@ -46,10 +46,10 @@ const PUBLISHED_ISSUE = 1;
 let nextIssue = PUBLISHED_ISSUE;
 
 async function publish(slug: string, ownerUid = 'creator-1'): Promise<void> {
-  const issueNumber = nextIssue++;
-  await store.createSubmission(issueNumber, ownerUid, slug);
-  await store.setSubmissionSlug(issueNumber, slug);
-  await store.setSubmissionPublishedAt(issueNumber, '2026-07-01T00:00:00.000Z');
+  const jobId = nextIssue++;
+  await store.createSubmission(jobId, ownerUid, slug);
+  await store.setSubmissionSlug(jobId, slug);
+  await store.setSubmissionPublishedAt(jobId, '2026-07-01T00:00:00.000Z');
 }
 
 const sweep = () => runSuggestionSweep({ store, now: () => AT });
@@ -333,10 +333,10 @@ describe('POST /api/internal/suggestion-sweep', () => {
 
 describe('runSuggestionSweep — bounded autonomy (IL-4)', () => {
   const acting = () => {
-    const started: Array<{ issueNumber: number; text: string }> = [];
+    const started: Array<{ jobId: number; text: string }> = [];
     return {
       started,
-      startImprovementRound: async (input: { issueNumber: number; text: string }) => {
+      startImprovementRound: async (input: { jobId: number; text: string }) => {
         started.push(input);
         return { route: 'job' as const, jobId: 5_000 + started.length };
       },
@@ -448,11 +448,11 @@ describe('runSuggestionSweep — draining the superseded per-game docs', () => {
 });
 
 async function shareDraft(slug: string, ownerUid = 'creator-1'): Promise<void> {
-  const issueNumber = nextIssue++;
-  await store.createSubmission(issueNumber, ownerUid, slug);
-  await store.setSubmissionSlug(issueNumber, slug);
-  await store.setSubmissionDeliveredVersion(issueNumber, 'v1');
-  await store.setDraftShared(issueNumber, '2026-08-01T00:00:00.000Z');
+  const jobId = nextIssue++;
+  await store.createSubmission(jobId, ownerUid, slug);
+  await store.setSubmissionSlug(jobId, slug);
+  await store.setSubmissionDeliveredVersion(jobId, 'v1');
+  await store.setDraftShared(jobId, '2026-08-01T00:00:00.000Z');
 }
 
 async function deskCut(

@@ -134,7 +134,7 @@ function AlertBanner({
                   {alert.stall ? ` (${alert.stall})` : ''}
                 </span>{' '}
                 <span className="admin-alert-age">
-                  {alert.issueNumber === undefined ? '' : `#${alert.issueNumber} · `}
+                  {alert.jobId === undefined ? '' : `#${alert.jobId} · `}
                   {since(alert.since, now)}
                 </span>
               </button>

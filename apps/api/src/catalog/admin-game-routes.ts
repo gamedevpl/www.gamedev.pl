@@ -16,7 +16,7 @@ export interface AdminGameRoutesOptions {
   onSourcesDelivered?: HealthGateTrigger;
   invalidatePublishedGameCaches: (slug: string) => void;
   isSlugClaimed: SlugClaimProbe;
-  confirmSlugClaim: (issueNumber: number, slug: string, title: string) => Promise<string | null>;
+  confirmSlugClaim: (jobId: number, slug: string, title: string) => Promise<string | null>;
 }
 
 // Operator's published-games shelf: list, re-gate, delete, backfills.
@@ -108,7 +108,7 @@ export async function registerAdminGameRoutes(app: FastifyInstance, options: Adm
     const dryRun = request.query.dryRun === '1' || request.query.dryRun === 'true';
     const pending = await store.listSubmissionsWithDelivery();
     const games: Array<{
-      issueNumber: number;
+      jobId: number;
       slug: string;
       from: string;
       to: string | null;
@@ -125,11 +125,11 @@ export async function registerAdminGameRoutes(app: FastifyInstance, options: Adm
       const changed = Boolean(usable && usable !== record.title);
 
       if (!dryRun && changed && usable) {
-        await store.setSubmissionTitle(record.issueNumber, usable);
+        await store.setSubmissionTitle(record.jobId, usable);
       }
 
       games.push({
-        issueNumber: record.issueNumber,
+        jobId: record.jobId,
         slug,
         from: record.title,
         to: usable,

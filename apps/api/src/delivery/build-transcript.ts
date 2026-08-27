@@ -93,7 +93,7 @@ async function collectTranscriptEntries(
   const eligibleSiblings = record.slug
     ? (await store.listSubmissionsBySlug(record.slug)).filter(
         (sibling) =>
-          sibling.issueNumber !== record.issueNumber &&
+          sibling.jobId !== record.jobId &&
           sibling.ownerUid === record.ownerUid &&
           sibling.createdAt < record.createdAt,
       )
@@ -108,8 +108,8 @@ async function collectTranscriptEntries(
   const collected = await Promise.all(
     rounds.map(async ({ record: roundRecord, round }) => {
       const [messages, events] = await Promise.all([
-        store.listCreatorMessages(roundRecord.issueNumber, { limit: MAX_TRANSCRIPT_LIST_ENTRIES }),
-        store.listBuildEvents(roundRecord.issueNumber, { limit: MAX_TRANSCRIPT_LIST_ENTRIES }),
+        store.listCreatorMessages(roundRecord.jobId, { limit: MAX_TRANSCRIPT_LIST_ENTRIES }),
+        store.listBuildEvents(roundRecord.jobId, { limit: MAX_TRANSCRIPT_LIST_ENTRIES }),
       ]);
       // Hitting the cap means this round's oldest entries went unfetched.
       if (messages.length >= MAX_TRANSCRIPT_LIST_ENTRIES || events.length >= MAX_TRANSCRIPT_LIST_ENTRIES) {

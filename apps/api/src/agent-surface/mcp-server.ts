@@ -175,7 +175,7 @@ export interface McpServerOptions {
   resolveProposalBase?: (slug: string) => Promise<{ base: ProposalBase; files: SourceFile[] } | null>;
   /** Starts the gate on a delivered candidate — shared with the delivery path. */
   onSourcesDelivered?: (input: {
-    issueNumber: number;
+    jobId: number;
     slug: string;
     version: string;
     mode?: 'health' | 'preview' | 'proposal';
@@ -187,7 +187,7 @@ export interface McpServerOptions {
    */
   allowedOrigins?: string[];
   startImprovementRound?: (input: {
-    issueNumber: number;
+    jobId: number;
     text: string;
     title: string;
     locale: string;
@@ -204,7 +204,7 @@ export interface McpServerOptions {
    * Injected from submissions so MCP and Studio feedback share the same resume path.
    */
   continueDraftRound?: (input: {
-    issueNumber: number;
+    jobId: number;
     feedback: string;
     locale: string;
     log: { error: (context: object, message: string) => void };
@@ -238,7 +238,7 @@ interface JsonRpcRequest {
 }
 
 interface AuthedJob {
-  issueNumber: number;
+  jobId: number;
   record: SubmissionRecord;
   access: AgentTokenAccess;
   identity: 'creator' | 'oauth' | 'round' | 'platform_connector';
@@ -693,7 +693,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     }
 
     return {
-      issueNumber: claims.jobId,
+      jobId: claims.jobId,
       record,
       access,
       identity,
@@ -1043,7 +1043,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           const sessionId = ctx.sessionId && looksLikeMcpSessionId(ctx.sessionId) ? ctx.sessionId : newMcpSessionId();
           noteTransportSession(sessionId);
 
-          const jobId = active.issueNumber;
+          const jobId = active.jobId;
           const roundGeneration = active.roundGeneration ?? 1;
           const sessionKey = mintMcpSessionKey(agentTokenSecret, {
             sessionId,
