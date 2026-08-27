@@ -29,7 +29,7 @@ import { BOT_UID_PREFIX, type Store, type SubmissionRecord } from '../platform/s
 
 /** How long a job may sit in one state before the queue calls it out, per state. */
 export interface JobQueueEntry {
-  issueNumber: number;
+  jobId: number;
   title: string;
   ownerUid: string;
   slug?: string;
@@ -85,7 +85,7 @@ export function buildJobQueue(records: SubmissionRecord[], now: number): JobQueu
       const lastAgentSignalAt = record.lastAgentSignalAt;
 
       return {
-        issueNumber: record.issueNumber,
+        jobId: record.jobId,
         title: record.title,
         ownerUid: record.ownerUid,
         slug: record.slug,
@@ -158,7 +158,7 @@ export async function registerJobAdminRoutes(
    * record; the manifest is what the gate actually wrote. Publishing is the one action
    * where the difference could put an unverified game in front of players.
    */
-  app.post<{ Params: { issueNumber: string } }>('/api/admin/jobs/:issueNumber/publish', async (request, reply) => {
+  app.post<{ Params: { jobId: string } }>('/api/admin/jobs/:jobId/publish', async (request, reply) => {
     if (!isAdminSession(request, adminUids)) {
       return reply.code(404).send({ error: 'not_found' });
     }
@@ -166,12 +166,12 @@ export async function registerJobAdminRoutes(
       return reply.code(503).send({ error: 'store_unavailable' });
     }
 
-    const issueNumber = Number(request.params.issueNumber);
-    if (!Number.isInteger(issueNumber)) {
+    const jobId = Number(request.params.jobId);
+    if (!Number.isInteger(jobId)) {
       return reply.code(400).send({ error: 'invalid_job' });
     }
 
-    const record = await store.getSubmission(issueNumber);
+    const record = await store.getSubmission(jobId);
     if (!record) return reply.code(404).send({ error: 'not_found' });
     if (!record.slug || !record.deliveredVersion) {
       return reply.code(409).send({ error: 'nothing_delivered' });
@@ -203,34 +203,34 @@ export async function registerJobAdminRoutes(
     // Through `publishing` rather than straight to `published`: the intermediate state is
     // what a job is in while this is happening, and skipping it would leave no record
     // that it ever was — which is the state a failed publish has to fall back from.
-    await store.recordJobTransition(issueNumber, { to: 'publishing', at, by: 'operator', reason: 'approved' });
+    await store.recordJobTransition(jobId, { to: 'publishing', at, by: 'operator', reason: 'approved' });
     await store.setPublication({
       slug: record.slug,
       state: 'published',
       currentVersion: record.deliveredVersion,
       publishedAt: at,
     });
-    await store.recordJobTransition(issueNumber, { to: 'published', at, by: 'operator', reason: 'published' });
-    await store.setSubmissionPublishedAt(issueNumber, at);
+    await store.recordJobTransition(jobId, { to: 'published', at, by: 'operator', reason: 'published' });
+    await store.setSubmissionPublishedAt(jobId, at);
     // The creator rail reads `lastStatus`, not `state`. Writing it here is what stops a
     // published game from also rendering as an in-progress "yours" card: the notify
     // sweep that normally keeps `lastStatus` current only walks *active* submissions,
     // and a terminal job is one sweep away from falling out of that set. `lastNotifiedStatus`
     // is left alone so the next sweep can still emit the published notification.
-    await store.setSubmissionLastStatus(issueNumber, 'published');
+    await store.setSubmissionLastStatus(jobId, 'published');
 
     // Supersede earlier rounds for this slug on publish.
     const activeRecords = await store.listActiveSubmissions();
     for (const other of activeRecords) {
-      if (other.slug === record.slug && other.issueNumber !== issueNumber) {
-        await store.recordJobTransition(other.issueNumber, {
+      if (other.slug === record.slug && other.jobId !== jobId) {
+        await store.recordJobTransition(other.jobId, {
           to: 'abandoned',
           at,
           by: 'system',
           reason: 'superseded_by_publish',
         });
-        await store.setSubmissionAbandoned(other.issueNumber, at);
-        await store.setSubmissionLastStatus(other.issueNumber, 'abandoned');
+        await store.setSubmissionAbandoned(other.jobId, at);
+        await store.setSubmissionLastStatus(other.jobId, 'abandoned');
       }
     }
 
@@ -255,7 +255,7 @@ export async function registerJobAdminRoutes(
   });
 
   // Sandboxed game preview for operator review before publishing.
-  app.get<{ Params: { issueNumber: string } }>('/api/admin/jobs/:issueNumber/preview', async (request, reply) => {
+  app.get<{ Params: { jobId: string } }>('/api/admin/jobs/:jobId/preview', async (request, reply) => {
     if (!isAdminSession(request, adminUids)) {
       return reply.code(404).send({ error: 'not_found' });
     }
@@ -263,12 +263,12 @@ export async function registerJobAdminRoutes(
       return reply.code(503).send({ error: 'store_unavailable' });
     }
 
-    const issueNumber = Number(request.params.issueNumber);
-    if (!Number.isInteger(issueNumber)) {
+    const jobId = Number(request.params.jobId);
+    if (!Number.isInteger(jobId)) {
       return reply.code(400).send({ error: 'invalid_job' });
     }
 
-    const record = await store.getSubmission(issueNumber);
+    const record = await store.getSubmission(jobId);
     if (!record) return reply.code(404).send({ error: 'not_found' });
     const { slug } = record;
     const playableVersion = record.previewVersion ?? record.deliveredVersion;

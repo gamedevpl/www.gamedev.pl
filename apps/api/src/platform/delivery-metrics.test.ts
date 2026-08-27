@@ -17,7 +17,7 @@ describe('delivery metrics', () => {
     const log = { info };
 
     logDeliveryPreflightRefused(log, {
-      issueNumber: 42,
+      jobId: 42,
       roundGeneration: 1,
       builder: 'managed',
       mode: 'preview',
@@ -25,7 +25,7 @@ describe('delivery metrics', () => {
       attempt: 1,
     });
     logDeliveryAccepted(log, {
-      issueNumber: 42,
+      jobId: 42,
       roundGeneration: 1,
       builder: 'managed',
       mode: 'preview',
@@ -35,7 +35,7 @@ describe('delivery metrics', () => {
       typecheckBypass: false,
     });
     logDeliveryGateVerdict(log, {
-      issueNumber: 42,
+      jobId: 42,
       roundGeneration: 1,
       builder: 'managed',
       mode: 'preview',
@@ -51,7 +51,7 @@ describe('delivery metrics', () => {
     ]);
     expect(info.mock.calls[0]![0]).toEqual({
       delivery: {
-        issueNumber: 42,
+        jobId: 42,
         roundGeneration: 1,
         builder: 'managed',
         mode: 'preview',
@@ -90,7 +90,7 @@ describe('delivery metrics', () => {
     const bound = asDeliveryLogger(log);
     expect(bound).not.toBeNull();
     logDeliveryPreflightRefused(bound!, {
-      issueNumber: 1,
+      jobId: 1,
       roundGeneration: 1,
       builder: 'platform',
       mode: 'publish',
@@ -102,7 +102,7 @@ describe('delivery metrics', () => {
         thisTag: 'pino-like',
         context: {
           delivery: {
-            issueNumber: 1,
+            jobId: 1,
             roundGeneration: 1,
             builder: 'platform',
             mode: 'publish',

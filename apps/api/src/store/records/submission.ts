@@ -7,7 +7,7 @@ import type { AgentEndedBy, BuilderHandoff } from './rounds.js';
 import type { JobCostEntry, JobSeedOutcome } from './dispatch.js';
 
 export interface SubmissionRecord {
-  issueNumber: number;
+  jobId: number;
   ownerUid: string;
   createdAt: string;
   title: string;
@@ -274,11 +274,18 @@ export interface SubmissionRecord {
 // A record stored before `gating` was retired can carry it.
 
 // Nothing entered it deliberately, so `submitted` is where such a job sat.
+
+// A record stored before the field was renamed still carries `issueNumber`
+// instead of `jobId` — Firestore is schemaless, so the TS rename alone
+// leaves every already-persisted document unreadable under the new name.
 export function fromStoredSubmission(data: unknown): SubmissionRecord {
-  const record = data as SubmissionRecord;
+  const record = data as SubmissionRecord & { issueNumber?: number };
   // `gating` no longer typechecks as a JobState.
 
   // A record written before it was removed can still hold the string.
-  const stored: string | undefined = record.state;
-  return stored === 'gating' ? { ...record, state: 'submitted' } : record;
+  const storedState: string | undefined = record.state;
+  const state = storedState === 'gating' ? 'submitted' : record.state;
+  const jobId = record.jobId ?? record.issueNumber;
+  if (state === record.state && jobId === record.jobId) return record;
+  return { ...record, state, jobId: jobId as number };
 }

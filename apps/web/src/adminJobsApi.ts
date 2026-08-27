@@ -17,7 +17,7 @@ export type { JobState };
 export type JobStall = Exclude<ContractJobStall, 'no_agent_yet'>;
 
 export interface JobQueueEntry {
-  issueNumber: number;
+  jobId: number;
   title: string;
   ownerUid: string;
   slug?: string;
@@ -63,8 +63,8 @@ export interface PublishResult {
 export type PublishRefusal =
   'gate_red' | 'not_gated' | 'nothing_delivered' | 'profile_required' | 'store_unavailable' | 'unknown';
 
-export async function publishJob(issueNumber: number): Promise<PublishResult | { refused: PublishRefusal }> {
-  const response = await fetch(`/api/admin/jobs/${issueNumber}/publish`, {
+export async function publishJob(jobId: number): Promise<PublishResult | { refused: PublishRefusal }> {
+  const response = await fetch(`/api/admin/jobs/${jobId}/publish`, {
     method: 'POST',
     credentials: 'include',
   });
@@ -94,8 +94,8 @@ export interface CancelResult {
 
 export type CancelRefusal = 'already_finished' | 'mid_publish' | 'store_unavailable' | 'unknown';
 
-export async function cancelJob(issueNumber: number): Promise<CancelResult | { refused: CancelRefusal }> {
-  const response = await fetch(`/api/admin/jobs/${issueNumber}/cancel`, {
+export async function cancelJob(jobId: number): Promise<CancelResult | { refused: CancelRefusal }> {
+  const response = await fetch(`/api/admin/jobs/${jobId}/cancel`, {
     method: 'POST',
     credentials: 'include',
   });
@@ -175,8 +175,8 @@ export type RetryRefusal =
   | 'store_unavailable'
   | 'unknown';
 
-export async function retryJob(issueNumber: number): Promise<RetryResult | { refused: RetryRefusal }> {
-  const response = await fetch(`/api/admin/jobs/${issueNumber}/retry`, {
+export async function retryJob(jobId: number): Promise<RetryResult | { refused: RetryRefusal }> {
+  const response = await fetch(`/api/admin/jobs/${jobId}/retry`, {
     method: 'POST',
     credentials: 'include',
   });
@@ -199,9 +199,8 @@ export interface JobPreview {
   html: string;
 }
 
-export async function fetchJobPreview(issueNumber: number): Promise<JobPreview | null> {
-  const response = await fetch(`/api/admin/jobs/${issueNumber}/preview`, { credentials: 'include' });
+export async function fetchJobPreview(jobId: number): Promise<JobPreview | null> {
+  const response = await fetch(`/api/admin/jobs/${jobId}/preview`, { credentials: 'include' });
   if (!response.ok) return null;
   return (await response.json()) as JobPreview;
 }
-

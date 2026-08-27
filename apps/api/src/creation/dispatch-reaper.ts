@@ -11,7 +11,7 @@ export interface RedispatchOutcome {
 }
 
 export type RedispatchQueuedJob = (input: {
-  issueNumber: number;
+  jobId: number;
   log: { error: (context: object, message: string) => void };
 }) => Promise<RedispatchOutcome>;
 
@@ -46,12 +46,12 @@ export async function runDispatchReaperSweep(deps: DispatchReaperSweepDeps): Pro
       continue;
     }
     try {
-      const result = await deps.redispatchQueuedJob({ issueNumber: record.issueNumber, log: deps.log });
+      const result = await deps.redispatchQueuedJob({ jobId: record.jobId, log: deps.log });
       if (result.outcome === 'retried') retried++;
       else if (result.outcome === 'exhausted') exhausted++;
       else skipped++;
     } catch (error) {
-      deps.log.error({ err: error, issueNumber: record.issueNumber }, 'dispatch reaper attempt failed');
+      deps.log.error({ err: error, jobId: record.jobId }, 'dispatch reaper attempt failed');
       skipped++;
     }
   }

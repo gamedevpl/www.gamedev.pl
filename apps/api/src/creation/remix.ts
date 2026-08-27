@@ -269,7 +269,7 @@ export interface RemixRoutesOptions {
    * Starts the gate on a delivered candidate. Shared with the delivery path so a
    * proposal is checked by exactly the machinery a creator's own upload is.
    */
-  onSourcesDelivered?: (input: { issueNumber: number; slug: string; version: string }) => void | Promise<unknown>;
+  onSourcesDelivered?: (input: { jobId: number; slug: string; version: string }) => void | Promise<unknown>;
   /**
    * Published sources + base pin for a proposal, both lanes.
    *
@@ -1066,7 +1066,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         // constant. The trigger uses the number only to label the build.
         void Promise.resolve(
           options.onSourcesDelivered({
-            issueNumber: PROPOSAL_NO_JOB,
+            jobId: PROPOSAL_NO_JOB,
             slug: session.slug,
             version: result.proposal.version,
           }),

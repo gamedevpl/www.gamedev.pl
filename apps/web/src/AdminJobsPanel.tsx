@@ -241,7 +241,7 @@ function JobRow({
   job: JobQueueEntry;
   supersededCount?: number;
   selected: boolean;
-  onToggleSelect: (issueNumber: number) => void;
+  onToggleSelect: (jobId: number) => void;
   onPreview: (job: JobQueueEntry) => void;
   onPublished: () => void;
 }) {
@@ -257,7 +257,7 @@ function JobRow({
     setMessage(null);
     setCancelArmed(false);
     try {
-      const result = await publishJob(job.issueNumber);
+      const result = await publishJob(job.jobId);
       if ('refused' in result) {
         setMessage(REFUSAL_COPY[result.refused]);
       } else {
@@ -269,7 +269,7 @@ function JobRow({
     } finally {
       setBusy(null);
     }
-  }, [job.issueNumber, onPublished]);
+  }, [job.jobId, onPublished]);
 
   const onCancel = useCallback(async () => {
     if (!cancelArmed) {
@@ -280,7 +280,7 @@ function JobRow({
     setMessage(null);
     setCancelArmed(false);
     try {
-      const result = await cancelJob(job.issueNumber);
+      const result = await cancelJob(job.jobId);
       if ('refused' in result) {
         setMessage(CANCEL_COPY[result.refused]);
       } else {
@@ -292,14 +292,14 @@ function JobRow({
     } finally {
       setBusy(null);
     }
-  }, [cancelArmed, job.issueNumber, onPublished]);
+  }, [cancelArmed, job.jobId, onPublished]);
 
   const onRetry = useCallback(async () => {
     setBusy('retry');
     setMessage(null);
     setCancelArmed(false);
     try {
-      const result = await retryJob(job.issueNumber);
+      const result = await retryJob(job.jobId);
       if ('refused' in result) {
         setMessage(RETRY_COPY[result.refused]);
       } else {
@@ -311,7 +311,7 @@ function JobRow({
     } finally {
       setBusy(null);
     }
-  }, [job.issueNumber, onPublished]);
+  }, [job.jobId, onPublished]);
 
   const latest = job.recentTransitions[0];
 
@@ -321,14 +321,14 @@ function JobRow({
         <input
           type="checkbox"
           checked={selected}
-          onChange={() => onToggleSelect(job.issueNumber)}
-          aria-label={`Select job #${job.issueNumber}`}
+          onChange={() => onToggleSelect(job.jobId)}
+          aria-label={`Select job #${job.jobId}`}
         />
       </td>
       <td>
         <div className="admin-job-title">{job.title}</div>
         <div className="admin-job-sub">
-          #{job.issueNumber}
+          #{job.jobId}
           {job.slug ? ` · ${job.slug}` : ''}
           {supersededCount && supersededCount > 0 ? (
             <span className="admin-job-superseded-badge">+{supersededCount} superseded</span>
@@ -424,13 +424,13 @@ export function AdminJobsPanel() {
   const gameGroups = useMemo(() => {
     const map = new Map<string, JobQueueEntry[]>();
     for (const j of jobs) {
-      const key = j.slug || String(j.issueNumber);
+      const key = j.slug || String(j.jobId);
       const list = map.get(key) ?? [];
       list.push(j);
       map.set(key, list);
     }
     for (const list of map.values()) {
-      list.sort((a, b) => b.issueNumber - a.issueNumber);
+      list.sort((a, b) => b.jobId - a.jobId);
     }
     return map;
   }, [jobs]);
@@ -500,7 +500,7 @@ export function AdminJobsPanel() {
       return (
         job.title.toLowerCase().includes(term) ||
         (job.slug && job.slug.toLowerCase().includes(term)) ||
-        String(job.issueNumber).includes(term)
+        String(job.jobId).includes(term)
       );
     });
   }, [gameGroups, filter, latestOnly, search]);
@@ -524,18 +524,18 @@ export function AdminJobsPanel() {
     }));
   }, [groupByGame, filteredItems]);
 
-  const toggleSelect = useCallback((issueNumber: number) => {
+  const toggleSelect = useCallback((jobId: number) => {
     setSelectedIssues((prev) => {
       const next = new Set(prev);
-      if (next.has(issueNumber)) next.delete(issueNumber);
-      else next.add(issueNumber);
+      if (next.has(jobId)) next.delete(jobId);
+      else next.add(jobId);
       return next;
     });
   }, []);
 
   const allFilteredSelected = useMemo(() => {
     if (filteredItems.length === 0) return false;
-    return filteredItems.every(({ job }) => selectedIssues.has(job.issueNumber));
+    return filteredItems.every(({ job }) => selectedIssues.has(job.jobId));
   }, [filteredItems, selectedIssues]);
 
   const toggleSelectAll = useCallback(() => {
@@ -543,7 +543,7 @@ export function AdminJobsPanel() {
       setSelectedIssues((prev) => {
         const next = new Set(prev);
         for (const { job } of filteredItems) {
-          next.delete(job.issueNumber);
+          next.delete(job.jobId);
         }
         return next;
       });
@@ -551,7 +551,7 @@ export function AdminJobsPanel() {
       setSelectedIssues((prev) => {
         const next = new Set(prev);
         for (const { job } of filteredItems) {
-          next.add(job.issueNumber);
+          next.add(job.jobId);
         }
         return next;
       });
@@ -570,7 +570,7 @@ export function AdminJobsPanel() {
         const item = publishable[i];
         setBatchProgress({ running: true, current: i + 1, total: publishable.length, success, failed });
         try {
-          const res = await publishJob(item.issueNumber);
+          const res = await publishJob(item.jobId);
           if ('refused' in res) failed++;
           else success++;
         } catch {
@@ -596,7 +596,7 @@ export function AdminJobsPanel() {
         const item = cancelable[i];
         setBatchProgress({ running: true, current: i + 1, total: cancelable.length, success, failed });
         try {
-          const res = await cancelJob(item.issueNumber);
+          const res = await cancelJob(item.jobId);
           if ('refused' in res) failed++;
           else success++;
         } catch {
@@ -610,7 +610,7 @@ export function AdminJobsPanel() {
     [load],
   );
 
-  const selectedEntries = useMemo(() => jobs.filter((j) => selectedIssues.has(j.issueNumber)), [jobs, selectedIssues]);
+  const selectedEntries = useMemo(() => jobs.filter((j) => selectedIssues.has(j.jobId)), [jobs, selectedIssues]);
 
   if (state === 'forbidden') return <p className="health-empty">Not found.</p>;
   if (state === 'loading') return <p className="health-empty">Reading the queue…</p>;
@@ -800,9 +800,9 @@ export function AdminJobsPanel() {
                               <tbody>
                                 {grp.jobs.map((j) => (
                                   <JobRow
-                                    key={j.issueNumber}
+                                    key={j.jobId}
                                     job={j}
-                                    selected={selectedIssues.has(j.issueNumber)}
+                                    selected={selectedIssues.has(j.jobId)}
                                     onToggleSelect={toggleSelect}
                                     onPreview={(entry) => setPreviewTarget(entry)}
                                     onPublished={() => void load()}
@@ -817,10 +817,10 @@ export function AdminJobsPanel() {
                   })
                 : filteredItems.map(({ job, supersededCount }) => (
                     <JobRow
-                      key={job.issueNumber}
+                      key={job.jobId}
                       job={job}
                       supersededCount={supersededCount}
-                      selected={selectedIssues.has(job.issueNumber)}
+                      selected={selectedIssues.has(job.jobId)}
                       onToggleSelect={toggleSelect}
                       onPreview={(entry) => setPreviewTarget(entry)}
                       onPublished={() => void load()}

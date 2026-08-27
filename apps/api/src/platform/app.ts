@@ -421,8 +421,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       (options.submissionRoutes?.agentBackend
         ? undefined
         : {
-            readSignals: async (issueNumber) => {
-              const record = await store.getSubmission(issueNumber);
+            readSignals: async (jobId) => {
+              const record = await store.getSubmission(jobId);
               return record
                 ? {
                     deliveredVersion: record.deliveredVersion,
@@ -431,8 +431,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                   }
                 : null;
             },
-            readCredentialRef: async (issueNumber, sessionRef) => {
-              const record = await store.getSubmission(issueNumber);
+            readCredentialRef: async (jobId, sessionRef) => {
+              const record = await store.getSubmission(jobId);
               return record?.dispatch?.credentialRefs?.[sessionRef];
             },
           }),
@@ -777,7 +777,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await registerCreatorStudioRoutes(app, {
     store,
     gamesStore,
-    mintStatusToken: submissionTokenSecret ? (issueNumber) => mintToken(issueNumber, submissionTokenSecret) : undefined,
+    mintStatusToken: submissionTokenSecret ? (jobId) => mintToken(jobId, submissionTokenSecret) : undefined,
     objectStore,
   });
 
@@ -798,7 +798,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // TA-01: built unconditionally (the Vertex client is lazy); TAB_COMPLETE gates it.
     tabCompleter: options.tabCompleter ?? new VertexTabCompleter(),
     tabCompleteGate: createTabCompleteGate({ store, logWarn: (payload, msg) => app.log.warn(payload, msg) }),
-    mintStatusToken: submissionTokenSecret ? (issueNumber) => mintToken(issueNumber, submissionTokenSecret) : undefined,
+    mintStatusToken: submissionTokenSecret ? (jobId) => mintToken(jobId, submissionTokenSecret) : undefined,
     ...options.creatorCodeRoutes,
   });
 
@@ -907,7 +907,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       // Straight to review: the gate already ran on this exact version, and re-running it
       // would ask the same question of the same bytes.
       await store.recordJobTransition(jobId, { to: 'ready_for_review', at, by: 'gate', reason: 'gate_green' });
-      return { issueNumber: jobId };
+      return { jobId };
     },
   });
 

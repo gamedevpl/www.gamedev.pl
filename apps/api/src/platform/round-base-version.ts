@@ -11,7 +11,7 @@ export type BaseVersionStore = Pick<Store, 'getPublication' | 'listSubmissionsBy
 
 // A `SubmissionRecord`, structurally.
 export type BaseVersionRecord = Pick<SubmissionRecord, 'previewVersion' | 'deliveredVersion'> & {
-  issueNumber?: number;
+  jobId?: number;
   ownerUid?: string;
 };
 
@@ -42,10 +42,7 @@ async function resolveSiblingRoundVersion(
   const priors = owned
     .filter(
       (other) =>
-        other.slug === slug &&
-        other.issueNumber !== record.issueNumber &&
-        !other.abandonedAt &&
-        other.state !== 'canceled',
+        other.slug === slug && other.jobId !== record.jobId && !other.abandonedAt && other.state !== 'canceled',
     )
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   for (const prior of priors) {

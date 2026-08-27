@@ -79,7 +79,7 @@ async function main(): Promise<void> {
   const isSlugClaimed = async (slug: string, except?: number): Promise<boolean> => {
     if (published.has(slug)) return true;
     const existing = await store.getSubmissionBySlug(slug);
-    if (existing && existing.issueNumber !== except) return true;
+    if (existing && existing.jobId !== except) return true;
     return Boolean(await store.getPublication(slug));
   };
 

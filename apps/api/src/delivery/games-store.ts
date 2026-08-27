@@ -430,7 +430,7 @@ export interface VersionManifest {
   version: string;
   createdAt: string;
   /** The job that produced it. */
-  issueNumber: number;
+  jobId: number;
   // Producing round, used to reject stale verdicts.
   roundGeneration?: number;
   /** Which backend and model built it — unattributable cost is how budgets get lost. */
@@ -627,7 +627,7 @@ export type StagedSourcesSummary = {
 
 type StagingManifest = {
   slug: string;
-  issueNumber: number;
+  jobId: number;
   roundGeneration: number;
   updatedAt: string;
   files: StagedSourceEntry[];
@@ -638,7 +638,7 @@ export interface GamesStore {
   /** Writes a candidate version's sources. Returns the version id assigned. */
   putCandidateSources(input: {
     slug: string;
-    issueNumber: number;
+    jobId: number;
     // Producing round, persisted with the candidate manifest.
     roundGeneration?: number;
     files: SourceFile[];
@@ -682,7 +682,7 @@ export interface GamesStore {
    */
   putStagedSourceFile(input: {
     slug: string;
-    issueNumber: number;
+    jobId: number;
     roundGeneration: number;
     path: string;
     content: string;
@@ -692,34 +692,30 @@ export interface GamesStore {
   }): Promise<StagedSourcesSummary & { path: string; bytes: number }>;
   deleteStagedSourceFile(input: {
     slug: string;
-    issueNumber: number;
+    jobId: number;
     roundGeneration: number;
     path: string;
     stagedBy?: 'agent' | 'owner';
   }): Promise<StagedSourcesSummary & { path: string }>;
   /** Lists staged paths + byte totals (no contents). */
-  listStagedSources(input: {
-    slug: string;
-    issueNumber: number;
-    roundGeneration: number;
-  }): Promise<StagedSourcesSummary>;
+  listStagedSources(input: { slug: string; jobId: number; roundGeneration: number }): Promise<StagedSourcesSummary>;
   /** Reads staged contents for finalize. */
   getStagedSourceFiles(input: {
     slug: string;
-    issueNumber: number;
+    jobId: number;
     roundGeneration: number;
   }): Promise<Array<SourceFile & { deleted?: true }>>;
   /** Reads one staged path (null when not in the buffer). Used by patch_source_file. */
   getStagedSourceFile(input: {
     slug: string;
-    issueNumber: number;
+    jobId: number;
     roundGeneration: number;
     path: string;
   }): Promise<string | null>;
   /** Clears the staging buffer (all paths, or a named subset). */
   clearStagedSources(input: {
     slug: string;
-    issueNumber: number;
+    jobId: number;
     roundGeneration: number;
     paths?: string[];
   }): Promise<{ cleared: number }>;
@@ -907,15 +903,26 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
   }
 
   const versionPrefix = (slug: string, version: string) => `games/${slug}/versions/${version}`;
-  const stagingPrefix = (slug: string, issueNumber: number, roundGeneration: number) =>
-    `games/${slug}/staging/${issueNumber}/g${roundGeneration}`;
+  const stagingPrefix = (slug: string, jobId: number, roundGeneration: number) =>
+    `games/${slug}/staging/${jobId}/g${roundGeneration}`;
+
+  // A manifest written before the field was renamed still carries `issueNumber`
+  // instead of `jobId` — GCS is schemaless, so the TS rename alone leaves every
+  // already-stored manifest unreadable under the new name.
+  function parseVersionManifest(body: Buffer): VersionManifest {
+    const manifest = JSON.parse(body.toString('utf8')) as VersionManifest & { issueNumber?: number };
+    if (manifest.jobId === undefined && manifest.issueNumber !== undefined) {
+      manifest.jobId = manifest.issueNumber;
+    }
+    return manifest;
+  }
 
   async function readStagingManifest(
     slug: string,
-    issueNumber: number,
+    jobId: number,
     roundGeneration: number,
   ): Promise<{ manifest: StagingManifest; generation: number } | null> {
-    const got = await readObjectWithGeneration(`${stagingPrefix(slug, issueNumber, roundGeneration)}/manifest.json`);
+    const got = await readObjectWithGeneration(`${stagingPrefix(slug, jobId, roundGeneration)}/manifest.json`);
     if (!got) return null;
     return {
       manifest: JSON.parse(got.body.toString('utf8')) as StagingManifest,
@@ -971,7 +978,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         slug: input.slug,
         version,
         createdAt: at.toISOString(),
-        issueNumber: input.issueNumber,
+        jobId: input.jobId,
         ...(input.roundGeneration !== undefined ? { roundGeneration: input.roundGeneration } : {}),
         backend: input.backend,
         model: input.model,
@@ -988,7 +995,14 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       // Written last: a manifest is what makes a version real, so a run that dies
       // mid-upload leaves orphaned objects rather than a version claiming files that
       // were never stored.
-      await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
+      //
+      // Dual-write the pre-rename key too: a rollback to the previous revision (traffic
+      // reassignment, seconds, no rebuild — docs/runbooks/rollback-deploy.md) runs code
+      // that only reads `issueNumber`. Drop once that revision is no longer a rollback
+      // target. Kept off the returned/typed `manifest` on purpose — only the stored bytes
+      // carry it.
+      const stored = { ...manifest, issueNumber: manifest.jobId };
+      await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(stored, null, 2)), 'application/json');
 
       return { version, manifest };
     },
@@ -1003,16 +1017,16 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         throw new InvalidUploadError(`file too large: ${path} is ${bytes} bytes (max 1000000 per file)`);
       }
 
-      const prefix = stagingPrefix(input.slug, input.issueNumber, input.roundGeneration);
+      const prefix = stagingPrefix(input.slug, input.jobId, input.roundGeneration);
       // Source bytes first — orphaned sources without a manifest entry are harmless;
       // a lost race on the manifest is retried below.
       await writeObject(`${prefix}/source/${path}`, Buffer.from(input.content, 'utf8'), 'text/plain; charset=utf-8');
 
       for (let attempt = 0; attempt < MAX_STAGING_MANIFEST_RETRIES; attempt++) {
-        const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+        const existing = await readStagingManifest(input.slug, input.jobId, input.roundGeneration);
         const base = existing?.manifest ?? {
           slug: input.slug,
-          issueNumber: input.issueNumber,
+          jobId: input.jobId,
           roundGeneration: input.roundGeneration,
           updatedAt: new Date(now()).toISOString(),
           files: [],
@@ -1040,7 +1054,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
 
         const manifest: StagingManifest = {
           slug: input.slug,
-          issueNumber: input.issueNumber,
+          jobId: input.jobId,
           roundGeneration: input.roundGeneration,
           updatedAt: new Date(now()).toISOString(),
           files: nextFiles,
@@ -1067,14 +1081,14 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
     async deleteStagedSourceFile(input) {
       assertSlug(input.slug);
       const path = assertDeliverableSourcePath(input.path);
-      const prefix = stagingPrefix(input.slug, input.issueNumber, input.roundGeneration);
+      const prefix = stagingPrefix(input.slug, input.jobId, input.roundGeneration);
       await deleteObject(`${prefix}/source/${path}`).catch(() => undefined);
 
       for (let attempt = 0; attempt < MAX_STAGING_MANIFEST_RETRIES; attempt++) {
-        const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+        const existing = await readStagingManifest(input.slug, input.jobId, input.roundGeneration);
         const base = existing?.manifest ?? {
           slug: input.slug,
-          issueNumber: input.issueNumber,
+          jobId: input.jobId,
           roundGeneration: input.roundGeneration,
           updatedAt: new Date(now()).toISOString(),
           files: [],
@@ -1090,7 +1104,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
 
         const manifest: StagingManifest = {
           slug: input.slug,
-          issueNumber: input.issueNumber,
+          jobId: input.jobId,
           roundGeneration: input.roundGeneration,
           updatedAt: new Date(now()).toISOString(),
           files: nextFiles,
@@ -1114,16 +1128,16 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
 
     async listStagedSources(input) {
       assertSlug(input.slug);
-      const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+      const existing = await readStagingManifest(input.slug, input.jobId, input.roundGeneration);
       return summaryFromManifest(existing?.manifest ?? null);
     },
 
     async getStagedSourceFiles(input) {
       assertSlug(input.slug);
-      const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+      const existing = await readStagingManifest(input.slug, input.jobId, input.roundGeneration);
       const manifest = existing?.manifest;
       if (!manifest || manifest.files.length === 0) return [];
-      const prefix = stagingPrefix(input.slug, input.issueNumber, input.roundGeneration);
+      const prefix = stagingPrefix(input.slug, input.jobId, input.roundGeneration);
       const files = await Promise.all(
         manifest.files.map(async (entry) => {
           if (entry.deleted) return { path: entry.path, content: '', deleted: true as const };
@@ -1142,20 +1156,18 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
     async getStagedSourceFile(input) {
       assertSlug(input.slug);
       const path = assertDeliverableSourcePath(input.path);
-      const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+      const existing = await readStagingManifest(input.slug, input.jobId, input.roundGeneration);
       if (!existing?.manifest.files.some((file) => file.path === path)) return null;
-      const body = await readObject(
-        `${stagingPrefix(input.slug, input.issueNumber, input.roundGeneration)}/source/${path}`,
-      );
+      const body = await readObject(`${stagingPrefix(input.slug, input.jobId, input.roundGeneration)}/source/${path}`);
       return body ? body.toString('utf8') : null;
     },
 
     async clearStagedSources(input) {
       assertSlug(input.slug);
-      const prefix = stagingPrefix(input.slug, input.issueNumber, input.roundGeneration);
+      const prefix = stagingPrefix(input.slug, input.jobId, input.roundGeneration);
 
       for (let attempt = 0; attempt < MAX_STAGING_MANIFEST_RETRIES; attempt++) {
-        const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+        const existing = await readStagingManifest(input.slug, input.jobId, input.roundGeneration);
         if (!existing || existing.manifest.files.length === 0) return { cleared: 0 };
 
         const removePaths = input.paths?.length
@@ -1197,7 +1209,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
 
     async getManifest(slug, version) {
       const body = await readObject(`${versionPrefix(slug, version)}/manifest.json`);
-      return body ? (JSON.parse(body.toString('utf8')) as VersionManifest) : null;
+      return body ? parseVersionManifest(body) : null;
     },
 
     async setVersionSummary(slug, version, summary) {
@@ -1207,7 +1219,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const prefix = versionPrefix(slug, version);
       const existing = await readObject(`${prefix}/manifest.json`);
       if (!existing) return;
-      const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
+      const manifest = parseVersionManifest(existing);
       if (manifest.summary === trimmed) return;
       manifest.summary = trimmed.slice(0, 1024);
       await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
@@ -1246,7 +1258,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         const batch = await Promise.all(
           versions.slice(offset, offset + limit).map(async (version) => {
             const body = await readObject(`${versionPrefix(slug, version)}/manifest.json`);
-            return body ? (JSON.parse(body.toString('utf8')) as VersionManifest) : null;
+            return body ? parseVersionManifest(body) : null;
           }),
         );
         for (const manifest of batch) {
@@ -1273,7 +1285,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const prefix = versionPrefix(input.slug, input.version);
       const existing = await readObject(`${prefix}/manifest.json`);
       if (!existing) throw new Error(`no manifest for ${input.slug}@${input.version}`);
-      const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
+      const manifest = parseVersionManifest(existing);
       if (manifest.deliveryMode !== 'proposal') {
         // Not idempotent-by-accident: re-stamping an already-adopted version would
         // rewrite who adopted it, and re-stamping an ordinary delivery would invent a
@@ -1297,7 +1309,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const prefix = versionPrefix(slug, version);
       const existing = await readObject(`${prefix}/manifest.json`);
       if (!existing) throw new Error(`no manifest for ${slug}@${version}`);
-      const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
+      const manifest = parseVersionManifest(existing);
       applyGateVerdict(manifest, result, new Date(now()).toISOString());
       // First writer wins: the ref the *first* gate run checked against is the one the
       // verdict is reproducible against, and a re-run must not quietly repin it.
@@ -1318,7 +1330,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       for (let attempt = 0; attempt < MAX_STAGING_MANIFEST_RETRIES; attempt++) {
         const got = await readObjectWithGeneration(name);
         if (!got) throw new Error(`no manifest for ${slug}@${version}`);
-        const manifest = JSON.parse(got.body.toString('utf8')) as VersionManifest;
+        const manifest = parseVersionManifest(got.body);
         if (manifest.gate || manifest.previewGate || manifest.health) return;
         manifest.gateProgress = progress;
         try {
@@ -1334,7 +1346,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       // Retries exhausted — drop advisory progress if still open.
       const final = await readObject(name);
       if (!final) throw new Error(`no manifest for ${slug}@${version}`);
-      const finalManifest = JSON.parse(final.toString('utf8')) as VersionManifest;
+      const finalManifest = parseVersionManifest(final);
       if (finalManifest.gate || finalManifest.previewGate || finalManifest.health) return;
     },
 
@@ -1342,7 +1354,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const prefix = versionPrefix(slug, version);
       const existing = await readObject(`${prefix}/manifest.json`);
       if (!existing) throw new Error(`no manifest for ${slug}@${version}`);
-      const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
+      const manifest = parseVersionManifest(existing);
       applyPreviewGateVerdict(manifest, result, new Date(now()).toISOString());
       await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
     },
@@ -1351,7 +1363,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const prefix = versionPrefix(slug, version);
       const existing = await readObject(`${prefix}/manifest.json`);
       if (!existing) throw new Error(`no manifest for ${slug}@${version}`);
-      const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
+      const manifest = parseVersionManifest(existing);
       applyHealthVerdict(manifest, result, new Date(now()).toISOString());
       await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
     },

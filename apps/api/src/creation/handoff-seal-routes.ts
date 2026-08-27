@@ -20,9 +20,9 @@ export interface HandoffSealRoutesOptions {
   now: () => number;
   checkUserAccess: (request: FastifyRequest, reply: FastifyReply) => boolean;
   builderOf: (record: SubmissionRecord | null | undefined) => BuilderKind;
-  invalidateStatusCache: (issueNumber: number) => void;
+  invalidateStatusCache: (jobId: number) => void;
   resumeBuild: (input: {
-    issueNumber: number;
+    jobId: number;
     feedback: string;
     locale: string;
     log: { error: (context: object, message: string) => void };
@@ -32,7 +32,7 @@ export interface HandoffSealRoutesOptions {
   }) => Promise<ResumeOutcome>;
   gateTrigger:
     | ((input: {
-        issueNumber: number;
+        jobId: number;
         slug: string;
         version: string;
         mode?: 'health' | 'preview' | 'proposal';
@@ -70,9 +70,9 @@ export function registerHandoffSealRoutes(app: FastifyInstance, options: Handoff
       }
 
       const token = z.string().parse((request.params as { token?: string }).token);
-      let issueNumber: number;
+      let jobId: number;
       try {
-        issueNumber = verifyToken(token, submissionTokenSecret);
+        jobId = verifyToken(token, submissionTokenSecret);
       } catch (error) {
         if (error instanceof InvalidTokenError) {
           return reply.status(400).send({ error: 'invalid submission token' });
@@ -80,7 +80,7 @@ export function registerHandoffSealRoutes(app: FastifyInstance, options: Handoff
         throw error;
       }
 
-      const record = await store.getSubmission(issueNumber);
+      const record = await store.getSubmission(jobId);
       if (!record || record.ownerUid !== request.user!.uid) {
         return reply.status(403).send({ error: 'only the creator can hand off this build' });
       }
@@ -113,7 +113,7 @@ export function registerHandoffSealRoutes(app: FastifyInstance, options: Handoff
       }
       if (record.builderHandoff?.acknowledgedAt && record.builderHandoff.to === requestedBuilder) {
         const retry = await resumeBuild({
-          issueNumber,
+          jobId,
           feedback: record.spec ?? `Continue building "${record.title}" for gamedev.pl.`,
           locale: record.locale ?? 'en',
           log: request.log,
@@ -124,8 +124,8 @@ export function registerHandoffSealRoutes(app: FastifyInstance, options: Handoff
             reason: requestedBuilder === 'self' ? 'platform_builder_handoff_retry' : 'self_builder_handoff_retry',
           },
         });
-        if (retry.started) await store.clearBuilderHandoff(issueNumber);
-        invalidateStatusCache(issueNumber);
+        if (retry.started) await store.clearBuilderHandoff(jobId);
+        invalidateStatusCache(jobId);
         if (!retry.started) {
           if (retry.reason === 'platform_unavailable') {
             return reply.status(409).send({ error: MANAGED_UNAVAILABLE_ERROR, reason: retry.unavailableReason });
@@ -182,12 +182,12 @@ export function registerHandoffSealRoutes(app: FastifyInstance, options: Handoff
       const neverDispatched = !record.dispatch?.refs?.length;
       const awaitsAgentAck = creatorRequested && stall !== 'ended' && !neverDispatched && !roundAlreadyClosed;
       const requestedAt = new Date(now()).toISOString();
-      const accepted = await store.requestBuilderHandoff(issueNumber, requestedBuilder, requestedAt, awaitsAgentAck);
+      const accepted = await store.requestBuilderHandoff(jobId, requestedBuilder, requestedAt, awaitsAgentAck);
       if (!accepted) {
         return reply.status(409).send({ error: 'builder_handoff_in_progress', builder: currentBuilder });
       }
       if (awaitsAgentAck) {
-        invalidateStatusCache(issueNumber);
+        invalidateStatusCache(jobId);
         return reply.status(202).send({
           ok: true,
           pending: true,
@@ -199,15 +199,15 @@ export function registerHandoffSealRoutes(app: FastifyInstance, options: Handoff
 
       // Recheck: a reviewer may have approved since the top read.
       if (roundAlreadyClosed) {
-        const fresh = await store.getSubmission(issueNumber);
+        const fresh = await store.getSubmission(jobId);
         if (!fresh || fresh.state === 'publishing' || fresh.state === 'published') {
-          await store.clearBuilderHandoff(issueNumber).catch(() => {});
+          await store.clearBuilderHandoff(jobId).catch(() => {});
           return reply.status(409).send({ error: 'builder_locked', reason: 'active_round', builder: currentBuilder });
         }
       }
 
       const outcome = await resumeBuild({
-        issueNumber,
+        jobId,
         feedback: record.spec ?? `Continue building "${record.title}" for gamedev.pl.`,
         locale: record.locale ?? 'en',
         log: request.log,
@@ -219,14 +219,14 @@ export function registerHandoffSealRoutes(app: FastifyInstance, options: Handoff
         },
       });
       if (outcome.started) {
-        await store.clearBuilderHandoff(issueNumber);
+        await store.clearBuilderHandoff(jobId);
       } else {
         // The quiet path has no agent to acknowledge the nudge.
 
         // Ack anyway: resumeBuild may have persisted the builder change.
-        await store.acknowledgeBuilderHandoff(issueNumber, new Date(now()).toISOString());
+        await store.acknowledgeBuilderHandoff(jobId, new Date(now()).toISOString());
       }
-      invalidateStatusCache(issueNumber);
+      invalidateStatusCache(jobId);
 
       if (!outcome.started) {
         if (outcome.reason === 'platform_unavailable') {
@@ -263,9 +263,9 @@ export function registerHandoffSealRoutes(app: FastifyInstance, options: Handoff
       }
 
       const token = z.string().parse((request.params as { token?: string }).token);
-      let issueNumber: number;
+      let jobId: number;
       try {
-        issueNumber = verifyToken(token, submissionTokenSecret);
+        jobId = verifyToken(token, submissionTokenSecret);
       } catch (error) {
         if (error instanceof InvalidTokenError) {
           return reply.status(400).send({ error: 'invalid submission token' });
@@ -273,7 +273,7 @@ export function registerHandoffSealRoutes(app: FastifyInstance, options: Handoff
         throw error;
       }
 
-      const owner = await store.getSubmission(issueNumber);
+      const owner = await store.getSubmission(jobId);
       if (!owner || owner.ownerUid !== request.user!.uid) {
         return reply.status(403).send({ error: 'only the creator can seal this build' });
       }
@@ -282,16 +282,16 @@ export function registerHandoffSealRoutes(app: FastifyInstance, options: Handoff
       // Atomic claim: past this point there is one writer.
 
       // A concurrent request is refused before it spends anything.
-      const claimed = await store.claimSeal(issueNumber, at());
+      const claimed = await store.claimSeal(jobId, at());
       if (!claimed) {
-        const fresh = await store.getSubmission(issueNumber);
+        const fresh = await store.getSubmission(jobId);
         return reply.status(409).send({ error: (fresh && sealRefusal(fresh)) ?? 'not_reviewable' });
       }
 
       // Reverts the claim, so a failed seal leaves a retryable round.
       const abort = async (reason: string) => {
         await store
-          .recordJobTransition(issueNumber, { to: 'ready_for_review', at: at(), by: 'system', reason })
+          .recordJobTransition(jobId, { to: 'ready_for_review', at: at(), by: 'system', reason })
           .catch(() => {});
       };
 
@@ -326,7 +326,7 @@ export function registerHandoffSealRoutes(app: FastifyInstance, options: Handoff
       try {
         ({ version } = await gamesStore.putCandidateSources({
           slug,
-          issueNumber,
+          jobId,
           roundGeneration: claimed.roundGeneration ?? 1,
           files,
           backend: claimed.dispatch?.backend ?? claimed.builder,
@@ -336,26 +336,26 @@ export function registerHandoffSealRoutes(app: FastifyInstance, options: Handoff
           ...(manifest.engineRef ? { engineRef: manifest.engineRef } : {}),
         }));
       } catch (error) {
-        request.log.error({ err: error, issueNumber }, 'sealing a preview failed');
+        request.log.error({ err: error, jobId }, 'sealing a preview failed');
         await abort('seal_failed');
         return reply.status(502).send({ error: 'seal_failed' });
       }
 
-      await store.setSubmissionDeliveredVersion(issueNumber, version);
-      await store.recordJobTransition(issueNumber, {
+      await store.setSubmissionDeliveredVersion(jobId, version);
+      await store.recordJobTransition(jobId, {
         to: 'submitted',
         at: at(),
         by: 'creator',
         reason: 'seal_delivered',
       });
 
-      const gate = await gateTrigger({ issueNumber, slug, version });
+      const gate = await gateTrigger({ jobId, slug, version });
       if (gate?.buildId) {
         await store
-          .recordJobCost(issueNumber, { kind: 'gate_run', at: at(), by: 'cloud-build', ref: gate.buildId })
+          .recordJobCost(jobId, { kind: 'gate_run', at: at(), by: 'cloud-build', ref: gate.buildId })
           .catch(() => {});
       }
-      invalidateStatusCache(issueNumber);
+      invalidateStatusCache(jobId);
 
       return reply.send({ ok: true, version });
     },

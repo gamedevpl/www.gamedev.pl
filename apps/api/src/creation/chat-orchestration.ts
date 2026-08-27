@@ -32,7 +32,7 @@ export interface ChatOrchestrationOptions {
 
 export interface ChatOrchestration {
   runChatAgent(input: {
-    issueNumber: number;
+    jobId: number;
     // The clean creator sentence, never the fenced playtest context block.
     message: string;
     scope: ChatAgentScope;
@@ -82,8 +82,8 @@ export function createChatOrchestration(options: ChatOrchestrationOptions): Chat
         : null;
     const [pending, events] = store
       ? await Promise.all([
-          store.listPendingCreatorMessages(record.issueNumber, { limit: 20 }),
-          store.listBuildEvents(record.issueNumber, { limit: 3 }),
+          store.listPendingCreatorMessages(record.jobId, { limit: 20 }),
+          store.listBuildEvents(record.jobId, { limit: 3 }),
         ])
       : [[], []];
     return {
@@ -105,9 +105,9 @@ export function createChatOrchestration(options: ChatOrchestrationOptions): Chat
   }
 
   // Recent turns for the chat agent's history, oldest first.
-  async function recentChatTurns(issueNumber: number): Promise<ChatTurn[]> {
+  async function recentChatTurns(jobId: number): Promise<ChatTurn[]> {
     if (!store) return [];
-    const raw = await store.listCreatorMessages(issueNumber, { limit: MAX_CHAT_TURNS * 3 });
+    const raw = await store.listCreatorMessages(jobId, { limit: MAX_CHAT_TURNS * 3 });
     let turns: ChatTurn[] = [];
     let pending: string | null = null;
     for (const message of raw) {
@@ -134,7 +134,7 @@ export function createChatOrchestration(options: ChatOrchestrationOptions): Chat
   }
 
   async function runChatAgent(input: {
-    issueNumber: number;
+    jobId: number;
     message: string;
     scope: ChatAgentScope;
     record: SubmissionRecord;
@@ -154,7 +154,7 @@ export function createChatOrchestration(options: ChatOrchestrationOptions): Chat
         const gate = await chatGate.checkAndSpend(input.uid, dateStr);
         if (!gate.allowed) {
           logChatAgentFailOpen(chatAgentLog, {
-            issueNumber: input.issueNumber,
+            jobId: input.jobId,
             scope: input.scope,
             reason: gate.reason,
           });
@@ -164,7 +164,7 @@ export function createChatOrchestration(options: ChatOrchestrationOptions): Chat
       const quota = await store.checkAndIncrementQuota(input.uid, dateStr, dailyChatQuota, 'chats');
       if (!quota.allowed) {
         logChatAgentFailOpen(chatAgentLog, {
-          issueNumber: input.issueNumber,
+          jobId: input.jobId,
           scope: input.scope,
           reason: 'daily_quota',
         });
@@ -172,7 +172,7 @@ export function createChatOrchestration(options: ChatOrchestrationOptions): Chat
       }
       const [status, history] = await Promise.all([
         buildChatAgentStatus(input.record, input.scope),
-        recentChatTurns(input.issueNumber),
+        recentChatTurns(input.jobId),
       ]);
       const decision = await chatAgent.decide({
         message: input.message,
@@ -185,13 +185,13 @@ export function createChatOrchestration(options: ChatOrchestrationOptions): Chat
         ...(input.images?.length ? { images: input.images } : {}),
       });
       logChatAgentDecision(chatAgentLog, {
-        issueNumber: input.issueNumber,
+        jobId: input.jobId,
         scope: input.scope,
         outcome: decision.kind,
       });
       if (decision.tokens) {
         await store
-          .recordJobCost(input.issueNumber, {
+          .recordJobCost(input.jobId, {
             kind: 'chat',
             at: new Date(now()).toISOString(),
             by: decision.model ?? 'vertex',
@@ -204,7 +204,7 @@ export function createChatOrchestration(options: ChatOrchestrationOptions): Chat
         : { kind: 'replied', replyText: decision.text };
     } catch (error) {
       logChatAgentFailOpen(chatAgentLog, {
-        issueNumber: input.issueNumber,
+        jobId: input.jobId,
         scope: input.scope,
         reason: error instanceof Error ? error.message : String(error),
       });

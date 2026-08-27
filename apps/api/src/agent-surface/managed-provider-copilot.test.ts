@@ -11,7 +11,7 @@ import {
 import type { WorkflowRun } from '../catalog/github-client.js';
 
 const BRIEF: BuildBrief = {
-  issueNumber: 42,
+  jobId: 42,
   slug: 'comet-courier',
   spec: 'Deliver parcels between comets.',
   channelToken: 'tok_abc',

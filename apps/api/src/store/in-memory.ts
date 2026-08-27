@@ -147,7 +147,7 @@ export class InMemoryStore implements Store {
       .sort();
 
     for (const submission of owned) {
-      this.submissions.set(submission.issueNumber, {
+      this.submissions.set(submission.jobId, {
         ...submission,
         ownerUid: DELETED_ACCOUNT_UID,
         ...(!submission.publishedAt ? { abandonedAt: submission.abandonedAt ?? at, draftSharedAt: undefined } : {}),
@@ -243,109 +243,105 @@ export class InMemoryStore implements Store {
     return this.identityStore.setDigestOptOut(uid, at);
   }
 
-  async createSubmission(issueNumber: number, ownerUid: string, title: string): Promise<SubmissionRecord> {
-    return this.submissionStore.createSubmission(issueNumber, ownerUid, title);
+  async createSubmission(jobId: number, ownerUid: string, title: string): Promise<SubmissionRecord> {
+    return this.submissionStore.createSubmission(jobId, ownerUid, title);
   }
 
-  async getSubmission(issueNumber: number): Promise<SubmissionRecord | null> {
-    return this.submissionStore.getSubmission(issueNumber);
+  async getSubmission(jobId: number): Promise<SubmissionRecord | null> {
+    return this.submissionStore.getSubmission(jobId);
   }
 
-  async setSubmissionNotifiedStatus(issueNumber: number, status: SubmissionStatus): Promise<void> {
-    return this.submissionStore.setSubmissionNotifiedStatus(issueNumber, status);
+  async setSubmissionNotifiedStatus(jobId: number, status: SubmissionStatus): Promise<void> {
+    return this.submissionStore.setSubmissionNotifiedStatus(jobId, status);
   }
 
-  async setSubmissionLastStatus(issueNumber: number, status: SubmissionStatus): Promise<void> {
-    return this.submissionStore.setSubmissionLastStatus(issueNumber, status);
+  async setSubmissionLastStatus(jobId: number, status: SubmissionStatus): Promise<void> {
+    return this.submissionStore.setSubmissionLastStatus(jobId, status);
   }
 
-  async recordJobTransition(issueNumber: number, transition: JobTransition): Promise<boolean> {
-    return this.dispatchStore.recordJobTransition(issueNumber, transition);
+  async recordJobTransition(jobId: number, transition: JobTransition): Promise<boolean> {
+    return this.dispatchStore.recordJobTransition(jobId, transition);
   }
 
-  async bumpRoundGeneration(issueNumber: number): Promise<number | null> {
-    return this.roundsStore.bumpRoundGeneration(issueNumber);
+  async bumpRoundGeneration(jobId: number): Promise<number | null> {
+    return this.roundsStore.bumpRoundGeneration(jobId);
   }
 
-  async pinRoundKitEngineRef(issueNumber: number, engineRef: string, replace = false): Promise<string | null> {
-    return this.roundsStore.pinRoundKitEngineRef(issueNumber, engineRef, replace);
+  async pinRoundKitEngineRef(jobId: number, engineRef: string, replace = false): Promise<string | null> {
+    return this.roundsStore.pinRoundKitEngineRef(jobId, engineRef, replace);
   }
 
   async requestBuilderHandoff(
-    issueNumber: number,
+    jobId: number,
     to: BuilderKind,
     requestedAt: string,
     awaitsAgentAck = true,
   ): Promise<boolean> {
-    return this.roundsStore.requestBuilderHandoff(issueNumber, to, requestedAt, awaitsAgentAck);
+    return this.roundsStore.requestBuilderHandoff(jobId, to, requestedAt, awaitsAgentAck);
   }
 
-  async claimSeal(issueNumber: number, at: string): Promise<SubmissionRecord | null> {
-    return this.roundsStore.claimSeal(issueNumber, at);
+  async claimSeal(jobId: number, at: string): Promise<SubmissionRecord | null> {
+    return this.roundsStore.claimSeal(jobId, at);
   }
 
-  async acknowledgeBuilderHandoff(issueNumber: number, acknowledgedAt: string): Promise<BuilderHandoff | null> {
-    return this.roundsStore.acknowledgeBuilderHandoff(issueNumber, acknowledgedAt);
+  async acknowledgeBuilderHandoff(jobId: number, acknowledgedAt: string): Promise<BuilderHandoff | null> {
+    return this.roundsStore.acknowledgeBuilderHandoff(jobId, acknowledgedAt);
   }
 
-  async clearBuilderHandoff(issueNumber: number): Promise<void> {
-    return this.roundsStore.clearBuilderHandoff(issueNumber);
+  async clearBuilderHandoff(jobId: number): Promise<void> {
+    return this.roundsStore.clearBuilderHandoff(jobId);
   }
 
-  async ensureRoundGeneration(issueNumber: number): Promise<number | null> {
-    return this.roundsStore.ensureRoundGeneration(issueNumber);
+  async ensureRoundGeneration(jobId: number): Promise<number | null> {
+    return this.roundsStore.ensureRoundGeneration(jobId);
   }
 
-  async clearAgentEnded(issueNumber: number): Promise<void> {
-    return this.roundsStore.clearAgentEnded(issueNumber);
+  async clearAgentEnded(jobId: number): Promise<void> {
+    return this.roundsStore.clearAgentEnded(jobId);
   }
 
-  async setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void> {
-    return this.roundsStore.setSubmissionAgentState(issueNumber, agentState);
+  async setSubmissionAgentState(jobId: number, agentState: AgentTaskState): Promise<void> {
+    return this.roundsStore.setSubmissionAgentState(jobId, agentState);
   }
 
-  async setRoundBuilder(
-    issueNumber: number,
-    builder: BuilderKind,
-    options?: { resetRoundBudget?: boolean },
-  ): Promise<void> {
-    return this.roundsStore.setRoundBuilder(issueNumber, builder, options);
+  async setRoundBuilder(jobId: number, builder: BuilderKind, options?: { resetRoundBudget?: boolean }): Promise<void> {
+    return this.roundsStore.setRoundBuilder(jobId, builder, options);
   }
 
-  async setSubmissionSeed(issueNumber: number, seed: SeedFiles | null): Promise<void> {
-    return this.roundsStore.setSubmissionSeed(issueNumber, seed);
+  async setSubmissionSeed(jobId: number, seed: SeedFiles | null): Promise<void> {
+    return this.roundsStore.setSubmissionSeed(jobId, seed);
   }
 
-  async setSeedStatus(issueNumber: number, status: 'pending' | 'unavailable'): Promise<void> {
-    return this.roundsStore.setSeedStatus(issueNumber, status);
+  async setSeedStatus(jobId: number, status: 'pending' | 'unavailable'): Promise<void> {
+    return this.roundsStore.setSeedStatus(jobId, status);
   }
 
-  async incrementSeedRegenerations(issueNumber: number): Promise<number> {
-    return this.roundBudgetStore.incrementSeedRegenerations(issueNumber);
+  async incrementSeedRegenerations(jobId: number): Promise<number> {
+    return this.roundBudgetStore.incrementSeedRegenerations(jobId);
   }
 
-  async incrementRoundDeliveryCount(issueNumber: number): Promise<number> {
-    return this.roundBudgetStore.incrementRoundDeliveryCount(issueNumber);
+  async incrementRoundDeliveryCount(jobId: number): Promise<number> {
+    return this.roundBudgetStore.incrementRoundDeliveryCount(jobId);
   }
 
-  async incrementRoundTypecheckPreflightRefusals(issueNumber: number): Promise<number> {
-    return this.roundBudgetStore.incrementRoundTypecheckPreflightRefusals(issueNumber);
+  async incrementRoundTypecheckPreflightRefusals(jobId: number): Promise<number> {
+    return this.roundBudgetStore.incrementRoundTypecheckPreflightRefusals(jobId);
   }
 
-  async setRoundTypecheckPreflightBypassErrors(issueNumber: number, message: string | null): Promise<void> {
-    return this.roundBudgetStore.setRoundTypecheckPreflightBypassErrors(issueNumber, message);
+  async setRoundTypecheckPreflightBypassErrors(jobId: number, message: string | null): Promise<void> {
+    return this.roundBudgetStore.setRoundTypecheckPreflightBypassErrors(jobId, message);
   }
 
-  async incrementRoundSubmitAttempts(issueNumber: number): Promise<number> {
-    return this.roundBudgetStore.incrementRoundSubmitAttempts(issueNumber);
+  async incrementRoundSubmitAttempts(jobId: number): Promise<number> {
+    return this.roundBudgetStore.incrementRoundSubmitAttempts(jobId);
   }
 
-  async incrementRoundPreflightRefusal(issueNumber: number, kind: 'audio' | 'symbols'): Promise<number> {
-    return this.roundBudgetStore.incrementRoundPreflightRefusal(issueNumber, kind);
+  async incrementRoundPreflightRefusal(jobId: number, kind: 'audio' | 'symbols'): Promise<number> {
+    return this.roundBudgetStore.incrementRoundPreflightRefusal(jobId, kind);
   }
 
-  async setRoundLastGateMetricKey(issueNumber: number, key: string): Promise<void> {
-    return this.roundBudgetStore.setRoundLastGateMetricKey(issueNumber, key);
+  async setRoundLastGateMetricKey(jobId: number, key: string): Promise<void> {
+    return this.roundBudgetStore.setRoundLastGateMetricKey(jobId, key);
   }
 
   async allocateJobId(): Promise<number> {
@@ -353,38 +349,38 @@ export class InMemoryStore implements Store {
   }
 
   async recordDispatch(
-    issueNumber: number,
+    jobId: number,
     dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string; credentialRef?: string },
   ): Promise<void> {
-    return this.dispatchStore.recordDispatch(issueNumber, dispatch);
+    return this.dispatchStore.recordDispatch(jobId, dispatch);
   }
 
-  async clearDispatchSeedWorkspace(issueNumber: number): Promise<void> {
-    return this.dispatchStore.clearDispatchSeedWorkspace(issueNumber);
+  async clearDispatchSeedWorkspace(jobId: number): Promise<void> {
+    return this.dispatchStore.clearDispatchSeedWorkspace(jobId);
   }
 
-  async recordSeedOutcome(issueNumber: number, outcome: JobSeedOutcome): Promise<void> {
-    return this.dispatchStore.recordSeedOutcome(issueNumber, outcome);
+  async recordSeedOutcome(jobId: number, outcome: JobSeedOutcome): Promise<void> {
+    return this.dispatchStore.recordSeedOutcome(jobId, outcome);
   }
 
   async listSeedOutcomesSince(since: string): Promise<JobSeedOutcome[]> {
     return this.dispatchStore.listSeedOutcomesSince(since);
   }
 
-  async recordJobCost(issueNumber: number, entry: JobCostEntry): Promise<void> {
-    return this.dispatchStore.recordJobCost(issueNumber, entry);
+  async recordJobCost(jobId: number, entry: JobCostEntry): Promise<void> {
+    return this.dispatchStore.recordJobCost(jobId, entry);
   }
 
-  async setJobCostCredits(issueNumber: number, ref: string, credits: number): Promise<void> {
-    return this.dispatchStore.setJobCostCredits(issueNumber, ref, credits);
+  async setJobCostCredits(jobId: number, ref: string, credits: number): Promise<void> {
+    return this.dispatchStore.setJobCostCredits(jobId, ref, credits);
   }
 
-  async setJobCostTokens(issueNumber: number, ref: string, tokens: AgentSessionTokens): Promise<void> {
-    return this.dispatchStore.setJobCostTokens(issueNumber, ref, tokens);
+  async setJobCostTokens(jobId: number, ref: string, tokens: AgentSessionTokens): Promise<void> {
+    return this.dispatchStore.setJobCostTokens(jobId, ref, tokens);
   }
 
-  async setDispatchWorkspace(issueNumber: number, workspace: string): Promise<void> {
-    return this.dispatchStore.setDispatchWorkspace(issueNumber, workspace);
+  async setDispatchWorkspace(jobId: number, workspace: string): Promise<void> {
+    return this.dispatchStore.setDispatchWorkspace(jobId, workspace);
   }
 
   async getPublication(slug: string): Promise<PublicationRecord | null> {
@@ -423,24 +419,24 @@ export class InMemoryStore implements Store {
     return this.catalogEnrichmentStore.listCatalogEnrichments();
   }
 
-  async setSubmissionSlug(issueNumber: number, slug: string): Promise<void> {
-    return this.submissionStore.setSubmissionSlug(issueNumber, slug);
+  async setSubmissionSlug(jobId: number, slug: string): Promise<void> {
+    return this.submissionStore.setSubmissionSlug(jobId, slug);
   }
 
-  async setSubmissionTitle(issueNumber: number, title: string): Promise<void> {
-    return this.submissionStore.setSubmissionTitle(issueNumber, title);
+  async setSubmissionTitle(jobId: number, title: string): Promise<void> {
+    return this.submissionStore.setSubmissionTitle(jobId, title);
   }
 
-  async setSubmissionDeliveredVersion(issueNumber: number, version: string): Promise<void> {
-    return this.submissionStore.setSubmissionDeliveredVersion(issueNumber, version);
+  async setSubmissionDeliveredVersion(jobId: number, version: string): Promise<void> {
+    return this.submissionStore.setSubmissionDeliveredVersion(jobId, version);
   }
 
-  async setSubmissionPreviewVersion(issueNumber: number, version: string): Promise<void> {
-    return this.submissionStore.setSubmissionPreviewVersion(issueNumber, version);
+  async setSubmissionPreviewVersion(jobId: number, version: string): Promise<void> {
+    return this.submissionStore.setSubmissionPreviewVersion(jobId, version);
   }
 
-  async recordDeliveryNudge(issueNumber: number): Promise<number> {
-    return this.submissionStore.recordDeliveryNudge(issueNumber);
+  async recordDeliveryNudge(jobId: number): Promise<number> {
+    return this.submissionStore.recordDeliveryNudge(jobId);
   }
 
   async getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
@@ -455,122 +451,122 @@ export class InMemoryStore implements Store {
     return this.submissionQueryStore.getPublishedSubmissionBySlug(slug);
   }
 
-  async setSubmissionPublishedAt(issueNumber: number, at: string): Promise<void> {
-    return this.submissionStore.setSubmissionPublishedAt(issueNumber, at);
+  async setSubmissionPublishedAt(jobId: number, at: string): Promise<void> {
+    return this.submissionStore.setSubmissionPublishedAt(jobId, at);
   }
 
-  async setSubmissionAbandoned(issueNumber: number, at: string): Promise<void> {
-    return this.submissionStore.setSubmissionAbandoned(issueNumber, at);
+  async setSubmissionAbandoned(jobId: number, at: string): Promise<void> {
+    return this.submissionStore.setSubmissionAbandoned(jobId, at);
   }
 
-  async setDraftShared(issueNumber: number, at: string | null): Promise<void> {
-    return this.submissionStore.setDraftShared(issueNumber, at);
+  async setDraftShared(jobId: number, at: string | null): Promise<void> {
+    return this.submissionStore.setDraftShared(jobId, at);
   }
 
-  async setSubmissionLocale(issueNumber: number, locale: string): Promise<void> {
-    return this.submissionStore.setSubmissionLocale(issueNumber, locale);
+  async setSubmissionLocale(jobId: number, locale: string): Promise<void> {
+    return this.submissionStore.setSubmissionLocale(jobId, locale);
   }
 
-  async setSubmissionClarificationCount(issueNumber: number, count: number): Promise<void> {
-    return this.submissionStore.setSubmissionClarificationCount(issueNumber, count);
+  async setSubmissionClarificationCount(jobId: number, count: number): Promise<void> {
+    return this.submissionStore.setSubmissionClarificationCount(jobId, count);
   }
 
   async setSubmissionBrief(
-    issueNumber: number,
+    jobId: number,
     brief: { spec: string; qa: string[]; specIsSystemGenerated?: boolean },
   ): Promise<void> {
-    return this.submissionStore.setSubmissionBrief(issueNumber, brief);
+    return this.submissionStore.setSubmissionBrief(jobId, brief);
   }
 
   async appendBuildEvent(
-    issueNumber: number,
+    jobId: number,
     event: Omit<BuildEvent, 'id' | 'createdAt'> & { createdAt?: string },
     options?: { preserveEnded?: boolean },
   ): Promise<BuildEvent> {
-    return this.buildLogStore.appendBuildEvent(issueNumber, event, options);
+    return this.buildLogStore.appendBuildEvent(jobId, event, options);
   }
 
   async touchLastAgentSignalAt(
-    issueNumber: number,
+    jobId: number,
     at?: string,
     presence?: { key: string },
     options?: { preserveEnded?: boolean },
   ): Promise<void> {
-    return this.buildLogStore.touchLastAgentSignalAt(issueNumber, at, presence, options);
+    return this.buildLogStore.touchLastAgentSignalAt(jobId, at, presence, options);
   }
 
-  async markAgentEnded(issueNumber: number, at?: string, by: AgentEndedBy = 'end'): Promise<void> {
-    return this.buildLogStore.markAgentEnded(issueNumber, at, by);
+  async markAgentEnded(jobId: number, at?: string, by: AgentEndedBy = 'end'): Promise<void> {
+    return this.buildLogStore.markAgentEnded(jobId, at, by);
   }
 
-  async listBuildEvents(issueNumber: number, opts?: { limit?: number }): Promise<BuildEvent[]> {
-    return this.buildLogStore.listBuildEvents(issueNumber, opts);
+  async listBuildEvents(jobId: number, opts?: { limit?: number }): Promise<BuildEvent[]> {
+    return this.buildLogStore.listBuildEvents(jobId, opts);
   }
 
-  async countBuildEvents(issueNumber: number): Promise<number> {
-    return this.buildLogStore.countBuildEvents(issueNumber);
+  async countBuildEvents(jobId: number): Promise<number> {
+    return this.buildLogStore.countBuildEvents(jobId);
   }
 
   async appendBuildShot(
-    issueNumber: number,
+    jobId: number,
     shot: Omit<BuildShot, 'id' | 'createdAt'> & { createdAt?: string },
   ): Promise<BuildShot> {
-    return this.buildMediaStore.appendBuildShot(issueNumber, shot);
+    return this.buildMediaStore.appendBuildShot(jobId, shot);
   }
 
-  async listBuildShots(issueNumber: number, opts?: { limit?: number }): Promise<BuildShotSummary[]> {
-    return this.buildMediaStore.listBuildShots(issueNumber, opts);
+  async listBuildShots(jobId: number, opts?: { limit?: number }): Promise<BuildShotSummary[]> {
+    return this.buildMediaStore.listBuildShots(jobId, opts);
   }
 
-  async getBuildShot(issueNumber: number, id: string): Promise<BuildShot | null> {
-    return this.buildMediaStore.getBuildShot(issueNumber, id);
+  async getBuildShot(jobId: number, id: string): Promise<BuildShot | null> {
+    return this.buildMediaStore.getBuildShot(jobId, id);
   }
 
-  async countBuildShots(issueNumber: number): Promise<number> {
-    return this.buildMediaStore.countBuildShots(issueNumber);
+  async countBuildShots(jobId: number): Promise<number> {
+    return this.buildMediaStore.countBuildShots(jobId);
   }
 
   async appendBuildPreview(
-    issueNumber: number,
+    jobId: number,
     preview: Omit<BuildPreview, 'id' | 'createdAt'> & { createdAt?: string },
   ): Promise<BuildPreview> {
-    return this.buildMediaStore.appendBuildPreview(issueNumber, preview);
+    return this.buildMediaStore.appendBuildPreview(jobId, preview);
   }
 
-  async listBuildPreviews(issueNumber: number, opts?: { limit?: number }): Promise<BuildPreviewSummary[]> {
-    return this.buildMediaStore.listBuildPreviews(issueNumber, opts);
+  async listBuildPreviews(jobId: number, opts?: { limit?: number }): Promise<BuildPreviewSummary[]> {
+    return this.buildMediaStore.listBuildPreviews(jobId, opts);
   }
 
-  async getBuildPreview(issueNumber: number, id: string): Promise<BuildPreview | null> {
-    return this.buildMediaStore.getBuildPreview(issueNumber, id);
+  async getBuildPreview(jobId: number, id: string): Promise<BuildPreview | null> {
+    return this.buildMediaStore.getBuildPreview(jobId, id);
   }
 
-  async countBuildPreviews(issueNumber: number): Promise<number> {
-    return this.buildMediaStore.countBuildPreviews(issueNumber);
+  async countBuildPreviews(jobId: number): Promise<number> {
+    return this.buildMediaStore.countBuildPreviews(jobId);
   }
 
-  async pruneBuildPreviews(issueNumber: number, keep: number): Promise<number> {
-    return this.buildMediaStore.pruneBuildPreviews(issueNumber, keep);
+  async pruneBuildPreviews(jobId: number, keep: number): Promise<number> {
+    return this.buildMediaStore.pruneBuildPreviews(jobId, keep);
   }
 
   async appendCreatorMessage(
-    issueNumber: number,
+    jobId: number,
     text: string,
     opts?: { origin?: CreatorMessageOrigin; delivered?: boolean; textLocalized?: string; locale?: string },
   ): Promise<CreatorMessage> {
-    return this.buildLogStore.appendCreatorMessage(issueNumber, text, opts);
+    return this.buildLogStore.appendCreatorMessage(jobId, text, opts);
   }
 
-  async listPendingCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
-    return this.buildLogStore.listPendingCreatorMessages(issueNumber, opts);
+  async listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
+    return this.buildLogStore.listPendingCreatorMessages(jobId, opts);
   }
 
-  async listCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
-    return this.buildLogStore.listCreatorMessages(issueNumber, opts);
+  async listCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
+    return this.buildLogStore.listCreatorMessages(jobId, opts);
   }
 
-  async markCreatorMessagesDelivered(issueNumber: number, ids: string[]): Promise<void> {
-    return this.buildLogStore.markCreatorMessagesDelivered(issueNumber, ids);
+  async markCreatorMessagesDelivered(jobId: number, ids: string[]): Promise<void> {
+    return this.buildLogStore.markCreatorMessagesDelivered(jobId, ids);
   }
 
   async appendTelemetryEvents(dateStr: string, events: TelemetryEvent[]): Promise<void> {
@@ -620,8 +616,8 @@ export class InMemoryStore implements Store {
     return this.submissionQueryStore.listQueuedSubmissions();
   }
 
-  async claimDispatchReaperAttempt(issueNumber: number, at: string): Promise<boolean> {
-    return this.dispatchStore.claimDispatchReaperAttempt(issueNumber, at);
+  async claimDispatchReaperAttempt(jobId: number, at: string): Promise<boolean> {
+    return this.dispatchStore.claimDispatchReaperAttempt(jobId, at);
   }
 
   async checkAndIncrementQuota(

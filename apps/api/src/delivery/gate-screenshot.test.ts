@@ -25,7 +25,7 @@ describe('gate screenshot posting', () => {
     const posted = await postGateScreenshotToThread({
       store,
       gamesStore,
-      issueNumber: 42,
+      jobId: 42,
       slug: 'shot-game',
       version: 'v1',
       screenshotPath: 'media/opening.png',
@@ -50,7 +50,7 @@ describe('gate screenshot posting', () => {
       postGateScreenshotToThread({
         store,
         gamesStore,
-        issueNumber: 7,
+        jobId: 7,
         slug: 'empty',
         version: 'v1',
         screenshotPath: 'media/opening.png',

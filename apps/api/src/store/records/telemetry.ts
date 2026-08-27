@@ -31,7 +31,7 @@ export interface TelemetryEvent {
    * Not the submission's issue number. The catalog is built straight from the games
    * repo ([github-client.ts](./github-client.ts) `getCatalog`), so the slug is the only
    * identity every playable game has — most predate the submission flow and have no
-   * `submissions/{issueNumber}` document at all. IL-2 can join to a submission at read
+   * `submissions/{jobId}` document at all. IL-2 can join to a submission at read
    * time via `getSubmissionBySlug` when it needs a creator to notify.
    */
   slug: string;

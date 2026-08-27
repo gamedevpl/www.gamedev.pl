@@ -14,7 +14,7 @@ export interface OwnerGame {
 }
 
 function groupKey(record: SubmissionRecord): string {
-  return record.slug ?? `issue:${record.issueNumber}`;
+  return record.slug ?? `issue:${record.jobId}`;
 }
 
 function isShelfEligible(record: SubmissionRecord): boolean {

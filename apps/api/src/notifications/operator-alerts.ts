@@ -66,7 +66,7 @@ export type JobAlertKind = Exclude<OperatorAlertKind, 'seeding_degraded'>;
 /** An alert with a job behind it. What the notification path accepts. */
 export interface JobAlert extends OperatorAlert {
   kind: JobAlertKind;
-  issueNumber: number;
+  jobId: number;
   ownerUid: string;
 }
 
@@ -83,7 +83,7 @@ export interface OperatorAlert {
    * about one job (`seeding_degraded`) — rendering `#0` for those would send an operator
    * looking for a job that does not exist.
    */
-  issueNumber?: number;
+  jobId?: number;
   title: string;
   ownerUid?: string;
   slug?: string;
@@ -155,12 +155,12 @@ function alertFor(record: SubmissionRecord, now: number, pendingFeedback?: Pendi
   // alert that needs no state at all, so a record whose state cannot be resolved — a
   // legacy one, or one whose first derivation has not been written back yet — still
   // reports it rather than being skipped as unreadable.
-  const pendingSince = pendingFeedback?.get(record.issueNumber);
+  const pendingSince = pendingFeedback?.get(record.jobId);
   if (pendingSince && (!state || !isTerminal(state)) && now - Date.parse(pendingSince) > FEEDBACK_STALL_MS) {
     return {
-      id: `op-${record.issueNumber}-feedback_undelivered`,
+      id: `op-${record.jobId}-feedback_undelivered`,
       kind: 'feedback_undelivered',
-      issueNumber: record.issueNumber,
+      jobId: record.jobId,
       title: record.title,
       ownerUid: record.ownerUid,
       ...(record.slug ? { slug: record.slug } : {}),
@@ -172,7 +172,7 @@ function alertFor(record: SubmissionRecord, now: number, pendingFeedback?: Pendi
 
   const since = record.stateSince ?? record.createdAt;
   const base = {
-    issueNumber: record.issueNumber,
+    jobId: record.jobId,
     title: record.title,
     ownerUid: record.ownerUid,
     ...(record.slug ? { slug: record.slug } : {}),
@@ -180,13 +180,13 @@ function alertFor(record: SubmissionRecord, now: number, pendingFeedback?: Pendi
   };
 
   if (state === 'ready_for_review') {
-    return { id: `op-${record.issueNumber}-review_ready`, kind: 'review_ready', ...base };
+    return { id: `op-${record.jobId}-review_ready`, kind: 'review_ready', ...base };
   }
 
   if (state === 'failed') {
     const at = Date.parse(since);
     if (!Number.isFinite(at) || now - at > FAILED_ALERT_WINDOW_MS) return null;
-    return { id: `op-${record.issueNumber}-build_failed`, kind: 'build_failed', ...base };
+    return { id: `op-${record.jobId}-build_failed`, kind: 'build_failed', ...base };
   }
 
   // Everything else terminal — published, canceled — is somebody's finished business.
@@ -201,7 +201,7 @@ function alertFor(record: SubmissionRecord, now: number, pendingFeedback?: Pendi
     now,
   });
   if (!stall) return null;
-  return { id: `op-${record.issueNumber}-build_stalled`, kind: 'build_stalled', ...base, stall };
+  return { id: `op-${record.jobId}-build_stalled`, kind: 'build_stalled', ...base, stall };
 }
 
 /**

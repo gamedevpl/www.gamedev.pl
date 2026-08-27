@@ -6,7 +6,7 @@ import { isPublishedEntry } from '@gamedevpl/contract';
  * "Is this slug a published game?" — the gate on telemetry intake.
  *
  * This exists because the obvious answer was the wrong one. Telemetry first asked
- * Firestore, resolving a slug to `submissions/{issueNumber}` and requiring
+ * Firestore, resolving a slug to `submissions/{jobId}` and requiring
  * `publishedAt`. That silently discarded ~95% of real play: the catalog is built
  * straight from the games repo, so most playable games have no submission document
  * at all — they predate the submission flow or were seeded. `publishedAt` marks

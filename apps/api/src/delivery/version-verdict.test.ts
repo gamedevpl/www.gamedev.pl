@@ -11,7 +11,7 @@ function manifest(overrides: Partial<VersionManifest> = {}): VersionManifest {
     slug: 'space-parcels',
     version: 'v1',
     createdAt: '2026-08-21T08:00:00.000Z',
-    issueNumber: 731,
+    jobId: 731,
     roundGeneration: 1,
     sourceFiles: [],
     ...overrides,

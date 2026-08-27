@@ -40,7 +40,7 @@ export interface SeedPipeline {
   // A self round has no workspace, whatever a backend forgot to declare.
   seedDeliveryFor(backend: AgentBackend | undefined, builder: BuilderKind): SeedDelivery;
   seedBuild(input: {
-    issueNumber: number;
+    jobId: number;
     slug: string;
     spec: string;
     delivery: SeedDelivery;
@@ -49,11 +49,11 @@ export interface SeedPipeline {
   }): Promise<SeedBuildResult>;
   // Queues a replacement draft, for rounds that read the job's copy.
   regenerateSeed(input: {
-    issueNumber: number;
+    jobId: number;
     steer?: string;
     log: { error: (context: object, message: string) => void; info?: (context: object, message: string) => void };
   }): Promise<RegenerateSeedResult>;
-  publishSeedPreview(input: { issueNumber: number; slug: string; files: SeedFile[]; locale: string }): Promise<void>;
+  publishSeedPreview(input: { jobId: number; slug: string; files: SeedFile[]; locale: string }): Promise<void>;
 }
 
 // Round-0 draft generation, cost ledger, redo, and its preview.
@@ -70,13 +70,13 @@ export function createSeedPipeline(options: SeedPipelineOptions): SeedPipeline {
 
   // Seed is billed by token via Vertex, unlike Copilot's flat session.
   async function recordSeedCost(
-    issueNumber: number,
+    jobId: number,
     draft: SeedDraft,
     log: { error: (context: object, message: string) => void },
   ): Promise<void> {
     if (!store) return;
     try {
-      await store.recordJobCost(issueNumber, {
+      await store.recordJobCost(jobId, {
         kind: 'seed',
         at: new Date(now()).toISOString(),
         by: draft.usage.model,
@@ -84,7 +84,7 @@ export function createSeedPipeline(options: SeedPipelineOptions): SeedPipeline {
         ...(draft.usage.provider ? { provider: draft.usage.provider } : {}),
       });
     } catch (error) {
-      log.error({ err: error, issueNumber }, 'could not record the cost of a seed');
+      log.error({ err: error, jobId }, 'could not record the cost of a seed');
     }
   }
 
@@ -92,7 +92,7 @@ export function createSeedPipeline(options: SeedPipelineOptions): SeedPipeline {
 
   // Slug already exists on the job by dispatch time — nothing to decide.
   async function seedBuild(input: {
-    issueNumber: number;
+    jobId: number;
     slug: string;
     spec: string;
     delivery: SeedDelivery;
@@ -106,7 +106,7 @@ export function createSeedPipeline(options: SeedPipelineOptions): SeedPipeline {
     // Resolved before the try so a failed attempt still names the vendor.
     const provider = await seedAvailabilityGate.resolveProvider();
     try {
-      const record = await store.getSubmission(input.issueNumber);
+      const record = await store.getSubmission(input.jobId);
       if (!record) return { reason: 'job_not_found', provider };
 
       const draft = await gameSeeder.seed({
@@ -118,22 +118,22 @@ export function createSeedPipeline(options: SeedPipelineOptions): SeedPipeline {
       });
       if (!draft) return { reason: 'seeder_declined', provider };
 
-      await recordSeedCost(input.issueNumber, draft, input.log);
+      await recordSeedCost(input.jobId, draft, input.log);
       return { draft };
     } catch (error) {
       // Fail-open survives round 0 becoming mandatory; the caller records the failure.
-      input.log.error({ err: error, issueNumber: input.issueNumber }, 'seeding failed, dispatching unseeded');
+      input.log.error({ err: error, jobId: input.jobId }, 'seeding failed, dispatching unseeded');
       return { reason: error instanceof Error ? `threw: ${error.message}` : 'threw', provider };
     }
   }
 
   async function regenerateSeed(input: {
-    issueNumber: number;
+    jobId: number;
     steer?: string;
     log: { error: (context: object, message: string) => void; info?: (context: object, message: string) => void };
   }): Promise<RegenerateSeedResult> {
     if (!gameSeeder || !store) return { ok: false, reason: 'not_configured' };
-    const record = await store.getSubmission(input.issueNumber);
+    const record = await store.getSubmission(input.jobId);
     if (!record || !record.slug) return { ok: false, reason: 'not_found' };
     // A workspace round already forked; a rewrite cannot catch up.
     const roundBuilder = builderOf(record);
@@ -145,14 +145,14 @@ export function createSeedPipeline(options: SeedPipelineOptions): SeedPipeline {
     // Checked before spending quota, which never resets when seeding comes back on.
     if (!(await seedAvailabilityGate.seedingEnabled())) return { ok: false, reason: 'seeding_off' };
 
-    const used = await store.incrementSeedRegenerations(input.issueNumber);
+    const used = await store.incrementSeedRegenerations(input.jobId);
     if (used > MAX_SEED_REGENERATIONS) return { ok: false, reason: 'cap_reached' };
 
-    await store.setSeedStatus(input.issueNumber, 'pending');
+    await store.setSeedStatus(input.jobId, 'pending');
     const slug = record.slug;
     void (async () => {
       const { draft } = await seedBuild({
-        issueNumber: input.issueNumber,
+        jobId: input.jobId,
         slug,
         spec: record.spec ?? '',
         delivery: 'channel',
@@ -160,17 +160,17 @@ export function createSeedPipeline(options: SeedPipelineOptions): SeedPipeline {
         log: input.log,
       });
       if (draft) {
-        await store!.setSubmissionSeed(input.issueNumber, {
+        await store!.setSubmissionSeed(input.jobId, {
           slug: draft.slug,
           files: draft.files,
           references: draft.references,
           ...(draft.notes ? { notes: draft.notes } : {}),
         });
       } else {
-        await store!.setSeedStatus(input.issueNumber, 'unavailable');
+        await store!.setSeedStatus(input.jobId, 'unavailable');
       }
     })().catch((error) => {
-      input.log.error({ err: error, issueNumber: input.issueNumber }, 'seed regeneration failed');
+      input.log.error({ err: error, jobId: input.jobId }, 'seed regeneration failed');
     });
 
     return { ok: true, status: 'pending', regenerationsRemaining: MAX_SEED_REGENERATIONS - used };
@@ -182,7 +182,7 @@ export function createSeedPipeline(options: SeedPipelineOptions): SeedPipeline {
 
   // Lands in the same BuildPreview slot the agent's own pushes use.
   async function publishSeedPreview(input: {
-    issueNumber: number;
+    jobId: number;
     slug: string;
     files: SeedFile[];
     locale: string;
@@ -202,7 +202,7 @@ export function createSeedPipeline(options: SeedPipelineOptions): SeedPipeline {
       { restrictNetwork: true },
     );
     if (Buffer.byteLength(html, 'utf8') > MAX_BUILD_PREVIEW_BYTES) return;
-    await store.appendBuildPreview(input.issueNumber, {
+    await store.appendBuildPreview(input.jobId, {
       data: Buffer.from(html, 'utf8').toString('base64'),
       slug: input.slug,
       // Provisional: the agent has not run yet.

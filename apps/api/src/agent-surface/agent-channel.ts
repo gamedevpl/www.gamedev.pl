@@ -392,13 +392,13 @@ async function resolvePatchBase(input: {
   version: string | null;
   record: SubmissionRecord;
   slug: string;
-  issueNumber: number;
+  jobId: number;
   roundGeneration: number;
   path: string;
 }): Promise<{ content: string; baseFrom: PatchBaseFrom } | null> {
   const stagedContent = await input.gamesStore.getStagedSourceFile({
     slug: input.slug,
-    issueNumber: input.issueNumber,
+    jobId: input.jobId,
     roundGeneration: input.roundGeneration,
     path: input.path,
   });
@@ -454,9 +454,9 @@ export interface AgentChannelOptions {
    * Called when a build records an event, so a cached status response can be dropped
    * and the creator's next poll shows the update rather than a stale snapshot.
    */
-  onEvent?: (issueNumber: number) => void;
+  onEvent?: (jobId: number) => void;
   onBuilderHandoffAcknowledged?: (input: {
-    issueNumber: number;
+    jobId: number;
     acknowledgedAt: string;
     log: FastifyRequest['log'];
   }) => Promise<{ started: boolean; reason?: string }>;
@@ -516,9 +516,9 @@ export interface AgentChannelOptions {
    * whatever is in the buffer and shows it — see `staged-preview.ts`. Deliberately
    * fire-and-forget: the agent is owed its staging receipt whatever the preview does.
    */
-  onSourcesStaged?: (input: { issueNumber: number; slug: string; roundGeneration: number }) => void;
+  onSourcesStaged?: (input: { jobId: number; slug: string; roundGeneration: number }) => void;
   // Queues a replacement draft. Absent when nothing seeds.
-  onRegenerateSeed?: (input: { issueNumber: number; steer?: string; log: FastifyRequest['log'] }) => Promise<
+  onRegenerateSeed?: (input: { jobId: number; steer?: string; log: FastifyRequest['log'] }) => Promise<
     | { ok: true; status: 'pending'; regenerationsRemaining: number }
     | {
         ok: false;
@@ -527,7 +527,7 @@ export interface AgentChannelOptions {
       }
   >;
   onSourcesDelivered?: (input: {
-    issueNumber: number;
+    jobId: number;
     slug: string;
     version: string;
     /**
@@ -660,7 +660,7 @@ export async function registerAgentChannelRoutes(
     request: FastifyRequest,
     reply: FastifyReply,
     options: { allowTerminalReceipt?: boolean } = {},
-  ): Promise<{ issueNumber: number; record: SubmissionRecord; access: AgentTokenAccess } | null> {
+  ): Promise<{ jobId: number; record: SubmissionRecord; access: AgentTokenAccess } | null> {
     if (!store || !agentTokenSecret) {
       reply.status(503).send({ error: 'the build channel is not configured' });
       return null;
@@ -683,8 +683,8 @@ export async function registerAgentChannelRoutes(
       throw error;
     }
 
-    const issueNumber = claims.jobId;
-    const record = await store.getSubmission(issueNumber);
+    const jobId = claims.jobId;
+    const record = await store.getSubmission(jobId);
     if (!record) {
       reply.status(404).send({ error: 'unknown build' });
       return null;
@@ -693,10 +693,10 @@ export async function registerAgentChannelRoutes(
     try {
       if (options.allowTerminalReceipt) {
         const access = classifyAgentTokenAccess(claims, record, now());
-        return { issueNumber, record, access };
+        return { jobId, record, access };
       }
       assertAgentTokenActive(claims, record, now());
-      return { issueNumber, record, access: 'active' };
+      return { jobId, record, access: 'active' };
     } catch (error) {
       if (!(error instanceof InvalidAgentTokenError)) throw error;
       // Stale/expired tokens are a strict 401 in every case — including terminal jobs.
@@ -715,7 +715,7 @@ export async function registerAgentChannelRoutes(
     request: FastifyRequest,
     reply: FastifyReply,
     expectedKind: UploadKind,
-  ): Promise<{ issueNumber: number; record: SubmissionRecord; upload: UploadTokenClaims } | null> {
+  ): Promise<{ jobId: number; record: SubmissionRecord; upload: UploadTokenClaims } | null> {
     if (!store || !agentTokenSecret) {
       reply.status(503).send({ error: 'the build channel is not configured' });
       return null;
@@ -747,8 +747,8 @@ export async function registerAgentChannelRoutes(
       return null;
     }
 
-    const issueNumber = upload.jobId;
-    const record = await store.getSubmission(issueNumber);
+    const jobId = upload.jobId;
+    const record = await store.getSubmission(jobId);
     if (!record) {
       reply.status(404).send({ error: 'unknown build' });
       return null;
@@ -768,7 +768,7 @@ export async function registerAgentChannelRoutes(
       throw error;
     }
 
-    return { issueNumber, record, upload };
+    return { jobId, record, upload };
   }
 
   function stopReason(record: SubmissionRecord): 'abandoned' | 'published' | 'canceled' | 'builder_handoff' | null {
@@ -798,7 +798,7 @@ export async function registerAgentChannelRoutes(
    * background dispatch while still `queued` used to skip `submitted`, leave the
    * job in `building`, and let the reconciler close the round a generation early.
    */
-  async function markBuildingFromChannel(issueNumber: number, record: SubmissionRecord): Promise<JobState> {
+  async function markBuildingFromChannel(jobId: number, record: SubmissionRecord): Promise<JobState> {
     const current = (record.state ?? 'queued') as JobState;
     if (!store) return current;
     if (!canTransition(current, 'building')) {
@@ -808,7 +808,7 @@ export async function registerAgentChannelRoutes(
       // re-read explicitly.
       return current;
     }
-    await store.recordJobTransition(issueNumber, {
+    await store.recordJobTransition(jobId, {
       to: 'building',
       at: new Date().toISOString(),
       by: 'agent',
@@ -836,10 +836,7 @@ export async function registerAgentChannelRoutes(
    */
   async function gateVerdict(record: SubmissionRecord) {
     return readGateVerdict(options.gamesStore, record, (error) =>
-      app.log.warn(
-        { err: error, issueNumber: record.issueNumber, slug: record.slug },
-        'could not read the gate verdict',
-      ),
+      app.log.warn({ err: error, jobId: record.jobId, slug: record.slug }, 'could not read the gate verdict'),
     );
   }
 
@@ -849,8 +846,8 @@ export async function registerAgentChannelRoutes(
    * agent keeps building for minutes after a creator hits "stop", because nothing
    * tells it otherwise.
    */
-  async function channelState(issueNumber: number, record: SubmissionRecord) {
-    const pending: CreatorMessage[] = await store!.listPendingCreatorMessages(issueNumber);
+  async function channelState(jobId: number, record: SubmissionRecord) {
+    const pending: CreatorMessage[] = await store!.listPendingCreatorMessages(jobId);
     const reason = stopReason(record);
     const gate = await gateVerdict(record);
     return {
@@ -981,7 +978,7 @@ export async function registerAgentChannelRoutes(
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
-      const { issueNumber, record } = resolved;
+      const { jobId, record } = resolved;
 
       const parsed = BuildEventInputSchema.safeParse(request.body ?? {});
       if (!parsed.success) {
@@ -991,15 +988,15 @@ export async function registerAgentChannelRoutes(
       // A rejected report still answers with the creator's messages. Handing back an
       // error and dropping their change request would be the worst of both.
       const reject = async (reason: RejectionReason) =>
-        reply.send({ accepted: false, rejected: reason, ...(await channelState(issueNumber, record)) });
+        reply.send({ accepted: false, rejected: reason, ...(await channelState(jobId, record)) });
 
       if (stopReason(record)) {
         return reject('stopped');
       }
-      if (isRateLimited(eventsByBuild, issueNumber, now(), maxEventsPerWindow)) {
+      if (isRateLimited(eventsByBuild, jobId, now(), maxEventsPerWindow)) {
         return reject('rate_limited');
       }
-      if ((await store!.countBuildEvents(issueNumber)) >= maxEventsPerBuild) {
+      if ((await store!.countBuildEvents(jobId)) >= maxEventsPerBuild) {
         return reject('too_many_events');
       }
 
@@ -1008,14 +1005,14 @@ export async function registerAgentChannelRoutes(
         return reply.status(400).send({ error: 'text is required' });
       }
 
-      const stored = await store!.appendBuildEvent(issueNumber, event);
-      const stateAfterSignal = await markBuildingFromChannel(issueNumber, record);
-      options.onEvent?.(issueNumber);
+      const stored = await store!.appendBuildEvent(jobId, event);
+      const stateAfterSignal = await markBuildingFromChannel(jobId, record);
+      options.onEvent?.(jobId);
 
       return reply.send({
         accepted: true,
         event: stored,
-        ...(await channelState(issueNumber, { ...record, state: stateAfterSignal })),
+        ...(await channelState(jobId, { ...record, state: stateAfterSignal })),
       });
     },
   );
@@ -1036,7 +1033,7 @@ export async function registerAgentChannelRoutes(
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
-      const { issueNumber, record } = resolved;
+      const { jobId, record } = resolved;
       if (!agentTokenSecret) {
         return reply.status(503).send({ error: 'the build channel is not configured' });
       }
@@ -1050,7 +1047,7 @@ export async function registerAgentChannelRoutes(
         return reply.send({
           accepted: false,
           rejected: 'stopped',
-          ...(await channelState(issueNumber, record)),
+          ...(await channelState(jobId, record)),
         });
       }
 
@@ -1061,7 +1058,7 @@ export async function registerAgentChannelRoutes(
       // One clock read: advertised expiresAt must match the signed exp.
       const issuedAt = now();
       const token = mintUploadToken(agentTokenSecret, {
-        jobId: issueNumber,
+        jobId,
         roundGeneration: generation,
         kind: 'screenshot',
         ...(label ? { label } : {}),
@@ -1077,7 +1074,7 @@ export async function registerAgentChannelRoutes(
         expiresInSeconds: ttlSeconds,
         upload: uploadCurlCommand(url, 'shot.png', 'image/png'),
         maxBytes: MAX_AGENT_SHOT_BYTES,
-        ...(await channelState(issueNumber, record)),
+        ...(await channelState(jobId, record)),
       });
     },
   );
@@ -1092,18 +1089,18 @@ export async function registerAgentChannelRoutes(
     async (request, reply) => {
       const resolved = await resolveUploadBuild(request, reply, 'screenshot');
       if (!resolved) return reply;
-      const { issueNumber, record, upload } = resolved;
+      const { jobId, record, upload } = resolved;
 
       const reject = async (reason: RejectionReason) =>
-        reply.send({ accepted: false, rejected: reason, ...(await channelState(issueNumber, record)) });
+        reply.send({ accepted: false, rejected: reason, ...(await channelState(jobId, record)) });
 
       if (stopReason(record)) {
         return reject('stopped');
       }
-      if (isRateLimited(shotsByBuild, issueNumber, now(), maxShotsPerWindow)) {
+      if (isRateLimited(shotsByBuild, jobId, now(), maxShotsPerWindow)) {
         return reject('rate_limited');
       }
-      if ((await store!.countBuildShots(issueNumber)) >= maxShotsPerBuild) {
+      if ((await store!.countBuildShots(jobId)) >= maxShotsPerBuild) {
         return reject('too_many_shots');
       }
 
@@ -1129,16 +1126,16 @@ export async function registerAgentChannelRoutes(
         ? sanitizeCreatorText(upload.label, { singleLine: true }).slice(0, MAX_SHOT_LABEL)
         : '';
 
-      const stored = await store!.appendBuildShot(issueNumber, {
+      const stored = await store!.appendBuildShot(jobId, {
         data: bytes.toString('base64'),
         ...(label ? { label } : {}),
       });
-      options.onEvent?.(issueNumber);
+      options.onEvent?.(jobId);
 
       return reply.send({
         accepted: true,
         shot: { id: stored.id, createdAt: stored.createdAt, ...(label ? { label } : {}) },
-        ...(await channelState(issueNumber, (await store!.getSubmission(issueNumber)) ?? record)),
+        ...(await channelState(jobId, (await store!.getSubmission(jobId)) ?? record)),
       });
     },
   );
@@ -1164,7 +1161,7 @@ export async function registerAgentChannelRoutes(
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
-      const { issueNumber, record } = resolved;
+      const { jobId, record } = resolved;
 
       const parsed = BuildPreviewInputSchema.safeParse(request.body ?? {});
       if (!parsed.success) {
@@ -1172,12 +1169,12 @@ export async function registerAgentChannelRoutes(
       }
 
       const reject = async (reason: RejectionReason) =>
-        reply.send({ accepted: false, rejected: reason, ...(await channelState(issueNumber, record)) });
+        reply.send({ accepted: false, rejected: reason, ...(await channelState(jobId, record)) });
 
       if (stopReason(record)) {
         return reject('stopped');
       }
-      if (isRateLimited(previewsByBuild, issueNumber, now(), maxPreviewsPerWindow)) {
+      if (isRateLimited(previewsByBuild, jobId, now(), maxPreviewsPerWindow)) {
         return reject('rate_limited');
       }
 
@@ -1200,7 +1197,7 @@ export async function registerAgentChannelRoutes(
         : '';
       const hasLocalized = Boolean(labelLocalized && parsed.data.locale);
 
-      const stored = await store!.appendBuildPreview(issueNumber, {
+      const stored = await store!.appendBuildPreview(jobId, {
         data: bytes.toString('base64'),
         ...(parsed.data.slug ? { slug: parsed.data.slug } : {}),
         ...(label ? { label } : {}),
@@ -1208,13 +1205,13 @@ export async function registerAgentChannelRoutes(
       });
       // Pruning after the write, not before: a push that succeeds and then fails to tidy up
       // has still delivered the thing the creator is waiting for.
-      await store!.pruneBuildPreviews(issueNumber, keepPreviews).catch(() => 0);
-      options.onEvent?.(issueNumber);
+      await store!.pruneBuildPreviews(jobId, keepPreviews).catch(() => 0);
+      options.onEvent?.(jobId);
 
       return reply.send({
         accepted: true,
         preview: { id: stored.id, createdAt: stored.createdAt, ...(stored.slug ? { slug: stored.slug } : {}) },
-        ...(await channelState(issueNumber, record)),
+        ...(await channelState(jobId, record)),
       });
     },
   );
@@ -1236,13 +1233,13 @@ export async function registerAgentChannelRoutes(
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
-      const { issueNumber, record } = resolved;
+      const { jobId, record } = resolved;
 
       if (!options.gamesStore) {
         return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
       }
       if (stopReason(record)) {
-        return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(issueNumber, record)) });
+        return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(jobId, record)) });
       }
 
       const parsed = StageSourceInputSchema.safeParse(request.body ?? {});
@@ -1260,17 +1257,17 @@ export async function registerAgentChannelRoutes(
         return reply.status(409).send({ error: `this build delivers to ${record.slug}, not ${parsed.data.slug}` });
       }
       if (!record.slug && store) {
-        await store.setSubmissionSlug(issueNumber, slug);
+        await store.setSubmissionSlug(jobId, slug);
       }
 
       const roundGeneration = store
-        ? ((await store.ensureRoundGeneration(issueNumber)) ?? record.roundGeneration ?? 1)
+        ? ((await store.ensureRoundGeneration(jobId)) ?? record.roundGeneration ?? 1)
         : (record.roundGeneration ?? 1);
 
       try {
         const staged = await options.gamesStore.putStagedSourceFile({
           slug,
-          issueNumber,
+          jobId,
           roundGeneration,
           path: parsed.data.path,
           content: parsed.data.content,
@@ -1279,11 +1276,11 @@ export async function registerAgentChannelRoutes(
         // (Claude Chat's preferred path) looks quiet after 15m and Studio wrongly offers
         // a platform handoff while the agent is still uploading files. Also busts the
         // status cache so a prior submit auto-end does not keep stall=ended on screen.
-        await markBuildingFromChannel(issueNumber, record);
-        await store?.touchLastAgentSignalAt(issueNumber, undefined, { key: 'staging_sources' });
-        options.onEvent?.(issueNumber);
+        await markBuildingFromChannel(jobId, record);
+        await store?.touchLastAgentSignalAt(jobId, undefined, { key: 'staging_sources' });
+        options.onEvent?.(jobId);
         // After the buffer is durable, so the assembly it schedules reads this file too.
-        options.onSourcesStaged?.({ issueNumber, slug, roundGeneration });
+        options.onSourcesStaged?.({ jobId, slug, roundGeneration });
         const hint = largeSourceFileHint(staged.path, staged.bytes, parsed.data.content);
         const manifestHint = gameManifestHint(staged.path, parsed.data.content);
         const advisories = await computeStageAdvisories({
@@ -1292,7 +1289,7 @@ export async function registerAgentChannelRoutes(
           store: store!,
           record,
           slug,
-          issueNumber,
+          jobId,
           roundGeneration,
           engineRef: record.roundKitEngineRef,
           path: staged.path,
@@ -1313,7 +1310,7 @@ export async function registerAgentChannelRoutes(
           ...(hint ? { hint } : {}),
           ...(advisories.typecheckHint ? { typecheckHint: advisories.typecheckHint } : {}),
           ...(advisories.audioHint ? { audioHint: advisories.audioHint } : {}),
-          ...(await channelState(issueNumber, (await store!.getSubmission(issueNumber)) ?? record)),
+          ...(await channelState(jobId, (await store!.getSubmission(jobId)) ?? record)),
         });
       } catch (error) {
         if (error instanceof InvalidUploadError) {
@@ -1334,13 +1331,13 @@ export async function registerAgentChannelRoutes(
     async (request, reply) => {
       const resolved = await resolveUploadBuild(request, reply, 'stage');
       if (!resolved) return reply;
-      const { issueNumber, record, upload } = resolved;
+      const { jobId, record, upload } = resolved;
 
       if (!options.gamesStore) {
         return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
       }
       if (stopReason(record)) {
-        return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(issueNumber, record)) });
+        return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(jobId, record)) });
       }
 
       const path = upload.path?.trim() ?? '';
@@ -1374,21 +1371,21 @@ export async function registerAgentChannelRoutes(
       }
 
       const roundGeneration = store
-        ? ((await store.ensureRoundGeneration(issueNumber)) ?? record.roundGeneration ?? 1)
+        ? ((await store.ensureRoundGeneration(jobId)) ?? record.roundGeneration ?? 1)
         : (record.roundGeneration ?? 1);
 
       try {
         const staged = await options.gamesStore.putStagedSourceFile({
           slug,
-          issueNumber,
+          jobId,
           roundGeneration,
           path,
           content,
         });
-        await markBuildingFromChannel(issueNumber, record);
-        await store?.touchLastAgentSignalAt(issueNumber, undefined, { key: 'staging_sources' });
-        options.onEvent?.(issueNumber);
-        options.onSourcesStaged?.({ issueNumber, slug, roundGeneration });
+        await markBuildingFromChannel(jobId, record);
+        await store?.touchLastAgentSignalAt(jobId, undefined, { key: 'staging_sources' });
+        options.onEvent?.(jobId);
+        options.onSourcesStaged?.({ jobId, slug, roundGeneration });
         const hint = largeSourceFileHint(staged.path, staged.bytes, content);
         const manifestHint = gameManifestHint(staged.path, content);
         const advisories = await computeStageAdvisories({
@@ -1397,7 +1394,7 @@ export async function registerAgentChannelRoutes(
           store: store!,
           record,
           slug,
-          issueNumber,
+          jobId,
           roundGeneration,
           engineRef: record.roundKitEngineRef,
           path: staged.path,
@@ -1418,7 +1415,7 @@ export async function registerAgentChannelRoutes(
           ...(hint ? { hint } : {}),
           ...(advisories.typecheckHint ? { typecheckHint: advisories.typecheckHint } : {}),
           ...(advisories.audioHint ? { audioHint: advisories.audioHint } : {}),
-          ...(await channelState(issueNumber, (await store!.getSubmission(issueNumber)) ?? record)),
+          ...(await channelState(jobId, (await store!.getSubmission(jobId)) ?? record)),
         });
       } catch (error) {
         if (error instanceof InvalidUploadError) {
@@ -1439,13 +1436,13 @@ export async function registerAgentChannelRoutes(
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
-      const { issueNumber, record } = resolved;
+      const { jobId, record } = resolved;
 
       if (!options.gamesStore) {
         return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
       }
       if (stopReason(record)) {
-        return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(issueNumber, record)) });
+        return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(jobId, record)) });
       }
 
       const parsed = StageSourcePatchInputSchema.safeParse(request.body ?? {});
@@ -1463,11 +1460,11 @@ export async function registerAgentChannelRoutes(
         return reply.status(409).send({ error: `this build delivers to ${record.slug}, not ${parsed.data.slug}` });
       }
       if (!record.slug && store) {
-        await store.setSubmissionSlug(issueNumber, slug);
+        await store.setSubmissionSlug(jobId, slug);
       }
 
       const roundGeneration = store
-        ? ((await store.ensureRoundGeneration(issueNumber)) ?? record.roundGeneration ?? 1)
+        ? ((await store.ensureRoundGeneration(jobId)) ?? record.roundGeneration ?? 1)
         : (record.roundGeneration ?? 1);
 
       const specs: PatchFileSpec[] = parsed.data.files
@@ -1498,7 +1495,7 @@ export async function registerAgentChannelRoutes(
             version,
             record,
             slug,
-            issueNumber,
+            jobId,
             roundGeneration,
             path: spec.path,
           });
@@ -1529,7 +1526,7 @@ export async function registerAgentChannelRoutes(
           try {
             staged = await options.gamesStore.putStagedSourceFile({
               slug,
-              issueNumber,
+              jobId,
               roundGeneration,
               path: item.path,
               content: item.content,
@@ -1559,10 +1556,10 @@ export async function registerAgentChannelRoutes(
             failed,
           });
         }
-        await markBuildingFromChannel(issueNumber, record);
-        await store?.touchLastAgentSignalAt(issueNumber, undefined, { key: 'staging_sources' });
-        options.onEvent?.(issueNumber);
-        options.onSourcesStaged?.({ issueNumber, slug, roundGeneration });
+        await markBuildingFromChannel(jobId, record);
+        await store?.touchLastAgentSignalAt(jobId, undefined, { key: 'staging_sources' });
+        options.onEvent?.(jobId);
+        options.onSourcesStaged?.({ jobId, slug, roundGeneration });
 
         let hint: string | null = null;
         let manifestHint: string | null = null;
@@ -1580,7 +1577,7 @@ export async function registerAgentChannelRoutes(
                 store: store!,
                 record,
                 slug,
-                issueNumber,
+                jobId,
                 roundGeneration,
                 engineRef: record.roundKitEngineRef,
                 path: tsFile.path,
@@ -1596,7 +1593,7 @@ export async function registerAgentChannelRoutes(
                 store: store!,
                 record,
                 slug,
-                issueNumber,
+                jobId,
                 roundGeneration,
                 engineRef: record.roundKitEngineRef,
                 path: gameJson.path,
@@ -1625,7 +1622,7 @@ export async function registerAgentChannelRoutes(
           ...(hint ? { hint } : {}),
           ...(typecheckHint ? { typecheckHint } : {}),
           ...(audioHint ? { audioHint } : {}),
-          ...(await channelState(issueNumber, (await store!.getSubmission(issueNumber)) ?? record)),
+          ...(await channelState(jobId, (await store!.getSubmission(jobId)) ?? record)),
         });
       } catch (error) {
         if (error instanceof SourcePatchError || error instanceof InvalidUploadError) {
@@ -1642,7 +1639,7 @@ export async function registerAgentChannelRoutes(
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
-      const { issueNumber, record } = resolved;
+      const { jobId, record } = resolved;
 
       if (!options.gamesStore) {
         return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
@@ -1658,11 +1655,11 @@ export async function registerAgentChannelRoutes(
       }
 
       const roundGeneration = store
-        ? ((await store.ensureRoundGeneration(issueNumber)) ?? record.roundGeneration ?? 1)
+        ? ((await store.ensureRoundGeneration(jobId)) ?? record.roundGeneration ?? 1)
         : (record.roundGeneration ?? 1);
       const staged = await options.gamesStore.listStagedSources({
         slug: record.slug,
-        issueNumber,
+        jobId,
         roundGeneration,
       });
       return reply.send(staged);
@@ -1677,7 +1674,7 @@ export async function registerAgentChannelRoutes(
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
-      const { issueNumber, record } = resolved;
+      const { jobId, record } = resolved;
 
       if (!options.gamesStore) {
         return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
@@ -1692,13 +1689,13 @@ export async function registerAgentChannelRoutes(
         : undefined;
 
       const roundGeneration = store
-        ? ((await store.ensureRoundGeneration(issueNumber)) ?? record.roundGeneration ?? 1)
+        ? ((await store.ensureRoundGeneration(jobId)) ?? record.roundGeneration ?? 1)
         : (record.roundGeneration ?? 1);
 
       try {
         const { cleared } = await options.gamesStore.clearStagedSources({
           slug: record.slug,
-          issueNumber,
+          jobId,
           roundGeneration,
           ...(paths?.length ? { paths } : {}),
         });
@@ -1724,13 +1721,13 @@ export async function registerAgentChannelRoutes(
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
-      const { issueNumber, record } = resolved;
+      const { jobId, record } = resolved;
 
       if (!options.gamesStore) {
         return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
       }
       if (stopReason(record)) {
-        return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(issueNumber, record)) });
+        return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(jobId, record)) });
       }
       if (!record.slug) {
         return reply
@@ -1744,20 +1741,20 @@ export async function registerAgentChannelRoutes(
       }
 
       const roundGeneration = store
-        ? ((await store.ensureRoundGeneration(issueNumber)) ?? record.roundGeneration ?? 1)
+        ? ((await store.ensureRoundGeneration(jobId)) ?? record.roundGeneration ?? 1)
         : (record.roundGeneration ?? 1);
 
       try {
         const staged = await options.gamesStore.deleteStagedSourceFile({
           slug: record.slug,
-          issueNumber,
+          jobId,
           roundGeneration,
           path: parsed.data.path,
         });
-        await markBuildingFromChannel(issueNumber, record);
-        await store?.touchLastAgentSignalAt(issueNumber, undefined, { key: 'staging_sources' });
-        options.onEvent?.(issueNumber);
-        options.onSourcesStaged?.({ issueNumber, slug: record.slug, roundGeneration });
+        await markBuildingFromChannel(jobId, record);
+        await store?.touchLastAgentSignalAt(jobId, undefined, { key: 'staging_sources' });
+        options.onEvent?.(jobId);
+        options.onSourcesStaged?.({ jobId, slug: record.slug, roundGeneration });
         return reply.send({
           accepted: true,
           path: staged.path,
@@ -1768,7 +1765,7 @@ export async function registerAgentChannelRoutes(
             maxFiles: staged.maxFiles,
             updatedAt: staged.updatedAt,
           },
-          ...(await channelState(issueNumber, (await store!.getSubmission(issueNumber)) ?? record)),
+          ...(await channelState(jobId, (await store!.getSubmission(jobId)) ?? record)),
         });
       } catch (error) {
         if (error instanceof InvalidUploadError) {
@@ -1801,7 +1798,7 @@ export async function registerAgentChannelRoutes(
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
-      const { issueNumber, record } = resolved;
+      const { jobId, record } = resolved;
 
       if (!options.gamesStore) {
         return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
@@ -1830,7 +1827,7 @@ export async function registerAgentChannelRoutes(
         let mode: DeliveryMode | undefined =
           parsed.data.mode === 'preview' || parsed.data.mode === 'publish' ? parsed.data.mode : undefined;
         const roundGeneration = store
-          ? ((await store.ensureRoundGeneration(issueNumber)) ?? record.roundGeneration ?? 1)
+          ? ((await store.ensureRoundGeneration(jobId)) ?? record.roundGeneration ?? 1)
           : (record.roundGeneration ?? 1);
 
         let files = parsed.data.files ?? [];
@@ -1868,7 +1865,7 @@ export async function registerAgentChannelRoutes(
         } else if (parsed.data.fromStaged) {
           const staged = await options.gamesStore.getStagedSourceFiles({
             slug,
-            issueNumber,
+            jobId,
             roundGeneration,
           });
           if (staged.length === 0 && files.length === 0) {
@@ -1917,11 +1914,11 @@ export async function registerAgentChannelRoutes(
         }
         let summary = parsed.data.summary;
         if (!summary && store) {
-          const recent = await store.listBuildEvents(issueNumber, { limit: 20 });
+          const recent = await store.listBuildEvents(jobId, { limit: 20 });
           summary = pickLatestChangelogText(recent);
         }
         const delivery = await options.sourceDelivery.deliver({
-          issueNumber,
+          jobId,
           slug,
           files,
           mode,
@@ -1943,17 +1940,17 @@ export async function registerAgentChannelRoutes(
                   deliveriesUsed: delivery.deliveriesUsed,
                 }
               : {}),
-            ...(await channelState(issueNumber, (await store!.getSubmission(issueNumber)) ?? record)),
+            ...(await channelState(jobId, (await store!.getSubmission(jobId)) ?? record)),
           });
         }
         const { version, buildId, gateStarted } = delivery;
         // Staging is spent once the candidate is written — clear so the next iterate
         // starts clean and a half-edited buffer cannot leak into a later round.
         if (parsed.data.fromStaged) {
-          await options.gamesStore.clearStagedSources({ slug, issueNumber, roundGeneration }).catch(() => {});
+          await options.gamesStore.clearStagedSources({ slug, jobId, roundGeneration }).catch(() => {});
         }
 
-        const fresh = store ? ((await store.getSubmission(issueNumber)) ?? record) : record;
+        const fresh = store ? ((await store.getSubmission(jobId)) ?? record) : record;
         return reply.send({
           accepted: true,
           mode,
@@ -1963,7 +1960,7 @@ export async function registerAgentChannelRoutes(
           // unparseable from an otherwise successful create.
           gateStarted,
           ...(buildId ? { buildId } : {}),
-          ...(await channelState(issueNumber, fresh)),
+          ...(await channelState(jobId, fresh)),
         });
       } catch (error) {
         if (error instanceof SourceDeliveryValidationError) {
@@ -2072,13 +2069,13 @@ export async function registerAgentChannelRoutes(
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
-      const { issueNumber, record } = resolved;
+      const { jobId, record } = resolved;
 
-      if (isRateLimited(inboxChecksByBuild, issueNumber, now(), maxInboxChecksPerWindow)) {
+      if (isRateLimited(inboxChecksByBuild, jobId, now(), maxInboxChecksPerWindow)) {
         return reply.status(429).send({ error: 'too many inbox checks' });
       }
 
-      return reply.send(await channelState(issueNumber, record));
+      return reply.send(await channelState(jobId, record));
     },
   );
 
@@ -2089,14 +2086,14 @@ export async function registerAgentChannelRoutes(
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
-      const { issueNumber, record } = resolved;
+      const { jobId, record } = resolved;
 
       const query = request.query as { cursor?: string; limit?: string };
       const transcript = await loadBuildTranscript(store!, record, {
         ...(query.cursor !== undefined ? { cursor: query.cursor } : {}),
         ...(optionalFiniteQuery(query.limit) !== undefined ? { limit: optionalFiniteQuery(query.limit) } : {}),
       });
-      return reply.send({ ...transcript, ...(await channelState(issueNumber, record)) });
+      return reply.send({ ...transcript, ...(await channelState(jobId, record)) });
     },
   );
 
@@ -2106,16 +2103,16 @@ export async function registerAgentChannelRoutes(
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
-      const { issueNumber, record } = resolved;
+      const { jobId, record } = resolved;
 
       const parsed = AckRequestSchema.safeParse(request.body ?? {});
       if (!parsed.success) {
         return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
       }
 
-      await store!.markCreatorMessagesDelivered(issueNumber, parsed.data.ids);
-      options.onEvent?.(issueNumber);
-      return reply.send({ ok: true, ...(await channelState(issueNumber, record)) });
+      await store!.markCreatorMessagesDelivered(jobId, parsed.data.ids);
+      options.onEvent?.(jobId);
+      return reply.send({ ok: true, ...(await channelState(jobId, record)) });
     },
   );
 
@@ -2133,7 +2130,7 @@ export async function registerAgentChannelRoutes(
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
-      const { issueNumber, record } = resolved;
+      const { jobId, record } = resolved;
 
       const parsed = EndRequestSchema.safeParse(request.body ?? {});
       if (!parsed.success) {
@@ -2143,7 +2140,7 @@ export async function registerAgentChannelRoutes(
       // A summary that cannot be stored must not fail the end.
       const recordSummary = async () => {
         if (!parsed.data.summary) return false;
-        if ((await store!.countBuildEvents(issueNumber)) >= maxEventsPerBuild) return false;
+        if ((await store!.countBuildEvents(jobId)) >= maxEventsPerBuild) return false;
         const event = await composeCreatorEvent({
           kind: 'done',
           text: parsed.data.summary,
@@ -2151,7 +2148,7 @@ export async function registerAgentChannelRoutes(
           ...(parsed.data.locale ? { locale: parsed.data.locale } : {}),
         });
         if (!event) return false;
-        await store!.appendBuildEvent(issueNumber, event);
+        await store!.appendBuildEvent(jobId, event);
         const version = record.previewVersion ?? record.deliveredVersion;
         if (record.slug && version && options.gamesStore?.setVersionSummary) {
           await options.gamesStore.setVersionSummary(record.slug, version, event.text).catch(() => {});
@@ -2165,24 +2162,24 @@ export async function registerAgentChannelRoutes(
         options.onBuilderHandoffAcknowledged
       ) {
         const outcome = await options.onBuilderHandoffAcknowledged({
-          issueNumber,
+          jobId,
           acknowledgedAt: new Date(now()).toISOString(),
           log: request.log,
         });
-        const fresh = (await store!.getSubmission(issueNumber)) ?? record;
+        const fresh = (await store!.getSubmission(jobId)) ?? record;
         if (!outcome.started) {
-          options.onEvent?.(issueNumber);
+          options.onEvent?.(jobId);
           return reply.send({
             accepted: false,
             rejected: outcome.reason ?? 'handoff_not_started',
-            ...(await channelState(issueNumber, fresh)),
+            ...(await channelState(jobId, fresh)),
           });
         }
         if (parsed.data.ackInboxIds && parsed.data.ackInboxIds.length > 0) {
-          await store!.markCreatorMessagesDelivered(issueNumber, parsed.data.ackInboxIds);
+          await store!.markCreatorMessagesDelivered(jobId, parsed.data.ackInboxIds);
         }
         const summarized = await recordSummary();
-        const state = await channelState(issueNumber, fresh);
+        const state = await channelState(jobId, fresh);
         return reply.send({
           accepted: true,
           ended: true,
@@ -2194,23 +2191,23 @@ export async function registerAgentChannelRoutes(
       }
 
       if (stopReason(record)) {
-        return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(issueNumber, record)) });
+        return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(jobId, record)) });
       }
 
       if (parsed.data.ackInboxIds && parsed.data.ackInboxIds.length > 0) {
-        await store!.markCreatorMessagesDelivered(issueNumber, parsed.data.ackInboxIds);
+        await store!.markCreatorMessagesDelivered(jobId, parsed.data.ackInboxIds);
       }
 
       // Submit-ended still records; a prior or legacy end does not.
       const summarized = record.agentEndedAt && record.agentEndedBy !== 'submit' ? false : await recordSummary();
-      await store!.markAgentEnded(issueNumber);
-      options.onEvent?.(issueNumber);
-      const fresh = (await store!.getSubmission(issueNumber)) ?? record;
+      await store!.markAgentEnded(jobId);
+      options.onEvent?.(jobId);
+      const fresh = (await store!.getSubmission(jobId)) ?? record;
       return reply.send({
         accepted: true,
         ended: true,
         ...(summarized ? { summaryShown: true } : {}),
-        ...(await channelState(issueNumber, fresh)),
+        ...(await channelState(jobId, fresh)),
       });
     },
   );
@@ -2235,7 +2232,7 @@ export async function registerAgentChannelRoutes(
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
-      const { issueNumber } = resolved;
+      const { jobId } = resolved;
       if (!knowledgeSearch) {
         return reply
           .status(503)
@@ -2252,14 +2249,14 @@ export async function registerAgentChannelRoutes(
 
       const bucket = mode === 'answer' ? knowledgeAnswersByBuild : knowledgeChunksByBuild;
       const cap = mode === 'answer' ? maxKnowledgeAnswersPerWindow : maxKnowledgeChunksPerWindow;
-      if (isRateLimited(bucket, issueNumber, now(), cap)) {
+      if (isRateLimited(bucket, jobId, now(), cap)) {
         return reply.send(knowledgeCapWarning(mode, cap));
       }
 
       const startedAt = now();
       const result = await knowledgeSearch({ query: text, mode, scope });
       logKnowledgeQuery(request.log, {
-        issueNumber,
+        jobId,
         mode,
         scope,
         cacheHit: result.cached,

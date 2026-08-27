@@ -67,7 +67,7 @@ const fakeStore: Pick<Store, 'getPublication' | 'listSubmissionsByOwner'> = {
 
 const BASE_INPUT = {
   slug: 'my-game',
-  issueNumber: 1,
+  jobId: 1,
   roundGeneration: 1,
   engineRef: 'engine-1',
   store: fakeStore,

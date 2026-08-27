@@ -36,7 +36,7 @@ export function AdminJobPreviewModal({
     setState('loading');
     setMessage(null);
 
-    void fetchJobPreview(job.issueNumber)
+    void fetchJobPreview(job.jobId)
       .then((data) => {
         if (cancelled) return;
         if (!data) {
@@ -54,7 +54,7 @@ export function AdminJobPreviewModal({
     return () => {
       cancelled = true;
     };
-  }, [job.issueNumber]);
+  }, [job.jobId]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -70,7 +70,7 @@ export function AdminJobPreviewModal({
     setPublishing(true);
     setMessage(null);
     try {
-      const result = await publishJob(job.issueNumber);
+      const result = await publishJob(job.jobId);
       if ('refused' in result) {
         setMessage(REFUSAL_COPY[result.refused]);
       } else {
@@ -82,7 +82,7 @@ export function AdminJobPreviewModal({
     } finally {
       setPublishing(false);
     }
-  }, [job.issueNumber, onPublished]);
+  }, [job.jobId, onPublished]);
 
   return (
     <div
@@ -99,7 +99,7 @@ export function AdminJobPreviewModal({
           <div className="admin-preview-info">
             <h3 className="admin-preview-title">{job.title}</h3>
             <div className="admin-preview-meta">
-              <span>#{job.issueNumber}</span>
+              <span>#{job.jobId}</span>
               {job.slug ? <span>· {job.slug}</span> : null}
               {preview?.version ? <span>· {preview.version}</span> : null}
               <span className={`admin-job-state-badge admin-job-state-badge--${job.state}`}>{job.state}</span>
@@ -107,21 +107,11 @@ export function AdminJobPreviewModal({
           </div>
           <div className="admin-preview-actions">
             {job.state === 'ready_for_review' && (
-              <button
-                type="button"
-                className="admin-job-publish is-promoted"
-                onClick={onPublish}
-                disabled={publishing}
-              >
+              <button type="button" className="admin-job-publish is-promoted" onClick={onPublish} disabled={publishing}>
                 {publishing ? 'Publishing…' : 'Publish Game'}
               </button>
             )}
-            <button
-              type="button"
-              className="admin-preview-close-btn"
-              onClick={onClose}
-              aria-label="Close preview"
-            >
+            <button type="button" className="admin-preview-close-btn" onClick={onClose} aria-label="Close preview">
               ✕
             </button>
           </div>
@@ -130,9 +120,7 @@ export function AdminJobPreviewModal({
         <div className="admin-preview-body">
           {state === 'loading' && <div className="admin-preview-state">Loading game preview…</div>}
           {state === 'error' && (
-            <div className="admin-preview-state is-error">
-              No playable preview available for this build yet.
-            </div>
+            <div className="admin-preview-state is-error">No playable preview available for this build yet.</div>
           )}
           {state === 'ready' && preview && (
             <div className="admin-preview-frame-wrap">

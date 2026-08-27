@@ -46,7 +46,7 @@ const CONSUMES = {
 const MAX_STAGE_UPLOAD_BATCH = 50;
 
 interface AuthedStageJob {
-  issueNumber: number;
+  jobId: number;
   record: SubmissionRecord;
   claims: Pick<AgentTokenClaims, 'roundGeneration'>;
   channelToken: string;
@@ -260,7 +260,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
         if (hasPath) {
           const path = validPaths[0]!;
           const token = mintUploadToken(agentTokenSecret, {
-            jobId: auth.issueNumber,
+            jobId: auth.jobId,
             roundGeneration: generation,
             kind: 'stage',
             path,
@@ -280,7 +280,7 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
 
         const uploads = validPaths.map((path) => {
           const token = mintUploadToken(agentTokenSecret, {
-            jobId: auth.issueNumber,
+            jobId: auth.jobId,
             roundGeneration: generation,
             kind: 'stage',
             path,

@@ -187,7 +187,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
       withApp(async (app) => {
         await games.putCandidateSources({
           slug: 'sky-dodge',
-          issueNumber: 10,
+          jobId: 10,
           files: [
             { path: 'SPEC.md', content: '# Sky Dodge' },
             {
@@ -205,7 +205,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
         await store.setSubmissionDeliveredVersion(10, (await games.listVersions('sky-dodge'))[0]!.version);
         await games.putStagedSourceFile({
           slug: 'sky-dodge',
-          issueNumber: 10,
+          jobId: 10,
           roundGeneration: 1,
           path: 'game/render.ts',
           content: 'export const paint = 2; // owner edit',
@@ -283,7 +283,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
           payload: { path: 'game.ts', content: 'export const boot = 1;', rebuild: false },
         });
         expect(ok.statusCode).toBe(200);
-        const listed = await games.listStagedSources({ slug: 'sky-dodge', issueNumber: 10, roundGeneration: 1 });
+        const listed = await games.listStagedSources({ slug: 'sky-dodge', jobId: 10, roundGeneration: 1 });
         expect(listed.files).toEqual([{ path: 'game.ts', bytes: expect.any(Number), stagedBy: 'owner' }]);
 
         await store.recordDispatch(10, { backend: 'managed', ref: 'session-1' });
@@ -315,14 +315,14 @@ describe('the Code surface routes (creator-code.ts)', () => {
         // The closed round's own buffer stays untouched...
         const oldRoundListed = await games.listStagedSources({
           slug: 'sky-dodge',
-          issueNumber: 10,
+          jobId: 10,
           roundGeneration: 1,
         });
         expect(oldRoundListed.files).toEqual([]);
         // ...and the write landed in the new round's buffer instead.
         const newRoundListed = await games.listStagedSources({
           slug: 'sky-dodge',
-          issueNumber: body.roundOpened,
+          jobId: body.roundOpened,
           roundGeneration: 1,
         });
         expect(newRoundListed.files).toEqual([{ path: 'game.ts', bytes: expect.any(Number), stagedBy: 'owner' }]);
@@ -351,7 +351,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
           payload: { path: 'game.ts', content: 'export const boot = 2;', rebuild: false },
         });
         expect(second.json().roundOpened).toBeUndefined();
-        const listed = await games.listStagedSources({ slug: 'sky-dodge', issueNumber: 10, roundGeneration: 1 });
+        const listed = await games.listStagedSources({ slug: 'sky-dodge', jobId: 10, roundGeneration: 1 });
         expect(listed.files).toEqual([{ path: 'game.ts', bytes: expect.any(Number), stagedBy: 'owner' }]);
       }));
   });
@@ -375,7 +375,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
         });
         expect(deleted.statusCode).toBe(200);
         expect(deleted.json()).toMatchObject({ accepted: true, path: 'game.ts' });
-        const listed = await games.listStagedSources({ slug: 'sky-dodge', issueNumber: 10, roundGeneration: 1 });
+        const listed = await games.listStagedSources({ slug: 'sky-dodge', jobId: 10, roundGeneration: 1 });
         expect(listed.files).toEqual([{ path: 'game.ts', bytes: 0, deleted: true, stagedBy: 'owner' }]);
 
         await store.recordDispatch(10, { backend: 'managed', ref: 'session-1' });
@@ -422,7 +422,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
       withApp(async (app) => {
         await games.putCandidateSources({
           slug: 'sky-dodge',
-          issueNumber: 10,
+          jobId: 10,
           files: [
             { path: 'SPEC.md', content: '# Sky Dodge' },
             {
@@ -464,7 +464,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
       withApp(async () => {
         await games.putStagedSourceFile({
           slug: 'sky-dodge',
-          issueNumber: 10,
+          jobId: 10,
           roundGeneration: 1,
           path: 'game/agent-file.ts',
           content: 'agent wrote this',
@@ -472,7 +472,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
         });
         await games.putStagedSourceFile({
           slug: 'sky-dodge',
-          issueNumber: 10,
+          jobId: 10,
           roundGeneration: 1,
           path: 'game/owner-file.ts',
           content: 'owner wrote this',
@@ -493,7 +493,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
 
         expect(res.statusCode).toBe(200);
         expect(res.json()).toEqual({ cleared: 1 });
-        const remaining = await games.listStagedSources({ slug: 'sky-dodge', issueNumber: 10, roundGeneration: 1 });
+        const remaining = await games.listStagedSources({ slug: 'sky-dodge', jobId: 10, roundGeneration: 1 });
         expect(remaining.files.map((f) => f.path)).toEqual(['game/agent-file.ts']);
       }));
 
@@ -501,7 +501,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
       withApp(async () => {
         await games.putStagedSourceFile({
           slug: 'sky-dodge',
-          issueNumber: 10,
+          jobId: 10,
           roundGeneration: 1,
           path: 'game/agent-file.ts',
           content: 'round-key agent wrote this',
@@ -509,7 +509,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
         });
         await games.putStagedSourceFile({
           slug: 'sky-dodge',
-          issueNumber: 10,
+          jobId: 10,
           roundGeneration: 1,
           path: 'game/console-file.ts',
           content: 'the owner ran the agent console',
@@ -531,7 +531,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
 
         expect(res.statusCode).toBe(200);
         expect(res.json()).toEqual({ cleared: 1 });
-        const remaining = await games.listStagedSources({ slug: 'sky-dodge', issueNumber: 10, roundGeneration: 1 });
+        const remaining = await games.listStagedSources({ slug: 'sky-dodge', jobId: 10, roundGeneration: 1 });
         expect(remaining.files.map((f) => f.path)).toEqual(['game/agent-file.ts']);
       }));
 
@@ -539,7 +539,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
       withApp(async (app) => {
         await games.putStagedSourceFile({
           slug: 'sky-dodge',
-          issueNumber: 10,
+          jobId: 10,
           roundGeneration: 1,
           path: 'game/owner-file.ts',
           content: 'owner wrote this',
@@ -555,7 +555,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
 
         expect(res.statusCode).toBe(409);
         expect(res.json()).toMatchObject({ error: 'agent_round' });
-        const remaining = await games.listStagedSources({ slug: 'sky-dodge', issueNumber: 10, roundGeneration: 1 });
+        const remaining = await games.listStagedSources({ slug: 'sky-dodge', jobId: 10, roundGeneration: 1 });
         expect(remaining.files.map((f) => f.path)).toEqual(['game/owner-file.ts']);
       }));
   });
@@ -687,7 +687,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
       const { games: withKitGames, objectStore } = storesWithKit('declare const GameKit: { boot(): void };');
       await withKitGames.putStagedSourceFile({
         slug: 'sky-dodge',
-        issueNumber: 10,
+        jobId: 10,
         roundGeneration: 1,
         path: 'game.ts',
         content: 'export const boot = 1;',
@@ -695,7 +695,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
       });
       await withKitGames.putStagedSourceFile({
         slug: 'sky-dodge',
-        issueNumber: 10,
+        jobId: 10,
         roundGeneration: 1,
         path: 'GAME.json',
         // index.html is refused — howToPlay satisfies hasPlayableOverlay instead.
@@ -707,7 +707,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
       });
       await withKitGames.putStagedSourceFile({
         slug: 'sky-dodge',
-        issueNumber: 10,
+        jobId: 10,
         roundGeneration: 1,
         path: 'style.css',
         content: '.game { color: gold; }',
@@ -788,7 +788,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
     async function deliverBase(): Promise<string> {
       await games.putCandidateSources({
         slug: 'sky-dodge',
-        issueNumber: 10,
+        jobId: 10,
         files: [
           { path: 'SPEC.md', content: '# Sky Dodge' },
           {
@@ -894,7 +894,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
       withApp(async (app) => {
         await games.putStagedSourceFile({
           slug: 'sky-dodge',
-          issueNumber: 10,
+          jobId: 10,
           roundGeneration: 1,
           path: 'game.ts',
           content: 'export const boot = 1;',
@@ -914,7 +914,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
       withApp(async (app) => {
         await games.putCandidateSources({
           slug: 'sky-dodge',
-          issueNumber: 10,
+          jobId: 10,
           files: [
             { path: 'SPEC.md', content: '# Sky Dodge\n' },
             {
@@ -940,7 +940,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
         expect(res.json()).toMatchObject({ accepted: true, path: 'SPEC.md', from: 'delivery' });
         const staged = await games.getStagedSourceFile({
           slug: 'sky-dodge',
-          issueNumber: 10,
+          jobId: 10,
           roundGeneration: 1,
           path: 'SPEC.md',
         });
@@ -960,7 +960,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
         expect(res.json()).toMatchObject({ accepted: true, from: 'stub' });
         const staged = await games.getStagedSourceFile({
           slug: 'sky-dodge',
-          issueNumber: 10,
+          jobId: 10,
           roundGeneration: 1,
           path: 'SPEC.md',
         });
@@ -1036,7 +1036,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
         const stage = (path: string, content: string) =>
           games.putStagedSourceFile({
             slug: 'sky-dodge',
-            issueNumber: 10,
+            jobId: 10,
             roundGeneration: 1,
             path,
             content,
@@ -1079,7 +1079,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
         const stage = (path: string, content: string, agentAssisted?: boolean) =>
           games.putStagedSourceFile({
             slug: 'sky-dodge',
-            issueNumber: 10,
+            jobId: 10,
             roundGeneration: 1,
             path,
             content,
@@ -1121,7 +1121,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
         });
         expect(staged.statusCode).toBe(200);
 
-        const summary = await games.listStagedSources({ slug: 'sky-dodge', issueNumber: 10, roundGeneration: 1 });
+        const summary = await games.listStagedSources({ slug: 'sky-dodge', jobId: 10, roundGeneration: 1 });
         const entry = summary.files.find((f) => f.path === 'game.ts');
         expect(entry?.stagedBy).toBe('owner');
         expect(entry?.agentAssisted).toBe(true);
@@ -1131,7 +1131,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
       const stageAgent = (path: string, content: string) =>
         games.putStagedSourceFile({
           slug: 'sky-dodge',
-          issueNumber: 10,
+          jobId: 10,
           roundGeneration: 1,
           path,
           content,
@@ -1166,7 +1166,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
       // The owner discards their own staged paths (there are none) or simply never
       // staged anything this round — either way the buffer is empty, and the delivered
       // content is byte-identical to the agent-authored version above.
-      await games.clearStagedSources({ slug: 'sky-dodge', issueNumber: 10, roundGeneration: 1, paths: [...paths] });
+      await games.clearStagedSources({ slug: 'sky-dodge', jobId: 10, roundGeneration: 1, paths: [...paths] });
 
       const secondVersion = await withApp(async (app) => {
         const res = await app.inject({
@@ -1186,7 +1186,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
         const stage = (path: string, content: string) =>
           games.putStagedSourceFile({
             slug: 'sky-dodge',
-            issueNumber: 10,
+            jobId: 10,
             roundGeneration: 1,
             path,
             content,
@@ -1327,7 +1327,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
     it('rolls forward by creating a new build from target version sources', async () => {
       const { version } = await games.putCandidateSources({
         slug: 'sky-dodge',
-        issueNumber: 10,
+        jobId: 10,
         mode: 'preview',
         files: [
           { path: 'SPEC.md', content: '# Sky Dodge' },

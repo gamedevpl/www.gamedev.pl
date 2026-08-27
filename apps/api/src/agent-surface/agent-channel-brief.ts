@@ -15,7 +15,7 @@ export interface AgentChannelBriefRoutesDeps {
   resolveBuild: (
     request: FastifyRequest,
     reply: FastifyReply,
-  ) => Promise<{ issueNumber: number; record: SubmissionRecord; access: AgentTokenAccess } | null>;
+  ) => Promise<{ jobId: number; record: SubmissionRecord; access: AgentTokenAccess } | null>;
   store: Store | undefined;
 }
 
@@ -28,13 +28,11 @@ export function registerAgentChannelBriefRoutes(app: FastifyInstance, deps: Agen
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
-      const { issueNumber, record } = resolved;
+      const { jobId, record } = resolved;
 
-      const pending = await store!.listPendingCreatorMessages(issueNumber);
+      const pending = await store!.listPendingCreatorMessages(jobId);
       const seed = seedPayload(record);
-      const referenceShots = (await store!.listBuildShots(issueNumber)).filter(
-        (shot) => shot.label === 'creator-reference',
-      );
+      const referenceShots = (await store!.listBuildShots(jobId)).filter((shot) => shot.label === 'creator-reference');
       return reply.send({
         title: record.title,
         slug: record.slug ?? null,
@@ -61,12 +59,12 @@ export function registerAgentChannelBriefRoutes(app: FastifyInstance, deps: Agen
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
-      const { issueNumber } = resolved;
+      const { jobId } = resolved;
 
-      const summaries = (await store!.listBuildShots(issueNumber)).filter((shot) => shot.label === 'creator-reference');
+      const summaries = (await store!.listBuildShots(jobId)).filter((shot) => shot.label === 'creator-reference');
       const images = await Promise.all(
         summaries.map(async (summary) => {
-          const shot = await store!.getBuildShot(issueNumber, summary.id);
+          const shot = await store!.getBuildShot(jobId, summary.id);
           if (!shot) return null;
           return { id: shot.id, createdAt: shot.createdAt, png: shot.data };
         }),

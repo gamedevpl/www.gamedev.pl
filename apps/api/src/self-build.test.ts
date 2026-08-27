@@ -75,7 +75,7 @@ function stubGamesStore(options?: {
 }) {
   const stored: Array<{
     slug: string;
-    issueNumber: number;
+    jobId: number;
     backend?: string;
     kitEngineRef?: string;
     mode?: 'preview' | 'publish';
@@ -94,7 +94,7 @@ function stubGamesStore(options?: {
   const gamesStore = {
     putCandidateSources: async (input: {
       slug: string;
-      issueNumber: number;
+      jobId: number;
       files: typeof MINIMAL_FILES;
       backend?: string;
       kitEngineRef?: string;
@@ -114,7 +114,7 @@ function stubGamesStore(options?: {
           slug: input.slug,
           version,
           createdAt: new Date().toISOString(),
-          issueNumber: input.issueNumber,
+          jobId: input.jobId,
           backend: input.backend,
           kitEngineRef: input.kitEngineRef,
           deliveryMode: input.mode === 'preview' ? 'preview' : 'publish',
@@ -129,7 +129,7 @@ function stubGamesStore(options?: {
         slug,
         version,
         createdAt: new Date().toISOString(),
-        issueNumber: 0,
+        jobId: 0,
         backend: hit.backend,
         kitEngineRef: hit.kitEngineRef,
         deliveryMode: hit.deliveryMode,
@@ -195,9 +195,9 @@ function authHeaders(uid = 'g:creator') {
   return { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, sessionSecret)}` };
 }
 
-function agentHeaders(issueNumber: number, roundGeneration = 1) {
+function agentHeaders(jobId: number, roundGeneration = 1) {
   return {
-    authorization: `Bearer ${mintAgentToken(issueNumber, secret, { roundGeneration })}`,
+    authorization: `Bearer ${mintAgentToken(jobId, secret, { roundGeneration })}`,
   };
 }
 
@@ -300,16 +300,16 @@ describe('self builder (BY-02)', () => {
     expect(submit.statusCode).toBe(200);
     const slug = submit.json().slug as string;
 
-    let issueNumber = 0;
+    let jobId = 0;
     await vi.waitFor(async () => {
       const record = (await store.listSubmissionsByOwner('g:creator'))[0];
       expect(record?.state).toBe('dispatched');
-      issueNumber = record!.issueNumber;
+      jobId = record!.jobId;
     });
 
     const statusWaiting = await app.inject({
       method: 'GET',
-      url: `/api/submissions/${mintToken(issueNumber, secret)}`,
+      url: `/api/submissions/${mintToken(jobId, secret)}`,
     });
     expect(statusWaiting.json().stall).toBe('no_agent_yet');
     // Studio defaults from these — not localStorage alone (Codex P2 on BY-07).
@@ -318,20 +318,20 @@ describe('self builder (BY-02)', () => {
     const progress = await app.inject({
       method: 'POST',
       url: '/api/agent/build/progress',
-      headers: agentHeaders(issueNumber),
+      headers: agentHeaders(jobId),
       payload: { text: 'Scaffolding the loop.' },
     });
     expect(progress.statusCode).toBe(200);
-    expect((await store.getSubmission(issueNumber))?.state).toBe('building');
+    expect((await store.getSubmission(jobId))?.state).toBe('building');
 
     const delivery = await app.inject({
       method: 'POST',
       url: '/api/agent/build/sources',
-      headers: agentHeaders(issueNumber),
+      headers: agentHeaders(jobId),
       payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
     });
     expect(delivery.json()).toMatchObject({ accepted: true });
-    expect((await store.getSubmission(issueNumber))?.state).toBe('submitted');
+    expect((await store.getSubmission(jobId))?.state).toBe('submitted');
     expect(stored[0]?.backend).toBe('self');
   });
 
@@ -349,15 +349,15 @@ describe('self builder (BY-02)', () => {
     });
     expect(submit.statusCode).toBe(200);
     const slug = submit.json().slug as string;
-    let issueNumber = 0;
+    let jobId = 0;
     await vi.waitFor(async () => {
-      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+      jobId = (await store.listSubmissionsByOwner('g:creator'))[0]!.jobId;
     });
 
     const first = await app.inject({
       method: 'POST',
       url: '/api/agent/build/sources',
-      headers: agentHeaders(issueNumber),
+      headers: agentHeaders(jobId),
       payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF, mode: 'preview' },
     });
     expect(first.json()).toMatchObject({ accepted: true });
@@ -367,7 +367,7 @@ describe('self builder (BY-02)', () => {
     const reused = await app.inject({
       method: 'POST',
       url: '/api/agent/build/sources',
-      headers: agentHeaders(issueNumber),
+      headers: agentHeaders(jobId),
       payload: {
         slug,
         fromLatestDelivery: true,
@@ -402,9 +402,9 @@ describe('self builder (BY-02)', () => {
     });
     expect(submit.statusCode).toBe(200);
     const slug = submit.json().slug as string;
-    let issueNumber = 0;
+    let jobId = 0;
     await vi.waitFor(async () => {
-      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+      jobId = (await store.listSubmissionsByOwner('g:creator'))[0]!.jobId;
     });
 
     // Preview candidates may omit TRACE/PLAYTEST — kit_outdated recovery must not
@@ -413,7 +413,7 @@ describe('self builder (BY-02)', () => {
     const first = await app.inject({
       method: 'POST',
       url: '/api/agent/build/sources',
-      headers: agentHeaders(issueNumber),
+      headers: agentHeaders(jobId),
       payload: { slug, files: previewOnly, kitEngineRef: KIT_REF, mode: 'preview' },
     });
     expect(first.statusCode).toBe(200);
@@ -422,7 +422,7 @@ describe('self builder (BY-02)', () => {
     const reused = await app.inject({
       method: 'POST',
       url: '/api/agent/build/sources',
-      headers: agentHeaders(issueNumber),
+      headers: agentHeaders(jobId),
       payload: {
         slug,
         fromLatestDelivery: true,
@@ -448,15 +448,15 @@ describe('self builder (BY-02)', () => {
       payload: { title: 'Need Kit Ref', concept: CONCEPT, builder: 'self' },
     });
     const slug = submit.json().slug as string;
-    let issueNumber = 0;
+    let jobId = 0;
     await vi.waitFor(async () => {
-      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+      jobId = (await store.listSubmissionsByOwner('g:creator'))[0]!.jobId;
     });
 
     const refused = await app.inject({
       method: 'POST',
       url: '/api/agent/build/sources',
-      headers: agentHeaders(issueNumber),
+      headers: agentHeaders(jobId),
       payload: { slug, files: MINIMAL_FILES },
     });
     expect(refused.statusCode).toBe(400);
@@ -477,17 +477,17 @@ describe('self builder (BY-02)', () => {
       payload: { title: 'Pinned Kit', concept: CONCEPT, builder: 'self' },
     });
     const slug = submit.json().slug as string;
-    let issueNumber = 0;
+    let jobId = 0;
     await vi.waitFor(async () => {
-      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+      jobId = (await store.listSubmissionsByOwner('g:creator'))[0]!.jobId;
     });
     const pinned = 'a'.repeat(40);
-    await store.pinRoundKitEngineRef(issueNumber, pinned);
+    await store.pinRoundKitEngineRef(jobId, pinned);
 
     const refused = await app.inject({
       method: 'POST',
       url: '/api/agent/build/sources',
-      headers: agentHeaders(issueNumber),
+      headers: agentHeaders(jobId),
       payload: { slug, files: MINIMAL_FILES, kitEngineRef: 'b'.repeat(40) },
     });
     expect(refused.statusCode).toBe(400);
@@ -497,7 +497,7 @@ describe('self builder (BY-02)', () => {
     const accepted = await app.inject({
       method: 'POST',
       url: '/api/agent/build/sources',
-      headers: agentHeaders(issueNumber),
+      headers: agentHeaders(jobId),
       payload: { slug, files: MINIMAL_FILES, kitEngineRef: pinned },
     });
     expect(accepted.statusCode).toBe(200);
@@ -517,17 +517,17 @@ describe('self builder (BY-02)', () => {
       payload: { title: 'Cap Game', concept: CONCEPT, builder: 'self' },
     });
     const slug = submit.json().slug as string;
-    let issueNumber = 0;
+    let jobId = 0;
     await vi.waitFor(async () => {
-      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
-      expect((await store.getSubmission(issueNumber))?.builder).toBe('self');
+      jobId = (await store.listSubmissionsByOwner('g:creator'))[0]!.jobId;
+      expect((await store.getSubmission(jobId))?.builder).toBe('self');
     });
 
     for (let i = 0; i < 2; i += 1) {
       const ok = await app.inject({
         method: 'POST',
         url: '/api/agent/build/sources',
-        headers: agentHeaders(issueNumber),
+        headers: agentHeaders(jobId),
         payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
       });
       expect(ok.json().accepted).toBe(true);
@@ -535,7 +535,7 @@ describe('self builder (BY-02)', () => {
     const refused = await app.inject({
       method: 'POST',
       url: '/api/agent/build/sources',
-      headers: agentHeaders(issueNumber),
+      headers: agentHeaders(jobId),
       payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
     });
     expect(refused.json()).toMatchObject({
@@ -565,11 +565,11 @@ describe('self builder (BY-02)', () => {
       payload: { title: 'No Connect', concept: CONCEPT, builder: 'self' },
     });
     expect(submit.statusCode).toBe(200);
-    let issueNumber = 0;
+    let jobId = 0;
     await vi.waitFor(async () => {
       const record = (await store.listSubmissionsByOwner('g:creator'))[0];
       expect(record?.state).toBe('dispatched');
-      issueNumber = record!.issueNumber;
+      jobId = record!.jobId;
     });
 
     clock = opened + 15 * 24 * 60 * 60 * 1000;
@@ -579,7 +579,7 @@ describe('self builder (BY-02)', () => {
       headers: { authorization: 'Bearer internal' },
     });
     expect(sweep.statusCode).toBe(200);
-    const abandoned = await store.getSubmission(issueNumber);
+    const abandoned = await store.getSubmission(jobId);
     expect(abandoned?.state).toBe('abandoned');
     expect(abandoned?.abandonedAt).toBeTruthy();
     expect(abandoned?.transitions?.at(-1)?.reason).toBe('no_connect');
@@ -599,17 +599,17 @@ describe('self builder (BY-02)', () => {
       payload: { title: 'Switch Game', concept: CONCEPT, builder: 'self' },
     });
     const slug = submit.json().slug as string;
-    let issueNumber = 0;
+    let jobId = 0;
     await vi.waitFor(async () => {
-      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+      jobId = (await store.listSubmissionsByOwner('g:creator'))[0]!.jobId;
     });
 
     // A live self agent still owns the round. The explicit handoff route below covers
     // the separate no-agent-yet escape hatch.
-    await store.touchLastAgentSignalAt(issueNumber);
+    await store.touchLastAgentSignalAt(jobId);
     const mid = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(issueNumber, secret)}/feedback`,
+      url: `/api/submissions/${mintToken(jobId, secret)}/feedback`,
       headers: authHeaders(),
       payload: { feedback: 'Please switch builders now please.', builder: 'platform' },
     });
@@ -620,17 +620,17 @@ describe('self builder (BY-02)', () => {
     await app.inject({
       method: 'POST',
       url: '/api/agent/build/sources',
-      headers: agentHeaders(issueNumber),
+      headers: agentHeaders(jobId),
       payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
     });
-    await store.recordJobTransition(issueNumber, {
+    await store.recordJobTransition(jobId, {
       to: 'ready_for_review',
       at: new Date().toISOString(),
       by: 'gate',
       reason: 'gate_green',
     });
     // ready_for_review closes the round; bounce to needs_changes (reject) to open feedback.
-    await store.recordJobTransition(issueNumber, {
+    await store.recordJobTransition(jobId, {
       to: 'needs_changes',
       at: new Date().toISOString(),
       by: 'operator',
@@ -639,7 +639,7 @@ describe('self builder (BY-02)', () => {
 
     const switchToPlatform = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(issueNumber, secret)}/feedback`,
+      url: `/api/submissions/${mintToken(jobId, secret)}/feedback`,
       headers: authHeaders(),
       payload: {
         feedback: 'Please have the platform team finish this game carefully.',
@@ -648,14 +648,14 @@ describe('self builder (BY-02)', () => {
     });
     expect(switchToPlatform.statusCode).toBe(200);
     await vi.waitFor(() => expect(briefs.length).toBeGreaterThan(0));
-    const afterPlatform = await store.getSubmission(issueNumber);
+    const afterPlatform = await store.getSubmission(jobId);
     expect(afterPlatform?.builder).toBe('platform');
     expect(afterPlatform?.defaultBuilder).toBe('platform');
     expect(afterPlatform?.dispatch?.backend).toBe('copilot');
     // self→platform carries latest candidate sources as brief.seed.
     expect(briefs.at(-1)?.seed?.files.some((f) => f.path === 'SPEC.md')).toBe(true);
 
-    await store.recordJobTransition(issueNumber, {
+    await store.recordJobTransition(jobId, {
       to: 'needs_changes',
       at: new Date().toISOString(),
       by: 'operator',
@@ -663,7 +663,7 @@ describe('self builder (BY-02)', () => {
     });
     const switchToSelf = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(issueNumber, secret)}/feedback`,
+      url: `/api/submissions/${mintToken(jobId, secret)}/feedback`,
       headers: authHeaders(),
       payload: {
         feedback: 'I will finish this myself with my own agent now.',
@@ -672,7 +672,7 @@ describe('self builder (BY-02)', () => {
     });
     expect(switchToSelf.statusCode).toBe(200);
     await vi.waitFor(async () => {
-      const record = await store.getSubmission(issueNumber);
+      const record = await store.getSubmission(jobId);
       expect(record?.builder).toBe('self');
       expect(record?.dispatch?.backend).toBe('self');
     });
@@ -693,35 +693,35 @@ describe('self builder (BY-02)', () => {
       payload: { title: 'Ready For Review Handoff', concept: CONCEPT, builder: 'self' },
     });
     const slug = submit.json().slug as string;
-    let issueNumber = 0;
+    let jobId = 0;
     await vi.waitFor(async () => {
-      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+      jobId = (await store.listSubmissionsByOwner('g:creator'))[0]!.jobId;
     });
 
     await app.inject({
       method: 'POST',
       url: '/api/agent/build/sources',
-      headers: agentHeaders(issueNumber),
+      headers: agentHeaders(jobId),
       payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
     });
-    await store.recordJobTransition(issueNumber, {
+    await store.recordJobTransition(jobId, {
       to: 'ready_for_review',
       at: new Date().toISOString(),
       by: 'gate',
       reason: 'gate_green',
     });
-    const generationBefore = (await store.getSubmission(issueNumber))?.roundGeneration ?? 1;
+    const generationBefore = (await store.getSubmission(jobId))?.roundGeneration ?? 1;
 
     const handoff = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(issueNumber, secret)}/handoff`,
+      url: `/api/submissions/${mintToken(jobId, secret)}/handoff`,
       headers: authHeaders(),
       payload: { builder: 'platform' },
     });
 
     expect(handoff.statusCode).toBe(200);
     await vi.waitFor(() => expect(briefs.length).toBeGreaterThan(0));
-    const afterHandoff = await store.getSubmission(issueNumber);
+    const afterHandoff = await store.getSubmission(jobId);
     expect(afterHandoff?.builder).toBe('platform');
     expect(afterHandoff?.dispatch?.backend).toBe('copilot');
     expect(afterHandoff?.roundGeneration).toBeGreaterThan(generationBefore);
@@ -741,27 +741,27 @@ describe('self builder (BY-02)', () => {
       payload: { title: 'No Agent Handoff', concept: CONCEPT, builder: 'self' },
     });
     expect(submit.statusCode).toBe(200);
-    let issueNumber = 0;
+    let jobId = 0;
     await vi.waitFor(async () => {
-      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
-      expect((await store.getSubmission(issueNumber))?.state).toBe('dispatched');
+      jobId = (await store.listSubmissionsByOwner('g:creator'))[0]!.jobId;
+      expect((await store.getSubmission(jobId))?.state).toBe('dispatched');
     });
 
-    const generationBefore = (await store.getSubmission(issueNumber))?.roundGeneration ?? 1;
+    const generationBefore = (await store.getSubmission(jobId))?.roundGeneration ?? 1;
     const handoff = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(issueNumber, secret)}/handoff`,
+      url: `/api/submissions/${mintToken(jobId, secret)}/handoff`,
       headers: authHeaders(),
     });
 
     expect(handoff.statusCode).toBe(200);
     await vi.waitFor(async () => {
-      const record = await store.getSubmission(issueNumber);
+      const record = await store.getSubmission(jobId);
       expect(record?.builder).toBe('platform');
       expect(record?.dispatch?.backend).toBe('copilot');
       expect(record?.roundGeneration).toBeGreaterThan(generationBefore);
     });
-    expect(await store.listPendingCreatorMessages(issueNumber)).toEqual([]);
+    expect(await store.listPendingCreatorMessages(jobId)).toEqual([]);
     expect(briefs.at(-1)?.spec).toBe(CONCEPT);
   });
 
@@ -779,14 +779,14 @@ describe('self builder (BY-02)', () => {
       payload: { title: 'Active Handoff', concept: CONCEPT, builder: 'self' },
     });
     expect(submit.statusCode).toBe(200);
-    let issueNumber = 0;
+    let jobId = 0;
     await vi.waitFor(async () => {
-      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
-      expect((await store.getSubmission(issueNumber))?.state).toBe('dispatched');
+      jobId = (await store.listSubmissionsByOwner('g:creator'))[0]!.jobId;
+      expect((await store.getSubmission(jobId))?.state).toBe('dispatched');
     });
-    await store.touchLastAgentSignalAt(issueNumber, new Date().toISOString());
+    await store.touchLastAgentSignalAt(jobId, new Date().toISOString());
 
-    const token = mintToken(issueNumber, secret);
+    const token = mintToken(jobId, secret);
     const refusedWithoutConfirmation = await app.inject({
       method: 'POST',
       url: `/api/submissions/${token}/handoff`,
@@ -794,7 +794,7 @@ describe('self builder (BY-02)', () => {
     });
     expect(refusedWithoutConfirmation.statusCode).toBe(409);
 
-    const generationBefore = (await store.getSubmission(issueNumber))?.roundGeneration ?? 1;
+    const generationBefore = (await store.getSubmission(jobId))?.roundGeneration ?? 1;
     const handoff = await app.inject({
       method: 'POST',
       url: `/api/submissions/${token}/handoff`,
@@ -803,17 +803,17 @@ describe('self builder (BY-02)', () => {
     });
     expect(handoff.statusCode).toBe(202);
     expect(handoff.json()).toMatchObject({ pending: true, target: 'platform' });
-    expect((await store.getSubmission(issueNumber))?.builder).toBe('self');
-    expect((await store.getSubmission(issueNumber))?.builderHandoff?.to).toBe('platform');
+    expect((await store.getSubmission(jobId))?.builder).toBe('self');
+    expect((await store.getSubmission(jobId))?.builderHandoff?.to).toBe('platform');
     const acknowledged = await app.inject({
       method: 'POST',
       url: '/api/agent/build/end',
-      headers: agentHeaders(issueNumber, generationBefore),
+      headers: agentHeaders(jobId, generationBefore),
     });
     expect(acknowledged.statusCode).toBe(200);
     expect(acknowledged.json()).toMatchObject({ accepted: true, handoffAcknowledged: true });
     await vi.waitFor(async () => {
-      const record = await store.getSubmission(issueNumber);
+      const record = await store.getSubmission(jobId);
       expect(record?.builder).toBe('platform');
       expect(record?.dispatch?.backend).toBe('copilot');
       expect(record?.roundGeneration).toBeGreaterThan(generationBefore);
@@ -822,7 +822,7 @@ describe('self builder (BY-02)', () => {
     const staleReport = await app.inject({
       method: 'POST',
       url: '/api/agent/build/progress',
-      headers: agentHeaders(issueNumber, generationBefore),
+      headers: agentHeaders(jobId, generationBefore),
       payload: { text: 'The stopped self agent must not keep writing.' },
     });
     expect(staleReport.statusCode).toBe(401);
@@ -839,7 +839,7 @@ describe('self builder (BY-02)', () => {
               slug: 'gate-closes-handoff',
               version,
               createdAt: new Date().toISOString(),
-              issueNumber: 0,
+              jobId: 0,
               roundGeneration: 1,
               sourceFiles: [],
               gate: { green: true, ranAt: new Date().toISOString() },
@@ -857,22 +857,22 @@ describe('self builder (BY-02)', () => {
       payload: { title: 'Gate Closes Handoff', concept: CONCEPT, builder: 'self' },
     });
     expect(submit.statusCode).toBe(200);
-    let issueNumber = 0;
+    let jobId = 0;
     await vi.waitFor(async () => {
-      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
-      expect((await store.getSubmission(issueNumber))?.state).toBe('dispatched');
+      jobId = (await store.listSubmissionsByOwner('g:creator'))[0]!.jobId;
+      expect((await store.getSubmission(jobId))?.state).toBe('dispatched');
     });
-    await store.touchLastAgentSignalAt(issueNumber, new Date().toISOString());
-    await store.setSubmissionSlug(issueNumber, 'gate-closes-handoff');
-    await store.setSubmissionDeliveredVersion(issueNumber, 'v1');
-    await store.recordJobTransition(issueNumber, {
+    await store.touchLastAgentSignalAt(jobId, new Date().toISOString());
+    await store.setSubmissionSlug(jobId, 'gate-closes-handoff');
+    await store.setSubmissionDeliveredVersion(jobId, 'v1');
+    await store.recordJobTransition(jobId, {
       to: 'submitted',
       at: new Date().toISOString(),
       by: 'agent',
       reason: 'sources_delivered',
     });
 
-    const token = mintToken(issueNumber, secret);
+    const token = mintToken(jobId, secret);
     const handoff = await app.inject({
       method: 'POST',
       url: `/api/submissions/${token}/handoff`,
@@ -880,7 +880,7 @@ describe('self builder (BY-02)', () => {
       payload: { stopActiveSelfAgent: true },
     });
     expect(handoff.statusCode).toBe(202);
-    expect((await store.getSubmission(issueNumber))?.builderHandoff?.awaitsAgentAck).toBe(true);
+    expect((await store.getSubmission(jobId))?.builderHandoff?.awaitsAgentAck).toBe(true);
 
     // Gate goes green before the (now-stopping) self agent ever calls `end`.
     const status = await app.inject({
@@ -892,7 +892,7 @@ describe('self builder (BY-02)', () => {
 
     // Resume dispatches a fresh round (state moves past ready_for_review again).
     await vi.waitFor(async () => {
-      const record = await store.getSubmission(issueNumber);
+      const record = await store.getSubmission(jobId);
       expect(record?.builder).toBe('platform');
       expect(record?.dispatch?.backend).toBe('copilot');
       expect(record?.builderHandoff).toBeUndefined();
@@ -916,17 +916,17 @@ describe('self builder (BY-02)', () => {
       payload: { title: 'Race To Publish', concept: CONCEPT, builder: 'self' },
     });
     const slug = submit.json().slug as string;
-    let issueNumber = 0;
+    let jobId = 0;
     await vi.waitFor(async () => {
-      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+      jobId = (await store.listSubmissionsByOwner('g:creator'))[0]!.jobId;
     });
     await app.inject({
       method: 'POST',
       url: '/api/agent/build/sources',
-      headers: agentHeaders(issueNumber),
+      headers: agentHeaders(jobId),
       payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
     });
-    await store.recordJobTransition(issueNumber, {
+    await store.recordJobTransition(jobId, {
       to: 'ready_for_review',
       at: new Date().toISOString(),
       by: 'gate',
@@ -952,7 +952,7 @@ describe('self builder (BY-02)', () => {
 
     const handoff = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(issueNumber, secret)}/handoff`,
+      url: `/api/submissions/${mintToken(jobId, secret)}/handoff`,
       headers: authHeaders(),
       payload: { builder: 'platform' },
     });
@@ -960,7 +960,7 @@ describe('self builder (BY-02)', () => {
     expect(handoff.statusCode).toBe(409);
     expect(handoff.json()).toMatchObject({ error: 'builder_locked' });
     expect(briefs).toHaveLength(0);
-    const record = await originalGetSubmission(issueNumber);
+    const record = await originalGetSubmission(jobId);
     expect(record?.state).toBe('publishing');
     expect(record?.builder).toBe('self');
   });
@@ -979,15 +979,15 @@ describe('self builder (BY-02)', () => {
       payload: { title: 'Platform Handoff', concept: CONCEPT, builder: 'platform' },
     });
     expect(submit.statusCode).toBe(200);
-    let issueNumber = 0;
+    let jobId = 0;
     await vi.waitFor(async () => {
-      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
-      expect((await store.getSubmission(issueNumber))?.state).toBe('dispatched');
+      jobId = (await store.listSubmissionsByOwner('g:creator'))[0]!.jobId;
+      expect((await store.getSubmission(jobId))?.state).toBe('dispatched');
     });
-    await store.touchLastAgentSignalAt(issueNumber, new Date().toISOString());
+    await store.touchLastAgentSignalAt(jobId, new Date().toISOString());
 
-    const token = mintToken(issueNumber, secret);
-    const generationBefore = (await store.getSubmission(issueNumber))?.roundGeneration ?? 1;
+    const token = mintToken(jobId, secret);
+    const generationBefore = (await store.getSubmission(jobId))?.roundGeneration ?? 1;
     const refusedWithoutConfirmation = await app.inject({
       method: 'POST',
       url: `/api/submissions/${token}/handoff`,
@@ -1004,17 +1004,17 @@ describe('self builder (BY-02)', () => {
     });
     expect(handoff.statusCode).toBe(202);
     expect(handoff.json()).toMatchObject({ pending: true, target: 'self' });
-    expect((await store.getSubmission(issueNumber))?.builder).toBe('platform');
-    expect((await store.getSubmission(issueNumber))?.builderHandoff?.to).toBe('self');
+    expect((await store.getSubmission(jobId))?.builder).toBe('platform');
+    expect((await store.getSubmission(jobId))?.builderHandoff?.to).toBe('self');
     const acknowledged = await app.inject({
       method: 'POST',
       url: '/api/agent/build/end',
-      headers: agentHeaders(issueNumber, generationBefore),
+      headers: agentHeaders(jobId, generationBefore),
     });
     expect(acknowledged.statusCode).toBe(200);
     expect(acknowledged.json()).toMatchObject({ accepted: true, handoffAcknowledged: true });
     await vi.waitFor(async () => {
-      const record = await store.getSubmission(issueNumber);
+      const record = await store.getSubmission(jobId);
       expect(record?.builder).toBe('self');
       expect(record?.dispatch?.backend).toBe('self');
       expect(record?.roundGeneration).toBeGreaterThan(generationBefore);
@@ -1025,7 +1025,7 @@ describe('self builder (BY-02)', () => {
     const staleReport = await app.inject({
       method: 'POST',
       url: '/api/agent/build/progress',
-      headers: agentHeaders(issueNumber, generationBefore),
+      headers: agentHeaders(jobId, generationBefore),
       payload: { text: 'The stopped platform agent must not keep writing.' },
     });
     expect(staleReport.statusCode).toBe(401);
@@ -1046,24 +1046,24 @@ describe('self builder (BY-02)', () => {
       payload: { title: 'Ended Platform Handoff', concept: CONCEPT, builder: 'platform' },
     });
     expect(submit.statusCode).toBe(200);
-    let issueNumber = 0;
+    let jobId = 0;
     await vi.waitFor(async () => {
-      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
-      expect((await store.getSubmission(issueNumber))?.state).toBe('dispatched');
+      jobId = (await store.listSubmissionsByOwner('g:creator'))[0]!.jobId;
+      expect((await store.getSubmission(jobId))?.state).toBe('dispatched');
     });
-    await store.touchLastAgentSignalAt(issueNumber, new Date().toISOString());
+    await store.touchLastAgentSignalAt(jobId, new Date().toISOString());
 
-    const generationBefore = (await store.getSubmission(issueNumber))?.roundGeneration ?? 1;
+    const generationBefore = (await store.getSubmission(jobId))?.roundGeneration ?? 1;
     const endRes = await app.inject({
       method: 'POST',
       url: '/api/agent/build/end',
-      headers: agentHeaders(issueNumber, generationBefore),
+      headers: agentHeaders(jobId, generationBefore),
       payload: {},
     });
     expect(endRes.statusCode).toBe(200);
-    expect((await store.getSubmission(issueNumber))?.agentEndedAt).toBeTruthy();
+    expect((await store.getSubmission(jobId))?.agentEndedAt).toBeTruthy();
 
-    const token = mintToken(issueNumber, secret);
+    const token = mintToken(jobId, secret);
     const handoff = await app.inject({
       method: 'POST',
       url: `/api/submissions/${token}/handoff`,
@@ -1072,7 +1072,7 @@ describe('self builder (BY-02)', () => {
     });
     // No `pending: true`, no second `/end` call needed.
     expect(handoff.statusCode).toBe(200);
-    const after = await store.getSubmission(issueNumber);
+    const after = await store.getSubmission(jobId);
     expect(after?.builder).toBe('self');
     expect(after?.builderHandoff).toBeUndefined();
     expect(after?.roundGeneration).toBeGreaterThan(generationBefore);
@@ -1099,14 +1099,14 @@ describe('self builder (BY-02)', () => {
       payload: { title: 'Wedged Handoff', concept: CONCEPT, builder: 'platform' },
     });
     expect(submit.statusCode).toBe(200);
-    let issueNumber = 0;
+    let jobId = 0;
     await vi.waitFor(async () => {
-      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
-      expect((await store.getSubmission(issueNumber))?.state).toBe('dispatched');
+      jobId = (await store.listSubmissionsByOwner('g:creator'))[0]!.jobId;
+      expect((await store.getSubmission(jobId))?.state).toBe('dispatched');
     });
-    await store.touchLastAgentSignalAt(issueNumber, new Date(clock).toISOString());
+    await store.touchLastAgentSignalAt(jobId, new Date(clock).toISOString());
 
-    const token = mintToken(issueNumber, secret);
+    const token = mintToken(jobId, secret);
     const handoff = await app.inject({
       method: 'POST',
       url: `/api/submissions/${token}/handoff`,
@@ -1115,7 +1115,7 @@ describe('self builder (BY-02)', () => {
     });
     expect(handoff.statusCode).toBe(202);
     expect(handoff.json()).toMatchObject({ pending: true, target: 'self' });
-    expect((await store.getSubmission(issueNumber))?.builderHandoff?.to).toBe('self');
+    expect((await store.getSubmission(jobId))?.builderHandoff?.to).toBe('self');
 
     // The platform agent never acks via MCP `end` — crashed or wedged.
     clock = opened + 9 * 60 * 1000;
@@ -1125,8 +1125,8 @@ describe('self builder (BY-02)', () => {
       headers: { authorization: 'Bearer internal' },
     });
     expect(tooSoon.statusCode).toBe(200);
-    expect((await store.getSubmission(issueNumber))?.builderHandoff?.to).toBe('self');
-    expect((await store.getSubmission(issueNumber))?.builder).toBe('platform');
+    expect((await store.getSubmission(jobId))?.builderHandoff?.to).toBe('self');
+    expect((await store.getSubmission(jobId))?.builder).toBe('platform');
 
     clock = opened + 11 * 60 * 1000;
     const sweep = await app.inject({
@@ -1136,7 +1136,7 @@ describe('self builder (BY-02)', () => {
     });
     expect(sweep.statusCode).toBe(200);
     await vi.waitFor(async () => {
-      const record = await store.getSubmission(issueNumber);
+      const record = await store.getSubmission(jobId);
       expect(record?.builder).toBe('self');
       expect(record?.builderHandoff).toBeUndefined();
     });
@@ -1156,26 +1156,26 @@ describe('self builder (BY-02)', () => {
       payload: { title: 'Quiet Handoff', concept: CONCEPT, builder: 'self' },
     });
     const slug = submit.json().slug as string;
-    let issueNumber = 0;
+    let jobId = 0;
     await vi.waitFor(async () => {
-      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+      jobId = (await store.listSubmissionsByOwner('g:creator'))[0]!.jobId;
     });
 
     // Deliver a candidate, close the self round, reopen self, then go quiet.
     await app.inject({
       method: 'POST',
       url: '/api/agent/build/sources',
-      headers: agentHeaders(issueNumber),
+      headers: agentHeaders(jobId),
       payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
     });
-    expect((await store.getSubmission(issueNumber))?.deliveredVersion).toBeTruthy();
-    await store.recordJobTransition(issueNumber, {
+    expect((await store.getSubmission(jobId))?.deliveredVersion).toBeTruthy();
+    await store.recordJobTransition(jobId, {
       to: 'ready_for_review',
       at: new Date().toISOString(),
       by: 'gate',
       reason: 'gate_green',
     });
-    await store.recordJobTransition(issueNumber, {
+    await store.recordJobTransition(jobId, {
       to: 'needs_changes',
       at: new Date().toISOString(),
       by: 'operator',
@@ -1184,23 +1184,23 @@ describe('self builder (BY-02)', () => {
 
     await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(issueNumber, secret)}/feedback`,
+      url: `/api/submissions/${mintToken(jobId, secret)}/feedback`,
       headers: authHeaders(),
       payload: { feedback: 'Keep going on the draft.', builder: 'self' },
     });
     await vi.waitFor(async () => {
-      const live = await store.getSubmission(issueNumber);
+      const live = await store.getSubmission(jobId);
       expect(live?.builder).toBe('self');
       expect(live?.state).toBe('dispatched');
     });
 
-    const genBefore = (await store.getSubmission(issueNumber))?.roundGeneration ?? 1;
+    const genBefore = (await store.getSubmission(jobId))?.roundGeneration ?? 1;
     const quietAt = new Date(Date.now() - 20 * 60 * 1000).toISOString();
-    await store.touchLastAgentSignalAt(issueNumber, quietAt);
+    await store.touchLastAgentSignalAt(jobId, quietAt);
 
     const handoff = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(issueNumber, secret)}/feedback`,
+      url: `/api/submissions/${mintToken(jobId, secret)}/feedback`,
       headers: authHeaders(),
       payload: {
         feedback: 'Please have the platform team finish this — my agent went quiet.',
@@ -1209,7 +1209,7 @@ describe('self builder (BY-02)', () => {
     });
     expect(handoff.statusCode).toBe(200);
     await vi.waitFor(() => expect(briefs.length).toBeGreaterThan(0));
-    const after = await store.getSubmission(issueNumber);
+    const after = await store.getSubmission(jobId);
     expect(after?.builder).toBe('platform');
     expect(after?.dispatch?.backend).toBe('copilot');
     expect(after?.roundGeneration).toBeGreaterThan(genBefore);
@@ -1230,24 +1230,24 @@ describe('self builder (BY-02)', () => {
       payload: { title: 'Ended Handoff', concept: CONCEPT, builder: 'self' },
     });
     const slug = submit.json().slug as string;
-    let issueNumber = 0;
+    let jobId = 0;
     await vi.waitFor(async () => {
-      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+      jobId = (await store.listSubmissionsByOwner('g:creator'))[0]!.jobId;
     });
 
     await app.inject({
       method: 'POST',
       url: '/api/agent/build/sources',
-      headers: agentHeaders(issueNumber),
+      headers: agentHeaders(jobId),
       payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
     });
-    await store.recordJobTransition(issueNumber, {
+    await store.recordJobTransition(jobId, {
       to: 'ready_for_review',
       at: new Date().toISOString(),
       by: 'gate',
       reason: 'gate_green',
     });
-    await store.recordJobTransition(issueNumber, {
+    await store.recordJobTransition(jobId, {
       to: 'needs_changes',
       at: new Date().toISOString(),
       by: 'operator',
@@ -1256,33 +1256,33 @@ describe('self builder (BY-02)', () => {
 
     await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(issueNumber, secret)}/feedback`,
+      url: `/api/submissions/${mintToken(jobId, secret)}/feedback`,
       headers: authHeaders(),
       payload: { feedback: 'Keep going on the draft.', builder: 'self' },
     });
     await vi.waitFor(async () => {
-      const live = await store.getSubmission(issueNumber);
+      const live = await store.getSubmission(jobId);
       expect(live?.builder).toBe('self');
       expect(live?.state).toBe('dispatched');
     });
 
     // Recent signal — quiet would refuse; MCP end unlocks handoff immediately.
-    await store.touchLastAgentSignalAt(issueNumber, new Date().toISOString());
-    const liveGen = (await store.getSubmission(issueNumber))?.roundGeneration ?? 1;
+    await store.touchLastAgentSignalAt(jobId, new Date().toISOString());
+    const liveGen = (await store.getSubmission(jobId))?.roundGeneration ?? 1;
     const endRes = await app.inject({
       method: 'POST',
       url: '/api/agent/build/end',
-      headers: agentHeaders(issueNumber, liveGen),
+      headers: agentHeaders(jobId, liveGen),
       payload: {},
     });
     expect(endRes.statusCode).toBe(200);
     expect(endRes.json()).toMatchObject({ accepted: true, ended: true });
-    expect((await store.getSubmission(issueNumber))?.agentEndedAt).toBeTruthy();
+    expect((await store.getSubmission(jobId))?.agentEndedAt).toBeTruthy();
 
-    const genBefore = (await store.getSubmission(issueNumber))?.roundGeneration ?? 1;
+    const genBefore = (await store.getSubmission(jobId))?.roundGeneration ?? 1;
     const handoff = await app.inject({
       method: 'POST',
-      url: `/api/submissions/${mintToken(issueNumber, secret)}/feedback`,
+      url: `/api/submissions/${mintToken(jobId, secret)}/feedback`,
       headers: authHeaders(),
       payload: {
         feedback: 'Please have the platform team finish this — my agent ended.',
@@ -1291,7 +1291,7 @@ describe('self builder (BY-02)', () => {
     });
     expect(handoff.statusCode).toBe(200);
     await vi.waitFor(() => expect(briefs.length).toBeGreaterThan(0));
-    const after = await store.getSubmission(issueNumber);
+    const after = await store.getSubmission(jobId);
     expect(after?.builder).toBe('platform');
     expect(after?.dispatch?.backend).toBe('copilot');
     expect(after?.roundGeneration).toBeGreaterThan(genBefore);
@@ -1311,20 +1311,20 @@ describe('self builder (BY-02)', () => {
       payload: { title: 'Provenance', concept: CONCEPT, builder: 'self' },
     });
     const slug = submit.json().slug as string;
-    let issueNumber = 0;
+    let jobId = 0;
     await vi.waitFor(async () => {
-      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+      jobId = (await store.listSubmissionsByOwner('g:creator'))[0]!.jobId;
     });
 
     await app.inject({
       method: 'POST',
       url: '/api/agent/build/sources',
-      headers: agentHeaders(issueNumber),
+      headers: agentHeaders(jobId),
       payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
     });
     expect(stored[0]?.backend).toBe('self');
     expect(stored[0]?.kitEngineRef).toBe(KIT_REF);
-    expect((await store.getSubmission(issueNumber))?.builder).toBe('self');
+    expect((await store.getSubmission(jobId))?.builder).toBe('self');
   });
 
   it('preserves strict 401 for stale tokens on terminal self jobs (no stopReason bypass)', async () => {
@@ -1368,31 +1368,31 @@ describe('self builder (BY-02)', () => {
     app = created.app;
     const { store } = created;
 
-    const issueNumber = 77;
-    await store.createSubmission(issueNumber, 'g:creator', 'No Progress Race');
-    await store.setSubmissionSlug(issueNumber, 'no-progress-race');
-    await store.setRoundBuilder(issueNumber, 'self');
-    await store.recordJobTransition(issueNumber, {
+    const jobId = 77;
+    await store.createSubmission(jobId, 'g:creator', 'No Progress Race');
+    await store.setSubmissionSlug(jobId, 'no-progress-race');
+    await store.setRoundBuilder(jobId, 'self');
+    await store.recordJobTransition(jobId, {
       to: 'queued',
       at: new Date(clock).toISOString(),
       by: 'creator',
       reason: 'submitted',
     });
     // Refs exist (dispatch recorded) but state is still queued — the live race shape.
-    await store.recordDispatch(issueNumber, { backend: 'self', ref: `self:${issueNumber}` });
-    expect((await store.getSubmission(issueNumber))?.state).toBe('queued');
-    const initialGen = (await store.getSubmission(issueNumber))!.roundGeneration ?? 1;
+    await store.recordDispatch(jobId, { backend: 'self', ref: `self:${jobId}` });
+    expect((await store.getSubmission(jobId))?.state).toBe('queued');
+    const initialGen = (await store.getSubmission(jobId))!.roundGeneration ?? 1;
 
     const delivery = await app.inject({
       method: 'POST',
       url: '/api/agent/build/sources',
-      headers: agentHeaders(issueNumber),
+      headers: agentHeaders(jobId),
       payload: { slug: 'no-progress-race', files: MINIMAL_FILES, kitEngineRef: KIT_REF },
     });
     expect(delivery.statusCode).toBe(200);
     expect(delivery.json()).toMatchObject({ accepted: true });
-    expect((await store.getSubmission(issueNumber))?.state).toBe('submitted');
-    expect((await store.getSubmission(issueNumber))?.roundGeneration).toBe(initialGen);
+    expect((await store.getSubmission(jobId))?.state).toBe('submitted');
+    expect((await store.getSubmission(jobId))?.roundGeneration).toBe(initialGen);
 
     // Past the observe quiet window — reconciler must not move a submitted self job.
     clock += 3 * 60 * 1000;
@@ -1402,17 +1402,17 @@ describe('self builder (BY-02)', () => {
       headers: { authorization: 'Bearer internal' },
     });
     expect(sweep.statusCode).toBe(200);
-    expect((await store.getSubmission(issueNumber))?.state).toBe('submitted');
-    expect((await store.getSubmission(issueNumber))?.roundGeneration).toBe(initialGen);
+    expect((await store.getSubmission(jobId))?.state).toBe('submitted');
+    expect((await store.getSubmission(jobId))?.roundGeneration).toBe(initialGen);
 
     // Only the gate's own closing transition bumps generation — exactly +1.
-    await store.recordJobTransition(issueNumber, {
+    await store.recordJobTransition(jobId, {
       to: 'ready_for_review',
       at: new Date(clock).toISOString(),
       by: 'gate',
       reason: 'gate_green',
     });
-    expect((await store.getSubmission(issueNumber))?.roundGeneration).toBe(initialGen + 1);
+    expect((await store.getSubmission(jobId))?.roundGeneration).toBe(initialGen + 1);
   });
 
   it('late background dispatch does not regress a submitted self delivery', async () => {
@@ -1432,31 +1432,31 @@ describe('self builder (BY-02)', () => {
     expect(submit.statusCode).toBe(200);
     const slug = submit.json().slug as string;
 
-    let issueNumber = 0;
+    let jobId = 0;
     await vi.waitFor(async () => {
       const record = (await store.listSubmissionsByOwner('g:creator'))[0];
       expect(record?.builder).toBe('self');
-      issueNumber = record!.issueNumber;
+      jobId = record!.jobId;
     });
 
     // Deliver immediately — typically still queued while background dispatch runs.
     const delivery = await app.inject({
       method: 'POST',
       url: '/api/agent/build/sources',
-      headers: agentHeaders(issueNumber),
+      headers: agentHeaders(jobId),
       payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
     });
     expect(delivery.json()).toMatchObject({ accepted: true });
-    expect((await store.getSubmission(issueNumber))?.state).toBe('submitted');
+    expect((await store.getSubmission(jobId))?.state).toBe('submitted');
 
     // Wait until the fire-and-forget dispatch has recorded its ref (and attempted its
     // state write). State must remain submitted — not regress to dispatched.
     await vi.waitFor(async () => {
-      const record = await store.getSubmission(issueNumber);
+      const record = await store.getSubmission(jobId);
       expect(record?.dispatch?.backend).toBe('self');
       expect(record?.dispatch?.refs?.length).toBeGreaterThan(0);
     });
-    expect((await store.getSubmission(issueNumber))?.state).toBe('submitted');
+    expect((await store.getSubmission(jobId))?.state).toBe('submitted');
   });
 });
 
@@ -1490,27 +1490,27 @@ describe('self-build Studio preview (BY-14c)', () => {
     const slug = submit.json().slug as string;
     const token = submit.json().token as string;
 
-    let issueNumber = 0;
+    let jobId = 0;
     await vi.waitFor(async () => {
       const record = (await store.listSubmissionsByOwner('g:creator'))[0];
       expect(record?.builder).toBe('self');
-      issueNumber = record!.issueNumber;
+      jobId = record!.jobId;
     });
 
     const delivery = await app.inject({
       method: 'POST',
       url: '/api/agent/build/sources',
-      headers: agentHeaders(issueNumber),
+      headers: agentHeaders(jobId),
       payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
     });
     expect(delivery.json()).toMatchObject({ accepted: true });
-    const version = (await store.getSubmission(issueNumber))!.deliveredVersion!;
+    const version = (await store.getSubmission(jobId))!.deliveredVersion!;
     expect(version).toBeTruthy();
 
     derived.set(`${slug}:${version}:${artifact}`, Buffer.from(html));
 
     if (artifact === 'bundle.html') {
-      await store.recordJobTransition(issueNumber, {
+      await store.recordJobTransition(jobId, {
         to: 'ready_for_review',
         at: new Date().toISOString(),
         by: 'gate',
@@ -1518,7 +1518,7 @@ describe('self-build Studio preview (BY-14c)', () => {
       });
     }
 
-    return { store, token, slug, issueNumber, version };
+    return { store, token, slug, jobId, version };
   }
 
   it('advertises preview.slug on status once a gate artifact exists for the delivery', async () => {
@@ -1566,8 +1566,8 @@ describe('self-build Studio preview (BY-14c)', () => {
     // Gate decides publishability; the author can still watch the candidate. A red
     // (or not-yet-finished) run stores preview.html — same contract as platform builds.
     const html = '<!doctype html><title>Ungated Draft</title><canvas></canvas>';
-    const { token, slug, store, issueNumber } = await deliverSelfBuild('preview.html', html);
-    expect((await store.getSubmission(issueNumber))?.state).toBe('submitted');
+    const { token, slug, store, jobId } = await deliverSelfBuild('preview.html', html);
+    expect((await store.getSubmission(jobId))?.state).toBe('submitted');
 
     const status = await app!.inject({
       method: 'GET',
@@ -1627,21 +1627,21 @@ describe('self-build Studio preview (BY-14c)', () => {
     const slug = submit.json().slug as string;
     const token = submit.json().token as string;
 
-    let issueNumber = 0;
+    let jobId = 0;
     await vi.waitFor(async () => {
       const record = (await created.store.listSubmissionsByOwner('g:creator'))[0];
       expect(record?.builder).toBe('self');
-      issueNumber = record!.issueNumber;
+      jobId = record!.jobId;
     });
 
     const delivery = await app.inject({
       method: 'POST',
       url: '/api/agent/build/sources',
-      headers: agentHeaders(issueNumber),
+      headers: agentHeaders(jobId),
       payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
     });
     expect(delivery.json()).toMatchObject({ accepted: true });
-    expect((await created.store.getSubmission(issueNumber))!.deliveredVersion).toBeTruthy();
+    expect((await created.store.getSubmission(jobId))!.deliveredVersion).toBeTruthy();
 
     const status = await app.inject({
       method: 'GET',

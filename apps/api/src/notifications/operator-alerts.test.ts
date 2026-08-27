@@ -12,7 +12,7 @@ const NOW = Date.parse('2026-07-30T12:00:00Z');
 const MINUTE = 60_000;
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
 
-function record(overrides: Partial<SubmissionRecord> & { issueNumber: number }): SubmissionRecord {
+function record(overrides: Partial<SubmissionRecord> & { jobId: number }): SubmissionRecord {
   return {
     ownerUid: 'g:1',
     title: 'A game',
@@ -26,7 +26,7 @@ describe('detectOperatorAlerts', () => {
     // The property the whole channel depends on: a job reporting progress is not an
     // alert, however long it has been running. Get this wrong and every alert is noise.
     const alerts = detectOperatorAlerts(
-      [record({ issueNumber: 1, state: 'building', stateSince: ago(180 * MINUTE), lastAgentSignalAt: ago(MINUTE) })],
+      [record({ jobId: 1, state: 'building', stateSince: ago(180 * MINUTE), lastAgentSignalAt: ago(MINUTE) })],
       NOW,
     );
 
@@ -35,7 +35,7 @@ describe('detectOperatorAlerts', () => {
 
   it('flags a gate-green build waiting on the publish decision', () => {
     const alerts = detectOperatorAlerts(
-      [record({ issueNumber: 1_000_001, state: 'ready_for_review', stateSince: ago(5 * MINUTE), slug: 'comet' })],
+      [record({ jobId: 1_000_001, state: 'ready_for_review', stateSince: ago(5 * MINUTE), slug: 'comet' })],
       NOW,
     );
 
@@ -43,7 +43,7 @@ describe('detectOperatorAlerts', () => {
       {
         id: 'op-1000001-review_ready',
         kind: 'review_ready',
-        issueNumber: 1_000_001,
+        jobId: 1_000_001,
         title: 'A game',
         ownerUid: 'g:1',
         slug: 'comet',
@@ -56,7 +56,7 @@ describe('detectOperatorAlerts', () => {
     const alerts = detectOperatorAlerts(
       [
         record({
-          issueNumber: 2,
+          jobId: 2,
           state: 'building',
           stateSince: ago(60 * MINUTE),
           lastAgentSignalAt: ago(40 * MINUTE),
@@ -70,21 +70,21 @@ describe('detectOperatorAlerts', () => {
   });
 
   it('forgets a failure once it is old news', () => {
-    const fresh = record({ issueNumber: 3, state: 'failed', stateSince: ago(2 * 60 * MINUTE) });
-    const ancient = record({ issueNumber: 4, state: 'failed', stateSince: ago(FAILED_ALERT_WINDOW_MS + MINUTE) });
+    const fresh = record({ jobId: 3, state: 'failed', stateSince: ago(2 * 60 * MINUTE) });
+    const ancient = record({ jobId: 4, state: 'failed', stateSince: ago(FAILED_ALERT_WINDOW_MS + MINUTE) });
 
     const alerts = detectOperatorAlerts([fresh, ancient], NOW);
 
-    expect(alerts.map((alert) => alert.issueNumber)).toEqual([3]);
+    expect(alerts.map((alert) => alert.jobId)).toEqual([3]);
   });
 
   it('ignores finished and abandoned work', () => {
     const alerts = detectOperatorAlerts(
       [
-        record({ issueNumber: 5, state: 'published', stateSince: ago(MINUTE) }),
-        record({ issueNumber: 6, state: 'canceled', stateSince: ago(MINUTE) }),
+        record({ jobId: 5, state: 'published', stateSince: ago(MINUTE) }),
+        record({ jobId: 6, state: 'canceled', stateSince: ago(MINUTE) }),
         // Abandoned by the creator while it happened to be stalled: their decision ends it.
-        record({ issueNumber: 7, state: 'building', stateSince: ago(90 * MINUTE), abandonedAt: ago(MINUTE) }),
+        record({ jobId: 7, state: 'building', stateSince: ago(90 * MINUTE), abandonedAt: ago(MINUTE) }),
       ],
       NOW,
     );
@@ -95,10 +95,7 @@ describe('detectOperatorAlerts', () => {
   it('sees a legacy record through its last derived status', () => {
     // Records that predate the job model carry no state at all. Missing them would make
     // the console quietly wrong about exactly the builds most likely to be stuck.
-    const alerts = detectOperatorAlerts(
-      [record({ issueNumber: 8, lastStatus: 'in_review', stateSince: ago(MINUTE) })],
-      NOW,
-    );
+    const alerts = detectOperatorAlerts([record({ jobId: 8, lastStatus: 'in_review', stateSince: ago(MINUTE) })], NOW);
 
     expect(alerts).toHaveLength(1);
     expect(alerts[0].kind).toBe('review_ready');
@@ -107,15 +104,15 @@ describe('detectOperatorAlerts', () => {
   it('puts the publish decision above a stall, and the longest wait first', () => {
     const alerts = detectOperatorAlerts(
       [
-        record({ issueNumber: 10, state: 'failed', stateSince: ago(MINUTE) }),
-        record({ issueNumber: 11, state: 'queued', stateSince: ago(30 * MINUTE) }),
-        record({ issueNumber: 12, state: 'ready_for_review', stateSince: ago(2 * MINUTE) }),
-        record({ issueNumber: 13, state: 'ready_for_review', stateSince: ago(20 * MINUTE) }),
+        record({ jobId: 10, state: 'failed', stateSince: ago(MINUTE) }),
+        record({ jobId: 11, state: 'queued', stateSince: ago(30 * MINUTE) }),
+        record({ jobId: 12, state: 'ready_for_review', stateSince: ago(2 * MINUTE) }),
+        record({ jobId: 13, state: 'ready_for_review', stateSince: ago(20 * MINUTE) }),
       ],
       NOW,
     );
 
-    expect(alerts.map((alert) => alert.issueNumber)).toEqual([13, 12, 11, 10]);
+    expect(alerts.map((alert) => alert.jobId)).toEqual([13, 12, 11, 10]);
   });
 });
 
@@ -124,18 +121,18 @@ describe('detectOperatorAlerts — undelivered change requests', () => {
     // The job itself looks healthy, and that is the point: the relay that wakes an
     // agent for a change request can be down while the build it should reach is fine.
     const alerts = detectOperatorAlerts(
-      [record({ issueNumber: 20, state: 'building', stateSince: ago(MINUTE), lastAgentSignalAt: ago(MINUTE) })],
+      [record({ jobId: 20, state: 'building', stateSince: ago(MINUTE), lastAgentSignalAt: ago(MINUTE) })],
       NOW,
       new Map([[20, ago(FEEDBACK_STALL_MS + MINUTE)]]),
     );
 
     expect(alerts).toHaveLength(1);
-    expect(alerts[0]).toMatchObject({ kind: 'feedback_undelivered', issueNumber: 20 });
+    expect(alerts[0]).toMatchObject({ kind: 'feedback_undelivered', jobId: 20 });
   });
 
   it('leaves a fresh request alone', () => {
     const alerts = detectOperatorAlerts(
-      [record({ issueNumber: 21, state: 'building', stateSince: ago(MINUTE), lastAgentSignalAt: ago(MINUTE) })],
+      [record({ jobId: 21, state: 'building', stateSince: ago(MINUTE), lastAgentSignalAt: ago(MINUTE) })],
       NOW,
       new Map([[21, ago(5 * MINUTE)]]),
     );
@@ -145,14 +142,14 @@ describe('detectOperatorAlerts — undelivered change requests', () => {
 
   it('answers without it when the caller cannot afford the reads', () => {
     // A smaller answer, never a wrong one: the other three kinds still come back.
-    const alerts = detectOperatorAlerts([record({ issueNumber: 22, state: 'ready_for_review' })], NOW);
+    const alerts = detectOperatorAlerts([record({ jobId: 22, state: 'ready_for_review' })], NOW);
 
     expect(alerts.map((alert) => alert.kind)).toEqual(['review_ready']);
   });
 
   it('outranks a stall on the same job — the relay is the thing that is broken', () => {
     const alerts = detectOperatorAlerts(
-      [record({ issueNumber: 23, state: 'building', stateSince: ago(90 * MINUTE) })],
+      [record({ jobId: 23, state: 'building', stateSince: ago(90 * MINUTE) })],
       NOW,
       new Map([[23, ago(FEEDBACK_STALL_MS + MINUTE)]]),
     );
@@ -166,18 +163,14 @@ describe('detectOperatorAlerts — records the state machine cannot read', () =>
     // The sweep's alert pass reads the records it fetched before deriving anything, so a
     // job on its first sweep has neither `state` nor `lastStatus`. Skipping it as
     // unreadable would silently exempt exactly the newest jobs.
-    const alerts = detectOperatorAlerts(
-      [record({ issueNumber: 30 })],
-      NOW,
-      new Map([[30, ago(FEEDBACK_STALL_MS + MINUTE)]]),
-    );
+    const alerts = detectOperatorAlerts([record({ jobId: 30 })], NOW, new Map([[30, ago(FEEDBACK_STALL_MS + MINUTE)]]));
 
     expect(alerts.map((alert) => alert.kind)).toEqual(['feedback_undelivered']);
   });
 
   it('says nothing about a message left on finished work', () => {
     const alerts = detectOperatorAlerts(
-      [record({ issueNumber: 31, state: 'canceled' })],
+      [record({ jobId: 31, state: 'canceled' })],
       NOW,
       new Map([[31, ago(FEEDBACK_STALL_MS + MINUTE)]]),
     );
@@ -221,7 +214,7 @@ describe('detectSeedingDegraded', () => {
     });
     // No job to point at: this is about the platform, and rendering #0 would send an
     // operator looking for a job that does not exist.
-    expect(alert?.issueNumber).toBeUndefined();
+    expect(alert?.jobId).toBeUndefined();
   });
 
   it('stays quiet when placing plainly works for some of them', () => {

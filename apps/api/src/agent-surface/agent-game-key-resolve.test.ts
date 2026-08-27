@@ -30,34 +30,34 @@ function submissionMap(store: InMemoryStore): Map<number, SubmissionRecord> {
  * real-clock `createdAt` — so a typo'd issue number would produce a green run that
  * proved nothing about ordering.
  */
-function setCreatedAt(store: InMemoryStore, issueNumber: number, createdAt: string): void {
+function setCreatedAt(store: InMemoryStore, jobId: number, createdAt: string): void {
   const map = submissionMap(store);
-  const sub = map.get(issueNumber);
+  const sub = map.get(jobId);
   if (!sub) {
-    throw new Error(`setCreatedAt: no submission ${issueNumber} — seed it before setting createdAt`);
+    throw new Error(`setCreatedAt: no submission ${jobId} — seed it before setting createdAt`);
   }
-  map.set(issueNumber, { ...sub, createdAt });
+  map.set(jobId, { ...sub, createdAt });
 }
 
-async function seedActiveSelfRound(store: InMemoryStore, issueNumber: number, builder: BuilderKind = 'self') {
-  await store.createSubmission(issueNumber, ownerUid, 'Comet Courier');
-  await store.setSubmissionSlug(issueNumber, slug);
-  await store.setRoundBuilder(issueNumber, builder);
-  await store.recordJobTransition(issueNumber, {
+async function seedActiveSelfRound(store: InMemoryStore, jobId: number, builder: BuilderKind = 'self') {
+  await store.createSubmission(jobId, ownerUid, 'Comet Courier');
+  await store.setSubmissionSlug(jobId, slug);
+  await store.setRoundBuilder(jobId, builder);
+  await store.recordJobTransition(jobId, {
     to: 'dispatched',
     at: new Date(now).toISOString(),
     by: 'system',
   });
-  await store.ensureRoundGeneration(issueNumber);
+  await store.ensureRoundGeneration(jobId);
 }
 
-async function seedPublishedGame(store: InMemoryStore, issueNumber: number, createdAt = '2026-07-01T00:00:00.000Z') {
-  await store.createSubmission(issueNumber, ownerUid, 'Comet Courier');
-  await store.setSubmissionSlug(issueNumber, slug);
-  await store.setRoundBuilder(issueNumber, 'self');
-  setCreatedAt(store, issueNumber, createdAt);
-  await store.setSubmissionPublishedAt(issueNumber, createdAt);
-  await store.recordJobTransition(issueNumber, {
+async function seedPublishedGame(store: InMemoryStore, jobId: number, createdAt = '2026-07-01T00:00:00.000Z') {
+  await store.createSubmission(jobId, ownerUid, 'Comet Courier');
+  await store.setSubmissionSlug(jobId, slug);
+  await store.setRoundBuilder(jobId, 'self');
+  setCreatedAt(store, jobId, createdAt);
+  await store.setSubmissionPublishedAt(jobId, createdAt);
+  await store.recordJobTransition(jobId, {
     to: 'published',
     at: createdAt,
     by: 'operator',
@@ -139,7 +139,7 @@ describe('resolveGameAgentKeyForStart', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.claims).toMatchObject({ slug, creatorUid: ownerUid, keyGeneration: 1 });
-      expect(result.record.issueNumber).toBe(13);
+      expect(result.record.jobId).toBe(13);
       expect(result.record.builder).toBe('self');
     }
   });
@@ -184,7 +184,7 @@ describe('slug ownership beyond owner-list window (BY-25)', () => {
     const result = await resolveGameAgentKeyForStart(store, gameKey(), secret, now);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.record.issueNumber).toBe(activeRoundIssue);
+      expect(result.record.jobId).toBe(activeRoundIssue);
     }
   });
 
@@ -195,7 +195,7 @@ describe('slug ownership beyond owner-list window (BY-25)', () => {
     const result = await resolveGameAgentKeyForOpenRound(store, gameKey(), secret, now);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.publishedRecord.issueNumber).toBe(publishedIssue);
+      expect(result.publishedRecord.jobId).toBe(publishedIssue);
       expect(result.activeRound).toBeNull();
     }
   });
@@ -257,7 +257,7 @@ describe('slug ownership beyond owner-list window (BY-25)', () => {
       const result = await resolveGameAgentKeyForOpenRound(store, gameKey(), secret, now);
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.publishedRecord.issueNumber).toBe(publishedIssue);
+        expect(result.publishedRecord.jobId).toBe(publishedIssue);
         // The abandoned round must not read as an in-flight one.
         expect(result.activeRound).toBeNull();
       }

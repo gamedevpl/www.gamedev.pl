@@ -53,8 +53,8 @@ function stubGitHub(): GitHubClient {
   };
 }
 
-function agentHeaders(issueNumber = ISSUE, roundGeneration = 1) {
-  return { authorization: `Bearer ${mintAgentToken(issueNumber, secret, { roundGeneration })}` };
+function agentHeaders(jobId = ISSUE, roundGeneration = 1) {
+  return { authorization: `Bearer ${mintAgentToken(jobId, secret, { roundGeneration })}` };
 }
 
 function mockObjectStore(objects: Map<string, Buffer>, signedUrl = 'https://signed.example/kit.tgz'): GcsObjectStore {

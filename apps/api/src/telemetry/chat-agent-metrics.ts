@@ -24,23 +24,17 @@ export function asChatAgentLogger(log: {
 export function logChatAgentDecision(
   log: Logger,
   input: {
-    issueNumber: number;
+    jobId: number;
     scope: ChatAgentScopeLabel;
     outcome: ChatAgentOutcome;
   },
 ): void {
-  log.info(
-    { chatAgent: { issueNumber: input.issueNumber, scope: input.scope, outcome: input.outcome } },
-    CHAT_AGENT_DECISION_MSG,
-  );
+  log.info({ chatAgent: { jobId: input.jobId, scope: input.scope, outcome: input.outcome } }, CHAT_AGENT_DECISION_MSG);
 }
 
 export function logChatAgentFailOpen(
   log: Logger,
-  input: { issueNumber: number; scope: ChatAgentScopeLabel; reason: string },
+  input: { jobId: number; scope: ChatAgentScopeLabel; reason: string },
 ): void {
-  log.warn(
-    { chatAgent: { issueNumber: input.issueNumber, scope: input.scope, reason: input.reason } },
-    CHAT_AGENT_FAILOPEN_MSG,
-  );
+  log.warn({ chatAgent: { jobId: input.jobId, scope: input.scope, reason: input.reason } }, CHAT_AGENT_FAILOPEN_MSG);
 }

@@ -64,7 +64,7 @@ function stubGamesStore(captures?: {
       slug: 'dog-dash',
       version: 'v1',
       createdAt: 'now',
-      issueNumber: 1,
+      jobId: 1,
       engineRef: 'abc123',
       sourceFiles: Object.keys(SOURCES),
     }),
@@ -75,7 +75,7 @@ function stubGamesStore(captures?: {
         slug: input.slug,
         version,
         createdAt: 'now',
-        issueNumber: input.issueNumber,
+        jobId: input.jobId,
         engineRef: input.engineRef,
         deliveryMode: input.mode ?? 'publish',
         origin: input.origin,
@@ -142,7 +142,7 @@ async function buildTestApp(
       base: { kind: 'store'; version: string } | { kind: 'repo'; snapshotId: string; sha: string };
       files: Array<{ path: string; content: string }>;
     } | null>;
-    onSourcesDelivered?: (input: { issueNumber: number; slug: string; version: string }) => void;
+    onSourcesDelivered?: (input: { jobId: number; slug: string; version: string }) => void;
   } = {},
 ) {
   const store = new InMemoryStore();
@@ -674,7 +674,7 @@ describe('remix across the two catalog eras', () => {
         base: { kind: 'store'; version: string } | { kind: 'repo'; snapshotId: string; sha: string };
         files: Array<{ path: string; content: string }>;
       } | null>;
-      onSourcesDelivered?: (input: { issueNumber: number; slug: string; version: string }) => void;
+      onSourcesDelivered?: (input: { jobId: number; slug: string; version: string }) => void;
     } = {},
   ) {
     const store = overrides.store ?? new InMemoryStore();
@@ -1068,7 +1068,7 @@ describe('remix propose', () => {
 
   it('proposes a params-only change on a store-lane game', async () => {
     const puts: Array<{ slug: string; files: Array<{ path: string; content: string }>; manifest: unknown }> = [];
-    const gated: Array<{ issueNumber: number; slug: string; version: string }> = [];
+    const gated: Array<{ jobId: number; slug: string; version: string }> = [];
     const built = await buildTestApp({
       gamesStore: stubGamesStore({ puts }),
       onSourcesDelivered: (input) => {

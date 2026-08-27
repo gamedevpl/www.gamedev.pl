@@ -13,24 +13,24 @@ describe('chat agent metrics', () => {
     const warn = vi.fn();
     const log = { info, warn };
 
-    logChatAgentDecision(log, { issueNumber: 42, scope: 'draft', outcome: 'reply' });
-    logChatAgentFailOpen(log, { issueNumber: 42, scope: 'draft', reason: 'timeout' });
+    logChatAgentDecision(log, { jobId: 42, scope: 'draft', outcome: 'reply' });
+    logChatAgentFailOpen(log, { jobId: 42, scope: 'draft', reason: 'timeout' });
 
     expect(info).toHaveBeenCalledWith(
-      { chatAgent: { issueNumber: 42, scope: 'draft', outcome: 'reply' } },
+      { chatAgent: { jobId: 42, scope: 'draft', outcome: 'reply' } },
       CHAT_AGENT_DECISION_MSG,
     );
     expect(warn).toHaveBeenCalledWith(
-      { chatAgent: { issueNumber: 42, scope: 'draft', reason: 'timeout' } },
+      { chatAgent: { jobId: 42, scope: 'draft', reason: 'timeout' } },
       CHAT_AGENT_FAILOPEN_MSG,
     );
 
     // Closed-shape payloads only — never the message or reply text.
     const allCalls = [...info.mock.calls, ...warn.mock.calls];
     for (const [payload] of allCalls) {
-      expect(
-        Object.keys(payload.chatAgent).every((key) => ['issueNumber', 'scope', 'outcome', 'reason'].includes(key)),
-      ).toBe(true);
+      expect(Object.keys(payload.chatAgent).every((key) => ['jobId', 'scope', 'outcome', 'reason'].includes(key))).toBe(
+        true,
+      );
     }
   });
 });

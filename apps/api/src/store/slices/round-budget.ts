@@ -3,103 +3,103 @@ import type { SubmissionRecord } from '../records/submission.js';
 
 export interface RoundBudgetStore {
   // Increments and returns how many seed regenerations this job has asked for.
-  incrementSeedRegenerations(issueNumber: number): Promise<number>;
+  incrementSeedRegenerations(jobId: number): Promise<number>;
 
   // Increments and returns the per-round sources-delivery count.
-  incrementRoundDeliveryCount(issueNumber: number): Promise<number>;
+  incrementRoundDeliveryCount(jobId: number): Promise<number>;
 
   // Bumps the typecheck-preflight refusal count for this round.
-  incrementRoundTypecheckPreflightRefusals(issueNumber: number): Promise<number>;
+  incrementRoundTypecheckPreflightRefusals(jobId: number): Promise<number>;
 
   // Stores or clears bypass diagnostics after the refusal cap.
-  setRoundTypecheckPreflightBypassErrors(issueNumber: number, message: string | null): Promise<void>;
+  setRoundTypecheckPreflightBypassErrors(jobId: number, message: string | null): Promise<void>;
 
   // Bumps submit attempts -- every deliver call that reaches preflight.
-  incrementRoundSubmitAttempts(issueNumber: number): Promise<number>;
+  incrementRoundSubmitAttempts(jobId: number): Promise<number>;
 
   // Bumps the audio or symbols preflight refusal count.
-  incrementRoundPreflightRefusal(issueNumber: number, kind: 'audio' | 'symbols'): Promise<number>;
+  incrementRoundPreflightRefusal(jobId: number, kind: 'audio' | 'symbols'): Promise<number>;
 
   // Records that a gate metric was logged for this version/status key.
-  setRoundLastGateMetricKey(issueNumber: number, key: string): Promise<void>;
+  setRoundLastGateMetricKey(jobId: number, key: string): Promise<void>;
 }
 
 export class InMemoryRoundBudgetStore implements RoundBudgetStore {
   constructor(private submissions: Map<number, SubmissionRecord>) {}
 
-  async incrementSeedRegenerations(issueNumber: number): Promise<number> {
-    const sub = this.submissions.get(issueNumber);
+  async incrementSeedRegenerations(jobId: number): Promise<number> {
+    const sub = this.submissions.get(jobId);
     if (!sub) return 0;
     const seedRegenerations = (sub.seedRegenerations ?? 0) + 1;
-    this.submissions.set(issueNumber, { ...sub, seedRegenerations });
+    this.submissions.set(jobId, { ...sub, seedRegenerations });
     return seedRegenerations;
   }
 
-  async incrementRoundDeliveryCount(issueNumber: number): Promise<number> {
-    const sub = this.submissions.get(issueNumber);
+  async incrementRoundDeliveryCount(jobId: number): Promise<number> {
+    const sub = this.submissions.get(jobId);
     if (!sub) return 0;
     const roundDeliveryCount = (sub.roundDeliveryCount ?? 0) + 1;
-    this.submissions.set(issueNumber, { ...sub, roundDeliveryCount });
+    this.submissions.set(jobId, { ...sub, roundDeliveryCount });
     return roundDeliveryCount;
   }
 
-  async incrementRoundTypecheckPreflightRefusals(issueNumber: number): Promise<number> {
-    const sub = this.submissions.get(issueNumber);
+  async incrementRoundTypecheckPreflightRefusals(jobId: number): Promise<number> {
+    const sub = this.submissions.get(jobId);
     if (!sub) return 0;
     const roundTypecheckPreflightRefusals = (sub.roundTypecheckPreflightRefusals ?? 0) + 1;
-    this.submissions.set(issueNumber, { ...sub, roundTypecheckPreflightRefusals });
+    this.submissions.set(jobId, { ...sub, roundTypecheckPreflightRefusals });
     return roundTypecheckPreflightRefusals;
   }
 
-  async setRoundTypecheckPreflightBypassErrors(issueNumber: number, message: string | null): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
+  async setRoundTypecheckPreflightBypassErrors(jobId: number, message: string | null): Promise<void> {
+    const sub = this.submissions.get(jobId);
     if (!sub) return;
     if (message == null) {
       const next = { ...sub };
       delete next.roundTypecheckPreflightBypassErrors;
-      this.submissions.set(issueNumber, next);
+      this.submissions.set(jobId, next);
       return;
     }
-    this.submissions.set(issueNumber, { ...sub, roundTypecheckPreflightBypassErrors: message });
+    this.submissions.set(jobId, { ...sub, roundTypecheckPreflightBypassErrors: message });
   }
 
-  async incrementRoundSubmitAttempts(issueNumber: number): Promise<number> {
-    const sub = this.submissions.get(issueNumber);
+  async incrementRoundSubmitAttempts(jobId: number): Promise<number> {
+    const sub = this.submissions.get(jobId);
     if (!sub) return 0;
     const roundSubmitAttempts = (sub.roundSubmitAttempts ?? 0) + 1;
-    this.submissions.set(issueNumber, { ...sub, roundSubmitAttempts });
+    this.submissions.set(jobId, { ...sub, roundSubmitAttempts });
     return roundSubmitAttempts;
   }
 
-  async incrementRoundPreflightRefusal(issueNumber: number, kind: 'audio' | 'symbols'): Promise<number> {
-    const sub = this.submissions.get(issueNumber);
+  async incrementRoundPreflightRefusal(jobId: number, kind: 'audio' | 'symbols'): Promise<number> {
+    const sub = this.submissions.get(jobId);
     if (!sub) return 0;
     if (kind === 'audio') {
       const roundPreflightRefusalsAudio = (sub.roundPreflightRefusalsAudio ?? 0) + 1;
-      this.submissions.set(issueNumber, { ...sub, roundPreflightRefusalsAudio });
+      this.submissions.set(jobId, { ...sub, roundPreflightRefusalsAudio });
       return roundPreflightRefusalsAudio;
     }
     const roundPreflightRefusalsSymbols = (sub.roundPreflightRefusalsSymbols ?? 0) + 1;
-    this.submissions.set(issueNumber, { ...sub, roundPreflightRefusalsSymbols });
+    this.submissions.set(jobId, { ...sub, roundPreflightRefusalsSymbols });
     return roundPreflightRefusalsSymbols;
   }
 
-  async setRoundLastGateMetricKey(issueNumber: number, key: string): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
+  async setRoundLastGateMetricKey(jobId: number, key: string): Promise<void> {
+    const sub = this.submissions.get(jobId);
     if (!sub) return;
-    this.submissions.set(issueNumber, { ...sub, roundLastGateMetricKey: key });
+    this.submissions.set(jobId, { ...sub, roundLastGateMetricKey: key });
   }
 }
 
 export class FirestoreRoundBudgetStore implements RoundBudgetStore {
   constructor(private db: Firestore) {}
 
-  private ref(issueNumber: number) {
-    return this.db.collection('submissions').doc(String(issueNumber));
+  private ref(jobId: number) {
+    return this.db.collection('submissions').doc(String(jobId));
   }
 
-  async incrementSeedRegenerations(issueNumber: number): Promise<number> {
-    const ref = this.ref(issueNumber);
+  async incrementSeedRegenerations(jobId: number): Promise<number> {
+    const ref = this.ref(jobId);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) return 0;
@@ -110,8 +110,8 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
     });
   }
 
-  async incrementRoundDeliveryCount(issueNumber: number): Promise<number> {
-    const ref = this.ref(issueNumber);
+  async incrementRoundDeliveryCount(jobId: number): Promise<number> {
+    const ref = this.ref(jobId);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) return 0;
@@ -122,8 +122,8 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
     });
   }
 
-  async incrementRoundTypecheckPreflightRefusals(issueNumber: number): Promise<number> {
-    const ref = this.ref(issueNumber);
+  async incrementRoundTypecheckPreflightRefusals(jobId: number): Promise<number> {
+    const ref = this.ref(jobId);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) return 0;
@@ -134,8 +134,8 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
     });
   }
 
-  async setRoundTypecheckPreflightBypassErrors(issueNumber: number, message: string | null): Promise<void> {
-    const ref = this.ref(issueNumber);
+  async setRoundTypecheckPreflightBypassErrors(jobId: number, message: string | null): Promise<void> {
+    const ref = this.ref(jobId);
     if (message == null) {
       await ref.set({ roundTypecheckPreflightBypassErrors: FieldValue.delete() }, { merge: true });
       return;
@@ -143,8 +143,8 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
     await ref.set({ roundTypecheckPreflightBypassErrors: message }, { merge: true });
   }
 
-  async incrementRoundSubmitAttempts(issueNumber: number): Promise<number> {
-    const ref = this.ref(issueNumber);
+  async incrementRoundSubmitAttempts(jobId: number): Promise<number> {
+    const ref = this.ref(jobId);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) return 0;
@@ -155,8 +155,8 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
     });
   }
 
-  async incrementRoundPreflightRefusal(issueNumber: number, kind: 'audio' | 'symbols'): Promise<number> {
-    const ref = this.ref(issueNumber);
+  async incrementRoundPreflightRefusal(jobId: number, kind: 'audio' | 'symbols'): Promise<number> {
+    const ref = this.ref(jobId);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) return 0;
@@ -172,7 +172,7 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
     });
   }
 
-  async setRoundLastGateMetricKey(issueNumber: number, key: string): Promise<void> {
-    await this.ref(issueNumber).set({ roundLastGateMetricKey: key }, { merge: true });
+  async setRoundLastGateMetricKey(jobId: number, key: string): Promise<void> {
+    await this.ref(jobId).set({ roundLastGateMetricKey: key }, { merge: true });
   }
 }

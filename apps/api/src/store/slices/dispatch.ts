@@ -18,39 +18,39 @@ import { clearRoundSignals } from './rounds.js';
 
 export interface DispatchStore {
   // Moves a job to transition.to, stamping stateSince and appending to history.
-  recordJobTransition(issueNumber: number, transition: JobTransition): Promise<boolean>;
+  recordJobTransition(jobId: number, transition: JobTransition): Promise<boolean>;
 
   // Appends a dispatch ref -- which backend is building this job, and where.
   recordDispatch(
-    issueNumber: number,
+    jobId: number,
     dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string; credentialRef?: string },
   ): Promise<void>;
 
   // Appends one billed thing to the job's ledger; best-effort.
-  recordJobCost(issueNumber: number, entry: JobCostEntry): Promise<void>;
+  recordJobCost(jobId: number, entry: JobCostEntry): Promise<void>;
 
   // Records what a seeded build's draft achieved.
-  recordSeedOutcome(issueNumber: number, outcome: JobSeedOutcome): Promise<void>;
+  recordSeedOutcome(jobId: number, outcome: JobSeedOutcome): Promise<void>;
 
   // Every seed outcome recorded at or after `since`, newest first.
   listSeedOutcomesSince(since: string): Promise<JobSeedOutcome[]>;
 
   // Overwrites credits on an existing agent_session ledger entry; no-op if absent.
-  setJobCostCredits(issueNumber: number, ref: string, credits: number): Promise<void>;
+  setJobCostCredits(jobId: number, ref: string, credits: number): Promise<void>;
 
   // Token-billed twin of setJobCostCredits; drops the credit placeholder.
-  setJobCostTokens(issueNumber: number, ref: string, tokens: AgentSessionTokens): Promise<void>;
+  setJobCostTokens(jobId: number, ref: string, tokens: AgentSessionTokens): Promise<void>;
 
   // Records where a dispatched job's work actually lives.
-  setDispatchWorkspace(issueNumber: number, workspace: string): Promise<void>;
+  setDispatchWorkspace(jobId: number, workspace: string): Promise<void>;
 
   // Forgets a released seed branch, so nothing tries to delete it twice.
-  clearDispatchSeedWorkspace(issueNumber: number): Promise<void>;
+  clearDispatchSeedWorkspace(jobId: number): Promise<void>;
 
   // Allocates a job id of our own, from JOB_ID_FLOOR upward.
   allocateJobId(): Promise<number>;
 
-  claimDispatchReaperAttempt(issueNumber: number, at: string): Promise<boolean>;
+  claimDispatchReaperAttempt(jobId: number, at: string): Promise<boolean>;
 }
 
 export class InMemoryDispatchStore implements DispatchStore {
@@ -58,8 +58,8 @@ export class InMemoryDispatchStore implements DispatchStore {
 
   constructor(private submissions: Map<number, SubmissionRecord>) {}
 
-  async recordJobTransition(issueNumber: number, transition: JobTransition): Promise<boolean> {
-    const sub = this.submissions.get(issueNumber);
+  async recordJobTransition(jobId: number, transition: JobTransition): Promise<boolean> {
+    const sub = this.submissions.get(jobId);
     if (!sub) return false;
     // Idempotent for identical arrivals; a new reason wins only for the operator.
     if (sub.state === transition.to) {
@@ -86,7 +86,7 @@ export class InMemoryDispatchStore implements DispatchStore {
         : {}),
     };
     if (closes) clearRoundSignals(next);
-    this.submissions.set(issueNumber, next);
+    this.submissions.set(jobId, next);
     return true;
   }
 
@@ -96,13 +96,13 @@ export class InMemoryDispatchStore implements DispatchStore {
   }
 
   async recordDispatch(
-    issueNumber: number,
+    jobId: number,
     dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string; credentialRef?: string },
   ): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
+    const sub = this.submissions.get(jobId);
     if (!sub) return;
     const existing = sub.dispatch;
-    this.submissions.set(issueNumber, {
+    this.submissions.set(jobId, {
       ...sub,
       dispatch: {
         backend: dispatch.backend,
@@ -116,18 +116,18 @@ export class InMemoryDispatchStore implements DispatchStore {
     });
   }
 
-  async clearDispatchSeedWorkspace(issueNumber: number): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
+  async clearDispatchSeedWorkspace(jobId: number): Promise<void> {
+    const sub = this.submissions.get(jobId);
     if (!sub?.dispatch) return;
     const dispatch = { ...sub.dispatch };
     delete dispatch.seedWorkspace;
-    this.submissions.set(issueNumber, { ...sub, dispatch });
+    this.submissions.set(jobId, { ...sub, dispatch });
   }
 
-  async recordSeedOutcome(issueNumber: number, outcome: JobSeedOutcome): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
+  async recordSeedOutcome(jobId: number, outcome: JobSeedOutcome): Promise<void> {
+    const sub = this.submissions.get(jobId);
     if (!sub) return;
-    this.submissions.set(issueNumber, { ...sub, seedOutcome: outcome });
+    this.submissions.set(jobId, { ...sub, seedOutcome: outcome });
   }
 
   async listSeedOutcomesSince(since: string): Promise<JobSeedOutcome[]> {
@@ -137,17 +137,17 @@ export class InMemoryDispatchStore implements DispatchStore {
       .sort((a, b) => b.at.localeCompare(a.at));
   }
 
-  async recordJobCost(issueNumber: number, entry: JobCostEntry): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
+  async recordJobCost(jobId: number, entry: JobCostEntry): Promise<void> {
+    const sub = this.submissions.get(jobId);
     if (!sub) return;
-    this.submissions.set(issueNumber, {
+    this.submissions.set(jobId, {
       ...sub,
       costs: [...(sub.costs ?? []), entry].slice(-MAX_JOB_COSTS),
     });
   }
 
-  async setJobCostCredits(issueNumber: number, ref: string, credits: number): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
+  async setJobCostCredits(jobId: number, ref: string, credits: number): Promise<void> {
+    const sub = this.submissions.get(jobId);
     if (!sub?.costs?.length) return;
     let changed = false;
     const costs = sub.costs.map((entry) => {
@@ -156,29 +156,29 @@ export class InMemoryDispatchStore implements DispatchStore {
       return { ...entry, credits, creditsMeasured: true };
     });
     if (!changed) return;
-    this.submissions.set(issueNumber, { ...sub, costs });
+    this.submissions.set(jobId, { ...sub, costs });
   }
 
-  async setJobCostTokens(issueNumber: number, ref: string, tokens: AgentSessionTokens): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
+  async setJobCostTokens(jobId: number, ref: string, tokens: AgentSessionTokens): Promise<void> {
+    const sub = this.submissions.get(jobId);
     if (!sub?.costs?.length) return;
     const costs = applyMeasuredTokens(sub.costs, ref, tokens);
     if (!costs) return;
-    this.submissions.set(issueNumber, { ...sub, costs });
+    this.submissions.set(jobId, { ...sub, costs });
   }
 
-  async setDispatchWorkspace(issueNumber: number, workspace: string): Promise<void> {
-    const sub = this.submissions.get(issueNumber);
+  async setDispatchWorkspace(jobId: number, workspace: string): Promise<void> {
+    const sub = this.submissions.get(jobId);
     if (!sub?.dispatch) return;
-    this.submissions.set(issueNumber, { ...sub, dispatch: { ...sub.dispatch, workspace } });
+    this.submissions.set(jobId, { ...sub, dispatch: { ...sub.dispatch, workspace } });
   }
 
-  async claimDispatchReaperAttempt(issueNumber: number, at: string): Promise<boolean> {
-    const sub = this.submissions.get(issueNumber);
+  async claimDispatchReaperAttempt(jobId: number, at: string): Promise<boolean> {
+    const sub = this.submissions.get(jobId);
     if (!sub || sub.state !== 'queued' || sub.dispatchReaperAttemptedAt || (sub.dispatch?.refs?.length ?? 0) > 0) {
       return false;
     }
-    this.submissions.set(issueNumber, { ...sub, dispatchReaperAttemptedAt: at });
+    this.submissions.set(jobId, { ...sub, dispatchReaperAttemptedAt: at });
     return true;
   }
 }
@@ -186,12 +186,12 @@ export class InMemoryDispatchStore implements DispatchStore {
 export class FirestoreDispatchStore implements DispatchStore {
   constructor(private db: Firestore) {}
 
-  private ref(issueNumber: number) {
-    return this.db.collection('submissions').doc(String(issueNumber));
+  private ref(jobId: number) {
+    return this.db.collection('submissions').doc(String(jobId));
   }
 
-  async recordJobTransition(issueNumber: number, transition: JobTransition): Promise<boolean> {
-    const ref = this.ref(issueNumber);
+  async recordJobTransition(jobId: number, transition: JobTransition): Promise<boolean> {
+    const ref = this.ref(jobId);
     // Transactional -- a concurrent poll and sweep could otherwise drop one write.
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
@@ -247,10 +247,10 @@ export class FirestoreDispatchStore implements DispatchStore {
   }
 
   async recordDispatch(
-    issueNumber: number,
+    jobId: number,
     dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string; credentialRef?: string },
   ): Promise<void> {
-    const ref = this.ref(issueNumber);
+    const ref = this.ref(jobId);
     // Transactional -- a dispatch and a reconciler observation could land together.
     await this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
@@ -278,9 +278,9 @@ export class FirestoreDispatchStore implements DispatchStore {
     });
   }
 
-  async recordSeedOutcome(issueNumber: number, outcome: JobSeedOutcome): Promise<void> {
+  async recordSeedOutcome(jobId: number, outcome: JobSeedOutcome): Promise<void> {
     // A plain merge -- one writer, once per job, nothing here to race.
-    await this.ref(issueNumber).set({ seedOutcome: outcome }, { merge: true });
+    await this.ref(jobId).set({ seedOutcome: outcome }, { merge: true });
   }
 
   async listSeedOutcomesSince(since: string): Promise<JobSeedOutcome[]> {
@@ -295,8 +295,8 @@ export class FirestoreDispatchStore implements DispatchStore {
       .filter((outcome): outcome is JobSeedOutcome => Boolean(outcome));
   }
 
-  async recordJobCost(issueNumber: number, entry: JobCostEntry): Promise<void> {
-    const ref = this.ref(issueNumber);
+  async recordJobCost(jobId: number, entry: JobCostEntry): Promise<void> {
+    const ref = this.ref(jobId);
     // Transactional -- two rounds can be charged in the same second.
     await this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
@@ -306,8 +306,8 @@ export class FirestoreDispatchStore implements DispatchStore {
     });
   }
 
-  async setJobCostCredits(issueNumber: number, ref: string, credits: number): Promise<void> {
-    const docRef = this.ref(issueNumber);
+  async setJobCostCredits(jobId: number, ref: string, credits: number): Promise<void> {
+    const docRef = this.ref(jobId);
     await this.db.runTransaction(async (tx) => {
       const snap = await tx.get(docRef);
       if (!snap.exists) return;
@@ -323,8 +323,8 @@ export class FirestoreDispatchStore implements DispatchStore {
     });
   }
 
-  async setJobCostTokens(issueNumber: number, ref: string, tokens: AgentSessionTokens): Promise<void> {
-    const docRef = this.ref(issueNumber);
+  async setJobCostTokens(jobId: number, ref: string, tokens: AgentSessionTokens): Promise<void> {
+    const docRef = this.ref(jobId);
     await this.db.runTransaction(async (tx) => {
       const snap = await tx.get(docRef);
       if (!snap.exists) return;
@@ -335,8 +335,8 @@ export class FirestoreDispatchStore implements DispatchStore {
     });
   }
 
-  async setDispatchWorkspace(issueNumber: number, workspace: string): Promise<void> {
-    const ref = this.ref(issueNumber);
+  async setDispatchWorkspace(jobId: number, workspace: string): Promise<void> {
+    const ref = this.ref(jobId);
     // Transactional -- a status poll here can race a dispatch write.
     await this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
@@ -347,8 +347,8 @@ export class FirestoreDispatchStore implements DispatchStore {
     });
   }
 
-  async clearDispatchSeedWorkspace(issueNumber: number): Promise<void> {
-    const ref = this.ref(issueNumber);
+  async clearDispatchSeedWorkspace(jobId: number): Promise<void> {
+    const ref = this.ref(jobId);
     await this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) return;
@@ -361,8 +361,8 @@ export class FirestoreDispatchStore implements DispatchStore {
     });
   }
 
-  async claimDispatchReaperAttempt(issueNumber: number, at: string): Promise<boolean> {
-    const ref = this.ref(issueNumber);
+  async claimDispatchReaperAttempt(jobId: number, at: string): Promise<boolean> {
+    const ref = this.ref(jobId);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) return false;

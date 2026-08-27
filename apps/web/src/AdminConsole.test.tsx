@@ -109,7 +109,7 @@ describe('AdminConsole', () => {
           {
             id: 'op-1-review_ready',
             kind: 'review_ready',
-            issueNumber: 1_000_001,
+            jobId: 1_000_001,
             title: 'Comet Courier',
             ownerUid: 'g:1',
             since: new Date(Date.now() - 20 * 60_000).toISOString(),
@@ -140,7 +140,7 @@ describe('AdminConsole', () => {
           {
             id: 'op-1-build_stalled',
             kind: 'build_stalled',
-            issueNumber: 1_000_001,
+            jobId: 1_000_001,
             title: 'Comet Courier',
             ownerUid: 'g:1',
             since: new Date(Date.now() - 20 * 60_000).toISOString(),
@@ -171,7 +171,7 @@ describe('AdminConsole', () => {
           {
             id: 'op-1-review_ready',
             kind: 'review_ready',
-            issueNumber: 1_000_001,
+            jobId: 1_000_001,
             title: 'Comet Courier',
             ownerUid: 'g:1',
             since: new Date(Date.now() + 90_000).toISOString(),

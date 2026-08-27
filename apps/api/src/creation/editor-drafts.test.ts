@@ -81,7 +81,7 @@ function stubGamesStore(options: { hasEditor?: boolean; sealed?: boolean } = {})
           slug: 'garden-gather',
           version: 'v1',
           createdAt: 'now',
-          issueNumber: 1_000_001,
+          jobId: 1_000_001,
           engineRef: 'abc1234',
           sourceFiles: Object.keys(VERSION_SOURCES).filter(
             (path) =>
@@ -95,7 +95,7 @@ function stubGamesStore(options: { hasEditor?: boolean; sealed?: boolean } = {})
         slug: candidate.slug,
         version,
         createdAt: 'now',
-        issueNumber: sourceJob,
+        jobId: sourceJob,
         engineRef: candidate.engineRef,
         origin: 'editor',
         sourceFiles: candidate.files.map((file) => file.path),

@@ -226,7 +226,7 @@ export async function registerSuggestionInboxRoutes(
       };
     } else {
       const outcome = await startImprovementRound({
-        issueNumber: submission.issueNumber,
+        jobId: submission.jobId,
         text: brief,
         title: `Improve ${record.slug}: ${record.class}`,
         locale: submission.locale ?? 'en',

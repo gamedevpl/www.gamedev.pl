@@ -12,7 +12,7 @@ function storeGamesStore(files: Record<string, string>): GamesStore {
         slug: 'neon-drift',
         version: 'base-1',
         createdAt: NOW,
-        issueNumber: 1_000_001,
+        jobId: 1_000_001,
         sourceFiles: Object.keys(files),
       } as VersionManifest;
     },

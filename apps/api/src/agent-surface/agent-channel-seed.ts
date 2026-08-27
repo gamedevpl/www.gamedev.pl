@@ -25,11 +25,11 @@ export interface AgentChannelSeedRoutesDeps {
   resolveBuild: (
     request: FastifyRequest,
     reply: FastifyReply,
-  ) => Promise<{ issueNumber: number; record: SubmissionRecord; access: AgentTokenAccess } | null>;
+  ) => Promise<{ jobId: number; record: SubmissionRecord; access: AgentTokenAccess } | null>;
   store: Store | undefined;
   gamesStore: GamesStore | undefined;
   onRegenerateSeed:
-    | ((input: { issueNumber: number; steer?: string; log: FastifyRequest['log'] }) => Promise<
+    | ((input: { jobId: number; steer?: string; log: FastifyRequest['log'] }) => Promise<
         | { ok: true; status: 'pending'; regenerationsRemaining: number }
         | {
             ok: false;
@@ -95,7 +95,7 @@ export function registerAgentChannelSeedRoutes(app: FastifyInstance, deps: Agent
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
-      const { issueNumber, record } = resolved;
+      const { jobId, record } = resolved;
 
       if (!onRegenerateSeed) {
         return reply.status(503).send({ error: 'seeding_unavailable', message: 'this deployment does not seed' });
@@ -108,11 +108,11 @@ export function registerAgentChannelSeedRoutes(app: FastifyInstance, deps: Agent
 
       if (gamesStore && record.slug) {
         const roundGeneration = store
-          ? ((await store.ensureRoundGeneration(issueNumber)) ?? record.roundGeneration ?? 1)
+          ? ((await store.ensureRoundGeneration(jobId)) ?? record.roundGeneration ?? 1)
           : (record.roundGeneration ?? 1);
         const staged = await gamesStore.listStagedSources({
           slug: record.slug,
-          issueNumber,
+          jobId,
           roundGeneration,
         });
         if (staged.files.length > 0) {
@@ -126,7 +126,7 @@ export function registerAgentChannelSeedRoutes(app: FastifyInstance, deps: Agent
       }
 
       const result = await onRegenerateSeed({
-        issueNumber,
+        jobId,
         ...(parsed.data.steer ? { steer: parsed.data.steer } : {}),
         log: request.log,
       });

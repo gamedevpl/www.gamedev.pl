@@ -56,7 +56,7 @@ import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { isPublished } from '../platform/publication-state.js';
 
 /**
- * `issueNumber` written onto a proposal's version manifest.
+ * `jobId` written onto a proposal's version manifest.
  *
  * Zero, because a proposal has no job — and it must not have one. A submission record for
  * a proposal would be owned by the proposer and carry the target's slug, which is exactly
@@ -283,7 +283,7 @@ export async function openProposal(deps: ProposalDeps, input: OpenProposalInput)
   const id = randomUUID();
   const { version } = await deps.gamesStore.putCandidateSources({
     slug: input.targetSlug,
-    issueNumber: PROPOSAL_NO_JOB,
+    jobId: PROPOSAL_NO_JOB,
     files: input.files,
     mode: 'proposal',
     proposal: { id, proposerUid: input.proposerUid },
@@ -383,10 +383,7 @@ export type DecisionResult =
 export async function acceptProposal(
   deps: ProposalDeps & {
     /** Creates the owner-side improvement job. Injected to keep submissions out of here. */
-    adoptIntoJob: (input: {
-      proposal: ProposalRecord;
-      ownerUid: string | null;
-    }) => Promise<{ issueNumber: number } | null>;
+    adoptIntoJob: (input: { proposal: ProposalRecord; ownerUid: string | null }) => Promise<{ jobId: number } | null>;
     /**
      * Lands an accepted **repo-lane** proposal in the games repo as a pull request.
      *
@@ -451,7 +448,7 @@ export async function acceptProposal(
     if (pr) record.mergePr = { number: pr.number, url: pr.url, openedAt: at };
   } else {
     const job = await deps.adoptIntoJob({ proposal: record, ownerUid: input.byUid });
-    if (job) record.adoptedJobId = job.issueNumber;
+    if (job) record.adoptedJobId = job.jobId;
   }
 
   record.decision = { at, byUid: input.byUid, reviewer: input.reviewer };

@@ -35,20 +35,20 @@ export interface JobReconcilerDeps {
   backendFor: (builder: BuilderKind | undefined) => Promise<AgentBackend | undefined>;
   builderOf: (record: SubmissionRecord | null | undefined) => BuilderKind;
   releaseWorkspace: (
-    issueNumber: number,
+    jobId: number,
     workspace: string,
     log: { error: (context: object, message: string) => void },
     backendName?: string,
   ) => Promise<void>;
   resumeBuild: (input: {
-    issueNumber: number;
+    jobId: number;
     feedback: string;
     locale: string;
     log: { error: (context: object, message: string) => void };
     undelivered?: boolean;
   }) => Promise<unknown>;
   acknowledgeBuilderHandoff: (input: {
-    issueNumber: number;
+    jobId: number;
     acknowledgedAt: string;
     log: { error: (context: object, message: string) => void };
   }) => Promise<{ started: boolean; reason?: string }>;
@@ -134,46 +134,46 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
       observation = await selected.observe(lastRef, {
         hasCandidate: Boolean(record.deliveredVersion) || (record.roundDeliveryCount ?? 0) > 0,
         // Pull-delivery backends harvest inside observe.
-        issueNumber: record.issueNumber,
+        jobId: record.jobId,
         ...(record.slug ? { slug: record.slug } : {}),
         // Durable generation — process memory is empty after restart.
         roundGeneration: record.roundGeneration ?? 1,
       });
       clearObserveFailures(lastRef);
     } catch (error) {
-      log.error({ err: error, issueNumber: record.issueNumber }, 'agent observation failed');
+      log.error({ err: error, jobId: record.jobId }, 'agent observation failed');
       if (!noteObserveFailure(lastRef)) return null;
       const transition = sessionCrashTransition(state, now);
       if (!transition) return null;
-      const recorded = await store.recordJobTransition(record.issueNumber, transition);
+      const recorded = await store.recordJobTransition(record.jobId, transition);
       return recorded ? transition : null;
     }
     try {
       if (!observation) return null;
       if (observation.sessionTokens) {
         try {
-          await store.setJobCostTokens(record.issueNumber, lastRef, observation.sessionTokens);
+          await store.setJobCostTokens(record.jobId, lastRef, observation.sessionTokens);
         } catch (error) {
-          log.error({ err: error, issueNumber: record.issueNumber }, 'could not reconcile agent session tokens');
+          log.error({ err: error, jobId: record.jobId }, 'could not reconcile agent session tokens');
         }
       }
       if (observation.sessionCredits !== undefined) {
         try {
-          await store.setJobCostCredits(record.issueNumber, lastRef, observation.sessionCredits);
+          await store.setJobCostCredits(record.jobId, lastRef, observation.sessionCredits);
         } catch (error) {
-          log.error({ err: error, issueNumber: record.issueNumber }, 'could not reconcile agent session cost');
+          log.error({ err: error, jobId: record.jobId }, 'could not reconcile agent session cost');
         }
       }
       // Persist vendor state even when the job does not move.
       if (observation.state !== record.agentState) {
         try {
-          await store.setSubmissionAgentState(record.issueNumber, observation.state);
+          await store.setSubmissionAgentState(record.jobId, observation.state);
         } catch (error) {
-          log.error({ err: error, issueNumber: record.issueNumber }, 'could not store agent task state');
+          log.error({ err: error, jobId: record.jobId }, 'could not store agent task state');
         }
       }
       // Re-read after harvest; do not skip the gate.
-      const fresh = await store.getSubmission(record.issueNumber);
+      const fresh = await store.getSubmission(record.jobId);
       const stateAfterObserve = (fresh?.state ?? state) as JobState;
       const stillAgentActive =
         stateAfterObserve === 'queued' || stateAfterObserve === 'dispatched' || stateAfterObserve === 'building';
@@ -182,13 +182,13 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
       // A late transition would snatch a delivered candidate back.
       if (!stillAgentActive) return null;
       if (observation.workspace && observation.workspace !== record.dispatch?.workspace) {
-        await store.setDispatchWorkspace(record.issueNumber, observation.workspace);
+        await store.setDispatchWorkspace(record.jobId, observation.workspace);
         // Learning the branch proves it forked, so the seed has no reader.
 
         // The tightest safe lifetime: earlier could delete under a cloning session.
         if (record.dispatch?.seedWorkspace && record.dispatch.seedWorkspace !== observation.workspace) {
-          await releaseWorkspace(record.issueNumber, record.dispatch.seedWorkspace, log, record.dispatch.backend);
-          await store.clearDispatchSeedWorkspace(record.issueNumber);
+          await releaseWorkspace(record.jobId, record.dispatch.seedWorkspace, log, record.dispatch.backend);
+          await store.clearDispatchSeedWorkspace(record.jobId);
         }
       }
       const result = reconcileAgentObservation(stateAfterObserve, observation);
@@ -204,15 +204,15 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
 
       // Judged from our own record, never from what the session claims.
       if (result.reason === 'task_completed_without_delivery' && (record.deliveryNudges ?? 0) < maxDeliveryNudges) {
-        const nudges = await store.recordDeliveryNudge(record.issueNumber);
+        const nudges = await store.recordDeliveryNudge(record.jobId);
         // Counted before dispatch, so a throw still spends the budget.
         if (nudges <= maxDeliveryNudges) {
           log.warn(
-            { issueNumber: record.issueNumber, nudge: nudges, workspace: record.dispatch?.workspace },
+            { jobId: record.jobId, nudge: nudges, workspace: record.dispatch?.workspace },
             'session finished without delivering; sending it back',
           );
           await resumeBuild({
-            issueNumber: record.issueNumber,
+            jobId: record.jobId,
             feedback: '',
             locale: record.locale ?? 'en',
             log,
@@ -229,11 +229,11 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
         by: 'reconciler',
         reason: result.reason,
       };
-      const recorded = await store.recordJobTransition(record.issueNumber, transition);
+      const recorded = await store.recordJobTransition(record.jobId, transition);
       return recorded ? transition : null;
     } catch (error) {
       // Best effort: the answer is the status the record already has.
-      log.error({ err: error, issueNumber: record.issueNumber }, 'agent observation failed');
+      log.error({ err: error, jobId: record.jobId }, 'agent observation failed');
       return null;
     }
   }
@@ -278,10 +278,10 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
       }) => {
         const key = `${version}:${input.status}`;
         if (record.roundLastGateMetricKey === key) return;
-        await store.setRoundLastGateMetricKey(record.issueNumber, key);
+        await store.setRoundLastGateMetricKey(record.jobId, key);
         record.roundLastGateMetricKey = key;
         logDeliveryGateVerdict(log, {
-          issueNumber: record.issueNumber,
+          jobId: record.jobId,
           roundGeneration,
           builder: builderLabelFromRecord(record.builder, record.dispatch?.backend),
           mode: input.mode,
@@ -311,16 +311,16 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
           by: 'gate',
           reason: verdict.green ? 'gate_green' : verdict.status === 'kit_outdated' ? 'kit_outdated' : 'gate_red',
         };
-        const recorded = await store.recordJobTransition(record.issueNumber, transition);
+        const recorded = await store.recordJobTransition(record.jobId, transition);
         if (!recorded) return null;
         // The outgoing token just died; resume any pending handoff now.
         if (to === 'ready_for_review' && record.builderHandoff?.awaitsAgentAck) {
           await acknowledgeBuilderHandoff({
-            issueNumber: record.issueNumber,
+            jobId: record.jobId,
             acknowledgedAt: transition.at,
             log,
           }).catch((error) => {
-            log.error({ err: error, issueNumber: record.issueNumber }, 'failed to resume handoff at round close');
+            log.error({ err: error, jobId: record.jobId }, 'failed to resume handoff at round close');
           });
         }
         // First time acting on this verdict: post the capture frame.
@@ -330,12 +330,12 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
           await postGateScreenshotToThread({
             store,
             gamesStore,
-            issueNumber: record.issueNumber,
+            jobId: record.jobId,
             slug: record.slug,
             version: record.deliveredVersion,
             screenshotPath: verdict.screenshot,
           }).catch((error) => {
-            log.warn({ err: error, issueNumber: record.issueNumber }, 'could not post gate screenshot');
+            log.warn({ err: error, jobId: record.jobId }, 'could not post gate screenshot');
           });
         }
         return transition;
@@ -358,23 +358,23 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
         by: 'gate',
         reason: preview.status === 'kit_outdated' ? 'kit_outdated' : 'gate_red',
       };
-      const recorded = await store.recordJobTransition(record.issueNumber, transition);
+      const recorded = await store.recordJobTransition(record.jobId, transition);
       if (!recorded) return null;
       if (preview.screenshot) {
         await postGateScreenshotToThread({
           store,
           gamesStore,
-          issueNumber: record.issueNumber,
+          jobId: record.jobId,
           slug: record.slug,
           version,
           screenshotPath: preview.screenshot,
         }).catch((error) => {
-          log.warn({ err: error, issueNumber: record.issueNumber }, 'could not post gate screenshot');
+          log.warn({ err: error, jobId: record.jobId }, 'could not post gate screenshot');
         });
       }
       return transition;
     } catch (error) {
-      log.error({ err: error, issueNumber: record.issueNumber }, 'could not read the gate verdict');
+      log.error({ err: error, jobId: record.jobId }, 'could not read the gate verdict');
       return null;
     }
   }

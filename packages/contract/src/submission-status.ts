@@ -127,7 +127,7 @@ export interface RecentBuild {
   // Number of source files in this build.
   fileCount?: number;
   // Producing job, used to attach the changelog.
-  issueNumber?: number;
+  jobId?: number;
 }
 
 // Whether platform can be picked now; absent means no opinion.
@@ -139,7 +139,7 @@ export interface SubmissionStatusResponseBase {
   // Finer than status; absent for GitHub-derived submissions.
   phase?: JobState;
   // This round's own job id, distinct from slug-scoped `recentBuilds[0]`.
-  issueNumber?: number;
+  jobId?: number;
   slug?: string;
   // 'remix' means a private save-as-yours fork that never gates.
   draftOrigin?: 'remix';

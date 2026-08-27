@@ -44,12 +44,7 @@ export interface ProposalToolsDeps {
   resolveProposalBase: ((slug: string) => Promise<{ base: ProposalBase; files: SourceFile[] } | null>) | undefined;
   contentChecker: ContentChecker | undefined;
   onSourcesDelivered:
-    | ((input: {
-        issueNumber: number;
-        slug: string;
-        version: string;
-        mode?: 'health' | 'preview' | 'proposal';
-      }) => unknown)
+    | ((input: { jobId: number; slug: string; version: string; mode?: 'health' | 'preview' | 'proposal' }) => unknown)
     | undefined;
 }
 
@@ -276,7 +271,7 @@ export function createProposalTools(deps: ProposalToolsDeps): Record<string, Pro
           // Same server-side allowlist a creator's own delivery passes.
           const written = await gamesStore.putCandidateSources({
             slug: record.targetSlug,
-            issueNumber: PROPOSAL_NO_JOB,
+            jobId: PROPOSAL_NO_JOB,
             files,
             mode: 'proposal',
             proposal: { id: record.id, proposerUid: record.proposerUid },
@@ -295,7 +290,7 @@ export function createProposalTools(deps: ProposalToolsDeps): Record<string, Pro
           // Best effort: an unstarted gate leaves the proposal submitted and re-runnable.
           try {
             await onSourcesDelivered({
-              issueNumber: PROPOSAL_NO_JOB,
+              jobId: PROPOSAL_NO_JOB,
               slug: record.targetSlug,
               version,
               mode: 'proposal',

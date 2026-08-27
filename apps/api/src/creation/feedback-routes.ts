@@ -37,10 +37,10 @@ export interface FeedbackRoutesOptions {
   feedbackByIp: Map<string, number[]>;
   checkUserAccess: (request: FastifyRequest, reply: FastifyReply) => boolean;
   builderOf: (record: SubmissionRecord | null | undefined) => BuilderKind;
-  invalidateStatusCache: (issueNumber: number) => void;
+  invalidateStatusCache: (jobId: number) => void;
   runChatAgent: ChatOrchestration['runChatAgent'];
   resumeBuild: (input: {
-    issueNumber: number;
+    jobId: number;
     feedback: string;
     locale: string;
     log: { error: (context: object, message: string) => void };
@@ -95,9 +95,9 @@ export function registerFeedbackRoutes(app: FastifyInstance, options: FeedbackRo
 
       const token = z.string().parse((request.params as { token?: string }).token);
 
-      let issueNumber: number;
+      let jobId: number;
       try {
-        issueNumber = verifyToken(token, submissionTokenSecret);
+        jobId = verifyToken(token, submissionTokenSecret);
       } catch (error) {
         if (error instanceof InvalidTokenError) {
           return reply.status(400).send({ error: 'invalid submission token' });
@@ -133,7 +133,7 @@ export function registerFeedbackRoutes(app: FastifyInstance, options: FeedbackRo
       // A published game is done: a revision is a new idea.
 
       // The record is the authority; there is no PR to consult.
-      const record = store ? await store.getSubmission(issueNumber) : null;
+      const record = store ? await store.getSubmission(jobId) : null;
       if (record?.publishedAt) {
         return reply.status(409).send({ error: 'this game is already published; submit a new idea to make changes' });
       }
@@ -151,14 +151,14 @@ export function registerFeedbackRoutes(app: FastifyInstance, options: FeedbackRo
       let referenceImages: ChatAgentImage[] = [];
       if (store && parsed.data.context?.screenshotPng) {
         try {
-          shotId = await storeCreatorPlaytestShot(store, issueNumber, parsed.data.context.screenshotPng);
+          shotId = await storeCreatorPlaytestShot(store, jobId, parsed.data.context.screenshotPng);
         } catch (shotError) {
           request.log.error({ err: shotError }, 'failed to store creator playtest screenshot');
         }
       }
       if (store && parsed.data.context?.referenceImages?.length) {
         try {
-          const stored = await storeCreatorReferenceImages(store, issueNumber, parsed.data.context.referenceImages);
+          const stored = await storeCreatorReferenceImages(store, jobId, parsed.data.context.referenceImages);
           referenceImageShotIds = stored.ids;
           referenceImages = stored.images;
         } catch (shotError) {
@@ -219,7 +219,7 @@ export function registerFeedbackRoutes(app: FastifyInstance, options: FeedbackRo
       // Letting the chat agent answer it would block the new round.
       if (record && !builderChanging) {
         const chatOutcome = await runChatAgent({
-          issueNumber,
+          jobId,
           message: sanitizedFeedback,
           scope: 'draft',
           record,
@@ -231,14 +231,14 @@ export function registerFeedbackRoutes(app: FastifyInstance, options: FeedbackRo
         if (chatOutcome?.kind === 'replied' && store) {
           try {
             // Marked delivered once the reply lands too — see markCreatorMessagesDelivered below.
-            const creatorMessage = await store.appendCreatorMessage(issueNumber, inboxText);
+            const creatorMessage = await store.appendCreatorMessage(jobId, inboxText);
             creatorMessageQueued = true;
-            await store.appendCreatorMessage(issueNumber, chatOutcome.replyText, {
+            await store.appendCreatorMessage(jobId, chatOutcome.replyText, {
               origin: 'studio',
               delivered: true,
             });
-            await store.markCreatorMessagesDelivered(issueNumber, [creatorMessage.id]);
-            invalidateStatusCache(issueNumber);
+            await store.markCreatorMessagesDelivered(jobId, [creatorMessage.id]);
+            invalidateStatusCache(jobId);
             return reply.send({ ok: true, ...(shotId ? { shotId } : {}) });
           } catch (queueError) {
             // A failed write must not claim success — fail open instead.
@@ -265,7 +265,7 @@ export function registerFeedbackRoutes(app: FastifyInstance, options: FeedbackRo
       let queued = creatorMessageQueued;
       if (store && !creatorMessageQueued) {
         try {
-          await store.appendCreatorMessage(issueNumber, inboxText);
+          await store.appendCreatorMessage(jobId, inboxText);
           queued = true;
         } catch (queueError) {
           request.log.error({ err: queueError }, 'failed to queue feedback for the agent');
@@ -274,7 +274,7 @@ export function registerFeedbackRoutes(app: FastifyInstance, options: FeedbackRo
       const appendStudioAck = async () => {
         if (!store || !queued || !studioAckText) return;
         await store
-          .appendCreatorMessage(issueNumber, studioAckText, { origin: 'studio_ack', delivered: true })
+          .appendCreatorMessage(jobId, studioAckText, { origin: 'studio_ack', delivered: true })
           .catch(() => {});
       };
 
@@ -294,7 +294,7 @@ export function registerFeedbackRoutes(app: FastifyInstance, options: FeedbackRo
         // The current agent accepted the note, so its acknowledgement is truthful.
         await appendStudioAck();
         // Drop the cache so the note appears on the next poll.
-        invalidateStatusCache(issueNumber);
+        invalidateStatusCache(jobId);
         return reply.send({
           ok: true,
           ...(shotId ? { shotId } : {}),
@@ -310,7 +310,7 @@ export function registerFeedbackRoutes(app: FastifyInstance, options: FeedbackRo
             : 'creator_feedback';
 
       const outcome = await resumeBuild({
-        issueNumber,
+        jobId,
         feedback: inboxText,
         locale: creatorLocale,
         log: request.log,
@@ -332,7 +332,7 @@ export function registerFeedbackRoutes(app: FastifyInstance, options: FeedbackRo
       // Without this, Studio served the previous round for up to a minute.
 
       // That is the false "agent not connected" warning.
-      invalidateStatusCache(issueNumber);
+      invalidateStatusCache(jobId);
 
       // Accepted, and honest about what it bought.
 

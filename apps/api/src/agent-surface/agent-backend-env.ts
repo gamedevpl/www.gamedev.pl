@@ -61,8 +61,8 @@ export interface ManagedBackendDeps {
   systemPrompt?: () => Promise<string | undefined>;
   kitDigest?: KitDigestLoader;
   // Channel-side round state; without it a finished round looks stalled.
-  readSignals?: (issueNumber: number) => Promise<ManagedRoundSignals | null>;
-  readCredentialRef?: (issueNumber: number, sessionRef: string) => Promise<string | undefined>;
+  readSignals?: (jobId: number) => Promise<ManagedRoundSignals | null>;
+  readCredentialRef?: (jobId: number, sessionRef: string) => Promise<string | undefined>;
 }
 
 // One vendor's backend — a bad Gemini key must not affect Anthropic.

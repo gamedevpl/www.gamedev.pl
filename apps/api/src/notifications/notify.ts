@@ -267,7 +267,7 @@ export async function emitOperatorAlert(
       bodyKey: `notifications.${type}.body`,
       params: {
         title: alert.title,
-        issueNumber: String(alert.issueNumber),
+        jobId: String(alert.jobId),
         ...(alert.stall ? { detail: alert.stall } : {}),
       },
       link: OPERATOR_ALERT_LINK,
@@ -276,7 +276,7 @@ export async function emitOperatorAlert(
     created += 1;
     await sendOperatorEmail(deps, uid, alert.id, type, OPERATOR_ALERT_LINK, {
       title: alert.title,
-      issueNumber: alert.issueNumber,
+      jobId: alert.jobId,
       ...(alert.stall ? { detail: alert.stall } : {}),
     });
     await maybePush(deps, uid, result.notification);
@@ -403,7 +403,7 @@ export interface SubmissionNotificationEvent {
   /** Owner of the submission — the notification recipient. */
   uid: string;
   type: SubmissionNotificationType;
-  issueNumber: number;
+  jobId: number;
   /** Sanitized game title, shown in the notification text. */
   gameTitle: string;
   /** Status-page share token — the default deep link. */
@@ -498,7 +498,7 @@ export async function emitSubmissionNotification(
   deps: EmitDeps,
   event: SubmissionNotificationEvent,
 ): Promise<{ created: boolean }> {
-  const id = `sub-${event.issueNumber}-${SHORT_TYPE[event.type]}`;
+  const id = `sub-${event.jobId}-${SHORT_TYPE[event.type]}`;
   const now = deps.now ? new Date(deps.now()).toISOString() : new Date().toISOString();
 
   // Published games deep-link to play; the health nudge to the studio, where the
@@ -589,7 +589,7 @@ export async function emitProposalNotification(
  */
 export async function notifyOnTransition(
   deps: EmitDeps,
-  submission: Pick<SubmissionRecord, 'issueNumber' | 'ownerUid' | 'title' | 'lastNotifiedStatus'>,
+  submission: Pick<SubmissionRecord, 'jobId' | 'ownerUid' | 'title' | 'lastNotifiedStatus'>,
   status: SubmissionStatusResponse,
   statusToken: string,
 ): Promise<{ emitted: boolean }> {
@@ -602,17 +602,17 @@ export async function notifyOnTransition(
   await emitSubmissionNotification(deps, {
     uid: submission.ownerUid,
     type: event,
-    issueNumber: submission.issueNumber,
+    jobId: submission.jobId,
     gameTitle: submission.title,
     statusToken,
     slug: status.status === 'published' ? (status as SubmissionPublishedResponse).slug : undefined,
   });
-  await deps.store.setSubmissionNotifiedStatus(submission.issueNumber, status.status);
+  await deps.store.setSubmissionNotifiedStatus(submission.jobId, status.status);
   // Stamp the finish line the first time we see it, so build times can be measured
   // (and shown to the next creator as a real expectation instead of a guess).
   if (status.status === 'published') {
     const at = deps.now ? new Date(deps.now()).toISOString() : new Date().toISOString();
-    await deps.store.setSubmissionPublishedAt(submission.issueNumber, at);
+    await deps.store.setSubmissionPublishedAt(submission.jobId, at);
   }
   return { emitted: true };
 }

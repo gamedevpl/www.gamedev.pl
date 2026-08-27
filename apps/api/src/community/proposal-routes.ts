@@ -88,10 +88,7 @@ export interface ProposalRoutesOptions {
    * could not be created, which the caller reports rather than swallowing — an accepted
    * proposal with no job is a change the owner cannot publish.
    */
-  adoptIntoJob?: (input: {
-    proposal: ProposalRecord;
-    ownerUid: string | null;
-  }) => Promise<{ issueNumber: number } | null>;
+  adoptIntoJob?: (input: { proposal: ProposalRecord; ownerUid: string | null }) => Promise<{ jobId: number } | null>;
   now?: () => number;
 }
 

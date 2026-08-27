@@ -309,7 +309,7 @@ export interface SubmissionRoutesHandle {
    * being "create an issue"; a second copy of that decision is a second thing to migrate.
    */
   startImprovementRound: (input: {
-    issueNumber: number;
+    jobId: number;
     text: string;
     title: string;
     locale: string;
@@ -338,16 +338,16 @@ export interface SubmissionRoutesHandle {
    * `onEvent` busts the cache for, and a second, independent cache would let Studio
    * poll a stale status for up to the 60s TTL after an owner staged a file.
    */
-  invalidateStatusCache: (issueNumber: number) => void;
+  invalidateStatusCache: (jobId: number) => void;
   /**
    * Arms the staged-preview publisher for a job, the same debounced assembly the agent
    * channel's `onSourcesStaged` triggers. Null when the publisher could not be built
    * (no store / games store / GitHub client configured) — callers treat that as a
    * no-op, same as the channel does.
    */
-  scheduleStagedPreview: ((issueNumber: number) => void) | null;
+  scheduleStagedPreview: ((jobId: number) => void) | null;
   redispatchQueuedJob: (input: {
-    issueNumber: number;
+    jobId: number;
     log: { error: (context: object, message: string) => void };
   }) => Promise<{ outcome: 'retried' | 'exhausted' | 'skipped'; reason?: string }>;
 }
@@ -423,9 +423,9 @@ export async function registerSubmissionRoutes(
   const internalAuthVerifier = options.internalAuthVerifier ?? createInternalAuthVerifierFromEnv();
   const gameSeeder = options.gameSeeder;
   const gamesStoreForSeed = options.agentChannel?.gamesStore;
-  function invalidateDeliveryCaches(issueNumber: number): void {
-    buildStatus.invalidateEvents(issueNumber);
-    invalidateStatusCache(issueNumber);
+  function invalidateDeliveryCaches(jobId: number): void {
+    buildStatus.invalidateEvents(jobId);
+    invalidateStatusCache(jobId);
   }
   const kitFileStoreForDelivery = options.agentChannel?.objectStore
     ? createKitFileStore(options.agentChannel.objectStore)
@@ -434,15 +434,15 @@ export async function registerSubmissionRoutes(
   function buildAgentRegistry(): AgentBackendRegistry {
     const selfOptions = store
       ? {
-          persistSeed: async (issueNumber: number, seed: SeedFiles) => {
-            await store.setSubmissionSeed(issueNumber, seed);
+          persistSeed: async (jobId: number, seed: SeedFiles) => {
+            await store.setSubmissionSeed(jobId, seed);
           },
-          readSeed: async (issueNumber: number) => {
-            const record = await store.getSubmission(issueNumber);
+          readSeed: async (jobId: number) => {
+            const record = await store.getSubmission(jobId);
             return record?.seed;
           },
-          readSignals: async (issueNumber: number) => {
-            const record = await store.getSubmission(issueNumber);
+          readSignals: async (jobId: number) => {
+            const record = await store.getSubmission(jobId);
             if (!record) return null;
             return {
               lastAgentSignalAt: record.lastAgentSignalAt,
@@ -460,8 +460,8 @@ export async function registerSubmissionRoutes(
             ...configuredManagedDeps,
             ...(store
               ? {
-                  readCredentialRef: async (issueNumber: number, sessionRef: string) => {
-                    const record = await store.getSubmission(issueNumber);
+                  readCredentialRef: async (jobId: number, sessionRef: string) => {
+                    const record = await store.getSubmission(jobId);
                     return record?.dispatch?.credentialRefs?.[sessionRef];
                   },
                 }
@@ -569,9 +569,9 @@ export async function registerSubmissionRoutes(
     const transition = planObservedStatusTransition(record.state, observed, new Date(now()).toISOString());
     if (!transition) return null;
     try {
-      await store.recordJobTransition(record.issueNumber, transition);
+      await store.recordJobTransition(record.jobId, transition);
     } catch (error) {
-      app.log.error({ err: error, issueNumber: record.issueNumber }, 'job transition write failed');
+      app.log.error({ err: error, jobId: record.jobId }, 'job transition write failed');
       return null;
     }
     // Returned so the caller can judge staleness against the state it just wrote. The
@@ -614,7 +614,7 @@ export async function registerSubmissionRoutes(
    * Never throws. A ledger is worth having, and it is not worth dropping a build for.
    */
   async function recordSessionCost(
-    issueNumber: number,
+    jobId: number,
     ref: string,
     backend: AgentBackend,
     log: { error: (context: object, message: string) => void },
@@ -622,7 +622,7 @@ export async function registerSubmissionRoutes(
     // Self builds run on the creator's machine — there is no platform agent session to bill.
     if (!store || backend.name === 'self') return;
     try {
-      await store.recordJobCost(issueNumber, {
+      await store.recordJobCost(jobId, {
         kind: 'agent_session',
         at: new Date(now()).toISOString(),
         by: backend.name,
@@ -633,7 +633,7 @@ export async function registerSubmissionRoutes(
         credits: 1,
       });
     } catch (error) {
-      log.error({ err: error, issueNumber }, 'could not record the cost of an agent session');
+      log.error({ err: error, jobId }, 'could not record the cost of an agent session');
     }
   }
 
@@ -671,18 +671,18 @@ export async function registerSubmissionRoutes(
 
   // Acks a pending handoff and starts the target builder.
   async function acknowledgeBuilderHandoff(input: {
-    issueNumber: number;
+    jobId: number;
     acknowledgedAt: string;
     log: { error: (context: object, message: string) => void };
   }): Promise<ResumeOutcome | { started: false; reason: string }> {
     if (!store) return { started: false, reason: 'not_configured' };
-    const current = await store.getSubmission(input.issueNumber);
+    const current = await store.getSubmission(input.jobId);
     const requested = current?.builderHandoff;
     if (!requested) return { started: false, reason: 'handoff_not_pending' };
-    const acknowledged = await store.acknowledgeBuilderHandoff(input.issueNumber, input.acknowledgedAt);
+    const acknowledged = await store.acknowledgeBuilderHandoff(input.jobId, input.acknowledgedAt);
     if (!acknowledged) return { started: false, reason: 'handoff_already_acknowledged' };
     const outcome = await resumeBuild({
-      issueNumber: input.issueNumber,
+      jobId: input.jobId,
       feedback: current?.spec ?? `Continue building "${current?.title ?? 'this game'}" for gamedev.pl.`,
       locale: current?.locale ?? 'en',
       log: input.log,
@@ -693,8 +693,8 @@ export async function registerSubmissionRoutes(
         reason: acknowledged.to === 'self' ? 'platform_builder_handoff' : 'self_builder_handoff',
       },
     });
-    if (outcome.started) await store.clearBuilderHandoff(input.issueNumber);
-    invalidateStatusCache(input.issueNumber);
+    if (outcome.started) await store.clearBuilderHandoff(input.jobId);
+    invalidateStatusCache(input.jobId);
     return outcome;
   }
 
@@ -719,7 +719,7 @@ export async function registerSubmissionRoutes(
    */
   async function startImprovementRound(input: {
     /** The job that owns the published game. Its slug and owner seed the new job. */
-    issueNumber: number;
+    jobId: number;
     /** Already moderated and sanitized. Untrusted text: data, never instructions. */
     text: string;
     title: string;
@@ -756,7 +756,7 @@ export async function registerSubmissionRoutes(
     ownerUid?: string;
   }): Promise<{ route: 'job'; jobId: number } | { route: 'unavailable'; reason: ManagedUnavailableReason } | null> {
     if (!store) return null;
-    const source = await store.getSubmission(input.issueNumber);
+    const source = await store.getSubmission(input.jobId);
     // Without a slug there is no game to improve, and dispatching would quietly
     // commission a brand-new one against a creator's improvement request.
     if (!source?.slug) return null;
@@ -806,7 +806,7 @@ export async function registerSubmissionRoutes(
       } catch (seedError) {
         // Best effort. The request still reaches the agent as the brief, so a failure
         // here costs the creator the echo, not the round.
-        input.log.error({ err: seedError, issueNumber: jobId }, 'failed to seed the improvement thread');
+        input.log.error({ err: seedError, jobId }, 'failed to seed the improvement thread');
       }
     }
     await store.recordJobTransition(jobId, {
@@ -817,7 +817,7 @@ export async function registerSubmissionRoutes(
     });
 
     const dispatched = await dispatchBuild({
-      issueNumber: jobId,
+      jobId,
       // The brief is both the spec and the change request: `feedback` selects the
       // "revise, do not rebuild" prompt, and `spec` is what a backend without that
       // distinction would read.
@@ -842,14 +842,14 @@ export async function registerSubmissionRoutes(
    * about how a closed green draft starts moving again.
    */
   async function continueDraftRound(input: {
-    issueNumber: number;
+    jobId: number;
     feedback: string;
     locale: string;
     log: { error: (context: object, message: string) => void };
     openedBy?: 'creator' | 'agent';
   }): Promise<{ ok: true; jobId: number; alreadyOpen: boolean } | { ok: false; reason: string }> {
     if (!store) return { ok: false, reason: 'not_configured' };
-    const record = await store.getSubmission(input.issueNumber);
+    const record = await store.getSubmission(input.jobId);
     if (!record || record.abandonedAt) {
       return { ok: false, reason: 'draft_not_found' };
     }
@@ -860,7 +860,7 @@ export async function registerSubmissionRoutes(
       return { ok: false, reason: 'publishing' };
     }
     if (isActiveBuildRound(record)) {
-      return { ok: true, jobId: input.issueNumber, alreadyOpen: true };
+      return { ok: true, jobId: input.jobId, alreadyOpen: true };
     }
     // Only states where a new round is the honest next step. Canceled/abandoned stay dead.
     // `undefined` is a legacy/partial record — resumeBuild adopts it into `dispatched`.
@@ -881,19 +881,19 @@ export async function registerSubmissionRoutes(
       // was speaking — so the thread must not present it as the creator's own words.
       const origin = input.openedBy === 'agent' ? ('agent' as const) : ('creator' as const);
       const relayed = await relayedMessageLocalization(origin, input.feedback);
-      await store.appendCreatorMessage(input.issueNumber, relayed.text, {
+      await store.appendCreatorMessage(input.jobId, relayed.text, {
         origin,
         ...(relayed.textLocalized && relayed.locale
           ? { textLocalized: relayed.textLocalized, locale: relayed.locale }
           : {}),
       });
     } catch (queueError) {
-      input.log.error({ err: queueError, issueNumber: input.issueNumber }, 'failed to queue continue_draft feedback');
+      input.log.error({ err: queueError, jobId: input.jobId }, 'failed to queue continue_draft feedback');
       return { ok: false, reason: 'queue_failed' };
     }
 
     const outcome = await resumeBuild({
-      issueNumber: input.issueNumber,
+      jobId: input.jobId,
       feedback: input.feedback,
       locale: input.locale,
       log: input.log,
@@ -908,7 +908,7 @@ export async function registerSubmissionRoutes(
     if (!outcome.started) {
       return { ok: false, reason: outcome.reason ?? 'resume_failed' };
     }
-    return { ok: true, jobId: input.issueNumber, alreadyOpen: false };
+    return { ok: true, jobId: input.jobId, alreadyOpen: false };
   }
 
   /**
@@ -919,7 +919,7 @@ export async function registerSubmissionRoutes(
    * fail a round that otherwise worked. Logged so the litter is countable.
    */
   async function releaseWorkspace(
-    issueNumber: number,
+    jobId: number,
     workspace: string,
     log: { error: (context: object, message: string) => void },
     // Vendor that built this workspace; unknown falls back to every vendor.
@@ -940,7 +940,7 @@ export async function registerSubmissionRoutes(
             await backend.cleanup({ ref: '', workspace });
           } catch (error) {
             log.error(
-              { err: error, issueNumber, workspace, backend: backend.name },
+              { err: error, jobId, workspace, backend: backend.name },
               'could not delete a spent build workspace',
             );
           }
@@ -1019,7 +1019,7 @@ export async function registerSubmissionRoutes(
   const statusRateLimitWindowMs = 60 * 1000;
   const maxStatusChecksPerWindow = 120;
   const statusChecksByIp = new Map<string, number[]>();
-  // Keyed by `${issueNumber}:${locale}` — the response body is localized, so two
+  // Keyed by `${jobId}:${locale}` — the response body is localized, so two
   // languages must not share an entry.
   const statusCache = new Map<string, CachedStatus>();
   // In-flight refreshes, same keys. A status page polls on a timer, so several
@@ -1030,14 +1030,14 @@ export async function registerSubmissionRoutes(
   // repopulate the cache after feedback/handoff cleared it.
   const statusCacheEpoch = new Map<number, number>();
   /** Drop every locale variant so the next poll rebuilds from the job record. */
-  function invalidateStatusCache(issueNumber: number): void {
+  function invalidateStatusCache(jobId: number): void {
     for (const key of [...statusCache.keys()]) {
-      if (key.startsWith(`${issueNumber}:`)) statusCache.delete(key);
+      if (key.startsWith(`${jobId}:`)) statusCache.delete(key);
     }
     for (const key of [...statusRefreshes.keys()]) {
-      if (key.startsWith(`${issueNumber}:`)) statusRefreshes.delete(key);
+      if (key.startsWith(`${jobId}:`)) statusRefreshes.delete(key);
     }
-    statusCacheEpoch.set(issueNumber, (statusCacheEpoch.get(issueNumber) ?? 0) + 1);
+    statusCacheEpoch.set(jobId, (statusCacheEpoch.get(jobId) ?? 0) + 1);
   }
 
   const buildStatus = createBuildStatusAssembler({
@@ -1277,19 +1277,15 @@ export async function registerSubmissionRoutes(
   // varies by language is resolved per-request in `attachBuildEvents`, from text the
   // agent already sent. `cacheKey` still carries the locale so existing entries and
   // `invalidateStatusCache`'s prefix scan keep working.
-  async function refreshStatus(
-    issueNumber: number,
-    cacheKey: string,
-    token: string,
-  ): Promise<SubmissionStatusResponse> {
+  async function refreshStatus(jobId: number, cacheKey: string, token: string): Promise<SubmissionStatusResponse> {
     const existing = statusRefreshes.get(cacheKey);
     if (existing) return existing;
 
-    const epochAtStart = statusCacheEpoch.get(issueNumber) ?? 0;
+    const epochAtStart = statusCacheEpoch.get(jobId) ?? 0;
     const refresh = (async () => {
       // Every job answers from its own record: there is no issue to read, and the
       // GitHub round-trip it used to need is gone with the path that needed it.
-      let record = await store?.getSubmission(issueNumber);
+      let record = await store?.getSubmission(jobId);
       if (record) {
         // Two things can have moved the job since the last poll, and they own different
         // stretches of it: the agent's own session up to delivery, our gate after it.
@@ -1308,7 +1304,7 @@ export async function registerSubmissionRoutes(
       // Session boot (`dispatched`) must re-observe Agent Tasks every few seconds —
       // a 60s cache would freeze "Starting agent" while GitHub already reports
       // `in_progress`. Skip writing when invalidate raced this refresh.
-      if ((statusCacheEpoch.get(issueNumber) ?? 0) === epochAtStart) {
+      if ((statusCacheEpoch.get(jobId) ?? 0) === epochAtStart) {
         const ttlMs = status.phase === 'dispatched' ? 2_000 : 60_000;
         statusCache.set(cacheKey, { value: status, expiresAt: now() + ttlMs });
       }
@@ -1343,9 +1339,9 @@ export async function registerSubmissionRoutes(
         return reply.status(429).send({ error: 'too many status checks, please try again later' });
       }
 
-      let issueNumber: number;
+      let jobId: number;
       try {
-        issueNumber = verifyToken(token, submissionTokenSecret);
+        jobId = verifyToken(token, submissionTokenSecret);
       } catch (error) {
         if (error instanceof InvalidTokenError) {
           return reply.status(400).send({ error: 'invalid submission token' });
@@ -1353,19 +1349,19 @@ export async function registerSubmissionRoutes(
         throw error;
       }
 
-      const cacheKey = `${issueNumber}:${locale}`;
+      const cacheKey = `${jobId}:${locale}`;
       const cached = statusCache.get(cacheKey);
       if (cached && cached.expiresAt > currentTime) {
         // Events are attached outside the cache: the GitHub-derived part of a status
         // is worth a minute, but an agent's live update is worth seconds.
-        return reply.send(await attachBuildEvents(cached.value, issueNumber, locale));
+        return reply.send(await attachBuildEvents(cached.value, jobId, locale));
       }
 
       // An abandoned build is terminal and self-declared: answer from the record
       // rather than deriving from GitHub, where a closed issue reads as
       // "needs_changes" — which would tell the creator the opposite of the truth.
       if (store) {
-        const record = await store.getSubmission(issueNumber);
+        const record = await store.getSubmission(jobId);
         if (record?.abandonedAt) {
           return reply.send({ status: 'abandoned' });
         }
@@ -1373,7 +1369,7 @@ export async function registerSubmissionRoutes(
 
       let status: SubmissionStatusResponse;
       try {
-        status = await refreshStatus(issueNumber, cacheKey, token);
+        status = await refreshStatus(jobId, cacheKey, token);
       } catch (error) {
         // The refresh is several GitHub reads, and GitHub rate-limits the whole token
         // at once — so this throws in bursts, for everyone watching a build, exactly
@@ -1381,14 +1377,14 @@ export async function registerSubmissionRoutes(
         // from a minute ago than the page breaking, and the next poll is seconds away.
         const lastKnown = statusCache.get(cacheKey);
         if (lastKnown) {
-          request.log.warn({ err: error, issueNumber }, 'status refresh failed; serving last known status');
-          return reply.send(await attachBuildEvents(lastKnown.value, issueNumber, locale));
+          request.log.warn({ err: error, jobId }, 'status refresh failed; serving last known status');
+          return reply.send(await attachBuildEvents(lastKnown.value, jobId, locale));
         }
         request.log.error({ err: error }, 'failed to resolve submission status');
         return reply.status(502).send({ error: 'failed to load submission status' });
       }
 
-      return reply.send(await attachBuildEvents(status, issueNumber, locale));
+      return reply.send(await attachBuildEvents(status, jobId, locale));
     },
   );
 
@@ -1434,13 +1430,13 @@ export async function registerSubmissionRoutes(
    * the queue module deliberately owns none of that. Same admission rule as every other
    * operator surface: a non-operator gets 404, not 403.
    */
-  app.post<{ Params: { issueNumber: string } }>('/api/admin/jobs/:issueNumber/cancel', async (request, reply) => {
+  app.post<{ Params: { jobId: string } }>('/api/admin/jobs/:jobId/cancel', async (request, reply) => {
     if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
     if (!store) return reply.status(503).send({ error: 'store_unavailable' });
-    const issueNumber = Number(request.params.issueNumber);
-    if (!Number.isInteger(issueNumber)) return reply.status(400).send({ error: 'invalid_job' });
+    const jobId = Number(request.params.jobId);
+    if (!Number.isInteger(jobId)) return reply.status(400).send({ error: 'invalid_job' });
 
-    const record = await store.getSubmission(issueNumber);
+    const record = await store.getSubmission(jobId);
     if (!record) return reply.status(404).send({ error: 'not_found' });
 
     const state = resolveJobState(record);
@@ -1454,7 +1450,7 @@ export async function registerSubmissionRoutes(
     // A record the job model never adopted has no state to transition from; recording
     // the cancel adopts it directly as canceled, which is the fact the operator just
     // established about it.
-    await store.recordJobTransition(issueNumber, { to: 'canceled', at, by: 'operator', reason: 'operator_canceled' });
+    await store.recordJobTransition(jobId, { to: 'canceled', at, by: 'operator', reason: 'operator_canceled' });
 
     // Best effort, and honest about what it did. The Copilot backend has no kill switch —
     // cancellation there is the job being terminal: the channel's control block now says
@@ -1469,7 +1465,7 @@ export async function registerSubmissionRoutes(
         const ref = refs[refs.length - 1];
         stopEnforced = (await cancelBackend.cancel(ref, record.dispatch?.credentialRefs?.[ref])).enforced;
       } catch (cancelError) {
-        request.log.error({ err: cancelError, issueNumber }, 'agent cancel failed; job is canceled regardless');
+        request.log.error({ err: cancelError, jobId }, 'agent cancel failed; job is canceled regardless');
       }
     }
 
@@ -1477,21 +1473,16 @@ export async function registerSubmissionRoutes(
     // for the queue but still sits on the creator's studio shelf — a reject from this
     // console left street-heist looking "Stopped" with Playtest still offered, because
     // the shelf only filters on `abandonedAt`, not on job state.
-    const afterCancel = await store.getSubmission(issueNumber);
+    const afterCancel = await store.getSubmission(jobId);
     if (afterCancel?.dispatch?.workspace) {
-      await releaseWorkspace(issueNumber, afterCancel.dispatch.workspace, request.log, afterCancel.dispatch.backend);
+      await releaseWorkspace(jobId, afterCancel.dispatch.workspace, request.log, afterCancel.dispatch.backend);
     }
     if (afterCancel?.dispatch?.seedWorkspace) {
-      await releaseWorkspace(
-        issueNumber,
-        afterCancel.dispatch.seedWorkspace,
-        request.log,
-        afterCancel.dispatch.backend,
-      );
-      await store.clearDispatchSeedWorkspace(issueNumber);
+      await releaseWorkspace(jobId, afterCancel.dispatch.seedWorkspace, request.log, afterCancel.dispatch.backend);
+      await store.clearDispatchSeedWorkspace(jobId);
     }
-    await store.setSubmissionAbandoned(issueNumber, at);
-    invalidateStatusCache(issueNumber);
+    await store.setSubmissionAbandoned(jobId, at);
+    invalidateStatusCache(jobId);
 
     return reply.send({ ok: true, state: 'canceled', stopEnforced });
   });
@@ -1518,16 +1509,16 @@ export async function registerSubmissionRoutes(
     'dispatched',
   ]);
 
-  app.post<{ Params: { issueNumber: string } }>('/api/admin/jobs/:issueNumber/retry', async (request, reply) => {
+  app.post<{ Params: { jobId: string } }>('/api/admin/jobs/:jobId/retry', async (request, reply) => {
     if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
     if (!store) return reply.status(503).send({ error: 'store_unavailable' });
     if (!submissionTokenSecret) {
       return reply.status(503).send({ error: 'agent_backend_unavailable' });
     }
-    const issueNumber = Number(request.params.issueNumber);
-    if (!Number.isInteger(issueNumber)) return reply.status(400).send({ error: 'invalid_job' });
+    const jobId = Number(request.params.jobId);
+    if (!Number.isInteger(jobId)) return reply.status(400).send({ error: 'invalid_job' });
 
-    const record = await store.getSubmission(issueNumber);
+    const record = await store.getSubmission(jobId);
     if (!record) return reply.status(404).send({ error: 'not_found' });
     if (!(await backendFor(builderOf(record)))) {
       return reply.status(503).send({ error: 'agent_backend_unavailable' });
@@ -1548,7 +1539,7 @@ export async function registerSubmissionRoutes(
 
     const refsBefore = record.dispatch?.refs?.length ?? 0;
     const outcome = await resumeBuild({
-      issueNumber,
+      jobId,
       feedback: undelivered ? '' : OPERATOR_RETRY_BRIEF,
       locale: record.locale ?? 'en',
       log: request.log,
@@ -1568,7 +1559,7 @@ export async function registerSubmissionRoutes(
     if (!outcome.started) {
       return reply.status(502).send({ error: outcome.reason });
     }
-    const after = await store.getSubmission(issueNumber);
+    const after = await store.getSubmission(jobId);
     if ((after?.dispatch?.refs?.length ?? 0) <= refsBefore) {
       return reply.status(502).send({ error: 'dispatch_failed' });
     }
@@ -1578,7 +1569,7 @@ export async function registerSubmissionRoutes(
     // marker — otherwise the kick is invisible in the job history. Coming from
     // `building` / `failed` already wrote `dispatched` with this reason.
     if (state === 'dispatched' && after?.state === 'dispatched') {
-      await store.recordJobTransition(issueNumber, {
+      await store.recordJobTransition(jobId, {
         to: 'dispatched',
         at: new Date(now()).toISOString(),
         by: 'operator',
@@ -1625,9 +1616,9 @@ export async function registerSubmissionRoutes(
           ...options.stagedPreview,
           now,
           log: app.log,
-          onPublished: (issueNumber) => {
-            buildStatus.invalidateEvents(issueNumber);
-            invalidateStatusCache(issueNumber);
+          onPublished: (jobId) => {
+            buildStatus.invalidateEvents(jobId);
+            invalidateStatusCache(jobId);
           },
         })
       : null;
@@ -1651,16 +1642,14 @@ export async function registerSubmissionRoutes(
       ...(sourceDelivery ? { sourceDelivery } : {}),
       agentTokenSecret: submissionTokenSecret,
       now,
-      onEvent: (issueNumber) => {
-        buildStatus.invalidateEvents(issueNumber);
+      onEvent: (jobId) => {
+        buildStatus.invalidateEvents(jobId);
         // Heartbeat / ended / phase move with channel writes; do not keep serving a
         // minute-old stall next to fresh progress (submit auto-end + continue loop).
-        invalidateStatusCache(issueNumber);
+        invalidateStatusCache(jobId);
       },
       onBuilderHandoffAcknowledged: (input) => acknowledgeBuilderHandoff(input),
-      ...(stagedPreviews
-        ? { onSourcesStaged: ({ issueNumber }: { issueNumber: number }) => stagedPreviews.schedule(issueNumber) }
-        : {}),
+      ...(stagedPreviews ? { onSourcesStaged: ({ jobId }: { jobId: number }) => stagedPreviews.schedule(jobId) } : {}),
       onRegenerateSeed: regenerateSeed,
     },
     mcp: {
@@ -1687,7 +1676,7 @@ export async function registerSubmissionRoutes(
     startImprovementRound,
     buildNotifyDeps,
     invalidateStatusCache,
-    scheduleStagedPreview: stagedPreviews ? (issueNumber) => stagedPreviews.schedule(issueNumber) : null,
+    scheduleStagedPreview: stagedPreviews ? (jobId) => stagedPreviews.schedule(jobId) : null,
     redispatchQueuedJob,
   };
 }

@@ -220,7 +220,7 @@ export function bakeRemixEditorDefaults(
 async function isSlugTaken(store: Store, slug: string, except?: number): Promise<boolean> {
   try {
     const existing = await store.getSubmissionBySlug(slug);
-    if (existing && existing.issueNumber !== except) return true;
+    if (existing && existing.jobId !== except) return true;
     if (await store.getPublication(slug)) return true;
   } catch {
     // Same forgiveness as createGame: an unavailable store must not block creation.
@@ -290,7 +290,7 @@ export async function saveRemixAsStudioDraft(input: RemixSaveInput): Promise<Rem
     );
     if (!slug) {
       await input.store.setSubmissionAbandoned(jobId, new Date(now()).toISOString());
-      input.log.error({ issueNumber: jobId, slug: wanted }, 'could not claim a slug for a remix save');
+      input.log.error({ jobId, slug: wanted }, 'could not claim a slug for a remix save');
       return { ok: false, status: 409, error: 'name_unavailable', reason: 'name_unavailable' };
     }
 
@@ -314,7 +314,7 @@ export async function saveRemixAsStudioDraft(input: RemixSaveInput): Promise<Rem
     try {
       ({ version, manifest } = await input.gamesStore.putCandidateSources({
         slug,
-        issueNumber: jobId,
+        jobId,
         files,
         requireCompiledEditor: true,
         backend: 'remix',
@@ -357,7 +357,7 @@ export async function saveRemixAsStudioDraft(input: RemixSaveInput): Promise<Rem
     const token = mintToken(jobId, input.submissionTokenSecret);
     input.log.info?.(
       {
-        issueNumber: jobId,
+        jobId,
         slug,
         parentSlug: input.parentSlug,
         parentVersion: input.parentVersion,

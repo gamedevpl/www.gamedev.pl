@@ -15,7 +15,7 @@ const DELIVERED_AT = '2026-08-21T08:00:00.000Z';
 
 function record(overrides: Partial<SubmissionRecord> = {}): SubmissionRecord {
   return {
-    issueNumber: 1000081,
+    jobId: 1000081,
     ownerUid: 'bot:grok',
     title: 'Transport Tycoon Remake',
     createdAt: DELIVERED_AT,

@@ -420,7 +420,7 @@ system prompt — pinned to the same engine ref the round receives, rather than 
 this repository.
 
 **4. A live platform round.** With valid managed configuration deployed, create a game with
-`builder: "platform"` (the default). Cloud Run should log, correlated by `issueNumber` / `slug`:
+`builder: "platform"` (the default). Cloud Run should log, correlated by `jobId` / `slug`:
 
 - `managed agent dispatch enabled` (once per process, at registry build)
 - `managed round credential minted` — includes `credentialRef` and `mcpUrl`

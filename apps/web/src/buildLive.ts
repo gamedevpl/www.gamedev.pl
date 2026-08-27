@@ -13,7 +13,7 @@ export function isBuildLive(status: SubmissionStatus): boolean {
 // recentBuilds is slug history — its newest entry may be an older round.
 export function newestBuildIsCurrentRound(builds: RecentBuild[], status: SubmissionStatus): boolean {
   if (builds.length === 0) return false;
-  if (typeof status.issueNumber !== 'number') return true;
-  if (typeof builds[0]?.issueNumber !== 'number') return true;
-  return builds[0].issueNumber === status.issueNumber;
+  if (typeof status.jobId !== 'number') return true;
+  if (typeof builds[0]?.jobId !== 'number') return true;
+  return builds[0].jobId === status.jobId;
 }

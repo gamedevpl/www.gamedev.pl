@@ -9,7 +9,7 @@ const MANIFEST: VersionManifest = {
   slug: 'comet-courier',
   version: 'v1',
   createdAt: '2026-07-30T10:00:00Z',
-  issueNumber: 1_000_001,
+  jobId: 1_000_001,
   engineRef: 'abc123',
   sourceFiles: ['SPEC.md', 'index.html', 'game.ts'],
 };

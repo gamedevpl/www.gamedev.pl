@@ -274,7 +274,7 @@ export interface StagedPreviewOptions {
   /** How many previews are kept per job — matches the channel's own pruning. */
   keepPreviews?: number;
   /** Called after a preview lands, so a cached status response is dropped. */
-  onPublished?: (issueNumber: number) => void;
+  onPublished?: (jobId: number) => void;
   log: {
     warn: (context: object, message: string) => void;
     error: (context: object, message: string) => void;
@@ -293,7 +293,7 @@ export interface StagedPreviewOptions {
 }
 
 export interface CandidatePreviewInput {
-  issueNumber: number;
+  jobId: number;
   slug: string;
   version: string;
   roundGeneration?: number;
@@ -307,9 +307,9 @@ export interface StagedPreviewPublisher {
    * Note that a file was staged. Coalesces into one assembly per burst and never
    * throws — callers are request handlers that owe the agent an answer either way.
    */
-  schedule(issueNumber: number): void;
+  schedule(jobId: number): void;
   /** Runs one attempt now, bypassing the timers. The seam the tests drive. */
-  publishNow(issueNumber: number): Promise<StagedPreviewOutcome>;
+  publishNow(jobId: number): Promise<StagedPreviewOutcome>;
   /**
    * Assembles and stores an immediate fast preview for a delivered candidate version,
    * bounded by the publisher's concurrency limit, without ref fallback.
@@ -346,14 +346,14 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
   const lastDigest = new Map<string, string>();
   let inFlight = 0;
 
-  async function attempt(issueNumber: number): Promise<StagedPreviewOutcome> {
+  async function attempt(jobId: number): Promise<StagedPreviewOutcome> {
     const attemptStartedAt = Date.now();
-    const record = await options.store.getSubmission(issueNumber);
+    const record = await options.store.getSubmission(jobId);
     if (!record?.slug || record.abandonedAt) return 'skipped';
     const slug = record.slug;
     const roundGeneration = record.roundGeneration ?? 1;
 
-    const staged = await options.gamesStore.getStagedSourceFiles({ slug, issueNumber, roundGeneration });
+    const staged = await options.gamesStore.getStagedSourceFiles({ slug, jobId, roundGeneration });
     if (staged.length === 0) return 'not_staged';
 
     const overlayStartedAt = Date.now();
@@ -388,13 +388,13 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
     // Cheap guard against a thrash the creator would see as a flickering preview: an agent
     // that stages a file back to the bytes it already had produces the same document, and
     // a new row on the rail claiming an update would be a lie about work that happened.
-    const digestKey = `${issueNumber}:${roundGeneration}`;
+    const digestKey = `${jobId}:${roundGeneration}`;
     const digest = createHash('sha256').update(html).digest('hex');
     if (lastDigest.get(digestKey) === digest) return 'unchanged';
 
     const storeWriteStartedAt = Date.now();
     const locale = record.locale ?? '';
-    await options.store.appendBuildPreview(issueNumber, {
+    await options.store.appendBuildPreview(jobId, {
       data: Buffer.from(html, 'utf8').toString('base64'),
       slug,
       // A tree mid-upload: worth showing, never worth calling ready.
@@ -404,14 +404,14 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
     });
     // After the write, like the channel's own preview verb: a push that lands and then
     // fails to tidy up has still delivered the thing the creator was waiting for.
-    await options.store.pruneBuildPreviews(issueNumber, keepPreviews).catch(() => 0);
+    await options.store.pruneBuildPreviews(jobId, keepPreviews).catch(() => 0);
     const storeWriteMs = Date.now() - storeWriteStartedAt;
     noteJob(lastDigest, digestKey, digest);
-    options.onPublished?.(issueNumber);
+    options.onPublished?.(jobId);
     // Per-phase timing — see docs/live-editing-latency.md.
     options.log.info?.(
       {
-        issueNumber,
+        jobId,
         totalMs: Date.now() - attemptStartedAt,
         overlayMs,
         getGameSourcesMs: sources.timings?.totalMs,
@@ -424,12 +424,12 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
     return 'published';
   }
 
-  async function publishNow(issueNumber: number): Promise<StagedPreviewOutcome> {
-    if (running.has(issueNumber)) return 'skipped';
-    running.add(issueNumber);
+  async function publishNow(jobId: number): Promise<StagedPreviewOutcome> {
+    if (running.has(jobId)) return 'skipped';
+    running.add(jobId);
     inFlight += 1;
     try {
-      return await attempt(issueNumber);
+      return await attempt(jobId);
     } catch (error) {
       // A game being written does not compile, and neither an agent nor a creator can act
       // on that fact — so it is recorded and dropped rather than raised. The hygiene
@@ -441,14 +441,14 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
         error instanceof ProjectTooLargeError ||
         error instanceof CredentialLeakError;
       options.log.warn(
-        { issueNumber, err: error, ...(known ? { hygiene: true } : {}) },
+        { jobId, err: error, ...(known ? { hygiene: true } : {}) },
         'staged preview could not be assembled',
       );
       return 'failed';
     } finally {
-      running.delete(issueNumber);
+      running.delete(jobId);
       inFlight -= 1;
-      noteJob(lastAttemptAt, issueNumber, now());
+      noteJob(lastAttemptAt, jobId, now());
     }
   }
 
@@ -459,41 +459,41 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
    * max-wait; `gap` is the per-job floor between assemblies; `atLeast` is what a
    * busy re-arm needs so it cannot spin. The latest of the three wins.
    */
-  function arm(issueNumber: number, burstStartedAt: number, atLeast = 0): void {
+  function arm(jobId: number, burstStartedAt: number, atLeast = 0): void {
     const current = now();
-    const sinceLast = current - (lastAttemptAt.get(issueNumber) ?? Number.NEGATIVE_INFINITY);
+    const sinceLast = current - (lastAttemptAt.get(jobId) ?? Number.NEGATIVE_INFINITY);
     const gap = Number.isFinite(sinceLast) ? Math.max(0, minGapMs - sinceLast) : 0;
     const settle = Math.min(debounceMs, Math.max(0, burstStartedAt + maxWaitMs - current));
     const timer = setTimeout(
       () => {
-        pending.delete(issueNumber);
+        pending.delete(jobId);
         // A job already assembling, or a process at its concurrency ceiling, must be
         // *re-armed* rather than run: `publishNow` would answer `skipped` and this file
         // would then wait for a stage that may never come, because the burst it belongs
         // to may have just ended. Re-arming keeps the burst's own max-wait window.
-        if (running.has(issueNumber) || inFlight >= maxConcurrent) {
-          arm(issueNumber, burstStartedAt, busyRetryMs);
+        if (running.has(jobId) || inFlight >= maxConcurrent) {
+          arm(jobId, burstStartedAt, busyRetryMs);
           return;
         }
-        void publishNow(issueNumber).catch((error: unknown) => {
-          options.log.error({ issueNumber, err: error }, 'staged preview attempt failed unexpectedly');
+        void publishNow(jobId).catch((error: unknown) => {
+          options.log.error({ jobId, err: error }, 'staged preview attempt failed unexpectedly');
         });
       },
       Math.max(gap, settle, atLeast),
     );
     // Never a reason to hold the process open — this is courtesy work beside a build.
     timer.unref?.();
-    pending.set(issueNumber, { timer, burstStartedAt });
+    pending.set(jobId, { timer, burstStartedAt });
   }
 
-  function schedule(issueNumber: number): void {
+  function schedule(jobId: number): void {
     // Trailing edge: every staged file restarts the clock, so the assembly lands after
     // the *last* of a burst rather than being armed by the first and firing on a tree
     // that is still half-uploaded. `burstStartedAt` survives the restart, which is what
     // stops a steady staging stream from deferring the first preview forever.
-    const existing = pending.get(issueNumber);
+    const existing = pending.get(jobId);
     if (existing) clearTimeout(existing.timer);
-    arm(issueNumber, existing?.burstStartedAt ?? now());
+    arm(jobId, existing?.burstStartedAt ?? now());
   }
 
   function stop(): void {
@@ -502,24 +502,24 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
   }
 
   async function publishCandidate(input: CandidatePreviewInput): Promise<StagedPreviewOutcome> {
-    const { issueNumber, slug, version, files } = input;
-    const existing = pending.get(issueNumber);
+    const { jobId, slug, version, files } = input;
+    const existing = pending.get(jobId);
     if (existing) {
       clearTimeout(existing.timer);
-      pending.delete(issueNumber);
+      pending.delete(jobId);
     }
 
     // Count-based: `now` is injectable and may be frozen.
     const maxBusyRetries = Math.max(1, Math.ceil(STAGED_PREVIEW_CANDIDATE_BUSY_WAIT_MS / busyRetryMs));
-    for (let retries = 0; running.has(issueNumber) || inFlight >= maxConcurrent; retries++) {
+    for (let retries = 0; running.has(jobId) || inFlight >= maxConcurrent; retries++) {
       if (retries >= maxBusyRetries) {
-        options.log.warn({ issueNumber, version }, 'candidate preview skipped: assembly slot never freed');
+        options.log.warn({ jobId, version }, 'candidate preview skipped: assembly slot never freed');
         return 'skipped';
       }
       await new Promise((resolve) => setTimeout(resolve, busyRetryMs));
     }
 
-    running.add(issueNumber);
+    running.add(jobId);
     inFlight += 1;
     const attemptStartedAt = Date.now();
     try {
@@ -528,14 +528,14 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
         overlay[file.path] = file.content;
       }
       if (!hasPlayableOverlay(overlay)) {
-        options.log.warn({ issueNumber, version }, 'candidate preview incomplete: overlay not playable');
+        options.log.warn({ jobId, version }, 'candidate preview incomplete: overlay not playable');
         return 'incomplete';
       }
 
       const engineRef = input.kitEngineRef || options.engineRef;
       const sources = await options.githubClient.getGameSources(engineRef, slug, overlay, { noRefFallback: true });
       if (!sources) {
-        options.log.warn({ issueNumber, version }, 'candidate preview incomplete: sources did not resolve');
+        options.log.warn({ jobId, version }, 'candidate preview incomplete: sources did not resolve');
         return 'incomplete';
       }
 
@@ -552,10 +552,7 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
       );
       const assembleMs = Date.now() - assembleStartedAt;
       if (Buffer.byteLength(html, 'utf8') > maxBytes) {
-        options.log.warn(
-          { issueNumber, version, bytes: Buffer.byteLength(html, 'utf8') },
-          'candidate preview too large',
-        );
+        options.log.warn({ jobId, version, bytes: Buffer.byteLength(html, 'utf8') }, 'candidate preview too large');
         return 'too_large';
       }
 
@@ -570,13 +567,13 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
       }
 
       const roundGen = input.roundGeneration ?? 1;
-      const digestKey = `${issueNumber}:${roundGen}`;
+      const digestKey = `${jobId}:${roundGen}`;
       const digest = createHash('sha256').update(html).digest('hex');
       noteJob(lastDigest, digestKey, digest);
 
       const storeWriteStartedAt = Date.now();
       const locale = input.locale ?? '';
-      await options.store.appendBuildPreview(issueNumber, {
+      await options.store.appendBuildPreview(jobId, {
         data: Buffer.from(html, 'utf8').toString('base64'),
         slug,
         // Submitted, unlike the debounced assembly: the agent handed this over.
@@ -584,13 +581,13 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
         label: STAGED_PREVIEW_LABEL,
         ...(locale.startsWith('pl') ? { labelLocalized: STAGED_PREVIEW_LABEL_PL, locale } : {}),
       });
-      await options.store.pruneBuildPreviews(issueNumber, keepPreviews).catch(() => 0);
+      await options.store.pruneBuildPreviews(jobId, keepPreviews).catch(() => 0);
       const storeWriteMs = Date.now() - storeWriteStartedAt;
 
-      options.onPublished?.(issueNumber);
+      options.onPublished?.(jobId);
       options.log.info?.(
         {
-          issueNumber,
+          jobId,
           version,
           totalMs: Date.now() - attemptStartedAt,
           getGameSourcesMs: sources.timings?.totalMs,
@@ -601,12 +598,12 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
       );
       return 'published';
     } catch (error) {
-      options.log.warn({ issueNumber, version, err: error }, 'candidate preview could not be assembled');
+      options.log.warn({ jobId, version, err: error }, 'candidate preview could not be assembled');
       return 'failed';
     } finally {
-      running.delete(issueNumber);
+      running.delete(jobId);
       inFlight -= 1;
-      noteJob(lastAttemptAt, issueNumber, now());
+      noteJob(lastAttemptAt, jobId, now());
     }
   }
 

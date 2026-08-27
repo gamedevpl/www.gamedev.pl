@@ -25,7 +25,7 @@ export interface DispatcherDeps {
   backendFor: (builder: BuilderKind | undefined) => Promise<AgentBackend | undefined>;
   builderOf: (record: SubmissionRecord | null | undefined) => BuilderKind;
   recordSessionCost: (
-    issueNumber: number,
+    jobId: number,
     ref: string,
     backend: AgentBackend,
     log: { error: (context: object, message: string) => void },
@@ -52,7 +52,7 @@ export function createDispatcher(deps: DispatcherDeps) {
   } = deps;
 
   async function dispatchBuild(input: {
-    issueNumber: number;
+    jobId: number;
     spec: string;
     locale: string;
     log: { error: (context: object, message: string) => void };
@@ -71,13 +71,13 @@ export function createDispatcher(deps: DispatcherDeps) {
 
     // An agent that cannot report or deliver is worse than none.
     if (!submissionTokenSecret || !store) return false;
-    const existing = await store.getSubmission(input.issueNumber);
+    const existing = await store.getSubmission(input.jobId);
     const builder = input.builder ?? builderOf(existing);
     const selected = await backendFor(builder);
     if (!selected) return false;
     try {
-      await store.setRoundBuilder(input.issueNumber, builder, { resetRoundBudget: false });
-      const roundGeneration = (await store.ensureRoundGeneration(input.issueNumber)) ?? 1;
+      await store.setRoundBuilder(input.jobId, builder, { resetRoundBudget: false });
+      const roundGeneration = (await store.ensureRoundGeneration(input.jobId)) ?? 1;
       // Before the brief, so a draft is announced only when it exists.
 
       // The slug it mints must be on the record the brief reads.
@@ -92,14 +92,14 @@ export function createDispatcher(deps: DispatcherDeps) {
       const willAttemptJobSeed =
         readsSeedFromJob && !storedSeed && !input.feedback && Boolean(input.slug) && Boolean(gameSeeder);
       if (storedSeed) {
-        await store.setSubmissionSeed(input.issueNumber, storedSeed);
+        await store.setSubmissionSeed(input.jobId, storedSeed);
       } else if (willAttemptJobSeed) {
         // Generation takes minutes; pending makes agents recheck get_seed.
 
         // Otherwise a race reads as "no seed, scaffold from scratch".
-        await store.setSeedStatus(input.issueNumber, 'pending');
+        await store.setSeedStatus(input.jobId, 'pending');
       } else if (readsSeedFromJob) {
-        await store.setSeedStatus(input.issueNumber, 'unavailable');
+        await store.setSeedStatus(input.jobId, 'unavailable');
       }
       const seedAttempt =
         storedSeed || input.feedback || !input.slug
@@ -119,15 +119,15 @@ export function createDispatcher(deps: DispatcherDeps) {
       if (readsSeedFromJob && !storedSeed) {
         if (seed) {
           // Persist before dispatch, so a racing read still sees the draft.
-          await store.setSubmissionSeed(input.issueNumber, seed);
+          await store.setSubmissionSeed(input.jobId, seed);
         } else if (willAttemptJobSeed) {
           // Downgrade to unavailable only when generation was tried and failed.
 
           // The other path already wrote unavailable above.
-          await store.setSeedStatus(input.issueNumber, 'unavailable');
+          await store.setSeedStatus(input.jobId, 'unavailable');
         }
       }
-      const current = await store.getSubmission(input.issueNumber);
+      const current = await store.getSubmission(input.jobId);
       if (
         !current ||
         !isActiveBuildRound(current) ||
@@ -135,20 +135,20 @@ export function createDispatcher(deps: DispatcherDeps) {
         current.roundGeneration !== roundGeneration ||
         current.builderHandoff
       ) {
-        input.log.error({ issueNumber: input.issueNumber }, 'discarding dispatch after the round changed');
+        input.log.error({ jobId: input.jobId }, 'discarding dispatch after the round changed');
         return false;
       }
       const result = await selected.dispatch({
-        issueNumber: input.issueNumber,
+        jobId: input.jobId,
         roundGeneration,
         ...(input.slug ? { slug: input.slug } : {}),
         spec: input.spec,
         locale: input.locale,
-        channelToken: mintAgentToken(input.issueNumber, submissionTokenSecret, {
+        channelToken: mintAgentToken(input.jobId, submissionTokenSecret, {
           roundGeneration,
           now: now(),
         }),
-        mcpOpenerToken: mintManagedMcpOpener(input.issueNumber, submissionTokenSecret, {
+        mcpOpenerToken: mintManagedMcpOpener(input.jobId, submissionTokenSecret, {
           roundGeneration,
           now: now(),
         }),
@@ -169,12 +169,12 @@ export function createDispatcher(deps: DispatcherDeps) {
       });
       if (seedOutcome) {
         try {
-          await store.recordSeedOutcome(input.issueNumber, seedOutcome);
+          await store.recordSeedOutcome(input.jobId, seedOutcome);
         } catch (error) {
-          input.log.error({ err: error, issueNumber: input.issueNumber }, 'could not record the seed outcome');
+          input.log.error({ err: error, jobId: input.jobId }, 'could not record the seed outcome');
         }
       }
-      await store.recordDispatch(input.issueNumber, {
+      await store.recordDispatch(input.jobId, {
         backend: selected.name,
         ref: result.ref,
         workspace: result.workspace,
@@ -191,15 +191,15 @@ export function createDispatcher(deps: DispatcherDeps) {
       // Failures here are their own problem; the build is already out.
       if (draft?.compiles) {
         void publishSeedPreview({
-          issueNumber: input.issueNumber,
+          jobId: input.jobId,
           slug: draft.slug,
           files: draft.files,
           locale: input.locale,
         }).catch((error: unknown) => {
-          input.log.error({ err: error, issueNumber: input.issueNumber }, 'seed preview failed');
+          input.log.error({ err: error, jobId: input.jobId }, 'seed preview failed');
         });
       }
-      await recordSessionCost(input.issueNumber, result.ref, selected, input.log);
+      await recordSessionCost(input.jobId, result.ref, selected, input.log);
       // Dispatch is fire-and-forget; a self agent can deliver first.
 
       // The write does not refuse regressions, so an unconditional one would
@@ -207,10 +207,10 @@ export function createDispatcher(deps: DispatcherDeps) {
       // yank a submitted job back and reopen the double-close hazard.
 
       // Advance only when the walk allows; refs and cost are durable anyway.
-      const latest = await store.getSubmission(input.issueNumber);
+      const latest = await store.getSubmission(input.jobId);
       const from = latest?.state ?? 'queued';
       if (canTransition(from, 'dispatched')) {
-        await store.recordJobTransition(input.issueNumber, {
+        await store.recordJobTransition(input.jobId, {
           to: 'dispatched',
           at: new Date(now()).toISOString(),
           by: 'system',
@@ -223,18 +223,18 @@ export function createDispatcher(deps: DispatcherDeps) {
       // A failed dispatch leaves the job queued, which the operator queue reports.
 
       // It surfaces as a visible stalled job, never a silently dead one.
-      input.log.error({ err: error, issueNumber: input.issueNumber }, 'agent dispatch failed');
+      input.log.error({ err: error, jobId: input.jobId }, 'agent dispatch failed');
       return false;
     }
   }
 
   // The reaper's one retry after dispatchBuild died before a ref.
   async function redispatchQueuedJob(input: {
-    issueNumber: number;
+    jobId: number;
     log: { error: (context: object, message: string) => void };
   }): Promise<{ outcome: 'retried' | 'exhausted' | 'skipped'; reason?: string }> {
     if (!store) return { outcome: 'skipped', reason: 'store_unavailable' };
-    const record = await store.getSubmission(input.issueNumber);
+    const record = await store.getSubmission(input.jobId);
     if (!record) return { outcome: 'skipped', reason: 'not_found' };
     if (record.state !== 'queued' || (record.dispatch?.refs?.length ?? 0) > 0) {
       return { outcome: 'skipped', reason: 'not_stuck' };
@@ -242,7 +242,7 @@ export function createDispatcher(deps: DispatcherDeps) {
 
     const fail = async (reason: string) => {
       if (canTransition('queued', 'failed')) {
-        await store.recordJobTransition(input.issueNumber, {
+        await store.recordJobTransition(input.jobId, {
           to: 'failed',
           at: new Date(now()).toISOString(),
           by: 'system',
@@ -262,11 +262,11 @@ export function createDispatcher(deps: DispatcherDeps) {
       return { outcome: 'exhausted', reason: 'no_spec' };
     }
 
-    const claimed = await store.claimDispatchReaperAttempt(input.issueNumber, new Date(now()).toISOString());
+    const claimed = await store.claimDispatchReaperAttempt(input.jobId, new Date(now()).toISOString());
     if (!claimed) return { outcome: 'skipped', reason: 'already_claimed' };
 
     await dispatchBuild({
-      issueNumber: input.issueNumber,
+      jobId: input.jobId,
       ...(record.slug ? { slug: record.slug } : {}),
       spec,
       locale: record.locale ?? 'en',

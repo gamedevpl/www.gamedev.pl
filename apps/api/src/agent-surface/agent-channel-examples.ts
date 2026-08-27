@@ -17,7 +17,7 @@ export interface AgentChannelExamplesRoutesDeps {
   resolveBuild: (
     request: FastifyRequest,
     reply: FastifyReply,
-  ) => Promise<{ issueNumber: number; record: SubmissionRecord; access: AgentTokenAccess } | null>;
+  ) => Promise<{ jobId: number; record: SubmissionRecord; access: AgentTokenAccess } | null>;
   objectStore: GcsObjectStore | undefined;
   exampleFileStore: ExampleFileStore | null;
 }

@@ -189,15 +189,15 @@ describe('StudioBuildHistory', () => {
     unmount();
   });
 
-  it('offers to seal only the current round build, by issueNumber — not by row position', async () => {
+  it('offers to seal only the current round build, by jobId — not by row position', async () => {
     // A newer sibling round on the same slug can outrank the current one in the list
-    // (contract note on RecentBuild.issueNumber). Sealing must still bind to the round
+    // (contract note on RecentBuild.jobId). Sealing must still bind to the round
     // this token/status actually is, not to whichever row happens to be newest.
     const { host, unmount } = await mount(
       {
         ...base,
         slug: 'my-game',
-        issueNumber: 1000058,
+        jobId: 1000058,
         canSeal: true,
         recentBuilds: [
           {
@@ -205,14 +205,14 @@ describe('StudioBuildHistory', () => {
             createdAt: new Date().toISOString(),
             mode: 'preview',
             verdict: 'green',
-            issueNumber: 1000059,
+            jobId: 1000059,
           },
           {
             version: 'v1',
             createdAt: new Date(Date.now() - 60_000).toISOString(),
             mode: 'preview',
             verdict: 'green',
-            issueNumber: 1000058,
+            jobId: 1000058,
           },
         ],
       },
@@ -242,7 +242,7 @@ describe('StudioBuildHistory', () => {
       {
         ...base,
         slug: 'my-game',
-        issueNumber: 1000058,
+        jobId: 1000058,
         canSeal: true,
         recentBuilds: [
           {
@@ -250,7 +250,7 @@ describe('StudioBuildHistory', () => {
             createdAt: new Date().toISOString(),
             mode: 'preview',
             verdict: 'green',
-            issueNumber: 1000058,
+            jobId: 1000058,
           },
         ],
       },

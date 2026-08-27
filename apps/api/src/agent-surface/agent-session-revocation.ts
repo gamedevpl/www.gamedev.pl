@@ -17,7 +17,7 @@ export async function endOpenAgentSessions(store: Store, ownerUid: string): Prom
   );
   let ended = 0;
   for (const job of open) {
-    if ((await store.bumpRoundGeneration(job.issueNumber)) !== null) ended += 1;
+    if ((await store.bumpRoundGeneration(job.jobId)) !== null) ended += 1;
   }
   return ended;
 }

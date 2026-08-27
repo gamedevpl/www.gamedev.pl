@@ -26,7 +26,7 @@ export interface NotifySweepRoutesDeps {
   builderOf: (record: SubmissionRecord | null | undefined) => BuilderKind;
   backendFor: (builder: BuilderKind | undefined) => Promise<AgentBackend | undefined>;
   acknowledgeBuilderHandoff: (input: {
-    issueNumber: number;
+    jobId: number;
     acknowledgedAt: string;
     log: { error: (context: object, message: string) => void };
   }) => Promise<{ started: boolean; reason?: string }>;
@@ -98,19 +98,16 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
               try {
                 await cancelBackend.cancel(ref, record.dispatch?.credentialRefs?.[ref]);
               } catch (cancelError) {
-                request.log.error(
-                  { err: cancelError, issueNumber: record.issueNumber },
-                  'self no-connect cancel failed',
-                );
+                request.log.error({ err: cancelError, jobId: record.jobId }, 'self no-connect cancel failed');
               }
             }
-            await store.recordJobTransition(record.issueNumber, {
+            await store.recordJobTransition(record.jobId, {
               to: 'abandoned',
               at,
               by: 'system',
               reason: 'no_connect',
             });
-            await store.setSubmissionAbandoned(record.issueNumber, at);
+            await store.setSubmissionAbandoned(record.jobId, at);
             continue;
           }
 
@@ -122,7 +119,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
             now() - Date.parse(record.builderHandoff.requestedAt) > HANDOFF_ACK_STALL_MS
           ) {
             await acknowledgeBuilderHandoff({
-              issueNumber: record.issueNumber,
+              jobId: record.jobId,
               acknowledgedAt: new Date(now()).toISOString(),
               log: request.log,
             });
@@ -130,12 +127,12 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
           }
 
           // A dispatched request nobody ever collects errors nowhere; ageing makes it visible.
-          const pending = await store.listPendingCreatorMessages(record.issueNumber);
+          const pending = await store.listPendingCreatorMessages(record.jobId);
           const oldest = pending[0];
           if (oldest) {
-            pendingFeedback.set(record.issueNumber, oldest.createdAt);
+            pendingFeedback.set(record.jobId, oldest.createdAt);
             if (now() - Date.parse(oldest.createdAt) > FEEDBACK_STALL_MS) {
-              stalledIssues.push(record.issueNumber);
+              stalledIssues.push(record.jobId);
             }
           }
 
@@ -152,16 +149,16 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
           const status = await nativeJobStatus(current);
           // Recorded whether or not anyone is notified, so the rail stops deriving.
           if (record.lastStatus !== status.status) {
-            await store.setSubmissionLastStatus(record.issueNumber, status.status);
+            await store.setSubmissionLastStatus(record.jobId, status.status);
           }
           // Post-reconcile snapshot: the pre-reconcile record would replan the same destination.
           await recordDerivedJobState(current, status.status);
-          const statusToken = mintToken(record.issueNumber, submissionTokenSecret);
+          const statusToken = mintToken(record.jobId, submissionTokenSecret);
           const result = await notifyOnTransition(buildNotifyDeps(), record, status, statusToken);
           if (result.emitted) emitted += 1;
         } catch (sweepError) {
           // One bad submission (deleted issue, GitHub hiccup) must not abort the sweep.
-          request.log.error({ err: sweepError, issueNumber: record.issueNumber }, 'sweep item failed');
+          request.log.error({ err: sweepError, jobId: record.jobId }, 'sweep item failed');
         }
       }
       // Operator alerts: a stall is time passing, so no transition writes it.
@@ -207,14 +204,14 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
             // Red: the baked bundle still serves, but rebuilding would fail.
 
             // Notified-at is written after both emits, so failures retry next sweep.
-            const submission = manifest ? await store.getSubmission(manifest.issueNumber) : null;
+            const submission = manifest ? await store.getSubmission(manifest.jobId) : null;
             if (submission) {
               await emitSubmissionNotification(buildNotifyDeps(), {
                 uid: submission.ownerUid,
                 type: 'submission.game_health',
-                issueNumber: submission.issueNumber,
+                jobId: submission.jobId,
                 gameTitle: submission.title,
-                statusToken: mintToken(submission.issueNumber, submissionTokenSecret),
+                statusToken: mintToken(submission.jobId, submissionTokenSecret),
               });
             }
             if (adminUids && adminUids.size > 0) {
@@ -223,7 +220,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
                 {
                   id: `op-health-${publication.slug}-${check.version}`,
                   kind: 'game_unhealthy',
-                  issueNumber: manifest?.issueNumber ?? 0,
+                  jobId: manifest?.jobId ?? 0,
                   title: submission?.title ?? publication.slug,
                   ownerUid: submission?.ownerUid ?? '',
                   slug: publication.slug,

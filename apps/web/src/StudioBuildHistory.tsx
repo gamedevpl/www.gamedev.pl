@@ -232,7 +232,7 @@ export function StudioBuildHistory({
                   ) : null}
 
                   <div className="studio-build-history-actions">
-                    {build.issueNumber === status.issueNumber && token && status.canSeal && build.mode === 'preview' ? (
+                    {build.jobId === status.jobId && token && status.canSeal && build.mode === 'preview' ? (
                       <button
                         type="button"
                         className="studio-build-action-btn is-seal"

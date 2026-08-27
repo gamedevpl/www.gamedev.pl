@@ -76,7 +76,7 @@ export async function registerGamePlayRoute(
         // Checked outside gameCache — a draft must never get cached under it.
         if (await draftPreview.canPlayDraft(request, slug)) {
           const record = await store?.getSubmissionBySlug(slug);
-          if (record) return draftPreview.replyWithDraft(request, reply, record.issueNumber);
+          if (record) return draftPreview.replyWithDraft(request, reply, record.jobId);
         }
         return reply.status(404).send({ error: 'game not found' });
       }

@@ -24,7 +24,7 @@ function fakeGamesStore() {
   return {
     async putCandidateSources(input: {
       slug: string;
-      issueNumber: number;
+      jobId: number;
       files: SourceFile[];
       mode?: string;
       proposal?: { id: string; proposerUid: string };
@@ -34,7 +34,7 @@ function fakeGamesStore() {
         slug: input.slug,
         version,
         createdAt: new Date(NOW).toISOString(),
-        issueNumber: input.issueNumber,
+        jobId: input.jobId,
         deliveryMode: input.mode ?? 'publish',
         ...(input.proposal ? { proposal: input.proposal } : {}),
         sourceFiles: input.files.map((f) => f.path),
@@ -69,7 +69,7 @@ async function seed(store: InMemoryStore) {
     await store.upsertUser({ uid, name: uid });
   }
   const job = await store.createSubmission(1_000_001, OWNER, 'Neon Drift');
-  await store.setSubmissionSlug(job.issueNumber, SLUG);
+  await store.setSubmissionSlug(job.jobId, SLUG);
   await store.setPublication({
     slug: SLUG,
     state: 'published',

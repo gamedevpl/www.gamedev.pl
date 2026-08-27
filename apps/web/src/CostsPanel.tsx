@@ -34,7 +34,7 @@ function JobRow({ job }: { job: JobCostSummary }) {
       <td>
         <div className="admin-job-title">{job.title}</div>
         <div className="admin-job-sub">
-          #{job.issueNumber}
+          #{job.jobId}
           {job.slug ? ` · ${job.slug}` : ''}
         </div>
       </td>
@@ -152,7 +152,7 @@ export function CostsPanel() {
             </thead>
             <tbody>
               {report.jobs.map((job) => (
-                <JobRow key={job.issueNumber} job={job} />
+                <JobRow key={job.jobId} job={job} />
               ))}
             </tbody>
           </table>
