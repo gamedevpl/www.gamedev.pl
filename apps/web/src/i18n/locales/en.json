@@ -1152,6 +1152,8 @@
   },
   "errors": {
     "generic": "Something went wrong",
+    "signInRequired": "Your sign-in expired. Sign in again and send this once more — your answers are kept.",
+    "tooManyAttempts": "That's a lot of new games at once. Wait a few minutes and try again.",
     "creationPaused": "New games are paused for a moment while we look at something on our side. Your daily allowance hasn't been touched — please try again shortly.",
     "creationOverCapacity": "We've hit today's ceiling on new games across the whole site, so we can't start another one right now. Your own allowance is untouched and still there tomorrow.",
     "nameUnavailable": "That name was taken while we were setting your game up. Give it a different one and try again.",

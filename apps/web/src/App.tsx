@@ -66,6 +66,7 @@ function readLocationRoute(): AppRoute {
   return parsePathRoute(window.location.pathname, window.location.hash);
 }
 import { submitSpec, refineSpec, type SubmissionApiError, type PlatformBuilderAvailability } from './submissionApi.js';
+import { submissionErrorKey } from './submissionErrors.js';
 import { useActiveBuildCount } from './activeBuilds.js';
 import { getSavedSpecs, saveSpec, type SavedSpec } from './mySpecs.js';
 import { saveLastBuilder, type BuilderKind } from './builderKind.js';
@@ -620,28 +621,16 @@ export function App() {
       navigate(builder === 'platform' ? studioWelcomePath(address) : studioConnectPath(address));
     } catch (err) {
       const message = err instanceof Error ? err.message : t('errors.generic');
-      const category = err instanceof Error ? (err as SubmissionApiError).category : undefined;
-      if (message === 'content_rejected') {
-        setSubmissionError(t(`errors.contentRejected.${category ?? 'other'}`));
-      } else if (message === 'creation_paused') {
-        setSubmissionError(t('errors.creationPaused'));
-        // Site-wide limits, not this creator's — checked before the quota branch below
-        // because saying "you've used your allowance" here would be untrue, and the
-        // creator can see their remaining count on the hero to check it.
-      } else if (message === 'creation_over_capacity') {
-        setSubmissionError(t('errors.creationOverCapacity'));
-        // Two submissions of the same title raced for its address and this one lost
-        // twice. Rare, and recoverable by renaming — which is a thing the creator can
-        // now actually do, because they picked the name in the first place.
-      } else if (message === 'name_unavailable') {
-        setSubmissionError(t('errors.nameUnavailable'));
-      } else if (message.includes('quota')) {
-        setSubmissionError(t('auth.quotaExceeded'));
-      } else if (message.includes('blocked')) {
-        setSubmissionError(t('auth.accountBlocked'));
-      } else {
-        setSubmissionError(message);
-      }
+      const apiErr = err instanceof Error ? (err as SubmissionApiError) : undefined;
+      setSubmissionError(
+        t(
+          submissionErrorKey({
+            message,
+            ...(apiErr?.status !== undefined ? { status: apiErr.status } : {}),
+            ...(apiErr?.category !== undefined ? { category: apiErr.category } : {}),
+          }),
+        ),
+      );
       setSubmissionStatus('idle');
     }
   }

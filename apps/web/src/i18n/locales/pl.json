@@ -1166,6 +1166,8 @@
   },
   "errors": {
     "generic": "Coś poszło nie tak",
+    "signInRequired": "Twoja sesja wygasła. Zaloguj się ponownie i wyślij jeszcze raz — odpowiedzi są zachowane.",
+    "tooManyAttempts": "To dużo nowych gier naraz. Odczekaj kilka minut i spróbuj ponownie.",
     "creationPaused": "Tworzenie nowych gier jest na chwilę wstrzymane — sprawdzamy coś u nas. Twój dzienny limit pozostaje nietknięty, spróbuj ponownie za moment.",
     "creationOverCapacity": "Osiągnęliśmy dzisiejszy limit nowych gier w całym serwisie, więc nie możemy teraz zacząć kolejnej. Twój własny limit jest nietknięty i będzie czekał jutro.",
     "nameUnavailable": "Ta nazwa została zajęta, gdy przygotowywaliśmy Twoją grę. Nadaj inną i spróbuj ponownie.",

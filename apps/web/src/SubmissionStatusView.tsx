@@ -484,9 +484,7 @@ export function SubmissionStatusView({
         setStatus(null);
         setLoading(false);
         setIsInvalidToken(apiError.status === 400);
-        setErrorMessage(
-          apiError.status === 400 ? t('statusView.invalidToken') : apiError.message || t('errors.generic'),
-        );
+        setErrorMessage(apiError.status === 400 ? t('statusView.invalidToken') : t('errors.generic'));
 
         if (apiError.status !== 400) {
           // Transient failure (network blip, rate limit) — keep trying at the idle cadence.
