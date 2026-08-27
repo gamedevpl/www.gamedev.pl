@@ -31,6 +31,16 @@ export type CatalogSensing = 'tilt' | 'backdrop';
 // Whether the game exposes an EditorKit content editor.
 export type CatalogEditor = 'content';
 
+// The status a catalog entry carries when its game is live.
+
+// SPEC frontmatter is agent-authored, so this stays a bare string.
+export const CATALOG_PUBLISHED_STATUS = 'published';
+
+// One reading of the repo lane's "is this game live?".
+export function isPublishedEntry(entry: { status?: string } | null | undefined): boolean {
+  return entry?.status === CATALOG_PUBLISHED_STATUS;
+}
+
 // One game's catalog entry, derived from its SPEC frontmatter.
 export interface CatalogEntry {
   slug: string;

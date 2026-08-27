@@ -1,6 +1,7 @@
 import { createGitHubClient, type GitHubClient } from './github-client.js';
 import type { CatalogGenreSource } from './recommendations.js';
 import type { RecommendGame } from './recommend.js';
+import { isPublishedEntry } from '@gamedevpl/contract';
 
 /**
  * Published catalog summaries (slug + genre) for the recommender.
@@ -30,9 +31,7 @@ export function createCatalogGenreSource(options: CatalogGenreSourceOptions): Ca
 
   async function load(): Promise<RecommendGame[]> {
     const entries = await client.getCatalog(ref);
-    const games = entries
-      .filter((entry) => entry.status === 'published')
-      .map((entry) => ({ slug: entry.slug, genre: entry.genre }));
+    const games = entries.filter(isPublishedEntry).map((entry) => ({ slug: entry.slug, genre: entry.genre }));
     cache = { games, expiresAt: now() + ttlMs };
     return games;
   }

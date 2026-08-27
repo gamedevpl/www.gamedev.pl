@@ -8,6 +8,7 @@ export { AVATAR_MODES, type AvatarMode } from './avatar-mode.js';
 export { BUILD_EVENT_KINDS, BUILD_STEPS, type BuildEventKind, type BuildStep } from './build-event.js';
 export { BUILDER_UNAVAILABLE_REASONS, type BuilderUnavailableReason } from './builder-availability.js';
 export { BUILDERS, isBuilderKind, type BuilderKind } from './builder-kind.js';
+export { CATALOG_PUBLISHED_STATUS, isPublishedEntry } from './catalog-entry.js';
 export type {
   CatalogEntry,
   CatalogEditor,
