@@ -314,6 +314,7 @@
     "apps/api/src/store/fake-firestore.ts": 328,
     "apps/api/src/store/firestore-util.ts": 163,
     "apps/api/src/store/firestore.ts": 145,
+    "apps/api/src/store/gating-normalize.test.ts": 13,
     "apps/api/src/store/in-memory.ts": 40,
     "apps/api/src/store/records/access-tokens.ts": 204,
     "apps/api/src/store/records/agent-keys.ts": 169,

@@ -443,15 +443,7 @@ export function AdminJobsPanel() {
     for (const list of gameGroups.values()) {
       if (list.some((j) => j.state === 'ready_for_review')) readyGames++;
       if (list.some((j) => j.stall !== null)) stalledCount++;
-      if (
-        list.some(
-          (j) =>
-            j.state === 'building' ||
-            j.state === 'dispatched' ||
-            j.state === 'queued' ||
-            j.state === 'gating',
-        )
-      ) {
+      if (list.some((j) => j.state === 'building' || j.state === 'dispatched' || j.state === 'queued')) {
         inFlightCount++;
       }
     }
@@ -486,13 +478,7 @@ export function AdminJobsPanel() {
           for (const j of stalledJobs) results.push({ job: j, supersededCount: 0 });
         }
       } else if (filter === 'in_flight') {
-        const inFlight = list.filter(
-          (j) =>
-            j.state === 'building' ||
-            j.state === 'dispatched' ||
-            j.state === 'queued' ||
-            j.state === 'gating',
-        );
+        const inFlight = list.filter((j) => j.state === 'building' || j.state === 'dispatched' || j.state === 'queued');
         if (inFlight.length === 0) continue;
         if (latestOnly) {
           results.push({ job: inFlight[0], supersededCount: list.length - 1 });
@@ -624,18 +610,13 @@ export function AdminJobsPanel() {
     [load],
   );
 
-  const selectedEntries = useMemo(
-    () => jobs.filter((j) => selectedIssues.has(j.issueNumber)),
-    [jobs, selectedIssues],
-  );
+  const selectedEntries = useMemo(() => jobs.filter((j) => selectedIssues.has(j.issueNumber)), [jobs, selectedIssues]);
 
   if (state === 'forbidden') return <p className="health-empty">Not found.</p>;
   if (state === 'loading') return <p className="health-empty">Reading the queue…</p>;
   if (state === 'error') return <p className="health-empty">Could not read the queue.</p>;
 
-  const readyJobsToPublish = filteredItems
-    .map(({ job }) => job)
-    .filter((j) => j.state === 'ready_for_review');
+  const readyJobsToPublish = filteredItems.map(({ job }) => job).filter((j) => j.state === 'ready_for_review');
 
   return (
     <section className="admin-jobs">
@@ -694,20 +675,12 @@ export function AdminJobsPanel() {
           />
 
           <label className="admin-jobs-group-toggle" title="Show only the latest valid version per game">
-            <input
-              type="checkbox"
-              checked={latestOnly}
-              onChange={(e) => setLatestOnly(e.target.checked)}
-            />
+            <input type="checkbox" checked={latestOnly} onChange={(e) => setLatestOnly(e.target.checked)} />
             Latest only
           </label>
 
           <label className="admin-jobs-group-toggle">
-            <input
-              type="checkbox"
-              checked={groupByGame}
-              onChange={(e) => setGroupByGame(e.target.checked)}
-            />
+            <input type="checkbox" checked={groupByGame} onChange={(e) => setGroupByGame(e.target.checked)} />
             Group by game
           </label>
         </div>
@@ -721,11 +694,7 @@ export function AdminJobsPanel() {
               : `Batch completed: ${batchProgress.success} succeeded, ${batchProgress.failed} failed.`}
           </div>
           {!batchProgress.running && (
-            <button
-              type="button"
-              className="admin-batch-dismiss"
-              onClick={() => setBatchProgress(null)}
-            >
+            <button type="button" className="admin-batch-dismiss" onClick={() => setBatchProgress(null)}>
               Dismiss
             </button>
           )}
@@ -754,11 +723,7 @@ export function AdminJobsPanel() {
             >
               Cancel selected ({selectedEntries.length})
             </button>
-            <button
-              type="button"
-              className="admin-job-cancel"
-              onClick={() => setSelectedIssues(new Set())}
-            >
+            <button type="button" className="admin-job-cancel" onClick={() => setSelectedIssues(new Set())}>
               Clear selection
             </button>
           </div>
@@ -813,9 +778,7 @@ export function AdminJobsPanel() {
                               <span className="admin-job-group-title">{grp.title}</span>
                               <span className="admin-job-group-badge">{grp.jobs.length} builds</span>
                               {grp.readyCount > 0 && (
-                                <span className="admin-job-group-ready-badge">
-                                  {grp.readyCount} ready to publish
-                                </span>
+                                <span className="admin-job-group-ready-badge">{grp.readyCount} ready to publish</span>
                               )}
                             </button>
                             <div className="admin-job-group-actions">

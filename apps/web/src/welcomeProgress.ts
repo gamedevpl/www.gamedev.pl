@@ -23,9 +23,6 @@ export function welcomeProgressMessage(status: SubmissionStatus | null, translat
   if (status.phase === 'submitted') {
     return translate('statusView.phases.submitted');
   }
-  if (status.phase === 'gating') {
-    return translate('statusView.phases.gating');
-  }
   if (status.phase === 'ready_for_review') {
     return translate('statusView.phases.ready_for_review');
   }

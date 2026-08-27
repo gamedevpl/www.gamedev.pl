@@ -6,7 +6,7 @@ describe('isSweepActive', () => {
   it('keeps reaching a delivery the gate still owes a verdict on', () => {
     // An earlier red gate hid later crashed deliveries from the sweep.
     expect(isSweepActive({ lastNotifiedStatus: 'needs_changes', state: 'submitted' })).toBe(true);
-    expect(isSweepActive({ lastNotifiedStatus: 'needs_changes', state: 'gating' })).toBe(true);
+    expect(isSweepActive({ lastNotifiedStatus: 'needs_changes', state: 'submitted' })).toBe(true);
   });
 
   it('does not let gate_crashed disarm the detector that wrote it', () => {

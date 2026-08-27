@@ -39,10 +39,9 @@ function copyInputFromStatus(status: SubmissionStatus | null): SelfBuildCopyInpu
   };
 }
 
-// The round left the agent's hands: delivered, gating, or finished.
+// The round left the agent's hands: delivered or finished.
 const PAST_CONNECT_PHASES: ReadonlySet<string> = new Set([
   'submitted',
-  'gating',
   'ready_for_review',
   'publishing',
   'published',

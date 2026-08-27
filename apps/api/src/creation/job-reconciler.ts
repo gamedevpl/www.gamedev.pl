@@ -250,7 +250,7 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
   async function reconcileGateVerdict(record: SubmissionRecord, sweep = false): Promise<JobTransition | null> {
     if (!gamesStore || !store || !record.slug) return null;
     const state = record.state ?? 'queued';
-    if (state !== 'building' && state !== 'submitted' && state !== 'gating') return null;
+    if (state !== 'building' && state !== 'submitted') return null;
     try {
       const roundGeneration = record.roundGeneration ?? 1;
       // Retained versions may belong to an older round.
