@@ -21,6 +21,7 @@ import { fetchGamesRepoArchive } from '../platform/games-repo-archive.js';
 import type { GamesStore, SourceFile } from '../delivery/games-store.js';
 import type { GameSnapshotStore } from '../catalog/game-snapshot.js';
 import type { ProposalBase, Store } from '../platform/store.js';
+import { isPublished } from '../platform/publication-state.js';
 
 /** A game's current sources, plus what to pin a proposal built from them to. */
 export interface ProposalBaseSources {
@@ -83,7 +84,7 @@ export async function resolveProposalBase(options: ProposalBaseOptions, slug: st
   const publication = await options.store.getPublication(slug);
 
   if (publication && options.gamesStore) {
-    if (publication.state !== 'published') {
+    if (!isPublished(publication)) {
       throw new ProposalBaseUnavailableError(`${slug} is not published`, 'not_published');
     }
     const manifest = await options.gamesStore.getManifest(slug, publication.currentVersion);

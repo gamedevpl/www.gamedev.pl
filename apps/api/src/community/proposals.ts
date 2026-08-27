@@ -53,6 +53,7 @@ import {
   type Store,
 } from '../platform/store.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
+import { isPublished } from '../platform/publication-state.js';
 
 /**
  * `issueNumber` written onto a proposal's version manifest.
@@ -178,7 +179,7 @@ export async function canProposeTo(
   const publication = await store.getPublication(slug);
   // Repo-lane games have no publication record and are still perfectly proposable; what
   // is refused is a game that is not *live*, whichever lane it is in.
-  if (publication && publication.state !== 'published') {
+  if (publication && !isPublished(publication)) {
     return { ok: false, reason: 'not_published' };
   }
 

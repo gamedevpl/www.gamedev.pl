@@ -6,6 +6,7 @@ import type { GitHubClient } from '../catalog/github-client.js';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { BuilderKind } from './builder.js';
+import { isPublished } from '../platform/publication-state.js';
 
 export interface DraftLifecycleRoutesOptions {
   store?: Store;
@@ -197,7 +198,7 @@ export async function registerDraftLifecycleRoutes(
       }
 
       const publication = await store.getPublication(record.slug);
-      if (!publication || publication.state !== 'published') {
+      if (!isPublished(publication)) {
         return reply.status(409).send({ error: 'not_published' });
       }
 

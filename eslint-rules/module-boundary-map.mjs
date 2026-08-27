@@ -114,6 +114,7 @@ const FILE_BUCKET = {
   'kit-registry': 'platform',
   'kit-window': 'platform',
   'round-base-version': 'platform',
+  'publication-state': 'platform',
   // Job vocabulary and its transition table, read by eight buckets. Its only
   // domain import is type-only, so nothing follows it at runtime.
   'job-state': 'platform',

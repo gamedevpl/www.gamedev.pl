@@ -18,6 +18,7 @@ import {
 import { catalogEntryFromSpec, type CatalogGameEntry } from '../catalog/github-client.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { Store } from '../platform/store.js';
+import { isPublished } from '../platform/publication-state.js';
 
 /**
  * Creator profiles — claim a handle, edit the public page, publish gate data.
@@ -262,7 +263,7 @@ async function listCreatorPublishedGames(
     // archived / disabled publications must not stay on the public profile with a
     // dead Play button — same gate the play endpoint uses.
     const publication = await store.getPublication(slug);
-    if (!publication || publication.state !== 'published') continue;
+    if (!isPublished(publication)) continue;
 
     // Match /api/games/:slug/media/:filename: a repo-backed catalog entry wins
     // whenever both the migrated repo copy and store delivery exist.

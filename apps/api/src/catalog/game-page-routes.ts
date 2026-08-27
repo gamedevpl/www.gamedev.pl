@@ -9,6 +9,7 @@ import {
 import { catalogEntryFromSpec, type CatalogGameEntry, type GitHubClient } from './github-client.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { DELETED_ACCOUNT_UID, type Store } from '../platform/store.js';
+import { isPublished } from '../platform/publication-state.js';
 
 /**
  * The compact public landing page at `/:handle/:slug`.
@@ -108,7 +109,7 @@ export async function registerGamePageRoutes(app: FastifyInstance, options: Game
   async function buildGamePage(slug: string): Promise<GamePageResponse | null> {
     const repoEntry = getRepoPublishedCatalogEntry ? await getRepoPublishedCatalogEntry(slug) : null;
     const publication = await store.getPublication(slug);
-    const storePublished = publication?.state === 'published' ? publication : null;
+    const storePublished = isPublished(publication) ? publication : null;
     if (!repoEntry && !storePublished) return null;
     if (repoEntry && repoEntry.status !== 'published' && !storePublished) return null;
 

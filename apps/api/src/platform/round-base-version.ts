@@ -5,6 +5,7 @@
 // Without the fallback the staging buffer becomes the whole delivery.
 
 import type { Store, SubmissionRecord } from './store.js';
+import { publishedVersion } from '../platform/publication-state.js';
 
 export type BaseVersionStore = Pick<Store, 'getPublication' | 'listSubmissionsByOwner'>;
 
@@ -27,7 +28,7 @@ export async function resolveRoundBaseVersion(
   if (sibling) return sibling;
 
   const publication = await store.getPublication(slug);
-  return publication?.state === 'published' ? publication.currentVersion : null;
+  return publishedVersion(publication);
 }
 
 // Same non-abandoned, non-canceled filter `resolveOwnedRecord` applies.
