@@ -1,7 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-surface/agent-channel.js';
-import { mintAgentToken, mintManagedMcpOpener } from './agent-surface/agent-token.js';
 import { registerMcpServerRoutes } from './agent-surface/mcp-server.js';
 import { registerNotifySweepRoutes } from './notifications/notify-sweep-routes.js';
 import { createCreationGate, createChatGate, type ChatGate, type CreationGate } from './creation/creation-limits.js';
@@ -16,7 +15,8 @@ import { registerAdminGameRoutes } from './catalog/admin-game-routes.js';
 import { createSlugResolver } from './catalog/slug-resolver.js';
 import { registerSelfBuildConnectRoutes } from './agent-surface/self-build-connect-routes.js';
 import { registerDraftLifecycleRoutes } from './creation/draft-lifecycle-routes.js';
-import { buildDispatchIssueBody, createGameCreator, registerCreateGameRoute } from './creation/create-game.js';
+import { createGameCreator, registerCreateGameRoute } from './creation/create-game.js';
+import { createDispatcher } from './creation/dispatch-build.js';
 import { createResumeBuild, type ResumeOutcome } from './creation/resume-build.js';
 import { createJobReconciler } from './creation/job-reconciler.js';
 import { registerHandoffSealRoutes } from './creation/handoff-seal-routes.js';
@@ -60,7 +60,6 @@ import { createLocalGamesClient, resolveLocalGamesDir } from './catalog/local-ga
 import { createMailerFromEnv, type Mailer } from './notifications/mailer.js';
 import { createDefaultContentChecker, type ContentChecker } from './platform/moderation.js';
 import { notifyOnTransition, type EmitDeps } from './notifications/notify.js';
-import { seedOutcomeFor } from './agent-surface/seed-status.js';
 import { isAdminSession } from './platform/admin-session.js';
 import {
   type AgentKeysStore,
@@ -112,13 +111,6 @@ export type SubmissionRoutesStore = IdentityStore &
 // Re-exported for callers (and tests) that knew it here; it now lives with the status
 // parser, which reads the same marker back off the PR to rebuild the revision history.
 export { CREATOR_FEEDBACK_MARKER };
-
-// Rebuilds a dispatch spec from stored spec/qa; null if none.
-export function reconstructDispatchSpec(record: Pick<SubmissionRecord, 'title' | 'spec' | 'qa'>): string | null {
-  if (!record.spec) return null;
-  const concept = [record.spec, ...(record.qa ?? [])].join('\n\n');
-  return buildDispatchIssueBody({ title: record.title, concept });
-}
 
 interface CachedStatus {
   expiresAt: number;
@@ -645,238 +637,6 @@ export async function registerSubmissionRoutes(
     }
   }
 
-  async function dispatchBuild(input: {
-    issueNumber: number;
-    spec: string;
-    locale: string;
-    log: { error: (context: object, message: string) => void };
-    /**
-     * The game this job is for: the directory a new build is told to build into, and —
-     * set together with `feedback` — the existing game an improvement continues rather
-     * than rebuilds, which is what makes `buildPrompt` restore its delivered sources.
-     *
-     * A new build now carries it from the moment it is created, so the brief names a real
-     * path instead of "(the slug named in your first progress report)".
-     */
-    slug?: string;
-    /** What to change about the existing game. Untrusted text: data, never instructions. */
-    feedback?: string;
-    /** Who builds this round. Defaults to the game's last builder, then `platform`. */
-    builder?: BuilderKind;
-  }): Promise<boolean> {
-    // Without the signing secret there is no per-job channel credential to give the
-    // agent, and an agent that cannot report or deliver is worse than one never started.
-    if (!submissionTokenSecret || !store) return false;
-    const existing = await store.getSubmission(input.issueNumber);
-    const builder = input.builder ?? builderOf(existing);
-    const selected = await backendFor(builder);
-    if (!selected) return false;
-    try {
-      await store.setRoundBuilder(input.issueNumber, builder, { resetRoundBudget: false });
-      const roundGeneration = (await store.ensureRoundGeneration(input.issueNumber)) ?? 1;
-      // Before the brief is built, so the agent is told about a draft only when one is
-      // really there — and so the slug it mints is on the record the brief reads from.
-      // A seed is written into `games/<slug>/`, so a job without a slug cannot have one.
-      // Every new submission has one by now; the guard is for the paths that do not.
-      // Ask before paying, and ask how the seed would arrive.
-      const seedDelivery = seedDeliveryFor(selected, builder);
-      // Only these rounds read the job's copy, so only they need one stored.
-      const readsSeedFromJob = seedDelivery === 'channel';
-      const storedSeed = readsSeedFromJob ? existing?.seed : undefined;
-      const willAttemptJobSeed =
-        readsSeedFromJob && !storedSeed && !input.feedback && Boolean(input.slug) && Boolean(gameSeeder);
-      if (storedSeed) {
-        await store.setSubmissionSeed(input.issueNumber, storedSeed);
-      } else if (willAttemptJobSeed) {
-        // Seed generation can take minutes; mark pending so MCP agents recheck get_seed
-        // instead of treating a race as "no seed, scaffold from scratch".
-        await store.setSeedStatus(input.issueNumber, 'pending');
-      } else if (readsSeedFromJob) {
-        await store.setSeedStatus(input.issueNumber, 'unavailable');
-      }
-      const seedAttempt =
-        storedSeed || input.feedback || !input.slug
-          ? undefined
-          : await seedBuild({ ...input, slug: input.slug, delivery: seedDelivery });
-      const draft = seedAttempt?.draft;
-      const seed: SeedFiles | undefined = storedSeed
-        ? storedSeed
-        : draft
-          ? {
-              slug: draft.slug,
-              files: draft.files,
-              references: draft.references,
-              ...(draft.notes ? { notes: draft.notes } : {}),
-            }
-          : undefined;
-      if (readsSeedFromJob && !storedSeed) {
-        if (seed) {
-          // Persist before dispatch so a racing get_brief/get_seed can see the draft even
-          // if the self backend's persistSeed races behind the first tool call.
-          await store.setSubmissionSeed(input.issueNumber, seed);
-        } else if (willAttemptJobSeed) {
-          // Downgrade pending→unavailable only when generation was attempted and failed.
-          // The !willAttemptJobSeed path already wrote unavailable above.
-          await store.setSeedStatus(input.issueNumber, 'unavailable');
-        }
-      }
-      const current = await store.getSubmission(input.issueNumber);
-      if (
-        !current ||
-        !isActiveBuildRound(current) ||
-        builderOf(current) !== builder ||
-        current.roundGeneration !== roundGeneration ||
-        current.builderHandoff
-      ) {
-        input.log.error({ issueNumber: input.issueNumber }, 'discarding dispatch after the round changed');
-        return false;
-      }
-      const result = await selected.dispatch({
-        issueNumber: input.issueNumber,
-        roundGeneration,
-        ...(input.slug ? { slug: input.slug } : {}),
-        spec: input.spec,
-        locale: input.locale,
-        channelToken: mintAgentToken(input.issueNumber, submissionTokenSecret, {
-          roundGeneration,
-          now: now(),
-        }),
-        mcpOpenerToken: mintManagedMcpOpener(input.issueNumber, submissionTokenSecret, {
-          roundGeneration,
-          now: now(),
-        }),
-        apiBaseUrl: notifyAppBaseUrl,
-        ...(input.slug ? { slug: input.slug } : {}),
-        ...(input.feedback ? { feedback: input.feedback } : {}),
-        ...(seed ? { seed } : {}),
-      });
-      // Written once, here: only this scope knows both generation and placement.
-      // After dispatch, so no bookkeeping delays the agent starting.
-      // Failures too: recording only successes is what hid the 2026-08 outage.
-      const seedOutcome = seedOutcomeFor({
-        attempt: seedAttempt,
-        placed: readsSeedFromJob ? Boolean(seed) : true,
-        at: new Date(now()).toISOString(),
-      });
-      if (seedOutcome) {
-        try {
-          await store.recordSeedOutcome(input.issueNumber, seedOutcome);
-        } catch (error) {
-          input.log.error({ err: error, issueNumber: input.issueNumber }, 'could not record the seed outcome');
-        }
-      }
-      await store.recordDispatch(input.issueNumber, {
-        backend: selected.name,
-        ref: result.ref,
-        workspace: result.workspace,
-        credentialRef: result.credentialRef,
-      });
-      // The round-0 preview: the creator sees a playable rough draft minutes after
-      // submitting instead of waiting out the agent's first push. Off the response path
-      // (nobody's submit should wait on an esbuild pass and a handful of repo reads),
-      // gated on the draft actually bundling, and assembled from the draft's own files
-      // over the published engine so what is shown is exactly what the agent starts
-      // from. Every failure inside is its own problem: the build is already dispatched
-      // and owes this nothing.
-      if (draft?.compiles) {
-        void publishSeedPreview({
-          issueNumber: input.issueNumber,
-          slug: draft.slug,
-          files: draft.files,
-          locale: input.locale,
-        }).catch((error: unknown) => {
-          input.log.error({ err: error, issueNumber: input.issueNumber }, 'seed preview failed');
-        });
-      }
-      await recordSessionCost(input.issueNumber, result.ref, selected, input.log);
-      // Dispatch is fire-and-forget from create — a self agent can deliver (→ building /
-      // submitted) before this line runs. recordJobTransition does not refuse walk
-      // regressions, so an unconditional `dispatched` write would yank a submitted job
-      // back to agent-active and re-open the CP-1 double-close. Only advance when the
-      // walk still allows it; refs/cost above are already durable either way.
-      const latest = await store.getSubmission(input.issueNumber);
-      const from = latest?.state ?? 'queued';
-      if (canTransition(from, 'dispatched')) {
-        await store.recordJobTransition(input.issueNumber, {
-          to: 'dispatched',
-          at: new Date(now()).toISOString(),
-          by: 'system',
-          reason: `dispatched_to_${selected.name}`,
-        });
-      }
-      // else: agent already advanced past dispatch (e.g. delivered while we were still
-      // opening the round). Refs/cost above are durable; do not regress state.
-      return true;
-    } catch (error) {
-      // A failed dispatch leaves the job `queued`, which is exactly what the operator
-      // queue reports as `not_dispatched` once it has waited long enough — so this
-      // surfaces as a visible stalled job rather than a silently dead one.
-      input.log.error({ err: error, issueNumber: input.issueNumber }, 'agent dispatch failed');
-      return false;
-    }
-  }
-
-  // The reaper's one retry after dispatchBuild died before a ref.
-  async function redispatchQueuedJob(input: {
-    issueNumber: number;
-    log: { error: (context: object, message: string) => void };
-  }): Promise<{ outcome: 'retried' | 'exhausted' | 'skipped'; reason?: string }> {
-    if (!store) return { outcome: 'skipped', reason: 'store_unavailable' };
-    const record = await store.getSubmission(input.issueNumber);
-    if (!record) return { outcome: 'skipped', reason: 'not_found' };
-    if (record.state !== 'queued' || (record.dispatch?.refs?.length ?? 0) > 0) {
-      return { outcome: 'skipped', reason: 'not_stuck' };
-    }
-
-    const fail = async (reason: string) => {
-      if (canTransition('queued', 'failed')) {
-        await store.recordJobTransition(input.issueNumber, {
-          to: 'failed',
-          at: new Date(now()).toISOString(),
-          by: 'system',
-          reason,
-        });
-      }
-    };
-
-    if (record.dispatchReaperAttemptedAt) {
-      await fail('dispatch_reaper_exhausted');
-      return { outcome: 'exhausted' };
-    }
-
-    const spec = reconstructDispatchSpec(record);
-    if (!spec) {
-      await fail('dispatch_reaper_no_spec');
-      return { outcome: 'exhausted', reason: 'no_spec' };
-    }
-
-    const claimed = await store.claimDispatchReaperAttempt(input.issueNumber, new Date(now()).toISOString());
-    if (!claimed) return { outcome: 'skipped', reason: 'already_claimed' };
-
-    await dispatchBuild({
-      issueNumber: input.issueNumber,
-      ...(record.slug ? { slug: record.slug } : {}),
-      spec,
-      locale: record.locale ?? 'en',
-      builder: builderOf(record),
-      log: input.log,
-    });
-    return { outcome: 'retried' };
-  }
-
-  /**
-   * Starts another round on an existing job.
-   *
-   * The backend decides what "another round" costs: Copilot needs an open pull request
-   * on the branch before it will resume one, which its adapter arranges on demand. That
-   * detail stays inside the adapter — here it is simply "continue this job".
-   *
-   * Returns what happened rather than only logging it. A round that never started is
-   * indistinguishable, from the creator's side, from one that started and is thinking —
-   * the thread shows their message either way and the status does not move. Callers get
-   * the outcome so they can say so; `no_capacity` is separated out because it is not a
-   * fault in the job and it will not clear by trying again in a minute.
-   */
   const resumeBuild = createResumeBuild({
     store,
     submissionTokenSecret,
@@ -1220,6 +980,20 @@ export async function registerSubmissionRoutes(
     publishedRef,
   });
   const { seedDeliveryFor, seedBuild, regenerateSeed, publishSeedPreview } = seedPipeline;
+
+  const { dispatchBuild, redispatchQueuedJob } = createDispatcher({
+    store,
+    submissionTokenSecret,
+    gameSeeder,
+    now,
+    notifyAppBaseUrl,
+    backendFor,
+    builderOf,
+    recordSessionCost,
+    seedDeliveryFor,
+    seedBuild,
+    publishSeedPreview,
+  });
 
   const rateLimitWindowMs = 60 * 60 * 1000;
   const maxSubmissionsPerWindow = 5;

@@ -69,6 +69,13 @@ export function createResumeBuild(deps: ResumeBuildDeps) {
     seedFromLatestDelivery,
   } = deps;
 
+  // Starts another round on an existing job.
+
+  // The backend decides what another round costs; the adapter arranges it.
+
+  // Returns what happened rather than only logging it.
+
+  // A round that never started looks like one that is thinking.
   async function resumeBuild(input: {
     issueNumber: number;
     feedback: string;

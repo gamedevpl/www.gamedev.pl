@@ -134,6 +134,7 @@ const FILE_BUCKET = {
   'improve-routes': 'creation',
   'create-game': 'creation',
   'job-reconciler': 'creation',
+  'dispatch-build': 'creation',
   'resume-build': 'creation',
   'seed-pipeline': 'creation',
   'creator-self-routes': 'creation',
