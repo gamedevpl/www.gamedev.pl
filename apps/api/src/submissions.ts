@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-surface/agent-channel.js';
-import { registerMcpServerRoutes } from './agent-surface/mcp-server.js';
+import type { AgentChannelOptions } from './agent-surface/agent-channel.js';
+import type { McpServerOptions } from './agent-surface/mcp-server.js';
 import { registerNotifySweepRoutes } from './notifications/notify-sweep-routes.js';
 import { createCreationGate, createChatGate, type ChatGate, type CreationGate } from './creation/creation-limits.js';
 import {
@@ -120,25 +120,13 @@ interface CachedStatus {
 export interface SubmissionRoutesOptions {
   githubToken?: string;
   gamesRepo?: string;
-  /**
-   * A game's published sources plus the base to pin a proposal to — the MCP proposal
-   * round's one read. Injected from `buildApp`, which is where the snapshot reader and
-   * games-repo credentials already live.
-   */
-  resolveProposalBase?: (slug: string) => Promise<{
-    base: import('./platform/store.js').ProposalBase;
-    files: import('./delivery/games-store.js').SourceFile[];
-  } | null>;
   submissionTokenSecret?: string;
-  platformConnectorSecret?: string;
   /**
    * Localizes an agent-relayed change request on the write that stores it. Used by the
    * two relay paths and by nothing that serves a read — see the note on the instance.
    * Defaults to createTranslatorFromEnv(); tests inject a stub.
    */
   translator?: Translator;
-  /** Forwarded to the MCP routes so the endpoint can say the product is closed. Copy only. */
-  privateBeta?: boolean;
   githubClient?: GitHubClient;
   fetchImpl?: typeof fetch;
   now?: () => number;
@@ -254,7 +242,37 @@ function checkUserAccess(request: FastifyRequest, reply: FastifyReply): boolean 
 }
 
 /** What `registerSubmissionRoutes` hands back for other route modules to build on. */
+// What the two agent surfaces need that only this registrar can build.
+
+// buildApp mounts both and supplies the rest — store, buckets, gate trigger, flags.
+
+export interface AgentSurfaceSeams {
+  channel: Pick<
+    AgentChannelOptions,
+    | 'agentTokenSecret'
+    | 'now'
+    | 'sourceDelivery'
+    | 'onEvent'
+    | 'onBuilderHandoffAcknowledged'
+    | 'onSourcesStaged'
+    | 'onRegenerateSeed'
+  >;
+  mcp: Pick<
+    McpServerOptions,
+    | 'agentTokenSecret'
+    | 'now'
+    | 'startImprovementRound'
+    | 'continueDraftRound'
+    | 'createGame'
+    | 'contentChecker'
+    | 'dailyImprovementQuota'
+    | 'dailyFeedbackQuota'
+  >;
+}
+
 export interface SubmissionRoutesHandle {
+  // The agent channel and MCP mounts' half of the wiring; buildApp mounts both.
+  agentSurface: AgentSurfaceSeams;
   /** The resolved games-repo client, or null when this deployment cannot reach one. */
   githubClient: GitHubClient | null;
   /** Whether the resolved registry has a platform backend. */
@@ -1628,53 +1646,37 @@ export async function registerSubmissionRoutes(
         })
       : undefined;
 
-  // The agent's side of the wire. Registered here rather than in app.ts so it shares
-  // the store, the token secret, and the caches it has to invalidate.
-  await registerAgentChannelRoutes(app, {
-    ...options.agentChannel,
-    ...(sourceDelivery ? { sourceDelivery } : {}),
-    store,
-    agentTokenSecret: submissionTokenSecret,
-    now,
-    onEvent: (issueNumber) => {
-      buildStatus.invalidateEvents(issueNumber);
-      // Heartbeat / ended / phase move with channel writes; do not keep serving a
-      // minute-old stall next to fresh progress (submit auto-end + continue loop).
-      invalidateStatusCache(issueNumber);
+  const agentSurface: AgentSurfaceSeams = {
+    channel: {
+      ...(sourceDelivery ? { sourceDelivery } : {}),
+      agentTokenSecret: submissionTokenSecret,
+      now,
+      onEvent: (issueNumber) => {
+        buildStatus.invalidateEvents(issueNumber);
+        // Heartbeat / ended / phase move with channel writes; do not keep serving a
+        // minute-old stall next to fresh progress (submit auto-end + continue loop).
+        invalidateStatusCache(issueNumber);
+      },
+      onBuilderHandoffAcknowledged: (input) => acknowledgeBuilderHandoff(input),
+      ...(stagedPreviews
+        ? { onSourcesStaged: ({ issueNumber }: { issueNumber: number }) => stagedPreviews.schedule(issueNumber) }
+        : {}),
+      onRegenerateSeed: regenerateSeed,
     },
-    onBuilderHandoffAcknowledged: (input) => acknowledgeBuilderHandoff(input),
-    ...(stagedPreviews
-      ? { onSourcesStaged: ({ issueNumber }: { issueNumber: number }) => stagedPreviews.schedule(issueNumber) }
-      : {}),
-    onRegenerateSeed: regenerateSeed,
-  });
-
-  // Remote MCP (BY-05): streamable-HTTP tools wrapping the channel above. Same secret
-  // and store — sessionKey is derived from the round key, never a new creator credential.
-  await registerMcpServerRoutes(app, {
-    store,
-    agentTokenSecret: submissionTokenSecret,
-    platformConnectorSecret: options.platformConnectorSecret,
-    now,
-    privateBeta: options.privateBeta,
-    // MCP Apps views (SEP-1865) read MCP_UI directly — off in production until the
-    // Phase 0 host spike lands. No behaviour changes for clients without the extension.
-    gamesStore: options.agentChannel?.gamesStore,
-    objectStore: options.agentChannel?.objectStore,
-    startImprovementRound,
-    continueDraftRound,
-    createGame,
-    contentChecker,
-    dailyImprovementQuota,
-    dailyFeedbackQuota,
-    // Proposal rounds: an agent contributing to a game its creator does not own. Both
-    // seams come from the caller so this module keeps no games-repo or snapshot
-    // dependency; absent means the tools answer "not configured" rather than half-working.
-    resolveProposalBase: options.resolveProposalBase,
-    onSourcesDelivered: options.agentChannel?.onSourcesDelivered,
-  });
+    mcp: {
+      agentTokenSecret: submissionTokenSecret,
+      now,
+      startImprovementRound,
+      continueDraftRound,
+      createGame,
+      contentChecker,
+      dailyImprovementQuota,
+      dailyFeedbackQuota,
+    },
+  };
 
   return {
+    agentSurface,
     githubClient,
     hasPlatformBackend: agentBackends.platformByVendor.size > 0,
     configuredVendors: [...agentBackends.platformByVendor.keys()],

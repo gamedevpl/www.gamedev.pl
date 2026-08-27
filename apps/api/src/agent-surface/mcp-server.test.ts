@@ -189,11 +189,11 @@ async function createApp(
   return await buildApp({
     store,
     sessionSecret: 'dev-session-secret-change-me',
+    ...(platformConnectorSecret ? { platformConnectorSecret } : {}),
     submissionRoutes: {
       githubClient: stubGitHub(),
       githubToken: 'gh-token',
       submissionTokenSecret: secret,
-      ...(platformConnectorSecret ? { platformConnectorSecret } : {}),
       agentChannel: {
         ...(gamesStore ? { gamesStore } : {}),
         ...(objectStore ? { objectStore } : {}),
