@@ -35,6 +35,19 @@ async function appWithThrowingRoute(logLines?: string[]) {
     throw error;
   });
 
+  // GitHubRequestError, MailerError and friends carry their code in `status`.
+  app.get('/api/test-throw-status-field', async () => {
+    const error = new Error(LEAK) as Error & { status?: number };
+    error.status = 404;
+    throw error;
+  });
+
+  app.get('/api/test-throw-status-field-5xx', async () => {
+    const error = new Error(LEAK) as Error & { status?: number };
+    error.status = 503;
+    throw error;
+  });
+
   app.get('/api/test-throw-redirect', async () => {
     const error = new Error(LEAK) as Error & { statusCode?: number };
     error.statusCode = 302;
@@ -74,6 +87,27 @@ describe('app-wide error handler', () => {
     const response = await app.inject({ method: 'GET', url: '/api/test-throw-redirect' });
 
     // Only a real 4xx is an answer; anything else is failure.
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toEqual({ error: 'internal' });
+    expect(response.body).not.toContain('gamedev-private-bucket');
+
+    await app.close();
+  });
+
+  it('passes through a 4xx an error carries in status rather than statusCode', async () => {
+    const app = await appWithThrowingRoute();
+    const response = await app.inject({ method: 'GET', url: '/api/test-throw-status-field' });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toMatchObject({ statusCode: 404, error: 'Not Found' });
+
+    await app.close();
+  });
+
+  it('flattens a 5xx an error carries in status', async () => {
+    const app = await appWithThrowingRoute();
+    const response = await app.inject({ method: 'GET', url: '/api/test-throw-status-field-5xx' });
+
     expect(response.statusCode).toBe(500);
     expect(response.json()).toEqual({ error: 'internal' });
     expect(response.body).not.toContain('gamedev-private-bucket');

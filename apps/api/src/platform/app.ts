@@ -223,7 +223,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   // Fastify's default 500 echoes err.message; 4xx replies pass through.
   app.setErrorHandler((error: FastifyError, request, reply) => {
-    const statusCode = error.statusCode ?? 500;
+    // Fastify reads both; statusCode wins when an error carries each.
+    const statusCode = error.statusCode ?? (error as { status?: number }).status ?? 500;
     if (statusCode >= 400 && statusCode < 500) {
       void reply.send(error);
       return;
