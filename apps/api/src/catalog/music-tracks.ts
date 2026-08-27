@@ -88,8 +88,8 @@ export function parseGameMusicTracks(source: string, label = 'game music.json'):
     ) {
       throw new Error(`${label}: ${name}.gain must be between 0 and 1`);
     }
-    if (!Array.isArray(track.channels) || track.channels.length === 0 || track.channels.length > 4) {
-      throw new Error(`${label}: ${name} needs 1–4 channels`);
+    if (!Array.isArray(track.channels) || track.channels.length === 0 || track.channels.length > 8) {
+      throw new Error(`${label}: ${name} needs 1–8 channels`);
     }
     for (const [channelIndex, channelRaw] of track.channels.entries()) {
       if (!channelRaw || typeof channelRaw !== 'object' || Array.isArray(channelRaw)) {
