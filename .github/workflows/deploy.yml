@@ -71,6 +71,83 @@ jobs:
             --project "$PROJECT_ID"
 
       - name: Deploy candidate revision to Cloud Run
+        # Repo variables arrive as step env rather than being interpolated into the script.
+        # GitHub compiles a run: body containing ${{ }} as one expression, and this one blew
+        # past the 21,000-character ceiling (2026-08-26: every deploy since #1044 failed to
+        # start, "Invalid workflow file ... Exceeded max expression length 21000"). Reading the
+        # values from env keeps the body a literal string, so it cannot hit that limit again —
+        # and a variable value can no longer be spliced into the script as shell.
+        env:
+          ADMIN_UIDS: ${{ vars.ADMIN_UIDS }}
+          APPLE_CLIENT_IDS: ${{ vars.APPLE_CLIENT_IDS }}
+          BETA_ALLOWED_EMAILS: ${{ vars.BETA_ALLOWED_EMAILS }}
+          BETA_ALLOWED_UIDS: ${{ vars.BETA_ALLOWED_UIDS }}
+          CODE_LANE: ${{ vars.CODE_LANE }}
+          CODE_SURFACE: ${{ vars.CODE_SURFACE }}
+          DIGEST_SWEEP_AUDIENCE: ${{ vars.DIGEST_SWEEP_AUDIENCE }}
+          DISPATCH_REAPER_AUDIENCE: ${{ vars.DISPATCH_REAPER_AUDIENCE }}
+          EDITORKIT_V2: ${{ vars.EDITORKIT_V2 }}
+          EDITOR_ASSIST: ${{ vars.EDITOR_ASSIST }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ vars.GOOGLE_OAUTH_CLIENT_ID }}
+          HEALTH_SWEEP_AUDIENCE: ${{ vars.HEALTH_SWEEP_AUDIENCE }}
+          HEALTH_SWEEP_BATCH: ${{ vars.HEALTH_SWEEP_BATCH }}
+          KNOWLEDGE_SEARCH_COLLECTION: ${{ vars.KNOWLEDGE_SEARCH_COLLECTION }}
+          KNOWLEDGE_SEARCH_ENGINE_ID: ${{ vars.KNOWLEDGE_SEARCH_ENGINE_ID }}
+          KNOWLEDGE_SEARCH_LOCATION: ${{ vars.KNOWLEDGE_SEARCH_LOCATION }}
+          KNOWLEDGE_SEARCH_PROJECT_ID: ${{ vars.KNOWLEDGE_SEARCH_PROJECT_ID }}
+          KNOWLEDGE_SEARCH_QUOTA_PROJECT: ${{ vars.KNOWLEDGE_SEARCH_QUOTA_PROJECT }}
+          KNOWLEDGE_SEARCH_SERVING_CONFIG: ${{ vars.KNOWLEDGE_SEARCH_SERVING_CONFIG }}
+          MAIL_FROM: ${{ vars.MAIL_FROM }}
+          MANAGED_AGENT_COPILOT_MAX_CREDITS: ${{ vars.MANAGED_AGENT_COPILOT_MAX_CREDITS }}
+          MANAGED_AGENT_COPILOT_MCP_BASE_REF: ${{ vars.MANAGED_AGENT_COPILOT_MCP_BASE_REF }}
+          MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT: ${{ vars.MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT }}
+          MANAGED_AGENT_COPILOT_MCP_REPO: ${{ vars.MANAGED_AGENT_COPILOT_MCP_REPO }}
+          MANAGED_AGENT_DELIVERY_MODE: ${{ vars.MANAGED_AGENT_DELIVERY_MODE }}
+          MANAGED_AGENT_ENVIRONMENT_ID: ${{ vars.MANAGED_AGENT_ENVIRONMENT_ID }}
+          MANAGED_AGENT_GEMINI_MODEL: ${{ vars.MANAGED_AGENT_GEMINI_MODEL }}
+          MANAGED_AGENT_ID: ${{ vars.MANAGED_AGENT_ID }}
+          MANAGED_AGENT_MAX_LIST_COST_CENTS: ${{ vars.MANAGED_AGENT_MAX_LIST_COST_CENTS }}
+          MANAGED_AGENT_MAX_SECONDS: ${{ vars.MANAGED_AGENT_MAX_SECONDS }}
+          MANAGED_AGENT_MAX_TOTAL_TOKENS: ${{ vars.MANAGED_AGENT_MAX_TOTAL_TOKENS }}
+          MANAGED_AGENT_MCP_URL: ${{ vars.MANAGED_AGENT_MCP_URL }}
+          MANAGED_AGENT_MODEL: ${{ vars.MANAGED_AGENT_MODEL }}
+          MANAGED_AGENT_OPENAI_MODEL: ${{ vars.MANAGED_AGENT_OPENAI_MODEL }}
+          MANAGED_AGENT_VAULT_IDS: ${{ vars.MANAGED_AGENT_VAULT_IDS }}
+          MANAGED_AGENT_VENDOR: ${{ vars.MANAGED_AGENT_VENDOR }}
+          MCP_UI: ${{ vars.MCP_UI }}
+          MP_RELAY_URL: ${{ vars.MP_RELAY_URL }}
+          NOTIFY_SWEEP_AUDIENCE: ${{ vars.NOTIFY_SWEEP_AUDIENCE }}
+          OPENAI_APPS_CHALLENGE_TOKEN: ${{ vars.OPENAI_APPS_CHALLENGE_TOKEN }}
+          PUBLIC_PLAY_SLUGS: ${{ vars.PUBLIC_PLAY_SLUGS }}
+          REMIX_DEBUG: ${{ vars.REMIX_DEBUG }}
+          REVIEWER_UIDS: ${{ vars.REVIEWER_UIDS }}
+          SCORECARD_SWEEP_AUDIENCE: ${{ vars.SCORECARD_SWEEP_AUDIENCE }}
+          SEED_ANTHROPIC_MAX_OUTPUT_TOKENS: ${{ vars.SEED_ANTHROPIC_MAX_OUTPUT_TOKENS }}
+          SEED_ANTHROPIC_MODEL: ${{ vars.SEED_ANTHROPIC_MODEL }}
+          SEED_ANTHROPIC_PICK_MAX_OUTPUT_TOKENS: ${{ vars.SEED_ANTHROPIC_PICK_MAX_OUTPUT_TOKENS }}
+          SEED_MAX_OUTPUT_TOKENS: ${{ vars.SEED_MAX_OUTPUT_TOKENS }}
+          SEED_META_BASE_URL: ${{ vars.SEED_META_BASE_URL }}
+          SEED_META_MAX_OUTPUT_TOKENS: ${{ vars.SEED_META_MAX_OUTPUT_TOKENS }}
+          SEED_META_MODEL: ${{ vars.SEED_META_MODEL }}
+          SEED_META_PICK_MAX_OUTPUT_TOKENS: ${{ vars.SEED_META_PICK_MAX_OUTPUT_TOKENS }}
+          SEED_MODEL: ${{ vars.SEED_MODEL }}
+          SEED_OPENAI_MAX_OUTPUT_TOKENS: ${{ vars.SEED_OPENAI_MAX_OUTPUT_TOKENS }}
+          SEED_OPENAI_MODEL: ${{ vars.SEED_OPENAI_MODEL }}
+          SEED_OPENAI_PICK_MAX_OUTPUT_TOKENS: ${{ vars.SEED_OPENAI_PICK_MAX_OUTPUT_TOKENS }}
+          SEED_OPENROUTER_BASE_URL: ${{ vars.SEED_OPENROUTER_BASE_URL }}
+          SEED_OPENROUTER_MAX_OUTPUT_TOKENS: ${{ vars.SEED_OPENROUTER_MAX_OUTPUT_TOKENS }}
+          SEED_OPENROUTER_MODEL: ${{ vars.SEED_OPENROUTER_MODEL }}
+          SEED_OPENROUTER_PICK_MAX_OUTPUT_TOKENS: ${{ vars.SEED_OPENROUTER_PICK_MAX_OUTPUT_TOKENS }}
+          SEED_PICK_MAX_OUTPUT_TOKENS: ${{ vars.SEED_PICK_MAX_OUTPUT_TOKENS }}
+          SEED_PROVIDER: ${{ vars.SEED_PROVIDER }}
+          SUGGESTION_SWEEP_AUDIENCE: ${{ vars.SUGGESTION_SWEEP_AUDIENCE }}
+          TAB_COMPLETE: ${{ vars.TAB_COMPLETE }}
+          TRANSLATE_BUILD_LOG: ${{ vars.TRANSLATE_BUILD_LOG }}
+          VAPID_PUBLIC_KEY: ${{ vars.VAPID_PUBLIC_KEY }}
+          VAPID_SUBJECT: ${{ vars.VAPID_SUBJECT }}
+          VERTEX_MODEL: ${{ vars.VERTEX_MODEL }}
+          VERTEX_REGION: ${{ vars.VERTEX_REGION }}
+          ZONE_HOST_URL: ${{ vars.ZONE_HOST_URL }}
         run: |
           SECRET_MAPPINGS=()
           if gcloud secrets describe github-token --project "$PROJECT_ID" >/dev/null 2>&1 \
@@ -151,10 +228,10 @@ jobs:
           # Safety guard: in private-beta mode, deploying with an empty allowlist
           # would produce a site that nobody can sign into. Fail fast here rather
           # than silently serving a broken login flow.
-          BETA_ALLOWED_UIDS_VAL="${{ vars.BETA_ALLOWED_UIDS }}"
-          BETA_ALLOWED_EMAILS_VAL="${{ vars.BETA_ALLOWED_EMAILS }}"
-          PUBLIC_PLAY_SLUGS_VAL="${{ vars.PUBLIC_PLAY_SLUGS }}"
-           EDITORKIT_V2_VAL="${{ vars.EDITORKIT_V2 }}"
+          BETA_ALLOWED_UIDS_VAL="${BETA_ALLOWED_UIDS}"
+          BETA_ALLOWED_EMAILS_VAL="${BETA_ALLOWED_EMAILS}"
+          PUBLIC_PLAY_SLUGS_VAL="${PUBLIC_PLAY_SLUGS}"
+           EDITORKIT_V2_VAL="${EDITORKIT_V2}"
            EDITORKIT_V2_VAL="${EDITORKIT_V2_VAL:-true}"
           if [ "true" = "true" ] && [ -z "$BETA_ALLOWED_UIDS_VAL" ] && [ -z "$BETA_ALLOWED_EMAILS_VAL" ]; then
             echo "Error: PRIVATE_BETA=true but both BETA_ALLOWED_UIDS and BETA_ALLOWED_EMAILS are empty. Set at least one allowlist variable."
@@ -190,26 +267,9 @@ jobs:
           PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
           SWEEP_SA="notify-sweep@${PROJECT_ID}.iam.gserviceaccount.com"
           ACCOUNT_DELETION_SWEEP_URL="https://${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app/api/internal/account-deletion-sweep"
-          ENV_VARS="^|^GAMES_REPO=${GAMES_REPO}|GAMES_SNAPSHOT_BUCKET=${GAMES_SNAPSHOT_BUCKET}|GAMES_STORE_BUCKET=${GAMES_STORE_BUCKET}|GATE_BUILD_PROJECT=${{ env.PROJECT_ID }}|GOOGLE_OAUTH_CLIENT_ID=${{ vars.GOOGLE_OAUTH_CLIENT_ID }}|APPLE_CLIENT_IDS=${{ vars.APPLE_CLIENT_IDS }}|WEB_ORIGIN=https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl|CANONICAL_HOST=www.gamedev.pl|MCP_AUTHORIZATION_SERVERS=https://www.gamedev.pl|PRIVATE_BETA=true|PUBLIC_PLAY_SLUGS=${PUBLIC_PLAY_SLUGS_VAL}|EDITORKIT_V2=${EDITORKIT_V2_VAL}|BETA_ALLOWED_UIDS=${{ vars.BETA_ALLOWED_UIDS }}|BETA_ALLOWED_EMAILS=${{ vars.BETA_ALLOWED_EMAILS }}|ADMIN_UIDS=${{ vars.ADMIN_UIDS }}|REVIEWER_UIDS=${{ vars.REVIEWER_UIDS }}|NOTIFY_SWEEP_AUDIENCE=${{ vars.NOTIFY_SWEEP_AUDIENCE }}|NOTIFY_SWEEP_SA=${SWEEP_SA}|SCORECARD_SWEEP_AUDIENCE=${{ vars.SCORECARD_SWEEP_AUDIENCE }}|DIGEST_SWEEP_AUDIENCE=${{ vars.DIGEST_SWEEP_AUDIENCE }}|SUGGESTION_SWEEP_AUDIENCE=${{ vars.SUGGESTION_SWEEP_AUDIENCE }}|HEALTH_SWEEP_AUDIENCE=${{ vars.HEALTH_SWEEP_AUDIENCE }}|DISPATCH_REAPER_AUDIENCE=${{ vars.DISPATCH_REAPER_AUDIENCE }}|ACCOUNT_DELETION_SWEEP_AUDIENCE=${ACCOUNT_DELETION_SWEEP_URL}|VAPID_PUBLIC_KEY=${{ vars.VAPID_PUBLIC_KEY }}|VAPID_SUBJECT=${{ vars.VAPID_SUBJECT }}|OPENAI_APPS_CHALLENGE_TOKEN=${{ vars.OPENAI_APPS_CHALLENGE_TOKEN }}"
+          ENV_VARS="^|^GAMES_REPO=${GAMES_REPO}|GAMES_SNAPSHOT_BUCKET=${GAMES_SNAPSHOT_BUCKET}|GAMES_STORE_BUCKET=${GAMES_STORE_BUCKET}|GATE_BUILD_PROJECT=${PROJECT_ID}|GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}|APPLE_CLIENT_IDS=${APPLE_CLIENT_IDS}|WEB_ORIGIN=https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl|CANONICAL_HOST=www.gamedev.pl|MCP_AUTHORIZATION_SERVERS=https://www.gamedev.pl|PRIVATE_BETA=true|PUBLIC_PLAY_SLUGS=${PUBLIC_PLAY_SLUGS_VAL}|EDITORKIT_V2=${EDITORKIT_V2_VAL}|BETA_ALLOWED_UIDS=${BETA_ALLOWED_UIDS}|BETA_ALLOWED_EMAILS=${BETA_ALLOWED_EMAILS}|ADMIN_UIDS=${ADMIN_UIDS}|REVIEWER_UIDS=${REVIEWER_UIDS}|NOTIFY_SWEEP_AUDIENCE=${NOTIFY_SWEEP_AUDIENCE}|NOTIFY_SWEEP_SA=${SWEEP_SA}|SCORECARD_SWEEP_AUDIENCE=${SCORECARD_SWEEP_AUDIENCE}|DIGEST_SWEEP_AUDIENCE=${DIGEST_SWEEP_AUDIENCE}|SUGGESTION_SWEEP_AUDIENCE=${SUGGESTION_SWEEP_AUDIENCE}|HEALTH_SWEEP_AUDIENCE=${HEALTH_SWEEP_AUDIENCE}|DISPATCH_REAPER_AUDIENCE=${DISPATCH_REAPER_AUDIENCE}|ACCOUNT_DELETION_SWEEP_AUDIENCE=${ACCOUNT_DELETION_SWEEP_URL}|VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}|VAPID_SUBJECT=${VAPID_SUBJECT}|OPENAI_APPS_CHALLENGE_TOKEN=${OPENAI_APPS_CHALLENGE_TOKEN}"
           for MANAGED_VAR in MANAGED_AGENT_VENDOR MANAGED_AGENT_MODEL MANAGED_AGENT_GEMINI_MODEL MANAGED_AGENT_OPENAI_MODEL MANAGED_AGENT_ID MANAGED_AGENT_ENVIRONMENT_ID MANAGED_AGENT_MAX_SECONDS MANAGED_AGENT_MAX_LIST_COST_CENTS MANAGED_AGENT_COPILOT_MAX_CREDITS MANAGED_AGENT_MAX_TOTAL_TOKENS MANAGED_AGENT_VAULT_IDS MANAGED_AGENT_MCP_URL MANAGED_AGENT_DELIVERY_MODE MANAGED_AGENT_COPILOT_MCP_REPO MANAGED_AGENT_COPILOT_MCP_BASE_REF MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT; do
-            case "$MANAGED_VAR" in
-              MANAGED_AGENT_VENDOR) MANAGED_VAL="${{ vars.MANAGED_AGENT_VENDOR }}" ;;
-              MANAGED_AGENT_MODEL) MANAGED_VAL="${{ vars.MANAGED_AGENT_MODEL }}" ;;
-              MANAGED_AGENT_GEMINI_MODEL) MANAGED_VAL="${{ vars.MANAGED_AGENT_GEMINI_MODEL }}" ;;
-              MANAGED_AGENT_OPENAI_MODEL) MANAGED_VAL="${{ vars.MANAGED_AGENT_OPENAI_MODEL }}" ;;
-              MANAGED_AGENT_ID) MANAGED_VAL="${{ vars.MANAGED_AGENT_ID }}" ;;
-              MANAGED_AGENT_ENVIRONMENT_ID) MANAGED_VAL="${{ vars.MANAGED_AGENT_ENVIRONMENT_ID }}" ;;
-              MANAGED_AGENT_MAX_SECONDS) MANAGED_VAL="${{ vars.MANAGED_AGENT_MAX_SECONDS }}" ;;
-              MANAGED_AGENT_MAX_LIST_COST_CENTS) MANAGED_VAL="${{ vars.MANAGED_AGENT_MAX_LIST_COST_CENTS }}" ;;
-              MANAGED_AGENT_COPILOT_MAX_CREDITS) MANAGED_VAL="${{ vars.MANAGED_AGENT_COPILOT_MAX_CREDITS }}" ;;
-              MANAGED_AGENT_MAX_TOTAL_TOKENS) MANAGED_VAL="${{ vars.MANAGED_AGENT_MAX_TOTAL_TOKENS }}" ;;
-              MANAGED_AGENT_VAULT_IDS) MANAGED_VAL="${{ vars.MANAGED_AGENT_VAULT_IDS }}" ;;
-              MANAGED_AGENT_MCP_URL) MANAGED_VAL="${{ vars.MANAGED_AGENT_MCP_URL }}" ;;
-              MANAGED_AGENT_DELIVERY_MODE) MANAGED_VAL="${{ vars.MANAGED_AGENT_DELIVERY_MODE }}" ;;
-              MANAGED_AGENT_COPILOT_MCP_REPO) MANAGED_VAL="${{ vars.MANAGED_AGENT_COPILOT_MCP_REPO }}" ;;
-              MANAGED_AGENT_COPILOT_MCP_BASE_REF) MANAGED_VAL="${{ vars.MANAGED_AGENT_COPILOT_MCP_BASE_REF }}" ;;
-              MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT) MANAGED_VAL="${{ vars.MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT }}" ;;
-            esac
+            MANAGED_VAL="${!MANAGED_VAR}"
             if [ -n "$MANAGED_VAL" ]; then
               ENV_VARS="${ENV_VARS}|${MANAGED_VAR}=${MANAGED_VAL}"
             fi
@@ -217,31 +277,12 @@ jobs:
           # Round-0 seed providers. SEED_PROVIDER/SEED_MODEL tune the always-on Vertex
           # default; the rest only matter once the matching secret above exists too.
           for SEED_VAR in SEED_PROVIDER SEED_MODEL SEED_ANTHROPIC_MODEL SEED_OPENAI_MODEL SEED_META_MODEL SEED_META_BASE_URL SEED_OPENROUTER_MODEL SEED_OPENROUTER_BASE_URL SEED_MAX_OUTPUT_TOKENS SEED_ANTHROPIC_MAX_OUTPUT_TOKENS SEED_OPENAI_MAX_OUTPUT_TOKENS SEED_META_MAX_OUTPUT_TOKENS SEED_OPENROUTER_MAX_OUTPUT_TOKENS SEED_PICK_MAX_OUTPUT_TOKENS SEED_ANTHROPIC_PICK_MAX_OUTPUT_TOKENS SEED_OPENAI_PICK_MAX_OUTPUT_TOKENS SEED_META_PICK_MAX_OUTPUT_TOKENS SEED_OPENROUTER_PICK_MAX_OUTPUT_TOKENS; do
-            case "$SEED_VAR" in
-              SEED_PROVIDER) SEED_VAL="${{ vars.SEED_PROVIDER }}" ;;
-              SEED_MODEL) SEED_VAL="${{ vars.SEED_MODEL }}" ;;
-              SEED_ANTHROPIC_MODEL) SEED_VAL="${{ vars.SEED_ANTHROPIC_MODEL }}" ;;
-              SEED_OPENAI_MODEL) SEED_VAL="${{ vars.SEED_OPENAI_MODEL }}" ;;
-              SEED_META_MODEL) SEED_VAL="${{ vars.SEED_META_MODEL }}" ;;
-              SEED_META_BASE_URL) SEED_VAL="${{ vars.SEED_META_BASE_URL }}" ;;
-              SEED_OPENROUTER_MODEL) SEED_VAL="${{ vars.SEED_OPENROUTER_MODEL }}" ;;
-              SEED_OPENROUTER_BASE_URL) SEED_VAL="${{ vars.SEED_OPENROUTER_BASE_URL }}" ;;
-              SEED_MAX_OUTPUT_TOKENS) SEED_VAL="${{ vars.SEED_MAX_OUTPUT_TOKENS }}" ;;
-              SEED_ANTHROPIC_MAX_OUTPUT_TOKENS) SEED_VAL="${{ vars.SEED_ANTHROPIC_MAX_OUTPUT_TOKENS }}" ;;
-              SEED_OPENAI_MAX_OUTPUT_TOKENS) SEED_VAL="${{ vars.SEED_OPENAI_MAX_OUTPUT_TOKENS }}" ;;
-              SEED_META_MAX_OUTPUT_TOKENS) SEED_VAL="${{ vars.SEED_META_MAX_OUTPUT_TOKENS }}" ;;
-              SEED_OPENROUTER_MAX_OUTPUT_TOKENS) SEED_VAL="${{ vars.SEED_OPENROUTER_MAX_OUTPUT_TOKENS }}" ;;
-              SEED_PICK_MAX_OUTPUT_TOKENS) SEED_VAL="${{ vars.SEED_PICK_MAX_OUTPUT_TOKENS }}" ;;
-              SEED_ANTHROPIC_PICK_MAX_OUTPUT_TOKENS) SEED_VAL="${{ vars.SEED_ANTHROPIC_PICK_MAX_OUTPUT_TOKENS }}" ;;
-              SEED_OPENAI_PICK_MAX_OUTPUT_TOKENS) SEED_VAL="${{ vars.SEED_OPENAI_PICK_MAX_OUTPUT_TOKENS }}" ;;
-              SEED_META_PICK_MAX_OUTPUT_TOKENS) SEED_VAL="${{ vars.SEED_META_PICK_MAX_OUTPUT_TOKENS }}" ;;
-              SEED_OPENROUTER_PICK_MAX_OUTPUT_TOKENS) SEED_VAL="${{ vars.SEED_OPENROUTER_PICK_MAX_OUTPUT_TOKENS }}" ;;
-            esac
+            SEED_VAL="${!SEED_VAR}"
             if [ -n "$SEED_VAL" ]; then
               ENV_VARS="${ENV_VARS}|${SEED_VAR}=${SEED_VAL}"
             fi
           done
-          ZONE_HOST_URL_VAL="${{ vars.ZONE_HOST_URL }}"
+          ZONE_HOST_URL_VAL="${ZONE_HOST_URL}"
           if [ -n "$ZONE_HOST_URL_VAL" ]; then
             ENV_VARS="${ENV_VARS}|ZONE_HOST_URL=${ZONE_HOST_URL_VAL}"
           fi
@@ -256,7 +297,7 @@ jobs:
           # next deploy and the composer would go quiet with nothing to explain it.
           # Absent or not "true" leaves the route answering 503, which is the state
           # every deployment was in before it existed.
-          EDITOR_ASSIST_VAL="${{ vars.EDITOR_ASSIST }}"
+          EDITOR_ASSIST_VAL="${EDITOR_ASSIST}"
           if [ -n "$EDITOR_ASSIST_VAL" ]; then
             ENV_VARS="${ENV_VARS}|EDITOR_ASSIST=${EDITOR_ASSIST_VAL}"
           fi
@@ -267,14 +308,14 @@ jobs:
           # blast radius — model-written code, even though it is ephemeral and never
           # published — so it must be switchable on its own. Threaded, not hand-set,
           # for the same reason as everything above.
-          CODE_LANE_VAL="${{ vars.CODE_LANE }}"
+          CODE_LANE_VAL="${CODE_LANE}"
           if [ -n "$CODE_LANE_VAL" ]; then
             ENV_VARS="${ENV_VARS}|CODE_LANE=${CODE_LANE_VAL}"
           fi
 
           # TA-01's ghost-text completion route: off unless set, same reasoning as
           # EDITOR_ASSIST above — a hand-set value would vanish on the next deploy.
-          TAB_COMPLETE_VAL="${{ vars.TAB_COMPLETE }}"
+          TAB_COMPLETE_VAL="${TAB_COMPLETE}"
           if [ -n "$TAB_COMPLETE_VAL" ]; then
             ENV_VARS="${ENV_VARS}|TAB_COMPLETE=${TAB_COMPLETE_VAL}"
           fi
@@ -284,7 +325,7 @@ jobs:
           # gate — the owner decision is all-creators, so it ships on by default and this
           # variable is only ever set to turn it *off*. Threaded so a hand-set value
           # cannot vanish on the next deploy the way the incident above found others had.
-          CODE_SURFACE_VAL="${{ vars.CODE_SURFACE }}"
+          CODE_SURFACE_VAL="${CODE_SURFACE}"
           if [ -n "$CODE_SURFACE_VAL" ]; then
             ENV_VARS="${ENV_VARS}|CODE_SURFACE=${CODE_SURFACE_VAL}"
           fi
@@ -297,7 +338,7 @@ jobs:
           # radius is limited to hosts that opted in. Enabled by "true" or "1",
           # case-insensitive (mcpUiEnabled, apps/api/src/mcp-ui.ts); absent or any other
           # value is the pre-views state the endpoint has always run in production.
-          MCP_UI_VAL="${{ vars.MCP_UI }}"
+          MCP_UI_VAL="${MCP_UI}"
           if [ -n "$MCP_UI_VAL" ]; then
             ENV_VARS="${ENV_VARS}|MCP_UI=${MCP_UI_VAL}"
           fi
@@ -321,7 +362,7 @@ jobs:
           # --set-env-vars replaces the whole map, so a value typed onto the
           # service would vanish on the next deploy and the trace would go quiet
           # with nothing to explain it.
-          REMIX_DEBUG_VAL="${{ vars.REMIX_DEBUG }}"
+          REMIX_DEBUG_VAL="${REMIX_DEBUG}"
           if [ -n "$REMIX_DEBUG_VAL" ]; then
             ENV_VARS="${ENV_VARS}|REMIX_DEBUG=${REMIX_DEBUG_VAL}"
           fi
@@ -331,7 +372,7 @@ jobs:
           # would be wiped by the next deploy — here that would silently pull room
           # creation back into this process while the ceiling stayed raised, which is
           # the worst of both configurations.
-          MP_RELAY_URL_VAL="${{ vars.MP_RELAY_URL }}"
+          MP_RELAY_URL_VAL="${MP_RELAY_URL}"
           if [ -n "$MP_RELAY_URL_VAL" ]; then
             ENV_VARS="${ENV_VARS}|MP_RELAY_URL=${MP_RELAY_URL_VAL}"
             MAX_INSTANCES=4
@@ -358,11 +399,7 @@ jobs:
           # an unrelated deploy. An emergency lever that quietly reverts is worse than no
           # lever, because the operator believes the incident is over.
           for VERTEX_VAR in VERTEX_MODEL VERTEX_REGION TRANSLATE_BUILD_LOG; do
-            case "$VERTEX_VAR" in
-              VERTEX_MODEL) VERTEX_VAL="${{ vars.VERTEX_MODEL }}" ;;
-              VERTEX_REGION) VERTEX_VAL="${{ vars.VERTEX_REGION }}" ;;
-              TRANSLATE_BUILD_LOG) VERTEX_VAL="${{ vars.TRANSLATE_BUILD_LOG }}" ;;
-            esac
+            VERTEX_VAL="${!VERTEX_VAR}"
             if [ -n "$VERTEX_VAL" ]; then
               ENV_VARS="${ENV_VARS}|${VERTEX_VAR}=${VERTEX_VAL}"
               echo "Threading ${VERTEX_VAR}=${VERTEX_VAL}"
@@ -381,10 +418,7 @@ jobs:
           #                        default batch size, so a deliberately throttled sweep
           #                        speeds back up mid-incident.
           for MAIL_HEALTH_VAR in MAIL_FROM HEALTH_SWEEP_BATCH; do
-            case "$MAIL_HEALTH_VAR" in
-              MAIL_FROM) MAIL_HEALTH_VAL="${{ vars.MAIL_FROM }}" ;;
-              HEALTH_SWEEP_BATCH) MAIL_HEALTH_VAL="${{ vars.HEALTH_SWEEP_BATCH }}" ;;
-            esac
+            MAIL_HEALTH_VAL="${!MAIL_HEALTH_VAR}"
             if [ -n "$MAIL_HEALTH_VAL" ]; then
               ENV_VARS="${ENV_VARS}|${MAIL_HEALTH_VAR}=${MAIL_HEALTH_VAL}"
               echo "Threading ${MAIL_HEALTH_VAR}=${MAIL_HEALTH_VAL}"
@@ -397,14 +431,7 @@ jobs:
           # games-repo corpus has actually been imported into that engine.
           for KNOWLEDGE_VAR in KNOWLEDGE_SEARCH_ENGINE_ID KNOWLEDGE_SEARCH_PROJECT_ID KNOWLEDGE_SEARCH_LOCATION \
             KNOWLEDGE_SEARCH_COLLECTION KNOWLEDGE_SEARCH_SERVING_CONFIG KNOWLEDGE_SEARCH_QUOTA_PROJECT; do
-            case "$KNOWLEDGE_VAR" in
-              KNOWLEDGE_SEARCH_ENGINE_ID) KNOWLEDGE_VAL="${{ vars.KNOWLEDGE_SEARCH_ENGINE_ID }}" ;;
-              KNOWLEDGE_SEARCH_PROJECT_ID) KNOWLEDGE_VAL="${{ vars.KNOWLEDGE_SEARCH_PROJECT_ID }}" ;;
-              KNOWLEDGE_SEARCH_LOCATION) KNOWLEDGE_VAL="${{ vars.KNOWLEDGE_SEARCH_LOCATION }}" ;;
-              KNOWLEDGE_SEARCH_COLLECTION) KNOWLEDGE_VAL="${{ vars.KNOWLEDGE_SEARCH_COLLECTION }}" ;;
-              KNOWLEDGE_SEARCH_SERVING_CONFIG) KNOWLEDGE_VAL="${{ vars.KNOWLEDGE_SEARCH_SERVING_CONFIG }}" ;;
-              KNOWLEDGE_SEARCH_QUOTA_PROJECT) KNOWLEDGE_VAL="${{ vars.KNOWLEDGE_SEARCH_QUOTA_PROJECT }}" ;;
-            esac
+            KNOWLEDGE_VAL="${!KNOWLEDGE_VAR}"
             if [ -n "$KNOWLEDGE_VAL" ]; then
               ENV_VARS="${ENV_VARS}|${KNOWLEDGE_VAR}=${KNOWLEDGE_VAL}"
               echo "Threading ${KNOWLEDGE_VAR}=${KNOWLEDGE_VAL}"
