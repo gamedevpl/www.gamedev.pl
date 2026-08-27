@@ -10,6 +10,7 @@ import { pollDelayMs } from './studioStatusPoll.js';
 import { getSubmissionStatus, type SubmissionStatus } from './submissionApi.js';
 import { recordCreateStep } from './visitTelemetry.js';
 import { welcomeProgressMessage, welcomeStatusLabel } from './welcomeProgress.js';
+import { isRoundSealed } from './roundSealed.js';
 
 // Focusable controls inside the welcome dialog.
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -113,14 +114,7 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
     (item) => item.origin !== 'seed' && item.origin !== 'staged',
   );
 
-  const isReady =
-    status != null &&
-    (status.status === 'in_review' ||
-      status.status === 'published' ||
-      status.phase === 'ready_for_review' ||
-      status.phase === 'published' ||
-      hasDeliveredPlayable ||
-      status.preview != null);
+  const isReady = status != null && (isRoundSealed(status) || hasDeliveredPlayable || status.preview != null);
 
   const isNeedsChanges =
     status != null && (status.status === 'needs_changes' || status.phase === 'needs_changes' || status.failure != null);
