@@ -906,6 +906,17 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
   const stagingPrefix = (slug: string, jobId: number, roundGeneration: number) =>
     `games/${slug}/staging/${jobId}/g${roundGeneration}`;
 
+  // A manifest written before the field was renamed still carries `issueNumber`
+  // instead of `jobId` — GCS is schemaless, so the TS rename alone leaves every
+  // already-stored manifest unreadable under the new name.
+  function parseVersionManifest(body: Buffer): VersionManifest {
+    const manifest = JSON.parse(body.toString('utf8')) as VersionManifest & { issueNumber?: number };
+    if (manifest.jobId === undefined && manifest.issueNumber !== undefined) {
+      manifest.jobId = manifest.issueNumber;
+    }
+    return manifest;
+  }
+
   async function readStagingManifest(
     slug: string,
     jobId: number,
@@ -1191,7 +1202,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
 
     async getManifest(slug, version) {
       const body = await readObject(`${versionPrefix(slug, version)}/manifest.json`);
-      return body ? (JSON.parse(body.toString('utf8')) as VersionManifest) : null;
+      return body ? parseVersionManifest(body) : null;
     },
 
     async setVersionSummary(slug, version, summary) {
@@ -1201,7 +1212,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const prefix = versionPrefix(slug, version);
       const existing = await readObject(`${prefix}/manifest.json`);
       if (!existing) return;
-      const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
+      const manifest = parseVersionManifest(existing);
       if (manifest.summary === trimmed) return;
       manifest.summary = trimmed.slice(0, 1024);
       await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
@@ -1240,7 +1251,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         const batch = await Promise.all(
           versions.slice(offset, offset + limit).map(async (version) => {
             const body = await readObject(`${versionPrefix(slug, version)}/manifest.json`);
-            return body ? (JSON.parse(body.toString('utf8')) as VersionManifest) : null;
+            return body ? parseVersionManifest(body) : null;
           }),
         );
         for (const manifest of batch) {
@@ -1267,7 +1278,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const prefix = versionPrefix(input.slug, input.version);
       const existing = await readObject(`${prefix}/manifest.json`);
       if (!existing) throw new Error(`no manifest for ${input.slug}@${input.version}`);
-      const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
+      const manifest = parseVersionManifest(existing);
       if (manifest.deliveryMode !== 'proposal') {
         // Not idempotent-by-accident: re-stamping an already-adopted version would
         // rewrite who adopted it, and re-stamping an ordinary delivery would invent a
@@ -1291,7 +1302,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const prefix = versionPrefix(slug, version);
       const existing = await readObject(`${prefix}/manifest.json`);
       if (!existing) throw new Error(`no manifest for ${slug}@${version}`);
-      const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
+      const manifest = parseVersionManifest(existing);
       applyGateVerdict(manifest, result, new Date(now()).toISOString());
       // First writer wins: the ref the *first* gate run checked against is the one the
       // verdict is reproducible against, and a re-run must not quietly repin it.
@@ -1312,7 +1323,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       for (let attempt = 0; attempt < MAX_STAGING_MANIFEST_RETRIES; attempt++) {
         const got = await readObjectWithGeneration(name);
         if (!got) throw new Error(`no manifest for ${slug}@${version}`);
-        const manifest = JSON.parse(got.body.toString('utf8')) as VersionManifest;
+        const manifest = parseVersionManifest(got.body);
         if (manifest.gate || manifest.previewGate || manifest.health) return;
         manifest.gateProgress = progress;
         try {
@@ -1328,7 +1339,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       // Retries exhausted — drop advisory progress if still open.
       const final = await readObject(name);
       if (!final) throw new Error(`no manifest for ${slug}@${version}`);
-      const finalManifest = JSON.parse(final.toString('utf8')) as VersionManifest;
+      const finalManifest = parseVersionManifest(final);
       if (finalManifest.gate || finalManifest.previewGate || finalManifest.health) return;
     },
 
@@ -1336,7 +1347,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const prefix = versionPrefix(slug, version);
       const existing = await readObject(`${prefix}/manifest.json`);
       if (!existing) throw new Error(`no manifest for ${slug}@${version}`);
-      const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
+      const manifest = parseVersionManifest(existing);
       applyPreviewGateVerdict(manifest, result, new Date(now()).toISOString());
       await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
     },
@@ -1345,7 +1356,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const prefix = versionPrefix(slug, version);
       const existing = await readObject(`${prefix}/manifest.json`);
       if (!existing) throw new Error(`no manifest for ${slug}@${version}`);
-      const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
+      const manifest = parseVersionManifest(existing);
       applyHealthVerdict(manifest, result, new Date(now()).toISOString());
       await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
     },

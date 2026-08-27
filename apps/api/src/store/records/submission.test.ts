@@ -32,4 +32,24 @@ describe('fromStoredSubmission', () => {
     expect(record).not.toBe(stored);
     expect(stored.state).toBe('gating');
   });
+
+  it('reads a legacy issueNumber-keyed record under its new jobId name', () => {
+    const record = fromStoredSubmission({ issueNumber: 42, createdAt: '2026-01-01T00:00:00Z' });
+
+    expect(record.jobId).toBe(42);
+  });
+
+  it("leaves an already-renamed record's jobId alone", () => {
+    const stored = { jobId: 5, createdAt: '2026-01-01T00:00:00Z' };
+
+    expect(fromStoredSubmission(stored)).toEqual(stored);
+  });
+
+  it('does not mutate the stored object when it rewrites the id', () => {
+    const stored = { issueNumber: 11, createdAt: '2026-01-01T00:00:00Z' };
+    const record = fromStoredSubmission(stored);
+
+    expect(record).not.toBe(stored);
+    expect((stored as { jobId?: number }).jobId).toBeUndefined();
+  });
 });

@@ -1080,6 +1080,20 @@ describe('GCS games store', () => {
     expect(await store.getSourceFile('g', 'v1', 'game.ts')).toBeNull();
   });
 
+  it("normalizes a manifest stored under the field's old name, issueNumber", async () => {
+    const { impl, objects } = stubGcs();
+    // GCS is schemaless: a manifest written before the field was renamed still
+    // has this shape on disk, and the TS rename alone cannot rewrite history.
+    objects.set(
+      'games/g/versions/v1/manifest.json',
+      Buffer.from(JSON.stringify({ slug: 'g', version: 'v1', createdAt: '2026-01-01T00:00:00Z', issueNumber: 7 })),
+    );
+    const store = createGcsGamesStore({ ...base, fetchImpl: impl });
+
+    expect((await store.getManifest('g', 'v1'))?.jobId).toBe(7);
+    expect((await store.listVersions('g'))[0]?.jobId).toBe(7);
+  });
+
   it('marks version objects immutable so a CDN can front them later', async () => {
     const headers: Array<Record<string, string>> = [];
     const impl = (async (_url: string | URL, init: RequestInit = {}) => {

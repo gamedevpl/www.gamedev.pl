@@ -75,7 +75,7 @@ if (vendor === 'copilot' && flag('override-tools')) {
 const mcpOpenerToken = mintManagedMcpOpener(ISSUE, openerSecret, { roundGeneration });
 
 const brief: BuildBrief = {
-  issueNumber: ISSUE,
+  jobId: ISSUE,
   roundGeneration,
   ...(SLUG ? { slug: SLUG } : {}),
   ...(creation ? { createGame: { title: CREATE_TITLE, concept: CREATE_CONCEPT } } : {}),
@@ -234,7 +234,7 @@ for (let attempt = 1; attempt <= pollCount; attempt += 1) {
   rule(`observe #${attempt}`);
   const observation = await backend.observe(dispatch.ref, {
     hasCandidate: false,
-    issueNumber: ISSUE,
+    jobId: ISSUE,
     slug: SLUG,
     roundGeneration,
   });
