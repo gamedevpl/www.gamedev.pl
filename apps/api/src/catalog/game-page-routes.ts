@@ -10,6 +10,7 @@ import { catalogEntryFromSpec, type CatalogGameEntry, type GitHubClient } from '
 import type { GamesStore } from '../delivery/games-store.js';
 import { DELETED_ACCOUNT_UID, type Store } from '../platform/store.js';
 import { isPublished } from '../platform/publication-state.js';
+import { isPublishedEntry } from '@gamedevpl/contract';
 
 /**
  * The compact public landing page at `/:handle/:slug`.
@@ -111,7 +112,7 @@ export async function registerGamePageRoutes(app: FastifyInstance, options: Game
     const publication = await store.getPublication(slug);
     const storePublished = isPublished(publication) ? publication : null;
     if (!repoEntry && !storePublished) return null;
-    if (repoEntry && repoEntry.status !== 'published' && !storePublished) return null;
+    if (repoEntry && !isPublishedEntry(repoEntry) && !storePublished) return null;
 
     const submission = await store.getSubmissionBySlug(slug);
     const erased = submission?.ownerUid === DELETED_ACCOUNT_UID;

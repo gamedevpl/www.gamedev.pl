@@ -16,7 +16,14 @@ export type { CatalogOrientation };
  * `controllers` = playable only with phones as controllers on a second screen,
  * `none` = keyboard only. null when the API served a catalog without the field.
  */
-import type { CatalogEditor, CatalogEntry, CatalogMedia, CatalogMultiplayer, CatalogScreenshot } from '@gamedevpl/contract';
+import { isPublishedEntry } from '@gamedevpl/contract';
+import type {
+  CatalogEditor,
+  CatalogEntry,
+  CatalogMedia,
+  CatalogMultiplayer,
+  CatalogScreenshot,
+} from '@gamedevpl/contract';
 
 export type { CatalogTouch };
 export type {
@@ -182,7 +189,7 @@ export function normalizeCatalogEntry(value: unknown): CatalogEntry | null {
     typeof entry.genre !== 'string' ||
     typeof entry.controls !== 'string' ||
     typeof entry.status !== 'string' ||
-    entry.status !== 'published'
+    !isPublishedEntry(entry)
   ) {
     return null;
   }
