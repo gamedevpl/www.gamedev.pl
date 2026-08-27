@@ -993,7 +993,6 @@
     "phases": {
       "dispatched": "The platform agent has been assigned and is starting up. The first update can take a few minutes while the coding session boots — no need to refresh.",
       "submitted": "The agent delivered your game. We're checking it over now.",
-      "gating": "Automated checks are making sure your game actually runs clean.",
       "ready_for_review": "Your game passed every check. It's waiting for the last look before going live."
     },
     "gateProgress": {

@@ -86,9 +86,9 @@ describe('buildJobQueue', () => {
   });
 
   it('shows both the internal state and what the creator is being told', () => {
-    const queue = buildJobQueue([record({ issueNumber: 1, state: 'gating', stateSince: ago(MINUTE) })], NOW);
+    const queue = buildJobQueue([record({ issueNumber: 1, state: 'submitted', stateSince: ago(MINUTE) })], NOW);
 
-    expect(queue.jobs[0].state).toBe('gating');
+    expect(queue.jobs[0].state).toBe('submitted');
     expect(queue.jobs[0].creatorStatus).toBe('building');
   });
 
@@ -427,4 +427,3 @@ describe('GET /api/admin/jobs/:issueNumber/preview', () => {
     await app.close();
   });
 });
-

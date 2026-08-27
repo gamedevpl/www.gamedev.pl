@@ -18,7 +18,6 @@ export function isActiveBuildRound(record: { state?: JobState; transitions?: Job
     case 'dispatched':
     case 'building':
     case 'submitted':
-    case 'gating':
     case 'publishing':
       return true;
     case 'needs_changes': {

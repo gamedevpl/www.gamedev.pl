@@ -1,6 +1,6 @@
 import { FieldValue, type Firestore } from '@google-cloud/firestore';
 import type { SubmissionStatus } from '../../platform/submission-status.js';
-import type { SubmissionRecord } from '../records/submission.js';
+import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
 
 export interface SubmissionStore {
   createSubmission(issueNumber: number, ownerUid: string, title: string): Promise<SubmissionRecord>;
@@ -179,7 +179,7 @@ export class FirestoreSubmissionStore implements SubmissionStore {
   async getSubmission(issueNumber: number): Promise<SubmissionRecord | null> {
     const snap = await this.ref(issueNumber).get();
     if (!snap.exists) return null;
-    return snap.data() as SubmissionRecord;
+    return fromStoredSubmission(snap.data());
   }
 
   async setSubmissionNotifiedStatus(issueNumber: number, status: SubmissionStatus): Promise<void> {
@@ -213,7 +213,7 @@ export class FirestoreSubmissionStore implements SubmissionStore {
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) return 0;
-      const nudges = ((snap.data() as SubmissionRecord).deliveryNudges ?? 0) + 1;
+      const nudges = (fromStoredSubmission(snap.data()).deliveryNudges ?? 0) + 1;
       tx.set(ref, { deliveryNudges: nudges }, { merge: true });
       return nudges;
     });
@@ -223,7 +223,7 @@ export class FirestoreSubmissionStore implements SubmissionStore {
     const ref = this.ref(issueNumber);
     const snap = await ref.get();
     // First observation wins: a later re-derivation must not move the timestamp.
-    if ((snap.data() as SubmissionRecord | undefined)?.publishedAt) return;
+    if (fromStoredSubmission(snap.data())?.publishedAt) return;
     await ref.set({ publishedAt: at }, { merge: true });
   }
 

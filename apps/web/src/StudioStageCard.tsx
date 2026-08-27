@@ -17,7 +17,7 @@ export function StudioStageCard({ status }: { status?: SubmissionStatus | null }
   // Gate's own timestamp beats a stale pre-delivery agent line.
   const heartbeatAt = gate ? Date.parse(gate.at) || latestAgentActivityAt(status) : latestAgentActivityAt(status);
   // Not ended while the gate still owes a verdict.
-  const awaitingGate = status?.phase === 'submitted' || status?.phase === 'gating';
+  const awaitingGate = status?.phase === 'submitted';
   const ended = !awaitingGate && (status?.stall === 'ended' || Boolean(status?.agentEndedAt));
   const working = gate
     ? {

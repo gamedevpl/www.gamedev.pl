@@ -122,7 +122,7 @@ export function createGateCrashProbe(
 ): (record: SubmissionRecord) => Promise<JobTransition | null> {
   return async (record: SubmissionRecord): Promise<JobTransition | null> => {
     const state = record.state ?? 'submitted';
-    if (state !== 'submitted' && state !== 'gating') return null;
+    if (state !== 'submitted') return null;
     if (!record.slug) return null;
 
     const since = Date.parse(record.stateSince ?? record.createdAt ?? '');

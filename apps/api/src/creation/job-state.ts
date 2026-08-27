@@ -64,8 +64,7 @@ const ALLOWED_TRANSITIONS: Readonly<Record<JobState, readonly JobState[]>> = {
   // `building` here — `toSubmissionStatus(submitted)` is already `building`, and
   // allowing that edge lets the lossy derived-status reconciler yank a delivery back
   // to `building` on every sweep.
-  submitted: ['gating', 'ready_for_review', 'needs_changes', 'failed', 'canceled', 'abandoned', 'dispatched', 'queued'],
-  gating: ['ready_for_review', 'needs_changes', 'failed', 'canceled', 'abandoned', 'dispatched', 'queued'],
+  submitted: ['ready_for_review', 'needs_changes', 'failed', 'canceled', 'abandoned', 'dispatched', 'queued'],
   // `building` (and the queue/dispatch that precede a fresh round) let a creator or
   // their agent continue iterating after a green gate without waiting on publish —
   // Studio feedback and MCP `continue_draft` both land here. Reviewer reject still
@@ -185,7 +184,6 @@ export function toSubmissionStatus(state: JobState): SubmissionStatus {
       return 'queued';
     case 'building':
     case 'submitted':
-    case 'gating':
       return 'building';
     case 'ready_for_review':
       return 'in_review';
@@ -353,7 +351,7 @@ export function reconcileAgentObservation(current: JobState, observation: AgentO
   // Once the work has been delivered, the agent's own lifecycle stops being interesting:
   // the gate and the reviewer own what happens next, and an agent session reporting
   // `completed` (or even `failed`) after a successful upload must not disturb them.
-  const pastAgent: readonly JobState[] = ['submitted', 'gating', 'ready_for_review', 'publishing'];
+  const pastAgent: readonly JobState[] = ['submitted', 'ready_for_review', 'publishing'];
   if (pastAgent.includes(current)) return null;
 
   const next = ((): ReconcileResult | null => {

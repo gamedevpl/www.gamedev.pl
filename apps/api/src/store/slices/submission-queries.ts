@@ -1,6 +1,6 @@
 import type { Firestore } from '@google-cloud/firestore';
 import { isSweepActive } from '../../platform/sweep-scope.js';
-import type { SubmissionRecord } from '../records/submission.js';
+import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
 
 export interface SubmissionQueryStore {
   // Most recently published submissions, newest first -- the build-time sample.
@@ -103,7 +103,7 @@ export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
   async listRecentlyPublished(limit: number): Promise<SubmissionRecord[]> {
     // Auto-indexed single-field orderBy; docs without publishedAt are excluded by definition.
     const snap = await this.db.collection('submissions').orderBy('publishedAt', 'desc').limit(limit).get();
-    return snap.docs.map((d) => d.data() as SubmissionRecord);
+    return snap.docs.map((d) => fromStoredSubmission(d.data()));
   }
 
   async getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
@@ -114,14 +114,14 @@ export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
   async listSubmissionsBySlug(slug: string): Promise<SubmissionRecord[]> {
     // Equality-only query, no composite index needed; bounded by jobs per game.
     const snap = await this.db.collection('submissions').where('slug', '==', slug).get();
-    return snap.docs.map((d) => d.data() as SubmissionRecord).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return snap.docs.map((d) => fromStoredSubmission(d.data())).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   async getPublishedSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
     // Same query, filtered in memory to avoid a composite index.
     const snap = await this.db.collection('submissions').where('slug', '==', slug).get();
     const records = snap.docs
-      .map((d) => d.data() as SubmissionRecord)
+      .map((d) => fromStoredSubmission(d.data()))
       .filter((record) => record.publishedAt && !record.abandonedAt);
     records.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return records[0] ?? null;
@@ -130,14 +130,14 @@ export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
   async listActiveSubmissions(): Promise<SubmissionRecord[]> {
     // 'in' would need a composite index and miss unset lastNotifiedStatus docs.
     const snap = await this.db.collection('submissions').get();
-    return snap.docs.map((d) => d.data() as SubmissionRecord).filter(isSweepActive);
+    return snap.docs.map((d) => fromStoredSubmission(d.data())).filter(isSweepActive);
   }
 
   async listSubmissionsMissingSlug(): Promise<SubmissionRecord[]> {
     // Firestore can't query for an absent field -- a small full scan.
     const snap = await this.db.collection('submissions').get();
     return snap.docs
-      .map((d) => d.data() as SubmissionRecord)
+      .map((d) => fromStoredSubmission(d.data()))
       .filter((s) => !s.slug && !s.abandonedAt)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
@@ -145,7 +145,7 @@ export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
   async listSubmissionsWithDelivery(): Promise<SubmissionRecord[]> {
     const snap = await this.db.collection('submissions').get();
     return snap.docs
-      .map((d) => d.data() as SubmissionRecord)
+      .map((d) => fromStoredSubmission(d.data()))
       .filter((s) => Boolean(s.slug && s.deliveredVersion) && !s.abandonedAt)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
@@ -154,13 +154,13 @@ export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
     // Equality-only, no orderBy -- no composite index; sorted here instead.
     const snap = await this.db.collection('submissions').where('ownerUid', '==', ownerUid).get();
     const sorted = snap.docs
-      .map((d) => d.data() as SubmissionRecord)
+      .map((d) => fromStoredSubmission(d.data()))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return opts?.limit !== undefined ? sorted.slice(0, opts.limit) : sorted;
   }
 
   async listQueuedSubmissions(): Promise<SubmissionRecord[]> {
     const snap = await this.db.collection('submissions').where('state', '==', 'queued').get();
-    return snap.docs.map((d) => d.data() as SubmissionRecord).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    return snap.docs.map((d) => fromStoredSubmission(d.data())).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 }
