@@ -1094,6 +1094,20 @@ describe('GCS games store', () => {
     expect((await store.listVersions('g'))[0]?.jobId).toBe(7);
   });
 
+  it('dual-writes issueNumber on a new manifest, for a rollback to the previous revision', async () => {
+    const { impl, objects } = stubGcs();
+    const store = createGcsGamesStore({ ...base, fetchImpl: impl });
+
+    const { version, manifest } = await store.putCandidateSources({ slug: 'g', jobId: 9, files: MINIMAL });
+
+    // The returned/typed object stays clean...
+    expect((manifest as { issueNumber?: number }).issueNumber).toBeUndefined();
+    // ...but the previous revision's code, which only reads issueNumber, can still
+    // load what this revision just wrote.
+    const stored = JSON.parse(objects.get(`games/g/versions/${version}/manifest.json`)!.toString('utf8'));
+    expect(stored).toMatchObject({ jobId: 9, issueNumber: 9 });
+  });
+
   it('marks version objects immutable so a CDN can front them later', async () => {
     const headers: Array<Record<string, string>> = [];
     const impl = (async (_url: string | URL, init: RequestInit = {}) => {

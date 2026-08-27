@@ -172,7 +172,10 @@ export class FirestoreSubmissionStore implements SubmissionStore {
       roundGeneration: 1,
       roundStartedAt: createdAt,
     };
-    await this.ref(jobId).set(record);
+    // Dual-write the pre-rename key too: a rollback to the previous revision (traffic
+    // reassignment, seconds, no rebuild — docs/runbooks/rollback-deploy.md) runs code that
+    // only reads `issueNumber`. Drop once that revision is no longer a rollback target.
+    await this.ref(jobId).set({ ...record, issueNumber: jobId });
     return record;
   }
 

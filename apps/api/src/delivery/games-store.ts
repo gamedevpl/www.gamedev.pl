@@ -995,7 +995,14 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       // Written last: a manifest is what makes a version real, so a run that dies
       // mid-upload leaves orphaned objects rather than a version claiming files that
       // were never stored.
-      await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
+      //
+      // Dual-write the pre-rename key too: a rollback to the previous revision (traffic
+      // reassignment, seconds, no rebuild — docs/runbooks/rollback-deploy.md) runs code
+      // that only reads `issueNumber`. Drop once that revision is no longer a rollback
+      // target. Kept off the returned/typed `manifest` on purpose — only the stored bytes
+      // carry it.
+      const stored = { ...manifest, issueNumber: manifest.jobId };
+      await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(stored, null, 2)), 'application/json');
 
       return { version, manifest };
     },
