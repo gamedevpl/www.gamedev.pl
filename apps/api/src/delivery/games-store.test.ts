@@ -68,6 +68,19 @@ describe('validateSourceUpload — the delivery contract', () => {
     );
   });
 
+  it('accepts quantized rasters under scenes/, cast/, or images/', () => {
+    expect(
+      validateSourceUpload([...MINIMAL, { path: 'scenes/glade/bg.png', content: 'png' }]).map((file) => file.path),
+    ).toContain('scenes/glade/bg.png');
+    expect(
+      validateSourceUpload([...MINIMAL, { path: 'cast/jack/atlas.webp', content: 'webp' }]).map((file) => file.path),
+    ).toContain('cast/jack/atlas.webp');
+  });
+
+  it('still refuses a loose PNG in the game root', () => {
+    expect(() => validateSourceUpload([...MINIMAL, { path: 'hero.png', content: 'png' }])).toThrow(/not deliverable/);
+  });
+
   it('refuses harness-shaped paths so a diff visibly respects the boundary', () => {
     // Confinement itself is structural — every stored path is prefixed with the
     // version's own source/, so none of these could ever have reached GameKit. They are

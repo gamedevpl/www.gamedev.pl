@@ -20,11 +20,20 @@ import {
   DELIVERY_FIXED_FILES,
   GAME_KIT_MODULES,
   GAME_KIT_VERTICAL_ENTRIES,
+  IMAGES_CONTRACT,
   MAX_SOURCE_GRAPH_MODULES,
   MUSIC_CONTRACT,
   SOURCE_GRAPH_BUDGET_BYTES,
   type GameKitModuleName,
 } from '../platform/games-repo-contract.js';
+import {
+  assertImageFileSize,
+  imageLoaderBootJs,
+  imageLoaderHtml,
+  mimeForImagePath,
+  parseGameImages,
+  type ImageManifest,
+} from './raster-assets.js';
 import { isRateLimitResponse } from '../platform/github-rate-limit.js';
 import {
   generateIndexHtml,
@@ -205,6 +214,7 @@ export function resolveGameTypeScriptPath(resolveDir: string, specifier: string)
 interface GameManifest {
   engine?: { modules?: unknown };
   audio?: { sounds?: unknown; music?: unknown; musicTracks?: unknown };
+  images?: unknown;
 }
 
 interface SourcedAudioCatalog {
@@ -224,6 +234,8 @@ interface ParsedGameManifest {
    * game can change score mid-round without a fetch. Empty for almost every game.
    */
   musicTracks: string[];
+  /** GAME.json `images` name → path; empty when the game ships no rasters. */
+  images: ImageManifest;
 }
 
 function isKebabCaseName(value: unknown): value is string {
@@ -248,8 +260,10 @@ function parseGameManifest(source: string): ParsedGameManifest {
     throw new Error('game manifest engine modules are duplicated or out of order');
   }
 
+  const images = parseGameImages(manifest.images);
+
   if (!modules.includes('audio')) {
-    return { modules: modules as GameKitModuleName[], sounds: [], music: null, musicTracks: [] };
+    return { modules: modules as GameKitModuleName[], sounds: [], music: null, musicTracks: [], images };
   }
 
   const sounds = manifest.audio?.sounds;
@@ -286,7 +300,7 @@ function parseGameManifest(source: string): ParsedGameManifest {
     musicTracks = rawTracks;
   }
 
-  return { modules: modules as GameKitModuleName[], sounds, music, musicTracks };
+  return { modules: modules as GameKitModuleName[], sounds, music, musicTracks, images };
 }
 
 /**
@@ -1576,6 +1590,24 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         assetChunks.unshift(`window.__GAME_AUDIO_ASSETS__ = Object.freeze(${JSON.stringify(assets)});`);
       }
 
+      let loaderHtml = '';
+      const imageNames = Object.keys(manifest.images);
+      if (imageNames.length > 0) {
+        const imageAssets: Record<string, string> = {};
+        for (const name of imageNames) {
+          const relPath = manifest.images[name];
+          const bytes = await readRawBytes(`games/${slug}/${relPath}`, ref);
+          if (!bytes) {
+            throw new Error(`game image "${name}" not found: ${relPath}`);
+          }
+          assertImageFileSize(name, bytes.byteLength);
+          imageAssets[name] = `data:${mimeForImagePath(relPath)};base64,${Buffer.from(bytes).toString('base64')}`;
+        }
+        assetChunks.push(`window.${IMAGES_CONTRACT.windowAssetsName} = Object.freeze(${JSON.stringify(imageAssets)});`);
+        assetChunks.push(imageLoaderBootJs(imageNames));
+        loaderHtml = imageLoaderHtml();
+      }
+
       const assetsJs = assetChunks.length > 0 ? `${assetChunks.join('\n')}\n` : '';
       const bundleStartedAt = Date.now();
       const transpiledSources = [coreJs, ...availableModuleSources];
@@ -1587,7 +1619,7 @@ ${gameJs}`;
       const bundledCss = `${gameShellCss}\n${resolvedStyleCss}`;
 
       return {
-        indexHtml: resolvedIndexHtml,
+        indexHtml: `${loaderHtml}${resolvedIndexHtml}`,
         gameJs: bundledJs,
         styleCss: bundledCss,
         title,

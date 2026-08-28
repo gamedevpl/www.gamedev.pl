@@ -123,8 +123,8 @@ export const MAX_SOURCE_GRAPH_MODULES = 128;
 /**
  * Platform half of the serve cap — games-repo `GAMEKIT_PLATFORM_BYTES` /
  * `assemble-contract.json` `platformCeilingBytes`. Together with
- * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
- * (1_368_464, matching `maxProjectBytes`). Not a round KiB.
+ * {@link GAME_BUDGET_BYTES} and {@link RASTER_ASSET_BUDGET_BYTES} this must
+ * equal games-repo `MAX_BUNDLE_BYTES` (`maxProjectBytes`). Not a round KiB.
  *
  * One derived ceiling, not a sum of per-feature constants (games-repo #281). Check 4
  * bills each author for measured `assembled − platformBytes` against the 624 KiB
@@ -143,8 +143,23 @@ export const MAX_SOURCE_GRAPH_MODULES = 128;
  */
 export const GAMEKIT_PLATFORM_BYTES = 410_000;
 
-/** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
-export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
+/**
+ * Assembled data-URI text + opt-in loading-screen chrome a raster game may embed.
+ * Distinct from author JS and from the kit. Games-repo Check 4 bills
+ * `assembled − platformBytes − rasterBytes` against the author budget, and
+ * `rasterBytes` against this ceiling. Presence of `GAME.json.images` is the
+ * opt-in — not a new GameKit module.
+ */
+export const RASTER_ASSET_BUDGET_BYTES = 3 * 1024 * 1024;
+
+/** One GAME.json `images` PNG/WebP file may not exceed this binary size. */
+export const RASTER_ASSET_MAX_FILE_BYTES = 400 * 1024;
+
+/**
+ * Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`.
+ * Author JS + platform kit + raster payloads.
+ */
+export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES + RASTER_ASSET_BUDGET_BYTES;
 
 /**
  * Music embedding contract (games-repo `tools/lib/assemble.ts`):
@@ -186,6 +201,21 @@ export const MUSIC_CONTRACT = {
   catalogTracksKey: 'tracks',
   windowMusicName: '__GAME_AUDIO_MUSIC__',
   windowTracksName: '__GAME_MUSIC_TRACKS__',
+} as const;
+
+/**
+ * Raster embedding contract (games-repo `tools/lib/raster-assets.ts`):
+ * - `GAME.json` → `images` is an optional `{ kebab-name: "scenes|cast|images/….png|webp" }`
+ *   map. Absent means no bitmaps and no loading screen.
+ * - Paths stay inside the game directory; assemble never fetches at runtime.
+ * - inject `window.__GAME_IMAGE_ASSETS__` (data URIs) plus a decode-progress
+ *   loader that fills `__GAME_IMAGE_ELEMENTS__` / `__GAME_IMAGE_PROGRESS__`.
+ */
+export const IMAGES_CONTRACT = {
+  manifestField: 'images',
+  windowAssetsName: '__GAME_IMAGE_ASSETS__',
+  windowElementsName: '__GAME_IMAGE_ELEMENTS__',
+  windowProgressName: '__GAME_IMAGE_PROGRESS__',
 } as const;
 
 /**
@@ -363,8 +393,19 @@ export const DELIVERY_RESERVED_SEGMENTS = [
 /** Cap on files per delivery. */
 export const DELIVERY_MAX_FILES = 200;
 
-/** Total bytes one delivery may carry. */
-export const DELIVERY_MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
+/**
+ * Additional raster files a game may deliver — quantized PNG/WebP under
+ * `scenes/`, `cast/`, or `images/`. Website-ahead of the games-repo JSON
+ * (exact-match `extraModulePattern` stays a `.ts` allowlist); a site that
+ * accepts a path no game sends yet is inert.
+ */
+export const DELIVERY_EXTRA_ASSET_PATTERN = new RegExp(
+  '^(?:scenes|cast|images)/[a-z0-9][a-z0-9/_-]{0,80}\\.(?:png|webp)$',
+  'i',
+);
+
+/** Total bytes one delivery may carry. Raised ahead of quantized scene PNGs. */
+export const DELIVERY_MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 /** The games-repo delivery contract as read off the wire. */
 export interface DeliveryContract {

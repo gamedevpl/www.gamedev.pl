@@ -21,6 +21,7 @@ import type { DeliveryMode, PreflightKind } from '@gamedevpl/contract';
 import { randomBytes } from 'node:crypto';
 import { GoogleAuth } from 'google-auth-library';
 import {
+  DELIVERY_EXTRA_ASSET_PATTERN,
   DELIVERY_EXTRA_MODULE_PATTERN,
   DELIVERY_FIXED_FILES,
   DELIVERY_MAX_FILES,
@@ -58,6 +59,8 @@ export const ALLOWED_SOURCE_FILES = DELIVERY_FIXED_FILES;
 
 /** A game's own `.ts` modules, the one thing it may add beyond the fixed set. */
 const EXTRA_SOURCE_PATTERN = DELIVERY_EXTRA_MODULE_PATTERN;
+/** Quantized scene/cast rasters — website-ahead of the games-repo JSON allowlist. */
+const EXTRA_ASSET_PATTERN = DELIVERY_EXTRA_ASSET_PATTERN;
 
 /**
  * Config-shaped or executable-config paths an externally-authored delivery must never
@@ -172,7 +175,7 @@ export class StagingGenerationMismatchError extends Error {
 export const MAX_STAGING_MANIFEST_RETRIES = 64;
 
 /** Hint derived from {@link ALLOWED_SOURCE_FILES} so refusal text cannot drift from the contract. */
-const ALLOWED_SOURCES_HINT = `${ALLOWED_SOURCE_FILES.join(', ')}, or your own .ts modules`;
+const ALLOWED_SOURCES_HINT = `${ALLOWED_SOURCE_FILES.join(', ')}, your own .ts modules, or scenes/cast/images PNG/WebP`;
 
 /**
  * True when a path is config-shaped or executable-config: tsconfig*, package*.json,
@@ -242,11 +245,12 @@ export function assertDeliverableSourcePath(rawPath: string): string {
 
   const allowed =
     (ALLOWED_SOURCE_FILES as readonly string[]).includes(path) ||
-    (EXTRA_SOURCE_PATTERN.test(path) && !path.includes('//'));
+    (EXTRA_SOURCE_PATTERN.test(path) && !path.includes('//')) ||
+    (EXTRA_ASSET_PATTERN.test(path) && !path.includes('//'));
   if (!allowed) {
     throw new InvalidUploadError(
       `path not deliverable: ${path}. Deliver only your own game's files ` +
-        `(${ALLOWED_SOURCE_FILES.join(', ')}, or your own .ts modules under the game).`,
+        `(${ALLOWED_SOURCE_FILES.join(', ')}, your own .ts modules, or scenes/cast/images PNG/WebP).`,
     );
   }
   return path;

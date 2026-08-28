@@ -1197,6 +1197,111 @@ describe('getGameSources', () => {
     expect(sources?.styleCss).toContain('image-rendering: pixelated');
   });
 
+  it('embeds GAME.json images as data URIs and prepends the decode loading screen', async () => {
+    const png = new Uint8Array([1, 2, 3, 4]);
+    const files = new Map<string, string | Uint8Array>([
+      ['games/painted/index.html', '<canvas id="game"></canvas>'],
+      ['games/painted/game.ts', 'GameKit.mount({ ok: true });'],
+      ['games/painted/style.css', '.game { color: moss; }'],
+      ['games/painted/SPEC.md', specMd({ title: 'Painted' })],
+      [
+        'games/painted/GAME.json',
+        JSON.stringify({
+          engine: { modules: ['input', 'audio'] },
+          audio: { sounds: ['ui-toggle'], music: 'calm-theme' },
+          images: { 'glade-bg': 'scenes/glade/bg.png' },
+        }),
+      ],
+      ['games/painted/scenes/glade/bg.png', png],
+      ['shared/game-shell.css', '.shell { display: grid; }'],
+      ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
+      ['shared/modules/input.ts', 'GameKit.createInput = function (): void {};'],
+      ['shared/modules/audio.ts', 'GameKit.createAudio = function (): void {};'],
+      ['shared/audio/assets/ui-toggle.wav', new Uint8Array([1, 2])],
+      [
+        'shared/audio/music.json',
+        JSON.stringify({ tracks: { 'calm-theme': { loop: true, data: 'data:audio/mpeg;base64,AAA=' } } }),
+      ],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(path);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const sources = await client.getGameSources('main', 'painted');
+    const expected = `data:image/png;base64,${Buffer.from(png).toString('base64')}`;
+    expect(sources?.gameJs).toContain('window.__GAME_IMAGE_ASSETS__ = Object.freeze(');
+    expect(sources?.gameJs).toContain(JSON.stringify(expected));
+    expect(sources?.gameJs).toContain('window.__GAME_IMAGE_ELEMENTS__');
+    expect(sources?.gameJs).toContain('window.__GAME_IMAGE_PROGRESS__');
+    expect(sources?.indexHtml).toContain('id="gk-load"');
+    expect(sources?.indexHtml).toContain('<canvas id="game"></canvas>');
+  });
+
+  it('refuses a GAME.json image whose path is not under scenes/, cast/, or images/', async () => {
+    const files = new Map<string, string | Uint8Array>([
+      ['games/painted/index.html', '<canvas id="game"></canvas>'],
+      ['games/painted/game.ts', 'GameKit.mount({ ok: true });'],
+      ['games/painted/style.css', '.game {}'],
+      ['games/painted/SPEC.md', specMd({ title: 'Painted' })],
+      [
+        'games/painted/GAME.json',
+        JSON.stringify({
+          engine: { modules: ['input'] },
+          images: { leak: 'media/opening.png' },
+        }),
+      ],
+      ['shared/game-shell.css', '.shell {}'],
+      ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
+      ['shared/modules/input.ts', 'GameKit.createInput = function (): void {};'],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(path);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    await expect(client.getGameSources('main', 'painted')).rejects.toThrow(/must be under scenes/);
+  });
+
+  it('refuses a GAME.json image larger than the per-file quantized cap', async () => {
+    const tooBig = new Uint8Array(400 * 1024 + 1);
+    const files = new Map<string, string | Uint8Array>([
+      ['games/painted/index.html', '<canvas id="game"></canvas>'],
+      ['games/painted/game.ts', 'GameKit.mount({ ok: true });'],
+      ['games/painted/style.css', '.game {}'],
+      ['games/painted/SPEC.md', specMd({ title: 'Painted' })],
+      [
+        'games/painted/GAME.json',
+        JSON.stringify({
+          engine: { modules: ['input'] },
+          images: { bg: 'scenes/glade/bg.png' },
+        }),
+      ],
+      ['games/painted/scenes/glade/bg.png', tooBig],
+      ['shared/game-shell.css', '.shell {}'],
+      ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
+      ['shared/modules/input.ts', 'GameKit.createInput = function (): void {};'],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(path);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    await expect(client.getGameSources('main', 'painted')).rejects.toThrow(/quantized PNG\/WebP must stay under/);
+  });
+
   it('falls back to the default canvas frame when a game ships neither style.css nor a theme', async () => {
     const files = new Map<string, string | Uint8Array>([
       ['games/plain-run/index.html', '<canvas id="game"></canvas>'],

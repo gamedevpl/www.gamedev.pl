@@ -292,6 +292,7 @@ const FILE_BUCKET = {
   'catalog-search-routes': 'catalog',
   'embedding-service': 'catalog',
   'github-client': 'catalog',
+  'raster-assets': 'catalog',
   'game-snapshot': 'catalog',
   'game-snapshot-publish': 'catalog',
   'catalog-genre-source': 'catalog',
