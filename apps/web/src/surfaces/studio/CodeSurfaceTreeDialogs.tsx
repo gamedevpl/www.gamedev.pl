@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { PixelIcon } from './PixelIcon.js';
+import { PixelIcon } from '../../PixelIcon.js';
 import type { PlannedUpload } from './codeSurfaceUpload.js';
 
 export type TreeConfirm =

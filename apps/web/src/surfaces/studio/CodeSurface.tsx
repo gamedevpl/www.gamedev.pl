@@ -51,7 +51,7 @@ import {
   setAgentModeEnabled,
   subscribeAgentActivity,
 } from './webmcp.js';
-import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
+import { StudioCreatorAgentKeyPanel } from '../../StudioCreatorAgentKeyPanel.js';
 import { flushLanguageFileUpdates, queueLanguageFileUpdate } from './codeSurfaceLanguageBind.js';
 import {
   createCodeSurfaceLanguageService,
@@ -65,10 +65,10 @@ import { diffLines } from './diffLines.js';
 import { declaredParamDefaultChanges, type DeclaredParamChange } from './editorJsonLiveDiff.js';
 import { clampParamValue, parseEditorParams, scrubStep, withParamDefault } from './editorParamsScrub.js';
 import { NumberScrubber } from './NumberScrubber.js';
-import { PixelIcon } from './PixelIcon.js';
-import { fetchGameEditor, type EditorContentDoc, type EditorParamValue } from './studioApi.js';
-import type { EditorContentPush } from './editorBridge.js';
-import { recordCodeStep } from './visitTelemetry.js';
+import { PixelIcon } from '../../PixelIcon.js';
+import { fetchGameEditor, type EditorContentDoc, type EditorParamValue } from '../../studioApi.js';
+import type { EditorContentPush } from '../../editorBridge.js';
+import { recordCodeStep } from '../../visitTelemetry.js';
 
 /**
  * The Code surface (creator-code-editing-execution-plan.md CE-06/07/08/09/13/15):

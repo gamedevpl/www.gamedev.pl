@@ -21,7 +21,7 @@ import {
   pruneEmptyFolders,
 } from './codeSurfaceTreeModel.js';
 import { collectUploadEntries, planSourceUpload, uploadHasWork, type PlannedUpload } from './codeSurfaceUpload.js';
-import { recordCodeStep } from './visitTelemetry.js';
+import { recordCodeStep } from '../../visitTelemetry.js';
 import type { TreeConfirm, TreePrompt } from './CodeSurfaceTreeDialogs.js';
 
 type TreeStep = 'file_created' | 'file_deleted' | 'file_moved' | 'files_uploaded';

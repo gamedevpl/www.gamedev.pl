@@ -9,7 +9,7 @@ import { CodeSurface } from './CodeSurface.js';
 import { resetCodeSurfaceSessionState } from './codeSurfaceSessionState.js';
 import * as codeSurfaceApi from './codeSurfaceApi.js';
 import * as codeSurfaceLanguageService from './codeSurfaceLanguageService.js';
-import i18n from './i18n/index.js';
+import i18n from '../../i18n/index.js';
 
 type CapturedEditorProps = {
   languageService?: { worker: unknown; path: string };

@@ -60,7 +60,7 @@ import {
   serializeCodeSurfaceEditorState,
   type CodeSurfaceEditorState,
 } from './codeSurfaceEditorState.js';
-import { recordCodeCompletion } from './visitTelemetry.js';
+import { recordCodeCompletion } from '../../visitTelemetry.js';
 
 // CodeMirror 6 (CE-14): lazy chunk; keyed by file path to remount.
 

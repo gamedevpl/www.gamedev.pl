@@ -7,7 +7,7 @@ import { COMPILER_OPTIONS } from './tsCompilerOptions.js';
 // GA-02: the completions worker — loaded only for an editable Code surface.
 
 // Lib .d.ts files load lazily via Vite chunks — no CDN.
-const libLoaders = import.meta.glob('../../../node_modules/typescript/lib/lib*.d.ts', {
+const libLoaders = import.meta.glob('../../../../../node_modules/typescript/lib/lib*.d.ts', {
   query: '?raw',
   import: 'default',
 }) as Record<string, () => Promise<string>>;

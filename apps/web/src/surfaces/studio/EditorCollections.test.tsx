@@ -3,7 +3,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import i18n from './i18n/index.js';
+import i18n from '../../i18n/index.js';
 import type {
   EditorCollectionSpec,
   EditorContentDoc,
@@ -12,22 +12,22 @@ import type {
   EditorItemContent,
   GameEditorState,
   StudioGame,
-} from './studioApi.js';
+} from '../../studioApi.js';
 
 const fetchGameEditor = vi.hoisted(() => vi.fn());
 const putEditorDraft = vi.hoisted(() => vi.fn());
 const publishEditorContent = vi.hoisted(() => vi.fn());
 
-vi.mock('./studioApi.js', async () => {
-  const actual = await vi.importActual<typeof import('./studioApi.js')>('./studioApi.js');
+vi.mock('../../studioApi.js', async () => {
+  const actual = await vi.importActual<typeof import('../../studioApi.js')>('../../studioApi.js');
   return { ...actual, fetchGameEditor, putEditorDraft, publishEditorContent };
 });
 
-vi.mock('./visitTelemetry.js', () => ({ recordAssistStep: vi.fn(), recordEditorStep: vi.fn() }));
+vi.mock('../../visitTelemetry.js', () => ({ recordAssistStep: vi.fn(), recordEditorStep: vi.fn() }));
 
 import { EditorPanel } from './EditorPanel.js';
-import { RemixPainter } from './RemixPainter.js';
-import type { EditorContentPush } from './editorBridge.js';
+import { RemixPainter } from '../../RemixPainter.js';
+import type { EditorContentPush } from '../../editorBridge.js';
 
 const mapItem: EditorItemContent = { properties: { name: 'Map 1' }, rows: ['..', '..'] };
 const routeItem: EditorItemContent = { properties: { name: 'Route 1' }, rows: ['##', '##'] };

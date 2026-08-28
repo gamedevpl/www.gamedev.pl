@@ -4,8 +4,8 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EditorSurface } from './EditorSurface.js';
-import type { EditorControllerState } from './editorBridge.js';
-import i18n from './i18n/index.js';
+import type { EditorControllerState } from '../../editorBridge.js';
+import i18n from '../../i18n/index.js';
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
