@@ -43,6 +43,7 @@ export const RESERVED_HANDLES: ReadonlySet<string> = new Set([
   'creator',
   'creators',
   'dev',
+  'device',
   'draft',
   'gamedev',
   'gamedevpl',
@@ -57,9 +58,7 @@ export const RESERVED_HANDLES: ReadonlySet<string> = new Set([
   'play',
   'platform',
   'privacy',
-  // First-class product route (the proposer's tracker). Reserved for the same reason
-  // `studio` and `play` are: `/proposals` resolves to that surface before the root-handle
-  // fallback, so a claimed handle of this name would have an unreachable profile.
+  // `/proposals` is a first-class route, same as `studio` and `play`.
   'proposals',
   'review',
   'root',

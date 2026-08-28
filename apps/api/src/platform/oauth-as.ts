@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import type { Locale } from '@gamedevpl/contract';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -6,6 +6,18 @@ import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import { endOpenAgentSessions } from '../agent-surface/agent-session-revocation.js';
 import { InvalidSessionError, readSessionCookie, readSessionToken } from './auth.js';
 import { escapeHtml, MASCOT_SVG, OAUTH_PAGE_STYLES } from './oauth-page-chrome.js';
+import { isRateLimited } from './ip-rate-limit.js';
+import { cliSurfaceEnabled } from './cli-surface.js';
+import { DEVICE_GRANT_TYPE, exchangeDeviceCode, registerOAuthDeviceRoutes } from './oauth-device.js';
+import { consentHtml, consentToken, consentTokenValid } from './oauth-consent.js';
+import { gamedevCliClient, gamedevCliGrantLabel, isGamedevCliClient, sanitizeDeviceName } from './oauth-first-party.js';
+import {
+  advertisedOAuthScopes,
+  formatOAuthScope,
+  MAX_OAUTH_GRANTS_PER_UID,
+  parseOAuthScopes,
+  scopeHasMcp,
+} from './oauth-scopes.js';
 import { redirectUriAllowed } from './oauth-redirect.js';
 import { verifyPkceS256 } from './oauth-pkce.js';
 import {
@@ -26,7 +38,7 @@ import {
 import type { OAuthClientRecord, OAuthGrantRecord, Store } from './store.js';
 
 export const OAUTH_AS_METADATA_PATH = '/.well-known/oauth-authorization-server';
-const MCP_SCOPE = 'mcp';
+export { consentToken } from './oauth-consent.js';
 
 const DCR_RATE_LIMIT_MAX = 10;
 const DCR_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
@@ -35,6 +47,9 @@ const cimdCache = new Map<string, { client: OAuthClientRecord; expiresAt: number
 const CIMD_CACHE_TTL_MS = 5 * 60 * 1000;
 
 const dcrHitsByIp = new Map<string, number[]>();
+const tokenHitsByIp = new Map<string, number[]>();
+const TOKEN_RATE_LIMIT_MAX = 60;
+const TOKEN_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 
 export interface OAuthAuthorizationServerOptions {
   store: Store;
@@ -163,13 +178,17 @@ async function fetchCimdClient(clientIdUrl: string, nowMs: number): Promise<OAut
 }
 
 async function resolveOAuthClient(store: Store, clientId: string, nowMs: number): Promise<OAuthClientRecord | null> {
+  if (isGamedevCliClient(clientId)) return gamedevCliClient();
   if (clientId.startsWith('https://')) {
     return fetchCimdClient(clientId, nowMs);
   }
   return store.getOAuthClient(clientId);
 }
 
-function clientLabel(client: OAuthClientRecord, redirectUri?: string): string {
+function clientLabel(client: OAuthClientRecord, grant?: OAuthGrantRecord, redirectUri?: string): string {
+  if (isGamedevCliClient(client.clientId)) {
+    return gamedevCliGrantLabel(grant?.deviceName ?? 'this device');
+  }
   if (redirectUri) {
     try {
       return new URL(redirectUri).host;
@@ -186,155 +205,6 @@ function clientLabel(client: OAuthClientRecord, redirectUri?: string): string {
     }
   }
   return client.clientId;
-}
-
-/**
- * Days of inactivity after which a grant dies on its own.
- *
- * Derived, not typed as a number: the consent screen states this as a promise, and a
- * promise that drifts from the constant enforcing it is the defect this whole screen
- * exists to stop making.
- */
-const INACTIVITY_DAYS = Math.round(AS_REFRESH_TOKEN_TTL_MS / (24 * 60 * 60 * 1000));
-
-/**
- * Binds the consent form to the session that was shown it.
- *
- * `POST /oauth/authorize` mints a real, durable grant, and its only protection was the
- * session cookie's `sameSite: 'lax'` — which does not cover a top-level form POST from
- * another origin. That is the one request on this server where a cross-site submit is
- * worth mounting: it hands a coding agent standing write access to someone's games
- * without the consent screen ever rendering.
- *
- * Stateless on purpose: the HMAC covers the uid together with the exact request being
- * consented to, so a token cannot be lifted from one creator's form onto another's, nor
- * replayed against a different client or PKCE challenge.
- */
-export function consentToken(input: { uid: string; clientId: string; codeChallenge: string; secret: string }): string {
-  return createHmac('sha256', input.secret)
-    .update(`oauth-consent-v1:${input.uid}:${input.clientId}:${input.codeChallenge}`)
-    .digest('hex');
-}
-
-function consentTokenValid(candidate: string, expected: string): boolean {
-  const a = Buffer.from(candidate, 'utf8');
-  const b = Buffer.from(expected, 'utf8');
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-
-function consentHtml(input: {
-  lang: Locale;
-  redirectUri: string;
-  clientId: string;
-  clientName?: string;
-  account?: string;
-  state?: string;
-  codeChallenge: string;
-  scope: string;
-  consentToken: string;
-}): string {
-  // Falls back to the client_id when a client registered without a name. Better a URL
-  // the creator can read than "a coding agent", which every client would say.
-  const client = input.clientName?.trim() || input.clientId;
-  const copy =
-    input.lang === 'pl'
-      ? {
-          title: `Połącz ${client}`,
-          lead: `${client} prosi o budowanie gier na Twoim koncie.`,
-          as: 'Zatwierdzasz jako',
-          canTitle: 'Będzie mógł',
-          can: [
-            'Rozpoczynać i kontynuować rundy budowania Twoich gier',
-            'Zużywać Twój dzienny limit poprawek',
-            'Czytać i zastępować źródła Twoich gier',
-            'Publikować nowe wersje w katalogu',
-          ],
-          cannotTitle: 'Nie będzie mógł',
-          cannot: ['Dotykać gier, których nie jesteś właścicielem', 'Zmieniać Twojego konta ani logowania'],
-          redirect: 'Wrócisz na',
-          redirectHint: 'To powinien być agent, którego przed chwilą użyłeś. Jeśli go nie rozpoznajesz — odmów.',
-          duration: `Dostęp trwa, dopóki go nie cofniesz w Studio — albo dopóki agent nie połączy się przez ${INACTIVITY_DAYS} dni.`,
-          approve: 'Zatwierdź',
-          deny: 'Odmów',
-          bail: 'Nie łączyłeś przed chwilą agenta? Naciśnij Odmów — nic nie zostanie udostępnione.',
-        }
-      : {
-          title: `Connect ${client}`,
-          lead: `${client} is asking to build games on your account.`,
-          as: 'Granting as',
-          canTitle: 'It will be able to',
-          can: [
-            'Start and continue build rounds on games you own',
-            'Use your daily improvement rounds',
-            'Read and replace the sources of your games',
-            'Publish new versions to the catalog',
-          ],
-          cannotTitle: 'It will not be able to',
-          cannot: ['Touch games you do not own', 'Change your account or how you sign in'],
-          redirect: "You'll be sent back to",
-          redirectHint: 'This should be the agent you just used. If you do not recognise it, deny.',
-          duration: `Access lasts until you revoke it in Studio, or until the agent goes ${INACTIVITY_DAYS} days without connecting.`,
-          approve: 'Approve',
-          deny: 'Deny',
-          bail: 'Did not just connect an agent? Press Deny — nothing is shared unless you approve.',
-        };
-
-  const hidden = [
-    `<input type="hidden" name="client_id" value="${escapeHtml(input.clientId)}" />`,
-    `<input type="hidden" name="redirect_uri" value="${escapeHtml(input.redirectUri)}" />`,
-    input.state ? `<input type="hidden" name="state" value="${escapeHtml(input.state)}" />` : '',
-    `<input type="hidden" name="code_challenge" value="${escapeHtml(input.codeChallenge)}" />`,
-    `<input type="hidden" name="code_challenge_method" value="S256" />`,
-    `<input type="hidden" name="scope" value="${escapeHtml(input.scope)}" />`,
-    `<input type="hidden" name="response_type" value="code" />`,
-    `<input type="hidden" name="consent_token" value="${escapeHtml(input.consentToken)}" />`,
-  ].join('\n');
-
-  const list = (items: string[]) => items.map((item) => `<li>${escapeHtml(item)}</li>`).join('\n      ');
-
-  return `<!doctype html>
-<html lang="${input.lang}">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${escapeHtml(copy.title)}</title>
-  ${OAUTH_PAGE_STYLES}
-</head>
-<body>
-  <main>
-    <p class="brand">${MASCOT_SVG}<span>gamedev.pl</span></p>
-    <h1>${escapeHtml(copy.title)}</h1>
-    <p class="lead">${escapeHtml(copy.lead)}</p>
-    ${input.account ? `<p class="who">${escapeHtml(copy.as)} <strong>${escapeHtml(input.account)}</strong></p>` : ''}
-
-    <h2>${escapeHtml(copy.canTitle)}</h2>
-    <ul class="can">
-      ${list(copy.can)}
-    </ul>
-
-    <h2>${escapeHtml(copy.cannotTitle)}</h2>
-    <ul class="cannot">
-      ${list(copy.cannot)}
-    </ul>
-
-    <h2>${escapeHtml(copy.redirect)}</h2>
-    <p class="redirect">${escapeHtml(input.redirectUri)}</p>
-    <p class="hint">${escapeHtml(copy.redirectHint)}</p>
-
-    <p class="duration">${escapeHtml(copy.duration)}</p>
-
-    <form method="post" action="/oauth/authorize">
-      ${hidden}
-      <div class="actions">
-        <button type="submit" name="action" value="approve" class="approve">${escapeHtml(copy.approve)}</button>
-        <button type="submit" name="action" value="deny">${escapeHtml(copy.deny)}</button>
-      </div>
-    </form>
-
-    <p class="bail">${escapeHtml(copy.bail)}</p>
-  </main>
-</body>
-</html>`;
 }
 
 function oauthErrorRedirect(redirectUri: string, error: string, state?: string): string {
@@ -359,6 +229,7 @@ const AuthorizeQuerySchema = z.object({
   state: z.string().optional(),
   code_challenge: z.string().min(1),
   code_challenge_method: z.literal('S256'),
+  device: z.string().max(40).optional(),
 });
 
 const DcrBodySchema = z.object({
@@ -385,6 +256,8 @@ export function registerOAuthAuthorizationServerRoutes(
     });
   }
 
+  registerOAuthDeviceRoutes(app, { sessionSecret, sessionSecretPrev, now });
+
   app.get(OAUTH_AS_METADATA_PATH, async (_request, reply) => {
     return reply
       .header('Cache-Control', 'public, max-age=3600')
@@ -396,10 +269,13 @@ export function registerOAuthAuthorizationServerRoutes(
         registration_endpoint: oauthUrl('/oauth/register'),
         revocation_endpoint: oauthUrl('/oauth/revoke'),
         response_types_supported: ['code'],
-        grant_types_supported: ['authorization_code', 'refresh_token'],
+        grant_types_supported: cliSurfaceEnabled()
+          ? ['authorization_code', 'refresh_token', DEVICE_GRANT_TYPE]
+          : ['authorization_code', 'refresh_token'],
         code_challenge_methods_supported: ['S256'],
         token_endpoint_auth_methods_supported: ['none'],
-        scopes_supported: [MCP_SCOPE],
+        scopes_supported: advertisedOAuthScopes(),
+        ...(cliSurfaceEnabled() ? { device_authorization_endpoint: oauthUrl('/oauth/device') } : {}),
         client_id_metadata_document_supported: true,
       });
   });
@@ -448,7 +324,7 @@ export function registerOAuthAuthorizationServerRoutes(
   async function validateAuthorizeParams(
     request: FastifyRequest,
   ): Promise<
-    | { ok: true; params: z.infer<typeof AuthorizeQuerySchema>; client: OAuthClientRecord }
+    | { ok: true; params: z.infer<typeof AuthorizeQuerySchema>; client: OAuthClientRecord; scope: string }
     | { ok: false; status: number; error: string }
   > {
     const raw = request.method === 'GET' ? request.query : request.body;
@@ -457,7 +333,8 @@ export function registerOAuthAuthorizationServerRoutes(
       return { ok: false, status: 400, error: 'invalid_request' };
     }
     const params = parsed.data;
-    if ((params.scope ?? MCP_SCOPE) !== MCP_SCOPE) {
+    const scopes = parseOAuthScopes(params.scope);
+    if (!scopes) {
       return { ok: false, status: 400, error: 'invalid_scope' };
     }
 
@@ -467,7 +344,7 @@ export function registerOAuthAuthorizationServerRoutes(
       return { ok: false, status: 400, error: 'invalid_redirect_uri' };
     }
 
-    return { ok: true, params, client };
+    return { ok: true, params, client, scope: formatOAuthScope(scopes) };
   }
 
   app.get('/oauth/authorize', async (request, reply) => {
@@ -482,7 +359,7 @@ export function registerOAuthAuthorizationServerRoutes(
       return reply.status(validated.status).send({ error: validated.error });
     }
 
-    const { params, client } = validated;
+    const { params, client, scope } = validated;
     const lang = pickLang(request);
     const user = await store.getUser(uid);
 
@@ -503,7 +380,8 @@ export function registerOAuthAuthorizationServerRoutes(
         account: user?.email,
         state: params.state,
         codeChallenge: params.code_challenge,
-        scope: params.scope ?? MCP_SCOPE,
+        scope,
+        ...(params.device ? { device: params.device } : {}),
         consentToken: consentToken({
           uid,
           clientId: params.client_id,
@@ -525,7 +403,7 @@ export function registerOAuthAuthorizationServerRoutes(
       return reply.status(validated.status).send({ error: validated.error });
     }
 
-    const { params } = validated;
+    const { params, scope } = validated;
 
     // A grant is durable write access to someone's games, and `sameSite: 'lax'` does not
     // stop a top-level cross-site form POST — so without this the screen above could be
@@ -559,17 +437,22 @@ export function registerOAuthAuthorizationServerRoutes(
     }
 
     const nowMs = now();
+    const held = await store.listOAuthGrantsByOwner(uid);
+    if (held.length >= MAX_OAUTH_GRANTS_PER_UID) {
+      return reply.redirect(oauthErrorRedirect(params.redirect_uri, 'access_denied', params.state));
+    }
     const grantId = randomUUID();
     const grant: OAuthGrantRecord = {
       grantId,
       clientId: params.client_id,
       ownerUid: uid,
-      scope: MCP_SCOPE,
+      scope,
       createdAt: new Date(nowMs).toISOString(),
       refreshFamilyId: grantId,
       currentRefreshTokenId: '',
       currentRefreshHash: '',
       refreshExpiresAt: new Date(nowMs + AS_REFRESH_TOKEN_TTL_MS).toISOString(),
+      ...(isGamedevCliClient(params.client_id) ? { deviceName: sanitizeDeviceName(params.device) } : {}),
     };
     await store.createOAuthGrant(grant);
 
@@ -582,7 +465,7 @@ export function registerOAuthAuthorizationServerRoutes(
       redirectUri: params.redirect_uri,
       codeChallenge: params.code_challenge,
       codeChallengeMethod: 'S256',
-      scope: MCP_SCOPE,
+      scope,
       expiresAt: new Date(nowMs + AS_AUTH_CODE_TTL_MS).toISOString(),
       grantId,
     });
@@ -595,12 +478,14 @@ export function registerOAuthAuthorizationServerRoutes(
     if (!body || typeof body !== 'object') {
       return reply.status(400).send({ error: 'invalid_request' });
     }
+    const nowMs = now();
+    if (isRateLimited(tokenHitsByIp, request.clientIp, nowMs, TOKEN_RATE_LIMIT_MAX, TOKEN_RATE_LIMIT_WINDOW_MS)) {
+      return reply.status(429).send({ error: 'too_many_requests' });
+    }
     const grantType =
       typeof (body as { grant_type?: string }).grant_type === 'string'
         ? (body as { grant_type: string }).grant_type
         : '';
-
-    const nowMs = now();
 
     if (grantType === 'authorization_code') {
       const code = typeof (body as { code?: string }).code === 'string' ? (body as { code: string }).code.trim() : '';
@@ -701,7 +586,7 @@ export function registerOAuthAuthorizationServerRoutes(
         // Refresh-token reuse revokes the whole grant in the store. Session keys minted
         // before that revocation do not consult the grant, so advance the creator's open
         // self rounds as well or the stolen capability would remain writable for 24h.
-        if (rotateResult.reason === 'reuse') {
+        if (rotateResult.reason === 'reuse' && scopeHasMcp(grant.scope)) {
           await endOpenAgentSessions(store, grant.ownerUid);
         }
         return reply.status(400).send({ error: 'invalid_grant' });
@@ -713,6 +598,28 @@ export function registerOAuthAuthorizationServerRoutes(
         expires_in: Math.floor(AS_ACCESS_TOKEN_TTL_MS / 1000),
         token_type: 'Bearer',
         scope: rotateResult.grant.scope,
+      });
+    }
+
+    if (grantType === DEVICE_GRANT_TYPE) {
+      const deviceCode =
+        typeof (body as { device_code?: string }).device_code === 'string'
+          ? (body as { device_code: string }).device_code.trim()
+          : '';
+      const clientId =
+        typeof (body as { client_id?: string }).client_id === 'string'
+          ? (body as { client_id: string }).client_id.trim()
+          : '';
+      const exchanged = await exchangeDeviceCode(store, { deviceCode, clientId, nowMs });
+      if (!exchanged.ok) {
+        return reply.status(exchanged.status).send({ error: exchanged.error });
+      }
+      return reply.send({
+        access_token: exchanged.accessToken,
+        refresh_token: exchanged.refreshToken,
+        expires_in: Math.floor(AS_ACCESS_TOKEN_TTL_MS / 1000),
+        token_type: 'Bearer',
+        scope: exchanged.scope,
       });
     }
 
@@ -755,7 +662,7 @@ export function registerOAuthAuthorizationServerRoutes(
       // token repeatedly advance every self round as a denial-of-service primitive.
       if (grant && !grant.revokedAt) {
         const revoked = await store.revokeOAuthGrant(grantId, grant.ownerUid);
-        if (revoked) await endOpenAgentSessions(store, grant.ownerUid);
+        if (revoked && scopeHasMcp(grant.scope)) await endOpenAgentSessions(store, grant.ownerUid);
       }
     }
 
@@ -774,7 +681,7 @@ export function registerOAuthAuthorizationServerRoutes(
         return {
           grantId: grant.grantId,
           clientId: grant.clientId,
-          clientLabel: client ? clientLabel(client, redirectHost) : grant.clientId,
+          clientLabel: client ? clientLabel(client, grant, redirectHost) : grant.clientId,
           createdAt: grant.createdAt,
           lastUsedAt: grant.lastUsedAt ?? null,
         };
@@ -788,12 +695,12 @@ export function registerOAuthAuthorizationServerRoutes(
     if (!uid) return reply.status(401).send({ error: 'unauthorized' });
 
     const grantId = (request.params as { grantId: string }).grantId;
+    const existing = await store.getOAuthGrant(grantId);
     const revoked = await store.revokeOAuthGrant(grantId, uid);
     if (!revoked) return reply.status(404).send({ error: 'not_found' });
-    // OAuth access is only checked by start(). The returned sessionKey is bound to the
-    // round generation, so revoking the grant must advance that generation just like a
-    // creator-key rotation/revoke does. This makes "disconnect immediately" truthful.
-    await endOpenAgentSessions(store, uid);
+    if (existing && scopeHasMcp(existing.scope)) {
+      await endOpenAgentSessions(store, uid);
+    }
     return reply.status(204).send();
   });
 }

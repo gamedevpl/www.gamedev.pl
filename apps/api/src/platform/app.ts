@@ -978,6 +978,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     store,
     sessionSecret: oauthSessionSecret,
     sessionSecretPrev: oauthSessionSecretPrev,
+    now: options.submissionRoutes?.now,
   });
 
   // Browser sign-in for accounts that hold a personal access token instead of a Google

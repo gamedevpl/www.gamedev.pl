@@ -1,7 +1,7 @@
 import { looksLikeCreatorAgentKey } from './agent-creator-key.js';
 import { verifyDurableCreatorAgentKey } from './agent-creator-key-resolve.js';
 import { looksLikeGameAgentKey, SESSION_KEY_IS_NOT_AN_OPENER_REASON } from './agent-game-key.js';
-import { looksLikeAsAccessToken, verifyAsAccessToken } from '../platform/oauth-tokens.js';
+import { looksLikeAsAccessToken, verifyMcpAsAccessToken as verifyAsAccessToken } from '../platform/oauth-scopes.js';
 import { looksLikeMcpSessionKey } from './mcp-session-key.js';
 import type { Store } from '../platform/store.js';
 import {

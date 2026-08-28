@@ -287,11 +287,11 @@ describe('the worker source this module rewrites', () => {
     const isServerRenderedRoute = new Function('url', `${source}\nreturn isServerRenderedRoute(url);`) as (
       url: URL,
     ) => boolean;
-
     // CP-2 found every returning creator got the SPA NotFound page here, because the
     // shell answered the navigation and the server never saw it.
     expect(isServerRenderedRoute(new URL('https://www.gamedev.pl/oauth/authorize?client_id=x'))).toBe(true);
     expect(isServerRenderedRoute(new URL('https://www.gamedev.pl/.well-known/oauth-authorization-server'))).toBe(true);
+    expect(isServerRenderedRoute(new URL('https://www.gamedev.pl/device'))).toBe(true);
 
     // Real SPA routes must keep being served from the shell — that is the whole point
     // of the worker, and exempting them would give up offline deep links.

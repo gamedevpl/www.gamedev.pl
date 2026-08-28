@@ -1,6 +1,6 @@
 import { looksLikeCreatorAgentKey } from './agent-creator-key.js';
 import { verifyDurableCreatorAgentKey } from './agent-creator-key-resolve.js';
-import { looksLikeAsAccessToken, verifyAsAccessToken } from '../platform/oauth-tokens.js';
+import { looksLikeAsAccessToken, verifyMcpAsAccessToken as verifyAsAccessToken } from '../platform/oauth-scopes.js';
 import {
   canProposeTo,
   openProposal,
