@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AdminConfirmDialog } from './AdminConfirmDialog.js';
+import { publishConfirmCopy } from './adminJobConfirm.js';
 import { GameFrame } from './GameFrame.js';
 import {
   fetchJobPreview,
@@ -141,9 +142,7 @@ export function AdminJobPreviewModal({
       </div>
       {confirmingPublish ? (
         <AdminConfirmDialog
-          title={`Publish ${job.title}?`}
-          body={job.slug ? `This goes live on the catalog as ${job.slug}.` : 'This goes live on the catalog.'}
-          confirmLabel="Publish"
+          {...publishConfirmCopy([job])}
           busy={publishing}
           busyLabel="Publishing…"
           onConfirm={() => void onPublish()}

@@ -34,8 +34,7 @@ export function AdminConfirmDialog({
       event.stopImmediatePropagation();
       if (!busy) onDismiss();
     };
-    // Capture so Escape dismisses this dialog instead of a parent overlay
-    // (the preview theater also listens for Escape).
+    // Capture so Escape cannot close the parent preview.
     window.addEventListener('keydown', onKeyDown, true);
     return () => {
       window.removeEventListener('keydown', onKeyDown, true);
