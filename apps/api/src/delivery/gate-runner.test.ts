@@ -72,6 +72,41 @@ describe('runGate', () => {
     );
   });
 
+  it('materializes raster sources as file bytes, not UTF-8 text', async () => {
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    const harness = await harnessDir();
+    const store = {
+      getManifest: async () => ({
+        ...MANIFEST,
+        sourceFiles: ['game.ts', 'scenes/glade/bg.png'],
+      }),
+      getSourceFile: async (_slug: string, _version: string, filePath: string) =>
+        filePath.endsWith('.png') ? png.toString('base64') : `contents of ${filePath}`,
+      putDerivedArtifact: async () => undefined,
+      putCandidateSources: vi.fn(),
+      putGateResult: vi.fn(),
+      getDerivedArtifact: async () => null,
+      getKitRegistry: async () => null,
+    } as unknown as GamesStore;
+    let written: Buffer | null = null;
+    const run = vi.fn(async () => {
+      written = await readFile(path.join(harness, 'games/comet-courier/scenes/glade/bg.png'));
+      return { code: 0, output: 'all good' };
+    });
+
+    await runGate('comet-courier', 'v1', {
+      store,
+      prepareHarness: async () => harness,
+      run,
+      assembleBundle: stubAssemble,
+    });
+
+    expect(written).toEqual(png);
+  });
+
   it('reports preparing and check:game stage banners via onProgress', async () => {
     const harness = await harnessDir();
     const { store } = stubStore();

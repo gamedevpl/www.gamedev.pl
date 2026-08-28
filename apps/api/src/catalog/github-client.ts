@@ -29,6 +29,8 @@ import {
 import {
   assertImageFileSize,
   assertImageSignature,
+  decodeRasterSourceContent,
+  encodeRasterSourceContent,
   imageLoaderBootJs,
   imageLoaderHtml,
   mimeForImagePath,
@@ -1405,9 +1407,24 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       for (const entry of fixedEntries) {
         if (entry) sources[entry[0]] = entry[1];
       }
-      // Every game relies on this — neither file is ever committed anymore.
       const manifestSource = sources['GAME.json'];
       if (manifestSource) {
+        let images: ImageManifest;
+        try {
+          images = parseGameImages((JSON.parse(manifestSource) as { images?: unknown }).images);
+        } catch {
+          images = {};
+        }
+        for (const [name, relPath] of Object.entries(images)) {
+          const bytes = await readRawBytes(`games/${slug}/${relPath}`, ref);
+          if (!bytes) {
+            throw new Error(`game image "${name}" not found: ${relPath}`);
+          }
+          assertImageFileSize(name, bytes.byteLength);
+          assertImageSignature(name, relPath, bytes);
+          sources[relPath] = encodeRasterSourceContent(bytes);
+        }
+        // Every game relies on this — neither file is ever committed anymore.
         if (!sources['index.html']?.trim()) {
           const title = sources['SPEC.md'] ? parseSpecTitle(sources['SPEC.md']) : null;
           const generated = generateIndexHtmlFromManifest(manifestSource, title ?? slug);
@@ -1454,6 +1471,19 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         if (overrides && Object.hasOwn(overrides, relative)) return overrides[relative];
         if (options?.noRefFallback) return null;
         return await readRawFile(`games/${slug}/${relative}`, ref);
+      };
+
+      const gameImageBytes = async (relative: string, name: string): Promise<Uint8Array | null> => {
+        if (overrides && Object.hasOwn(overrides, relative)) {
+          try {
+            return decodeRasterSourceContent(relative, overrides[relative]);
+          } catch (error) {
+            const detail = error instanceof Error ? error.message : 'invalid raster';
+            throw new Error(`game image "${name}" (${relative}): ${detail}`, { cause: error });
+          }
+        }
+        if (options?.noRefFallback) return null;
+        return await readRawBytes(`games/${slug}/${relative}`, ref);
       };
 
       const startedAt = Date.now();
@@ -1597,7 +1627,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         const imageAssets: Record<string, string> = {};
         for (const name of imageNames) {
           const relPath = manifest.images[name];
-          const bytes = await readRawBytes(`games/${slug}/${relPath}`, ref);
+          const bytes = await gameImageBytes(relPath, name);
           if (!bytes) {
             throw new Error(`game image "${name}" not found: ${relPath}`);
           }

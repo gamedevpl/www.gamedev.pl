@@ -31,6 +31,12 @@ import {
 import type { GateProgress, GateProgressStage } from './gate-progress.js';
 import { applyGateVerdict, applyPreviewGateVerdict, applyHealthVerdict } from './version-verdict.js';
 import { hasPlayableHowToPlay } from '../catalog/index-html-generator.js';
+import {
+  decodeRasterSourceContent,
+  encodeRasterSourceContent,
+  isRasterSourcePath,
+  mimeForImagePath,
+} from '../catalog/raster-assets.js';
 import { parseKitSidecar } from '../platform/kit-registry.js';
 import { KIT_REGISTRY_OBJECT, parseKitRegistry, type KitRegistry } from '../platform/kit-window.js';
 import { findUnresolvedSourceLinks, formatSourceLinkError, sourceFilesToMap } from './source-link-check.js';
@@ -61,6 +67,26 @@ export const ALLOWED_SOURCE_FILES = DELIVERY_FIXED_FILES;
 const EXTRA_SOURCE_PATTERN = DELIVERY_EXTRA_MODULE_PATTERN;
 /** Quantized scene/cast rasters — website-ahead of the games-repo JSON allowlist. */
 const EXTRA_ASSET_PATTERN = DELIVERY_EXTRA_ASSET_PATTERN;
+
+function sourceObjectBytes(path: string, content: string): Buffer {
+  if (isRasterSourcePath(path)) return decodeRasterSourceContent(path, content);
+  return Buffer.from(content, 'utf8');
+}
+
+function sourceObjectContentType(path: string): string {
+  return isRasterSourcePath(path) ? mimeForImagePath(path) : 'text/plain; charset=utf-8';
+}
+
+function sourceFileContentFromObject(path: string, body: Buffer): string {
+  return isRasterSourcePath(path) ? encodeRasterSourceContent(body) : body.toString('utf8');
+}
+
+function sourceFileFromObject(path: string, body: Buffer): SourceFile {
+  if (isRasterSourcePath(path)) {
+    return { path, content: encodeRasterSourceContent(body), encoding: 'base64' };
+  }
+  return { path, content: body.toString('utf8') };
+}
 
 /**
  * Config-shaped or executable-config paths an externally-authored delivery must never
@@ -120,6 +146,8 @@ const MAX_SCANNED_DELIVERY_BYTES = 1024 * 1024;
 export interface SourceFile {
   path: string;
   content: string;
+  /** Raster paths store canonical base64 of the file bytes, never a UTF-8 transcode. */
+  encoding?: 'utf8' | 'base64';
 }
 
 /**
@@ -274,7 +302,15 @@ export function validateSourceUpload(
     const path = assertDeliverableSourcePath(file.path);
     if (seen.has(path)) throw new InvalidUploadError(`duplicate path: ${path}`);
 
-    total += Buffer.byteLength(file.content, 'utf8');
+    if (isRasterSourcePath(path)) {
+      try {
+        total += decodeRasterSourceContent(path, file.content).byteLength;
+      } catch (error) {
+        throw new InvalidUploadError(error instanceof Error ? error.message : `invalid raster: ${path}`);
+      }
+    } else {
+      total += Buffer.byteLength(file.content, 'utf8');
+    }
     if (total > MAX_UPLOAD_BYTES) throw new InvalidUploadError(`upload too large: over ${MAX_UPLOAD_BYTES} bytes`);
 
     seen.add(path);
@@ -372,7 +408,12 @@ export function validateSourceUpload(
   }
 
   // Refuse missing cross-file symbols before the async gate.
-  const normalized = files.map((file) => ({ path: file.path.trim(), content: file.content }));
+  const normalized = files.map((file) => {
+    const path = file.path.trim();
+    if (!isRasterSourcePath(path)) return { path, content: file.content };
+    const bytes = decodeRasterSourceContent(path, file.content);
+    return { path, content: encodeRasterSourceContent(bytes), encoding: 'base64' as const };
+  });
 
   // `any` is refused here rather than at the gate, for the reason the gate refuses it at
   // all: it is the difference between a mistake the checker catches and one a player
@@ -974,7 +1015,11 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
 
       await Promise.all(
         files.map((file) =>
-          writeObject(`${prefix}/source/${file.path}`, Buffer.from(file.content, 'utf8'), 'text/plain; charset=utf-8'),
+          writeObject(
+            `${prefix}/source/${file.path}`,
+            sourceObjectBytes(file.path, file.content),
+            sourceObjectContentType(file.path),
+          ),
         ),
       );
 
@@ -1016,7 +1061,13 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const path = assertDeliverableSourcePath(input.path);
       const indexHtmlReason = forbiddenIndexHtmlWriteReason(path, input.content);
       if (indexHtmlReason) throw new InvalidUploadError(indexHtmlReason);
-      const bytes = Buffer.byteLength(input.content, 'utf8');
+      let stored: Buffer;
+      try {
+        stored = sourceObjectBytes(path, input.content);
+      } catch (error) {
+        throw new InvalidUploadError(error instanceof Error ? error.message : `invalid file: ${path}`);
+      }
+      const bytes = stored.byteLength;
       if (bytes > 1_000_000) {
         throw new InvalidUploadError(`file too large: ${path} is ${bytes} bytes (max 1000000 per file)`);
       }
@@ -1024,7 +1075,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const prefix = stagingPrefix(input.slug, input.jobId, input.roundGeneration);
       // Source bytes first — orphaned sources without a manifest entry are harmless;
       // a lost race on the manifest is retried below.
-      await writeObject(`${prefix}/source/${path}`, Buffer.from(input.content, 'utf8'), 'text/plain; charset=utf-8');
+      await writeObject(`${prefix}/source/${path}`, stored, sourceObjectContentType(path));
 
       for (let attempt = 0; attempt < MAX_STAGING_MANIFEST_RETRIES; attempt++) {
         const existing = await readStagingManifest(input.slug, input.jobId, input.roundGeneration);
@@ -1151,7 +1202,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
               `staged file missing: ${entry.path} — stage it again, then submit_sources with fromStaged=true`,
             );
           }
-          return { path: entry.path, content: body.toString('utf8') };
+          return sourceFileFromObject(entry.path, body);
         }),
       );
       return files;
@@ -1163,7 +1214,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const existing = await readStagingManifest(input.slug, input.jobId, input.roundGeneration);
       if (!existing?.manifest.files.some((file) => file.path === path)) return null;
       const body = await readObject(`${stagingPrefix(input.slug, input.jobId, input.roundGeneration)}/source/${path}`);
-      return body ? body.toString('utf8') : null;
+      return body ? sourceFileContentFromObject(path, body) : null;
     },
 
     async clearStagedSources(input) {
@@ -1231,7 +1282,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
 
     async getSourceFile(slug, version, path) {
       const body = await readObject(`${versionPrefix(slug, version)}/source/${path}`);
-      return body ? body.toString('utf8') : null;
+      return body ? sourceFileContentFromObject(path, body) : null;
     },
 
     async listVersions(slug, opts) {

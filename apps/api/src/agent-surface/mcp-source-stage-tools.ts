@@ -3,6 +3,7 @@ import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
 import { DEFAULT_UPLOAD_URL_TTL_SECONDS, mintUploadToken, uploadCurlCommand } from './agent-upload-token.js';
 import { assertDeliverableSourcePath, InvalidUploadError } from '../delivery/games-store.js';
+import { decodeRasterSourceContent, encodeRasterSourceContent, isRasterSourcePath } from '../catalog/raster-assets.js';
 import { decodeCanonicalBase64Utf8, InvalidBase64Error } from '../platform/canonical-base64.js';
 import { largeSourceFileHint, moduleSizeWarnings } from '../creation/module-size.js';
 import { gameManifestHint } from './game-manifest-hint.js';
@@ -366,7 +367,16 @@ export function createSourceStageTools(deps: SourceStageToolsDeps): Record<strin
         if (!path) return toolErr('path is required');
         if (typeof args.content !== 'string') return toolErr('content is required');
         let content = args.content;
-        if (args.encoding === 'base64') {
+        if (isRasterSourcePath(path)) {
+          if (args.encoding === 'utf8') {
+            return toolErr(`file ${path}: PNG/WebP must be sent as encoding=base64`);
+          }
+          try {
+            content = encodeRasterSourceContent(decodeRasterSourceContent(path, args.content));
+          } catch (error) {
+            return toolErr(`file ${path}: ${error instanceof Error ? error.message : 'invalid raster'}`);
+          }
+        } else if (args.encoding === 'base64') {
           try {
             content = decodeCanonicalBase64Utf8(args.content);
           } catch (error) {

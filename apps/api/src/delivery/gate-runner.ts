@@ -20,6 +20,7 @@
 // would quietly delete the moderation boundary that human review exists to be.
 
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { decodeRasterSourceContent, isRasterSourcePath } from '../catalog/raster-assets.js';
 import path from 'node:path';
 import type { GameProject } from '@gamedevpl/contract';
 import { assembleGameHtml } from '../platform/assemble.js';
@@ -548,7 +549,11 @@ async function materializeCandidate(store: GamesStore, manifest: VersionManifest
     if (content === null) throw new Error(`version ${manifest.version} claims ${relative}, which is not stored`);
     const target = path.join(gameDir, relative);
     await mkdir(path.dirname(target), { recursive: true });
-    await writeFile(target, content, 'utf8');
+    if (isRasterSourcePath(relative)) {
+      await writeFile(target, decodeRasterSourceContent(relative, content));
+    } else {
+      await writeFile(target, content, 'utf8');
+    }
   }
 }
 

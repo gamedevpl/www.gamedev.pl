@@ -1366,6 +1366,93 @@ describe('getGameSources', () => {
     await expect(client.getGameSources('main', 'painted')).rejects.toThrow(/is a JPEG, not a PNG/);
   });
 
+  it('bakes a candidate overlay raster and does not fall back to the ref', async () => {
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    const published = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0xff]);
+    const files = new Map<string, string | Uint8Array>([
+      ['games/painted/index.html', '<canvas id="game"></canvas>'],
+      ['games/painted/game.ts', 'GameKit.mount({ ok: true });'],
+      ['games/painted/style.css', '.game {}'],
+      ['games/painted/SPEC.md', specMd({ title: 'Painted' })],
+      [
+        'games/painted/GAME.json',
+        JSON.stringify({
+          engine: { modules: ['input'] },
+          images: { bg: 'scenes/glade/bg.png' },
+        }),
+      ],
+      ['games/painted/scenes/glade/bg.png', published],
+      ['shared/game-shell.css', '.shell {}'],
+      ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
+      ['shared/modules/input.ts', 'GameKit.createInput = function (): void {};'],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(path);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const sources = await client.getGameSources(
+      'main',
+      'painted',
+      {
+        'game.ts': 'GameKit.mount({ ok: true });',
+        'GAME.json': JSON.stringify({
+          engine: { modules: ['input'] },
+          images: { bg: 'scenes/glade/bg.png' },
+        }),
+        'index.html': '<canvas id="game"></canvas>',
+        'style.css': '.game {}',
+        'SPEC.md': specMd({ title: 'Painted' }),
+        'scenes/glade/bg.png': png.toString('base64'),
+      },
+      { noRefFallback: true },
+    );
+    const expected = `data:image/png;base64,${png.toString('base64')}`;
+    expect(sources?.gameJs).toContain(JSON.stringify(expected));
+    expect(sources?.gameJs).not.toContain(Buffer.from(published).toString('base64'));
+  });
+
+  it('refuses a missing candidate raster when noRefFallback is set', async () => {
+    const files = new Map<string, string | Uint8Array>([
+      ['shared/game-shell.css', '.shell {}'],
+      ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
+      ['shared/modules/input.ts', 'GameKit.createInput = function (): void {};'],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(path);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    await expect(
+      client.getGameSources(
+        'main',
+        'painted',
+        {
+          'game.ts': 'GameKit.mount({ ok: true });',
+          'GAME.json': JSON.stringify({
+            engine: { modules: ['input'] },
+            images: { bg: 'scenes/glade/bg.png' },
+          }),
+          'index.html': '<canvas id="game"></canvas>',
+          'style.css': '.game {}',
+          'SPEC.md': specMd({ title: 'Painted' }),
+        },
+        { noRefFallback: true },
+      ),
+    ).rejects.toThrow(/not found: scenes\/glade\/bg.png/);
+  });
+
   it('falls back to the default canvas frame when a game ships neither style.css nor a theme', async () => {
     const files = new Map<string, string | Uint8Array>([
       ['games/plain-run/index.html', '<canvas id="game"></canvas>'],
@@ -1754,6 +1841,38 @@ describe('getGameSourceMap', () => {
     expect(sources?.['AGENT.json']).toContain('capture');
     // Absent fixed files are omitted, not invented.
     expect(sources?.['TRACE.json']).toBeUndefined();
+  });
+
+  it('getGameDeliverySources includes declared rasters as base64 file bytes', async () => {
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    const files = new Map<string, string | Uint8Array>([
+      ['games/painted/game.ts', 'GameKit.mount({ ok: true });\n'],
+      ['games/painted/SPEC.md', '---\ntitle: Painted\n---\n'],
+      ['games/painted/index.html', '<canvas></canvas>'],
+      ['games/painted/style.css', 'body{}'],
+      [
+        'games/painted/GAME.json',
+        JSON.stringify({
+          engine: { modules: [] },
+          images: { bg: 'scenes/glade/bg.png' },
+        }),
+      ],
+      ['games/painted/scenes/glade/bg.png', png],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(path);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const sources = await client.getGameDeliverySources('main', 'painted');
+    expect(sources?.['scenes/glade/bg.png']).toBe(png.toString('base64'));
   });
 
   it('generates index.html and style.css when the game ships neither, like every current game', async () => {

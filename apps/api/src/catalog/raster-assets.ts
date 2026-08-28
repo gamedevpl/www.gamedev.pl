@@ -1,4 +1,5 @@
-import { RASTER_ASSET_MAX_FILE_BYTES } from '../platform/games-repo-contract.js';
+import { decodeCanonicalBase64, InvalidBase64Error } from '../platform/canonical-base64.js';
+import { DELIVERY_EXTRA_ASSET_PATTERN, RASTER_ASSET_MAX_FILE_BYTES } from '../platform/games-repo-contract.js';
 
 /** Same shape games-repo `tools/lib/raster-assets.ts` accepts. */
 const HANDLE = /^[a-z][a-z0-9-]*$/;
@@ -29,6 +30,35 @@ export function parseGameImages(images: unknown): ImageManifest {
 
 export function mimeForImagePath(relPath: string): string {
   return relPath.toLowerCase().endsWith('.webp') ? 'image/webp' : 'image/png';
+}
+
+export function isRasterSourcePath(path: string): boolean {
+  return DELIVERY_EXTRA_ASSET_PATTERN.test(path) && !path.includes('//');
+}
+
+/** Decode a staged/delivered raster. Content is canonical base64 of the file bytes. */
+export function decodeRasterSourceContent(path: string, content: string): Buffer {
+  let bytes: Buffer;
+  try {
+    bytes = decodeCanonicalBase64(content);
+  } catch (error) {
+    if (error instanceof InvalidBase64Error) {
+      throw new Error(`${path} is not valid base64 — PNG/WebP must be sent as encoding=base64`, { cause: error });
+    }
+    throw error;
+  }
+  const name =
+    path
+      .split('/')
+      .pop()
+      ?.replace(/\.(?:png|webp)$/i, '') || 'image';
+  assertImageFileSize(name, bytes.byteLength);
+  assertImageSignature(name, path, bytes);
+  return bytes;
+}
+
+export function encodeRasterSourceContent(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString('base64');
 }
 
 function isPng(bytes: Uint8Array): boolean {
