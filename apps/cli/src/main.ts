@@ -11,7 +11,7 @@ import { CliError, EXIT_GREEN, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js'
 import { describeError, pipeNeedsFlag } from './errors.js';
 import { handleReplLine, replBanner } from './repl.js';
 import type { IntakeDraft } from './create.js';
-import { getStatus, previewUrl } from './turn.js';
+import { getStatus, isTerminalStatus, previewUrl } from './turn.js';
 import { checkoutGame, diffGame, pullGame, readCheckoutSlug, unreconciledMessage } from './checkout.js';
 import { runLadder, assertLadderGreen } from './verify.js';
 import { runGitRemoteHelper } from './git-remote-main.js';
@@ -83,7 +83,7 @@ export async function runCli(
           io.stdout.write(`${status.status}${status.stall ? ` (${status.stall})` : ''}\n`);
           if (status.preview?.slug) io.stdout.write(`${previewUrl(api.origin, status.preview.slug)}\n`);
         }
-        if (!flags.watch || i === max) break;
+        if (!flags.watch || i === max || isTerminalStatus(status.status)) break;
         await new Promise((resolve) => setTimeout(resolve, delay));
         delay = Math.min(Math.round(delay * 1.5), 15_000);
         status = await getStatus(api, token);

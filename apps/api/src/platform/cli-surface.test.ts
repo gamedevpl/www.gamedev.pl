@@ -58,6 +58,8 @@ describe('reserved installer routes', () => {
     expect(ps1.statusCode).toBe(200);
     expect(ps1.body).toContain('Get-FileHash');
     expect(ps1.body).toContain('Node 20');
+    expect(ps1.body).toContain("process.versions.node.split('.')[0]");
+    expect(ps1.body).toContain('too old');
     const enabled = await app.inject({ method: 'GET', url: '/api/cli/enabled' });
     expect(enabled.statusCode).toBe(200);
     expect(enabled.json()).toMatchObject({ enabled: true });

@@ -1,17 +1,9 @@
-import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useCliSurfaceEnabled } from './useCliSurfaceEnabled.js';
 
 export function GamedevCliConnectTab({ slug }: { slug: string }) {
   const { t } = useTranslation();
-  const [on, setOn] = useState(false);
-  useEffect(() => {
-    void fetch('/api/cli/enabled')
-      .then(async (res) => {
-        const body = (await res.json().catch(() => null)) as { enabled?: boolean } | null;
-        setOn(res.ok && body?.enabled === true);
-      })
-      .catch(() => setOn(false));
-  }, []);
+  const on = useCliSurfaceEnabled();
   if (!on) return null;
   const snippet = `curl -fsSL https://www.gamedev.pl/install.sh | bash\ngamedev connect ${slug}`;
   return (

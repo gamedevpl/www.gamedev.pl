@@ -46,6 +46,8 @@ $version = if ($env:GAMEDEV_VERSION) { $env:GAMEDEV_VERSION } else { "${CLI_VERS
 $binDir = if ($env:GAMEDEV_BIN_DIR) { $env:GAMEDEV_BIN_DIR } else { Join-Path $HOME ".local\\bin" }
 $asset = "${CLI_ASSET}"
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw "gamedev needs Node 20+ (same as a game checkout)" }
+$major = [int]((node -p "process.versions.node.split('.')[0]"))
+if ($major -lt 20) { throw "Node $(node -v) is too old; need 20+" }
 $base = "https://github.com/gamedevpl/www.gamedev.pl/releases/download/${CLI_RELEASE_PREFIX}$version"
 $tmp = New-TemporaryFile | ForEach-Object { Remove-Item $_; New-Item -ItemType Directory -Path $_ }
 try {

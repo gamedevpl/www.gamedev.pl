@@ -28,6 +28,10 @@ export async function getStatus(
   return api.request('GET', `/api/submissions/${encodeURIComponent(token)}`);
 }
 
+export function isTerminalStatus(status: string): boolean {
+  return status === 'published' || status === 'abandoned';
+}
+
 export function previewUrl(origin: string, slug: string): string {
   return `${origin}/play/${slug}`;
 }

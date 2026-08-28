@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createApi } from './api.js';
 import { memoryStore } from './keychain.js';
-import { postTurn } from './turn.js';
+import { isTerminalStatus, postTurn } from './turn.js';
 import { CliError, EXIT_AUTH } from './exit-codes.js';
 
 function mockFetch(handler: (url: string, init?: RequestInit) => { status: number; body: unknown }) {
@@ -13,6 +13,15 @@ function mockFetch(handler: (url: string, init?: RequestInit) => { status: numbe
     });
   };
 }
+
+describe('isTerminalStatus', () => {
+  it('stops a watch on published or abandoned', () => {
+    expect(isTerminalStatus('published')).toBe(true);
+    expect(isTerminalStatus('abandoned')).toBe(true);
+    expect(isTerminalStatus('building')).toBe(false);
+    expect(isTerminalStatus('needs_changes')).toBe(false);
+  });
+});
 
 describe('turn client', () => {
   it('returns a reply without treating it as a build', async () => {

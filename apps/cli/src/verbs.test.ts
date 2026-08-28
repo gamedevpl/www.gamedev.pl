@@ -30,6 +30,30 @@ describe('dispatchReadVerb', () => {
     expect(io.read()).toContain('ghost-roads');
   });
 
+  it('reads builder from owner studio + submission status', async () => {
+    const io = out();
+    const seen: string[] = [];
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_pat_x', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url) => {
+        seen.push(String(url));
+        if (String(url).includes('/api/me/studio')) {
+          return new Response(JSON.stringify({ games: [{ slug: 'sky-dodge', token: 'tok-1' }] }), { status: 200 });
+        }
+        if (String(url).endsWith('/api/submissions/tok-1')) {
+          return new Response(JSON.stringify({ status: 'building', builder: 'self' }), { status: 200 });
+        }
+        return new Response('{}', { status: 404 });
+      },
+    });
+    expect(await dispatchReadVerb({ verb: 'builder', args: ['sky-dodge'], flags: {}, api, io })).toBe(EXIT_GREEN);
+    expect(io.read()).toContain('self');
+    expect(seen.some((url) => url.includes('/api/me/studio?game=sky-dodge'))).toBe(true);
+    expect(seen.some((url) => url.endsWith('/api/submissions/tok-1'))).toBe(true);
+    expect(seen.some((url) => url.includes('/connect'))).toBe(false);
+  });
+
   it('prints a play URL for share', async () => {
     const io = out();
     const api = createApi({

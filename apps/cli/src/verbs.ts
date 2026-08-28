@@ -65,11 +65,14 @@ export async function dispatchReadVerb(input: {
   if (verb === 'builder') {
     const slug = args[0];
     if (!slug) throw new CliError('gamedev builder <slug>', EXIT_INPUT, '<slug>');
-    const data = await api.request<{ round?: { builder?: string } }>(
+    const studio = await api.request<{ games?: Array<{ slug?: string; token?: string }> }>(
       'GET',
-      `/api/me/studio/games/${encodeURIComponent(slug)}/connect`,
+      `/api/me/studio?game=${encodeURIComponent(slug)}`,
     );
-    emit(io, asJson, data, data.round?.builder ?? 'unknown');
+    const row = (studio.games ?? []).find((game) => game.slug === slug);
+    if (!row?.token) throw new CliError(`no owned game ${slug}`, EXIT_INPUT, '<slug>');
+    const data = await api.request<{ builder?: string }>('GET', `/api/submissions/${encodeURIComponent(row.token)}`);
+    emit(io, asJson, data, data.builder ?? 'unknown');
     return EXIT_GREEN;
   }
   if (verb === 'update') {

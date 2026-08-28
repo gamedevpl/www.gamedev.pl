@@ -2,21 +2,13 @@
 
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SiteFooter } from './SiteFooter.js';
 import i18n from './i18n/index.js';
 import { setVisitSessionForTesting, VisitSession } from './visitTelemetry.js';
 
-/**
- * The footer carries two different reporting routes that look alike and must not be
- * confused: "report illegal content" is the legal notice-and-action path, and "report a
- * bug" goes to the issue tracker. Contact opens the in-app form that emails the operator;
- * the electronic address also lives in the legal documents, not under the brand. These
- * check that the project links are present and that the bug link carries the visit id,
- * which is what lets a public issue be diagnosed without anyone pasting session details
- * into it.
- */
+/** Project links, the in-app contact form, and a visit-id-bearing bug report. */
 
 let container: HTMLDivElement;
 let root: Root | null = null;
@@ -34,12 +26,13 @@ afterEach(() => {
   });
   root = null;
   setVisitSessionForTesting(null);
+  vi.unstubAllGlobals();
   container.remove();
 });
 
-function render(): void {
+async function render(): Promise<void> {
   root = createRoot(container);
-  act(() => {
+  await act(async () => {
     root!.render(<SiteFooter />);
   });
 }
@@ -49,20 +42,24 @@ function links(): HTMLAnchorElement[] {
 }
 
 describe('SiteFooter project links', () => {
-  it('links to the repository', () => {
-    render();
+  it('links to the repository', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, json: async () => ({ enabled: true }) })),
+    );
+    await render();
 
     const repoLink = links().find((a) => a.href === 'https://github.com/gamedevpl/www.gamedev.pl');
     expect(repoLink).toBeDefined();
     expect(repoLink?.rel).toContain('noopener');
-    // Repo mark lives in the footer now — not the header chrome.
     expect(repoLink?.classList.contains('site-footer__github')).toBe(true);
     expect(repoLink?.querySelector('img')).not.toBeNull();
     expect(links().some((a) => a.getAttribute('href') === '/cli')).toBe(true);
   });
 
-  it('sends Contact to the in-app form, not GitHub issues or a bare mailto', () => {
-    render();
+  it('sends Contact to the in-app form, not GitHub issues or a bare mailto', async () => {
+    await render();
+    expect(links().some((a) => a.getAttribute('href') === '/cli')).toBe(false);
 
     const contact = links().find((a) => a.getAttribute('href') === '/contact');
     expect(contact).toBeDefined();
@@ -83,11 +80,11 @@ describe('SiteFooter project links', () => {
     expect(container.textContent).not.toContain('admin@gamedev.pl');
   });
 
-  it('prefills the bug report with the current visit id and page', () => {
+  it('prefills the bug report with the current visit id and page', async () => {
     setVisitSessionForTesting(new VisitSession('visit-abc', Date.now(), () => {}));
     window.history.pushState({}, '', '/play/arena-tag');
 
-    render();
+    await render();
 
     const bugLink = links().find((a) => a.href.includes('/issues/new'));
     expect(bugLink).toBeDefined();
@@ -98,8 +95,8 @@ describe('SiteFooter project links', () => {
     expect(url.searchParams.get('where')).toBe('/play/arena-tag');
   });
 
-  it('still offers the bug link when nothing is tracking the visit', () => {
-    render();
+  it('still offers the bug link when nothing is tracking the visit', async () => {
+    await render();
 
     const bugLink = links().find((a) => a.href.includes('/issues/new'));
     expect(bugLink).toBeDefined();
