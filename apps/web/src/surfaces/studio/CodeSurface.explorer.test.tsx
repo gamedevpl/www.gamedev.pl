@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CodeSurface } from './CodeSurface.js';
 import { resetCodeSurfaceSessionState } from './codeSurfaceSessionState.js';
 import * as codeSurfaceApi from './codeSurfaceApi.js';
-import i18n from './i18n/index.js';
+import i18n from '../../i18n/index.js';
 
 vi.mock('./CodeMirrorEditor.js', () => ({
   default: (props: { value: string; onChange: (value: string) => void }) =>
@@ -38,8 +38,8 @@ vi.mock('./webmcp.js', async () => {
   return { ...actual, registerCodeSurfaceWebMcpTools: vi.fn(() => () => {}) };
 });
 
-vi.mock('./connectApi.js', async () => {
-  const actual = await vi.importActual<typeof import('./connectApi.js')>('./connectApi.js');
+vi.mock('../../connectApi.js', async () => {
+  const actual = await vi.importActual<typeof import('../../connectApi.js')>('../../connectApi.js');
   return { ...actual, getCreatorAgentKey: vi.fn().mockResolvedValue({ revoked: true, keyGeneration: 1 }) };
 });
 

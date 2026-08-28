@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatShortcut, fuzzyMatch } from './codeActionsMatch.js';
-import { PixelIcon } from './PixelIcon.js';
+import { PixelIcon } from '../../PixelIcon.js';
 
 // VS Code-style palette: quick open, commands ('>' prefix), project search.
 

@@ -1,6 +1,6 @@
 // Produces new EDITOR.json text for a scrub.
 
-import type { EditorLabel, EditorParamSpec, EditorParamValue } from './studioApi.js';
+import type { EditorLabel, EditorParamSpec, EditorParamValue } from '../../studioApi.js';
 
 export type ParsedEditorJson = { params: Record<string, EditorParamSpec>; rest: Record<string, unknown> } | null;
 

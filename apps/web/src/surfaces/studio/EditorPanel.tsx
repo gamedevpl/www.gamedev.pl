@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PixelIcon } from './PixelIcon.js';
-import { PathPainter } from './PathPainter.js';
+import { PixelIcon } from '../../PixelIcon.js';
+import { PathPainter } from '../../PathPainter.js';
 import {
   blankItem,
   applyEditorPatch,
@@ -15,13 +15,13 @@ import {
   layerProblems,
   layeredProblems,
   setCell,
-} from './editorContentTools.js';
-import { LayeredBoard, LayeredSidebar } from './LayeredEditorSurface.js';
+} from '../../editorContentTools.js';
+import { LayeredBoard, LayeredSidebar } from '../../LayeredEditorSurface.js';
 import { EditorSurface } from './EditorSurface.js';
 import { editorSurfaceModeForDefinition } from './editorSurfaceMode.js';
 import { useEditorDocument } from './useEditorDocument.js';
-import { recordAssistStep, recordEditorStep } from './visitTelemetry.js';
-import type { EditorContentPush, EditorControllerState, EditorSelection } from './editorBridge.js';
+import { recordAssistStep, recordEditorStep } from '../../visitTelemetry.js';
+import type { EditorContentPush, EditorControllerState, EditorSelection } from '../../editorBridge.js';
 import {
   deleteEditorDraft,
   fetchGameEditor,
@@ -39,10 +39,10 @@ import {
   type GameEditorState,
   type StudioApiError,
   type StudioGame,
-} from './studioApi.js';
-import { getSubmissionStatus, listMySubmissions } from './submissionApi.js';
-import { pollDelayMs } from './studioStatusPoll.js';
-import { isRoundSealed } from './roundSealed.js';
+} from '../../studioApi.js';
+import { getSubmissionStatus, listMySubmissions } from '../../submissionApi.js';
+import { pollDelayMs } from '../../studioStatusPoll.js';
+import { isRoundSealed } from '../../roundSealed.js';
 
 /**
  * The studio's Edit surface (EditorKit L3): renders a game's own editor

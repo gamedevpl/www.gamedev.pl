@@ -1,4 +1,4 @@
-import type { EditorDefinition } from './studioApi.js';
+import type { EditorDefinition } from '../../studioApi.js';
 
 export type EditorSurfaceMode = 'docked' | 'full';
 

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CreatorStudioView } from './CreatorStudioView.js';
 import i18n from './i18n/index.js';
 import type { StudioGame, StudioGamesResponse } from './studioApi.js';
-import type { CodeSurfaceSources } from './codeSurfaceApi.js';
+import type { CodeSurfaceSources } from './surfaces/studio/codeSurfaceApi.js';
 
 // Verifies the shortcut redirect: CreatorStudioView catches it outside Code.
 
@@ -40,8 +40,10 @@ vi.mock('./submissionApi', async () => {
   };
 });
 
-vi.mock('./codeSurfaceApi', async () => {
-  const actual = await vi.importActual<typeof import('./codeSurfaceApi.js')>('./codeSurfaceApi.js');
+vi.mock('./surfaces/studio/codeSurfaceApi', async () => {
+  const actual = await vi.importActual<typeof import('./surfaces/studio/codeSurfaceApi.js')>(
+    './surfaces/studio/codeSurfaceApi.js',
+  );
   return {
     ...actual,
     fetchCodeSurfaceSources: vi.fn(),
@@ -49,7 +51,7 @@ vi.mock('./codeSurfaceApi', async () => {
 });
 
 // CodeMirror stand-in: jsdom cannot lay it out.
-vi.mock('./CodeMirrorEditor.js', () => ({
+vi.mock('./surfaces/studio/CodeMirrorEditor.js', () => ({
   default: (props: { value: string; onChange: (value: string) => void }) =>
     createElement('textarea', {
       className: 'code-surface-editor',
@@ -58,7 +60,9 @@ vi.mock('./CodeMirrorEditor.js', () => ({
     }),
 }));
 
-const mockedFetchCodeSurfaceSources = vi.mocked((await import('./codeSurfaceApi.js')).fetchCodeSurfaceSources);
+const mockedFetchCodeSurfaceSources = vi.mocked(
+  (await import('./surfaces/studio/codeSurfaceApi.js')).fetchCodeSurfaceSources,
+);
 
 function studioShelf(games: StudioGame[]): StudioGamesResponse {
   return { games, truncated: false, totalGames: games.length };

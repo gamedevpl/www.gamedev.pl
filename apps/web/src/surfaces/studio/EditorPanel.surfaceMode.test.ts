@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { editorSurfaceModeForDefinition } from './editorSurfaceMode.js';
-import type { EditorDefinition } from './studioApi.js';
+import type { EditorDefinition } from '../../studioApi.js';
 
 const label = { en: 'Terrain', pl: 'Teren' };
 const layered: EditorDefinition = {

@@ -3,8 +3,8 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import i18n from './i18n/index.js';
-import type { EditorContentDoc, EditorDefinition, GameEditorState, StudioGame } from './studioApi.js';
+import i18n from '../../i18n/index.js';
+import type { EditorContentDoc, EditorDefinition, GameEditorState, StudioGame } from '../../studioApi.js';
 
 const fetchGameEditor = vi.hoisted(() => vi.fn());
 const putEditorDraft = vi.hoisted(() => vi.fn());
@@ -13,17 +13,17 @@ const requestEditorAssist = vi.hoisted(() => vi.fn());
 const listMySubmissions = vi.hoisted(() => vi.fn());
 const getSubmissionStatus = vi.hoisted(() => vi.fn());
 
-vi.mock('./studioApi.js', async () => {
-  const actual = await vi.importActual<typeof import('./studioApi.js')>('./studioApi.js');
+vi.mock('../../studioApi.js', async () => {
+  const actual = await vi.importActual<typeof import('../../studioApi.js')>('../../studioApi.js');
   return { ...actual, fetchGameEditor, putEditorDraft, publishEditorContent, requestEditorAssist };
 });
 
-vi.mock('./submissionApi.js', async () => {
-  const actual = await vi.importActual<typeof import('./submissionApi.js')>('./submissionApi.js');
+vi.mock('../../submissionApi.js', async () => {
+  const actual = await vi.importActual<typeof import('../../submissionApi.js')>('../../submissionApi.js');
   return { ...actual, listMySubmissions, getSubmissionStatus };
 });
 
-vi.mock('./visitTelemetry.js', () => ({ recordAssistStep: vi.fn(), recordEditorStep: vi.fn() }));
+vi.mock('../../visitTelemetry.js', () => ({ recordAssistStep: vi.fn(), recordEditorStep: vi.fn() }));
 
 import { EditorPanel } from './EditorPanel.js';
 

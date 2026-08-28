@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
-import { putEditorDraft, type EditorContentDoc, type StudioApiError } from './studioApi.js';
-import { recordEditorStep } from './visitTelemetry.js';
+import { putEditorDraft, type EditorContentDoc, type StudioApiError } from '../../studioApi.js';
+import { recordEditorStep } from '../../visitTelemetry.js';
 
 export type EditorDocumentSaveState = 'clean' | 'dirty' | 'saving' | 'saved' | 'conflict' | 'error';
 

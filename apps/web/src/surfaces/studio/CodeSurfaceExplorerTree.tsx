@@ -2,7 +2,7 @@ import type { ChangeEvent, CSSProperties, DragEvent, RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CodeSurfaceFile } from './codeSurfaceApi.js';
 import { buildSourceTree, type TreeNode } from './codeSurfaceTreeModel.js';
-import { PixelIcon } from './PixelIcon.js';
+import { PixelIcon } from '../../PixelIcon.js';
 
 const LOCKED_DIRS = ['shared/', 'tools/'] as const;
 

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CodeSurface } from './CodeSurface.js';
 import { resetCodeSurfaceSessionState } from './codeSurfaceSessionState.js';
 import * as codeSurfaceApi from './codeSurfaceApi.js';
-import i18n from './i18n/index.js';
+import i18n from '../../i18n/index.js';
 
 // CodeMirror stand-in: jsdom cannot lay it out; palette never needs it.
 
