@@ -8,7 +8,9 @@ import {
   guessWelcomeLocale,
   parseWelcomeStatuses,
   pickWelcomeRecipients,
+  runWelcomeDelivery,
   welcomeGivenName,
+  welcomeNeedsApprove,
   welcomeSendBlockedReason,
   type WelcomeCandidate,
 } from './beta-welcome-email.js';
@@ -88,6 +90,13 @@ describe('pickWelcomeRecipients', () => {
     expect(picked.find((row) => row.email === 'jan@wp.pl')?.uid).toBe('g:1');
   });
 
+  it('retries unstamped approved people from a pending filter after approve-before-send', () => {
+    expect(pickWelcomeRecipients(rows, { statuses: new Set(['pending']) }).map((row) => row.email)).toEqual([
+      'bob@gmail.com',
+      'jan@wp.pl',
+    ]);
+  });
+
   it('honours --only, --limit, and --force', () => {
     expect(
       pickWelcomeRecipients(rows, { statuses: new Set(['pending']), only: 'Jan@WP.pl' }).map((row) => row.uid),
@@ -95,7 +104,7 @@ describe('pickWelcomeRecipients', () => {
     expect(pickWelcomeRecipients(rows, { statuses: new Set(['pending', 'approved']), limit: 1 })).toHaveLength(1);
     expect(
       pickWelcomeRecipients(rows, { statuses: new Set(['pending']), force: true }).map((row) => row.email),
-    ).toEqual(['done@x.com', 'jan@wp.pl']);
+    ).toEqual(['bob@gmail.com', 'done@x.com', 'jan@wp.pl']);
   });
 });
 
@@ -106,6 +115,87 @@ describe('welcomeSendBlockedReason', () => {
     expect(welcomeSendBlockedReason({ send: true, approve: false, recipients: pending })).toMatch(/--approve/);
     expect(welcomeSendBlockedReason({ send: true, approve: true, recipients: pending })).toBeUndefined();
     expect(welcomeSendBlockedReason({ send: false, approve: false, recipients: pending })).toBeUndefined();
+  });
+});
+
+describe('runWelcomeDelivery', () => {
+  it('approves and verifies before sending, then stamps after a successful send', async () => {
+    const order: string[] = [];
+    const result = await runWelcomeDelivery({
+      shouldApprove: true,
+      approve: async () => {
+        order.push('approve');
+      },
+      send: async () => {
+        order.push('send');
+        return { id: 'msg_1' };
+      },
+      stamp: async () => {
+        order.push('stamp');
+      },
+    });
+    expect(order).toEqual(['approve', 'send', 'stamp']);
+    expect(result).toEqual({ id: 'msg_1' });
+  });
+
+  it('does not send when approve fails', async () => {
+    const order: string[] = [];
+    await expect(
+      runWelcomeDelivery({
+        shouldApprove: true,
+        approve: async () => {
+          order.push('approve');
+          throw new Error('write failed');
+        },
+        send: async () => {
+          order.push('send');
+        },
+        stamp: async () => {
+          order.push('stamp');
+        },
+      }),
+    ).rejects.toThrow(/write failed/);
+    expect(order).toEqual(['approve']);
+  });
+
+  it('leaves access open without a stamp when send fails', async () => {
+    const order: string[] = [];
+    await expect(
+      runWelcomeDelivery({
+        shouldApprove: true,
+        approve: async () => {
+          order.push('approve');
+        },
+        send: async () => {
+          order.push('send');
+          throw new Error('resend down');
+        },
+        stamp: async () => {
+          order.push('stamp');
+        },
+      }),
+    ).rejects.toThrow(/resend down/);
+    expect(order).toEqual(['approve', 'send']);
+  });
+
+  it('skips approve when the row is already approved', async () => {
+    expect(welcomeNeedsApprove(true, 'pending')).toBe(true);
+    expect(welcomeNeedsApprove(true, 'approved')).toBe(false);
+    expect(welcomeNeedsApprove(false, 'pending')).toBe(false);
+    const order: string[] = [];
+    await runWelcomeDelivery({
+      shouldApprove: welcomeNeedsApprove(true, 'approved'),
+      approve: async () => {
+        order.push('approve');
+      },
+      send: async () => {
+        order.push('send');
+      },
+      stamp: async () => {
+        order.push('stamp');
+      },
+    });
+    expect(order).toEqual(['send', 'stamp']);
   });
 });
 

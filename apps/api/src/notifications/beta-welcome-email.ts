@@ -77,6 +77,27 @@ export function welcomeSendBlockedReason(opts: {
   return undefined;
 }
 
+export function welcomeNeedsApprove(approve: boolean, status: WaitlistStatus): boolean {
+  return approve && status === 'pending';
+}
+
+export async function runWelcomeDelivery<T>(ops: {
+  shouldApprove: boolean;
+  approve: () => Promise<void>;
+  send: () => Promise<T>;
+  stamp: () => Promise<unknown>;
+}): Promise<T> {
+  if (ops.shouldApprove) await ops.approve();
+  const result = await ops.send();
+  await ops.stamp();
+  return result;
+}
+
+function welcomeStatusSelected(status: WaitlistStatus, statuses: ReadonlySet<WaitlistStatus>): boolean {
+  if (statuses.has(status)) return true;
+  return status === 'approved' && statuses.has('pending');
+}
+
 function signedAccountUid(uid: string): boolean {
   return uid.startsWith('g:') || uid.startsWith('a:');
 }
@@ -98,7 +119,7 @@ export function pickWelcomeRecipients(
     if (!email.includes('@')) continue;
     if (entry.status === 'rejected') continue;
     if (entry.uid.startsWith('bot:')) continue;
-    if (!opts.statuses.has(entry.status)) continue;
+    if (!welcomeStatusSelected(entry.status, opts.statuses)) continue;
     if (only && email !== only) continue;
     if (entry.welcomeEmailedAt && !opts.force) continue;
     const current = byEmail.get(email);

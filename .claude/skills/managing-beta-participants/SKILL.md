@@ -136,9 +136,11 @@ the Workspace alias exists. Override From with `--from` or `BETA_WELCOME_FROM` i
 Same ADC/Firestore setup as `beta:approve`.
 
 `--send` to pending people requires `--approve`, otherwise they would get "you're in" and
-still hit the wall. Successful sends stamp `welcomeEmailedAt` so a second run skips them
-(`--force` to resend). Rejected rows, `bot:` accounts, and entries without an email are
-skipped.
+still hit the wall. Approve is written and verified **before** the send; `welcomeEmailedAt`
+is stamped only after Resend accepts, so a delivery failure leaves access open instead of
+a false promise. Unstamped approved rows stay in the default pending filter, so a retry
+after a crash still finds them (`--force` to resend a stamped row). Rejected rows, `bot:`
+accounts, and entries without an email are skipped.
 
 ---
 

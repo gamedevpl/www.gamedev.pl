@@ -11,7 +11,9 @@ import {
   guessWelcomeLocale,
   parseWelcomeStatuses,
   pickWelcomeRecipients,
+  runWelcomeDelivery,
   welcomeGivenName,
+  welcomeNeedsApprove,
   welcomeSendBlockedReason,
   type WelcomeCandidate,
 } from '../src/notifications/beta-welcome-email.js';
@@ -54,7 +56,7 @@ function asCandidate(id: string, data: Partial<WaitlistEntry>): WelcomeCandidate
   const email = data.email?.trim();
   if (!email) return null;
   return {
-    uid: data.uid ?? id,
+    uid: id,
     email,
     name: data.name,
     locale: data.locale,
@@ -62,6 +64,15 @@ function asCandidate(id: string, data: Partial<WaitlistEntry>): WelcomeCandidate
     requestedAt: data.requestedAt,
     welcomeEmailedAt: data.welcomeEmailedAt,
   };
+}
+
+async function approveAndVerify(db: Firestore, uid: string, email: string): Promise<void> {
+  const ref = db.collection('waitlist').doc(uid);
+  await ref.set({ status: 'approved' }, { merge: true });
+  const snap = await ref.get();
+  if (snap.data()?.status !== 'approved') {
+    throw new Error(`failed to approve ${email}: waitlist status is ${String(snap.data()?.status ?? 'missing')}`);
+  }
 }
 
 function sampleFor(locale: 'en' | 'pl', rows: readonly { locale: 'en' | 'pl'; text: string; subject: string }[]) {
@@ -158,14 +169,20 @@ async function main() {
   if (!send) return;
 
   for (const [index, item] of rendered.entries()) {
-    const result = await mailer.send(item.message);
-    const now = new Date().toISOString();
-    const patch: Partial<WaitlistEntry> = { welcomeEmailedAt: now };
-    if (approve && item.row.status === 'pending') patch.status = 'approved';
-    await db.collection('waitlist').doc(item.row.uid).set(patch, { merge: true });
+    const shouldApprove = welcomeNeedsApprove(approve, item.row.status);
+    const result = await runWelcomeDelivery({
+      shouldApprove,
+      approve: () => approveAndVerify(db, item.row.uid, item.row.email),
+      send: () => mailer.send(item.message),
+      stamp: () =>
+        db
+          .collection('waitlist')
+          .doc(item.row.uid)
+          .set({ welcomeEmailedAt: new Date().toISOString() }, { merge: true }),
+    });
     console.log(
       `✉️  ${item.row.email} via ${result.provider}${result.id ? ` (${result.id})` : ''}` +
-        `${patch.status === 'approved' ? ' — approved' : ''}`,
+        `${shouldApprove ? ' — approved' : ''}`,
     );
     if (index < rendered.length - 1 && delayMs > 0) await sleep(delayMs);
   }

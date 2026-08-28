@@ -293,8 +293,11 @@ npm run beta:welcome -w @gamedevpl/api -- --approve --send --only you@example.co
 ```
 
 `--send` without `RESEND_API_KEY` is refused. `--send` to pending rows also requires
-`--approve`, so the mail and the allowlist stay in sync. A successful send stamps
-`welcomeEmailedAt` on the waitlist doc; later runs skip those rows unless `--force`.
+`--approve`, so the mail and the allowlist stay in sync. Pending recipients are
+approved and verified **before** the send; `welcomeEmailedAt` is stamped only after
+Resend accepts. If the mailer fails, they can already sign in, and the next pending
+run still picks them (unstamped approved rows stay in the pending filter). `--force`
+resends a stamped row.
 
 **Owner setup before the first real send** (the script will not do this):
 
