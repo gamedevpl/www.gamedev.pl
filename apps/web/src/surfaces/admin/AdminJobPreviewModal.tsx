@@ -1,23 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
-import { AdminConfirmDialog } from './AdminConfirmDialog.js';
-import { publishConfirmCopy } from './adminJobConfirm.js';
-import { GameFrame } from './GameFrame.js';
-import {
-  fetchJobPreview,
-  publishJob,
-  type JobPreview,
-  type JobQueueEntry,
-  type PublishRefusal,
-} from './adminJobsApi.js';
-
-const REFUSAL_COPY: Record<PublishRefusal, string> = {
-  gate_red: 'the gate failed this version — read its report before publishing',
-  not_gated: 'the gate has not run against this version yet',
-  nothing_delivered: 'this build has never delivered a version',
-  profile_required: 'the creator has not claimed a public profile — ask them to open Studio and use Claim handle',
-  store_unavailable: 'the games store is not configured on this deployment',
-  unknown: 'refused, and the reason was not one this console knows',
-};
+import { useEffect, useState } from 'react';
+import { AdminJobPreviewPublish } from './AdminJobPreviewPublish.js';
+import { fetchJobPreview, type JobPreview, type JobQueueEntry } from './adminJobsApi.js';
+import { GameFrame } from '../../GameFrame.js';
 
 export function AdminJobPreviewModal({
   job,
@@ -30,8 +14,6 @@ export function AdminJobPreviewModal({
 }) {
   const [preview, setPreview] = useState<JobPreview | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [publishing, setPublishing] = useState(false);
-  const [confirmingPublish, setConfirmingPublish] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -69,25 +51,6 @@ export function AdminJobPreviewModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  const onPublish = useCallback(async () => {
-    setPublishing(true);
-    setMessage(null);
-    try {
-      const result = await publishJob(job.jobId);
-      if ('refused' in result) {
-        setMessage(REFUSAL_COPY[result.refused]);
-      } else {
-        setMessage(`Published ${result.slug} (${result.version})`);
-        onPublished?.();
-      }
-    } catch {
-      setMessage('Could not reach the API');
-    } finally {
-      setPublishing(false);
-      setConfirmingPublish(false);
-    }
-  }, [job.jobId, onPublished]);
-
   return (
     <div
       className="admin-preview-overlay"
@@ -111,14 +74,7 @@ export function AdminJobPreviewModal({
           </div>
           <div className="admin-preview-actions">
             {job.state === 'ready_for_review' && (
-              <button
-                type="button"
-                className="admin-job-publish is-promoted"
-                onClick={() => setConfirmingPublish(true)}
-                disabled={publishing}
-              >
-                {publishing ? 'Publishing…' : 'Publish Game'}
-              </button>
+              <AdminJobPreviewPublish job={job} onPublished={onPublished} onMessage={setMessage} />
             )}
             <button type="button" className="admin-preview-close-btn" onClick={onClose} aria-label="Close preview">
               ✕
@@ -140,17 +96,6 @@ export function AdminJobPreviewModal({
 
         {message && <footer className="admin-preview-footer">{message}</footer>}
       </div>
-      {confirmingPublish ? (
-        <AdminConfirmDialog
-          {...publishConfirmCopy([job])}
-          busy={publishing}
-          busyLabel="Publishing…"
-          onConfirm={() => void onPublish()}
-          onDismiss={() => {
-            if (!publishing) setConfirmingPublish(false);
-          }}
-        />
-      ) : null}
     </div>
   );
 }

@@ -51,7 +51,7 @@ import { useDocumentTitle } from './useDocumentTitle.js';
 // Deferred: an anonymous player playing a published game never has to pay for the
 // weight of the admin console, the studio (and everything it drags in — the code
 // editor, the remix panel), the review desk, or party's multiplayer client.
-const AdminConsole = lazy(() => import('./AdminConsole.js').then((m) => ({ default: m.AdminConsole })));
+const AdminConsole = lazy(() => import('./surfaces/admin/AdminConsole.js').then((m) => ({ default: m.AdminConsole })));
 const CreatorStudioView = lazy(() => import('./CreatorStudioView.js').then((m) => ({ default: m.CreatorStudioView })));
 const ReviewDesk = lazy(() => import('./ReviewDesk.js').then((m) => ({ default: m.ReviewDesk })));
 const PartyPage = lazy(() => import('./PartyPage.js').then((m) => ({ default: m.PartyPage })));
