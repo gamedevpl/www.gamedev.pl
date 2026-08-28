@@ -19026,6 +19026,7 @@ button.builder-mode-selector:disabled {
   align-items: flex-start;
   gap: 10px;
   margin: 0;
+  white-space: pre-wrap;
 }
 
 .remix-tick {
@@ -19256,6 +19257,11 @@ button.builder-mode-selector:disabled {
   padding-left: 2px;
 }
 
+.remix-bubble.is-miss {
+  color: var(--text);
+  border-color: var(--panel-border, #2b333f);
+}
+
 .remix-bubble.is-pending {
   font-style: italic;
   display: flex;
@@ -19308,7 +19314,7 @@ button.builder-mode-selector:disabled {
   font-weight: 600;
 }
 
-.remix-host .remix-panel.is-chat.is-collapsed {
+.remix-host .remix-panel.is-collapsed {
   max-height: none;
   padding: 8px 12px 10px;
   gap: 4px;
@@ -19336,6 +19342,10 @@ button.builder-mode-selector:disabled {
 .remix-collapsed-hint {
   font-size: 0.78rem;
   color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 70%;
 }
 
 .remix-collapsed-hit:focus-visible {
@@ -19357,7 +19367,7 @@ button.builder-mode-selector:disabled {
     width: 300px;
   }
 
-  .remix-host .remix-panel.is-chat.is-collapsed {
+  .remix-host .remix-panel.is-collapsed {
     top: auto;
     bottom: 8px;
     width: 220px;

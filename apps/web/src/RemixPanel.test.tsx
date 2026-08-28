@@ -22,6 +22,7 @@ vi.mock('./AuthContext', () => ({
 
 const remixApi = vi.hoisted(() => ({
   startRemix: vi.fn(),
+  getRemix: vi.fn(),
   remixAssist: vi.fn(),
   remixCode: vi.fn(),
   remixShare: vi.fn(),
@@ -42,6 +43,7 @@ vi.mock('./visitTelemetry', () => telemetry);
 vi.mock('./AuthModal', () => ({ AuthModal: () => null }));
 
 import { RemixPanel } from './RemixPanel.js';
+import { clearRemixSnapshot, writeRemixSnapshot } from './remixSessionPersist.js';
 
 let container: HTMLDivElement;
 let root: Root | null = null;
@@ -63,6 +65,8 @@ afterEach(() => {
   });
   root = null;
   container.remove();
+  clearRemixSnapshot();
+  window.sessionStorage.clear();
   vi.clearAllMocks();
 });
 
@@ -70,7 +74,7 @@ afterEach(() => {
 const frameWindow = { postMessage: () => {} } as unknown as Window;
 const frameRef = { current: { contentWindow: frameWindow } } as unknown as React.RefObject<HTMLIFrameElement>;
 
-function panel(props: { initialRequest?: string } = {}) {
+function panel(props: { initialRequest?: string; theaterChromeHidden?: boolean; session?: object } = {}) {
   return (
     <RemixPanel
       slug="dog-dash"
@@ -78,11 +82,13 @@ function panel(props: { initialRequest?: string } = {}) {
       onSwapDocument={(html) => swapped.push(html)}
       onClose={() => {}}
       initialRequest={props.initialRequest}
+      theaterChromeHidden={props.theaterChromeHidden}
+      session={props.session as never}
     />
   );
 }
 
-async function draw(props: { initialRequest?: string } = {}) {
+async function draw(props: { initialRequest?: string; theaterChromeHidden?: boolean; session?: object } = {}) {
   root = createRoot(container);
   await act(async () => {
     root!.render(panel(props));
@@ -426,7 +432,15 @@ describe('RemixPanel', () => {
             closed: false,
             properties: { name: { type: 'text', max: 24 } },
           },
-          defaults: [{ properties: { name: 'Opening' }, points: [{ x: 0, y: 1 }, { x: 7, y: 4 }] }],
+          defaults: [
+            {
+              properties: { name: 'Opening' },
+              points: [
+                { x: 0, y: 1 },
+                { x: 7, y: 4 },
+              ],
+            },
+          ],
         },
       },
       canAssist: false,
@@ -817,7 +831,12 @@ describe('RemixPanel', () => {
     expect(container.querySelector('.remix-panel.is-chat')).not.toBeNull();
     expect(container.querySelector('.remix-transcript')).not.toBeNull();
     const bubbles = Array.from(container.querySelectorAll('.remix-bubble-text')).map((el) => el.textContent);
-    expect(bubbles).toEqual(['a bit bigger', 'Bigger.', 'again', 'Bigger still.']);
+    expect(bubbles).toEqual([
+      'a bit bigger',
+      'Bigger.\ndog size: 1 → 1.2',
+      'again',
+      'Bigger still.\ndog size: 1.2 → 1.4',
+    ]);
     expect(container.querySelector('.remix-title')?.textContent).toBe('Remix chat');
     // Undo sits on the last assistant turn, not in the Share/Propose action row.
     expect(container.querySelector('.remix-bubble-undo')?.textContent).toBe('Undo');
@@ -886,7 +905,7 @@ describe('RemixPanel', () => {
     expect(container.querySelector('.remix-bubble-undo.is-urgent')).not.toBeNull();
   });
 
-  it('keeps failures out of the chat transcript', async () => {
+  it('keeps failures visible in the chat transcript', async () => {
     remixApi.startRemix.mockResolvedValue({
       remixId: 'r1',
       params: null,
@@ -917,9 +936,9 @@ describe('RemixPanel', () => {
 
     await send('three');
     const texts = Array.from(container.querySelectorAll('.remix-bubble-text')).map((el) => el.textContent);
-    // The ask stays; the failure is a note, not an assistant bubble.
     expect(texts).toContain('three');
-    expect(texts.join(' ')).not.toMatch(/napping|too long|Couldn't do that/i);
+    expect(texts.join(' ')).toMatch(/Couldn't do that/i);
+    expect(container.querySelector('.remix-bubble.is-miss')).not.toBeNull();
     expect(container.querySelector('.remix-note')?.textContent).toMatch(/play|napping|Couldn't/i);
   });
 
@@ -1002,6 +1021,83 @@ describe('RemixPanel', () => {
       buttonNamed(container, 'Save to Studio')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(container.querySelector('.remix-keep-offer')).not.toBeNull();
+  });
+
+  it('docks instead of closing when the grip is used before chat mode', async () => {
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: { dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'dog size' } } },
+      values: { dogScale: 1 },
+      canAssist: true,
+      canCode: false,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    });
+    remixApi.remixAssist.mockResolvedValue({
+      lane: 'params',
+      values: { dogScale: 1.2 },
+      summary: { en: 'Bigger dog.' },
+    });
+    await draw();
+    await send('bigger');
+    expect(container.querySelector('.remix-result')?.textContent).toContain('dog size: 1 → 1.2');
+
+    await act(async () => {
+      container.querySelector('.remix-grip')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.remix-panel.is-collapsed')).not.toBeNull();
+    expect(container.querySelector('.remix-collapsed-hint')?.textContent).toContain('Bigger dog.');
+    expect(remixApi.startRemix).toHaveBeenCalledTimes(1);
+  });
+
+  it('docks while the theater HUD is hidden and keeps the running change', async () => {
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: null,
+      values: null,
+      canAssist: false,
+      canCode: true,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    });
+    await draw({ theaterChromeHidden: true });
+    expect(container.querySelector('.remix-panel.is-collapsed')).not.toBeNull();
+    expect(remixApi.startRemix).toHaveBeenCalledTimes(1);
+  });
+
+  it('reopens over a restored snapshot without minting a new session', async () => {
+    const session = {
+      remixId: 'r1',
+      params: { dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'dog size' } } },
+      values: { dogScale: 1.4 },
+      canAssist: true,
+      canCode: false,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    };
+    writeRemixSnapshot({
+      v: 1,
+      slug: 'dog-dash',
+      remixId: 'r1',
+      expiresAt: Date.now() + 60_000,
+      remixOpen: true,
+      chatExpanded: true,
+      values: { dogScale: 1.4 },
+      chatTurns: [
+        { id: '1', role: 'user', text: 'bigger' },
+        { id: '2', role: 'assistant', text: 'Bigger.\ndog size: 1 → 1.4' },
+      ],
+      changed: { text: 'Bigger.\ndog size: 1 → 1.4', canShare: true },
+      note: null,
+      successCount: 2,
+      asked: 'bigger',
+      utterance: '',
+    });
+    await draw({ session });
+    expect(remixApi.startRemix).not.toHaveBeenCalled();
+    expect(container.querySelector('.remix-panel.is-chat')).not.toBeNull();
+    const bubbles = Array.from(container.querySelectorAll('.remix-bubble-text')).map((el) => el.textContent);
+    expect(bubbles).toEqual(['bigger', 'Bigger.\ndog size: 1 → 1.4']);
   });
 
   async function send(text: string) {

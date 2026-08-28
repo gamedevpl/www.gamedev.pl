@@ -14,7 +14,7 @@ import { applyAssistPatches, assistEnabled, MAX_UTTERANCE_LENGTH, type EditorAss
 import { rememberRemixTurn, type RemixTurn } from './remix-turns.js';
 import { codeLaneDebugEnabled, codeLaneEnabled, type VertexCodeLane } from './code-lane.js';
 import { typeCheckGame } from './type-check.js';
-import { buildSuggestions } from './remix-suggestions.js';
+import { remixClientPayload } from './remix-view.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { Store } from '../platform/store.js';
 import type { ContentChecker } from '../platform/moderation.js';
@@ -558,30 +558,43 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       // privilege. Whether *this* game can actually be assembled is answered
       // on the first request that needs it rather than paid for here.
       const canCode = Boolean(options.codeLane && codeLaneEnabled());
-      return reply.send({
-        remixId: id,
-        // The declaration drives the sliders; its defaults are the starting values.
-        params: definition?.params ?? null,
-        values: definition?.params
-          ? Object.fromEntries(Object.entries(definition.params).map(([key, spec]) => [key, spec.default]))
-          : null,
-        // The collections half of the declaration, defaults included — what the
-        // painter renders. Already validated (it parsed), already public (it
-        // ships inside the game's own bundle), and edits to it never come back
-        // to this server: painted content lives in the player's session and
-        // reaches the game over the bridge, exactly like params.
-        content: definition && Object.keys(definition.content).length > 0 ? definition.content : null,
-        layers: definition && definition.layers && Object.keys(definition.layers).length > 0 ? definition.layers : null,
-        constraints: definition?.constraints ?? null,
-        contentDefaults: defaultCollections(definition, loaded.sources[EDITOR_CONTENT_FILE]),
-        canAssist,
-        canCode,
-        // What is worth saying here, derived from what this game can do.
-        suggestions: buildSuggestions(definition, { canAssist, canCode }),
-        expiresInMs: REMIX_TTL_MS,
-      });
+      return reply.send(
+        remixClientPayload({
+          remixId: id,
+          definition,
+          contentDefaults: defaultCollections(definition, loaded.sources[EDITOR_CONTENT_FILE]),
+          canAssist,
+          canCode,
+          expiresInMs: REMIX_TTL_MS,
+        }),
+      );
     },
   );
+
+  app.get('/api/remixes/:id', { config: { rateLimit: { max: 30, timeWindow: 60_000 } } }, async (request, reply) => {
+    if (!requireUser(request, reply)) return;
+    const session = await getSession(request);
+    if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
+    let html: string | null = null;
+    if (Object.keys(session.overrides).length > 0) {
+      html = await rebuild(session);
+    }
+    const canAssist = Boolean(options.assistant && assistEnabled() && session.definition?.params);
+    const canCode = Boolean(options.codeLane && codeLaneEnabled());
+    return reply.send(
+      remixClientPayload({
+        remixId: session.id,
+        definition: session.definition,
+        contentDefaults: defaultCollections(session.definition, session.sources[EDITOR_CONTENT_FILE]),
+        canAssist,
+        canCode,
+        expiresInMs: Math.max(0, session.expiresAt - now()),
+        html,
+        undoable: session.history.length > 0,
+        turns: session.turns,
+      }),
+    );
+  });
 
   app.post(
     '/api/remixes/:id/assist',

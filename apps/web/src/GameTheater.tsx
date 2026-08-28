@@ -808,6 +808,8 @@ export function GameTheater({
             initialRemixRequest={initialRemixRequest}
             painterNonce={painterNonce}
             onRemixCapabilities={onRemixCapabilities}
+            theaterChromeHidden={chromeIdle}
+            onRevealChrome={revealChrome}
           />
         ) : (
           <GameFrame title={title} html={source.html} frameRef={frameRef} embed />

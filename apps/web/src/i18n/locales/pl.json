@@ -1765,7 +1765,8 @@
     "undone": "Przywrócono poprzednią wersję.",
     "undoFailed": "Nie udało się cofnąć.",
     "brokeIt": "Ta zmiana zepsuła grę. Cofnąć?",
-    "changeStanding": "Twoja zmiana działa."
+    "changeStanding": "Twoja zmiana działa.",
+    "changedWhere": "Zmieniono {{name}} w {{file}}."
   },
   "gamePage": {
     "loading": "Wczytywanie strony gry…",

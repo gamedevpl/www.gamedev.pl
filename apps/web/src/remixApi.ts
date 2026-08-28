@@ -40,6 +40,13 @@ export type RemixSession = {
   /** Absent from an older server; an empty list is the same as none. */
   suggestions?: RemixSuggestion[];
   expiresInMs: number;
+  /** Prior asks, when a resume route rebuilt the conversation. */
+  turns?: Array<{ utterance: string; summary?: string }>;
+};
+
+export type RemixResume = RemixSession & {
+  html?: string | null;
+  undoable?: boolean;
 };
 
 export type RemixAssistResponse = {
@@ -70,14 +77,7 @@ export type RemixSave = {
 
 export type RemixApiError = Error & { status?: number; reason?: string; category?: string };
 
-async function post<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body ?? {}),
-    ...(signal ? { signal } : {}),
-  });
+async function readJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let reason: string | undefined;
     let category: string | undefined;
@@ -99,8 +99,25 @@ async function post<T>(path: string, body?: unknown, signal?: AbortSignal): Prom
   return (await response.json()) as T;
 }
 
+async function post<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body ?? {}),
+    ...(signal ? { signal } : {}),
+  });
+  return readJson<T>(response);
+}
+
 export function startRemix(slug: string): Promise<RemixSession> {
   return post<RemixSession>(`/api/games/${encodeURIComponent(slug)}/remix`);
+}
+
+export function getRemix(remixId: string): Promise<RemixResume> {
+  return fetch(`${API_BASE}/api/remixes/${encodeURIComponent(remixId)}`, { credentials: 'include' }).then((response) =>
+    readJson<RemixResume>(response),
+  );
 }
 
 export function remixAssist(

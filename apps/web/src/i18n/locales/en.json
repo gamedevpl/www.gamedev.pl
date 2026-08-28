@@ -1751,7 +1751,8 @@
     "undone": "Put back the way it was.",
     "undoFailed": "Couldn't go back just now.",
     "brokeIt": "That change stopped the game working. Put it back?",
-    "changeStanding": "Your change is running."
+    "changeStanding": "Your change is running.",
+    "changedWhere": "Changed {{name}} in {{file}}."
   },
   "gamePage": {
     "loading": "Loading the game page…",
