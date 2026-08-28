@@ -1,6 +1,5 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { mkdtempSync } from 'node:os';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import { checkoutGame, changedPaths, unreconciledMessage } from './checkout.js';
