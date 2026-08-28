@@ -1,0 +1,52 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+export interface AdapterSpec {
+  name: string;
+  command: string;
+  versionFlag: string;
+  headless: string[];
+  events: { flag: string; dialect: 'ndjson' | 'jsonl' };
+  budget?: { turns?: string; price?: string };
+  cwd: 'game-dir' | 'workspace';
+  exit: { success: number[]; failure: number[] };
+}
+
+export interface AdapterFile {
+  version: number;
+  adapters: AdapterSpec[];
+}
+
+function shippedAdaptersPath(): string {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const candidates = [join(here, 'adapters.json'), join(here, '..', 'adapters.json')];
+  const found = candidates.find((path) => existsSync(path));
+  if (!found) throw new Error('adapters.json is missing from the gamedev package');
+  return found;
+}
+
+export function loadAdapters(env: NodeJS.ProcessEnv = process.env): AdapterFile {
+  const shipped = JSON.parse(readFileSync(shippedAdaptersPath(), 'utf8')) as AdapterFile;
+  const customPath = env.GAMEDEV_ADAPTERS ?? join(env.HOME ?? homedir(), '.config', 'gamedev', 'adapters.json');
+  try {
+    const extra = JSON.parse(readFileSync(customPath, 'utf8')) as { adapters?: AdapterSpec[] };
+    if (extra.adapters?.length) {
+      return { version: shipped.version, adapters: [...shipped.adapters, ...extra.adapters] };
+    }
+  } catch {
+    // custom file is optional and unsupported
+  }
+  return shipped;
+}
+
+export function detectAdapter(
+  name: string,
+  which: (cmd: string) => string | null,
+  file = loadAdapters(),
+): AdapterSpec | null {
+  const spec = file.adapters.find((row) => row.name === name);
+  if (!spec) return null;
+  return which(spec.command) ? spec : null;
+}
