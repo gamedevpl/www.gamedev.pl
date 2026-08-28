@@ -1,13 +1,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from './AuthContext.js';
+import { useAuth } from '../../AuthContext.js';
 import {
   catalogMediaUrl,
   defaultScreenshotIndex,
   gamePageHandle,
   isPlatformAuthor,
   type CatalogEntry,
-} from './catalog.js';
+} from '../../catalog.js';
 import {
   CATALOG_CATEGORY_IDS,
   categorizeCatalogEntry,
@@ -31,20 +31,20 @@ import {
   type CatalogSortSignals,
 } from './catalogSort.js';
 import { CatalogRail, FeaturedGame } from './CatalogRail.js';
-import { loadCreatorGames, publishedCreatorSlugs, type CreatorGameItem } from './creatorGames.js';
-import { fetchFeaturedSlugs } from './featuredApi.js';
-import { MascotMoment } from './Mascot.js';
-import { PixelIcon } from './PixelIcon.js';
-import { getRecentPlays } from './recentPlays.js';
-import { creatorPath, gamePath } from './router.js';
+import { loadCreatorGames, publishedCreatorSlugs, type CreatorGameItem } from '../../creatorGames.js';
+import { fetchFeaturedSlugs } from '../../featuredApi.js';
+import { MascotMoment } from '../../Mascot.js';
+import { PixelIcon } from '../../PixelIcon.js';
+import { getRecentPlays } from '../../recentPlays.js';
+import { creatorPath, gamePath } from '../../router.js';
 import {
   fetchCatalogSortSignals,
   readCachedCatalogSortPayload,
   type CatalogSortPayload,
-} from './recommendationsApi.js';
-import { useInView } from './useInView.js';
+} from '../../recommendationsApi.js';
+import { useInView } from '../../useInView.js';
 import { isCatalogScrolling, watchCatalogScrollIdle, whenCatalogScrollIdle } from './catalogScrollIdle.js';
-import type { PlayVia } from './visitTelemetry.js';
+import type { PlayVia } from '../../visitTelemetry.js';
 
 // Rail length before it scrolls, same for every rail.
 const RAIL_CARD_LIMIT = 12;

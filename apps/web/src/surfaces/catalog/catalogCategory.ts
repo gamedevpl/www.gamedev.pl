@@ -1,4 +1,4 @@
-import type { CatalogEntry } from './catalog.js';
+import type { CatalogEntry } from '../../catalog.js';
 
 // Coarse shelves, distinct from genre — free text can't group itself.
 export const CATALOG_CATEGORY_IDS = [

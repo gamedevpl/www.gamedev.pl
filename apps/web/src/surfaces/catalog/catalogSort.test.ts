@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { CatalogEntry } from './catalog.js';
+import type { CatalogEntry } from '../../catalog.js';
 import {
   applyCatalogFilters,
   filterUnplayedEntries,
@@ -11,7 +11,7 @@ import {
   sortCatalogEntries,
   type CatalogSortSignals,
 } from './catalogSort.js';
-import { rememberRecentPlay } from './recentPlays.js';
+import { rememberRecentPlay } from '../../recentPlays.js';
 
 function entry(partial: Partial<CatalogEntry> & Pick<CatalogEntry, 'slug' | 'title'>): CatalogEntry {
   return {

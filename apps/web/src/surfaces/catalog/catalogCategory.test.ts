@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CatalogEntry } from './catalog.js';
+import type { CatalogEntry } from '../../catalog.js';
 import { categorizeCatalogEntry, entriesInCategory, isCatalogCategoryId } from './catalogCategory.js';
 
 function entry(partial: Partial<CatalogEntry> & Pick<CatalogEntry, 'slug' | 'title'>): CatalogEntry {

@@ -6,12 +6,12 @@ import {
   gamePageHandle,
   isPlatformAuthor,
   type CatalogEntry,
-} from './catalog.js';
+} from '../../catalog.js';
 import { isCatalogScrolling, whenCatalogScrollIdle } from './catalogScrollIdle.js';
-import { PixelIcon } from './PixelIcon.js';
-import { creatorPath, gamePath } from './router.js';
-import { useInView } from './useInView.js';
-import type { PlayVia } from './visitTelemetry.js';
+import { PixelIcon } from '../../PixelIcon.js';
+import { creatorPath, gamePath } from '../../router.js';
+import { useInView } from '../../useInView.js';
+import type { PlayVia } from '../../visitTelemetry.js';
 
 // Curated home page surfaces above the full catalog grid.
 
