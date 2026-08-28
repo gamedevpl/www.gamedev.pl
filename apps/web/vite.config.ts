@@ -56,12 +56,8 @@ function pathnameOf(req: IncomingMessage): string {
 
 function isViteInternal(pathname: string): boolean {
   const prefixes = ['/api', '/oauth/', '/.well-known', '/@', '/node_modules', '/src', '/__'];
-  return (
-    prefixes.some((p) => pathname.startsWith(p)) ||
-    pathname === '/oauth' ||
-    pathname === '/device' ||
-    pathname === '/index.html'
-  );
+  const exact = ['/oauth', '/device', '/cli', '/install.sh', '/install.ps1', '/index.html'];
+  return prefixes.some((p) => pathname.startsWith(p)) || exact.includes(pathname);
 }
 
 /** Ensure later `writeHead(200)` / default 200 from the HTML middleware become 404. */
@@ -129,7 +125,10 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: Object.fromEntries(
-      ['/api', '/oauth', '/device', '/.well-known'].map((p) => [p, { target: apiTarget, changeOrigin: true }]),
+      ['/api', '/oauth', '/device', '/cli', '/install.sh', '/install.ps1', '/.well-known'].map((p) => [
+        p,
+        { target: apiTarget, changeOrigin: true },
+      ]),
     ),
   },
   // GA-02: tsWorker.ts needs code-split chunks; IIFE can't.

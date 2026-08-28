@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import bundled from './adapters.json' with { type: 'json' };
 
 export interface AdapterSpec {
   name: string;
@@ -19,16 +20,20 @@ export interface AdapterFile {
   adapters: AdapterSpec[];
 }
 
-function shippedAdaptersPath(): string {
+function shippedAdapters(): AdapterFile {
   const here = dirname(fileURLToPath(import.meta.url));
-  const candidates = [join(here, 'adapters.json'), join(here, '..', 'adapters.json')];
+  const candidates = [
+    join(here, 'adapters.json'),
+    join(here, '..', 'adapters.json'),
+    join(dirname(process.execPath), 'adapters.json'),
+  ];
   const found = candidates.find((path) => existsSync(path));
-  if (!found) throw new Error('adapters.json is missing from the gamedev package');
-  return found;
+  if (found) return JSON.parse(readFileSync(found, 'utf8')) as AdapterFile;
+  return bundled as AdapterFile;
 }
 
 export function loadAdapters(env: NodeJS.ProcessEnv = process.env): AdapterFile {
-  const shipped = JSON.parse(readFileSync(shippedAdaptersPath(), 'utf8')) as AdapterFile;
+  const shipped = shippedAdapters();
   const customPath = env.GAMEDEV_ADAPTERS ?? join(env.HOME ?? homedir(), '.config', 'gamedev', 'adapters.json');
   try {
     const extra = JSON.parse(readFileSync(customPath, 'utf8')) as { adapters?: AdapterSpec[] };

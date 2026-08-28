@@ -1,0 +1,48 @@
+name: CLI release
+
+on:
+  push:
+    tags:
+      - 'cli-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'CLI version without prefix (e.g. 0.1.0)'
+        required: true
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    name: Build gamedev binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.2.21'
+      - name: Compile per-platform binaries
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            version="${{ github.event.inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME#cli-v}"
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          chmod +x apps/cli/scripts/compile-release.sh
+          apps/cli/scripts/compile-release.sh "$version"
+      - name: Attest provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: apps/cli/dist/release/*
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: cli-v${{ env.VERSION }}
+          name: gamedev CLI v${{ env.VERSION }}
+          generate_release_notes: true
+          files: apps/cli/dist/release/*

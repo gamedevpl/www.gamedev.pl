@@ -28,13 +28,35 @@ describe('reserved installer routes', () => {
     expect(isKnownSpaShellPath('/creators/gamedevpl')).toBe(true);
   });
 
-  it('404s /install.sh and /install.ps1 as JSON, not the SPA shell', async () => {
+  it('404s /install.sh, /install.ps1 and /cli as JSON, not the SPA shell', async () => {
     const app = await buildApp({ store: new InMemoryStore(), sessionSecret: 'dev-session-secret-change-me' });
-    for (const url of ['/install.sh', '/install.ps1']) {
+    for (const url of ['/install.sh', '/install.ps1', '/cli']) {
       const response = await app.inject({ method: 'GET', url });
       expect(response.statusCode).toBe(404);
       expect(response.headers['content-type']).toMatch(/json/);
       expect(response.json()).toEqual({ error: 'not found' });
     }
+  });
+
+  it('serves checksum-verifying installers and /cli when the flag is on', async () => {
+    const prev = process.env.CLI_SURFACE;
+    process.env.CLI_SURFACE = 'true';
+    const app = await buildApp({ store: new InMemoryStore(), sessionSecret: 'dev-session-secret-change-me' });
+    const sh = await app.inject({ method: 'GET', url: '/install.sh' });
+    expect(sh.statusCode).toBe(200);
+    expect(sh.body).toContain('sha256sum -c');
+    expect(sh.body).toContain('$HOME/.local/bin');
+    const page = await app.inject({ method: 'GET', url: '/cli' });
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toContain('gamedev login');
+    expect(page.body).toContain('OS keychain');
+    const ps1 = await app.inject({ method: 'GET', url: '/install.ps1' });
+    expect(ps1.statusCode).toBe(200);
+    expect(ps1.body).toContain('Get-FileHash');
+    const enabled = await app.inject({ method: 'GET', url: '/api/cli/enabled' });
+    expect(enabled.statusCode).toBe(200);
+    expect(enabled.json()).toMatchObject({ enabled: true });
+    if (prev === undefined) delete process.env.CLI_SURFACE;
+    else process.env.CLI_SURFACE = prev;
   });
 });

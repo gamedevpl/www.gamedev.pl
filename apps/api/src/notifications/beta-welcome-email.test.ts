@@ -212,6 +212,7 @@ describe('betaWelcomeEmail', () => {
     expect(en.text).toContain('Hi Anna,');
     expect(en.text).toContain(params.siteUrl);
     expect(en.text).toMatch(/Reply to this email/i);
+    expect(en.text).toContain('https://www.gamedev.pl/cli');
     expect(en.text.toLowerCase()).not.toContain('arcade');
     expect(en.html).toContain('Hi Anna,');
 

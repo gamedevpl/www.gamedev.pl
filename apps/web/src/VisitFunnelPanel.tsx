@@ -1,18 +1,16 @@
+import { CliFunnelBlock } from './CliFunnelBlock.js';
 import { type VisitFunnel, type VisitsResponse } from './healthApi.js';
 
 /**
  * The visit funnel, rendered beside game health on the operator page.
  *
- * Game health answers "is this game working". This answers the questions that come
- * before that and which no per-game view can reach: how many arrivals there were, how
- * many reached a game at all, how fast, how deep, and where they came from.
+ * Game health answers "is this game working". This answers arrivals, first play,
+ * depth, and where they came from — questions no per-game view can reach.
  *
- * Time-to-first-play and games-per-visit distributions live in TelemetryOverview at
- * the top of the tab (histograms); this panel keeps the medians in its headline row
- * and the acquisition / creation / edit funnels below.
+ * Time-to-first-play and games-per-visit live in TelemetryOverview (histograms);
+ * this panel keeps medians plus the acquisition / creation / edit / CLI funnels.
  *
- * Untranslated for the same reason as the rest of this page — a single-operator
- * surface no player can reach.
+ * Untranslated: a single-operator surface no player can reach.
  */
 
 function percent(part: number, whole: number): string {
@@ -520,6 +518,8 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
             </table>
           )}
         </div>
+
+        <CliFunnelBlock funnel={funnel} />
 
         {funnel.completion?.requests ? (
           <div className="funnel-block">

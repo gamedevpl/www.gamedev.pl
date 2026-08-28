@@ -54,11 +54,11 @@ describe('SiteFooter project links', () => {
 
     const repoLink = links().find((a) => a.href === 'https://github.com/gamedevpl/www.gamedev.pl');
     expect(repoLink).toBeDefined();
-    // Leaving the site: opened in a new tab, and without handing over the referrer opener.
     expect(repoLink?.rel).toContain('noopener');
     // Repo mark lives in the footer now — not the header chrome.
     expect(repoLink?.classList.contains('site-footer__github')).toBe(true);
     expect(repoLink?.querySelector('img')).not.toBeNull();
+    expect(links().some((a) => a.getAttribute('href') === '/cli')).toBe(true);
   });
 
   it('sends Contact to the in-app form, not GitHub issues or a bare mailto', () => {
