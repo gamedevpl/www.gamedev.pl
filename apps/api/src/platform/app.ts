@@ -960,7 +960,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   }));
 
   app.get('/api/version', async () => ({ name: 'gamedev-pl', version: '0.0.0' }));
-
   // RFC 9728 protected-resource metadata for the MCP endpoint (BY-18a). Public,
   // cacheable, no auth — advertises where an authorization server will live.
   registerOAuthProtectedResourceRoutes(app);
