@@ -1007,7 +1007,12 @@ describe('LanguageSwitcher in header', () => {
 
     await act(async () => {
       buttons[1]?.click();
-      await Promise.resolve();
+      // The click's own i18n.changeLanguage(lang) is fire-and-forget (its result isn't
+      // reachable from a DOM click), and now genuinely async — it fetches pl.json on
+      // demand rather than switching between two already-bundled locales. Awaiting the
+      // same call here (a safe no-op once the click's own call has already loaded it)
+      // is what actually waits for that fetch instead of one microtask tick.
+      await i18n.changeLanguage('pl');
     });
     expect(i18n.language).toMatch(/^pl/);
     const after = [...(container.querySelectorAll('.language-switcher button') ?? [])];

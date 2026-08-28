@@ -6,7 +6,7 @@ import { recordVisit, watchInstallPrompt } from './pwa.js';
 import { hasServiceWorkerSupport } from './serviceWorkerSupport.js';
 import { watchShellUpdates } from './shellUpdate.js';
 import { startVisitTracking } from './visitTelemetry.js';
-import './i18n/index.js';
+import { i18nReady } from './i18n/index.js';
 import './styles.css';
 
 // Started before the first render: the visit has to be recorded as it lands, and a tree
@@ -32,17 +32,30 @@ watchInstallPrompt();
 recordVisit();
 watchShellUpdates();
 
-// Clears the index.html boot watchdog — React is about to replace #root.
-const booted = (window as Window & { __gamedevBooted?: () => void }).__gamedevBooted;
-if (typeof booted === 'function') booted();
+// An async IIFE rather than a top-level await: the build targets Safari 14 / Chrome 87,
+// which predate top-level await in a module. Waits for the active locale's own
+// translations — and only that locale's — to be loaded, the same guarantee the old
+// both-locales-bundled i18n import gave for free.
+void (async () => {
+  await i18nReady;
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <AuthProvider>
-      <App />
-    </AuthProvider>
-  </React.StrictMode>,
-);
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </React.StrictMode>,
+  );
+
+  // Clears the index.html boot watchdog — done only now, after i18nReady has settled
+  // and React is about to replace #root, not before awaiting it. A locale request can
+  // stall rather than reject (the service worker's network-only fetch for a deferred
+  // chunk opens a connection that never completes), and clearing this any earlier would
+  // disarm the watchdog's own auto-reload/stuck-screen recovery for exactly the window
+  // where render() still hasn't happened.
+  const booted = (window as Window & { __gamedevBooted?: () => void }).__gamedevBooted;
+  if (typeof booted === 'function') booted();
+})();
 
 /*
  * Register the worker for everyone, not just people who turn on notifications.
