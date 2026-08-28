@@ -51,7 +51,7 @@ import {
   setAgentModeEnabled,
   subscribeAgentActivity,
 } from './webmcp.js';
-import { StudioCreatorAgentKeyPanel } from '../../StudioCreatorAgentKeyPanel.js';
+import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
 import { flushLanguageFileUpdates, queueLanguageFileUpdate } from './codeSurfaceLanguageBind.js';
 import {
   createCodeSurfaceLanguageService,

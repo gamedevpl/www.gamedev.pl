@@ -14,7 +14,7 @@ const connectApi = vi.hoisted(() => ({
   revokeOAuthGrant: vi.fn(),
 }));
 
-vi.mock('./connectApi.js', () => connectApi);
+vi.mock('./surfaces/studio/connectApi.js', () => connectApi);
 
 vi.mock('./AuthContext.js', () => ({
   useAuth: () => ({ deleteAccount: vi.fn(), user: { uid: 'g:test', handle: null } }),

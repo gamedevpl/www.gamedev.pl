@@ -38,8 +38,8 @@ vi.mock('./webmcp.js', async () => {
   return { ...actual, registerCodeSurfaceWebMcpTools: vi.fn(() => () => {}) };
 });
 
-vi.mock('../../connectApi.js', async () => {
-  const actual = await vi.importActual<typeof import('../../connectApi.js')>('../../connectApi.js');
+vi.mock('./connectApi.js', async () => {
+  const actual = await vi.importActual<typeof import('./connectApi.js')>('./connectApi.js');
   return { ...actual, getCreatorAgentKey: vi.fn().mockResolvedValue({ revoked: true, keyGeneration: 1 }) };
 });
 

@@ -41,8 +41,8 @@ import {
   type StudioGame,
 } from '../../studioApi.js';
 import { getSubmissionStatus, listMySubmissions } from '../../submissionApi.js';
-import { pollDelayMs } from '../../studioStatusPoll.js';
-import { isRoundSealed } from '../../roundSealed.js';
+import { pollDelayMs } from './studioStatusPoll.js';
+import { isRoundSealed } from './roundSealed.js';
 
 /**
  * The studio's Edit surface (EditorKit L3): renders a game's own editor
