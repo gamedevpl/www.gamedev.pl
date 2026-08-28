@@ -107,7 +107,7 @@
     "navPlay": "Graj",
     "navCreate": "Stwórz",
     "navParty": "Impreza",
-    "navArcade": "Arcade",
+    "navArcade": "Gry",
     "navStudio": "Studio",
     "navFeed": "Strumień Agentów",
     "activeBuilds": "w trakcie: {{count}}",
@@ -601,10 +601,10 @@
     "share": {
       "title": "Udostępnij wersję roboczą",
       "liveTitle": "Udostępnij grę",
-      "liveHint": "Ta gra jest już w arcade. Każdy z tym linkiem zagra w najnowszą opublikowaną wersję.",
+      "liveHint": "Ta gra jest już w katalogu. Każdy z tym linkiem zagra w najnowszą opublikowaną wersję.",
       "on": "Wł.",
       "off": "Wył.",
-      "hintOff": "Na razie tylko Ty możesz zagrać w tę grę. Włącz, aby każdy z linkiem mógł spróbować — i tak nie trafi do arcade.",
+      "hintOff": "Na razie tylko Ty możesz zagrać w tę grę. Włącz, aby każdy z linkiem mógł spróbować — i tak nie trafi do katalogu.",
       "hintOn": "Każdy z tym linkiem może zagrać w najnowszą wersję. To ten sam link, który gra zachowa po publikacji, więc nie trzeba wysyłać go ponownie.",
       "error": "Nie udało się tego teraz zmienić. Spróbuj ponownie za chwilę."
     },
@@ -990,15 +990,15 @@
       },
       "publishing": {
         "label": "Publikujemy",
-        "description": "Zatwierdzone! Twoja gra trafia właśnie do arcade."
+        "description": "Zatwierdzone! Twoja gra właśnie jest publikowana."
       },
       "published": {
         "label": "Gotowe!",
-        "description": "Twoja gra jest w arcade. Zagraj w nią!"
+        "description": "Twoja gra jest w katalogu. Zagraj w nią!"
       },
       "needs_changes": {
         "label": "Wymaga poprawki",
-        "description": "Ta wersja potrzebuje jeszcze jednej rundy, zanim będzie mogła trafić do arcade. Wyślij poniżej krótką uwagę, aby kontynuować — nawet „popraw testy” wystarczy."
+        "description": "Ta wersja potrzebuje jeszcze jednej rundy, zanim będzie mogła zostać opublikowana. Wyślij poniżej krótką uwagę, aby kontynuować — nawet „popraw testy” wystarczy."
       },
       "abandoned": {
         "label": "Zatrzymana",
@@ -1062,7 +1062,7 @@
       "task_failed": "Agent budujący niespodziewanie przerwał pracę. Twoja gra i dotychczasowe postępy są bezpieczne — wyślij poniżej uwagi, aby rozpocząć kolejną rundę.",
       "task_timed_out": "Budowanie nie zdążyło się skończyć w wyznaczonym czasie. Postępy są bezpieczne — wyślij poniżej uwagi, aby rozpocząć kolejną rundę.",
       "task_completed_without_delivery": "Agent zakończył pracę, ale nie dostarczył gry. Wyślij poniżej uwagi, aby rozpocząć kolejną rundę.",
-      "gate_red": "Automatyczne testy nie przeszły, więc ta wersja nie może jeszcze trafić do arcade.",
+      "gate_red": "Automatyczne testy nie przeszły, więc ta wersja nie może jeszcze zostać opublikowana.",
       "self_build_delivery_cap": "Ta runda wyczerpała limit dostarczeń, więc Twój agent nie może wysłać kolejnej wersji, dopóki nie zaczniesz nowej rundy. Wyślij poniżej krótką uwagę, aby kontynuować — dotychczasowe postępy są bezpieczne.",
       "generic": "Ta runda budowania zakończyła się błędem. Postępy są bezpieczne — wyślij poniżej uwagi, aby rozpocząć kolejną rundę."
     },

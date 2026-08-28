@@ -251,8 +251,8 @@ as a repo variable — both deploy paths thread it, so a value set by hand on th
 revision is wiped by the next deploy.
 
 `INVITE_URL` (default `https://www.gamedev.pl`) is **not** a service variable:
-only `beta:invite` reads it, and that runs on the operator's machine, so set it
-in the shell you run the script from.
+only the `beta:invite` and `beta:welcome` CLIs read it, and those run on the operator's
+machine, so set it in the shell you run the script from.
 
 ### Sending beta invites
 
@@ -271,6 +271,44 @@ It refuses to run without `RESEND_API_KEY` (rather than silently not sending); `
 previews the rendered email with no Firestore write and no send. See
 [`.claude/skills/managing-beta-participants`](../.claude/skills/managing-beta-participants) for
 the full access model.
+
+### Sending the waitlist welcome
+
+`beta:welcome` mails people already on the Firestore waitlist once a spot is opening —
+the email the splash promised. It is a **preview by default**: no send and no writes
+until `--send`. Language follows waitlist `locale`, then a `.pl` email domain, else
+English. From is the already-verified `Grzegorz <noreply@mail.gamedev.pl>`; Reply-To is
+`grzegorz@gamedev.pl`, so a reply reaches the owner without adding a Resend sending domain.
+
+```bash
+# Preview everyone currently pending (no mail, no writes)
+npm run beta:welcome -w @gamedevpl/api
+
+# One person, still a preview
+npm run beta:welcome -w @gamedevpl/api -- --only you@example.com
+
+# Let that person in for real (approve + send)
+export RESEND_API_KEY='re_...'
+npm run beta:welcome -w @gamedevpl/api -- --approve --send --only you@example.com
+```
+
+`--send` without `RESEND_API_KEY` is refused. `--send` to pending rows also requires
+`--approve`, so the mail and the allowlist stay in sync. Pending recipients are
+approved and verified **before** the send; `welcomeEmailedAt` is stamped only after
+Resend accepts. If the mailer fails, they can already sign in, and the next pending
+run still picks them (unstamped approved rows stay in the pending filter). `--force`
+resends a stamped row.
+
+**Owner setup before the first real send** (the script will not do this):
+
+1. Add a Google Workspace alias so `grzegorz@gamedev.pl` receives mail (inbound only —
+   Resend keeps sending from `mail.gamedev.pl`).
+2. Send one `--only you@… --approve --send` to yourself and confirm that Reply-To is
+   `grzegorz@gamedev.pl` and that a reply reaches the alias.
+
+Do not change the service `MAIL_FROM` — notification mail should keep using the subdomain.
+
+`INVITE_URL` (default `https://www.gamedev.pl`) is read by this CLI too.
 
 ### Sending a one-time invite link
 

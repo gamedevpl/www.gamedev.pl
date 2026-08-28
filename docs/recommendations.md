@@ -1,6 +1,6 @@
 # Game recommendations (catalog sort order)
 
-> Status: ✅ Built (2026-07-29). The home-page arcade grid can be sorted several
+> Status: ✅ Built (2026-07-29). The home-page catalog grid can be sorted several
 > ways. **Recommended** is the default; players can also pick Newest, Most played,
 > Last played, or A–Z. **My games** and **Not played** are filters. A signed-in
 > creator’s published games are pinned to the front of the same gallery when the

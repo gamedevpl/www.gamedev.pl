@@ -120,7 +120,7 @@ const PLAY_VIA_LABELS: Record<string, string> = {
 
 const HOW_TO_ENTRY_LABELS: Record<string, string> = {
   play: 'deep link (/play)',
-  home: 'arcade (home)',
+  home: 'catalog (home)',
 };
 
 /** A labelled count with its share of visits, for the small ranked tables. */

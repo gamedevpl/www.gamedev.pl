@@ -12,7 +12,7 @@
 You write a few sentences about a game you want. The app asks what it needs to know, then you
 can hand the brief to the platform builder or connect your own coding agent over MCP. The
 agent builds actual code, not a template with the numbers changed. After review, the game
-appears in the arcade and runs in a browser. Bring friends — some games turn phones into
+appears in the catalog and runs in a browser. Bring friends — some games turn phones into
 controllers around one shared screen.
 
 _Every game above was built this way._

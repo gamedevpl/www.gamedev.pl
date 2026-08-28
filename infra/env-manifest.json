@@ -120,12 +120,12 @@
       "the checker must not demand them from the other path. Each needs a reason: this is",
       "the escape hatch, and an unexplained entry here is how a real divergence hides.",
       "INVITE_URL earned its place by being threaded to Cloud Run for months while only",
-      "the beta:invite CLI ever read it."
+      "the beta:invite / beta:welcome CLIs ever read it."
     ],
     "CANDIDATE_URL": "step-local: the untrafficked revision URL the smoke tests curl",
     "E2E_CHROMIUM_PATH": "step-local: where the browser gate finds Chromium on the runner",
     "MP_RELAY_URL_VAL": "step-local: shell variable behind MP_RELAY_URL, not its own var",
     "FLAG_VAL": "step-local: loop scratch variable in infra/deploy-api.sh",
-    "INVITE_URL": "read only by the beta:invite CLI on the operator's machine, never by the service"
+    "INVITE_URL": "read only by the beta:invite and beta:welcome CLIs on the operator's machine, never by the service"
   }
 }

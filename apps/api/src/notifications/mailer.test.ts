@@ -37,6 +37,16 @@ describe('ResendMailer', () => {
     });
   });
 
+  it('lets a message override the mailer from address', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ id: 'resend-from' }), { status: 200 }));
+    const mailer = new ResendMailer({ apiKey: 'key_abc', from: DEFAULT_MAIL_FROM, fetchImpl });
+
+    await mailer.send({ ...message, from: 'Grzegorz <grzegorz@gamedev.pl>' });
+
+    const body = JSON.parse(fetchImpl.mock.calls[0]![1]?.body as string);
+    expect(body.from).toBe('Grzegorz <grzegorz@gamedev.pl>');
+  });
+
   it('forwards replyTo as reply_to for the Resend API', async () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ id: 'resend-456' }), { status: 200 }));
     const mailer = new ResendMailer({ apiKey: 'key_abc', from: DEFAULT_MAIL_FROM, fetchImpl });

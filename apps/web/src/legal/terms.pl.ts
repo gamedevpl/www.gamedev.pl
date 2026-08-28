@@ -49,7 +49,7 @@ export const termsPl: LegalDocument = {
           items: [
             'Tworzenie gier — opisujesz pomysł na grę, a autonomiczny agent AI pisze jej kod i, po weryfikacji, ' +
               'publikuje ją w Serwisie.',
-            'Arkada — granie w gry opublikowane w Serwisie, w tym w gry stworzone przez innych użytkowników.',
+            'Katalog — granie w gry opublikowane w Serwisie, w tym w gry stworzone przez innych użytkowników.',
             'Tryb wieloosobowy — wspólna gra na jednym ekranie, w której telefony uczestników pełnią rolę ' +
               'kontrolerów.',
             'Śledzenie zgłoszeń — strona statusu Twojej gry, powiadomienia w Serwisie, powiadomienia push i ' +
@@ -185,14 +185,14 @@ export const termsPl: LegalDocument = {
             'Każdy opis gry przechodzi automatyczną moderację z użyciem modelu AI, jeszcze zanim trafi do agenta ' +
             'kodującego. Moderacja może odrzucić zgłoszenie automatycznie, bez udziału człowieka. Poza tym ' +
             'Usługodawca weryfikuje gry przed publikacją i może odmówić publikacji według własnego uznania — ' +
-            'publikacja w arkadzie jest decyzją kuratorską, a nie automatycznym następstwem zgłoszenia.',
+            'publikacja w katalogu jest decyzją kuratorską, a nie automatycznym następstwem zgłoszenia.',
         },
         { kind: 'p', text: 'W razie naruszenia Regulaminu Usługodawca może, proporcjonalnie do naruszenia:' },
         {
           kind: 'ul',
           items: [
             'odrzucić zgłoszenie lub odmówić publikacji gry;',
-            'usunąć opublikowaną grę z arkady albo ograniczyć dostęp do niej;',
+            'usunąć opublikowaną grę z katalogu albo ograniczyć dostęp do niej;',
             'ograniczyć limity zgłoszeń, zawiesić konto lub je usunąć w przypadku rażących bądź powtarzających się ' +
               'naruszeń.',
           ],

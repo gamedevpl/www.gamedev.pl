@@ -7,7 +7,7 @@ import type { Scorecard, Store } from '../platform/store.js';
 /**
  * Home-page catalog sorting signals: community popularity from scorecards + personal
  * play affinity for signed-in players, plus helpers for newest / most-played /
- * last-played modes on the arcade grid.
+ * last-played modes on the catalog grid.
  *
  * Affinity recording (`POST /api/games/:slug/played`) is identity-attached account
  * data, erased with the account. It never writes to the anonymous play/visit

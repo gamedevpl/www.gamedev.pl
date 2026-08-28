@@ -67,7 +67,7 @@ survives only in this repo's early history.
 | [`game-assessment-plan.md`](./game-assessment-plan.md)             | ✅ Reviewer role + `/review` swipe desk; Copy JSON → agent plan (`ingest-desk-reviews`)                 |
 | [`how-to-play-plan.md`](./how-to-play-plan.md)                     | Richer How to play (Goal / Scoring in `.legend-keys`) — decision, schema, phased catalog seal           |
 | [`path-routing-plan.md`](./path-routing-plan.md)                   | ✅ Path URLs for deep links (`/play/<slug>`, …) — History API, no hashbang                              |
-| [`recommendations.md`](./recommendations.md)                       | ✅ Home arcade sort from scorecards + signed-in play affinity                                           |
+| [`recommendations.md`](./recommendations.md)                       | ✅ Home catalog sort from scorecards + signed-in play affinity                                          |
 | [`runbooks/`](./runbooks/README.md)                                | ✅ Incident procedures: site-down triage, deploy rollback, Firestore restore, secret rotation           |
 | [`contributing-for-agents.md`](./contributing-for-agents.md)       | How agents run, structure, and contribute to this repository                                            |
 | [`comment-prose-debt.md`](./comment-prose-debt.md)                 | ✅ Comment seal: // one-liners ≤12 words; per-file baseline ratchet (`npm run comment-prose`)           |

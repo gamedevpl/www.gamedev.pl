@@ -7,6 +7,7 @@ export interface WaitlistEntry {
   requestedAt: string;
   locale?: string;
   status: WaitlistStatus;
+  welcomeEmailedAt?: string;
 }
 
 export interface BetaInvite {
