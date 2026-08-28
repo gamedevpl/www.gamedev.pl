@@ -134,7 +134,7 @@ function TreeRows(props: CodeSurfaceExplorerTreeProps & { node: TreeNode; depth:
   const expanded = props.expanded.has(props.node.path);
   return (
     <>
-      <FolderRow {...props} node={props.node} expanded={expanded} />
+      <FolderRow {...props} node={props.node} open={expanded} />
       {expanded
         ? props.node.children.map((child) => (
             <TreeRows key={child.path} {...props} node={child} depth={props.depth + 1} />
@@ -202,7 +202,7 @@ function FolderRow(
   props: CodeSurfaceExplorerTreeProps & {
     node: Extract<TreeNode, { kind: 'folder' }>;
     depth: number;
-    expanded: boolean;
+    open: boolean;
   },
 ) {
   const { t } = useTranslation();
@@ -230,7 +230,7 @@ function FolderRow(
         type="button"
         className="code-surface-tree-folder-toggle"
         draggable={props.editable}
-        aria-expanded={props.expanded}
+        aria-expanded={props.open}
         title={props.node.path}
         onClick={() => {
           props.onToggleFolder(props.node.path);
@@ -240,7 +240,7 @@ function FolderRow(
         onDragEnd={props.onDragEnd}
       >
         <span className="code-surface-tree-indent" aria-hidden="true" />
-        <PixelIcon name={props.expanded ? 'chevronDown' : 'chevronUp'} size={11} />
+        <PixelIcon name={props.open ? 'chevronDown' : 'chevronUp'} size={11} />
         <PixelIcon name="folder" size={12} />
         <span className="code-surface-tree-folder-name">{props.node.name}/</span>
       </button>
@@ -273,9 +273,9 @@ function FolderRow(
 }
 
 export function CodeSurfaceTreeInputs(props: {
-  fileRef: RefObject<HTMLInputElement | null>;
-  folderRef: RefObject<HTMLInputElement | null>;
-  archiveRef: RefObject<HTMLInputElement | null>;
+  fileRef: RefObject<HTMLInputElement>;
+  folderRef: RefObject<HTMLInputElement>;
+  archiveRef: RefObject<HTMLInputElement>;
   onFiles: (event: ChangeEvent<HTMLInputElement>) => void;
   onFolder: (event: ChangeEvent<HTMLInputElement>) => void;
   onArchive: (event: ChangeEvent<HTMLInputElement>) => void;

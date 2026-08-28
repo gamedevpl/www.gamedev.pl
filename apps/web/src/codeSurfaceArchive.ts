@@ -8,11 +8,15 @@ function u32(view: DataView, offset: number): number {
   return view.getUint32(offset, true);
 }
 
+function blobFromBytes(data: Uint8Array): Blob {
+  return new Blob([data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer]);
+}
+
 async function inflateRaw(data: Uint8Array): Promise<Uint8Array> {
   if (typeof DecompressionStream === 'undefined') {
     throw new Error('this browser cannot inflate zip entries');
   }
-  const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  const stream = blobFromBytes(data).stream().pipeThrough(new DecompressionStream('deflate-raw'));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
@@ -20,7 +24,7 @@ async function gunzip(data: Uint8Array): Promise<Uint8Array> {
   if (typeof DecompressionStream === 'undefined') {
     throw new Error('this browser cannot inflate gzip archives');
   }
-  const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream('gzip'));
+  const stream = blobFromBytes(data).stream().pipeThrough(new DecompressionStream('gzip'));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 

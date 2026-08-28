@@ -21,9 +21,9 @@ type FileSystemEntryLike = FileSystemFileEntryLike | FileSystemDirectoryEntryLik
 
 function asEntry(item: DataTransferItem): FileSystemEntryLike | null {
   const candidate = item as DataTransferItem & {
-    webkitGetAsEntry?: () => FileSystemEntryLike | null;
+    webkitGetAsEntry?: () => FileSystemEntry | null;
   };
-  return candidate.webkitGetAsEntry?.() ?? null;
+  return (candidate.webkitGetAsEntry?.() as FileSystemEntryLike | null | undefined) ?? null;
 }
 
 async function readAllEntries(

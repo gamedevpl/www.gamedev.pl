@@ -69,9 +69,9 @@ export function useCodeSurfaceTree(options: UseCodeSurfaceTreeOptions) {
   const [busy, setBusy] = useState(false);
   const [dragItem, setDragItem] = useState<{ path: string; kind: 'file' | 'folder' } | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement | null>(null);
-  const folderRef = useRef<HTMLInputElement | null>(null);
-  const archiveRef = useRef<HTMLInputElement | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null!);
+  const folderRef = useRef<HTMLInputElement>(null!);
+  const archiveRef = useRef<HTMLInputElement>(null!);
   const filesRef = useRef(options.files);
   filesRef.current = options.files;
   const draftsRef = useRef(options.drafts);
@@ -177,7 +177,18 @@ export function useCodeSurfaceTree(options: UseCodeSurfaceTreeOptions) {
       if (fileList.length === 1 && isArchiveFileName(fileList[0]!.name)) {
         try {
           const unpacked = await unpackArchive(new Uint8Array(await fileList[0]!.arrayBuffer()), fileList[0]!.name);
-          items = unpacked.map((entry) => ({ file: new File([entry.bytes], entry.path), relative: entry.path }));
+          items = unpacked.map((entry) => ({
+            file: new File(
+              [
+                entry.bytes.buffer.slice(
+                  entry.bytes.byteOffset,
+                  entry.bytes.byteOffset + entry.bytes.byteLength,
+                ) as ArrayBuffer,
+              ],
+              entry.path,
+            ),
+            relative: entry.path,
+          }));
           strip = true;
         } catch (error) {
           options.onError(error instanceof Error ? error.message : t('studioPanel.code.tree.noArchive'));

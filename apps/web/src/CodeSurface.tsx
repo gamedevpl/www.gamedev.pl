@@ -927,7 +927,7 @@ export function CodeSurface({
     prepareMutation,
     onSources: setSources,
     onDrafts: setDrafts,
-    onSelect: selectFile,
+    onSelect: (path) => (path ? selectFile(path) : setSelected(null)),
     onError: (message) => setDeliverMessage(message),
     onRebuild: schedulePreviewRebuild,
     onDiscard: discardWorkingCopy,
