@@ -51,10 +51,10 @@ import { useDocumentTitle } from './useDocumentTitle.js';
 // Deferred: an anonymous player playing a published game never has to pay for the
 // weight of the admin console, the studio (and everything it drags in — the code
 // editor, the remix panel), the review desk, or party's multiplayer client.
-const AdminConsole = lazy(() => import('./AdminConsole.js').then((m) => ({ default: m.AdminConsole })));
+const AdminConsole = lazy(() => import('./surfaces/admin/AdminConsole.js').then((m) => ({ default: m.AdminConsole })));
 const CreatorStudioView = lazy(() => import('./CreatorStudioView.js').then((m) => ({ default: m.CreatorStudioView })));
 const ReviewDesk = lazy(() => import('./ReviewDesk.js').then((m) => ({ default: m.ReviewDesk })));
-const PartyPage = lazy(() => import('./PartyPage.js').then((m) => ({ default: m.PartyPage })));
+const PartyPage = lazy(() => import('./surfaces/party/PartyPage.js').then((m) => ({ default: m.PartyPage })));
 
 /**
  * Catches a lazy route chunk's import() rejecting — a client that stayed open across
@@ -105,9 +105,9 @@ import { ClosedBetaSplash } from './ClosedBetaSplash.js';
 import { BetaInvitePage } from './BetaInvitePage.js';
 import { BetaWelcomeSplash } from './BetaWelcomeSplash.js';
 import { AppLoadingScreen } from './AppLoadingScreen.js';
-import { ControllerView } from './mp/ControllerView.js';
-import { PartyStage } from './mp/PartyStage.js';
-import { createPartySession, type PartySession } from './mp/mpApi.js';
+import { ControllerView } from './surfaces/party/ControllerView.js';
+import { PartyStage } from './surfaces/party/PartyStage.js';
+import { createPartySession, type PartySession } from './surfaces/party/mpApi.js';
 import { parseOAuthReturnParam } from './oauthReturn.js';
 
 type StageContent =

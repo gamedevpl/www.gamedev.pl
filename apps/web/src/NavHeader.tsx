@@ -7,7 +7,7 @@ import { LanguageSwitcher } from './LanguageSwitcher.js';
 import { Mascot } from './Mascot.js';
 import { NotificationBell } from './NotificationBell.js';
 import { PixelIcon } from './PixelIcon.js';
-import { fetchAdminSummary } from './adminApi.js';
+import { fetchAdminSummary } from './surfaces/admin/adminApi.js';
 import { fetchReviewStatus } from './reviewApi.js';
 import { creatorPath } from './router.js';
 import { usePageScrolling } from './usePageScrolling.js';

@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CatalogRail } from './CatalogRail.js';
-import type { CatalogEntry } from './catalog.js';
-import { MascotMoment } from './Mascot.js';
+import { CatalogRail } from '../../CatalogRail.js';
+import type { CatalogEntry } from '../../catalog.js';
+import { MascotMoment } from '../../Mascot.js';
 import { PartyDiagram } from './PartyDiagram.js';
-import { PixelIcon } from './PixelIcon.js';
-import type { PlayVia } from './visitTelemetry.js';
+import { PixelIcon } from '../../PixelIcon.js';
+import type { PlayVia } from '../../visitTelemetry.js';
 
 type PartyPageProps = {
   catalogStatus: 'loading' | 'ready' | 'error';

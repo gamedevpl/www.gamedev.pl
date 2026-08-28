@@ -17294,6 +17294,22 @@ button.builder-mode-selector:disabled {
   background: color-mix(in srgb, var(--danger, #c0392b) 10%, transparent);
 }
 
+/* The action cluster is a small target on a long row. A hover wash on the whole
+   `<tr>` is how the pointer knows which game it is about to act on — there is
+   otherwise no selected/hover state at all. Stalled rows keep their tint and just
+   go a step darker, so the stall signal is not painted over. */
+.admin-job-row {
+  transition: background 0.12s ease;
+}
+
+.admin-job-row:hover {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.admin-job-row.is-stalled:hover {
+  background: color-mix(in srgb, var(--danger, #c0392b) 18%, transparent);
+}
+
 .admin-job-stall {
   font-size: 0.78rem;
   color: var(--danger, #c0392b);
@@ -17313,6 +17329,10 @@ button.builder-mode-selector:disabled {
 .admin-job-publish:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+.admin-job-publish:hover:not(:disabled) {
+  background: color-mix(in srgb, currentColor 12%, transparent);
 }
 
 .admin-job-actions {
@@ -17338,6 +17358,11 @@ button.builder-mode-selector:disabled {
 .admin-job-cancel.is-armed {
   border-color: var(--danger, #c0392b);
   color: var(--danger, #c0392b);
+  opacity: 1;
+}
+
+.admin-job-cancel:hover:not(:disabled) {
+  background: color-mix(in srgb, currentColor 10%, transparent);
   opacity: 1;
 }
 
@@ -17706,6 +17731,55 @@ button.builder-mode-selector:disabled {
 
 .admin-preview-close-btn:hover {
   background: rgba(255, 255, 255, 0.1);
+}
+
+/* Publish and cancel from the queue (and from the preview theater) both confirm
+   here. Above the preview overlay (1000) because Publish from the theater opens
+   this on top of it; same 1100 band as the other stacked operator sheets. */
+.admin-job-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.admin-job-confirm {
+  width: min(92vw, 420px);
+  padding: 1.15rem 1.2rem 1rem;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.15));
+  border-radius: 10px;
+  background: var(--bg-dark, #16181d);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  white-space: normal;
+}
+
+.admin-job-confirm.is-danger {
+  border-color: color-mix(in srgb, var(--danger, #c0392b) 45%, var(--border, rgba(255, 255, 255, 0.15)));
+}
+
+.admin-job-confirm h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.admin-job-confirm p {
+  margin: 0.55rem 0 0;
+  color: var(--muted, #94a3b8);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.admin-job-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
 }
 
 .admin-preview-body {

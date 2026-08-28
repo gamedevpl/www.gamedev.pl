@@ -1,5 +1,11 @@
 import type { SocketStatus } from '@gamedevpl/contract';
-import { parseServerFrame, PROTOCOL_VERSION, roomSocketUrl, type InputKey, type ServerFrame } from './protocol.js';
+import {
+  parseServerFrame,
+  PROTOCOL_VERSION,
+  roomSocketUrl,
+  type InputKey,
+  type ServerFrame,
+} from '../../mp/protocol.js';
 
 export type RoomStatus = SocketStatus;
 

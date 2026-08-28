@@ -1,4 +1,4 @@
-import type { InputKey } from './protocol.js';
+import type { InputKey } from '../../mp/protocol.js';
 
 /** Bilingual phrase → party key. One-shot recognition maps a final transcript onto these. */
 export const VOICE_PHRASES: Array<{ key: InputKey; phrases: string[] }> = [
