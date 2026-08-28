@@ -19,4 +19,4 @@ await build({
 });
 
 chmodSync(join(outDir, 'gamedev.mjs'), 0o755);
-console.log('bundled dist/gamedev.mjs — self-contained binaries: scripts/compile-release.sh (needs bun)');
+console.log('bundled dist/gamedev.mjs — shebang Node script, no native binary');

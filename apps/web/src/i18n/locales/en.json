@@ -1645,7 +1645,7 @@
     },
     "gamedevCli": {
       "title": "gamedev CLI",
-      "hint": "Install the terminal client, then connect this game. Same round as MCP — no extra secret."
+      "hint": "Needs Node 20 — same as a working copy. Then connect this game. Same round as MCP — no extra secret."
     },
     "rotate": {
       "start": "Rotate key",

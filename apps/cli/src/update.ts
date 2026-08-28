@@ -6,16 +6,14 @@ import { CliError, EXIT_REFUSED } from './exit-codes.js';
 
 export const CLI_VERSION = '0.1.0';
 export const CLI_RELEASE_PREFIX = 'cli-v';
+export const CLI_ASSET = 'gamedev';
 export const CLI_RELEASES_DOWNLOAD = 'https://github.com/gamedevpl/www.gamedev.pl/releases/download';
 export const CLI_RELEASES_API = 'https://api.github.com/repos/gamedevpl/www.gamedev.pl/releases';
 
 export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
-export function assetName(platform: NodeJS.Platform, arch: string): string {
-  if (platform === 'win32') return 'gamedev-windows-x64.exe';
-  const os = platform === 'darwin' ? 'darwin' : 'linux';
-  const cpu = arch === 'arm64' ? 'arm64' : 'x64';
-  return `gamedev-${os}-${cpu}`;
+export function assetName(): string {
+  return CLI_ASSET;
 }
 
 export function releaseUrl(version: string, file: string): string {
@@ -30,9 +28,8 @@ export function expectedHash(sums: string, asset: string): string | null {
   return null;
 }
 
-export function defaultInstallDest(platform: NodeJS.Platform = process.platform): string {
-  const bin = platform === 'win32' ? 'gamedev.exe' : 'gamedev';
-  return join(homedir(), '.local', 'bin', bin);
+export function defaultInstallDest(): string {
+  return join(homedir(), '.local', 'bin', CLI_ASSET);
 }
 
 export function helperDest(binPath: string): string {
@@ -54,13 +51,11 @@ export async function resolveUpdateVersion(input: { version?: string; fetchImpl:
 export async function updateCli(input: {
   dest: string;
   version?: string;
-  platform?: NodeJS.Platform;
-  arch?: string;
   fetchImpl?: FetchLike;
 }): Promise<{ version: string; asset: string }> {
   const fetchImpl = input.fetchImpl ?? fetch;
   const version = await resolveUpdateVersion({ version: input.version, fetchImpl });
-  const asset = assetName(input.platform ?? process.platform, input.arch ?? process.arch);
+  const asset = assetName();
   const sumsRes = await fetchImpl(releaseUrl(version, 'SHA256SUMS'));
   if (!sumsRes.ok) {
     throw new CliError(`update: SHA256SUMS missing for cli-v${version}`, EXIT_REFUSED, 'wait for a cli-v* release');

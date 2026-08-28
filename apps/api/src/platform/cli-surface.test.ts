@@ -46,13 +46,18 @@ describe('reserved installer routes', () => {
     expect(sh.statusCode).toBe(200);
     expect(sh.body).toContain('sha256sum -c');
     expect(sh.body).toContain('$HOME/.local/bin');
+    expect(sh.body).toContain('Node 20');
+    expect(sh.body).toContain('asset="gamedev"');
+    expect(sh.body).not.toContain('gamedev-linux');
     const page = await app.inject({ method: 'GET', url: '/cli' });
     expect(page.statusCode).toBe(200);
     expect(page.body).toContain('gamedev login');
     expect(page.body).toContain('OS keychain');
+    expect(page.body).toContain('Node 20');
     const ps1 = await app.inject({ method: 'GET', url: '/install.ps1' });
     expect(ps1.statusCode).toBe(200);
     expect(ps1.body).toContain('Get-FileHash');
+    expect(ps1.body).toContain('Node 20');
     const enabled = await app.inject({ method: 'GET', url: '/api/cli/enabled' });
     expect(enabled.statusCode).toBe(200);
     expect(enabled.json()).toMatchObject({ enabled: true });

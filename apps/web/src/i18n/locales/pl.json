@@ -1659,7 +1659,7 @@
     },
     "gamedevCli": {
       "title": "gamedev CLI",
-      "hint": "Zainstaluj klienta terminalowego, potem podłącz tę grę. Ta sama runda co MCP — bez dodatkowego sekretu."
+      "hint": "Potrzebujesz Node 20 — tak jak przy kopii roboczej. Potem podłącz tę grę. Ta sama runda co MCP — bez dodatkowego sekretu."
     },
     "rotate": {
       "start": "Obróć klucz",

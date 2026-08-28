@@ -8,18 +8,17 @@ This package lives in the public app monorepo until the owner creates
 
 ## Install
 
+Needs **Node 20+** — the same runtime a game checkout already requires. The installed
+file is a shebang script, not a native binary (no Apple/Windows code signing).
+
 ```bash
 curl -fsSL https://www.gamedev.pl/install.sh | bash
 ```
 
 The installer is 404 until the `CLI_SURFACE` deploy flag is on. Checksums come from GitHub
-Releases tagged `cli-v*`. `gamedev update` uses the same channel.
+Releases tagged `cli-v*` (one `gamedev` asset). `gamedev update` uses the same channel.
 
-Until a release exists: `npm run build -w @gamedevpl/cli` and run `node apps/cli/dist/main.js`.
-
-Self-contained binaries: `bun` + `apps/cli/scripts/compile-release.sh`. Apple notarization and
-Windows Authenticode need owner-held certificates — CI attests provenance via GitHub but does
-not codesign.
+Until a release exists: `npm run bundle -w @gamedevpl/cli` and run `apps/cli/dist/gamedev.mjs`.
 
 ## Verbs
 
@@ -29,4 +28,4 @@ not codesign.
 Exit codes: `0` gate green · `1` gate red · `2` refused · `3` auth · `4` input required.
 
 CI: `GAMEDEV_TOKEN` from secrets. Never pass the creator OAuth token to a sub-agent.
-`git push` / `git pull` against a checkout use `git-remote-gamedev` (same binary).
+`git push` / `git pull` against a checkout use `git-remote-gamedev` (same script).

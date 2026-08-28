@@ -17,14 +17,16 @@ permissions:
 
 jobs:
   release:
-    name: Build gamedev binaries
+    name: Bundle gamedev Node script
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
         with:
-          bun-version: '1.2.21'
-      - name: Compile per-platform binaries
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Bundle the shebang script
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then

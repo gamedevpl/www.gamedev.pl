@@ -17,7 +17,7 @@ export function cliPageHtml(origin: string): string {
     <p class="lead">A conversational front door for making and iterating games on gamedev.pl. It has no model of its own. Coding happens on the platform, or by a tool you already installed.</p>
     <h2>Install</h2>
     <pre class="redirect">${install}</pre>
-    <p class="hint">Windows: <code>irm ${escapeHtml(origin)}/install.ps1 | iex</code>. The script verifies a SHA-256 before it writes <code>~/.local/bin</code>.</p>
+    <p class="hint">Needs Node 20+ — same as a game checkout. Windows: <code>irm ${escapeHtml(origin)}/install.ps1 | iex</code>. The script verifies a SHA-256 before it writes <code>~/.local/bin</code>.</p>
     <h2>Journeys</h2>
     <ul class="can">
       <li><code>gamedev login</code> then describe a game — refine, watch the gate, open a preview.</li>
