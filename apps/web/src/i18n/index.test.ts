@@ -3,6 +3,20 @@
 import { describe, expect, it, vi } from 'vitest';
 import i18n, { i18nReady } from './index.js';
 
+describe('detectLanguage', () => {
+  it('normalizes a region-qualified cached locale from before this module existed', async () => {
+    // i18next-browser-languagedetector (removed by this PR) cached values like 'pl-PL'
+    // or 'en-US', not the base subtag this module's own writes always use — an exact
+    // membership check against SUPPORTED_LANGUAGES would silently discard a still-valid
+    // stored preference and fall through to navigator/default instead.
+    localStorage.setItem('gamedevpl:lang', 'pl-PL');
+    vi.resetModules();
+    const fresh = await import('./index.js');
+    await fresh.i18nReady;
+    expect(fresh.default.language).toBe('pl');
+  });
+});
+
 describe('i18n.changeLanguage', () => {
   it('persists every successful switch, not only the first load of a bundle', async () => {
     await i18nReady;

@@ -19,7 +19,14 @@ const STORAGE_KEY = 'gamedevpl:lang';
 function detectLanguage(): SupportedLanguage {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored && (SUPPORTED_LANGUAGES as readonly string[]).includes(stored)) return stored as SupportedLanguage;
+    // Normalized the same way navigator candidates are below: a value cached by the
+    // removed i18next-browser-languagedetector (pre-dating this module) can be
+    // region-qualified, e.g. 'pl-PL' or 'en-US' — an exact match against
+    // SUPPORTED_LANGUAGES would silently discard a still-valid stored preference.
+    const storedBase = stored?.split(/[-_]/)[0]?.toLowerCase();
+    if (storedBase && (SUPPORTED_LANGUAGES as readonly string[]).includes(storedBase)) {
+      return storedBase as SupportedLanguage;
+    }
   } catch {
     // localStorage unavailable (private mode, disabled) — fall through to navigator.
   }

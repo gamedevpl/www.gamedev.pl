@@ -32,10 +32,6 @@ watchInstallPrompt();
 recordVisit();
 watchShellUpdates();
 
-// Clears the index.html boot watchdog — React is about to replace #root.
-const booted = (window as Window & { __gamedevBooted?: () => void }).__gamedevBooted;
-if (typeof booted === 'function') booted();
-
 // An async IIFE rather than a top-level await: the build targets Safari 14 / Chrome 87,
 // which predate top-level await in a module. Waits for the active locale's own
 // translations — and only that locale's — to be loaded, the same guarantee the old
@@ -50,6 +46,15 @@ void (async () => {
       </AuthProvider>
     </React.StrictMode>,
   );
+
+  // Clears the index.html boot watchdog — done only now, after i18nReady has settled
+  // and React is about to replace #root, not before awaiting it. A locale request can
+  // stall rather than reject (the service worker's network-only fetch for a deferred
+  // chunk opens a connection that never completes), and clearing this any earlier would
+  // disarm the watchdog's own auto-reload/stuck-screen recovery for exactly the window
+  // where render() still hasn't happened.
+  const booted = (window as Window & { __gamedevBooted?: () => void }).__gamedevBooted;
+  if (typeof booted === 'function') booted();
 })();
 
 /*
