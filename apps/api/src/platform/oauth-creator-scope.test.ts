@@ -224,6 +224,17 @@ describe('OAuth creator scope (CL-04..CL-07, CL-09)', () => {
     expect((await store.listOAuthGrantsByOwner('g:boss')).length).toBe(MAX_OAUTH_GRANTS_PER_UID);
   });
 
+  it('rejects a creator OAuth token after deletion is scheduled', async () => {
+    const { store, token } = await signedInBoss();
+    await store.scheduleAccountDeletion('g:boss', '2026-08-28T00:00:00.000Z', '2026-09-01T00:00:00.000Z');
+    const profile = await app!.inject({
+      method: 'GET',
+      url: '/api/me/profile',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(profile.statusCode).toBe(401);
+  });
+
   it('rate-limits the token endpoint per IP', async () => {
     app = await buildOAuthApp(new InMemoryStore());
     const headers = { 'content-type': 'application/x-www-form-urlencoded' };

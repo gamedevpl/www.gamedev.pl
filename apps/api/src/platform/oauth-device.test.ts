@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { DEVICE_GRANT_TYPE } from './oauth-device.js';
+import { DEVICE_CODE_TTL_MS, DEVICE_GRANT_TYPE } from './oauth-device.js';
 import { GAMEDEV_CLI_CLIENT_ID } from './oauth-first-party.js';
 import { buildOAuthApp, enableCliSurface, sessionCookie } from './oauth-cli-test-app.js';
 import { InMemoryStore } from './store.js';
@@ -112,5 +112,29 @@ describe('OAuth device authorization (CL-08)', () => {
       headers: { cookie: sessionCookie('g:boss') },
     });
     expect(grants.json()).toEqual([expect.objectContaining({ clientLabel: 'gamedev CLI on headless-box' })]);
+  });
+
+  it('returns expired_token on the first poll after the device-code TTL', async () => {
+    await setup();
+    const issued = await app!.inject({
+      method: 'POST',
+      url: '/oauth/device',
+      headers: { 'content-type': 'application/json' },
+      payload: { client_id: GAMEDEV_CLI_CLIENT_ID, scope: 'creator' },
+    });
+    const body = issued.json() as { device_code: string };
+    clock += DEVICE_CODE_TTL_MS + 1;
+    const poll = await app!.inject({
+      method: 'POST',
+      url: '/oauth/token',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({
+        grant_type: DEVICE_GRANT_TYPE,
+        device_code: body.device_code,
+        client_id: GAMEDEV_CLI_CLIENT_ID,
+      }).toString(),
+    });
+    expect(poll.statusCode).toBe(400);
+    expect(poll.json()).toEqual({ error: 'expired_token' });
   });
 });

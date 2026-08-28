@@ -25,6 +25,6 @@ export async function resolveBearerIdentity(
   const access = await verifyAsAccessToken(store, bearer, nowMs);
   if (!access || !scopeIncludes(access.scope, CREATOR_SCOPE)) return null;
   const user = await store.getUser(access.ownerUid);
-  if (!user) return null;
+  if (!user || user.deletionScheduledFor) return null;
   return { user, method: 'oauth', scope: access.scope };
 }

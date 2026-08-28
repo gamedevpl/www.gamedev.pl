@@ -17,6 +17,7 @@ import type { OAuthGrantRecord, Store } from './store.js';
 export const DEVICE_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:device_code';
 export const DEVICE_CODE_TTL_MS = 10 * 60 * 1000;
 export const DEVICE_POLL_INTERVAL_SEC = 5;
+export const MAX_PENDING_DEVICE_CODES = 64;
 
 const USER_CODE_ALPHABET = 'BCDFGHJKLMNPQRSTVWXZ';
 
@@ -102,44 +103,51 @@ export function registerOAuthDeviceRoutes(
   const sessionSecret = options.sessionSecret;
   const sessionSecretPrev = options.sessionSecretPrev;
 
-  app.post('/oauth/device', async (request, reply) => {
-    if (!cliSurfaceEnabled()) {
-      return reply.status(404).send({ error: 'not found' });
-    }
-    const body = (request.body ?? {}) as { client_id?: string; scope?: string; device?: string };
-    const clientId = typeof body.client_id === 'string' ? body.client_id.trim() : '';
-    if (!isGamedevCliClient(clientId)) {
-      return reply.status(400).send({ error: 'invalid_client' });
-    }
-    const scopes = parseOAuthScopes(body.scope ?? CREATOR_SCOPE);
-    if (!scopes || !scopes.includes(CREATOR_SCOPE)) {
-      return reply.status(400).send({ error: 'invalid_scope' });
-    }
-    const nowMs = now();
-    prune(nowMs);
-    const deviceCode = randomBytes(32).toString('base64url');
-    const userCode = mintUserCode();
-    const row: DeviceAuth = {
-      deviceCodeHash: hashDeviceCode(deviceCode),
-      userCode,
-      clientId,
-      scope: formatOAuthScope(scopes),
-      deviceName: sanitizeDeviceName(body.device),
-      expiresAt: nowMs + DEVICE_CODE_TTL_MS,
-      intervalSec: DEVICE_POLL_INTERVAL_SEC,
-      lastPollAt: 0,
-    };
-    pending.set(userCode, row);
-    const base = canonicalAppBaseUrl();
-    return reply.status(200).send({
-      device_code: deviceCode,
-      user_code: userCode,
-      verification_uri: `${base}/device`,
-      verification_uri_complete: `${base}/device?user_code=${encodeURIComponent(userCode)}`,
-      expires_in: Math.floor(DEVICE_CODE_TTL_MS / 1000),
-      interval: DEVICE_POLL_INTERVAL_SEC,
-    });
-  });
+  app.post(
+    '/oauth/device',
+    { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } },
+    async (request, reply) => {
+      if (!cliSurfaceEnabled()) {
+        return reply.status(404).send({ error: 'not found' });
+      }
+      const body = (request.body ?? {}) as { client_id?: string; scope?: string; device?: string };
+      const clientId = typeof body.client_id === 'string' ? body.client_id.trim() : '';
+      if (!isGamedevCliClient(clientId)) {
+        return reply.status(400).send({ error: 'invalid_client' });
+      }
+      const scopes = parseOAuthScopes(body.scope ?? CREATOR_SCOPE);
+      if (!scopes || !scopes.includes(CREATOR_SCOPE)) {
+        return reply.status(400).send({ error: 'invalid_scope' });
+      }
+      const nowMs = now();
+      prune(nowMs);
+      if (pending.size >= MAX_PENDING_DEVICE_CODES) {
+        return reply.status(429).send({ error: 'too_many_requests' });
+      }
+      const deviceCode = randomBytes(32).toString('base64url');
+      const userCode = mintUserCode();
+      const row: DeviceAuth = {
+        deviceCodeHash: hashDeviceCode(deviceCode),
+        userCode,
+        clientId,
+        scope: formatOAuthScope(scopes),
+        deviceName: sanitizeDeviceName(body.device),
+        expiresAt: nowMs + DEVICE_CODE_TTL_MS,
+        intervalSec: DEVICE_POLL_INTERVAL_SEC,
+        lastPollAt: 0,
+      };
+      pending.set(userCode, row);
+      const base = canonicalAppBaseUrl();
+      return reply.status(200).send({
+        device_code: deviceCode,
+        user_code: userCode,
+        verification_uri: `${base}/device`,
+        verification_uri_complete: `${base}/device?user_code=${encodeURIComponent(userCode)}`,
+        expires_in: Math.floor(DEVICE_CODE_TTL_MS / 1000),
+        interval: DEVICE_POLL_INTERVAL_SEC,
+      });
+    },
+  );
 
   app.get('/device', async (request, reply) => {
     if (!cliSurfaceEnabled()) return reply.status(404).send({ error: 'not found' });
@@ -183,9 +191,9 @@ export async function exchangeDeviceCode(
 > {
   if (!cliSurfaceEnabled()) return { ok: false, error: 'invalid_grant', status: 400 };
   if (!isGamedevCliClient(input.clientId)) return { ok: false, error: 'invalid_client', status: 400 };
-  prune(input.nowMs);
   const hash = hashDeviceCode(input.deviceCode);
   const row = [...pending.values()].find((item) => item.deviceCodeHash === hash);
+  prune(input.nowMs);
   if (!row) return { ok: false, error: 'invalid_grant', status: 400 };
   if (row.expiresAt <= input.nowMs) {
     pending.delete(row.userCode);
