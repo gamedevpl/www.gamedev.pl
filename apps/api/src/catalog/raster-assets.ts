@@ -1,5 +1,5 @@
 import { decodeCanonicalBase64, InvalidBase64Error } from '../platform/canonical-base64.js';
-import { DELIVERY_EXTRA_ASSET_PATTERN, RASTER_ASSET_MAX_FILE_BYTES } from '../platform/games-repo-contract.js';
+import { DELIVERY_EXTRA_ASSET_PATTERN, RASTER_ASSET_MAX_FILE_BYTES } from '../platform/raster-contract.js';
 
 // Same shape as games-repo tools/lib/raster-assets.ts.
 const HANDLE = /^[a-z][a-z0-9-]*$/;

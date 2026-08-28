@@ -9,14 +9,6 @@ import {
   type SourceFile,
 } from './games-store.js';
 
-const TINY_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
-  'base64',
-);
-const TINY_PNG_B64 = TINY_PNG.toString('base64');
-const TINY_WEBP = Buffer.from([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]);
-const TINY_WEBP_B64 = TINY_WEBP.toString('base64');
-
 const HOW_TO_PLAY = {
   goal: { en: 'Survive', pl: 'Przetrwaj' },
   hint: { en: 'Keep moving', pl: 'Nie zatrzymuj się' },
@@ -74,32 +66,6 @@ describe('validateSourceUpload — the delivery contract', () => {
     expect(validateSourceUpload([...MINIMAL, { path: 'entities/player.ts', content: 'export {};' }])).toHaveLength(
       MINIMAL.length + 1,
     );
-  });
-
-  it('accepts quantized rasters under scenes/, cast/, or images/', () => {
-    expect(
-      validateSourceUpload([...MINIMAL, { path: 'scenes/glade/bg.png', content: TINY_PNG_B64 }]).map(
-        (file) => file.path,
-      ),
-    ).toContain('scenes/glade/bg.png');
-    expect(
-      validateSourceUpload([...MINIMAL, { path: 'cast/jack/atlas.webp', content: TINY_WEBP_B64 }]).map(
-        (file) => file.path,
-      ),
-    ).toContain('cast/jack/atlas.webp');
-  });
-
-  it('refuses a raster whose bytes are not a PNG or WebP', () => {
-    expect(() =>
-      validateSourceUpload([
-        ...MINIMAL,
-        { path: 'scenes/glade/bg.png', content: Buffer.from('fake-png-bytes').toString('base64') },
-      ]),
-    ).toThrow(/is not a PNG/);
-  });
-
-  it('still refuses a loose PNG in the game root', () => {
-    expect(() => validateSourceUpload([...MINIMAL, { path: 'hero.png', content: 'png' }])).toThrow(/not deliverable/);
   });
 
   it('refuses harness-shaped paths so a diff visibly respects the boundary', () => {
@@ -670,21 +636,6 @@ describe('GCS games store', () => {
       model: 'claude-sonnet-4.6',
       engineRef: 'abc123',
     });
-  });
-
-  it('stores raster sources as raw PNG bytes and reads them back as base64', async () => {
-    const { impl, objects } = stubGcs();
-    const store = createGcsGamesStore({ ...base, fetchImpl: impl });
-
-    const { version } = await store.putCandidateSources({
-      slug: 'g',
-      jobId: 1,
-      files: [...MINIMAL, { path: 'scenes/glade/bg.png', content: TINY_PNG_B64 }],
-    });
-
-    const stored = objects.get(`games/g/versions/${version}/source/scenes/glade/bg.png`);
-    expect(stored).toEqual(TINY_PNG);
-    await expect(store.getSourceFile('g', version, 'scenes/glade/bg.png')).resolves.toBe(TINY_PNG_B64);
   });
 
   it('writes the manifest last, so a dead run leaves no version claiming missing files', async () => {

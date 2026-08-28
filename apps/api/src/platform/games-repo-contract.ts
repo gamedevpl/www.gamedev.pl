@@ -37,6 +37,8 @@
  * directions is that the allowlist here is never the narrower of the two.
  */
 
+import { RASTER_ASSET_BUDGET_BYTES } from './raster-contract.js';
+
 /** Canonical GameKit module order — must match games-repo `GAME_KIT_MODULES`. */
 export const GAME_KIT_MODULES = [
   'input',
@@ -143,12 +145,6 @@ export const MAX_SOURCE_GRAPH_MODULES = 128;
  */
 export const GAMEKIT_PLATFORM_BYTES = 410_000;
 
-// Third serve bucket: raster data-URIs plus loader chrome.
-export const RASTER_ASSET_BUDGET_BYTES = 3 * 1024 * 1024;
-
-// Per-file quantized PNG/WebP cap; forces the ~300 KB scene.
-export const RASTER_ASSET_MAX_FILE_BYTES = 400 * 1024;
-
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
 export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES + RASTER_ASSET_BUDGET_BYTES;
 
@@ -192,14 +188,6 @@ export const MUSIC_CONTRACT = {
   catalogTracksKey: 'tracks',
   windowMusicName: '__GAME_AUDIO_MUSIC__',
   windowTracksName: '__GAME_MUSIC_TRACKS__',
-} as const;
-
-// GAME.json.images embed contract; lockstep with games-repo raster-assets.
-export const IMAGES_CONTRACT = {
-  manifestField: 'images',
-  windowAssetsName: '__GAME_IMAGE_ASSETS__',
-  windowElementsName: '__GAME_IMAGE_ELEMENTS__',
-  windowProgressName: '__GAME_IMAGE_PROGRESS__',
 } as const;
 
 /**
@@ -376,12 +364,6 @@ export const DELIVERY_RESERVED_SEGMENTS = [
 
 /** Cap on files per delivery. */
 export const DELIVERY_MAX_FILES = 200;
-
-// Website-ahead PNG/WebP paths under scenes/, cast/, or images/.
-export const DELIVERY_EXTRA_ASSET_PATTERN = new RegExp(
-  '^(?:scenes|cast|images)/[a-z0-9][a-z0-9/_-]{0,80}\\.(?:png|webp)$',
-  'i',
-);
 
 /** Total bytes one delivery may carry. */
 export const DELIVERY_MAX_UPLOAD_BYTES = 5 * 1024 * 1024;

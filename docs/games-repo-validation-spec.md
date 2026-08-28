@@ -27,7 +27,7 @@ This specification defines the quality gates enforced on incoming pull requests 
   change cannot break a published game whose author spent nothing.
 - On top of that sits a serve-compat ceiling: author budget + platform kit + raster
   payloads. The live numbers are `GAME_BUDGET_BYTES`, `GAMEKIT_PLATFORM_BYTES`, and
-  `RASTER_ASSET_BUDGET_BYTES` in `apps/api/src/platform/games-repo-contract.ts`, which
+  `RASTER_ASSET_BUDGET_BYTES` in `apps/api/src/platform/raster-contract.ts`, which
   `apps/api/src/platform/assemble.ts` re-exports as `MAX_PROJECT_BYTES` — do not restate
   them here, or this page becomes a third copy to keep in lockstep.
 
