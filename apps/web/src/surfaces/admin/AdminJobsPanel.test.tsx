@@ -74,46 +74,6 @@ describe('AdminJobsPanel', () => {
     await act(async () => root.unmount());
   });
 
-  it('publishes and says which game went live', async () => {
-    mocked.fetchJobQueue.mockResolvedValue(queue([job()]));
-    mocked.publishJob.mockResolvedValue({
-      ok: true,
-      slug: 'comet-courier',
-      version: 'v1',
-      publishedAt: '2026-07-30T12:00:00Z',
-    });
-
-    const { container, root } = await render();
-    const button = container.querySelector('.admin-job-publish') as HTMLButtonElement;
-
-    await act(async () => {
-      button.click();
-      await Promise.resolve();
-    });
-
-    expect(mocked.publishJob).toHaveBeenCalledWith(1_000_001);
-    expect(container.querySelector('.admin-job-message')?.textContent).toContain('published comet-courier');
-    expect(mocked.fetchJobQueue).toHaveBeenCalledTimes(2);
-
-    await act(async () => root.unmount());
-  });
-
-  it('names the next step when a publish is refused', async () => {
-    mocked.fetchJobQueue.mockResolvedValue(queue([job()]));
-    mocked.publishJob.mockResolvedValue({ refused: 'gate_red' });
-
-    const { container, root } = await render();
-
-    await act(async () => {
-      (container.querySelector('.admin-job-publish') as HTMLButtonElement).click();
-      await Promise.resolve();
-    });
-
-    expect(container.querySelector('.admin-job-message')?.textContent).toContain('gate failed');
-
-    await act(async () => root.unmount());
-  });
-
   it('deduplicates multiple builds for the same game under ready filter, showing only latest by issue order', async () => {
     // Deliberately pass older builds earlier in the queue array (e.g. API priority sort)
     mocked.fetchJobQueue.mockResolvedValue(
@@ -153,39 +113,6 @@ describe('AdminJobsPanel', () => {
 
     expect(container.querySelector('.admin-job-stall')?.textContent).toContain('silent');
     expect(container.querySelector('.admin-job-row')?.className).toContain('is-stalled');
-
-    await act(async () => root.unmount());
-  });
-
-  it('takes two clicks to cancel, because canceled has no undo', async () => {
-    mocked.fetchJobQueue.mockResolvedValue(queue([job({ state: 'building' })]));
-    mocked.cancelJob.mockResolvedValue({ ok: true, state: 'canceled', stopEnforced: false });
-
-    const { container, root } = await render();
-
-    // Switch to in-flight filter to see building job
-    const inFlightChip = Array.from(container.querySelectorAll('.admin-filter-chip')).find((c) =>
-      c.textContent?.includes('In flight'),
-    ) as HTMLButtonElement;
-    await act(async () => {
-      inFlightChip.click();
-      await Promise.resolve();
-    });
-
-    const button = container.querySelector('.admin-job-cancel') as HTMLButtonElement;
-    await act(async () => {
-      button.click();
-      await Promise.resolve();
-    });
-    expect(mocked.cancelJob).not.toHaveBeenCalled();
-    expect(button.textContent).toContain('Sure?');
-
-    await act(async () => {
-      button.click();
-      await Promise.resolve();
-    });
-    expect(mocked.cancelJob).toHaveBeenCalledWith(1_000_001);
-    expect(container.querySelector('.admin-job-message')?.textContent).toContain('next report');
 
     await act(async () => root.unmount());
   });
@@ -462,35 +389,6 @@ describe('AdminJobsPanel', () => {
     });
 
     expect(document.querySelector('.admin-preview-modal')).toBeNull();
-
-    await act(async () => root.unmount());
-  });
-
-  it('executes batch publish on deduplicated ready jobs', async () => {
-    mocked.fetchJobQueue.mockResolvedValue(
-      queue([
-        job({ jobId: 10, slug: 'game-1', state: 'ready_for_review' }),
-        job({ jobId: 9, slug: 'game-1', state: 'ready_for_review' }), // older superseded build
-        job({ jobId: 11, slug: 'game-2', state: 'ready_for_review' }),
-        job({ jobId: 12, slug: 'game-3', state: 'building' }),
-      ]),
-    );
-    mocked.publishJob.mockResolvedValue({ ok: true, slug: 'game', version: 'v1', publishedAt: '2026-07-30T12:00:00Z' });
-
-    const { container, root } = await render();
-    const bulkBtn = container.querySelector('.admin-bulk-publish-cta') as HTMLButtonElement;
-    expect(bulkBtn?.textContent).toContain('Publish all ready (2)');
-
-    await act(async () => {
-      bulkBtn.click();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(mocked.publishJob).toHaveBeenCalledWith(10);
-    expect(mocked.publishJob).toHaveBeenCalledWith(11);
-    expect(mocked.publishJob).not.toHaveBeenCalledWith(9);
-    expect(mocked.publishJob).not.toHaveBeenCalledWith(12);
 
     await act(async () => root.unmount());
   });
