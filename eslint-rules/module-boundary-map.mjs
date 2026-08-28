@@ -81,6 +81,7 @@ const FILE_BUCKET = {
   'spa-paths': 'platform',
   // Kill switch + reserved installer routes for the gamedev CLI surface (CL-02).
   'cli-surface': 'platform',
+  'oauth-cli-test-app': 'platform',
   'theme-css-generator': 'platform',
   translate: 'platform',
   'localize-intake': 'platform',
@@ -174,6 +175,8 @@ const FILE_BUCKET = {
   'chat-agent': 'creation',
   'chat-orchestration': 'creation',
   'chat-turns': 'creation',
+  'chat-turns-history': 'creation',
+  'creator-feedback-handler': 'creation',
   'creator-code': 'creation',
   'creator-studio': 'creation',
   'creator-profile-routes': 'creation',

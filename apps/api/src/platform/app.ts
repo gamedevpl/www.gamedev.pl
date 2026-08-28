@@ -979,7 +979,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     sessionSecretPrev: oauthSessionSecretPrev,
     now: options.submissionRoutes?.now,
   });
-
   // Browser sign-in for accounts that hold a personal access token instead of a Google
   // or Apple identity. Registered right after the AS because the only reason it exists
   // is to get such an account to the consent screen above.
