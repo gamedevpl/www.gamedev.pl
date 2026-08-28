@@ -87,7 +87,7 @@ describe('ProposalReviewCard', () => {
     const onChanged = vi.fn();
     const host = await mount(createElement(ProposalReviewCard, { proposal: proposal(), onChanged }));
 
-    const accept = buttonWith(host, 'accept');
+    const accept = buttonWith(host, 'Accept');
     expect(accept).toBeTruthy();
     await click(accept!);
 
@@ -100,7 +100,7 @@ describe('ProposalReviewCard', () => {
     vi.stubGlobal('fetch', fetchMock);
     const host = await mount(createElement(ProposalReviewCard, { proposal: proposal(), onChanged: () => {} }));
 
-    await click(buttonWith(host, 'decline')!);
+    await click(buttonWith(host, 'Decline')!);
     // A decline is somebody's work being turned down, and it should cost a second gesture
     // plus a reason — which is also what the statement-of-reasons rule needs.
     expect(fetchMock).not.toHaveBeenCalled();
@@ -111,7 +111,7 @@ describe('ProposalReviewCard', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 409, json: async () => ({}) }));
     const host = await mount(createElement(ProposalReviewCard, { proposal: proposal(), onChanged: () => {} }));
 
-    await click(buttonWith(host, 'accept')!);
+    await click(buttonWith(host, 'Accept')!);
     expect(host.querySelector('[role="alert"]')).toBeTruthy();
   });
 });
