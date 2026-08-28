@@ -704,15 +704,15 @@ describe('CodeSurface', () => {
     await render();
 
     expect(container.textContent).toMatch(/1 file changed/i);
-    const discard = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Discard changes')!;
-    expect(discard).not.toBeUndefined();
+    const discard = container.querySelector<HTMLButtonElement>('.code-surface-discard')!;
     await act(async () => {
       discard.click();
-      expect(mocked.discardCodeSurfaceEdits).not.toHaveBeenCalled();
+    });
+    expect(mocked.discardCodeSurfaceEdits).not.toHaveBeenCalled();
+    await act(async () => {
       container.querySelector<HTMLButtonElement>('[data-testid="code-tree-confirm"]')!.click();
       await flush();
     });
-
     expect(mocked.discardCodeSurfaceEdits).toHaveBeenCalledWith('sky-dodge');
     expect(container.textContent).toMatch(/No local changes/i);
   });

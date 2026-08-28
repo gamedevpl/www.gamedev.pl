@@ -1074,7 +1074,7 @@ export function CodeSurface({
       actionsCommands.push({
         id: 'discard',
         label: t('studioPanel.code.discard'),
-        run: () => void discardWorkingCopy(),
+        run: () => tree.requestDiscard(),
       });
     }
     actionsCommands.push({
