@@ -4,7 +4,7 @@ import { AdminJobsPanel } from './AdminJobsPanel.js';
 import { CostsPanel } from './CostsPanel.js';
 import { CreationLimitsPanel } from './CreationLimitsPanel.js';
 import { GameHealthView } from '../../GameHealthView.js';
-import { ProposalReviewPanel } from '../../ProposalReviewPanel.js';
+import { ProposalReviewPanel } from '../review/ProposalReviewPanel.js';
 import { SuggestionsPanel } from './SuggestionsPanel.js';
 import { WaitlistPanel } from './WaitlistPanel.js';
 import { AdminAssessmentsPanel } from './AdminAssessmentsPanel.js';

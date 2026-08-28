@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getProposalDiff, type ProposalDiff } from './proposalsApi.js';
+import { getProposalDiff, type ProposalDiff } from '../../proposalsApi.js';
 
 /**
  * What a proposal changes, for the reviewer who wants to look.

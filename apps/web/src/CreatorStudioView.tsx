@@ -41,7 +41,7 @@ import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
 import { StudioDetailsBuildProgress } from './StudioDetailsBuildProgress.js';
 import { StudioDetailsMedia } from './StudioDetailsMedia.js';
 import { ContributionsSetting } from './ContributionsSetting.js';
-import { ProposalReviewPanel } from './ProposalReviewPanel.js';
+import { ProposalReviewPanel } from './surfaces/review/ProposalReviewPanel.js';
 import { StudioOAuthClientsPanel } from './StudioOAuthClientsPanel.js';
 import { StudioWorkspaceCheckoutPanel } from './StudioWorkspaceCheckoutPanel.js';
 import { SubmissionStatusView } from './SubmissionStatusView.js';
@@ -1122,10 +1122,7 @@ export function CreatorStudioView({
                         </StudioChatRail>
 
                         {tab === 'edit' ? (
-                          <div
-                            className="studio-edit-overlay"
-                            data-surface={editorSurfaceMode}
-                          >
+                          <div className="studio-edit-overlay" data-surface={editorSurfaceMode}>
                             <EditorPanel
                               key={activeGame.token}
                               game={activeGame}

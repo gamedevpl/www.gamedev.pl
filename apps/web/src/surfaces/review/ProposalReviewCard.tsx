@@ -8,7 +8,7 @@ import {
   requestProposalChanges,
   type DeclineReason,
   type Proposal,
-} from './proposalsApi.js';
+} from '../../proposalsApi.js';
 
 /**
  * One proposal, from the reviewer's seat.

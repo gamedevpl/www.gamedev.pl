@@ -3,16 +3,16 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import i18n from './i18n/index.js';
+import i18n from '../../i18n/index.js';
 
-vi.mock('./AuthContext.js', () => ({
+vi.mock('../../AuthContext.js', () => ({
   useAuth: () => ({
     user: { uid: 'dev:reviewer', tier: 'standard', reviewer: true },
     loading: false,
   }),
 }));
 
-vi.mock('./PublishedGameFrame.js', () => ({
+vi.mock('../../PublishedGameFrame.js', () => ({
   PublishedGameFrame: ({ slug, title }: { slug: string; title: string }) => (
     <div data-testid="frame">
       {title} ({slug})

@@ -4,7 +4,7 @@ import {
   type AssessmentResolution,
   type AssessmentResolutionStatus,
   type GameAssessment,
-} from '../../reviewApi.js';
+} from '../review/reviewApi.js';
 
 const STATUS_LABELS: Record<AssessmentResolutionStatus, string> = {
   addressed: 'Addressed',

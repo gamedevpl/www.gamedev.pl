@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProposalReviewCard } from './ProposalReviewCard.js';
-import { myReviews, platformProposals, type Proposal } from './proposalsApi.js';
+import { myReviews, platformProposals, type Proposal } from '../../proposalsApi.js';
 
 /**
  * The reviewer's queue — proposals waiting on a decision.

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from './AuthContext.js';
-import { catalogMediaUrl, defaultScreenshotIndex } from './catalog.js';
-import { GameTheater } from './GameTheater.js';
+import { useAuth } from '../../AuthContext.js';
+import { catalogMediaUrl, defaultScreenshotIndex } from '../../catalog.js';
+import { GameTheater } from '../../GameTheater.js';
 import {
   ASSESSMENT_CHECKLIST_KEYS,
   ASSESSMENT_CHECKLIST_MARKS,
