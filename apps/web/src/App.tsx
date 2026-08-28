@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { fetchCatalog, gamePageHandle, type CatalogEntry } from './catalog.js';
@@ -55,6 +55,28 @@ const AdminConsole = lazy(() => import('./AdminConsole.js').then((m) => ({ defau
 const CreatorStudioView = lazy(() => import('./CreatorStudioView.js').then((m) => ({ default: m.CreatorStudioView })));
 const ReviewDesk = lazy(() => import('./ReviewDesk.js').then((m) => ({ default: m.ReviewDesk })));
 const PartyPage = lazy(() => import('./PartyPage.js').then((m) => ({ default: m.PartyPage })));
+
+/**
+ * Catches a lazy route chunk's import() rejecting — a client that stayed open across
+ * a deploy asks for a content-hashed filename the new build no longer serves, which
+ * `apps/api/src/platform/app.ts`'s static handler hard-404s. Unlike `CodeSurface.tsx`'s
+ * `CodeMirrorBoundary`, there is no lesser-but-working surface to degrade to here, so
+ * the fallback is a reload prompt rather than a substitute — the same recovery the
+ * service-worker shell's `AppUpdateBanner` already offers, for the client that has no
+ * active worker to show it (registration unsupported, blocked, or not yet complete).
+ */
+class RouteChunkBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch() {
+    // Advisory only — the fallback's reload prompt is the whole recovery.
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
 
 /**
  * Read the current URL into an AppRoute, putting the browser on the current address
@@ -1183,69 +1205,53 @@ export function App() {
       <PullToRefresh enabled={route.view === 'home' && !stageContent} onRefresh={handlePullToRefresh} />
 
       <main className="content">
-        <Suspense fallback={<p className="content-loading">{t('app.loadingSurface')}</p>}>
-          {route.view === 'admin' ? (
-            <AdminConsole section={route.section} onNavigate={navigate} />
-          ) : route.view === 'review' ? (
-            <ReviewDesk />
-          ) : route.view === 'studioWelcome' ? (
-            <StudioWelcomeView game={route.game} onOpenStudio={navigate} />
-          ) : route.view === 'studioConnect' ? (
-            <StudioConnectWizard game={route.game} onOpenStudio={navigate} />
-          ) : route.view === 'studio' ? (
-            <CreatorStudioView
-              selectedGame={route.game}
-              selectedTab={route.tab}
-              selectedPosture={route.posture}
-              onNavigate={navigate}
-              onPlay={(slug) => navigate(playPath(slug))}
-              onRetryConcept={(concept) => {
-                setRetryPrompt(concept);
-                setPendingScrollTarget('hero-prompt');
-              }}
-            />
-          ) : (
-            <>
-              {route.view === 'play' ? (
-                <GameDetailPage
-                  game={playCatalogGame}
-                  state={catalogStatus}
-                  onPlay={handlePlayGame}
-                  onPlayTogether={handlePlayTogether}
-                  onRemix={handleRemixGame}
-                  onRetry={handleRetryCatalog}
-                />
-              ) : route.view === 'create' ? (
-                <CreatePage
-                  // Remount when a retry loads a new idea, so the prompt box picks it up.
-                  retryKey={retryPrompt ?? 'blank'}
-                  initialPrompt={resolveCreateInitialPrompt(partySeedRef.current, retryPrompt)}
-                  catalogEntries={catalogEntries}
-                  onPlayGame={handlePlayGame}
-                  submissionStatus={submissionStatus}
-                  submissionError={submissionError}
-                  onSubmitSpec={(concept, referenceImages) =>
-                    void handleSubmitSpec(concept, undefined, referenceImages)
-                  }
-                  onPlatformBuilderAvailability={setPlatformBuilderAvailability}
-                />
-              ) : route.view === 'party' ? (
-                <PartyPage
-                  catalogStatus={catalogStatus}
-                  catalogError={catalogError}
-                  catalogEntries={catalogEntries}
-                  onPlayGame={handlePlayGame}
-                  onPlayTogether={(game, via) => void handlePlayTogether(game, via)}
-                  onRetryCatalog={handleRetryCatalog}
-                  onCreateCustom={handlePartyCreateNav}
-                  partyError={partyError}
-                />
-              ) : (
-                <div id="hero-prompt">
-                  <HeroPromptSection
+        <RouteChunkBoundary
+          fallback={
+            <div className="content-load-error">
+              <p>{t('app.surfaceLoadFailed')}</p>
+              <button type="button" className="secondary-btn" onClick={() => window.location.reload()}>
+                {t('app.reload')}
+              </button>
+            </div>
+          }
+        >
+          <Suspense fallback={<p className="content-loading">{t('app.loadingSurface')}</p>}>
+            {route.view === 'admin' ? (
+              <AdminConsole section={route.section} onNavigate={navigate} />
+            ) : route.view === 'review' ? (
+              <ReviewDesk />
+            ) : route.view === 'studioWelcome' ? (
+              <StudioWelcomeView game={route.game} onOpenStudio={navigate} />
+            ) : route.view === 'studioConnect' ? (
+              <StudioConnectWizard game={route.game} onOpenStudio={navigate} />
+            ) : route.view === 'studio' ? (
+              <CreatorStudioView
+                selectedGame={route.game}
+                selectedTab={route.tab}
+                selectedPosture={route.posture}
+                onNavigate={navigate}
+                onPlay={(slug) => navigate(playPath(slug))}
+                onRetryConcept={(concept) => {
+                  setRetryPrompt(concept);
+                  setPendingScrollTarget('hero-prompt');
+                }}
+              />
+            ) : (
+              <>
+                {route.view === 'play' ? (
+                  <GameDetailPage
+                    game={playCatalogGame}
+                    state={catalogStatus}
+                    onPlay={handlePlayGame}
+                    onPlayTogether={handlePlayTogether}
+                    onRemix={handleRemixGame}
+                    onRetry={handleRetryCatalog}
+                  />
+                ) : route.view === 'create' ? (
+                  <CreatePage
                     // Remount when a retry loads a new idea, so the prompt box picks it up.
-                    key={retryPrompt ?? 'blank'}
-                    initialPrompt={retryPrompt ?? ''}
+                    retryKey={retryPrompt ?? 'blank'}
+                    initialPrompt={resolveCreateInitialPrompt(partySeedRef.current, retryPrompt)}
                     catalogEntries={catalogEntries}
                     onPlayGame={handlePlayGame}
                     submissionStatus={submissionStatus}
@@ -1255,56 +1261,83 @@ export function App() {
                     }
                     onPlatformBuilderAvailability={setPlatformBuilderAvailability}
                   />
-                </div>
-              )}
+                ) : route.view === 'party' ? (
+                  <PartyPage
+                    catalogStatus={catalogStatus}
+                    catalogError={catalogError}
+                    catalogEntries={catalogEntries}
+                    onPlayGame={handlePlayGame}
+                    onPlayTogether={(game, via) => void handlePlayTogether(game, via)}
+                    onRetryCatalog={handleRetryCatalog}
+                    onCreateCustom={handlePartyCreateNav}
+                    partyError={partyError}
+                  />
+                ) : (
+                  <div id="hero-prompt">
+                    <HeroPromptSection
+                      // Remount when a retry loads a new idea, so the prompt box picks it up.
+                      key={retryPrompt ?? 'blank'}
+                      initialPrompt={retryPrompt ?? ''}
+                      catalogEntries={catalogEntries}
+                      onPlayGame={handlePlayGame}
+                      submissionStatus={submissionStatus}
+                      submissionError={submissionError}
+                      onSubmitSpec={(concept, referenceImages) =>
+                        void handleSubmitSpec(concept, undefined, referenceImages)
+                      }
+                      onPlatformBuilderAvailability={setPlatformBuilderAvailability}
+                    />
+                  </div>
+                )}
 
-              {/* Gated on the pending spec, same as before /create existed; portals itself. */}
-              {route.view !== 'play' && pendingSpec && (
-                <CreatorQA
-                  key={qaFormKey}
-                  questions={qaQuestions}
-                  initialConcept={pendingSpec.concept}
-                  initialTitle={pendingSpec.title}
-                  onSubmitWithConcept={handleQaComplete}
-                  onTitleChange={handleQaTitleChange}
-                  onCancel={handleQaCancel}
-                  submitting={submissionStatus === 'loading' || submissionStatus === 'refining'}
-                  error={submissionError}
-                  initialAnswers={latestAnswersRef.current}
-                  onAnswersChange={handleQaAnswersChange}
-                  initialBuilder={qaBuilder}
-                  onBuilderChange={handleQaBuilderChange}
-                  platformUnavailable={
-                    platformBuilderAvailability?.available === false ? platformBuilderAvailability.reason : undefined
-                  }
-                />
-              )}
+                {/* Gated on the pending spec, same as before /create existed; portals itself. */}
+                {route.view !== 'play' && pendingSpec && (
+                  <CreatorQA
+                    key={qaFormKey}
+                    questions={qaQuestions}
+                    initialConcept={pendingSpec.concept}
+                    initialTitle={pendingSpec.title}
+                    onSubmitWithConcept={handleQaComplete}
+                    onTitleChange={handleQaTitleChange}
+                    onCancel={handleQaCancel}
+                    submitting={submissionStatus === 'loading' || submissionStatus === 'refining'}
+                    error={submissionError}
+                    initialAnswers={latestAnswersRef.current}
+                    onAnswersChange={handleQaAnswersChange}
+                    initialBuilder={qaBuilder}
+                    onBuilderChange={handleQaBuilderChange}
+                    platformUnavailable={
+                      platformBuilderAvailability?.available === false ? platformBuilderAvailability.reason : undefined
+                    }
+                  />
+                )}
 
-              {stageOverlay}
+                {stageOverlay}
 
-              {partyError && route.view !== 'party' && <p className="error party-error">{partyError}</p>}
+                {partyError && route.view !== 'party' && <p className="error party-error">{partyError}</p>}
 
-              {/* The gallery is home content; game pages have their own compact surface. */}
-              {route.view === 'home' && (
-                <ArcadeCatalog
-                  catalogStatus={catalogStatus}
-                  catalogError={catalogError}
-                  catalogEntries={catalogEntries}
-                  onPlayGame={handlePlayGame}
-                  onPlayTogether={(game, via) => void handlePlayTogether(game, via)}
-                  onRetryCatalog={handleRetryCatalog}
-                  recommendationsRefreshKey={recommendationsRefreshKey}
-                  creatorGamesRefreshKey={myGamesRefreshKey}
-                />
-              )}
+                {/* The gallery is home content; game pages have their own compact surface. */}
+                {route.view === 'home' && (
+                  <ArcadeCatalog
+                    catalogStatus={catalogStatus}
+                    catalogError={catalogError}
+                    catalogEntries={catalogEntries}
+                    onPlayGame={handlePlayGame}
+                    onPlayTogether={(game, via) => void handlePlayTogether(game, via)}
+                    onRetryCatalog={handleRetryCatalog}
+                    recommendationsRefreshKey={recommendationsRefreshKey}
+                    creatorGamesRefreshKey={myGamesRefreshKey}
+                  />
+                )}
 
-              {/* Both pages' real content can run shorter than the viewport, leaving a
+                {/* Both pages' real content can run shorter than the viewport, leaving a
                 bare gap above the sticky footer — fill it with a reason to scroll back up.
                 Gated on the catalog on both: /create's showcase rail is catalog data too. */}
-              {(route.view === 'home' || route.view === 'create') && catalogStatus === 'ready' && <BottomCta />}
-            </>
-          )}
-        </Suspense>
+                {(route.view === 'home' || route.view === 'create') && catalogStatus === 'ready' && <BottomCta />}
+              </>
+            )}
+          </Suspense>
+        </RouteChunkBoundary>
       </main>
 
       {/* Hidden while a game is on stage: the player is a full-viewport fixed overlay,

@@ -1,6 +1,8 @@
 {
   "app": {
-    "loadingSurface": "Wczytywanie…"
+    "loadingSurface": "Wczytywanie…",
+    "surfaceLoadFailed": "Ta strona się nie wczytała — dostępna jest nowsza wersja serwisu.",
+    "reload": "Odśwież"
   },
   "notifications": {
     "aria": "Powiadomienia",

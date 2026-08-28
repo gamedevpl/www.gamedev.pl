@@ -1,6 +1,8 @@
 {
   "app": {
-    "loadingSurface": "Loading…"
+    "loadingSurface": "Loading…",
+    "surfaceLoadFailed": "This page didn't load — a newer version of the site is available.",
+    "reload": "Reload"
   },
   "notifications": {
     "aria": "Notifications",
