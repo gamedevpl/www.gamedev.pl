@@ -9,6 +9,7 @@ import {
   chatTurnsFromServer,
   clearRemixSnapshot,
   readRemixSnapshot,
+  resumeLostCodeEdits,
   resumeRemixForSlug,
   stashPending,
   takePending,
@@ -30,6 +31,8 @@ function liveSnap() {
     successCount: 1,
     asked: 'faster',
     utterance: '',
+    contentEdited: true,
+    undo: { speed: 1 },
   };
 }
 
@@ -60,6 +63,8 @@ describe('remixSessionPersist', () => {
     expect(snap?.remixId).toBe('r1');
     expect(snap?.values).toEqual({ speed: 2 });
     expect(snap?.chatExpanded).toBe(false);
+    expect(snap?.contentEdited).toBe(true);
+    expect(snap?.undo).toEqual({ speed: 1 });
   });
 
   it('drops an expired snapshot', () => {
@@ -105,6 +110,27 @@ describe('remixSessionPersist', () => {
   it('clears the snapshot when resume fails', async () => {
     writeRemixSnapshot(liveSnap());
     remixApi.getRemix.mockRejectedValue(new Error('expired'));
+    expect(await resumeRemixForSlug('dog-dash')).toBeNull();
+    expect(readRemixSnapshot('dog-dash')).toBeNull();
+  });
+
+  it('refuses a rehydrated resume that lost a code edit', async () => {
+    const snap = { ...liveSnap(), codeEdited: true, changed: { text: 'Rebuilt.', canShare: false, undoCode: true } };
+    expect(resumeLostCodeEdits(snap, { remixId: 'r1', rehydrated: true, html: null } as never)).toBe(true);
+    expect(resumeLostCodeEdits(snap, { remixId: 'r1', html: '<html></html>' } as never)).toBe(false);
+    expect(resumeLostCodeEdits(liveSnap(), { remixId: 'r1', rehydrated: true, html: null } as never)).toBe(false);
+    writeRemixSnapshot(snap);
+    remixApi.getRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: null,
+      values: null,
+      canAssist: false,
+      canCode: true,
+      suggestions: [],
+      expiresInMs: 60_000,
+      html: null,
+      rehydrated: true,
+    });
     expect(await resumeRemixForSlug('dog-dash')).toBeNull();
     expect(readRemixSnapshot('dog-dash')).toBeNull();
   });

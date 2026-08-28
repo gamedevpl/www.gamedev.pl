@@ -13,6 +13,7 @@ export function remixClientPayload(input: {
   html?: string | null;
   undoable?: boolean;
   turns?: RemixTurn[];
+  rehydrated?: boolean;
 }): Record<string, unknown> {
   const { definition, canAssist, canCode } = input;
   return {
@@ -32,5 +33,6 @@ export function remixClientPayload(input: {
     ...(input.html !== undefined ? { html: input.html } : {}),
     ...(input.undoable !== undefined ? { undoable: input.undoable } : {}),
     ...(input.turns && input.turns.length > 0 ? { turns: input.turns } : {}),
+    ...(input.rehydrated ? { rehydrated: true } : {}),
   };
 }

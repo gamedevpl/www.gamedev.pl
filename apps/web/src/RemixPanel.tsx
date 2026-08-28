@@ -218,7 +218,7 @@ export function RemixPanel(props: {
   const [slow, setSlow] = useState(false);
   /** Consecutive model-lane failures — two in a row reads as "editing is napping". */
   const failStreakRef = useRef(0);
-  const [undo, setUndo] = useState<Record<string, EditorParamValue> | null>(null);
+  const [undo, setUndo] = useState<Record<string, EditorParamValue> | null>(() => restored?.undo ?? null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   /**
@@ -304,7 +304,8 @@ export function RemixPanel(props: {
   const [painterOffer, setPainterOffer] = useState(false);
   /** First door wins — matches the telemetry dedupe, which keeps the first via. */
   const painterDoorRef = useRef<RemixPaintedVia | null>(null);
-  const contentEditedRef = useRef(false);
+  const contentEditedRef = useRef(Boolean(restored?.contentEdited));
+  const codeEditedRef = useRef(Boolean(restored?.codeEdited || restored?.changed?.undoCode));
   const contentPushTimer = useRef<number | null>(null);
 
   const label = useCallback(
@@ -653,13 +654,29 @@ export function RemixPanel(props: {
       asked,
       utterance,
       ...(Object.keys(contentDoc).length > 0 ? { contentDoc } : {}),
+      ...(undo ? { undo } : {}),
+      ...(contentEditedRef.current ? { contentEdited: true } : {}),
+      ...(codeEditedRef.current ? { codeEdited: true } : {}),
     });
   }
 
   useEffect(() => {
     persistLive(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- persistLive closes over fields
-  }, [session, props.slug, chatExpanded, values, chatTurns, changed, note, successCount, asked, utterance, contentDoc]);
+  }, [
+    session,
+    props.slug,
+    chatExpanded,
+    values,
+    chatTurns,
+    changed,
+    note,
+    successCount,
+    asked,
+    utterance,
+    contentDoc,
+    undo,
+  ]);
 
   function closeSheet() {
     persistLive(false);
@@ -959,6 +976,7 @@ export function RemixPanel(props: {
           undoCode: undoable,
         });
         props.onUndoable?.(undoable);
+        codeEditedRef.current = true;
         setUndo(null);
         // The swap replaces the whole document, so the new build boots fresh and
         // the values the player has set are re-sent once it says hello.
@@ -1030,6 +1048,7 @@ export function RemixPanel(props: {
       window.setTimeout(() => pushToGame(valuesRef.current), 400);
       recordRemixStep('undone');
       props.onUndoable?.(result.undoable);
+      codeEditedRef.current = result.undoable;
       // More history behind it: the button stays, because the server can still
       // give another step back and the player has no other way to ask for it.
       setChanged(result.undoable ? { text: t('remix.changeStanding'), canShare: false, undoCode: true } : null);

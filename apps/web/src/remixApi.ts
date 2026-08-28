@@ -47,6 +47,8 @@ export type RemixSession = {
 export type RemixResume = RemixSession & {
   html?: string | null;
   undoable?: boolean;
+  // True when this instance rebuilt an empty session around the id.
+  rehydrated?: boolean;
 };
 
 export type RemixAssistResponse = {

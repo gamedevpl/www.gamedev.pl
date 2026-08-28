@@ -354,7 +354,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     return true;
   }
 
-  async function getSession(request: FastifyRequest): Promise<RemixSession | null> {
+  async function takeSession(request: FastifyRequest): Promise<{ session: RemixSession; rehydrated: boolean } | null> {
     sweep();
     const id = (request.params as { id?: string }).id;
     const uid = request.user?.uid;
@@ -365,9 +365,15 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       // Someone else's remix is indistinguishable from an expired one, which is
       // the honest answer as well as the safe one.
       if (session.ownerUid !== uid) return null;
-      return session;
+      return { session, rehydrated: false };
     }
-    return rehydrate(id, uid);
+    const rebuilt = await rehydrate(id, uid);
+    return rebuilt ? { session: rebuilt, rehydrated: true } : null;
+  }
+
+  async function getSession(request: FastifyRequest): Promise<RemixSession | null> {
+    const found = await takeSession(request);
+    return found?.session ?? null;
   }
 
   /**
@@ -573,10 +579,11 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
 
   app.get('/api/remixes/:id', { config: { rateLimit: { max: 30, timeWindow: 60_000 } } }, async (request, reply) => {
     if (!requireUser(request, reply)) return;
-    const session = await getSession(request);
-    if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
+    const found = await takeSession(request);
+    if (!found) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
+    const { session, rehydrated } = found;
     let html: string | null = null;
-    if (Object.keys(session.overrides).length > 0) {
+    if (!rehydrated && Object.keys(session.overrides).length > 0) {
       html = await rebuild(session);
     }
     const canAssist = Boolean(options.assistant && assistEnabled() && session.definition?.params);
@@ -590,8 +597,9 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         canCode,
         expiresInMs: Math.max(0, session.expiresAt - now()),
         html,
-        undoable: session.history.length > 0,
-        turns: session.turns,
+        undoable: !rehydrated && session.history.length > 0,
+        turns: rehydrated ? [] : session.turns,
+        rehydrated,
       }),
     );
   });

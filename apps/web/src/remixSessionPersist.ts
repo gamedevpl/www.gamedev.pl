@@ -38,6 +38,9 @@ export type RemixSnapshot = {
   asked: string;
   utterance: string;
   contentDoc?: EditorContentDoc;
+  contentEdited?: boolean;
+  codeEdited?: boolean;
+  undo?: Record<string, EditorParamValue> | null;
 };
 
 let memoryPending: string | null = null;
@@ -148,6 +151,15 @@ export function sessionFromResume(live: RemixResume): RemixSession {
   };
 }
 
+export function snapshotNeedsCodeDocument(snapshot: RemixSnapshot): boolean {
+  return Boolean(snapshot.codeEdited || snapshot.changed?.undoCode);
+}
+
+export function resumeLostCodeEdits(snapshot: RemixSnapshot, live: RemixResume): boolean {
+  if (!snapshotNeedsCodeDocument(snapshot)) return false;
+  return Boolean(live.rehydrated) || !live.html;
+}
+
 export async function resumeRemixForSlug(slug: string): Promise<{
   live: RemixResume;
   snapshot: RemixSnapshot;
@@ -156,6 +168,10 @@ export async function resumeRemixForSlug(slug: string): Promise<{
   if (!snapshot) return null;
   try {
     const live = await getRemix(snapshot.remixId);
+    if (resumeLostCodeEdits(snapshot, live)) {
+      clearRemixSnapshot();
+      return null;
+    }
     return { live, snapshot };
   } catch {
     clearRemixSnapshot();

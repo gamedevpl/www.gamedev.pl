@@ -30,6 +30,7 @@ describe('remixClientPayload', () => {
     expect(body).not.toHaveProperty('html');
     expect(body).not.toHaveProperty('undoable');
     expect(body).not.toHaveProperty('turns');
+    expect(body).not.toHaveProperty('rehydrated');
   });
 
   it('includes resume fields only when they carry something', () => {
@@ -43,9 +44,11 @@ describe('remixClientPayload', () => {
       html: '<html></html>',
       undoable: true,
       turns: [{ utterance: 'faster', summary: 'Raised speed.' }],
+      rehydrated: true,
     });
     expect(body.html).toBe('<html></html>');
     expect(body.undoable).toBe(true);
     expect(body.turns).toEqual([{ utterance: 'faster', summary: 'Raised speed.' }]);
+    expect(body.rehydrated).toBe(true);
   });
 });

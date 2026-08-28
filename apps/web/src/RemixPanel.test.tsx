@@ -1083,21 +1083,41 @@ describe('RemixPanel', () => {
       remixOpen: true,
       chatExpanded: true,
       values: { dogScale: 1.4 },
+      undo: { dogScale: 1 },
       chatTurns: [
         { id: '1', role: 'user', text: 'bigger' },
-        { id: '2', role: 'assistant', text: 'Bigger.\ndog size: 1 → 1.4' },
+        { id: '2', role: 'assistant', text: 'Bigger.\ndog size: 1 → 1.4', canUndo: true },
       ],
       changed: { text: 'Bigger.\ndog size: 1 → 1.4', canShare: true },
       note: null,
       successCount: 2,
       asked: 'bigger',
       utterance: '',
+      contentEdited: true,
+      contentDoc: { maps: [{ properties: {}, rows: ['#'] }] },
     });
+    remixApi.remixSave.mockResolvedValue({ slug: 'my-dog-dash', openPath: '/play/my-dog-dash' });
     await draw({ session });
     expect(remixApi.startRemix).not.toHaveBeenCalled();
     expect(container.querySelector('.remix-panel.is-chat')).not.toBeNull();
     const bubbles = Array.from(container.querySelectorAll('.remix-bubble-text')).map((el) => el.textContent);
     expect(bubbles).toEqual(['bigger', 'Bigger.\ndog size: 1 → 1.4']);
+    expect(container.querySelector('.remix-bubble-undo')).not.toBeNull();
+    await act(async () => {
+      container.querySelector('.remix-bubble-undo')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.remix-bubble-undo')).toBeNull();
+    await act(async () => {
+      buttonNamed(container, 'Save to Studio')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.remix-keep-offer')).not.toBeNull();
+    await act(async () => {
+      buttonNamed(container, 'Keep in Studio')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(remixApi.remixSave).toHaveBeenCalledWith(
+      'r1',
+      expect.objectContaining({ content: { maps: [{ properties: {}, rows: ['#'] }] } }),
+    );
   });
 
   async function send(text: string) {

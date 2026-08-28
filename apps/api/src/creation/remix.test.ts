@@ -394,6 +394,17 @@ describe('remix routes', () => {
     const empty = await app.inject({ method: 'GET', url: `/api/remixes/${fresh.remixId}`, headers: alice });
     expect(empty.json().html).toBeNull();
     expect(empty.json().undoable).toBe(false);
+    expect(empty.json().rehydrated).toBeUndefined();
+    const other = await buildTestApp();
+    try {
+      const hopped = await other.app.inject({ method: 'GET', url: `/api/remixes/${remixId}`, headers: alice });
+      expect(hopped.statusCode).toBe(200);
+      expect(hopped.json().rehydrated).toBe(true);
+      expect(hopped.json().html).toBeNull();
+      expect(hopped.json().undoable).toBe(false);
+    } finally {
+      await other.app.close();
+    }
   });
 
   it('discards an abandoned code edit rather than letting it land later', async () => {
