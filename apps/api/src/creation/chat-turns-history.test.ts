@@ -22,4 +22,22 @@ describe('reconstructChatTurns', () => {
       { message: 'make it blue', built: true, ackText: 'On it!' },
     ]);
   });
+
+  it('keeps continue_draft paraphrases as agent turns, preferring textLocalized', () => {
+    const relayed: CreatorMessage = {
+      ...msg('Zoom out the battlefield.', 'agent'),
+      textLocalized: 'Oddal widok pola bitwy.',
+      locale: 'pl',
+    };
+    expect(reconstructChatTurns([relayed, msg('On it!', 'studio_ack')])).toEqual([
+      { message: 'Oddal widok pola bitwy.', built: true, ackText: 'On it!', origin: 'agent' },
+    ]);
+  });
+
+  it('does not treat an agent relay as words the creator typed', () => {
+    expect(reconstructChatTurns([msg('make it blue'), msg('Zoom out the battlefield.', 'agent')])).toEqual([
+      { message: 'make it blue', built: true },
+      { message: 'Zoom out the battlefield.', built: true, origin: 'agent' },
+    ]);
+  });
 });

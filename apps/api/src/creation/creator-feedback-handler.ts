@@ -298,7 +298,16 @@ export async function handleCreatorFeedback(
 
   if (outcome.started) await appendStudioAck();
   invalidateStatusCache(jobId);
-  if (mode === 'turn') return sendTurnBuild(reply, jobId, studioAckText);
+  if (mode === 'turn') {
+    return outcome.started
+      ? sendTurnBuild(reply, jobId, studioAckText)
+      : sendTurnReply(
+          reply,
+          outcome.reason === 'no_capacity'
+            ? 'Saved — but no build round could start: the build agent is out of capacity right now.'
+            : "Saved — but a new build round didn't start.",
+        );
+  }
   return sendFeedbackOk(reply, shotId, outcome.started ? {} : { roundStarted: false, reason: outcome.reason });
 }
 

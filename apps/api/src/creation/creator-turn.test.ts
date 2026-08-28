@@ -34,7 +34,7 @@ function githubStub(): GitHubClient {
   };
 }
 
-function backendStub() {
+function backendStub(resume?: AgentBackend['resume']) {
   const briefs: BuildBrief[] = [];
   const backend: AgentBackend = {
     name: 'stub',
@@ -42,20 +42,22 @@ function backendStub() {
       briefs.push(brief);
       return { ref: 'task-1', workspace: 'copilot/x' };
     },
-    resume: async (brief) => {
-      briefs.push(brief);
-      return { ref: 'task-2', workspace: 'copilot/y' };
-    },
+    resume:
+      resume ??
+      (async (brief) => {
+        briefs.push(brief);
+        return { ref: 'task-2', workspace: 'copilot/y' };
+      }),
     observe: async () => null,
     cancel: async () => ({ enforced: false }),
   };
   return { backend, briefs };
 }
 
-async function createApp(params: { chatAgent: StudioChatAgent; store?: Store }) {
+async function createApp(params: { chatAgent: StudioChatAgent; store?: Store; resume?: AgentBackend['resume'] }) {
   const store = params.store ?? new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
-  const { backend, briefs } = backendStub();
+  const { backend, briefs } = backendStub(params.resume);
   const app = await buildApp({
     store,
     sessionSecret,
@@ -160,6 +162,38 @@ describe('POST /api/submissions/:token/turn (CL-10, CL-11)', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().kind).toBe('reply');
+    await app.close();
+  });
+
+  it('returns a reply when resume cannot start a round', async () => {
+    const decide = vi.fn(async () => ({ kind: 'build' as const, text: 'On it.' }));
+    const resume = vi.fn(async () => {
+      throw Object.assign(new Error('agent tasks POST 412: insufficient premium quota to create assignment'), {
+        name: 'AgentTasksError',
+        status: 412,
+      });
+    });
+    const { app, store, authHeaders: headers } = await createApp({ chatAgent: { decide }, resume });
+    const { jobId, token } = await openDraft(app, store, headers);
+    await store.recordJobTransition(jobId, {
+      to: 'failed',
+      at: new Date().toISOString(),
+      by: 'reconciler',
+      reason: 'task_failed',
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/turn`,
+      headers,
+      payload: { text: 'make the robots blue' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().kind).toBe('reply');
+    expect(res.json().text).toMatch(/out of capacity/i);
+    expect(res.json()).not.toHaveProperty('roundId');
+    const messages = await store.listCreatorMessages(jobId);
+    expect(messages.some((message) => message.origin === 'studio_ack')).toBe(false);
     await app.close();
   });
 
