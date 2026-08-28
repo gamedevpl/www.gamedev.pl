@@ -83,7 +83,16 @@ function shellPrecache(): Plugin {
     apply: 'build',
     async writeBundle(options, bundle) {
       const outDir = options.dir ?? 'dist';
-      const shell = shellAssetEntries(Object.keys(bundle));
+      // A route's own lazy(() => import(...)) chunk — CodeMirrorEditor, AdminConsole,
+      // CreatorStudioView, ReviewDesk, PartyPage — has no business in a precache whose
+      // whole point is "have it before it's needed": nothing needs it before someone
+      // navigates there. Rollup already knows which chunks those are; a name allowlist
+      // would silently stop covering the next one.
+      const isDynamicEntry = (fileName: string) => {
+        const output = bundle[fileName];
+        return output?.type === 'chunk' && output.isDynamicEntry;
+      };
+      const shell = shellAssetEntries(Object.keys(bundle), isDynamicEntry);
 
       const contents = await Promise.all(shell.map((entry) => readFile(path.join(outDir, entry.slice(1)))));
       const revision = shellRevision(contents, (input) => createHash('sha256').update(input).digest('hex'));

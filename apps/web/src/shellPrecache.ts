@@ -48,12 +48,19 @@ export interface ShellManifest {
  * payload of an install for a set of browsers that will never read either copy.
  *
  * Source maps are excluded for the same reason in reverse — nothing renders without them.
+ *
+ * `isDynamicEntry` excludes a route's own `lazy(() => import(...))` chunk: nobody needs
+ * it before they navigate there, so precaching it defeats the reason it is lazy at all.
+ * Defaults to "nothing is dynamic" so a caller that never lazy-loads anything is unaffected.
  */
-export function shellAssetEntries(emittedFileNames: Iterable<string>): string[] {
+export function shellAssetEntries(
+  emittedFileNames: Iterable<string>,
+  isDynamicEntry: (fileName: string) => boolean = () => false,
+): string[] {
   const entries = new Set<string>(SHELL_EXTRAS);
 
   for (const fileName of emittedFileNames) {
-    if (PRECACHEABLE_ASSET.test(fileName)) {
+    if (PRECACHEABLE_ASSET.test(fileName) && !isDynamicEntry(fileName)) {
       entries.add(`/${fileName.replace(/^\/+/, '')}`);
     }
   }

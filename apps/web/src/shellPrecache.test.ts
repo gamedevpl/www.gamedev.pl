@@ -55,6 +55,24 @@ describe('shellAssetEntries', () => {
     expect(entries).toEqual([...entries].sort());
     expect(new Set(entries).size).toBe(entries.length);
   });
+
+  it('leaves out a route chunk reached only through lazy(() => import(...))', () => {
+    // Precaching it would download AdminConsole/CreatorStudioView/CodeMirrorEditor
+    // for every visitor in the background, regardless of whether they ever navigate
+    // there — the exact download this chunk being lazy exists to avoid.
+    const entries = shellAssetEntries(
+      ['assets/index-abc.js', 'assets/AdminConsole-def.js'],
+      (fileName) => fileName === 'assets/AdminConsole-def.js',
+    );
+
+    expect(entries).toContain('/assets/index-abc.js');
+    expect(entries).not.toContain('/assets/AdminConsole-def.js');
+  });
+
+  it('precaches everything when no dynamic-entry predicate is given', () => {
+    const entries = shellAssetEntries(['assets/index-abc.js']);
+    expect(entries).toContain('/assets/index-abc.js');
+  });
 });
 
 describe('shellRevision', () => {
