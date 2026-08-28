@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { PassThrough } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { isLaunchedEntry, runCli } from './main.js';
-import { EXIT_AUTH, EXIT_GREEN, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
+import { EXIT_AUTH, EXIT_GREEN, EXIT_INPUT } from './exit-codes.js';
 
 function io() {
   const stdout = new PassThrough();
