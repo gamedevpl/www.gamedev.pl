@@ -28,6 +28,7 @@ import {
 } from '../platform/games-repo-contract.js';
 import {
   assertImageFileSize,
+  assertImageSignature,
   imageLoaderBootJs,
   imageLoaderHtml,
   mimeForImagePath,
@@ -1601,6 +1602,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
             throw new Error(`game image "${name}" not found: ${relPath}`);
           }
           assertImageFileSize(name, bytes.byteLength);
+          assertImageSignature(name, relPath, bytes);
           imageAssets[name] = `data:${mimeForImagePath(relPath)};base64,${Buffer.from(bytes).toString('base64')}`;
         }
         assetChunks.push(`window.${IMAGES_CONTRACT.windowAssetsName} = Object.freeze(${JSON.stringify(imageAssets)});`);

@@ -31,6 +31,55 @@ export function mimeForImagePath(relPath: string): string {
   return relPath.toLowerCase().endsWith('.webp') ? 'image/webp' : 'image/png';
 }
 
+function isPng(bytes: Uint8Array): boolean {
+  return (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  );
+}
+
+function isWebp(bytes: Uint8Array): boolean {
+  return (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  );
+}
+
+function isJpeg(bytes: Uint8Array): boolean {
+  return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+}
+
+/** Reject corrupt bytes and extension-mismatched formats before they become data URIs. */
+export function assertImageSignature(name: string, relPath: string, bytes: Uint8Array): void {
+  const prefix = `game image "${name}"`;
+  if (relPath.toLowerCase().endsWith('.webp')) {
+    if (!isWebp(bytes)) {
+      throw new Error(`${prefix} is not a WebP (missing RIFF/WEBP signature)`);
+    }
+    return;
+  }
+  if (isJpeg(bytes)) {
+    throw new Error(`${prefix} is a JPEG, not a PNG`);
+  }
+  if (!isPng(bytes)) {
+    throw new Error(`${prefix} is not a PNG (missing signature)`);
+  }
+}
+
 export function assertImageFileSize(name: string, bytes: number): void {
   if (bytes > RASTER_ASSET_MAX_FILE_BYTES) {
     throw new Error(
