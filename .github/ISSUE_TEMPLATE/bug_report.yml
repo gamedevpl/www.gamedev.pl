@@ -18,7 +18,7 @@ body:
     attributes:
       label: What happened?
       description: What you did, what you expected, and what you got instead.
-      placeholder: I tapped Play on a game from the arcade and the screen stayed black.
+      placeholder: I tapped Play on a game from the catalog and the screen stayed black.
     validations:
       required: true
 

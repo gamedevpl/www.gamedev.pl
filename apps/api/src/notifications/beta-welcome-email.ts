@@ -133,7 +133,7 @@ function paragraphsToHtml(paragraphs: string[]): string {
 }
 
 const welcomeCopy: Record<Locale, (p: BetaWelcomeParams) => { subject: string; paragraphs: string[] }> = {
-  en: ({ givenName, siteUrl, replyEmail }) => ({
+  en: ({ givenName, siteUrl }) => ({
     subject: "You're in — gamedev.pl closed beta",
     paragraphs: [
       greeting('en', givenName),
@@ -141,15 +141,15 @@ const welcomeCopy: Record<Locale, (p: BetaWelcomeParams) => { subject: string; p
       `Your access is open. Sign in again at ${siteUrl} with the same Google or Apple account you used to join the list.`,
       [
         'A few things that help most:',
-        '1. Play a handful of games in the arcade — on your phone too, if you can.',
+        '1. Play a handful of games — on your phone too, if you can.',
         '2. If you have an idea, try making one: describe it in a sentence and let an agent build it.',
-        `3. Tell me what feels off, confusing, or delightful. Reply to this email (${replyEmail}), or use the contact form at ${siteUrl}/contact. I read everything.`,
+        '3. Tell me what feels off, confusing, or delightful. Reply to this email, or use the contact form on the site. I read everything.',
       ].join('\n'),
       'This is a real beta. Things will break, and that is useful.',
       'See you inside,\nGrzegorz\ngamedev.pl',
     ],
   }),
-  pl: ({ givenName, siteUrl, replyEmail }) => ({
+  pl: ({ givenName, siteUrl }) => ({
     subject: 'Jesteś w środku — zamknięta beta gamedev.pl',
     paragraphs: [
       greeting('pl', givenName),
@@ -157,9 +157,9 @@ const welcomeCopy: Record<Locale, (p: BetaWelcomeParams) => { subject: string; p
       `Dostęp jest otwarty. Zaloguj się ponownie na ${siteUrl} tym samym kontem Google albo Apple co przy zapisie na listę.`,
       [
         'Kilka rzeczy, które pomagają najbardziej:',
-        '1. Zagraj w kilka gier z arcade — też na telefonie, jeśli możesz.',
+        '1. Zagraj w kilka gier — też na telefonie, jeśli możesz.',
         '2. Jeśli masz pomysł, spróbuj zbudować własną: opisz ją zdaniem, agent zrobi resztę.',
-        `3. Napisz, gdy coś zgrzyta, jest niejasne albo akurat trafione. Najłatwiej: odpowiedz na tego maila (${replyEmail}) albo użyj formularza na ${siteUrl}/contact. Czytam wszystko.`,
+        '3. Napisz, gdy coś zgrzyta, jest niejasne albo akurat trafione. Najłatwiej: odpowiedz na tego maila albo użyj formularza kontaktowego na stronie. Czytam wszystko.',
       ].join('\n'),
       'To prawdziwa beta. Rzeczy będą się psuć — i właśnie o to chodzi.',
       'Do zobaczenia,\nGrzegorz\ngamedev.pl',

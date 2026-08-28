@@ -153,7 +153,7 @@ export interface VisitFunnel {
    * is worth building (github.com/gamedevpl/www.gamedev.pl/issues/395).
    *
    * Opens stay as raw counts so a second open in one visit stays visible; `visits` is
-   * the distinct-visit denominator the open-rate question needs. Deep-link vs arcade is
+   * the distinct-visit denominator the open-rate question needs. Deep-link vs catalog is
    * `byEntry` (visit landing), not a field on the open event — the streams stay
    * unjoinable and the entry is already on `visit_started`.
    */
@@ -182,7 +182,7 @@ export interface HowToPlayFunnel {
   via: Array<{ via: HowToPlayVia | 'unknown'; opens: number; visits: number }>;
   /**
    * Per visit landing: how many playing visits, how many of those opened, and opens.
-   * `play` is a shared-link / deep-link arrival; `home` is the arcade path. Every
+   * `play` is a shared-link / deep-link arrival; `home` is the catalog path. Every
    * entry with a playing visit appears (zero opens included) so rates are readable.
    * Busiest by playing visits first.
    */

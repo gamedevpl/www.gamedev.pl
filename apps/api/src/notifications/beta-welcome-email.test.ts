@@ -121,14 +121,16 @@ describe('betaWelcomeEmail', () => {
     expect(en.subject).toMatch(/closed beta/i);
     expect(en.text).toContain('Hi Anna,');
     expect(en.text).toContain(params.siteUrl);
-    expect(en.text).toContain(params.replyEmail);
-    expect(en.text).toContain('/contact');
+    expect(en.text).toMatch(/Reply to this email/i);
+    expect(en.text.toLowerCase()).not.toContain('arcade');
     expect(en.html).toContain('Hi Anna,');
 
     const pl = betaWelcomeEmail('pl', params);
     expect(pl.subject).toMatch(/beta/i);
     expect(pl.text).toContain('Cześć Anna,');
     expect(pl.text).toContain('Dziękuję');
+    expect(pl.text).toMatch(/odpowiedz na tego maila/i);
+    expect(pl.text.toLowerCase()).not.toContain('arcade');
     expect(pl.text).not.toBe(en.text);
   });
 

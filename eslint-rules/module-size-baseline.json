@@ -649,7 +649,7 @@
     "apps/web/src/HowToPlayPanel.test.tsx": 221,
     "apps/web/src/HowToPlayPanel.tsx": 173,
     "apps/web/src/i18n/index.ts": 29,
-    "apps/web/src/i18n/locales.test.ts": 121,
+    "apps/web/src/i18n/locales.test.ts": 136,
     "apps/web/src/InstallPrompt.test.tsx": 261,
     "apps/web/src/InstallPrompt.tsx": 113,
     "apps/web/src/LanguageSwitcher.tsx": 32,

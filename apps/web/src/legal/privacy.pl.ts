@@ -410,10 +410,10 @@ export const privacyPl: LegalDocument = {
         {
           kind: 'p',
           text:
-            'Gry, które zostały już opublikowane w arkadzie, pozostają dostępne, ale bez powiązania z Twoim kontem — ' +
+            'Gry, które zostały już opublikowane w katalogu, pozostają dostępne, ale bez powiązania z Twoim kontem — ' +
             'inni gracze mogą z nich korzystać, a my nie możemy wycofać kodu, który stał się częścią projektu. Po ' +
             'usunięciu podpis w katalogu wraca do nazwy platformy. Jeśli ' +
-            'chcesz, żeby konkretna gra została zdjęta z arkady, napisz o tym wprost w zgłoszeniu, a rozpatrzymy je ' +
+            'chcesz, żeby konkretna gra została zdjęta z katalogu, napisz o tym wprost w zgłoszeniu, a rozpatrzymy je ' +
             'osobno.',
         },
       ],

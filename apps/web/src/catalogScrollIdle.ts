@@ -37,7 +37,7 @@ function ensureListeners(): void {
   window.addEventListener('scroll', onScroll, { passive: true, capture: true });
 }
 
-/** Call once from the arcade mount so scroll tracking is live before first hover. */
+/** Call once from the catalog mount so scroll tracking is live before first hover. */
 export function watchCatalogScrollIdle(): () => void {
   ensureListeners();
   return () => {

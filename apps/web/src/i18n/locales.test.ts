@@ -98,6 +98,21 @@ describe('locale resources', () => {
     }
   });
 
+  it('does not call the catalog an arcade', () => {
+    for (const [lang, resource] of [
+      ['en', en],
+      ['pl', pl],
+    ] as const) {
+      for (const path of keyPaths(resource)) {
+        if (path === 'catalog.categories.arcade_racing') continue;
+        const value = path.split('.').reduce<unknown>((acc, key) => (acc as Record<string, unknown>)[key], resource);
+        if (typeof value === 'string') {
+          expect(value, `${lang}.${path}`).not.toMatch(/arcade/i);
+        }
+      }
+    }
+  });
+
   // BYOCA connect/builder/status copy must never say "token" — creators see a
   // paste-ready prompt with a "key", and the credential concept stays undescribed.
   it('never uses the word token in builder, connect, or self-build status copy', () => {

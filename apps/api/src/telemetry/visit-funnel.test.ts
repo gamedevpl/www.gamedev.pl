@@ -572,7 +572,7 @@ describe('summarizeVisitFunnel', () => {
     expect(funnel.entries).toEqual([{ entry: 'unknown', visits: 1, plays: 1 }]);
   });
 
-  it('answers how-to-play open rate, same-card reopens, via, and deep-link vs arcade', () => {
+  it('answers how-to-play open rate, same-card reopens, via, and deep-link vs catalog', () => {
     const opened = (visitId: string, via: string | undefined, msSinceStart: number, reopen?: true): VisitEvent => ({
       visitId,
       type: 'how_to_play_opened',
@@ -583,7 +583,7 @@ describe('summarizeVisitFunnel', () => {
     });
 
     const funnel = summarizeVisitFunnel([
-      // Arcade visit: same card opened again — the "card did not answer" case.
+      // Catalog visit: same card opened again — the "card did not answer" case.
       started('a', { entry: 'home' }),
       played('a', 1_000),
       opened('a', 'bar', 2_000),
@@ -627,7 +627,7 @@ describe('summarizeVisitFunnel', () => {
   });
 
   it('does not treat one open per game in a multi-game visit as a same-card reopen', () => {
-    // Two plays, one how-to-play open each, neither flagged reopen — normal arcade depth.
+    // Two plays, one how-to-play open each, neither flagged reopen — normal catalog depth.
     const funnel = summarizeVisitFunnel([
       started('a'),
       played('a', 1_000),

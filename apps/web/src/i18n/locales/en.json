@@ -102,7 +102,7 @@
     "navPlay": "Play",
     "navCreate": "Create",
     "navParty": "Party",
-    "navArcade": "Arcade",
+    "navArcade": "Games",
     "navStudio": "Studio",
     "navFeed": "Agent Stream",
     "activeBuilds": "{{count}} in progress",
@@ -588,10 +588,10 @@
     "share": {
       "title": "Share the draft",
       "liveTitle": "Share the game",
-      "liveHint": "This game is live in the arcade. Anyone with this link plays the latest published version.",
+      "liveHint": "This game is live in the catalog. Anyone with this link plays the latest published version.",
       "on": "On",
       "off": "Off",
-      "hintOff": "Only you can play this game right now. Turn this on to give anyone with the link a go — it stays out of the arcade either way.",
+      "hintOff": "Only you can play this game right now. Turn this on to give anyone with the link a go — it stays out of the catalog either way.",
       "hintOn": "Anyone with this link can play the latest build. It's the same link the game keeps once it's published, so there's nothing to re-send.",
       "error": "We couldn't change that just now. Please try again in a moment."
     },
@@ -975,11 +975,11 @@
       },
       "publishing": {
         "label": "Going live",
-        "description": "Approved! Your game is being deployed to the arcade."
+        "description": "Approved! Your game is being published."
       },
       "published": {
         "label": "Live!",
-        "description": "Your game is on the arcade. Go play it."
+        "description": "Your game is live. Go play it."
       },
       "needs_changes": {
         "label": "Needs a tweak",
@@ -1138,7 +1138,7 @@
   "betaWelcome": {
     "kicker": "Closed beta",
     "title": "Welcome to gamedev.pl!",
-    "subtitle": "You’re in. Explore the arcade, build something, and help shape what comes next.",
+    "subtitle": "You’re in. Play, build something, and help shape what comes next.",
     "playTitle": "Play first",
     "playBody": "Try a few games and find one worth sharing.",
     "buildTitle": "Make your own",

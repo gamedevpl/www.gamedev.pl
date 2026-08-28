@@ -273,7 +273,7 @@ describe('VisitFunnelPanel', () => {
     expect(text).toContain('theater bar');
     expect(text).toContain('More menu');
     expect(text).toContain('deep link (/play)');
-    expect(text).toContain('arcade (home)');
+    expect(text).toContain('catalog (home)');
     // 1 of 2 openers reopened the same card — 50%, not 10% of all visits.
     expect(text).toContain('50% reopened the same card');
     // byEntry rates: 1/100 home vs 1/2 play — not raw opener counts.

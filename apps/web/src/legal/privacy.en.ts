@@ -399,7 +399,7 @@ export const privacyEn: LegalDocument = {
         {
           kind: 'p',
           text:
-            'Games already published in the arcade stay available but are no longer linked to your account — other ' +
+            'Games already published in the catalog stay available but are no longer linked to your account — other ' +
             'players can keep playing them, and we cannot withdraw code that has become part of the project. After ' +
             'deletion the byline falls back to the platform name. If you want a specific game taken down, say so ' +
             'explicitly in your request and we will consider it separately.',

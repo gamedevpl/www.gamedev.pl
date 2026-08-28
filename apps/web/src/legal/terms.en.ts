@@ -41,7 +41,7 @@ export const termsEn: LegalDocument = {
           items: [
             'Game creation — you describe a game idea, an autonomous AI agent writes its code and, after review, ' +
               'publishes it in the Service.',
-            'Arcade — playing games published in the Service, including games created by other users.',
+            'Catalog — playing games published in the Service, including games created by other users.',
             'Multiplayer — shared-screen play in which participants’ phones act as controllers.',
             'Submission tracking — a status page for your game, in-app notifications, push notifications and emails ' +
               'about progress.',
@@ -175,14 +175,14 @@ export const termsEn: LegalDocument = {
             'Every game description passes through automated moderation using an AI model before it reaches the ' +
             'coding agent. Moderation may reject a submission automatically, with no human involved. Separately, ' +
             'the Provider reviews games before publication and may decline to publish at its discretion — appearing ' +
-            'in the arcade is a curatorial decision, not an automatic consequence of submitting.',
+            'in the catalog is a curatorial decision, not an automatic consequence of submitting.',
         },
         { kind: 'p', text: 'Where these Terms are breached, the Provider may, proportionately to the breach:' },
         {
           kind: 'ul',
           items: [
             'reject a submission or decline to publish a game;',
-            'remove a published game from the arcade or restrict access to it;',
+            'remove a published game from the catalog or restrict access to it;',
             'reduce submission quotas, suspend an account, or delete it in cases of gross or repeated breaches.',
           ],
         },
