@@ -29,11 +29,8 @@ export function handleHelperLine(line: string, slug: string): string[] {
 }
 
 export function listRefs(versions: VersionRef[]): string[] {
-  const chronological = [...versions].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  const head = chronological.at(-1);
-  if (!head) return ['@refs/heads/main HEAD', ''];
-  const sha = shaForVersion(head.version);
-  return [`${sha} HEAD`, `${sha} refs/heads/main`, ''];
+  if (versions.length === 0) return ['@refs/heads/main HEAD', ''];
+  return ['? HEAD', '? refs/heads/main', ''];
 }
 
 export function fastImportScript(input: {
@@ -104,7 +101,7 @@ export async function runRemoteHelper(slug: string, io: HelperIo): Promise<void>
       const result = await io.pushReconcile();
       const dst = rest.join(' ').split(':')[1] ?? 'refs/heads/main';
       if (result === 'unreconciled') io.write(`${refuseNonFastForward()}\n\n`);
-      else io.write(`ok ${dst}\n\n`);
+      else io.write(`error ${dst} git push is not a delivery path — use gamedev submit\n\n`);
     } else io.write(`${handleHelperLine(trimmed, slug).join('\n')}\n`);
   }
 }

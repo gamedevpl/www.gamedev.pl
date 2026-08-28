@@ -30,6 +30,7 @@ export async function registerCreatorVersionRoutes(
 
   app.get<{ Params: { slug: string } }>('/api/me/studio/games/:slug/versions', async (request, reply) => {
     if (!request.user) return reply.status(401).send({ error: 'authentication required' });
+    if (request.user.tier === 'blocked') return reply.status(403).send({ error: 'account is blocked' });
     const parsed = SlugParams.safeParse(request.params);
     if (!parsed.success) return reply.status(400).send({ error: 'invalid slug' });
     if (!gamesStore?.listVersions) return reply.status(503).send({ error: 'games store is not configured' });
@@ -53,6 +54,7 @@ export async function registerCreatorVersionRoutes(
     { config: { rateLimit: { max: 30, timeWindow: '1 hour' } } },
     async (request, reply) => {
       if (!request.user) return reply.status(401).send({ error: 'authentication required' });
+      if (request.user.tier === 'blocked') return reply.status(403).send({ error: 'account is blocked' });
       const parsed = VersionParams.safeParse(request.params);
       if (!parsed.success) return reply.status(400).send({ error: 'invalid slug or version' });
       if (!gamesStore) return reply.status(503).send({ error: 'games store is not configured' });

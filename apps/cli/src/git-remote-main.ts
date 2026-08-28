@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { createInterface } from 'node:readline';
 import { stdin, stdout } from 'node:process';
-import { spawn } from 'node:child_process';
 import { createApi } from './api.js';
 import { encryptedFileStore, memoryStore } from './keychain.js';
 import { originFromEnv } from './oauth.js';
@@ -52,12 +51,7 @@ export async function runGitRemoteHelper(argv: string[], env: NodeJS.ProcessEnv 
       return body.files;
     },
     importScript: async (script) => {
-      await new Promise<void>((resolve, reject) => {
-        const child = spawn('git', ['fast-import'], { stdio: ['pipe', 'inherit', 'inherit'] });
-        child.on('error', reject);
-        child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error('fast-import failed'))));
-        child.stdin.end(script);
-      });
+      stdout.write(script.endsWith('\n') ? script : `${script}\n`);
     },
     pushReconcile: async () => {
       const diff = await diffGame({ api, slug, dest: process.cwd() });

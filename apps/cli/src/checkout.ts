@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import type { ApiClient } from './api.js';
@@ -62,6 +62,11 @@ export async function fetchLatestTree(api: ApiClient, slug: string): Promise<{ v
 }
 
 export function writeGameFiles(dest: string, slug: string, files: TreeFile[]): void {
+  const keep = new Set(files.map((file) => file.path));
+  const root = join(dest, 'games', slug);
+  for (const stale of walkFiles(root)) {
+    if (!keep.has(stale.path)) rmSync(join(root, stale.path));
+  }
   for (const file of files) {
     const abs = join(dest, 'games', slug, file.path);
     mkdirSync(dirname(abs), { recursive: true });

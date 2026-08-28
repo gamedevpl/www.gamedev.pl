@@ -85,6 +85,24 @@ describe('owner version history (CL-29a)', () => {
     expect(stolen.statusCode).toBe(404);
   });
 
+  it('refuses version reads from a blocked owner', async () => {
+    await store.upsertUser({ uid: 'g:creator', tier: 'blocked' });
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      submissionRoutes: {
+        submissionTokenSecret: 'secret',
+        agentChannel: { gamesStore: stubGamesStore() },
+      },
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/me/studio/games/${SLUG}/versions`,
+      headers: sessionHeaders('g:creator'),
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
   it('authenticates a creator-scoped OAuth token the same way as a session', async () => {
     const app = await buildApp({
       store,
