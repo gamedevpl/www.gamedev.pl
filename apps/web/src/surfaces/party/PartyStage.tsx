@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { CatalogEntry } from '../catalog.js';
-import { PublishedGameFrame } from '../PublishedGameFrame.js';
-import type { PlayVia } from '../visitTelemetry.js';
+import type { CatalogEntry } from '../../catalog.js';
+import { PublishedGameFrame } from '../../PublishedGameFrame.js';
+import type { PlayVia } from '../../visitTelemetry.js';
 import { joinUrl, type PartySession } from './mpApi.js';
 import { QrCode } from './QrCode.js';
 import { RoomClient, type RoomStatus } from './roomClient.js';
-import { BRIDGE_NAMESPACE, parseGameBridgeMessage, PROTOCOL_VERSION, type RosterSlot } from './protocol.js';
+import { BRIDGE_NAMESPACE, parseGameBridgeMessage, PROTOCOL_VERSION, type RosterSlot } from '../../mp/protocol.js';
 
 type PartyStageProps = {
   game: CatalogEntry;
