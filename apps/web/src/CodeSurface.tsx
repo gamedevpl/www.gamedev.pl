@@ -21,7 +21,6 @@ import { formatShortcut } from './codeActionsMatch.js';
 import type { CodeMirrorDiagnostic } from './CodeMirrorEditor.js';
 import {
   CodeSurfaceApiError,
-  deleteCodeSurfaceFile,
   deliverCodeSurface,
   fetchCodeSurfaceCompletion,
   fetchCodeSurfaceKitDeclaration,
@@ -35,6 +34,9 @@ import {
   type CodeSurfaceFile,
   type CodeSurfaceSources,
 } from './codeSurfaceApi.js';
+import { CodeSurfaceExplorerTree, CodeSurfaceTreeInputs } from './CodeSurfaceExplorerTree.js';
+import { CodeSurfaceTreeDialogs } from './CodeSurfaceTreeDialogs.js';
+import { useCodeSurfaceTree } from './useCodeSurfaceTree.js';
 import {
   getCodeSurfaceSessionState,
   setCodeSurfaceEditorState,
@@ -140,8 +142,6 @@ export type CodeSurfaceProps = {
   onActionsMenuCancelled?: () => void;
 };
 
-const LOCKED_DIRS = ['shared/', 'tools/'] as const;
-
 function languageFor(path: string): CodeLanguage {
   if (path.endsWith('.ts') || path.endsWith('.tsx')) return 'typescript';
   if (path.endsWith('.json')) return 'json';
@@ -149,10 +149,6 @@ function languageFor(path: string): CodeLanguage {
   if (path.endsWith('.html')) return 'html';
   if (path.endsWith('.md')) return 'markdown';
   return 'text';
-}
-
-function fileDotClass(file: CodeSurfaceFile): string {
-  return file.stagedBy ? ` has-staged-edits is-staged-by-${file.stagedBy}` : '';
 }
 
 // GA-04: mirrors type-check.ts's own .ts filter.
@@ -211,9 +207,6 @@ export function CodeSurface({
   const [missingRequiredPath, setMissingRequiredPath] = useState<string | null>(null);
   const [restoringPath, setRestoringPath] = useState<string | null>(null);
   const [filePickerOpen, setFilePickerOpen] = useState(false);
-  // Two-click confirm, same pattern as the admin job cancel button.
-  const [deleteArmedPath, setDeleteArmedPath] = useState<string | null>(null);
-  const [deletingPath, setDeletingPath] = useState<string | null>(null);
   // Nonce remounts an open palette so a repeat shortcut re-targets it.
   const [actionsMenu, setActionsMenu] = useState<{ mode: CodeActionsMode; nonce: number } | null>(null);
   /** Briefly true after a live param push (§E tier 1) — separate from `saveState`. */
@@ -656,7 +649,6 @@ export function CodeSurface({
 
   function closeFilePicker() {
     setFilePickerOpen(false);
-    setDeleteArmedPath(null);
     filePickerTriggerRef.current?.focus();
   }
 
@@ -915,44 +907,32 @@ export function CodeSurface({
     }
   }
 
-  async function deleteFile(path: string) {
-    if (deleteArmedPath !== path) {
-      setDeleteArmedPath(path);
-      return;
-    }
-    if (deletingPath) return;
-    setDeleteArmedPath(null);
-    setDeletingPath(path);
-    setDeliverMessage(null);
-    const timer = saveTimersRef.current.get(path);
-    if (timer !== undefined) {
-      window.clearTimeout(timer);
-      saveTimersRef.current.delete(path);
-    }
-    // An in-flight save could otherwise revive the file after deletion.
-    await savingPromisesRef.current.get(path);
-    try {
-      await deleteCodeSurfaceFile(slug, path);
-      setDrafts((current) => {
-        if (!(path in current)) return current;
-        const next = { ...current };
-        delete next[path];
-        return next;
-      });
-      const result = await fetchCodeSurfaceSources(slug);
-      setSources(result);
-      if (selected === path) {
-        const next = result.files[0]?.path ?? null;
-        if (next) selectFile(next);
-        else setSelected(null);
+  const prepareMutation = useCallback(async (paths: string[]) => {
+    for (const path of paths) {
+      const timer = saveTimersRef.current.get(path);
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+        saveTimersRef.current.delete(path);
       }
-      schedulePreviewRebuild();
-    } catch (error) {
-      setDeliverMessage(error instanceof CodeSurfaceApiError ? error.message : t('studioPanel.code.deleteFileError'));
-    } finally {
-      setDeletingPath(null);
+      await savingPromisesRef.current.get(path);
     }
-  }
+  }, []);
+
+  const tree = useCodeSurfaceTree({
+    slug,
+    files: sources?.files ?? [],
+    drafts,
+    selected,
+    editable,
+    prepareMutation,
+    onSources: setSources,
+    onDrafts: setDrafts,
+    onSelect: selectFile,
+    onError: (message) => setDeliverMessage(message),
+    onRebuild: schedulePreviewRebuild,
+    onDiscard: discardWorkingCopy,
+    onTsUpdate: (path, content) => languageServiceRef.current?.updateFile(path, content),
+  });
 
   // The fixit under a refused delivery: stage the file, open it.
   async function restoreMissingFile(path: string) {
@@ -1186,7 +1166,6 @@ export function CodeSurface({
           ref={filePickerTriggerRef}
           type="button"
           className="code-surface-file-trigger"
-          disabled={sources.files.length === 0}
           aria-label={t('studioPanel.code.filePicker')}
           aria-haspopup="dialog"
           aria-expanded={filePickerOpen}
@@ -1200,24 +1179,7 @@ export function CodeSurface({
 
       <div className="code-surface-body">
         <nav className="code-surface-rail" aria-label={t('studioPanel.tabs.code')} ref={railRef}>
-          {sources.files.map((entry) => (
-            <button
-              key={entry.path}
-              type="button"
-              className={`code-surface-rail-item${entry.path === selected ? ' is-active' : ''}${fileDotClass(entry)}`}
-              onClick={() => selectFile(entry.path)}
-              title={entry.stagedBy ? t('studioPanel.code.stagedBy', { who: entry.stagedBy }) : entry.path}
-            >
-              <span className="code-surface-rail-path">{entry.path}</span>
-              {entry.stagedBy ? <span className="code-surface-rail-dot" aria-hidden="true" /> : null}
-            </button>
-          ))}
-          {LOCKED_DIRS.map((dir) => (
-            <div key={dir} className="code-surface-rail-locked" title={t('studioPanel.code.lockedHint')}>
-              <PixelIcon name="lock" size={11} />
-              <span>{dir}</span>
-            </div>
-          ))}
+          <CodeSurfaceExplorerTree variant="rail" {...tree.treeProps} />
         </nav>
 
         <div className="code-surface-viewer">
@@ -1404,7 +1366,7 @@ export function CodeSurface({
                   type="button"
                   className="code-surface-statusbar-item code-surface-discard"
                   disabled={discardState === 'discarding' || deliverState === 'delivering'}
-                  onClick={() => void discardWorkingCopy()}
+                  onClick={() => tree.requestDiscard()}
                 >
                   {discardState === 'discarding' ? t('studioPanel.code.discarding') : t('studioPanel.code.discard')}
                 </button>
@@ -1478,64 +1440,15 @@ export function CodeSurface({
                 <PixelIcon name="close" size={13} />
               </button>
             </header>
-            <div className="code-surface-file-options" role="listbox" aria-label={t('studioPanel.code.filePicker')}>
-              {sources.files.map((entry) => (
-                <div
-                  key={entry.path}
-                  className={`code-surface-file-option${entry.path === selected ? ' is-active' : ''}`}
-                  role="option"
-                  aria-selected={entry.path === selected}
-                >
-                  <button
-                    type="button"
-                    className="code-surface-file-option-open"
-                    onClick={() => {
-                      selectFile(entry.path);
-                      closeFilePicker();
-                    }}
-                  >
-                    <span className="code-surface-file-option-path">{entry.path}</span>
-                    {entry.stagedBy ? (
-                      <span className="code-surface-file-option-status">
-                        {t('studioPanel.code.stagedBy', { who: entry.stagedBy })}
-                      </span>
-                    ) : null}
-                    {entry.path === selected ? <PixelIcon name="check" size={13} /> : null}
-                  </button>
-                  {editable ? (
-                    <button
-                      type="button"
-                      className={`code-surface-file-option-delete${deleteArmedPath === entry.path ? ' is-armed' : ''}`}
-                      disabled={deletingPath === entry.path}
-                      title={
-                        deleteArmedPath === entry.path
-                          ? t('studioPanel.code.filePickerDeleteConfirm', { path: entry.path })
-                          : t('studioPanel.code.filePickerDelete', { path: entry.path })
-                      }
-                      aria-label={
-                        deleteArmedPath === entry.path
-                          ? t('studioPanel.code.filePickerDeleteConfirm', { path: entry.path })
-                          : t('studioPanel.code.filePickerDelete', { path: entry.path })
-                      }
-                      onClick={() => void deleteFile(entry.path)}
-                    >
-                      <PixelIcon name="trash" size={13} />
-                    </button>
-                  ) : null}
-                </div>
-              ))}
-              {LOCKED_DIRS.map((dir) => (
-                <div
-                  key={dir}
-                  className="code-surface-file-option is-locked"
-                  role="option"
-                  aria-selected="false"
-                  aria-disabled="true"
-                >
-                  <PixelIcon name="lock" size={11} />
-                  <span className="code-surface-file-option-path">{dir}</span>
-                </div>
-              ))}
+            <div className="code-surface-file-options">
+              <CodeSurfaceExplorerTree
+                variant="sheet"
+                {...tree.treeProps}
+                onSelectFile={(path) => {
+                  tree.treeProps.onSelectFile(path);
+                  closeFilePicker();
+                }}
+              />
             </div>
           </section>
         </div>
@@ -1676,6 +1589,9 @@ export function CodeSurface({
           </section>
         </div>
       ) : null}
+
+      <CodeSurfaceTreeInputs {...tree.inputProps} />
+      <CodeSurfaceTreeDialogs {...tree.dialogProps} />
     </div>
   );
 }

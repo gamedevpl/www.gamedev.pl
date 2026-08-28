@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CODE_STEPS } from '@gamedevpl/contract';
 import { summarizeVisitFunnel } from './visit-funnel.js';
 import type { VisitEvent } from '../platform/store.js';
 
@@ -224,23 +225,14 @@ describe('summarizeVisitFunnel', () => {
       started('c'),
     ]);
 
-    expect(funnel.coding).toEqual([
-      { step: 'offered', visits: 2 },
-      { step: 'opened', visits: 1 },
-      { step: 'file_opened', visits: 1 },
-      { step: 'edited', visits: 2 },
-      { step: 'typechecked', visits: 0 },
-      { step: 'previewed', visits: 0 },
-      { step: 'delivered', visits: 1 },
-      { step: 'published', visits: 0 },
-      { step: 'read_only_agent', visits: 0 },
-      { step: 'conflict_seen', visits: 0 },
-      { step: 'round_reopened', visits: 0 },
-      { step: 'restored_missing', visits: 0 },
-      { step: 'agent_mode_enabled', visits: 0 },
-      { step: 'agent_mode_disabled', visits: 0 },
-      { step: 'agent_console_run', visits: 0 },
-    ]);
+    const visits: Partial<Record<(typeof CODE_STEPS)[number], number>> = {
+      offered: 2,
+      opened: 1,
+      file_opened: 1,
+      edited: 2,
+      delivered: 1,
+    };
+    expect(funnel.coding).toEqual(CODE_STEPS.map((step) => ({ step, visits: visits[step] ?? 0 })));
   });
 
   it('reports completion health and latency separately for each lane', () => {

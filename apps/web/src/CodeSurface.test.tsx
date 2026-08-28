@@ -289,12 +289,11 @@ describe('CodeSurface', () => {
     await act(async () => {
       deleteBtn()!.click();
     });
-    // First click only arms the button — nothing deleted yet.
     expect(mocked.deleteCodeSurfaceFile).not.toHaveBeenCalled();
-    expect(deleteBtn()!.className).toContain('is-armed');
+    expect(container.querySelector('[data-testid="code-tree-confirm-dialog"]')).not.toBeNull();
 
     await act(async () => {
-      deleteBtn()!.click();
+      container.querySelector<HTMLButtonElement>('[data-testid="code-tree-confirm"]')!.click();
       await flush();
     });
 
@@ -337,7 +336,7 @@ describe('CodeSurface', () => {
       deleteBtn()!.click();
     });
     await act(async () => {
-      deleteBtn()!.click();
+      container.querySelector<HTMLButtonElement>('[data-testid="code-tree-confirm"]')!.click();
       await flush();
     });
 
@@ -384,7 +383,7 @@ describe('CodeSurface', () => {
       deleteBtn()!.click();
     });
     await act(async () => {
-      deleteBtn()!.click();
+      container.querySelector<HTMLButtonElement>('[data-testid="code-tree-confirm"]')!.click();
       await flush();
     });
 
@@ -707,9 +706,10 @@ describe('CodeSurface', () => {
     expect(container.textContent).toMatch(/1 file changed/i);
     const discard = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Discard changes')!;
     expect(discard).not.toBeUndefined();
-
     await act(async () => {
       discard.click();
+      expect(mocked.discardCodeSurfaceEdits).not.toHaveBeenCalled();
+      container.querySelector<HTMLButtonElement>('[data-testid="code-tree-confirm"]')!.click();
       await flush();
     });
 
