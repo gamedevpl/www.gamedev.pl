@@ -3,8 +3,8 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CatalogEntry } from './catalog.js';
-import i18n from './i18n/index.js';
+import type { CatalogEntry } from '../../catalog.js';
+import i18n from '../../i18n/index.js';
 import { PartyPage } from './PartyPage.js';
 
 const partyGame: CatalogEntry = {

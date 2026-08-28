@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ControllerView } from './ControllerView.js';
 import type { RoomStatus } from './roomClient.js';
-import type { ServerFrame } from './protocol.js';
+import type { ServerFrame } from '../../mp/protocol.js';
 
 type RoomClientOpts = {
   onStatus?: (status: RoomStatus, reason?: string) => void;
