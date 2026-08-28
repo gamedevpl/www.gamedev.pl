@@ -30,10 +30,12 @@ vi.mock('./PublishedGameFrame', () => ({
     frameRef,
     remixOpenNonce,
     initialRemixRequest,
+    theaterChromeHidden,
   }: {
     frameRef?: { current: HTMLIFrameElement | null };
     remixOpenNonce?: number;
     initialRemixRequest?: string;
+    theaterChromeHidden?: boolean;
   }) => (
     <iframe
       className="game-frame"
@@ -41,6 +43,7 @@ vi.mock('./PublishedGameFrame', () => ({
       ref={frameRef as React.Ref<HTMLIFrameElement>}
       data-remix-open={remixOpenNonce ?? 0}
       data-remix-request={initialRemixRequest ?? ''}
+      data-chrome-hidden={theaterChromeHidden ? '1' : '0'}
     />
   ),
 }));
@@ -629,6 +632,7 @@ describe('GameTheater how-to-play visit telemetry', () => {
     await click(hide);
     expect(bar.classList.contains('is-idle')).toBe(true);
     expect(container.querySelector('.theater-reveal-btn')).not.toBeNull();
+    expect(container.querySelector('iframe')?.getAttribute('data-chrome-hidden')).toBe('1');
 
     await act(async () => {
       window.dispatchEvent(

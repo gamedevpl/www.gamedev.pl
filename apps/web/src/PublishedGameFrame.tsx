@@ -9,6 +9,7 @@ import { recordGamePlayed } from './recommendationsApi.js';
 import { RemixPanel, type RemixEditorStage } from './RemixPanel.js';
 import type { RemixSession } from './remixApi.js';
 import { readSharedParams } from './remixApi.js';
+import { resumeRemixForSlug, sessionFromResume } from './remixSessionPersist.js';
 import type { PlayVia } from './visitTelemetry.js';
 
 type PublishedGameFrameProps = {
@@ -45,6 +46,10 @@ type PublishedGameFrameProps = {
   painterNonce?: number;
   /** Reports whether this game's remix has a painter, for the menu to show its entry. */
   onRemixCapabilities?: (caps: { painter: boolean }) => void;
+  // Hidden theater HUD docks remix instead of covering play.
+  theaterChromeHidden?: boolean;
+  // Expanding the dock should bring theater chrome back.
+  onRevealChrome?: () => void;
 };
 
 /**
@@ -66,6 +71,8 @@ export function PublishedGameFrame({
   initialRemixRequest,
   painterNonce,
   onRemixCapabilities,
+  theaterChromeHidden,
+  onRevealChrome,
 }: PublishedGameFrameProps) {
   const { t } = useTranslation();
   const [html, setHtml] = useState<string | null>(null);
@@ -102,6 +109,7 @@ export function PublishedGameFrame({
    * host only restyles which surface is full-bleed vs bottom-right PiP.
    */
   const [editorStage, setEditorStage] = useState<RemixEditorStage>({ active: false, focus: 'edit' });
+  const [restoreReady, setRestoreReady] = useState(false);
   const localFrameRef = useRef<HTMLIFrameElement | null>(null);
   const activeFrameRef = frameRef ?? localFrameRef;
   // Present only when the player arrived on a shared link; read once.
@@ -142,6 +150,31 @@ export function PublishedGameFrame({
       cancelled = true;
     };
   }, [slug, title, loadAttempt]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setRestoreReady(false);
+    const show = Boolean(remixable) && slots === undefined;
+    if (!show) {
+      setRestoreReady(true);
+      return;
+    }
+    void resumeRemixForSlug(slug).then((resumed) => {
+      if (cancelled) return;
+      if (resumed) {
+        setRemixSession(sessionFromResume(resumed.live));
+        if (resumed.live.html) setRemixHtml(resumed.live.html);
+        setRemixUndoable(Boolean(resumed.live.undoable));
+        setRemixOpen(resumed.snapshot.remixOpen);
+        onRemixCapabilities?.({ painter: Boolean(resumed.live.content || resumed.live.layers) });
+      }
+      setRestoreReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callback is stable
+  }, [slug, remixable, slots]);
 
   // Either menu door opens the sheet; the painter door additionally tells the
   // panel to show the brush (it carries the nonce through as `painterRequest`).
@@ -185,7 +218,7 @@ export function PublishedGameFrame({
        * surface without remounting the frame.
        */}
       <div className="remix-game-slot">{frame}</div>
-      {remixOpen || sharedParams ? (
+      {restoreReady && (remixOpen || sharedParams) ? (
         <RemixPanel
           slug={slug}
           frameRef={activeFrameRef}
@@ -201,6 +234,8 @@ export function PublishedGameFrame({
           painterRequest={painterNonce}
           onCapabilities={onRemixCapabilities}
           onEditorStage={setEditorStage}
+          theaterChromeHidden={theaterChromeHidden}
+          onRevealChrome={onRevealChrome}
         />
       ) : null}
     </div>
