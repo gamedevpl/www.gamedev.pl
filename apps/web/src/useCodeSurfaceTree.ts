@@ -20,14 +20,7 @@ import {
   planFolderMove,
   pruneEmptyFolders,
 } from './codeSurfaceTreeModel.js';
-import {
-  planSourceUpload,
-  readFileAsUploadEntry,
-  uploadHasWork,
-  type PlannedUpload,
-  type SkippedUpload,
-  type UploadEntry,
-} from './codeSurfaceUpload.js';
+import { collectUploadEntries, planSourceUpload, uploadHasWork, type PlannedUpload } from './codeSurfaceUpload.js';
 import { recordCodeStep } from './visitTelemetry.js';
 import type { TreeConfirm, TreePrompt } from './CodeSurfaceTreeDialogs.js';
 
@@ -48,17 +41,6 @@ export type UseCodeSurfaceTreeOptions = {
   onDiscard: () => Promise<void>;
   onTsUpdate?: (path: string, content: string | null) => void;
 };
-
-async function collectEntries(items: Array<{ file: File; relative?: string }>) {
-  const entries: UploadEntry[] = [];
-  const skipped: SkippedUpload[] = [];
-  for (const item of items) {
-    const read = await readFileAsUploadEntry(item.file, item.relative);
-    if ('reason' in read) skipped.push(read);
-    else entries.push(read);
-  }
-  return { entries, skipped };
-}
 
 export function useCodeSurfaceTree(options: UseCodeSurfaceTreeOptions) {
   const { t } = useTranslation();
@@ -213,7 +195,7 @@ export function useCodeSurfaceTree(options: UseCodeSurfaceTreeOptions) {
           return;
         }
       }
-      const { entries, skipped } = await collectEntries(items);
+      const { entries, skipped } = await collectUploadEntries(items, { intoFolder, stripRoot: strip });
       const plan = planSourceUpload({ entries, existing, intoFolder, stripRoot: strip });
       openUploadConfirm({ ...plan, skipped: [...skipped, ...plan.skipped] });
     },
@@ -419,7 +401,7 @@ export function useCodeSurfaceTree(options: UseCodeSurfaceTreeOptions) {
 
   async function dropAt(folder: string, event: DragEvent<HTMLElement>, filesInto = folder) {
     if (event.dataTransfer?.types.includes('Files') && event.dataTransfer.files.length > 0 && !dragItem) {
-      await ingestFiles(await filesFromDataTransfer(event.dataTransfer), filesInto, false);
+      await ingestFiles(await filesFromDataTransfer(event.dataTransfer), filesInto, true);
     } else {
       onInternalDrop(folder);
       setDragItem(null);
@@ -477,7 +459,7 @@ export function useCodeSurfaceTree(options: UseCodeSurfaceTreeOptions) {
     folderRef,
     archiveRef,
     onFiles: (event: ChangeEvent<HTMLInputElement>) => void onInputFiles(event, false),
-    onFolder: (event: ChangeEvent<HTMLInputElement>) => void onInputFiles(event, false),
+    onFolder: (event: ChangeEvent<HTMLInputElement>) => void onInputFiles(event, true),
     onArchive: (event: ChangeEvent<HTMLInputElement>) => void onInputFiles(event, true, targetFolder()),
   };
 

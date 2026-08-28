@@ -1,3 +1,5 @@
+import { RESERVED_SOURCE_SEGMENTS } from './codeSurfacePaths.js';
+
 type FileSystemFileEntryLike = {
   isFile: true;
   isDirectory: false;
@@ -51,6 +53,7 @@ async function walkEntry(entry: FileSystemEntryLike, prefix: string): Promise<Fi
     Object.defineProperty(file, 'webkitRelativePath', { value: relative, configurable: true });
     return [file];
   }
+  if (RESERVED_SOURCE_SEGMENTS.has(entry.name) || entry.name.startsWith('.')) return [];
   const nextPrefix = prefix ? `${prefix}/${entry.name}` : entry.name;
   const children = await readAllEntries(entry.createReader());
   const nested = await Promise.all(children.map((child) => walkEntry(child, nextPrefix)));

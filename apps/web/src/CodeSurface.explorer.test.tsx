@@ -257,4 +257,37 @@ describe('CodeSurface explorer', () => {
     });
     expect(mocked.fetchCodeSurfaceSources.mock.calls.length).toBeGreaterThan(before);
   });
+
+  it('strips a folder-picker wrapper that contains a fixed source file', async () => {
+    mocked.fetchCodeSurfaceSources
+      .mockResolvedValueOnce(sourcesFor([{ path: 'game.ts', content: 'export const boot = () => {};\n' }]))
+      .mockResolvedValueOnce(
+        sourcesFor([
+          { path: 'game.ts', content: 'export const next = () => {};\n' },
+          { path: 'GAME.json', content: '{}\n' },
+        ]),
+      );
+    await render();
+    const input = container.querySelectorAll('input[type="file"]')[1] as HTMLInputElement;
+    const code = new File(['export const next = () => {};\n'], 'game.ts', { type: 'text/plain' });
+    Object.defineProperty(code, 'webkitRelativePath', { value: 'my-game/game.ts' });
+    const json = new File(['{}\n'], 'GAME.json', { type: 'application/json' });
+    Object.defineProperty(json, 'webkitRelativePath', { value: 'my-game/GAME.json' });
+    await act(async () => {
+      Object.defineProperty(input, 'files', { value: [code, json], configurable: true });
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await flush();
+    });
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[data-testid="code-tree-confirm"]')!.click();
+      await flush();
+    });
+    expect(mocked.stageCodeSurfaceFile).toHaveBeenCalledWith(
+      'sky-dodge',
+      'game.ts',
+      'export const next = () => {};\n',
+      { rebuild: false },
+    );
+    expect(mocked.stageCodeSurfaceFile).toHaveBeenCalledWith('sky-dodge', 'GAME.json', '{}\n', { rebuild: false });
+  });
 });

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { planSourceUpload } from './codeSurfaceUpload.js';
+import { describe, expect, it, vi } from 'vitest';
+import { collectUploadEntries, planSourceUpload } from './codeSurfaceUpload.js';
 
 describe('codeSurfaceUpload', () => {
   it('adds new files, flags overwrites, and skips illegal paths', () => {
@@ -40,6 +40,33 @@ describe('codeSurfaceUpload', () => {
       stripRoot: true,
     });
     expect(plan.add.map((file) => file.path).sort()).toEqual(['entities/enemy.ts', 'entities/player.ts']);
+  });
+
+  it('strips a folder-picker wrapper that contains a fixed source file', () => {
+    const plan = planSourceUpload({
+      entries: [
+        { relativePath: 'my-game/game.ts', content: 'export {};\n' },
+        { relativePath: 'my-game/GAME.json', content: '{}\n' },
+      ],
+      existing: new Set(),
+      stripRoot: true,
+    });
+    expect(plan.add.map((file) => file.path).sort()).toEqual(['GAME.json', 'game.ts']);
+  });
+
+  it('does not read oversized or illegal folder entries', async () => {
+    const huge = new File(['x'], 'blob.bin');
+    Object.defineProperty(huge, 'size', { value: 5_000_000 });
+    Object.defineProperty(huge, 'webkitRelativePath', { value: 'my-game/node_modules/blob.bin' });
+    const ok = new File(['export {};\n'], 'game.ts');
+    Object.defineProperty(ok, 'webkitRelativePath', { value: 'my-game/game.ts' });
+    const readHuge = vi.spyOn(huge, 'arrayBuffer');
+    const readOk = vi.spyOn(ok, 'arrayBuffer');
+    const { entries, skipped } = await collectUploadEntries([{ file: huge }, { file: ok }], { stripRoot: true });
+    expect(readHuge).not.toHaveBeenCalled();
+    expect(readOk).toHaveBeenCalled();
+    expect(entries.map((entry) => entry.relativePath)).toEqual(['my-game/game.ts']);
+    expect(skipped.some((item) => item.reason !== '')).toBe(true);
   });
 
   it('keeps the chosen folder name when stripRoot is off', () => {

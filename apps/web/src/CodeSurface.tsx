@@ -52,6 +52,7 @@ import {
   subscribeAgentActivity,
 } from './webmcp.js';
 import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
+import { flushLanguageFileUpdates, queueLanguageFileUpdate } from './codeSurfaceLanguageBind.js';
 import {
   createCodeSurfaceLanguageService,
   fromVfsPath,
@@ -258,6 +259,7 @@ export function CodeSurface({
 
   // GA-04: a ref, not state — languageServiceReady below signals it exists.
   const languageServiceRef = useRef<CodeSurfaceLanguageService | null>(null);
+  const pendingTsUpdatesRef = useRef<Array<{ path: string; content: string | null }>>([]);
   const languageServiceInitRef = useRef(false);
   const [languageServiceReady, setLanguageServiceReady] = useState(false);
   // GA-09: cached for the kit read-only hop.
@@ -552,6 +554,7 @@ export function CodeSurface({
         return;
       }
       languageServiceRef.current = service;
+      if (service) flushLanguageFileUpdates(pendingTsUpdatesRef.current, service);
       setLanguageServiceReady(service !== null);
     })();
     return () => {
@@ -564,6 +567,7 @@ export function CodeSurface({
     return () => {
       languageServiceRef.current?.destroy();
       languageServiceRef.current = null;
+      pendingTsUpdatesRef.current = [];
       languageServiceInitRef.current = false;
       setLanguageServiceReady(false);
     };
@@ -931,10 +935,8 @@ export function CodeSurface({
     onError: (message) => setDeliverMessage(message),
     onRebuild: schedulePreviewRebuild,
     onDiscard: discardWorkingCopy,
-    onTsUpdate: (path, content) => {
-      if (content === null) languageServiceRef.current?.deleteFile?.(path);
-      else languageServiceRef.current?.updateFile(path, content);
-    },
+    onTsUpdate: (path, content) =>
+      queueLanguageFileUpdate(pendingTsUpdatesRef.current, languageServiceRef.current, path, content),
   });
 
   // The fixit under a refused delivery: stage the file, open it.
