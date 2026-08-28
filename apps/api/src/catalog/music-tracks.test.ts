@@ -33,6 +33,36 @@ describe('music-tracks', () => {
     );
   });
 
+  it('accepts kick and hat percussion channels and drumKit definitions', () => {
+    const trackerWithDrums = {
+      bpm: 116,
+      steps: 8,
+      gain: 1,
+      drumKit: { kick: 'deep-kick', hat: 'soft-hat' },
+      channels: [
+        {
+          wave: 'kick' as const,
+          name: 'kick',
+          gain: 0.2,
+          sweepFrom: 120,
+          sweepTo: 40,
+          duration: 0.16,
+          pattern: ['K', null, 'K', null, 'K', null, 'K', null],
+        },
+        {
+          wave: 'hat' as const,
+          name: 'hat',
+          gain: 0.1,
+          frequency: 8000,
+          pattern: [null, 'H', null, 'H', null, 'H', null, 'H'],
+        },
+      ],
+    };
+    expect(
+      parseGameMusicTracks(JSON.stringify({ version: 1, tracks: { 'rainbow-run': trackerWithDrums } }))['rainbow-run'],
+    ).toEqual(trackerWithDrums);
+  });
+
   it('merges game tracks onto shared catalog and refuses collision', () => {
     const merged = mergeMusicTrackMaps({ 'soft-puzzle': { loop: true } }, { 'raid-theme': validTrack });
     expect(Object.hasOwn(merged, 'soft-puzzle')).toBe(true);
