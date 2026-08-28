@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AdminConsole } from './AdminConsole.js';
 import type { AdminSummary } from './adminApi.js';
-import type { AdminSection } from './router.js';
+import type { AdminSection } from '../../router.js';
 
 const mocked = vi.hoisted(() => ({
   fetchAdminSummary: vi.fn(),
@@ -21,7 +21,7 @@ vi.mock('./adminApi.js', () => mocked);
 // The sections themselves are covered by their own tests; the console's job is which
 // one is on screen, not what it renders.
 vi.mock('./AdminJobsPanel.js', () => ({ AdminJobsPanel: () => createElement('p', null, 'queue-panel') }));
-vi.mock('./GameHealthView.js', () => ({ GameHealthView: () => createElement('p', null, 'telemetry-panel') }));
+vi.mock('../../GameHealthView.js', () => ({ GameHealthView: () => createElement('p', null, 'telemetry-panel') }));
 vi.mock('./CostsPanel.js', () => ({ CostsPanel: () => createElement('p', null, 'costs-panel') }));
 vi.mock('./CreationLimitsPanel.js', () => ({ CreationLimitsPanel: () => createElement('p', null, 'limits-panel') }));
 vi.mock('./AccessTokensPanel.js', () => ({ AccessTokensPanel: () => createElement('p', null, 'tokens-panel') }));

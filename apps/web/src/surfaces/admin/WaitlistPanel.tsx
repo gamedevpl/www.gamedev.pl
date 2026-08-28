@@ -10,7 +10,7 @@ import {
   type WaitlistEntry,
   type WaitlistStatus,
 } from './adminApi.js';
-import { betaInvitePath } from './router.js';
+import { betaInvitePath } from '../../router.js';
 
 /**
  * Closed-beta waitlist membership — list, approve, reject, pre-approve by email.
