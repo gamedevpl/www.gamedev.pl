@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 import {
   buildManifestLine,
   CACHE_PREFIX,
+  deferredAssetEntries,
+  reachableFromShell,
   replaceBuildManifest,
   SHELL_EXTRAS,
   shellAssetEntries,
@@ -55,6 +57,145 @@ describe('shellAssetEntries', () => {
     expect(entries).toEqual([...entries].sort());
     expect(new Set(entries).size).toBe(entries.length);
   });
+
+  it('leaves out a route chunk reached only through lazy(() => import(...))', () => {
+    // Precaching it would download AdminConsole/CreatorStudioView/CodeMirrorEditor
+    // for every visitor in the background, regardless of whether they ever navigate
+    // there — the exact download this chunk being lazy exists to avoid.
+    const entries = shellAssetEntries(
+      ['assets/index-abc.js', 'assets/AdminConsole-def.js'],
+      (fileName) => fileName === 'assets/AdminConsole-def.js',
+    );
+
+    expect(entries).toContain('/assets/index-abc.js');
+    expect(entries).not.toContain('/assets/AdminConsole-def.js');
+  });
+
+  it('precaches everything when no deferred predicate is given', () => {
+    const entries = shellAssetEntries(['assets/index-abc.js']);
+    expect(entries).toContain('/assets/index-abc.js');
+  });
+});
+
+describe('deferredAssetEntries', () => {
+  it('is the complement of shellAssetEntries for the same predicate', () => {
+    const files = ['assets/index-abc.js', 'assets/AdminConsole-def.js', 'assets/index-abc.js.map'];
+    const isDeferred = (fileName: string) => fileName === 'assets/AdminConsole-def.js';
+
+    const deferred = deferredAssetEntries(files, isDeferred);
+    expect(deferred).toEqual(['/assets/AdminConsole-def.js']);
+
+    // Never both: a build's own asset is either something the shell precaches, or
+    // something public/sw.js is told is fine to fetch on demand — not both, and not
+    // neither, since either gap is exactly what let a deferred chunk's ordinary fetch
+    // failure get treated as a sign of shell rot.
+    const shell = shellAssetEntries(files, isDeferred);
+    for (const entry of deferred) expect(shell).not.toContain(entry);
+  });
+
+  it('is empty when nothing is deferred', () => {
+    expect(deferredAssetEntries(['assets/index-abc.js'], () => false)).toEqual([]);
+  });
+});
+
+describe('reachableFromShell', () => {
+  it('follows a static entry chunk into what it imports, and stops at what it does not', () => {
+    // index imports shared.js; AdminConsole is a lazy chunk index never statically imports.
+    const reachable = reachableFromShell(
+      {
+        'assets/index-abc.js': { kind: 'chunk', text: '', isEntry: true, imports: ['assets/shared-def.js'] },
+        'assets/shared-def.js': { kind: 'chunk', text: 'export const x = 1' },
+        'assets/AdminConsole-ghi.js': { kind: 'chunk', text: 'export const AdminConsole = 1', isDynamicEntry: true },
+      },
+      '<script type="module" src="/assets/index-abc.js"></script>',
+    );
+
+    expect(reachable.has('assets/index-abc.js')).toBe(true);
+    expect(reachable.has('assets/shared-def.js')).toBe(true);
+    expect(reachable.has('assets/AdminConsole-ghi.js')).toBe(false);
+  });
+
+  it('does not follow a lazy chunk’s filename into a chunk that only prefetches it', () => {
+    // The bug this guards against: Vite inlines a __vite__mapDeps prefetch array right at
+    // a lazy(() => import(...)) call site, so the entry chunk's own *text* names every
+    // lazy chunk it can ever trigger — that is not the same as needing it up front. Only
+    // `imports` (never a chunk's text) may decide chunk-to-chunk reachability.
+    const reachable = reachableFromShell(
+      {
+        'assets/index-abc.js': {
+          kind: 'chunk',
+          text: 'const __vite__mapDeps=(i)=>["assets/AdminConsole-ghi.js"][i]',
+          isEntry: true,
+          imports: [],
+        },
+        'assets/AdminConsole-ghi.js': { kind: 'chunk', text: 'export const AdminConsole = 1', isDynamicEntry: true },
+      },
+      '<script type="module" src="/assets/index-abc.js"></script>',
+    );
+
+    expect(reachable.has('assets/AdminConsole-ghi.js')).toBe(false);
+  });
+
+  it('reaches a worker bundle only through the chunk that constructs it', () => {
+    // Vite emits a `new Worker(new URL(...))` build as a plain asset — no isEntry, no
+    // imports, nothing but text that names it from inside the chunk that builds it.
+    const reachableViaStaticChunk = reachableFromShell(
+      {
+        'assets/index-abc.js': {
+          kind: 'chunk',
+          text: 'new Worker(new URL("assets/tsWorker-xyz.js"))',
+          isEntry: true,
+        },
+        'assets/tsWorker-xyz.js': { kind: 'asset', text: 'importScripts("assets/lib.dom.d-uvw.js")' },
+        'assets/lib.dom.d-uvw.js': { kind: 'asset', text: '// lib' },
+      },
+      '<script src="/assets/index-abc.js"></script>',
+    );
+    expect(reachableViaStaticChunk.has('assets/tsWorker-xyz.js')).toBe(true);
+    expect(reachableViaStaticChunk.has('assets/lib.dom.d-uvw.js')).toBe(true);
+
+    // Same worker, but only CreatorStudioView (a lazy chunk) builds it — neither the
+    // worker nor the TypeScript lib files it references should count as reachable.
+    const reachableViaLazyChunk = reachableFromShell(
+      {
+        'assets/index-abc.js': { kind: 'chunk', text: 'no worker mentioned here', isEntry: true },
+        'assets/CreatorStudioView-def.js': {
+          kind: 'chunk',
+          text: 'new Worker(new URL("assets/tsWorker-xyz.js"))',
+          isDynamicEntry: true,
+        },
+        'assets/tsWorker-xyz.js': { kind: 'asset', text: 'importScripts("assets/lib.dom.d-uvw.js")' },
+        'assets/lib.dom.d-uvw.js': { kind: 'asset', text: '// lib' },
+      },
+      '<script src="/assets/index-abc.js"></script>',
+    );
+    expect(reachableViaLazyChunk.has('assets/tsWorker-xyz.js')).toBe(false);
+    expect(reachableViaLazyChunk.has('assets/lib.dom.d-uvw.js')).toBe(false);
+  });
+
+  it('reaches a stylesheet and its fonts through index.html, not the entry chunk', () => {
+    // A stylesheet is <link>ed from index.html, never imported from JS; its fonts are
+    // named only inside its own CSS text, via @font-face url().
+    const reachable = reachableFromShell(
+      {
+        'assets/index-abc.js': { kind: 'chunk', text: 'no css mentioned here', isEntry: true },
+        'assets/index-def.css': { kind: 'asset', text: "@font-face{src:url('assets/Font-ghi.woff2')}" },
+        'assets/Font-ghi.woff2': { kind: 'asset' },
+      },
+      '<link rel="stylesheet" href="/assets/index-def.css">',
+    );
+
+    expect(reachable.has('assets/index-def.css')).toBe(true);
+    expect(reachable.has('assets/Font-ghi.woff2')).toBe(true);
+  });
+
+  it('leaves a binary asset from propagating further, but still counts it reachable', () => {
+    const reachable = reachableFromShell(
+      { 'assets/icon-abc.png': { kind: 'asset' } },
+      '<link rel="icon" href="/assets/icon-abc.png">',
+    );
+    expect(reachable.has('assets/icon-abc.png')).toBe(true);
+  });
 });
 
 describe('shellRevision', () => {
@@ -89,7 +230,11 @@ describe('shellRevision', () => {
 });
 
 describe('replaceBuildManifest', () => {
-  const manifest = { revision: 'cafef00d', shell: ['/index.html', '/assets/index-abc.js'] };
+  const manifest = {
+    revision: 'cafef00d',
+    shell: ['/index.html', '/assets/index-abc.js'],
+    deferred: ['/assets/AdminConsole-def.js'],
+  };
 
   it('replaces the placeholder with the real manifest', () => {
     const result = replaceBuildManifest(
@@ -120,7 +265,7 @@ describe('replaceBuildManifest', () => {
 
 describe('the worker source this module rewrites', () => {
   it('carries the placeholder line the build replaces', () => {
-    expect(() => replaceBuildManifest(SW_SOURCE, { revision: 'x', shell: [] })).not.toThrow();
+    expect(() => replaceBuildManifest(SW_SOURCE, { revision: 'x', shell: [], deferred: [] })).not.toThrow();
   });
 
   it('names its caches with the prefix declared here', () => {
@@ -184,6 +329,19 @@ describe('the worker source this module rewrites', () => {
     expect(SW_SOURCE).toContain('await caches.delete(CACHE)');
     expect(SW_SOURCE).toContain('client.navigate');
     expect(SW_SOURCE).toContain('legacyAssetOrHeal');
+  });
+
+  it('never heals the shell for a current build’s own deferred chunk failing to fetch', () => {
+    // CP-4 found this: once a route's lazy chunk is correctly left out of the precache,
+    // every request for it goes through the same branch a genuinely stale legacy hash
+    // does — and that branch nukes the whole shell cache and force-navigates every open
+    // tab on a failure. An ordinary network hiccup loading one optional route must not
+    // do that; only a hash this build has never heard of should.
+    const handler = SW_SOURCE.slice(SW_SOURCE.indexOf("self.addEventListener('fetch'"));
+    const deferredCheck = handler.indexOf('BUILD.deferred.includes(url.pathname)');
+    const legacyCheck = handler.indexOf('legacyAssetOrHeal');
+    expect(deferredCheck).toBeGreaterThan(-1);
+    expect(deferredCheck).toBeLessThan(legacyCheck);
   });
 
   it('ships inert, so a dev worker caches no live module', () => {

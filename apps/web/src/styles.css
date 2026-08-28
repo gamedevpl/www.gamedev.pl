@@ -426,6 +426,25 @@ a {
   padding: 40px 24px 80px;
 }
 
+/* Route-level Suspense fallback while a lazy surface's chunk loads. */
+.content-loading {
+  margin: 40px 0;
+  text-align: center;
+  opacity: 0.7;
+}
+
+/* RouteChunkBoundary's fallback: a stale client's lazy chunk 404s post-deploy. */
+.content-load-error {
+  margin: 40px auto;
+  max-width: 360px;
+  text-align: center;
+}
+
+.content-load-error p {
+  opacity: 0.7;
+  margin-bottom: 16px;
+}
+
 /* HERO PROMPT CENTERPIECE */
 .hero-prompt-section {
   margin-bottom: 48px;
