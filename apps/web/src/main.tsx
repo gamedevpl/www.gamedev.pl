@@ -6,7 +6,7 @@ import { recordVisit, watchInstallPrompt } from './pwa.js';
 import { hasServiceWorkerSupport } from './serviceWorkerSupport.js';
 import { watchShellUpdates } from './shellUpdate.js';
 import { startVisitTracking } from './visitTelemetry.js';
-import './i18n/index.js';
+import { i18nReady } from './i18n/index.js';
 import './styles.css';
 
 // Started before the first render: the visit has to be recorded as it lands, and a tree
@@ -36,13 +36,21 @@ watchShellUpdates();
 const booted = (window as Window & { __gamedevBooted?: () => void }).__gamedevBooted;
 if (typeof booted === 'function') booted();
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <AuthProvider>
-      <App />
-    </AuthProvider>
-  </React.StrictMode>,
-);
+// An async IIFE rather than a top-level await: the build targets Safari 14 / Chrome 87,
+// which predate top-level await in a module. Waits for the active locale's own
+// translations — and only that locale's — to be loaded, the same guarantee the old
+// both-locales-bundled i18n import gave for free.
+void (async () => {
+  await i18nReady;
+
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </React.StrictMode>,
+  );
+})();
 
 /*
  * Register the worker for everyone, not just people who turn on notifications.
