@@ -1721,6 +1721,20 @@
     },
     "revokeError": "We couldn't revoke the key right now. Try again in a moment."
   },
+  "patTokens": {
+    "title": "Personal access tokens",
+    "hint": "For CI and unattended scripts. A token cannot mint another token — create these while signed in at the browser. Copy the secret when it appears; it is shown only once.",
+    "loading": "Loading tokens…",
+    "loadError": "We couldn't load your tokens right now.",
+    "mint": "Create token",
+    "minting": "Creating…",
+    "mintError": "We couldn't create a token right now. Try again in a moment.",
+    "shownOnce": "Copy this now",
+    "name": "Token name",
+    "days": "Expires in days",
+    "revoke": "Revoke",
+    "revokeError": "We couldn't revoke that token. Try again in a moment."
+  },
   "remix": {
     "title": "Remix",
     "chatTitle": "Remix chat",

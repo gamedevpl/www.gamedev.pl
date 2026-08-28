@@ -1735,6 +1735,20 @@
     },
     "revokeError": "Nie udało się unieważnić klucza. Spróbuj za chwilę."
   },
+  "patTokens": {
+    "title": "Osobiste tokeny dostępu",
+    "hint": "Do CI i skryptów bez nadzoru. Token nie może utworzyć kolejnego tokenu — twórz je będąc zalogowanym w przeglądarce. Skopiuj sekret, gdy się pojawi; pokazywany jest tylko raz.",
+    "loading": "Wczytuję tokeny…",
+    "loadError": "Nie udało się wczytać tokenów.",
+    "mint": "Utwórz token",
+    "minting": "Tworzenie…",
+    "mintError": "Nie udało się teraz utworzyć tokenu. Spróbuj za chwilę.",
+    "shownOnce": "Skopiuj teraz",
+    "name": "Nazwa tokenu",
+    "days": "Wygasa za (dni)",
+    "revoke": "Unieważnij",
+    "revokeError": "Nie udało się unieważnić tego tokenu. Spróbuj za chwilę."
+  },
   "remix": {
     "title": "Remiks",
     "chatTitle": "Czat remiksu",

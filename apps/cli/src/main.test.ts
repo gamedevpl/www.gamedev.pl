@@ -43,9 +43,14 @@ describe('runCli verbs', () => {
     expect(await runCli(['node', 'gamedev', 'whoami'], { HOME: '/tmp/gamedev-cli-empty' }, streams)).toBe(EXIT_AUTH);
   });
 
-  it('refuses unreconciled submit/diff without --force', async () => {
+  it('diff --force skips the platform read', async () => {
     const streams = io();
-    expect(await runCli(['node', 'gamedev', 'diff'], {}, streams)).toBe(EXIT_REFUSED);
+    expect(await runCli(['node', 'gamedev', 'diff', '--force'], {}, streams)).toBe(EXIT_GREEN);
+  });
+
+  it('exits 4 when diff has no slug and no checkout', async () => {
+    const streams = io();
+    expect(await runCli(['node', 'gamedev', 'diff'], { HOME: '/tmp/gamedev-cli-empty' }, streams)).toBe(EXIT_INPUT);
   });
 
   it('runs when launched as the bundled gamedev.mjs, not only main.ts', () => {

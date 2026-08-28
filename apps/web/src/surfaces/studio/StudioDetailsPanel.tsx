@@ -15,6 +15,7 @@ import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
 import { StudioDetailsBuildProgress } from './StudioDetailsBuildProgress.js';
 import { StudioDetailsMedia } from './StudioDetailsMedia.js';
 import { StudioOAuthClientsPanel } from './StudioOAuthClientsPanel.js';
+import { StudioPatPanel } from './StudioPatPanel.js';
 import { StudioWorkspaceCheckoutPanel } from './StudioWorkspaceCheckoutPanel.js';
 import { formatSeconds } from './studioHealth.js';
 
@@ -279,6 +280,7 @@ export function DetailsPanel({
           <div className="studio-rail-credentials-body">
             <p className="studio-rail-credentials-hint">{t('studioPanel.rail.credentialsHint')}</p>
             <StudioCreatorAgentKeyPanel />
+            <StudioPatPanel />
             <StudioOAuthClientsPanel />
           </div>
         ) : null}

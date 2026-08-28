@@ -6,12 +6,23 @@ export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 export interface ApiClient {
   origin: string;
   request<T>(method: string, path: string, body?: unknown): Promise<T>;
+  requestBytes(path: string): Promise<Buffer>;
 }
 
 export function bearerFrom(tokens: StoredTokens | null, env: NodeJS.ProcessEnv): string | null {
   const pat = env.GAMEDEV_TOKEN?.trim();
   if (pat) return pat;
   return tokens?.accessToken ?? null;
+}
+
+function throwForStatus(res: Response, errBody: { error?: string; message?: string }): never {
+  if (res.status === 401) {
+    throw new CliError('credential expired or revoked — run `gamedev login`', EXIT_AUTH, 'gamedev login');
+  }
+  if (res.status === 404) {
+    throw new CliError('not found', EXIT_REFUSED);
+  }
+  throw new CliError(errBody.message ?? errBody.error ?? `request failed (${res.status})`, EXIT_REFUSED);
 }
 
 export function createApi(input: {
@@ -22,32 +33,37 @@ export function createApi(input: {
 }): ApiClient {
   const fetchImpl = input.fetch ?? fetch;
   const env = input.env ?? process.env;
+
+  async function authorized(path: string, init: RequestInit): Promise<Response> {
+    const token = bearerFrom(await input.store.get(), env);
+    if (!token) {
+      throw new CliError('not signed in — run `gamedev login`', EXIT_AUTH, 'gamedev login');
+    }
+    return fetchImpl(`${input.origin}${path}`, {
+      ...init,
+      headers: { authorization: `Bearer ${token}`, ...(init.headers ?? {}) },
+    });
+  }
+
   return {
     origin: input.origin,
     async request<T>(method: string, path: string, body?: unknown): Promise<T> {
-      const token = bearerFrom(await input.store.get(), env);
-      if (!token) {
-        throw new CliError('not signed in — run `gamedev login`', EXIT_AUTH, 'gamedev login');
-      }
-      const res = await fetchImpl(`${input.origin}${path}`, {
+      const res = await authorized(path, {
         method,
-        headers: {
-          authorization: `Bearer ${token}`,
-          ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
-        },
+        headers: body !== undefined ? { 'content-type': 'application/json' } : {},
         ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       });
-      if (res.status === 401) {
-        throw new CliError('credential expired or revoked — run `gamedev login`', EXIT_AUTH, 'gamedev login');
-      }
-      if (res.status === 404) {
-        throw new CliError('not found', EXIT_REFUSED);
-      }
       if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new CliError(err.error ?? `request failed (${res.status})`, EXIT_REFUSED);
+        throwForStatus(res, (await res.json().catch(() => ({}))) as { error?: string; message?: string });
       }
       return (await res.json()) as T;
+    },
+    async requestBytes(path: string): Promise<Buffer> {
+      const res = await authorized(path, { method: 'GET' });
+      if (!res.ok) {
+        throwForStatus(res, (await res.json().catch(() => ({}))) as { error?: string; message?: string });
+      }
+      return Buffer.from(await res.arrayBuffer());
     },
   };
 }

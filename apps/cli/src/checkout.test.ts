@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { mkdtempSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { mkdtempSync } from 'node:os';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { checkoutGame } from './checkout.js';
+import { describe, expect, it } from 'vitest';
+import { checkoutGame, changedPaths, unreconciledMessage } from './checkout.js';
 import { createApi } from './api.js';
 import { memoryStore } from './keychain.js';
 
@@ -14,16 +15,27 @@ describe('checkout', () => {
       api: createApi({
         origin: 'https://www.gamedev.pl',
         store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
-        fetch: async () => new Response('{}'),
+        fetch: async () => new Response('archive'),
       }),
       slug: 'ghost-roads',
       dest,
+      fetchBuffer: async () => Buffer.from('archive'),
       run: (cmd, args) => {
         commands.push([cmd, ...args].join(' '));
       },
     });
     expect(result.remote).toBe('gamedev://ghost-roads');
+    expect(commands).toContain('tar -xzf .gamedev-workspace.tgz');
     expect(commands).toContain('git init');
     expect(commands).toContain('git remote add origin gamedev://ghost-roads');
+  });
+
+  it('treats a missing remote file as unreconciled', () => {
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-df-'));
+    mkdirSync(join(dest, 'games', 'ghost-roads'), { recursive: true });
+    writeFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'export const n = 1;\n');
+    expect(changedPaths([{ path: 'game.ts', content: 'export const n = 1;\n' }], [])).toEqual(['game.ts']);
+    expect(unreconciledMessage()).toContain('gamedev pull');
+    expect(dirname(join(dest, 'games', 'ghost-roads', 'game.ts'))).toContain('ghost-roads');
   });
 });

@@ -77,6 +77,8 @@ import { mintToken } from './submission-token.js';
 import { registerTelemetryRoutes, type TelemetryRoutesOptions } from '../telemetry/telemetry.js';
 import { registerVisitTelemetryRoutes } from '../telemetry/visit-telemetry.js';
 import { registerCliSurfaceRoutes } from './cli-surface.js';
+import { registerCreatorPatRoutes } from './creator-pat-routes.js';
+import { registerCreatorVersionRoutes } from '../creation/creator-versions.js';
 import { registerVoteRoutes, type VoteRoutesOptions } from '../community/votes.js';
 import { registerRecommendationRoutes, type RecommendationRoutesOptions } from '../catalog/recommendations.js';
 import { createCombinedPublishedSlugGate, createPublishedSlugGateFromEnv } from '../catalog/published-slugs.js';
@@ -514,13 +516,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     ...options.telemetryRoutes,
   });
 
-  // Visit-level telemetry — the funnel before and between games. Exempted from the
-  // private-beta wall below (unlike play telemetry): the whole point is the first
-  // minute of a visit, which for most visitors is *before* sign-in — during closed
-  // beta that is the "please sign in" splash itself. Walling it would silently zero
-  // out exactly the acquisition and drop-off signal this stream exists to capture.
-  // Safe to leave open: the handler never reads request.user and records nothing
-  // that identifies a visitor, so it costs nothing to admit from the open internet.
+  // Visit telemetry is exempt from the private-beta wall: first-minute arrivals.
   await registerVisitTelemetryRoutes(app, { store });
   await registerCliSurfaceRoutes(app);
   // Thumbs up/down (docs/improvement-loop-plan.md, signal source #2). Casting or
@@ -780,6 +776,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     mintStatusToken: submissionTokenSecret ? (jobId) => mintToken(jobId, submissionTokenSecret) : undefined,
     objectStore,
   });
+  await registerCreatorVersionRoutes(app, { store, gamesStore });
+  await registerCreatorPatRoutes(app, { store });
 
   // The Code surface (creator-code-editing-execution-plan.md): owner reads and
   // owner-authored staging writes over the same games store and staging buffer the

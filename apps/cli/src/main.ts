@@ -12,7 +12,7 @@ import { describeError, pipeNeedsFlag } from './errors.js';
 import { handleReplLine, replBanner } from './repl.js';
 import type { IntakeDraft } from './create.js';
 import { getStatus, previewUrl } from './turn.js';
-import { checkoutGame, unreconciledMessage } from './checkout.js';
+import { checkoutGame, diffGame, pullGame, readCheckoutSlug, unreconciledMessage } from './checkout.js';
 import { runLadder, assertLadderGreen } from './verify.js';
 import { handleHelperLine, remoteSlugFromArgv } from './git-remote.js';
 
@@ -91,12 +91,32 @@ export async function runCli(
       io.stdout.write(`checked out ${slug} → ${result.dest} (origin ${result.remote})\n`);
       return EXIT_GREEN;
     }
+    if (verb === 'pull') {
+      const slug = args[0] ?? readCheckoutSlug(process.cwd());
+      if (!slug) throw new CliError('gamedev pull <slug>', EXIT_INPUT, '<slug>');
+      const dest = args[1] ?? process.cwd();
+      const pulled = await pullGame({ api, slug, dest });
+      io.stdout.write(asJson ? `${JSON.stringify(pulled)}\n` : `pulled ${slug} @ ${pulled.version}\n`);
+      return EXIT_GREEN;
+    }
     if (verb === 'diff') {
       if (flags.force) return EXIT_GREEN;
-      throw new CliError(unreconciledMessage(), EXIT_REFUSED);
+      const slug = args[0] ?? readCheckoutSlug(process.cwd());
+      if (!slug) throw new CliError('gamedev diff <slug>', EXIT_INPUT, '<slug>');
+      const dest = args[1] ?? process.cwd();
+      const diff = await diffGame({ api, slug, dest });
+      if (asJson) io.stdout.write(`${JSON.stringify(diff)}\n`);
+      if (diff.unreconciled) throw new CliError(unreconciledMessage(), EXIT_REFUSED, '--force');
+      return EXIT_GREEN;
     }
     if (verb === 'submit') {
-      assertLadderGreen(runLadder({ cwd: args[0] ?? process.cwd(), publish: flags.publish === true }));
+      const dest = args[0] ?? process.cwd();
+      const slug = (typeof flags.slug === 'string' ? flags.slug : null) ?? readCheckoutSlug(dest);
+      if (!flags.force && slug) {
+        const diff = await diffGame({ api, slug, dest });
+        if (diff.unreconciled) throw new CliError(unreconciledMessage(), EXIT_REFUSED, '--force');
+      }
+      assertLadderGreen(runLadder({ cwd: dest, publish: flags.publish === true }));
       io.stdout.write('static ladder green\n');
       return EXIT_GREEN;
     }
