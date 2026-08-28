@@ -4,9 +4,9 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ArcadeCatalog } from './ArcadeCatalog.js';
-import * as AuthContextModule from './AuthContext.js';
-import type { CatalogEntry } from './catalog.js';
-import i18n from './i18n/index.js';
+import * as AuthContextModule from '../../AuthContext.js';
+import type { CatalogEntry } from '../../catalog.js';
+import i18n from '../../i18n/index.js';
 
 type ObserverInstance = {
   callback: IntersectionObserverCallback;
@@ -516,7 +516,13 @@ describe('ArcadeCatalog shared-world badge', () => {
           catalogStatus: 'ready',
           catalogError: null,
           catalogEntries: [
-            { ...entries[0]!, slug: 'shared-one', title: 'Shared One', world: 'shared' as const, editor: 'content' as const },
+            {
+              ...entries[0]!,
+              slug: 'shared-one',
+              title: 'Shared One',
+              world: 'shared' as const,
+              editor: 'content' as const,
+            },
             { ...entries[1]!, slug: 'solo-one', title: 'Solo One', world: null },
           ],
           onPlayGame: vi.fn(),

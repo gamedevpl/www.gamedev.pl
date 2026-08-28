@@ -1,5 +1,5 @@
-import type { CatalogEntry } from './catalog.js';
-import { getRecentPlays } from './recentPlays.js';
+import type { CatalogEntry } from '../../catalog.js';
+import { getRecentPlays } from '../../recentPlays.js';
 
 export type CatalogSortMode = 'recommended' | 'newest' | 'most_played' | 'last_played' | 'alpha';
 

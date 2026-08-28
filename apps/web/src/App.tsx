@@ -5,7 +5,7 @@ import { fetchCatalog, gamePageHandle, type CatalogEntry } from './catalog.js';
 import { GameTheater } from './GameTheater.js';
 import { NavHeader } from './NavHeader.js';
 import { HeroPromptSection } from './HeroPromptSection.js';
-import { ArcadeCatalog } from './ArcadeCatalog.js';
+import { ArcadeCatalog } from './surfaces/catalog/ArcadeCatalog.js';
 import { UnpublishedPlayView } from './UnpublishedPlayView.js';
 import { PixelIcon } from './PixelIcon.js';
 import { CreatorQA, type QAQuestion } from './CreatorQA.js';
