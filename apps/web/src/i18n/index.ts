@@ -46,7 +46,19 @@ async function loadLocale(language: SupportedLanguage): Promise<Record<string, u
  */
 export const i18nReady: Promise<void> = (async () => {
   const language = detectLanguage();
-  const resource = await loadLocale(language);
+  let resource: Record<string, unknown>;
+  try {
+    resource = await loadLocale(language);
+  } catch {
+    // Offline with no cached copy of the locale chunk — an installed PWA reopened after
+    // its HTTP cache evicted the entry, since sw.js serves deferred locale chunks
+    // network-only by design (see shellPrecache.ts). main.tsx clears the boot watchdog
+    // before awaiting this promise, so rejecting here would leave the page permanently
+    // blank instead of rendering. Resolving without initializing i18next lets render()
+    // proceed; react-i18next falls back to raw keys until a locale load succeeds (e.g.
+    // on the next reload with connectivity), which beats a page that never appears.
+    return;
+  }
   await i18n.use(initReactI18next).init({
     lng: language,
     resources: { [language]: { translation: resource } },
@@ -76,21 +88,39 @@ export const i18nReady: Promise<void> = (async () => {
   // point: production code awaits `i18nReady` in main.tsx before rendering anything that
   // could call it, and every test does the same via `i18nTestSetup.ts`.
   const nativeChangeLanguage = i18n.changeLanguage.bind(i18n);
+  // Tracks which call is the most recent, so a slow first load (e.g. clicking PL then EN
+  // while PL's chunk is still fetching) can't resolve after the fast second call already
+  // applied and silently switch the UI back — only the latest click may ever take effect.
+  let latestChangeLanguageSeq = 0;
+  let latestChangeLanguagePromise: ReturnType<typeof nativeChangeLanguage> | undefined;
   i18n.changeLanguage = (async (lng?: string, callback?: (error: unknown, t: unknown) => void) => {
-    if (
-      lng &&
-      (SUPPORTED_LANGUAGES as readonly string[]).includes(lng) &&
-      !i18n.hasResourceBundle(lng, 'translation')
-    ) {
-      const resourceForLng = await loadLocale(lng as SupportedLanguage);
-      i18n.addResourceBundle(lng, 'translation', resourceForLng, true, true);
-      try {
-        localStorage.setItem(STORAGE_KEY, lng);
-      } catch {
-        // best-effort persistence only
+    const seq = ++latestChangeLanguageSeq;
+    const run = (async () => {
+      if (lng && (SUPPORTED_LANGUAGES as readonly string[]).includes(lng)) {
+        if (!i18n.hasResourceBundle(lng, 'translation')) {
+          const resourceForLng = await loadLocale(lng as SupportedLanguage);
+          if (seq !== latestChangeLanguageSeq) {
+            // A newer switch started while this fetch was in flight — defer to it
+            // instead of applying a now-stale result on top of it. Non-null: `seq`
+            // only differs from the counter once a later call has already run past
+            // its own assignment below, so the promise it set is always present.
+            return latestChangeLanguagePromise!;
+          }
+          i18n.addResourceBundle(lng, 'translation', resourceForLng, true, true);
+        }
+        // Persisted on every successful switch, not only the first time a bundle
+        // loads — otherwise switching back to an already-loaded language (EN -> PL
+        // -> EN) never updates the stored choice, and the next reload reverts to PL.
+        try {
+          localStorage.setItem(STORAGE_KEY, lng);
+        } catch {
+          // best-effort persistence only
+        }
       }
-    }
-    return nativeChangeLanguage(lng, callback);
+      return nativeChangeLanguage(lng, callback);
+    })();
+    latestChangeLanguagePromise = run;
+    return run;
   }) as typeof i18n.changeLanguage;
 })();
 
