@@ -30,11 +30,23 @@ import {
 import type { GateProgress, GateProgressStage } from './gate-progress.js';
 import { applyGateVerdict, applyPreviewGateVerdict, applyHealthVerdict } from './version-verdict.js';
 import { hasPlayableHowToPlay } from '../catalog/index-html-generator.js';
+import { isRasterSourcePath } from '../catalog/raster-assets.js';
+import { forbiddenDeliveryPathReason, forbiddenIndexHtmlWriteReason } from './delivery-path-guard.js';
+import {
+  canonicalizeUploadedSource,
+  measureUploadedSourceBytes,
+  sourceFileContentFromObject,
+  sourceFileFromObject,
+  sourceObjectBytes,
+  sourceObjectContentType,
+} from './source-file-bytes.js';
 import { parseKitSidecar } from '../platform/kit-registry.js';
 import { KIT_REGISTRY_OBJECT, parseKitRegistry, type KitRegistry } from '../platform/kit-window.js';
 import { findUnresolvedSourceLinks, formatSourceLinkError, sourceFilesToMap } from './source-link-check.js';
 import { BANNED_ANY_GUIDANCE, describeBannedAnyFinding, findBannedAnyUsages } from './ts-any-scan.js';
 import { missingFreshEditorFile } from './editor-upload-requirements.js';
+
+export { forbiddenDeliveryPathReason, forbiddenIndexHtmlWriteReason } from './delivery-path-guard.js';
 
 export type { GateProgress } from './gate-progress.js';
 
@@ -59,20 +71,7 @@ export const ALLOWED_SOURCE_FILES = DELIVERY_FIXED_FILES;
 /** A game's own `.ts` modules, the one thing it may add beyond the fixed set. */
 const EXTRA_SOURCE_PATTERN = DELIVERY_EXTRA_MODULE_PATTERN;
 
-/**
- * Config-shaped or executable-config paths an externally-authored delivery must never
- * carry. Named separately from the allowlist so the rejection reason can point at the
- * offending path as a config/exec smell rather than a vague "not deliverable".
- *
- * Deliberately *not* part of the shared delivery contract: these are platform-side
- * anti-RCE controls with no games-repo counterpart. The games repo's submit tool has
- * nothing to gain from knowing them — it never sends such a path — while a game that does
- * is either confused or hostile, and either way this side must refuse it whatever the
- * shared contract says. Tightening them is a website-only change and needs no lockstep.
- */
-const FORBIDDEN_DELIVERY_BASENAME =
-  /^(tsconfig(\..*)?\.json|package(-lock)?\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|composer\.json|\.npmrc|\.eslintrc(\..*)?|vite\.config\..+|webpack\.config\..+|rollup\.config\..+|jest\.config\..+|vitest\.config\..+)$/i;
-const FORBIDDEN_DELIVERY_EXTENSION = /\.(js|mjs|cjs|jsx|tsx|sh|bash|zsh|ps1|bat|cmd|exe|bin|yml|yaml|toml|lock)$/i;
+/** Config/exec path refusals live in delivery-path-guard.ts. */
 
 /**
  * First path segments a game may not use.
@@ -117,6 +116,8 @@ const MAX_SCANNED_DELIVERY_BYTES = 1024 * 1024;
 export interface SourceFile {
   path: string;
   content: string;
+  // Raster content is base64 of file bytes, never UTF-8.
+  encoding?: 'utf8' | 'base64';
 }
 
 /**
@@ -171,52 +172,6 @@ export class StagingGenerationMismatchError extends Error {
 /** How many times a staging manifest write may retry after a concurrent update. */
 export const MAX_STAGING_MANIFEST_RETRIES = 64;
 
-/** Hint derived from {@link ALLOWED_SOURCE_FILES} so refusal text cannot drift from the contract. */
-const ALLOWED_SOURCES_HINT = `${ALLOWED_SOURCE_FILES.join(', ')}, or your own .ts modules`;
-
-/**
- * True when a path is config-shaped or executable-config: tsconfig*, package*.json,
- * lockfiles, workflows, shell/JS entrypoints, dotfiles. The reason always names `path`.
- */
-export function forbiddenDeliveryPathReason(path: string): string | null {
-  const basename = path.split('/').pop() ?? path;
-  if (path.startsWith('.') || path.split('/').some((segment) => segment.startsWith('.'))) {
-    return (
-      `path not deliverable: ${path}. Dotfiles and hidden paths are config/executable-shaped — ` +
-      `deliver only game sources (${ALLOWED_SOURCES_HINT}).`
-    );
-  }
-  if (path === 'media' || path.startsWith('media/')) {
-    return (
-      `path not deliverable: ${path}. Media is produced by the platform gate, not uploaded — ` +
-      'deliver game sources only.'
-    );
-  }
-  if (FORBIDDEN_DELIVERY_BASENAME.test(basename) || FORBIDDEN_DELIVERY_EXTENSION.test(basename)) {
-    return (
-      `path not deliverable: ${path}. Config or executable-shaped files are refused — ` +
-      `deliver only game sources (${ALLOWED_SOURCES_HINT}).`
-    );
-  }
-  if (path.includes('.github/') || basename === 'Dockerfile' || basename === 'Makefile') {
-    return `path not deliverable: ${path}. Workflow/build files are refused — deliver only game sources.`;
-  }
-  return null;
-}
-
-// index.html is generated, never hand-authored — see byoca-mcp SKILL.md.
-export function forbiddenIndexHtmlWriteReason(path: string, content: string): string | null {
-  if (path !== 'index.html' || !content.trim()) return null;
-  return (
-    'index.html cannot be staged or patched — it is generated from GAME.json howToPlay, never hand-authored. ' +
-    'Add a valid howToPlay to GAME.json instead: at minimum howToPlay.goal and howToPlay.hint, each a ' +
-    '{"en": "...", "pl": "..."} pair (both languages, both non-empty) — that is what the generator requires ' +
-    'to produce a playable page; optional controls/scoring/mode add more rows. Without it, the game has no ' +
-    'markup and the gate refuses it as unplayable. If an index.html from an earlier round is in the way, ' +
-    'call delete_source_file("index.html").'
-  );
-}
-
 /**
  * Validates one delivery path (shape + allowlist). Used by full uploads and by
  * file-by-file staging — required-set checks (SPEC.md, TRACE, …) stay on finalize.
@@ -242,11 +197,12 @@ export function assertDeliverableSourcePath(rawPath: string): string {
 
   const allowed =
     (ALLOWED_SOURCE_FILES as readonly string[]).includes(path) ||
-    (EXTRA_SOURCE_PATTERN.test(path) && !path.includes('//'));
+    (EXTRA_SOURCE_PATTERN.test(path) && !path.includes('//')) ||
+    isRasterSourcePath(path);
   if (!allowed) {
     throw new InvalidUploadError(
       `path not deliverable: ${path}. Deliver only your own game's files ` +
-        `(${ALLOWED_SOURCE_FILES.join(', ')}, or your own .ts modules under the game).`,
+        `(${ALLOWED_SOURCE_FILES.join(', ')}, your own .ts modules, or scenes/cast/images PNG/WebP).`,
     );
   }
   return path;
@@ -270,7 +226,11 @@ export function validateSourceUpload(
     const path = assertDeliverableSourcePath(file.path);
     if (seen.has(path)) throw new InvalidUploadError(`duplicate path: ${path}`);
 
-    total += Buffer.byteLength(file.content, 'utf8');
+    try {
+      total += measureUploadedSourceBytes(path, file.content);
+    } catch (error) {
+      throw new InvalidUploadError(error instanceof Error ? error.message : `invalid raster: ${path}`);
+    }
     if (total > MAX_UPLOAD_BYTES) throw new InvalidUploadError(`upload too large: over ${MAX_UPLOAD_BYTES} bytes`);
 
     seen.add(path);
@@ -368,7 +328,7 @@ export function validateSourceUpload(
   }
 
   // Refuse missing cross-file symbols before the async gate.
-  const normalized = files.map((file) => ({ path: file.path.trim(), content: file.content }));
+  const normalized = files.map((file) => canonicalizeUploadedSource(file));
 
   // `any` is refused here rather than at the gate, for the reason the gate refuses it at
   // all: it is the difference between a mistake the checker catches and one a player
@@ -970,7 +930,11 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
 
       await Promise.all(
         files.map((file) =>
-          writeObject(`${prefix}/source/${file.path}`, Buffer.from(file.content, 'utf8'), 'text/plain; charset=utf-8'),
+          writeObject(
+            `${prefix}/source/${file.path}`,
+            sourceObjectBytes(file.path, file.content),
+            sourceObjectContentType(file.path),
+          ),
         ),
       );
 
@@ -1012,7 +976,13 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const path = assertDeliverableSourcePath(input.path);
       const indexHtmlReason = forbiddenIndexHtmlWriteReason(path, input.content);
       if (indexHtmlReason) throw new InvalidUploadError(indexHtmlReason);
-      const bytes = Buffer.byteLength(input.content, 'utf8');
+      let stored: Buffer;
+      try {
+        stored = sourceObjectBytes(path, input.content);
+      } catch (error) {
+        throw new InvalidUploadError(error instanceof Error ? error.message : `invalid file: ${path}`);
+      }
+      const bytes = stored.byteLength;
       if (bytes > 1_000_000) {
         throw new InvalidUploadError(`file too large: ${path} is ${bytes} bytes (max 1000000 per file)`);
       }
@@ -1020,7 +990,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const prefix = stagingPrefix(input.slug, input.jobId, input.roundGeneration);
       // Source bytes first — orphaned sources without a manifest entry are harmless;
       // a lost race on the manifest is retried below.
-      await writeObject(`${prefix}/source/${path}`, Buffer.from(input.content, 'utf8'), 'text/plain; charset=utf-8');
+      await writeObject(`${prefix}/source/${path}`, stored, sourceObjectContentType(path));
 
       for (let attempt = 0; attempt < MAX_STAGING_MANIFEST_RETRIES; attempt++) {
         const existing = await readStagingManifest(input.slug, input.jobId, input.roundGeneration);
@@ -1147,7 +1117,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
               `staged file missing: ${entry.path} — stage it again, then submit_sources with fromStaged=true`,
             );
           }
-          return { path: entry.path, content: body.toString('utf8') };
+          return sourceFileFromObject(entry.path, body);
         }),
       );
       return files;
@@ -1159,7 +1129,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const existing = await readStagingManifest(input.slug, input.jobId, input.roundGeneration);
       if (!existing?.manifest.files.some((file) => file.path === path)) return null;
       const body = await readObject(`${stagingPrefix(input.slug, input.jobId, input.roundGeneration)}/source/${path}`);
-      return body ? body.toString('utf8') : null;
+      return body ? sourceFileContentFromObject(path, body) : null;
     },
 
     async clearStagedSources(input) {
@@ -1227,7 +1197,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
 
     async getSourceFile(slug, version, path) {
       const body = await readObject(`${versionPrefix(slug, version)}/source/${path}`);
-      return body ? body.toString('utf8') : null;
+      return body ? sourceFileContentFromObject(path, body) : null;
     },
 
     async listVersions(slug, opts) {

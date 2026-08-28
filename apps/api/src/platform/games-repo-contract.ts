@@ -37,6 +37,8 @@
  * directions is that the allowlist here is never the narrower of the two.
  */
 
+import { RASTER_ASSET_BUDGET_BYTES } from './raster-contract.js';
+
 /** Canonical GameKit module order — must match games-repo `GAME_KIT_MODULES`. */
 export const GAME_KIT_MODULES = [
   'input',
@@ -144,7 +146,7 @@ export const MAX_SOURCE_GRAPH_MODULES = 128;
 export const GAMEKIT_PLATFORM_BYTES = 410_000;
 
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
-export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
+export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES + RASTER_ASSET_BUDGET_BYTES;
 
 /**
  * Music embedding contract (games-repo `tools/lib/assemble.ts`):
@@ -364,7 +366,7 @@ export const DELIVERY_RESERVED_SEGMENTS = [
 export const DELIVERY_MAX_FILES = 200;
 
 /** Total bytes one delivery may carry. */
-export const DELIVERY_MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
+export const DELIVERY_MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 /** The games-repo delivery contract as read off the wire. */
 export interface DeliveryContract {

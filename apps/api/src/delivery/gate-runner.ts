@@ -19,8 +19,9 @@
 // This never publishes. It records a verdict; a human still approves. Publishing on green
 // would quietly delete the moderation boundary that human review exists to be.
 
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
+import { materializeCandidate } from './gate-materialize.js';
 import type { GameProject } from '@gamedevpl/contract';
 import { assembleGameHtml } from '../platform/assemble.js';
 import { firstGateScreenshotPath } from './gate-screenshot.js';
@@ -31,7 +32,7 @@ import {
   type GateProgressLane,
   type GateProgressStage,
 } from './gate-progress.js';
-import type { GamesStore, VersionManifest } from './games-store.js';
+import type { GamesStore } from './games-store.js';
 import { isKitEngineRefSupported, kitOutdatedReport, type KitRegistry } from '../platform/kit-window.js';
 import { createLocalGamesClient } from '../catalog/local-games-repo.js';
 
@@ -535,21 +536,6 @@ export function failedOnlyOnTrace(output: string): boolean {
   const otherStageFailed =
     /(typecheck|smoke|validate|webgl|audio|ios|no-js|gfx|accept|playtest|build)\b[^\n]*(fail|error)/.test(text);
   return !otherStageFailed;
-}
-
-/** Writes a stored version's sources into the harness as the game's own directory. */
-async function materializeCandidate(store: GamesStore, manifest: VersionManifest, gameDir: string): Promise<void> {
-  // Removed first: the harness may already carry this game from the context mirror, and a
-  // candidate must be verified as *itself*, not as a merge over whatever was published.
-  await rm(gameDir, { recursive: true, force: true });
-
-  for (const relative of manifest.sourceFiles) {
-    const content = await store.getSourceFile(manifest.slug, manifest.version, relative);
-    if (content === null) throw new Error(`version ${manifest.version} claims ${relative}, which is not stored`);
-    const target = path.join(gameDir, relative);
-    await mkdir(path.dirname(target), { recursive: true });
-    await writeFile(target, content, 'utf8');
-  }
 }
 
 /**

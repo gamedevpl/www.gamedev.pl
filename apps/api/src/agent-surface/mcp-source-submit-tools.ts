@@ -1,6 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
+import { decodeRasterSourceContent, encodeRasterSourceContent, isRasterSourcePath } from '../catalog/raster-assets.js';
 import { decodeCanonicalBase64Utf8, InvalidBase64Error } from '../platform/canonical-base64.js';
 import { selfBuildDeliveryCap } from '../platform/self-build-delivery-cap.js';
 import { MAX_UPLOAD_FILES } from '../delivery/games-store.js';
@@ -292,6 +293,20 @@ export function createSourceSubmitTools(deps: SourceSubmitToolsDeps): Record<str
 
         const decodedFiles: Array<{ path: string; content: string }> = [];
         for (const file of inlineFiles) {
+          if (isRasterSourcePath(file.path)) {
+            if (file.encoding === 'utf8') {
+              return toolErr(`file ${file.path}: PNG/WebP must be sent as encoding=base64`);
+            }
+            try {
+              decodedFiles.push({
+                path: file.path,
+                content: encodeRasterSourceContent(decodeRasterSourceContent(file.path, file.content)),
+              });
+            } catch (error) {
+              return toolErr(`file ${file.path}: ${error instanceof Error ? error.message : 'invalid raster'}`);
+            }
+            continue;
+          }
           if (file.encoding === 'base64') {
             try {
               decodedFiles.push({ path: file.path, content: decodeCanonicalBase64Utf8(file.content) });

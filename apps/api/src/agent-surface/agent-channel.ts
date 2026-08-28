@@ -24,6 +24,7 @@ import {
   type UploadKind,
   type UploadTokenClaims,
 } from './agent-upload-token.js';
+import { isRasterSourcePath } from '../catalog/raster-assets.js';
 import { MAX_BUILD_PREVIEW_BYTES } from '../delivery/build-preview-limits.js';
 import { loadBuildTranscript } from '../delivery/build-transcript.js';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
@@ -1361,7 +1362,7 @@ export async function registerAgentChannelRoutes(
           .status(413)
           .send({ error: `file too large: ${path} is ${bytes.length} bytes (max 1000000 per file)` });
       }
-      const content = bytes.toString('utf8');
+      const content = isRasterSourcePath(path) ? bytes.toString('base64') : bytes.toString('utf8');
 
       const slug = record.slug;
       if (!slug) {

@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "_comment": "Cross-repo serve contract. Website half: www.gamedev.pl apps/api/src/games-repo-contract.ts + CI contract:games-repo (PR #253). Keep GAME_KIT_MODULES as an array literal in tools/lib/assemble.ts for that scraper. maxProjectBytes = authorBudgetBytes + platformCeilingBytes. The author gate is measured (assembled − platformBytes); the ceiling is serve-compat only. Feature-by-feature archaeology: docs/platform-byte-ledger.md.",
+  "_comment": "Cross-repo serve contract. Website half: www.gamedev.pl apps/api/src/games-repo-contract.ts + CI contract:games-repo (PR #253). Keep GAME_KIT_MODULES as an array literal in tools/lib/assemble.ts for that scraper. maxProjectBytes = authorBudgetBytes + platformCeilingBytes + rasterBudgetBytes. The author gate is measured (assembled minus platformBytes minus rasterBytes); the ceiling is serve-compat only. Feature-by-feature archaeology: docs/platform-byte-ledger.md.",
   "gameKitModules": [
     "input",
     "collision",
@@ -36,7 +36,8 @@
   ],
   "authorBudgetBytes": 958464,
   "platformCeilingBytes": 410000,
-  "maxProjectBytes": 1368464,
+  "rasterBudgetBytes": 3145728,
+  "maxProjectBytes": 4514192,
   "audio": {
     "musicField": "string",
     "musicTracksField": "string[]",
@@ -45,6 +46,14 @@
       "assets": "__GAME_AUDIO_ASSETS__",
       "defaultMusic": "__GAME_AUDIO_MUSIC__",
       "tracks": "__GAME_MUSIC_TRACKS__"
+    }
+  },
+  "images": {
+    "manifestField": "images",
+    "injectedGlobals": {
+      "assets": "__GAME_IMAGE_ASSETS__",
+      "elements": "__GAME_IMAGE_ELEMENTS__",
+      "progress": "__GAME_IMAGE_PROGRESS__"
     }
   }
 }

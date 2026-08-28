@@ -25,6 +25,8 @@ import {
   SOURCE_GRAPH_BUDGET_BYTES,
   type GameKitModuleName,
 } from '../platform/games-repo-contract.js';
+import { appendDeclaredImageSources, bakeGameImageAssets, resolveGameImageBytes } from './bake-game-images.js';
+import { parseGameManifest } from './parse-game-manifest.js';
 import { isRateLimitResponse } from '../platform/github-rate-limit.js';
 import {
   generateIndexHtml,
@@ -202,91 +204,8 @@ export function resolveGameTypeScriptPath(resolveDir: string, specifier: string)
   return `${resolvedPath}.ts`;
 }
 
-interface GameManifest {
-  engine?: { modules?: unknown };
-  audio?: { sounds?: unknown; music?: unknown; musicTracks?: unknown };
-}
-
 interface SourcedAudioCatalog {
   sounds?: Record<string, { mime?: unknown }>;
-}
-
-interface ParsedGameManifest {
-  modules: GameKitModuleName[];
-  sounds: string[];
-  /**
-   * Selected BGM track id from GAME.json (`audio.music` string). Null when the
-   * audio module is off. Matches games-repo `tools/lib/assemble.ts`.
-   */
-  music: string | null;
-  /**
-   * Extra BGM ids from GAME.json (`audio.musicTracks`), embedded alongside `music` so a
-   * game can change score mid-round without a fetch. Empty for almost every game.
-   */
-  musicTracks: string[];
-}
-
-function isKebabCaseName(value: unknown): value is string {
-  return typeof value === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(value);
-}
-
-function parseGameManifest(source: string): ParsedGameManifest {
-  const manifest = JSON.parse(source) as GameManifest;
-  const modules = manifest.engine?.modules;
-  if (
-    !Array.isArray(modules) ||
-    modules.some(
-      (moduleName) =>
-        typeof moduleName !== 'string' || !GAME_KIT_MODULES.some((allowedModule) => allowedModule === moduleName),
-    )
-  ) {
-    throw new Error('game manifest contains invalid engine modules');
-  }
-
-  const expectedOrder = GAME_KIT_MODULES.filter((moduleName) => modules.includes(moduleName));
-  if (new Set(modules).size !== modules.length || modules.join(',') !== expectedOrder.join(',')) {
-    throw new Error('game manifest engine modules are duplicated or out of order');
-  }
-
-  if (!modules.includes('audio')) {
-    return { modules: modules as GameKitModuleName[], sounds: [], music: null, musicTracks: [] };
-  }
-
-  const sounds = manifest.audio?.sounds;
-  if (
-    !Array.isArray(sounds) ||
-    sounds.length === 0 ||
-    new Set(sounds).size !== sounds.length ||
-    !sounds.every(isKebabCaseName)
-  ) {
-    throw new Error('game manifest contains invalid audio sounds');
-  }
-
-  // Games-repo assemble: `audio.music` is a single track name string. Injected as
-  // `window.__GAME_AUDIO_MUSIC__ = "<name>"`, and it is the track that autoplays.
-  const music = manifest.audio?.music;
-  if (!isKebabCaseName(music)) {
-    throw new Error('game manifest contains invalid audio music');
-  }
-
-  // `audio.musicTracks` is optional. Mirrors games-repo validate Check 3: non-empty when
-  // present, kebab-case names, no duplicates, and never a repeat of `audio.music`.
-  const rawTracks = manifest.audio?.musicTracks;
-  let musicTracks: string[] = [];
-  if (rawTracks !== undefined) {
-    if (
-      !Array.isArray(rawTracks) ||
-      rawTracks.length === 0 ||
-      new Set(rawTracks).size !== rawTracks.length ||
-      !rawTracks.every(isKebabCaseName) ||
-      rawTracks.includes(music)
-    ) {
-      throw new Error('game manifest contains invalid audio musicTracks');
-    }
-    musicTracks = rawTracks;
-  }
-
-  return { modules: modules as GameKitModuleName[], sounds, music, musicTracks };
 }
 
 /**
@@ -1390,9 +1309,12 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       for (const entry of fixedEntries) {
         if (entry) sources[entry[0]] = entry[1];
       }
-      // Every game relies on this — neither file is ever committed anymore.
       const manifestSource = sources['GAME.json'];
       if (manifestSource) {
+        await appendDeclaredImageSources(sources, manifestSource, (relPath) =>
+          readRawBytes(`games/${slug}/${relPath}`, ref),
+        );
+        // Every game relies on this — neither file is ever committed anymore.
         if (!sources['index.html']?.trim()) {
           const title = sources['SPEC.md'] ? parseSpecTitle(sources['SPEC.md']) : null;
           const generated = generateIndexHtmlFromManifest(manifestSource, title ?? slug);
@@ -1576,6 +1498,18 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         assetChunks.unshift(`window.__GAME_AUDIO_ASSETS__ = Object.freeze(${JSON.stringify(assets)});`);
       }
 
+      let loaderHtml = '';
+      const bakedImages = await bakeGameImageAssets(manifest.images, (relPath, name) =>
+        resolveGameImageBytes(relPath, name, overrides, options?.noRefFallback, () =>
+          readRawBytes(`games/${slug}/${relPath}`, ref),
+        ),
+      );
+      if (bakedImages) {
+        assetChunks.push(bakedImages.assetChunk);
+        assetChunks.push(bakedImages.bootJs);
+        loaderHtml = bakedImages.loaderHtml;
+      }
+
       const assetsJs = assetChunks.length > 0 ? `${assetChunks.join('\n')}\n` : '';
       const bundleStartedAt = Date.now();
       const transpiledSources = [coreJs, ...availableModuleSources];
@@ -1587,7 +1521,7 @@ ${gameJs}`;
       const bundledCss = `${gameShellCss}\n${resolvedStyleCss}`;
 
       return {
-        indexHtml: resolvedIndexHtml,
+        indexHtml: `${loaderHtml}${resolvedIndexHtml}`,
         gameJs: bundledJs,
         styleCss: bundledCss,
         title,
