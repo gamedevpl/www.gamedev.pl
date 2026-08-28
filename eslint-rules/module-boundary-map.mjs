@@ -363,6 +363,7 @@ const FILE_BUCKET = {
   'game-follow-routes': 'notifications',
   'email-routes': 'notifications',
   'email-templates': 'notifications',
+  'beta-welcome-email': 'notifications',
   mailer: 'notifications',
   'push-routes': 'notifications',
   pusher: 'notifications',

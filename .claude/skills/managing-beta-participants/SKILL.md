@@ -108,6 +108,39 @@ npm run beta:approve -- user@example.com --reject
 npm run beta:approve -- user@example.com --pending
 ```
 
+### 3. Waitlist welcome mail (`beta:welcome`)
+
+When a spot opens, mail the people already on the waitlist. This is the email the splash
+promised ("we'll email you when a spot opens up"), not a marketing broadcast. **Dry-run is
+the default — nothing is sent until you pass `--send`.**
+
+```bash
+# Preview (no send, no Firestore writes)
+npm run beta:welcome -w @gamedevpl/api
+npm run beta:welcome -w @gamedevpl/api -- --only you@example.com
+npm run beta:welcome -w @gamedevpl/api -- --status all --limit 5
+
+# Let pending people in: approve + send. Requires RESEND_API_KEY.
+export RESEND_API_KEY='re_...'
+npm run beta:welcome -w @gamedevpl/api -- --approve --send --only you@example.com
+```
+
+Language is chosen from the waitlist `locale` (the UI language they joined in). If that
+field is missing, a `.pl` email domain becomes Polish; everything else is English. First
+name comes from the Google/Apple display name when it looks like a name. `--locale pl|en`
+overrides both.
+
+From: `Grzegorz <grzegorz@gamedev.pl>` (override with `--from` or `BETA_WELCOME_FROM`).
+Reply-To is the same address, so a reply reaches the owner once the Workspace alias exists.
+Resend must be allowed to send as `@gamedev.pl` — today only `mail.gamedev.pl` is verified;
+see [`docs/deployment.md`](../../docs/deployment.md) → "Sending the waitlist welcome".
+Same ADC/Firestore setup as `beta:approve`.
+
+`--send` to pending people requires `--approve`, otherwise they would get "you're in" and
+still hit the wall. Successful sends stamp `welcomeEmailedAt` so a second run skips them
+(`--force` to resend). Rejected rows, `bot:` accounts, and entries without an email are
+skipped.
+
 ---
 
 ## Environment Variable Allowlists (Redeploy-based Fallback)
