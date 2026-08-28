@@ -237,7 +237,7 @@ interface ParsedGameManifest {
    * game can change score mid-round without a fetch. Empty for almost every game.
    */
   musicTracks: string[];
-  /** GAME.json `images` name → path; empty when the game ships no rasters. */
+  // GAME.json images map; empty when the game has no rasters.
   images: ImageManifest;
 }
 

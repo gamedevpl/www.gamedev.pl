@@ -146,7 +146,7 @@ const MAX_SCANNED_DELIVERY_BYTES = 1024 * 1024;
 export interface SourceFile {
   path: string;
   content: string;
-  /** Raster paths store canonical base64 of the file bytes, never a UTF-8 transcode. */
+  // Raster content is base64 of file bytes, never UTF-8.
   encoding?: 'utf8' | 'base64';
 }
 

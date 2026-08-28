@@ -1,7 +1,7 @@
 import { decodeCanonicalBase64, InvalidBase64Error } from '../platform/canonical-base64.js';
 import { DELIVERY_EXTRA_ASSET_PATTERN, RASTER_ASSET_MAX_FILE_BYTES } from '../platform/games-repo-contract.js';
 
-/** Same shape games-repo `tools/lib/raster-assets.ts` accepts. */
+// Same shape as games-repo tools/lib/raster-assets.ts.
 const HANDLE = /^[a-z][a-z0-9-]*$/;
 const REL_PATH = /^(?:scenes|cast|images)\/[a-z0-9][a-z0-9/_-]*\.(?:png|webp)$/i;
 
@@ -36,7 +36,7 @@ export function isRasterSourcePath(path: string): boolean {
   return DELIVERY_EXTRA_ASSET_PATTERN.test(path) && !path.includes('//');
 }
 
-/** Decode a staged/delivered raster. Content is canonical base64 of the file bytes. */
+// Decode staged raster; content is canonical base64.
 export function decodeRasterSourceContent(path: string, content: string): Buffer {
   let bytes: Buffer;
   try {
@@ -93,7 +93,7 @@ function isJpeg(bytes: Uint8Array): boolean {
   return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
 }
 
-/** Reject corrupt bytes and extension-mismatched formats before they become data URIs. */
+// Reject junk or extension-mismatched image bytes.
 export function assertImageSignature(name: string, relPath: string, bytes: Uint8Array): void {
   const prefix = `game image "${name}"`;
   if (relPath.toLowerCase().endsWith('.webp')) {
@@ -118,7 +118,7 @@ export function assertImageFileSize(name: string, bytes: number): void {
   }
 }
 
-/** Loader chrome shown while the document parses and embedded bitmaps decode. */
+// Loader chrome while embedded bitmaps decode.
 export function imageLoaderHtml(): string {
   return `    <style>
       .gk-load{position:fixed;inset:0;z-index:1100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;margin:0;background:#070b14;color:#eff8ff;font:600 16px system-ui,sans-serif}

@@ -184,7 +184,7 @@ describe('extractDeliveryContract', () => {
     expect(contract.extraModulePattern).toBe(DELIVERY_EXTRA_MODULE_PATTERN.source);
     expect([...contract.reservedSegments].sort()).toEqual([...DELIVERY_RESERVED_SEGMENTS].sort());
     expect(contract.maxFiles).toBe(DELIVERY_MAX_FILES);
-    // Caps may be website-ahead (this side accepts more than the snapshot advertises).
+    // Caps may be website-ahead of the snapshot.
     expect(contract.maxUploadBytes).toBeLessThanOrEqual(DELIVERY_MAX_UPLOAD_BYTES);
   });
 
