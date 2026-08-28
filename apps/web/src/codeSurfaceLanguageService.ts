@@ -1,4 +1,5 @@
 import type { WorkerShape } from '@valtown/codemirror-ts/worker';
+import { bindLanguageWorker } from './codeSurfaceLanguageBind.js';
 
 // Main-thread half of GA-02's worker. Advisory only, never gates.
 
@@ -7,6 +8,7 @@ export type CodeSurfaceLanguageService = {
   worker: Omit<WorkerShape, 'initialize'>;
   // Seeds/edits a sibling file — open-file edits go through tsSync().
   updateFile: (path: string, code: string) => void;
+  deleteFile?: (path: string) => void;
   destroy: () => void;
 };
 
@@ -32,19 +34,13 @@ export async function createCodeSurfaceLanguageService(
     // Dynamic import: static `import 'comlink'` here would leak into the main bundle.
     const Comlink = await import('comlink');
     innerWorker = new Worker(new URL('./tsWorker.ts', import.meta.url), { type: 'module' });
-    const worker = Comlink.wrap<WorkerShape>(innerWorker);
+    const worker = Comlink.wrap<WorkerShape & { deleteFile(path: string): void }>(innerWorker);
     await worker.initialize();
     if (kitDeclaration) {
       await worker.updateFile({ path: toVfsPath(KIT_DECLARATION_PATH), code: kitDeclaration });
     }
     await Promise.all(Object.entries(files).map(([path, code]) => worker.updateFile({ path: toVfsPath(path), code })));
-    return {
-      worker,
-      updateFile: (path, code) => {
-        void worker.updateFile({ path: toVfsPath(path), code });
-      },
-      destroy: () => innerWorker?.terminate(),
-    };
+    return bindLanguageWorker(worker, toVfsPath, () => innerWorker?.terminate());
   } catch {
     innerWorker?.terminate();
     return null;
