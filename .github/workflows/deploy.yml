@@ -84,6 +84,7 @@ jobs:
           BETA_ALLOWED_UIDS: ${{ vars.BETA_ALLOWED_UIDS }}
           CODE_LANE: ${{ vars.CODE_LANE }}
           CODE_SURFACE: ${{ vars.CODE_SURFACE }}
+          CLI_SURFACE: ${{ vars.CLI_SURFACE }}
           DIGEST_SWEEP_AUDIENCE: ${{ vars.DIGEST_SWEEP_AUDIENCE }}
           DISPATCH_REAPER_AUDIENCE: ${{ vars.DISPATCH_REAPER_AUDIENCE }}
           EDITORKIT_V2: ${{ vars.EDITORKIT_V2 }}
@@ -329,6 +330,13 @@ jobs:
           CODE_SURFACE_VAL="${CODE_SURFACE}"
           if [ -n "$CODE_SURFACE_VAL" ]; then
             ENV_VARS="${ENV_VARS}|CODE_SURFACE=${CODE_SURFACE_VAL}"
+          fi
+
+          # Creator CLI (gamedev) surface: OAuth `creator` scope, /cli page, connect
+          # card tab. Default off until the pilot; a kill switch, not a cohort gate.
+          CLI_SURFACE_VAL="${CLI_SURFACE}"
+          if [ -n "$CLI_SURFACE_VAL" ]; then
+            ENV_VARS="${ENV_VARS}|CLI_SURFACE=${CLI_SURFACE_VAL}"
           fi
 
           # MCP Apps views (SEP-1865) on /api/mcp: a ui:// resource registry and _meta.ui

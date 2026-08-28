@@ -61,6 +61,7 @@ export interface VisitFunnel {
    */
   assisting?: Array<{ step: string; visits: number }>;
   coding?: Array<{ step: string; visits: number }>;
+  cli?: Array<{ step: string; visits: number }>;
   completion?: {
     requests: number;
     shown: number;

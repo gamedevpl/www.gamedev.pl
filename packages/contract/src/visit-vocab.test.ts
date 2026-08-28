@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   ASSIST_STEPS,
   BETA_WELCOME_STEPS,
+  CLI_ADAPTERS,
+  CLI_INSTALL_CHANNELS,
+  CLI_PLATFORM_OS,
+  CLI_STEPS,
+  CLI_VERIFY_STAGES,
   CODE_COMPLETION_KINDS,
   CODE_COMPLETION_OUTCOMES,
   CODE_STEPS,
@@ -34,6 +39,7 @@ describe('visit vocab', () => {
       'game',
       'create',
       'party',
+      'cli',
       'notFound',
     ]);
   });
@@ -194,5 +200,26 @@ describe('visit vocab', () => {
 
   it('lists code completion outcomes', () => {
     expect(CODE_COMPLETION_OUTCOMES).toEqual(['shown', 'empty', 'failed']);
+  });
+
+  it('lists cli funnel steps in order', () => {
+    expect(CLI_STEPS).toEqual([
+      'installed',
+      'authorized',
+      'first_turn',
+      'build_requested',
+      'delivered',
+      'published',
+      'delegate_offered',
+      'delegate_used',
+      'verify_failed',
+    ]);
+  });
+
+  it('lists cli dimension vocabularies', () => {
+    expect(CLI_INSTALL_CHANNELS).toEqual(['curl', 'ps1', 'update']);
+    expect(CLI_PLATFORM_OS).toEqual(['linux', 'darwin', 'win32']);
+    expect(CLI_ADAPTERS).toEqual(['claude', 'codex', 'gemini', 'vibe', 'custom']);
+    expect(CLI_VERIFY_STAGES).toEqual(['typecheck', 'check_static', 'check_game']);
   });
 });

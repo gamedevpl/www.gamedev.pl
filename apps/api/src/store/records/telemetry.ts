@@ -101,7 +101,8 @@ export interface VisitEvent {
     | 'assist_step'
     | 'remix_step'
     | 'code_step'
-    | 'code_completion';
+    | 'code_completion'
+    | 'cli_step';
   /** Server-anchored instant, derived like `TelemetryEvent.at`. */
   at: string;
   /** Milliseconds from visit start — the trustworthy measure of within-visit timing. */
@@ -162,6 +163,10 @@ export interface VisitEvent {
   utmSource?: string;
   utmMedium?: string;
   utmCampaign?: string;
+  channel?: string;
+  os?: string;
+  adapter?: string;
+  stage?: string;
 }
 
 /**

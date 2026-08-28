@@ -13,6 +13,7 @@ export const VISIT_ROUTE_KINDS = [
   'game',
   'create',
   'party',
+  'cli',
   'notFound',
 ] as const;
 export type VisitRouteKind = (typeof VISIT_ROUTE_KINDS)[number];
@@ -158,3 +159,28 @@ export type CodeCompletionKind = (typeof CODE_COMPLETION_KINDS)[number];
 
 export const CODE_COMPLETION_OUTCOMES = ['shown', 'empty', 'failed'] as const;
 export type CodeCompletionOutcome = (typeof CODE_COMPLETION_OUTCOMES)[number];
+
+export const CLI_STEPS = [
+  'installed',
+  'authorized',
+  'first_turn',
+  'build_requested',
+  'delivered',
+  'published',
+  'delegate_offered',
+  'delegate_used',
+  'verify_failed',
+] as const;
+export type CliStep = (typeof CLI_STEPS)[number];
+
+export const CLI_INSTALL_CHANNELS = ['curl', 'ps1', 'update'] as const;
+export type CliInstallChannel = (typeof CLI_INSTALL_CHANNELS)[number];
+
+export const CLI_PLATFORM_OS = ['linux', 'darwin', 'win32'] as const;
+export type CliPlatformOs = (typeof CLI_PLATFORM_OS)[number];
+
+export const CLI_ADAPTERS = ['claude', 'codex', 'gemini', 'vibe', 'custom'] as const;
+export type CliAdapter = (typeof CLI_ADAPTERS)[number];
+
+export const CLI_VERIFY_STAGES = ['typecheck', 'check_static', 'check_game'] as const;
+export type CliVerifyStage = (typeof CLI_VERIFY_STAGES)[number];
