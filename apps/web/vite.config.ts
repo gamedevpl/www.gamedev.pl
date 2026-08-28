@@ -8,6 +8,7 @@ import { defineConfig } from 'vite';
 import { isKnownSpaShellPath, looksLikeStaticAsset } from '../api/src/platform/spa-paths.js';
 import {
   type BundleFile,
+  deferredAssetEntries,
   reachableFromShell,
   replaceBuildManifest,
   shellAssetEntries,
@@ -106,15 +107,17 @@ function shellPrecache(): Plugin {
             : { kind: 'asset', text: typeof output.source === 'string' ? output.source : undefined };
       }
       const reachable = reachableFromShell(files, indexHtml);
+      const isDeferred = (fileName: string) => !reachable.has(fileName);
 
-      const shell = shellAssetEntries(Object.keys(bundle), (fileName) => !reachable.has(fileName));
+      const shell = shellAssetEntries(Object.keys(bundle), isDeferred);
+      const deferred = deferredAssetEntries(Object.keys(bundle), isDeferred);
 
       const contents = await Promise.all(shell.map((entry) => readFile(path.join(outDir, entry.slice(1)))));
       const revision = shellRevision(contents, (input) => createHash('sha256').update(input).digest('hex'));
 
       const swPath = path.join(outDir, 'sw.js');
       const source = await readFile(swPath, 'utf8');
-      await writeFile(swPath, replaceBuildManifest(source, { revision, shell }));
+      await writeFile(swPath, replaceBuildManifest(source, { revision, shell, deferred }));
 
       const bytes = contents.reduce((sum, buffer) => sum + buffer.byteLength, 0);
       this.info(`shell precache: ${shell.length} files, ${(bytes / 1024).toFixed(0)} kB, revision ${revision}`);

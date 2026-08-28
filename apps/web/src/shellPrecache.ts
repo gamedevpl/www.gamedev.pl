@@ -37,6 +37,8 @@ export interface ShellManifest {
   revision: string;
   /** Absolute, same-origin paths, sorted so the manifest is reproducible. */
   shell: string[];
+  /** This build's own deliberately-unprecached assets — see `deferredAssetEntries`. */
+  deferred: string[];
 }
 
 /**
@@ -62,6 +64,33 @@ export function shellAssetEntries(
 
   for (const fileName of emittedFileNames) {
     if (PRECACHEABLE_ASSET.test(fileName) && !isDeferred(fileName)) {
+      entries.add(`/${fileName.replace(/^\/+/, '')}`);
+    }
+  }
+
+  return [...entries].sort();
+}
+
+/**
+ * The complement of `shellAssetEntries`: this build's own assets that are deliberately
+ * left out of the shell cache — a route's lazy chunk, or a worker bundle it alone
+ * references.
+ *
+ * `public/sw.js` needs this list too, and not just for symmetry: without it, a fetch
+ * failure for one of these reads identically to a genuinely stale hash left by a client
+ * open across a deploy, and the worker "heals" by deleting the whole shell cache and
+ * force-navigating every open tab — a disproportionate reaction to one route's chunk
+ * having an ordinary network hiccup. Naming the current build's own deferred assets is
+ * what lets the worker tell "this is fine, just fetch it" from "this shell has rotted".
+ */
+export function deferredAssetEntries(
+  emittedFileNames: Iterable<string>,
+  isDeferred: (fileName: string) => boolean,
+): string[] {
+  const entries = new Set<string>();
+
+  for (const fileName of emittedFileNames) {
+    if (PRECACHEABLE_ASSET.test(fileName) && isDeferred(fileName)) {
       entries.add(`/${fileName.replace(/^\/+/, '')}`);
     }
   }

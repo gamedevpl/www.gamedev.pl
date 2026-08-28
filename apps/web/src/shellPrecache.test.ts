@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildManifestLine,
   CACHE_PREFIX,
+  deferredAssetEntries,
   reachableFromShell,
   replaceBuildManifest,
   SHELL_EXTRAS,
@@ -73,6 +74,27 @@ describe('shellAssetEntries', () => {
   it('precaches everything when no deferred predicate is given', () => {
     const entries = shellAssetEntries(['assets/index-abc.js']);
     expect(entries).toContain('/assets/index-abc.js');
+  });
+});
+
+describe('deferredAssetEntries', () => {
+  it('is the complement of shellAssetEntries for the same predicate', () => {
+    const files = ['assets/index-abc.js', 'assets/AdminConsole-def.js', 'assets/index-abc.js.map'];
+    const isDeferred = (fileName: string) => fileName === 'assets/AdminConsole-def.js';
+
+    const deferred = deferredAssetEntries(files, isDeferred);
+    expect(deferred).toEqual(['/assets/AdminConsole-def.js']);
+
+    // Never both: a build's own asset is either something the shell precaches, or
+    // something public/sw.js is told is fine to fetch on demand — not both, and not
+    // neither, since either gap is exactly what let a deferred chunk's ordinary fetch
+    // failure get treated as a sign of shell rot.
+    const shell = shellAssetEntries(files, isDeferred);
+    for (const entry of deferred) expect(shell).not.toContain(entry);
+  });
+
+  it('is empty when nothing is deferred', () => {
+    expect(deferredAssetEntries(['assets/index-abc.js'], () => false)).toEqual([]);
   });
 });
 
@@ -208,7 +230,11 @@ describe('shellRevision', () => {
 });
 
 describe('replaceBuildManifest', () => {
-  const manifest = { revision: 'cafef00d', shell: ['/index.html', '/assets/index-abc.js'] };
+  const manifest = {
+    revision: 'cafef00d',
+    shell: ['/index.html', '/assets/index-abc.js'],
+    deferred: ['/assets/AdminConsole-def.js'],
+  };
 
   it('replaces the placeholder with the real manifest', () => {
     const result = replaceBuildManifest(
@@ -239,7 +265,7 @@ describe('replaceBuildManifest', () => {
 
 describe('the worker source this module rewrites', () => {
   it('carries the placeholder line the build replaces', () => {
-    expect(() => replaceBuildManifest(SW_SOURCE, { revision: 'x', shell: [] })).not.toThrow();
+    expect(() => replaceBuildManifest(SW_SOURCE, { revision: 'x', shell: [], deferred: [] })).not.toThrow();
   });
 
   it('names its caches with the prefix declared here', () => {
@@ -303,6 +329,19 @@ describe('the worker source this module rewrites', () => {
     expect(SW_SOURCE).toContain('await caches.delete(CACHE)');
     expect(SW_SOURCE).toContain('client.navigate');
     expect(SW_SOURCE).toContain('legacyAssetOrHeal');
+  });
+
+  it('never heals the shell for a current build’s own deferred chunk failing to fetch', () => {
+    // CP-4 found this: once a route's lazy chunk is correctly left out of the precache,
+    // every request for it goes through the same branch a genuinely stale legacy hash
+    // does — and that branch nukes the whole shell cache and force-navigates every open
+    // tab on a failure. An ordinary network hiccup loading one optional route must not
+    // do that; only a hash this build has never heard of should.
+    const handler = SW_SOURCE.slice(SW_SOURCE.indexOf("self.addEventListener('fetch'"));
+    const deferredCheck = handler.indexOf('BUILD.deferred.includes(url.pathname)');
+    const legacyCheck = handler.indexOf('legacyAssetOrHeal');
+    expect(deferredCheck).toBeGreaterThan(-1);
+    expect(deferredCheck).toBeLessThan(legacyCheck);
   });
 
   it('ships inert, so a dev worker caches no live module', () => {

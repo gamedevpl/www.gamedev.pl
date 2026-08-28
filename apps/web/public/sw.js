@@ -29,7 +29,7 @@
 
 // Replaced at build time with the real asset list. Left inert here so the worker runs
 // as-is in dev, where the "bundle" is a live module graph that must never be cached.
-const BUILD = { revision: 'dev', shell: [] }; // __BUILD_MANIFEST__
+const BUILD = { revision: 'dev', shell: [], deferred: [] }; // __BUILD_MANIFEST__
 
 // Must match CACHE_PREFIX in src/shellPrecache.ts (asserted by shellPrecache.test.ts).
 const CACHE_PREFIX = 'gamedevpl-shell-';
@@ -161,6 +161,16 @@ self.addEventListener('fetch', (event) => {
   // is exact by construction and there is nothing to revalidate.
   if (hasPrecache && BUILD.shell.includes(url.pathname)) {
     event.respondWith(precachedOrNetwork(request, url.pathname));
+    return;
+  }
+
+  // A route's own lazy(() => import(...)) chunk, or something only it references (a web
+  // worker build, say) — deliberately never precached, so an ordinary network fetch is
+  // all this needs. Healing the shell for it would be wrong: this file failing to load
+  // says nothing about whether the installed shell is intact, and RouteChunkBoundary
+  // already recovers the one navigation that asked for it.
+  if (BUILD.deferred.includes(url.pathname)) {
+    event.respondWith(fetch(request));
     return;
   }
 
