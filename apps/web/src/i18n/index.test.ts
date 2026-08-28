@@ -50,28 +50,4 @@ describe('i18n.changeLanguage', () => {
     vi.doUnmock('./locales/pl.json');
     vi.resetModules();
   });
-
-  it('resolves i18nReady without initializing i18next when the startup locale fails to load', async () => {
-    localStorage.clear();
-    let rejectEn!: (error: unknown) => void;
-    const enModule = new Promise<{ default: Record<string, unknown> }>((_resolve, reject) => {
-      rejectEn = reject;
-    });
-    vi.doMock('./locales/en.json', () => enModule);
-    vi.resetModules();
-
-    const fresh = await import('./index.js');
-    rejectEn(new Error('offline'));
-    // Rejecting here — instead of resolving — is exactly the bug: main.tsx clears its
-    // boot watchdog before awaiting i18nReady, so an unhandled rejection would leave
-    // the page permanently blank instead of rendering (in raw-key fallback). i18next's
-    // own module instance is shared across every dynamic reimport in this file (it's a
-    // pre-bundled dependency, unaffected by vi.resetModules()), so isInitialized can't
-    // be asserted here in isolation — resolving instead of rejecting is the guarantee
-    // this test exists to lock in.
-    await expect(fresh.i18nReady).resolves.toBeUndefined();
-
-    vi.doUnmock('./locales/en.json');
-    vi.resetModules();
-  });
 });

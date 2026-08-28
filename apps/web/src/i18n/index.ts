@@ -46,7 +46,7 @@ async function loadLocale(language: SupportedLanguage): Promise<Record<string, u
  */
 export const i18nReady: Promise<void> = (async () => {
   const language = detectLanguage();
-  let resource: Record<string, unknown>;
+  let resource: Record<string, unknown> | undefined;
   try {
     resource = await loadLocale(language);
   } catch {
@@ -54,14 +54,16 @@ export const i18nReady: Promise<void> = (async () => {
     // its HTTP cache evicted the entry, since sw.js serves deferred locale chunks
     // network-only by design (see shellPrecache.ts). main.tsx clears the boot watchdog
     // before awaiting this promise, so rejecting here would leave the page permanently
-    // blank instead of rendering. Resolving without initializing i18next lets render()
-    // proceed; react-i18next falls back to raw keys until a locale load succeeds (e.g.
-    // on the next reload with connectivity), which beats a page that never appears.
-    return;
+    // blank instead of rendering. i18next still gets initialized below, just without a
+    // resource bundle for `language` — react-i18next falls back to raw keys, and because
+    // hasResourceBundle(language) is now false, the changeLanguage wrapper installed
+    // below treats a later switch back to this same language as a genuine retry (e.g.
+    // the language switcher itself, once connectivity returns) instead of a permanent
+    // dead end that only a full reload could recover from.
   }
   await i18n.use(initReactI18next).init({
     lng: language,
-    resources: { [language]: { translation: resource } },
+    resources: resource ? { [language]: { translation: resource } } : {},
     // No fallbackLng: with it, i18next preloads that language's resources too on every
     // init and every changeLanguage — for a Polish visitor that means downloading English
     // anyway, undoing the split for anyone but English visitors. en/pl are kept at 100% key
