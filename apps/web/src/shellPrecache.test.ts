@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildManifestLine,
   CACHE_PREFIX,
+  reachableFromShell,
   replaceBuildManifest,
   SHELL_EXTRAS,
   shellAssetEntries,
@@ -69,9 +70,109 @@ describe('shellAssetEntries', () => {
     expect(entries).not.toContain('/assets/AdminConsole-def.js');
   });
 
-  it('precaches everything when no dynamic-entry predicate is given', () => {
+  it('precaches everything when no deferred predicate is given', () => {
     const entries = shellAssetEntries(['assets/index-abc.js']);
     expect(entries).toContain('/assets/index-abc.js');
+  });
+});
+
+describe('reachableFromShell', () => {
+  it('follows a static entry chunk into what it imports, and stops at what it does not', () => {
+    // index imports shared.js; AdminConsole is a lazy chunk index never statically imports.
+    const reachable = reachableFromShell(
+      {
+        'assets/index-abc.js': { kind: 'chunk', text: '', isEntry: true, imports: ['assets/shared-def.js'] },
+        'assets/shared-def.js': { kind: 'chunk', text: 'export const x = 1' },
+        'assets/AdminConsole-ghi.js': { kind: 'chunk', text: 'export const AdminConsole = 1', isDynamicEntry: true },
+      },
+      '<script type="module" src="/assets/index-abc.js"></script>',
+    );
+
+    expect(reachable.has('assets/index-abc.js')).toBe(true);
+    expect(reachable.has('assets/shared-def.js')).toBe(true);
+    expect(reachable.has('assets/AdminConsole-ghi.js')).toBe(false);
+  });
+
+  it('does not follow a lazy chunk’s filename into a chunk that only prefetches it', () => {
+    // The bug this guards against: Vite inlines a __vite__mapDeps prefetch array right at
+    // a lazy(() => import(...)) call site, so the entry chunk's own *text* names every
+    // lazy chunk it can ever trigger — that is not the same as needing it up front. Only
+    // `imports` (never a chunk's text) may decide chunk-to-chunk reachability.
+    const reachable = reachableFromShell(
+      {
+        'assets/index-abc.js': {
+          kind: 'chunk',
+          text: 'const __vite__mapDeps=(i)=>["assets/AdminConsole-ghi.js"][i]',
+          isEntry: true,
+          imports: [],
+        },
+        'assets/AdminConsole-ghi.js': { kind: 'chunk', text: 'export const AdminConsole = 1', isDynamicEntry: true },
+      },
+      '<script type="module" src="/assets/index-abc.js"></script>',
+    );
+
+    expect(reachable.has('assets/AdminConsole-ghi.js')).toBe(false);
+  });
+
+  it('reaches a worker bundle only through the chunk that constructs it', () => {
+    // Vite emits a `new Worker(new URL(...))` build as a plain asset — no isEntry, no
+    // imports, nothing but text that names it from inside the chunk that builds it.
+    const reachableViaStaticChunk = reachableFromShell(
+      {
+        'assets/index-abc.js': {
+          kind: 'chunk',
+          text: 'new Worker(new URL("assets/tsWorker-xyz.js"))',
+          isEntry: true,
+        },
+        'assets/tsWorker-xyz.js': { kind: 'asset', text: 'importScripts("assets/lib.dom.d-uvw.js")' },
+        'assets/lib.dom.d-uvw.js': { kind: 'asset', text: '// lib' },
+      },
+      '<script src="/assets/index-abc.js"></script>',
+    );
+    expect(reachableViaStaticChunk.has('assets/tsWorker-xyz.js')).toBe(true);
+    expect(reachableViaStaticChunk.has('assets/lib.dom.d-uvw.js')).toBe(true);
+
+    // Same worker, but only CreatorStudioView (a lazy chunk) builds it — neither the
+    // worker nor the TypeScript lib files it references should count as reachable.
+    const reachableViaLazyChunk = reachableFromShell(
+      {
+        'assets/index-abc.js': { kind: 'chunk', text: 'no worker mentioned here', isEntry: true },
+        'assets/CreatorStudioView-def.js': {
+          kind: 'chunk',
+          text: 'new Worker(new URL("assets/tsWorker-xyz.js"))',
+          isDynamicEntry: true,
+        },
+        'assets/tsWorker-xyz.js': { kind: 'asset', text: 'importScripts("assets/lib.dom.d-uvw.js")' },
+        'assets/lib.dom.d-uvw.js': { kind: 'asset', text: '// lib' },
+      },
+      '<script src="/assets/index-abc.js"></script>',
+    );
+    expect(reachableViaLazyChunk.has('assets/tsWorker-xyz.js')).toBe(false);
+    expect(reachableViaLazyChunk.has('assets/lib.dom.d-uvw.js')).toBe(false);
+  });
+
+  it('reaches a stylesheet and its fonts through index.html, not the entry chunk', () => {
+    // A stylesheet is <link>ed from index.html, never imported from JS; its fonts are
+    // named only inside its own CSS text, via @font-face url().
+    const reachable = reachableFromShell(
+      {
+        'assets/index-abc.js': { kind: 'chunk', text: 'no css mentioned here', isEntry: true },
+        'assets/index-def.css': { kind: 'asset', text: "@font-face{src:url('assets/Font-ghi.woff2')}" },
+        'assets/Font-ghi.woff2': { kind: 'asset' },
+      },
+      '<link rel="stylesheet" href="/assets/index-def.css">',
+    );
+
+    expect(reachable.has('assets/index-def.css')).toBe(true);
+    expect(reachable.has('assets/Font-ghi.woff2')).toBe(true);
+  });
+
+  it('leaves a binary asset from propagating further, but still counts it reachable', () => {
+    const reachable = reachableFromShell(
+      { 'assets/icon-abc.png': { kind: 'asset' } },
+      '<link rel="icon" href="/assets/icon-abc.png">',
+    );
+    expect(reachable.has('assets/icon-abc.png')).toBe(true);
   });
 });
 

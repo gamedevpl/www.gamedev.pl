@@ -49,23 +49,100 @@ export interface ShellManifest {
  *
  * Source maps are excluded for the same reason in reverse — nothing renders without them.
  *
- * `isDynamicEntry` excludes a route's own `lazy(() => import(...))` chunk: nobody needs
- * it before they navigate there, so precaching it defeats the reason it is lazy at all.
- * Defaults to "nothing is dynamic" so a caller that never lazy-loads anything is unaffected.
+ * `isDeferred` excludes anything the shell does not need before the user acts: a route's
+ * own `lazy(() => import(...))` chunk, or something reachable only through one (see
+ * `reachableFromShell`). Precaching it anyway defeats the reason it is deferred at all.
+ * Defaults to "nothing is deferred" so a caller that never lazy-loads anything is unaffected.
  */
 export function shellAssetEntries(
   emittedFileNames: Iterable<string>,
-  isDynamicEntry: (fileName: string) => boolean = () => false,
+  isDeferred: (fileName: string) => boolean = () => false,
 ): string[] {
   const entries = new Set<string>(SHELL_EXTRAS);
 
   for (const fileName of emittedFileNames) {
-    if (PRECACHEABLE_ASSET.test(fileName) && !isDynamicEntry(fileName)) {
+    if (PRECACHEABLE_ASSET.test(fileName) && !isDeferred(fileName)) {
       entries.add(`/${fileName.replace(/^\/+/, '')}`);
     }
   }
 
   return [...entries].sort();
+}
+
+/** A build output's shape, reduced to just what `reachableFromShell` needs to see. */
+export interface BundleFile {
+  /** A Rollup chunk (JS with real import metadata) vs. everything else (CSS, fonts,
+   *  images, and — critically — a `new Worker(new URL(...))` build, which Rollup emits
+   *  as a plain asset with none of a chunk's metadata at all). */
+  kind: 'chunk' | 'asset';
+  /** Chunk source or textual asset content; omitted for binary assets (images, fonts). */
+  text?: string;
+  /** True for the page's own static `<script type="module">` entry chunk. */
+  isEntry?: boolean;
+  /** True for a chunk that exists only as the target of a `lazy(() => import(...))`. */
+  isDynamicEntry?: boolean;
+  /** Filenames this chunk statically imports — Rollup's `imports`, never `dynamicImports`. */
+  imports?: readonly string[];
+}
+
+/**
+ * Which of a build's files the shell can never avoid loading.
+ *
+ * Chunk-to-chunk reachability follows Rollup's own `imports` graph, deliberately never a
+ * chunk's *text* — a chunk's compiled code also names every chunk it dynamically
+ * `import()`s (Vite inlines a `__vite__mapDeps` prefetch array right at the call site),
+ * so text-matching cannot tell "loads it now" from "knows where to fetch it later".
+ * `imports` can, because Rollup already keeps `dynamicImports` in a separate list.
+ *
+ * Assets carry no graph metadata at all — `CodeSurface.tsx`'s `new Worker(new URL(...))`
+ * build comes out of Rollup as a plain asset, indistinguishable by type from a stylesheet
+ * or a font. The only way to find one is whether something already known reachable names
+ * it in its own text, so this walks the *reachable* set's text (index.html, the chunks
+ * `imports` found, and each asset found this way in turn — a stylesheet's `@font-face`
+ * `url()`s fall out of that last step) to grow the asset side, without ever consulting an
+ * excluded chunk's text — which is what would let AdminConsole's own prefetch array pull
+ * it back in.
+ */
+export function reachableFromShell(files: Record<string, BundleFile>, indexHtml: string): Set<string> {
+  const shortNameOf = (fileName: string) => fileName.split('/').pop() ?? fileName;
+
+  const reachable = new Set<string>();
+  const chunkQueue = Object.keys(files).filter(
+    (fileName) => files[fileName]?.isEntry && !files[fileName]?.isDynamicEntry,
+  );
+  while (chunkQueue.length > 0) {
+    const fileName = chunkQueue.pop();
+    if (fileName === undefined || reachable.has(fileName)) continue;
+    reachable.add(fileName);
+    for (const imported of files[fileName]?.imports ?? []) {
+      if (!reachable.has(imported)) chunkQueue.push(imported);
+    }
+  }
+
+  const textPool = new Map<string, string>([['', indexHtml]]);
+  for (const fileName of reachable) {
+    const text = files[fileName]?.text;
+    if (text !== undefined) textPool.set(fileName, text);
+  }
+
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const fileName of Object.keys(files)) {
+      if (files[fileName]?.kind !== 'asset' || reachable.has(fileName)) continue;
+      const shortName = shortNameOf(fileName);
+      for (const text of textPool.values()) {
+        if (!text.includes(shortName)) continue;
+        reachable.add(fileName);
+        const ownText = files[fileName]?.text;
+        if (ownText !== undefined) textPool.set(fileName, ownText);
+        grew = true;
+        break;
+      }
+    }
+  }
+
+  return reachable;
 }
 
 /**

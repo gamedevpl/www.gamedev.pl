@@ -6,7 +6,13 @@ import path from 'node:path';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vite';
 import { isKnownSpaShellPath, looksLikeStaticAsset } from '../api/src/platform/spa-paths.js';
-import { replaceBuildManifest, shellAssetEntries, shellRevision } from './src/shellPrecache.js';
+import {
+  type BundleFile,
+  reachableFromShell,
+  replaceBuildManifest,
+  shellAssetEntries,
+  shellRevision,
+} from './src/shellPrecache.js';
 
 const apiTarget = process.env.VITE_API_TARGET ?? 'http://127.0.0.1:3001';
 
@@ -83,16 +89,25 @@ function shellPrecache(): Plugin {
     apply: 'build',
     async writeBundle(options, bundle) {
       const outDir = options.dir ?? 'dist';
-      // A route's own lazy(() => import(...)) chunk — CodeMirrorEditor, AdminConsole,
-      // CreatorStudioView, ReviewDesk, PartyPage — has no business in a precache whose
-      // whole point is "have it before it's needed": nothing needs it before someone
-      // navigates there. Rollup already knows which chunks those are; a name allowlist
-      // would silently stop covering the next one.
-      const isDynamicEntry = (fileName: string) => {
-        const output = bundle[fileName];
-        return output?.type === 'chunk' && output.isDynamicEntry;
-      };
-      const shell = shellAssetEntries(Object.keys(bundle), isDynamicEntry);
+      const indexHtml = await readFile(path.join(outDir, 'index.html'), 'utf8');
+
+      // Reduce Rollup's bundle to what reachableFromShell needs.
+      const files: Record<string, BundleFile> = {};
+      for (const [fileName, output] of Object.entries(bundle)) {
+        files[fileName] =
+          output.type === 'chunk'
+            ? {
+                kind: 'chunk',
+                text: output.code,
+                isEntry: output.isEntry,
+                isDynamicEntry: output.isDynamicEntry,
+                imports: output.imports,
+              }
+            : { kind: 'asset', text: typeof output.source === 'string' ? output.source : undefined };
+      }
+      const reachable = reachableFromShell(files, indexHtml);
+
+      const shell = shellAssetEntries(Object.keys(bundle), (fileName) => !reachable.has(fileName));
 
       const contents = await Promise.all(shell.map((entry) => readFile(path.join(outDir, entry.slice(1)))));
       const revision = shellRevision(contents, (input) => createHash('sha256').update(input).digest('hex'));
