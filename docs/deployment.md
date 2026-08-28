@@ -277,7 +277,8 @@ the full access model.
 `beta:welcome` mails people already on the Firestore waitlist once a spot is opening —
 the email the splash promised. It is a **preview by default**: no send and no writes
 until `--send`. Language follows waitlist `locale`, then a `.pl` email domain, else
-English. From is `Grzegorz <grzegorz@gamedev.pl>` so replies land with the owner.
+English. From is the already-verified `Grzegorz <noreply@mail.gamedev.pl>`; Reply-To is
+`grzegorz@gamedev.pl`, so a reply reaches the owner without adding a Resend sending domain.
 
 ```bash
 # Preview everyone currently pending (no mail, no writes)
@@ -297,19 +298,12 @@ npm run beta:welcome -w @gamedevpl/api -- --approve --send --only you@example.co
 
 **Owner setup before the first real send** (the script will not do this):
 
-1. Add a Google Workspace alias so `grzegorz@gamedev.pl` receives mail.
-2. Let Resend send as that address. The product's verified sending domain today is
-   `mail.gamedev.pl` (`noreply@…`). Sending as `@gamedev.pl` needs the root domain added
-   in the Resend dashboard (EU / Ireland), with the DKIM record Resend prints and an
-   SPF include **merged** into the existing Workspace SPF — do not replace it. DNS
-   edits for the apex TXT set are listed in the private ops `docs/dns.md`.
-3. Send one `--only you@… --approve --send` to yourself and confirm From, Reply-To, and
-   that a reply reaches the alias.
+1. Add a Google Workspace alias so `grzegorz@gamedev.pl` receives mail (inbound only —
+   Resend keeps sending from `mail.gamedev.pl`).
+2. Send one `--only you@… --approve --send` to yourself and confirm that Reply-To is
+   `grzegorz@gamedev.pl` and that a reply reaches the alias.
 
-If Resend rejects the From address, pass
-`--from 'Grzegorz <noreply@mail.gamedev.pl>'` for that run; Reply-To stays
-`grzegorz@gamedev.pl`. Do not change the service `MAIL_FROM` — notification mail should
-keep using the subdomain.
+Do not change the service `MAIL_FROM` — notification mail should keep using the subdomain.
 
 `INVITE_URL` (default `https://www.gamedev.pl`) is read by this CLI too.
 

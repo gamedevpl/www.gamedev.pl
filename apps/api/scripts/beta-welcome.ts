@@ -25,7 +25,7 @@ Preview waitlist welcome mail (default). Pass --send only when you really mean i
   --only <email>                  one recipient
   --limit <n>                     cap after filters
   --locale en|pl                  force language
-  --from <rfc5322>                default: Grzegorz <grzegorz@gamedev.pl>
+  --from <rfc5322>                default: Grzegorz <noreply@mail.gamedev.pl>
   --approve                       mark pending as approved when sending
   --force                         resend even if welcomeEmailedAt is set
   --send                          actually send (refuses without RESEND_API_KEY)

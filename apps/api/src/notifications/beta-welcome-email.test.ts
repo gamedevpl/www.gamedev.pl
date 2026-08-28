@@ -147,13 +147,14 @@ describe('betaWelcomeEmail', () => {
 });
 
 describe('betaWelcomeMessage', () => {
-  it('sends from Grzegorz and sets Reply-To so a reply reaches him', () => {
+  it('sends from the verified mail subdomain and sets Reply-To so a reply reaches him', () => {
     const msg = betaWelcomeMessage('friend@example.com', 'en', {
       siteUrl: 'https://www.gamedev.pl',
       replyEmail: BETA_WELCOME_REPLY_TO,
     });
     expect(msg.to).toBe('friend@example.com');
     expect(msg.from).toBe(BETA_WELCOME_FROM);
+    expect(msg.from).toContain('noreply@mail.gamedev.pl');
     expect(msg.replyTo).toBe(BETA_WELCOME_REPLY_TO);
     expect(msg.html).toBeTruthy();
   });

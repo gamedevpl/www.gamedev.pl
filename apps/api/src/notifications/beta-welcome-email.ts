@@ -2,7 +2,7 @@ import type { Locale, WaitlistStatus } from '@gamedevpl/contract';
 import { normalizeLocale } from './email-templates.js';
 import type { EmailMessage } from './mailer.js';
 
-export const BETA_WELCOME_FROM = 'Grzegorz <grzegorz@gamedev.pl>';
+export const BETA_WELCOME_FROM = 'Grzegorz <noreply@mail.gamedev.pl>';
 export const BETA_WELCOME_REPLY_TO = 'grzegorz@gamedev.pl';
 export const BETA_WELCOME_SITE_URL = 'https://www.gamedev.pl';
 

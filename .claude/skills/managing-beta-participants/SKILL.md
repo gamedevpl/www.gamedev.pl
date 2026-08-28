@@ -130,10 +130,9 @@ field is missing, a `.pl` email domain becomes Polish; everything else is Englis
 name comes from the Google/Apple display name when it looks like a name. `--locale pl|en`
 overrides both.
 
-From: `Grzegorz <grzegorz@gamedev.pl>` (override with `--from` or `BETA_WELCOME_FROM`).
-Reply-To is the same address, so a reply reaches the owner once the Workspace alias exists.
-Resend must be allowed to send as `@gamedev.pl` — today only `mail.gamedev.pl` is verified;
-see [`docs/deployment.md`](../../docs/deployment.md) → "Sending the waitlist welcome".
+From stays on the already-verified sender `Grzegorz <noreply@mail.gamedev.pl>` so Resend
+needs no new domain. Reply-To is `grzegorz@gamedev.pl`, so a reply reaches the owner once
+the Workspace alias exists. Override From with `--from` or `BETA_WELCOME_FROM` if needed.
 Same ADC/Firestore setup as `beta:approve`.
 
 `--send` to pending people requires `--approve`, otherwise they would get "you're in" and
