@@ -13,7 +13,7 @@ import {
   stubForPath,
   wouldNestInsideSelf,
 } from './codeSurfacePaths.js';
-import { applyTreeMutation } from './codeSurfaceTreeApply.js';
+import { applyTreeMutation, draftsFromServer, forEachTsPath, mergeMutationDrafts } from './codeSurfaceTreeApply.js';
 import {
   defaultFolderForSelection,
   filesUnderPrefix,
@@ -46,7 +46,7 @@ export type UseCodeSurfaceTreeOptions = {
   onError: (message: string) => void;
   onRebuild: () => void;
   onDiscard: () => Promise<void>;
-  onTsUpdate?: (path: string, content: string) => void;
+  onTsUpdate?: (path: string, content: string | null) => void;
 };
 
 async function collectEntries(items: Array<{ file: File; relative?: string }>) {
@@ -130,6 +130,7 @@ export function useCodeSurfaceTree(options: UseCodeSurfaceTreeOptions) {
         options.onSelect(remaining[0] ?? null);
       }
       options.onRebuild();
+      return result;
     },
     [options],
   );
@@ -142,17 +143,14 @@ export function useCodeSurfaceTree(options: UseCodeSurfaceTreeOptions) {
       step?: TreeStep,
     ) => {
       setBusy(true);
+      const touched = [...writes.map((file) => file.path), ...deletes];
       try {
-        await options.prepareMutation([...writes.map((file) => file.path), ...deletes]);
+        await options.prepareMutation(touched);
         await applyTreeMutation({ slug: options.slug, writes, deletes });
-        options.onDrafts((current) => {
-          const next = { ...current };
-          for (const path of deletes) delete next[path];
-          for (const file of writes) next[file.path] = file.content;
-          return next;
-        });
-        for (const file of writes) {
-          if (file.path.endsWith('.ts') || file.path.endsWith('.tsx')) options.onTsUpdate?.(file.path, file.content);
+        options.onDrafts((current) => mergeMutationDrafts(current, writes, deletes));
+        if (options.onTsUpdate) {
+          const written = new Map(writes.map((file) => [file.path, file.content]));
+          forEachTsPath(touched, (path) => written.get(path) ?? null, options.onTsUpdate);
         }
         await refresh(selectPath, deletes);
         if (step) recordCodeStep(step);
@@ -160,7 +158,12 @@ export function useCodeSurfaceTree(options: UseCodeSurfaceTreeOptions) {
       } catch (error) {
         options.onError(error instanceof Error ? error.message : t('studioPanel.code.tree.error'));
         try {
-          await refresh(undefined, []);
+          const result = await refresh(undefined, []);
+          options.onDrafts((current) => draftsFromServer(current, result.files, touched));
+          if (options.onTsUpdate) {
+            const live = new Map(result.files.map((file) => [file.path, file.content]));
+            forEachTsPath(touched, (path) => live.get(path) ?? null, options.onTsUpdate);
+          }
         } catch {
           // Keep the mutation error on screen.
         }

@@ -31,7 +31,7 @@ export const RESERVED_SOURCE_SEGMENTS = new Set([
 const EXTRA_MODULE_PATTERN = /^[a-z0-9][a-z0-9/-]{0,60}\.ts$/;
 const FOLDER_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,40}$/;
 const MAX_PATH_LENGTH = 120;
-const MAX_FILE_BYTES = 1_000_000;
+export const MAX_FILE_BYTES = 1_000_000;
 
 export function normalizeSourcePath(raw: string): string {
   return raw.trim().replaceAll('\\', '/').replace(/^\/+/, '').replace(/\/+$/, '');

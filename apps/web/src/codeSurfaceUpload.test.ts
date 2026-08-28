@@ -30,6 +30,18 @@ describe('codeSurfaceUpload', () => {
     expect(plan.add.map((file) => file.path).sort()).toEqual(['SPEC.md', 'game.ts']);
   });
 
+  it('keeps a sole source folder instead of treating it as a zip wrapper', () => {
+    const plan = planSourceUpload({
+      entries: [
+        { relativePath: 'entities/player.ts', content: 'export {};\n' },
+        { relativePath: 'entities/enemy.ts', content: 'export {};\n' },
+      ],
+      existing: new Set(),
+      stripRoot: true,
+    });
+    expect(plan.add.map((file) => file.path).sort()).toEqual(['entities/enemy.ts', 'entities/player.ts']);
+  });
+
   it('keeps the chosen folder name when stripRoot is off', () => {
     const plan = planSourceUpload({
       entries: [{ relativePath: 'entities/player.ts', content: 'export {};\n' }],

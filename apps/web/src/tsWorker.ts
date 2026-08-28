@@ -27,12 +27,11 @@ async function loadLibFiles(): Promise<Map<string, string>> {
 }
 
 // Starts empty; main thread seeds files via updateFile after initialize() resolves.
-Comlink.expose(
-  createWorker({
-    env: (async () => {
-      const fsMap = await loadLibFiles();
-      const system = createSystem(fsMap);
-      return createVirtualTypeScriptEnvironment(system, [], ts, COMPILER_OPTIONS);
-    })(),
-  }),
-);
+const api = createWorker({
+  env: (async () => {
+    const fsMap = await loadLibFiles();
+    const system = createSystem(fsMap);
+    return createVirtualTypeScriptEnvironment(system, [], ts, COMPILER_OPTIONS);
+  })(),
+});
+Comlink.expose(Object.assign(api, { deleteFile: (path: string) => api.getEnv()?.deleteFile(path) }));

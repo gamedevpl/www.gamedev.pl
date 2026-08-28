@@ -1,6 +1,7 @@
 import {
   decodeTextBytes,
   deliverablePathReason,
+  FIXED_SOURCE_FILES,
   indexHtmlWriteReason,
   joinSourcePath,
   normalizeSourcePath,
@@ -25,6 +26,8 @@ function stripSharedRoot(paths: string[]): ((path: string) => string) | null {
   const root = [...firstSegments][0]!;
   if (!paths.every((path) => path === root || path.startsWith(`${root}/`))) return null;
   if (paths.some((path) => path === root)) return null;
+  const stripped = paths.map((path) => path.slice(root.length + 1));
+  if (!stripped.some((path) => (FIXED_SOURCE_FILES as readonly string[]).includes(path))) return null;
   return (path) => path.slice(root.length + 1);
 }
 

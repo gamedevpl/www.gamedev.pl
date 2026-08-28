@@ -127,6 +127,13 @@ describe('codeSurfaceArchive', () => {
     expect(new TextDecoder().decode(entries.find((entry) => entry.path === 'game.ts')!.bytes)).toContain('boot');
   });
 
+  it('refuses an entry larger than the unpack cap', async () => {
+    const bytes = storedZip({ 'game.ts': 'export const boot = () => {};\n' });
+    await expect(unpackArchive(bytes, 'game.zip', { maxEntryBytes: 4, maxBytes: 4, maxEntries: 8 })).rejects.toThrow(
+      /too large/,
+    );
+  });
+
   it('unpacks tar.gz entries', async () => {
     const bytes = tarGz({ 'entities/player.ts': 'export {};\n' });
     const entries = await unpackArchive(bytes, 'tree.tar.gz');

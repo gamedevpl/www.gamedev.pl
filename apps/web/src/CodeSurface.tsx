@@ -931,7 +931,10 @@ export function CodeSurface({
     onError: (message) => setDeliverMessage(message),
     onRebuild: schedulePreviewRebuild,
     onDiscard: discardWorkingCopy,
-    onTsUpdate: (path, content) => languageServiceRef.current?.updateFile(path, content),
+    onTsUpdate: (path, content) => {
+      if (content === null) languageServiceRef.current?.deleteFile?.(path);
+      else languageServiceRef.current?.updateFile(path, content);
+    },
   });
 
   // The fixit under a refused delivery: stage the file, open it.
