@@ -426,6 +426,13 @@ a {
   padding: 40px 24px 80px;
 }
 
+/* Route-level Suspense fallback while a lazy surface's chunk loads. */
+.content-loading {
+  margin: 40px 0;
+  text-align: center;
+  opacity: 0.7;
+}
+
 /* HERO PROMPT CENTERPIECE */
 .hero-prompt-section {
   margin-bottom: 48px;

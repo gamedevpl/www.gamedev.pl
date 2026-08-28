@@ -1,4 +1,7 @@
 {
+  "app": {
+    "loadingSurface": "Loading…"
+  },
   "notifications": {
     "aria": "Notifications",
     "title": "Notifications",

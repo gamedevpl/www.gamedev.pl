@@ -1,4 +1,7 @@
 {
+  "app": {
+    "loadingSurface": "Wczytywanie…"
+  },
   "notifications": {
     "aria": "Powiadomienia",
     "title": "Powiadomienia",
