@@ -3,13 +3,13 @@ import { AccessTokensPanel } from './AccessTokensPanel.js';
 import { AdminJobsPanel } from './AdminJobsPanel.js';
 import { CostsPanel } from './CostsPanel.js';
 import { CreationLimitsPanel } from './CreationLimitsPanel.js';
-import { GameHealthView } from './GameHealthView.js';
-import { ProposalReviewPanel } from './ProposalReviewPanel.js';
+import { GameHealthView } from '../../GameHealthView.js';
+import { ProposalReviewPanel } from '../../ProposalReviewPanel.js';
 import { SuggestionsPanel } from './SuggestionsPanel.js';
 import { WaitlistPanel } from './WaitlistPanel.js';
 import { AdminAssessmentsPanel } from './AdminAssessmentsPanel.js';
 import { fetchAdminSummary, type AdminSummary, type OperatorAlert } from './adminApi.js';
-import { ADMIN_SECTIONS, adminPath, type AdminSection } from './router.js';
+import { ADMIN_SECTIONS, adminPath, type AdminSection } from '../../router.js';
 
 /**
  * One place for everything an operator can do.
