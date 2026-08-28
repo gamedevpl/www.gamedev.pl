@@ -8,9 +8,9 @@ import {
   type ReviewSweepSource,
 } from './adminApi.js';
 import { AssessmentResolutionSummary, AssessmentResolveForm } from './AdminAssessmentResolve.js';
-import { fetchAllAdminAssessments, type AdminAssessmentsExport } from './assessmentExportApi.js';
-import { formatAssessmentChecklist } from './reviewChecklist.js';
-import { formatAssessmentClientContext } from './reviewClientContext.js';
+import { fetchAllAdminAssessments, type AdminAssessmentsExport } from '../../assessmentExportApi.js';
+import { formatAssessmentChecklist } from '../../reviewChecklist.js';
+import { formatAssessmentClientContext } from '../../reviewClientContext.js';
 
 export function AdminAssessmentsPanel() {
   const [data, setData] = useState<AdminAssessmentsExport | null>(null);

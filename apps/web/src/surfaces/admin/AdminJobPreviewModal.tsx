@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { GameFrame } from './GameFrame.js';
+import { GameFrame } from '../../GameFrame.js';
 import {
   fetchJobPreview,
   publishJob,
