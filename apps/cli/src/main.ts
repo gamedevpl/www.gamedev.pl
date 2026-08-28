@@ -14,7 +14,7 @@ import type { IntakeDraft } from './create.js';
 import { getStatus, previewUrl } from './turn.js';
 import { checkoutGame, diffGame, pullGame, readCheckoutSlug, unreconciledMessage } from './checkout.js';
 import { runLadder, assertLadderGreen } from './verify.js';
-import { handleHelperLine, remoteSlugFromArgv } from './git-remote.js';
+import { runGitRemoteHelper } from './git-remote-main.js';
 
 function storeFromEnv(env: NodeJS.ProcessEnv): TokenStore {
   if (env.GAMEDEV_TOKEN) {
@@ -36,9 +36,7 @@ export async function runCli(
   },
 ): Promise<number> {
   if (/git-remote-gamedev/.test(argv[1] ?? argv[0] ?? '')) {
-    const slug = remoteSlugFromArgv(argv);
-    io.stdout.write(`${handleHelperLine('capabilities', slug).join('\n')}\n`);
-    return EXIT_GREEN;
+    return runGitRemoteHelper(argv, env);
   }
   const { verb, args, flags } = parseArgv(argv);
   const asJson = jsonMode(flags);
