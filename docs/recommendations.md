@@ -87,7 +87,7 @@ wrong account's affinity.
 
 ## UI
 
-[`ArcadeCatalog`](../apps/web/src/ArcadeCatalog.tsx) shows the My games / Not played
+[`ArcadeCatalog`](../apps/web/src/surfaces/catalog/ArcadeCatalog.tsx) shows the My games / Not played
 toggles and Sort dropdown beside the Games heading, pins the creator’s published
 games first when My games is off, then filters/reorders the same grid. Logic lives
-in [`catalogSort.ts`](../apps/web/src/catalogSort.ts).
+in [`catalogSort.ts`](../apps/web/src/surfaces/catalog/catalogSort.ts).
