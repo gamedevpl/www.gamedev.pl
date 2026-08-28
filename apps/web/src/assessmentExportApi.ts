@@ -1,4 +1,4 @@
-import { readJson, type GameAssessment } from './reviewApi.js';
+import { readJson, type GameAssessment } from './surfaces/review/reviewApi.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 

@@ -4,7 +4,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AdminAssessmentsPanel } from './AdminAssessmentsPanel.js';
-import type { GameAssessment } from '../../reviewApi.js';
+import type { GameAssessment } from '../review/reviewApi.js';
 
 const mocked = vi.hoisted(() => ({
   fetchAllAdminAssessments: vi.fn(),
@@ -18,8 +18,8 @@ vi.mock('./adminApi.js', () => ({
   createReviewSweep: vi.fn(),
   patchReviewSweep: vi.fn(),
 }));
-vi.mock('../../reviewApi.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../reviewApi.js')>()),
+vi.mock('../review/reviewApi.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../review/reviewApi.js')>()),
   resolveAssessment: mocked.resolveAssessment,
 }));
 

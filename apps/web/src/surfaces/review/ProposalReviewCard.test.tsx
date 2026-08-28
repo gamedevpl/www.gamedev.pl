@@ -4,7 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProposalReviewCard } from './ProposalReviewCard.js';
-import type { Proposal } from './proposalsApi.js';
+import type { Proposal } from '../../proposalsApi.js';
 
 async function flush() {
   await Promise.resolve();
