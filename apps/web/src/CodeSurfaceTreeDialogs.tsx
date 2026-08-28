@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
 import type { PlannedUpload } from './codeSurfaceUpload.js';
@@ -20,6 +21,10 @@ export type TreePrompt =
 
 function listed(paths: string[], cap = 8): { shown: string[]; extra: number } {
   return { shown: paths.slice(0, cap), extra: Math.max(0, paths.length - cap) };
+}
+
+function portal(node: ReactNode) {
+  return createPortal(node, document.body);
 }
 
 export function CodeSurfaceTreeDialogs(props: {
@@ -48,7 +53,7 @@ export function CodeSurfaceTreeDialogs(props: {
             ? t('studioPanel.code.tree.promptMoveFile')
             : t('studioPanel.code.tree.promptMoveFolder');
     const exists = props.prompt.kind === 'new-file' && props.prompt.exists;
-    return (
+    return portal(
       <div className="code-surface-tree-backdrop" role="presentation" onClick={props.onCancel}>
         <section
           className="code-surface-tree-dialog"
@@ -103,13 +108,13 @@ export function CodeSurfaceTreeDialogs(props: {
             </button>
           </div>
         </section>
-      </div>
+      </div>,
     );
   }
 
   if (!props.confirm) return null;
 
-  return (
+  return portal(
     <div className="code-surface-tree-backdrop" role="presentation" onClick={props.busy ? undefined : props.onCancel}>
       <section
         className="code-surface-tree-dialog"
@@ -147,7 +152,7 @@ export function CodeSurfaceTreeDialogs(props: {
           </button>
         </div>
       </section>
-    </div>
+    </div>,
   );
 }
 

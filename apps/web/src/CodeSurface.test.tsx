@@ -290,10 +290,10 @@ describe('CodeSurface', () => {
       deleteBtn()!.click();
     });
     expect(mocked.deleteCodeSurfaceFile).not.toHaveBeenCalled();
-    expect(container.querySelector('[data-testid="code-tree-confirm-dialog"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="code-tree-confirm-dialog"]')).not.toBeNull();
 
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('[data-testid="code-tree-confirm"]')!.click();
+      document.querySelector<HTMLButtonElement>('[data-testid="code-tree-confirm"]')!.click();
       await flush();
     });
 
@@ -336,7 +336,7 @@ describe('CodeSurface', () => {
       deleteBtn()!.click();
     });
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('[data-testid="code-tree-confirm"]')!.click();
+      document.querySelector<HTMLButtonElement>('[data-testid="code-tree-confirm"]')!.click();
       await flush();
     });
 
@@ -383,7 +383,7 @@ describe('CodeSurface', () => {
       deleteBtn()!.click();
     });
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('[data-testid="code-tree-confirm"]')!.click();
+      document.querySelector<HTMLButtonElement>('[data-testid="code-tree-confirm"]')!.click();
       await flush();
     });
 
@@ -710,7 +710,7 @@ describe('CodeSurface', () => {
     });
     expect(mocked.discardCodeSurfaceEdits).not.toHaveBeenCalled();
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('[data-testid="code-tree-confirm"]')!.click();
+      document.querySelector<HTMLButtonElement>('[data-testid="code-tree-confirm"]')!.click();
       await flush();
     });
     expect(mocked.discardCodeSurfaceEdits).toHaveBeenCalledWith('sky-dodge');

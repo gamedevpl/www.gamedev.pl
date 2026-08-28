@@ -14,4 +14,9 @@ describe('Code surface file tree CSS', () => {
   it('keeps row actions visible on the phone sheet', () => {
     expect(css).toMatch(/@media \(max-width: 1099px\)[\s\S]*?\.code-surface-tree-actions \{\s*opacity: 1;/);
   });
+
+  it('lifts the confirm veil above the phone chat sheet', () => {
+    expect(css).toMatch(/\.code-surface-tree-backdrop \{[\s\S]*?position:\s*fixed/);
+    expect(css).toMatch(/\.code-surface-tree-backdrop \{[\s\S]*?z-index:\s*1300/);
+  });
 });

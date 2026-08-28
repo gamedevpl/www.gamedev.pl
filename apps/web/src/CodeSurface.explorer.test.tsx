@@ -126,12 +126,12 @@ describe('CodeSurface explorer', () => {
     await act(async () => {
       tool('New folder')!.click();
     });
-    const input = container.querySelector<HTMLInputElement>('[data-testid="code-tree-prompt"] input')!;
+    const input = document.querySelector<HTMLInputElement>('[data-testid="code-tree-prompt"] input')!;
     await act(async () => {
       setInput(input, 'entities');
     });
     await act(async () => {
-      [...container.querySelectorAll('button')].find((button) => button.textContent === 'Create')!.click();
+      document.querySelector<HTMLButtonElement>('[data-testid="code-tree-prompt-submit"]')!.click();
     });
     expect(container.querySelector('[data-path="entities"]')?.textContent).toContain('entities');
     expect(mocked.stageCodeSurfaceFile).not.toHaveBeenCalled();
@@ -150,12 +150,12 @@ describe('CodeSurface explorer', () => {
     await act(async () => {
       tool('New file')!.click();
     });
-    const input = container.querySelector<HTMLInputElement>('[data-testid="code-tree-prompt"] input')!;
+    const input = document.querySelector<HTMLInputElement>('[data-testid="code-tree-prompt"] input')!;
     await act(async () => {
       setInput(input, 'entities/player.ts');
     });
     await act(async () => {
-      [...container.querySelectorAll('button')].find((button) => button.textContent === 'Create')!.click();
+      document.querySelector<HTMLButtonElement>('[data-testid="code-tree-prompt-submit"]')!.click();
       await flush();
     });
     expect(mocked.stageCodeSurfaceFile).toHaveBeenCalledWith('sky-dodge', 'entities/player.ts', 'export {};\n', {
@@ -184,16 +184,16 @@ describe('CodeSurface explorer', () => {
     await act(async () => {
       move.click();
     });
-    const input = container.querySelector<HTMLInputElement>('[data-testid="code-tree-prompt"] input')!;
+    const input = document.querySelector<HTMLInputElement>('[data-testid="code-tree-prompt"] input')!;
     await act(async () => {
       setInput(input, 'entities/boot.ts');
     });
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('[data-testid="code-tree-prompt-submit"]')!.click();
+      document.querySelector<HTMLButtonElement>('[data-testid="code-tree-prompt-submit"]')!.click();
     });
     expect(mocked.stageCodeSurfaceFile).not.toHaveBeenCalled();
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('[data-testid="code-tree-confirm"]')!.click();
+      document.querySelector<HTMLButtonElement>('[data-testid="code-tree-confirm"]')!.click();
       await flush();
     });
     expect(mocked.stageCodeSurfaceFile).toHaveBeenCalledWith(
@@ -218,9 +218,9 @@ describe('CodeSurface explorer', () => {
       await flush();
     });
     expect(mocked.stageCodeSurfaceFile).not.toHaveBeenCalled();
-    expect(container.querySelector('[data-testid="code-tree-confirm-dialog"]')?.textContent).toMatch(/replaced/i);
+    expect(document.querySelector('[data-testid="code-tree-confirm-dialog"]')?.textContent).toMatch(/replaced/i);
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('[data-testid="code-tree-confirm"]')!.click();
+      document.querySelector<HTMLButtonElement>('[data-testid="code-tree-confirm"]')!.click();
       await flush();
     });
     expect(mocked.stageCodeSurfaceFile).toHaveBeenCalledWith(
@@ -229,5 +229,32 @@ describe('CodeSurface explorer', () => {
       'export const next = () => {};\n',
       { rebuild: false },
     );
+  });
+
+  it('reloads sources when a later write in a folder delete fails', async () => {
+    mocked.fetchCodeSurfaceSources.mockResolvedValue(
+      sourcesFor([
+        { path: 'game.ts', content: 'export {};\n' },
+        { path: 'entities/a.ts', content: 'export const a = 1;\n' },
+        { path: 'entities/b.ts', content: 'export const b = 2;\n' },
+      ]),
+    );
+    mocked.deleteCodeSurfaceFile
+      .mockResolvedValueOnce({
+        accepted: true,
+        path: 'entities/a.ts',
+        staged: { totalBytes: 0, maxBytes: 1_000_000, maxFiles: 60, updatedAt: null },
+      })
+      .mockRejectedValueOnce(new Error('quota'));
+    await render();
+    const before = mocked.fetchCodeSurfaceSources.mock.calls.length;
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-path="entities"] .code-surface-file-option-delete')!.click();
+    });
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[data-testid="code-tree-confirm"]')!.click();
+      await flush();
+    });
+    expect(mocked.fetchCodeSurfaceSources.mock.calls.length).toBeGreaterThan(before);
   });
 });

@@ -31,6 +31,8 @@ import {
 import { recordCodeStep } from './visitTelemetry.js';
 import type { TreeConfirm, TreePrompt } from './CodeSurfaceTreeDialogs.js';
 
+type TreeStep = 'file_created' | 'file_deleted' | 'file_moved' | 'files_uploaded';
+
 export type UseCodeSurfaceTreeOptions = {
   slug: string;
   files: CodeSurfaceFile[];
@@ -133,7 +135,12 @@ export function useCodeSurfaceTree(options: UseCodeSurfaceTreeOptions) {
   );
 
   const runMutation = useCallback(
-    async (writes: Array<{ path: string; content: string }>, deletes: string[], selectPath?: string | null) => {
+    async (
+      writes: Array<{ path: string; content: string }>,
+      deletes: string[],
+      selectPath?: string | null,
+      step?: TreeStep,
+    ) => {
       setBusy(true);
       try {
         await options.prepareMutation([...writes.map((file) => file.path), ...deletes]);
@@ -148,8 +155,16 @@ export function useCodeSurfaceTree(options: UseCodeSurfaceTreeOptions) {
           if (file.path.endsWith('.ts') || file.path.endsWith('.tsx')) options.onTsUpdate?.(file.path, file.content);
         }
         await refresh(selectPath, deletes);
+        if (step) recordCodeStep(step);
+        return true;
       } catch (error) {
         options.onError(error instanceof Error ? error.message : t('studioPanel.code.tree.error'));
+        try {
+          await refresh(undefined, []);
+        } catch {
+          // Keep the mutation error on screen.
+        }
+        return false;
       } finally {
         setBusy(false);
         setConfirm(null);
@@ -273,8 +288,7 @@ export function useCodeSurfaceTree(options: UseCodeSurfaceTreeOptions) {
         options.onError(t('studioPanel.code.tree.exists'));
         return;
       }
-      void runMutation([{ path: value, content: stubForPath(value) }], [], value);
-      recordCodeStep('file_created');
+      void runMutation([{ path: value, content: stubForPath(value) }], [], value, 'file_created');
       return;
     }
     if (prompt.kind === 'new-folder') {
@@ -334,8 +348,7 @@ export function useCodeSurfaceTree(options: UseCodeSurfaceTreeOptions) {
       return;
     }
     if (confirm.kind === 'delete-file') {
-      recordCodeStep('file_deleted');
-      await runMutation([], [confirm.path]);
+      await runMutation([], [confirm.path], undefined, 'file_deleted');
       return;
     }
     if (confirm.kind === 'delete-empty-folder') {
@@ -345,38 +358,44 @@ export function useCodeSurfaceTree(options: UseCodeSurfaceTreeOptions) {
       return;
     }
     if (confirm.kind === 'delete-folder') {
-      recordCodeStep('file_deleted');
-      setEmptyFolders((current) =>
-        current.filter((folder) => folder !== confirm.path && !folder.startsWith(`${confirm.path}/`)),
-      );
-      await runMutation([], confirm.files);
+      if (await runMutation([], confirm.files, undefined, 'file_deleted')) {
+        setEmptyFolders((current) =>
+          current.filter((folder) => folder !== confirm.path && !folder.startsWith(`${confirm.path}/`)),
+        );
+      }
       return;
     }
     if (confirm.kind === 'move-file') {
-      recordCodeStep('file_moved');
-      await runMutation([{ path: confirm.to, content: contentOf(confirm.from) }], [confirm.from], confirm.to);
+      await runMutation(
+        [{ path: confirm.to, content: contentOf(confirm.from) }],
+        [confirm.from],
+        confirm.to,
+        'file_moved',
+      );
       return;
     }
     if (confirm.kind === 'move-folder') {
       const pairs = planFolderMove(paths, confirm.from, confirm.to);
-      recordCodeStep('file_moved');
-      setEmptyFolders((current) =>
-        current.map((folder) =>
-          folder === confirm.from || folder.startsWith(`${confirm.from}/`)
-            ? folder.replace(confirm.from, confirm.to)
-            : folder,
-        ),
-      );
-      await runMutation(
-        pairs.map((pair) => ({ path: pair.to, content: contentOf(pair.from) })),
-        pairs.map((pair) => pair.from),
-        options.selected ? pairs.find((pair) => pair.from === options.selected)?.to : undefined,
-      );
+      if (
+        await runMutation(
+          pairs.map((pair) => ({ path: pair.to, content: contentOf(pair.from) })),
+          pairs.map((pair) => pair.from),
+          options.selected ? pairs.find((pair) => pair.from === options.selected)?.to : undefined,
+          'file_moved',
+        )
+      ) {
+        setEmptyFolders((current) =>
+          current.map((folder) =>
+            folder === confirm.from || folder.startsWith(`${confirm.from}/`)
+              ? folder.replace(confirm.from, confirm.to)
+              : folder,
+          ),
+        );
+      }
       return;
     }
-    recordCodeStep('files_uploaded');
     const writes = [...confirm.plan.add, ...confirm.plan.overwrite];
-    await runMutation(writes, [], writes[0]?.path);
+    await runMutation(writes, [], writes[0]?.path, 'files_uploaded');
   }
 
   function onInternalDrop(toFolder: string) {
