@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AdminConfirmDialog } from './AdminConfirmDialog.js';
 import { AdminJobPreviewModal } from './AdminJobPreviewModal.js';
 import {
   cancelJob,
@@ -228,6 +229,38 @@ function duration(ms: number | undefined): string {
   return `${Math.floor(hours / 24)}d ${hours % 24}h`;
 }
 
+function publishConfirmCopy(jobs: JobQueueEntry[]): { title: string; body: string; confirmLabel: string } {
+  if (jobs.length === 1) {
+    const job = jobs[0];
+    return {
+      title: `Publish ${job.title}?`,
+      body: job.slug ? `This goes live on the catalog as ${job.slug}.` : 'This goes live on the catalog.',
+      confirmLabel: 'Publish',
+    };
+  }
+  return {
+    title: `Publish ${jobs.length} games?`,
+    body: 'Each ready build goes live on the catalog.',
+    confirmLabel: `Publish ${jobs.length}`,
+  };
+}
+
+function cancelConfirmCopy(jobs: JobQueueEntry[]): { title: string; body: string; confirmLabel: string } {
+  if (jobs.length === 1) {
+    const job = jobs[0];
+    return {
+      title: `Cancel ${job.title}?`,
+      body: 'The build stops and cannot be undone.',
+      confirmLabel: 'Cancel build',
+    };
+  }
+  return {
+    title: `Cancel ${jobs.length} jobs?`,
+    body: 'Those builds stop and cannot be undone.',
+    confirmLabel: `Cancel ${jobs.length}`,
+  };
+}
+
 type FilterKind = 'ready' | 'stalled' | 'in_flight' | 'all';
 
 function JobRow({
@@ -247,7 +280,7 @@ function JobRow({
 }) {
   const [busy, setBusy] = useState<'publish' | 'cancel' | 'retry' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [cancelArmed, setCancelArmed] = useState(false);
+  const [confirming, setConfirming] = useState<'publish' | 'cancel' | null>(null);
 
   const publishable = job.state === 'ready_for_review';
   const previewable = publishable || Boolean(job.slug);
@@ -255,7 +288,6 @@ function JobRow({
   const onPublish = useCallback(async () => {
     setBusy('publish');
     setMessage(null);
-    setCancelArmed(false);
     try {
       const result = await publishJob(job.jobId);
       if ('refused' in result) {
@@ -268,17 +300,13 @@ function JobRow({
       setMessage('could not reach the API');
     } finally {
       setBusy(null);
+      setConfirming(null);
     }
   }, [job.jobId, onPublished]);
 
   const onCancel = useCallback(async () => {
-    if (!cancelArmed) {
-      setCancelArmed(true);
-      return;
-    }
     setBusy('cancel');
     setMessage(null);
-    setCancelArmed(false);
     try {
       const result = await cancelJob(job.jobId);
       if ('refused' in result) {
@@ -291,13 +319,14 @@ function JobRow({
       setMessage('could not reach the API');
     } finally {
       setBusy(null);
+      setConfirming(null);
     }
-  }, [cancelArmed, job.jobId, onPublished]);
+  }, [job.jobId, onPublished]);
 
   const onRetry = useCallback(async () => {
     setBusy('retry');
     setMessage(null);
-    setCancelArmed(false);
+    setConfirming(null);
     try {
       const result = await retryJob(job.jobId);
       if ('refused' in result) {
@@ -355,7 +384,12 @@ function JobRow({
             </button>
           ) : null}
           {publishable ? (
-            <button type="button" className="admin-job-publish" onClick={onPublish} disabled={busy !== null}>
+            <button
+              type="button"
+              className="admin-job-publish"
+              onClick={() => setConfirming('publish')}
+              disabled={busy !== null}
+            >
               {busy === 'publish' ? 'Publishing…' : 'Publish'}
             </button>
           ) : null}
@@ -367,15 +401,39 @@ function JobRow({
           {job.state !== 'publishing' ? (
             <button
               type="button"
-              className={cancelArmed ? 'admin-job-cancel is-armed' : 'admin-job-cancel'}
-              onClick={onCancel}
+              className="admin-job-cancel"
+              onClick={() => setConfirming('cancel')}
               disabled={busy !== null}
             >
-              {busy === 'cancel' ? 'Canceling…' : cancelArmed ? 'Sure? This is final' : 'Cancel'}
+              {busy === 'cancel' ? 'Canceling…' : 'Cancel'}
             </button>
           ) : null}
         </div>
         {message ? <div className="admin-job-message">{message}</div> : null}
+        {confirming === 'publish' ? (
+          <AdminConfirmDialog
+            {...publishConfirmCopy([job])}
+            busy={busy === 'publish'}
+            busyLabel="Publishing…"
+            onConfirm={() => void onPublish()}
+            onDismiss={() => {
+              if (busy === null) setConfirming(null);
+            }}
+          />
+        ) : null}
+        {confirming === 'cancel' ? (
+          <AdminConfirmDialog
+            {...cancelConfirmCopy([job])}
+            danger
+            busy={busy === 'cancel'}
+            busyLabel="Canceling…"
+            dismissLabel="Keep"
+            onConfirm={() => void onCancel()}
+            onDismiss={() => {
+              if (busy === null) setConfirming(null);
+            }}
+          />
+        ) : null}
       </td>
     </tr>
   );
@@ -397,6 +455,10 @@ export function AdminJobsPanel() {
     total: number;
     success: number;
     failed: number;
+  } | null>(null);
+  const [pendingBatch, setPendingBatch] = useState<{
+    kind: 'publish' | 'cancel';
+    targets: JobQueueEntry[];
   } | null>(null);
 
   const load = useCallback(async () => {
@@ -562,6 +624,7 @@ export function AdminJobsPanel() {
     async (targets: JobQueueEntry[]) => {
       const publishable = targets.filter((j) => j.state === 'ready_for_review');
       if (publishable.length === 0) return;
+      setPendingBatch(null);
       setBatchProgress({ running: true, current: 0, total: publishable.length, success: 0, failed: 0 });
 
       let success = 0;
@@ -588,6 +651,7 @@ export function AdminJobsPanel() {
     async (targets: JobQueueEntry[]) => {
       const cancelable = targets.filter((j) => j.state !== 'publishing');
       if (cancelable.length === 0) return;
+      setPendingBatch(null);
       setBatchProgress({ running: true, current: 0, total: cancelable.length, success: 0, failed: 0 });
 
       let success = 0;
@@ -634,7 +698,7 @@ export function AdminJobsPanel() {
           <button
             type="button"
             className="admin-bulk-publish-cta"
-            onClick={() => void onBatchPublish(readyJobsToPublish)}
+            onClick={() => setPendingBatch({ kind: 'publish', targets: readyJobsToPublish })}
             disabled={batchProgress?.running}
           >
             ⚡ Publish all ready ({readyJobsToPublish.length})
@@ -709,7 +773,12 @@ export function AdminJobsPanel() {
               <button
                 type="button"
                 className="admin-job-publish"
-                onClick={() => void onBatchPublish(selectedEntries)}
+                onClick={() =>
+                  setPendingBatch({
+                    kind: 'publish',
+                    targets: selectedEntries.filter((j) => j.state === 'ready_for_review'),
+                  })
+                }
                 disabled={batchProgress?.running}
               >
                 Publish selected ({selectedEntries.filter((j) => j.state === 'ready_for_review').length})
@@ -718,7 +787,12 @@ export function AdminJobsPanel() {
             <button
               type="button"
               className="admin-job-cancel"
-              onClick={() => void onBatchCancel(selectedEntries)}
+              onClick={() =>
+                setPendingBatch({
+                  kind: 'cancel',
+                  targets: selectedEntries.filter((j) => j.state !== 'publishing'),
+                })
+              }
               disabled={batchProgress?.running}
             >
               Cancel selected ({selectedEntries.length})
@@ -786,7 +860,12 @@ export function AdminJobsPanel() {
                                 <button
                                   type="button"
                                   className="admin-job-publish"
-                                  onClick={() => void onBatchPublish(grp.jobs)}
+                                  onClick={() =>
+                                    setPendingBatch({
+                                      kind: 'publish',
+                                      targets: grp.jobs.filter((j) => j.state === 'ready_for_review'),
+                                    })
+                                  }
                                   disabled={batchProgress?.running}
                                 >
                                   Publish ready ({grp.readyCount})
@@ -830,6 +909,32 @@ export function AdminJobsPanel() {
           </table>
         </div>
       )}
+
+      {pendingBatch && pendingBatch.targets.length > 0 ? (
+        pendingBatch.kind === 'publish' ? (
+          <AdminConfirmDialog
+            {...publishConfirmCopy(pendingBatch.targets)}
+            busy={Boolean(batchProgress?.running)}
+            busyLabel="Publishing…"
+            onConfirm={() => void onBatchPublish(pendingBatch.targets)}
+            onDismiss={() => {
+              if (!batchProgress?.running) setPendingBatch(null);
+            }}
+          />
+        ) : (
+          <AdminConfirmDialog
+            {...cancelConfirmCopy(pendingBatch.targets)}
+            danger
+            busy={Boolean(batchProgress?.running)}
+            busyLabel="Canceling…"
+            dismissLabel="Keep"
+            onConfirm={() => void onBatchCancel(pendingBatch.targets)}
+            onDismiss={() => {
+              if (!batchProgress?.running) setPendingBatch(null);
+            }}
+          />
+        )
+      ) : null}
 
       {previewTarget && (
         <AdminJobPreviewModal

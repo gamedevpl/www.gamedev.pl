@@ -55,6 +55,16 @@ async function render() {
   return { container, root };
 }
 
+function confirmDialog(): HTMLElement | null {
+  return document.querySelector('.admin-job-confirm');
+}
+
+function confirmDialogButton(label: string): HTMLButtonElement {
+  return Array.from(confirmDialog()?.querySelectorAll('button') ?? []).find(
+    (button) => button.textContent === label,
+  ) as HTMLButtonElement;
+}
+
 afterEach(() => {
   document.body.innerHTML = '';
   vi.clearAllMocks();
@@ -91,9 +101,59 @@ describe('AdminJobsPanel', () => {
       await Promise.resolve();
     });
 
+    expect(mocked.publishJob).not.toHaveBeenCalled();
+    expect(confirmDialog()?.textContent).toContain('Publish Comet Courier?');
+    expect(confirmDialog()?.textContent).toContain('comet-courier');
+
+    await act(async () => {
+      confirmDialogButton('Publish').click();
+      await Promise.resolve();
+    });
+
     expect(mocked.publishJob).toHaveBeenCalledWith(1_000_001);
     expect(container.querySelector('.admin-job-message')?.textContent).toContain('published comet-courier');
     expect(mocked.fetchJobQueue).toHaveBeenCalledTimes(2);
+
+    await act(async () => root.unmount());
+  });
+
+  it('does not publish when the confirmation is dismissed', async () => {
+    mocked.fetchJobQueue.mockResolvedValue(queue([job()]));
+
+    const { container, root } = await render();
+    await act(async () => {
+      (container.querySelector('.admin-job-publish') as HTMLButtonElement).click();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      confirmDialogButton('Back').click();
+      await Promise.resolve();
+    });
+
+    expect(mocked.publishJob).not.toHaveBeenCalled();
+    expect(confirmDialog()).toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it('closes the confirmation on Escape without publishing', async () => {
+    mocked.fetchJobQueue.mockResolvedValue(queue([job()]));
+
+    const { container, root } = await render();
+    await act(async () => {
+      (container.querySelector('.admin-job-publish') as HTMLButtonElement).click();
+      await Promise.resolve();
+    });
+    expect(confirmDialog()).not.toBeNull();
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(mocked.publishJob).not.toHaveBeenCalled();
+    expect(confirmDialog()).toBeNull();
 
     await act(async () => root.unmount());
   });
@@ -106,6 +166,10 @@ describe('AdminJobsPanel', () => {
 
     await act(async () => {
       (container.querySelector('.admin-job-publish') as HTMLButtonElement).click();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      confirmDialogButton('Publish').click();
       await Promise.resolve();
     });
 
@@ -157,7 +221,7 @@ describe('AdminJobsPanel', () => {
     await act(async () => root.unmount());
   });
 
-  it('takes two clicks to cancel, because canceled has no undo', async () => {
+  it('takes a confirmation dialog to cancel, because canceled has no undo', async () => {
     mocked.fetchJobQueue.mockResolvedValue(queue([job({ state: 'building' })]));
     mocked.cancelJob.mockResolvedValue({ ok: true, state: 'canceled', stopEnforced: false });
 
@@ -178,14 +242,42 @@ describe('AdminJobsPanel', () => {
       await Promise.resolve();
     });
     expect(mocked.cancelJob).not.toHaveBeenCalled();
-    expect(button.textContent).toContain('Sure?');
+    expect(confirmDialog()?.textContent).toContain('Cancel Comet Courier?');
+    expect(confirmDialog()?.textContent).toContain('cannot be undone');
 
     await act(async () => {
-      button.click();
+      confirmDialogButton('Cancel build').click();
       await Promise.resolve();
     });
     expect(mocked.cancelJob).toHaveBeenCalledWith(1_000_001);
     expect(container.querySelector('.admin-job-message')?.textContent).toContain('next report');
+
+    await act(async () => root.unmount());
+  });
+
+  it('does not cancel when the confirmation is dismissed', async () => {
+    mocked.fetchJobQueue.mockResolvedValue(queue([job({ state: 'building' })]));
+
+    const { container, root } = await render();
+    const inFlightChip = Array.from(container.querySelectorAll('.admin-filter-chip')).find((c) =>
+      c.textContent?.includes('In flight'),
+    ) as HTMLButtonElement;
+    await act(async () => {
+      inFlightChip.click();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      (container.querySelector('.admin-job-cancel') as HTMLButtonElement).click();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      confirmDialogButton('Keep').click();
+      await Promise.resolve();
+    });
+
+    expect(mocked.cancelJob).not.toHaveBeenCalled();
+    expect(confirmDialog()).toBeNull();
 
     await act(async () => root.unmount());
   });
@@ -466,6 +558,49 @@ describe('AdminJobsPanel', () => {
     await act(async () => root.unmount());
   });
 
+  it('confirms publish from the preview theater before going live', async () => {
+    mocked.fetchJobQueue.mockResolvedValue(queue([job({ jobId: 1234, title: 'Sky Dodge', slug: 'sky-dodge' })]));
+    mocked.fetchJobPreview.mockResolvedValue({
+      slug: 'sky-dodge',
+      title: 'Sky Dodge',
+      version: 'v1',
+      html: '<!doctype html><html><body>Playable Game Canvas</body></html>',
+    });
+    mocked.publishJob.mockResolvedValue({
+      ok: true,
+      slug: 'sky-dodge',
+      version: 'v1',
+      publishedAt: '2026-07-30T12:00:00Z',
+    });
+
+    const { container, root } = await render();
+    await act(async () => {
+      (container.querySelector('.admin-job-preview-btn') as HTMLButtonElement).click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const publishBtn = Array.from(document.querySelectorAll('.admin-preview-actions button')).find(
+      (button) => button.textContent === 'Publish Game',
+    ) as HTMLButtonElement;
+    await act(async () => {
+      publishBtn.click();
+      await Promise.resolve();
+    });
+
+    expect(mocked.publishJob).not.toHaveBeenCalled();
+    expect(confirmDialog()?.textContent).toContain('Publish Sky Dodge?');
+    expect(document.querySelector('.admin-preview-modal')).not.toBeNull();
+
+    await act(async () => {
+      confirmDialogButton('Publish').click();
+      await Promise.resolve();
+    });
+    expect(mocked.publishJob).toHaveBeenCalledWith(1234);
+
+    await act(async () => root.unmount());
+  });
+
   it('executes batch publish on deduplicated ready jobs', async () => {
     mocked.fetchJobQueue.mockResolvedValue(
       queue([
@@ -483,6 +618,14 @@ describe('AdminJobsPanel', () => {
 
     await act(async () => {
       bulkBtn.click();
+      await Promise.resolve();
+    });
+
+    expect(mocked.publishJob).not.toHaveBeenCalled();
+    expect(confirmDialog()?.textContent).toContain('Publish 2 games?');
+
+    await act(async () => {
+      confirmDialogButton('Publish 2').click();
       await Promise.resolve();
       await Promise.resolve();
     });

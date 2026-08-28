@@ -211,7 +211,7 @@ export function CodeSurface({
   const [missingRequiredPath, setMissingRequiredPath] = useState<string | null>(null);
   const [restoringPath, setRestoringPath] = useState<string | null>(null);
   const [filePickerOpen, setFilePickerOpen] = useState(false);
-  // Two-click confirm, same pattern as the admin job cancel button.
+  // Two-click confirm — the first click arms, the second deletes.
   const [deleteArmedPath, setDeleteArmedPath] = useState<string | null>(null);
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
   // Nonce remounts an open palette so a repeat shortcut re-targets it.

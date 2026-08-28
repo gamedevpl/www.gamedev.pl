@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { AdminConfirmDialog } from './AdminConfirmDialog.js';
 import { GameFrame } from './GameFrame.js';
 import {
   fetchJobPreview,
@@ -29,6 +30,7 @@ export function AdminJobPreviewModal({
   const [preview, setPreview] = useState<JobPreview | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [publishing, setPublishing] = useState(false);
+  const [confirmingPublish, setConfirmingPublish] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -81,6 +83,7 @@ export function AdminJobPreviewModal({
       setMessage('Could not reach the API');
     } finally {
       setPublishing(false);
+      setConfirmingPublish(false);
     }
   }, [job.jobId, onPublished]);
 
@@ -107,7 +110,12 @@ export function AdminJobPreviewModal({
           </div>
           <div className="admin-preview-actions">
             {job.state === 'ready_for_review' && (
-              <button type="button" className="admin-job-publish is-promoted" onClick={onPublish} disabled={publishing}>
+              <button
+                type="button"
+                className="admin-job-publish is-promoted"
+                onClick={() => setConfirmingPublish(true)}
+                disabled={publishing}
+              >
                 {publishing ? 'Publishing…' : 'Publish Game'}
               </button>
             )}
@@ -131,6 +139,19 @@ export function AdminJobPreviewModal({
 
         {message && <footer className="admin-preview-footer">{message}</footer>}
       </div>
+      {confirmingPublish ? (
+        <AdminConfirmDialog
+          title={`Publish ${job.title}?`}
+          body={job.slug ? `This goes live on the catalog as ${job.slug}.` : 'This goes live on the catalog.'}
+          confirmLabel="Publish"
+          busy={publishing}
+          busyLabel="Publishing…"
+          onConfirm={() => void onPublish()}
+          onDismiss={() => {
+            if (!publishing) setConfirmingPublish(false);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
