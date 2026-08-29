@@ -137,6 +137,9 @@ export type AppRoute =
   // Public contact form. Same early-exit posture as legal: a contact point behind
   // sign-in is not a published contact point.
   | { view: 'contact' }
+  // Public MCP + CLI discoverability. Always a real page (MCP is live);
+  // `/mcp` is an alias. `/cli` stays the flag-gated installer landing, not this view.
+  | { view: 'connect' }
   // /create landing page; same closed-beta gate as home, not open-chrome.
   | { view: 'create' }
   // /party: the multiplayer destination. Same closed-beta gate as create.
@@ -183,6 +186,7 @@ const RESERVED_HANDLE_SEGMENTS = new Set([
   'api',
   'auth',
   'cli',
+  'connect',
   'contact',
   'create',
   'creator',
@@ -196,6 +200,7 @@ const RESERVED_HANDLE_SEGMENTS = new Set([
   'help',
   'invite',
   'join',
+  'mcp',
   'me',
   'null',
   'official',
@@ -242,6 +247,10 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
 
   if (normalizedPath === '/contact') {
     return { view: 'contact' };
+  }
+
+  if (normalizedPath === '/connect' || normalizedPath === '/mcp') {
+    return { view: 'connect' };
   }
 
   if (normalizedPath === '/create') {
@@ -565,6 +574,7 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
     case 'review':
     case 'legal':
     case 'contact':
+    case 'connect':
     case 'create':
     case 'party':
     case 'creator':
@@ -620,6 +630,11 @@ export function legalPath(doc: LegalDocId, sectionId?: string): string {
 /** URL for the public contact form. */
 export function contactPath(): string {
   return '/contact';
+}
+
+/** Public MCP + CLI page. `#mcp` / `#cli` jump to a section. */
+export function connectPath(section?: 'mcp' | 'cli'): string {
+  return section ? `/connect#${section}` : '/connect';
 }
 
 // URL for the creation landing page.

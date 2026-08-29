@@ -34,6 +34,7 @@ import { StudioConnectWizard } from './surfaces/studio/StudioConnectWizard.js';
 import type { PublicCreatorProfile } from './creatorProfileApi.js';
 import { LegalPage } from './LegalPage.js';
 import { ContactPage } from './ContactPage.js';
+import { ConnectAgentsPage } from './ConnectAgentsPage.js';
 import { CreatePage } from './CreatePage.js';
 import { ProposalsPage } from './ProposalsPage.js';
 import { CreatorProfilePage } from './CreatorProfilePage.js';
@@ -238,6 +239,7 @@ export function App() {
         privacy: t('legal.privacy'),
         terms: t('legal.terms'),
         contact: t('pageTitle.contact'),
+        connect: t('pageTitle.connect'),
         create: t('pageTitle.create'),
         party: t('pageTitle.party'),
         proposals: t('pageTitle.proposals'),
@@ -986,10 +988,10 @@ export function App() {
     );
   }
 
-  // Same early exit as legal: the published contact point must work without a session.
-  if (route.view === 'contact') {
+  // Same early exit as legal: contact and the agent-connect page must work without a session.
+  if (route.view === 'contact' || route.view === 'connect') {
     return (
-      <div className="app app--contact">
+      <div className={route.view === 'contact' ? 'app app--contact' : 'app app--connect'}>
         <NavHeader
           activeBuildCount={activeBuildCount}
           onHome={() => navigate('/')}
@@ -1003,7 +1005,11 @@ export function App() {
           onUp={navigate}
         />
         <main className="content">
-          <ContactPage onBack={() => navigate('/')} />
+          {route.view === 'contact' ? (
+            <ContactPage onBack={() => navigate('/')} />
+          ) : (
+            <ConnectAgentsPage onBack={() => navigate('/')} />
+          )}
         </main>
         <SiteFooter />
       </div>

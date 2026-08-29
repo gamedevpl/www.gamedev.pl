@@ -15,6 +15,8 @@ describe('cliSurfaceEnabled', () => {
   it('treats cli as a reserved handle', async () => {
     const { isReservedHandle, validateHandleShape } = await import('./creator-profile.js');
     expect(isReservedHandle('cli')).toBe(true);
+    expect(isReservedHandle('connect')).toBe(true);
+    expect(isReservedHandle('mcp')).toBe(true);
     expect(isReservedHandle('device')).toBe(true);
     expect(validateHandleShape('CLI')).toBe('reserved');
   });

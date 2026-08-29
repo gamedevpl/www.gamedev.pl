@@ -3,7 +3,6 @@ import githubIcon from './assets/github-mark-white.svg';
 import { bugReportUrl, REPO_URL } from './github.js';
 import { OPERATOR_LEGAL_NAME } from './legal/operator.js';
 import { contactPath, legalPath } from './core/router.js';
-import { useCliSurfaceEnabled } from './useCliSurfaceEnabled.js';
 import { currentVisitId } from './visitTelemetry.js';
 
 /**
@@ -20,8 +19,6 @@ import { currentVisitId } from './visitTelemetry.js';
 export function SiteFooter() {
   const { t } = useTranslation();
   const year = new Date().getFullYear();
-  const cliOn = useCliSurfaceEnabled();
-
   return (
     <footer className="site-footer">
       <div className="site-footer__inner">
@@ -55,7 +52,6 @@ export function SiteFooter() {
         >
           {t('footer.reportBug')}
         </a>
-        {cliOn ? <a href="/cli">{t('footer.cli')}</a> : null}
       </nav>
 
       <p className="site-footer__ai">{t('footer.aiDisclosure')}</p>

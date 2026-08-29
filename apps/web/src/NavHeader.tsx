@@ -323,6 +323,10 @@ export function NavHeader({
                 <PixelIcon name="phone" size={14} /> {t('header.navParty')}
               </button>
 
+              <a className="nav-link" href="/connect" onClick={() => setIsMenuOpen(false)}>
+                <PixelIcon name="code" size={14} /> {t('header.navConnect')}
+              </a>
+
               {/* Operators only — everyone else never learns this exists, which is the
                   same posture the API takes when asked. */}
               {isOperator ? (

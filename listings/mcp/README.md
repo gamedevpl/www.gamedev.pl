@@ -11,6 +11,7 @@ an npm package we maintain.
 
 | Path                                        | What                                                                                                                                  |
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /connect` (alias `/mcp`)               | Human page: MCP URL + gamedev CLI. Header menu, not `/create` or public game pages.                                                   |
 | `GET /.well-known/mcp/server.json`          | Registry-shaped `server.json` (schema `2025-12-11`). Auth points at `/.well-known/oauth-protected-resource` rather than restating it. |
 | `GET /.well-known/oauth-protected-resource` | RFC 9728 protected-resource metadata (BY-18a).                                                                                        |
 
@@ -201,7 +202,8 @@ mcp-publisher status --status deprecated --message "…" pl.gamedev/creator 1.0.
 
 ## One-click install (product surface, not a listing)
 
-On the Studio connect card, credential-free deep links install the **server URL only**:
+The public explanation is [`/connect`](https://www.gamedev.pl/connect). On the Studio
+connect card, credential-free deep links install the **server URL only**:
 
 - Cursor: `cursor://anysphere.cursor-deeplink/mcp/install?…`
 - VS Code: `vscode:mcp/install?…`

@@ -180,6 +180,8 @@ describe('NavHeader menu', () => {
     expect(labels.some((text) => /GitHub/i.test(text))).toBe(false);
     // Sign out sits at the foot of the menu, not beside the avatar.
     expect(container.querySelector('.logout-btn')).toBeNull();
+    expect(labels.some((text) => /Connect an agent/i.test(text))).toBe(true);
+    expect(container.querySelector('a.nav-link[href="/connect"]')).not.toBeNull();
     expect(labels.some((text) => /Sign out/i.test(text))).toBe(true);
     expect(container.querySelector('.nav-link--sign-out')).not.toBeNull();
 

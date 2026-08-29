@@ -132,6 +132,8 @@ describe('route kinds follow the real router', () => {
     ['/privacy', 'legal'],
     ['/terms', 'legal'],
     ['/contact', 'legal'],
+    ['/connect', 'legal'],
+    ['/mcp', 'legal'],
     ['/status/some-token', 'studio'],
     ['/health', 'health'],
     ['/studio', 'studio'],

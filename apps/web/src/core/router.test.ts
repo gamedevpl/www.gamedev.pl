@@ -205,6 +205,13 @@ describe('parsePathRoute', () => {
     expect(parsePathRoute('/contact')).toEqual({ view: 'contact' });
   });
 
+  it('parses the public connect page and the /mcp alias', () => {
+    expect(parsePathRoute('/connect')).toEqual({ view: 'connect' });
+    expect(parsePathRoute('/mcp')).toEqual({ view: 'connect' });
+    expect(parsePathRoute('/connect/extra')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/cli')).toEqual({ view: 'notFound' });
+  });
+
   it('parses the creation landing route, and reserves the handle', () => {
     expect(parsePathRoute('/create')).toEqual({ view: 'create' });
     // Same reserved-segment protection as the other first-class routes.
@@ -417,6 +424,7 @@ describe('navUpTarget', () => {
     expect(navUpTarget({ view: 'admin', section: 'queue' })).toEqual({ path: '/', labelKey: 'upHome' });
     expect(navUpTarget({ view: 'legal', doc: 'privacy' })).toEqual({ path: '/', labelKey: 'upHome' });
     expect(navUpTarget({ view: 'contact' })).toEqual({ path: '/', labelKey: 'upHome' });
+    expect(navUpTarget({ view: 'connect' })).toEqual({ path: '/', labelKey: 'upHome' });
     expect(navUpTarget({ view: 'create' })).toEqual({ path: '/', labelKey: 'upHome' });
     expect(navUpTarget({ view: 'party' })).toEqual({ path: '/', labelKey: 'upHome' });
     expect(navUpTarget({ view: 'creator', handle: 'ada' })).toEqual({ path: '/', labelKey: 'upHome' });

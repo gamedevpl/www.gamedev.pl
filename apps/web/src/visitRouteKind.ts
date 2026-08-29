@@ -28,6 +28,7 @@ export function routeKind(view: string): VisitRouteKind {
     case 'review':
       return 'health';
     case 'contact':
+    case 'connect':
       return 'legal';
     case 'creator':
       return 'legal';
