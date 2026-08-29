@@ -935,5 +935,63 @@ describe('HeroPromptSection', () => {
 
     await act(async () => root.unmount());
   });
+
+  it('matches game from vector search even when catalogEntries is initially empty on cold load', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('pl');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const vectorMatchGame = {
+      slug: 'bonfire-arena',
+      title: 'Bonfire Arena',
+      genre: 'soulslike',
+      tagline: { pl: 'Pojedynki na miecze', en: 'Sword duels' },
+      shortControls: { pl: 'Strzałki / Spacja', en: 'Arrows / Space' },
+      searchKeywords: ['miecze', 'walka'],
+    };
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            match: vectorMatchGame,
+            score: 0.85,
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+
+    // Initial render with catalogEntries = [] (e.g. initial cold load)
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'walka na miecze',
+          catalogEntries: [],
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    // Advance debounce
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250));
+      await flushEffects();
+    });
+
+    // Even with empty catalogEntries, match should be displayed
+    const card = container.querySelector('.matched-card');
+    expect(card).not.toBeNull();
+    expect(container.querySelector('.matched-title')?.textContent).toBe('Bonfire Arena');
+
+    fetchSpy.mockRestore();
+    await act(async () => root.unmount());
+  });
 });
 

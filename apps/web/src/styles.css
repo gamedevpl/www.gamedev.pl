@@ -484,7 +484,7 @@ a {
    height:auto so border-box can't clip 36px cells. */
 .prompt-composer-bar {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) 36px 36px;
+  grid-template-columns: 36px minmax(0, 1fr) 36px auto;
   align-items: center;
   column-gap: 8px;
   width: 100%;
@@ -494,7 +494,7 @@ a {
   background: rgba(32, 42, 51, 0.97);
   border: 1px solid rgba(0, 228, 172, 0.22);
   border-radius: 999px;
-  padding: 4px 8px;
+  padding: 4px 6px 4px 8px;
   box-shadow:
     0 8px 24px rgba(0, 0, 0, 0.32),
     0 0 0 1px rgba(0, 0, 0, 0.2);
@@ -636,18 +636,17 @@ a {
   flex: none;
 }
 
-/* Desktop: circular send — label stays for a11y/tests, clipped visually. */
+/* Pill build button with visible text CTA and icon. */
 .prompt-composer-bar .build-btn {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0;
-  width: 36px;
-  height: 36px;
-  min-width: 36px;
-  min-height: 36px;
-  padding: 0;
+  gap: 6px;
+  width: auto;
+  height: 38px;
+  min-height: 38px;
+  padding: 0 16px;
   margin: 0;
   border: none;
   border-radius: 999px;
@@ -659,18 +658,18 @@ a {
 }
 
 .prompt-composer-bar .build-btn-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
+  position: static;
+  width: auto;
+  height: auto;
   padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
+  margin: 0;
+  overflow: visible;
+  clip: auto;
   white-space: nowrap;
   border: 0;
 }
 
-/* Busy: keep teal; spinner replaces the clipped label on desktop. */
+/* Busy: keep teal; spinner replaces the icon during generation. */
 .prompt-composer-bar .build-btn.is-busy {
   opacity: 1;
   cursor: progress;
