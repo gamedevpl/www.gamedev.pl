@@ -143,7 +143,7 @@ roughly in order of how often they turn up real issues:
   into the game's iframe and send keyboard input; a game that never responds to
   input is the most user-visible failure mode there is.
 - **Play alias rewrite** (`/ai/<slug>` or `/ay/<slug>`) — should 30x/rewrite to the canonical
-  `/play/<slug>` (see `apps/web/src/router.ts`).
+  `/play/<slug>` (see `apps/web/src/core/router.ts`).
 - **Multiplayer lobby** — click "Play together" on a catalog entry with `multiplayer` set;
   check the QR/join-link screen renders and the join URL matches `/join/<CODE>#<token>`.
 - **Header menu** (hamburger, top right) — items are `<button class="nav-link">`, not
