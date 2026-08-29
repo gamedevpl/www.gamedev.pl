@@ -988,7 +988,7 @@ export function App() {
     );
   }
 
-  // Same early exit as legal: contact and the agent-connect page must work without a session.
+  // Open chrome: contact and /connect work without a session.
   if (route.view === 'contact' || route.view === 'connect') {
     return (
       <div className={route.view === 'contact' ? 'app app--contact' : 'app app--connect'}>

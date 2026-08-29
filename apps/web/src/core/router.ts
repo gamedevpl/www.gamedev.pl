@@ -137,8 +137,6 @@ export type AppRoute =
   // Public contact form. Same early-exit posture as legal: a contact point behind
   // sign-in is not a published contact point.
   | { view: 'contact' }
-  // Public MCP + CLI discoverability. Always a real page (MCP is live);
-  // `/mcp` is an alias. `/cli` stays the flag-gated installer landing, not this view.
   | { view: 'connect' }
   // /create landing page; same closed-beta gate as home, not open-chrome.
   | { view: 'create' }

@@ -6,11 +6,6 @@ const MCP_PATH = '/api/mcp';
 const CLAUDE_PLUGIN = 'https://github.com/gamedevpl/www.gamedev.pl/tree/master/listings/mcp/claude-plugin';
 const MCP_REGISTRY = 'https://github.com/modelcontextprotocol/registry';
 
-/**
- * Public “connect an agent” page — MCP (live) and the gamedev CLI (installers
- * only when CLI_SURFACE is on). Same open-chrome posture as Contact: readable
- * without a session. Not linked from create or public game pages.
- */
 export function ConnectAgentsPage({ onBack }: { onBack: () => void }) {
   const { t } = useTranslation();
   const cliOn = useCliSurfaceEnabled();
