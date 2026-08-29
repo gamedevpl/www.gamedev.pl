@@ -598,7 +598,7 @@ describe('HeroPromptSection', () => {
 
     const playBtn = container.querySelector<HTMLButtonElement>('.play-match-btn');
     expect(playBtn).not.toBeNull();
-    expect(playBtn?.textContent).toContain("Play Mexico '86 Arcade Football Now");
+    expect(playBtn?.textContent).toContain('Play now');
 
     await act(async () => {
       playBtn?.click();
