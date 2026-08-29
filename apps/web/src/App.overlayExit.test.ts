@@ -212,10 +212,6 @@ describe('closing a full-viewport game', () => {
     }
     expect(window.location.pathname).toBe('/create');
 
-    // Simulate in-app navigation from /create to an unpublished /play game
-    // When the app's navigate() is called, playReturnPathRef records '/create'
-    // To trigger navigate() in test, we can click a play link or dispatch the in-app event
-    // The play button on a card in showcase or footer:
     const showcasePlay = container.querySelector<HTMLButtonElement>('.card-actions .primary-btn');
     if (showcasePlay) {
       await act(async () => {
