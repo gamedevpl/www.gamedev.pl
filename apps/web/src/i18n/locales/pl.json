@@ -1283,6 +1283,7 @@
       "lead": "Rozmowny front door. Opisz pomysł, odpowiedz na pytania, obserwuj bramkę. Checkout idzie do Twojego edytora; git push nie jest ścieżką oddania.",
       "installHint": "Potrzebujesz Node 20+ — tak jak przy kopii roboczej. Windows: irm https://www.gamedev.pl/install.ps1 | iex. Skrypt weryfikuje sumę kontrolną zanim zapisze ~/.local/bin.",
       "installPending": "Instalatory nie są jeszcze publiczne. Klient jest w tym repozytorium w apps/cli; zbierz go lokalnie: npm run bundle -w @gamedevpl/cli.",
+      "login": "gamedevpl login otwiera przeglądarkę. Zatwierdzasz raz — bez kopiowania tokenu.",
       "repl": "gamedevpl bez czasownika otwiera REPL: opisz grę, potem iteruj.",
       "checkout": "gamedevpl checkout <slug> do własnego edytora. Oddajesz poleceniem gamedevpl submit.",
       "ci": "CI: GAMEDEV_TOKEN z secrets. Nigdy nie przekazuj tokenu OAuth twórcy do sub-agenta."
@@ -1687,7 +1688,7 @@
     },
     "gamedevCli": {
       "title": "gamedevpl CLI",
-      "hint": "Potrzebujesz Node 20 — tak jak przy kopii roboczej. Potem podłącz tę grę. Ta sama runda co MCP — bez dodatkowego sekretu."
+      "hint": "Potrzebujesz Node 20. gamedevpl login otwiera przeglądarkę, potem podłącz tę grę. Ta sama runda co MCP."
     },
     "rotate": {
       "start": "Obróć klucz",

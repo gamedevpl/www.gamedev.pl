@@ -78,6 +78,7 @@ describe('ConnectAgentsPage', () => {
     await draw(true);
     expect(container.textContent).toMatch(/install\.sh/);
     expect(container.textContent).toMatch(/Node 20/);
+    expect(container.textContent).toMatch(/login opens your browser/i);
   });
 
   it('scrolls the hashed section into view on mount', async () => {

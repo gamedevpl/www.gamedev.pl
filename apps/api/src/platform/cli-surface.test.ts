@@ -59,6 +59,7 @@ describe('reserved installer routes', () => {
       const page = await app.inject({ method: 'GET', url: '/cli' });
       expect(page.statusCode).toBe(200);
       expect(page.body).toContain('gamedevpl login');
+      expect(page.body).toContain('no token to copy');
       expect(page.body).toContain('encrypted file');
       expect(page.body).toContain('Node 20');
       const ps1 = await app.inject({ method: 'GET', url: '/install.ps1' });

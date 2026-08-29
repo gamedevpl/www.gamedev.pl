@@ -89,6 +89,7 @@ export function ConnectAgentsPage({ onBack, onStudio }: { onBack: () => void; on
           <p className="connect-hint">{t('connectAgents.cli.installPending')}</p>
         )}
         <ul className="connect-list">
+          <li>{t('connectAgents.cli.login')}</li>
           <li>{t('connectAgents.cli.repl')}</li>
           <li>{t('connectAgents.cli.checkout')}</li>
           <li>{t('connectAgents.cli.ci')}</li>

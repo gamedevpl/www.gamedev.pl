@@ -6,6 +6,7 @@ import { parseArgv, jsonMode, SLASH_VERBS } from './argv.js';
 import { CLI_BIN, GIT_REMOTE_HELPER, GIT_REMOTE_SCHEME, cliUsage } from './bin-name.js';
 import { createApi, requireTtyFlag } from './api.js';
 import { encryptedFileStore, FILE_FALLBACK_WARNING, memoryStore, type TokenStore } from './keychain.js';
+import { runLoopbackLogin } from './login.js';
 import { originFromEnv } from './oauth.js';
 import { CliError, EXIT_GREEN, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { describeError, pipeNeedsFlag } from './errors.js';
@@ -62,13 +63,23 @@ export async function runCli(
       return EXIT_GREEN;
     }
     if (verb === 'login') {
-      if (env.GAMEDEV_TOKEN) {
-        await store.set({ accessToken: env.GAMEDEV_TOKEN, tokenType: 'Bearer', scope: 'creator' });
+      const persist = encryptedFileStore(env);
+      const imported = (typeof flags.token === 'string' ? flags.token.trim() : '') || env.GAMEDEV_TOKEN?.trim() || '';
+      if (imported) {
+        await persist.set({ accessToken: imported, tokenType: 'Bearer', scope: 'creator' });
+        io.stderr.write(`${FILE_FALLBACK_WARNING}\n`);
         io.stdout.write('signed in with GAMEDEV_TOKEN\n');
         return EXIT_GREEN;
       }
       requireTtyFlag(tty, '--token', `GAMEDEV_TOKEN=… ${cliUsage('login')}`);
-      io.stdout.write(`open ${origin}/oauth/authorize to sign in, then retry with GAMEDEV_TOKEN set\n`);
+      await runLoopbackLogin({
+        origin,
+        store: persist,
+        stdout: io.stdout,
+        stderr: io.stderr,
+        env,
+        isTty: Boolean(io.stdout.isTTY),
+      });
       return EXIT_GREEN;
     }
     if (verb === 'logout') {
