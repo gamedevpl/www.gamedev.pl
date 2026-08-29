@@ -42,10 +42,15 @@ function hashDeviceCode(deviceCode: string): string {
 }
 
 function mintUserCode(): string {
-  const bytes = randomBytes(8);
+  const n = USER_CODE_ALPHABET.length;
+  const limit = 256 - (256 % n);
   let out = '';
-  for (let i = 0; i < 8; i++) {
-    out += USER_CODE_ALPHABET[bytes[i]! % USER_CODE_ALPHABET.length];
+  while (out.length < 8) {
+    for (const byte of randomBytes(8)) {
+      if (byte >= limit) continue;
+      out += USER_CODE_ALPHABET[byte % n];
+      if (out.length === 8) break;
+    }
   }
   return `${out.slice(0, 4)}-${out.slice(4)}`;
 }
