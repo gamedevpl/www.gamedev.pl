@@ -733,10 +733,6 @@ export function App() {
     [pendingSpec, qaQuestions, qaLocale],
   );
 
-  // Whether this tab has pushed a history entry of its own — i.e. whether going Back
-  // lands somewhere in the app rather than wherever the visitor came from.
-  const pushedHistoryRef = useRef(false);
-
   const navigate = useCallback((path: string, options?: { replace?: boolean }) => {
     // Update the URL (the source of truth) and the route synchronously so
     // navigation is immediate (and testable) without waiting for popstate.
@@ -744,7 +740,6 @@ export function App() {
       window.history.replaceState(null, '', path);
     } else {
       window.history.pushState(null, '', path);
-      pushedHistoryRef.current = true;
     }
     // pushState/replaceState are silent, so announce the navigation for anything
     // living outside this component (see NAVIGATE_EVENT). Dispatched before the
@@ -754,19 +749,10 @@ export function App() {
   }, []);
 
   /**
-   * Closing a full-viewport overlay that owns the URL — currently a draft.
-   *
-   * Home was the unconditional answer, and it threw away context every time: a creator
-   * who opened their build from Creator Studio and closed it landed on the catalog,
-   * several clicks from the game they were in the middle of making. Back returns them
-   * to whatever opened the overlay. A cold visit to a shared link has no in-app entry
-   * behind it — Back there would leave the site entirely — so that case still goes home.
+   * Closing a full-viewport overlay that owns the URL — unpublished draft or public play.
+   * Direct visits to `/play/<slug>` always reliably return to Home (`/`).
    */
   const exitOverlay = useCallback(() => {
-    if (pushedHistoryRef.current) {
-      window.history.back();
-      return;
-    }
     navigate('/');
   }, [navigate]);
 
@@ -857,6 +843,16 @@ export function App() {
     setStageContent(null);
   }
 
+  function handleExitPartyTheater() {
+    if (route.view === 'play' && stageContent?.type === 'party') {
+      const game = stageContent.game;
+      navigate(gamePath(gamePageHandle(game), game.slug), { replace: true });
+      setStageContent(null);
+      return;
+    }
+    setStageContent(null);
+  }
+
   async function handlePlayTogether(game: CatalogEntry, via?: PlayVia) {
     if (!user) {
       setIsAuthModalOpen(true);
@@ -893,7 +889,7 @@ export function App() {
             <div className="game-theater-actions">
               <button
                 className="secondary-btn exit-btn"
-                onClick={() => setStageContent(null)}
+                onClick={handleExitPartyTheater}
                 aria-label={t('catalog.exitPlayer', { defaultValue: 'Close' })}
                 title={t('catalog.exitPlayer', { defaultValue: 'Close' })}
               >
@@ -907,7 +903,7 @@ export function App() {
               game={stageContent.game}
               session={stageContent.session}
               via={stageContent.via}
-              onExit={() => setStageContent(null)}
+              onExit={handleExitPartyTheater}
             />
           </div>
         </section>

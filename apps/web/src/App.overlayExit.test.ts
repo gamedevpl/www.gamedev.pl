@@ -158,4 +158,28 @@ describe('closing a full-viewport game', () => {
       root.unmount();
     });
   });
+
+  it('exits an unpublished /play deep link to home on Close', async () => {
+    mockApi();
+    window.history.pushState(null, '', '/play/transport-tycoon-remake');
+    const { container, root } = await renderApp();
+
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+
+    const exit = container.querySelector<HTMLButtonElement>('.exit-btn');
+    expect(exit).not.toBeNull();
+    await act(async () => {
+      exit?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(back).not.toHaveBeenCalled();
+    expect(window.location.pathname).toBe('/');
+    expect(container.querySelector('.exit-btn')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });
