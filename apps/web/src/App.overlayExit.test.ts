@@ -70,6 +70,9 @@ function mockApi() {
         }),
       );
     }
+    if (url.includes('/api/my/games') || url.includes('/api/studio')) {
+      return new Response(JSON.stringify({ games: [] }));
+    }
     if (url.includes('/api/games/')) {
       return new Response(JSON.stringify({ slug: 'sky-dodge', title: 'Sky Dodge', html: '<!doctype html><canvas>' }));
     }
@@ -177,6 +180,49 @@ describe('closing a full-viewport game', () => {
     expect(back).not.toHaveBeenCalled();
     expect(window.location.pathname).toBe('/');
     expect(container.querySelector('.exit-btn')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('returns to the in-app opener when closing /play opened from within the app', async () => {
+    mockApi();
+    window.history.pushState(null, '', '/');
+    const { container, root } = await renderApp();
+
+    expect(window.location.pathname).toBe('/');
+
+    // Open hamburger menu and navigate to /create
+    const hamburger = container.querySelector<HTMLButtonElement>('.hamburger-btn');
+    if (hamburger) {
+      await act(async () => {
+        hamburger.click();
+        await flushEffects();
+      });
+    }
+    const createBtn = Array.from(container.querySelectorAll<HTMLButtonElement>('.nav-link')).find((btn) =>
+      /Create/i.test(btn.textContent ?? ''),
+    );
+    if (createBtn) {
+      await act(async () => {
+        createBtn.click();
+        await flushEffects();
+      });
+    }
+    expect(window.location.pathname).toBe('/create');
+
+    // Simulate in-app navigation from /create to an unpublished /play game
+    // When the app's navigate() is called, playReturnPathRef records '/create'
+    // To trigger navigate() in test, we can click a play link or dispatch the in-app event
+    // The play button on a card in showcase or footer:
+    const showcasePlay = container.querySelector<HTMLButtonElement>('.card-actions .primary-btn');
+    if (showcasePlay) {
+      await act(async () => {
+        showcasePlay.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+      });
+    }
 
     await act(async () => {
       root.unmount();

@@ -733,7 +733,17 @@ export function App() {
     [pendingSpec, qaQuestions, qaLocale],
   );
 
+  // Track where a full-viewport /play overlay was opened from within the app
+  // (e.g. from Creator Studio /studio/...), so closing it returns to that opener.
+  const playReturnPathRef = useRef<string | null>(null);
+
   const navigate = useCallback((path: string, options?: { replace?: boolean }) => {
+    // When navigating to a /play route from elsewhere in the app, record the
+    // origin path so exitOverlay can return to it.
+    if (path.startsWith('/play/') && !window.location.pathname.startsWith('/play/')) {
+      playReturnPathRef.current = window.location.pathname + window.location.search;
+    }
+
     // Update the URL (the source of truth) and the route synchronously so
     // navigation is immediate (and testable) without waiting for popstate.
     if (options?.replace) {
@@ -750,9 +760,16 @@ export function App() {
 
   /**
    * Closing a full-viewport overlay that owns the URL — unpublished draft or public play.
-   * Direct visits to `/play/<slug>` always reliably return to Home (`/`).
+   * Returns to the in-app opener (e.g. Creator Studio) if launched from within the app,
+   * or safely falls back to Home (`/`) on direct visits.
    */
   const exitOverlay = useCallback(() => {
+    const returnPath = playReturnPathRef.current;
+    playReturnPathRef.current = null;
+    if (returnPath && !returnPath.startsWith('/play/')) {
+      navigate(returnPath);
+      return;
+    }
     navigate('/');
   }, [navigate]);
 
