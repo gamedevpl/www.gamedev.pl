@@ -985,18 +985,55 @@ a {
   padding: 16px 20px;
   border-radius: 12px;
   text-align: left;
-  animation: fadeIn 0.25s ease-out;
+  min-height: 72px;
+  box-sizing: border-box;
+  animation: fadeIn 0.2s ease-out;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    min-height 0.2s ease;
 }
 
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(-6px);
+    transform: translateY(-4px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.searching-card {
+  background: rgba(0, 228, 172, 0.04);
+  border: 1px dashed rgba(0, 228, 172, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.searching-card .searching-spinner {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 228, 172, 0.25);
+  border-top-color: var(--turquoise);
+  animation: status-spin 0.8s linear infinite;
+}
+
+.searching-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.searching-sub {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-style: italic;
 }
 
 .matched-card {
@@ -1085,30 +1122,47 @@ a {
   align-items: center;
 }
 
-.play-match-btn {
+.play-match-btn,
+.build-match-btn {
   background: var(--turquoise);
   color: #0b221d;
   font-weight: 700;
 }
 
-.remix-match-btn {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--panel-border);
-  color: var(--text);
-}
-
 .creation-card {
   background: rgba(56, 189, 248, 0.08);
   border: 1px solid rgba(56, 189, 248, 0.25);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.creation-info {
+  flex: 1;
+  min-width: 200px;
+}
+
+.creation-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.creation-badge,
+.searching-badge {
+  font-size: 0.85rem;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .creation-badge {
   color: var(--accent-blue);
-  font-size: 0.85rem;
-  /* This badge quotes the creator's whole prompt back at them; the uppercase the
-     other badges use turned that quote into a full line of shouting. */
-  text-transform: none;
-  letter-spacing: normal;
+}
+
+.searching-badge {
+  color: var(--turquoise);
 }
 
 .creation-sub {
@@ -4110,16 +4164,19 @@ body.player-open {
     width: 100%;
   }
 
-  .matched-card {
+  .matched-card,
+  .creation-card {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .matched-actions {
+  .matched-actions,
+  .creation-actions {
     flex-direction: column;
   }
 
-  .matched-actions button {
+  .matched-actions button,
+  .creation-actions button {
     width: 100%;
   }
 

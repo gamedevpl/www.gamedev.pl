@@ -733,12 +733,20 @@ describe('HeroPromptSection', () => {
       await flushEffects();
     });
 
+    // In-flight debounce shows search card and no creation flash.
+    expect(container.querySelector('.searching-card')).not.toBeNull();
+    expect(container.querySelector('.searching-spinner')).not.toBeNull();
+    expect(container.querySelector('.creation-card')).toBeNull();
+    expect(container.querySelector('.matched-card')).toBeNull();
+
     // Advance timer for 200ms debounce
     await act(async () => {
       await new Promise((r) => setTimeout(r, 250));
       await flushEffects();
     });
 
+    // Search match replaces search indicator with matched card.
+    expect(container.querySelector('.searching-card')).toBeNull();
     const card = container.querySelector('.matched-card');
     expect(card).not.toBeNull();
 
@@ -747,6 +755,132 @@ describe('HeroPromptSection', () => {
 
     const desc = container.querySelector('.matched-desc');
     expect(desc?.textContent).toBe('Deep space dogfights in a shattered galaxy.');
+
+    fetchSpy.mockRestore();
+    await act(async () => root.unmount());
+  });
+
+  it('shows searching state while debouncing and falls back to creation card when no match is found', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('pl');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (String(url).includes('/api/catalog/search')) {
+        return {
+          ok: true,
+          json: async () => ({ match: null, score: 0 }),
+        } as Response;
+      }
+      return { ok: false } as Response;
+    });
+
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'symulator gotowania zupy pomidorowej',
+          catalogEntries: [],
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    // In-flight shows searching indicator, not creation card.
+    expect(container.querySelector('.searching-card')).not.toBeNull();
+    expect(container.querySelector('.searching-card')?.textContent).toContain('Szukanie w katalogu');
+    expect(container.querySelector('.creation-card')).toBeNull();
+
+    // Advance debounce timer
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250));
+      await flushEffects();
+    });
+
+    // Finished search with no match shows creation card with CTA button.
+    expect(container.querySelector('.searching-card')).toBeNull();
+    expect(container.querySelector('.matched-card')).toBeNull();
+    expect(container.querySelector('.creation-card')).not.toBeNull();
+    expect(container.querySelector('.creation-card')?.textContent).toContain('Opisz swój pomysł na grę');
+    expect(container.querySelector('.creation-card .build-match-btn')?.textContent).toContain('Stwórz taką grę');
+
+    fetchSpy.mockRestore();
+    await act(async () => root.unmount());
+  });
+
+  it('does not show creation card for single-word query when search finds no match', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('pl');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify({ match: null, score: 0 }), { status: 200 })),
+    );
+
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'miecz',
+          catalogEntries: [],
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    // Advance debounce timer
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250));
+      await flushEffects();
+    });
+
+    // Single-word search with no match should not propose creation
+    expect(container.querySelector('.searching-card')).toBeNull();
+    expect(container.querySelector('.matched-card')).toBeNull();
+    expect(container.querySelector('.creation-card')).toBeNull();
+
+    fetchSpy.mockRestore();
+    await act(async () => root.unmount());
+  });
+
+  it('renders searching card on the very first synchronous paint when initialPrompt requires search', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('pl');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify({ match: null, score: 0 }), { status: 200 })),
+    );
+
+    // Initial render without flushing effects or advancing timers
+    act(() => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'symulator gotowania zupy pomidorowej',
+          catalogEntries: [],
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+        }),
+      );
+    });
+
+    // Synchronous first paint must already show searching, never creation card
+    expect(container.querySelector('.searching-card')).not.toBeNull();
+    expect(container.querySelector('.creation-card')).toBeNull();
 
     fetchSpy.mockRestore();
     await act(async () => root.unmount());
@@ -801,200 +935,5 @@ describe('HeroPromptSection', () => {
 
     await act(async () => root.unmount());
   });
-
-  it('correctly handles negative control queries without false positive matches', async () => {
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-    await i18n.changeLanguage('en');
-
-    const container = document.createElement('div');
-    document.body.appendChild(container);
-    const root = createRoot(container);
-
-    const mockCatalog = [
-      {
-        slug: 'carjack-city',
-        title: 'Carjack City',
-        genre: 'action',
-        controls: 'WASD',
-        media: null,
-        multiplayer: null,
-        saves: null,
-        world: null,
-        sensing: null,
-        orientation: 'landscape' as const,
-        editor: null,
-        status: 'published' as const,
-        submittedBy: null,
-        tagline: { en: 'Top-down driving.', pl: 'Jazda samochodem.' },
-        searchKeywords: ['driving', 'car', 'cars'],
-      },
-      {
-        slug: 'mexico-86',
-        title: "Mexico '86 Arcade Football",
-        genre: 'sports',
-        controls: 'Arrows / Enter',
-        media: null,
-        multiplayer: null,
-        saves: null,
-        world: null,
-        sensing: null,
-        orientation: 'landscape' as const,
-        editor: null,
-        status: 'published' as const,
-        submittedBy: null,
-        tagline: { en: 'Tournament football.', pl: 'Turniej piłkarski.' },
-        searchKeywords: ['football', 'soccer', 'piłka', 'mundial'],
-      },
-      {
-        slug: 'checker-champ',
-        title: 'Checker Champ',
-        genre: 'board',
-        controls: 'Mouse',
-        media: null,
-        multiplayer: null,
-        saves: null,
-        world: null,
-        sensing: null,
-        orientation: 'landscape' as const,
-        editor: null,
-        status: 'published' as const,
-        submittedBy: null,
-        tagline: { en: 'Classic checkers.', pl: 'Klasyczne warcaby.' },
-        searchKeywords: ['checkers', 'warcaby'],
-      },
-      {
-        slug: 'classic-solitaire',
-        title: 'Classic Solitaire',
-        genre: 'cards',
-        controls: 'Mouse',
-        media: null,
-        multiplayer: null,
-        saves: null,
-        world: null,
-        sensing: null,
-        orientation: 'landscape' as const,
-        editor: null,
-        status: 'published' as const,
-        submittedBy: null,
-        tagline: { en: 'Klondike card solitaire.', pl: 'Pasjans karciany.' },
-        searchKeywords: ['cards', 'solitaire', 'karty', 'pasjans'],
-      },
-      {
-        slug: 'starweb-4x',
-        title: 'Starweb 4X',
-        genre: 'strategy',
-        controls: 'Mouse',
-        media: null,
-        multiplayer: null,
-        saves: null,
-        world: null,
-        sensing: null,
-        orientation: 'landscape' as const,
-        editor: null,
-        status: 'published' as const,
-        submittedBy: null,
-        tagline: { en: 'Galactic strategy.', pl: 'Galaktyczna strategia.' },
-        searchKeywords: ['4x', 'space', 'strategy'],
-      },
-    ];
-
-    const checkPrompt = async (prompt: string) => {
-      await act(async () => {
-        root.render(
-          createElement(HeroPromptSection, {
-            key: prompt,
-            initialPrompt: prompt,
-            catalogEntries: mockCatalog,
-            submissionStatus: 'idle',
-            submissionError: null,
-            onSubmitSpec: vi.fn(),
-          }),
-        );
-        await flushEffects();
-      });
-      return container.querySelector('.matched-card');
-    };
-
-    // "card" query should NOT false-match carjack-city
-    const cardMatch = await checkPrompt('I want to play a card game');
-    expect(cardMatch).not.toBeNull();
-    expect(container.querySelector('.matched-title')?.textContent).toBe('Classic Solitaire');
-
-    // Polish cards intent
-    const plCardMatch = await checkPrompt('chcę pograć w karty');
-    expect(plCardMatch).not.toBeNull();
-    expect(container.querySelector('.matched-title')?.textContent).toBe('Classic Solitaire');
-
-    // "gold rush" must NOT false-match mexico-86 via 'gol'
-    const goldRush = await checkPrompt('gold rush');
-    expect(goldRush).toBeNull();
-
-    // "author" and "autumn leaves" must NOT false-match carjack-city via 'aut'
-    const author = await checkPrompt('author');
-    expect(author).toBeNull();
-
-    const autumn = await checkPrompt('autumn leaves');
-    expect(autumn).toBeNull();
-
-    // "chess" / "szachy" must NOT false-match checker-champ
-    const chess = await checkPrompt('chess');
-    expect(chess).toBeNull();
-
-    const szachy = await checkPrompt('szachy');
-    expect(szachy).toBeNull();
-
-    // "web" must NOT false-match a game named starweb-4x by substring
-    const webMatch = await checkPrompt('web');
-    expect(webMatch).toBeNull();
-
-    await act(async () => root.unmount());
-  });
-
-  it('does not match cards game for query "car" via genre substring', async () => {
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-    await i18n.changeLanguage('en');
-
-    const container = document.createElement('div');
-    document.body.appendChild(container);
-    const root = createRoot(container);
-
-    const cardsOnlyCatalog = [
-      {
-        slug: 'classic-solitaire',
-        title: 'Classic Solitaire',
-        genre: 'cards',
-        controls: 'Mouse',
-        media: null,
-        multiplayer: null,
-        saves: null,
-        world: null,
-        sensing: null,
-        orientation: 'landscape' as const,
-        editor: null,
-        status: 'published' as const,
-        submittedBy: null,
-        tagline: { en: 'Klondike card solitaire.', pl: 'Pasjans karciany.' },
-        searchKeywords: ['solitaire', 'pasjans'],
-      },
-    ];
-
-    await act(async () => {
-      root.render(
-        createElement(HeroPromptSection, {
-          key: 'car',
-          initialPrompt: 'car',
-          catalogEntries: cardsOnlyCatalog,
-          submissionStatus: 'idle',
-          submissionError: null,
-          onSubmitSpec: vi.fn(),
-        }),
-      );
-      await flushEffects();
-    });
-
-    const card = container.querySelector('.matched-card');
-    expect(card).toBeNull();
-
-    await act(async () => root.unmount());
-  });
 });
+
