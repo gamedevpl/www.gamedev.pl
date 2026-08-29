@@ -11,7 +11,7 @@ an npm package we maintain.
 
 | Path                                        | What                                                                                                                                  |
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /connect` (alias `/mcp`)               | Human page: MCP URL + gamedev CLI. Header menu, not `/create` or public game pages.                                                   |
+| `GET /connect` (alias `/mcp`)               | Human page: MCP URL + gamedevpl CLI. Header menu, not `/create` or public game pages.                                                 |
 | `GET /.well-known/mcp/server.json`          | Registry-shaped `server.json` (schema `2025-12-11`). Auth points at `/.well-known/oauth-protected-resource` rather than restating it. |
 | `GET /.well-known/oauth-protected-resource` | RFC 9728 protected-resource metadata (BY-18a).                                                                                        |
 

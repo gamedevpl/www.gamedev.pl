@@ -67,7 +67,7 @@ describe('OAuth creator scope (CL-04..CL-07, CL-09)', () => {
     expect(grants.json()).toEqual([
       expect.objectContaining({
         clientId: GAMEDEV_CLI_CLIENT_ID,
-        clientLabel: 'gamedev CLI on studio-mac',
+        clientLabel: 'gamedevpl CLI on studio-mac',
       }),
     ]);
     expect(await store.listOAuthGrantsByOwner('g:boss')).toHaveLength(1);

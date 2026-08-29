@@ -83,13 +83,13 @@ function devicePage(input: { userCode: string; consentToken: string; error?: str
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>gamedev CLI device login</title>
+  <title>gamedevpl CLI device login</title>
   ${OAUTH_PAGE_STYLES}
 </head>
 <body>
   <main>
     <p class="brand">${MASCOT_SVG}<span>gamedev.pl</span></p>
-    <h1>Approve gamedev CLI</h1>
+    <h1>Approve gamedevpl CLI</h1>
     <p class="lead">Enter the code shown in your terminal.</p>
     ${error}
     <form method="post" action="/device">

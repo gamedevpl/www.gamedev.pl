@@ -1,4 +1,5 @@
-import { createTwoRegion, glyphs, wantsColor } from './renderer.js';
+import { CLI_BIN } from './bin-name.js';
+import { glyphs, wantsColor } from './renderer.js';
 import { completeSlash, parseArgv, SLASH_VERBS, type SlashVerb } from './argv.js';
 import { postTurn } from './turn.js';
 import type { ApiClient } from './api.js';
@@ -88,7 +89,5 @@ export async function handleReplLine(input: {
 
 export function replBanner(isTty: boolean, env: NodeJS.ProcessEnv): string {
   const g = glyphs(wantsColor(env, isTty));
-  return `${g.agent} gamedev — ${g.prompt} to talk, /help for verbs`;
+  return `${g.agent} ${CLI_BIN} — ${g.prompt} to talk, /help for verbs`;
 }
-
-export { createTwoRegion };

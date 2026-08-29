@@ -2,11 +2,12 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
+import { CLI_BIN, GIT_REMOTE_HELPER } from './bin-name.js';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 
 export const CLI_VERSION = '0.1.0';
 export const CLI_RELEASE_PREFIX = 'cli-v';
-export const CLI_ASSET = 'gamedev';
+export const CLI_ASSET = CLI_BIN;
 export const CLI_RELEASES_DOWNLOAD = 'https://github.com/gamedevpl/www.gamedev.pl/releases/download';
 export const CLI_RELEASES_API = 'https://api.github.com/repos/gamedevpl/www.gamedev.pl/releases?per_page=100';
 
@@ -34,8 +35,8 @@ export function defaultInstallDest(): string {
 
 export function helperDest(binPath: string): string {
   const ext = /\.exe$/i.test(binPath) ? '.exe' : '';
-  if (basename(binPath).toLowerCase() === `git-remote-gamedev${ext}`) return binPath;
-  return join(dirname(binPath), `git-remote-gamedev${ext}`);
+  if (basename(binPath).toLowerCase() === `${GIT_REMOTE_HELPER}${ext}`.toLowerCase()) return binPath;
+  return join(dirname(binPath), `${GIT_REMOTE_HELPER}${ext}`);
 }
 
 export async function resolveUpdateVersion(input: { version?: string; fetchImpl: FetchLike }): Promise<string> {

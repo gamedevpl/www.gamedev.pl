@@ -28,7 +28,7 @@ For coding agents (GitHub Copilot, Claude Code, Codex) and humans picking up wor
 ```
 apps/
   web/       Vite + React + TS frontend (prompt form + game player)
-  cli/       `gamedev` terminal client (`/connect` on the site)
+  cli/       `gamedevpl` terminal client (`/connect` on the site)
   api/       Fastify + TS backend (catalog, jobs, agent channel, MCP)
   world/     Zone host (authoritative sims)
 packages/

@@ -36,7 +36,7 @@ export function memoryStore(initial?: StoredTokens | null): TokenStore {
 function filePath(env: NodeJS.ProcessEnv): string {
   const override = env.GAMEDEV_TOKEN_FILE;
   if (override) return override;
-  return join(env.HOME ?? homedir(), '.config', 'gamedev', 'credentials.bin');
+  return join(env.HOME ?? homedir(), '.config', 'gamedevpl', 'credentials.bin');
 }
 
 function fileKey(env: NodeJS.ProcessEnv): Buffer {
@@ -81,4 +81,4 @@ export function encryptedFileStore(env: NodeJS.ProcessEnv = process.env): TokenS
 }
 
 export const FILE_FALLBACK_WARNING =
-  'WARNING: OS keychain unavailable; tokens stored in an encrypted file under ~/.config/gamedev. Not plaintext, but weaker than the keychain.';
+  'WARNING: OS keychain unavailable; tokens stored in an encrypted file under ~/.config/gamedevpl. Not plaintext, but weaker than the keychain.';

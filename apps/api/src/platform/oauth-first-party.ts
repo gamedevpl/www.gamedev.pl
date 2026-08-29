@@ -9,7 +9,7 @@ export function gamedevCliClient(): OAuthClientRecord {
     clientId: GAMEDEV_CLI_CLIENT_ID,
     registrationType: 'first-party',
     redirectUris: ['http://127.0.0.1/callback', 'http://[::1]/callback'],
-    clientName: 'gamedev CLI',
+    clientName: 'gamedevpl CLI',
     tokenEndpointAuthMethod: 'none',
     createdAt: GAMEDEV_CLI_CREATED_AT,
   };
@@ -28,5 +28,5 @@ export function sanitizeDeviceName(raw: string | undefined): string {
 }
 
 export function gamedevCliGrantLabel(deviceName: string): string {
-  return `gamedev CLI on ${deviceName}`;
+  return `gamedevpl CLI on ${deviceName}`;
 }

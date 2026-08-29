@@ -52,11 +52,11 @@ describe('reserved installer routes', () => {
       expect(sh.body).toContain('GitHub Releases');
       expect(sh.body).toContain('$HOME/.local/bin');
       expect(sh.body).toContain('Node 20');
-      expect(sh.body).toContain('asset="gamedev"');
+      expect(sh.body).toContain('asset="gamedevpl"');
       expect(sh.body).not.toContain('gamedev-linux');
       const page = await app.inject({ method: 'GET', url: '/cli' });
       expect(page.statusCode).toBe(200);
-      expect(page.body).toContain('gamedev login');
+      expect(page.body).toContain('gamedevpl login');
       expect(page.body).toContain('encrypted file');
       expect(page.body).toContain('Node 20');
       const ps1 = await app.inject({ method: 'GET', url: '/install.ps1' });

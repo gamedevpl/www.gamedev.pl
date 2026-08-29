@@ -1,20 +1,22 @@
 #!/usr/bin/env node
 import { resolve as resolvePath } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { createInterface } from 'node:readline/promises';
 import { stdin, stdout, stderr } from 'node:process';
 import { parseArgv, jsonMode, SLASH_VERBS } from './argv.js';
+import { CLI_BIN, cliUsage } from './bin-name.js';
 import { createApi, requireTtyFlag } from './api.js';
 import { encryptedFileStore, FILE_FALLBACK_WARNING, memoryStore, type TokenStore } from './keychain.js';
 import { originFromEnv } from './oauth.js';
 import { CliError, EXIT_GREEN, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { describeError, pipeNeedsFlag } from './errors.js';
+import { createReadlineHost } from './host.js';
 import { handleReplLine, replBanner } from './repl.js';
 import type { IntakeDraft } from './create.js';
-import { getStatus, isTerminalStatus, previewUrl } from './turn.js';
 import { checkoutGame, diffGame, pullGame, readCheckoutSlug, unreconciledMessage } from './checkout.js';
 import { runLadder, assertLadderGreen } from './verify.js';
 import { runGitRemoteHelper } from './git-remote-main.js';
+import { glyphs, wantsColor } from './renderer.js';
+import { runStatusVerb } from './status-watch.js';
 import { dispatchReadVerb } from './verbs.js';
 
 function storeFromEnv(env: NodeJS.ProcessEnv): TokenStore {
@@ -27,6 +29,14 @@ function storeFromEnv(env: NodeJS.ProcessEnv): TokenStore {
   return encryptedFileStore(env);
 }
 
+export function isGitRemoteHelper(argv: string[]): boolean {
+  if (/git-remote-gamedev/.test(argv[1] ?? argv[0] ?? '')) return true;
+  if (!argv.some((arg) => arg.startsWith('gamedev://'))) return false;
+  const first = argv[2];
+  if (first && !first.startsWith('-') && (SLASH_VERBS as readonly string[]).includes(first)) return false;
+  return true;
+}
+
 export async function runCli(
   argv: string[],
   env: NodeJS.ProcessEnv,
@@ -36,7 +46,7 @@ export async function runCli(
     stderr,
   },
 ): Promise<number> {
-  if (/git-remote-gamedev/.test(argv[1] ?? argv[0] ?? '')) {
+  if (isGitRemoteHelper(argv)) {
     return runGitRemoteHelper(argv, env);
   }
   const { verb, args, flags } = parseArgv(argv);
@@ -48,7 +58,7 @@ export async function runCli(
 
   try {
     if (verb === 'help' || flags.help) {
-      io.stdout.write(`gamedev <${SLASH_VERBS.join('|')}>\n`);
+      io.stdout.write(`${CLI_BIN} <${SLASH_VERBS.join('|')}>\n`);
       return EXIT_GREEN;
     }
     if (verb === 'login') {
@@ -57,7 +67,7 @@ export async function runCli(
         io.stdout.write('signed in with GAMEDEV_TOKEN\n');
         return EXIT_GREEN;
       }
-      requireTtyFlag(tty, '--token', 'GAMEDEV_TOKEN=… gamedev login');
+      requireTtyFlag(tty, '--token', `GAMEDEV_TOKEN=… ${cliUsage('login')}`);
       io.stdout.write(`open ${origin}/oauth/authorize to sign in, then retry with GAMEDEV_TOKEN set\n`);
       return EXIT_GREEN;
     }
@@ -73,26 +83,20 @@ export async function runCli(
     }
     if (verb === 'status') {
       const token = args[0];
-      if (!token) throw new CliError('gamedev status <token-or-slug>', EXIT_INPUT, '<token>');
+      if (!token) throw new CliError(cliUsage('status', '<token-or-slug>'), EXIT_INPUT, '<token>');
       const max = typeof flags.watch === 'string' ? Number(flags.watch) || 30 : flags.watch ? 30 : 1;
-      let delay = 2000;
-      let status = await getStatus(api, token);
-      for (let i = 1; i <= max; i += 1) {
-        if (asJson) io.stdout.write(`${JSON.stringify(status)}\n`);
-        else {
-          io.stdout.write(`${status.status}${status.stall ? ` (${status.stall})` : ''}\n`);
-          if (status.preview?.slug) io.stdout.write(`${previewUrl(api.origin, status.preview.slug)}\n`);
-        }
-        if (!flags.watch || i === max || isTerminalStatus(status.status)) break;
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        delay = Math.min(Math.round(delay * 1.5), 15_000);
-        status = await getStatus(api, token);
-      }
-      return EXIT_GREEN;
+      return runStatusVerb({
+        api,
+        token,
+        maxPolls: max,
+        asJson,
+        live: Boolean(io.stdout.isTTY) && Boolean(flags.watch) && !asJson,
+        stdout: io.stdout,
+      });
     }
     if (verb === 'checkout') {
       const slug = args[0];
-      if (!slug) throw new CliError('gamedev checkout <slug>', EXIT_INPUT, '<slug>');
+      if (!slug) throw new CliError(cliUsage('checkout', '<slug>'), EXIT_INPUT, '<slug>');
       const dest = args[1] ?? slug;
       const result = await checkoutGame({ api, slug, dest });
       io.stdout.write(`checked out ${slug} → ${result.dest} (origin ${result.remote})\n`);
@@ -100,7 +104,7 @@ export async function runCli(
     }
     if (verb === 'pull') {
       const slug = args[0] ?? readCheckoutSlug(process.cwd());
-      if (!slug) throw new CliError('gamedev pull <slug>', EXIT_INPUT, '<slug>');
+      if (!slug) throw new CliError(cliUsage('pull', '<slug>'), EXIT_INPUT, '<slug>');
       const dest = args[1] ?? process.cwd();
       const pulled = await pullGame({ api, slug, dest });
       io.stdout.write(asJson ? `${JSON.stringify(pulled)}\n` : `pulled ${slug} @ ${pulled.version}\n`);
@@ -109,7 +113,7 @@ export async function runCli(
     if (verb === 'diff') {
       if (flags.force) return EXIT_GREEN;
       const slug = args[0] ?? readCheckoutSlug(process.cwd());
-      if (!slug) throw new CliError('gamedev diff <slug>', EXIT_INPUT, '<slug>');
+      if (!slug) throw new CliError(cliUsage('diff', '<slug>'), EXIT_INPUT, '<slug>');
       const dest = args[1] ?? process.cwd();
       const diff = await diffGame({ api, slug, dest });
       if (asJson) io.stdout.write(`${JSON.stringify(diff)}\n`);
@@ -128,34 +132,38 @@ export async function runCli(
       return EXIT_GREEN;
     }
     if (verb === 'connect') {
-      io.stdout.write(`gamedev connect ${args[0] ?? ''}\n`);
+      io.stdout.write(`${cliUsage('connect', args[0] ?? '')}\n`);
       return EXIT_GREEN;
     }
     const read = await dispatchReadVerb({ verb, args, flags, api, io });
     if (read !== null) return read;
     if (verb === 'repl') {
-      if (!tty) throw pipeNeedsFlag('a verb such as gamedev whoami');
+      if (!tty) throw pipeNeedsFlag(`a verb such as ${cliUsage('whoami')}`);
       io.stdout.write(`${replBanner(true, env)}\n`);
-      const rl = createInterface({ input: io.stdin, output: io.stdout });
+      const host = createReadlineHost(io);
+      const g = glyphs(wantsColor(env, tty));
       let token = typeof flags.token === 'string' ? flags.token : null;
       let draft: IntakeDraft | null = null;
-      for (;;) {
-        const line = await rl.question('› ');
-        const result = await handleReplLine({
-          line,
-          api,
-          token,
-          draft,
-          write: (s) => io.stdout.write(`${s}\n`),
-        });
-        if (result.token !== undefined) token = result.token;
-        if (result.draft !== undefined) draft = result.draft;
-        if (result.next === 'quit') break;
+      try {
+        for (;;) {
+          const line = await host.prompt(`${g.prompt} `);
+          const result = await handleReplLine({
+            line,
+            api,
+            token,
+            draft,
+            write: (s) => host.writeLine(s),
+          });
+          if (result.token !== undefined) token = result.token;
+          if (result.draft !== undefined) draft = result.draft;
+          if (result.next === 'quit') break;
+        }
+      } finally {
+        host.close();
       }
-      rl.close();
       return EXIT_GREEN;
     }
-    io.stderr.write(`unknown verb ${verb} — gamedev help\n`);
+    io.stderr.write(`unknown verb ${verb} — ${cliUsage('help')}\n`);
     return EXIT_INPUT;
   } catch (error) {
     const shown = describeError(error);

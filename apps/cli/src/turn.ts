@@ -14,17 +14,17 @@ export async function getTurns(
   return api.request('GET', `/api/submissions/${encodeURIComponent(token)}/turns`);
 }
 
-export async function getStatus(
-  api: ApiClient,
-  token: string,
-): Promise<{
+export type RoundStatus = {
   status: string;
+  phase?: string;
   gateProgress?: { stage: string; index: number; total: number };
   previewGate?: { green: boolean };
   preview?: { slug: string };
   stall?: string;
   failure?: { reason: string };
-}> {
+};
+
+export async function getStatus(api: ApiClient, token: string): Promise<RoundStatus> {
   return api.request('GET', `/api/submissions/${encodeURIComponent(token)}`);
 }
 

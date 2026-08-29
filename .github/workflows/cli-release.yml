@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   release:
-    name: Bundle gamedev Node script
+    name: Bundle gamedevpl Node script
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -45,6 +45,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: cli-v${{ env.VERSION }}
-          name: gamedev CLI v${{ env.VERSION }}
+          name: gamedevpl CLI v${{ env.VERSION }}
           generate_release_notes: true
           files: apps/cli/dist/release/*

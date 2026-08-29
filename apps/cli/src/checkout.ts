@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync, lstatSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { cliUsage } from './bin-name.js';
 import type { ApiClient } from './api.js';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 
@@ -13,7 +14,7 @@ export type VersionRow = {
 };
 
 export function unreconciledMessage(): string {
-  return 'working copy is unreconciled with the platform — gamedev pull, or pass --force';
+  return `working copy is unreconciled with the platform — ${cliUsage('pull')}, or pass --force`;
 }
 
 export function readCheckoutSlug(cwd: string): string | null {

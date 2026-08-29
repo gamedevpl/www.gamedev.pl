@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { cliUsage } from './bin-name.js';
 import { unreconciledMessage } from './checkout.js';
 
 export const GIT_REMOTE_CAPS = ['import', 'push', 'option'] as const;
@@ -95,7 +96,7 @@ export async function runRemoteHelper(slug: string, io: HelperIo): Promise<void>
       const result = await io.pushReconcile();
       const dst = rest.join(' ').split(':')[1] ?? 'refs/heads/main';
       if (result === 'unreconciled') io.write(`${refuseNonFastForward()}\n\n`);
-      else io.write(`error ${dst} git push is not a delivery path — use gamedev submit\n\n`);
+      else io.write(`error ${dst} git push is not a delivery path — use ${cliUsage('submit')}\n\n`);
     } else io.write(`${handleHelperLine(trimmed, slug).join('\n')}\n`);
   }
 }

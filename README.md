@@ -43,7 +43,7 @@ playability it does not have.
 The interesting engineering is written up in [`docs/`](./docs) — start with
 [`docs/README.md`](./docs/README.md).
 
-## Connect your agent (MCP or the `gamedev` CLI)
+## Connect your agent (MCP or the `gamedevpl` CLI)
 
 Two doors, same games. The on-site page is
 [`https://www.gamedev.pl/connect`](https://www.gamedev.pl/connect) (also `/mcp`). It lives
@@ -62,8 +62,8 @@ more exist and are deliberately never advertised, so an agent will not discover 
 [`listings/mcp/README.md`](./listings/mcp/README.md) lists every tool with its annotations,
 what each destructive one actually consumes, and why the rest are hidden.
 
-**CLI.** `apps/cli` is the `gamedev` terminal client (no local model). With no verb it
-opens a REPL: describe a game, then iterate. `gamedev checkout <slug>` is the own-editor
+**CLI.** `apps/cli` is the `gamedevpl` terminal client (no local model). With no verb it
+opens a REPL: describe a game, then iterate. `gamedevpl checkout <slug>` is the own-editor
 path. Installers (`/install.sh`) 404 while `CLI_SURFACE` is off. With the flag on, the
 route serves the script even if no `cli-v*` GitHub release exists yet — that download is
 what fails then. Until a release ships, `npm run bundle -w @gamedevpl/cli`. Details:
@@ -110,7 +110,7 @@ it, please report it privately — see [`SECURITY.md`](./SECURITY.md).
 ```
 apps/
   web/               Vite + React + TypeScript — arcade, player, Creator Studio
-  cli/               `gamedev` terminal client (see Connect your agent above)
+  cli/               `gamedevpl` terminal client (see Connect your agent above)
   api/               Fastify + TypeScript — catalog, jobs, auth, agent channel, multiplayer
   api/fixtures/      Games-repo-shaped content so the app runs with no credentials
   e2e/               Playwright checks for critical browser and production flows

@@ -13,10 +13,10 @@ await build({
   platform: 'node',
   target: 'node20',
   format: 'esm',
-  outfile: join(outDir, 'gamedev.mjs'),
+  outfile: join(outDir, 'gamedevpl.mjs'),
   banner: { js: '#!/usr/bin/env node' },
   packages: 'bundle',
 });
 
-chmodSync(join(outDir, 'gamedev.mjs'), 0o755);
-console.log('bundled dist/gamedev.mjs — shebang Node script, no native binary');
+chmodSync(join(outDir, 'gamedevpl.mjs'), 0o755);
+console.log('bundled dist/gamedevpl.mjs — shebang Node script, no native binary');

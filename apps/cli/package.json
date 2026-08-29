@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "bin": {
-    "gamedev": "./dist/main.js",
+    "gamedevpl": "./dist/main.js",
     "git-remote-gamedev": "./dist/git-remote-main.js"
   },
   "scripts": {

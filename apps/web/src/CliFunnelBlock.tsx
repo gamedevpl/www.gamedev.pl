@@ -22,10 +22,10 @@ export function CliFunnelBlock({ funnel }: { funnel: VisitFunnel }) {
   const rows = funnel.cli;
   return (
     <div className="funnel-block" data-testid="cli-funnel">
-      <h3>gamedev CLI</h3>
+      <h3>gamedevpl CLI</h3>
       {rows.every((row) => row.visits === 0) ? (
         <p className="health-empty">
-          Nobody used the gamedev CLI in this window. Pilot verdict needs a live cohort — do not invent one.
+          Nobody used the gamedevpl CLI in this window. Pilot verdict needs a live cohort — do not invent one.
         </p>
       ) : (
         <table className="health-table">

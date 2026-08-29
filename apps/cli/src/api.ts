@@ -1,3 +1,4 @@
+import { cliUsage } from './bin-name.js';
 import { CliError, EXIT_AUTH, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import type { StoredTokens, TokenStore } from './keychain.js';
 
@@ -17,7 +18,7 @@ export function bearerFrom(tokens: StoredTokens | null, env: NodeJS.ProcessEnv):
 
 function throwForStatus(res: Response, errBody: { error?: string; message?: string }): never {
   if (res.status === 401) {
-    throw new CliError('credential expired or revoked — run `gamedev login`', EXIT_AUTH, 'gamedev login');
+    throw new CliError(`credential expired or revoked — run \`${cliUsage('login')}\``, EXIT_AUTH, cliUsage('login'));
   }
   if (res.status === 404) {
     throw new CliError('not found', EXIT_REFUSED);
@@ -37,7 +38,7 @@ export function createApi(input: {
   async function authorized(path: string, init: RequestInit): Promise<Response> {
     const token = bearerFrom(await input.store.get(), env);
     if (!token) {
-      throw new CliError('not signed in — run `gamedev login`', EXIT_AUTH, 'gamedev login');
+      throw new CliError(`not signed in — run \`${cliUsage('login')}\``, EXIT_AUTH, cliUsage('login'));
     }
     return fetchImpl(`${input.origin}${path}`, {
       ...init,

@@ -35,7 +35,7 @@ describe('checkout', () => {
     mkdirSync(join(dest, 'games', 'ghost-roads'), { recursive: true });
     writeFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'export const n = 1;\n');
     expect(changedPaths([{ path: 'game.ts', content: 'export const n = 1;\n' }], [])).toEqual(['game.ts']);
-    expect(unreconciledMessage()).toContain('gamedev pull');
+    expect(unreconciledMessage()).toContain('gamedevpl pull');
     expect(dirname(join(dest, 'games', 'ghost-roads', 'game.ts'))).toContain('ghost-roads');
   });
 

@@ -34,7 +34,7 @@ function shippedAdapters(): AdapterFile {
 
 export function loadAdapters(env: NodeJS.ProcessEnv = process.env): AdapterFile {
   const shipped = shippedAdapters();
-  const customPath = env.GAMEDEV_ADAPTERS ?? join(env.HOME ?? homedir(), '.config', 'gamedev', 'adapters.json');
+  const customPath = env.GAMEDEV_ADAPTERS ?? join(env.HOME ?? homedir(), '.config', 'gamedevpl', 'adapters.json');
   try {
     const extra = JSON.parse(readFileSync(customPath, 'utf8')) as { adapters?: AdapterSpec[] };
     if (extra.adapters?.length) {
