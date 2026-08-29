@@ -1122,16 +1122,11 @@ a {
   align-items: center;
 }
 
-.play-match-btn {
+.play-match-btn,
+.build-match-btn {
   background: var(--turquoise);
   color: #0b221d;
   font-weight: 700;
-}
-
-.remix-match-btn {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--panel-border);
-  color: var(--text);
 }
 
 .creation-card {
@@ -1153,16 +1148,6 @@ a {
   display: flex;
   gap: 10px;
   align-items: center;
-}
-
-.build-match-btn {
-  background: #38bdf8;
-  color: #0b1a2b;
-  font-weight: 700;
-}
-
-.build-match-btn:hover:not(:disabled) {
-  background: #7dd3fc;
 }
 
 .creation-badge,
@@ -4179,16 +4164,19 @@ body.player-open {
     width: 100%;
   }
 
-  .matched-card {
+  .matched-card,
+  .creation-card {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .matched-actions {
+  .matched-actions,
+  .creation-actions {
     flex-direction: column;
   }
 
-  .matched-actions button {
+  .matched-actions button,
+  .creation-actions button {
     width: 100%;
   }
 
