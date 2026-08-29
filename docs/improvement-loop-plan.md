@@ -486,7 +486,7 @@ considerably:
 - ✅ **Suggestion inbox** (2026-07-30) — cards with insight → evidence →
   [Approve → dispatches a job] / [Dismiss with reason], in the studio's stats tab beside the
   reactions block, because a suggestion is a reading of the same evidence
-  ([CreatorStudioView.tsx](../apps/web/src/CreatorStudioView.tsx),
+  ([CreatorStudioView.tsx](../apps/web/src/surfaces/studio/CreatorStudioView.tsx),
   [suggestion-inbox.ts](../apps/api/src/community/suggestion-inbox.ts)). Dismissal reasons are a
   **fixed vocabulary** rather than free text: they exist to tune the router, so they have
   to be countable, and a free-text field on a card that later feeds an agent's context is
@@ -767,7 +767,7 @@ at all and feeds the only autonomous-eligible class.
 - ✅ **Votes and feedback themes in the studio** (2026-07-28, #289):
   [creator-studio.ts](../apps/api/src/creation/creator-studio.ts) serves votes, feedback counts and
   themes for a creator's own games, rendered in
-  [CreatorStudioView.tsx](../apps/web/src/CreatorStudioView.tsx). `/api/me/studio/health`
+  [CreatorStudioView.tsx](../apps/web/src/surfaces/studio/CreatorStudioView.tsx). `/api/me/studio/health`
   recomputes from raw events and so could never answer "what do they say" at any window
   size — votes, feedback and themes are not derived from play events at all. This route
   reads the scorecards the nightly sweep already wrote instead: one document per game, and
