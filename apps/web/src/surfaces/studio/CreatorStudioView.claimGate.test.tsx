@@ -4,8 +4,8 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CreatorStudioView } from './CreatorStudioView.js';
-import i18n from './i18n/index.js';
-import type { StudioGame, StudioGamesResponse } from './studioApi.js';
+import i18n from '../../i18n/index.js';
+import type { StudioGame, StudioGamesResponse } from '../../studioApi.js';
 
 const fetchStudioGames = vi.fn();
 const fetchStudioHealth = vi.fn();
@@ -13,12 +13,12 @@ const fetchStudioScorecards = vi.fn();
 const fetchStudioSuggestions = vi.fn();
 let authUser: { uid: string; name: string; handle?: string } | null = null;
 
-vi.mock('./AuthContext', () => ({
+vi.mock('../../AuthContext', () => ({
   useAuth: () => ({ user: authUser, logout: vi.fn(), refreshUser: vi.fn() }),
 }));
 
-vi.mock('./studioApi', async () => {
-  const actual = await vi.importActual<typeof import('./studioApi.js')>('./studioApi.js');
+vi.mock('../../studioApi', async () => {
+  const actual = await vi.importActual<typeof import('../../studioApi.js')>('../../studioApi.js');
   return {
     ...actual,
     fetchStudioGames: (...args: unknown[]) => fetchStudioGames(...args),
@@ -29,8 +29,8 @@ vi.mock('./studioApi', async () => {
   };
 });
 
-vi.mock('./submissionApi', async () => {
-  const actual = await vi.importActual<typeof import('./submissionApi.js')>('./submissionApi.js');
+vi.mock('../../submissionApi', async () => {
+  const actual = await vi.importActual<typeof import('../../submissionApi.js')>('../../submissionApi.js');
   return {
     ...actual,
     getSubmissionStatus: vi.fn(async () => ({ status: 'in_review', phase: 'ready_for_review', builder: 'self' })),
@@ -44,7 +44,7 @@ vi.mock('./submissionApi', async () => {
   };
 });
 
-vi.mock('./creatorProfileApi.js', () => ({
+vi.mock('../../creatorProfileApi.js', () => ({
   fetchMyProfile: vi.fn(async () => ({ profile: null, publishReady: false, picture: null })),
   claimHandle: vi.fn(),
   updateMyProfile: vi.fn(),
