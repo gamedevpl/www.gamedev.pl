@@ -3,8 +3,8 @@
 Terminal front door for gamedev.pl. **No local model.** Coding happens by delegating to a
 vendor CLI the creator already has, or by the platform builder.
 
-This package lives in the public app monorepo until the owner creates
-`gamedevpl/gamedev-cli` (stop-and-ask). Extracting it should be a rename, not a rewrite.
+This package lives in the public app monorepo. A separate `gamedevpl/gamedev-cli`
+repo is not planned.
 
 ## Install
 
