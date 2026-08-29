@@ -14,7 +14,7 @@ export interface OAuthStore {
 
   getOAuthClient(clientId: string): Promise<OAuthClientRecord | null>;
 
-  createOAuthGrant(record: OAuthGrantRecord): Promise<void>;
+  createOAuthGrant(record: OAuthGrantRecord, opts?: { maxPerOwner?: number }): Promise<boolean>;
 
   getOAuthGrant(grantId: string): Promise<OAuthGrantRecord | null>;
 
@@ -75,11 +75,16 @@ export class InMemoryOAuthStore implements OAuthStore {
     return record ? { ...record } : null;
   }
 
-  async createOAuthGrant(record: OAuthGrantRecord): Promise<void> {
+  async createOAuthGrant(record: OAuthGrantRecord, opts?: { maxPerOwner?: number }): Promise<boolean> {
+    if (opts?.maxPerOwner !== undefined) {
+      const held = [...this.oauthGrants.values()].filter((g) => g.ownerUid === record.ownerUid && !g.revokedAt);
+      if (held.length >= opts.maxPerOwner) return false;
+    }
     this.oauthGrants.set(record.grantId, { ...record });
     if (record.currentRefreshTokenId) {
       this.oauthRefreshTokenIndex.set(record.currentRefreshTokenId, record.grantId);
     }
+    return true;
   }
 
   async getOAuthGrant(grantId: string): Promise<OAuthGrantRecord | null> {
@@ -216,15 +221,32 @@ export class FirestoreOAuthStore implements OAuthStore {
     return snap.data() as OAuthClientRecord;
   }
 
-  async createOAuthGrant(record: OAuthGrantRecord): Promise<void> {
-    const batch = this.db.batch();
-    batch.create(this.db.collection('oauthGrants').doc(record.grantId), stripUndefined(record));
-    if (record.currentRefreshTokenId) {
-      batch.set(this.db.collection('oauthRefreshTokens').doc(record.currentRefreshTokenId), {
-        grantId: record.grantId,
-      });
+  async createOAuthGrant(record: OAuthGrantRecord, opts?: { maxPerOwner?: number }): Promise<boolean> {
+    if (opts?.maxPerOwner === undefined) {
+      const batch = this.db.batch();
+      batch.create(this.db.collection('oauthGrants').doc(record.grantId), stripUndefined(record));
+      if (record.currentRefreshTokenId) {
+        batch.set(this.db.collection('oauthRefreshTokens').doc(record.currentRefreshTokenId), {
+          grantId: record.grantId,
+        });
+      }
+      await batch.commit();
+      return true;
     }
-    await batch.commit();
+    const max = opts.maxPerOwner;
+    const grants = this.db.collection('oauthGrants');
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(grants.where('ownerUid', '==', record.ownerUid));
+      const held = snap.docs.map((doc) => doc.data() as OAuthGrantRecord).filter((grant) => !grant.revokedAt);
+      if (held.length >= max) return false;
+      tx.create(grants.doc(record.grantId), stripUndefined(record));
+      if (record.currentRefreshTokenId) {
+        tx.set(this.db.collection('oauthRefreshTokens').doc(record.currentRefreshTokenId), {
+          grantId: record.grantId,
+        });
+      }
+      return true;
+    });
   }
 
   async getOAuthGrant(grantId: string): Promise<OAuthGrantRecord | null> {

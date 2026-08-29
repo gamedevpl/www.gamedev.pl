@@ -1285,8 +1285,8 @@ export class FirestoreStore implements Store {
     return this.oauthStore.getOAuthClient(clientId);
   }
 
-  async createOAuthGrant(record: OAuthGrantRecord): Promise<void> {
-    return this.oauthStore.createOAuthGrant(record);
+  async createOAuthGrant(record: OAuthGrantRecord, opts?: { maxPerOwner?: number }): Promise<boolean> {
+    return this.oauthStore.createOAuthGrant(record, opts);
   }
 
   async getOAuthGrant(grantId: string): Promise<OAuthGrantRecord | null> {

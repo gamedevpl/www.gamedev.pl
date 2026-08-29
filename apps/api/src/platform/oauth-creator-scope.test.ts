@@ -1,14 +1,18 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { OAUTH_AS_METADATA_PATH } from './oauth-as.js';
+import { consentToken, OAUTH_AS_METADATA_PATH } from './oauth-as.js';
 import { GAMEDEV_CLI_CLIENT_ID } from './oauth-first-party.js';
+import { pkceChallengeS256 } from './oauth-pkce.js';
 import { MAX_OAUTH_GRANTS_PER_UID } from './oauth-scopes.js';
 import { MCP_ENDPOINT_PATH } from '../agent-surface/self-build-connect.js';
 import {
   buildOAuthApp,
+  CLI_LOOPBACK,
+  CLI_VERIFIER,
   enableCliSurface,
   mintCreatorTokens,
   seedSelfRound,
+  SESSION_SECRET,
   sessionCookie,
 } from './oauth-cli-test-app.js';
 import { InMemoryStore } from './store.js';
@@ -210,6 +214,37 @@ describe('OAuth creator scope (CL-04..CL-07, CL-09)', () => {
     });
     expect(reuse.statusCode).toBe(400);
     expect((await store.getSubmission(41))?.roundGeneration).toBe(1);
+  });
+
+  it('does not persist a grant until the code is exchanged', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    app = await buildOAuthApp(store);
+    const challenge = pkceChallengeS256(CLI_VERIFIER);
+    const approve = await app.inject({
+      method: 'POST',
+      url: '/oauth/authorize',
+      headers: { cookie: sessionCookie('g:boss'), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({
+        response_type: 'code',
+        client_id: GAMEDEV_CLI_CLIENT_ID,
+        redirect_uri: CLI_LOOPBACK,
+        scope: 'creator',
+        state: 'xyz',
+        code_challenge: challenge,
+        code_challenge_method: 'S256',
+        action: 'approve',
+        consent_token: consentToken({
+          uid: 'g:boss',
+          clientId: GAMEDEV_CLI_CLIENT_ID,
+          codeChallenge: challenge,
+          secret: SESSION_SECRET,
+        }),
+      }).toString(),
+    });
+    expect(approve.statusCode).toBe(302);
+    expect(new URL(approve.headers.location as string).searchParams.get('code')).toBeTruthy();
+    expect(await store.listOAuthGrantsByOwner('g:boss')).toHaveLength(0);
   });
 
   it('caps grants per account', async () => {

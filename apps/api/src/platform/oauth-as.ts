@@ -441,20 +441,6 @@ export function registerOAuthAuthorizationServerRoutes(
     if (held.length >= MAX_OAUTH_GRANTS_PER_UID) {
       return reply.redirect(oauthErrorRedirect(params.redirect_uri, 'access_denied', params.state));
     }
-    const grantId = randomUUID();
-    const grant: OAuthGrantRecord = {
-      grantId,
-      clientId: params.client_id,
-      ownerUid: uid,
-      scope,
-      createdAt: new Date(nowMs).toISOString(),
-      refreshFamilyId: grantId,
-      currentRefreshTokenId: '',
-      currentRefreshHash: '',
-      refreshExpiresAt: new Date(nowMs + AS_REFRESH_TOKEN_TTL_MS).toISOString(),
-      ...(isGamedevCliClient(params.client_id) ? { deviceName: sanitizeDeviceName(params.device) } : {}),
-    };
-    await store.createOAuthGrant(grant);
 
     const authCode = generateAsAuthCode();
     await store.createOAuthAuthCode({
@@ -467,7 +453,8 @@ export function registerOAuthAuthorizationServerRoutes(
       codeChallengeMethod: 'S256',
       scope,
       expiresAt: new Date(nowMs + AS_AUTH_CODE_TTL_MS).toISOString(),
-      grantId,
+      grantId: randomUUID(),
+      ...(isGamedevCliClient(params.client_id) ? { deviceName: sanitizeDeviceName(params.device) } : {}),
     });
 
     return reply.redirect(oauthCodeRedirect(params.redirect_uri, authCode.code, params.state));
@@ -527,7 +514,27 @@ export function registerOAuthAuthorizationServerRoutes(
         return reply.status(400).send({ error: 'invalid_grant' });
       }
 
-      const grant = consumed.grantId ? await store.getOAuthGrant(consumed.grantId) : null;
+      const grantId = consumed.grantId ?? randomUUID();
+      let grant = consumed.grantId ? await store.getOAuthGrant(consumed.grantId) : null;
+      if (!grant) {
+        const created = await store.createOAuthGrant(
+          {
+            grantId,
+            clientId: consumed.clientId,
+            ownerUid: consumed.ownerUid,
+            scope: consumed.scope,
+            createdAt: new Date(nowMs).toISOString(),
+            refreshFamilyId: grantId,
+            currentRefreshTokenId: '',
+            currentRefreshHash: '',
+            refreshExpiresAt: new Date(nowMs + AS_REFRESH_TOKEN_TTL_MS).toISOString(),
+            ...(consumed.deviceName ? { deviceName: consumed.deviceName } : {}),
+          },
+          { maxPerOwner: MAX_OAUTH_GRANTS_PER_UID },
+        );
+        if (!created) return reply.status(400).send({ error: 'access_denied' });
+        grant = await store.getOAuthGrant(grantId);
+      }
       if (!grant || grant.revokedAt) return reply.status(400).send({ error: 'invalid_grant' });
 
       const access = generateAsAccessToken();

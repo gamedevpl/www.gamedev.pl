@@ -211,12 +211,6 @@ export async function exchangeDeviceCode(
   }
   if (!row.uid) return { ok: false, error: 'authorization_pending', status: 400 };
 
-  const held = await store.listOAuthGrantsByOwner(row.uid);
-  if (held.length >= MAX_OAUTH_GRANTS_PER_UID) {
-    pending.delete(row.userCode);
-    return { ok: false, error: 'access_denied', status: 400 };
-  }
-
   const grantId = randomUUID();
   const grant: OAuthGrantRecord = {
     grantId,
@@ -230,7 +224,11 @@ export async function exchangeDeviceCode(
     refreshExpiresAt: new Date(input.nowMs + AS_REFRESH_TOKEN_TTL_MS).toISOString(),
     deviceName: row.deviceName,
   };
-  await store.createOAuthGrant(grant);
+  const created = await store.createOAuthGrant(grant, { maxPerOwner: MAX_OAUTH_GRANTS_PER_UID });
+  if (!created) {
+    pending.delete(row.userCode);
+    return { ok: false, error: 'access_denied', status: 400 };
+  }
   const access = generateAsAccessToken();
   const refresh = generateAsRefreshToken();
   const issued = await store.issueOAuthTokensFromGrant({

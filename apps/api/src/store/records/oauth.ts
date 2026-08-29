@@ -46,6 +46,7 @@ export interface OAuthAuthCodeRecord {
   expiresAt: string;
   usedAt?: string;
   grantId?: string;
+  deviceName?: string;
 }
 
 export type RotateRefreshTokenResult =
