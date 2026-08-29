@@ -10,19 +10,19 @@ import { PixelIcon, type PixelIconName } from './PixelIcon.js';
 import { formatRelativeTime } from './relativeTime.js';
 import { playPath, studioPath, type StudioTab } from './router.js';
 import { abandonSubmission, deleteGame, handoffToPlatform } from './submissionApi.js';
-import { StudioShotToasts } from './StudioShotToasts.js';
+import { StudioShotToasts } from './surfaces/studio/StudioShotToasts.js';
 import { type CodeActionsMode } from './surfaces/studio/CodeActionsMenu.js';
 import { CodeSurface } from './surfaces/studio/CodeSurface.js';
 import { EditorPanel } from './surfaces/studio/EditorPanel.js';
-import { StudioStage, type StagePosture, type StageStatus } from './StudioStage.js';
-import { StudioStrip } from './StudioStrip.js';
+import { StudioStage, type StagePosture, type StageStatus } from './surfaces/studio/StudioStage.js';
+import { StudioStrip } from './surfaces/studio/StudioStrip.js';
 import { usePlayChromeIdle } from './usePlayChromeIdle.js';
-import { StudioVersionRibbon } from './StudioVersionRibbon.js';
-import { StudioChatRail } from './StudioChatRail.js';
-import { StudioStageCard } from './StudioStageCard.js';
-import { StudioFullBleed } from './StudioFullBleed.js';
+import { StudioVersionRibbon } from './surfaces/studio/StudioVersionRibbon.js';
+import { StudioChatRail } from './surfaces/studio/StudioChatRail.js';
+import { StudioStageCard } from './surfaces/studio/StudioStageCard.js';
+import { StudioFullBleed } from './surfaces/studio/StudioFullBleed.js';
 import { useStageSource, type StageOrigin } from './useStageSource.js';
-import { useStudioStatusPoll, defaultRailOpen } from './useStudioStatusPoll.js';
+import { useStudioStatusPoll, defaultRailOpen } from './surfaces/studio/useStudioStatusPoll.js';
 import { GameTheater } from './GameTheater.js';
 import {
   collapseStudioGames,
@@ -36,15 +36,15 @@ import {
   type StudioShelfFilter,
   type StudioShelfGame,
 } from './studioShelf.js';
-import { StudioConnectCard } from './StudioConnectCard.js';
-import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
-import { StudioDetailsBuildProgress } from './StudioDetailsBuildProgress.js';
-import { StudioDetailsMedia } from './StudioDetailsMedia.js';
+import { StudioConnectCard } from './surfaces/studio/StudioConnectCard.js';
+import { StudioCreatorAgentKeyPanel } from './surfaces/studio/StudioCreatorAgentKeyPanel.js';
+import { StudioDetailsBuildProgress } from './surfaces/studio/StudioDetailsBuildProgress.js';
+import { StudioDetailsMedia } from './surfaces/studio/StudioDetailsMedia.js';
 import { ContributionsSetting } from './ContributionsSetting.js';
 import { ProposalReviewPanel } from './surfaces/review/ProposalReviewPanel.js';
-import { StudioOAuthClientsPanel } from './StudioOAuthClientsPanel.js';
-import { StudioWorkspaceCheckoutPanel } from './StudioWorkspaceCheckoutPanel.js';
-import { SubmissionStatusView } from './SubmissionStatusView.js';
+import { StudioOAuthClientsPanel } from './surfaces/studio/StudioOAuthClientsPanel.js';
+import { StudioWorkspaceCheckoutPanel } from './surfaces/studio/StudioWorkspaceCheckoutPanel.js';
+import { SubmissionStatusView } from './surfaces/studio/SubmissionStatusView.js';
 import {
   approveSuggestion,
   dismissSuggestion,

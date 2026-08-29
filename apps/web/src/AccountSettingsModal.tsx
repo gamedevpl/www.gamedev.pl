@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { AccountDeletionControl } from './AccountDeletionControl.js';
 import { PixelIcon } from './PixelIcon.js';
-import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
-import { StudioOAuthClientsPanel } from './StudioOAuthClientsPanel.js';
+import { StudioCreatorAgentKeyPanel } from './surfaces/studio/StudioCreatorAgentKeyPanel.js';
+import { StudioOAuthClientsPanel } from './surfaces/studio/StudioOAuthClientsPanel.js';
 
 type AccountSettingsSection = 'credentials' | 'account';
 

@@ -29,8 +29,8 @@ import {
   studioConnectPath,
   type AppRoute,
 } from './router.js';
-import { StudioWelcomeView } from './StudioWelcomeView.js';
-import { StudioConnectWizard } from './StudioConnectWizard.js';
+import { StudioWelcomeView } from './surfaces/studio/StudioWelcomeView.js';
+import { StudioConnectWizard } from './surfaces/studio/StudioConnectWizard.js';
 import type { PublicCreatorProfile } from './creatorProfileApi.js';
 import { LegalPage } from './LegalPage.js';
 import { ContactPage } from './ContactPage.js';

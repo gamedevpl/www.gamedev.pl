@@ -63,15 +63,15 @@ vi.mock('./webmcp.js', async () => {
 });
 
 // Stub the agent-mode modal's key panel fetch.
-vi.mock('../../connectApi.js', async () => {
-  const actual = await vi.importActual<typeof import('../../connectApi.js')>('../../connectApi.js');
+vi.mock('./connectApi.js', async () => {
+  const actual = await vi.importActual<typeof import('./connectApi.js')>('./connectApi.js');
   return { ...actual, getCreatorAgentKey: vi.fn() };
 });
 
 const mocked = vi.mocked(codeSurfaceApi);
 const mockedStudioApi = vi.mocked(await import('../../studioApi.js'));
 const mockedWebmcp = vi.mocked(await import('./webmcp.js'));
-const mockedConnectApi = vi.mocked(await import('../../connectApi.js'));
+const mockedConnectApi = vi.mocked(await import('./connectApi.js'));
 
 async function flush() {
   await Promise.resolve();
