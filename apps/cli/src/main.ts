@@ -8,6 +8,7 @@ import { originFromEnv } from './oauth.js';
 import { CliError, EXIT_GREEN, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { describeError, pipeNeedsFlag } from './errors.js';
 import { handleReplLine, replBanner } from './repl.js';
+import type { IntakeDraft } from './create.js';
 import { getStatus, previewUrl } from './turn.js';
 import { checkoutGame, unreconciledMessage } from './checkout.js';
 import { runLadder, assertLadderGreen } from './verify.js';
@@ -105,15 +106,20 @@ export async function runCli(
       if (!tty) throw pipeNeedsFlag('a verb such as gamedev whoami');
       io.stdout.write(`${replBanner(true, env)}\n`);
       const rl = createInterface({ input: io.stdin, output: io.stdout });
+      let token = typeof flags.token === 'string' ? flags.token : null;
+      let draft: IntakeDraft | null = null;
       for (;;) {
         const line = await rl.question('› ');
-        const next = await handleReplLine({
+        const result = await handleReplLine({
           line,
           api,
-          token: typeof flags.token === 'string' ? flags.token : null,
+          token,
+          draft,
           write: (s) => io.stdout.write(`${s}\n`),
         });
-        if (next === 'quit') break;
+        if (result.token !== undefined) token = result.token;
+        if (result.draft !== undefined) draft = result.draft;
+        if (result.next === 'quit') break;
       }
       rl.close();
       return EXIT_GREEN;

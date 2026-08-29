@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { answersFromFlags } from './create.js';
+import { answerDraft, answersFromFlags, formatQuestion } from './create.js';
 import { EXIT_INPUT } from './exit-codes.js';
 
 describe('create intake', () => {
@@ -15,6 +15,22 @@ describe('create intake', () => {
   it('accepts --answers JSON for non-TTY', () => {
     expect(answersFromFlags({ answers: '{"tone":"calm"}' }, [{ id: 'tone', prompt: 'tone?' }])).toEqual({
       tone: 'calm',
+    });
+  });
+
+  it('advances a refine draft to a submit spec', () => {
+    const draft = {
+      concept: 'robots water plants',
+      title: 'Robot Garden',
+      questions: [{ id: 'tone', prompt: 'What tone?' }],
+      index: 0,
+      answers: {},
+    };
+    expect(formatQuestion(draft)).toContain('What tone?');
+    expect(answerDraft(draft, 'calm')).toEqual({
+      kind: 'ready',
+      title: 'Robot Garden',
+      concept: 'robots water plants\n\nWhat tone?: calm',
     });
   });
 });
