@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import githubIcon from './assets/github-mark-white.svg';
 import { bugReportUrl, REPO_URL } from './github.js';
 import { OPERATOR_LEGAL_NAME } from './legal/operator.js';
-import { contactPath, legalPath } from './router.js';
+import { contactPath, legalPath } from './core/router.js';
 import { currentVisitId } from './visitTelemetry.js';
 
 /**

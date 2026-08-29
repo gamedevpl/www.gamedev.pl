@@ -1,6 +1,6 @@
 import { webcrypto } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { parsePathRoute } from './router.js';
+import { parsePathRoute } from './core/router.js';
 
 // vitest's node environment does not expose the webcrypto global that a real browser
 // (and plain Node) provides, and `readVisitIdentity` relies on `crypto.randomUUID()`

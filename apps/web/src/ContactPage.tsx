@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { submitContact, type ContactError } from './contactApi.js';
 import { CONTACT_EMAIL } from './legal/operator.js';
 import { PixelIcon } from './PixelIcon.js';
-import { legalPath } from './router.js';
+import { legalPath } from './core/router.js';
 
 /**
  * Public contact form. Replaces the old footer link to the GitHub issues list for
@@ -110,8 +110,7 @@ export function ContactPage({ onBack }: { onBack: () => void }) {
           </label>
 
           <p className="contact-privacy">
-            {t('contact.privacyNote')}{' '}
-            <a href={legalPath('privacy')}>{t('legal.privacy')}</a>
+            {t('contact.privacyNote')} <a href={legalPath('privacy')}>{t('legal.privacy')}</a>
           </p>
 
           <div className="contact-actions">
@@ -125,8 +124,7 @@ export function ContactPage({ onBack }: { onBack: () => void }) {
       )}
 
       <p className="contact-alt">
-        {t('contact.orEmail')}{' '}
-        <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+        {t('contact.orEmail')} <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
       </p>
     </article>
   );

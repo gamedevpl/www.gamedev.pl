@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
-import { NAVIGATE_EVENT, type NavigateEventDetail } from './router.js';
+import { NAVIGATE_EVENT, type NavigateEventDetail } from './core/router.js';
 import { startVisitTracking, type WireVisitEvent } from './visitTelemetry.js';
 
 /**

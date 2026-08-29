@@ -5,7 +5,7 @@ import { catalogMediaUrl, isPlatformAuthor, normalizeCatalogEntry, type CatalogE
 import { fetchCreatorPage, type PublicCreatorProfile } from './creatorProfileApi.js';
 import { EditProfileModal } from './EditProfileModal.js';
 import { PixelIcon } from './PixelIcon.js';
-import { creatorPath, gamePath, studioPath } from './router.js';
+import { creatorPath, gamePath, studioPath } from './core/router.js';
 import { StudioCreatorProfileProvider } from './studioCreatorProfile.js';
 
 /**

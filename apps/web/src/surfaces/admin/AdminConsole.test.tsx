@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AdminConsole } from './AdminConsole.js';
 import type { AdminSummary } from './adminApi.js';
-import type { AdminSection } from '../../router.js';
+import type { AdminSection } from '../../core/router.js';
 
 const mocked = vi.hoisted(() => ({
   fetchAdminSummary: vi.fn(),

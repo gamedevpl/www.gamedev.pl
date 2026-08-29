@@ -1,4 +1,4 @@
-import type { LegalDocId } from './legal/types.js';
+import type { LegalDocId } from '../legal/types.js';
 
 /**
  * Creator Studio work surface. Persisted in the URL so a refresh or shared link

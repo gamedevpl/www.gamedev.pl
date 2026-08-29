@@ -26,7 +26,7 @@ view tree in `App.tsx`, or touch the sandboxed game iframe contract.
 
 ## Current surface (inventory)
 
-Custom router in [`apps/web/src/router.ts`](../apps/web/src/router.ts) — no React Router.
+Custom router in [`apps/web/src/core/router.ts`](../apps/web/src/core/router.ts) — no React Router.
 `App.tsx` listens to `hashchange` and stores an `AppRoute` discriminant.
 
 | Hash today              | Meaning                                                                              |
@@ -42,7 +42,7 @@ Custom router in [`apps/web/src/router.ts`](../apps/web/src/router.ts) — no Re
 
 | Area                       | Files / notes                                                                           |
 | -------------------------- | --------------------------------------------------------------------------------------- |
-| Router + builders          | `apps/web/src/router.ts`, `router.test.ts`, `mp/protocol.test.ts`                       |
+| Router + builders          | `apps/web/src/core/router.ts`, `router.test.ts`, `mp/protocol.test.ts`                  |
 | App navigation             | `App.tsx` (`navigateHash`, `hashchange`), `App.catalog.test.ts`                         |
 | Links in UI                | `NavHeader.tsx`, `DraftView.tsx`, `GameHealthView.tsx`, `SubmissionStatusView.tsx`      |
 | In-app notifications       | Stored `link` field (`#/play/…` or `#/status/…`); bell uses `href={n.link}`             |

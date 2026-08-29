@@ -6,7 +6,7 @@ import { catalogMediaUrl, gamePageHandle, type CatalogEntry } from './catalog.js
 import { fetchGamePage, type GamePage as GamePageData } from './gamePageApi.js';
 import { PixelIcon } from './PixelIcon.js';
 import { ShareGameButton } from './ShareGameButton.js';
-import { creatorPath, gamePath, playPath, studioPath } from './router.js';
+import { creatorPath, gamePath, playPath, studioPath } from './core/router.js';
 import { isPlayVia, recordRemixStep, type PlayVia } from './visitTelemetry.js';
 import { VoteWidget } from './VoteWidget.js';
 
@@ -262,7 +262,12 @@ export function GamePage({
             </a>
           ) : null}
           {entry.editor === 'content' ? (
-            <button type="button" className="secondary-btn game-page-remix" onClick={openRemixEntry} ref={remixButtonRef}>
+            <button
+              type="button"
+              className="secondary-btn game-page-remix"
+              onClick={openRemixEntry}
+              ref={remixButtonRef}
+            >
               <PixelIcon name="wrench" size={13} /> {t('gamePage.remix')}
             </button>
           ) : null}

@@ -9,7 +9,7 @@ import {
 } from '../../catalog.js';
 import { isCatalogScrolling, whenCatalogScrollIdle } from './catalogScrollIdle.js';
 import { PixelIcon } from '../../PixelIcon.js';
-import { creatorPath, gamePath } from '../../router.js';
+import { creatorPath, gamePath } from '../../core/router.js';
 import { useInView } from '../../useInView.js';
 import type { PlayVia } from '../../visitTelemetry.js';
 

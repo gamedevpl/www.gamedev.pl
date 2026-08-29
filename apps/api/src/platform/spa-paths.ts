@@ -4,7 +4,7 @@
  *
  * Kept as a pure pathname check so the Cloud Run static fallback and Vite's
  * dev server can share the same grammar. Must stay aligned with
- * `apps/web/src/router.ts` (`parsePathRoute`) — except `/join/<code>`, which is
+ * `apps/web/src/core/router.ts` (`parsePathRoute`) — except `/join/<code>`, which is
  * treated as known here even without a fragment: the join token lives in the
  * hash and never reaches the server (see docs/path-routing-plan.md § Join).
  */
@@ -17,7 +17,7 @@ const DRAFT_PATTERN = /^\/draft\/([^/]+)$/;
 const STATUS_PATTERN = /^\/status\/([^/]+)$/;
 const JOIN_PATTERN = /^\/join\/([A-Z0-9]{6})$/;
 const INVITE_PATTERN = /^\/invite\/([A-Za-z0-9_-]{32})$/;
-/** Public creator profile aliases — same grammar as `creatorPath` in apps/web/src/router.ts. */
+/** Public creator profile aliases — same grammar as `creatorPath` in apps/web/src/core/router.ts. */
 const CREATOR_ALIAS_PATTERN = /^\/creators\/([a-z][a-z0-9_]{2,23})$/;
 const ROOT_CREATOR_PATTERN = /^\/([a-z][a-z0-9_]{2,23})$/;
 /**
@@ -30,7 +30,7 @@ const GAME_PAGE_PATTERN =
   /^\/([a-z][a-z0-9_]{2,23})\/([a-z0-9]+(?:-[a-z0-9]+)*)(?:\/(?:board|review|releases|sources))?$/;
 /**
  * `/studio`, `/studio/:token`, `/studio/:token/:tab` — keep aligned with
- * `STUDIO_TAB_ALIASES` in apps/web/src/router.ts.
+ * `STUDIO_TAB_ALIASES` in apps/web/src/core/router.ts.
  *
  * Both vocabularies, deliberately. The three surfaces are what the studio has now; the
  * five names beside them are what it had before, and the client still resolves those to a

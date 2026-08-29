@@ -36,7 +36,7 @@ import { fetchFeaturedSlugs } from '../../featuredApi.js';
 import { MascotMoment } from '../../Mascot.js';
 import { PixelIcon } from '../../PixelIcon.js';
 import { getRecentPlays } from '../../recentPlays.js';
-import { creatorPath, gamePath } from '../../router.js';
+import { creatorPath, gamePath } from '../../core/router.js';
 import {
   fetchCatalogSortSignals,
   readCachedCatalogSortPayload,

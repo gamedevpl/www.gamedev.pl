@@ -1,4 +1,4 @@
-import type { AppRoute } from './router.js';
+import type { AppRoute } from './core/router.js';
 
 /** Brand suffix used on every non-home tab title. */
 export const SITE_BRAND = 'Gamedev.pl';

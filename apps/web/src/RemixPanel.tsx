@@ -51,7 +51,7 @@ import {
   type RemixChanged,
   type RemixNote,
 } from './remixSessionPersist.js';
-import { NAVIGATE_EVENT, playPath } from './router.js';
+import { NAVIGATE_EVENT, playPath } from './core/router.js';
 
 /** Successful landings before we offer to keep the remix in Studio. */
 const KEEP_OFFER_AFTER = 3;
