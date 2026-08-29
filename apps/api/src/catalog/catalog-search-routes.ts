@@ -59,14 +59,7 @@ export async function registerCatalogSearchRoutes(
         const best = catalogVectorIndex.findBestMatch(queryVector, 0.55);
         if (best) {
           return reply.send({
-            match: {
-              slug: best.game.slug,
-              title: best.game.title,
-              genre: best.game.genre,
-              tagline: best.game.tagline,
-              shortControls: best.game.shortControls,
-              searchKeywords: best.game.searchKeywords,
-            },
+            match: best.game,
             score: best.score,
           });
         }
