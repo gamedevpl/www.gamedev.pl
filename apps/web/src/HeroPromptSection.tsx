@@ -273,6 +273,13 @@ export function HeroPromptSection({
     return file ? catalogMediaUrl(matchedGame.slug, file, 320) : null;
   }, [matchedGame]);
 
+  const isCreationIntentEligible = useMemo(() => {
+    const trimmed = promptText.trim();
+    if (attachments.length > 0) return true;
+    const words = trimmed.split(/\s+/).filter(Boolean);
+    return words.length >= 2 && trimmed.length >= 6;
+  }, [promptText, attachments.length]);
+
   const handleFiles = (files: FileList | File[]) => {
     if (submissionStatus !== 'idle') return;
     Array.from(files).forEach((file) => {
@@ -604,7 +611,7 @@ export function HeroPromptSection({
                 <p className="searching-sub">"{promptText.trim()}"</p>
               </div>
             </div>
-          ) : promptText.trim().length >= 3 ? (
+          ) : isCreationIntentEligible ? (
             <div className={`smart-intent-card creation-card${isBusy ? ' is-busy' : ''}`}>
               <div className="creation-info">
                 <span className="smart-badge creation-badge">

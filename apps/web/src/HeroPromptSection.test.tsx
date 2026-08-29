@@ -802,11 +802,52 @@ describe('HeroPromptSection', () => {
       await flushEffects();
     });
 
-    // Finished search with no match shows creation card.
+    // Finished search with no match shows creation card with CTA button.
     expect(container.querySelector('.searching-card')).toBeNull();
     expect(container.querySelector('.matched-card')).toBeNull();
     expect(container.querySelector('.creation-card')).not.toBeNull();
     expect(container.querySelector('.creation-card')?.textContent).toContain('Opisz swój pomysł na grę');
+    expect(container.querySelector('.creation-card .build-match-btn')?.textContent).toContain('Stwórz taką grę');
+
+    fetchSpy.mockRestore();
+    await act(async () => root.unmount());
+  });
+
+  it('does not show creation card for single-word query when search finds no match', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('pl');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify({ match: null, score: 0 }), { status: 200 })),
+    );
+
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'miecz',
+          catalogEntries: [],
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    // Advance debounce timer
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250));
+      await flushEffects();
+    });
+
+    // Single-word search with no match should not propose creation
+    expect(container.querySelector('.searching-card')).toBeNull();
+    expect(container.querySelector('.matched-card')).toBeNull();
+    expect(container.querySelector('.creation-card')).toBeNull();
 
     fetchSpy.mockRestore();
     await act(async () => root.unmount());
