@@ -636,17 +636,18 @@ a {
   flex: none;
 }
 
-/* Pill build button with visible text CTA and icon. */
+/* Send/build button: compact circle by default, expanded pill when active CTA. */
 .prompt-composer-bar .build-btn {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  width: auto;
-  height: 38px;
-  min-height: 38px;
-  padding: 0 16px;
+  gap: 0;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
   margin: 0;
   border: none;
   border-radius: 999px;
@@ -655,9 +656,34 @@ a {
   white-space: nowrap;
   flex: none;
   box-sizing: border-box;
+  transition:
+    width 0.2s ease,
+    padding 0.2s ease,
+    gap 0.2s ease;
 }
 
 .prompt-composer-bar .build-btn-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Expanded state: pill CTA with visible text when matched or creation intent is active. */
+.prompt-composer-bar .build-btn.has-text-cta {
+  width: auto;
+  height: 38px;
+  min-height: 38px;
+  padding: 0 16px;
+  gap: 6px;
+}
+
+.prompt-composer-bar .build-btn.has-text-cta .build-btn-label {
   position: static;
   width: auto;
   height: auto;
@@ -665,8 +691,6 @@ a {
   margin: 0;
   overflow: visible;
   clip: auto;
-  white-space: nowrap;
-  border: 0;
 }
 
 /* Busy: keep teal; spinner replaces the icon during generation. */

@@ -796,18 +796,23 @@ describe('HeroPromptSection', () => {
     expect(container.querySelector('.searching-card')?.textContent).toContain('Szukanie w katalogu');
     expect(container.querySelector('.creation-card')).toBeNull();
 
+    // During debounced search: searching card is displayed, build-btn stays compact circle
+    expect(container.querySelector('.searching-card')).not.toBeNull();
+    expect(container.querySelector('.build-btn')?.classList.contains('has-text-cta')).toBe(false);
+
     // Advance debounce timer
     await act(async () => {
       await new Promise((r) => setTimeout(r, 250));
       await flushEffects();
     });
 
-    // Finished search with no match shows creation card with CTA button.
+    // Search with no match shows creation card and expanded CTA.
     expect(container.querySelector('.searching-card')).toBeNull();
     expect(container.querySelector('.matched-card')).toBeNull();
     expect(container.querySelector('.creation-card')).not.toBeNull();
     expect(container.querySelector('.creation-card')?.textContent).toContain('Opisz swój pomysł na grę');
     expect(container.querySelector('.creation-card .build-match-btn')?.textContent).toContain('Stwórz taką grę');
+    expect(container.querySelector('.build-btn')?.classList.contains('has-text-cta')).toBe(true);
 
     fetchSpy.mockRestore();
     await act(async () => root.unmount());
@@ -894,25 +899,16 @@ describe('HeroPromptSection', () => {
     document.body.appendChild(container);
     const root = createRoot(container);
 
-    const mockCatalog = [
-      {
-        slug: 'mexico-86',
-        title: "Mexico '86 Arcade Football",
-        genre: 'sports',
-        controls: 'Arrows / Enter',
-        media: null,
-        multiplayer: null,
-        saves: null,
-        world: null,
-        sensing: null,
-        orientation: 'landscape' as const,
-        editor: null,
-        status: 'published' as const,
-        submittedBy: null,
-        tagline: { en: 'Tournament football.', pl: 'Turniej piłkarski.' },
-        searchKeywords: ['football', 'soccer', 'piłka', 'mundial'],
-      },
-    ];
+    const mockCatalog = [{
+      slug: 'mexico-86',
+      title: "Mexico '86 Arcade Football",
+      genre: 'sports',
+      controls: 'Arrows / Enter',
+      media: null, multiplayer: null, saves: null, world: null, sensing: null,
+      orientation: 'landscape' as const, editor: null, status: 'published' as const, submittedBy: null,
+      tagline: { en: 'Tournament football.', pl: 'Turniej piłkarski.' },
+      searchKeywords: ['football', 'soccer', 'piłka', 'mundial'],
+    }];
 
     await act(async () => {
       root.render(
@@ -929,9 +925,7 @@ describe('HeroPromptSection', () => {
 
     const card = container.querySelector('.matched-card');
     expect(card).not.toBeNull();
-
-    const title = container.querySelector('.matched-title');
-    expect(title?.textContent).toBe("Mexico '86 Arcade Football");
+    expect(container.querySelector('.matched-title')?.textContent).toBe("Mexico '86 Arcade Football");
 
     await act(async () => root.unmount());
   });
@@ -954,15 +948,7 @@ describe('HeroPromptSection', () => {
     };
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
-      Promise.resolve(
-        new Response(
-          JSON.stringify({
-            match: vectorMatchGame,
-            score: 0.85,
-          }),
-          { status: 200 },
-        ),
-      ),
+      Promise.resolve(new Response(JSON.stringify({ match: vectorMatchGame, score: 0.85 }), { status: 200 })),
     );
 
     // Initial render with catalogEntries = [] (e.g. initial cold load)
@@ -985,10 +971,11 @@ describe('HeroPromptSection', () => {
       await flushEffects();
     });
 
-    // Even with empty catalogEntries, match should be displayed
+    // Match is displayed and prompt button shows build CTA.
     const card = container.querySelector('.matched-card');
     expect(card).not.toBeNull();
     expect(container.querySelector('.matched-title')?.textContent).toBe('Bonfire Arena');
+    expect(container.querySelector('.build-btn')?.classList.contains('has-text-cta')).toBe(true);
 
     fetchSpy.mockRestore();
     await act(async () => root.unmount());

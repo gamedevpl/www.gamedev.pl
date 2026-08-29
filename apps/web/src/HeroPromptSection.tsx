@@ -279,6 +279,8 @@ export function HeroPromptSection({
     return words.length >= 2 && trimmed.length >= 6;
   }, [promptText, attachments.length]);
 
+  const showTextualBuildCta = Boolean((matchedGame || isCreationIntentEligible) && !isSearching && !isBusy);
+
   const handleFiles = (files: FileList | File[]) => {
     if (submissionStatus !== 'idle') return;
     Array.from(files).forEach((file) => {
@@ -484,12 +486,16 @@ export function HeroPromptSection({
 
             <button
               type="submit"
-              className={`primary-btn build-btn${isBusy ? ' is-busy' : ''}`}
+              className={`primary-btn build-btn${isBusy ? ' is-busy' : ''}${showTextualBuildCta ? ' has-text-cta' : ''}`}
               title={busyLabel ?? t('hero.buildGameButton')}
               aria-label={busyLabel ?? t('hero.buildGameButton')}
               disabled={isBusy || pendingAttachmentReads > 0 || (!promptText.trim() && attachments.length === 0)}
             >
-              {isBusy ? <span className="build-btn-spinner" aria-hidden="true" /> : <PixelIcon name="sparkle" size={14} />}
+              {isBusy ? (
+                <span className="build-btn-spinner" aria-hidden="true" />
+              ) : (
+                <PixelIcon name={showTextualBuildCta ? 'sparkle' : 'send'} size={showTextualBuildCta ? 14 : 16} />
+              )}
               <span className="build-btn-label">{busyLabel ?? t('hero.buildGameButton')}</span>
             </button>
           </div>
