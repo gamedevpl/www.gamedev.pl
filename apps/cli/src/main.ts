@@ -3,7 +3,7 @@ import { resolve as resolvePath } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { stdin, stdout, stderr } from 'node:process';
 import { parseArgv, jsonMode, SLASH_VERBS } from './argv.js';
-import { CLI_BIN, cliUsage } from './bin-name.js';
+import { CLI_BIN, GIT_REMOTE_HELPER, GIT_REMOTE_SCHEME, cliUsage } from './bin-name.js';
 import { createApi, requireTtyFlag } from './api.js';
 import { encryptedFileStore, FILE_FALLBACK_WARNING, memoryStore, type TokenStore } from './keychain.js';
 import { originFromEnv } from './oauth.js';
@@ -30,8 +30,8 @@ function storeFromEnv(env: NodeJS.ProcessEnv): TokenStore {
 }
 
 export function isGitRemoteHelper(argv: string[]): boolean {
-  if (/git-remote-gamedev/.test(argv[1] ?? argv[0] ?? '')) return true;
-  if (!argv.some((arg) => arg.startsWith('gamedev://'))) return false;
+  if ((argv[1] ?? argv[0] ?? '').includes(GIT_REMOTE_HELPER)) return true;
+  if (!argv.some((arg) => arg.startsWith(`${GIT_REMOTE_SCHEME}://`))) return false;
   const first = argv[2];
   if (first && !first.startsWith('-') && (SLASH_VERBS as readonly string[]).includes(first)) return false;
   return true;

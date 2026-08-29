@@ -3,7 +3,7 @@ import { fastImportScript, handleHelperLine, listRefs, refuseNonFastForward, sha
 import { remoteSlugFromArgv } from './git-remote-main.js';
 import { unreconciledMessage } from './checkout.js';
 
-describe('git-remote-gamedev', () => {
+describe('git-remote-gamedevpl', () => {
   it('advertises import and push and refuses non-ff like gamedevpl diff', () => {
     expect(handleHelperLine('capabilities', 'ghost-roads')).toContain('import');
     expect(handleHelperLine('capabilities', 'ghost-roads')).toContain('push');

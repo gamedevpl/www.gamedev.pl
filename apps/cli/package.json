@@ -5,7 +5,7 @@
   "type": "module",
   "bin": {
     "gamedevpl": "./dist/main.js",
-    "git-remote-gamedev": "./dist/git-remote-main.js"
+    "git-remote-gamedevpl": "./dist/git-remote-main.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-adapters.mjs",

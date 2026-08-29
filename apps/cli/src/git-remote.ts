@@ -8,7 +8,7 @@ export type VersionRef = { version: string; createdAt: string };
 export type TreeFile = { path: string; content: string };
 
 export function shaForVersion(version: string): string {
-  return createHash('sha1').update(`gamedev:${version}`).digest('hex');
+  return createHash('sha1').update(`gamedevpl:${version}`).digest('hex');
 }
 
 export function refuseNonFastForward(): string {
@@ -41,7 +41,7 @@ export function fastImportScript(input: {
     const message = row.version;
     chunks.push('commit refs/heads/main');
     chunks.push(`mark :${mark}`);
-    chunks.push(`committer gamedev <cli@gamedev.pl> ${Math.floor(Date.parse(row.createdAt) / 1000)} +0000`);
+    chunks.push(`committer gamedevpl <cli@gamedev.pl> ${Math.floor(Date.parse(row.createdAt) / 1000)} +0000`);
     chunks.push(`data ${Buffer.byteLength(message)}`);
     chunks.push(message);
     if (mark > 1) chunks.push(`from :${mark - 1}`);

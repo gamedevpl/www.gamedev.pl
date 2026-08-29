@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync, lstatSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cliUsage } from './bin-name.js';
+import { cliUsage, gitRemoteUrl } from './bin-name.js';
 import type { ApiClient } from './api.js';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 
@@ -101,11 +101,11 @@ export async function checkoutGame(input: {
     run('tar', ['-xzf', '.gamedev-workspace.tgz'], input.dest);
     writeFileSync(join(input.dest, '.gamedev-slug'), input.slug);
     run('git', ['init'], input.dest);
-    run('git', ['remote', 'add', 'origin', `gamedev://${input.slug}`], input.dest);
+    run('git', ['remote', 'add', 'origin', gitRemoteUrl(input.slug)], input.dest);
   } finally {
     rmSync(tgz, { force: true });
   }
-  return { dest: input.dest, remote: `gamedev://${input.slug}` };
+  return { dest: input.dest, remote: gitRemoteUrl(input.slug) };
 }
 
 export async function pullGame(input: { api: ApiClient; slug: string; dest: string }): Promise<{ version: string }> {

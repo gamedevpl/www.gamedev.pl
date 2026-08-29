@@ -53,6 +53,7 @@ describe('reserved installer routes', () => {
       expect(sh.body).toContain('$HOME/.local/bin');
       expect(sh.body).toContain('Node 20');
       expect(sh.body).toContain('asset="gamedevpl"');
+      expect(sh.body).toContain('git-remote-gamedevpl');
       expect(sh.body).not.toContain('gamedev-linux');
       const page = await app.inject({ method: 'GET', url: '/cli' });
       expect(page.statusCode).toBe(200);
@@ -65,7 +66,7 @@ describe('reserved installer routes', () => {
       expect(ps1.body).toContain('Node 20');
       expect(ps1.body).toContain("process.versions.node.split('.')[0]");
       expect(ps1.body).toContain('too old');
-      expect(ps1.body).toContain('node "%~dp0git-remote-gamedev" %*');
+      expect(ps1.body).toContain('node "%~dp0git-remote-gamedevpl" %*');
       expect(sh.body).not.toContain('ORIGIN=');
       const enabled = await app.inject({ method: 'GET', url: '/api/cli/enabled' });
       expect(enabled.statusCode).toBe(200);

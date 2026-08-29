@@ -43,8 +43,8 @@ if [ "$expected" != "$actual" ]; then
 fi
 mkdir -p "$BIN_DIR"
 install -m 0755 "$tmp/$asset" "$BIN_DIR/gamedevpl"
-install -m 0755 "$tmp/$asset" "$BIN_DIR/git-remote-gamedev"
-echo "installed $BIN_DIR/gamedevpl (Node script; also git-remote-gamedev)"
+install -m 0755 "$tmp/$asset" "$BIN_DIR/git-remote-gamedevpl"
+echo "installed $BIN_DIR/gamedevpl (Node script; also git-remote-gamedevpl)"
 echo "put $BIN_DIR on PATH if it is not already"
 `;
 }
@@ -72,15 +72,15 @@ try {
   if ($expected -ne $actual) { throw "checksum mismatch for $asset" }
   New-Item -ItemType Directory -Force -Path $binDir | Out-Null
   Copy-Item $bin (Join-Path $binDir "gamedevpl")
-  Copy-Item $bin (Join-Path $binDir "git-remote-gamedev")
+  Copy-Item $bin (Join-Path $binDir "git-remote-gamedevpl")
   @(
     '@echo off',
     'node "%~dp0gamedevpl" %*'
   ) | Set-Content -Path (Join-Path $binDir "gamedevpl.cmd")
   @(
     '@echo off',
-    'node "%~dp0git-remote-gamedev" %*'
-  ) | Set-Content -Path (Join-Path $binDir "git-remote-gamedev.cmd")
+    'node "%~dp0git-remote-gamedevpl" %*'
+  ) | Set-Content -Path (Join-Path $binDir "git-remote-gamedevpl.cmd")
   Write-Host "installed $binDir\\gamedevpl (Node script via $origin)"
 } finally {
   Remove-Item -Recurse -Force $tmp

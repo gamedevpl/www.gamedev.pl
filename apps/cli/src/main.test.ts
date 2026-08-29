@@ -74,9 +74,10 @@ describe('runCli verbs', () => {
     vi.unstubAllGlobals();
   });
 
-  it('treats a gamedev:// URL as the git remote helper even when argv1 is gamedevpl', () => {
-    expect(isGitRemoteHelper(['node', '/bin/gamedevpl', 'origin', 'gamedev://sky-dodge'])).toBe(true);
+  it('treats a gamedevpl:// URL as the git remote helper even when argv1 is gamedevpl', () => {
+    expect(isGitRemoteHelper(['node', '/bin/gamedevpl', 'origin', 'gamedevpl://sky-dodge'])).toBe(true);
     expect(isGitRemoteHelper(['node', '/bin/gamedevpl', 'status', 'tok'])).toBe(false);
-    expect(isGitRemoteHelper(['node', '/bin/gamedevpl', 'connect', 'gamedev://sky-dodge'])).toBe(false);
+    expect(isGitRemoteHelper(['node', '/bin/gamedevpl', 'connect', 'gamedevpl://sky-dodge'])).toBe(false);
+    expect(isGitRemoteHelper(['node', '/bin/git-remote-gamedevpl', 'origin', 'gamedevpl://sky-dodge'])).toBe(true);
   });
 });

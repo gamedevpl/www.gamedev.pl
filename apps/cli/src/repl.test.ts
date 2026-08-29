@@ -114,7 +114,7 @@ describe('repl turn loop', () => {
     expect(posts).toBe(0);
   });
 
-  it('tells the user to run known non-REPL verbs as gamedev <verb>', async () => {
+  it('tells the user to run known non-REPL verbs as gamedevpl <verb>', async () => {
     const lines: string[] = [];
     const api = createApi({
       origin: 'https://www.gamedev.pl',
@@ -128,7 +128,7 @@ describe('repl turn loop', () => {
       write: (s) => lines.push(s),
     });
     expect(result.next).toBe('continue');
-    expect(lines.join('\n')).toBe('run it as gamedev status');
+    expect(lines.join('\n')).toBe('run it as gamedevpl status');
   });
 
   it('parses slash-verb flags the same way as argv', async () => {

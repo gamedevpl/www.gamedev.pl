@@ -1,4 +1,4 @@
-import { CLI_BIN } from './bin-name.js';
+import { CLI_BIN, cliUsage } from './bin-name.js';
 import { glyphs, wantsColor } from './renderer.js';
 import { completeSlash, parseArgv, SLASH_VERBS, type SlashVerb } from './argv.js';
 import { postTurn } from './turn.js';
@@ -53,7 +53,7 @@ export async function handleReplLine(input: {
         input.write(chunks.join('').trimEnd() || `/${cmd}`);
         return { next: 'continue' };
       }
-      input.write(`run it as gamedev ${cmd}`);
+      input.write(`run it as ${cliUsage(cmd)}`);
       return { next: 'continue' };
     }
     const matches = completeSlash(trimmed);

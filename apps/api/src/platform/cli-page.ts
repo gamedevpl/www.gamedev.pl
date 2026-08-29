@@ -21,7 +21,7 @@ export function cliPageHtml(origin: string): string {
     <h2>Journeys</h2>
     <ul class="can">
       <li><code>gamedevpl login</code> then describe a game — refine, watch the gate, open a preview.</li>
-      <li><code>gamedevpl checkout &lt;slug&gt;</code> for your own editor; <code>git push</code> uses <code>git-remote-gamedev</code>.</li>
+      <li><code>gamedevpl checkout &lt;slug&gt;</code> for your own editor; <code>git push</code> uses <code>git-remote-gamedevpl</code>.</li>
       <li>CI: <code>GAMEDEV_TOKEN</code> from secrets, <code>gamedevpl submit --json</code>.</li>
     </ul>
     <h2>Security posture</h2>

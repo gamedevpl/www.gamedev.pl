@@ -7,7 +7,7 @@ import { createApi } from './api.js';
 import { memoryStore } from './keychain.js';
 
 describe('checkout', () => {
-  it('always inits git with a gamedev:// remote', async () => {
+  it('always inits git with a gamedevpl:// remote', async () => {
     const dest = mkdtempSync(join(tmpdir(), 'gdpl-co-'));
     const commands: string[] = [];
     const result = await checkoutGame({
@@ -23,10 +23,10 @@ describe('checkout', () => {
         commands.push([cmd, ...args].join(' '));
       },
     });
-    expect(result.remote).toBe('gamedev://ghost-roads');
+    expect(result.remote).toBe('gamedevpl://ghost-roads');
     expect(commands).toContain('tar -xzf .gamedev-workspace.tgz');
     expect(commands).toContain('git init');
-    expect(commands).toContain('git remote add origin gamedev://ghost-roads');
+    expect(commands).toContain('git remote add origin gamedevpl://ghost-roads');
     expect(existsSync(join(dest, '.gamedev-workspace.tgz'))).toBe(false);
   });
 

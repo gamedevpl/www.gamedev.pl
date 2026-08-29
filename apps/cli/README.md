@@ -29,4 +29,4 @@ Until a release exists: `npm run bundle -w @gamedevpl/cli` and run `apps/cli/dis
 Exit codes: `0` gate green · `1` gate red · `2` refused · `3` auth · `4` input required.
 
 CI: `GAMEDEV_TOKEN` from secrets. Never pass the creator OAuth token to a sub-agent.
-`git push` / `git pull` against a checkout use `git-remote-gamedev` (same script).
+`git push` / `git pull` against a checkout use `git-remote-gamedevpl` (same script).
