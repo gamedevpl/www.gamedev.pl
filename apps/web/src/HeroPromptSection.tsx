@@ -279,8 +279,6 @@ export function HeroPromptSection({
     return words.length >= 2 && trimmed.length >= 6;
   }, [promptText, attachments.length]);
 
-  const showTextualBuildCta = Boolean((matchedGame || isCreationIntentEligible) && !isSearching && !isBusy);
-
   const handleFiles = (files: FileList | File[]) => {
     if (submissionStatus !== 'idle') return;
     Array.from(files).forEach((file) => {
@@ -469,7 +467,6 @@ export function HeroPromptSection({
                 if (pastedImages.length > 0) handleFiles(pastedImages);
               }}
             />
-
             <div className="prompt-bar-actions">
               <button
                 type="button"
@@ -484,20 +481,7 @@ export function HeroPromptSection({
               </button>
             </div>
 
-            <button
-              type="submit"
-              className={`primary-btn build-btn${isBusy ? ' is-busy' : ''}${showTextualBuildCta ? ' has-text-cta' : ''}`}
-              title={busyLabel ?? t('hero.buildGameButton')}
-              aria-label={busyLabel ?? t('hero.buildGameButton')}
-              disabled={isBusy || pendingAttachmentReads > 0 || (!promptText.trim() && attachments.length === 0)}
-            >
-              {isBusy ? (
-                <span className="build-btn-spinner" aria-hidden="true" />
-              ) : (
-                <PixelIcon name={showTextualBuildCta ? 'sparkle' : 'send'} size={showTextualBuildCta ? 14 : 16} />
-              )}
-              <span className="build-btn-label">{busyLabel ?? t('hero.buildGameButton')}</span>
-            </button>
+            <button type="submit" style={{ display: 'none' }} aria-hidden="true" disabled={isBusy} />
           </div>
 
           {exampleChips && exampleChips.length > 0 && !isBusy && (
@@ -556,22 +540,24 @@ export function HeroPromptSection({
 
           {matchedGame ? (
             <div className="smart-intent-card matched-card">
-              {matchedPoster && (
+              {matchedPoster ? (
                 <div className="matched-thumb-wrap">
                   <img
                     src={matchedPoster}
                     alt={matchedGame.title}
                     className="matched-thumb"
-                    loading="eager"
+                    loading="lazy"
                     decoding="async"
                   />
                 </div>
-              )}
+              ) : null}
               <div className="matched-info">
                 <div className="matched-badges">
-                  <span className="smart-badge">
-                    <PixelIcon name="gamepad" size={12} /> {t('catalog.genre')}: {matchedGame.genre}
-                  </span>
+                  {matchedGame.genre && (
+                    <span className="smart-badge">
+                      <PixelIcon name="gamepad" size={12} /> {t('catalog.genre')}: {matchedGame.genre}
+                    </span>
+                  )}
                   {matchedGame.multiplayer && (
                     <span className="smart-badge smart-badge-secondary">
                       <PixelIcon name="user" size={12} /> {t('catalog.categories.multiplayer_party')}
@@ -602,6 +588,13 @@ export function HeroPromptSection({
                   disabled={isBusy}
                 >
                   <PixelIcon name="play" size={14} /> {t('hero.smartPlayBtn', { title: matchedGame.title })}
+                </button>
+                <button
+                  type="submit"
+                  className="match-build-link"
+                  disabled={isBusy || pendingAttachmentReads > 0 || (!promptText.trim() && attachments.length === 0)}
+                >
+                  <PixelIcon name="sparkle" size={12} /> {t('hero.orBuildOwnGame')}
                 </button>
               </div>
             </div>
