@@ -127,6 +127,7 @@
     "smartMatchHint": "Looking for something else? Add more details above to build a new game.",
     "smartNoMatchTitle": "Describe your game idea: \"{{query}}\"",
     "smartNoMatchSub": "Become the creator — let AI agents build your game idea!",
+    "smartSearching": "Searching catalog…",
     "smartBuildBtn": "Build \"{{query}}\" with AI",
     "keyboardShortcutHint": "Press ⌘+Enter or Ctrl+Enter to submit",
     "micStart": "Speak",

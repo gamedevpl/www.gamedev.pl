@@ -127,6 +127,7 @@
     "smartMatchHint": "Chcesz stworzyć coś innego? Dopisz więcej szczegółów powyżej i stwórz nową grę.",
     "smartNoMatchTitle": "Opisz swój pomysł na grę: \"{{query}}\"",
     "smartNoMatchSub": "Zostań twórcą — pozwól agentom AI stworzyć Twój pomysł!",
+    "smartSearching": "Szukanie w katalogu…",
     "smartBuildBtn": "Stwórz \"{{query}}\" z AI",
     "keyboardShortcutHint": "Naciśnij ⌘+Enter lub Ctrl+Enter, aby wysłać",
     "micStart": "Mów",
