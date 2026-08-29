@@ -587,7 +587,7 @@ export function HeroPromptSection({
                   onClick={() => onPlayGame?.(matchedGame, 'composer_match')}
                   disabled={isBusy}
                 >
-                  <PixelIcon name="play" size={14} /> {t('hero.smartPlayBtn', { title: matchedGame.title })}
+                  <PixelIcon name="play" size={14} /> {t('hero.smartPlayBtn')}
                 </button>
                 <button
                   type="submit"

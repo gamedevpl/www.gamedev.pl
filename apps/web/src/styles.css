@@ -1066,7 +1066,6 @@ a {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  flex-wrap: wrap;
 }
 
 .matched-thumb-wrap {
@@ -1177,6 +1176,7 @@ a {
   background: var(--turquoise);
   color: #0b221d;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .creation-card {
