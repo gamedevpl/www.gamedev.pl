@@ -612,6 +612,15 @@ export function HeroPromptSection({
                 </span>
                 <p className="creation-sub">{t('hero.smartNoMatchSub')}</p>
               </div>
+              <div className="creation-actions">
+                <button
+                  type="submit"
+                  className="primary-btn build-match-btn"
+                  disabled={isBusy || pendingAttachmentReads > 0 || (!promptText.trim() && attachments.length === 0)}
+                >
+                  <PixelIcon name="sparkle" size={14} /> {t('hero.smartBuildBtn')}
+                </button>
+              </div>
             </div>
           ) : null}
 

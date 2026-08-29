@@ -1137,6 +1137,32 @@ a {
 .creation-card {
   background: rgba(56, 189, 248, 0.08);
   border: 1px solid rgba(56, 189, 248, 0.25);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.creation-info {
+  flex: 1;
+  min-width: 200px;
+}
+
+.creation-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.build-match-btn {
+  background: #38bdf8;
+  color: #0b1a2b;
+  font-weight: 700;
+}
+
+.build-match-btn:hover:not(:disabled) {
+  background: #7dd3fc;
 }
 
 .creation-badge,
