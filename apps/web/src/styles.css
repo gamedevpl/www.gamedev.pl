@@ -484,7 +484,7 @@ a {
    height:auto so border-box can't clip 36px cells. */
 .prompt-composer-bar {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) 36px 36px;
+  grid-template-columns: 36px minmax(0, 1fr) 36px;
   align-items: center;
   column-gap: 8px;
   width: 100%;
@@ -636,7 +636,7 @@ a {
   flex: none;
 }
 
-/* Desktop: circular send — label stays for a11y/tests, clipped visually. */
+/* Send/build button: compact circle by default, expanded pill when active CTA. */
 .prompt-composer-bar .build-btn {
   position: relative;
   display: inline-flex;
@@ -656,6 +656,10 @@ a {
   white-space: nowrap;
   flex: none;
   box-sizing: border-box;
+  transition:
+    width 0.2s ease,
+    padding 0.2s ease,
+    gap 0.2s ease;
 }
 
 .prompt-composer-bar .build-btn-label {
@@ -670,7 +674,26 @@ a {
   border: 0;
 }
 
-/* Busy: keep teal; spinner replaces the clipped label on desktop. */
+/* Expanded state: pill CTA with visible text when matched or creation intent is active. */
+.prompt-composer-bar .build-btn.has-text-cta {
+  width: auto;
+  height: 38px;
+  min-height: 38px;
+  padding: 0 16px;
+  gap: 6px;
+}
+
+.prompt-composer-bar .build-btn.has-text-cta .build-btn-label {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: 0;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+}
+
+/* Busy: keep teal; spinner replaces the icon during generation. */
 .prompt-composer-bar .build-btn.is-busy {
   opacity: 1;
   cursor: progress;
@@ -1118,8 +1141,35 @@ a {
 
 .matched-actions {
   display: flex;
-  gap: 10px;
+  flex-direction: column;
   align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.match-build-link {
+  background: none;
+  border: none;
+  padding: 2px 6px;
+  color: var(--text-muted, #94a3b8);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.2s ease;
+}
+
+.match-build-link:hover:not(:disabled) {
+  color: var(--turquoise, #00e4ac);
+}
+
+.match-build-link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .play-match-btn,
@@ -4178,6 +4228,11 @@ body.player-open {
   .matched-actions button,
   .creation-actions button {
     width: 100%;
+  }
+
+  .matched-actions .match-build-link {
+    width: auto;
+    align-self: center;
   }
 
   .catalog-grid {

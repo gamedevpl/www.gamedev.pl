@@ -298,23 +298,21 @@ export function App() {
   // `/play/<slug>` auto-opens theater once the catalog confirms the game.
   // Close replaces onto the canonical page; in-place Play is untouched.
   useEffect(() => {
-    if (route.view !== 'play') return;
-
-    const entry = catalogEntries.find((game) => game.slug === route.slug);
-
-    if (stageContent?.type === 'catalog' && stageContent.game.slug === route.slug) {
+    if (stageContent?.type === 'catalog') {
+      const entry = catalogEntries.find((game) => game.slug === stageContent.game.slug);
       if (entry && stageContent.game !== entry) {
         setStageContent((prev) =>
-          prev?.type === 'catalog' && prev.game.slug === route.slug ? { ...prev, game: entry } : prev,
+          prev?.type === 'catalog' && prev.game.slug === entry.slug ? { ...prev, game: entry } : prev,
         );
       }
-      // Ready + missing → UnpublishedPlayView.
-      if (catalogStatus === 'ready' && !entry) {
+      if (route.view === 'play' && catalogStatus === 'ready' && !entry) {
         setStageContent(null);
       }
       return;
     }
 
+    if (route.view !== 'play') return;
+    const entry = catalogEntries.find((game) => game.slug === route.slug);
     // Wait so unknown slugs do not flash a 404 theater.
     if (catalogStatus !== 'ready' || !entry) return;
 
@@ -834,7 +832,8 @@ export function App() {
 
   function handlePlayGame(game: CatalogEntry, via?: PlayVia) {
     // In-place Play from home/profile/game page; `/play/<slug>` auto-opens itself.
-    setStageContent({ type: 'catalog', game, ...(via === undefined ? {} : { via }) });
+    const fullEntry = catalogEntries.find((e) => e.slug === game.slug) ?? game;
+    setStageContent({ type: 'catalog', game: fullEntry, ...(via === undefined ? {} : { via }) });
     // Soft refresh so "continue" / genre picks update after the next home visit.
     setRecommendationsRefreshKey((n) => n + 1);
   }

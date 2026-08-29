@@ -53,11 +53,9 @@ describe('HeroPromptSection', () => {
 
     const attachBtn = container.querySelector('.attach-btn');
     const micBtn = container.querySelector('.mic-btn');
-    const buildBtn = container.querySelector('.build-btn');
 
     expect(attachBtn).not.toBeNull();
     expect(micBtn).not.toBeNull();
-    expect(buildBtn).not.toBeNull();
     expect(container.querySelector('.prompt-composer-bar')).not.toBeNull();
     expect(container.querySelectorAll('.chip-btn')).toHaveLength(0);
 
@@ -93,13 +91,13 @@ describe('HeroPromptSection', () => {
       await flushEffects();
     });
 
-    expect(document.activeElement).not.toBe(container.querySelector('.big-prompt-input'));
+    const textarea = container.querySelector('.big-prompt-input');
+    expect(document.activeElement).not.toBe(textarea);
 
     await act(async () => root.unmount());
   });
 
   it('says it is analyzing while the refiner runs, and submitting only once it is', async () => {
-    // refining must not claim Submitting before anything is sent
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
 
@@ -120,17 +118,19 @@ describe('HeroPromptSection', () => {
         );
         await flushEffects();
       });
-      return container.querySelector<HTMLButtonElement>('.build-btn');
     };
 
-    expect((await renderWithStatus('refining'))?.textContent).toContain('Analyzing your idea');
-    expect((await renderWithStatus('loading'))?.textContent).toContain('Submitting');
-    expect((await renderWithStatus('idle'))?.textContent).toContain('Build My Game');
+    await renderWithStatus('refining');
+    expect(container.querySelector('.prompt-busy-status')?.textContent).toContain('Analyzing your idea');
+    expect(container.querySelector<HTMLInputElement>('.big-prompt-input')?.disabled).toBe(true);
 
-    // Busy must disable the button against a second fire.
-    expect((await renderWithStatus('refining'))?.disabled).toBe(true);
-    expect((await renderWithStatus('loading'))?.disabled).toBe(true);
-    expect((await renderWithStatus('idle'))?.disabled).toBe(false);
+    await renderWithStatus('loading');
+    expect(container.querySelector('.prompt-busy-status')?.textContent).toContain('Submitting');
+    expect(container.querySelector<HTMLInputElement>('.big-prompt-input')?.disabled).toBe(true);
+
+    await renderWithStatus('idle');
+    expect(container.querySelector('.prompt-busy-status')).toBeNull();
+    expect(container.querySelector<HTMLInputElement>('.big-prompt-input')?.disabled).toBe(false);
 
     await act(async () => root.unmount());
   });
@@ -161,7 +161,6 @@ describe('HeroPromptSection', () => {
 
     await renderWithStatus('refining');
     expect(container.querySelector('.prompt-composer-bar.is-busy')).not.toBeNull();
-    expect(container.querySelector('.build-btn.is-busy')).not.toBeNull();
     expect(container.querySelector('.build-btn-spinner')).not.toBeNull();
     expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Analyzing your idea/i);
     expect(container.querySelector('.creation-card.is-busy .creation-sub')?.textContent).toMatch(/Become the creator/i);
@@ -318,7 +317,6 @@ describe('HeroPromptSection', () => {
       await flushEffects();
     });
 
-    expect(container.querySelector<HTMLButtonElement>('.build-btn')?.disabled).toBe(true);
     await act(async () => {
       container
         .querySelector('.prompt-box-form')
@@ -330,7 +328,6 @@ describe('HeroPromptSection', () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
-    expect(container.querySelector<HTMLButtonElement>('.build-btn')?.disabled).toBe(false);
 
     await act(async () => root.unmount());
   });
@@ -381,14 +378,12 @@ describe('HeroPromptSection', () => {
         ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
       await flushEffects();
     });
-    expect(container.querySelector<HTMLButtonElement>('.build-btn')?.disabled).toBe(true);
     expect(onSubmitSpec).not.toHaveBeenCalled();
 
     await act(async () => {
       resolveNormalization(['small']);
       await flushEffects();
     });
-    expect(container.querySelector<HTMLButtonElement>('.build-btn')?.disabled).toBe(false);
     expect(onSubmitSpec).toHaveBeenCalledTimes(1);
 
     await act(async () => root.unmount());
@@ -796,13 +791,16 @@ describe('HeroPromptSection', () => {
     expect(container.querySelector('.searching-card')?.textContent).toContain('Szukanie w katalogu');
     expect(container.querySelector('.creation-card')).toBeNull();
 
+    // During debounced search: searching card is displayed
+    expect(container.querySelector('.searching-card')).not.toBeNull();
+
     // Advance debounce timer
     await act(async () => {
       await new Promise((r) => setTimeout(r, 250));
       await flushEffects();
     });
 
-    // Finished search with no match shows creation card with CTA button.
+    // Search with no match shows creation card and build button.
     expect(container.querySelector('.searching-card')).toBeNull();
     expect(container.querySelector('.matched-card')).toBeNull();
     expect(container.querySelector('.creation-card')).not.toBeNull();
@@ -894,25 +892,16 @@ describe('HeroPromptSection', () => {
     document.body.appendChild(container);
     const root = createRoot(container);
 
-    const mockCatalog = [
-      {
-        slug: 'mexico-86',
-        title: "Mexico '86 Arcade Football",
-        genre: 'sports',
-        controls: 'Arrows / Enter',
-        media: null,
-        multiplayer: null,
-        saves: null,
-        world: null,
-        sensing: null,
-        orientation: 'landscape' as const,
-        editor: null,
-        status: 'published' as const,
-        submittedBy: null,
-        tagline: { en: 'Tournament football.', pl: 'Turniej piłkarski.' },
-        searchKeywords: ['football', 'soccer', 'piłka', 'mundial'],
-      },
-    ];
+    const mockCatalog = [{
+      slug: 'mexico-86',
+      title: "Mexico '86 Arcade Football",
+      genre: 'sports',
+      controls: 'Arrows / Enter',
+      media: null, multiplayer: null, saves: null, world: null, sensing: null,
+      orientation: 'landscape' as const, editor: null, status: 'published' as const, submittedBy: null,
+      tagline: { en: 'Tournament football.', pl: 'Turniej piłkarski.' },
+      searchKeywords: ['football', 'soccer', 'piłka', 'mundial'],
+    }];
 
     await act(async () => {
       root.render(
@@ -929,10 +918,59 @@ describe('HeroPromptSection', () => {
 
     const card = container.querySelector('.matched-card');
     expect(card).not.toBeNull();
+    expect(container.querySelector('.matched-title')?.textContent).toBe("Mexico '86 Arcade Football");
 
-    const title = container.querySelector('.matched-title');
-    expect(title?.textContent).toBe("Mexico '86 Arcade Football");
+    await act(async () => root.unmount());
+  });
 
+  it('matches game from vector search even when catalogEntries is initially empty on cold load', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('pl');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const vectorMatchGame = {
+      slug: 'bonfire-arena',
+      title: 'Bonfire Arena',
+      genre: 'soulslike',
+      tagline: { pl: 'Pojedynki na miecze', en: 'Sword duels' },
+      shortControls: { pl: 'Strzałki / Spacja', en: 'Arrows / Space' },
+      searchKeywords: ['miecze', 'walka'],
+    };
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify({ match: vectorMatchGame, score: 0.85 }), { status: 200 })),
+    );
+
+    // Initial render with catalogEntries = [] (e.g. initial cold load)
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'walka na miecze',
+          catalogEntries: [],
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    // Advance debounce
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250));
+      await flushEffects();
+    });
+
+    // Match is displayed with play CTA and secondary build link.
+    const card = container.querySelector('.matched-card');
+    expect(card).not.toBeNull();
+    expect(container.querySelector('.matched-title')?.textContent).toBe('Bonfire Arena');
+    expect(container.querySelector('.matched-actions .match-build-link')?.textContent).toContain('lub stwórz swoją grę');
+
+    fetchSpy.mockRestore();
     await act(async () => root.unmount());
   });
 });

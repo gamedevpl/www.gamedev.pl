@@ -217,10 +217,9 @@ describe('the QA gate in App', () => {
       await flushEffects();
     });
 
-    const buildBtn = container.querySelector<HTMLButtonElement>('.build-btn');
-    expect(buildBtn?.textContent).toContain('Analyzing your idea');
-    expect(buildBtn?.textContent).not.toContain('Submitting');
-    expect(buildBtn?.disabled).toBe(true);
+    const busyStatus = container.querySelector('.prompt-busy-status');
+    expect(busyStatus?.textContent).toContain('Analyzing your idea');
+    expect(busyStatus?.textContent).not.toContain('Submitting');
 
     // Release the refiner: the label hands over to the panel, not to "Submitting…".
     await act(async () => {
@@ -230,7 +229,7 @@ describe('the QA gate in App', () => {
     });
 
     expect(inWizard('.qa-wizard')).not.toBeNull();
-    expect(container.querySelector<HTMLButtonElement>('.build-btn')?.textContent).toContain('Build My Game');
+    expect(container.querySelector('.prompt-busy-status')).toBeNull();
     await act(async () => root.unmount());
   });
 

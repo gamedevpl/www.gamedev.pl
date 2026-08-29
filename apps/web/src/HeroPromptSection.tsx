@@ -91,18 +91,16 @@ export function HeroPromptSection({
   const attachMenuRef = useRef<HTMLDivElement | null>(null);
   const attachPanelRef = useClampToViewport<HTMLDivElement>(attachMenuOpen);
 
-  // Show quota before a 429 after they finish typing.
-  const [quota, setQuota] = useState<{ used: number; limit: number | null } | null>(null);
+  // Platform builder availability poll.
   useEffect(() => {
     let cancelled = false;
     getQuota()
       .then((result) => {
         if (cancelled) return;
-        setQuota(result.submissions);
         onPlatformBuilderAvailability?.(result.platformBuilder);
       })
       .catch(() => {
-        // Signed out or unreachable — the line simply doesn't render.
+        // Signed out or unreachable.
       });
     return () => {
       cancelled = true;
@@ -220,7 +218,15 @@ export function HeroPromptSection({
   const trimmedPrompt = promptText.trim();
   const needsVectorSearch = trimmedPrompt.length >= 3 && !localMatchedGame && !isBusy;
   const isSearching = needsVectorSearch && vectorMatch.query !== trimmedPrompt;
-  const vectorMatchedGame = needsVectorSearch && vectorMatch.query === trimmedPrompt ? vectorMatch.match : null;
+  const rawVectorGame = needsVectorSearch && vectorMatch.query === trimmedPrompt ? vectorMatch.match : null;
+
+  // Enriches matched game with screenshots from catalog.
+  const vectorMatchedGame = useMemo(() => {
+    if (!rawVectorGame) return null;
+    const full = catalogEntries.find((e) => e.slug === rawVectorGame.slug);
+    return full ? { ...full, ...rawVectorGame } : rawVectorGame;
+  }, [rawVectorGame, catalogEntries]);
+
   const matchedGame = localMatchedGame || vectorMatchedGame;
 
   useEffect(() => {
@@ -233,18 +239,16 @@ export function HeroPromptSection({
         .then((data: { match?: CatalogEntry | null; score?: number } | null) => {
           if (data?.match && typeof data.score === 'number' && data.score >= 0.55) {
             const found = catalogEntries.find((e) => e.slug === data.match?.slug);
-            if (found) {
-              setVectorMatch({
-                query: trimmedPrompt,
-                match: {
+            const entry = found
+              ? {
                   ...found,
                   tagline: data.match.tagline || found.tagline,
                   shortControls: data.match.shortControls || found.shortControls,
                   searchKeywords: data.match.searchKeywords || found.searchKeywords,
-                },
-              });
-              return;
-            }
+                }
+              : (data.match as CatalogEntry);
+            setVectorMatch({ query: trimmedPrompt, match: entry });
+            return;
           }
           setVectorMatch({ query: trimmedPrompt, match: null });
         })
@@ -463,7 +467,6 @@ export function HeroPromptSection({
                 if (pastedImages.length > 0) handleFiles(pastedImages);
               }}
             />
-
             <div className="prompt-bar-actions">
               <button
                 type="button"
@@ -478,17 +481,7 @@ export function HeroPromptSection({
               </button>
             </div>
 
-            <button
-              type="submit"
-              className={`primary-btn build-btn${isBusy ? ' is-busy' : ''}`}
-              title={busyLabel ?? t('hero.buildGameButton')}
-              aria-label={busyLabel ?? t('hero.buildGameButton')}
-              disabled={isBusy || pendingAttachmentReads > 0 || (!promptText.trim() && attachments.length === 0)}
-            >
-              {isBusy ? <span className="build-btn-spinner" aria-hidden="true" /> : <PixelIcon name="send" size={16} />}
-              {/* refining ≠ submitting; phone shows label, desktop clips to icon */}
-              <span className="build-btn-label">{busyLabel ?? t('hero.buildGameButton')}</span>
-            </button>
+            <button type="submit" style={{ display: 'none' }} aria-hidden="true" disabled={isBusy} />
           </div>
 
           {exampleChips && exampleChips.length > 0 && !isBusy && (
@@ -547,22 +540,24 @@ export function HeroPromptSection({
 
           {matchedGame ? (
             <div className="smart-intent-card matched-card">
-              {matchedPoster && (
+              {matchedPoster ? (
                 <div className="matched-thumb-wrap">
                   <img
                     src={matchedPoster}
                     alt={matchedGame.title}
                     className="matched-thumb"
-                    loading="eager"
+                    loading="lazy"
                     decoding="async"
                   />
                 </div>
-              )}
+              ) : null}
               <div className="matched-info">
                 <div className="matched-badges">
-                  <span className="smart-badge">
-                    <PixelIcon name="gamepad" size={12} /> {t('catalog.genre')}: {matchedGame.genre}
-                  </span>
+                  {matchedGame.genre && (
+                    <span className="smart-badge">
+                      <PixelIcon name="gamepad" size={12} /> {t('catalog.genre')}: {matchedGame.genre}
+                    </span>
+                  )}
                   {matchedGame.multiplayer && (
                     <span className="smart-badge smart-badge-secondary">
                       <PixelIcon name="user" size={12} /> {t('catalog.categories.multiplayer_party')}
@@ -594,6 +589,13 @@ export function HeroPromptSection({
                 >
                   <PixelIcon name="play" size={14} /> {t('hero.smartPlayBtn', { title: matchedGame.title })}
                 </button>
+                <button
+                  type="submit"
+                  className="match-build-link"
+                  disabled={isBusy || pendingAttachmentReads > 0 || (!promptText.trim() && attachments.length === 0)}
+                >
+                  <PixelIcon name="sparkle" size={12} /> {t('hero.orBuildOwnGame')}
+                </button>
               </div>
             </div>
           ) : isSearching ? (
@@ -624,12 +626,6 @@ export function HeroPromptSection({
                 </button>
               </div>
             </div>
-          ) : null}
-
-          {quota && quota.limit !== null ? (
-            <span className={`quota-note${quota.used >= quota.limit ? ' is-spent' : ''}`}>
-              {t('hero.quotaLeft', { left: Math.max(0, quota.limit - quota.used), limit: quota.limit })}
-            </span>
           ) : null}
         </form>
 
