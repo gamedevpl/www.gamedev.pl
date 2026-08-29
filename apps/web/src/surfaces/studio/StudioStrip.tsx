@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { latestAgentActivityAt } from '../../agentActivity.js';
 import { PixelIcon } from '../../PixelIcon.js';
-import { playPath } from '../../router.js';
+import { playPath } from '../../core/router.js';
 import { StudioBuildBar } from './StudioBuildBar.js';
 import { StudioStripOverflowMenu } from './StudioStripOverflowMenu.js';
 import { formatRelativeTime } from '../../relativeTime.js';

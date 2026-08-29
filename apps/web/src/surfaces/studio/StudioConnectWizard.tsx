@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from '../../PixelIcon.js';
-import { studioPath } from '../../router.js';
+import { studioPath } from '../../core/router.js';
 import { connectCardMode, shouldShowConnectCard, type SelfBuildCopyInput } from '../../selfBuildCopy.js';
 import { StudioConnectCard } from './StudioConnectCard.js';
 import { markStudioOnboarded, resolveWelcomeToken } from './studioWelcome.js';

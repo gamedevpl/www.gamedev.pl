@@ -18,7 +18,7 @@ import {
   type VisitRouteKind,
   type WaitlistStep,
 } from '@gamedevpl/contract';
-import { NAVIGATE_EVENT, parsePathRoute } from './router.js';
+import { NAVIGATE_EVENT, parsePathRoute } from './core/router.js';
 
 export type {
   AssistStep,

@@ -25,7 +25,7 @@ import {
   type SubmissionPreview,
   type SubmissionStatus,
 } from '../../submissionApi.js';
-import { NAVIGATE_EVENT, statusPath, studioPath } from '../../router.js';
+import { NAVIGATE_EVENT, statusPath, studioPath } from '../../core/router.js';
 import { formatRelativeTime } from '../../relativeTime.js';
 import { connectCardMode, selfComposerRoute, selfStatusCopy, shouldShowConnectCard } from '../../selfBuildCopy.js';
 import { StudioConnectCard, SwitchToPlatformControl, SwitchToSelfControl } from './StudioConnectCard.js';

@@ -20,7 +20,7 @@ import { useVoiceMeterBridge } from './voiceMeter.js';
 import { useWorldBridge } from './world.js';
 import { useZoneBridge } from './zone.js';
 import { useScreenWakeLock } from './useScreenWakeLock.js';
-import { creatorPath, gamePath } from './router.js';
+import { creatorPath, gamePath } from './core/router.js';
 
 /**
  * Shell-owned camera feed under the game iframe. Kept as a tiny component so the

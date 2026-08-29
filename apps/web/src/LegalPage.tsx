@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { legalDocument, type LegalBlock, type LegalDocId } from './legal/index.js';
 import { renderInline } from './legal/inline.js';
 import { OPERATOR_LEGAL_NAME } from './legal/operator.js';
-import { legalAnchor, legalPath } from './router.js';
+import { legalAnchor, legalPath } from './core/router.js';
 import { PixelIcon } from './PixelIcon.js';
 
 function Block({ block }: { block: LegalBlock }) {

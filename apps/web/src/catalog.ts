@@ -41,8 +41,8 @@ export type {
 export const PLATFORM_SUBMITTED_BY = 'gamedev-platform';
 
 /** Re-exported so callers reach one name for "the platform's namespace". */
-export { PLATFORM_HANDLE } from './router.js';
-import { PLATFORM_HANDLE } from './router.js';
+export { PLATFORM_HANDLE } from './core/router.js';
+import { PLATFORM_HANDLE } from './core/router.js';
 
 /**
  * True when the byline should read as the site itself rather than a named person —

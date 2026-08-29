@@ -4,7 +4,7 @@ import { act, createElement, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n/index.js';
-import { statusPath } from '../../router.js';
+import { statusPath } from '../../core/router.js';
 import { SubmissionStatusView } from './SubmissionStatusView.js';
 import { ACTIVE_POLL_MS, pollDelayMs } from './studioStatusPoll.js';
 import { HANDOFF_STALE_MS } from './StudioConnectCard.js';

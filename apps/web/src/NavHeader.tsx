@@ -9,7 +9,7 @@ import { NotificationBell } from './NotificationBell.js';
 import { PixelIcon } from './PixelIcon.js';
 import { fetchAdminSummary } from './surfaces/admin/adminApi.js';
 import { fetchReviewStatus } from './surfaces/review/reviewApi.js';
-import { creatorPath } from './router.js';
+import { creatorPath } from './core/router.js';
 import { usePageScrolling } from './usePageScrolling.js';
 
 type NavHeaderProps = {

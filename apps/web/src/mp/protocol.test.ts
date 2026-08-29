@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseGameBridgeMessage, parseServerFrame, socketUrlFrom, PROTOCOL_VERSION } from './protocol.js';
-import { parsePathRoute } from '../router.js';
+import { parsePathRoute } from '../core/router.js';
 
 describe('parseServerFrame', () => {
   it('accepts a well-formed roster', () => {

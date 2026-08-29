@@ -6,7 +6,7 @@ import { catalogMediaUrl, isPlatformAuthor, type CatalogEntry } from './catalog.
 import { PixelIcon } from './PixelIcon.js';
 import { ShareGameButton } from './ShareGameButton.js';
 import { VoteWidget } from './VoteWidget.js';
-import { creatorPath, studioPath } from './router.js';
+import { creatorPath, studioPath } from './core/router.js';
 import { recordRemixStep } from './visitTelemetry.js';
 
 type GameDetailPageProps = {

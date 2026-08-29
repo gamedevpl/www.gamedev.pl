@@ -8,7 +8,7 @@ import { StudioCreatorProfileProvider } from '../../studioCreatorProfile.js';
 import type { GameHealth } from '../../healthApi.js';
 import { PixelIcon, type PixelIconName } from '../../PixelIcon.js';
 import { formatRelativeTime } from '../../relativeTime.js';
-import { playPath, studioPath, type StudioTab } from '../../router.js';
+import { playPath, studioPath, type StudioTab } from '../../core/router.js';
 import { abandonSubmission, deleteGame, handoffToPlatform } from '../../submissionApi.js';
 import { StudioShotToasts } from './StudioShotToasts.js';
 import { type CodeActionsMode } from './CodeActionsMenu.js';
