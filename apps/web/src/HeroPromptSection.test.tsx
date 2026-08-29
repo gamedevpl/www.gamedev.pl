@@ -853,6 +853,39 @@ describe('HeroPromptSection', () => {
     await act(async () => root.unmount());
   });
 
+  it('renders searching card on the very first synchronous paint when initialPrompt requires search', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('pl');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify({ match: null, score: 0 }), { status: 200 })),
+    );
+
+    // Initial render without flushing effects or advancing timers
+    act(() => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'symulator gotowania zupy pomidorowej',
+          catalogEntries: [],
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+        }),
+      );
+    });
+
+    // Synchronous first paint must already show searching, never creation card
+    expect(container.querySelector('.searching-card')).not.toBeNull();
+    expect(container.querySelector('.creation-card')).toBeNull();
+
+    fetchSpy.mockRestore();
+    await act(async () => root.unmount());
+  });
+
   it('matches Polish sports intent query "chcę pograć w piłkę" to mexico-86', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('pl');

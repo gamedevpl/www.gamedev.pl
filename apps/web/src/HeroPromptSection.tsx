@@ -212,48 +212,45 @@ export function HeroPromptSection({
         : null;
 
   const localMatchedGame = useMemo(() => findMatchingGame(promptText, catalogEntries), [promptText, catalogEntries]);
-  const [vectorMatchedGame, setVectorMatchedGame] = useState<CatalogEntry | null>(null);
-  const [isSearching, setIsSearching] = useState(false);
+  const [vectorMatch, setVectorMatch] = useState<{ query: string; match: CatalogEntry | null }>({
+    query: '',
+    match: null,
+  });
+
+  const trimmedPrompt = promptText.trim();
+  const needsVectorSearch = trimmedPrompt.length >= 3 && !localMatchedGame && !isBusy;
+  const isSearching = needsVectorSearch && vectorMatch.query !== trimmedPrompt;
+  const vectorMatchedGame = needsVectorSearch && vectorMatch.query === trimmedPrompt ? vectorMatch.match : null;
+  const matchedGame = localMatchedGame || vectorMatchedGame;
 
   useEffect(() => {
-    const trimmed = promptText.trim();
-    setVectorMatchedGame(null);
-    if (trimmed.length < 3) {
-      setIsSearching(false);
-      return;
-    }
+    if (!needsVectorSearch) return;
 
-    if (localMatchedGame || isBusy) {
-      setIsSearching(false);
-      return;
-    }
-
-    setIsSearching(true);
     const controller = new AbortController();
     const handle = setTimeout(() => {
-      fetch(`/api/catalog/search?q=${encodeURIComponent(trimmed)}`, { signal: controller.signal })
+      fetch(`/api/catalog/search?q=${encodeURIComponent(trimmedPrompt)}`, { signal: controller.signal })
         .then((res) => (res.ok ? res.json() : null))
         .then((data: { match?: CatalogEntry | null; score?: number } | null) => {
           if (data?.match && typeof data.score === 'number' && data.score >= 0.55) {
             const found = catalogEntries.find((e) => e.slug === data.match?.slug);
             if (found) {
-              setVectorMatchedGame({
-                ...found,
-                tagline: data.match.tagline || found.tagline,
-                shortControls: data.match.shortControls || found.shortControls,
-                searchKeywords: data.match.searchKeywords || found.searchKeywords,
+              setVectorMatch({
+                query: trimmedPrompt,
+                match: {
+                  ...found,
+                  tagline: data.match.tagline || found.tagline,
+                  shortControls: data.match.shortControls || found.shortControls,
+                  searchKeywords: data.match.searchKeywords || found.searchKeywords,
+                },
               });
-              setIsSearching(false);
               return;
             }
           }
-          setVectorMatchedGame(null);
-          setIsSearching(false);
+          setVectorMatch({ query: trimmedPrompt, match: null });
         })
         .catch(() => {
           if (!controller.signal.aborted) {
-            setVectorMatchedGame(null);
-            setIsSearching(false);
+            setVectorMatch({ query: trimmedPrompt, match: null });
           }
         });
     }, 200);
@@ -262,9 +259,7 @@ export function HeroPromptSection({
       clearTimeout(handle);
       controller.abort();
     };
-  }, [promptText, catalogEntries, localMatchedGame, isBusy]);
-
-  const matchedGame = vectorMatchedGame || localMatchedGame;
+  }, [trimmedPrompt, catalogEntries, needsVectorSearch]);
 
   const matchedPoster = useMemo(() => {
     if (!matchedGame?.media?.screenshots?.length) return null;
