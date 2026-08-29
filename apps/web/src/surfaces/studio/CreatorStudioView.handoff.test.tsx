@@ -4,10 +4,10 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CreatorStudioView } from './CreatorStudioView.js';
-import i18n from './i18n/index.js';
-import type { StudioGame, StudioGamesResponse } from './studioApi.js';
-import { getSubmissionStatus } from './submissionApi.js';
-import { submitImprovement } from './studioApi.js';
+import i18n from '../../i18n/index.js';
+import type { StudioGame, StudioGamesResponse } from '../../studioApi.js';
+import { getSubmissionStatus } from '../../submissionApi.js';
+import { submitImprovement } from '../../studioApi.js';
 
 /**
  * The studio-side half of the publish→improve handoff (BY-20): when the embedded build
@@ -25,12 +25,12 @@ const fetchStudioScorecards = vi.fn();
 const fetchStudioSuggestions = vi.fn();
 let authUser: { uid: string; name: string } | null = null;
 
-vi.mock('./AuthContext', () => ({
+vi.mock('../../AuthContext', () => ({
   useAuth: () => ({ user: authUser, logout: vi.fn() }),
 }));
 
-vi.mock('./studioApi', async () => {
-  const actual = await vi.importActual<typeof import('./studioApi.js')>('./studioApi.js');
+vi.mock('../../studioApi', async () => {
+  const actual = await vi.importActual<typeof import('../../studioApi.js')>('../../studioApi.js');
   return {
     ...actual,
     fetchStudioGames: (...args: unknown[]) => fetchStudioGames(...args),
@@ -41,8 +41,8 @@ vi.mock('./studioApi', async () => {
   };
 });
 
-vi.mock('./submissionApi', async () => {
-  const actual = await vi.importActual<typeof import('./submissionApi.js')>('./submissionApi.js');
+vi.mock('../../submissionApi', async () => {
+  const actual = await vi.importActual<typeof import('../../submissionApi.js')>('../../submissionApi.js');
   return {
     ...actual,
     getSubmissionStatus: vi.fn(),

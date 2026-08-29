@@ -52,7 +52,9 @@ import { useDocumentTitle } from './useDocumentTitle.js';
 // weight of the admin console, the studio (and everything it drags in — the code
 // editor, the remix panel), the review desk, or party's multiplayer client.
 const AdminConsole = lazy(() => import('./surfaces/admin/AdminConsole.js').then((m) => ({ default: m.AdminConsole })));
-const CreatorStudioView = lazy(() => import('./CreatorStudioView.js').then((m) => ({ default: m.CreatorStudioView })));
+const CreatorStudioView = lazy(() =>
+  import('./surfaces/studio/CreatorStudioView.js').then((m) => ({ default: m.CreatorStudioView })),
+);
 const ReviewDesk = lazy(() => import('./surfaces/review/ReviewDesk.js').then((m) => ({ default: m.ReviewDesk })));
 const PartyPage = lazy(() => import('./surfaces/party/PartyPage.js').then((m) => ({ default: m.PartyPage })));
 

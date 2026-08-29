@@ -4,8 +4,8 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CreatorStudioView } from './CreatorStudioView.js';
-import i18n from './i18n/index.js';
-import type { StudioGame, StudioGamesResponse, StudioScorecard } from './studioApi.js';
+import i18n from '../../i18n/index.js';
+import type { StudioGame, StudioGamesResponse, StudioScorecard } from '../../studioApi.js';
 
 const abandonSubmission = vi.fn();
 const deleteGame = vi.fn();
@@ -20,12 +20,12 @@ const setGameAutonomy = vi.fn();
 const setDraftShared = vi.fn();
 let authUser: { uid: string; name: string } | null = null;
 
-vi.mock('./AuthContext', () => ({
+vi.mock('../../AuthContext', () => ({
   useAuth: () => ({ user: authUser, logout: vi.fn() }),
 }));
 
-vi.mock('./submissionApi', async () => {
-  const actual = await vi.importActual<typeof import('./submissionApi.js')>('./submissionApi.js');
+vi.mock('../../submissionApi', async () => {
+  const actual = await vi.importActual<typeof import('../../submissionApi.js')>('../../submissionApi.js');
   return {
     ...actual,
     getSubmissionStatus: vi.fn(async () => ({ media: [] })),
@@ -34,8 +34,8 @@ vi.mock('./submissionApi', async () => {
   };
 });
 
-vi.mock('./studioApi', async () => {
-  const actual = await vi.importActual<typeof import('./studioApi.js')>('./studioApi.js');
+vi.mock('../../studioApi', async () => {
+  const actual = await vi.importActual<typeof import('../../studioApi.js')>('../../studioApi.js');
   return {
     ...actual,
     fetchStudioGames: (...args: unknown[]) => fetchStudioGames(...args),
