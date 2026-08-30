@@ -3331,6 +3331,35 @@ describe('SubmissionStatusView stop & retry', () => {
     });
   });
 
+  it('does not retry the same channel item after it fails to load', async () => {
+    // Regression: comparing against loadedChannelRef.current (never set on
+    // failure) meant a failed fetch retried itself forever.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    mockedGetSubmissionStatus.mockResolvedValue({ status: 'building', playable: [{ ref: 'shot-c' }] });
+    mockedGetChannelPlayable.mockRejectedValueOnce(Object.assign(new Error('not ready'), { status: 409 }));
+    mockedGetChannelPlayable.mockResolvedValue('<!doctype html><canvas data-build="c"></canvas>');
+    window.history.pushState(null, '', '/status/channel-retry-once');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'channel-retry-once' }));
+      await flushEffects();
+      await flushEffects();
+      await flushEffects();
+    });
+
+    // A same-item failure must not trigger a synchronous retry loop.
+    expect(mockedGetChannelPlayable).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('emits round_opened on the first status snapshot when openedBy is set', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');

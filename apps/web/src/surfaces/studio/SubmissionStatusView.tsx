@@ -647,8 +647,9 @@ export function SubmissionStatusView({
         .finally(() => {
           channelInFlightRef.current = false;
           setChannelLoading(false);
+          // Retry only a genuinely newer ref — not this one again after a failure.
           const pending = pendingChannelItemRef.current;
-          if (pending && pending.ref !== loadedChannelRef.current) load(pending);
+          if (pending && pending.ref !== item.ref) load(pending);
         });
     };
 
