@@ -369,6 +369,8 @@ export function SubmissionStatusView({
   // work — not on every status poll.
   const loadedPreviewShaRef = useRef<string | null>(null);
   const previewInFlightRef = useRef(false);
+  // The newest preview key wanted while an older fetch is in flight.
+  const pendingPreviewKeyRef = useRef<string | null>(null);
   const loadedChannelRef = useRef<string | null>(null);
   const channelInFlightRef = useRef(false);
   // The newest channel item wanted while an older fetch is in flight.
@@ -435,6 +437,7 @@ export function SubmissionStatusView({
     setChannelLoading(false);
     loadedPreviewShaRef.current = null;
     previewInFlightRef.current = false;
+    pendingPreviewKeyRef.current = null;
     loadedChannelRef.current = null;
     channelInFlightRef.current = false;
     pendingChannelItemRef.current = null;
@@ -574,39 +577,49 @@ export function SubmissionStatusView({
     const headSha = status?.progress?.headSha;
     const gateRun = status?.previewGate?.ranAt ?? '';
     const previewKey = `${headSha ?? 'unknown'}:${gateRun}`;
-    if (!previewSlug || previewInFlightRef.current) return;
+    if (!previewSlug) return;
     if (headSha && previewKey === loadedPreviewShaRef.current) return;
     // Without a headSha we can't tell if there's anything new — only load once.
     if (!headSha && loadedPreviewShaRef.current !== null) return;
+    // Set even mid-fetch — `finally` below checks back, so nothing is dropped.
+    pendingPreviewKeyRef.current = previewKey;
+    if (previewInFlightRef.current) return;
 
-    previewInFlightRef.current = true;
-    const isRefresh = loadedPreviewShaRef.current !== null;
-    if (isRefresh) {
-      setPreviewRefreshing(true);
-    } else {
-      setPreviewLoading(true);
-    }
-    setPreviewError(null);
+    const load = (key: string) => {
+      previewInFlightRef.current = true;
+      const isRefresh = loadedPreviewShaRef.current !== null;
+      if (isRefresh) {
+        setPreviewRefreshing(true);
+      } else {
+        setPreviewLoading(true);
+      }
+      setPreviewError(null);
 
-    getSubmissionPreview(token)
-      .then((result) => {
-        setPreview(result);
-        loadedPreviewShaRef.current = previewKey;
-      })
-      .catch((err: unknown) => {
-        const apiError = err as SubmissionApiError;
-        // On a refresh failure, keep showing the last-good preview rather than clearing it.
-        if (!isRefresh) {
-          setPreview(null);
-        }
-        loadedPreviewShaRef.current = previewKey;
-        setPreviewError(apiError.status === 409 ? t('statusView.previewNotReady') : t('statusView.previewError'));
-      })
-      .finally(() => {
-        previewInFlightRef.current = false;
-        setPreviewLoading(false);
-        setPreviewRefreshing(false);
-      });
+      getSubmissionPreview(token)
+        .then((result) => {
+          setPreview(result);
+          loadedPreviewShaRef.current = key;
+        })
+        .catch((err: unknown) => {
+          const apiError = err as SubmissionApiError;
+          // On a refresh failure, keep showing the last-good preview rather than clearing it.
+          if (!isRefresh) {
+            setPreview(null);
+          }
+          loadedPreviewShaRef.current = key;
+          setPreviewError(apiError.status === 409 ? t('statusView.previewNotReady') : t('statusView.previewError'));
+        })
+        .finally(() => {
+          previewInFlightRef.current = false;
+          setPreviewLoading(false);
+          setPreviewRefreshing(false);
+          // Retry only a genuinely newer key — not this one again after a failure.
+          const pending = pendingPreviewKeyRef.current;
+          if (pending && pending !== key) load(pending);
+        });
+    };
+
+    load(previewKey);
   }, [status?.preview?.slug, status?.progress?.headSha, status?.previewGate?.ranAt, t, token]);
 
   // Prefetch the latest channel build when there is no PR preview yet — same PlayCard

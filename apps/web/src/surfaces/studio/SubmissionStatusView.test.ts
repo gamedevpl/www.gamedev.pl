@@ -3360,6 +3360,74 @@ describe('SubmissionStatusView stop & retry', () => {
     });
   });
 
+  it('fetches the fresh preview when it arrives while the cached one is still loading', async () => {
+    // Regression: a newer headSha arriving mid-fetch used to be silently dropped,
+    // the same class of bug as the channel-prefetch dedup race above.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      preview: { slug: 'space-runner' },
+      progress: { headSha: 'sha-a', commits: [], checklist: [], revisions: [] },
+    });
+    mockedGetSubmissionPreview.mockResolvedValue({
+      slug: 'space-runner',
+      title: 'Space Runner',
+      html: '<canvas>a</canvas>',
+    });
+    window.history.pushState(null, '', '/status/preview-warm-cache');
+    const firstContainer = document.createElement('div');
+    document.body.appendChild(firstContainer);
+    const firstRoot = createRoot(firstContainer);
+
+    await act(async () => {
+      firstRoot.render(createElement(SubmissionStatusView, { token: 'preview-warm-cache' }));
+      await flushEffects();
+      await flushEffects();
+    });
+    await act(async () => {
+      firstRoot.unmount();
+    });
+    mockedGetSubmissionPreview.mockClear();
+
+    // Cache still holds sha-a; the fresh status resolves to sha-b.
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'in_review',
+      preview: { slug: 'space-runner' },
+      progress: { headSha: 'sha-b', commits: [], checklist: [], revisions: [] },
+    });
+    let resolveA!: (preview: { slug: string; title: string; html: string }) => void;
+    const pendingA = new Promise<{ slug: string; title: string; html: string }>((resolve) => {
+      resolveA = resolve;
+    });
+    mockedGetSubmissionPreview
+      .mockImplementationOnce(() => pendingA)
+      .mockResolvedValueOnce({ slug: 'space-runner', title: 'Space Runner', html: '<canvas>b</canvas>' });
+    const secondContainer = document.createElement('div');
+    document.body.appendChild(secondContainer);
+    const secondRoot = createRoot(secondContainer);
+
+    await act(async () => {
+      secondRoot.render(createElement(SubmissionStatusView, { token: 'preview-warm-cache' }));
+      await flushEffects();
+      await flushEffects();
+    });
+    // Waits for the in-flight fetch rather than being dropped.
+    expect(mockedGetSubmissionPreview).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveA({ slug: 'space-runner', title: 'Space Runner', html: '<canvas>a</canvas>' });
+      await flushEffects();
+      await flushEffects();
+    });
+    expect(mockedGetSubmissionPreview).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      secondRoot.unmount();
+    });
+  });
+
   it('emits round_opened on the first status snapshot when openedBy is set', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
