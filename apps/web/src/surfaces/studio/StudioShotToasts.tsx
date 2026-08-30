@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from '../../PixelIcon.js';
-import { buildMediaUrl, getSubmissionStatus, type BuildMediaItem } from '../../submissionApi.js';
+import { buildMediaUrl, type BuildMediaItem } from '../../submissionApi.js';
+import { subscribeStudioStatus } from './studioStatusStore.js';
 
 /**
  * Scattered screenshot stack near Play — a dismissable notification.
@@ -89,22 +90,11 @@ export function StudioShotToasts({ token, placement = 'near-play', onOpenMedia }
   const stackRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    const load = () => {
-      getSubmissionStatus(token, i18n.language)
-        .then((status) => {
-          if (!cancelled) setMedia(status.media ?? []);
-        })
-        .catch(() => {
-          if (!cancelled) setMedia([]);
-        });
-    };
-    load();
-    const id = window.setInterval(load, POLL_MS);
-    return () => {
-      cancelled = true;
-      window.clearInterval(id);
-    };
+    return subscribeStudioStatus(token, i18n.language, {
+      intervalMs: () => POLL_MS,
+      onUpdate: (status) => setMedia(status.media ?? []),
+      onError: () => setMedia([]),
+    });
   }, [token, i18n.language]);
 
   useEffect(() => {

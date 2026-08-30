@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StudioBuildHistory } from './StudioBuildHistory.js';
-import { getSubmissionStatus, type SubmissionStatus } from '../../submissionApi.js';
+import { pokeStudioStatus, subscribeStudioStatus } from './studioStatusStore.js';
+import type { SubmissionStatus } from '../../submissionApi.js';
 
 // Details refreshes slower than the thread's own live pulse.
 const DETAILS_POLL_MS = 10_000;
@@ -24,32 +25,17 @@ export function StudioDetailsBuildProgress({
   const { t, i18n } = useTranslation();
   const [status, setStatus] = useState<SubmissionStatus | null>(null);
   const [loaded, setLoaded] = useState(false);
-  // Bumped to force an immediate re-poll (e.g. right after sealing) instead of waiting
-  // out DETAILS_POLL_MS — canSeal would otherwise read stale for that whole window.
-  const [refreshNonce, setRefreshNonce] = useState(0);
 
   useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      try {
-        const next = await getSubmissionStatus(token, i18n.language);
-        if (cancelled) return;
+    return subscribeStudioStatus(token, i18n.language, {
+      intervalMs: () => DETAILS_POLL_MS,
+      onUpdate: (next) => {
         setStatus(next);
-      } catch {
-        // Secondary chrome — a failed poll must not toast over the thread.
-      } finally {
-        if (!cancelled) setLoaded(true);
-      }
-    };
-
-    void load();
-    const timer = window.setInterval(() => void load(), DETAILS_POLL_MS);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [token, i18n.language, refreshNonce]);
+        setLoaded(true);
+      },
+      onError: () => setLoaded(true),
+    });
+  }, [token, i18n.language]);
 
   if (!status) {
     return loaded ? null : <p className="studio-rail-empty">{t('statusView.loading')}</p>;
@@ -63,7 +49,7 @@ export function StudioDetailsBuildProgress({
       onSelectPreviewVersion={onSelectPreviewVersion}
       activePreviewVersion={activePreviewVersion}
       onReverted={onReverted}
-      onSealed={() => setRefreshNonce((n) => n + 1)}
+      onSealed={() => pokeStudioStatus(token, i18n.language)}
     />
   );
 }
