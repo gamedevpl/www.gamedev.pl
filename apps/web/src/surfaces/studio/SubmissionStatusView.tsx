@@ -370,6 +370,8 @@ export function SubmissionStatusView({
   const previewInFlightRef = useRef(false);
   const loadedChannelRef = useRef<string | null>(null);
   const channelInFlightRef = useRef(false);
+  // True while `status` is a stale value cached by another consumer's poll.
+  const wasCachedBootstrapRef = useRef(false);
 
   // Same reasoning as presence.ts's onVisibility: a backgrounded tab's poll timer gets
   // throttled by the browser, so a self-build round can finish unwatched for minutes.
@@ -433,7 +435,8 @@ export function SubmissionStatusView({
     loadedChannelRef.current = null;
     channelInFlightRef.current = false;
 
-    return subscribeStudioStatus(
+    let synchronousDelivery = true;
+    const unsubscribe = subscribeStudioStatus(
       token,
       i18n.language,
       {
@@ -447,12 +450,14 @@ export function SubmissionStatusView({
           return latest ? pollDelayMs(latest.status, latest.stall, latest.phase) : pollDelayMs('queued');
         },
         onUpdate: (next) => {
+          wasCachedBootstrapRef.current = synchronousDelivery;
           setStatus(next);
           setLoading(false);
           setErrorMessage(null);
           setIsInvalidToken(false);
         },
         onError: (err) => {
+          wasCachedBootstrapRef.current = synchronousDelivery;
           setStatus(null);
           setLoading(false);
           setIsInvalidToken(err.status === 400);
@@ -461,6 +466,8 @@ export function SubmissionStatusView({
       },
       { forceFreshOnMount: true },
     );
+    synchronousDelivery = false;
+    return unsubscribe;
     // i18n.language is a dependency because the API localizes the build log for us.
   }, [i18n.language, t, token]);
 
@@ -500,7 +507,8 @@ export function SubmissionStatusView({
   useEffect(() => {
     if (embedded)
       onActivityCountRef.current?.(activity.length, activity.length > 0 ? activity[activity.length - 1].text : null);
-    if (!status) return;
+    // A cached snapshot from another consumer's poll is not an observed transition.
+    if (!status || wasCachedBootstrapRef.current) return;
     const builder = status.builder && isBuilderKind(status.builder) ? status.builder : null;
 
     const failureReason = status.failure?.reason;

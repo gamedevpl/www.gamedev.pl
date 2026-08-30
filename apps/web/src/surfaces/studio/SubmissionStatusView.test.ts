@@ -3229,6 +3229,45 @@ describe('SubmissionStatusView stop & retry', () => {
     vi.useRealTimers();
   });
 
+  it('does not mint gate_verdict from a stale snapshot cached by an earlier mount', async () => {
+    // Regression: a synchronously-delivered stale cache used to count as observed.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    mockedGetSubmissionStatus.mockResolvedValue({ status: 'building', builder: 'self' });
+    window.history.pushState(null, '', '/status/verdict-warm-cache');
+    const firstContainer = document.createElement('div');
+    document.body.appendChild(firstContainer);
+    const firstRoot = createRoot(firstContainer);
+
+    await act(async () => {
+      firstRoot.render(createElement(SubmissionStatusView, { token: 'verdict-warm-cache', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+    await act(async () => {
+      firstRoot.unmount();
+    });
+    mockedRecordStudioStep.mockClear();
+
+    // Cache still holds 'building'; next fetch resolves to a terminal status.
+    mockedGetSubmissionStatus.mockResolvedValue({ status: 'in_review', builder: 'self' });
+    const secondContainer = document.createElement('div');
+    document.body.appendChild(secondContainer);
+    const secondRoot = createRoot(secondContainer);
+
+    await act(async () => {
+      secondRoot.render(createElement(SubmissionStatusView, { token: 'verdict-warm-cache', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+    expect(mockedRecordStudioStep).not.toHaveBeenCalledWith('gate_verdict', expect.anything(), expect.anything());
+
+    await act(async () => {
+      secondRoot.unmount();
+    });
+  });
+
   it('emits round_opened on the first status snapshot when openedBy is set', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
