@@ -1,0 +1,336 @@
+/* Arcade catalog chrome: header, jumpbar, pager, toolbar, sort menu (ArcadeCatalog.tsx). */
+
+/* UNBOXED ARCADE CATALOG */
+.arcade-section {
+  width: 100%;
+  margin-top: 40px;
+  margin-bottom: 60px;
+}
+
+/* Keep the footer below the fold while the catalog settles. */
+.arcade-section.is-pending {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.arcade-header {
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.arcade-title-row {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+/* A quiet section label, not a banner — the grid of games below speaks for itself. */
+.arcade-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--turquoise);
+  margin: 0;
+  letter-spacing: -0.3px;
+  min-width: 0;
+}
+
+#browse-everything,
+#play-anchor,
+#party-rail {
+  /* Clears the sticky header when a nav link scrolls this into view. */
+  scroll-margin-top: 88px;
+}
+
+.catalog-jumpbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 30px;
+}
+
+.jump-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-card);
+  border-radius: 999px;
+  padding: 7px 14px 7px 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.jump-chip:hover,
+.jump-chip:focus-visible {
+  border-color: var(--turquoise);
+}
+
+.jump-chip.is-all {
+  color: var(--turquoise);
+  border-color: rgba(0, 228, 172, 0.35);
+}
+
+.jump-chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.jump-chip-dot.cat-arcade_racing {
+  background: var(--cat-arcade-racing);
+}
+
+.jump-chip-dot.cat-rpg_adventure {
+  background: var(--cat-rpg-adventure);
+}
+
+.jump-chip-dot.cat-strategy_sim {
+  background: var(--cat-strategy-sim);
+}
+
+.jump-chip-dot.cat-puzzle_story {
+  background: var(--cat-puzzle-story);
+}
+
+.jump-chip-dot.cat-multiplayer_party {
+  background: var(--cat-multiplayer-party);
+}
+
+.jump-chip-dot.cat-more_to_explore {
+  background: var(--cat-more-to-explore);
+}
+
+.catalog-category-active {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.catalog-category-clear {
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 4px 12px;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.catalog-category-clear:hover,
+.catalog-category-clear:focus-visible {
+  border-color: var(--turquoise);
+  color: var(--turquoise);
+}
+
+.catalog-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 26px;
+}
+
+.catalog-pager button {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.catalog-pager button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.catalog-pager button:not(:disabled):hover,
+.catalog-pager button:not(:disabled):focus-visible {
+  border-color: var(--turquoise);
+  color: var(--turquoise);
+}
+
+.catalog-pager button.is-active {
+  background: var(--panel-card);
+  border-color: var(--turquoise);
+  color: var(--turquoise);
+}
+
+.catalog-pager-ellipsis {
+  color: var(--muted);
+  padding: 0 2px;
+}
+
+.arcade-subtitle {
+  margin: 6px 0 0;
+  font-size: 0.95rem;
+  color: var(--muted);
+  max-width: 42rem;
+}
+
+/* Compact toolbar: Not-played toggle + Sort, one row on phone and desktop. */
+.catalog-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  min-width: 0;
+  max-width: min(100%, 26rem);
+}
+
+.catalog-sort-menu {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 11rem;
+}
+
+.catalog-filter-trigger,
+.catalog-sort-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  min-height: 40px;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+  touch-action: manipulation;
+}
+
+/* Not-played is a compact toggle; the sort control fills remaining toolbar space. */
+.catalog-toolbar > .catalog-filter-trigger {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: 9rem;
+  justify-content: center;
+}
+
+.catalog-sort-trigger {
+  width: 100%;
+  max-width: 100%;
+}
+
+.catalog-filter-trigger.is-active,
+.catalog-sort-menu.is-open .catalog-sort-trigger {
+  border-color: var(--turquoise);
+  color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.08);
+}
+
+.catalog-sort-trigger-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.catalog-sort-caret {
+  flex: none;
+  font-size: 0.75rem;
+  line-height: 1;
+  opacity: 0.8;
+}
+
+.catalog-sort-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: max(100%, 11.5rem);
+  max-width: min(18rem, calc(100vw - 24px));
+  margin: 0;
+  padding: 8px;
+  list-style: none;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: rgba(16, 22, 28, 0.98);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.catalog-sort-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.catalog-sort-option-label {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.catalog-sort-option:hover,
+.catalog-sort-option:focus-visible {
+  background: rgba(0, 228, 172, 0.12);
+  color: var(--turquoise);
+  outline: none;
+}
+
+.catalog-sort-option.is-active {
+  color: var(--turquoise);
+}
+
+.catalog-sort-option > svg,
+.catalog-sort-check-spacer {
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+
+/* Loads after the base rules above so this always wins the cascade. */
+@media (max-width: 768px) {
+  .catalog-toolbar {
+    max-width: min(100%, 22rem);
+  }
+
+  .catalog-filter-trigger,
+  .catalog-sort-trigger {
+    min-height: 44px;
+  }
+}

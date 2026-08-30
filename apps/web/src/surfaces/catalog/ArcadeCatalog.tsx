@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import './catalog-toolbar.css';
+import './catalog.css';
 import { useAuth } from '../../AuthContext.js';
 import {
   catalogMediaUrl,

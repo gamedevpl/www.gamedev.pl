@@ -1,0 +1,302 @@
+/* Arcade catalog grid: cards, media, previews, moments (ArcadeCatalog.tsx). */
+
+.catalog-grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  /* Own height per card, so a taller neighbor can't stretch the row. */
+  align-items: start;
+}
+
+.catalog-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  background: var(--panel-card);
+  /* Skip layout/paint for off-screen cards while scrolling a ~100-game grid. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 160px;
+  transition: border-color 0.15s;
+}
+
+.catalog-card:hover {
+  border-color: var(--turquoise);
+}
+
+.catalog-media {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 20%, rgba(56, 189, 248, 0.14), transparent 55%), #0a0e12;
+  border-bottom: 1px solid var(--panel-border);
+  outline: none;
+}
+
+.catalog-media:focus-visible {
+  box-shadow: inset 0 0 0 3px var(--turquoise);
+}
+
+.catalog-card-hit-area {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+}
+
+.catalog-card-hit-area:focus-visible {
+  outline: 3px solid var(--turquoise);
+  outline-offset: -3px;
+}
+
+.catalog-preview {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
+.catalog-preview-fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 2px;
+  color: var(--turquoise);
+  background: linear-gradient(135deg, transparent 45%, rgba(0, 228, 172, 0.08) 45% 55%, transparent 55%), #111820;
+}
+
+.catalog-preview-fallback span {
+  font-size: 3.5rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.catalog-preview-fallback small {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.catalog-badges-top-left {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.preview-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  color: #fff;
+  /* Solid scrim — backdrop-filter on every visible card is scroll paint cost. */
+  background: rgba(6, 10, 14, 0.92);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.preview-toggle:hover,
+.preview-toggle:focus-visible {
+  border-color: var(--turquoise);
+  color: var(--turquoise);
+}
+
+/* Moments sit under the genre chip, clear of the title/Play overlay below. */
+.catalog-moments {
+  position: absolute;
+  z-index: 1;
+  top: 42px;
+  right: 8px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px;
+  /* Let pointer events through the gaps so the card's hover-to-play still works. */
+  pointer-events: none;
+}
+
+.catalog-moment {
+  pointer-events: auto;
+  overflow: hidden;
+  width: 42px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 5px;
+  background: #0a0e12;
+  opacity: 0.78;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  transition:
+    opacity 0.15s,
+    border-color 0.15s;
+}
+
+.catalog-moment img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.catalog-moment:hover,
+.catalog-moment:focus-visible,
+.catalog-moment.is-selected {
+  opacity: 1;
+  border-color: var(--turquoise);
+}
+
+/* Keyboard-only badge: hidden by default, shown only for touch input. */
+.touch-warning-pill {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  color: var(--error);
+  background: rgba(6, 10, 14, 0.92);
+  border: 1px solid rgba(255, 107, 107, 0.55);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+/* Coarse pointers get an explicit tap target since hover-to-preview needs a mouse. */
+@media (pointer: coarse), (max-width: 768px) {
+  .preview-toggle:not(.preview-toggle--video),
+  .catalog-moments {
+    display: none;
+  }
+
+  .catalog-badges-top-left {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    max-width: calc(100% - 8.5rem);
+  }
+
+  .touch-warning-pill {
+    display: inline-flex;
+  }
+
+  /* Genre is least important; drop it when a badge crowds this corner. */
+  .catalog-media:has(.touch-warning-pill) .genre-pill {
+    display: none;
+  }
+}
+
+.genre-pill {
+  position: absolute;
+  z-index: 1;
+  top: 10px;
+  right: 10px;
+  /* Genre text is agent-authored and can run long; 40% leaves toggle room. */
+  max-width: 40%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #fff;
+  background: rgba(6, 10, 14, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+/* Title/hint/Play overlay the bottom scrim; card is just the 16:9 media box. */
+.catalog-overlay {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 32px 12px 12px;
+  background: linear-gradient(to top, rgba(4, 7, 10, 0.92) 15%, rgba(4, 7, 10, 0.6) 55%, rgba(4, 7, 10, 0));
+  /* Pass hovers through the scrim to the video underneath; only the buttons catch clicks. */
+  pointer-events: none;
+  z-index: 2;
+}
+
+.card-title {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 1.05rem;
+  line-height: 1.2;
+  color: #fff;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+
+.card-copy {
+  min-width: 0;
+}
+
+.card-copy a {
+  pointer-events: auto;
+}
+
+.card-author {
+  margin: -4px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.7);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* Actions stay bottom-right; title/author take the remaining width, card link owns navigation. */
+.card-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Wrap uses natural button size; shrink/ellipsis guard only an over-long single button. */
+.card-actions button {
+  pointer-events: auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 7px 14px;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .catalog-card,
+  .catalog-moment {
+    transition: none;
+  }
+
+  .catalog-card:hover {
+    transform: none;
+  }
+}
+
+/* Loads after the base rules above so this always wins the cascade. */
+@media (max-width: 768px) {
+  .catalog-grid {
+    grid-template-columns: 1fr;
+  }
+}
