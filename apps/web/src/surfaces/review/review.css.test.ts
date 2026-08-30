@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-const css = readFileSync(fileURLToPath(new URL('./styles.css', import.meta.url)), 'utf8').replace(
+const css = readFileSync(fileURLToPath(new URL('./review.css', import.meta.url)), 'utf8').replace(
   /\/\*[\s\S]*?\*\//g,
   '',
 );
@@ -10,7 +10,7 @@ const css = readFileSync(fileURLToPath(new URL('./styles.css', import.meta.url))
 function ruleBody(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = new RegExp(`(?:^|})\\s*${escaped}\\s*\\{([^}]+)\\}`, 'm').exec(css);
-  expect(match, `no ${selector} rule in styles.css`).not.toBeNull();
+  expect(match, `no ${selector} rule in review.css`).not.toBeNull();
   return match![1]!;
 }
 

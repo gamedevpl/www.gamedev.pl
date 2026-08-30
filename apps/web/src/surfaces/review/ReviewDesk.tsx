@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import './review.css';
 import { useAuth } from '../../AuthContext.js';
 import { catalogMediaUrl, defaultScreenshotIndex } from '../../catalog.js';
 import { GameTheater } from '../../GameTheater.js';
