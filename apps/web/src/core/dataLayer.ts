@@ -74,14 +74,14 @@ export function peekCached<T>(key: string): T | undefined {
  */
 export function invalidateCached(key: string): void {
   const entry = cache.get(key);
-  if (entry?.inflight) {
-    // Bumps the generation so that fetch's resolution won't be cached, but
-    // drops `inflight` itself so a new fetchCached call starts its own
-    // fetch instead of joining a request already headed for the discard.
-    cache.set(key, { hasValue: false, expiresAt: 0, generation: entry.generation + 1 });
-  } else {
-    cache.delete(key);
-  }
+  if (!entry) return;
+  // Bumps the generation and drops `inflight` (if any) so a new
+  // fetchCached call always starts its own fetch instead of joining one
+  // already headed for the discard. Never fully deletes the entry: doing
+  // so would lose the generation counter, and a later fetch could then
+  // restart at the same number a still-settling older fetch captured —
+  // letting that stale result win the write it's meant to lose.
+  cache.set(key, { hasValue: false, expiresAt: 0, generation: entry.generation + 1 });
 }
 
 /** {@link invalidateCached} for every key starting with `prefix`. */

@@ -13,7 +13,7 @@ import type {
   SubmissionState,
   SubmissionStatusResponse,
 } from '@gamedevpl/contract';
-import { fetchCached } from './core/dataLayer.js';
+import { fetchCached, invalidateCachedPrefix } from './core/dataLayer.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
@@ -117,6 +117,19 @@ export async function submitSpec(input: {
   return (await response.json()) as { token: string; slug?: string; statusUrl: string };
 }
 
+function submissionStatusCacheKeyPrefix(token: string): string {
+  return `submission-status:${token}:`;
+}
+
+/**
+ * Drops the cached status (every locale) for `token`, so the next
+ * {@link getSubmissionStatus} call always issues a fresh request rather
+ * than joining or reusing one that predates a mutation on this token.
+ */
+function invalidateSubmissionStatus(token: string): void {
+  invalidateCachedPrefix(submissionStatusCacheKeyPrefix(token));
+}
+
 /**
  * `locale` localizes the agent's build log (its commit subjects and checklist are
  * written in English) — without it a Polish creator watches an English wall of text.
@@ -126,7 +139,7 @@ export async function getSubmissionStatus(token: string, locale?: string): Promi
   // land within the same tick of each other; fetchCached's dedup (default
   // ttlMs: 0) collapses those into one request without changing freshness
   // for a caller that lands outside that window — see core/dataLayer.ts.
-  return fetchCached(`submission-status:${token}:${locale ?? ''}`, async () => {
+  return fetchCached(`${submissionStatusCacheKeyPrefix(token)}${locale ?? ''}`, async () => {
     const query = locale ? `?locale=${encodeURIComponent(locale)}` : '';
     const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}${query}`);
 
@@ -209,6 +222,7 @@ export async function abandonSubmission(token: string): Promise<void> {
   if (!response.ok) {
     await throwResponseError(response);
   }
+  invalidateSubmissionStatus(token);
 }
 
 export async function deleteGame(token: string): Promise<void> {
@@ -220,6 +234,7 @@ export async function deleteGame(token: string): Promise<void> {
   if (!response.ok) {
     await throwResponseError(response);
   }
+  invalidateSubmissionStatus(token);
 }
 
 export type BuilderHandoffResponse = { pending?: boolean; acknowledgedAt?: string };
@@ -239,6 +254,7 @@ export async function handoffToPlatform(
   if (!response.ok) {
     await throwResponseError(response);
   }
+  invalidateSubmissionStatus(token);
   return (await response.json()) as BuilderHandoffResponse;
 }
 
@@ -253,6 +269,7 @@ export async function handoffToSelf(token: string): Promise<BuilderHandoffRespon
   if (!response.ok) {
     await throwResponseError(response);
   }
+  invalidateSubmissionStatus(token);
   return (await response.json()) as BuilderHandoffResponse;
 }
 
@@ -266,6 +283,7 @@ export async function sealPreview(token: string): Promise<{ version: string }> {
   if (!response.ok) {
     await throwResponseError(response);
   }
+  invalidateSubmissionStatus(token);
   return (await response.json()) as { version: string };
 }
 
@@ -340,6 +358,7 @@ export async function submitFeedback(
   if (!response.ok) {
     await throwResponseError(response);
   }
+  invalidateSubmissionStatus(token);
 
   return (await response.json()) as FeedbackResult;
 }

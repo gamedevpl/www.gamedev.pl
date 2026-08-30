@@ -124,6 +124,32 @@ describe('invalidateCached', () => {
   it('is a no-op for an unknown key', () => {
     expect(() => invalidateCached(`unknown:${Math.random()}`)).not.toThrow();
   });
+
+  it('never lets a long-settling fetch overwrite a newer one after two invalidations', async () => {
+    // Regression: invalidateCached used to `cache.delete` a settled (non-in-flight)
+    // entry, losing its generation counter. The next fetch would then restart
+    // numbering from 1 — the same number this test's first, still-pending fetch
+    // captured — so its late resolution could win the write it should have lost.
+    const key = `regression-generation:${Math.random()}`;
+    const dStale = deferred<string>();
+    const staleCall = fetchCached(key, () => dStale.promise, { ttlMs: 10_000 });
+
+    invalidateCached(key); // tombstones the still-in-flight first fetch
+
+    expect(await fetchCached(key, async () => 'settled', { ttlMs: 10_000 })).toBe('settled');
+    invalidateCached(key); // invalidates that now-settled value
+
+    const dThird = deferred<string>();
+    const thirdCall = fetchCached(key, () => dThird.promise, { ttlMs: 10_000 });
+
+    dStale.resolve('stale');
+    expect(await staleCall).toBe('stale');
+    expect(peekCached(key)).toBeUndefined(); // the stale write must be rejected, not cached
+
+    dThird.resolve('third');
+    expect(await thirdCall).toBe('third');
+    expect(peekCached(key)).toBe('third');
+  });
 });
 
 describe('invalidateCachedPrefix', () => {
