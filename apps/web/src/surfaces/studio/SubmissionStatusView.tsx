@@ -11,7 +11,6 @@ import {
   abandonSubmission,
   getChannelPlayable,
   getSubmissionPreview,
-  getSubmissionStatus,
   handoffToPlatform,
   handoffToSelf,
   submitFeedback,
@@ -19,6 +18,7 @@ import {
   type BuildEvent,
   type BuildMediaItem,
   type BuildEventKind,
+  type BuildPlayableItem,
   type BuildProgress,
   type BuildStep,
   type PriorRoundHistory,
@@ -33,6 +33,7 @@ import { StudioConnectCard, SwitchToPlatformControl, SwitchToSelfControl } from 
 import { StudioPriorRounds } from './StudioPriorRounds.js';
 import { submitImprovement } from '../../studioApi.js';
 import { pollDelayMs } from './studioStatusPoll.js';
+import { pokeStudioStatus, subscribeStudioStatus } from './studioStatusStore.js';
 import { studioThreadContentScrollTop, studioThreadNearContentEnd } from './studioThreadScroll.js';
 import { recordStudioStep, type StudioStepDetail } from '../../visitTelemetry.js';
 import { toBase64PngList } from '../../attachmentImages.js';
@@ -368,21 +369,24 @@ export function SubmissionStatusView({
   // work — not on every status poll.
   const loadedPreviewShaRef = useRef<string | null>(null);
   const previewInFlightRef = useRef(false);
+  // The newest preview key wanted while an older fetch is in flight.
+  const pendingPreviewKeyRef = useRef<string | null>(null);
   const loadedChannelRef = useRef<string | null>(null);
   const channelInFlightRef = useRef(false);
-  /** Immediate status re-pull after send (builder handoff / new dispatch). */
-  const requestStatusRefreshRef = useRef<() => void>(() => {});
+  // The newest channel item wanted while an older fetch is in flight.
+  const pendingChannelItemRef = useRef<BuildPlayableItem | null>(null);
+  // True while `status` is a stale value cached by another consumer's poll.
+  const wasCachedBootstrapRef = useRef(false);
 
   // Same reasoning as presence.ts's onVisibility: a backgrounded tab's poll timer gets
   // throttled by the browser, so a self-build round can finish unwatched for minutes.
-  // Reuse the same ref send/handoff already use, rather than a second poll loop.
   //
   // Sleep/wake can leave the tab "visible" with no edge to catch.
   useEffect(() => {
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') requestStatusRefreshRef.current();
+      if (document.visibilityState === 'visible') pokeStudioStatus(token, i18n.language);
     };
-    const onWake = () => requestStatusRefreshRef.current();
+    const onWake = () => pokeStudioStatus(token, i18n.language);
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('focus', onWake);
     window.addEventListener('pageshow', onWake);
@@ -391,7 +395,7 @@ export function SubmissionStatusView({
       window.removeEventListener('focus', onWake);
       window.removeEventListener('pageshow', onWake);
     };
-  }, []);
+  }, [token, i18n.language]);
 
   const currentTrackingUrl = useMemo(
     () => trackingUrl ?? new URL(embedded ? studioPath(token) : statusPath(token), window.location.href).toString(),
@@ -418,9 +422,6 @@ export function SubmissionStatusView({
   };
 
   useEffect(() => {
-    let cancelled = false;
-    let timeoutId: number | undefined;
-
     setStatus(null);
     setPendingRevisions([]);
     setLoading(true);
@@ -436,68 +437,44 @@ export function SubmissionStatusView({
     setChannelLoading(false);
     loadedPreviewShaRef.current = null;
     previewInFlightRef.current = false;
+    pendingPreviewKeyRef.current = null;
     loadedChannelRef.current = null;
     channelInFlightRef.current = false;
+    pendingChannelItemRef.current = null;
 
-    const stopPolling = () => {
-      if (timeoutId !== undefined) {
-        window.clearTimeout(timeoutId);
-        timeoutId = undefined;
-      }
-    };
-
-    const scheduleNext = (next: Pick<SubmissionStatus, 'status' | 'stall' | 'phase'>) => {
-      const delay = pollDelayMs(next.status, next.stall, next.phase);
-      if (delay === null || cancelled) return;
-      // Clear first: an in-flight poll and an immediate post-send refresh can both
-      // complete and schedule — without this, overlapping timers stack up.
-      if (timeoutId !== undefined) {
-        window.clearTimeout(timeoutId);
-        timeoutId = undefined;
-      }
-      timeoutId = window.setTimeout(() => {
-        void poll();
-      }, delay);
-    };
-
-    const poll = async () => {
-      try {
-        const nextStatus = await getSubmissionStatus(token, i18n.language);
-        if (cancelled) return;
-
-        setStatus(nextStatus);
-        setLoading(false);
-        setErrorMessage(null);
-        setIsInvalidToken(false);
-        scheduleNext(nextStatus);
-      } catch (err) {
-        if (cancelled) return;
-
-        const apiError = err as SubmissionApiError;
-        setStatus(null);
-        setLoading(false);
-        setIsInvalidToken(apiError.status === 400);
-        setErrorMessage(apiError.status === 400 ? t('statusView.invalidToken') : t('errors.generic'));
-
-        if (apiError.status !== 400) {
-          // Transient failure (network blip, rate limit) — keep trying at the idle cadence.
-          scheduleNext({ status: 'queued' });
-        }
-      }
-    };
-
-    requestStatusRefreshRef.current = () => {
-      stopPolling();
-      void poll();
-    };
-
-    void poll();
-
-    return () => {
-      cancelled = true;
-      stopPolling();
-      requestStatusRefreshRef.current = () => {};
-    };
+    let synchronousDelivery = true;
+    const unsubscribe = subscribeStudioStatus(
+      token,
+      i18n.language,
+      {
+        intervalMs: (latest, error) => {
+          if (error) {
+            // Invalid token: nothing further to poll for.
+            if (error.status === 400) return null;
+            // Transient failure (network blip, rate limit) — retry at the idle cadence.
+            return pollDelayMs('queued');
+          }
+          return latest ? pollDelayMs(latest.status, latest.stall, latest.phase) : pollDelayMs('queued');
+        },
+        onUpdate: (next) => {
+          wasCachedBootstrapRef.current = synchronousDelivery;
+          setStatus(next);
+          setLoading(false);
+          setErrorMessage(null);
+          setIsInvalidToken(false);
+        },
+        onError: (err) => {
+          wasCachedBootstrapRef.current = synchronousDelivery;
+          setStatus(null);
+          setLoading(false);
+          setIsInvalidToken(err.status === 400);
+          setErrorMessage(err.status === 400 ? t('statusView.invalidToken') : t('errors.generic'));
+        },
+      },
+      { forceFreshOnMount: true },
+    );
+    synchronousDelivery = false;
+    return unsubscribe;
     // i18n.language is a dependency because the API localizes the build log for us.
   }, [i18n.language, t, token]);
 
@@ -537,7 +514,8 @@ export function SubmissionStatusView({
   useEffect(() => {
     if (embedded)
       onActivityCountRef.current?.(activity.length, activity.length > 0 ? activity[activity.length - 1].text : null);
-    if (!status) return;
+    // A cached snapshot from another consumer's poll is not an observed transition.
+    if (!status || wasCachedBootstrapRef.current) return;
     const builder = status.builder && isBuilderKind(status.builder) ? status.builder : null;
 
     const failureReason = status.failure?.reason;
@@ -599,39 +577,49 @@ export function SubmissionStatusView({
     const headSha = status?.progress?.headSha;
     const gateRun = status?.previewGate?.ranAt ?? '';
     const previewKey = `${headSha ?? 'unknown'}:${gateRun}`;
-    if (!previewSlug || previewInFlightRef.current) return;
+    if (!previewSlug) return;
     if (headSha && previewKey === loadedPreviewShaRef.current) return;
     // Without a headSha we can't tell if there's anything new — only load once.
     if (!headSha && loadedPreviewShaRef.current !== null) return;
+    // Set even mid-fetch — `finally` below checks back, so nothing is dropped.
+    pendingPreviewKeyRef.current = previewKey;
+    if (previewInFlightRef.current) return;
 
-    previewInFlightRef.current = true;
-    const isRefresh = loadedPreviewShaRef.current !== null;
-    if (isRefresh) {
-      setPreviewRefreshing(true);
-    } else {
-      setPreviewLoading(true);
-    }
-    setPreviewError(null);
+    const load = (key: string) => {
+      previewInFlightRef.current = true;
+      const isRefresh = loadedPreviewShaRef.current !== null;
+      if (isRefresh) {
+        setPreviewRefreshing(true);
+      } else {
+        setPreviewLoading(true);
+      }
+      setPreviewError(null);
 
-    getSubmissionPreview(token)
-      .then((result) => {
-        setPreview(result);
-        loadedPreviewShaRef.current = previewKey;
-      })
-      .catch((err: unknown) => {
-        const apiError = err as SubmissionApiError;
-        // On a refresh failure, keep showing the last-good preview rather than clearing it.
-        if (!isRefresh) {
-          setPreview(null);
-        }
-        loadedPreviewShaRef.current = previewKey;
-        setPreviewError(apiError.status === 409 ? t('statusView.previewNotReady') : t('statusView.previewError'));
-      })
-      .finally(() => {
-        previewInFlightRef.current = false;
-        setPreviewLoading(false);
-        setPreviewRefreshing(false);
-      });
+      getSubmissionPreview(token)
+        .then((result) => {
+          setPreview(result);
+          loadedPreviewShaRef.current = key;
+        })
+        .catch((err: unknown) => {
+          const apiError = err as SubmissionApiError;
+          // On a refresh failure, keep showing the last-good preview rather than clearing it.
+          if (!isRefresh) {
+            setPreview(null);
+          }
+          loadedPreviewShaRef.current = key;
+          setPreviewError(apiError.status === 409 ? t('statusView.previewNotReady') : t('statusView.previewError'));
+        })
+        .finally(() => {
+          previewInFlightRef.current = false;
+          setPreviewLoading(false);
+          setPreviewRefreshing(false);
+          // Retry only a genuinely newer key — not this one again after a failure.
+          const pending = pendingPreviewKeyRef.current;
+          if (pending && pending !== key) load(pending);
+        });
+    };
+
+    load(previewKey);
   }, [status?.preview?.slug, status?.progress?.headSha, status?.previewGate?.ranAt, t, token]);
 
   // Prefetch the latest channel build when there is no PR preview yet — same PlayCard
@@ -646,29 +634,39 @@ export function SubmissionStatusView({
       }
       return;
     }
-    if (latest.ref === loadedChannelRef.current || channelInFlightRef.current) return;
+    if (latest.ref === loadedChannelRef.current) return;
+    // Set even mid-fetch — `finally` below checks back, so nothing is dropped.
+    pendingChannelItemRef.current = latest;
+    if (channelInFlightRef.current) return;
 
-    channelInFlightRef.current = true;
-    setChannelLoading(true);
-    setPreviewError(null);
+    const load = (item: BuildPlayableItem) => {
+      channelInFlightRef.current = true;
+      setChannelLoading(true);
+      setPreviewError(null);
 
-    getChannelPlayable(token, latest)
-      .then((html) => {
-        setChannelHtml(html);
-        loadedChannelRef.current = latest.ref;
-        // A working channel draft is enough to play — clear any PR-preview failure
-        // so we don't leave a red banner under a live "Play the draft" card.
-        setPreviewError(null);
-      })
-      .catch((err: unknown) => {
-        const apiError = err as SubmissionApiError;
-        setChannelHtml(null);
-        setPreviewError(apiError.status === 409 ? t('statusView.previewNotReady') : t('statusView.previewError'));
-      })
-      .finally(() => {
-        channelInFlightRef.current = false;
-        setChannelLoading(false);
-      });
+      getChannelPlayable(token, item)
+        .then((html) => {
+          setChannelHtml(html);
+          loadedChannelRef.current = item.ref;
+          // A working channel draft is enough to play — clear any PR-preview failure
+          // so we don't leave a red banner under a live "Play the draft" card.
+          setPreviewError(null);
+        })
+        .catch((err: unknown) => {
+          const apiError = err as SubmissionApiError;
+          setChannelHtml(null);
+          setPreviewError(apiError.status === 409 ? t('statusView.previewNotReady') : t('statusView.previewError'));
+        })
+        .finally(() => {
+          channelInFlightRef.current = false;
+          setChannelLoading(false);
+          // Retry only a genuinely newer ref — not this one again after a failure.
+          const pending = pendingChannelItemRef.current;
+          if (pending && pending.ref !== item.ref) load(pending);
+        });
+    };
+
+    load(latest);
   }, [preview, status?.playable, t, token]);
 
   const previewTitle = preview?.title ?? submittedTitle ?? status?.preview?.slug ?? t('statusView.previewGameTitle');
@@ -730,13 +728,13 @@ export function SubmissionStatusView({
     handoffToPlatform(token, {
       stopActiveSelfAgent: Boolean(status?.builder === 'self' && isAgentWorkActive(status)),
     }).then((result) => {
-      requestStatusRefreshRef.current();
+      pokeStudioStatus(token, i18n.language);
       return result;
     });
 
   const handoffToSelfFromUi = () =>
     handoffToSelf(token).then((result) => {
-      requestStatusRefreshRef.current();
+      pokeStudioStatus(token, i18n.language);
       return result;
     });
 
@@ -975,7 +973,7 @@ export function SubmissionStatusView({
                       setPendingRevisions((current) => [...current, { text, at: Date.now() }]);
                       // Feedback may have switched builder or landed on `dispatched` —
                       // pull status now so we do not keep painting the previous stall.
-                      requestStatusRefreshRef.current();
+                      pokeStudioStatus(token, i18n.language);
                     }}
                     onPublishedImprove={handleImproved}
                   />
@@ -1197,7 +1195,7 @@ export function SubmissionStatusView({
                 }
                 onSent={(text) => {
                   setPendingRevisions((current) => [...current, { text, at: Date.now() }]);
-                  requestStatusRefreshRef.current();
+                  pokeStudioStatus(token, i18n.language);
                 }}
                 onPublishedImprove={handleImproved}
               />
