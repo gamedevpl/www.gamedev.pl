@@ -3,6 +3,8 @@
  * Dismiss is local only — the store still keeps the messages.
  */
 
+import { readStorageItem, removeStorageItem, writeStorageItem } from './core/persistence.js';
+
 const STORAGE_PREFIX = 'gamedev_prior_round_hide:';
 
 function storageKey(slug: string, roundId: string): string {
@@ -10,19 +12,11 @@ function storageKey(slug: string, roundId: string): string {
 }
 
 export function isPriorRoundDismissed(slug: string, roundId: string): boolean {
-  try {
-    return localStorage.getItem(storageKey(slug, roundId)) === '1';
-  } catch {
-    return false;
-  }
+  return readStorageItem(storageKey(slug, roundId)) === '1';
 }
 
 export function setPriorRoundDismissed(slug: string, roundId: string, dismissed: boolean): void {
-  try {
-    const key = storageKey(slug, roundId);
-    if (dismissed) localStorage.setItem(key, '1');
-    else localStorage.removeItem(key);
-  } catch {
-    // Preference only — private mode must not break the thread.
-  }
+  const key = storageKey(slug, roundId);
+  if (dismissed) writeStorageItem(key, '1');
+  else removeStorageItem(key);
 }

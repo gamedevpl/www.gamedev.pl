@@ -1,6 +1,7 @@
 import { LOCALES, type Locale } from '@gamedevpl/contract';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import { readStorageItem, writeStorageItem } from '../core/persistence.js';
 
 export const SUPPORTED_LANGUAGES = LOCALES;
 export type SupportedLanguage = Locale;
@@ -17,18 +18,14 @@ const STORAGE_KEY = 'gamedevpl:lang';
  * language ourselves lets `resources` below name only the one JSON that's actually needed.
  */
 function detectLanguage(): SupportedLanguage {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    // Normalized the same way navigator candidates are below: a value cached by the
-    // removed i18next-browser-languagedetector (pre-dating this module) can be
-    // region-qualified, e.g. 'pl-PL' or 'en-US' — an exact match against
-    // SUPPORTED_LANGUAGES would silently discard a still-valid stored preference.
-    const storedBase = stored?.split(/[-_]/)[0]?.toLowerCase();
-    if (storedBase && (SUPPORTED_LANGUAGES as readonly string[]).includes(storedBase)) {
-      return storedBase as SupportedLanguage;
-    }
-  } catch {
-    // localStorage unavailable (private mode, disabled) — fall through to navigator.
+  const stored = readStorageItem(STORAGE_KEY);
+  // Normalized the same way navigator candidates are below: a value cached by the
+  // removed i18next-browser-languagedetector (pre-dating this module) can be
+  // region-qualified, e.g. 'pl-PL' or 'en-US' — an exact match against
+  // SUPPORTED_LANGUAGES would silently discard a still-valid stored preference.
+  const storedBase = stored?.split(/[-_]/)[0]?.toLowerCase();
+  if (storedBase && (SUPPORTED_LANGUAGES as readonly string[]).includes(storedBase)) {
+    return storedBase as SupportedLanguage;
   }
   const candidates = typeof navigator !== 'undefined' ? (navigator.languages ?? [navigator.language]) : [];
   for (const candidate of candidates) {
@@ -120,11 +117,7 @@ export const i18nReady: Promise<void> = (async () => {
         // Persisted on every successful switch, not only the first time a bundle
         // loads — otherwise switching back to an already-loaded language (EN -> PL
         // -> EN) never updates the stored choice, and the next reload reverts to PL.
-        try {
-          localStorage.setItem(STORAGE_KEY, lng);
-        } catch {
-          // best-effort persistence only
-        }
+        writeStorageItem(STORAGE_KEY, lng);
       }
       return nativeChangeLanguage(lng, callback);
     })();

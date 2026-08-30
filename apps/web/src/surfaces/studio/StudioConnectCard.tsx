@@ -12,6 +12,7 @@ import {
   type ConnectPayload,
 } from './connectApi.js';
 import { isConnectCollapsed, setConnectCollapsed } from '../../connectCollapse.js';
+import { readStorageItem, writeStorageItem } from '../../core/persistence.js';
 import type { ConnectCardMode } from '../../selfBuildCopy.js';
 import { recordStudioStep } from '../../visitTelemetry.js';
 
@@ -36,21 +37,12 @@ type ConnectAuthMode = 'key' | 'oauth';
 const QUIET_UNAVAILABLE = new Set(['not_self_round', 'inactive_round']);
 
 function loadAuthMode(): ConnectAuthMode {
-  try {
-    const raw = localStorage.getItem(AUTH_MODE_STORAGE_KEY);
-    // Sign-in is the default path — paste-header is the escape hatch (Cursor bugs, CLI).
-    return raw === 'key' ? 'key' : 'oauth';
-  } catch {
-    return 'oauth';
-  }
+  // Sign-in is the default path — paste-header is the escape hatch (Cursor bugs, CLI).
+  return readStorageItem(AUTH_MODE_STORAGE_KEY) === 'key' ? 'key' : 'oauth';
 }
 
 function saveAuthMode(mode: ConnectAuthMode): void {
-  try {
-    localStorage.setItem(AUTH_MODE_STORAGE_KEY, mode);
-  } catch {
-    // Convenience only.
-  }
+  writeStorageItem(AUTH_MODE_STORAGE_KEY, mode);
 }
 
 type StudioConnectCardProps = {
