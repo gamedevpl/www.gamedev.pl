@@ -59,3 +59,25 @@ describe('review desk shell', () => {
     expect(keep).toMatch(/translateX\(-50%\)/);
   });
 });
+
+// Phone override must load after review.css or it loses the cascade.
+describe('review desk phone overrides', () => {
+  const responsiveCss = readFileSync(
+    fileURLToPath(new URL('./review.responsive.css', import.meta.url)),
+    'utf8',
+  ).replace(/\/\*[\s\S]*?\*\//g, '');
+  const tsx = readFileSync(fileURLToPath(new URL('./ReviewDesk.tsx', import.meta.url)), 'utf8');
+
+  it('shrinks the dock and scroller under the 640px breakpoint', () => {
+    expect(responsiveCss).toMatch(/@media \(max-width: 640px\) \{/);
+    expect(responsiveCss).toMatch(/\.review-scroll\s*\{[^}]*min-height:\s*min\(28dvh,\s*160px\)/);
+    expect(responsiveCss).toMatch(/\.review-dock\s*\{[^}]*max-height:\s*min\(52dvh,\s*380px\)/);
+  });
+
+  it('imports review.responsive.css after review.css so the override wins', () => {
+    const baseIndex = tsx.indexOf("import './review.css'");
+    const responsiveIndex = tsx.indexOf("import './review.responsive.css'");
+    expect(baseIndex).toBeGreaterThan(-1);
+    expect(responsiveIndex).toBeGreaterThan(baseIndex);
+  });
+});
