@@ -9,7 +9,7 @@ import Fastify, {
   type FastifyRequest,
   type FastifyServerOptions,
 } from 'fastify';
-import { registerAccessTokenRoutes } from './access-token-routes.js';
+import { registerAccessTokenRoutes, type AccessTokenRoutesOptions } from './access-token-routes.js';
 import { registerJobAdminRoutes } from '../creation/job-admin-routes.js';
 import { createGameSeederFromEnv } from '../agent-surface/agent-backend-env.js';
 import { createGcsGamesStore } from '../delivery/games-store.js';
@@ -197,6 +197,8 @@ export interface BuildAppOptions {
   // Seams for reviewer desk; defaults to snapshot/GitHub catalog.
   reviewRoutes?: Omit<ReviewRoutesOptions, 'store' | 'adminUids' | 'reviewerUids'>;
   creatorCodeRoutes?: Partial<Omit<CreatorCodeRoutesOptions, 'store'>>;
+  // Seams for personal access tokens; its clock also goes to token-info.
+  accessTokenRoutes?: Partial<Omit<AccessTokenRoutesOptions, 'store' | 'adminUids'>>;
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -325,6 +327,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     adminUids,
     // Same hint contract for the reviewer desk.
     reviewerUids,
+    // A floored day count, so token-info reads the minting clock.
+    now: options.accessTokenRoutes?.now,
   });
 
   // Where a delivered game is stored, and what verifies it. Resolved once and shared by
@@ -737,7 +741,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // lets a coding agent in a cloud VM authenticate as a real account without a browser,
   // a Google identity, or any bypass route. Same operator allowlist as the views above,
   // and session-only, so a token can never mint another.
-  await registerAccessTokenRoutes(app, { store, adminUids });
+  await registerAccessTokenRoutes(app, { store, adminUids, now: options.accessTokenRoutes?.now });
 
   // The build queue, answered from the store alone. Until jobs carried their own state
   // there was nothing to answer it with: deriving every in-flight submission's status on

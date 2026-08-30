@@ -251,6 +251,8 @@ export interface AuthPluginOptions {
   adminUids?: Set<string>;
   // Reviewer desk hint only; every review route re-checks.
   reviewerUids?: Set<string>;
+  // Same clock as minting, or token-info's day count drifts.
+  now?: () => number;
 }
 
 const GoogleAuthSchema = z.object({
@@ -328,6 +330,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
   const adminUids = options.adminUids;
   const reviewerUids = options.reviewerUids;
   const sessionSecretPrev = options.sessionSecretPrev ?? process.env.SESSION_SECRET_PREV;
+  const now = options.now ?? Date.now;
 
   const verifier = options.googleAuthVerifier ?? new DefaultGoogleAuthVerifier(googleClientId);
 
@@ -357,8 +360,8 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         return { user: null, needsRenewal: false, fromToken: false };
       }
 
-      const now = Math.floor(Date.now() / 1000);
-      const needsRenewal = exp - now < sessionRenewalThresholdSeconds(src);
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      const needsRenewal = exp - nowSeconds < sessionRenewalThresholdSeconds(src);
 
       return { user, needsRenewal, fromToken: src === 'token' };
     } catch {
@@ -938,7 +941,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
       name: record.name,
       expiresAt: record.expiresAt,
       // Floor, so "1" never means "expires in ninety minutes".
-      expiresInDays: Math.floor((expiresAtMs - Date.now()) / (24 * 60 * 60 * 1000)),
+      expiresInDays: Math.floor((expiresAtMs - now()) / (24 * 60 * 60 * 1000)),
     };
   });
 
