@@ -77,21 +77,48 @@ async function tick(key: string, generation: number): Promise<void> {
   if (!state || state.generation !== generation) return;
   state.timer = undefined;
   state.ticking = true;
+
+  let status: SubmissionStatus | undefined;
+  let apiError: SubmissionApiError | undefined;
   try {
-    const status = await getSubmissionStatus(state.token, state.locale);
-    if (polls.get(key) !== state || state.generation !== generation) return;
-    state.latest = status;
-    state.lastError = null;
-    for (const subscriber of state.subscribers) subscriber.onUpdate?.(status);
+    status = await getSubmissionStatus(state.token, state.locale);
   } catch (err) {
-    if (polls.get(key) !== state || state.generation !== generation) return;
-    const apiError = err as SubmissionApiError;
-    state.lastError = apiError;
-    for (const subscriber of state.subscribers) subscriber.onError?.(apiError);
+    apiError = err as SubmissionApiError;
   }
-  state.lastTickAt = Date.now();
-  state.ticking = false;
-  schedule(key, state);
+
+  // A poke or a fresh subscribe-from-zero already took over this key while
+  // the fetch was in flight — that newer generation owns the cleanup below.
+  if (polls.get(key) !== state || state.generation !== generation) return;
+
+  // A throwing onUpdate/onError must not stop cleanup from running below
+  // (that would leave `ticking` stuck true) or stop the other subscribers
+  // from being notified, so each callback is isolated on its own.
+  try {
+    if (status !== undefined) {
+      state.latest = status;
+      state.lastError = null;
+      for (const subscriber of state.subscribers) {
+        try {
+          subscriber.onUpdate?.(status);
+        } catch {
+          /* one subscriber's bug must not affect the others or the tick */
+        }
+      }
+    } else if (apiError !== undefined) {
+      state.lastError = apiError;
+      for (const subscriber of state.subscribers) {
+        try {
+          subscriber.onError?.(apiError);
+        } catch {
+          /* one subscriber's bug must not affect the others or the tick */
+        }
+      }
+    }
+  } finally {
+    state.lastTickAt = Date.now();
+    state.ticking = false;
+    schedule(key, state);
+  }
 }
 
 /**

@@ -234,6 +234,30 @@ describe('subscribeStudioStatus', () => {
     unsubscribe();
   });
 
+  it('keeps ticking and notifies the other subscribers when one onUpdate throws', async () => {
+    // Regression: a throwing callback used to escape the tick uncaught,
+    // skipping cleanup and leaving `ticking` stuck true — no subscriber,
+    // old or new, would ever be polled again.
+    vi.mocked(getSubmissionStatus).mockResolvedValue(statusFixture());
+    const key = `token-${Math.random()}`;
+    const broken = fixedSubscriber(5_000);
+    broken.onUpdate = () => {
+      throw new Error('subscriber bug');
+    };
+    const healthy = fixedSubscriber(5_000);
+
+    const unsubBroken = subscribeStudioStatus(key, 'en', broken);
+    const unsubHealthy = subscribeStudioStatus(key, 'en', healthy);
+    await vi.waitFor(() => expect(healthy.updates).toHaveLength(1));
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    await vi.waitFor(() => expect(healthy.updates).toHaveLength(2));
+    expect(getSubmissionStatus).toHaveBeenCalledTimes(2);
+
+    unsubBroken();
+    unsubHealthy();
+  });
+
   it('lets a subscriber opt out only on error while another keeps polling', async () => {
     const error = Object.assign(new Error('bad token'), { status: 400 }) as SubmissionApiError;
     vi.mocked(getSubmissionStatus).mockRejectedValue(error);
