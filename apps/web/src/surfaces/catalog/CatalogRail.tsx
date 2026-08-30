@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import './catalog-rail.css';
 import {
   catalogMediaUrl,
   defaultScreenshotIndex,
