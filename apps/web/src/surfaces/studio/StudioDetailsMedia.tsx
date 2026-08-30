@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { buildMediaUrl, getSubmissionStatus, type BuildMediaItem } from '../../submissionApi.js';
+import { buildMediaUrl, type BuildMediaItem } from '../../submissionApi.js';
+import { subscribeStudioStatus } from './studioStatusStore.js';
 
 /** Details refreshes slower than the thread — the thread already owns the live pulse. */
 const DETAILS_POLL_MS = 10_000;
@@ -16,26 +17,14 @@ export function StudioDetailsMedia({ token, emptyLabel }: { token: string; empty
   const [lightbox, setLightbox] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      try {
-        const status = await getSubmissionStatus(token, i18n.language);
-        if (cancelled) return;
+    return subscribeStudioStatus(token, i18n.language, {
+      intervalMs: () => DETAILS_POLL_MS,
+      onUpdate: (status) => {
         setMedia(status.media ?? []);
-      } catch {
-        /* Secondary chrome — a failed poll must not toast over the thread. */
-      } finally {
-        if (!cancelled) setLoaded(true);
-      }
-    };
-
-    void load();
-    const timer = window.setInterval(() => void load(), DETAILS_POLL_MS);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
+        setLoaded(true);
+      },
+      onError: () => setLoaded(true),
+    });
   }, [token, i18n.language]);
 
   useEffect(() => {

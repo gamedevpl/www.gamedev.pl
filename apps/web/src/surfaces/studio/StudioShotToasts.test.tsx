@@ -35,13 +35,13 @@ describe('StudioShotToasts', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<StudioShotToasts token="tok" placement="near-play" />);
+      root.render(<StudioShotToasts token="tok-stack" placement="near-play" />);
     });
     await act(async () => {
       await Promise.resolve();
     });
 
-    expect(getSubmissionStatus).toHaveBeenCalledWith('tok', 'en');
+    expect(getSubmissionStatus).toHaveBeenCalledWith('tok-stack', 'en');
     expect(host.querySelector('.studio-shot-toasts.is-near-play')).not.toBeNull();
     expect(host.querySelectorAll('.studio-shot-toast')).toHaveLength(2);
 
@@ -69,7 +69,7 @@ describe('StudioShotToasts', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<StudioShotToasts token="tok" placement="near-play" onOpenMedia={onOpenMedia} />);
+      root.render(<StudioShotToasts token="tok-open" placement="near-play" onOpenMedia={onOpenMedia} />);
     });
     await act(async () => {
       await Promise.resolve();
@@ -100,7 +100,7 @@ describe('StudioShotToasts', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<StudioShotToasts token="tok" placement="near-play" onOpenMedia={onOpenMedia} />);
+      root.render(<StudioShotToasts token="tok-drag" placement="near-play" onOpenMedia={onOpenMedia} />);
     });
     await act(async () => {
       await Promise.resolve();
@@ -144,12 +144,12 @@ describe('StudioShotToasts', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<StudioShotToasts token="tok" />);
+      root.render(<StudioShotToasts token="tok-locale" />);
     });
     await act(async () => {
       await Promise.resolve();
     });
-    expect(getSubmissionStatus).toHaveBeenCalledWith('tok', 'en');
+    expect(getSubmissionStatus).toHaveBeenCalledWith('tok-locale', 'en');
 
     await act(async () => {
       await i18n.changeLanguage('pl');
@@ -157,7 +157,7 @@ describe('StudioShotToasts', () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(getSubmissionStatus).toHaveBeenCalledWith('tok', 'pl');
+    expect(getSubmissionStatus).toHaveBeenCalledWith('tok-locale', 'pl');
 
     root.unmount();
     host.remove();
@@ -173,7 +173,7 @@ describe('StudioShotToasts', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<StudioShotToasts token="tok" />);
+      root.render(<StudioShotToasts token="tok-empty" />);
     });
     await act(async () => {
       await Promise.resolve();

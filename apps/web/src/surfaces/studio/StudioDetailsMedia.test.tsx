@@ -34,13 +34,13 @@ describe('StudioDetailsMedia', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<StudioDetailsMedia token="tok" />);
+      root.render(<StudioDetailsMedia token="tok-grid" />);
     });
     await act(async () => {
       await Promise.resolve();
     });
 
-    expect(getSubmissionStatus).toHaveBeenCalledWith('tok', 'en');
+    expect(getSubmissionStatus).toHaveBeenCalledWith('tok-grid', 'en');
     expect(host.querySelector('[data-testid="studio-details-media"]')).not.toBeNull();
     expect(host.querySelectorAll('.studio-details-media-card')).toHaveLength(2);
 
@@ -63,7 +63,7 @@ describe('StudioDetailsMedia', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<StudioDetailsMedia token="tok" emptyLabel="Nothing yet" />);
+      root.render(<StudioDetailsMedia token="tok-empty" emptyLabel="Nothing yet" />);
     });
     await act(async () => {
       await Promise.resolve();
