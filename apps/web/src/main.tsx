@@ -7,6 +7,7 @@ import { hasServiceWorkerSupport } from './serviceWorkerSupport.js';
 import { watchShellUpdates } from './shellUpdate.js';
 import { startVisitTracking } from './visitTelemetry.js';
 import { i18nReady } from './i18n/index.js';
+import './core/styles/tokens.css';
 import './styles.css';
 
 // Started before the first render: the visit has to be recorded as it lands, and a tree

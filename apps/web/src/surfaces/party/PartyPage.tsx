@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import './party.css';
 import { CatalogRail } from '../catalog/CatalogRail.js';
 import type { CatalogEntry } from '../../catalog.js';
 import { MascotMoment } from '../../Mascot.js';
