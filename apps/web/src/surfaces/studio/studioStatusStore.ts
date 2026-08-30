@@ -111,8 +111,18 @@ async function tick(key: string, generation: number): Promise<void> {
   }
 }
 
+export interface SubscribeStudioStatusOptions {
+  // Force a fresh tick when joining, even an already idle poll.
+  forceFreshOnMount?: boolean;
+}
+
 // Joins the shared poll; a later subscriber gets the known status synchronously.
-export function subscribeStudioStatus(token: string, locale: string, subscriber: StudioStatusSubscriber): () => void {
+export function subscribeStudioStatus(
+  token: string,
+  locale: string,
+  subscriber: StudioStatusSubscriber,
+  options: SubscribeStudioStatusOptions = {},
+): () => void {
   const key = keyFor(token, locale);
   let state = polls.get(key);
   // Dormant: a brand-new key, or one every subscriber already left.
@@ -141,7 +151,7 @@ export function subscribeStudioStatus(token: string, locale: string, subscriber:
     // must not skip starting/resuming the poll below
   }
 
-  if (isDormant) {
+  if (isDormant || (options.forceFreshOnMount && !state.ticking)) {
     state.generation += 1;
     void tick(key, state.generation);
   } else if (!state.ticking) {

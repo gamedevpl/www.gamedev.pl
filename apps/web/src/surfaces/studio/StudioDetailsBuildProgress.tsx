@@ -27,14 +27,19 @@ export function StudioDetailsBuildProgress({
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    return subscribeStudioStatus(token, i18n.language, {
-      intervalMs: () => DETAILS_POLL_MS,
-      onUpdate: (next) => {
-        setStatus(next);
-        setLoaded(true);
+    return subscribeStudioStatus(
+      token,
+      i18n.language,
+      {
+        intervalMs: () => DETAILS_POLL_MS,
+        onUpdate: (next) => {
+          setStatus(next);
+          setLoaded(true);
+        },
+        onError: () => setLoaded(true),
       },
-      onError: () => setLoaded(true),
-    });
+      { forceFreshOnMount: true },
+    );
   }, [token, i18n.language]);
 
   if (!status) {

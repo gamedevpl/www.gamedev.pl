@@ -91,6 +91,38 @@ describe('subscribeStudioStatus', () => {
     unsubSecond();
   });
 
+  it('forceFreshOnMount refetches for a later subscriber joining an idle poll', async () => {
+    // A panel that always wants fresh data, not a stale shared cache.
+    vi.mocked(getSubmissionStatus).mockResolvedValue(statusFixture());
+    const key = `token-${Math.random()}`;
+    const first = fixedSubscriber(10_000);
+    const unsubFirst = subscribeStudioStatus(key, 'en', first);
+    await vi.waitFor(() => expect(first.updates).toHaveLength(1));
+
+    const second = fixedSubscriber(10_000);
+    const unsubSecond = subscribeStudioStatus(key, 'en', second, { forceFreshOnMount: true });
+
+    // Cached value delivered synchronously first, so there's no empty flash.
+    expect(second.updates).toHaveLength(1);
+    await vi.waitFor(() => expect(second.updates).toHaveLength(2));
+    expect(getSubmissionStatus).toHaveBeenCalledTimes(2);
+
+    unsubFirst();
+    unsubSecond();
+  });
+
+  it('forceFreshOnMount does not double-fetch for the very first subscriber', async () => {
+    vi.mocked(getSubmissionStatus).mockResolvedValue(statusFixture());
+    const key = `token-${Math.random()}`;
+    const sub = fixedSubscriber(10_000);
+
+    const unsubscribe = subscribeStudioStatus(key, 'en', sub, { forceFreshOnMount: true });
+    await vi.waitFor(() => expect(sub.updates).toHaveLength(1));
+
+    expect(getSubmissionStatus).toHaveBeenCalledTimes(1);
+    unsubscribe();
+  });
+
   it('ticks again after the fastest interval any subscriber still wants', async () => {
     vi.mocked(getSubmissionStatus).mockResolvedValue(statusFixture());
     const key = `token-${Math.random()}`;
