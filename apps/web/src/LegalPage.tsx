@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { legalDocument, type LegalBlock, type LegalDocId } from './legal/index.js';
+import { legalDocument, type LegalBlock, type LegalDocId, type LegalDocument } from './legal/index.js';
 import { renderInline } from './legal/inline.js';
 import { OPERATOR_LEGAL_NAME } from './legal/operator.js';
 import { legalAnchor, legalPath } from './core/router.js';
@@ -55,17 +55,24 @@ function Block({ block }: { block: LegalBlock }) {
  */
 export function LegalPage({ doc, onBack }: { doc: LegalDocId; onBack: () => void }) {
   const { t, i18n } = useTranslation();
-  const legalDoc = legalDocument(doc, i18n.language);
-  const effective = new Date(legalDoc.effectiveDate).toLocaleDateString(i18n.language, {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+  // Only the reader's language is fetched — the other one never enters this bundle.
+  const [legalDoc, setLegalDoc] = useState<LegalDocument | null>(null);
+  useEffect(() => {
+    let active = true;
+    setLegalDoc(null);
+    legalDocument(doc, i18n.language).then((loaded) => {
+      if (active) setLegalDoc(loaded);
+    });
+    return () => {
+      active = false;
+    };
+  }, [doc, i18n.language]);
 
   // Section anchors ride in the URL fragment (`/privacy#zglaszanie`) so a specific
   // clause can be cited in an email or a takedown notice and actually land on it.
   const anchor = legalAnchor(window.location.hash);
   useEffect(() => {
+    if (!legalDoc) return;
     if (!anchor) {
       window.scrollTo({ top: 0 });
       return;
@@ -74,7 +81,21 @@ export function LegalPage({ doc, onBack }: { doc: LegalDocId; onBack: () => void
     // 7,000px down, and animating that is a slow ride to somewhere the reader already
     // asked to be. Smooth scrolling also silently does nothing in some environments.
     document.getElementById(anchor)?.scrollIntoView({ block: 'start' });
-  }, [anchor, doc]);
+  }, [anchor, doc, legalDoc]);
+
+  if (!legalDoc) {
+    return (
+      <article className="legal-page">
+        <p className="content-loading">{t('app.loadingSurface')}</p>
+      </article>
+    );
+  }
+
+  const effective = new Date(legalDoc.effectiveDate).toLocaleDateString(i18n.language, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
 
   return (
     <article className="legal-page">
