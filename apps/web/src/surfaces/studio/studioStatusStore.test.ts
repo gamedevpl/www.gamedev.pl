@@ -123,8 +123,7 @@ describe('subscribeStudioStatus', () => {
 
     const stillWatching = fixedSubscriber(10_000);
     subscribeStudioStatus(key, 'en', stillWatching);
-    // The cached status is 120s stale, well past stillWatching's 10s budget,
-    // so joining triggers an immediate catch-up poll rather than a fresh wait.
+    // Cached status is 120s stale — joining triggers a fresh poll.
     await vi.waitFor(() => expect(stillWatching.updates).toHaveLength(1));
     expect(getSubmissionStatus).toHaveBeenCalledTimes(2);
 
@@ -165,9 +164,7 @@ describe('subscribeStudioStatus', () => {
   });
 
   it('keeps the remaining subscriber on its original deadline after a mid-interval unsubscribe', async () => {
-    // Regression: unsubscribing used to reschedule the survivor for a full
-    // fresh interval starting at that moment, not from the last real tick —
-    // repeated subscribe churn could push its poll later indefinitely.
+    // Regression: unsubscribe used to reset the survivor to a fresh interval.
     vi.mocked(getSubmissionStatus).mockResolvedValue(statusFixture());
     const key = `token-${Math.random()}`;
     const fast = fixedSubscriber(3_000);
@@ -177,8 +174,7 @@ describe('subscribeStudioStatus', () => {
     const unsubSlow = subscribeStudioStatus(key, 'en', slow);
     await vi.waitFor(() => expect(slow.updates).toHaveLength(1));
 
-    // Before fast's own 3s cadence would next fire, so this leaves only one
-    // real tick so far — the elapsed-time bookkeeping is what's under test.
+    // Before fast's cadence fires again — only one tick has run.
     await vi.advanceTimersByTimeAsync(2_000);
     unsubFast();
 
@@ -191,10 +187,7 @@ describe('subscribeStudioStatus', () => {
   });
 
   it('never double-delivers when a subscriber joins while the first fetch is in flight', async () => {
-    // Regression: a subscriber joining before the first fetch resolves used
-    // to schedule its own timer alongside that in-flight fetch; if the timer
-    // fired before the fetch resolved, both continuations delivered the
-    // same resolved status to every subscriber.
+    // Regression: a mid-fetch join used to schedule a racing timer.
     const d = deferred<SubmissionStatus>();
     vi.mocked(getSubmissionStatus).mockReturnValue(d.promise);
     const key = `token-${Math.random()}`;
@@ -235,9 +228,7 @@ describe('subscribeStudioStatus', () => {
   });
 
   it('keeps ticking and notifies the other subscribers when one onUpdate throws', async () => {
-    // Regression: a throwing callback used to escape the tick uncaught,
-    // skipping cleanup and leaving `ticking` stuck true — no subscriber,
-    // old or new, would ever be polled again.
+    // Regression: a throwing callback used to leave ticking stuck true forever.
     vi.mocked(getSubmissionStatus).mockResolvedValue(statusFixture());
     const key = `token-${Math.random()}`;
     const broken = fixedSubscriber(5_000);
@@ -259,8 +250,7 @@ describe('subscribeStudioStatus', () => {
   });
 
   it('does not orphan a subscriber whose cached-value delivery throws', async () => {
-    // Regression: a throwing callback here used to escape before the poll
-    // was started/resumed below, orphaning the subscriber with no active tick.
+    // Regression: a throw here used to orphan the subscriber before ticking resumed.
     vi.mocked(getSubmissionStatus).mockResolvedValue(statusFixture());
     const key = `token-${Math.random()}`;
     const first = fixedSubscriber(5_000);
@@ -285,9 +275,7 @@ describe('subscribeStudioStatus', () => {
   });
 
   it('keeps scheduling for healthy subscribers when one cadence policy throws', async () => {
-    // Regression: intervalMs throwing inside nextDelay used to propagate out
-    // of schedule() (called from tick()'s finally), leaving no timer set and
-    // silently stopping the poll for every subscriber, broken or not.
+    // Regression: a throwing cadence policy used to silently stop the whole poll.
     vi.mocked(getSubmissionStatus).mockResolvedValue(statusFixture());
     const key = `token-${Math.random()}`;
     const broken: StudioStatusSubscriber = {
@@ -310,9 +298,7 @@ describe('subscribeStudioStatus', () => {
   });
 
   it('gives a late subscriber the freshest known error, not a stale success', async () => {
-    // Regression: a success followed by an error left `latest` still set,
-    // so a joining subscriber got the stale success instead of the error —
-    // fatal for a subscriber whose cadence stops retrying on that error.
+    // Regression: a stale cached success used to hide a fresher error.
     const error = Object.assign(new Error('bad token'), { status: 400 }) as SubmissionApiError;
     vi.mocked(getSubmissionStatus).mockResolvedValueOnce(statusFixture()).mockRejectedValueOnce(error);
     const key = `token-${Math.random()}`;
@@ -330,6 +316,68 @@ describe('subscribeStudioStatus', () => {
     expect(late.updates).toHaveLength(0);
 
     unsubFirst();
+  });
+
+  it('does not double-deliver to a subscriber added mid-delivery by another callback', async () => {
+    // Regression: a live Set loop used to revisit an added subscriber.
+    vi.mocked(getSubmissionStatus).mockResolvedValue(statusFixture());
+    const key = `token-${Math.random()}`;
+    const second = fixedSubscriber(5_000);
+    let reentered = false;
+    const first: StudioStatusSubscriber & { updates: SubmissionStatus[] } = {
+      intervalMs: () => 5_000,
+      updates: [],
+      onUpdate: (status) => {
+        first.updates.push(status);
+        if (!reentered) {
+          reentered = true;
+          subscribeStudioStatus(key, 'en', second);
+        }
+      },
+    };
+
+    const unsubFirst = subscribeStudioStatus(key, 'en', first);
+    await vi.waitFor(() => expect(first.updates).toHaveLength(1));
+
+    expect(second.updates).toHaveLength(1);
+    expect(getSubmissionStatus).toHaveBeenCalledTimes(1);
+
+    unsubFirst();
+  });
+
+  it('does not schedule a stray extra tick when onUpdate re-pokes mid-delivery', async () => {
+    // Regression: a reentrant poke used to race a stray extra tick.
+    const d1 = deferred<SubmissionStatus>();
+    const d2 = deferred<SubmissionStatus>();
+    vi.mocked(getSubmissionStatus).mockReturnValueOnce(d1.promise).mockReturnValueOnce(d2.promise);
+
+    const key = `token-${Math.random()}`;
+    let poked = false;
+    const sub: StudioStatusSubscriber & { updates: SubmissionStatus[] } = {
+      intervalMs: () => 1_000,
+      updates: [],
+      onUpdate: (status) => {
+        sub.updates.push(status);
+        if (!poked) {
+          poked = true;
+          pokeStudioStatus(key, 'en');
+        }
+      },
+    };
+
+    const unsub = subscribeStudioStatus(key, 'en', sub);
+    d1.resolve(statusFixture({ status: 'building' }));
+    await vi.waitFor(() => expect(sub.updates).toHaveLength(1));
+
+    // The re-fetch from the poke outlasts the subscriber's own cadence.
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(getSubmissionStatus).toHaveBeenCalledTimes(2);
+
+    d2.resolve(statusFixture({ status: 'queued' }));
+    await vi.waitFor(() => expect(sub.updates).toHaveLength(2));
+    expect(getSubmissionStatus).toHaveBeenCalledTimes(2);
+
+    unsub();
   });
 
   it('lets a subscriber opt out only on error while another keeps polling', async () => {

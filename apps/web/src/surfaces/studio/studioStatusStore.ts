@@ -1,21 +1,10 @@
 import { getSubmissionStatus, type SubmissionApiError, type SubmissionStatus } from '../../submissionApi.js';
 
-/**
- * One shared poll per (token, locale) — replacing what were five independent
- * `setInterval`/`setTimeout` loops hitting the same `getSubmissionStatus`
- * endpoint. Each caller subscribes with its own cadence policy; the shared
- * loop ticks at the fastest cadence any current subscriber still wants, and
- * stops once none do. `core/dataLayer.ts`'s request dedup already collapses
- * near-simultaneous fetches — this collapses the *schedules* themselves.
- */
+// One shared poll per (token, locale); each subscriber sets its own cadence.
 export interface StudioStatusSubscriber {
-  /**
-   * Delay in ms before the next poll, given the latest resolved status (or
-   * the latest error). Return null to opt this subscriber out of scheduling
-   * the next tick — the shared poll still runs if another subscriber wants it.
-   */
+  // ms until the next poll; return null to opt this subscriber out.
   intervalMs(latest: SubmissionStatus | null, error: SubmissionApiError | null): number | null;
-  /** Called with every resolved status, including one already cached from a prior subscriber. */
+  // Fires for every status, including one cached from an earlier subscriber.
   onUpdate?(status: SubmissionStatus): void;
   onError?(error: SubmissionApiError): void;
 }
@@ -26,20 +15,12 @@ interface PollState {
   subscribers: Set<StudioStatusSubscriber>;
   latest: SubmissionStatus | null;
   lastError: SubmissionApiError | null;
-  // When the last tick (success or error) completed — schedule() counts a
-  // subscriber's own interval from here, not from whenever it happens to
-  // run, or a subscribe/unsubscribe mid-interval would keep pushing the
-  // remaining subscribers' next poll later.
+  // schedule() counts a subscriber's interval from here, not from call time.
   lastTickAt: number | undefined;
-  // True from the moment a tick starts until it reschedules. A subscribe
-  // while this is true must not schedule its own timer — that would let a
-  // slow-resolving tick's late completion and this new timer both call
-  // getSubmissionStatus and, though core/dataLayer.ts's dedup makes that one
-  // request, both would still separately deliver it to every subscriber.
+  // True mid-tick; a join then must not schedule its own timer.
   ticking: boolean;
   timer: ReturnType<typeof setTimeout> | undefined;
-  // Bumped on every subscribe-from-zero and every poke; a scheduled tick
-  // whose generation no longer matches was superseded and must not run.
+  // Bumped by poke/resubscribe; a stale tick's generation must not run.
   generation: number;
 }
 
@@ -56,8 +37,7 @@ function nextDelay(state: PollState): number | null {
     try {
       wanted = subscriber.intervalMs(state.latest, state.lastError);
     } catch {
-      // A broken cadence policy must not stop scheduling for the others.
-      continue;
+      continue; // a broken cadence policy must not block the others
     }
     if (wanted === null) continue;
     if (delay === null || wanted < delay) delay = wanted;
@@ -78,6 +58,11 @@ function schedule(key: string, state: PollState): void {
   state.timer = setTimeout(() => void tick(key, generation), delay);
 }
 
+// True once a poke/resubscribe elsewhere already took over this generation.
+function superseded(key: string, state: PollState, generation: number): boolean {
+  return polls.get(key) !== state || state.generation !== generation;
+}
+
 async function tick(key: string, generation: number): Promise<void> {
   const state = polls.get(key);
   if (!state || state.generation !== generation) return;
@@ -92,53 +77,45 @@ async function tick(key: string, generation: number): Promise<void> {
     apiError = err as SubmissionApiError;
   }
 
-  // A poke or a fresh subscribe-from-zero already took over this key while
-  // the fetch was in flight — that newer generation owns the cleanup below.
-  if (polls.get(key) !== state || state.generation !== generation) return;
+  if (superseded(key, state, generation)) return;
 
-  // A throwing onUpdate/onError must not stop cleanup from running below
-  // (that would leave `ticking` stuck true) or stop the other subscribers
-  // from being notified, so each callback is isolated on its own.
   try {
     if (status !== undefined) {
       state.latest = status;
       state.lastError = null;
-      for (const subscriber of state.subscribers) {
+      // Snapshot avoids double-delivery to a subscriber added during this loop.
+      for (const subscriber of [...state.subscribers]) {
         try {
           subscriber.onUpdate?.(status);
         } catch {
-          /* one subscriber's bug must not affect the others or the tick */
+          // one subscriber's bug must not affect the others
         }
       }
     } else if (apiError !== undefined) {
       state.lastError = apiError;
-      for (const subscriber of state.subscribers) {
+      for (const subscriber of [...state.subscribers]) {
         try {
           subscriber.onError?.(apiError);
         } catch {
-          /* one subscriber's bug must not affect the others or the tick */
+          // one subscriber's bug must not affect the others
         }
       }
     }
   } finally {
-    state.lastTickAt = Date.now();
-    state.ticking = false;
-    schedule(key, state);
+    // Skip cleanup if a reentrant poke already started a newer tick.
+    if (!superseded(key, state, generation)) {
+      state.lastTickAt = Date.now();
+      state.ticking = false;
+      schedule(key, state);
+    }
   }
 }
 
-/**
- * Joins the shared poll for `token`/`locale`. Fires an immediate fetch when
- * this is the first subscriber for that key; a later subscriber to an
- * already-active key gets the latest known status synchronously instead,
- * so mounting a second consumer never shows an empty state the first
- * consumer already resolved past.
- */
+// Joins the shared poll; a later subscriber gets the known status synchronously.
 export function subscribeStudioStatus(token: string, locale: string, subscriber: StudioStatusSubscriber): () => void {
   const key = keyFor(token, locale);
   let state = polls.get(key);
-  // True for a brand-new key, or one every prior subscriber has already left
-  // (dormant: no subscribers, no timer) — either way nothing is polling yet.
+  // Dormant: a brand-new key, or one every subscriber already left.
   const isDormant = !state || (state.subscribers.size === 0 && state.timer === undefined);
   if (!state) {
     state = {
@@ -156,23 +133,19 @@ export function subscribeStudioStatus(token: string, locale: string, subscriber:
   }
   state.subscribers.add(subscriber);
 
-  // A success always clears lastError (see tick()), so a non-null lastError
-  // here is always more recent than latest — check it first, and isolate the
-  // callback so a throw here can't skip starting/resuming the poll below.
+  // A success clears lastError, so a non-null one is always fresher.
   try {
     if (state.lastError) subscriber.onError?.(state.lastError);
     else if (state.latest) subscriber.onUpdate?.(state.latest);
   } catch {
-    /* one subscriber's bug must not orphan it or block scheduling */
+    // must not skip starting/resuming the poll below
   }
 
   if (isDormant) {
     state.generation += 1;
     void tick(key, state.generation);
   } else if (!state.ticking) {
-    // A tick already in flight will reschedule against the new subscriber
-    // set itself once it completes — scheduling here too would race it.
-    schedule(key, state);
+    schedule(key, state); // an in-flight tick will reschedule itself instead
   }
 
   return () => {
@@ -188,12 +161,7 @@ export function subscribeStudioStatus(token: string, locale: string, subscriber:
   };
 }
 
-/**
- * Forces an immediate re-poll for `token`/`locale` — a visibility/focus
- * wake-up, or a caller that knows the status just changed server-side
- * (e.g. right after sealing) and doesn't want to wait out the cadence.
- * A no-op when nothing is currently subscribed to that key.
- */
+// Forces an immediate re-poll; a no-op when nobody is subscribed.
 export function pokeStudioStatus(token: string, locale: string): void {
   const key = keyFor(token, locale);
   const state = polls.get(key);
