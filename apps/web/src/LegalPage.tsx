@@ -57,12 +57,21 @@ export function LegalPage({ doc, onBack }: { doc: LegalDocId; onBack: () => void
   const { t, i18n } = useTranslation();
   // Only the reader's language is fetched — the other one never enters this bundle.
   const [legalDoc, setLegalDoc] = useState<LegalDocument | null>(null);
+  // A stale tab across a deploy can request a hashed chunk the new build no longer
+  // serves — same failure RouteChunkBoundary guards the lazy routes against, but this
+  // load happens in an effect, not a thrown Suspense promise, so it needs its own catch.
+  const [loadFailed, setLoadFailed] = useState(false);
   useEffect(() => {
     let active = true;
     setLegalDoc(null);
-    legalDocument(doc, i18n.language).then((loaded) => {
-      if (active) setLegalDoc(loaded);
-    });
+    setLoadFailed(false);
+    legalDocument(doc, i18n.language)
+      .then((loaded) => {
+        if (active) setLegalDoc(loaded);
+      })
+      .catch(() => {
+        if (active) setLoadFailed(true);
+      });
     return () => {
       active = false;
     };
@@ -82,6 +91,19 @@ export function LegalPage({ doc, onBack }: { doc: LegalDocId; onBack: () => void
     // asked to be. Smooth scrolling also silently does nothing in some environments.
     document.getElementById(anchor)?.scrollIntoView({ block: 'start' });
   }, [anchor, doc, legalDoc]);
+
+  if (loadFailed) {
+    return (
+      <article className="legal-page">
+        <div className="content-load-error">
+          <p>{t('app.surfaceLoadFailed')}</p>
+          <button type="button" className="secondary-btn" onClick={() => window.location.reload()}>
+            {t('app.reload')}
+          </button>
+        </div>
+      </article>
+    );
+  }
 
   if (!legalDoc) {
     return (

@@ -91,4 +91,23 @@ describe('LegalPage', () => {
       root.unmount();
     });
   });
+
+  it('offers a reload prompt instead of loading forever when the import rejects', async () => {
+    // Regression: a stale tab across a deploy requesting a hashed chunk the new
+    // build no longer serves used to leave the page stuck on "Loading…" forever.
+    await i18n.changeLanguage('en');
+    mockedLegalDocument.mockRejectedValue(new Error('Failed to fetch dynamically imported module'));
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(LegalPage, { doc: 'privacy', onBack: () => {} }));
+      await flushEffects();
+    });
+    expect(container.querySelector('.content-loading')).toBeNull();
+    expect(container.querySelector('.content-load-error')).not.toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });
