@@ -716,7 +716,7 @@
     "apps/web/src/styles.studioEditor.test.ts": 27,
     "apps/web/src/styles.studioShell.test.ts": 55,
     "apps/web/src/submissionApi.test.ts": 43,
-    "apps/web/src/submissionApi.ts": 376,
+    "apps/web/src/submissionApi.ts": 383,
     "apps/web/src/surfaces/admin/AccessTokensPanel.test.tsx": 181,
     "apps/web/src/surfaces/admin/AccessTokensPanel.tsx": 185,
     "apps/web/src/surfaces/admin/adminApi.ts": 491,

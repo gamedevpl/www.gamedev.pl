@@ -13,6 +13,7 @@ import type {
   SubmissionState,
   SubmissionStatusResponse,
 } from '@gamedevpl/contract';
+import { fetchCached } from './core/dataLayer.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
@@ -121,14 +122,20 @@ export async function submitSpec(input: {
  * written in English) — without it a Polish creator watches an English wall of text.
  */
 export async function getSubmissionStatus(token: string, locale?: string): Promise<SubmissionStatus> {
-  const query = locale ? `?locale=${encodeURIComponent(locale)}` : '';
-  const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}${query}`);
+  // The 5 Studio surfaces that poll this endpoint on independent timers often
+  // land within the same tick of each other; fetchCached's dedup (default
+  // ttlMs: 0) collapses those into one request without changing freshness
+  // for a caller that lands outside that window — see core/dataLayer.ts.
+  return fetchCached(`submission-status:${token}:${locale ?? ''}`, async () => {
+    const query = locale ? `?locale=${encodeURIComponent(locale)}` : '';
+    const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}${query}`);
 
-  if (!response.ok) {
-    await throwResponseError(response);
-  }
+    if (!response.ok) {
+      await throwResponseError(response);
+    }
 
-  return (await response.json()) as SubmissionStatus;
+    return (await response.json()) as SubmissionStatus;
+  });
 }
 
 export async function listMySubmissionsPage(): Promise<MySubmissionsPage> {
