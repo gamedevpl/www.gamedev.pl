@@ -3268,6 +3268,69 @@ describe('SubmissionStatusView stop & retry', () => {
     });
   });
 
+  it('fetches the fresh channel build when it arrives while the cached one is still loading', async () => {
+    // Regression: a newer ref arriving mid-fetch used to be silently dropped.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    mockedGetSubmissionStatus.mockResolvedValue({ status: 'building', playable: [{ ref: 'shot-a' }] });
+    mockedGetChannelPlayable.mockResolvedValue('<!doctype html><canvas data-build="a"></canvas>');
+    window.history.pushState(null, '', '/status/channel-warm-cache');
+    const firstContainer = document.createElement('div');
+    document.body.appendChild(firstContainer);
+    const firstRoot = createRoot(firstContainer);
+
+    await act(async () => {
+      firstRoot.render(createElement(SubmissionStatusView, { token: 'channel-warm-cache' }));
+      await flushEffects();
+      await flushEffects();
+    });
+    await act(async () => {
+      firstRoot.unmount();
+    });
+    mockedGetChannelPlayable.mockClear();
+
+    // Cache still holds shot-a; the fresh status resolves to shot-b.
+    mockedGetSubmissionStatus.mockResolvedValue({ status: 'in_review', playable: [{ ref: 'shot-b' }] });
+    let resolveA!: (html: string) => void;
+    const pendingA = new Promise<string>((resolve) => {
+      resolveA = resolve;
+    });
+    mockedGetChannelPlayable
+      .mockImplementationOnce(() => pendingA)
+      .mockResolvedValueOnce('<!doctype html><canvas data-build="b"></canvas>');
+    const secondContainer = document.createElement('div');
+    document.body.appendChild(secondContainer);
+    const secondRoot = createRoot(secondContainer);
+
+    await act(async () => {
+      secondRoot.render(createElement(SubmissionStatusView, { token: 'channel-warm-cache' }));
+      await flushEffects();
+      await flushEffects();
+    });
+    // Waits for the in-flight fetch rather than being dropped.
+    expect(mockedGetChannelPlayable).toHaveBeenCalledTimes(1);
+    expect(mockedGetChannelPlayable).toHaveBeenCalledWith(
+      'channel-warm-cache',
+      expect.objectContaining({ ref: 'shot-a' }),
+    );
+
+    await act(async () => {
+      resolveA('<!doctype html><canvas data-build="a"></canvas>');
+      await flushEffects();
+      await flushEffects();
+    });
+    expect(mockedGetChannelPlayable).toHaveBeenCalledTimes(2);
+    expect(mockedGetChannelPlayable).toHaveBeenCalledWith(
+      'channel-warm-cache',
+      expect.objectContaining({ ref: 'shot-b' }),
+    );
+
+    await act(async () => {
+      secondRoot.unmount();
+    });
+  });
+
   it('emits round_opened on the first status snapshot when openedBy is set', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');

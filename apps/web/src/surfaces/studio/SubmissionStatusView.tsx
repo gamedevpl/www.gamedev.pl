@@ -18,6 +18,7 @@ import {
   type BuildEvent,
   type BuildMediaItem,
   type BuildEventKind,
+  type BuildPlayableItem,
   type BuildProgress,
   type BuildStep,
   type PriorRoundHistory,
@@ -370,6 +371,8 @@ export function SubmissionStatusView({
   const previewInFlightRef = useRef(false);
   const loadedChannelRef = useRef<string | null>(null);
   const channelInFlightRef = useRef(false);
+  // The newest channel item wanted while an older fetch is in flight.
+  const pendingChannelItemRef = useRef<BuildPlayableItem | null>(null);
   // True while `status` is a stale value cached by another consumer's poll.
   const wasCachedBootstrapRef = useRef(false);
 
@@ -434,6 +437,7 @@ export function SubmissionStatusView({
     previewInFlightRef.current = false;
     loadedChannelRef.current = null;
     channelInFlightRef.current = false;
+    pendingChannelItemRef.current = null;
 
     let synchronousDelivery = true;
     const unsubscribe = subscribeStudioStatus(
@@ -617,29 +621,38 @@ export function SubmissionStatusView({
       }
       return;
     }
-    if (latest.ref === loadedChannelRef.current || channelInFlightRef.current) return;
+    if (latest.ref === loadedChannelRef.current) return;
+    // Set even mid-fetch — `finally` below checks back, so nothing is dropped.
+    pendingChannelItemRef.current = latest;
+    if (channelInFlightRef.current) return;
 
-    channelInFlightRef.current = true;
-    setChannelLoading(true);
-    setPreviewError(null);
+    const load = (item: BuildPlayableItem) => {
+      channelInFlightRef.current = true;
+      setChannelLoading(true);
+      setPreviewError(null);
 
-    getChannelPlayable(token, latest)
-      .then((html) => {
-        setChannelHtml(html);
-        loadedChannelRef.current = latest.ref;
-        // A working channel draft is enough to play — clear any PR-preview failure
-        // so we don't leave a red banner under a live "Play the draft" card.
-        setPreviewError(null);
-      })
-      .catch((err: unknown) => {
-        const apiError = err as SubmissionApiError;
-        setChannelHtml(null);
-        setPreviewError(apiError.status === 409 ? t('statusView.previewNotReady') : t('statusView.previewError'));
-      })
-      .finally(() => {
-        channelInFlightRef.current = false;
-        setChannelLoading(false);
-      });
+      getChannelPlayable(token, item)
+        .then((html) => {
+          setChannelHtml(html);
+          loadedChannelRef.current = item.ref;
+          // A working channel draft is enough to play — clear any PR-preview failure
+          // so we don't leave a red banner under a live "Play the draft" card.
+          setPreviewError(null);
+        })
+        .catch((err: unknown) => {
+          const apiError = err as SubmissionApiError;
+          setChannelHtml(null);
+          setPreviewError(apiError.status === 409 ? t('statusView.previewNotReady') : t('statusView.previewError'));
+        })
+        .finally(() => {
+          channelInFlightRef.current = false;
+          setChannelLoading(false);
+          const pending = pendingChannelItemRef.current;
+          if (pending && pending.ref !== loadedChannelRef.current) load(pending);
+        });
+    };
+
+    load(latest);
   }, [preview, status?.playable, t, token]);
 
   const previewTitle = preview?.title ?? submittedTitle ?? status?.preview?.slug ?? t('statusView.previewGameTitle');
