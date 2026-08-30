@@ -56,8 +56,9 @@ describe.skipIf(!hasToken)('agent access token', () => {
     const state = JSON.parse(await readFile(storageState!, 'utf8')) as {
       cookies: { name: string; domain: string; httpOnly: boolean; secure: boolean; sameSite: string }[];
     };
-    const session = state.cookies.find((c) => c.name === 'gamedev_session');
-    expect(session, 'exchange should set gamedev_session').toBeTruthy();
+    // `__session` is the one name Firebase Hosting forwards to the backend (FH-01).
+    const session = state.cookies.find((c) => c.name === '__session');
+    expect(session, 'exchange should set the __session cookie').toBeTruthy();
 
     // The flags are the point of the cookie, not decoration: HttpOnly keeps it away
     // from a generated game's scripts, Secure keeps it off plaintext, and SameSite

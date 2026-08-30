@@ -61,7 +61,7 @@ describe('account deletion routes', () => {
 
     expect(response.statusCode).toBe(202);
     expect(response.json()).toEqual({ scheduled: true, deleteAfter: '2026-08-18T00:00:00.000Z' });
-    expect(response.headers['set-cookie']).toContain(`${SESSION_COOKIE_NAME}=;`);
+    expect([response.headers['set-cookie'] ?? []].flat().join('\n')).toContain(`${SESSION_COOKIE_NAME}=;`);
     expect(await store.getUser('g:leaver')).toMatchObject({
       deletionRequestedAt: '2026-08-04T00:00:00.000Z',
       deletionScheduledFor: '2026-08-18T00:00:00.000Z',

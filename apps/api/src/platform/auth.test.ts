@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   DEFAULT_SESSION_DURATION_SECONDS,
   InvalidSessionError,
+  LEGACY_SESSION_COOKIE_NAME,
   mintSessionToken,
   registerAuthPlugin,
   SESSION_COOKIE_NAME,
@@ -359,6 +360,49 @@ describe('Auth API Routes', () => {
     expect(JSON.parse(meRes.body).user.uid).toBe('g:10002');
   });
 
+  // FH-01's whole point: an old cookie must survive and come back renamed.
+  it('authenticates a pre-rename cookie and re-mints it under the new name', async () => {
+    const { app, store } = await setupTestServer();
+    await store.upsertUser({ uid: 'g:10009', email: 'legacy@example.com' });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/auth/me',
+      headers: {
+        // Long-lived on purpose: proves the re-mint follows the name, not the expiry.
+        cookie: `${LEGACY_SESSION_COOKIE_NAME}=${mintSessionToken('g:10009', 'test-secret-key', DEFAULT_SESSION_DURATION_SECONDS)}`,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).user.uid).toBe('g:10009');
+
+    const setCookie = [res.headers['set-cookie'] ?? []].flat().join('\n');
+    expect(setCookie).toContain(`${SESSION_COOKIE_NAME}=`);
+    // Retired in the same response, or the browser keeps sending a stripped name.
+    expect(setCookie).toContain(`${LEGACY_SESSION_COOKIE_NAME}=;`);
+  });
+
+  it('prefers the new cookie when a browser carries both', async () => {
+    const { app, store } = await setupTestServer();
+    await store.upsertUser({ uid: 'g:10010', email: 'current@example.com' });
+    await store.upsertUser({ uid: 'g:10011', email: 'stale@example.com' });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/auth/me',
+      headers: {
+        cookie: [
+          `${SESSION_COOKIE_NAME}=${mintSessionToken('g:10010', 'test-secret-key')}`,
+          `${LEGACY_SESSION_COOKIE_NAME}=${mintSessionToken('g:10011', 'test-secret-key')}`,
+        ].join('; '),
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).user.uid).toBe('g:10010');
+  });
+
   it('blocks old credentials while deletion is pending and restores the account on sign-in', async () => {
     const { app, store } = await setupTestServer({
       'restore-token': { sub: '10005', email: 'restore@example.com' },
@@ -426,8 +470,10 @@ describe('Auth API Routes', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const setCookie = res.headers['set-cookie'] as string;
+    // Both names: the pre-FH-01 cookie still authenticates through the read fallback.
+    const setCookie = [res.headers['set-cookie'] ?? []].flat().join('\n');
     expect(setCookie).toContain(`${SESSION_COOKIE_NAME}=;`);
+    expect(setCookie).toContain(`${LEGACY_SESSION_COOKIE_NAME}=;`);
   });
 
   it('returns 503 when authentication is unconfigured in production', async () => {
