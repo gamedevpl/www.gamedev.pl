@@ -1,22 +1,15 @@
+import { readStorageItem, writeStorageItem } from '../../core/persistence.js';
 import { getSavedSpecs } from '../../mySpecs.js';
 import { listMySubmissions } from '../../submissionApi.js';
 
 const ONBOARDED_KEY = 'gamedev_studio_onboarded';
 
 export function isStudioOnboarded(): boolean {
-  try {
-    return localStorage.getItem(ONBOARDED_KEY) === '1';
-  } catch {
-    return false;
-  }
+  return readStorageItem(ONBOARDED_KEY) === '1';
 }
 
 export function markStudioOnboarded(): void {
-  try {
-    localStorage.setItem(ONBOARDED_KEY, '1');
-  } catch {
-    // Convenience only.
-  }
+  writeStorageItem(ONBOARDED_KEY, '1');
 }
 
 // Resolve status token from slug or token.

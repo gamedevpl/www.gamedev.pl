@@ -1,4 +1,5 @@
 import type { CatalogEntry } from '../../catalog.js';
+import { readStorageItem, removeStorageItem, writeStorageItem } from '../../core/persistence.js';
 import { getRecentPlays } from '../../recentPlays.js';
 
 export type CatalogSortMode = 'recommended' | 'newest' | 'most_played' | 'last_played' | 'alpha';
@@ -28,21 +29,13 @@ export function isCatalogFilterId(value: unknown): value is CatalogFilterId {
 }
 
 export function readCatalogSortMode(): CatalogSortMode {
-  try {
-    const raw = localStorage.getItem(SORT_STORAGE_KEY);
-    if (raw === LEGACY_NOT_PLAYED_SORT) return DEFAULT_CATALOG_SORT;
-    return isCatalogSortMode(raw) ? raw : DEFAULT_CATALOG_SORT;
-  } catch {
-    return DEFAULT_CATALOG_SORT;
-  }
+  const raw = readStorageItem(SORT_STORAGE_KEY);
+  if (raw === LEGACY_NOT_PLAYED_SORT) return DEFAULT_CATALOG_SORT;
+  return isCatalogSortMode(raw) ? raw : DEFAULT_CATALOG_SORT;
 }
 
 export function writeCatalogSortMode(mode: CatalogSortMode): void {
-  try {
-    localStorage.setItem(SORT_STORAGE_KEY, mode);
-  } catch {
-    // Private mode — preference simply does not persist.
-  }
+  writeStorageItem(SORT_STORAGE_KEY, mode);
 }
 
 /**
@@ -50,39 +43,35 @@ export function writeCatalogSortMode(mode: CatalogSortMode): void {
  */
 export function readCatalogFilters(): Set<CatalogFilterId> {
   const filters = new Set<CatalogFilterId>();
-  try {
-    const raw = localStorage.getItem(FILTERS_STORAGE_KEY);
-    if (raw) {
+  const raw = readStorageItem(FILTERS_STORAGE_KEY);
+  if (raw) {
+    try {
       const parsed: unknown = JSON.parse(raw);
       if (Array.isArray(parsed)) {
         for (const item of parsed) {
           if (isCatalogFilterId(item)) filters.add(item);
         }
       }
-      return filters;
+    } catch {
+      // Bad JSON — empty set.
     }
-
-    // One-shot migrations from older persistence shapes.
-    if (localStorage.getItem(LEGACY_NOT_PLAYED_FILTER_KEY) === '1') {
-      filters.add('not_played');
-    } else if (localStorage.getItem(SORT_STORAGE_KEY) === LEGACY_NOT_PLAYED_SORT) {
-      filters.add('not_played');
-      localStorage.setItem(SORT_STORAGE_KEY, DEFAULT_CATALOG_SORT);
-    }
-    if (filters.size > 0) writeCatalogFilters(filters);
-    localStorage.removeItem(LEGACY_NOT_PLAYED_FILTER_KEY);
-  } catch {
-    // Private mode / bad JSON — empty set.
+    return filters;
   }
+
+  // One-shot migrations from older persistence shapes.
+  if (readStorageItem(LEGACY_NOT_PLAYED_FILTER_KEY) === '1') {
+    filters.add('not_played');
+  } else if (readStorageItem(SORT_STORAGE_KEY) === LEGACY_NOT_PLAYED_SORT) {
+    filters.add('not_played');
+    writeStorageItem(SORT_STORAGE_KEY, DEFAULT_CATALOG_SORT);
+  }
+  if (filters.size > 0) writeCatalogFilters(filters);
+  removeStorageItem(LEGACY_NOT_PLAYED_FILTER_KEY);
   return filters;
 }
 
 export function writeCatalogFilters(filters: ReadonlySet<CatalogFilterId>): void {
-  try {
-    localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify([...filters]));
-  } catch {
-    // Private mode — preference simply does not persist.
-  }
+  writeStorageItem(FILTERS_STORAGE_KEY, JSON.stringify([...filters]));
 }
 
 export interface CatalogSortSignals {

@@ -21,6 +21,8 @@
  *   changed (they have games of their own now, and notifications to want).
  */
 
+import { readStorageItem, resolveWebStorage, writeStorageItem } from './core/persistence.js';
+
 const VISITS_KEY = 'gamedev_pwa_visits';
 const VISIT_COUNTED_KEY = 'gamedev_pwa_visit_counted';
 const DISMISSED_KEY = 'gamedev_pwa_install_dismissed_at';
@@ -31,28 +33,14 @@ export const MIN_VISITS_BEFORE_PROMPT = 2;
 /** How long a dismissal holds before the offer may return. */
 export const DISMISSAL_TTL_MS = 30 * 24 * 60 * 60_000;
 
-/**
- * Storage access that cannot throw.
- *
- * Safari in private browsing, and any browser with site data blocked, throw on
- * `localStorage` access rather than returning null. An install nudge is the last thing
- * in this app that should be able to break a page render, so every read and write here
- * degrades to "we know nothing", which the rules below treat as "do not prompt".
- */
 function readStorage(storage: 'local' | 'session', key: string): string | null {
-  try {
-    return (storage === 'local' ? window.localStorage : window.sessionStorage).getItem(key);
-  } catch {
-    return null;
-  }
+  const target = resolveWebStorage(storage);
+  return target ? readStorageItem(key, target) : null;
 }
 
 function writeStorage(storage: 'local' | 'session', key: string, value: string): void {
-  try {
-    (storage === 'local' ? window.localStorage : window.sessionStorage).setItem(key, value);
-  } catch {
-    /* private mode / blocked storage — the counter just never advances */
-  }
+  const target = resolveWebStorage(storage);
+  if (target) writeStorageItem(key, value, target);
 }
 
 /**

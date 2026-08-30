@@ -388,6 +388,7 @@
     "apps/web/src/connectCollapse.ts": 26,
     "apps/web/src/ContactPage.tsx": 64,
     "apps/web/src/ContributionsSetting.tsx": 197,
+    "apps/web/src/core/persistence.ts": 122,
     "apps/web/src/core/router.test.ts": 451,
     "apps/web/src/core/router.ts": 2406,
     "apps/web/src/creatorGames.test.ts": 13,

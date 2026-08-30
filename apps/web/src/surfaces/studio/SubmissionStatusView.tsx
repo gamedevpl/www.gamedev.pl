@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { latestAgentActivityAt } from '../../agentActivity.js';
 import { BuilderModeBadge } from '../../BuilderModeBadge.js';
+import { readStorageItem, writeStorageItem } from '../../core/persistence.js';
 import type { BuilderUnavailableReason } from '../../BuilderChoice.js';
 import { defaultBuilderFor, isBuilderKind, saveLastBuilder, type BuilderKind } from '../../builderKind.js';
 import { GameTheater } from '../../GameTheater.js';
@@ -246,11 +247,7 @@ const STATUS_CHIP_DISMISSAL_PREFIX = 'gamedev_status_chip_dismissed:';
 
 function hasDismissedStatusChip(chipKey: string): boolean {
   if (chipKey !== REMEMBERED_STATUS_CHIP) return false;
-  try {
-    return window.localStorage.getItem(`${STATUS_CHIP_DISMISSAL_PREFIX}${chipKey}`) === '1';
-  } catch {
-    return false;
-  }
+  return readStorageItem(`${STATUS_CHIP_DISMISSAL_PREFIX}${chipKey}`) === '1';
 }
 
 /** Dismissible status chip above the composer. */
@@ -261,11 +258,7 @@ function ThreadStatusChip({ chipKey, children }: { chipKey: string; children: Re
   const dismiss = () => {
     setDismissed(true);
     if (chipKey !== REMEMBERED_STATUS_CHIP) return;
-    try {
-      window.localStorage.setItem(`${STATUS_CHIP_DISMISSAL_PREFIX}${chipKey}`, '1');
-    } catch {
-      // Storage unavailable.
-    }
+    writeStorageItem(`${STATUS_CHIP_DISMISSAL_PREFIX}${chipKey}`, '1');
   };
 
   if (dismissed) return null;
