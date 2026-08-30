@@ -10,6 +10,14 @@ import { pokeStudioStatus, subscribeStudioStatus, type StudioStatusSubscriber } 
 const statusFixture = (overrides: Partial<SubmissionStatus> = {}): SubmissionStatus =>
   ({ status: 'building', ...overrides }) as SubmissionStatus;
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 function fixedSubscriber(intervalMs: number | null): StudioStatusSubscriber & {
   updates: SubmissionStatus[];
   errors: SubmissionApiError[];
@@ -115,8 +123,10 @@ describe('subscribeStudioStatus', () => {
 
     const stillWatching = fixedSubscriber(10_000);
     subscribeStudioStatus(key, 'en', stillWatching);
-    await vi.advanceTimersByTimeAsync(10_000);
-    expect(getSubmissionStatus).toHaveBeenCalledTimes(2); // resumed, driven by the new subscriber
+    // The cached status is 120s stale, well past stillWatching's 10s budget,
+    // so joining triggers an immediate catch-up poll rather than a fresh wait.
+    await vi.waitFor(() => expect(stillWatching.updates).toHaveLength(1));
+    expect(getSubmissionStatus).toHaveBeenCalledTimes(2);
 
     unsubDone();
   });
@@ -152,6 +162,58 @@ describe('subscribeStudioStatus', () => {
     expect(getSubmissionStatus).toHaveBeenCalledTimes(2); // the slow subscriber's own cadence still does
 
     unsubSlow();
+  });
+
+  it('keeps the remaining subscriber on its original deadline after a mid-interval unsubscribe', async () => {
+    // Regression: unsubscribing used to reschedule the survivor for a full
+    // fresh interval starting at that moment, not from the last real tick —
+    // repeated subscribe churn could push its poll later indefinitely.
+    vi.mocked(getSubmissionStatus).mockResolvedValue(statusFixture());
+    const key = `token-${Math.random()}`;
+    const fast = fixedSubscriber(3_000);
+    const slow = fixedSubscriber(10_000);
+
+    const unsubFast = subscribeStudioStatus(key, 'en', fast);
+    const unsubSlow = subscribeStudioStatus(key, 'en', slow);
+    await vi.waitFor(() => expect(slow.updates).toHaveLength(1));
+
+    // Before fast's own 3s cadence would next fire, so this leaves only one
+    // real tick so far — the elapsed-time bookkeeping is what's under test.
+    await vi.advanceTimersByTimeAsync(2_000);
+    unsubFast();
+
+    // Reaches slow's original 10s deadline, not a fresh 10s post-unsubscribe.
+    await vi.advanceTimersByTimeAsync(8_000);
+    expect(getSubmissionStatus).toHaveBeenCalledTimes(2);
+    expect(slow.updates).toHaveLength(2);
+
+    unsubSlow();
+  });
+
+  it('never double-delivers when a subscriber joins while the first fetch is in flight', async () => {
+    // Regression: a subscriber joining before the first fetch resolves used
+    // to schedule its own timer alongside that in-flight fetch; if the timer
+    // fired before the fetch resolved, both continuations delivered the
+    // same resolved status to every subscriber.
+    const d = deferred<SubmissionStatus>();
+    vi.mocked(getSubmissionStatus).mockReturnValue(d.promise);
+    const key = `token-${Math.random()}`;
+    const first = fixedSubscriber(1_000); // short enough that a race would fire before resolution
+    const second = fixedSubscriber(1_000);
+
+    const unsubFirst = subscribeStudioStatus(key, 'en', first);
+    await vi.advanceTimersByTimeAsync(1_000); // long enough for a stray timer to fire, were one scheduled
+    const unsubSecond = subscribeStudioStatus(key, 'en', second);
+
+    d.resolve(statusFixture());
+    await vi.waitFor(() => expect(first.updates).toHaveLength(1));
+
+    expect(first.updates).toHaveLength(1);
+    expect(second.updates).toHaveLength(1);
+    expect(getSubmissionStatus).toHaveBeenCalledTimes(1);
+
+    unsubFirst();
+    unsubSecond();
   });
 
   it('delivers errors to onError and can still be driven back to polling', async () => {

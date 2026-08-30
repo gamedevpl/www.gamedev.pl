@@ -26,6 +26,17 @@ interface PollState {
   subscribers: Set<StudioStatusSubscriber>;
   latest: SubmissionStatus | null;
   lastError: SubmissionApiError | null;
+  // When the last tick (success or error) completed — schedule() counts a
+  // subscriber's own interval from here, not from whenever it happens to
+  // run, or a subscribe/unsubscribe mid-interval would keep pushing the
+  // remaining subscribers' next poll later.
+  lastTickAt: number | undefined;
+  // True from the moment a tick starts until it reschedules. A subscribe
+  // while this is true must not schedule its own timer — that would let a
+  // slow-resolving tick's late completion and this new timer both call
+  // getSubmissionStatus and, though core/dataLayer.ts's dedup makes that one
+  // request, both would still separately deliver it to every subscriber.
+  ticking: boolean;
   timer: ReturnType<typeof setTimeout> | undefined;
   // Bumped on every subscribe-from-zero and every poke; a scheduled tick
   // whose generation no longer matches was superseded and must not run.
@@ -50,11 +61,13 @@ function nextDelay(state: PollState): number | null {
 
 function schedule(key: string, state: PollState): void {
   if (state.timer !== undefined) clearTimeout(state.timer);
-  const delay = nextDelay(state);
-  if (delay === null) {
+  const wanted = nextDelay(state);
+  if (wanted === null) {
     state.timer = undefined;
     return;
   }
+  const elapsed = state.lastTickAt === undefined ? 0 : Date.now() - state.lastTickAt;
+  const delay = Math.max(0, wanted - elapsed);
   const generation = state.generation;
   state.timer = setTimeout(() => void tick(key, generation), delay);
 }
@@ -62,6 +75,8 @@ function schedule(key: string, state: PollState): void {
 async function tick(key: string, generation: number): Promise<void> {
   const state = polls.get(key);
   if (!state || state.generation !== generation) return;
+  state.timer = undefined;
+  state.ticking = true;
   try {
     const status = await getSubmissionStatus(state.token, state.locale);
     if (polls.get(key) !== state || state.generation !== generation) return;
@@ -74,6 +89,8 @@ async function tick(key: string, generation: number): Promise<void> {
     state.lastError = apiError;
     for (const subscriber of state.subscribers) subscriber.onError?.(apiError);
   }
+  state.lastTickAt = Date.now();
+  state.ticking = false;
   schedule(key, state);
 }
 
@@ -91,7 +108,17 @@ export function subscribeStudioStatus(token: string, locale: string, subscriber:
   // (dormant: no subscribers, no timer) — either way nothing is polling yet.
   const isDormant = !state || (state.subscribers.size === 0 && state.timer === undefined);
   if (!state) {
-    state = { token, locale, subscribers: new Set(), latest: null, lastError: null, timer: undefined, generation: 0 };
+    state = {
+      token,
+      locale,
+      subscribers: new Set(),
+      latest: null,
+      lastError: null,
+      lastTickAt: undefined,
+      ticking: false,
+      timer: undefined,
+      generation: 0,
+    };
     polls.set(key, state);
   }
   state.subscribers.add(subscriber);
@@ -102,7 +129,9 @@ export function subscribeStudioStatus(token: string, locale: string, subscriber:
   if (isDormant) {
     state.generation += 1;
     void tick(key, state.generation);
-  } else {
+  } else if (!state.ticking) {
+    // A tick already in flight will reschedule against the new subscriber
+    // set itself once it completes — scheduling here too would race it.
     schedule(key, state);
   }
 
@@ -113,7 +142,7 @@ export function subscribeStudioStatus(token: string, locale: string, subscriber:
     if (current.subscribers.size === 0) {
       if (current.timer !== undefined) clearTimeout(current.timer);
       current.timer = undefined;
-    } else {
+    } else if (!current.ticking) {
       schedule(key, current);
     }
   };
