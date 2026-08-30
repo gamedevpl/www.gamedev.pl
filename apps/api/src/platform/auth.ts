@@ -251,12 +251,7 @@ export interface AuthPluginOptions {
   adminUids?: Set<string>;
   // Reviewer desk hint only; every review route re-checks.
   reviewerUids?: Set<string>;
-  /**
-   * Clock for /api/auth/token-info's remaining-lifetime maths. Defaults to the wall
-   * clock; pinning it under test is what keeps a whole-day count off a stopwatch, since
-   * a floored day boundary otherwise lands differently depending on how slowly the
-   * suite runs. Pass the same clock the mint path uses, or the two disagree.
-   */
+  // Same clock as minting, or token-info's day count drifts.
   now?: () => number;
 }
 

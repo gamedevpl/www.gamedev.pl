@@ -197,12 +197,7 @@ export interface BuildAppOptions {
   // Seams for reviewer desk; defaults to snapshot/GitHub catalog.
   reviewRoutes?: Omit<ReviewRoutesOptions, 'store' | 'adminUids' | 'reviewerUids'>;
   creatorCodeRoutes?: Partial<Omit<CreatorCodeRoutesOptions, 'store'>>;
-  /**
-   * Seams for personal access tokens (clock under test). The same clock is handed to
-   * the auth plugin, because minting and `/api/auth/token-info` have to read one clock:
-   * a token's remaining lifetime is a floored whole-day count, so two clocks a few
-   * seconds apart can report a day that was never consumed.
-   */
+  // Seams for personal access tokens; its clock also goes to token-info.
   accessTokenRoutes?: Partial<Omit<AccessTokenRoutesOptions, 'store' | 'adminUids'>>;
 }
 
@@ -332,7 +327,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     adminUids,
     // Same hint contract for the reviewer desk.
     reviewerUids,
-    // token-info reports a remaining lifetime, so it reads the minting clock.
+    // A floored day count, so token-info reads the minting clock.
     now: options.accessTokenRoutes?.now,
   });
 
