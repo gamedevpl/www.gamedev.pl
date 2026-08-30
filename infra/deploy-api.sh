@@ -504,6 +504,7 @@ gcloud run deploy "$SERVICE" \
   --min-instances 0 \
   --max-instances "$MAX_INSTANCES" \
   --no-cpu-throttling \
+  --memory 1Gi \
   --port 8080 \
   --set-env-vars "${ENV_VARS}" \
   ${SECRET_FLAGS[@]+"${SECRET_FLAGS[@]}"}
