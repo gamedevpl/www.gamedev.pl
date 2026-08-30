@@ -9598,6 +9598,809 @@ button.builder-mode-selector:disabled {
   white-space: nowrap;
 }
 
+/* MOBILE PASS — the creator flow is mostly used on a phone, where the status page
+   was dominated by two full-length URLs and a cramped activity feed. */
+@media (max-width: 640px) {
+  /* Long tracking/share URLs: one truncated line each, with the copy button as
+     the real affordance. The full URL is still there for select-and-copy. */
+  .status-note {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 8px;
+  }
+
+  .status-note .inline-link {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+  }
+
+  /* Play card: the CTA earns a full-width row rather than a squeezed column. */
+  .status-play-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .status-play-card-actions {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .status-play-card-actions .status-play-cta,
+  .status-play-card-actions .status-playtest-cta {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Section headings stop competing with their trailing counters. */
+  .build-progress-heading-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  /* Activity entries: the timestamp drops under the text instead of squeezing it. */
+  .build-activity-item {
+    flex-wrap: wrap;
+  }
+
+  .build-activity-time {
+    width: 100%;
+    padding-left: 20px;
+  }
+
+  .build-progress-commits {
+    max-height: none;
+  }
+
+  .my-games-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Stop-this-build escape hatch: understated, and two-step so a mis-tap can't
+   discard an hour of agent work. */
+.status-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Studio's Build tab drops the "back home" half of this row; keep what's left
+   where it was rather than letting it slide across to the empty side. */
+.status-footer-actions.is-embedded {
+  justify-content: flex-end;
+}
+
+.status-abandon {
+  /* This cancels a running build, so it stays a quiet text link rather than a
+     button — but the tap target measured 14px tall, well under a thumb. Sized
+     the same way as .btn-create-now above: display:flex + min-height, because
+     padding alone did not change the measured box here. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.status-abandon:hover {
+  color: var(--text);
+}
+
+.status-abandon.is-danger {
+  color: #f87171;
+  font-weight: 600;
+}
+
+.status-abandon-confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.studio-abandon-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+}
+
+.studio-abandon-hint {
+  margin: 0;
+  max-width: 28rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.status-delete {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.status-delete:hover {
+  color: var(--text);
+}
+
+.status-delete.is-danger {
+  color: #f87171;
+  font-weight: 600;
+}
+
+.studio-delete-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+}
+
+.studio-delete-hint {
+  margin: 0;
+  max-width: 28rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+/* Click-to-fill prompt starters, shown only where a caller passes exampleChips. */
+.prompt-examples {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
+  margin: 10px 8px 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.prompt-example-chip {
+  flex: 0 0 auto;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.prompt-example-chip:hover {
+  border-color: var(--turquoise);
+  color: var(--text);
+}
+
+/* Today's allowance, under the composer. */
+.quota-note {
+  display: block;
+  margin: 0;
+  padding: 0 8px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.quota-note.is-spent {
+  color: #fbbf24;
+}
+
+/* Operator telemetry view (docs/improvement-loop-plan.md IL-2). Reachable only at
+   /health, and only renders for an admin — the API 404s everyone else. Styled plainly
+   on purpose: this is an instrument, not a product surface. */
+.health {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+}
+
+.health-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.health-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--text);
+}
+
+.health-windows {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.health-window {
+  min-height: 36px;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.health-window.is-active {
+  border-color: var(--turquoise);
+  color: var(--turquoise);
+}
+
+.health-summary {
+  margin: 1rem 0 0.25rem;
+  color: var(--text);
+}
+
+.health-empty,
+.health-note {
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* Wide content scrolls inside its own box rather than pushing the page sideways. */
+.health-table-scroll {
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.health-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.health-table th,
+.health-table td {
+  padding: 0.5rem 0.75rem;
+  text-align: right;
+  border-bottom: 1px solid var(--panel-border);
+  white-space: nowrap;
+}
+
+.health-table th:first-child,
+.health-table td:first-child,
+.health-table th:nth-child(2),
+.health-table td:nth-child(2) {
+  text-align: left;
+}
+
+.health-table th {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.health-slug a {
+  color: var(--accent-blue);
+  text-decoration: none;
+}
+
+.health-slug a:hover {
+  text-decoration: underline;
+}
+
+.health-badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+}
+
+.health-badge--bad {
+  background: rgba(255, 107, 107, 0.15);
+  color: var(--error);
+}
+
+.health-badge--warn {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+}
+
+.health-badge--ok {
+  background: rgba(0, 228, 172, 0.12);
+  color: var(--turquoise);
+}
+
+.health-badge--idle {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--muted);
+}
+
+.health-disclosure summary {
+  cursor: pointer;
+  color: var(--text);
+}
+
+/* The error count is the one disclosure whose summary should read as a warning; every
+   other use of .health-disclosure (e.g. the progress funnel) is neutral information, not
+   a fault, and must not borrow the error color. */
+.health-errors summary {
+  color: var(--error);
+}
+
+.health-disclosure ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1rem;
+  text-align: left;
+  white-space: normal;
+  max-width: 32rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.health-error-count {
+  color: var(--text);
+}
+
+/* ---------------------------------------------------------------------------
+   Legal chrome: site footer, the privacy/terms reader, and the AI-generation
+   disclosures. See docs/legal-compliance-plan.md for what each element is for —
+   several of these are required by law to be visible, so they intentionally do
+   not collapse away on small screens.
+   --------------------------------------------------------------------------- */
+
+.site-footer {
+  border-top: 1px solid var(--panel-border);
+  margin-top: 3rem;
+  padding: 2rem 1.5rem calc(2rem + env(safe-area-inset-bottom));
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.site-footer__inner {
+  max-width: 68rem;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem 3rem;
+  justify-content: space-between;
+}
+
+.site-footer__brand {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text);
+  margin: 0 0 0.4rem;
+}
+
+.site-footer__operator {
+  margin: 0.15rem 0;
+}
+
+.site-footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.25rem;
+  align-content: flex-start;
+}
+
+/* The project row sits under the legal block rather than beside it: the identity and
+   legal links are obligations that should read first, and this is an invitation. */
+.site-footer__project {
+  max-width: 68rem;
+  margin: 1.25rem auto 0;
+}
+
+.site-footer__github {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.site-footer__github img {
+  opacity: 0.7;
+}
+
+.site-footer__github:hover img,
+.site-footer__github:focus-visible img {
+  opacity: 1;
+}
+
+.site-footer a {
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.site-footer a:hover,
+.site-footer a:focus-visible {
+  color: var(--turquoise);
+  border-bottom-color: var(--turquoise);
+}
+
+/* These four are navigation, not prose — and one of them is the DSA illegal-content
+   report route, which has to be reachable on the device most people browse from. At
+   15px tall they were the last sub-thumb controls on the page. Only the nav list is
+   grown: the links inside the operator and AI-notice sentences stay inline, because
+   there is no way to give a word in a paragraph a 44px box without wrecking the
+   paragraph, and an inline link is not what the guideline is about. */
+@media (pointer: coarse), (max-width: 768px) {
+  .site-footer__links a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+.site-footer__ai,
+.site-footer__copy {
+  max-width: 68rem;
+  margin: 1.5rem auto 0;
+  font-size: 0.78rem;
+}
+
+.site-footer__copy {
+  margin-top: 0.5rem;
+  opacity: 0.7;
+}
+
+/* Legal documents ---------------------------------------------------------- */
+
+.not-found {
+  max-width: 28rem;
+  margin: 4rem auto 2rem;
+  text-align: center;
+  padding: 0 1rem;
+}
+
+.not-found .mascot-moment {
+  gap: 10px;
+}
+
+.not-found__code {
+  margin: 0.25rem 0 0.5rem;
+  font-size: clamp(3.5rem, 12vw, 5.5rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: var(--turquoise);
+  opacity: 0.85;
+}
+
+.not-found__title {
+  margin: 0 0 0.75rem;
+  font-size: clamp(1.4rem, 4vw, 1.85rem);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.not-found__copy {
+  margin: 0 0 1.75rem;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.not-found__home {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.7rem 1.25rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.legal-page {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 1rem 1.25rem 3rem;
+  line-height: 1.65;
+}
+
+.contact-page {
+  max-width: 36rem;
+  margin: 0 auto;
+  padding: 1rem 1.25rem 3rem;
+  line-height: 1.65;
+}
+
+.contact-back {
+  margin-bottom: 1.5rem;
+}
+
+.contact-title {
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  margin: 0 0 0.75rem;
+}
+
+.contact-intro {
+  color: var(--muted);
+  margin: 0 0 1.75rem;
+}
+
+.contact-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.contact-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.contact-label {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.contact-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  box-sizing: border-box;
+}
+
+.contact-textarea {
+  resize: vertical;
+  min-height: 8rem;
+}
+
+.contact-input:focus {
+  outline: none;
+  border-color: var(--turquoise);
+}
+
+.contact-privacy {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.contact-privacy a {
+  color: var(--turquoise);
+}
+
+.contact-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.contact-sent {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 1.5rem;
+  padding: 1rem 1.15rem;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+}
+
+.contact-alt {
+  margin: 2rem 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.create-page {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 1rem 1.25rem 3.5rem;
+}
+
+.create-intro {
+  text-align: center;
+  margin: 0 0 2rem;
+}
+
+.create-headline {
+  font-size: clamp(1.8rem, 5vw, 2.6rem);
+  margin: 0 0 0.6rem;
+}
+
+.create-subhead {
+  color: var(--muted);
+  font-size: 1.05rem;
+  max-width: 38rem;
+  margin: 0 auto;
+}
+
+.create-section-heading {
+  font-size: 1.3rem;
+  margin: 0 0 1rem;
+}
+
+.create-steps,
+.create-builders {
+  margin: 3rem 0 0;
+}
+
+.create-steps-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+/* Deliberate 2x2, not auto-fit: the 832px column only fits 4-across by
+   cramming, and auto-fit's leftover-item wrap (3 then 1 alone) reads as a
+   layout bug rather than a design choice. */
+@media (min-width: 640px) {
+  .create-steps-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.create-step {
+  padding: 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-card);
+}
+
+.create-step-n {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--turquoise);
+  margin: 0 0 0.4rem;
+}
+
+.create-step-title {
+  margin: 0 0 0.3rem;
+  font-size: 1rem;
+}
+
+.create-step-detail {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.create-notify-note {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 1.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.create-builders-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin: 0 0 1rem;
+}
+
+.create-builders-head .create-section-heading {
+  margin: 0;
+}
+
+.create-builders-sub {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.create-builder-lanes {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.create-builder-lane {
+  padding: 1.1rem;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-card);
+}
+
+.create-builder-lane.is-picked {
+  border-color: var(--turquoise);
+}
+
+.create-builder-lane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0 0 0.4rem;
+}
+
+.create-builder-lane-title {
+  font-weight: 600;
+}
+
+.create-builder-lane-detail {
+  margin: 0 0 0.6rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.create-builder-lane-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.create-builder-lane-badge {
+  flex: none;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: var(--panel-border);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.create-builder-lane-badge.is-turq {
+  background: rgba(45, 212, 191, 0.14);
+  color: var(--turquoise);
+}
+
+.create-agent-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
+.create-agent-chip {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.create-page .catalog-rail-section {
+  margin-top: 3rem;
+}
+
+@media (max-width: 768px) {
+  .create-page {
+    padding: 0.75rem 1rem 2.5rem;
+  }
+}
+
 .contact-alt a {
   color: var(--turquoise);
 }
