@@ -7,7 +7,7 @@ This is the ratchet that stops that from ever happening silently again.
 
 ## The seal
 
-**Rule for `apps/**/*.ts(x)` and `packages/**/*.ts(x)`** (fixtures excluded):
+**Rule for `apps/**/*.ts(x)`, `packages/**/*.ts(x)`, and `apps/**/*.css`** (fixtures excluded):
 
 | Allowed                                                      | Forbidden                                  |
 | ------------------------------------------------------------ | ------------------------------------------ |
