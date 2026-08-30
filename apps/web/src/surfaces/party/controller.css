@@ -1,5 +1,4 @@
-/* Multiplayer party mode's phone controller (docs/multiplayer-plan.md) — thumb-sized
-   and touch-only by design, the one page in this app never viewed on a desktop. */
+/* Phone controller (docs/multiplayer-plan.md) — thumb-sized, touch-only, mobile-only. */
 
 .controller-screen {
   --slot-color: var(--turquoise);
@@ -120,10 +119,7 @@
   grid-area: 3 / 2;
 }
 
-/* Scoped to the controller. `.action-btn` is also the sketch modal's Undo/Clear
-   (see the rule near .tool-btn), and this one — sized for a full-screen phone
-   gamepad — is later in the file at equal specificity, so it was winning there
-   and rendering those two buttons 88px tall with 32px text. */
+/* Scoped: unscoped .action-btn is also the sketch modal's Undo/Clear button. */
 .controller-screen .action-btn {
   min-height: 22vh;
   border: none;

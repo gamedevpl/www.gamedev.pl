@@ -1,5 +1,4 @@
-/* Fonts, color/spacing tokens, and the base reset — every surface's CSS starts here.
-   Imported once in main.tsx, before styles.css and any per-surface stylesheet. */
+/* Fonts, color/spacing tokens, and the base reset every surface starts from. */
 
 @font-face {
   font-family: 'Proxima Nova';

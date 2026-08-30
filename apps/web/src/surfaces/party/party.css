@@ -1,14 +1,11 @@
-/* Multiplayer party mode (docs/multiplayer-plan.md): the shared screen's
-   lobby and the "how it works" explainer. The phone controller is its own
-   controller.css, since it's used by a component that never renders this. */
+/* Party mode's lobby + "how it works" explainer (docs/multiplayer-plan.md). */
 
 .party-btn {
   border-color: var(--turquoise) !important;
   color: var(--turquoise) !important;
 }
 
-/* PartyPage renders this alongside the generic .error class, and needs
-   the extra specificity to win the margin regardless of stylesheet order. */
+/* Beats .error's margin regardless of which stylesheet loads first. */
 .error.party-error {
   margin: 12px auto;
   text-align: center;
