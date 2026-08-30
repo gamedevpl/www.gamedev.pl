@@ -4,6 +4,7 @@ import {
   readStorageItem,
   readStorageJSON,
   removeStorageItem,
+  resolveWebStorage,
   writeStorageItem,
   writeStorageJSON,
 } from './persistence.js';
@@ -90,5 +91,28 @@ describe('readStorageJSON / writeStorageJSON', () => {
     expect(readStorageJSON('missing', fakeStorage)).toBeNull();
     fakeStorage.setItem('bad', '{not json');
     expect(readStorageJSON('bad', fakeStorage)).toBeNull();
+  });
+
+  it('degrades to a no-op when the value cannot be serialized', () => {
+    const storage = new Map<string, string>();
+    const fakeStorage: Storage = {
+      getItem: (key) => storage.get(key) ?? null,
+      setItem: (key, value) => void storage.set(key, value),
+      removeItem: (key) => void storage.delete(key),
+      clear: () => storage.clear(),
+      key: () => null,
+      length: storage.size,
+    };
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    expect(() => writeStorageJSON('k', circular, fakeStorage)).not.toThrow();
+    expect(fakeStorage.getItem('k')).toBeNull();
+  });
+});
+
+describe('resolveWebStorage', () => {
+  it('returns the requested Storage object', () => {
+    expect(resolveWebStorage('local')).toBe(window.localStorage);
+    expect(resolveWebStorage('session')).toBe(window.sessionStorage);
   });
 });

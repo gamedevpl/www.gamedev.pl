@@ -21,7 +21,7 @@
  *   changed (they have games of their own now, and notifications to want).
  */
 
-import { readStorageItem, writeStorageItem } from './core/persistence.js';
+import { readStorageItem, resolveWebStorage, writeStorageItem } from './core/persistence.js';
 
 const VISITS_KEY = 'gamedev_pwa_visits';
 const VISIT_COUNTED_KEY = 'gamedev_pwa_visit_counted';
@@ -33,26 +33,13 @@ export const MIN_VISITS_BEFORE_PROMPT = 2;
 /** How long a dismissal holds before the offer may return. */
 export const DISMISSAL_TTL_MS = 30 * 24 * 60 * 60_000;
 
-/**
- * An install nudge is the last thing that should be able to break a page render.
- * `window` itself may not exist (SSR, a plain Node test) — resolved inside a try,
- * same as readStorageItem/writeStorageItem guard the storage object itself.
- */
-function resolveStorage(storage: 'local' | 'session'): Storage | undefined {
-  try {
-    return storage === 'local' ? window.localStorage : window.sessionStorage;
-  } catch {
-    return undefined;
-  }
-}
-
 function readStorage(storage: 'local' | 'session', key: string): string | null {
-  const target = resolveStorage(storage);
+  const target = resolveWebStorage(storage);
   return target ? readStorageItem(key, target) : null;
 }
 
 function writeStorage(storage: 'local' | 'session', key: string, value: string): void {
-  const target = resolveStorage(storage);
+  const target = resolveWebStorage(storage);
   if (target) writeStorageItem(key, value, target);
 }
 
