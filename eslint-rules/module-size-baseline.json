@@ -752,7 +752,7 @@
     "apps/web/src/surfaces/catalog/catalogPagination.test.ts": 25,
     "apps/web/src/surfaces/catalog/catalogPagination.ts": 19,
     "apps/web/src/surfaces/catalog/CatalogRail.test.tsx": 210,
-    "apps/web/src/surfaces/catalog/CatalogRail.tsx": 407,
+    "apps/web/src/surfaces/catalog/CatalogRail.tsx": 408,
     "apps/web/src/surfaces/catalog/catalogScrollIdle.test.ts": 69,
     "apps/web/src/surfaces/catalog/catalogScrollIdle.ts": 92,
     "apps/web/src/surfaces/catalog/catalogSort.test.ts": 177,
