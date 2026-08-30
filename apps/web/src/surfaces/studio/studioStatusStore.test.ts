@@ -258,6 +258,80 @@ describe('subscribeStudioStatus', () => {
     unsubHealthy();
   });
 
+  it('does not orphan a subscriber whose cached-value delivery throws', async () => {
+    // Regression: a throwing callback here used to escape before the poll
+    // was started/resumed below, orphaning the subscriber with no active tick.
+    vi.mocked(getSubmissionStatus).mockResolvedValue(statusFixture());
+    const key = `token-${Math.random()}`;
+    const first = fixedSubscriber(5_000);
+    const unsubFirst = subscribeStudioStatus(key, 'en', first);
+    await vi.waitFor(() => expect(first.updates).toHaveLength(1));
+    unsubFirst(); // dormant now, but state.latest is still cached
+
+    let thrown = false;
+    const broken = fixedSubscriber(5_000);
+    broken.onUpdate = (status) => {
+      if (!thrown) {
+        thrown = true;
+        throw new Error('subscriber bug on cached delivery');
+      }
+      broken.updates.push(status);
+    };
+
+    expect(() => subscribeStudioStatus(key, 'en', broken)).not.toThrow();
+
+    await vi.waitFor(() => expect(getSubmissionStatus).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(broken.updates).toHaveLength(1));
+  });
+
+  it('keeps scheduling for healthy subscribers when one cadence policy throws', async () => {
+    // Regression: intervalMs throwing inside nextDelay used to propagate out
+    // of schedule() (called from tick()'s finally), leaving no timer set and
+    // silently stopping the poll for every subscriber, broken or not.
+    vi.mocked(getSubmissionStatus).mockResolvedValue(statusFixture());
+    const key = `token-${Math.random()}`;
+    const broken: StudioStatusSubscriber = {
+      intervalMs: () => {
+        throw new Error('cadence bug');
+      },
+    };
+    const healthy = fixedSubscriber(5_000);
+
+    const unsubBroken = subscribeStudioStatus(key, 'en', broken);
+    const unsubHealthy = subscribeStudioStatus(key, 'en', healthy);
+    await vi.waitFor(() => expect(healthy.updates).toHaveLength(1));
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    await vi.waitFor(() => expect(healthy.updates).toHaveLength(2));
+    expect(getSubmissionStatus).toHaveBeenCalledTimes(2);
+
+    unsubBroken();
+    unsubHealthy();
+  });
+
+  it('gives a late subscriber the freshest known error, not a stale success', async () => {
+    // Regression: a success followed by an error left `latest` still set,
+    // so a joining subscriber got the stale success instead of the error —
+    // fatal for a subscriber whose cadence stops retrying on that error.
+    const error = Object.assign(new Error('bad token'), { status: 400 }) as SubmissionApiError;
+    vi.mocked(getSubmissionStatus).mockResolvedValueOnce(statusFixture()).mockRejectedValueOnce(error);
+    const key = `token-${Math.random()}`;
+    const first = fixedSubscriber(1_000);
+    const unsubFirst = subscribeStudioStatus(key, 'en', first);
+    await vi.waitFor(() => expect(first.updates).toHaveLength(1));
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    await vi.waitFor(() => expect(first.errors).toHaveLength(1));
+
+    const late = fixedSubscriber(1_000);
+    subscribeStudioStatus(key, 'en', late);
+
+    expect(late.errors).toHaveLength(1);
+    expect(late.updates).toHaveLength(0);
+
+    unsubFirst();
+  });
+
   it('lets a subscriber opt out only on error while another keeps polling', async () => {
     const error = Object.assign(new Error('bad token'), { status: 400 }) as SubmissionApiError;
     vi.mocked(getSubmissionStatus).mockRejectedValue(error);

@@ -52,7 +52,13 @@ function keyFor(token: string, locale: string): string {
 function nextDelay(state: PollState): number | null {
   let delay: number | null = null;
   for (const subscriber of state.subscribers) {
-    const wanted = subscriber.intervalMs(state.latest, state.lastError);
+    let wanted: number | null;
+    try {
+      wanted = subscriber.intervalMs(state.latest, state.lastError);
+    } catch {
+      // A broken cadence policy must not stop scheduling for the others.
+      continue;
+    }
     if (wanted === null) continue;
     if (delay === null || wanted < delay) delay = wanted;
   }
@@ -150,8 +156,15 @@ export function subscribeStudioStatus(token: string, locale: string, subscriber:
   }
   state.subscribers.add(subscriber);
 
-  if (state.latest) subscriber.onUpdate?.(state.latest);
-  else if (state.lastError) subscriber.onError?.(state.lastError);
+  // A success always clears lastError (see tick()), so a non-null lastError
+  // here is always more recent than latest — check it first, and isolate the
+  // callback so a throw here can't skip starting/resuming the poll below.
+  try {
+    if (state.lastError) subscriber.onError?.(state.lastError);
+    else if (state.latest) subscriber.onUpdate?.(state.latest);
+  } catch {
+    /* one subscriber's bug must not orphan it or block scheduling */
+  }
 
   if (isDormant) {
     state.generation += 1;
