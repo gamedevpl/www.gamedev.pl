@@ -550,6 +550,7 @@
     "apps/web/src/surfaces/catalog/catalogSort.ts": 196,
     "apps/web/src/surfaces/party/ControllerView.tsx": 127,
     "apps/web/src/surfaces/party/mpApi.ts": 23,
+    "apps/web/src/surfaces/party/party.css.test.ts": 54,
     "apps/web/src/surfaces/party/PartyStage.tsx": 171,
     "apps/web/src/surfaces/party/QrCode.tsx": 38,
     "apps/web/src/surfaces/party/roomClient.ts": 92,

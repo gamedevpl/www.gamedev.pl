@@ -1,0 +1,178 @@
+/* Multiplayer party mode's phone controller (docs/multiplayer-plan.md) — thumb-sized
+   and touch-only by design, the one page in this app never viewed on a desktop. */
+
+.controller-screen {
+  --slot-color: var(--turquoise);
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+  gap: 12px;
+  background: var(--bg-gradient);
+  /* Never scroll, never zoom, never select: this is a gamepad, not a document. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+.controller-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.controller-badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: #07101f;
+  font-weight: 800;
+  font-size: 0.8rem;
+}
+
+.controller-nick {
+  font-weight: 700;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.controller-status {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.controller-status-reconnecting {
+  color: #ffd56a;
+}
+
+.controller-voice-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.controller-voice-btn {
+  min-height: 44px;
+  border: 2px solid var(--slot-color);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--slot-color);
+  font-weight: 700;
+  font-size: 0.95rem;
+  touch-action: none;
+}
+
+.controller-voice-btn.is-on {
+  background: rgba(0, 228, 172, 0.16);
+}
+
+.controller-voice-btn.is-listening {
+  background: var(--slot-color);
+  color: #07101f;
+}
+
+.controller-voice-notice {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #ffd56a;
+  text-align: center;
+}
+
+.controller-pad {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 8px;
+  max-height: 58vh;
+}
+
+.pad-btn {
+  border: 2px solid var(--slot-color);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--slot-color);
+  font-size: 1.6rem;
+  touch-action: none;
+}
+
+.pad-btn:active {
+  background: var(--slot-color);
+  color: #07101f;
+}
+
+.pad-up {
+  grid-area: 1 / 2;
+}
+.pad-left {
+  grid-area: 2 / 1;
+}
+.pad-right {
+  grid-area: 2 / 3;
+}
+.pad-down {
+  grid-area: 3 / 2;
+}
+
+/* Scoped to the controller. `.action-btn` is also the sketch modal's Undo/Clear
+   (see the rule near .tool-btn), and this one — sized for a full-screen phone
+   gamepad — is later in the file at equal specificity, so it was winning there
+   and rendering those two buttons 88px tall with 32px text. */
+.controller-screen .action-btn {
+  min-height: 22vh;
+  border: none;
+  border-radius: 20px;
+  background: var(--slot-color);
+  color: #07101f;
+  font-size: 2rem;
+  font-weight: 900;
+  touch-action: none;
+}
+
+.controller-screen .action-btn:active {
+  filter: brightness(0.82);
+}
+
+.controller-join,
+.controller-message {
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+}
+
+.controller-room {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  color: var(--turquoise);
+}
+
+.controller-label {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.controller-input {
+  width: min(320px, 80vw);
+  padding: 12px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--panel-card);
+  color: var(--text);
+  font-size: 1.1rem;
+  text-align: center;
+}
+
+.controller-join-btn {
+  width: min(320px, 80vw);
+  min-height: 52px;
+  font-size: 1.05rem;
+}

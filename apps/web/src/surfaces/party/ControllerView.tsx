@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import './party.css';
+import './controller.css';
 import { RoomClient, type RoomStatus } from './roomClient.js';
 import { useScreenWakeLock } from '../../useScreenWakeLock.js';
 import type { InputKey, RoomPhase } from '../../mp/protocol.js';
