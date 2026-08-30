@@ -1,0 +1,81 @@
+/* Fonts, color/spacing tokens, and the base reset — every surface's CSS starts here.
+   Imported once in main.tsx, before styles.css and any per-surface stylesheet. */
+
+@font-face {
+  font-family: 'Proxima Nova';
+  src:
+    url('../../font/ProximaNovaLight.woff2') format('woff2'),
+    url('../../font/ProximaNovaLight.woff') format('woff');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Proxima Nova';
+  src:
+    url('../../font/ProximaNovaSemibold.woff2') format('woff2'),
+    url('../../font/ProximaNovaSemibold.woff') format('woff');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Proxima Nova';
+  src:
+    url('../../font/ProximaNovaBold.woff2') format('woff2'),
+    url('../../font/ProximaNovaBold.woff') format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --bg: #0f1418;
+  --bg-gradient: radial-gradient(circle at 50% 0%, #1a232b 0%, #0f1418 70%);
+  --panel: #161c22;
+  --panel-border: #232c35;
+  --panel-card: #1c242c;
+  --text: #f0f4f8;
+  --muted: #94a3b8;
+  --turquoise: #00e4ac;
+  --turquoise-glow: rgba(0, 228, 172, 0.35);
+  --accent-blue: #38bdf8;
+  --error: #ff6b6b;
+
+  /* Shelf identity dots only — never a CTA color, that stays turquoise. */
+  --cat-arcade-racing: #f2b84b;
+  --cat-rpg-adventure: #a78bfa;
+  --cat-strategy-sim: #4ade80;
+  --cat-puzzle-story: #38bdf8;
+  --cat-multiplayer-party: #fb923c;
+  --cat-more-to-explore: #94a3b8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  background-image: var(--bg-gradient);
+  background-attachment: fixed;
+  color: var(--text);
+  font-family:
+    'Proxima Nova',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}

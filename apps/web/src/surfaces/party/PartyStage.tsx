@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import './party.css';
 import type { CatalogEntry } from '../../catalog.js';
 import { PublishedGameFrame } from '../../PublishedGameFrame.js';
 import type { PlayVia } from '../../visitTelemetry.js';
