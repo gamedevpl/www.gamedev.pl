@@ -22,8 +22,15 @@ function bearer(token: string) {
   return { authorization: `Bearer ${token}` };
 }
 
-function appWith(store: InMemoryStore, extra: { betaAllowedUids?: string } = {}) {
-  return buildApp({ store, sessionSecret, adminUids: 'g:boss', ...extra });
+function appWith(store: InMemoryStore, extra: { betaAllowedUids?: string; now?: () => number } = {}) {
+  const { now, ...rest } = extra;
+  return buildApp({
+    store,
+    sessionSecret,
+    adminUids: 'g:boss',
+    ...rest,
+    ...(now ? { accessTokenRoutes: { now } } : {}),
+  });
 }
 
 async function mintFor(app: Awaited<ReturnType<typeof buildApp>>, uid: string, name = 'agent vm') {
@@ -290,17 +297,20 @@ describe('authenticating with a personal access token', () => {
   });
 
   it('reports its own remaining lifetime to the holder', async () => {
-    const app = await appWith(store);
+    // One clock, sampled once, for both the mint and the read. The day count is
+    // floored, so two wall-clock readings straddle a day boundary or not depending on
+    // how slowly the suite happens to run. A real instant, because the token still has
+    // to resolve as unexpired against the wall clock.
+    const nowMs = Date.now();
+    const app = await appWith(store, { now: () => nowMs });
     const { token } = (await mintFor(app, 'bot:ci', 'github actions')).json();
 
     const res = await app.inject({ method: 'GET', url: '/api/auth/token-info', headers: bearer(token) });
     expect(res.statusCode).toBe(200);
     expect(res.json().name).toBe('github actions');
-    // A day may already be consumed by this read.
-    expect(res.json().expiresInDays).toBeGreaterThanOrEqual(DEFAULT_EXPIRY_DAYS - 1);
-    expect(res.json().expiresInDays).toBeLessThanOrEqual(DEFAULT_EXPIRY_DAYS);
+    expect(res.json().expiresInDays).toBe(DEFAULT_EXPIRY_DAYS);
     // The date has to be readable, not just the day count.
-    expect(Date.parse(res.json().expiresAt)).toBeGreaterThan(Date.now());
+    expect(Date.parse(res.json().expiresAt)).toBeGreaterThan(nowMs);
   });
 
   // Minted off-clock, so the remainder is real.
