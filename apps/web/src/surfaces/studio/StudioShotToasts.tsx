@@ -90,11 +90,16 @@ export function StudioShotToasts({ token, placement = 'near-play', onOpenMedia }
   const stackRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    return subscribeStudioStatus(token, i18n.language, {
-      intervalMs: () => POLL_MS,
-      onUpdate: (status) => setMedia(status.media ?? []),
-      onError: () => setMedia([]),
-    });
+    return subscribeStudioStatus(
+      token,
+      i18n.language,
+      {
+        intervalMs: () => POLL_MS,
+        onUpdate: (status) => setMedia(status.media ?? []),
+        onError: () => setMedia([]),
+      },
+      { forceFreshOnMount: true },
+    );
   }, [token, i18n.language]);
 
   useEffect(() => {

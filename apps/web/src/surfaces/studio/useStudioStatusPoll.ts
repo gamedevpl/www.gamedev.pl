@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getSubmissionStatus, type SubmissionApiError, type SubmissionStatus } from '../../submissionApi.js';
+import type { SubmissionStatus } from '../../submissionApi.js';
+import { pokeStudioStatus, subscribeStudioStatus } from './studioStatusStore.js';
 
 const ACTIVE_STATES = new Set(['queued', 'building', 'in_review', 'publishing']);
 
@@ -43,25 +44,21 @@ export function useStudioStatusPoll(token: string | null): SubmissionStatus | nu
       setStatus(null);
       return;
     }
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
     setStatus(null);
 
-    const tick = async () => {
-      try {
-        const next = await getSubmissionStatus(token, locale);
-        if (cancelled) return;
-        setStatus(next);
-        timer = setTimeout(() => void tick(), delayFor(next));
-      } catch (err) {
-        if (cancelled) return;
-        const apiError = err as SubmissionApiError;
-        // Invalid token: the thread already reports this; nothing to poll for here.
-        if (apiError.status === 400) return;
-        timer = setTimeout(() => void tick(), delayFor(null));
-      }
-    };
-    void tick();
+    const unsubscribe = subscribeStudioStatus(
+      token,
+      locale,
+      {
+        intervalMs: (latest, error) => {
+          // Invalid token: the thread already reports this; nothing to poll for here.
+          if (error) return error.status === 400 ? null : delayFor(null);
+          return delayFor(latest);
+        },
+        onUpdate: (next) => setStatus(next),
+      },
+      { forceFreshOnMount: true },
+    );
 
     // A backgrounded tab's timers get throttled, sometimes for minutes — exactly the
     // window a self-build agent uses to open and finish a round unwatched. Poll again
@@ -70,20 +67,15 @@ export function useStudioStatusPoll(token: string | null): SubmissionStatus | nu
     // Sleep/wake can leave the tab "visible" with no edge to catch.
     const onVisibility = () => {
       if (document.visibilityState !== 'visible') return;
-      if (timer) clearTimeout(timer);
-      void tick();
+      pokeStudioStatus(token, locale);
     };
-    const onWake = () => {
-      if (timer) clearTimeout(timer);
-      void tick();
-    };
+    const onWake = () => pokeStudioStatus(token, locale);
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('focus', onWake);
     window.addEventListener('pageshow', onWake);
 
     return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
+      unsubscribe();
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('focus', onWake);
       window.removeEventListener('pageshow', onWake);

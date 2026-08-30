@@ -17,14 +17,19 @@ export function StudioDetailsMedia({ token, emptyLabel }: { token: string; empty
   const [lightbox, setLightbox] = useState<string | null>(null);
 
   useEffect(() => {
-    return subscribeStudioStatus(token, i18n.language, {
-      intervalMs: () => DETAILS_POLL_MS,
-      onUpdate: (status) => {
-        setMedia(status.media ?? []);
-        setLoaded(true);
+    return subscribeStudioStatus(
+      token,
+      i18n.language,
+      {
+        intervalMs: () => DETAILS_POLL_MS,
+        onUpdate: (status) => {
+          setMedia(status.media ?? []);
+          setLoaded(true);
+        },
+        onError: () => setLoaded(true),
       },
-      onError: () => setLoaded(true),
-    });
+      { forceFreshOnMount: true },
+    );
   }, [token, i18n.language]);
 
   useEffect(() => {
