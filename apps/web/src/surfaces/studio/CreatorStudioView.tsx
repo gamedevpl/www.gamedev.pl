@@ -15,11 +15,10 @@ import { EditorPanel } from './EditorPanel.js';
 import { StudioStage, type StagePosture, type StageStatus } from './StudioStage.js';
 import { StudioStrip } from './StudioStrip.js';
 import { usePlayChromeIdle } from '../../usePlayChromeIdle.js';
-import { StudioVersionRibbon } from './StudioVersionRibbon.js';
 import { StudioChatRail } from './StudioChatRail.js';
 import { StudioStageCard } from './StudioStageCard.js';
 import { StudioFullBleed } from './StudioFullBleed.js';
-import { useStageSource, type StageOrigin } from '../../useStageSource.js';
+import { useStageSource } from '../../useStageSource.js';
 import { useStudioStatusPoll, defaultRailOpen } from './useStudioStatusPoll.js';
 import { GameTheater } from '../../GameTheater.js';
 import {
@@ -336,11 +335,6 @@ export function CreatorStudioView({
   const [stageStatus, setStageStatus] = useState<StageStatus>({ kind: 'empty' });
   // "Fix it" seeds this; the composer consumes it once, then clears it.
   const [chatDraft, setChatDraft] = useState<{ text: string; seq: number } | null>(null);
-  // What the ribbon should describe — the *displayed* document's origin, reported back
-  // by the stage. Distinct from `stageSource.origin` (the latest fetched one) while a
-  // swap is held during play: the ribbon must not claim a not-yet-applied build's
-  // provenance for whatever's actually running.
-  const [displayedOrigin, setDisplayedOrigin] = useState<StageOrigin>(stageSource.origin);
   const [newerStageWaiting, setNewerStageWaiting] = useState(false);
   const [checklistUnread, setChecklistUnread] = useState(0);
   const [railManualOpen, setRailManualOpen] = useState<boolean | null>(null);
@@ -968,10 +962,13 @@ export function CreatorStudioView({
                           }}
                           onNewerStageWaiting={setNewerStageWaiting}
                           onImproved={(newToken) => setHandoffToken(newToken)}
-                          onDisplayedOriginChange={setDisplayedOrigin}
                           editorPushRef={editorPushRef}
                           onEditorControllerChange={setEditorController}
                           onPlayActivity={notePlayChromeActivity}
+                          publishedAt={activeGame.publishedAt ?? activeGame.livePublishedAt}
+                          deliveryInGate={Boolean(studioStatus?.gateProgress)}
+                          newerStageWaiting={newerStageWaiting}
+                          checked={studioStatus?.previewGate ? studioStatus.previewGate.green : null}
                         />
 
                         {stageStatus.kind === 'empty' &&
@@ -982,15 +979,6 @@ export function CreatorStudioView({
                         studioStatus.status !== 'needs_changes' ? (
                           <StudioStageCard status={studioStatus} />
                         ) : null}
-
-                        <StudioVersionRibbon
-                          origin={displayedOrigin}
-                          publishedAt={activeGame.publishedAt ?? activeGame.livePublishedAt}
-                          stageStatus={stageStatus}
-                          deliveryInGate={Boolean(studioStatus?.gateProgress)}
-                          newerStageWaiting={newerStageWaiting}
-                          checked={studioStatus?.previewGate ? studioStatus.previewGate.green : null}
-                        />
 
                         {posture === 'watch' && !covered ? (
                           <StudioShotToasts

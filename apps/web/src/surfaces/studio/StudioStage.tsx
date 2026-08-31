@@ -7,15 +7,16 @@ import {
   postGameHostMessage,
   requestStateSnapshot,
   requestStateRestore,
-  type PlaytestInstrumentation,
 } from '../../gamePlayer.js';
 import { useEditorDraftBridge, type EditorContentPush, type EditorControllerState } from '../../editorBridge.js';
 import { PixelIcon } from '../../PixelIcon.js';
-import { submitFeedback, type FeedbackContext, type SubmissionApiError } from '../../submissionApi.js';
+import { submitFeedback, type SubmissionApiError } from '../../submissionApi.js';
 import { submitImprovement } from '../../studioApi.js';
 import type { StageOrigin, StageSource } from '../../useStageSource.js';
 import './status-feedback.css';
 import './studio-stage.css';
+import { StudioStageStatusbar } from './StudioStageStatusbar.js';
+import { toFeedbackContext } from './studioFeedbackContext.js';
 
 /**
  * The stage: always mounted, always full-bleed, running the game whether or not the
@@ -47,28 +48,6 @@ const INPUT_IDLE_MS = 400;
 // Spaced retries for a frame whose harness hasn't mounted yet.
 const STATE_RESTORE_RETRY_DELAYS_MS = [150, 350, 600];
 
-function toContext(
-  pngBase64: string | null | undefined,
-  instrumentation: PlaytestInstrumentation,
-): FeedbackContext | undefined {
-  const hasShot = Boolean(pngBase64);
-  const hasSignals =
-    instrumentation.playSeconds > 0 ||
-    instrumentation.lastAliveFrames != null ||
-    instrumentation.errors.length > 0 ||
-    instrumentation.progress.length > 0;
-  if (!hasShot && !hasSignals) return undefined;
-  return {
-    ...(pngBase64 ? { screenshotPng: pngBase64 } : {}),
-    instrumentation: {
-      playSeconds: instrumentation.playSeconds,
-      lastAliveFrames: instrumentation.lastAliveFrames,
-      errors: instrumentation.errors,
-      progress: instrumentation.progress,
-    },
-  };
-}
-
 export type StudioStageProps = {
   token: string;
   title: string;
@@ -87,15 +66,15 @@ export type StudioStageProps = {
   onNewerStageWaiting?: (waiting: boolean) => void;
   /** A published-game improvement opened a new job; the parent moves the thread onto it. */
   onImproved?: (token: string) => void;
-  /** The origin of whatever `source` is *actually shown* right now — distinct from
-   * `source.origin` while a swap is held during play. The ribbon must describe the
-   * document on screen, not the one waiting in the wings. */
-  onDisplayedOriginChange?: (origin: StageOrigin) => void;
   /** Filled in with the editor bridge's live-push function, for the Code surface (§E tier 1). */
   editorPushRef?: MutableRefObject<EditorContentPush | null>;
   onEditorControllerChange?: (controller: EditorControllerState | null) => void;
   // Relayed iframe activity, for mobile chrome auto-hide.
   onPlayActivity?: () => void;
+  publishedAt?: string;
+  deliveryInGate?: boolean;
+  newerStageWaiting?: boolean;
+  checked?: boolean | null;
 };
 
 export function StudioStage({
@@ -112,10 +91,13 @@ export function StudioStage({
   onFixIt,
   onNewerStageWaiting,
   onImproved,
-  onDisplayedOriginChange,
   editorPushRef,
   onEditorControllerChange,
   onPlayActivity,
+  publishedAt,
+  deliveryInGate,
+  newerStageWaiting,
+  checked,
 }: StudioStageProps) {
   const { t } = useTranslation();
   const frameRef = useRef<HTMLIFrameElement | null>(null);
@@ -212,11 +194,6 @@ export function StudioStage({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingHtml, posture]);
-
-  useEffect(() => {
-    onDisplayedOriginChange?.(shownOrigin);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shownOrigin]);
 
   function applySwap(next: string | null, origin: StageOrigin) {
     swapGenerationRef.current += 1;
@@ -446,7 +423,7 @@ export function StudioStage({
     if (trimmedNote.length < 10) return;
     setSendState('sending');
     setSendError(null);
-    const context = toContext(attachedPng, snapshot?.instrumentation ?? instrumentation);
+    const context = toFeedbackContext(attachedPng, snapshot?.instrumentation ?? instrumentation);
     try {
       if (published) {
         const result = await submitImprovement(token, trimmedNote, context);
@@ -526,23 +503,6 @@ export function StudioStage({
         </div>
       ) : null}
 
-      {posture === 'play' && shownHtml ? (
-        <div className="studio-stage-play-bar">
-          {paused ? (
-            <button type="button" className="secondary-btn" onClick={resume}>
-              <PixelIcon name="play" size={12} /> <span className="btn-label">{t('studioPanel.playtest.resume')}</span>
-            </button>
-          ) : (
-            <button type="button" className="primary-btn" onClick={pause}>
-              <PixelIcon name="pause" size={12} /> <span className="btn-label">{t('studioPanel.playtest.pause')}</span>
-            </button>
-          )}
-          <button type="button" className="secondary-btn" onClick={requestWatch}>
-            <PixelIcon name="close" size={12} /> <span className="btn-label">{t('studioPanel.stage.stopPlaying')}</span>
-          </button>
-        </div>
-      ) : null}
-
       {promptOpen ? (
         <div className="studio-stage-sheet status-feedback">
           <h3 className="status-feedback-title">{t('studioPanel.playtest.promptTitle')}</h3>
@@ -581,6 +541,21 @@ export function StudioStage({
           {sendError ? <p className="error">{sendError}</p> : null}
         </div>
       ) : null}
+
+      <StudioStageStatusbar
+        shownOrigin={shownOrigin}
+        publishedAt={publishedAt}
+        stageStatus={status}
+        deliveryInGate={deliveryInGate}
+        newerStageWaiting={Boolean(newerStageWaiting) || pendingHtml !== null}
+        checked={checked}
+        posture={posture}
+        shownHtml={shownHtml}
+        paused={paused}
+        onPause={pause}
+        onResume={resume}
+        onRequestWatch={requestWatch}
+      />
     </div>
   );
 }
