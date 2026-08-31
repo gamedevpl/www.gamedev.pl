@@ -2,8 +2,10 @@ name: Games catalog gate
 
 # Runs the games repository's real post-merge gate on public Actions minutes.
 # publish-games.yml calls this workflow before advancing the snapshot pointer.
-# mode=full on merge/dispatch: playtest --suite default, no catalog agent-play
-# (those two are the weekly schedule seal; scoped still playtests touched slugs).
+# mode=full on merge/dispatch/daily 04:23 UTC: playtest --suite default, no
+# catalog agent-play. Those two are the Sunday 06:17 UTC seal (cron
+# '17 6 * * 0'); scoped still playtests touched slugs. The daily snapshot is a
+# cheap rebuild, not a second full-catalog seal.
 
 on:
   workflow_call:
