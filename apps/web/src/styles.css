@@ -2706,7 +2706,10 @@ body.player-open {
      visit scrolling sideways. 16px is the threshold, not a design choice. */
   textarea,
   input[type='text'],
-  input[type='email'],
+  input[type='email'] {
+    font-size: 16px;
+  }
+
   .content {
     padding: 20px 12px 60px;
     width: 100%;
@@ -7069,45 +7072,6 @@ button.builder-mode-selector:disabled {
     text-overflow: ellipsis;
     white-space: nowrap;
     vertical-align: bottom;
-  }
-
-  /* Play card: the CTA earns a full-width row rather than a squeezed column. */
-  .status-play-card {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .status-play-card-actions {
-    flex-direction: column;
-    align-items: stretch;
-    width: 100%;
-  }
-
-  .status-play-card-actions .status-play-cta,
-  .status-play-card-actions .status-playtest-cta {
-    width: 100%;
-    justify-content: center;
-  }
-
-  /* Section headings stop competing with their trailing counters. */
-  .build-progress-heading-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
-  }
-
-  /* Activity entries: the timestamp drops under the text instead of squeezing it. */
-  .build-activity-item {
-    flex-wrap: wrap;
-  }
-
-  .build-activity-time {
-    width: 100%;
-    padding-left: 20px;
-  }
-
-  .build-progress-commits {
-    max-height: none;
   }
 
   .my-games-list {

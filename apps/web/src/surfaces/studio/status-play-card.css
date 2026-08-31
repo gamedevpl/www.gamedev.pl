@@ -130,3 +130,23 @@
     justify-content: center;
   }
 }
+
+/* Play card: the CTA earns a full-width row rather than a squeezed column. */
+@media (max-width: 640px) {
+  .status-play-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .status-play-card-actions {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .status-play-card-actions .status-play-cta,
+  .status-play-card-actions .status-playtest-cta {
+    width: 100%;
+    justify-content: center;
+  }
+}
