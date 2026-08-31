@@ -8,6 +8,8 @@ import {
   type ReactNode,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import './code-actions-menu.css';
+import './code-surface-explorer.css';
 import { formatShortcut, fuzzyMatch } from './codeActionsMatch.js';
 import { PixelIcon } from '../../PixelIcon.js';
 
