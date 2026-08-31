@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import './admin-jobs-queue.css';
+import './admin-small-panels.css';
 import { fetchCostReport, type CostReport, type JobCostSummary } from './adminApi.js';
 
 /**

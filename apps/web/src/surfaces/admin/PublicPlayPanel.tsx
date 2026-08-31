@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import './admin-small-panels.css';
 import { fetchPublicPlay, setPublicPlaySlugs, type PublicPlay } from './adminApi.js';
 
 function relative(ms: number): string {

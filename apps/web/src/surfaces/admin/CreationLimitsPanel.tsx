@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import './admin-small-panels.css';
 import {
   fetchCreationLimits,
   setCreationLimits,

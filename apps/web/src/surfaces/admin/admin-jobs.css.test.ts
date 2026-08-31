@@ -2,20 +2,26 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-const css = readFileSync(fileURLToPath(new URL('./styles.css', import.meta.url)), 'utf8').replace(
-  /\/\*[\s\S]*?\*\//g,
-  '',
-);
+function loadCss(relativePath: string): string {
+  return readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
+const styles = loadCss('../../styles.css');
+const queue = loadCss('./admin-jobs-queue.css');
+const preview = loadCss('./admin-jobs-preview.css');
 
 function rule(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const pattern = new RegExp(`(?:^|[},])\\s*${escaped}\\s*(?:,[^{}]*)?\\{`, 'm');
-  const match = pattern.exec(css);
-  expect(match, `no ${selector} rule in styles.css`).not.toBeNull();
-  const start = match!.index + match![0].length;
-  const end = css.indexOf('}', start);
-  expect(end, `${selector} rule is never closed`).toBeGreaterThan(start);
-  return css.slice(start, end);
+  for (const css of [styles, queue, preview]) {
+    const match = pattern.exec(css);
+    if (!match) continue;
+    const start = match.index + match[0].length;
+    const end = css.indexOf('}', start);
+    expect(end, `${selector} rule is never closed`).toBeGreaterThan(start);
+    return css.slice(start, end);
+  }
+  throw new Error(`no ${selector} rule in styles.css, admin-jobs-queue.css, or admin-jobs-preview.css`);
 }
 
 function zIndexOf(selector: string): number {
