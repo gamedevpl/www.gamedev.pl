@@ -1,0 +1,376 @@
+/* Code surface editor pane: CodeMirror container/theming, readonly view, diff view, kit viewer, diagnostics (CodeSurface.tsx). */
+
+.code-surface-viewer {
+  min-width: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.code-surface-editor {
+  flex: 1;
+  width: 100%;
+  min-height: 200px;
+  border: 0;
+  resize: none;
+  padding: 12px 14px;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--mono-font, monospace);
+  font-size: 0.84rem;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.code-surface-editor:focus {
+  outline: none;
+}
+
+.code-surface-codemirror {
+  flex: 1;
+  min-height: 200px;
+  overflow: hidden;
+}
+
+.code-surface-codemirror .cm-editor {
+  height: 100%;
+}
+
+.code-surface-codemirror .cm-gutters {
+  background: transparent;
+  border-right: 1px solid var(--panel-border);
+  color: var(--muted);
+}
+
+.cm-color-picker {
+  width: 0.85rem;
+  height: 0.85rem;
+  margin: 0 0.25rem;
+  padding: 0;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  border-radius: 3px;
+  vertical-align: -0.12rem;
+  cursor: pointer;
+}
+
+.cm-color-picker::-webkit-color-swatch-wrapper {
+  padding: 1px;
+}
+
+.cm-color-picker::-webkit-color-swatch {
+  border: 0;
+  border-radius: 2px;
+}
+
+.cm-color-picker::-moz-color-swatch {
+  border: 0;
+  border-radius: 2px;
+}
+
+.cm-color-picker:focus-visible {
+  outline: 1px solid var(--turquoise);
+  outline-offset: 2px;
+}
+
+.code-surface-readonly-view {
+  margin: 0;
+  padding: 12px 0;
+  font-family: var(--mono-font, monospace);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  overflow-x: auto;
+}
+
+.code-surface-line {
+  display: flex;
+  gap: 12px;
+  padding: 0 14px;
+}
+
+.code-surface-line-number {
+  flex: none;
+  width: 2.6em;
+  text-align: right;
+  color: var(--muted);
+  user-select: none;
+}
+
+/* Wraps, unlike the line it sits in: a long line breaks under its own number rather
+   than forcing horizontal scroll, which fights the page's own vertical one on touch. */
+.code-surface-line-text {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.code-surface-params {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.code-surface-param-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.code-surface-param-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.code-surface-param-select,
+.code-surface-param-text {
+  flex: none;
+  width: 140px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.number-scrubber {
+  flex: none;
+  width: 80px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--text);
+  font-family: var(--mono-font, monospace);
+  font-size: 0.8rem;
+  text-align: center;
+  cursor: ew-resize;
+  user-select: none;
+  touch-action: none;
+}
+
+.number-scrubber:hover,
+.number-scrubber:focus-visible {
+  border-color: rgba(0, 228, 172, 0.5);
+}
+
+.number-scrubber.is-dragging {
+  border-color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.12);
+}
+
+.number-scrubber.is-disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.code-surface-diff-view {
+  margin: 0;
+  padding: 12px 0;
+  font-family: var(--mono-font, monospace);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  overflow-x: auto;
+}
+
+.code-surface-diff-line {
+  display: flex;
+  gap: 10px;
+  padding: 0 14px;
+}
+
+.code-surface-diff-marker {
+  flex: none;
+  width: 1em;
+  text-align: center;
+  user-select: none;
+}
+
+.code-surface-diff-line-added {
+  background: rgba(0, 228, 172, 0.1);
+}
+
+.code-surface-diff-line-added .code-surface-diff-marker {
+  color: var(--turquoise);
+}
+
+.code-surface-diff-line-removed {
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+}
+
+.code-surface-diff-line-removed .code-surface-diff-marker,
+.code-surface-diff-line-removed .code-surface-line-text {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--error) 50%, transparent);
+}
+
+/* GA-09: the kit's own read-only hop — a fixed overlay, not gated to mobile like
+   .code-surface-file-backdrop, since the jump works at any viewport width. */
+.code-surface-kit-backdrop {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(3, 8, 13, 0.66);
+}
+
+.code-surface-kit-viewer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  width: min(100%, 640px);
+  max-height: min(80vh, 40rem);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.code-surface-kit-viewer-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding: 12px 12px 10px 16px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.code-surface-kit-viewer-head h3 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.86rem;
+  font-family: var(--mono-font, monospace);
+  color: var(--muted);
+}
+
+.code-surface-kit-close {
+  flex: none;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.code-surface-kit-close:hover,
+.code-surface-kit-close:focus-visible {
+  color: var(--text);
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.code-surface-kit-viewer-body {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.code-surface-kit-viewer-body .is-jump-target {
+  background: rgba(0, 228, 172, 0.14);
+}
+
+/* TA-02: ghost-text proposal — must never intercept the click meant for it. */
+.cm-ghost-text {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* The only accept path on iOS — deliberately not click-through. */
+.cm-ghost-text-accept {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 2px;
+  padding: 0 4px;
+  border-radius: 5px;
+  border: 1px solid rgba(0, 228, 172, 0.4);
+  background: rgba(0, 228, 172, 0.12);
+  color: var(--turquoise);
+  font-size: 0.72rem;
+  line-height: 1;
+  vertical-align: middle;
+  cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
+}
+
+.cm-ghost-text-accept:hover,
+.cm-ghost-text-accept:active {
+  background: rgba(0, 228, 172, 0.22);
+}
+
+/* GA-09: VS Code-like affordance for modifier-click navigation. */
+.cm-ts-navigable-link {
+  color: #58a6ff;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.cm-ts-hover {
+  padding: 2px;
+  font-family: var(--mono-font, monospace);
+  white-space: pre-wrap;
+}
+
+.cm-ts-hover-compact {
+  max-width: 28rem;
+}
+
+.cm-ts-hover-expanded {
+  max-width: min(52rem, calc(100vw - 32px));
+}
+
+.cm-ts-hover-doc {
+  margin-top: 0.5rem;
+  color: var(--muted);
+  font-family: inherit;
+  white-space: pre-wrap;
+}
+
+.code-tok-comment {
+  color: var(--muted);
+}
+.code-tok-string {
+  color: #7ee787;
+}
+.code-tok-number {
+  color: #79c0ff;
+}
+.code-tok-keyword {
+  color: #ff7b72;
+}
+.code-tok-key {
+  color: #d2a8ff;
+}
+
+.code-surface-diagnostics {
+  flex: none;
+  margin: 0;
+  padding: 6px 14px;
+  list-style: none;
+  font-family: var(--mono-font, monospace);
+  font-size: 0.76rem;
+  color: #ff7b72;
+  border-top: 1px solid var(--panel-border);
+  max-height: 8em;
+  overflow-y: auto;
+}

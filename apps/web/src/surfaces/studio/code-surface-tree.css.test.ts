@@ -2,7 +2,21 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-const css = readFileSync(fileURLToPath(new URL('./styles.css', import.meta.url)), 'utf8');
+function loadCss(relativePath: string): string {
+  return readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), 'utf8');
+}
+
+// "Defined once" means once across the split code surface CSS files.
+const css = [
+  loadCss('../../styles.css'),
+  loadCss('./editor-controller.css'),
+  loadCss('./code-surface.css'),
+  loadCss('./code-surface-agent.css'),
+  loadCss('./code-surface-explorer.css'),
+  loadCss('./code-surface-editor.css'),
+  loadCss('./code-surface-statusbar.css'),
+  loadCss('./code-actions-menu.css'),
+].join('\n');
 
 describe('Code surface file tree CSS', () => {
   it('defines the tree toolbar and confirm dialog once, not inside a copy of the shell', () => {
