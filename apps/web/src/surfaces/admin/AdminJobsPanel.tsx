@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import './admin-jobs-queue.css';
 import { AdminConfirmDialog } from './AdminConfirmDialog.js';
 import { AdminJobPreviewModal } from './AdminJobPreviewModal.js';
 import { JobRow, PublishedGames } from './AdminJobsQueue.js';

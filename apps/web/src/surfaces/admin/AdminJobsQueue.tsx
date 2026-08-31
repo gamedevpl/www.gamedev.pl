@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import './admin-jobs-queue.css';
 import { AdminConfirmDialog } from './AdminConfirmDialog.js';
 import { cancelConfirmCopy, publishConfirmCopy } from './adminJobConfirm.js';
 import {

@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import './admin-jobs-queue.css';
+import './admin-jobs-preview.css';
 import { AdminJobPreviewPublish } from './AdminJobPreviewPublish.js';
 import { fetchJobPreview, type JobPreview, type JobQueueEntry } from './adminJobsApi.js';
 import { GameFrame } from '../../GameFrame.js';

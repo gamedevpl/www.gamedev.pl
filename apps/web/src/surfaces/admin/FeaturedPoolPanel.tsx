@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import './admin-small-panels.css';
 import { fetchFeaturedPool, setFeaturedPoolSlugs, type FeaturedPool } from './adminApi.js';
 
 // Featured pool editor; the typed order is the rotation order.

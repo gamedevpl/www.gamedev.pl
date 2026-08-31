@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import './admin-small-panels.css';
 import { fetchSuggestions, type Suggestion, type SuggestionsResponse } from './adminApi.js';
 
 /**

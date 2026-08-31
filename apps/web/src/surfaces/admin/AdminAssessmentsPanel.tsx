@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import './admin-assessments.css';
 import {
   createReviewSweep,
   fetchReviewSweeps,

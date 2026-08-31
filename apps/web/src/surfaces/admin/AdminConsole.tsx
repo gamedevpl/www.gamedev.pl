@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import './admin-console.css';
 import { AccessTokensPanel } from './AccessTokensPanel.js';
 import { AdminJobsPanel } from './AdminJobsPanel.js';
 import { CostsPanel } from './CostsPanel.js';

@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import './admin-small-panels.css';
 import { fetchAccessTokens, mintAccessToken, revokeAccessToken, type AccessToken } from './adminApi.js';
 
 /**
