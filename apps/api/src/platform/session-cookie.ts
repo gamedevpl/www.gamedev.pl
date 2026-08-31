@@ -37,13 +37,13 @@ export function readSessionCookie(cookies: Record<string, string | undefined>): 
 /**
  * Ends the session: clears both names and cancels any pending renewal.
  *
- * Both halves are load-bearing. The old name still authenticates through the fallback
- * above, so clearing only the current one would let the browser sign itself back in.
- * And the renewal hook runs *after* the handler, so a sign-out that leaves
- * `needsSessionRenewal` set has its cleared cookie immediately replaced by a fresh one
- * — the user stays signed in, which on a shared device is the whole failure. Renewal is
- * forced for every legacy cookie, so that is the common path during the FH-01 window,
- * not a corner case.
+ * The old name still authenticates through the fallback above, so clearing only the
+ * current one would let the browser sign itself back in.
+ *
+ * Cancelling renewal says plainly that this response ends the session, and saves
+ * minting a token nobody should receive. `handlerWroteSessionCookie` below is the
+ * general backstop for the same hazard; sign-out states it outright rather than relying
+ * on it.
  */
 export function clearSessionCookies(request: FastifyRequest, reply: FastifyReply): void {
   request.needsSessionRenewal = false;
@@ -56,4 +56,19 @@ export function retireLegacyCookie(cookies: Record<string, string | undefined>, 
   if (cookies[LEGACY_SESSION_COOKIE_NAME]) {
     reply.clearCookie(LEGACY_SESSION_COOKIE_NAME, { path: '/' });
   }
+}
+
+/**
+ * Whether a handler already wrote the session cookie on this response.
+ *
+ * A handler that set it has decided who this browser is — signed in as someone else,
+ * or signed out. The renewal hook runs afterwards and would append a second cookie for
+ * the *previous* identity; for the same name and path the later one wins, so the
+ * response says one thing and the next request authenticates as another. Renewal must
+ * never overwrite that decision.
+ */
+export function handlerWroteSessionCookie(reply: FastifyReply): boolean {
+  const header = reply.getHeader('set-cookie');
+  const values = Array.isArray(header) ? header : header === undefined ? [] : [String(header)];
+  return values.some((value) => String(value).startsWith(`${SESSION_COOKIE_NAME}=`));
 }

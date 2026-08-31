@@ -461,6 +461,31 @@ describe('Auth API Routes', () => {
     expect(JSON.parse(login.body).user).not.toHaveProperty('admin');
   });
 
+  // The same hook, the worse case: signing in as someone else while holding a
+  // legacy cookie let renewal append the OLD identity after the handler wrote the new
+  // one. Same name and path, so the later cookie wins and the browser stays the old user.
+  it('does not re-mint the previous identity when signing in with a pre-rename cookie', async () => {
+    const { app, store } = await setupTestServer({ 'newcomer-token': { sub: '20002', email: 'b@example.com' } });
+    await store.upsertUser({ uid: 'g:20001', email: 'a@example.com' });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'newcomer-token' },
+      headers: {
+        cookie: `${LEGACY_SESSION_COOKIE_NAME}=${mintSessionToken('g:20001', 'test-secret-key')}`,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).user.uid).toBe('g:20002');
+
+    // Whatever the browser ends up holding must be the account the response named.
+    const issued = res.cookies.filter((entry) => entry.name === SESSION_COOKIE_NAME);
+    expect(issued).toHaveLength(1);
+    expect(readSessionToken(issued[0]!.value, 'test-secret-key').uid).toBe('g:20002');
+  });
+
   // Renewal runs after the handler, so a legacy cookie made logout re-mint a live
   // session over the cleared one — signed out on paper, signed in in the browser.
   it('does not re-mint a session when logging out with a pre-rename cookie', async () => {

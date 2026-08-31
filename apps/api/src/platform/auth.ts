@@ -9,7 +9,13 @@ import { isReviewer, isReviewerSession } from '../community/review.js';
 import { resolveAppleAccount } from './apple-account.js';
 import { createAppleAuthVerifierFromEnv, parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { readBearerToken } from './bearer.js';
-import { clearSessionCookies, readSessionCookie, retireLegacyCookie, SESSION_COOKIE_NAME } from './session-cookie.js';
+import {
+  clearSessionCookies,
+  handlerWroteSessionCookie,
+  readSessionCookie,
+  retireLegacyCookie,
+  SESSION_COOKIE_NAME,
+} from './session-cookie.js';
 export { LEGACY_SESSION_COOKIE_NAME, readSessionCookie, SESSION_COOKIE_NAME } from './session-cookie.js';
 import { createMailerFromEnv } from '../notifications/mailer.js';
 import { emitWaitlistJoined } from '../notifications/notify.js';
@@ -435,7 +441,14 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
   });
 
   app.addHook('onSend', async (request, reply) => {
-    if (isAuthConfigured && request.user && request.needsSessionRenewal && request.user.tier !== 'blocked') {
+    if (
+      isAuthConfigured &&
+      request.user &&
+      request.needsSessionRenewal &&
+      request.user.tier !== 'blocked' &&
+      // The handler's own session cookie always wins; see handlerWroteSessionCookie.
+      !handlerWroteSessionCookie(reply)
+    ) {
       // Provenance survives renewal, or a token-derived cookie would quietly become a
       // genuine one after six hours and regain exactly the authority it was denied.
       // `needsSessionRenewal` is only ever set on the cookie path, so 'token' here
