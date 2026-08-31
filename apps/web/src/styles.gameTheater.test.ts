@@ -80,4 +80,12 @@ describe('play loading covers the site chrome', () => {
   it('does not fade the theater in over the catalog chrome', () => {
     expect(ruleBody('.stage.is-playing-full-viewport')).not.toMatch(/animation:\s*fadeIn/);
   });
+
+  it('keeps the theater bar above the nested mascot, so Close stays reachable', () => {
+    const nested = ruleBody('.is-playing-full-viewport .app-loading-screen');
+
+    expect(nested).toMatch(/position:\s*absolute/);
+    expect(nested).toMatch(/z-index:\s*1/);
+    expect(ruleBody('.game-theater-bar')).toMatch(/z-index:\s*10/);
+  });
 });

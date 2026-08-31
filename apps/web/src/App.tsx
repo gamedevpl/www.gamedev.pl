@@ -1161,7 +1161,7 @@ export function App() {
 
   // /play cold visit: hold mascot until catalog answers.
   if (route.view === 'play' && catalogStatus === 'loading') {
-    return <AppLoadingScreen />;
+    return <AppLoadingScreen onExit={exitOverlay} />;
   }
 
   // Unpublished /play: loading is a full-viewport overlay; error keeps chrome.
@@ -1191,7 +1191,7 @@ export function App() {
   // Bridge catalog-ready → auto-open so GameDetailPage does not flash first.
   // Close leaves `/play` for the canonical page, so no dismiss-ref is needed.
   if (route.view === 'play' && catalogStatus === 'ready' && playCatalogGame && !stageContent) {
-    return <AppLoadingScreen />;
+    return <AppLoadingScreen onExit={exitOverlay} />;
   }
 
   return (
@@ -1250,15 +1250,17 @@ export function App() {
               />
             ) : (
               <>
-                {route.view === 'play' && !stageContent ? (
-                  <GameDetailPage
-                    game={playCatalogGame}
-                    state={catalogStatus}
-                    onPlay={handlePlayGame}
-                    onPlayTogether={handlePlayTogether}
-                    onRemix={handleRemixGame}
-                    onRetry={handleRetryCatalog}
-                  />
+                {route.view === 'play' ? (
+                  !stageContent && (
+                    <GameDetailPage
+                      game={playCatalogGame}
+                      state={catalogStatus}
+                      onPlay={handlePlayGame}
+                      onPlayTogether={handlePlayTogether}
+                      onRemix={handleRemixGame}
+                      onRetry={handleRetryCatalog}
+                    />
+                  )
                 ) : route.view === 'create' ? (
                   <CreatePage
                     // Remount when a retry loads a new idea, so the prompt box picks it up.

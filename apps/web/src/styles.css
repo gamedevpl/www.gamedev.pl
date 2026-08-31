@@ -4380,6 +4380,18 @@ a.user-name--profile:focus-visible {
   display: none;
 }
 
+/* Theater bar stays the escape; this only fills the playfield. */
+.is-playing-full-viewport .app-loading-screen {
+  position: absolute;
+  z-index: 1;
+}
+
+.app-loading-screen__exit {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+}
+
 .app-loading-screen__content {
   display: flex;
   flex-direction: column;

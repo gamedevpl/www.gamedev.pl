@@ -88,7 +88,7 @@ export function UnpublishedPlayView({ slug, onExit, onTitle }: UnpublishedPlayVi
 
   if (!game) {
     // Match /play catalog wait: full-page mascot, not a spinner.
-    return <AppLoadingScreen />;
+    return <AppLoadingScreen onExit={onExit} />;
   }
 
   return (
