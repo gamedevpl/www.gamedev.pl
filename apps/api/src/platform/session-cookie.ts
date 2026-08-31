@@ -51,11 +51,19 @@ export function clearSessionCookies(request: FastifyRequest, reply: FastifyReply
   reply.clearCookie(LEGACY_SESSION_COOKIE_NAME, { path: '/' });
 }
 
-// Drops the old cookie once a renewal has written the current one.
+/**
+ * Drops the old cookie on any response that writes the session anew.
+ *
+ * It must go with *whichever* half wrote the replacement, handler or renewal. Left
+ * standing it is a 30-day credential sitting behind a session that may be far shorter:
+ * once the new cookie expires the fallback finds the old one and silently restores the
+ * identity it belonged to — which, after a sign-in as somebody else, is the wrong
+ * person. Idempotent, so a response that already cleared it stays as it is.
+ */
 export function retireLegacyCookie(cookies: Record<string, string | undefined>, reply: FastifyReply): void {
-  if (cookies[LEGACY_SESSION_COOKIE_NAME]) {
-    reply.clearCookie(LEGACY_SESSION_COOKIE_NAME, { path: '/' });
-  }
+  if (!cookies[LEGACY_SESSION_COOKIE_NAME]) return;
+  if (wroteCookieNamed(reply, LEGACY_SESSION_COOKIE_NAME)) return;
+  reply.clearCookie(LEGACY_SESSION_COOKIE_NAME, { path: '/' });
 }
 
 /**
@@ -68,7 +76,12 @@ export function retireLegacyCookie(cookies: Record<string, string | undefined>, 
  * never overwrite that decision.
  */
 export function handlerWroteSessionCookie(reply: FastifyReply): boolean {
+  return wroteCookieNamed(reply, SESSION_COOKIE_NAME);
+}
+
+// Set-Cookie is one value or many; this flattens both shapes.
+function wroteCookieNamed(reply: FastifyReply, name: string): boolean {
   const header = reply.getHeader('set-cookie');
-  const values = Array.isArray(header) ? header : header === undefined ? [] : [String(header)];
-  return values.some((value) => String(value).startsWith(`${SESSION_COOKIE_NAME}=`));
+  const values = Array.isArray(header) ? header : header === undefined ? [] : [header];
+  return values.some((value) => String(value).startsWith(`${name}=`));
 }

@@ -441,14 +441,10 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
   });
 
   app.addHook('onSend', async (request, reply) => {
-    if (
-      isAuthConfigured &&
-      request.user &&
-      request.needsSessionRenewal &&
-      request.user.tier !== 'blocked' &&
-      // The handler's own session cookie always wins; see handlerWroteSessionCookie.
-      !handlerWroteSessionCookie(reply)
-    ) {
+    if (!isAuthConfigured) return;
+    // The handler's own session cookie always wins; see handlerWroteSessionCookie.
+    const handlerWroteSession = handlerWroteSessionCookie(reply);
+    if (request.user && request.needsSessionRenewal && request.user.tier !== 'blocked' && !handlerWroteSession) {
       // Provenance survives renewal, or a token-derived cookie would quietly become a
       // genuine one after six hours and regain exactly the authority it was denied.
       // `needsSessionRenewal` is only ever set on the cookie path, so 'token' here
@@ -469,6 +465,11 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         sameSite: 'lax',
         maxAge: durationSeconds,
       });
+    }
+
+    // Retired by whichever half wrote the replacement, or it outlives the session that
+    // replaced it and hands the browser back its previous identity.
+    if (handlerWroteSession || handlerWroteSessionCookie(reply)) {
       retireLegacyCookie(request.cookies, reply);
     }
   });

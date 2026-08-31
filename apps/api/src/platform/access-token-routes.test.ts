@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { generateAccessToken } from './access-token.js';
 import { DEFAULT_EXPIRY_DAYS, MAX_TOKENS_PER_UID, mintAccessTokenFor } from './access-token-service.js';
 import { buildApp } from './app.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
+import { LEGACY_SESSION_COOKIE_NAME, mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { InMemoryStore } from './store.js';
 
 // Every test drives the fully assembled app, never the route plugin.
@@ -386,6 +386,35 @@ describe('authenticating with a personal access token', () => {
     });
 
     expect(res.json().user.uid).toBe('g:boss');
+  });
+
+  /**
+   * The exact route Codex named on #1110: a browser still carrying account A's
+   * pre-rename cookie exchanges a token for account B. B's session is the shorter of
+   * the two, so leaving A's 30-day cookie behind means the fallback restores A the
+   * moment B's expires — a silent switch back to the previous identity.
+   */
+  it('retires a pre-rename cookie when the exchange replaces the session', async () => {
+    const app = await appWith(store, { betaAllowedUids: 'g:boss' });
+    const { token } = (await mintFor(app, 'bot:e2e')).json();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/session',
+      headers: {
+        ...bearer(token),
+        cookie: `${LEGACY_SESSION_COOKIE_NAME}=${mintSessionToken('g:boss', sessionSecret)}`,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().user.uid).toBe('bot:e2e');
+
+    const issued = res.cookies.filter((entry) => entry.name === SESSION_COOKIE_NAME);
+    expect(issued).toHaveLength(1);
+    // The old name must not outlive the session that replaced it.
+    const legacy = res.cookies.find((entry) => entry.name === LEGACY_SESSION_COOKIE_NAME);
+    expect(legacy?.value).toBe('');
   });
 
   it('exchanges for a session cookie so a real browser can be driven', async () => {
