@@ -461,6 +461,28 @@ describe('Auth API Routes', () => {
     expect(JSON.parse(login.body).user).not.toHaveProperty('admin');
   });
 
+  // Renewal runs after the handler, so a legacy cookie made logout re-mint a live
+  // session over the cleared one — signed out on paper, signed in in the browser.
+  it('does not re-mint a session when logging out with a pre-rename cookie', async () => {
+    const { app, store } = await setupTestServer();
+    await store.upsertUser({ uid: 'g:10012', email: 'legacy-logout@example.com' });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/logout',
+      headers: {
+        cookie: `${LEGACY_SESSION_COOKIE_NAME}=${mintSessionToken('g:10012', 'test-secret-key')}`,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const setCookie = [res.headers['set-cookie'] ?? []].flat().join('\n');
+    expect(setCookie).toContain(`${SESSION_COOKIE_NAME}=;`);
+    expect(setCookie).toContain(`${LEGACY_SESSION_COOKIE_NAME}=;`);
+    // The failure this guards: a second, non-empty __session appended by the renewal hook.
+    expect(setCookie).not.toMatch(new RegExp(`${SESSION_COOKIE_NAME}=[^;\\s]`));
+  });
+
   it('POST /api/auth/logout clears session cookie', async () => {
     const { app } = await setupTestServer();
 

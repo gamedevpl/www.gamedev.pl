@@ -1,4 +1,4 @@
-import type { FastifyReply } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 
 /**
  * Firebase Hosting drops every cookie but `__session` before the request reaches Cloud
@@ -35,10 +35,18 @@ export function readSessionCookie(cookies: Record<string, string | undefined>): 
 }
 
 /**
- * Clears both names. The old one still authenticates through the fallback above, so
- * clearing only the current one would leave the browser able to sign itself back in.
+ * Ends the session: clears both names and cancels any pending renewal.
+ *
+ * Both halves are load-bearing. The old name still authenticates through the fallback
+ * above, so clearing only the current one would let the browser sign itself back in.
+ * And the renewal hook runs *after* the handler, so a sign-out that leaves
+ * `needsSessionRenewal` set has its cleared cookie immediately replaced by a fresh one
+ * — the user stays signed in, which on a shared device is the whole failure. Renewal is
+ * forced for every legacy cookie, so that is the common path during the FH-01 window,
+ * not a corner case.
  */
-export function clearSessionCookies(reply: FastifyReply): void {
+export function clearSessionCookies(request: FastifyRequest, reply: FastifyReply): void {
+  request.needsSessionRenewal = false;
   reply.clearCookie(SESSION_COOKIE_NAME, { path: '/' });
   reply.clearCookie(LEGACY_SESSION_COOKIE_NAME, { path: '/' });
 }

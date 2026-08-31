@@ -46,7 +46,7 @@ export function registerAccountDeletionRoutes(app: FastifyInstance, options: Acc
     }
     if (!deletion) return reply.status(404).send({ error: 'account not found' });
 
-    clearSessionCookies(reply);
+    clearSessionCookies(request, reply);
     return reply.status(202).send({ scheduled: true, deleteAfter: deletion.scheduledFor });
   });
 

@@ -920,8 +920,8 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     });
   });
 
-  app.post('/api/auth/logout', async (_request, reply) => {
-    clearSessionCookies(reply);
+  app.post('/api/auth/logout', async (request, reply) => {
+    clearSessionCookies(request, reply);
     return { status: 'ok' };
   });
 
