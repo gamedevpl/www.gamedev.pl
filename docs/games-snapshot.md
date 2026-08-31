@@ -175,7 +175,9 @@ The nightly `schedule:` in `publish-games.yml` (04:23 UTC) is that something. It
 how long a stale snapshot can serve at roughly a day, covering both a takedown whose
 bake failed and a dispatch that stopped arriving at all. It is a floor on recovery, not
 a substitute for the merge-time publish, and a day is far too slow for an urgent
-takedown.
+takedown. That daily run uses the same cheap full gate as a merge (playtest `--suite
+default`, no catalog `agent-play`). The Sunday 06:17 UTC cron is a separate catalog
+seal (`playtest --all` plus `agent-play`); it is not the staleness floor.
 
 If a takedown is urgent, do not wait for the next merge: run **Publish games snapshot**
 via `workflow_dispatch` against the games-repo ref that already omits the game. That

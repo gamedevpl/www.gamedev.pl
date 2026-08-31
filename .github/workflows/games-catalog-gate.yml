@@ -2,6 +2,10 @@ name: Games catalog gate
 
 # Runs the games repository's real post-merge gate on public Actions minutes.
 # publish-games.yml calls this workflow before advancing the snapshot pointer.
+# mode=full on merge/dispatch/daily 04:23 UTC: playtest --suite default, no
+# catalog agent-play. Those two are the Sunday 06:17 UTC seal (cron
+# '17 6 * * 0'); scoped still playtests touched slugs. The daily snapshot is a
+# cheap rebuild, not a second full-catalog seal.
 
 on:
   workflow_call:
@@ -27,6 +31,16 @@ on:
         required: false
         default: '1'
       narrow_conformance:
+        type: string
+        required: false
+        default: '0'
+      catalog_playtest:
+        description: 'full-mode playtest: default (~10 games) or all'
+        type: string
+        required: false
+        default: 'default'
+      catalog_agent_play:
+        description: 'full-mode catalog agent-play: 1 to run, 0 to skip (weekly seal)'
         type: string
         required: false
         default: '0'
@@ -73,6 +87,8 @@ jobs:
           INPUT_SLUGS: ${{ inputs.slugs }}
           INPUT_NEED_WEBKIT: ${{ inputs.need_webkit }}
           INPUT_NARROW_CONFORMANCE: ${{ inputs.narrow_conformance }}
+          INPUT_CATALOG_PLAYTEST: ${{ inputs.catalog_playtest }}
+          INPUT_CATALOG_AGENT_PLAY: ${{ inputs.catalog_agent_play }}
         run: |
           set -euo pipefail
           REF="${INPUT_SHA:-${INPUT_REF:-main}}"
@@ -80,6 +96,8 @@ jobs:
           SLUGS="${INPUT_SLUGS:-}"
           NEED_WEBKIT="${INPUT_NEED_WEBKIT:-1}"
           NARROW_CONFORMANCE="${INPUT_NARROW_CONFORMANCE:-0}"
+          CATALOG_PLAYTEST="${INPUT_CATALOG_PLAYTEST:-default}"
+          CATALOG_AGENT_PLAY="${INPUT_CATALOG_AGENT_PLAY:-0}"
 
           case "$REF" in
             *[!A-Za-z0-9._/-]*)
@@ -98,6 +116,20 @@ jobs:
             0:0|0:1|1:0|1:1) ;;
             *)
               echo "Error: gate flags must be 0 or 1"
+              exit 1
+              ;;
+          esac
+          case "$CATALOG_PLAYTEST" in
+            default|all) ;;
+            *)
+              echo "Error: catalog_playtest must be default or all"
+              exit 1
+              ;;
+          esac
+          case "$CATALOG_AGENT_PLAY" in
+            0|1) ;;
+            *)
+              echo "Error: catalog_agent_play must be 0 or 1"
               exit 1
               ;;
           esac
@@ -120,6 +152,8 @@ jobs:
             echo "slugs=$SLUGS"
             echo "need_webkit=$NEED_WEBKIT"
             echo "narrow_conformance=$NARROW_CONFORMANCE"
+            echo "catalog_playtest=$CATALOG_PLAYTEST"
+            echo "catalog_agent_play=$CATALOG_AGENT_PLAY"
           } >> "$GITHUB_OUTPUT"
 
       - name: Check out games repo
@@ -186,9 +220,15 @@ jobs:
           npm run build
           npm run check:webgl
           npm run accept
-          npm run agency -- --all --strict
-          npm run agent-play
-          npm run playtest -- --all
+          npm run agency -- --all --strict -j 4
+          if [ "${{ steps.resolve.outputs.catalog_agent_play }}" = 1 ]; then
+            npm run agent-play
+          fi
+          if [ "${{ steps.resolve.outputs.catalog_playtest }}" = all ]; then
+            npm run playtest -- --all
+          else
+            npm run playtest -- --suite default
+          fi
 
       - name: Run the static games gate
         if: steps.resolve.outputs.mode == 'static'

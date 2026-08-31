@@ -17,15 +17,23 @@ name: Publish games snapshot
 # failing before it reaches that step — nothing else retires the current snapshot
 # and the site serves a frozen catalog indefinitely. A partial bake no longer
 # advances the pointer (no published-serve GitHub fallback), so a failed publish
-# also leaves the previous good snapshot live. The schedule bounds that staleness
-# at a day, and re-bakes a takedown that a failed publish left serving.
+# also leaves the previous good snapshot live. The daily 04:23 UTC cron bounds
+# that staleness at a day with the same cheap full pipeline as dispatch (playtest
+# --suite default, no catalog agent-play). The Sunday 06:17 UTC cron is the
+# catalog seal: playtest --all plus agent-play. It is offset from 04:23 so
+# Sunday is one cheap rebuild then one seal, not two overlapping full-catalog
+# runs (this workflow cancels in-progress publishes).
 
 on:
   repository_dispatch:
     types: [games-published, games-validate]
-  # 04:23 UTC: off the top of the hour, where GitHub's scheduler is least contended.
+  # 04:23 UTC daily: off the top of the hour, where GitHub's scheduler is
+  # least contended. Cheap snapshot rebuild.
+  # 06:17 UTC Sunday: catalog seal. github.event.schedule is this exact
+  # cron string; keep it in sync with the catalog_* expressions below.
   schedule:
     - cron: '23 4 * * *'
+    - cron: '17 6 * * 0'
   workflow_dispatch:
     inputs:
       ref:
@@ -61,6 +69,11 @@ jobs:
       slugs: ${{ github.event.client_payload.slugs || '' }}
       need_webkit: ${{ github.event.client_payload.need_webkit || '1' }}
       narrow_conformance: ${{ github.event.client_payload.narrow_conformance || '0' }}
+      # github.event.schedule is the cron string that fired this run (empty on
+      # dispatch / workflow_dispatch). Match the Sunday cron above, not
+      # event_name == 'schedule' — the daily 04:23 cron is also a schedule.
+      catalog_playtest: ${{ github.event.schedule == '17 6 * * 0' && 'all' || 'default' }}
+      catalog_agent_play: ${{ github.event.schedule == '17 6 * * 0' && '1' || '0' }}
     secrets:
       GAMES_REPO_TOKEN: ${{ secrets.GAMES_REPO_TOKEN }}
 
