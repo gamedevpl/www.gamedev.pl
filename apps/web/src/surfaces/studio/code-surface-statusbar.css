@@ -1,0 +1,206 @@
+/* Code surface status bar: budget, save state, preview status, deliver/discard/publish (CodeSurface.tsx). */
+
+/* A thin, single-row status bar (VS Code's bottom bar) instead of a padded footer:
+   status segments on the left, actions on the right, everything the same small size. */
+.code-surface-statusbar {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 28px;
+  padding: 3px 10px;
+  border-top: 1px solid var(--panel-border);
+  background: rgba(148, 163, 184, 0.05);
+}
+
+.code-surface-statusbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.code-surface-statusbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.code-surface-statusbar-left::-webkit-scrollbar {
+  display: none;
+}
+
+.code-surface-statusbar-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  white-space: nowrap;
+  font-size: 0.72rem;
+}
+
+.code-surface-budget {
+  color: var(--muted);
+}
+
+.code-surface-budget.is-oversize {
+  color: #f0b429;
+}
+
+.code-surface-save-state {
+  color: var(--muted);
+}
+
+.code-surface-save-state.has-changes {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.code-surface-save-state.is-error {
+  color: #ff7b72;
+}
+
+.code-surface-rebuild-error {
+  color: #ff7b72;
+}
+
+.code-surface-live-push {
+  color: var(--success, #2e8b57);
+}
+
+.code-surface-round-opened {
+  color: var(--muted);
+}
+
+.code-surface-preview-status.is-pending {
+  color: var(--muted);
+}
+
+.code-surface-preview-status.is-pending .status-preview-spinner {
+  width: 10px;
+  height: 10px;
+  border-width: 2px;
+}
+
+.code-surface-preview-status.is-ready {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--turquoise);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.code-surface-preview-status.is-ready:hover {
+  color: var(--text);
+}
+
+.code-surface-deliver {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 8px;
+}
+
+.code-surface-discard {
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--muted);
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.code-surface-discard:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.code-surface-discard:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.code-surface-deliver-btn {
+  border: 1px solid var(--turquoise);
+  background: var(--turquoise);
+  color: #08241d;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.code-surface-deliver-btn:disabled {
+  border-color: var(--panel-border);
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--muted);
+  cursor: default;
+}
+
+.code-surface-deliver-message {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+/* Sits inline after the refusal it answers, so the fix reads as part of the sentence. */
+.code-surface-deliver-fix {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--turquoise);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--turquoise);
+  font: inherit;
+  cursor: pointer;
+}
+
+.code-surface-deliver-fix:hover:not(:disabled) {
+  background: rgba(45, 212, 191, 0.14);
+}
+
+.code-surface-deliver-fix:disabled {
+  border-color: var(--panel-border);
+  color: var(--muted);
+  cursor: default;
+}
+
+/* A refusal or failure is the one line explaining why nothing shipped — it must not
+   read as footnote grey. */
+.code-surface-deliver-message.is-error {
+  color: #ff7b72;
+}
+
+.code-surface-publish-hint {
+  display: inline-block;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  cursor: help;
+  vertical-align: middle;
+}
+
+.code-surface-publish-hint:focus-visible {
+  outline: 2px solid rgba(0, 228, 172, 0.5);
+  outline-offset: 2px;
+}
+
+/* Narrow phones: let the bar wrap into two lines rather than clip actions. */
+@media (max-width: 640px) {
+  .code-surface-statusbar-row {
+    flex-wrap: wrap;
+    height: auto;
+  }
+
+  .code-surface-publish-hint {
+    display: none;
+  }
+}

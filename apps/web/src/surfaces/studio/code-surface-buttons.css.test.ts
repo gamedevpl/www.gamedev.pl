@@ -2,12 +2,26 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-const css = readFileSync(fileURLToPath(new URL('./styles.css', import.meta.url)), 'utf8');
+function loadCss(relativePath: string): string {
+  return readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), 'utf8');
+}
+
+// The split code surface CSS spans styles.css plus these seven files.
+const css = [
+  loadCss('../../styles.css'),
+  loadCss('./editor-controller.css'),
+  loadCss('./code-surface.css'),
+  loadCss('./code-surface-agent.css'),
+  loadCss('./code-surface-explorer.css'),
+  loadCss('./code-surface-editor.css'),
+  loadCss('./code-surface-statusbar.css'),
+  loadCss('./code-actions-menu.css'),
+].join('\n');
 
 // Regression: the Publish CTA once rendered as a bare native button.
 function ruleFor(selector: string): string {
   const start = css.indexOf(selector);
-  expect(start, `no ${selector} selector in styles.css`).toBeGreaterThan(-1);
+  expect(start, `no ${selector} selector in the code surface CSS`).toBeGreaterThan(-1);
   const open = css.indexOf('{', start);
   expect(open, `${selector} selector has no rule body`).toBeGreaterThan(start);
   const end = css.indexOf('}', open);

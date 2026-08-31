@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { CodeSurfaceFile } from './codeSurfaceApi.js';
 import { buildSourceTree, type TreeNode } from './codeSurfaceTreeModel.js';
 import { PixelIcon } from '../../PixelIcon.js';
+import './code-surface-explorer.css';
 
 const LOCKED_DIRS = ['shared/', 'tools/'] as const;
 

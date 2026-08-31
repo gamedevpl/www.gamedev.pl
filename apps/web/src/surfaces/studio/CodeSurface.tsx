@@ -69,6 +69,12 @@ import { PixelIcon } from '../../PixelIcon.js';
 import { fetchGameEditor, type EditorContentDoc, type EditorParamValue } from '../../studioApi.js';
 import type { EditorContentPush } from '../../editorBridge.js';
 import { recordCodeStep } from '../../visitTelemetry.js';
+import './code-surface.css';
+import './code-surface-agent.css';
+import './code-surface-explorer.css';
+import './code-surface-editor.css';
+import './code-surface-statusbar.css';
+import './code-actions-menu.css';
 
 /**
  * The Code surface (creator-code-editing-execution-plan.md CE-06/07/08/09/13/15):

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EditorControllerState, EditorUiField, EditorUiLabel, EditorUiNode } from '../../editorBridge.js';
+import './editor-controller.css';
 
 function labelText(label: EditorUiLabel, language: string): string {
   return typeof label === 'string' ? label : language.startsWith('pl') ? label.pl : label.en;

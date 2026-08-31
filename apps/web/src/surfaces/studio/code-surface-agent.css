@@ -1,0 +1,182 @@
+/* Code surface in-editor agent: active banner, mode dialog, console (CodeSurface.tsx). */
+
+.code-surface-agent-active-banner {
+  margin-left: auto;
+  min-width: 0;
+  font-size: 0.78rem;
+  color: var(--turquoise);
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(0, 228, 172, 0.1);
+  border: 1px solid rgba(0, 228, 172, 0.3);
+}
+
+.code-surface-agent-mode-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.code-surface-agent-mode-trigger:hover,
+.code-surface-agent-mode-trigger:focus-visible {
+  color: var(--text);
+  border-color: rgba(0, 228, 172, 0.35);
+}
+
+.code-surface-agent-mode-trigger.is-active {
+  color: var(--turquoise);
+  border-color: rgba(0, 228, 172, 0.5);
+  background: rgba(0, 228, 172, 0.08);
+}
+
+.code-surface-agent-mode-backdrop {
+  position: fixed;
+  /* Above install/update banners (900) — the same 1000+ tier as .modal-backdrop. */
+  z-index: 1000;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(3, 8, 13, 0.66);
+}
+
+.code-surface-agent-mode-dialog {
+  width: min(560px, 92vw);
+  max-height: 85vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.code-surface-agent-mode-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.code-surface-agent-mode-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--panel-border);
+}
+
+.code-surface-agent-mode-section:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.code-surface-agent-mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.code-surface-agent-mode-hint {
+  margin: 6px 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.code-surface-agent-console-tools {
+  margin: 8px 0 0;
+  font-family: var(--mono, monospace);
+  font-size: 0.72rem;
+  color: var(--muted);
+  word-break: break-word;
+}
+
+.code-surface-agent-console-input {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px;
+  box-sizing: border-box;
+  resize: vertical;
+  font-family: var(--mono, monospace);
+  font-size: 0.78rem;
+  color: inherit;
+  background: rgba(3, 8, 13, 0.4);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.code-surface-agent-console-run {
+  margin-top: 8px;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 0.8rem;
+  color: inherit;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.code-surface-agent-console-run:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.code-surface-agent-console-history {
+  margin: 10px 0 0;
+  padding: 0;
+  max-height: 320px;
+  overflow: auto;
+  list-style: none;
+}
+
+.code-surface-agent-console-entry {
+  margin-bottom: 8px;
+}
+
+.code-surface-agent-console-entry-command {
+  padding: 2px 4px;
+  font-family: var(--mono, monospace);
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.code-surface-agent-console-entry.is-error .code-surface-agent-console-entry-command {
+  color: var(--error);
+}
+
+.code-surface-agent-console-output {
+  margin: 2px 0 0;
+  padding: 8px;
+  font-family: var(--mono, monospace);
+  font-size: 0.74rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: rgba(3, 8, 13, 0.4);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.code-surface-agent-console-guide {
+  margin-top: 10px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.code-surface-agent-console-guide pre {
+  margin: 6px 0 0;
+  font-size: 0.72rem;
+  white-space: pre-wrap;
+}
