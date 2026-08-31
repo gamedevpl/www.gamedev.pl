@@ -9,6 +9,7 @@ import {
   type DeclineReason,
   type Proposal,
 } from '../../proposalsApi.js';
+import '../../propose-composer.css';
 
 /**
  * One proposal, from the reviewer's seat.

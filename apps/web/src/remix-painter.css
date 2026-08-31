@@ -1,0 +1,65 @@
+/* Remix painter: board/palette inside the editor stage (RemixPainter.tsx). */
+
+/* ---------------------------------------------------------------------------
+ * Remix painter — board/palette inside the full-bleed editor stage.
+ * Reuses the Studio's board/palette/check classes (one grammar, two surfaces);
+ * cell size is set by `.remix-editor-body` / play-focus PiP rules above.
+ * ------------------------------------------------------------------------- */
+
+.remix-painter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.remix-painter .editor-board {
+  align-self: flex-start;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.remix-painter-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.remix-painter-item {
+  border: 1px solid var(--panel-border, rgba(255, 255, 255, 0.18));
+  background: transparent;
+  color: inherit;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.remix-painter-item.is-active {
+  background: var(--accent, #65f59a);
+  color: #10131c;
+  border-color: transparent;
+}
+
+.remix-painter-item.is-add,
+.remix-painter-item.is-remove {
+  min-width: 30px;
+}
+
+.remix-painter-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.remix-painter-properties {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+/* A build that compiled and then threw. The tick would be a lie. */
+.remix-result.is-broken .remix-tick {
+  background: rgba(242, 162, 162, 0.16);
+  color: #f2a2a2;
+}

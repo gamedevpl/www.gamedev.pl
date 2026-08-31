@@ -1,0 +1,231 @@
+/* Remix result: outcome CTAs, sliders, share/save actions (RemixPanel.tsx). */
+
+/*
+ * The wait, with a subject. The player's own words are echoed under it so the
+ * freeze reads as their change being made rather than as the game going away.
+ */
+.remix-working {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.remix-working-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.remix-working-copy b {
+  font-weight: 600;
+}
+
+.remix-echo {
+  font-size: 0.82rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remix-spinner {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid #2f3a46;
+  border-top-color: var(--accent, #62dcff);
+  animation: remix-spin 0.9s linear infinite;
+}
+
+@keyframes remix-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.remix-bar {
+  display: block;
+  height: 3px;
+  border-radius: 2px;
+  background: #222b34;
+  overflow: hidden;
+}
+
+.remix-bar i {
+  display: block;
+  height: 100%;
+  width: 45%;
+  border-radius: 2px;
+  background: var(--accent, #62dcff);
+  opacity: 0.75;
+  animation: remix-crawl 2.4s ease-in-out infinite;
+}
+
+@keyframes remix-crawl {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(230%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .remix-spinner,
+  .remix-bar i {
+    animation: none;
+  }
+}
+
+.remix-result {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.remix-tick {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  margin-top: 1px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  background: rgba(98, 220, 255, 0.16);
+  color: var(--accent, #62dcff);
+}
+
+.remix-actions-row {
+  display: flex;
+  gap: 8px;
+}
+
+.remix-btn {
+  flex: 1;
+  min-height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border, #24313d);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.remix-btn.is-primary {
+  background: var(--accent, #62dcff);
+  border-color: transparent;
+  color: #06222b;
+}
+
+.remix-btn.is-quiet {
+  flex: 0 1 auto;
+  padding: 0 16px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.remix-note {
+  margin: 0;
+  font-size: 0.86rem;
+  /* Not `--muted`: this is read over a lit game, in daylight, at arm's length. */
+  color: #b3c0cc;
+}
+
+.remix-note.is-ok {
+  color: #9fd8b4;
+}
+
+.remix-note.is-error {
+  color: #f2a2a2;
+}
+
+.remix-undo {
+  margin-left: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.remix-sliders {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.remix-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--muted);
+}
+
+.remix-row.is-toggle {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.remix-row em {
+  font-style: normal;
+  font-family: ui-monospace, monospace;
+  opacity: 0.7;
+}
+
+/* Thumb-sized on purpose: players are on phones. */
+.remix-row input[type='range'] {
+  width: 100%;
+  min-height: 30px;
+  accent-color: var(--accent, #62dcff);
+  touch-action: pan-y;
+}
+
+.remix-row input[type='text'],
+.remix-row select {
+  min-height: 32px;
+  background: #0c1116;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  color: inherit;
+  padding: 4px 6px;
+}
+
+.remix-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.remix-action {
+  flex: 1 1 0;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: #131b23;
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.remix-action.is-primary {
+  background: #17323f;
+}
+
+.remix-share-url {
+  margin: 0;
+  font-size: 0.7rem;
+  font-family: ui-monospace, monospace;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}

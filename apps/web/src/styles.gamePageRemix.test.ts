@@ -3,8 +3,12 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const css = readFileSync(fileURLToPath(new URL('./styles.css', import.meta.url)), 'utf8');
+const remixEditorStageCss = readFileSync(fileURLToPath(new URL('./remix-editor-stage.css', import.meta.url)), 'utf8');
 const phoneStart = css.lastIndexOf('@media (max-width: 600px)');
-const phoneEnd = css.indexOf('/* ---------------------------------------------------------------------------', phoneStart);
+const phoneEnd = css.indexOf(
+  '/* ---------------------------------------------------------------------------',
+  phoneStart,
+);
 const phoneCss = css.slice(phoneStart, phoneEnd);
 
 function phoneRule(selector: string): string {
@@ -54,16 +58,16 @@ describe('game-page Remix entry on phones', () => {
 
 describe('Remix editor Play focus', () => {
   it('fits the path preview into the PiP and removes editing controls', () => {
-    expect(css).toMatch(
+    expect(remixEditorStageCss).toMatch(
       /\.remix-editor-stage\.is-focus-play \.remix-painter-properties,[\s\S]*\.editor-path-help\s*\{\s*display:\s*none;/,
     );
-    expect(css).toMatch(
+    expect(remixEditorStageCss).toMatch(
       /\.remix-editor-stage\.is-focus-play \.editor-path-wrap\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s,
     );
-    expect(css).toMatch(
+    expect(remixEditorStageCss).toMatch(
       /\.remix-editor-stage\.is-focus-play \.editor-path-viewport\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;[^}]*overflow:\s*hidden;/s,
     );
-    expect(css).toMatch(
+    expect(remixEditorStageCss).toMatch(
       /\.remix-editor-stage\.is-focus-play \.editor-path\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;[^}]*min-width:\s*0;[^}]*min-height:\s*0;/s,
     );
   });

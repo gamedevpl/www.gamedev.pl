@@ -52,6 +52,9 @@ import {
   type RemixNote,
 } from './remixSessionPersist.js';
 import { NAVIGATE_EVENT, playPath } from './core/router.js';
+import './remix-composer.css';
+import './remix-result.css';
+import './remix-editor-stage.css';
 
 /** Successful landings before we offer to keep the remix in Studio. */
 const KEEP_OFFER_AFTER = 3;
