@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import './admin-small-panels.css';
 import {
   createBetaInvite,
   fetchBetaInvites,

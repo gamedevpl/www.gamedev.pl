@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import './admin-assessments.css';
 import {
   resolveAssessment,
   type AssessmentResolution,
