@@ -1659,7 +1659,6 @@ body.player-open {
   display: flex;
   flex-direction: column;
   box-shadow: none;
-  animation: fadeIn 0.2s ease-out;
   /* Touch belongs to the game, not the browser: no double-tap zoom, no pinch, no
      accidental text selection from a drag. Taps and clicks are unaffected. Games
      are single-screen surfaces that handle their own gestures, so there is no
@@ -4362,13 +4361,35 @@ a.user-name--profile:focus-visible {
   margin-bottom: 16px;
 }
 
-/* FULL SCREEN APP LOADING */
+/* FULL SCREEN APP LOADING
+   Covers site chrome when nested (unpublished /play, GameDetailPage). Same
+   paint as the theater so /play never flashes the top bar. */
 .app-loading-screen {
-  min-height: 100vh;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg);
+  background: #06090c;
+}
+
+.app:has(.app-loading-screen) > .app-header,
+.app:has(.app-loading-screen) > .site-footer,
+.app:has(.is-playing-full-viewport) > .app-header {
+  display: none;
+}
+
+/* Theater bar stays the escape; this only fills the playfield. */
+.is-playing-full-viewport .app-loading-screen {
+  position: absolute;
+  z-index: 1;
+}
+
+.app-loading-screen__exit {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
 }
 
 .app-loading-screen__content {

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AppLoadingScreen } from './AppLoadingScreen.js';
 import { GameFrame } from './GameFrame.js';
 import { fetchPublishedGame } from './catalog.js';
 import { PixelIcon } from './PixelIcon.js';
@@ -193,7 +194,7 @@ export function PublishedGameFrame({
     );
   }
   if (html === null) {
-    return <p className="catalog-state">{t('catalog.gameLoading')}</p>;
+    return <AppLoadingScreen />;
   }
   // `embed` describes chrome, not ownership — the theater always embeds — so the
   // gate is the explicit prop plus "this frame is one player's", which a party

@@ -59,4 +59,36 @@ describe('PublishedGameFrame retry', () => {
     expect(container.querySelector('iframe')).not.toBeNull();
     await act(async () => root.unmount());
   });
+
+  it('covers the wait with the full-viewport mascot, not a loading line', async () => {
+    let resolveGame!: (value: { slug: string; title: string; html: string }) => void;
+    vi.mocked(fetchPublishedGame).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveGame = resolve;
+        }),
+    );
+
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(<PublishedGameFrame slug="solo-cards" title="Solo Cards" embed />);
+    });
+
+    expect(container.querySelector('.app-loading-screen')).not.toBeNull();
+    expect(container.querySelector('iframe')).toBeNull();
+    expect(container.textContent).not.toMatch(/loading game/i);
+
+    await act(async () => {
+      resolveGame({
+        slug: 'solo-cards',
+        title: 'Solo Cards',
+        html: '<!doctype html><title>Solo Cards</title>',
+      });
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('.app-loading-screen')).toBeNull();
+    expect(container.querySelector('iframe')).not.toBeNull();
+    await act(async () => root.unmount());
+  });
 });
