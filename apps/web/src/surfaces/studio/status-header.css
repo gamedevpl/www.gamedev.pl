@@ -1,0 +1,231 @@
+/* Status view heading, live/preview badges, warning chip, retry, footer/abandon controls (SubmissionStatusView.tsx). */
+
+.status-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* "Live · updated 3 minutes ago" — the page polls on its own, so say so rather than
+   leaving the reader wondering whether they need to refresh. The trailing half is the
+   build's pulse, not a stopwatch: what matters is when the agent last moved. */
+.status-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: var(--accent-blue);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.status-heartbeat {
+  font-variant-numeric: tabular-nums;
+}
+
+.status-brief {
+  color: var(--text);
+  font-size: 0.98rem;
+  font-style: italic;
+  line-height: 1.5;
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  background: var(--panel-card);
+  border-left: 3px solid var(--turquoise);
+  border-radius: 4px;
+}
+
+.status-description {
+  color: var(--text);
+  margin: 12px 0;
+}
+
+.status-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.status-slug {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.status-preview-note {
+  color: var(--muted);
+  font-size: 0.85rem;
+  max-width: 460px;
+  margin: 0;
+}
+
+.status-preview-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: var(--accent-blue);
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 8px 0 0;
+}
+
+/* Shown before the agent has produced a first playable build. */
+.status-preview-pending {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 0 24px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px dashed var(--panel-border);
+  background: rgba(13, 17, 21, 0.4);
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.status-preview-spinner {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid rgba(148, 163, 184, 0.25);
+  border-top-color: var(--turquoise);
+  animation: status-spin 0.8s linear infinite;
+}
+
+@keyframes status-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* CI is red on this build — stated plainly, without alarm. */
+.status-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.28);
+}
+
+/* Claude-shaped: one dismissible chip above the composer, not a sticky banner. */
+.studio-status-chip {
+  margin: 0;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  font-size: 0.82rem;
+}
+
+.studio-status-chip-body {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.studio-status-chip-body > span {
+  min-width: 0;
+}
+
+.studio-status-chip-dismiss {
+  appearance: none;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: -4px -2px -4px 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+.studio-status-chip-dismiss:hover {
+  opacity: 1;
+  background: rgba(251, 191, 36, 0.12);
+}
+
+.status-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  text-decoration: none;
+}
+
+/* Stop-this-build escape hatch: understated, and two-step so a mis-tap can't
+   discard an hour of agent work. */
+.status-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Studio's Build tab drops the "back home" half of this row; keep what's left
+   where it was rather than letting it slide across to the empty side. */
+.status-footer-actions.is-embedded {
+  justify-content: flex-end;
+}
+
+.status-abandon {
+  /* This cancels a running build, so it stays a quiet text link rather than a
+     button — but the tap target measured 14px tall, well under a thumb. Sized
+     the same way as .btn-create-now above: display:flex + min-height, because
+     padding alone did not change the measured box here. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.status-abandon:hover {
+  color: var(--text);
+}
+
+.status-abandon.is-danger {
+  color: #f87171;
+  font-weight: 600;
+}
+
+.status-abandon-confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}

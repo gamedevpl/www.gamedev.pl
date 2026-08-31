@@ -14,6 +14,7 @@ import { PixelIcon } from '../../PixelIcon.js';
 import { submitFeedback, type FeedbackContext, type SubmissionApiError } from '../../submissionApi.js';
 import { submitImprovement } from '../../studioApi.js';
 import type { StageOrigin, StageSource } from '../../useStageSource.js';
+import './status-feedback.css';
 
 /**
  * The stage: always mounted, always full-bleed, running the game whether or not the

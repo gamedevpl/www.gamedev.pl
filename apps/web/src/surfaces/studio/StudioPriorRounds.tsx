@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { isPriorRoundDismissed, setPriorRoundDismissed } from '../../priorRoundDismiss.js';
 import type { PriorRoundEntry, PriorRoundHistory } from '../../submissionApi.js';
 import { formatRelativeTime } from '../../relativeTime.js';
+import './status-thread.css';
 
 /**
  * Superseded build jobs for this game, as collapsed blocks above the live thread.

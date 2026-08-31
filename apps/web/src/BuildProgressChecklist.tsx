@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
 import type { BuildEvent, BuildProgress } from './submissionApi.js';
+import './build-progress.css';
 
 // Props-driven — feed in your own status poll, this never refetches.
 export function BuildProgressChecklist({

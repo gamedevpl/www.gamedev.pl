@@ -1,0 +1,249 @@
+/* Build progress: activity-feed shot thumbnails, progress bar/checklist, commit and activity lists. */
+/* Shared by SubmissionStatusView.tsx, BuildProgressChecklist.tsx, StudioStageCard.tsx. */
+
+/* Post-play revision loop: tell the agent what to change after trying the draft. */
+/* Pictures of the build sit on the timeline, at the moment they belong to, rather
+   than as a banner above it — they are things that happened, like the commits and
+   the agent's sentences around them. Kept small on the row; full size is one click. */
+.build-activity-shots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.build-activity-shot {
+  padding: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: var(--panel-card);
+  cursor: zoom-in;
+  line-height: 0;
+  opacity: 0.85;
+  transition:
+    opacity 120ms ease,
+    border-color 120ms ease;
+}
+
+.build-activity-shot:hover,
+.build-activity-shot:focus-visible {
+  opacity: 1;
+  border-color: var(--accent, var(--panel-border));
+}
+
+.build-activity-shot img {
+  display: block;
+  width: 88px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 5px;
+  /* Pixel art: never smooth it. */
+  image-rendering: pixelated;
+}
+
+.build-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 16px 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.build-progress-heading {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+
+.build-progress-heading-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.build-progress-count {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--turquoise);
+  font-variant-numeric: tabular-nums;
+}
+
+.build-progress-bar {
+  height: 6px;
+  margin-bottom: 12px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+  overflow: hidden;
+}
+
+.build-progress-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent-blue), var(--turquoise));
+  transition: width 0.5s ease;
+}
+
+.build-progress ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.build-progress-checklist li {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.build-progress-checklist li.checklist-done {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.build-progress-commits {
+  /* Taller than a bare commit list needed: entries now carry the creator's own
+     (multi-line) change requests alongside the agent's one-liners. */
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.build-progress-commits li {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-family: monospace;
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.build-progress-commits li:last-child {
+  border-bottom: none;
+}
+
+.build-progress-commits li.build-progress-commit-latest {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* The agent's own words about what it's doing — the most direct signal we have,
+   so it sits at the top of the panel and outranks anything we infer. */
+.build-progress-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(45, 212, 191, 0.07);
+  border: 1px solid rgba(45, 212, 191, 0.25);
+}
+
+.build-progress-note-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--turquoise);
+}
+
+.build-progress-note-text {
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+/* "Working on: …" — the one line that answers "what is happening right now?" */
+.build-progress-current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 0.88rem;
+  color: var(--text);
+}
+
+.build-progress-current-spinner {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid rgba(148, 163, 184, 0.35);
+  border-top-color: var(--turquoise);
+  animation: status-spin 0.9s linear infinite;
+}
+
+/* The merged build feed: agent commits + the creator's own change requests. */
+.build-activity-list {
+  gap: 0 !important;
+}
+
+.build-activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  font-family: inherit !important;
+}
+
+.build-activity-item:last-child {
+  border-bottom: none;
+}
+
+.build-activity-icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--muted);
+}
+
+.build-activity-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.build-activity-text {
+  overflow-wrap: anywhere;
+}
+
+.build-activity-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--turquoise);
+}
+
+.build-activity-time {
+  flex: none;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* A creator's own words get the readable treatment; agent commits stay log-like. */
+.build-activity-revision .build-activity-text {
+  color: var(--text);
+  font-style: italic;
+}
+
+.build-activity-revision .build-activity-icon {
+  color: var(--turquoise);
+}
+
+/* The mini chat agent's row — distinct from both the creator's italic bubble text and
+   the builder's plain log lines, so it cannot be misread as either. */
+.build-activity-studio .build-activity-icon,
+.build-activity-studio .build-activity-label {
+  color: var(--accent-blue);
+}
