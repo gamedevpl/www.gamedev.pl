@@ -12,6 +12,7 @@ import type { RemixSession } from './remixApi.js';
 import { readSharedParams } from './remixApi.js';
 import { resumeRemixForSlug, sessionFromResume } from './remixSessionPersist.js';
 import type { PlayVia } from './visitTelemetry.js';
+import './remix-host.css';
 
 type PublishedGameFrameProps = {
   slug: string;

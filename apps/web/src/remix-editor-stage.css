@@ -1,0 +1,360 @@
+/* Remix editor stage: full-bleed map/game PiP layout (RemixPanel.tsx). */
+
+/* —— Remix level editor stage: full-bleed map ↔ game PiP —— */
+
+.remix-host.is-editor-stage {
+  display: block;
+  position: absolute;
+  inset: 0;
+  /*
+   * Above the theater chrome bar (z-index 10) so Edit/Play/Done are reachable;
+   * below install/update banners and auth modals (900+).
+   */
+  z-index: 60;
+  background: #0a0f14;
+}
+
+.remix-host.is-editor-stage .remix-game-slot {
+  display: block;
+  position: absolute;
+  z-index: 6;
+  overflow: hidden;
+  background: #000;
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.16);
+  transition:
+    inset 0.22s ease,
+    width 0.22s ease,
+    height 0.22s ease,
+    border-radius 0.22s ease,
+    box-shadow 0.22s ease;
+}
+
+.remix-host.is-editor-stage .remix-game-slot .game-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  display: block;
+}
+
+/* Edit focus: game is the live PiP above the palette dock. */
+.remix-host.is-editor-stage.is-focus-edit .remix-game-slot {
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px) + var(--remix-editor-dock, 72px));
+  left: auto;
+  top: auto;
+  width: min(42vw, 148px);
+  height: min(28vw, 96px);
+  border-radius: 12px;
+  /* Clicks go to the hit target in RemixPanel — not the tiny iframe. */
+  pointer-events: none;
+}
+
+@media (min-width: 720px) {
+  .remix-host.is-editor-stage.is-focus-edit .remix-game-slot {
+    width: 220px;
+    height: 132px;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px) + var(--remix-editor-dock, 80px));
+  }
+}
+
+/* Play focus: game reclaims the theater; map PiP is the editor body. */
+.remix-host.is-editor-stage.is-focus-play .remix-game-slot {
+  inset: 0;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  box-shadow: none;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+.remix-editor-stage {
+  --remix-editor-dock: 72px;
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+
+@media (min-width: 720px) {
+  .remix-editor-stage {
+    --remix-editor-dock: 80px;
+  }
+}
+
+.remix-editor-chrome,
+.remix-editor-body,
+.remix-editor-game-pip-hit {
+  pointer-events: auto;
+}
+
+.remix-editor-chrome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--panel-border, #24313d);
+  background: rgba(12, 18, 24, 0.94);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  z-index: 3;
+}
+
+.remix-editor-identity {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.remix-editor-kicker {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted, #8b9aab);
+  font-weight: 800;
+}
+
+.remix-editor-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #65f59a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remix-editor-chrome-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.remix-editor-focus {
+  display: inline-flex;
+  border: 1px solid var(--panel-border, #24313d);
+  border-radius: 999px;
+  overflow: hidden;
+  background: #0c1218;
+}
+
+.remix-editor-focus-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted, #8b9aab);
+  padding: 6px 11px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.remix-editor-focus-btn.is-on {
+  background: var(--accent, #62dcff);
+  color: #06222b;
+}
+
+.remix-editor-done {
+  border: 1px solid var(--panel-border, #24313d);
+  background: none;
+  color: inherit;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.remix-editor-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: radial-gradient(circle at 45% 35%, #15202a 0%, #0a0f14 65%), #0a0f14;
+  overflow: auto;
+}
+
+.remix-editor-body .remix-painter {
+  flex: 1;
+  min-height: 0;
+  --editor-cell: clamp(22px, 7vw, 40px);
+}
+
+.remix-editor-body .remix-painter .editor-board {
+  margin: 0 auto;
+}
+
+.remix-editor-body .editor-palette {
+  position: sticky;
+  bottom: 0;
+  padding-top: 4px;
+  background: linear-gradient(180deg, transparent, #0a0f14 30%);
+}
+
+/* Play focus: editor body collapses to the map PiP (BR). */
+.remix-editor-stage.is-focus-play {
+  pointer-events: none;
+}
+
+.remix-editor-stage.is-focus-play .remix-editor-chrome {
+  pointer-events: auto;
+  background: rgba(12, 18, 24, 0.72);
+}
+
+.remix-editor-stage.is-focus-play .remix-editor-body {
+  position: absolute;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  left: auto;
+  top: auto;
+  width: min(42vw, 148px);
+  height: min(28vw, 96px);
+  flex: none;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  cursor: pointer;
+  pointer-events: auto;
+  z-index: 6;
+  background: #0a0f14;
+}
+
+@media (min-width: 720px) {
+  .remix-editor-stage.is-focus-play .remix-editor-body {
+    width: 220px;
+    height: 132px;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+.remix-editor-stage.is-focus-play .remix-painter {
+  --editor-cell: clamp(8px, 2.4vw, 14px);
+  pointer-events: none;
+  gap: 4px;
+}
+
+.remix-editor-stage.is-focus-play .remix-painter-items,
+.remix-editor-stage.is-focus-play .editor-palette,
+.remix-editor-stage.is-focus-play .remix-painter-collection-selector,
+.remix-editor-stage.is-focus-play .remix-painter-checks,
+.remix-editor-stage.is-focus-play .remix-painter-properties,
+.remix-editor-stage.is-focus-play .editor-path-help {
+  display: none;
+}
+
+.remix-editor-stage.is-focus-play .remix-painter .editor-board {
+  padding: 4px;
+  gap: 1px;
+  border-radius: 6px;
+}
+
+.remix-editor-stage.is-focus-play .editor-path-wrap {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.remix-editor-stage.is-focus-play .editor-path-viewport {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+
+.remix-editor-stage.is-focus-play .editor-path {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-height: none;
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: 6px;
+}
+
+.remix-editor-game-pip-hit {
+  position: absolute;
+  z-index: 7;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px) + var(--remix-editor-dock, 72px));
+  width: min(42vw, 148px);
+  height: min(28vw, 96px);
+  border: none;
+  border-radius: 12px;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+@media (min-width: 720px) {
+  .remix-editor-game-pip-hit {
+    width: 220px;
+    height: 132px;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px) + var(--remix-editor-dock, 80px));
+  }
+}
+
+.remix-editor-pip-badge {
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 999px;
+  padding: 3px 7px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #e8f0f7;
+}
+
+.remix-editor-pip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #65f59a;
+  box-shadow: 0 0 0 3px rgba(101, 245, 154, 0.2);
+}
+
+.remix-editor-pip-cta {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  z-index: 2;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 3px 7px;
+  color: #e8f0f7;
+}
+
+/* The floating Remix pill lived here. It moved onto the chrome bar (GameTheater's
+   `remixControl`): an invitation that pulses over the game it is advertising is
+   the one element on the screen moving for its own sake, and the reveal timers
+   that fed it went with it. `offered` / `opened` on the visit stream is what now
+   answers whether the quieter door still gets used. */
