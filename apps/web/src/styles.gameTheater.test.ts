@@ -61,3 +61,23 @@ describe('game theater floating bar', () => {
     expect(exit).toMatch(/bottom:\s*max\(12px,\s*env\(safe-area-inset-bottom\)\)/);
   });
 });
+
+describe('play loading covers the site chrome', () => {
+  it('paints the mascot as a viewport overlay, not a block under the header', () => {
+    const loading = ruleBody('.app-loading-screen');
+
+    expect(loading).toMatch(/position:\s*fixed/);
+    expect(loading).toMatch(/inset:\s*0/);
+    expect(loading).toMatch(/z-index:\s*1000/);
+    expect(loading).toMatch(/background:\s*#06090c/);
+  });
+
+  it('hides the site header while that overlay or the theater owns the window', () => {
+    expect(css).toMatch(/\.app:has\(\.app-loading-screen\)\s*>\s*\.app-header[\s\S]*?display:\s*none/);
+    expect(css).toMatch(/\.app:has\(\.is-playing-full-viewport\)\s*>\s*\.app-header[\s\S]*?display:\s*none/);
+  });
+
+  it('does not fade the theater in over the catalog chrome', () => {
+    expect(ruleBody('.stage.is-playing-full-viewport')).not.toMatch(/animation:\s*fadeIn/);
+  });
+});

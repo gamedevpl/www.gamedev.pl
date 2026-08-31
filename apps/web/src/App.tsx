@@ -1164,9 +1164,7 @@ export function App() {
     return <AppLoadingScreen />;
   }
 
-  // Unpublished /play: theater covers the viewport when a game loads, but the
-  // loading/error sub-states are regular panels and need the site chrome around
-  // them (same wrapper as the notFound branch above).
+  // Unpublished /play: loading is a full-viewport overlay; error keeps chrome.
   if (unpublishedPlayTheater) {
     return (
       <div className="app app--unpublished-play">
@@ -1252,7 +1250,7 @@ export function App() {
               />
             ) : (
               <>
-                {route.view === 'play' ? (
+                {route.view === 'play' && !stageContent ? (
                   <GameDetailPage
                     game={playCatalogGame}
                     state={catalogStatus}

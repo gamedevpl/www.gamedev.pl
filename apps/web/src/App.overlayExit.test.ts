@@ -162,6 +162,51 @@ describe('closing a full-viewport game', () => {
     });
   });
 
+  it('covers unpublished /play loading with the mascot, not the site header', async () => {
+    let resolveGame!: (value: Response) => void;
+    const gamePending = new Promise<Response>((resolve) => {
+      resolveGame = resolve;
+    });
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(JSON.stringify({ user: { uid: 'creator-1', tier: 'beta' } }));
+      }
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
+      }
+      if (url.endsWith('/api/catalog')) {
+        return new Response(JSON.stringify([]));
+      }
+      if (url.includes('/api/my/games') || url.includes('/api/studio')) {
+        return new Response(JSON.stringify({ games: [] }));
+      }
+      if (url.includes('/api/games/pending-draft')) {
+        return gamePending;
+      }
+      return new Response(JSON.stringify({}), { status: 404 });
+    });
+
+    window.history.pushState(null, '', '/play/pending-draft');
+    const { container, root } = await renderApp();
+
+    expect(container.querySelector('.app-loading-screen')).not.toBeNull();
+    expect(container.querySelector('.game-theater-bar')).toBeNull();
+
+    await act(async () => {
+      resolveGame(new Response(JSON.stringify({ slug: 'pending-draft', title: 'Pending', html: '<canvas>' })));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.app-loading-screen')).toBeNull();
+    expect(container.querySelector('.game-theater-bar')).not.toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('exits an unpublished /play deep link to home on Close', async () => {
     mockApi();
     window.history.pushState(null, '', '/play/transport-tycoon-remake');
