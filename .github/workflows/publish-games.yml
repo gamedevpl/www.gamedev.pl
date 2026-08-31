@@ -61,6 +61,8 @@ jobs:
       slugs: ${{ github.event.client_payload.slugs || '' }}
       need_webkit: ${{ github.event.client_payload.need_webkit || '1' }}
       narrow_conformance: ${{ github.event.client_payload.narrow_conformance || '0' }}
+      catalog_playtest: ${{ github.event_name == 'schedule' && 'all' || 'default' }}
+      catalog_agent_play: ${{ github.event_name == 'schedule' && '1' || '0' }}
     secrets:
       GAMES_REPO_TOKEN: ${{ secrets.GAMES_REPO_TOKEN }}
 
