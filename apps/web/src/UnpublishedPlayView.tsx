@@ -58,13 +58,12 @@ export function UnpublishedPlayView({ slug, onExit, onTitle }: UnpublishedPlayVi
     };
   }, [slug, t]);
 
-  // Same scroll lock the other players use: the theater is a fixed overlay, so the
-  // page behind it must not scroll (or show through) while a game is open.
+  // Lock the page for loading and play — both are full-viewport overlays.
   useEffect(() => {
-    if (!game) return;
+    if (error) return;
     document.body.classList.add('player-open');
     return () => document.body.classList.remove('player-open');
-  }, [game]);
+  }, [error]);
 
   if (error) {
     return (
@@ -89,7 +88,7 @@ export function UnpublishedPlayView({ slug, onExit, onTitle }: UnpublishedPlayVi
 
   if (!game) {
     // Match /play catalog wait: full-page mascot, not a spinner.
-    return <AppLoadingScreen />;
+    return <AppLoadingScreen onExit={onExit} />;
   }
 
   return (
