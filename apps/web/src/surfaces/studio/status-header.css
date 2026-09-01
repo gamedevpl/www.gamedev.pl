@@ -185,12 +185,6 @@
   gap: 12px;
 }
 
-/* Studio's Build tab drops the "back home" half of this row; keep what's left
-   where it was rather than letting it slide across to the empty side. */
-.status-footer-actions.is-embedded {
-  justify-content: flex-end;
-}
-
 .status-abandon {
   /* This cancels a running build, so it stays a quiet text link rather than a
      button — but the tap target measured 14px tall, well under a thumb. Sized
