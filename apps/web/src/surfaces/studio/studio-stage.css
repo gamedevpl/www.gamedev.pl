@@ -323,17 +323,11 @@
   box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35);
 }
 
-/* Chat stays reachable while Code is open (owner feedback, 2026-08-11): the rail and
-   its pill float over the code overlay exactly as they float over the stage. Scoped to
-   Code — a full-cover Edit (a board definition) keeps its own overlay on top instead. */
+/* Chat stays reachable while Code is open (owner feedback, 2026-08-11): the rail floats
+   over the code overlay exactly as it floats over the stage. Scoped to Code — a
+   full-cover Edit (a board definition) keeps its own overlay on top instead. */
 .studio-stage-layout:has(.studio-code-overlay) .studio-chat-rail {
   z-index: 60;
-}
-
-.studio-stage-layout:has(.studio-code-overlay) .studio-chat-rail-pill {
-  z-index: 61;
-  /* Clear the panel's Stage/Deliver footer rows instead of sitting on the button. */
-  bottom: 118px;
 }
 
 .studio-stage-layout:has(.studio-code-overlay) .studio-fullbleed {

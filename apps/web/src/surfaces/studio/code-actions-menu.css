@@ -45,7 +45,7 @@
 .code-surface-palette-backdrop {
   position: absolute;
   inset: 0;
-  /* Above .studio-chat-rail-pill's z-index: 61 — the rail floats over Code. */
+  /* Above the chat rail's z-index: 60 — the rail floats over Code. */
   z-index: 70;
   display: flex;
   align-items: flex-start;
