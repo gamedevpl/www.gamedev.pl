@@ -39,6 +39,13 @@ import { recordStudioStep, type StudioStepDetail } from '../../visitTelemetry.js
 import { toBase64PngList } from '../../attachmentImages.js';
 import { SketchModal } from '../../SketchModal.js';
 import { useClampToViewport } from '../../useClampToViewport.js';
+import '../../build-progress.css';
+import './status-header.css';
+import './status-timeline.css';
+import './status-play-card.css';
+import './status-feedback.css';
+import './status-thread.css';
+import './status-composer.css';
 
 type BuilderHandoffHandler = () => Promise<void | { pending?: boolean }> | void | { pending?: boolean };
 

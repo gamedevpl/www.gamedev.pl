@@ -3,6 +3,7 @@ import { latestAgentActivityAt } from '../../agentActivity.js';
 import { Mascot } from '../../Mascot.js';
 import { formatRelativeTime } from '../../relativeTime.js';
 import type { SubmissionStatus } from '../../submissionApi.js';
+import '../../build-progress.css';
 
 // What the stage says while nothing playable has landed on it (Workstream C).
 export function StudioStageCard({ status }: { status?: SubmissionStatus | null }) {
