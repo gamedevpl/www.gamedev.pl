@@ -82,3 +82,7 @@ export function encryptedFileStore(env: NodeJS.ProcessEnv = process.env): TokenS
 
 export const FILE_FALLBACK_WARNING =
   'WARNING: OS keychain unavailable; tokens stored in an encrypted file under ~/.config/gamedevpl. Not plaintext, but weaker than the keychain.';
+
+export function fileKeychainOptedIn(env: NodeJS.ProcessEnv): boolean {
+  return env.GAMEDEV_ALLOW_FILE_KEYCHAIN === 'true' || Boolean(env.GAMEDEV_TOKEN_FILE);
+}

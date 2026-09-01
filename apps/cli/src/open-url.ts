@@ -12,7 +12,7 @@ export function openUrl(url: string): Promise<boolean> {
     process.platform === 'darwin'
       ? (['open', [url]] as const)
       : process.platform === 'win32'
-        ? (['cmd', ['/c', 'start', '', url]] as const)
+        ? (['rundll32', ['url.dll,FileProtocolHandler', url]] as const)
         : (['xdg-open', [url]] as const);
   return new Promise((resolve) => {
     const child = spawn(cmd, args, { stdio: 'ignore', detached: true, windowsHide: true });

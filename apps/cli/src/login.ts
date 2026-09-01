@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { hostname as osHostname } from 'node:os';
 import { cliUsage } from './bin-name.js';
 import { CliError, EXIT_AUTH, EXIT_INPUT } from './exit-codes.js';
-import { FILE_FALLBACK_WARNING, type TokenStore } from './keychain.js';
+import { FILE_FALLBACK_WARNING, fileKeychainOptedIn, type TokenStore } from './keychain.js';
 import { authorizeUrl, GAMEDEV_CLI_CLIENT_ID, randomVerifier, s256Challenge } from './oauth.js';
 import { openUrl as defaultOpenUrl } from './open-url.js';
 import { glyphs, wantsColor } from './renderer.js';
@@ -16,6 +16,11 @@ const DENY_PAGE =
   '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>gamedevpl</title></head><body><p>Sign-in cancelled. You can close this tab.</p></body></html>';
 const BAD_PAGE =
   '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>gamedevpl</title></head><body><p>This sign-in link is invalid. Return to the terminal.</p></body></html>';
+
+const FAIL_PAGE =
+  '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>gamedevpl</title></head><body><p>Sign-in failed. Return to the terminal.</p></body></html>';
+
+type CallbackResult = { kind: 'code'; code: string } | { kind: 'denied'; error: string };
 
 export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -88,12 +93,12 @@ async function exchangeCode(input: {
 
 function listen(expectedState: string): Promise<{
   redirectUri: string;
-  done: Promise<{ kind: 'code'; code: string } | { kind: 'denied' }>;
+  done: Promise<CallbackResult>;
   close: () => Promise<void>;
 }> {
   return new Promise((resolveListen, rejectListen) => {
-    let settle: ((value: { kind: 'code'; code: string } | { kind: 'denied' }) => void) | undefined;
-    const done = new Promise<{ kind: 'code'; code: string } | { kind: 'denied' }>((resolve) => {
+    let settle: ((value: CallbackResult) => void) | undefined;
+    const done = new Promise<CallbackResult>((resolve) => {
       settle = resolve;
     });
     const server = createServer((req: IncomingMessage, res: ServerResponse) => {
@@ -111,8 +116,9 @@ function listen(expectedState: string): Promise<{
       }
       const err = url.searchParams.get('error');
       if (err) {
-        sendHtml(res, 200, DENY_PAGE);
-        settle?.({ kind: 'denied' });
+        const cancelled = err === 'access_denied';
+        sendHtml(res, 200, cancelled ? DENY_PAGE : FAIL_PAGE);
+        settle?.({ kind: 'denied', error: err });
         return;
       }
       const code = url.searchParams.get('code') ?? '';
@@ -162,7 +168,7 @@ export async function runLoopbackLogin(input: LoopbackLoginInput): Promise<void>
   const opened = await open(url);
   if (!opened) input.stdout.write(`open ${url}\n`);
   else input.stdout.write(`${url}\n`);
-  let result: { kind: 'code'; code: string } | { kind: 'denied' };
+  let result: CallbackResult;
   try {
     result = await new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -183,7 +189,14 @@ export async function runLoopbackLogin(input: LoopbackLoginInput): Promise<void>
     await loop.close();
   }
   if (result.kind === 'denied') {
-    throw new CliError('sign-in cancelled', EXIT_AUTH, cliUsage('login'));
+    if (result.error === 'access_denied') {
+      throw new CliError('sign-in cancelled', EXIT_AUTH, cliUsage('login'));
+    }
+    throw new CliError(
+      `sign-in failed (${result.error}) — run \`${cliUsage('login')}\` again`,
+      EXIT_AUTH,
+      cliUsage('login'),
+    );
   }
   const tokens = await exchangeCode({
     origin: input.origin,
@@ -198,7 +211,7 @@ export async function runLoopbackLogin(input: LoopbackLoginInput): Promise<void>
     tokenType: tokens.tokenType,
     scope: tokens.scope,
   });
-  if (input.store.kind === 'encrypted-file') {
+  if (fileKeychainOptedIn(env) && input.store.kind === 'encrypted-file') {
     input.stderr?.write(`${FILE_FALLBACK_WARNING}\n`);
   }
   input.stdout.write(`${g.ok} signed in\n`);

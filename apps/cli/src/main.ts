@@ -5,7 +5,13 @@ import { stdin, stdout, stderr } from 'node:process';
 import { parseArgv, jsonMode, SLASH_VERBS } from './argv.js';
 import { CLI_BIN, GIT_REMOTE_HELPER, GIT_REMOTE_SCHEME, cliUsage } from './bin-name.js';
 import { createApi, requireTtyFlag } from './api.js';
-import { encryptedFileStore, FILE_FALLBACK_WARNING, memoryStore, type TokenStore } from './keychain.js';
+import {
+  encryptedFileStore,
+  FILE_FALLBACK_WARNING,
+  fileKeychainOptedIn,
+  memoryStore,
+  type TokenStore,
+} from './keychain.js';
 import { runLoopbackLogin } from './login.js';
 import { originFromEnv } from './oauth.js';
 import { CliError, EXIT_GREEN, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
@@ -24,7 +30,7 @@ function storeFromEnv(env: NodeJS.ProcessEnv): TokenStore {
   if (env.GAMEDEV_TOKEN) {
     return memoryStore({ accessToken: env.GAMEDEV_TOKEN, tokenType: 'Bearer', scope: 'creator' });
   }
-  if (env.GAMEDEV_ALLOW_FILE_KEYCHAIN === 'true' || env.GAMEDEV_TOKEN_FILE) {
+  if (fileKeychainOptedIn(env)) {
     stderr.write(`${FILE_FALLBACK_WARNING}\n`);
   }
   return encryptedFileStore(env);
@@ -67,7 +73,9 @@ export async function runCli(
       const imported = (typeof flags.token === 'string' ? flags.token.trim() : '') || env.GAMEDEV_TOKEN?.trim() || '';
       if (imported) {
         await persist.set({ accessToken: imported, tokenType: 'Bearer', scope: 'creator' });
-        io.stderr.write(`${FILE_FALLBACK_WARNING}\n`);
+        if (fileKeychainOptedIn(env)) {
+          io.stderr.write(`${FILE_FALLBACK_WARNING}\n`);
+        }
         io.stdout.write('signed in with GAMEDEV_TOKEN\n');
         return EXIT_GREEN;
       }
