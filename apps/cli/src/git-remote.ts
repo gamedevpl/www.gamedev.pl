@@ -29,7 +29,7 @@ export function handleHelperLine(line: string, slug: string): string[] {
 }
 
 export function listRefs(versions: VersionRef[]): string[] {
-  if (versions.length === 0) return ['@refs/heads/main HEAD', ''];
+  if (versions.length === 0) return ['@refs/heads/main HEAD', '? refs/heads/main', ''];
   return ['? HEAD', '? refs/heads/main', ''];
 }
 

@@ -13,6 +13,10 @@ function slugFromUrl(url: string): string {
   return url.replace(/^gamedev:\/\//, '').replace(/\/$/, '');
 }
 
+export function remoteSlugFromArgv(argv: string[], cwdSlug: string | null): string {
+  return slugFromUrl(argv[3] ?? argv[2] ?? cwdSlug ?? '');
+}
+
 function storeFromEnv(env: NodeJS.ProcessEnv) {
   if (env.GAMEDEV_TOKEN) {
     return memoryStore({ accessToken: env.GAMEDEV_TOKEN, tokenType: 'Bearer', scope: 'creator' });
@@ -26,7 +30,11 @@ function readSlugFile(cwd: string): string | null {
 }
 
 export async function runGitRemoteHelper(argv: string[], env: NodeJS.ProcessEnv = process.env): Promise<number> {
-  const slug = slugFromUrl(argv[3] ?? argv[2] ?? readSlugFile(process.cwd()) ?? '');
+  const slug = remoteSlugFromArgv(argv, readSlugFile(process.cwd()));
+  if (!slug) {
+    stdout.write('error missing game slug\n');
+    return 1;
+  }
   const api = createApi({ origin: originFromEnv(env), store: storeFromEnv(env), env });
   const rl = createInterface({ input: stdin, crlfDelay: Infinity });
   const iter = rl[Symbol.asyncIterator]();

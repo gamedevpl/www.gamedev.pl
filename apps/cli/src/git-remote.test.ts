@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fastImportScript, handleHelperLine, listRefs, refuseNonFastForward, shaForVersion } from './git-remote.js';
+import { remoteSlugFromArgv } from './git-remote-main.js';
 import { unreconciledMessage } from './checkout.js';
 
 describe('git-remote-gamedev', () => {
@@ -29,5 +30,14 @@ describe('git-remote-gamedev', () => {
     expect(script).toContain('commit refs/heads/main');
     expect(script).toContain('games/ghost-roads/game.ts');
     expect(script.match(/mark :\d+/g)?.length).toBe(2);
+  });
+
+  it('lists an unborn main ref when the remote has no versions', () => {
+    expect(listRefs([])).toEqual(['@refs/heads/main HEAD', '? refs/heads/main', '']);
+  });
+
+  it('resolves no slug when the remote URL and checkout file are missing', () => {
+    expect(remoteSlugFromArgv(['node', 'git-remote-gamedev'], null)).toBe('');
+    expect(remoteSlugFromArgv(['node', 'git-remote-gamedev'], 'ghost-roads')).toBe('ghost-roads');
   });
 });

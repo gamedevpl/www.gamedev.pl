@@ -10,7 +10,7 @@ type PatRow = {
 };
 
 async function patRequest(path: string, init?: RequestInit): Promise<Response> {
-  return fetch(path, { credentials: 'include', ...init });
+  return fetch(path, { ...init, credentials: 'include' });
 }
 
 export function StudioPatPanel() {
@@ -109,7 +109,10 @@ export function StudioPatPanel() {
           min={1}
           max={365}
           value={days}
-          onChange={(event) => setDays(Number(event.target.value))}
+          onChange={(event) => {
+            const n = event.target.valueAsNumber;
+            setDays(Number.isFinite(n) ? Math.min(365, Math.max(1, Math.trunc(n))) : 1);
+          }}
         />
         <button type="button" className="studio-connect-skip" disabled={busy} onClick={() => void mint()}>
           {busy ? t('patTokens.minting') : t('patTokens.mint')}

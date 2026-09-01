@@ -49,6 +49,7 @@ describe('StudioPatPanel', () => {
       button?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(host.querySelector('[data-testid="pat-secret"]')?.textContent).toContain('gdpl_pat_');
+    expect(vi.mocked(fetch).mock.calls.every(([, init]) => init?.credentials === 'include')).toBe(true);
     await act(async () => root.unmount());
   });
 });
