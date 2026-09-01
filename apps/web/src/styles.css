@@ -7690,10 +7690,6 @@ button.builder-mode-selector:disabled {
   .studio-playtest-sheet {
     max-height: min(78vh, 28rem);
   }
-
-  .studio-playtest-shot {
-    max-width: 100%;
-  }
 }
 
 @media (max-height: 420px) {

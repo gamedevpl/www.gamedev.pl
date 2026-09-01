@@ -396,3 +396,11 @@
   font-size: 0.8rem;
   color: var(--muted);
 }
+
+/* Travels with the base rule above: same specificity, so it only wins by coming
+   later, and this file loads after styles.css. */
+@media (max-width: 768px) {
+  .studio-playtest-shot {
+    max-width: 100%;
+  }
+}
