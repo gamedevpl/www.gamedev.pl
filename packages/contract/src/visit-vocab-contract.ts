@@ -1,4 +1,3 @@
-// Curated visit-stream vocabulary. Add names here to publish them from the contract.
 export {
   ASSIST_STEPS,
   BETA_WELCOME_STEPS,
