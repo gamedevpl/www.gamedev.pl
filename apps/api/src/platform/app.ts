@@ -523,7 +523,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // that identifies a visitor, so it costs nothing to admit from the open internet.
   await registerVisitTelemetryRoutes(app, { store });
   await registerCliSurfaceRoutes(app);
-
   // Thumbs up/down (docs/improvement-loop-plan.md, signal source #2). Casting or
   // clearing a vote needs a session (request.user), same as push subscriptions; the
   // count read does not, so a shared game link shows real numbers to a visitor who
