@@ -37,7 +37,10 @@ eslint-rules/ The repo's own enforcement gates (see below).
 docs/        This folder.
 ```
 
-Game sources are **not** in this repo. Repo-lane games live in
+Production game sources are **not** in this repo — with one deliberate exception:
+`apps/api/fixtures/games-repo/games/` holds three complete fixture games that
+`catalog/local-games-repo.ts` serves when no external checkout is configured, which is what
+makes local development work with no keys. Beyond those, repo-lane games live in
 `gamedevpl/www.gamedev.pl-games`, a private repository maintained by coding agents (see
 [`games-repo.md`](./games-repo.md)); store-lane games are held in the publication registry
 with their sources in GCS and are never committed to that repo. Which lane a slug is in
@@ -174,35 +177,39 @@ gets back a file set plus a base to pin against.
 
 ```mermaid
 flowchart LR
-    P[Player] -->|browse| Web[apps/web]
-    Web -->|GET catalog / game| API[apps/api catalog/]
-    API -->|store lane: checked first| Reg[(publication registry + GamesStore)]
-    API -->|repo lane: fallthrough| Snap[(Cloud Storage snapshot)]
-    API -->|assembled document| Web
+    P[Player] -->|GET /api/games/:slug| API[apps/api catalog/]
+    API -->|1. store lane| Reg[(publication registry + GamesStore)]
+    API -->|2. otherwise, repo lane| Snap[(Cloud Storage snapshot)]
+    API -->|prebuilt bundle.html| Web[apps/web]
     Web -->|srcdoc| IF["Sandboxed iframe<br/>allow-scripts allow-pointer-lock<br/>NO allow-same-origin"]
     IF --> P
 ```
 
-The two lanes are served differently, and the play route says so in its own order.
-`catalog/game-play-route.ts` asks `storePublishedGame(slug)` **first** — "delivered games are
-never committed to the repo" — and only falls through to the snapshot when that misses.
+**The two endpoints order the lanes differently, so do not generalise from one to the other.**
 
-- **Store lane:** bundle, catalog metadata and media come from the publication registry and
-  `GamesStore`. These games skip the repo catalog and the snapshot bake entirely
-  (`catalog-routes.ts:340`).
-- **Repo lane:** **baked ahead of time**, not on the request path. When
-  `GAMES_SNAPSHOT_BUCKET` is set, published catalog, play and media for these games are
-  served only from the Cloud Storage snapshot; unsetting it is an opt-out for local dev and
-  fixtures, not a fallback. See [`games-snapshot.md`](./games-snapshot.md) for why the
-  per-request rebuild had to go.
+- **`/api/games/:slug` is store-first.** `catalog/game-play-route.ts` asks
+  `storePublishedGame(slug)` before anything else; a hit returns the stored `bundle.html`
+  artefact directly and the request is done. Only a miss falls through to the repo-lane path.
+- **`/api/catalog` is repo-first.** It loads the repo catalog, then appends store
+  publications whose slugs are **not already taken** by a repo entry. That is the mechanism
+  behind "the repo lane wins catalog ties".
 
-Both lanes, and the gate, converge on one assembler: `platform/assemble.ts`'s
-`assembleGameHtml`, called by the repo-lane bake (`catalog/game-snapshot-publish.ts`), the
-store-lane play path (`catalog/game-play-route.ts`) and `delivery/gate-runner.ts`. The bake
-uses it deliberately rather than the games repo's own `tools/build.ts`, because that assembler
-is where the restrictive CSP, the AI Act art. 50(2) provenance metadata and the credential
-scan are applied — so there is exactly one authoritative definition of "what a served game
-is", and the gate checks the same artefact the player receives.
+Neither lane assembles a game on the request path. Both are sealed earlier:
+
+- **Store lane** — the gate produces `bundle.html` as a derived artefact; the play route
+  serves those bytes as-is.
+- **Repo lane** — `catalog/game-snapshot-publish.ts` bakes to the Cloud Storage snapshot.
+  With `GAMES_SNAPSHOT_BUCKET` set, published repo-lane catalog, play and media are served
+  only from that snapshot; unsetting it is an opt-out for local dev and fixtures, not a
+  fallback. See [`games-snapshot.md`](./games-snapshot.md) for why the per-request rebuild
+  had to go.
+
+Both sealing paths, plus the repo-lane fallback in the play route, go through one assembler:
+`platform/assemble.ts`'s `assembleGameHtml`. The bake uses it deliberately rather than the
+games repo's own `tools/build.ts`, because that is where the restrictive CSP, the AI Act
+art. 50(2) provenance metadata and the credential scan are applied — so there is one
+authoritative definition of "what a served game is", and the gate seals the same artefact the
+player later receives.
 
 ### Create
 
@@ -289,12 +296,19 @@ agree, and CI runs it. Details in [`deployment.md`](./deployment.md).
 
 ## Repo-wide gates
 
-Four checks run in `npm run lint` beyond ESLint itself. Three are **blocking ratchets** — they
-do not demand the codebase be clean, they demand it not get worse, and they fail the build
-when it does. The fourth is **visibility-only**: `npm run module-boundary` runs the rule at
-warning severity and exits 0, today with 131 warnings, so a new cross-bucket import in an
-ungraduated bucket is reported but does not fail anything. The rule blocks only for the
-buckets listed in `ENFORCED_BUCKETS`, where the main `eslint .` pass runs it at `error`.
+Four checks run in `npm run lint` beyond ESLint itself, and they are three different kinds of
+thing:
+
+- **Two baseline ratchets** — `module-size` and `comment-prose`. They do not demand the
+  codebase be clean, only that it not get worse, and raising a baseline is a deliberate
+  `--write --force` that shows up in the diff.
+- **One exact invariant** — `env-manifest` asserts both deploy paths thread exactly the
+  variables `infra/env-manifest.json` declares. No baseline, no debt, nothing to ratchet: it
+  matches or it fails.
+- **One visibility-only check** — `npm run module-boundary` runs the rule at warning severity
+  and exits 0, today with 131 warnings, so a new cross-bucket import in an ungraduated bucket
+  is reported and blocks nothing. It blocks only for the buckets in `ENFORCED_BUCKETS`, where
+  the main `eslint .` pass runs it at `error`.
 
 | Gate              | Rule                                                                                                        |
 | ----------------- | ----------------------------------------------------------------------------------------------------------- |
