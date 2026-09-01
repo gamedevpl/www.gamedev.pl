@@ -2,6 +2,8 @@ import { useCallback, useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { listOAuthGrants, revokeOAuthGrant, type OAuthGrantSummary } from './connectApi.js';
 import { formatRelativeTime } from '../../relativeTime.js';
+import './studio-connect.css';
+import './studio-credentials.css';
 
 /**
  * Connected coding-agent clients (BY-18b). Lists OAuth grants and lets the creator revoke.

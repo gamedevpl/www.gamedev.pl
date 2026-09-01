@@ -61,6 +61,8 @@ import {
   type AutonomyMode,
 } from '../../studioApi.js';
 import type { EditorContentPush, EditorControllerState } from '../../editorBridge.js';
+import './studio-connect.css';
+import './studio-credentials.css';
 
 /**
  * Creator control panel (docs/improvement-loop-plan.md IL-2 creator surface).

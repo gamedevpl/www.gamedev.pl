@@ -1,0 +1,342 @@
+/* Platform create handoff — welcome view chrome (StudioWelcomeView.tsx). */
+
+/* Platform create handoff — same qa-wizard chrome, a few blocks for progress + primer. */
+.studio-welcome-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.studio-welcome-hero-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.studio-welcome-hero-text .qa-stage-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.studio-welcome-pulse-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--turquoise, #00e4ac);
+  box-shadow: 0 0 6px rgba(0, 228, 172, 0.6);
+}
+
+.studio-welcome-pulse-dot.is-pulsing {
+  animation: studio-welcome-dot-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes studio-welcome-dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 6px rgba(0, 228, 172, 0.8);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.8);
+    box-shadow: 0 0 2px rgba(0, 228, 172, 0.2);
+  }
+}
+
+.studio-welcome-mascot-wrap {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+}
+
+.studio-welcome-mascot {
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.studio-welcome-mascot:hover {
+  transform: scale(1.06);
+}
+
+.studio-welcome-mascot-glow {
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 228, 172, 0.2) 0%, rgba(0, 228, 172, 0) 70%);
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.studio-welcome-mascot-glow.is-glowing {
+  animation: studio-welcome-aura-glow 3s ease-in-out infinite alternate;
+}
+
+@keyframes studio-welcome-aura-glow {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.35;
+  }
+  100% {
+    transform: scale(1.2);
+    opacity: 0.85;
+  }
+}
+
+.studio-welcome-progress {
+  position: relative;
+  margin: 8px 0 20px;
+  padding: 16px 18px;
+  background: var(--panel, #171c20);
+  border: 1px solid var(--panel-border, #33383d);
+  border-radius: 12px;
+  transition:
+    border-color 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.studio-welcome-progress.is-running {
+  border-color: rgba(0, 228, 172, 0.35);
+  box-shadow: 0 0 16px rgba(0, 228, 172, 0.08);
+}
+
+.studio-welcome-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.studio-welcome-progress-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--turquoise, #00e4ac);
+}
+
+.studio-welcome-live-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.studio-welcome-pulse-ring {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px solid var(--turquoise, #00e4ac);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.studio-welcome-pulse-ring.is-pulsing {
+  animation: studio-welcome-ring-expand 2s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+}
+
+@keyframes studio-welcome-ring-expand {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+
+.studio-welcome-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  background: rgba(0, 228, 172, 0.08);
+  border: 1px solid rgba(0, 228, 172, 0.2);
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  color: var(--turquoise, #00e4ac);
+  letter-spacing: 0.02em;
+}
+
+.studio-welcome-pulse-dot.is-ready {
+  background: var(--turquoise, #00e4ac);
+  box-shadow: 0 0 10px rgba(0, 228, 172, 0.9);
+  animation: studio-welcome-dot-pulse-ready 2.2s ease-in-out infinite;
+}
+
+@keyframes studio-welcome-dot-pulse-ready {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 10px rgba(0, 228, 172, 0.8);
+  }
+  50% {
+    transform: scale(1.25);
+    box-shadow: 0 0 16px rgba(0, 228, 172, 1);
+  }
+}
+
+.studio-welcome-progress.is-ready {
+  border-color: var(--turquoise, #00e4ac);
+  background: linear-gradient(135deg, rgba(0, 228, 172, 0.08) 0%, var(--panel, #171c20) 100%);
+  box-shadow: 0 0 24px rgba(0, 228, 172, 0.16);
+}
+
+.studio-welcome-ready-callout {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(0, 228, 172, 0.12);
+  border: 1px dashed rgba(0, 228, 172, 0.4);
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.studio-welcome-ready-callout:hover,
+.studio-welcome-ready-callout:focus-visible {
+  background: rgba(0, 228, 172, 0.2);
+  border-color: rgba(0, 228, 172, 0.7);
+}
+
+.studio-welcome-ready-title {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--turquoise, #00e4ac);
+}
+
+.qa-primary.is-ready-cta {
+  background: var(--turquoise, #00e4ac);
+  color: #0b1015;
+  font-weight: 800;
+  box-shadow: 0 0 20px rgba(0, 228, 172, 0.4);
+  animation: studio-welcome-cta-pulse 2s infinite alternate;
+}
+
+.qa-primary.is-ready-cta:hover {
+  background: #26f6be;
+  box-shadow: 0 0 28px rgba(0, 228, 172, 0.65);
+  transform: translateY(-1px);
+}
+
+@keyframes studio-welcome-cta-pulse {
+  0% {
+    box-shadow: 0 0 16px rgba(0, 228, 172, 0.3);
+  }
+  100% {
+    box-shadow: 0 0 26px rgba(0, 228, 172, 0.65);
+  }
+}
+
+.studio-welcome-mascot-glow.is-ready {
+  background: radial-gradient(circle, rgba(0, 228, 172, 0.35) 0%, rgba(0, 228, 172, 0) 75%);
+  opacity: 0.9;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-welcome-pulse-dot.is-pulsing,
+  .studio-welcome-pulse-dot.is-ready,
+  .studio-welcome-mascot-glow.is-glowing,
+  .studio-welcome-pulse-ring.is-pulsing,
+  .qa-primary.is-ready-cta {
+    animation: none;
+  }
+
+  .studio-welcome-mascot,
+  .qa-primary.is-ready-cta {
+    transition: none;
+  }
+
+  .studio-welcome-mascot:hover,
+  .qa-primary.is-ready-cta:hover {
+    transform: none;
+  }
+}
+
+.studio-welcome-progress-message {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.45;
+  color: var(--text, #e2e8f0);
+}
+
+/* Live "what's happening behind the scenes" checklist while the build runs. */
+.studio-welcome-checklist {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.studio-welcome-primer {
+  margin: 0 0 20px;
+}
+
+.studio-welcome-primer-title {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text, #e2e8f0);
+}
+
+.studio-welcome-primer-list {
+  margin: 0;
+  padding-left: 1.2em;
+  color: var(--muted, #94a3b8);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.studio-welcome-primer-list li + li {
+  margin-top: 6px;
+}
+
+.studio-welcome-primer-one {
+  margin: 0;
+  color: var(--muted, #94a3b8);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.studio-welcome-more {
+  margin: 0 0 8px;
+  color: var(--muted, #94a3b8);
+  font-size: 0.88rem;
+}
+
+.studio-welcome-more summary {
+  cursor: pointer;
+  color: var(--turquoise, #00e4ac);
+  font-weight: 600;
+}
+
+.studio-welcome-more p {
+  margin: 8px 0 0;
+  line-height: 1.45;
+}

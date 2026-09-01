@@ -1,0 +1,411 @@
+/* Self-build connect steps in the Studio thread (StudioConnectCard.tsx, CreatorStudioView.tsx, StudioConnectWizard.tsx). */
+
+/* Watch-only share link (no status token in it) shown under the tracking link. */
+.status-share {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-share-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-card);
+  color: var(--text);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.status-share-copy:hover {
+  border-color: var(--turquoise);
+}
+
+/* A live self round has a separate, explicit escape hatch beside its static badge.
+   It must not look like the future-round builder picker: this action invalidates the
+   MCP session and starts the platform agent. */
+.studio-active-handoff {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.studio-active-handoff-button {
+  appearance: none;
+  min-height: 28px;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--turquoise, #00e4ac) 42%, var(--panel-border, #33383d));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--turquoise, #00e4ac) 8%, transparent);
+  color: var(--muted, #94a3b8);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.studio-active-handoff-button:hover:not(:disabled) {
+  border-color: var(--turquoise, #00e4ac);
+  color: var(--text, #e8eef5);
+  background: color-mix(in srgb, var(--turquoise, #00e4ac) 15%, transparent);
+}
+
+.studio-active-handoff-button.is-primary {
+  color: var(--turquoise, #00e4ac);
+}
+
+.studio-active-handoff-confirm {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  color: var(--text, #e2e8f0);
+  font-size: 0.74rem;
+}
+
+.studio-active-handoff-pending {
+  margin: 0;
+  color: var(--muted, #94a3b8);
+  font-size: 0.74rem;
+}
+
+/* Pending text plus, once it goes stale, a retry button beneath it — stacked, not
+   inline, so the retry reads as a follow-up action rather than crowding the sentence. */
+.studio-active-handoff-pending-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.studio-active-handoff .error {
+  margin: 4px 0 0;
+  font-size: 0.74rem;
+}
+
+/* Self-build connect steps in the Studio thread. Interaction container, not card chrome.
+   Lives inside `.studio-thread-scroll` so a tall connect surface scrolls with the
+   conversation instead of pinning the composer halfway up a phone. */
+.studio-connect {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 12px 0 4px;
+  padding: 14px 0 8px;
+  border-top: 1px solid var(--panel-border, #33383d);
+}
+
+.studio-connect.is-error {
+  gap: 8px;
+  padding-bottom: 4px;
+}
+
+.studio-connect-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.studio-connect-title {
+  margin: 0;
+  flex: 1 1 12rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-heading, #fff);
+}
+
+/* Peer of Copy config / install chips — not a muted underline that vanishes into
+   a wrapping title on a phone. */
+.studio-connect-hide,
+.studio-connect-show {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex-shrink: 0;
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--turquoise, #00e4ac) 45%, var(--panel-border, #33383d));
+  background: color-mix(in srgb, var(--turquoise, #00e4ac) 12%, transparent);
+  color: var(--text-heading, #fff);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.studio-connect-hide:hover,
+.studio-connect-show:hover {
+  border-color: var(--turquoise, #00e4ac);
+  background: color-mix(in srgb, var(--turquoise, #00e4ac) 20%, transparent);
+}
+
+/* Phone: title wraps and buries the header chip — repeat dismiss where reading ends.
+   Desktop keeps the header control only so the card does not grow two exits. */
+.studio-connect-foot-dismiss {
+  display: none;
+}
+
+.studio-connect-hide.is-foot {
+  width: 100%;
+  padding: 0.55rem 0.85rem;
+  border-color: var(--turquoise, #00e4ac);
+  background: color-mix(in srgb, var(--turquoise, #00e4ac) 18%, transparent);
+}
+
+@media (max-width: 800px) {
+  .studio-connect-foot-dismiss {
+    display: flex;
+    justify-content: stretch;
+    padding-top: 2px;
+  }
+}
+
+.studio-connect.is-collapsed {
+  gap: 8px;
+  padding-top: 10px;
+  padding-bottom: 4px;
+}
+
+.studio-connect-collapsed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.studio-connect-collapsed-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted, #94a3b8);
+}
+
+.studio-connect-lead,
+.studio-connect-state,
+.studio-connect-skipped,
+.studio-connect-expiry {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted, #94a3b8);
+  line-height: 1.4;
+}
+
+.studio-connect-step {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.studio-connect-step-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.studio-connect-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-heading, #fff);
+  background: color-mix(in srgb, var(--turquoise, #00e4ac) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--turquoise, #00e4ac) 40%, transparent);
+}
+
+.studio-connect-step-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-heading, #fff);
+}
+
+.studio-connect-install-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.studio-connect-install-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--turquoise, #00e4ac) 55%, var(--panel-border, #33383d));
+  background: color-mix(in srgb, var(--turquoise, #00e4ac) 14%, transparent);
+  color: var(--text-heading, #fff);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.studio-connect-install-link:hover {
+  border-color: var(--turquoise, #00e4ac);
+  background: color-mix(in srgb, var(--turquoise, #00e4ac) 22%, transparent);
+}
+
+.studio-connect-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.studio-connect-tab {
+  cursor: pointer;
+  padding: 0.28rem 0.7rem;
+  font: inherit;
+  font-size: 0.8rem;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border, #33383d);
+  background: transparent;
+  color: inherit;
+}
+
+.studio-connect-tab:hover {
+  border-color: color-mix(in srgb, var(--turquoise, #00e4ac) 50%, var(--panel-border, #33383d));
+}
+
+.studio-connect-tab.is-active {
+  border-color: var(--turquoise, #00e4ac);
+  background: color-mix(in srgb, var(--turquoise, #00e4ac) 12%, transparent);
+}
+
+.studio-connect-snippet {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border, #33383d);
+  background: color-mix(in srgb, #000 35%, var(--panel-bg, #1d2123));
+  color: var(--text, #e2e8f0);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 10rem;
+  overflow: auto;
+}
+
+.studio-connect-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.studio-connect-skip {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--muted, #94a3b8);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.studio-connect-skip:hover {
+  color: var(--text, #e2e8f0);
+}
+
+.studio-connect-waiting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 0;
+  font-size: 0.85rem;
+  color: var(--muted, #94a3b8);
+}
+
+.studio-connect-switch {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--panel-border, #33383d);
+}
+
+.studio-connect-switch-hint {
+  max-width: 48rem;
+  margin: 0;
+  color: var(--muted, #94a3b8);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.studio-connect-switch-button {
+  appearance: none;
+  min-height: 34px;
+  padding: 6px 11px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text, #e2e8f0);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.studio-connect-switch-button:hover {
+  border-color: rgba(0, 228, 172, 0.55);
+  color: var(--turquoise, #00e4ac);
+}
+
+.studio-connect-switch-button.is-primary {
+  border-color: rgba(0, 228, 172, 0.55);
+  background: rgba(0, 228, 172, 0.12);
+  color: var(--turquoise, #00e4ac);
+}
+
+/* Deliberately not `disabled` — see StudioConnectCard.tsx's SwitchBuilderControl. */
+.studio-connect-switch-button.is-unavailable,
+.studio-active-handoff-button.is-unavailable {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.studio-connect-switch-button.is-unavailable:hover {
+  border-color: rgba(148, 163, 184, 0.4);
+  color: var(--text, #e2e8f0);
+}
+
+.studio-connect-switch-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+  color: var(--text, #e2e8f0);
+  font-size: 0.8rem;
+}
+
+.studio-connect-switch-pending {
+  margin: 0;
+  color: var(--muted, #94a3b8);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.studio-connect-switch-pending-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
