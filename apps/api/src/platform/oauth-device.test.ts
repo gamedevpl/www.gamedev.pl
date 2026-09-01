@@ -114,6 +114,39 @@ describe('OAuth device authorization (CL-08)', () => {
     expect(grants.json()).toEqual([expect.objectContaining({ clientLabel: 'gamedev CLI on headless-box' })]);
   });
 
+  it('does not approve a device code unless action is approve', async () => {
+    await setup();
+    const issued = await app!.inject({
+      method: 'POST',
+      url: '/oauth/device',
+      headers: { 'content-type': 'application/json' },
+      payload: { client_id: GAMEDEV_CLI_CLIENT_ID, scope: 'creator' },
+    });
+    const body = issued.json() as { device_code: string; user_code: string };
+    const missing = await app!.inject({
+      method: 'POST',
+      url: '/device',
+      headers: { cookie: sessionCookie('g:boss'), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({ user_code: body.user_code }).toString(),
+    });
+    expect(missing.statusCode).toBe(200);
+    expect(missing.body).toMatch(/Choose Approve or Deny/i);
+    expect(missing.body).not.toMatch(/Approved/i);
+
+    const poll = await app!.inject({
+      method: 'POST',
+      url: '/oauth/token',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({
+        grant_type: DEVICE_GRANT_TYPE,
+        device_code: body.device_code,
+        client_id: GAMEDEV_CLI_CLIENT_ID,
+      }).toString(),
+    });
+    expect(poll.statusCode).toBe(400);
+    expect(poll.json()).toEqual({ error: 'authorization_pending' });
+  });
+
   it('returns expired_token on the first poll after the device-code TTL', async () => {
     await setup();
     const issued = await app!.inject({

@@ -183,6 +183,9 @@ export function registerOAuthDeviceRoutes(
       row.denied = true;
       return reply.type('text/html').send(devicePage({ userCode: '', error: 'Denied. You can close this page.' }));
     }
+    if (body.action !== 'approve') {
+      return reply.type('text/html').send(devicePage({ userCode, error: 'Choose Approve or Deny to continue.' }));
+    }
     row.uid = uid;
     return reply.type('text/html').send(devicePage({ userCode: '', error: 'Approved. Return to your terminal.' }));
   });
