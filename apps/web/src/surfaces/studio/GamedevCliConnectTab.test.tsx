@@ -26,7 +26,7 @@ describe('GamedevCliConnectTab', () => {
       root.render(createElement(GamedevCliConnectTab, { slug: 'ghost-roads' }));
     });
     expect(host.textContent).toContain('gamedev connect ghost-roads');
-    expect(host.textContent).toContain('install.sh');
+    expect(host.textContent).toContain(`${window.location.origin}/install.sh`);
     await act(async () => root.unmount());
   });
 

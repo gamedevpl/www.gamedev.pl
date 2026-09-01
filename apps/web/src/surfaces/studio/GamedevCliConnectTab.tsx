@@ -5,7 +5,7 @@ export function GamedevCliConnectTab({ slug }: { slug: string }) {
   const { t } = useTranslation();
   const on = useCliSurfaceEnabled();
   if (!on) return null;
-  const snippet = `curl -fsSL https://www.gamedev.pl/install.sh | bash\ngamedev connect ${slug}`;
+  const snippet = `curl -fsSL ${window.location.origin}/install.sh | bash\ngamedev connect ${slug}`;
   return (
     <div className="studio-connect-step" data-testid="gamedev-cli-connect">
       <h4 className="studio-connect-step-title">{t('connect.gamedevCli.title')}</h4>

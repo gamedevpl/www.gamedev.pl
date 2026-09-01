@@ -20,7 +20,7 @@ describe('updateCli', () => {
   it('writes the verified script and a git-remote helper copy', async () => {
     const bytes = Buffer.from('#!/usr/bin/env node\n');
     const hash = createHash('sha256').update(bytes).digest('hex');
-    const dest = join(mkdtempSync(join(tmpdir(), 'gdpl-upd-')), 'gamedev');
+    const dest = join(mkdtempSync(join(tmpdir(), 'gdpl-upd-')), 'nested', 'gamedev');
     const result = await updateCli({
       dest,
       version: '0.1.0',

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { copyFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
@@ -8,7 +8,7 @@ export const CLI_VERSION = '0.1.0';
 export const CLI_RELEASE_PREFIX = 'cli-v';
 export const CLI_ASSET = 'gamedev';
 export const CLI_RELEASES_DOWNLOAD = 'https://github.com/gamedevpl/www.gamedev.pl/releases/download';
-export const CLI_RELEASES_API = 'https://api.github.com/repos/gamedevpl/www.gamedev.pl/releases';
+export const CLI_RELEASES_API = 'https://api.github.com/repos/gamedevpl/www.gamedev.pl/releases?per_page=100';
 
 export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -67,6 +67,7 @@ export async function updateCli(input: {
   const buf = Buffer.from(await binRes.arrayBuffer());
   const actual = createHash('sha256').update(buf).digest('hex');
   if (actual !== expected) throw new CliError('update: checksum mismatch', EXIT_REFUSED);
+  mkdirSync(dirname(input.dest), { recursive: true });
   writeFileSync(input.dest, buf, { mode: 0o755 });
   const helper = helperDest(input.dest);
   if (helper !== input.dest && dirname(helper) === dirname(input.dest)) {
