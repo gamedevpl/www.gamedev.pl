@@ -11,6 +11,7 @@ import { getSubmissionStatus, type SubmissionStatus } from '../../submissionApi.
 import { recordCreateStep } from '../../visitTelemetry.js';
 import { welcomeProgressMessage, welcomeStatusLabel } from '../../welcomeProgress.js';
 import { isRoundSealed } from './roundSealed.js';
+import './studio-welcome.css';
 
 // Focusable controls inside the welcome dialog.
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';

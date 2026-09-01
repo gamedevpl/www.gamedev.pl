@@ -4,6 +4,8 @@ import type { TFunction } from 'i18next';
 import { PixelIcon } from '../../PixelIcon.js';
 import { fetchGameWorkspace, type StudioApiError } from '../../studioApi.js';
 import { recordStudioStep } from '../../visitTelemetry.js';
+import './studio-connect.css';
+import './studio-credentials.css';
 
 type StudioWorkspaceCheckoutPanelProps = {
   slug: string;

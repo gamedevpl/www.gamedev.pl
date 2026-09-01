@@ -11,6 +11,8 @@ import {
 import { PixelIcon } from '../../PixelIcon.js';
 import { formatRelativeTime } from '../../relativeTime.js';
 import { recordStudioStep } from '../../visitTelemetry.js';
+import './studio-connect.css';
+import './studio-credentials.css';
 
 /**
  * Creator-wide MCP opener controls (BY-27a). Sits with OAuth grants — both answer

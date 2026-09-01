@@ -15,6 +15,8 @@ import { isConnectCollapsed, setConnectCollapsed } from '../../connectCollapse.j
 import { readStorageItem, writeStorageItem } from '../../core/persistence.js';
 import type { ConnectCardMode } from '../../selfBuildCopy.js';
 import { recordStudioStep } from '../../visitTelemetry.js';
+import './studio-connect.css';
+import './studio-connect-wizard.css';
 
 export type { ConnectCardMode };
 

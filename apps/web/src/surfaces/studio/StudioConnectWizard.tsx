@@ -16,6 +16,8 @@ import {
   type SubmissionStatus,
 } from '../../submissionApi.js';
 import { recordCreateStep, recordStudioStep } from '../../visitTelemetry.js';
+import './studio-connect.css';
+import './studio-connect-wizard.css';
 
 // Studio owns the full transcript; this step shows only the newest few.
 const FEED_LIMIT = 4;
