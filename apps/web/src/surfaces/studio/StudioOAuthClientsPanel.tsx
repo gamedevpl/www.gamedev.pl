@@ -4,6 +4,7 @@ import { listOAuthGrants, revokeOAuthGrant, type OAuthGrantSummary } from './con
 import { formatRelativeTime } from '../../relativeTime.js';
 import './studio-connect.css';
 import './studio-credentials.css';
+import './studio-share.css';
 
 /**
  * Connected coding-agent clients (BY-18b). Lists OAuth grants and lets the creator revoke.

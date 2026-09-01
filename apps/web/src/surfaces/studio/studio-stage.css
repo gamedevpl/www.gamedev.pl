@@ -370,3 +370,29 @@
     padding: 8px 10px;
   }
 }
+
+.studio-rail-contributions {
+  display: grid;
+  gap: 14px;
+  padding-top: 4px;
+}
+
+/* The agent's screenshot on the stage sheet (StudioStage.tsx). */
+.studio-playtest-shot {
+  margin: 0 0 12px;
+  max-width: 22rem;
+}
+
+.studio-playtest-shot img {
+  display: block;
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: #000;
+}
+
+.studio-playtest-shot figcaption {
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}

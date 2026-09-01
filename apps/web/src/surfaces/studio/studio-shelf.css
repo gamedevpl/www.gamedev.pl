@@ -248,3 +248,69 @@
   justify-self: end;
   align-self: center;
 }
+
+/* Expand/collapse on the shelf itself (desktop rail ↔ full list, phone drawer close). */
+.studio-shelf-edge-toggle {
+  display: none;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-left: auto;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.studio-shelf-edge-toggle:hover {
+  color: var(--turquoise);
+  border-color: rgba(0, 228, 172, 0.4);
+}
+
+.studio-shelf-backdrop {
+  z-index: 1100;
+}
+
+/* Collapsed-rail summary (folder + count). Hidden until compact desktop rail is closed. */
+.studio-shelf-summary {
+  display: none;
+  position: relative;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.studio-shelf-summary:hover {
+  border-color: rgba(0, 228, 172, 0.45);
+  color: var(--turquoise);
+}
+
+.studio-shelf-summary-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--turquoise);
+  color: #0b221d;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px var(--panel);
+}

@@ -6,6 +6,7 @@ import { fetchGameWorkspace, type StudioApiError } from '../../studioApi.js';
 import { recordStudioStep } from '../../visitTelemetry.js';
 import './studio-connect.css';
 import './studio-credentials.css';
+import './studio-share.css';
 
 type StudioWorkspaceCheckoutPanelProps = {
   slug: string;

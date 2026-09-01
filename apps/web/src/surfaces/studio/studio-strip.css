@@ -271,3 +271,58 @@
   flex: none;
   flex-wrap: nowrap;
 }
+
+/* Opens the phone drawer. Hidden on desktop — the left rail is already there. */
+.studio-shelf-open {
+  display: none;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.studio-shelf-open:hover {
+  border-color: rgba(0, 228, 172, 0.45);
+  color: var(--turquoise);
+}
+
+.studio-shelf-open-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+/* The strip's own back arrow — only rendered (see StudioStrip.tsx) once the
+   global header's is hidden below 800px/500px, so there is no toggle to pair
+   with a shown/hidden state here, just a fixed-size peer for the folder icon. */
+.studio-strip-exit {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.studio-strip-exit:hover {
+  color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.08);
+}
+
+.studio-strip-exit:focus-visible {
+  outline: 2px solid var(--turquoise);
+  outline-offset: 2px;
+}
