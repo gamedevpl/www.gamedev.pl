@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { useCliSurfaceEnabled } from './useCliSurfaceEnabled.js';
+import { useCliSurfaceEnabled } from '../../useCliSurfaceEnabled.js';
 
 export function GamedevCliConnectTab({ slug }: { slug: string }) {
   const { t } = useTranslation();
