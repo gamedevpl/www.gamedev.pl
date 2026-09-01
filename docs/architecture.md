@@ -93,8 +93,11 @@ for tests, plus `records/` and `slices/`. It is classified as `platform`, not as
 its own, and `platform/store.ts` is the façade over it.
 
 **The boundary is enforced by lint, not by convention.** `eslint-rules/module-boundary.mjs`
-reads `module-boundary-map.mjs` and flags any value-level import that leaves a bucket for
-anywhere but `platform/` or itself. Buckets graduate from warn to error one at a time, by
+reads `module-boundary-map.mjs` and flags a **domain** module's value-level import that
+leaves its bucket for anywhere but `platform/` or itself. `platform` itself is exempt as an
+importer — the rule returns immediately for a mapped `platform` file — because the
+composition root has to reach every domain's registrars. Type-only imports are exempt too:
+erased at compile time, so no runtime coupling. Buckets graduate from warn to error one at a time, by
 being appended to `ENFORCED_BUCKETS`; `telemetry`, `catalog`, `realtime` and `notifications`
 are at error today, the rest stay warn-only under `npm run module-boundary`.
 
@@ -152,10 +155,14 @@ places**, and which one decides how it is read, changed and republished.
 | System of record   | The publication registry + the version's `source/` objects in GCS | `games/<slug>/` in the games repo        |
 | Population         | Games built through the platform                                  | The ~98 older git games                  |
 | Publishing         | A registry pointer write                                          | A commit on the games repo's `main`      |
-| An accepted change | Adopted in place; the owner publishes                             | Landed as a branch + PR by the apply-bot |
+| An accepted change | Adopted in place onto an owner-owned job                          | Landed as a branch + PR by the apply-bot |
 
 A slug with **no publication record is a repo-lane game** — that is the actual test, in
 `community/proposal-base.ts`. The repo lane wins catalog ties.
+
+Neither lane lets a creator publish. Accepting a change adopts a green version; going live is
+still the operator step below — `store.setPublication` has exactly one production caller,
+the admin-only route in `creation/job-admin-routes.ts`.
 
 `community/proposal-base.ts` is the one place the difference is resolved, so everything
 downstream — the remix on-ramp, an agent's proposal round, the diff — asks one question and
@@ -169,7 +176,8 @@ gets back a file set plus a base to pin against.
 flowchart LR
     P[Player] -->|browse| Web[apps/web]
     Web -->|GET catalog / game| API[apps/api catalog/]
-    API -->|read| Snap[(Cloud Storage snapshot)]
+    API -->|store lane: checked first| Reg[(publication registry + GamesStore)]
+    API -->|repo lane: fallthrough| Snap[(Cloud Storage snapshot)]
     API -->|assembled document| Web
     Web -->|srcdoc| IF["Sandboxed iframe<br/>allow-scripts allow-pointer-lock<br/>NO allow-same-origin"]
     IF --> P
@@ -188,10 +196,13 @@ never committed to the repo" — and only falls through to the snapshot when tha
   fixtures, not a fallback. See [`games-snapshot.md`](./games-snapshot.md) for why the
   per-request rebuild had to go.
 
-The bake runs through `platform/assemble.ts`'s `assembleGameHtml` — deliberately, rather than
-the games repo's own `tools/build.ts`. That assembler is where the restrictive CSP, the AI Act
-art. 50(2) provenance metadata and the credential scan are applied, so there is exactly one
-authoritative definition of "what a served game is".
+Both lanes, and the gate, converge on one assembler: `platform/assemble.ts`'s
+`assembleGameHtml`, called by the repo-lane bake (`catalog/game-snapshot-publish.ts`), the
+store-lane play path (`catalog/game-play-route.ts`) and `delivery/gate-runner.ts`. The bake
+uses it deliberately rather than the games repo's own `tools/build.ts`, because that assembler
+is where the restrictive CSP, the AI Act art. 50(2) provenance metadata and the credential
+scan are applied — so there is exactly one authoritative definition of "what a served game
+is", and the gate checks the same artefact the player receives.
 
 ### Create
 
@@ -246,8 +257,10 @@ submits, and gets a gate verdict. The loop and its rules are in the
 Two separate things share the name:
 
 - **Party mode / multiplayer relay** — `realtime/mp.ts` over `@fastify/websocket`. Room state
-  lives in one process's memory, which is why the app service is pinned to a single instance.
-  Setting `MP_RELAY_URL` moves room creation to the standalone `gamedev-mp-relay` service.
+  lives in one process's memory, so the app service deploys with `--max-instances 1` **while
+  the relay is in-process**. Setting `MP_RELAY_URL` moves room creation to the standalone
+  `gamedev-mp-relay` service, and the same deploy step then raises the app to 4 instances —
+  the pin exists for the in-process registry, not as a permanent property of the service.
 - **Persistent world** — `apps/world` is its own Cloud Run service (`gamedev-world`) running
   the zone host over `packages/zone-core`. See [`persistent-world-plan.md`](./persistent-world-plan.md)
   and the `p3-zone-*` docs.
