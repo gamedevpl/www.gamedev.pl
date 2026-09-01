@@ -270,3 +270,43 @@
     max-height: none;
   }
 }
+
+/* Studio Build tab's own progress note + checklist (BuildProgressChecklist.tsx). */
+.studio-details-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--panel-card);
+  border: 1px solid var(--panel-border);
+}
+
+.studio-details-progress-note {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.studio-details-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.82rem;
+}
+
+.studio-details-checklist li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--text);
+}
+
+.studio-details-checklist li.checklist-done {
+  color: var(--muted);
+}

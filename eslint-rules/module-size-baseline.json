@@ -841,7 +841,7 @@
     "apps/web/src/surfaces/studio/roundSealed.ts": 16,
     "apps/web/src/surfaces/studio/StudioBuildBar.tsx": 44,
     "apps/web/src/surfaces/studio/StudioBuildHistory.test.tsx": 301,
-    "apps/web/src/surfaces/studio/StudioBuildHistory.tsx": 297,
+    "apps/web/src/surfaces/studio/StudioBuildHistory.tsx": 298,
     "apps/web/src/surfaces/studio/studioBuildProgress.test.tsx": 108,
     "apps/web/src/surfaces/studio/studioBuildStatus.test.tsx": 58,
     "apps/web/src/surfaces/studio/StudioChatRail.test.tsx": 248,

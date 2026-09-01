@@ -6,6 +6,7 @@ import { formatRelativeTime } from '../../relativeTime.js';
 import { fetchGameBuilds } from '../../studioApi.js';
 import { revertGameVersion, sealPreview, type RecentBuild, type SubmissionStatus } from '../../submissionApi.js';
 import { StudioLiveRoundRow } from './StudioLiveRoundRow.js';
+import './studio-build-history.css';
 
 const DEFAULT_INITIAL_LIMIT = 5;
 
