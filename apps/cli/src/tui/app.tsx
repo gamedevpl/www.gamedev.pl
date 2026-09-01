@@ -10,12 +10,12 @@ export function ReplApp({ session, color }: { session: TuiSession; color: boolea
   const [rows, setRows] = useState(stdout.rows || 24);
   useEffect(() => session.subscribe(setState), [session]);
   useEffect(() => {
-    const onResize = (): void => setRows(process.stdout.rows || 24);
-    process.stdout.on('resize', onResize);
+    const onResize = (): void => setRows(stdout.rows || 24);
+    stdout.on('resize', onResize);
     return () => {
-      process.stdout.off('resize', onResize);
+      stdout.off('resize', onResize);
     };
-  }, []);
+  }, [stdout]);
   useInput((input, key) => {
     if (state.mode === 'busy') return;
     if (key.escape || (key.ctrl && input === 'c')) {

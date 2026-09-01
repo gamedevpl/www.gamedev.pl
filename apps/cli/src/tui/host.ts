@@ -14,8 +14,9 @@ export async function runInkRepl(input: {
   io: { stdin: NodeJS.ReadStream; stdout: NodeJS.WriteStream };
   token: string | null;
 }): Promise<number> {
-  const color = wantsColor(input.env, true);
-  const session = createTuiSession(replBanner(true, input.env));
+  const isTty = Boolean(input.io.stdout.isTTY);
+  const color = wantsColor(input.env, isTty);
+  const session = createTuiSession(replBanner(isTty, input.env));
   const instance = render(createElement(ReplApp, { session, color }), {
     stdin: input.io.stdin,
     stdout: input.io.stdout,
