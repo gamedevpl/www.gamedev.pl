@@ -86,16 +86,15 @@ No events collection (rethink #3). Google `sub` is stable for the life of the ac
 
 ## AuthZ matrix
 
-| Route                                 | Today              | M1                               | M2+ (product decision)                |
-| ------------------------------------- | ------------------ | -------------------------------- | ------------------------------------- |
-| `GET /api/health`                     | basic auth         | public                           | public                                |
-| `GET /api/auth/*` (new)               | —                  | public                           | public                                |
-| `POST /api/submissions`               | basic auth         | **session + quota + owner**      | same                                  |
-| `GET /api/submissions/:token/preview` | basic auth + token | **session + token**              | same                                  |
-| `POST /api/generate-game`             | basic auth         | **session + quota (cheap tier)** | same                                  |
-| `GET /api/submissions/:token`         | basic auth + token | unchanged                        | session + token                       |
-| `GET /api/catalog`                    | basic auth         | unchanged                        | **public** (owner decided 2026-07-23) |
-| `GET /api/games/:slug`                | basic auth         | unchanged                        | **public** (owner decided 2026-07-23) |
+| Route                                 | Today              | M1                          | M2+ (product decision)                |
+| ------------------------------------- | ------------------ | --------------------------- | ------------------------------------- |
+| `GET /api/health`                     | basic auth         | public                      | public                                |
+| `GET /api/auth/*` (new)               | —                  | public                      | public                                |
+| `POST /api/submissions`               | basic auth         | **session + quota + owner** | same                                  |
+| `GET /api/submissions/:token/preview` | basic auth + token | **session + token**         | same                                  |
+| `GET /api/submissions/:token`         | basic auth + token | unchanged                   | session + token                       |
+| `GET /api/catalog`                    | basic auth         | unchanged                   | **public** (owner decided 2026-07-23) |
+| `GET /api/games/:slug`                | basic auth         | unchanged                   | **public** (owner decided 2026-07-23) |
 
 Rate limiting: per-uid daily counters for quotas; existing per-IP in-memory limiter stays as
 the coarse outer layer (and is the only limiter on `/api/auth/*`).
