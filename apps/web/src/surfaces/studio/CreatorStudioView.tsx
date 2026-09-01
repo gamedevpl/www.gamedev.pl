@@ -67,6 +67,7 @@ import './studio-shell.css';
 import './studio-panel.css';
 import './studio-shelf.css';
 import './studio-head-rail.css';
+import './studio-stage.css';
 
 /**
  * Creator control panel (docs/improvement-loop-plan.md IL-2 creator surface).

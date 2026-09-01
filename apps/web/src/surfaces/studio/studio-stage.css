@@ -1,0 +1,372 @@
+/* The full-bleed stage and every layer that sits over it: stage frame/void/idle poster,
+   stage cards, version ribbon, full-bleed toggle, the Details rail shell and the edit /
+   code overlays (CreatorStudioView.tsx, StudioStage.tsx, StudioStageCard.tsx,
+   StudioVersionRibbon.tsx, StudioFullBleed.tsx). */
+
+.studio-stage-layout {
+  position: relative;
+  flex: 1;
+  min-height: 320px;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #05070a;
+}
+
+.studio-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.studio-stage-frame {
+  position: absolute;
+  inset: 0;
+}
+
+.studio-stage-frame .game-frame,
+.studio-stage-frame iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+/* Watch posture: a window, not a place to play — same three constraints
+   `StudioLivePreview` used to own, now the stage's own permanent properties. */
+.studio-stage.is-watch .studio-stage-frame {
+  pointer-events: none;
+}
+
+.studio-stage-void {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(0, 228, 172, 0.06), transparent 65%);
+}
+
+.studio-stage.is-shimmering .studio-stage-frame {
+  animation: studio-stage-shimmer 0.4s ease-out;
+}
+
+@keyframes studio-stage-shimmer {
+  from {
+    opacity: 0.3;
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-stage.is-shimmering .studio-stage-frame {
+    animation: none;
+  }
+}
+
+.studio-stage-idle-poster {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  background: rgba(5, 7, 10, 0.55);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Dead stage: crashed / drew-nothing / assembling. Same card shape for all three —
+   what changes is the copy and whether a detail line and a recovery action show. */
+.studio-stage-card {
+  position: absolute;
+  z-index: 30;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: min(420px, calc(100% - 32px));
+  padding: 22px 20px;
+  border-radius: 16px;
+  border: 1px solid var(--panel-border);
+  background: rgba(12, 16, 22, 0.94);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  text-align: center;
+}
+
+.studio-stage-card-title {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+
+.studio-stage-card-detail {
+  margin: 0;
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(248, 113, 113, 0.1);
+  color: #fca5a5;
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+}
+
+/* Assembling card, live half: the agent's own last line, its checklist count and its
+   heartbeat. Read on a stage with nothing on it, so it carries no error colouring —
+   the detail line below it is a status note here, not the crash message it is on the
+   crashed card. */
+.studio-stage-card-working {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+}
+
+.studio-stage-card-kicker {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--turquoise);
+}
+
+.studio-stage-card-working-text {
+  font-size: 0.82rem;
+  /* Explicit, so the clamped box is a whole number of lines and cuts no descenders. */
+  line-height: 1.45;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  /* Agent lines run long, and the card floats over a stage that can be short. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+.studio-stage-card-progress {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* The shared bar carries a bottom margin for its own list; this card stacks with gap. */
+.studio-stage-card-progress .build-progress-bar {
+  margin-bottom: 0;
+}
+
+.studio-stage-card-count,
+.studio-stage-card-heartbeat {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.studio-stage-card.is-assembling .studio-stage-card-detail {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--muted);
+}
+
+.studio-stage-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* Version ribbon (the honesty organ) — bottom-center, non-dismissible. */
+.studio-version-ribbon {
+  position: absolute;
+  z-index: 25;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  background: rgba(8, 12, 16, 0.82);
+  backdrop-filter: blur(6px);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.studio-version-ribbon-identity {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.studio-version-ribbon.has-exception .studio-version-ribbon-exception {
+  color: #fca5a5;
+}
+
+.studio-version-ribbon-depth {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--turquoise);
+  font: inherit;
+  font-weight: 600;
+  cursor: default;
+}
+
+.studio-stage-play-bar {
+  position: absolute;
+  z-index: 25;
+  right: 14px;
+  bottom: 14px;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.studio-stage-sheet {
+  position: absolute;
+  z-index: 40;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: min(480px, 100%);
+  max-height: 70%;
+  overflow-y: auto;
+  border-radius: 16px 16px 0 0;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-bottom: 0;
+  padding: 16px;
+  box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* The way back — the ground-state rule's named exit, shown whenever any surface
+   covers the stage. Must outrank every surface `covered` can mean: the Edit overlay
+   (55), the Details rail (60 desktop / 1100 phone) and its backdrop (1090), and the
+   shelf drawer (1101) and its backdrop (1100) — otherwise the one named escape from
+   those surfaces is itself hidden behind them. */
+.studio-fullbleed {
+  position: absolute;
+  z-index: 1150;
+  left: 14px;
+  top: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 228, 172, 0.4);
+  background: rgba(8, 12, 16, 0.88);
+  color: var(--turquoise);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.studio-fullbleed:hover {
+  background: rgba(0, 228, 172, 0.14);
+}
+
+/* Details/Edit as layers over the stage, not grid siblings — always the overlay
+   shape now, desktop panel or phone sheet by width, never a two-column grid. */
+.studio-rail {
+  position: absolute;
+  z-index: 60;
+  inset: 0 0 0 auto;
+  width: min(400px, 100%);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--panel-border);
+  border-radius: 0;
+  background: var(--panel);
+  padding: 0;
+  overflow: hidden;
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35);
+}
+
+.studio-edit-overlay {
+  position: absolute;
+  z-index: 55;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Edit definitions without a board dock beside the running game. */
+.studio-edit-overlay:not(.studio-code-overlay)[data-surface='docked'] {
+  inset: 0 0 0 auto;
+  width: min(360px, 100%);
+  border-left: 1px solid var(--panel-border);
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35);
+}
+
+/* Chat stays reachable while Code is open (owner feedback, 2026-08-11): the rail and
+   its pill float over the code overlay exactly as they float over the stage. Scoped to
+   Code — a full-cover Edit (a board definition) keeps its own overlay on top instead. */
+.studio-stage-layout:has(.studio-code-overlay) .studio-chat-rail {
+  z-index: 60;
+}
+
+.studio-stage-layout:has(.studio-code-overlay) .studio-chat-rail-pill {
+  z-index: 61;
+  /* Clear the panel's Stage/Deliver footer rows instead of sitting on the button. */
+  bottom: 118px;
+}
+
+.studio-stage-layout:has(.studio-code-overlay) .studio-fullbleed {
+  top: 10px;
+}
+
+@media (max-width: 1099px) {
+  .studio-rail {
+    inset: auto 0 0 0;
+    width: auto;
+    z-index: 1100;
+    max-height: min(80vh, 40rem);
+    border-left: 0;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+    animation: fadeIn 0.2s ease;
+  }
+
+  /* Phone sheet: icons as a horizontal strip under the title, not a side column. */
+  .studio-rail .studio-rail-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      'head'
+      'icons'
+      'pane';
+  }
+
+  .studio-rail .studio-rail-icons {
+    flex-direction: row;
+    justify-content: center;
+    border-left: 0;
+    border-bottom: 1px solid var(--panel-border);
+    padding: 8px 10px;
+  }
+}

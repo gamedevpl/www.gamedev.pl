@@ -2,7 +2,10 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-const css = readFileSync(fileURLToPath(new URL('./styles.css', import.meta.url)), 'utf8');
+const read = (name: string) => readFileSync(fileURLToPath(new URL(name, import.meta.url)), 'utf8');
+
+// The edit-overlay dock rule now lives in the stage file.
+const css = [read('./styles.css'), read('./surfaces/studio/studio-stage.css')].join('\n');
 
 function declarations(selector: string): string {
   const start = css.indexOf(`${selector} {`);

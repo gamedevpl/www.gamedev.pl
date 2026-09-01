@@ -9,6 +9,8 @@ import { formatRelativeTime } from '../../relativeTime.js';
 import type { SubmissionStatus } from '../../submissionApi.js';
 import type { StagePosture } from './StudioStage.js';
 import { recordCodeStep } from '../../visitTelemetry.js';
+import './studio-strip.css';
+import './studio-chat-rail.css';
 
 // Always over the stage: a workroom, so no auto-hide (B1).
 

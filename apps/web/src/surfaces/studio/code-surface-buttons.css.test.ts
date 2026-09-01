@@ -6,9 +6,10 @@ function loadCss(relativePath: string): string {
   return readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), 'utf8');
 }
 
-// The split code surface CSS spans styles.css plus these seven files.
+// The split code surface CSS spans styles.css plus these eight files.
 const css = [
   loadCss('../../styles.css'),
+  loadCss('./studio-stage.css'),
   loadCss('./editor-controller.css'),
   loadCss('./code-surface.css'),
   loadCss('./code-surface-agent.css'),
