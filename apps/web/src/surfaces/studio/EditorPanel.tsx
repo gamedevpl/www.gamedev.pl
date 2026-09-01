@@ -43,6 +43,8 @@ import {
 import { getSubmissionStatus, listMySubmissions } from '../../submissionApi.js';
 import { pollDelayMs } from './studioStatusPoll.js';
 import { isRoundSealed } from './roundSealed.js';
+import '../../editor-kit.css';
+import '../../editor-kit-side.css';
 
 /**
  * The studio's Edit surface (EditorKit L3): renders a game's own editor

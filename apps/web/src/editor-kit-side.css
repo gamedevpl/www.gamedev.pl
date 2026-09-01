@@ -1,0 +1,224 @@
+/* EditorKit side rail: collection picker, item list, the natural-language assist
+   composer, property sheet and live checks. Split from editor-kit.css only to stay
+   under the 500-line new-file cap; same two roots import both. */
+
+.editor-side {
+  width: 280px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.editor-side-group h4 {
+  margin: 0 0 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.editor-collection-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.editor-collection-selector select {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid var(--panel-border);
+  border-radius: 7px;
+  background: var(--panel-card);
+  color: var(--text);
+  padding: 6px 8px;
+  font: inherit;
+}
+
+.editor-count {
+  font-family: ui-monospace, monospace;
+  font-size: 0.68rem;
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.editor-item-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.editor-item-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.editor-item-list li > button:first-child {
+  flex: 1;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.editor-item-list li > button:first-child.is-active {
+  border-color: var(--turquoise-glow);
+  background: rgb(0 228 172 / 7%);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.editor-item-remove {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 2px 8px;
+}
+
+.editor-add,
+.editor-discard {
+  width: 100%;
+  border: 1px dashed var(--panel-border);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 8px;
+  cursor: pointer;
+}
+
+/* The natural-language composer above the tuning sliders. */
+.editor-assist {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.editor-assist-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 34px;
+  padding: 6px 8px;
+  background: #0c1116;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  color: inherit;
+  font-size: 0.8rem;
+}
+
+.editor-assist-send {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: #131b23;
+  color: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.editor-assist-send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.editor-assist-note {
+  margin: 0 0 10px;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.editor-assist-note.is-ok {
+  color: #9fd8b4;
+}
+
+.editor-assist-undo {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Tuning sliders must be draggable with a thumb, not just clickable. */
+.editor-tuning-row input[type='range'] {
+  width: 100%;
+  min-height: 28px;
+  accent-color: var(--accent, #62dcff);
+  touch-action: pan-y;
+}
+
+.editor-prop {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 9px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.editor-prop em {
+  font-style: normal;
+  font-family: ui-monospace, monospace;
+  font-size: 0.68rem;
+  opacity: 0.7;
+}
+
+.editor-prop input[type='text'],
+.editor-prop input[type='number'],
+.editor-prop select {
+  background: #0c1116;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.editor-check {
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+  border: 1px solid var(--panel-border);
+  border-left: 3px solid var(--turquoise-glow);
+  border-radius: 8px;
+  padding: 7px 10px;
+  background: var(--panel-card);
+  color: var(--muted);
+}
+
+.editor-check.is-bad {
+  border-left-color: var(--error);
+  color: #e8b4b4;
+}
+
+.editor-footnote {
+  margin: 8px 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+@media (max-width: 800px) {
+  .editor-side {
+    width: auto;
+  }
+}
