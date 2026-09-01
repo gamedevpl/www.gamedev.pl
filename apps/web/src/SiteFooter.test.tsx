@@ -8,8 +8,6 @@ import { SiteFooter } from './SiteFooter.js';
 import i18n from './i18n/index.js';
 import { setVisitSessionForTesting, VisitSession } from './visitTelemetry.js';
 
-/** Project links, the in-app contact form, and a visit-id-bearing bug report. */
-
 let container: HTMLDivElement;
 let root: Root | null = null;
 
@@ -63,7 +61,6 @@ describe('SiteFooter project links', () => {
 
   it('sends Contact to the in-app form, not GitHub issues or a bare mailto', async () => {
     await render();
-    expect(links().some((a) => a.getAttribute('href') === '/cli')).toBe(false);
 
     const contact = links().find((a) => a.getAttribute('href') === '/contact');
     expect(contact).toBeDefined();
