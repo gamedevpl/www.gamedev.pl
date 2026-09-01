@@ -18,6 +18,10 @@ beforeEach(async () => {
   await i18n.changeLanguage('en');
   container = document.createElement('div');
   document.body.appendChild(container);
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => ({ ok: true, json: async () => ({ enabled: false }) })),
+  );
 });
 
 afterEach(() => {
@@ -31,12 +35,6 @@ afterEach(() => {
 });
 
 async function render(): Promise<void> {
-  if (!vi.isMockFunction(globalThis.fetch)) {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => ({ ok: true, json: async () => ({ enabled: false }) })),
-    );
-  }
   root = createRoot(container);
   await act(async () => {
     root!.render(<SiteFooter />);
