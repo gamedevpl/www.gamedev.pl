@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import type { StageOrigin } from '../../useStageSource.js';
 import type { StageStatus } from './StudioStage.js';
+import './studio-stage.css';
 
 /**
  * The honesty organ (Workstream B2): names which build is actually on screen, and

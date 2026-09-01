@@ -15,6 +15,7 @@ import { submitFeedback, type FeedbackContext, type SubmissionApiError } from '.
 import { submitImprovement } from '../../studioApi.js';
 import type { StageOrigin, StageSource } from '../../useStageSource.js';
 import './status-feedback.css';
+import './studio-stage.css';
 
 /**
  * The stage: always mounted, always full-bleed, running the game whether or not the

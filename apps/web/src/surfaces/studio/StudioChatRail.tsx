@@ -9,6 +9,7 @@ import {
   SHEET_DRAG_CLICK_SLOP_PX,
   SHEET_PEEK_PX,
 } from './studioChatSheet.js';
+import './studio-chat-rail.css';
 
 /**
  * B3/B4: a glass shell around the embedded `SubmissionStatusView` thread — the chat

@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from '../../PixelIcon.js';
+import './studio-stage.css';
 
 /**
  * The ground-state rule's named way back (Workstream C): shown whenever any surface —

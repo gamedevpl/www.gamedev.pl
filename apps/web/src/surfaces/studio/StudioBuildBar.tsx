@@ -3,6 +3,7 @@
 import { useTranslation } from 'react-i18next';
 import { buildBarModel } from '../../buildBarModel.js';
 import type { SubmissionStatus } from '../../submissionApi.js';
+import './studio-strip.css';
 
 export function StudioBuildBar({ status, onOpen }: { status?: SubmissionStatus | null; onOpen?: () => void }) {
   const { t } = useTranslation();
