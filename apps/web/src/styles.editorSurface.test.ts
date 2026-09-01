@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 const read = (name: string) => readFileSync(fileURLToPath(new URL(name, import.meta.url)), 'utf8');
 
-// The edit-overlay dock rule now lives in the stage file.
-const css = [read('./styles.css'), read('./surfaces/studio/studio-stage.css')].join('\n');
+// Overlay rule in the stage file, editor grammar in the kit.
+const css = [read('./styles.css'), read('./surfaces/studio/studio-stage.css'), read('./editor-kit.css')].join('\n');
 
 function declarations(selector: string): string {
   const start = css.indexOf(`${selector} {`);

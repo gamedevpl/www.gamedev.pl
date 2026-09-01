@@ -26,6 +26,8 @@ import type {
   EditorTilemapSpec,
 } from './studioApi.js';
 import type { EditorSelection } from './editorBridge.js';
+import './editor-kit.css';
+import './editor-kit-side.css';
 import './remix-painter.css';
 
 /** Narrows a collection to its tilemap spec — entities render no board. */

@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 const css = readFileSync(fileURLToPath(new URL('./styles.css', import.meta.url)), 'utf8');
 const remixEditorStageCss = readFileSync(fileURLToPath(new URL('./remix-editor-stage.css', import.meta.url)), 'utf8');
+// Path-painter grammar sits in the shared editor kit.
+const editorKitCss = readFileSync(fileURLToPath(new URL('./editor-kit.css', import.meta.url)), 'utf8');
 const phoneStart = css.lastIndexOf('@media (max-width: 600px)');
 const phoneEnd = css.indexOf(
   '/* ---------------------------------------------------------------------------',
@@ -75,9 +77,9 @@ describe('Remix editor Play focus', () => {
 
 describe('Editor path touch interaction', () => {
   it('lets oversized surfaces scroll while point handles remain draggable', () => {
-    expect(css).toMatch(/\.editor-path\s*\{[^}]*touch-action:\s*pan-x pan-y/s);
-    expect(css).toMatch(/\.editor-path-point\s*\{[^}]*touch-action:\s*none/s);
-    expect(css).toMatch(/\.editor-path-point-hit\s*\{[^}]*fill:\s*transparent[^}]*pointer-events:\s*all/s);
-    expect(css).toMatch(/\.editor-path-point-dot\s*\{[^}]*pointer-events:\s*none/s);
+    expect(editorKitCss).toMatch(/\.editor-path\s*\{[^}]*touch-action:\s*pan-x pan-y/s);
+    expect(editorKitCss).toMatch(/\.editor-path-point\s*\{[^}]*touch-action:\s*none/s);
+    expect(editorKitCss).toMatch(/\.editor-path-point-hit\s*\{[^}]*fill:\s*transparent[^}]*pointer-events:\s*all/s);
+    expect(editorKitCss).toMatch(/\.editor-path-point-dot\s*\{[^}]*pointer-events:\s*none/s);
   });
 });
