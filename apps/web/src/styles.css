@@ -310,9 +310,6 @@
   padding: 10px 14px;
   border-radius: 8px;
   font-size: 0.95rem;
-}
-
-.dropdown-menu a.nav-link {
   display: flex;
   align-items: center;
   gap: 8px;

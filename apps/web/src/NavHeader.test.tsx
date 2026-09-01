@@ -7,6 +7,20 @@ import { AuthProvider } from './AuthContext.js';
 import i18n from './i18n/index.js';
 import { NavHeader } from './NavHeader.js';
 
+function navFns<T extends object>(extra: T = {} as T) {
+  return {
+    onCreate: vi.fn(),
+    onHome: vi.fn(),
+    onStudio: vi.fn(),
+    onAdmin: vi.fn(),
+    onReview: vi.fn(),
+    onPlay: vi.fn(),
+    onParty: vi.fn(),
+    onConnect: vi.fn(),
+    ...extra,
+  };
+}
+
 describe('NavHeader Up chevron', () => {
   beforeEach(async () => {
     await i18n.changeLanguage('en');
@@ -41,13 +55,7 @@ describe('NavHeader Up chevron', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 0,
-            onCreate: vi.fn(),
-            onHome: vi.fn(),
-            onStudio: vi.fn(),
-            onAdmin: vi.fn(),
-            onReview: vi.fn(),
-            onPlay: vi.fn(),
-            onParty: vi.fn(),
+            ...navFns(),
             upTarget: { path: '/studio', ariaLabel: 'Back to Studio' },
             onUp,
           }),
@@ -82,13 +90,7 @@ describe('NavHeader Up chevron', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 0,
-            onCreate: vi.fn(),
-            onHome: vi.fn(),
-            onStudio: vi.fn(),
-            onAdmin: vi.fn(),
-            onReview: vi.fn(),
-            onPlay: vi.fn(),
-            onParty: vi.fn(),
+            ...navFns(),
             upTarget: null,
           }),
         ),
@@ -133,6 +135,7 @@ describe('NavHeader menu', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
+    const fns = navFns();
     await act(async () => {
       root.render(
         createElement(
@@ -140,13 +143,7 @@ describe('NavHeader menu', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 2,
-            onCreate: vi.fn(),
-            onHome: vi.fn(),
-            onStudio: vi.fn(),
-            onAdmin: vi.fn(),
-            onReview: vi.fn(),
-            onPlay: vi.fn(),
-            onParty: vi.fn(),
+            ...fns,
             upTarget: null,
           }),
         ),
@@ -160,11 +157,11 @@ describe('NavHeader menu', () => {
       hamburger.click();
       await Promise.resolve();
     });
-    return { container, root };
+    return { container, root, onConnect: fns.onConnect };
   }
 
   it('keeps Create Game and Studio, restores Operator and Review for admins, drops Arcade / Account settings', async () => {
-    const { container, root } = await renderSignedIn(true);
+    const { container, root, onConnect } = await renderSignedIn(true);
     const labels = Array.from(container.querySelectorAll('.nav-link')).map((el) => el.textContent ?? '');
 
     expect(labels.some((text) => /Create Game/i.test(text))).toBe(true);
@@ -181,9 +178,14 @@ describe('NavHeader menu', () => {
     // Sign out sits at the foot of the menu, not beside the avatar.
     expect(container.querySelector('.logout-btn')).toBeNull();
     expect(labels.some((text) => /Connect an agent/i.test(text))).toBe(true);
-    expect(container.querySelector('a.nav-link[href="/connect"]')).not.toBeNull();
     expect(labels.some((text) => /Sign out/i.test(text))).toBe(true);
     expect(container.querySelector('.nav-link--sign-out')).not.toBeNull();
+    const connect = Array.from(container.querySelectorAll('.nav-link')).find((el) =>
+      /Connect an agent/i.test(el.textContent ?? ''),
+    ) as HTMLButtonElement;
+    expect(connect.tagName).toBe('BUTTON');
+    await act(async () => connect.click());
+    expect(onConnect).toHaveBeenCalledTimes(1);
 
     await act(async () => root.unmount());
   });
@@ -269,14 +271,8 @@ describe('NavHeader menu', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 0,
-            onCreate,
             isOnCreate: true,
-            onHome: vi.fn(),
-            onStudio: vi.fn(),
-            onAdmin: vi.fn(),
-            onReview: vi.fn(),
-            onPlay: vi.fn(),
-            onParty: vi.fn(),
+            ...navFns({ onCreate }),
             upTarget: null,
           }),
         ),
@@ -333,15 +329,9 @@ describe('NavHeader menu', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 0,
-            onCreate,
             isOnCreate: true,
             isOnStudio: false,
-            onHome: vi.fn(),
-            onStudio,
-            onAdmin: vi.fn(),
-            onReview: vi.fn(),
-            onPlay,
-            onParty: vi.fn(),
+            ...navFns({ onCreate, onStudio, onPlay }),
             upTarget: null,
           }),
         ),
@@ -394,13 +384,7 @@ describe('NavHeader menu', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 0,
-            onCreate: vi.fn(),
-            onHome: vi.fn(),
-            onStudio: vi.fn(),
-            onAdmin: vi.fn(),
-            onReview: vi.fn(),
-            onPlay,
-            onParty: vi.fn(),
+            ...navFns({ onPlay }),
             upTarget: null,
           }),
         ),
@@ -461,13 +445,7 @@ describe('NavHeader menu', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 0,
-            onCreate: vi.fn(),
-            onHome: vi.fn(),
-            onStudio: vi.fn(),
-            onAdmin: vi.fn(),
-            onReview,
-            onPlay: vi.fn(),
-            onParty: vi.fn(),
+            ...navFns({ onReview }),
             upTarget: null,
           }),
         ),
@@ -532,13 +510,7 @@ describe('NavHeader menu', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 0,
-            onCreate: vi.fn(),
-            onHome: vi.fn(),
-            onStudio: vi.fn(),
-            onAdmin: vi.fn(),
-            onReview: vi.fn(),
-            onPlay: vi.fn(),
-            onParty: vi.fn(),
+            ...navFns(),
             upTarget: null,
           }),
         ),
@@ -592,13 +564,7 @@ describe('NavHeader menu', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 0,
-            onCreate: vi.fn(),
-            onHome: vi.fn(),
-            onStudio: vi.fn(),
-            onAdmin: vi.fn(),
-            onReview: vi.fn(),
-            onPlay: vi.fn(),
-            onParty: vi.fn(),
+            ...navFns(),
             upTarget: null,
           }),
         ),
@@ -683,13 +649,7 @@ describe('NavHeader operator link', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 0,
-            onCreate: vi.fn(),
-            onHome: vi.fn(),
-            onStudio: vi.fn(),
-            onAdmin,
-            onReview,
-            onPlay: vi.fn(),
-            onParty: vi.fn(),
+            ...navFns({ onAdmin, onReview }),
             upTarget: null,
           }),
         ),
@@ -802,13 +762,7 @@ describe('NavHeader Studio live count', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 9,
-            onCreate: vi.fn(),
-            onHome: vi.fn(),
-            onStudio,
-            onAdmin: vi.fn(),
-            onReview: vi.fn(),
-            onPlay: vi.fn(),
-            onParty: vi.fn(),
+            ...navFns({ onStudio }),
             upTarget: null,
           }),
         ),
@@ -881,13 +835,7 @@ describe('NavHeader profile link', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 0,
-            onCreate: vi.fn(),
-            onHome: vi.fn(),
-            onStudio: vi.fn(),
-            onAdmin: vi.fn(),
-            onReview: vi.fn(),
-            onPlay: vi.fn(),
-            onParty: vi.fn(),
+            ...navFns(),
             upTarget: null,
           }),
         ),
@@ -928,13 +876,7 @@ describe('NavHeader profile link', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 0,
-            onCreate: vi.fn(),
-            onHome: vi.fn(),
-            onStudio: vi.fn(),
-            onAdmin: vi.fn(),
-            onReview: vi.fn(),
-            onPlay: vi.fn(),
-            onParty: vi.fn(),
+            ...navFns(),
             upTarget: null,
           }),
         ),
@@ -985,13 +927,7 @@ describe('LanguageSwitcher in header', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 0,
-            onCreate: vi.fn(),
-            onHome: vi.fn(),
-            onStudio: vi.fn(),
-            onAdmin: vi.fn(),
-            onReview: vi.fn(),
-            onPlay: vi.fn(),
-            onParty: vi.fn(),
+            ...navFns(),
             upTarget: null,
           }),
         ),
