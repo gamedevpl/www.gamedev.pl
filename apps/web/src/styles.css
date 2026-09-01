@@ -630,6 +630,14 @@
   animation: status-spin 0.8s linear infinite;
 }
 
+/* Shared with .searching-spinner and the Studio status view's own spinners —
+   kept here since this file is always loaded, unlike the Studio lazy chunk. */
+@keyframes status-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .prompt-busy-status {
   display: inline-flex;
   align-items: center;

@@ -104,13 +104,9 @@
   border-radius: 50%;
   border: 2px solid rgba(148, 163, 184, 0.25);
   border-top-color: var(--turquoise);
+  /* @keyframes status-spin lives in styles.css: shared with .build-btn-spinner
+     and .searching-spinner, which are eager and outside this lazy chunk. */
   animation: status-spin 0.8s linear infinite;
-}
-
-@keyframes status-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 /* CI is red on this build — stated plainly, without alarm. */
