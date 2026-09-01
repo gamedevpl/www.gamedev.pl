@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { PixelIcon } from '../../PixelIcon.js';
 import { buildMediaUrl, type BuildMediaItem } from '../../submissionApi.js';
 import { subscribeStudioStatus } from './studioStatusStore.js';
+import './studio-shot-toasts.css';
 
 /**
  * Scattered screenshot stack near Play — a dismissable notification.

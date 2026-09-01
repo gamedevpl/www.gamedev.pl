@@ -1,0 +1,250 @@
+/* Studio shelf: the game list rail — new-game row, marks, search, filters and rows
+   (CreatorStudioView.tsx). */
+
+/* Starting a new game belongs at the top of the list of games, not behind a trip home. */
+.studio-shelf-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 8px 11px;
+  border-radius: 10px;
+  border: 1px dashed var(--panel-border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.studio-shelf-new:hover {
+  color: var(--turquoise);
+  border-color: rgba(0, 228, 172, 0.4);
+}
+
+/* Shelf mark: two title letters beside each row. Colour carries live/published. */
+.studio-shelf-mark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  border: 1px solid var(--panel-border);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.studio-shelf-mark.is-live {
+  color: #7dd3fc;
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(56, 189, 248, 0.12);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1);
+}
+
+.studio-shelf-mark.is-published {
+  color: var(--turquoise);
+  border-color: rgba(0, 228, 172, 0.4);
+  background: rgba(0, 228, 172, 0.1);
+}
+
+.studio-shelf-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.studio-shelf-heading {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+.studio-shelf-count {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.studio-shelf-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.studio-shelf-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border);
+  background: rgba(13, 17, 21, 0.55);
+  color: var(--muted);
+}
+
+.studio-shelf-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 9px 0;
+  outline: none;
+}
+
+.studio-shelf-search input::placeholder {
+  color: var(--muted);
+}
+
+.studio-shelf-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.studio-shelf-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.studio-shelf-filter.is-active {
+  color: #08241d;
+  background: var(--turquoise);
+  border-color: var(--turquoise);
+}
+
+.studio-shelf-filter-count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+.studio-shelf-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+  -webkit-overflow-scrolling: touch;
+}
+
+.studio-shelf-empty {
+  margin: 0;
+  padding: 12px 4px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* Compact rows — denser than home-rail cards so 10+ games stay scannable. */
+.studio-shelf-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-align: left;
+  padding: 8px 11px;
+  border-radius: 10px;
+  background: var(--panel-card);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    background 0.2s;
+}
+
+.studio-shelf-item:hover {
+  border-color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.04);
+}
+
+.studio-shelf-item.is-live {
+  border-color: rgba(45, 212, 191, 0.35);
+}
+
+/* Deliberately after .is-live, and deliberately more than a border tint.
+   Almost every game in a shelf is building or just built, so a selected state made of
+   the same turquoise border as the status lost to the rule below it and read as "all of
+   these are the same" — which is what the shelf is for denying. The fill and the left
+   marker are what say *here*, and they hold whatever the game's status is. */
+.studio-shelf-item.is-active,
+.studio-shelf-item.is-active:hover {
+  border-color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.12);
+  box-shadow:
+    inset 3px 0 0 var(--turquoise),
+    0 0 14px rgba(0, 228, 172, 0.1);
+}
+
+.studio-shelf-status {
+  grid-area: status;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.45px;
+  color: var(--muted);
+  min-width: 0;
+}
+
+.studio-shelf-status.is-live {
+  color: var(--turquoise);
+}
+
+.studio-shelf-status.is-published {
+  color: var(--accent-blue);
+}
+
+.studio-shelf-title {
+  flex: 1;
+  min-width: 0;
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.25;
+}
+
+.studio-shelf-meta {
+  grid-area: meta;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+  justify-self: end;
+  align-self: center;
+}

@@ -1,0 +1,212 @@
+/* Studio panel chrome: page header, kicker, home link, abandon notice and the
+   abandon/delete blocks (CreatorStudioView.tsx). */
+
+/* With a game open the page title steps out of the way. A masthead and a strapline are
+   right for the shelf, which is a page you arrive at; they are 200px of nothing above a
+   conversation you came back to read. */
+.studio-panel.is-focused .studio-panel-header {
+  margin-bottom: 10px;
+}
+
+.studio-panel.is-focused .studio-kicker,
+.studio-panel.is-focused .studio-panel-header .panel-copy {
+  display: none;
+}
+
+.studio-panel.is-focused .studio-panel-header .section-title {
+  font-size: 1.05rem;
+  margin: 0;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.studio-abandon-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+}
+
+.studio-abandon-hint {
+  margin: 0;
+  max-width: 28rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.status-delete {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.status-delete:hover {
+  color: var(--text);
+}
+
+.status-delete.is-danger {
+  color: #f87171;
+  font-weight: 600;
+}
+
+.studio-delete-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+}
+
+.studio-delete-hint {
+  margin: 0;
+  max-width: 28rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+/* CREATOR CONTROL PANEL (/studio)
+   One product surface: shared card chrome for shelf + detail, underline tabs,
+   quiet home escape. Reuses status/funnel tokens where they already fit. */
+.studio-panel {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 3rem;
+}
+
+.studio-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.studio-kicker {
+  margin: 0 0 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--turquoise);
+}
+
+.studio-panel-header .section-title {
+  margin: 0 0 6px;
+}
+
+.studio-panel-header .panel-copy {
+  max-width: 38rem;
+  margin: 0;
+  color: var(--muted);
+}
+
+/* Keep the removal result visible without pushing Studio down or competing with
+   the bottom install/update toast. The top offset clears the sticky app header
+   (including its safe-area inset) before the card begins. */
+.studio-abandon-notice {
+  position: fixed;
+  top: calc(max(12px, env(safe-area-inset-top)) + 69px);
+  right: 24px;
+  left: auto;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(560px, calc(100vw - 48px));
+  max-width: 560px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  background: rgba(22, 28, 34, 0.96);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  animation: install-prompt-in 220ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-abandon-notice {
+    animation: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .studio-abandon-notice {
+    top: calc(max(8px, env(safe-area-inset-top)) + 65px);
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+}
+
+.studio-abandon-notice__icon {
+  flex-shrink: 0;
+  color: var(--turquoise);
+}
+
+.studio-abandon-notice__text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.studio-abandon-notice__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.studio-abandon-notice__close:hover {
+  color: var(--text);
+  border-color: var(--panel-border);
+}
+
+@media (pointer: coarse), (max-width: 768px) {
+  .studio-abandon-notice__close {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+.studio-home-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.studio-home-link:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}

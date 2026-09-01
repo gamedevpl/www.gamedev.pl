@@ -2,7 +2,12 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-const css = readFileSync(fileURLToPath(new URL('./styles.css', import.meta.url)), 'utf8');
+const read = (name: string) => readFileSync(fileURLToPath(new URL(name, import.meta.url)), 'utf8');
+
+const css = read('./studio-shell.css');
+const railCss = read('./studio-head-rail.css');
+// Two claims target the eagerly-loaded site header, so they stay global.
+const globalCss = read('../../styles.css');
 
 /**
  * The studio shell claim is keyed off `:has(...)`, and the loading flash was a missing
@@ -38,18 +43,18 @@ describe('studio shell claim selectors', () => {
   });
 
   it('hides the redundant global topbar once a game is open on a phone', () => {
-    expect(css).toMatch(
+    expect(globalCss).toMatch(
       /@media \(max-width: 800px\), \(max-height: 500px\)[\s\S]*?\.app:has\(\.studio-layout\.is-game-open\) \.app-header\s*\{[\s\S]*?display:\s*none;/,
     );
   });
 
   // The Details backdrop covers the strip — buttons must stay above it.
   it('keeps the strip reachable while the Details sheet is open', () => {
-    expect(css).toMatch(/\.app:has\(\.studio-rail-backdrop\) \.studio-strip\s*\{[^}]*z-index:\s*1200/s);
+    expect(railCss).toMatch(/\.app:has\(\.studio-rail-backdrop\) \.studio-strip\s*\{[^}]*z-index:\s*1200/s);
   });
 
   // Same shape: the shelf drawer's backdrop covers the hamburger beside it.
   it('keeps the global nav reachable while the games shelf drawer is open', () => {
-    expect(css).toMatch(/\.app:has\(\.studio-shelf-backdrop\) \.app-header\s*\{[^}]*z-index:\s*1200/s);
+    expect(globalCss).toMatch(/\.app:has\(\.studio-shelf-backdrop\) \.app-header\s*\{[^}]*z-index:\s*1200/s);
   });
 });
