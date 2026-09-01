@@ -37,8 +37,11 @@ eslint-rules/ The repo's own enforcement gates (see below).
 docs/        This folder.
 ```
 
-Games are **not** in this repo. They live in `gamedevpl/www.gamedev.pl-games`, a private
-repository maintained by coding agents — see [`games-repo.md`](./games-repo.md).
+Game sources are **not** in this repo. Repo-lane games live in
+`gamedevpl/www.gamedev.pl-games`, a private repository maintained by coding agents (see
+[`games-repo.md`](./games-repo.md)); store-lane games are held in the publication registry
+with their sources in GCS and are never committed to that repo. Which lane a slug is in
+decides where to look — see [Two catalog lanes](#two-catalog-lanes) below.
 
 ---
 
@@ -69,20 +72,21 @@ sandbox is unchanged by it, and raw readings never leave the browser.
 
 ## `apps/api` — nine buckets and a composition root
 
-The API is organised into nine top-level buckets. Every file belongs to exactly one, and the
-assignment is machine-checked rather than conventional.
+The API is organised into nine top-level buckets. Every **mapped** file belongs to exactly
+one, and the assignment is machine-checked rather than conventional; two files are unmapped
+and belong to no bucket (below).
 
-| Bucket           | What it owns                                                                                                                                  |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `platform/`      | Composition root (`app.ts`), auth, rate limits, moderation, OAuth, account deletion, and the Store. The bucket every other bucket may import. |
-| `creation/`      | Specs, drafts, remix, the Creator Studio's server half, job dispatch and reconciliation, scorecards                                           |
-| `agent-surface/` | The MCP server, the agent channel, agent keys, OAuth metadata — everything a coding agent talks to                                            |
-| `delivery/`      | Turning a merged game into something playable: bundling, assembly, the gate runner                                                            |
-| `catalog/`       | The games-repo client, catalog reads, game pages, recommendations, health sweeps                                                              |
-| `community/`     | Reviews, votes, proposals, player feedback, suggestions                                                                                       |
-| `realtime/`      | Multiplayer relay, presence, worlds, zones, game saves                                                                                        |
-| `telemetry/`     | Event intake and trend aggregates                                                                                                             |
-| `notifications/` | In-app, email, Web Push, contact, digests                                                                                                     |
+| Bucket           | What it owns                                                                                                                                                                                                                   |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `platform/`      | Composition root (`app.ts`), auth, rate limits, moderation, OAuth, account deletion, and the Store. The bucket every other bucket may import.                                                                                  |
+| `creation/`      | Specs, drafts, remix, the Creator Studio's server half, job dispatch and reconciliation, scorecards                                                                                                                            |
+| `agent-surface/` | The MCP server, the agent channel, agent keys, OAuth metadata — everything a coding agent talks to                                                                                                                             |
+| `delivery/`      | Receiving a delivery over the build channel and getting it to playable: staged sources, candidate versions, previews, bundling, assembly, the gate runner. Nothing is merged here — repo-lane merge-back lives in `community/` |
+| `catalog/`       | The games-repo client, catalog reads, game pages, recommendations, health sweeps                                                                                                                                               |
+| `community/`     | Reviews, votes, proposals, player feedback, suggestions                                                                                                                                                                        |
+| `realtime/`      | Multiplayer relay, presence, worlds, zones, game saves                                                                                                                                                                         |
+| `telemetry/`     | Event intake and trend aggregates                                                                                                                                                                                              |
+| `notifications/` | In-app, email, Web Push, contact, digests                                                                                                                                                                                      |
 
 `store/**` is the shared persistence layer — Firestore, an in-memory implementation, a fake
 for tests, plus `records/` and `slices/`. It is classified as `platform`, not as a domain of
@@ -272,8 +276,12 @@ agree, and CI runs it. Details in [`deployment.md`](./deployment.md).
 
 ## Repo-wide gates
 
-Four checks run in `npm run lint` beyond ESLint itself. Each is a ratchet: it does not demand
-the codebase be clean, it demands it not get worse.
+Four checks run in `npm run lint` beyond ESLint itself. Three are **blocking ratchets** — they
+do not demand the codebase be clean, they demand it not get worse, and they fail the build
+when it does. The fourth is **visibility-only**: `npm run module-boundary` runs the rule at
+warning severity and exits 0, today with 131 warnings, so a new cross-bucket import in an
+ungraduated bucket is reported but does not fail anything. The rule blocks only for the
+buckets listed in `ENFORCED_BUCKETS`, where the main `eslint .` pass runs it at `error`.
 
 | Gate              | Rule                                                                                                        |
 | ----------------- | ----------------------------------------------------------------------------------------------------------- |
