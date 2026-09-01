@@ -7255,127 +7255,6 @@ button.builder-mode-selector:disabled {
   flex-shrink: 0;
 }
 
-/* Opens the phone drawer. Hidden on desktop — the left rail is already there. */
-.studio-shelf-open {
-  display: none;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-width: 44px;
-  min-height: 44px;
-  padding: 0 10px;
-  border-radius: 10px;
-  border: 1px solid var(--panel-border);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--text);
-  cursor: pointer;
-}
-
-.studio-shelf-open:hover {
-  border-color: rgba(0, 228, 172, 0.45);
-  color: var(--turquoise);
-}
-
-.studio-shelf-open-label {
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-/* The strip's own back arrow — only rendered (see StudioStrip.tsx) once the
-   global header's is hidden below 800px/500px, so there is no toggle to pair
-   with a shown/hidden state here, just a fixed-size peer for the folder icon. */
-.studio-strip-exit {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: none;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-}
-
-.studio-strip-exit:hover {
-  color: var(--turquoise);
-  background: rgba(0, 228, 172, 0.08);
-}
-
-.studio-strip-exit:focus-visible {
-  outline: 2px solid var(--turquoise);
-  outline-offset: 2px;
-}
-
-/* Expand/collapse on the shelf itself (desktop rail ↔ full list, phone drawer close). */
-.studio-shelf-edge-toggle {
-  display: none;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  margin-left: auto;
-  padding: 0;
-  border-radius: 8px;
-  border: 1px solid var(--panel-border);
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.studio-shelf-edge-toggle:hover {
-  color: var(--turquoise);
-  border-color: rgba(0, 228, 172, 0.4);
-}
-
-.studio-shelf-backdrop {
-  z-index: 1100;
-}
-
-/* Collapsed-rail summary (folder + count). Hidden until compact desktop rail is closed. */
-.studio-shelf-summary {
-  display: none;
-  position: relative;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border-radius: 12px;
-  border: 1px solid var(--panel-border);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--text);
-  cursor: pointer;
-}
-
-.studio-shelf-summary:hover {
-  border-color: rgba(0, 228, 172, 0.45);
-  color: var(--turquoise);
-}
-
-.studio-shelf-summary-badge {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 9px;
-  background: var(--turquoise);
-  color: #0b221d;
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 18px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  box-shadow: 0 0 0 2px var(--panel);
-}
-
 /* A game open in Studio on a phone already has its own back-arrow-equivalent —
    the strip's folder button opens the same shelf `navUpTarget` sends "Up" to for
    a selected game (see router.ts), just as an in-page drawer instead of a URL
@@ -7491,126 +7370,6 @@ button.builder-mode-selector:disabled {
   }
 }
 
-/* Whether anyone else may play an unpublished game. One switch, because the link is
-   the only way in: the game is in no catalog and no rail either way. */
-.studio-share {
-  margin-top: 20px;
-  padding: 16px 18px;
-  border-radius: 12px;
-  border: 1px solid var(--panel-border, #33383d);
-  background: var(--panel-card);
-}
-
-.studio-share.is-compact {
-  margin-top: 0;
-  border: 0;
-  border-radius: 12px;
-  background: transparent;
-}
-
-.studio-share-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.studio-share-title {
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.studio-share-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 12px 5px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--panel-border, #33383d);
-  background: transparent;
-  color: var(--muted);
-  font-size: 0.8rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.studio-share-toggle:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.studio-share-toggle.is-on {
-  color: var(--turquoise);
-  border-color: rgba(0, 228, 172, 0.4);
-  background: rgba(0, 228, 172, 0.1);
-}
-
-/* The switch itself: a track with a knob that slides when it is on. */
-.studio-share-toggle-track {
-  position: relative;
-  width: 30px;
-  height: 16px;
-  border-radius: 999px;
-  background: rgba(148, 163, 184, 0.3);
-  transition: background 0.15s ease;
-}
-
-.studio-share-toggle-track::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--muted);
-  transition:
-    transform 0.15s ease,
-    background 0.15s ease;
-}
-
-.studio-share-toggle.is-on .studio-share-toggle-track {
-  background: rgba(0, 228, 172, 0.35);
-}
-
-.studio-share-toggle.is-on .studio-share-toggle-track::after {
-  transform: translateX(14px);
-  background: var(--turquoise);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .studio-share-toggle-track,
-  .studio-share-toggle-track::after {
-    transition: none;
-  }
-}
-
-.studio-share-hint {
-  margin: 8px 0 0;
-  font-size: 0.85rem;
-  line-height: 1.5;
-  color: var(--muted);
-}
-
-.studio-share .status-share {
-  margin: 12px 0 0;
-}
-
-.studio-sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
 .studio-slug {
   color: var(--turquoise);
   font-size: 0.85rem;
@@ -7624,6 +7383,10 @@ button.builder-mode-selector:disabled {
   min-width: 0;
 }
 
+/* Stays global with `.studio-error` below it: the markup is `class="studio-empty
+   studio-error"`, and both rules set `color` at the same specificity, so the later
+   one wins. Move this pair into a lazy Studio chunk and it would load *after*
+   `.studio-error` and turn the error text muted instead of red. */
 .studio-empty,
 .studio-empty-state {
   color: var(--muted);
@@ -7639,12 +7402,6 @@ button.builder-mode-selector:disabled {
 
 .studio-error {
   color: var(--error);
-}
-
-.studio-overview {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
 }
 
 .studio-rail-credentials-hint {
@@ -7663,70 +7420,6 @@ button.builder-mode-selector:disabled {
   gap: 0;
 }
 
-.studio-facts {
-  margin: 0;
-}
-
-.studio-fact-suffix {
-  margin-left: 0.35rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--muted);
-}
-
-.studio-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-}
-
-.studio-stats {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.studio-stats-range {
-  color: var(--muted);
-  font-size: 0.85rem;
-  margin: 0;
-}
-
-.studio-error-samples {
-  margin-top: 0.5rem;
-}
-
-.studio-error-samples .health-section-title {
-  margin-top: 0.5rem;
-}
-
-.studio-error-samples ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.studio-error-samples li {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-  background: var(--panel-card);
-  border: 1px solid var(--panel-border);
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: 0.85rem;
-}
-
-.studio-error-samples code {
-  overflow-wrap: anywhere;
-  color: var(--text);
-}
-
 .studio-improve {
   margin: 0;
 }
@@ -7739,6 +7432,8 @@ button.builder-mode-selector:disabled {
   margin: 0;
 }
 
+/* Dead since the playtest theater was replaced by the stage sheet: no .tsx renders
+   any of these. Kept with the other dead clusters for a single sweep to remove. */
 .studio-playtest-hint,
 .studio-muted {
   color: var(--muted);
@@ -7940,25 +7635,6 @@ button.builder-mode-selector:disabled {
   animation: fadeIn 0.2s ease-out;
 }
 
-.studio-playtest-shot {
-  margin: 0 0 12px;
-  max-width: 22rem;
-}
-
-.studio-playtest-shot img {
-  display: block;
-  width: 100%;
-  border-radius: 8px;
-  border: 1px solid var(--panel-border);
-  background: #000;
-}
-
-.studio-playtest-shot figcaption {
-  margin-top: 0.35rem;
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
 .studio-playtest-errors {
   list-style: none;
   margin: 0 0 12px;
@@ -8013,10 +7689,6 @@ button.builder-mode-selector:disabled {
 
   .studio-playtest-sheet {
     max-height: min(78vh, 28rem);
-  }
-
-  .studio-playtest-shot {
-    max-width: 100%;
   }
 }
 
@@ -8305,48 +7977,6 @@ button.builder-mode-selector:disabled {
   }
 }
 
-/* "What players think" on the studio stats tab (docs/improvement-loop-plan.md IL-2).
-   Set apart from the numbers above it because it is measured over the nightly roll-up's
-   fixed window rather than the one the creator picked — the divider is doing real work,
-   not decoration. */
-.studio-reactions {
-  margin-top: 1.25rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--panel-border);
-}
-
-.studio-themes {
-  margin-top: 0.75rem;
-}
-
-.studio-themes-title {
-  font-size: 0.9rem;
-  margin: 0 0 0.25rem;
-}
-
-.studio-theme-list {
-  list-style: none;
-  margin: 0.5rem 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.studio-theme-list li {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-  background: var(--panel-card);
-  border: 1px solid var(--panel-border);
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: 0.85rem;
-  /* Player text is arbitrary length and script; wrap instead of overflowing the card. */
-  overflow-wrap: anywhere;
-}
-
 /* Sign in with Apple
    ------------------
    Drawn here rather than by Apple's SDK so it can match the height and width of the
@@ -8471,103 +8101,6 @@ button.builder-mode-selector:disabled {
   .pull-to-refresh--busy .pull-to-refresh__spinner {
     animation: none;
   }
-}
-
-/* Suggested improvements (docs/improvement-loop-plan.md IL-3). Sits under the reactions
-   block in the stats tab, because a suggestion is a reading of the same evidence. */
-.studio-suggestions {
-  margin-top: 1.5rem;
-}
-
-.studio-suggestion {
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
-  border-radius: 8px;
-  padding: 0.85rem 1rem;
-  margin-top: 0.75rem;
-}
-
-.studio-suggestion-class {
-  margin: 0 0 0.4rem;
-  font-size: 0.95rem;
-}
-
-.studio-suggestion-evidence {
-  margin: 0 0 0.6rem;
-  padding-left: 1.1rem;
-}
-
-/* Indented and quieter than the evidence above it: these are somebody else's words,
-   carried as evidence, and must not read as the platform asserting them. */
-.studio-suggestion-context {
-  margin: 0.6rem 0;
-  padding-left: 0.75rem;
-  border-left: 2px solid var(--border, rgba(255, 255, 255, 0.12));
-  opacity: 0.85;
-}
-
-.studio-suggestion-actions,
-.studio-suggestion-reasons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.studio-suggestion-reasons p {
-  width: 100%;
-  margin: 0 0 0.25rem;
-}
-
-.studio-suggestion-approve,
-.studio-suggestion-dismiss,
-.studio-suggestion-reason {
-  /* 44px tap floor, same as every other control added since the M0 responsive audit. */
-  min-height: 44px;
-  padding: 0 0.9rem;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.studio-suggestion-outcome {
-  margin: 0.5rem 0;
-}
-
-/* Autonomy permission (docs/improvement-loop-plan.md IL-4). A scale from least to most
-   permission, laid out as a list rather than a select so every option's consequence is
-   readable without opening anything. */
-.studio-autonomy {
-  margin-top: 1.5rem;
-}
-
-.studio-autonomy-options {
-  list-style: none;
-  margin: 0.5rem 0 0;
-  padding: 0;
-}
-
-.studio-autonomy-option {
-  display: flex;
-  gap: 0.6rem;
-  align-items: flex-start;
-  /* 44px tap floor, as with every control added since the M0 responsive audit. */
-  min-height: 44px;
-  padding: 0.5rem 0.6rem;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.studio-autonomy-option.is-active {
-  background: rgba(127, 127, 127, 0.12);
-}
-
-.studio-autonomy-option small {
-  display: block;
-  opacity: 0.75;
-}
-
-.studio-autonomy-saved {
-  margin: 0.4rem 0 0;
-  opacity: 0.75;
 }
 
 /* ------------------------------------------------------------------------- *
@@ -10395,12 +9928,6 @@ body.remix-entry-open {
 
 .contributions-blocks li button {
   margin-left: auto;
-}
-
-.studio-rail-contributions {
-  display: grid;
-  gap: 14px;
-  padding-top: 4px;
 }
 
 .proposal-diff {

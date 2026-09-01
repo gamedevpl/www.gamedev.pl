@@ -210,3 +210,39 @@
   color: var(--text);
   background: rgba(255, 255, 255, 0.04);
 }
+
+.studio-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.studio-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.studio-facts {
+  margin: 0;
+}
+
+.studio-fact-suffix {
+  margin-left: 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.studio-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
