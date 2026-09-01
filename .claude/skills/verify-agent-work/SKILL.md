@@ -284,6 +284,15 @@ Two concrete instances of that (observed 2026-07-23):
   functions write the same piece of state, the sequence (A then B then A) is the test,
   not A and B separately. A latch that means “stop trying” is only safe if nothing else
   can raise the value underneath it.
+- **Stepping a corpse with the live combat solver is not the same as advancing a collapse
+  pose.** Observed (bonfire-arena / www.gamedev.pl-games#1198 review, 2026-09-01):
+  `stepFighter()` was the only writer of `fallen`, and runtime skipped it on `e.dead`, so
+  knights vanished standing. A unit test that called `stepFighter` on a dead fighter
+  passed. Wiring the full solver back in left residual `arm.vel` in the still-live
+  clash/strike loop; the capture path then never reached `won`. A/B against the pre-fix
+  commit proved the regression was the corpse step, not the rebase. `trace:classify`
+  on a later fallen-only path was render-only. Advance the pose field the spec names;
+  do not keep a dead blade in the exchange.
 
 ## Read the diff against the spec
 
