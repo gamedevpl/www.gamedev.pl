@@ -98,6 +98,10 @@ export function answersFromFlags(
   if (!raw && questions.length > 0) {
     throw new CliError('refine questions need --answers or a TTY', EXIT_INPUT, '--answers');
   }
-  const parsed = raw ? (JSON.parse(raw) as Record<string, string>) : {};
-  return parsed;
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw) as Record<string, string>;
+  } catch {
+    throw new CliError('--answers must be a JSON object', EXIT_INPUT, '--answers');
+  }
 }

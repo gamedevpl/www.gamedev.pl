@@ -18,6 +18,15 @@ describe('create intake', () => {
     });
   });
 
+  it('maps invalid --answers JSON to EXIT_INPUT', () => {
+    try {
+      answersFromFlags({ answers: '{nope' }, [{ id: 'tone', prompt: 'tone?' }]);
+      throw new Error('expected throw');
+    } catch (error) {
+      expect((error as { exitCode: number }).exitCode).toBe(EXIT_INPUT);
+    }
+  });
+
   it('advances a refine draft to a submit spec', () => {
     const draft = {
       concept: 'robots water plants',

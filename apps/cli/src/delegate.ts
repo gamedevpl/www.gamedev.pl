@@ -16,14 +16,14 @@ export function childEnv(parent: NodeJS.ProcessEnv, roundToken: string): NodeJS.
   return env;
 }
 
-export function parseEventLine(dialect: AdapterSpec['events']['dialect'], line: string): string | null {
+export function parseEventLine(line: string): string | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
   try {
     const parsed = JSON.parse(trimmed) as { text?: string; message?: string; type?: string };
     return parsed.text ?? parsed.message ?? parsed.type ?? trimmed;
   } catch {
-    return dialect === 'ndjson' || dialect === 'jsonl' ? null : trimmed;
+    return null;
   }
 }
 
@@ -31,7 +31,7 @@ export function renderDelegateStream(adapter: string, lines: string[], verbose: 
   const out: string[] = [];
   for (const line of lines) {
     if (verbose) out.push(`${adapter} raw ${line}`);
-    const payload = parseEventLine('ndjson', line);
+    const payload = parseEventLine(line);
     if (payload) out.push(formatAdapterEvent(adapter, payload));
   }
   return out;
