@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { buildMediaUrl, type BuildMediaItem } from '../../submissionApi.js';
 import { subscribeStudioStatus } from './studioStatusStore.js';
+import './studio-details-media.css';
 
 /** Details refreshes slower than the thread — the thread already owns the live pulse. */
 const DETAILS_POLL_MS = 10_000;

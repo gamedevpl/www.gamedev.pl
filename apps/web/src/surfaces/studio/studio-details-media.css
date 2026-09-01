@@ -1,0 +1,59 @@
+/* Studio Details → Media pane and the shot lightbox it opens (StudioDetailsMedia.tsx). */
+
+.studio-shot-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  margin: 0;
+  padding: 24px;
+  border: 0;
+  background: rgba(0, 0, 0, 0.82);
+  cursor: zoom-out;
+  display: grid;
+  place-items: center;
+}
+
+.studio-shot-lightbox img {
+  max-width: min(960px, 100%);
+  max-height: 90vh;
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* Details → Media pane */
+.studio-details-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.studio-details-media-card {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--panel-card);
+  color: inherit;
+  overflow: hidden;
+  cursor: zoom-in;
+  text-align: left;
+}
+
+.studio-details-media-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  background: #0b1018;
+}
+
+.studio-details-media-caption {
+  display: block;
+  padding: 6px 8px 8px;
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
