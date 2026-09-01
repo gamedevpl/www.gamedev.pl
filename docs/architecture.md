@@ -94,9 +94,11 @@ anywhere but `platform/` or itself. Buckets graduate from warn to error one at a
 being appended to `ENFORCED_BUCKETS`; `telemetry`, `catalog`, `realtime` and `notifications`
 are at error today, the rest stay warn-only under `npm run module-boundary`.
 
-One file is deliberately unmapped: `apps/api/src/submissions.ts`. It is the remaining
-mega-file, and leaving it unclassified means every domain it reaches into surfaces as an
-honest warning rather than being quietly waved through.
+Two files are unmapped: `apps/api/src/submissions.ts` and `creation/remix-view.ts`.
+`submissions.ts` is left that way deliberately — it is the remaining mega-file, and leaving
+it unclassified means every domain it reaches into surfaces as an honest warning rather than
+being quietly waved through. `remix-view.ts` is simply unclassified, and `npm run
+module-boundary` reports it as such.
 
 `platform/app.ts` is a single `buildApp` that registers everything — including the agent
 channel and the MCP server, which are mounted in the same app rather than in a sidecar.
@@ -169,10 +171,18 @@ flowchart LR
     IF --> P
 ```
 
-Games are **baked ahead of time**, not on the request path. When `GAMES_SNAPSHOT_BUCKET` is
-set, published catalog, play and media are served only from the Cloud Storage snapshot;
-unsetting it is an opt-out for local dev and fixtures, not a fallback. See
-[`games-snapshot.md`](./games-snapshot.md) for why the per-request rebuild had to go.
+The two lanes are served differently, and the play route says so in its own order.
+`catalog/game-play-route.ts` asks `storePublishedGame(slug)` **first** — "delivered games are
+never committed to the repo" — and only falls through to the snapshot when that misses.
+
+- **Store lane:** bundle, catalog metadata and media come from the publication registry and
+  `GamesStore`. These games skip the repo catalog and the snapshot bake entirely
+  (`catalog-routes.ts:340`).
+- **Repo lane:** **baked ahead of time**, not on the request path. When
+  `GAMES_SNAPSHOT_BUCKET` is set, published catalog, play and media for these games are
+  served only from the Cloud Storage snapshot; unsetting it is an opt-out for local dev and
+  fixtures, not a fallback. See [`games-snapshot.md`](./games-snapshot.md) for why the
+  per-request rebuild had to go.
 
 The bake runs through `platform/assemble.ts`'s `assembleGameHtml` — deliberately, rather than
 the games repo's own `tools/build.ts`. That assembler is where the restrictive CSP, the AI Act
@@ -190,8 +200,16 @@ flowchart LR
     BE -->|build channel| CH[agent-surface/]
     CH -->|submit_sources| DL[delivery/]
     DL -->|Cloud Build gate run| DL
-    DL -->|verdict| Pub[publish = registry write]
+    DL -->|verdict only| V[green verdict]
+    V -->|operator approves| Pub[publish = registry write]
 ```
+
+> [!IMPORTANT]
+> **A green gate does not publish.** `delivery/gate-runner.ts` records a verdict and nothing
+> more — its own header says so: "This never publishes. It records a verdict; a human still
+> approves." The registry write happens in `creation/job-admin-routes.ts`, behind the
+> admin-only `POST /api/admin/jobs/:jobId/publish`, and the transition is recorded
+> `by: 'operator'`. That human step is the moderation boundary; do not automate past it.
 
 A round is **dispatched to an agent backend** and the agent delivers back over the **build
 channel**, calling `submit_sources`. It does not travel as a merged pull request: nothing in

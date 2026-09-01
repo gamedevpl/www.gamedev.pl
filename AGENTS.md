@@ -100,8 +100,17 @@ each band the CSS assembles differently — see `apps/e2e/src/studio-shell.test.
 
 ## Current architecture
 
-Production games will live in a **dedicated games repo maintained by coding agents**; this app
-is becoming a catalog, player, and spec-submission surface. Self-hosted agent execution (the
+The catalog has **two lanes**, and which one a game is in decides where its sources live.
+**Repo lane:** the ~98 older games, whose system of record is `games/<slug>/` in the
+**dedicated games repo maintained by coding agents**; they are baked to the Cloud Storage
+snapshot on merge. **Store lane:** games built through the platform, delivered over the build
+channel and held in the publication registry with their sources in GCS — these are never
+committed to the games repo, and the play route checks them first. A slug with no publication
+record is a repo-lane game; that is the literal test in `apps/api/src/community/proposal-base.ts`,
+which is the one place the difference is resolved. See
+[`architecture.md`](docs/architecture.md) for the full picture.
+
+Self-hosted agent execution (the
 agent-runner container, auth proxy, job tokens, and orchestrator) was **removed for legal
 reasons** and is not a future phase. That finding is about compute **we** operate on a
 seated human subscription — a builder on a hosted platform paid by metered API key is a
