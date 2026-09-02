@@ -1,6 +1,6 @@
 export const GIT_REMOTE_CAPS = ['fetch', 'push', 'option'] as const;
 
-/** Git launches `git-remote-<scheme> <remote> <url>`; the slug is in the URL. */
+// Prefer argv[3] URL over the remote name.
 export function remoteSlugFromArgv(argv: string[]): string {
   const url = argv[3] ?? argv[2] ?? '';
   return url.replace(/^gamedev:\/\//, '').replace(/\/$/, '');
