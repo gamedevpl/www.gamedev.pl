@@ -41,4 +41,12 @@ describe('tui session', () => {
     expect(await first).toBe('');
     expect(await second).toBe('hello');
   });
+
+  it('deletes the last code point, not a UTF-16 unit', () => {
+    const session = createTuiSession('');
+    void session.prompt();
+    session.setDraft('hi😀');
+    session.deleteLast();
+    expect(session.get().draft).toBe('hi');
+  });
 });

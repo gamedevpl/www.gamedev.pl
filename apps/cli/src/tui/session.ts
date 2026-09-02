@@ -15,6 +15,7 @@ export type TuiSession = {
   writeLine: (text: string) => void;
   setLive: (live: string[]) => void;
   setDraft: (draft: string) => void;
+  deleteLast: () => void;
   movePick: (delta: number) => void;
   prompt: (choices?: string[]) => Promise<string>;
   submit: () => void;
@@ -64,6 +65,12 @@ export function createTuiSession(banner: string): TuiSession {
         if (code >= 32 && code !== 127 && (code < 0x80 || code > 0x9f)) next += ch;
       }
       state = { ...state, draft: next };
+      emit();
+    },
+    deleteLast() {
+      const chars = [...state.draft];
+      chars.pop();
+      state = { ...state, draft: chars.join('') };
       emit();
     },
     movePick(delta) {

@@ -40,7 +40,7 @@ export function ReplApp({ session, color }: { session: TuiSession; color: boolea
       return;
     }
     if (key.backspace || key.delete) {
-      session.setDraft(state.draft.slice(0, -1));
+      session.deleteLast();
       return;
     }
     if (!key.ctrl && !key.meta && input) session.setDraft(state.draft + input);
