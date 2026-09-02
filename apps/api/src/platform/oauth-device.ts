@@ -32,7 +32,6 @@ type DeviceAuth = {
   lastPollAt: number;
   uid?: string;
   denied?: boolean;
-  consumed?: boolean;
 };
 
 const pending = new Map<string, DeviceAuth>();
@@ -57,7 +56,7 @@ function mintUserCode(): string {
 
 function prune(nowMs: number): void {
   for (const [key, row] of pending) {
-    if (row.expiresAt <= nowMs || row.consumed) pending.delete(key);
+    if (row.expiresAt <= nowMs) pending.delete(key);
   }
 }
 
@@ -130,7 +129,8 @@ export function registerOAuthDeviceRoutes(
         return reply.status(429).send({ error: 'too_many_requests' });
       }
       const deviceCode = randomBytes(32).toString('base64url');
-      const userCode = mintUserCode();
+      let userCode = mintUserCode();
+      while (pending.has(userCode)) userCode = mintUserCode();
       const row: DeviceAuth = {
         deviceCodeHash: hashDeviceCode(deviceCode),
         userCode,

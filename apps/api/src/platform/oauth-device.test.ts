@@ -60,6 +60,14 @@ describe('OAuth device authorization (CL-08)', () => {
       interval: number;
     };
     expect(body.user_code).toMatch(/^[A-Z]{4}-[A-Z]{4}$/);
+    const other = await app!.inject({
+      method: 'POST',
+      url: '/oauth/device',
+      headers: { 'content-type': 'application/json' },
+      payload: { client_id: GAMEDEV_CLI_CLIENT_ID, scope: 'creator' },
+    });
+    expect(other.statusCode).toBe(200);
+    expect((other.json() as { user_code: string }).user_code).not.toBe(body.user_code);
     expect(body.verification_uri).toMatch(/\/device$/);
     expect(body.interval).toBe(5);
 
