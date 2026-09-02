@@ -1006,7 +1006,7 @@ export function App() {
           {route.view === 'contact' ? (
             <ContactPage onBack={() => navigate('/')} />
           ) : (
-            <ConnectAgentsPage onBack={() => navigate('/')} />
+            <ConnectAgentsPage onBack={() => navigate('/')} onStudio={() => navigate(studioPath())} />
           )}
         </main>
         <SiteFooter />

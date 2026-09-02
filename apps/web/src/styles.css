@@ -5242,6 +5242,16 @@ button.builder-mode-selector:disabled {
   margin-top: 0.4rem;
 }
 
+.connect-list .connect-inapp {
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 .connect-hint,
 .connect-note {
   color: var(--muted);

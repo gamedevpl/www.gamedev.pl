@@ -25,7 +25,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function draw(cliOn: boolean): Promise<void> {
+async function draw(cliOn: boolean, onStudio: () => void = () => undefined): Promise<void> {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo) => {
@@ -40,7 +40,7 @@ async function draw(cliOn: boolean): Promise<void> {
   );
   root = createRoot(container);
   await act(async () => {
-    root!.render(<ConnectAgentsPage onBack={() => undefined} />);
+    root!.render(<ConnectAgentsPage onBack={() => undefined} onStudio={onStudio} />);
     await Promise.resolve();
     await Promise.resolve();
   });
@@ -54,6 +54,18 @@ describe('ConnectAgentsPage', () => {
     expect(container.querySelector('a[href="#cli"]')).not.toBeNull();
     expect(container.textContent).not.toMatch(/Build My Game/i);
     expect(container.querySelector('a[href="/create"]')).toBeNull();
+    expect(container.querySelector('a[href="/studio"]')).toBeNull();
+  });
+
+  it('opens Studio through in-app navigation, not a full reload', async () => {
+    const onStudio = vi.fn();
+    await draw(false, onStudio);
+    const studio = [...container.querySelectorAll('button')].find((btn) => /studio/i.test(btn.textContent ?? ''));
+    expect(studio).toBeDefined();
+    act(() => {
+      studio?.click();
+    });
+    expect(onStudio).toHaveBeenCalledTimes(1);
   });
 
   it('hides the installer one-liner while the CLI surface is off', async () => {

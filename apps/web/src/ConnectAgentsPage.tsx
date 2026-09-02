@@ -6,7 +6,7 @@ const MCP_PATH = '/api/mcp';
 const CLAUDE_PLUGIN = 'https://github.com/gamedevpl/www.gamedev.pl/tree/master/listings/mcp/claude-plugin';
 const MCP_REGISTRY = 'https://github.com/modelcontextprotocol/registry';
 
-export function ConnectAgentsPage({ onBack }: { onBack: () => void }) {
+export function ConnectAgentsPage({ onBack, onStudio }: { onBack: () => void; onStudio: () => void }) {
   const { t } = useTranslation();
   const cliOn = useCliSurfaceEnabled();
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://www.gamedev.pl';
@@ -39,7 +39,10 @@ export function ConnectAgentsPage({ onBack }: { onBack: () => void }) {
         <ul className="connect-list">
           <li>{t('connectAgents.mcp.oauth')}</li>
           <li>
-            {t('connectAgents.mcp.studio')} <a href="/studio">{t('connectAgents.mcp.studioLink')}</a>
+            {t('connectAgents.mcp.studio')}{' '}
+            <button type="button" className="connect-inapp" onClick={onStudio}>
+              {t('connectAgents.mcp.studioLink')}
+            </button>
           </li>
           <li>
             <a href={CLAUDE_PLUGIN} target="_blank" rel="noreferrer noopener">
