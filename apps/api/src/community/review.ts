@@ -21,7 +21,7 @@ import {
   registerAssessmentResolutionRoute,
   summarizeResolutions,
 } from './assessment-resolution.js';
-import type { EmitDeps } from '../notifications/notify.js';
+import type { emitReviewSweep as EmitReviewSweep, EmitDeps } from '../notifications/notify.js';
 import { ASSESSMENT_CHECKLIST_KEYS, isAssessmentChecklist } from './review-checklist.js';
 import {
   effectiveReleasedCount,
@@ -92,11 +92,8 @@ export interface ReviewRoutesOptions {
   listCatalog?: () => Promise<ReviewCatalogEntry[]>;
   now?: () => number;
   emitDeps?: EmitDeps;
-  // Injected so this module never imports notifications directly (N1 module map).
-  emitReviewSweep?: (
-    deps: EmitDeps & { reviewerUids: Iterable<string> },
-    event: { notificationId: string; title: string; detail?: string },
-  ) => Promise<{ created: number }>;
+  // Injected so this module has no value-level notifications import.
+  emitReviewSweep?: typeof EmitReviewSweep;
 }
 
 const ClientContextSchema = z
