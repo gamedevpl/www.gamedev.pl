@@ -1,8 +1,12 @@
 # The Games Repo — agent-maintained games
 
-> **Status: 📋 Design agreed, not built.** This supersedes the container-based
-> generation architecture, which has been removed (see "Why this replaced the previous
-> design" below).
+> **Status: ✅ Live.** The games repo is the repo lane's system of record (see
+> [`architecture.md`](./architecture.md#two-catalog-lanes)) and this document supersedes the
+> container-based generation architecture, which has been removed (see "Why this replaced the
+> previous design" below). One part of the shape below is stale: work no longer reaches an
+> agent by filing an issue (see the correction under "What the gamedev.pl app becomes"). A round
+> is dispatched to an agent backend and delivered over the build channel — not via issue or PR —
+> as described in [`architecture.md`](./architecture.md).
 
 ## The shape
 
@@ -104,10 +108,10 @@ _who runs the compute and on whose licence_, not of hosted builders as a categor
 
 This is the significant trade and it should be designed for, not discovered:
 
-|                     | Old               | New                                              |
-| ------------------- | ----------------- | ------------------------------------------------ |
-| **Playing** a game  | Instant           | **Instant** (static bundles)                     |
-| **Creating** a game | ~30s, synchronous | **Asynchronous** — spec → agent → PR → published |
+|                     | Old               | New                                                                               |
+| ------------------- | ----------------- | --------------------------------------------------------------------------------- |
+| **Playing** a game  | Instant           | **Instant** (static bundles)                                                      |
+| **Creating** a game | ~30s, synchronous | **Asynchronous** — spec → agent round → build-channel delivery → gate → published |
 
 Creation becomes closer to _commissioning_ a game than _generating_ one. The UI must set that
 expectation honestly: submitted specs need visible status ("queued", "an agent is working on
@@ -130,7 +134,7 @@ DeviceOrientation themselves. Tilt stays optional; keyboard / pad remain enough.
 identity, which is content submission rather than compute-on-behalf — a much weaker concern
 than the one we just removed, but not nothing:
 
-- **Abuse/spam**: rate-limit submissions; don't let anyone flood the repo with issues.
+- **Abuse/spam**: rate-limit submissions; don't let anyone flood the agent backend with rounds.
 - **Moderation**: spec text lands in a public repo under our identity. It needs review before,
   or shortly after, it appears.
 - **Attribution**: record who submitted a spec, and be clear about what rights that implies.
@@ -146,8 +150,8 @@ validation gate so it guards published bundles.
 - **Catalog** — browse games from the repo, including committed gameplay
   screenshots and on-demand video previews.
 - **Player** — the existing sandboxed-iframe surface, unchanged.
-- **Spec submission** — a "describe your game" flow that files an issue in the games repo, with
-  status surfaced back to the creator.
+- **Spec submission** — a "describe your game" flow that dispatches a round to an agent
+  backend, with status surfaced back to the creator.
 
 ## Open questions
 
@@ -162,6 +166,6 @@ validation gate so it guards published bundles.
   not public. Details: [`games-snapshot.md`](./games-snapshot.md).
 - **Repository ownership and merge authority.** Agent PRs need a human gate initially,
   especially because review is also the moderation point.
-- **Submission identity, attribution, rights, and abuse controls.** These must be decided before
-  the app writes public issues under its own credentials.
+- **Submission identity, attribution, rights, and abuse controls.** These must be decided for
+  specs the app dispatches to an agent backend under its own credentials.
 - **One repo's scaling limits** — fine for tens of games; revisit if it reaches hundreds.

@@ -11,8 +11,9 @@ gamedev.pl is becoming a catalog and creation surface for AI-assisted browser ga
 5. Players can later propose changes that follow the same spec → PR → review path.
 
 This is intentionally **not** real-time generation. Creation is closer to commissioning a
-game: asynchronous, visible, and reviewable. The local deterministic generator remains a
-useful player-surface demo, not the future production backend.
+game: asynchronous, visible, and reviewable. (The local deterministic mock generator this
+paragraph once pointed to as a demo is gone — `packages/game-generator` is not tracked in
+git — superseded once real creation shipped; see [`architecture.md`](./architecture.md).)
 
 Games are unconstrained code, so safety comes from sandboxed execution. Every game runs inside
 an iframe with `sandbox="allow-scripts allow-pointer-lock"` and no `allow-same-origin`, and production games are
@@ -32,24 +33,25 @@ The new product inherits the established gamedev.pl identity from the legacy `ma
 
 ## The three core loops
 
-### 1. Create 📋
+### 1. Create ✅
 
 ```text
 Creator submits a spec
         ↓
-The app validates it and files a games-repo issue
+Moderation and quota, then the round is dispatched to an agent backend
         ↓
-A coding agent proposes SPEC.md + implementation in a PR
+The agent delivers over the build channel (submit_sources) — not a merged PR
         ↓
-Human review and automated validation gate the merge
+A Cloud Build gate run checks the delivery
         ↓
-The publish workflow adds the game to the catalog
+An operator approves; publishing is a registry write
 ```
 
 The creator sees honest asynchronous states such as submitted, under review, agent working,
-PR open, and published.
+gate running, and published. See [`architecture.md`](./architecture.md) for the full flow,
+including the two catalog lanes this loop can land in.
 
-### 2. Play 📋 (player surface proven locally)
+### 2. Play ✅
 
 ```text
 Player browses the published catalog
@@ -59,22 +61,25 @@ The selected bundle loads from the games origin
 The game runs in the sandboxed iframe
 ```
 
-The existing mock proves the last step with three playable templates. Catalog ingestion and
-published hosting are not built yet.
+Live in production. Both catalog lanes serve this loop; see
+[`architecture.md`](./architecture.md#two-catalog-lanes).
 
-### 3. Remix 📋
+### 3. Remix 🚧
 
 ```text
 Player proposes a behavior change
         ↓
 The request becomes a proposed spec change
         ↓
-An agent updates the spec and implementation in a PR
+An agent updates the spec and implementation
         ↓
 Maintainers review; the agent never auto-merges
         ↓
-Merge republishes the game
+Accepted change republishes the game
 ```
+
+Built for the creator's own games; a player-facing entry point for someone else's published
+game is the open part. See [`remix-to-pr.md`](./remix-to-pr.md).
 
 ## Why one games repository
 

@@ -2,7 +2,7 @@
 
 Status legend: ✅ done · 🚧 in progress · 📋 planned/not started · 🗃️ retired
 
-> Reality-synced 2026-07-25. The original Phase 1–5 plan is **complete and in
+> Reality-synced 2026-09-02. The original Phase 1–5 plan is **complete and in
 > production**: https://www.gamedev.pl has been serving the new app in closed beta
 > since 2026-07-23, on Cloud Run (europe-west1) with a native domain mapping.
 > Phases below are kept for the record with what actually shipped, what shipped
@@ -20,9 +20,10 @@ The local `prompt → mock template → sandboxed iframe` slice is complete:
 - Request validation, bundle size limits, credential-pattern scanning, localization,
   tests, linting, and CI.
 
-The mock preview was **retained as a development-only route** — `createGenerator`
-accepts nothing but `mock` and throws on any other `LLM_PROVIDER`
-([generator.ts](../apps/api/src/generator.ts)). That closes Phase 2's open question.
+The mock preview and the local `prompt → mock template` generator described above are gone —
+`apps/api/src/generator.ts` is not tracked in git. Real creation (spec → agent round → build
+channel → gate → publish, see [`architecture.md`](./architecture.md)) superseded it. That closes
+Phase 2's open question, just not the way this paragraph originally described.
 
 ## Retired direction — self-hosted generation 🗃️
 
@@ -72,9 +73,10 @@ play hash routes, shareable slug permalinks, and ETag-revalidated gallery media.
 **Goal:** let a creator commission a game without implying instant generation.
 
 Done: structured spec input, Google sign-in as the attribution mechanism, moderation
-and rate limits and per-user daily quotas, structured issue filing with credentials
-that never reach the browser, and the full lifecycle surfaced (queued → in review →
-building → PR open → published / needs changes).
+and rate limits and per-user daily quotas, a round dispatched to an agent backend with
+credentials that never reach the browser, and the full lifecycle surfaced (queued → in review →
+building → gate → published / needs changes). (Not issue filing — see
+[`architecture.md`](./architecture.md) for the actual build-channel delivery mechanism.)
 
 Also shipped here, beyond the original list: a clarifying-questions QA pass before
 spec freeze (now a hard precondition), spec refinement, a my-games rail, revision
@@ -86,11 +88,10 @@ allowance display, and creator steering before a draft exists.
 **Goal:** let a player propose a change while preserving review and ownership.
 
 The **machinery is built and running, but only for the creator's own games.**
-`POST /api/submissions/:token/feedback` moderates and sanitizes the text, posts it
-to the PR as a fenced block explicitly marked as data-not-instructions, tags it for
-the relay workflow, and queues it into the agent inbox — which is exactly the
-"capture a change request → scoped issue → agent PR → preview in the same sandbox →
-never auto-merge" loop the phase describes.
+`POST /api/submissions/:token/feedback` moderates and sanitizes the text, delivers it into the
+agent's build channel as a message explicitly marked as data-not-instructions, and queues it
+into the agent inbox — which is exactly the "capture a change request → agent round → preview in
+the same sandbox → never auto-merge" loop the phase describes (not a scoped issue or a PR).
 
 Still open, and this is the actual remaining work of the phase:
 

@@ -1,7 +1,13 @@
 # Games Repo — concrete blueprint
 
-> **Status: 📋 Agreed blueprint, repository not created yet.** This is the implementation plan for the repo
-> described in [`games-repo.md`](./games-repo.md). Read that first for _why_; this is _what_.
+> **Status: 📋 Historical blueprint — partially superseded.** The repo described here
+> ([`games-repo.md`](./games-repo.md)) exists and is live as the repo lane's system of record
+> (see [`architecture.md`](./architecture.md#two-catalog-lanes)). The layout, spec format, and
+> validation gate below are still broadly representative, but §6 "How work reaches an agent"
+> describes an issue-first flow that was never built that way: a round is dispatched to an agent
+> backend and delivered over the build channel (`submit_sources`), not via issue-filing or
+> Copilot PR assignment. See [`architecture.md`](./architecture.md) for the real flow. Read this
+> as design history, not as current fact.
 
 ## 1. Layout
 
@@ -152,28 +158,31 @@ And it gives the **separate, cookieless origin** for games for free — the publ
 isn't the app's origin. A security property we wanted anyway falls out of the deployment shape
 rather than needing to be engineered.
 
-## 6. How work reaches an agent
+## 6. How work reaches an agent — superseded, kept for history
 
-**Recommended: issue-first.**
+This section described the originally planned issue-first flow. It was not built this way; see
+the status banner above and [`architecture.md`](./architecture.md) for the real mechanism (a
+round dispatched to an agent backend, delivered over the build channel, checked by a Cloud Build
+gate, and approved by an operator).
 
-1. A creator submits a spec through gamedev.pl (or opens an issue directly).
-2. The app files an issue using the `new-game` template, containing the proposed spec body and
-   the submitter's handle.
-3. The issue is assigned to Copilot (see the `copilot-orchestration` skill).
-4. Copilot's PR creates **both** `SPEC.md` and the implementation, in one game directory.
-5. Review is the moderation point — spec and code are judged together, before anything is public.
-6. Merge → publish → it appears in the catalog.
+1. ~~A creator submits a spec through gamedev.pl (or opens an issue directly).~~
+2. ~~The app files an issue using the `new-game` template, containing the proposed spec body and
+   the submitter's handle.~~
+3. ~~The issue is assigned to Copilot (see the `copilot-orchestration` skill).~~
+4. ~~Copilot's PR creates **both** `SPEC.md` and the implementation, in one game directory.~~
+5. ~~Review is the moderation point — spec and code are judged together, before anything is public.~~
+6. ~~Merge → publish → it appears in the catalog.~~
 
-Labels: `new-game`, `bug`, `spec-drift` (implementation no longer matches its spec).
+The spec-first vs. issue-first tradeoff discussed in the original draft is moot: neither issues
+nor PRs are the delivery mechanism.
 
-> **The alternative — spec-first** (spec merged as `status: draft`, implemented later) would let
-> the catalog advertise "coming soon" entries and separates moderation from implementation. It
-> costs an extra round trip per game. Worth switching to _if_ we want pending games visible;
-> otherwise issue-first is simpler and has exactly one review gate.
+## 7. Seed content — historical
 
-## 7. Seed content
+`packages/game-generator` is gone (not tracked in git); this described how the repo's first
+entries were meant to be seeded before real creation shipped. The three templates below are
+history, not a live source.
 
-The three templates in `packages/game-generator/templates` are real, working games. They become
+The three templates in `packages/game-generator/templates` were real, working games. They became
 the repo's first entries, each with a `SPEC.md` **written to describe what the game already
 does** — not aspirationally.
 
