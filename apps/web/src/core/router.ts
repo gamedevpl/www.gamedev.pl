@@ -219,6 +219,10 @@ const RESERVED_HANDLE_SEGMENTS = new Set([
   'www',
 ]);
 
+function isAddressableHandle(handle: string): boolean {
+  return CREATOR_HANDLE_PATTERN.test(handle) && (handle === PLATFORM_HANDLE || !RESERVED_HANDLE_SEGMENTS.has(handle));
+}
+
 // Canonical play prefix is `/play`. `/ay` and `/ai` are accepted aliases (same view);
 // the app rewrites them to `/play/<slug>` so shared URLs stay consistent.
 const PLAY_PREFIX_PATTERN = /^\/(play|ay|ai)\/([^/]+)$/;
@@ -271,11 +275,7 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
   const creatorMatch = normalizedPath.match(/^\/creators\/([^/]+)$/);
   if (creatorMatch?.[1]) {
     const handle = decodeSegment(creatorMatch[1]);
-    if (
-      handle &&
-      CREATOR_HANDLE_PATTERN.test(handle) &&
-      (handle === PLATFORM_HANDLE || !RESERVED_HANDLE_SEGMENTS.has(handle))
-    ) {
+    if (handle && isAddressableHandle(handle)) {
       return { view: 'creator', handle };
     }
     return { view: 'notFound' };
@@ -381,12 +381,7 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
   // `/studio`, `/privacy`, etc. keep their meaning. Those segments are also reserved at
   // handle-claim time; the ordering here is defense in depth for old data and typos.
   const rootHandle = decodeSegment(normalizedPath.slice(1));
-  if (
-    !normalizedPath.slice(1).includes('/') &&
-    rootHandle &&
-    CREATOR_HANDLE_PATTERN.test(rootHandle) &&
-    (rootHandle === PLATFORM_HANDLE || !RESERVED_HANDLE_SEGMENTS.has(rootHandle))
-  ) {
+  if (!normalizedPath.slice(1).includes('/') && rootHandle && isAddressableHandle(rootHandle)) {
     return { view: 'creator', handle: rootHandle };
   }
 
@@ -400,16 +395,7 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     const handle = decodeSegment(gameMatch[1]);
     const slug = decodeSegment(gameMatch[2]);
     const tabSegment = gameMatch[3] ? decodeSegment(gameMatch[3]) : undefined;
-    if (
-      handle &&
-      CREATOR_HANDLE_PATTERN.test(handle) &&
-      // The platform handle is reserved against claiming but *is* an address: it is
-      // where games with no creator to name live. Keep aligned with spa-paths.ts.
-      (handle === PLATFORM_HANDLE || !RESERVED_HANDLE_SEGMENTS.has(handle)) &&
-      slug &&
-      SLUG_PATTERN.test(slug) &&
-      tabSegment !== null
-    ) {
+    if (handle && isAddressableHandle(handle) && slug && SLUG_PATTERN.test(slug) && tabSegment !== null) {
       if (!tabSegment) {
         return { view: 'game', handle, slug };
       }
