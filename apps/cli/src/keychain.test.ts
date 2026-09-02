@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { encryptedFileStore, memoryStore } from './keychain.js';
+import { encryptedFileStore, FILE_FALLBACK_WARNING, memoryStore } from './keychain.js';
 
 describe('token stores', () => {
   it('round-trips tokens in memory', async () => {
@@ -21,5 +21,10 @@ describe('token stores', () => {
     const bytes = readFileSync(path);
     expect(bytes.toString('utf8')).not.toContain('gdpl_oat_secret');
     expect((await store.get())?.accessToken).toBe('gdpl_oat_secret');
+  });
+
+  it('describes the encrypted file store without claiming a keychain fallback', () => {
+    expect(FILE_FALLBACK_WARNING.toLowerCase()).not.toMatch(/keychain|unavailable|fallback/);
+    expect(FILE_FALLBACK_WARNING).toContain('encrypted file');
   });
 });

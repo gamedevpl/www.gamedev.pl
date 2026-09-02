@@ -70,13 +70,15 @@ export async function runCli(
     }
     if (verb === 'login') {
       const persist = encryptedFileStore(env);
-      const imported = (typeof flags.token === 'string' ? flags.token.trim() : '') || env.GAMEDEV_TOKEN?.trim() || '';
+      const fromFlag = typeof flags.token === 'string' ? flags.token.trim() : '';
+      const fromEnv = env.GAMEDEV_TOKEN?.trim() ?? '';
+      const imported = fromFlag || fromEnv;
       if (imported) {
         await persist.set({ accessToken: imported, tokenType: 'Bearer', scope: 'creator' });
         if (fileKeychainOptedIn(env)) {
           io.stderr.write(`${FILE_FALLBACK_WARNING}\n`);
         }
-        io.stdout.write('signed in with GAMEDEV_TOKEN\n');
+        io.stdout.write(fromFlag ? 'signed in with --token\n' : 'signed in with GAMEDEV_TOKEN\n');
         return EXIT_GREEN;
       }
       requireTtyFlag(tty, '--token', `GAMEDEV_TOKEN=… ${cliUsage('login')}`);

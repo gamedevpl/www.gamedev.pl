@@ -1,3 +1,4 @@
+import { request as httpRequest } from 'node:http';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -140,6 +141,44 @@ describe('loopback login', () => {
     });
     expect(io.read().out).toMatch(/^open https:\/\/www\.gamedev\.pl\/oauth\/authorize/m);
   });
+
+  it('parses the callback against a fixed loopback origin, not Host', async () => {
+    const store = memoryStore();
+    const io = sink();
+    await runLoopbackLogin({
+      origin: 'https://www.gamedev.pl',
+      store,
+      stdout: io.stdout,
+      timeoutMs: 4000,
+      fetch: async () =>
+        new Response(JSON.stringify({ access_token: 'gdpl_oat_host', token_type: 'Bearer', scope: 'creator' }), {
+          status: 200,
+        }),
+      openUrl: async (url) => {
+        const parsed = new URL(url);
+        const redirect = new URL(parsed.searchParams.get('redirect_uri') ?? '');
+        const state = parsed.searchParams.get('state');
+        await new Promise<void>((resolve, reject) => {
+          const req = httpRequest(
+            {
+              hostname: redirect.hostname,
+              port: redirect.port,
+              path: `${redirect.pathname}?code=c&state=${state}`,
+              headers: { host: '::::' },
+            },
+            (res) => {
+              res.resume();
+              res.on('end', resolve);
+            },
+          );
+          req.on('error', reject);
+          req.end();
+        });
+        return true;
+      },
+    });
+    expect((await store.get())?.accessToken).toBe('gdpl_oat_host');
+  });
 });
 
 describe('login verb', () => {
@@ -150,6 +189,10 @@ describe('login verb', () => {
     stdin.isTTY = false;
     const stdout = new PassThrough();
     const stderr = new PassThrough();
+    let out = '';
+    stdout.on('data', (chunk: Buffer) => {
+      out += chunk.toString();
+    });
     const code = await runCli(
       ['node', 'gamedevpl', 'login'],
       { HOME: dir, GAMEDEV_TOKEN: 'gdpl_pat_import', GAMEDEV_TOKEN_FILE: path },
@@ -160,6 +203,7 @@ describe('login verb', () => {
       },
     );
     expect(code).toBe(EXIT_GREEN);
+    expect(out).toContain('signed in with GAMEDEV_TOKEN');
     const stored = await encryptedFileStore({ HOME: dir, GAMEDEV_TOKEN_FILE: path }).get();
     expect(stored?.accessToken).toBe('gdpl_pat_import');
   });
@@ -171,6 +215,10 @@ describe('login verb', () => {
     stdin.isTTY = false;
     const stdout = new PassThrough();
     const stderr = new PassThrough();
+    let out = '';
+    stdout.on('data', (chunk: Buffer) => {
+      out += chunk.toString();
+    });
     const code = await runCli(
       ['node', 'gamedevpl', 'login', '--token', 'gdpl_pat_flag'],
       { HOME: dir, GAMEDEV_TOKEN_FILE: path },
@@ -181,6 +229,8 @@ describe('login verb', () => {
       },
     );
     expect(code).toBe(EXIT_GREEN);
+    expect(out).toContain('signed in with --token');
+    expect(out).not.toContain('GAMEDEV_TOKEN');
     const stored = await encryptedFileStore({ HOME: dir, GAMEDEV_TOKEN_FILE: path }).get();
     expect(stored?.accessToken).toBe('gdpl_pat_flag');
   });

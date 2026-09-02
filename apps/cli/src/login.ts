@@ -102,8 +102,14 @@ function listen(expectedState: string): Promise<{
       settle = resolve;
     });
     const server = createServer((req: IncomingMessage, res: ServerResponse) => {
-      const host = req.headers.host ?? '127.0.0.1';
-      const url = new URL(req.url ?? '/', `http://${host}`);
+      let url: URL;
+      try {
+        url = new URL(req.url ?? '/', 'http://127.0.0.1');
+      } catch {
+        res.writeHead(400);
+        res.end();
+        return;
+      }
       if (url.pathname !== '/callback') {
         res.writeHead(404);
         res.end();
