@@ -25,13 +25,11 @@ const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01, 0
 
 function stubGitHub(): GitHubClient {
   return {
-    createIssue: async () => ({ number: ISSUE }),
     getIssueState: async () => ({ state: 'open' as const }),
     findLinkedPR: async (): Promise<LinkedPullRequest | null> => null,
     createIssueComment: async () => ({ id: 1 }),
     updateIssueBody: async () => {},
     closeIssue: async () => {},
-    closePullRequest: async () => {},
     ensureOpenPullRequest: async () => ({ number: 1 }),
     deleteBranch: async () => {},
     getGameSources: async (): Promise<GameSources | null> => null,

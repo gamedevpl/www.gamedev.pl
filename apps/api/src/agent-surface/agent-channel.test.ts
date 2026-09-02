@@ -20,13 +20,11 @@ const ISSUE = 42;
 
 function stubGitHub(overrides: Partial<GitHubClient> = {}): GitHubClient {
   return {
-    createIssue: async () => ({ number: ISSUE }),
     getIssueState: async () => ({ state: 'open' as const }),
     findLinkedPR: async (): Promise<LinkedPullRequest | null> => null,
     createIssueComment: async () => ({ id: 1 }),
     updateIssueBody: async () => {},
     closeIssue: async () => {},
-    closePullRequest: async () => {},
     ensureOpenPullRequest: async () => ({ number: 1 }),
     deleteBranch: async () => {},
     getGameSources: async (): Promise<GameSources | null> => null,

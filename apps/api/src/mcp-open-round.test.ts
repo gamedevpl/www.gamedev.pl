@@ -24,13 +24,11 @@ const PUBLISHED_ISSUE = 10;
 
 function stubGitHub(): GitHubClient {
   return {
-    createIssue: async () => ({ number: PUBLISHED_ISSUE }),
     getIssueState: async () => ({ state: 'open' as const }),
     findLinkedPR: async (): Promise<LinkedPullRequest | null> => null,
     createIssueComment: async () => ({ id: 1 }),
     updateIssueBody: async () => {},
     closeIssue: async () => {},
-    closePullRequest: async () => {},
     ensureOpenPullRequest: async () => ({ number: 1 }),
     deleteBranch: async () => {},
     getGameSources: async (): Promise<GameSources | null> => null,

@@ -15,13 +15,11 @@ const CONCEPT = 'A squad tactics game about clearing rooms with careful timing a
 
 function stubGitHub(): GitHubClient {
   return {
-    createIssue: async () => ({ number: 1 }),
     getIssueState: async () => ({ state: 'open' as const }),
     findLinkedPR: async (): Promise<LinkedPullRequest | null> => null,
     createIssueComment: async () => ({ id: 1 }),
     updateIssueBody: async () => {},
     closeIssue: async () => {},
-    closePullRequest: async () => {},
     ensureOpenPullRequest: async () => ({ number: 1 }),
     deleteBranch: async () => {},
     getGameSources: async (): Promise<GameSources | null> => null,

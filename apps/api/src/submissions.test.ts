@@ -51,7 +51,6 @@ function createGithubClientStub(params: {
   catalog?: CatalogGameEntry[];
   progressNotes?: string | null;
 }) {
-  const createIssue = vi.fn(async () => ({ number: params.jobId ?? 123 }));
   const getIssueState = vi.fn(async () => ({ state: params.issueState ?? 'open' }));
   const findLinkedPR = vi.fn(async () => params.linkedPr ?? null);
   const getGameSources = vi.fn(async () => params.gameSources ?? null);
@@ -60,16 +59,13 @@ function createGithubClientStub(params: {
   const createIssueComment = vi.fn(async () => ({ id: 1 }));
   const updateIssueBody = vi.fn(async () => {});
   const closeIssue = vi.fn(async () => {});
-  const closePullRequest = vi.fn(async () => {});
   const getProgressNotes = vi.fn(async () => params.progressNotes ?? null);
   const githubClient: GitHubClient = {
-    createIssue,
     getIssueState,
     findLinkedPR,
     createIssueComment,
     updateIssueBody,
     closeIssue,
-    closePullRequest,
     getGameSources,
     getGameMedia,
     getCatalog,
@@ -78,13 +74,11 @@ function createGithubClientStub(params: {
   };
   return {
     githubClient,
-    createIssue,
     getIssueState,
     findLinkedPR,
     createIssueComment,
     updateIssueBody,
     closeIssue,
-    closePullRequest,
     getGameSources,
     getGameMedia,
     getCatalog,
@@ -497,8 +491,8 @@ describe('submission routes', () => {
     await app.close();
   });
 
-  it('rejects a submission that trips content moderation with 422, before creating an issue or spending quota', async () => {
-    const { githubClient, createIssue } = createGithubClientStub({});
+  it('rejects a submission that trips content moderation with 422, before spending quota', async () => {
+    const { githubClient } = createGithubClientStub({});
     const { app, store, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret });
 
     const response = await app.inject({
@@ -510,7 +504,6 @@ describe('submission routes', () => {
 
     expect(response.statusCode).toBe(422);
     expect(response.json()).toEqual({ error: 'content_rejected', category: 'adult' });
-    expect(createIssue).not.toHaveBeenCalled();
 
     const quota = await store.checkAndIncrementQuota(
       'g:test-user',
@@ -525,7 +518,7 @@ describe('submission routes', () => {
   it('files nothing on GitHub, and sends the sanitized spec straight to an agent', async () => {
     // Job identity is ours: no issue is created, so a build no longer waits on a work
     // item existing in someone else's system before it can be named.
-    const { githubClient, createIssue } = createGithubClientStub({ jobId: 77 });
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
     const { backend, briefs } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -545,7 +538,6 @@ describe('submission routes', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(createIssue).not.toHaveBeenCalled();
 
     // The token addresses a job id of ours, allocated above the floor that separates
     // them from the era when identity came from an issue number.
@@ -2909,7 +2901,7 @@ describe('submission routes', () => {
   });
 
   it('abandons a native job without closing anything on GitHub', async () => {
-    const { githubClient, closeIssue, closePullRequest } = createGithubClientStub({ jobId: 77 });
+    const { githubClient, closeIssue } = createGithubClientStub({ jobId: 77 });
     const { backend } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -2933,7 +2925,6 @@ describe('submission routes', () => {
 
     expect(response.statusCode).toBe(200);
     expect(closeIssue).not.toHaveBeenCalled();
-    expect(closePullRequest).not.toHaveBeenCalled();
     expect((await store.getSubmission(job.jobId))?.state).toBe('canceled');
 
     await app.close();
@@ -4348,7 +4339,7 @@ describe('POST /api/submissions/:token/improve', () => {
     // last caller of that path after #347 moved dispatch in-house — and nothing collects
     // such an issue any more, so the request went nowhere. An improvement is now a new
     // job carrying the game's slug.
-    const { githubClient, createIssue } = createGithubClientStub({ jobId: 501 });
+    const { githubClient } = createGithubClientStub({ jobId: 501 });
     const store = new InMemoryStore();
     const { backend, briefs } = createBackendStub();
     const { app, authHeaders } = await createApp({
@@ -4370,7 +4361,6 @@ describe('POST /api/submissions/:token/improve', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ ok: true, slug: 'sky-dodge' });
-    expect(createIssue).not.toHaveBeenCalled();
     const dispatched = briefs.at(-1)!;
     expect(dispatched.slug).toBe('sky-dodge');
     expect(dispatched.feedback).toContain('Make level two less punishing');
@@ -4379,7 +4369,7 @@ describe('POST /api/submissions/:token/improve', () => {
   });
 
   it('refuses unpublished games — those still use the draft feedback path', async () => {
-    const { githubClient, createIssue } = createGithubClientStub({});
+    const { githubClient } = createGithubClientStub({});
     const store = new InMemoryStore();
     const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
     await store.createSubmission(123, 'g:test-user', 'Not live yet');
@@ -4393,12 +4383,11 @@ describe('POST /api/submissions/:token/improve', () => {
     });
 
     expect(res.statusCode).toBe(409);
-    expect(createIssue).not.toHaveBeenCalled();
     await app.close();
   });
 
   it('refuses someone else’s published game even with a valid token', async () => {
-    const { githubClient, createIssue } = createGithubClientStub({});
+    const { githubClient } = createGithubClientStub({});
     const store = new InMemoryStore();
     const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
     await store.createSubmission(123, 'g:someone-else', 'Not yours');
@@ -4413,13 +4402,12 @@ describe('POST /api/submissions/:token/improve', () => {
     });
 
     expect(res.statusCode).toBe(403);
-    expect(createIssue).not.toHaveBeenCalled();
     await app.close();
   });
 
   describe('the Studio mini chat agent', () => {
     it('a conversational reply answers on the current job and opens no new one', async () => {
-      const { githubClient, createIssue } = createGithubClientStub({ jobId: 501 });
+      const { githubClient } = createGithubClientStub({ jobId: 501 });
       const store = new InMemoryStore();
       const { backend, briefs } = createBackendStub();
       const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'You can tune difficulty from Settings.' }));
@@ -4443,7 +4431,6 @@ describe('POST /api/submissions/:token/improve', () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ ok: true });
-      expect(createIssue).not.toHaveBeenCalled();
       // No new job: the reply lives on the published job's thread.
       expect(briefs).toHaveLength(0);
       const all = await store.listCreatorMessages(123);
@@ -4485,7 +4472,7 @@ describe('POST /api/submissions/:token/improve', () => {
     });
 
     it('a conversational reply does not spend the daily improvement quota', async () => {
-      const { githubClient, createIssue } = createGithubClientStub({ jobId: 501 });
+      const { githubClient } = createGithubClientStub({ jobId: 501 });
       const store = new InMemoryStore();
       const { backend, briefs } = createBackendStub();
       const responses: Array<{ kind: 'reply'; text: string } | { kind: 'build' }> = [
@@ -4518,7 +4505,6 @@ describe('POST /api/submissions/:token/improve', () => {
         expect(res.statusCode).toBe(200);
         expect(res.json()).toEqual({ ok: true });
       }
-      expect(createIssue).not.toHaveBeenCalled();
 
       const build = await app.inject({
         method: 'POST',
