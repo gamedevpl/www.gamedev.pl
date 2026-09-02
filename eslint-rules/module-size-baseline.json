@@ -832,6 +832,7 @@
     "apps/web/src/surfaces/studio/EditorSurface.test.tsx": 74,
     "apps/web/src/surfaces/studio/EditorSurface.tsx": 320,
     "apps/web/src/surfaces/studio/editorSurfaceMode.ts": 16,
+    "apps/web/src/surfaces/studio/FeedbackPanel.tsx": 654,
     "apps/web/src/surfaces/studio/NumberScrubber.test.tsx": 98,
     "apps/web/src/surfaces/studio/NumberScrubber.tsx": 87,
     "apps/web/src/surfaces/studio/roundSealed.test.ts": 22,

@@ -571,6 +571,7 @@
     "apps/web/src/surfaces/studio/editorJsonLiveDiff.ts": 92,
     "apps/web/src/surfaces/studio/EditorPanel.test.tsx": 16,
     "apps/web/src/surfaces/studio/EditorPanel.tsx": 644,
+    "apps/web/src/surfaces/studio/FeedbackPanel.tsx": 966,
     "apps/web/src/surfaces/studio/studio-shell.css.test.ts": 42,
     "apps/web/src/surfaces/studio/StudioBuildHistory.test.tsx": 103,
     "apps/web/src/surfaces/studio/StudioBuildHistory.tsx": 27,
