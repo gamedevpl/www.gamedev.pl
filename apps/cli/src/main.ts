@@ -26,12 +26,12 @@ import { glyphs, wantsColor } from './renderer.js';
 import { runStatusVerb } from './status-watch.js';
 import { dispatchReadVerb } from './verbs.js';
 
-function storeFromEnv(env: NodeJS.ProcessEnv): TokenStore {
+function storeFromEnv(env: NodeJS.ProcessEnv, warn: (line: string) => void): TokenStore {
   if (env.GAMEDEV_TOKEN) {
     return memoryStore({ accessToken: env.GAMEDEV_TOKEN, tokenType: 'Bearer', scope: 'creator' });
   }
   if (fileKeychainOptedIn(env)) {
-    stderr.write(`${FILE_FALLBACK_WARNING}\n`);
+    warn(`${FILE_FALLBACK_WARNING}\n`);
   }
   return encryptedFileStore(env);
 }
@@ -59,7 +59,7 @@ export async function runCli(
   const { verb, args, flags } = parseArgv(argv);
   const asJson = jsonMode(flags);
   const origin = originFromEnv(env);
-  const store = storeFromEnv(env);
+  const store = storeFromEnv(env, (line) => io.stderr.write(line));
   const api = createApi({ origin, store, env });
   const tty = Boolean(io.stdin.isTTY);
 

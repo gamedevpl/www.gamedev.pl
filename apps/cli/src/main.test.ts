@@ -26,10 +26,16 @@ function io() {
 }
 
 describe('runCli verbs', () => {
-  it('prints help and exits 0', async () => {
+  it('writes the file-store warning to injected stderr', async () => {
     const streams = io();
-    expect(await runCli(['node', 'gamedevpl', 'help'], {}, streams)).toBe(EXIT_GREEN);
-    expect(streams.read().out).toContain('whoami');
+    expect(
+      await runCli(
+        ['node', 'gamedevpl', 'help'],
+        { GAMEDEV_ALLOW_FILE_KEYCHAIN: 'true', HOME: '/tmp/gamedev-cli-empty' },
+        streams,
+      ),
+    ).toBe(EXIT_GREEN);
+    expect(streams.read().err).toMatch(/encrypted file/);
   });
 
   it('exits 4 when repl is run without a TTY', async () => {
