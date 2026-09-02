@@ -11,6 +11,7 @@ export function presenceThought(
   const presence = status?.lastAgentPresence;
   if (!presence?.key) return null;
   const at = Date.parse(presence.at);
-  if (!Number.isFinite(at) || nowMs - at > PRESENCE_THOUGHT_MS) return null;
+  const age = nowMs - at;
+  if (!Number.isFinite(at) || age < 0 || age > PRESENCE_THOUGHT_MS) return null;
   return { key: presence.key, at };
 }
