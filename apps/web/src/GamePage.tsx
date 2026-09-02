@@ -234,11 +234,6 @@ export function GamePage({
           <span aria-hidden="true"> / </span>
           <span className="game-page-breadcrumb-slug">{slug}</span>
           {entry.genre ? <span className="game-page-genre">{entry.genre}</span> : null}
-          {entry.editor === 'content' ? (
-            <span className="game-page-genre game-page-editor-badge">
-              <PixelIcon name="pencil" size={11} /> {t('catalog.editorBadge')}
-            </span>
-          ) : null}
         </nav>
         <h1>{entry.title}</h1>
         {page.description ? <p className="game-page-description">{page.description}</p> : null}

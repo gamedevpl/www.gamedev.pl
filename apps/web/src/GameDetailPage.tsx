@@ -82,11 +82,6 @@ export function GameDetailPage({ game, state, onPlay, onPlayTogether, onRemix, o
         <div className="game-page-kicker">
           {authorPath ? <a href={authorPath}>{authorLabel}</a> : <span>{authorLabel}</span>}
           {game.genre ? <span className="game-page-genre">{game.genre}</span> : null}
-          {game.editor === 'content' ? (
-            <span className="game-page-genre game-page-editor-badge">
-              <PixelIcon name="pencil" size={11} /> {t('catalog.editorBadge')}
-            </span>
-          ) : null}
         </div>
         <h1>{game.title}</h1>
 

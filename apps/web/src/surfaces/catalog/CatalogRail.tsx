@@ -163,18 +163,11 @@ function RailCard({
           </div>
         )}
         <span className="rail-card-genre">{entry.genre}</span>
-        {(entry.multiplayer || entry.editor === 'content') && (
+        {entry.multiplayer && (
           <div className="rail-card-capabilities">
-            {entry.multiplayer && (
-              <span className="rail-card-party-badge">
-                <PixelIcon name="phone" size={11} /> {t('party.playersBadge', { max: entry.multiplayer.maxPlayers })}
-              </span>
-            )}
-            {entry.editor === 'content' && (
-              <span className="rail-card-party-badge" title={t('catalog.editorTooltip')}>
-                <PixelIcon name="pencil" size={11} /> {t('catalog.editorBadge')}
-              </span>
-            )}
+            <span className="rail-card-party-badge">
+              <PixelIcon name="phone" size={11} /> {t('party.playersBadge', { max: entry.multiplayer.maxPlayers })}
+            </span>
           </div>
         )}
         {hasVideo && (

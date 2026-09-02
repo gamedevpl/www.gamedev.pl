@@ -269,8 +269,6 @@
     "cameraBadge": "Gra z kamerą",
     "cameraTooltip": "Ta gra może pokazać kamerę pod powierzchnią gry — nic nie jest nagrywane ani wysyłane",
     "savesBadge": "Zapisuje postępy",
-    "editorBadge": "Edytowalna",
-    "editorTooltip": "Ta gra ma wbudowany edytor zawartości",
     "sortLabel": "Sortuj gry",
     "toolbarLabel": "Filtry i sortowanie katalogu",
     "yoursBadge": "Twoje",
