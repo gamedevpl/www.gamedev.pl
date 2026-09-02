@@ -26,5 +26,7 @@ export function registerFeedbackRoutes(app: FastifyInstance, options: FeedbackRo
   app.post('/api/submissions/:token/turn', turnConfig, (request, reply) =>
     handleCreatorFeedback(options, request, reply, 'turn'),
   );
-  app.get('/api/submissions/:token/turns', (request, reply) => handleCreatorTurnsGet(options, request, reply));
+  app.get('/api/submissions/:token/turns', { config: turnConfig.config }, (request, reply) =>
+    handleCreatorTurnsGet(options, request, reply),
+  );
 }

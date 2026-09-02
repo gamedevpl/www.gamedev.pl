@@ -230,6 +230,12 @@ describe('POST /api/submissions/:token/turn (CL-10, CL-11)', () => {
         payload: { text: 'is it done yet?' },
       });
       expect(extra.statusCode).toBe(404);
+      const extraGet = await app.inject({
+        method: 'GET',
+        url: `/api/submissions/${token}/turns`,
+        headers,
+      });
+      expect(extraGet.statusCode).toBe(404);
     }
     await app.close();
   });
