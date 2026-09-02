@@ -67,13 +67,16 @@ class GhostTextAcceptWidget extends WidgetType {
     return true;
   }
   toDOM(): HTMLElement {
-    const span = document.createElement('span');
-    span.className = 'cm-ghost-text-accept';
-    span.textContent = '⇥';
-    span.setAttribute('role', 'button');
-    span.setAttribute('aria-label', 'Accept suggestion');
-    span.title = 'Accept suggestion';
-    return span;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'cm-ghost-text-accept';
+    button.textContent = '⇥';
+    button.setAttribute('aria-label', 'Accept suggestion');
+    button.title = 'Accept suggestion';
+
+    // Not a tab stop: Tab already accepts inside the editor.
+    button.tabIndex = -1;
+    return button;
   }
   ignoreEvent(): boolean {
     return false;
