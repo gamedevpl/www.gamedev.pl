@@ -16,7 +16,6 @@
 // same exposure refine.ts has carried in production, same containment — output lands
 // in a workspace whose only exits are our gate and human review, and the path guard
 // below refuses anything outside one game directory.
-import path from 'node:path';
 import { z } from 'zod';
 import type { GenAIClient, GenerationResult } from 'genaicode';
 import { createSeedClient, type SeedProviderConfig } from './seed-provider.js';
@@ -27,25 +26,9 @@ import { typeCheckGame } from './type-check.js';
 import type { TypeCheckResult } from './type-check.js';
 import { TYPECHECK_PREFLIGHT_BUDGET_MS } from './typecheck-preflight.js';
 import type { QueryKnowledgeFn } from './knowledge-search.js';
+import { isAllowedSeedPath, normalizeSeedPath } from './seed-paths.js';
 
-/**
- * Files a seed is allowed to write, relative to `games/<slug>/`.
- *
- * ACCEPTANCE.json is included deliberately: the games repo template ships a placeholder
- * objective ("collect at least one star"), and a seed that leaves it there fails the
- * gate's accept stage structurally, for every game, no matter how good the draft is.
- */
-const TOP_LEVEL_ALLOWED = new Set([
-  'SPEC.md',
-  'GAME.json',
-  'game.ts',
-  'index.html',
-  'style.css',
-  'ACCEPTANCE.json',
-  'EDITOR.json',
-  'EDITOR.ts',
-  'EDITOR.content.json',
-]);
+export { isAllowedSeedPath, normalizeSeedPath } from './seed-paths.js';
 
 /** The fence label carrying the hand-off note rather than a file. */
 const NOTES_FENCE = 'NOTES';
@@ -160,33 +143,6 @@ export interface GameSeeder {
 }
 
 const PickSchema = z.object({ picks: z.array(z.string()).optional() });
-
-/**
- * Strips what a model prepends in practice, so the guard judges the path a file would
- * actually land on rather than the string it was labelled with.
- */
-export function normalizeSeedPath(relative: string, slug: string): string {
-  let normalized = relative.trim().replaceAll('\\', '/').replace(/^\.\//, '');
-  const prefix = `games/${slug}/`;
-  if (normalized.startsWith(prefix)) normalized = normalized.slice(prefix.length);
-  return path.posix.normalize(normalized);
-}
-
-/**
- * Whether a normalized path is inside the one game directory this seed may write.
- *
- * The whole containment story for generated content: a draft is model output derived
- * from untrusted creator text, so nothing decides where its bytes go except this
- * function. Traversal, absolute paths, other games, `shared/`, `tools/` and every
- * non-source file are refused rather than sanitized.
- */
-export function isAllowedSeedPath(normalized: string): boolean {
-  if (!normalized || normalized.startsWith('..') || normalized.startsWith('/') || path.posix.isAbsolute(normalized)) {
-    return false;
-  }
-  if (TOP_LEVEL_ALLOWED.has(normalized)) return true;
-  return normalized.startsWith('game/') && normalized.endsWith('.ts');
-}
 
 export interface ParsedSeedResponse {
   files: { path: string; content: string }[];

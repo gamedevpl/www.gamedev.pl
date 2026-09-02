@@ -2,9 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   buildGeneratePrompt,
   collectSeedFiles,
-  isAllowedSeedPath,
   isUsableSeed,
-  normalizeSeedPath,
   parseSeedResponse,
   renderKnowledgeContext,
   ModelGameSeeder,
@@ -96,55 +94,6 @@ describe('parseSeedResponse', () => {
 
   it('finds no files in prose', () => {
     expect(parseSeedResponse('I cannot help with that request.').files).toEqual([]);
-  });
-});
-
-describe('seed path containment', () => {
-  it('strips the games/<slug>/ prefix a model actually emits', () => {
-    expect(normalizeSeedPath('games/my-game/SPEC.md', 'my-game')).toBe('SPEC.md');
-    expect(normalizeSeedPath('./game/model.ts', 'my-game')).toBe('game/model.ts');
-  });
-
-  it('refuses everything outside the one game directory', () => {
-    for (const allowed of [
-      'SPEC.md',
-      'GAME.json',
-      'game.ts',
-      'index.html',
-      'style.css',
-      'ACCEPTANCE.json',
-      'EDITOR.json',
-      'EDITOR.ts',
-      'EDITOR.content.json',
-      'game/model.ts',
-      'game/ai/steering.ts',
-    ]) {
-      expect(isAllowedSeedPath(allowed), allowed).toBe(true);
-    }
-
-    for (const refused of [
-      // Another game, the engine, the tooling, and CI — the four things a seed must
-      // never be able to reach, however the model labels them.
-      'games/other-game/game.ts',
-      'shared/modules/gfx.ts',
-      'tools/validate.ts',
-      '.github/workflows/validate.yml',
-      '../evil.ts',
-      'game/../../evil.ts',
-      '/etc/passwd',
-      // Right directory, wrong kind of file: media and goldens are the gate's to write.
-      'TRACE.json',
-      'CAPTURE.json',
-      'media/opening.png',
-      'game/notes.md',
-    ]) {
-      expect(isAllowedSeedPath(normalizeSeedPath(refused, 'my-game')), refused).toBe(false);
-    }
-  });
-
-  it('does not let another game be reached by prefixing it with this slug', () => {
-    // `games/my-game/` is stripped once; what remains still has to be inside the game.
-    expect(isAllowedSeedPath(normalizeSeedPath('games/my-game/../other/game.ts', 'my-game'))).toBe(false);
   });
 });
 
