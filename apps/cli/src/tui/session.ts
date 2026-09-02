@@ -61,7 +61,7 @@ export function createTuiSession(banner: string): TuiSession {
       let next = '';
       for (const ch of draft) {
         const code = ch.charCodeAt(0);
-        if (code >= 32 && code !== 127) next += ch;
+        if (code >= 32 && code !== 127 && (code < 0x80 || code > 0x9f)) next += ch;
       }
       state = { ...state, draft: next };
       emit();

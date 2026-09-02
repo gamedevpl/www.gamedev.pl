@@ -28,7 +28,7 @@ describe('tui session', () => {
   it('strips control characters from the draft', () => {
     const session = createTuiSession('');
     void session.prompt();
-    session.setDraft('hello\r\n\u0007world');
+    session.setDraft('hello\r\n\u0007\u0085\u009bworld');
     expect(session.get().draft).toBe('helloworld');
   });
 
