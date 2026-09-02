@@ -132,7 +132,7 @@ export async function runCli(
       return EXIT_GREEN;
     }
     if (verb === 'connect') {
-      io.stdout.write(`${cliUsage('connect', args[0] ?? '')}\n`);
+      io.stdout.write(`${cliUsage('connect', args[0] || '<slug>')}\n`);
       return EXIT_GREEN;
     }
     const read = await dispatchReadVerb({ verb, args, flags, api, io });

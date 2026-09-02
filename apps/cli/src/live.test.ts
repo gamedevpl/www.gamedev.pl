@@ -8,6 +8,18 @@ import { EXIT_GREEN } from './exit-codes.js';
 describe('live screen', () => {
   it('truncates live lines to the terminal width', () => {
     expect(renderLive(['abcdefghij'], 6)).toBe('abcde…');
+    expect(renderLive(['abcdefghij'], 1)).toBe('a');
+  });
+
+  it('reads stdout.columns on each paint when width is not fixed', () => {
+    const chunks: string[] = [];
+    const stdout = { write: (s: string) => (chunks.push(s), true), columns: 4 } as unknown as NodeJS.WriteStream;
+    const screen = createLiveScreen(stdout);
+    screen.paint(['abcdefghij']);
+    stdout.columns = 8;
+    screen.paint(['abcdefghij']);
+    expect(chunks[0]).toBe('abc…\n');
+    expect(chunks[1]).toContain('abcdefg…');
   });
 
   it('repaints by moving the cursor up, never rewriting older rows', () => {

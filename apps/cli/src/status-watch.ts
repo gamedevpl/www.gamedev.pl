@@ -33,7 +33,7 @@ export async function runStatusVerb(input: {
   sleep?: (ms: number) => Promise<void>;
 }): Promise<number> {
   const sleep = input.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
-  const screen = input.live ? createLiveScreen(input.stdout, input.stdout.columns ?? 80) : null;
+  const screen = input.live ? createLiveScreen(input.stdout) : null;
   let status = await getStatus(input.api, input.token);
   for (let i = 1; i <= input.maxPolls; i += 1) {
     if (input.asJson) input.stdout.write(`${JSON.stringify(status)}\n`);
