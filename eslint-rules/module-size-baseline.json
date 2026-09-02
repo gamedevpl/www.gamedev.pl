@@ -818,7 +818,7 @@
     "apps/web/src/surfaces/studio/CreatorStudioView.handoff.test.tsx": 274,
     "apps/web/src/surfaces/studio/CreatorStudioView.test.tsx": 2143,
     "apps/web/src/surfaces/studio/CreatorStudioView.theater.test.tsx": 145,
-    "apps/web/src/surfaces/studio/CreatorStudioView.tsx": 2247,
+    "apps/web/src/surfaces/studio/CreatorStudioView.tsx": 1192,
     "apps/web/src/surfaces/studio/diffLines.test.ts": 50,
     "apps/web/src/surfaces/studio/diffLines.ts": 46,
     "apps/web/src/surfaces/studio/EditorCollections.test.tsx": 595,
