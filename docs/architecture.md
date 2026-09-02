@@ -243,9 +243,16 @@ flowchart LR
 A round is **dispatched to an agent backend** and the agent delivers back over the **build
 channel**, calling `submit_sources`. It does not travel as a merged pull request: nothing in
 `apps/api` calls `createIssue`, and the managed Copilot provider passes
-`createPullRequest: false`. Where a branch or PR does get created it is agent-resumption
-mechanics — GitHub's agent tasks API can only resume work on a branch that has an open PR —
-and the adapter closes it when the job finishes.
+`createPullRequest: false`, so the agent path opens no pull request at all. The one
+production caller of `ensureOpenPullRequest` is `community/proposal-apply-bot.ts` — the
+repo-lane merge-back, not agent mechanics. The agent's working branch is removed by
+`deleteWorkspace`, which `managed-backend.ts`'s `cleanup` calls when a previous dispatch is
+released (a resume, cancellation or abandonment), not at job completion.
+
+> [!NOTE]
+> `GitHubClient.ensureOpenPullRequest`'s doc comment describes the adapter closing that PR
+> when the job finishes. It does not: `closePullRequest` has no production caller. The
+> comment records an intent the shipped code never implemented — do not plan against it.
 
 `BuilderKind` is `'platform' | 'self'`: the platform's own hosted builder, or the creator's
 own agent connected over MCP.
