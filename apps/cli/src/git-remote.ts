@@ -22,15 +22,14 @@ export function remoteSlugFromArgv(argv: string[]): string {
 export function handleHelperLine(line: string, slug: string): string[] {
   const [cmd] = line.trim().split(' ');
   if (cmd === 'capabilities') return ['import', 'push', 'option', ''];
-  if (cmd === 'list') return ['? HEAD', '? refs/heads/main', ''];
+  if (cmd === 'list') return ['@refs/heads/main HEAD', '? refs/heads/main', ''];
   if (cmd === 'option') return ['ok'];
   if (!cmd) return [];
   return [`error ${slug}: unknown helper command ${cmd}`];
 }
 
-export function listRefs(versions: VersionRef[]): string[] {
-  if (versions.length === 0) return ['@refs/heads/main HEAD', '? refs/heads/main', ''];
-  return ['? HEAD', '? refs/heads/main', ''];
+export function listRefs(_versions: VersionRef[]): string[] {
+  return ['@refs/heads/main HEAD', '? refs/heads/main', ''];
 }
 
 export function fastImportScript(input: {

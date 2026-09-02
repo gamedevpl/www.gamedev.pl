@@ -16,7 +16,7 @@ describe('git-remote-gamedev', () => {
       { version: 'v-1', createdAt: '2026-08-01T00:00:00.000Z' },
     ];
     const listed = listRefs(versions);
-    expect(listed).toContain('? HEAD');
+    expect(listed).toContain('@refs/heads/main HEAD');
     expect(listed).toContain('? refs/heads/main');
     expect(listed.some((line) => line.includes(shaForVersion('v-2')))).toBe(false);
     const script = fastImportScript({
