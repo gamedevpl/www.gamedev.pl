@@ -18,7 +18,8 @@ function percent(part: number, whole: number): string {
 }
 
 export function CliFunnelBlock({ funnel }: { funnel: VisitFunnel }) {
-  const rows = funnel.cli ?? [];
+  if (!funnel.cli) return null;
+  const rows = funnel.cli;
   return (
     <div className="funnel-block" data-testid="cli-funnel">
       <h3>gamedev CLI</h3>

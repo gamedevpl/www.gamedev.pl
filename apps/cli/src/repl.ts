@@ -1,5 +1,5 @@
 import { createTwoRegion, glyphs, wantsColor } from './renderer.js';
-import { completeSlash, SLASH_VERBS, type SlashVerb } from './argv.js';
+import { completeSlash, parseArgv, SLASH_VERBS, type SlashVerb } from './argv.js';
 import { postTurn } from './turn.js';
 import type { ApiClient } from './api.js';
 import { dispatchReadVerb } from './verbs.js';
@@ -38,12 +38,13 @@ export async function handleReplLine(input: {
       return { next: 'continue' };
     }
     if (cmd && (SLASH_VERBS as readonly string[]).includes(cmd)) {
+      const parsed = parseArgv(['node', 'cli', cmd, ...rest]);
       const chunks: string[] = [];
       const stdout = { write: (s: string) => (chunks.push(s), true) } as unknown as NodeJS.WriteStream;
       const code = await dispatchReadVerb({
         verb: cmd as SlashVerb,
-        args: rest,
-        flags: {},
+        args: parsed.args,
+        flags: parsed.flags,
         api: input.api,
         io: { stdout },
       });

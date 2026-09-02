@@ -30,6 +30,7 @@ function funnel(overrides: Partial<VisitFunnel> = {}): VisitFunnel {
     creating: [],
     waitlist: [],
     editing: [],
+    cli: [],
     howToPlay: {
       opens: 0,
       visits: 0,

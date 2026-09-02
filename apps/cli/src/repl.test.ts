@@ -130,4 +130,26 @@ describe('repl turn loop', () => {
     expect(result.next).toBe('continue');
     expect(lines.join('\n')).toBe('run it as gamedev status');
   });
+
+  it('parses slash-verb flags the same way as argv', async () => {
+    const lines: string[] = [];
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_oat_t', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url) => {
+        if (String(url).endsWith('/api/submissions/mine')) {
+          return new Response(JSON.stringify({ submissions: [{ slug: 'sky-dodge' }] }), { status: 200 });
+        }
+        return new Response('{}', { status: 404 });
+      },
+    });
+    const result = await handleReplLine({
+      line: '/games --json',
+      api,
+      token: 'tok',
+      write: (s) => lines.push(s),
+    });
+    expect(result.next).toBe('continue');
+    expect(JSON.parse(lines.join('\n'))).toEqual({ submissions: [{ slug: 'sky-dodge' }] });
+  });
 });
