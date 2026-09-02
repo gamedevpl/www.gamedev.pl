@@ -1,9 +1,8 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync, existsSync, symlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
-import { existsSync } from 'node:fs';
-import { checkoutGame, changedPaths, unreconciledMessage, writeGameFiles } from './checkout.js';
+import { checkoutGame, changedPaths, localGameFiles, unreconciledMessage, writeGameFiles } from './checkout.js';
 import { createApi } from './api.js';
 import { memoryStore } from './keychain.js';
 
@@ -47,5 +46,23 @@ describe('checkout', () => {
     writeFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'keep\n');
     writeGameFiles(dest, 'ghost-roads', [{ path: 'game.ts', content: 'next\n' }]);
     expect(existsSync(join(dest, 'games', 'ghost-roads', 'old.ts'))).toBe(false);
+  });
+
+  it('does not follow outbound symlinks when reconciling', () => {
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-ln-'));
+    const outside = mkdtempSync(join(tmpdir(), 'gdpl-out-'));
+    const secret = join(outside, 'secret.txt');
+    writeFileSync(secret, 'keep\n');
+    mkdirSync(join(dest, 'games', 'ghost-roads'), { recursive: true });
+    writeFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'keep\n');
+    symlinkSync(outside, join(dest, 'games', 'ghost-roads', 'leak'));
+    expect(
+      localGameFiles(dest, 'ghost-roads')
+        .map((file) => file.path)
+        .sort(),
+    ).toEqual(['game.ts', 'leak']);
+    writeGameFiles(dest, 'ghost-roads', [{ path: 'game.ts', content: 'next\n' }]);
+    expect(existsSync(secret)).toBe(true);
+    expect(existsSync(join(dest, 'games', 'ghost-roads', 'leak'))).toBe(false);
   });
 });

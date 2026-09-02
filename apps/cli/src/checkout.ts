@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync, lstatSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import type { ApiClient } from './api.js';
@@ -29,12 +29,20 @@ function defaultRun(cmd: string, args: string[], cwd: string): void {
 function walkFiles(root: string, rel = ''): TreeFile[] {
   const dir = rel ? join(root, rel) : root;
   if (!existsSync(dir)) return [];
+  const dirStat = lstatSync(dir);
+  if (dirStat.isSymbolicLink() || !dirStat.isDirectory()) return [];
   const out: TreeFile[] = [];
   for (const entry of readdirSync(dir)) {
     const nextRel = rel ? `${rel}/${entry}` : entry;
     const abs = join(dir, entry);
-    if (statSync(abs).isDirectory()) out.push(...walkFiles(root, nextRel));
-    else out.push({ path: nextRel, content: readFileSync(abs, 'utf8') });
+    const st = lstatSync(abs);
+    // Do not follow links — rmSync would escape.
+    if (st.isSymbolicLink()) {
+      out.push({ path: nextRel, content: '' });
+      continue;
+    }
+    if (st.isDirectory()) out.push(...walkFiles(root, nextRel));
+    else if (st.isFile()) out.push({ path: nextRel, content: readFileSync(abs, 'utf8') });
   }
   return out;
 }
