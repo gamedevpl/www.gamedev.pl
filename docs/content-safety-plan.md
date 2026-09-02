@@ -44,8 +44,11 @@ prompt (web) → POST /api/submissions → GitHub issue → Copilot agent → PR
 
 ## Layer 1 — Input screening at the API (first slice, build now)
 
-New `apps/api/src/platform/moderation.ts`, applied to title + spec in `POST /api/submissions`
-and to the prompt in `POST /api/generate-game`, BEFORE quota is consumed:
+New `apps/api/src/platform/moderation.ts`, applied to title + spec in `POST /api/submissions`,
+BEFORE quota is consumed:
+
+> The `POST /api/generate-game` route this slice also named was removed with the local mock
+> generator; only the submissions path remains. See [`architecture.md`](./architecture.md).
 
 - **Deny patterns**: curated regex lists (en + pl — Polish profanity/slur coverage is
   a must, the audience is Polish) for: slurs/hate, sexual content, sexualized minors
