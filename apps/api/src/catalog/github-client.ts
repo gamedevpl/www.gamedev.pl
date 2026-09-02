@@ -304,7 +304,7 @@ export interface GitHubClient {
   createIssueComment(issueOrPrNumber: number, body: string): Promise<{ id: number }>;
   /** Rewrites an issue body. No production caller — the issue-first flow is retired. */
   updateIssueBody(issueNumber: number, body: string): Promise<void>;
-  /** Closes an issue — a creator abandoning their build. */
+  /** Closes an issue. No production caller — the issue-first flow is retired. */
   closeIssue(issueNumber: number): Promise<void>;
   /**
    * Opens a pull request for an existing branch, or returns the open one if there
