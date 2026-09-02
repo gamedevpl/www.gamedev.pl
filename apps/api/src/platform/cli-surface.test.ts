@@ -54,6 +54,7 @@ describe('reserved installer routes', () => {
       expect(sh.body).toContain('Node 20');
       expect(sh.body).toContain('asset="gamedevpl"');
       expect(sh.body).toContain('git-remote-gamedevpl');
+      expect(sh.body).toContain('gamedevpl.XXXXXX');
       expect(sh.body).not.toContain('gamedev-linux');
       const page = await app.inject({ method: 'GET', url: '/cli' });
       expect(page.statusCode).toBe(200);

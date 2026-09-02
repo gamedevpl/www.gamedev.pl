@@ -23,7 +23,7 @@ if [ "$major" -lt 20 ]; then
 fi
 asset="${CLI_ASSET}"
 base="https://github.com/gamedevpl/www.gamedev.pl/releases/download/${CLI_RELEASE_PREFIX}\${VERSION}"
-tmp=$(mktemp -d)
+tmp=$(mktemp -d "\${TMPDIR:-/tmp}/gamedevpl.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 echo "fetching $asset from GitHub Releases (cli-v$VERSION)"
 curl -fsSL "$base/$asset" -o "$tmp/$asset"
