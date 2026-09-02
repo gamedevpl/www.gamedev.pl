@@ -76,6 +76,8 @@ describe('isKnownSpaShellPath', () => {
     '/nightshift/neon-courier',
     // The platform's namespace is reserved against claiming but is a real address:
     // it is where every game with no creator to name lives.
+    '/gamedevpl',
+    '/creators/gamedevpl',
     '/gamedevpl/brick-storm',
     '/gamedevpl/brick-storm/releases',
     '/nightshift/neon-courier/board',
@@ -107,6 +109,9 @@ describe('isKnownSpaShellPath', () => {
     '/join/K7M3QP/extra',
     '/invite/too-short',
     `/invite/${'a'.repeat(33)}`,
+    // Reserved roots (and the /creators alias) stay 404 — except the platform handle.
+    '/creators/cli',
+    '/creators/play',
     // Game page: reserved first segments, bad slugs, and unknown tabs stay 404.
     '/studio/neon-courier/releases/extra',
     '/play/neon-courier/board',

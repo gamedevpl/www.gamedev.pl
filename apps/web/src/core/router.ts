@@ -162,17 +162,17 @@ export type AppRoute =
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const BETA_INVITE_CODE_PATTERN = /^[A-Za-z0-9_-]{32}$/;
 
-/** Creator handles — keep aligned with apps/api/src/creation/creator-profile.ts HANDLE_PATTERN. */
+/** Creator handles — keep aligned with apps/api/src/platform/creator-profile.ts HANDLE_PATTERN. */
 const CREATOR_HANDLE_PATTERN = /^[a-z][a-z0-9_]{2,23}$/;
 
 /**
  * Where games with no creator to name live — keep aligned with `PLATFORM_HANDLE` in
- * apps/api/src/creation/creator-profile.ts. Reserved against claiming, but a real address.
+ * apps/api/src/platform/creator-profile.ts. Reserved against claiming, but a real address.
  */
 export const PLATFORM_HANDLE = 'gamedevpl';
 /**
  * Handles nobody can claim — keep aligned with `RESERVED_HANDLES` in
- * apps/api/src/creation/creator-profile.ts (same duplication contract as spa-paths.ts).
+ * apps/api/src/platform/creator-profile.ts (same duplication contract as spa-paths.ts).
  * The game-page matcher checks it so `/health/<slug>`-shaped typos stay 404s on
  * the client exactly as the API's shell allowlist answers them.
  */
