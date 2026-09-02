@@ -21,7 +21,7 @@ import {
   registerAssessmentResolutionRoute,
   summarizeResolutions,
 } from './assessment-resolution.js';
-import { emitReviewSweep, type EmitDeps } from '../notifications/notify.js';
+import type { emitReviewSweep as EmitReviewSweep, EmitDeps } from '../notifications/notify.js';
 import { ASSESSMENT_CHECKLIST_KEYS, isAssessmentChecklist } from './review-checklist.js';
 import {
   effectiveReleasedCount,
@@ -92,6 +92,8 @@ export interface ReviewRoutesOptions {
   listCatalog?: () => Promise<ReviewCatalogEntry[]>;
   now?: () => number;
   emitDeps?: EmitDeps;
+  // Injected so this module has no value-level notifications import.
+  emitReviewSweep?: typeof EmitReviewSweep;
 }
 
 const ClientContextSchema = z
@@ -313,11 +315,11 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
   }
 
   async function notifySweep(sweep: ReviewSweep, notificationId: string): Promise<number> {
-    if (!options.emitDeps) return 0;
+    if (!options.emitDeps || !options.emitReviewSweep) return 0;
     const audience = reviewerAudience(reviewerUids, adminUids);
     if (audience.size === 0) return 0;
     const released = effectiveReleasedCount(sweep, now());
-    const { created } = await emitReviewSweep(
+    const { created } = await options.emitReviewSweep(
       { ...options.emitDeps, reviewerUids: audience, now },
       {
         notificationId,
@@ -820,9 +822,9 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     const created = await store.upsertReReviewRequests(requests);
 
     let notified = 0;
-    if (body.data.notify !== false && options.emitDeps) {
+    if (body.data.notify !== false && options.emitDeps && options.emitReviewSweep) {
       const targetedReviewers = new Set(body.data.reviewerUids);
-      const { created: n } = await emitReviewSweep(
+      const { created: n } = await options.emitReviewSweep(
         { ...options.emitDeps, reviewerUids: targetedReviewers, now },
         {
           notificationId: `review-requeue-${now().toString(36)}`,
