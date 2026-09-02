@@ -781,7 +781,7 @@
     "apps/web/src/surfaces/studio/codeMirrorColors.test.ts": 33,
     "apps/web/src/surfaces/studio/codeMirrorColors.ts": 38,
     "apps/web/src/surfaces/studio/CodeMirrorEditor.test.tsx": 136,
-    "apps/web/src/surfaces/studio/CodeMirrorEditor.tsx": 993,
+    "apps/web/src/surfaces/studio/CodeMirrorEditor.tsx": 221,
     "apps/web/src/surfaces/studio/codeMirrorSearchPanel.test.ts": 81,
     "apps/web/src/surfaces/studio/codeMirrorSearchPanel.ts": 258,
     "apps/web/src/surfaces/studio/CodeSurface.actionsMenu.test.tsx": 294,
