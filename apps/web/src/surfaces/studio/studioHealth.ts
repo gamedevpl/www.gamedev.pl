@@ -1,10 +1,12 @@
 import type { GameHealth } from '../../healthApi.js';
 import type { StudioGame } from '../../studioApi.js';
 
+// Round the total first: rounding the remainder alone yields "1m 60s".
 export function formatSeconds(seconds: number): string {
-  if (seconds < 60) return `${Math.round(seconds)}s`;
-  const minutes = Math.floor(seconds / 60);
-  const rest = Math.round(seconds % 60);
+  const total = Math.round(seconds);
+  if (total < 60) return `${total}s`;
+  const minutes = Math.floor(total / 60);
+  const rest = total % 60;
   return rest === 0 ? `${minutes}m` : `${minutes}m ${rest}s`;
 }
 

@@ -283,7 +283,7 @@ export function DetailsPanel({
           </div>
         ) : null}
 
-        {activePane === 'workspace' ? <StudioWorkspaceCheckoutPanel slug={game.slug as string} /> : null}
+        {activePane === 'workspace' && game.slug ? <StudioWorkspaceCheckoutPanel slug={game.slug} /> : null}
 
         {activePane === 'stats' && catalogLive ? (
           <StatsSection
