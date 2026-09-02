@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
-import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
+import { LEGACY_SESSION_COOKIE_NAME, mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import type { InternalAuthVerifier } from './internal-auth.js';
 import { DELETED_ACCOUNT_UID, InMemoryStore } from './store.js';
 
@@ -61,7 +61,10 @@ describe('account deletion routes', () => {
 
     expect(response.statusCode).toBe(202);
     expect(response.json()).toEqual({ scheduled: true, deleteAfter: '2026-08-18T00:00:00.000Z' });
-    expect([response.headers['set-cookie'] ?? []].flat().join('\n')).toContain(`${SESSION_COOKIE_NAME}=;`);
+    const cleared = [response.headers['set-cookie'] ?? []].flat().join('\n');
+    expect(cleared).toContain(`${SESSION_COOKIE_NAME}=;`);
+    // The old name still authenticates, so deletion must clear it too.
+    expect(cleared).toContain(`${LEGACY_SESSION_COOKIE_NAME}=;`);
     expect(await store.getUser('g:leaver')).toMatchObject({
       deletionRequestedAt: '2026-08-04T00:00:00.000Z',
       deletionScheduledFor: '2026-08-18T00:00:00.000Z',

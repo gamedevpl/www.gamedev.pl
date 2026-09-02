@@ -388,12 +388,7 @@ describe('authenticating with a personal access token', () => {
     expect(res.json().user.uid).toBe('g:boss');
   });
 
-  /**
-   * The exact route Codex named on #1110: a browser still carrying account A's
-   * pre-rename cookie exchanges a token for account B. B's session is the shorter of
-   * the two, so leaving A's 30-day cookie behind means the fallback restores A the
-   * moment B's expires — a silent switch back to the previous identity.
-   */
+  // A replacement session must retire the old cookie beside it.
   it('retires a pre-rename cookie when the exchange replaces the session', async () => {
     const app = await appWith(store, { betaAllowedUids: 'g:boss' });
     const { token } = (await mintFor(app, 'bot:e2e')).json();
@@ -412,7 +407,7 @@ describe('authenticating with a personal access token', () => {
 
     const issued = res.cookies.filter((entry) => entry.name === SESSION_COOKIE_NAME);
     expect(issued).toHaveLength(1);
-    // The old name must not outlive the session that replaced it.
+    // The old name must not outlive its replacement.
     const legacy = res.cookies.find((entry) => entry.name === LEGACY_SESSION_COOKIE_NAME);
     expect(legacy?.value).toBe('');
   });

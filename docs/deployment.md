@@ -199,6 +199,37 @@ needed. `PUBLIC_PLAY_SLUGS` remains an optional deploy-time fallback for bootstr
 empty config. The API still requires each game to be published, and all other catalog,
 draft, and creation routes remain gated.
 
+## The session cookie is named `__session`
+
+`apps/api/src/platform/session-cookie.ts` owns the name, and the name is a constraint
+rather than a style choice. Firebase Hosting drops every cookie except one called exactly
+`__session` before a request reaches a Cloud Run backend, so if Hosting is ever put in
+front of this service any other name becomes invisible to the app and every browser
+session silently stops authenticating. Do not "tidy" it back to something descriptive.
+
+**`gamedev_session` is the pre-rename name, still read and never written.** Sessions last
+30 days, so flipping the name outright would sign out every live account the moment the
+deploy promoted. Instead a request carrying only the old cookie is authenticated from it
+and re-minted under the current name on the same response, so an account migrates on its
+next request rather than whenever its session neared expiry.
+
+That fallback only helps **before** a DNS cutover to Hosting: afterwards the old cookie is
+stripped at the edge and never arrives, so anyone who has not visited since the rename
+shipped is signed out then. The longer the gap between the rename and any cutover, the
+fewer people that happens to. Delete the constant and the branches reading it once a
+cutover is done and the last 30-day session minted under the old name has expired — or
+once it is decided that Hosting is not coming, in which case the fallback is simply dead
+weight.
+
+**One invariant holds the whole thing together:** session renewal runs on `onSend`, after
+the handler, and mints for whoever the request _arrived_ as. A response that already wrote
+the session cookie has decided who the browser is — signing in as someone else, or signing
+out — so renewal must never overwrite it, and the old name must be retired by whichever
+half wrote the replacement. Three separate defects came from breaking one half of that
+(logout re-minting the session it cleared; a sign-in leaving the previous identity's
+cookie last; a replacement leaving the 30-day old cookie standing beside a 12-hour new
+one). The tests in `auth.test.ts` and `access-token-routes.test.ts` pin each case.
+
 ## Outbound email (Resend)
 
 Email is used for **beta invites** today (`npm run beta:invite`) and is the shared

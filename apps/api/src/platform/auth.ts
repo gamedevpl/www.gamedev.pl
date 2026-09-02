@@ -467,8 +467,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
       });
     }
 
-    // Retired by whichever half wrote the replacement, or it outlives the session that
-    // replaced it and hands the browser back its previous identity.
+    // Retired by whichever half wrote the replacement; see session-cookie.ts.
     if (handlerWroteSession || handlerWroteSessionCookie(reply)) {
       retireLegacyCookie(request.cookies, reply);
     }

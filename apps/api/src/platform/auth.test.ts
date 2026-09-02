@@ -360,7 +360,7 @@ describe('Auth API Routes', () => {
     expect(JSON.parse(meRes.body).user.uid).toBe('g:10002');
   });
 
-  // FH-01's whole point: an old cookie must survive and come back renamed.
+  // An old cookie must survive and come back renamed.
   it('authenticates a pre-rename cookie and re-mints it under the new name', async () => {
     const { app, store } = await setupTestServer();
     await store.upsertUser({ uid: 'g:10009', email: 'legacy@example.com' });
@@ -369,7 +369,7 @@ describe('Auth API Routes', () => {
       method: 'GET',
       url: '/api/auth/me',
       headers: {
-        // Long-lived on purpose: proves the re-mint follows the name, not the expiry.
+        // Long-lived: proves the re-mint follows the name, not expiry.
         cookie: `${LEGACY_SESSION_COOKIE_NAME}=${mintSessionToken('g:10009', 'test-secret-key', DEFAULT_SESSION_DURATION_SECONDS)}`,
       },
     });
@@ -379,7 +379,7 @@ describe('Auth API Routes', () => {
 
     const setCookie = [res.headers['set-cookie'] ?? []].flat().join('\n');
     expect(setCookie).toContain(`${SESSION_COOKIE_NAME}=`);
-    // Retired in the same response, or the browser keeps sending a stripped name.
+    // Retired here, or the browser keeps a stripped name.
     expect(setCookie).toContain(`${LEGACY_SESSION_COOKIE_NAME}=;`);
   });
 
@@ -461,9 +461,7 @@ describe('Auth API Routes', () => {
     expect(JSON.parse(login.body).user).not.toHaveProperty('admin');
   });
 
-  // The same hook, the worse case: signing in as someone else while holding a
-  // legacy cookie let renewal append the OLD identity after the handler wrote the new
-  // one. Same name and path, so the later cookie wins and the browser stays the old user.
+  // Renewal must not append the old identity after a sign-in.
   it('does not re-mint the previous identity when signing in with a pre-rename cookie', async () => {
     const { app, store } = await setupTestServer({ 'newcomer-token': { sub: '20002', email: 'b@example.com' } });
     await store.upsertUser({ uid: 'g:20001', email: 'a@example.com' });
@@ -480,14 +478,13 @@ describe('Auth API Routes', () => {
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).user.uid).toBe('g:20002');
 
-    // Whatever the browser ends up holding must be the account the response named.
+    // The browser must hold the account the response named.
     const issued = res.cookies.filter((entry) => entry.name === SESSION_COOKIE_NAME);
     expect(issued).toHaveLength(1);
     expect(readSessionToken(issued[0]!.value, 'test-secret-key').uid).toBe('g:20002');
   });
 
-  // Renewal runs after the handler, so a legacy cookie made logout re-mint a live
-  // session over the cleared one — signed out on paper, signed in in the browser.
+  // Logout must not re-mint the session it just cleared.
   it('does not re-mint a session when logging out with a pre-rename cookie', async () => {
     const { app, store } = await setupTestServer();
     await store.upsertUser({ uid: 'g:10012', email: 'legacy-logout@example.com' });
@@ -504,7 +501,7 @@ describe('Auth API Routes', () => {
     const setCookie = [res.headers['set-cookie'] ?? []].flat().join('\n');
     expect(setCookie).toContain(`${SESSION_COOKIE_NAME}=;`);
     expect(setCookie).toContain(`${LEGACY_SESSION_COOKIE_NAME}=;`);
-    // The failure this guards: a second, non-empty __session appended by the renewal hook.
+    // Guards a second, non-empty __session from the renewal hook.
     expect(setCookie).not.toMatch(new RegExp(`${SESSION_COOKIE_NAME}=[^;\\s]`));
   });
 
@@ -517,7 +514,7 @@ describe('Auth API Routes', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    // Both names: the pre-FH-01 cookie still authenticates through the read fallback.
+    // Both names: the old one still authenticates.
     const setCookie = [res.headers['set-cookie'] ?? []].flat().join('\n');
     expect(setCookie).toContain(`${SESSION_COOKIE_NAME}=;`);
     expect(setCookie).toContain(`${LEGACY_SESSION_COOKIE_NAME}=;`);

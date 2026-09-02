@@ -56,7 +56,7 @@ describe.skipIf(!hasToken)('agent access token', () => {
     const state = JSON.parse(await readFile(storageState!, 'utf8')) as {
       cookies: { name: string; domain: string; httpOnly: boolean; secure: boolean; sameSite: string }[];
     };
-    // `__session` is the one name Firebase Hosting forwards to the backend (FH-01).
+    // `__session` is the one name Firebase Hosting forwards.
     const session = state.cookies.find((c) => c.name === '__session');
     expect(session, 'exchange should set the __session cookie').toBeTruthy();
 
