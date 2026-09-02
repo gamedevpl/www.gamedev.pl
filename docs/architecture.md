@@ -246,11 +246,11 @@ channel**, calling `submit_sources`. It does not travel as a merged pull request
 `docs/steel-thread-plan.md`'s M4 history), and the managed Copilot provider passes
 `createPullRequest: false`, so the agent path opens no pull request at all. The one
 production caller of `ensureOpenPullRequest` is `community/proposal-apply-bot.ts` — the
-repo-lane merge-back, not agent mechanics. That resumption PR is never closed programmatically
-(there is no `closePullRequest` method); it stays open for the life of the build. The agent's
-working branch is removed by `deleteWorkspace`, which `managed-backend.ts`'s `cleanup` calls
-when a previous dispatch is released (a resume, cancellation or abandonment), not at job
-completion.
+repo-lane merge-back described just below, not agent mechanics; that PR follows the games
+repo's normal review-and-merge lifecycle, not any programmatic close (`GitHubClient` has no
+`closePullRequest` method). The agent's working branch is removed by `deleteWorkspace`, which
+`managed-backend.ts`'s `cleanup` calls when a previous dispatch is released (a resume,
+cancellation or abandonment), not at job completion.
 
 `BuilderKind` is `'platform' | 'self'`: the platform's own hosted builder, or the creator's
 own agent connected over MCP.
