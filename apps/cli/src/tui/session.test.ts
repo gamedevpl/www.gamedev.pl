@@ -24,4 +24,21 @@ describe('tui session', () => {
     session.cancel();
     expect(await first).toBe('/quit');
   });
+
+  it('strips control characters from the draft', () => {
+    const session = createTuiSession('');
+    void session.prompt();
+    session.setDraft('hello\r\n\u0007world');
+    expect(session.get().draft).toBe('helloworld');
+  });
+
+  it('resolves a superseded prompt so it cannot hang', async () => {
+    const session = createTuiSession('');
+    const first = session.prompt();
+    const second = session.prompt();
+    session.setDraft('hello');
+    session.submit();
+    expect(await first).toBe('');
+    expect(await second).toBe('hello');
+  });
 });

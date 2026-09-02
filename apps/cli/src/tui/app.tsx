@@ -57,8 +57,8 @@ export function ReplApp({ session, color }: { session: TuiSession; color: boolea
         {shown.map((line, index) => (
           <Text key={`${index}:${line.slice(0, 32)}`}>{line}</Text>
         ))}
-        {state.live.map((line) => (
-          <Text key={`live:${line}`} dimColor>
+        {state.live.map((line, index) => (
+          <Text key={`live:${index}:${line.slice(0, 32)}`} dimColor>
             {line}
           </Text>
         ))}
@@ -67,7 +67,7 @@ export function ReplApp({ session, color }: { session: TuiSession; color: boolea
         <Text dimColor>{CLI_BIN}</Text>
         {state.mode === 'pick' ? (
           state.choices.map((choice, index) => (
-            <Text key={choice} color={index === state.pickIndex ? accent : undefined}>
+            <Text key={`pick:${index}:${choice}`} color={index === state.pickIndex ? accent : undefined}>
               {index === state.pickIndex ? '▸ ' : '  '}
               {choice}
             </Text>

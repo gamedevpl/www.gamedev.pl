@@ -58,7 +58,7 @@ export function createTuiSession(banner: string): TuiSession {
       emit();
     },
     setDraft(draft) {
-      state = { ...state, draft };
+      state = { ...state, draft: draft.replace(/[\u0000-\u001f\u007f]/g, '') };
       emit();
     },
     movePick(delta) {
@@ -68,6 +68,11 @@ export function createTuiSession(banner: string): TuiSession {
       emit();
     },
     prompt(choices) {
+      if (pending) {
+        const stale = pending;
+        pending = null;
+        stale('');
+      }
       return new Promise((resolve) => {
         pending = resolve;
         state = {
