@@ -308,13 +308,9 @@ export interface GitHubClient {
   closeIssue(issueNumber: number): Promise<void>;
   /**
    * Opens a pull request for an existing branch, or returns the open one if there
-   * already is one.
-   *
-   * Exists for one narrow reason: GitHub's agent tasks API can only resume work on a
-   * branch that has an **open pull request** — without one, the `head_ref` asking it to
-   * resume is silently ignored and the agent branches fresh instead. So a revision round
-   * has to guarantee the PR exists first. The PR is never merged and nothing reads it;
-   * it is resumption context, left open for the life of the build.
+   * already is one. The sole production caller, `proposal-apply-bot.ts`, uses this for
+   * the repo-lane merge-back: the PR it opens goes through the games repo's normal
+   * CODEOWNERS review and merge, same as any other PR.
    */
   ensureOpenPullRequest(input: { headRef: string; baseRef: string; title: string; body: string }): Promise<{
     number: number;
