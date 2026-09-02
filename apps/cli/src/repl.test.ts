@@ -98,4 +98,19 @@ describe('repl turn loop', () => {
     expect(opened.token).toBe('new-tok');
     expect(opened.draft).toBeNull();
   });
+
+  it('treats a blank line as a no-op', async () => {
+    let posts = 0;
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_oat_t', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async () => {
+        posts += 1;
+        return new Response('{}', { status: 404 });
+      },
+    });
+    const result = await handleReplLine({ line: '   ', api, token: 'tok', write: () => undefined });
+    expect(result.next).toBe('continue');
+    expect(posts).toBe(0);
+  });
 });

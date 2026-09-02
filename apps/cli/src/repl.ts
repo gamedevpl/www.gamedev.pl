@@ -28,6 +28,7 @@ export async function handleReplLine(input: {
   write: (s: string) => void;
 }): Promise<ReplLineResult> {
   const trimmed = input.line.trim();
+  if (!trimmed) return { next: 'continue' };
   if (trimmed === '/quit' || trimmed === '/exit') return { next: 'quit' };
   if (trimmed === '/help') {
     input.write(SLASH_VERBS.map((verb) => `/${verb}`).join('\n'));
