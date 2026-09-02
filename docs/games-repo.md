@@ -135,8 +135,9 @@ under our identity, which is content submission rather than compute-on-behalf â€
 concern than the one we just removed, but not nothing:
 
 - **Abuse/spam**: rate-limit submissions; don't let anyone flood the agent backend with rounds.
-- **Moderation**: spec text lands in our (private) repo under our identity. It needs review
-  before, or shortly after, it appears.
+- **Moderation**: spec text lands in our submission store under our identity â€” the store lane
+  never commits it to the (private) games repo at all; only repo-lane maintenance touches that
+  repo. It needs review before, or shortly after, it appears.
 - **Attribution**: record who submitted a spec, and be clear about what rights that implies.
 - **Prompt injection**: a spec is read by agents, so it can attempt to steer them. Agents
   working the repo must treat spec content as **data, not instructions**, and the repo's
