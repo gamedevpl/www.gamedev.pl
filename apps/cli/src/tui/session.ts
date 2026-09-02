@@ -116,6 +116,8 @@ export function createTuiSession(banner: string): TuiSession {
       if (!pending) return;
       const resolve = pending;
       pending = null;
+      state = { ...state, mode: 'busy', draft: '', live: [], choices: [] };
+      emit();
       resolve('/quit');
     },
     close() {

@@ -23,6 +23,7 @@ describe('tui session', () => {
     expect(session.get().draft).toBe('');
     session.cancel();
     expect(await first).toBe('/quit');
+    expect(session.get().mode).toBe('busy');
   });
 
   it('strips control characters from the draft', () => {

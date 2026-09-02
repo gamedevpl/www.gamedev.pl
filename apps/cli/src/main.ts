@@ -21,7 +21,6 @@ import { runLadder, assertLadderGreen } from './verify.js';
 import { runGitRemoteHelper } from './git-remote-main.js';
 import { runStatusVerb } from './status-watch.js';
 import { dispatchReadVerb } from './verbs.js';
-import { runInkRepl } from './tui/host.js';
 
 function storeFromEnv(env: NodeJS.ProcessEnv, warn: (line: string) => void): TokenStore {
   const token = env.GAMEDEV_TOKEN?.trim();
@@ -157,7 +156,8 @@ export async function runCli(
     const read = await dispatchReadVerb({ verb, args, flags, api, io });
     if (read !== null) return read;
     if (verb === 'repl') {
-      if (!tty) throw pipeNeedsFlag(`a verb such as ${cliUsage('whoami')}`);
+      if (!tty || !io.stdout.isTTY) throw pipeNeedsFlag(`a verb such as ${cliUsage('whoami')}`);
+      const { runInkRepl } = await import('./tui/host.js');
       return runInkRepl({
         api,
         env,
