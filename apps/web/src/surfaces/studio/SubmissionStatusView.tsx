@@ -6,7 +6,6 @@ import { defaultBuilderFor, isBuilderKind, type BuilderKind } from '../../builde
 import { GameTheater } from '../../GameTheater.js';
 import { PixelIcon, type PixelIconName } from '../../PixelIcon.js';
 import {
-  abandonSubmission,
   getChannelPlayable,
   getSubmissionPreview,
   handoffToPlatform,
@@ -34,6 +33,8 @@ import { BuildHeartbeat } from './BuildHeartbeat.js';
 import { presenceThought } from './presenceThought.js';
 import { ThreadStream } from './ThreadStream.js';
 import { ThreadContextBar } from './ThreadContextBar.js';
+import { AbandonControl } from './AbandonControl.js';
+import { PlayCard } from './PlayCard.js';
 
 function copyInputFromStatus(status: SubmissionStatus | null | undefined) {
   return {
@@ -1155,110 +1156,5 @@ export function SubmissionStatusView({
       </section>
       {theaters}
     </>
-  );
-}
-
-/** Stops the build for good after an explicit confirmation. */
-function AbandonControl({ token }: { token: string }) {
-  const { t } = useTranslation();
-  const [armed, setArmed] = useState(false);
-  const [state, setState] = useState<'idle' | 'sending'>('idle');
-  const [error, setError] = useState<string | null>(null);
-
-  const abandon = async () => {
-    setState('sending');
-    setError(null);
-    try {
-      await abandonSubmission(token);
-      // The poll picks up the terminal state on its next tick and re-renders.
-    } catch {
-      setError(t('statusView.abandon.error'));
-      setState('idle');
-      setArmed(false);
-    }
-  };
-
-  if (error) {
-    return <p className="error">{error}</p>;
-  }
-
-  if (!armed) {
-    return (
-      <button
-        type="button"
-        className="status-abandon"
-        onClick={() => setArmed(true)}
-        title={t('statusView.abandon.start')}
-        aria-label={t('statusView.abandon.start')}
-      >
-        {t('statusView.abandon.start')}
-      </button>
-    );
-  }
-
-  return (
-    <span className="status-abandon-confirm">
-      {t('statusView.abandon.confirm')}
-      <button
-        type="button"
-        className="status-abandon is-danger"
-        disabled={state === 'sending'}
-        onClick={() => void abandon()}
-      >
-        {state === 'sending' ? t('statusView.abandon.sending') : t('statusView.abandon.yes')}
-      </button>
-      <button type="button" className="status-abandon" onClick={() => setArmed(false)}>
-        {t('statusView.abandon.no')}
-      </button>
-    </span>
-  );
-}
-
-/**
- * The "your game is playable" call-to-action inside the status panel. Clicking the
- * CTA opens the game in the full-viewport theater — so the status page itself never
- * embeds a live iframe inline (which would trap page scroll and duplicate the game's
- * own chrome). Used for both the work-in-progress draft and the published game.
- */
-function PlayCard({
-  badge,
-  badgeClass,
-  title,
-  subtitle,
-  cta,
-  onPlay,
-  secondary,
-}: {
-  badge: ReactNode;
-  badgeClass?: string;
-  title: string;
-  subtitle?: string;
-  cta: string;
-  onPlay: () => void;
-  /**
-   * The other thing to do with a playable build. Playtesting is the studio's own
-   * surface — pause the game, point at what is wrong, send the frame with the note —
-   * and until this button existed the only route to it was noticing a tab.
-   */
-  secondary?: { label: string; onClick: () => void };
-}) {
-  return (
-    <div className="status-play-card">
-      <div className="status-play-card-info">
-        <span className={badgeClass ? `status-play-badge ${badgeClass}` : 'status-play-badge'}>{badge}</span>
-        <h3 className="status-play-card-title">{title}</h3>
-        {subtitle ? <p className="status-play-card-sub">{subtitle}</p> : null}
-      </div>
-      <div className="status-play-card-actions">
-        <button className="primary-btn status-play-cta" onClick={onPlay}>
-          <PixelIcon name="play" size={13} /> {cta}
-        </button>
-        {secondary ? (
-          <button className="secondary-btn status-playtest-cta" onClick={secondary.onClick}>
-            <PixelIcon name="wrench" size={13} /> {secondary.label}
-          </button>
-        ) : null}
-      </div>
-    </div>
   );
 }
