@@ -27,7 +27,7 @@ export function cliPageHtml(origin: string): string {
     <h2>Security posture</h2>
     <ul class="cannot">
       <li>Checksums on every install and update. No postinstall beyond the copy.</li>
-      <li>Tokens in the OS keychain (encrypted file only with a loud warning).</li>
+      <li>Tokens in an encrypted file under ~/.config/gamedev.</li>
       <li>Revoke the grant in Studio to kill CLI access on the next request.</li>
       <li>A sub-agent never receives your OAuth token — round-scoped credentials only.</li>
     </ul>

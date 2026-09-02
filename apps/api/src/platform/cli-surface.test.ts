@@ -45,7 +45,9 @@ describe('reserved installer routes', () => {
       const app = await buildApp({ store: new InMemoryStore(), sessionSecret: 'dev-session-secret-change-me' });
       const sh = await app.inject({ method: 'GET', url: '/install.sh' });
       expect(sh.statusCode).toBe(200);
-      expect(sh.body).toContain('sha256sum -c');
+      expect(sh.body).toContain('sha256sum');
+      expect(sh.body).toContain('shasum -a 256');
+      expect(sh.body).toContain('GitHub Releases');
       expect(sh.body).toContain('$HOME/.local/bin');
       expect(sh.body).toContain('Node 20');
       expect(sh.body).toContain('asset="gamedev"');
@@ -53,7 +55,7 @@ describe('reserved installer routes', () => {
       const page = await app.inject({ method: 'GET', url: '/cli' });
       expect(page.statusCode).toBe(200);
       expect(page.body).toContain('gamedev login');
-      expect(page.body).toContain('OS keychain');
+      expect(page.body).toContain('encrypted file');
       expect(page.body).toContain('Node 20');
       const ps1 = await app.inject({ method: 'GET', url: '/install.ps1' });
       expect(ps1.statusCode).toBe(200);

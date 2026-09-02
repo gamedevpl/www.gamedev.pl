@@ -25,10 +25,22 @@ asset="${CLI_ASSET}"
 base="https://github.com/gamedevpl/www.gamedev.pl/releases/download/${CLI_RELEASE_PREFIX}\${VERSION}"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-echo "fetching $asset from cli-v$VERSION (via $ORIGIN)"
+echo "fetching $asset from GitHub Releases (cli-v$VERSION)"
 curl -fsSL "$base/$asset" -o "$tmp/gamedev"
 curl -fsSL "$base/SHA256SUMS" -o "$tmp/SHA256SUMS"
-(cd "$tmp" && grep " $asset$" SHA256SUMS | sha256sum -c -)
+expected=$(grep " $asset$" "$tmp/SHA256SUMS" | cut -d ' ' -f 1)
+if command -v sha256sum >/dev/null 2>&1; then
+  actual=$(sha256sum "$tmp/gamedev" | cut -d ' ' -f 1)
+elif command -v shasum >/dev/null 2>&1; then
+  actual=$(shasum -a 256 "$tmp/gamedev" | cut -d ' ' -f 1)
+else
+  echo "need sha256sum or shasum to verify the download" >&2
+  exit 1
+fi
+if [ "$expected" != "$actual" ]; then
+  echo "checksum mismatch for $asset" >&2
+  exit 1
+fi
 mkdir -p "$BIN_DIR"
 install -m 0755 "$tmp/gamedev" "$BIN_DIR/gamedev"
 install -m 0755 "$tmp/gamedev" "$BIN_DIR/git-remote-gamedev"
