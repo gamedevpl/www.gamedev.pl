@@ -41,29 +41,32 @@ describe('reserved installer routes', () => {
   it('serves checksum-verifying installers and /cli when the flag is on', async () => {
     const prev = process.env.CLI_SURFACE;
     process.env.CLI_SURFACE = 'true';
-    const app = await buildApp({ store: new InMemoryStore(), sessionSecret: 'dev-session-secret-change-me' });
-    const sh = await app.inject({ method: 'GET', url: '/install.sh' });
-    expect(sh.statusCode).toBe(200);
-    expect(sh.body).toContain('sha256sum -c');
-    expect(sh.body).toContain('$HOME/.local/bin');
-    expect(sh.body).toContain('Node 20');
-    expect(sh.body).toContain('asset="gamedev"');
-    expect(sh.body).not.toContain('gamedev-linux');
-    const page = await app.inject({ method: 'GET', url: '/cli' });
-    expect(page.statusCode).toBe(200);
-    expect(page.body).toContain('gamedev login');
-    expect(page.body).toContain('OS keychain');
-    expect(page.body).toContain('Node 20');
-    const ps1 = await app.inject({ method: 'GET', url: '/install.ps1' });
-    expect(ps1.statusCode).toBe(200);
-    expect(ps1.body).toContain('Get-FileHash');
-    expect(ps1.body).toContain('Node 20');
-    expect(ps1.body).toContain("process.versions.node.split('.')[0]");
-    expect(ps1.body).toContain('too old');
-    const enabled = await app.inject({ method: 'GET', url: '/api/cli/enabled' });
-    expect(enabled.statusCode).toBe(200);
-    expect(enabled.json()).toMatchObject({ enabled: true });
-    if (prev === undefined) delete process.env.CLI_SURFACE;
-    else process.env.CLI_SURFACE = prev;
+    try {
+      const app = await buildApp({ store: new InMemoryStore(), sessionSecret: 'dev-session-secret-change-me' });
+      const sh = await app.inject({ method: 'GET', url: '/install.sh' });
+      expect(sh.statusCode).toBe(200);
+      expect(sh.body).toContain('sha256sum -c');
+      expect(sh.body).toContain('$HOME/.local/bin');
+      expect(sh.body).toContain('Node 20');
+      expect(sh.body).toContain('asset="gamedev"');
+      expect(sh.body).not.toContain('gamedev-linux');
+      const page = await app.inject({ method: 'GET', url: '/cli' });
+      expect(page.statusCode).toBe(200);
+      expect(page.body).toContain('gamedev login');
+      expect(page.body).toContain('OS keychain');
+      expect(page.body).toContain('Node 20');
+      const ps1 = await app.inject({ method: 'GET', url: '/install.ps1' });
+      expect(ps1.statusCode).toBe(200);
+      expect(ps1.body).toContain('Get-FileHash');
+      expect(ps1.body).toContain('Node 20');
+      expect(ps1.body).toContain("process.versions.node.split('.')[0]");
+      expect(ps1.body).toContain('too old');
+      const enabled = await app.inject({ method: 'GET', url: '/api/cli/enabled' });
+      expect(enabled.statusCode).toBe(200);
+      expect(enabled.json()).toMatchObject({ enabled: true });
+    } finally {
+      if (prev === undefined) delete process.env.CLI_SURFACE;
+      else process.env.CLI_SURFACE = prev;
+    }
   });
 });

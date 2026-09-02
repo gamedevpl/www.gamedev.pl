@@ -8,14 +8,16 @@ import { SiteFooter } from './SiteFooter.js';
 import i18n from './i18n/index.js';
 import { setVisitSessionForTesting, VisitSession } from './visitTelemetry.js';
 
-/** Project links, the in-app contact form, and a visit-id-bearing bug report. */
-
 let container: HTMLDivElement;
 let root: Root | null = null;
 
 beforeEach(async () => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   await i18n.changeLanguage('en');
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => ({ ok: false, json: async () => ({}) })),
+  );
   container = document.createElement('div');
   document.body.appendChild(container);
 });
@@ -34,6 +36,8 @@ async function render(): Promise<void> {
   root = createRoot(container);
   await act(async () => {
     root!.render(<SiteFooter />);
+    await Promise.resolve();
+    await Promise.resolve();
   });
 }
 
@@ -83,7 +87,6 @@ describe('SiteFooter project links', () => {
   it('prefills the bug report with the current visit id and page', async () => {
     setVisitSessionForTesting(new VisitSession('visit-abc', Date.now(), () => {}));
     window.history.pushState({}, '', '/play/arena-tag');
-
     await render();
 
     const bugLink = links().find((a) => a.href.includes('/issues/new'));

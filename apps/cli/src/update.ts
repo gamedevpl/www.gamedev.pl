@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 
 export const CLI_VERSION = '0.1.0';
@@ -33,7 +33,9 @@ export function defaultInstallDest(): string {
 }
 
 export function helperDest(binPath: string): string {
-  return binPath.replace(/gamedev(\.exe)?$/, 'git-remote-gamedev$1');
+  const ext = /\.exe$/i.test(binPath) ? '.exe' : '';
+  if (basename(binPath).toLowerCase() === `git-remote-gamedev${ext}`) return binPath;
+  return join(dirname(binPath), `git-remote-gamedev${ext}`);
 }
 
 export async function resolveUpdateVersion(input: { version?: string; fetchImpl: FetchLike }): Promise<string> {

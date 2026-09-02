@@ -24,6 +24,8 @@ describe('GamedevCliConnectTab', () => {
     const root = createRoot(host);
     await act(async () => {
       root.render(createElement(GamedevCliConnectTab, { slug: 'ghost-roads' }));
+      await Promise.resolve();
+      await Promise.resolve();
     });
     expect(host.textContent).toContain('gamedev connect ghost-roads');
     expect(host.textContent).toContain(`${window.location.origin}/install.sh`);
@@ -42,6 +44,8 @@ describe('GamedevCliConnectTab', () => {
     const root = createRoot(host);
     await act(async () => {
       root.render(createElement(GamedevCliConnectTab, { slug: 'ghost-roads' }));
+      await Promise.resolve();
+      await Promise.resolve();
     });
     expect(host.querySelector('[data-testid="gamedev-cli-connect"]')).toBeNull();
     await act(async () => root.unmount());
