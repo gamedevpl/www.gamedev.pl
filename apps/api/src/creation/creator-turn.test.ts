@@ -222,6 +222,35 @@ describe('POST /api/submissions/:token/turn (CL-10, CL-11)', () => {
     });
     expect(turn.statusCode).toBe(404);
     expect(turns.statusCode).toBe(404);
+    for (let i = 0; i < 10; i += 1) {
+      const extra = await app.inject({
+        method: 'POST',
+        url: `/api/submissions/${token}/turn`,
+        headers,
+        payload: { text: 'is it done yet?' },
+      });
+      expect(extra.statusCode).toBe(404);
+    }
+    await app.close();
+  });
+
+  it('returns text is required when turn text is omitted', async () => {
+    const {
+      app,
+      store,
+      authHeaders: headers,
+    } = await createApp({
+      chatAgent: { decide: async () => ({ kind: 'reply', text: 'no' }) },
+    });
+    const { token } = await openDraft(app, store, headers);
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/turn`,
+      headers,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'text is required' });
     await app.close();
   });
 });
