@@ -63,6 +63,8 @@ describe('reserved installer routes', () => {
       expect(ps1.body).toContain('Node 20');
       expect(ps1.body).toContain("process.versions.node.split('.')[0]");
       expect(ps1.body).toContain('too old');
+      expect(ps1.body).toContain('node "%~dp0git-remote-gamedev" %*');
+      expect(sh.body).not.toContain('ORIGIN=');
       const enabled = await app.inject({ method: 'GET', url: '/api/cli/enabled' });
       expect(enabled.statusCode).toBe(200);
       expect(enabled.json()).toMatchObject({ enabled: true });

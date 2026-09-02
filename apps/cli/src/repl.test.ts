@@ -113,4 +113,21 @@ describe('repl turn loop', () => {
     expect(result.next).toBe('continue');
     expect(posts).toBe(0);
   });
+
+  it('tells the user to run known non-REPL verbs as gamedev <verb>', async () => {
+    const lines: string[] = [];
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_oat_t', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async () => new Response('{}', { status: 404 }),
+    });
+    const result = await handleReplLine({
+      line: '/status tok',
+      api,
+      token: 'tok',
+      write: (s) => lines.push(s),
+    });
+    expect(result.next).toBe('continue');
+    expect(lines.join('\n')).toBe('run it as gamedev status');
+  });
 });

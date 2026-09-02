@@ -9,7 +9,7 @@ export function installSh(origin: string): string {
 # gamedev installer — checksum-verifying Node script into ~/.local/bin
 # Review this file. It is the whole install. No postinstall beyond the copy.
 set -eu
-ORIGIN="\${GAMEDEV_ORIGIN:-${origin}}"
+# Served from ${origin}. The payload is always GitHub Releases, not this origin.
 VERSION="\${GAMEDEV_VERSION:-${CLI_VERSION}}"
 BIN_DIR="\${GAMEDEV_BIN_DIR:-$HOME/.local/bin}"
 if ! command -v node >/dev/null 2>&1; then
@@ -79,7 +79,7 @@ try {
   ) | Set-Content -Path (Join-Path $binDir "gamedev.cmd")
   @(
     '@echo off',
-    'node "%~dp0gamedev" %*'
+    'node "%~dp0git-remote-gamedev" %*'
   ) | Set-Content -Path (Join-Path $binDir "git-remote-gamedev.cmd")
   Write-Host "installed $binDir\\gamedev (Node script via $origin)"
 } finally {

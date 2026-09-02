@@ -51,6 +51,8 @@ export async function handleReplLine(input: {
         input.write(chunks.join('').trimEnd() || `/${cmd}`);
         return { next: 'continue' };
       }
+      input.write(`run it as gamedev ${cmd}`);
+      return { next: 'continue' };
     }
     const matches = completeSlash(trimmed);
     if (matches.length) input.write(matches.map((verb) => `/${verb}`).join('  '));
