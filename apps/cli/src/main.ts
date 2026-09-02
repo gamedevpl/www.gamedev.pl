@@ -27,8 +27,9 @@ import { runStatusVerb } from './status-watch.js';
 import { dispatchReadVerb } from './verbs.js';
 
 function storeFromEnv(env: NodeJS.ProcessEnv, warn: (line: string) => void): TokenStore {
-  if (env.GAMEDEV_TOKEN) {
-    return memoryStore({ accessToken: env.GAMEDEV_TOKEN, tokenType: 'Bearer', scope: 'creator' });
+  const token = env.GAMEDEV_TOKEN?.trim();
+  if (token) {
+    return memoryStore({ accessToken: token, tokenType: 'Bearer', scope: 'creator' });
   }
   if (fileKeychainOptedIn(env)) {
     warn(`${FILE_FALLBACK_WARNING}\n`);
@@ -75,7 +76,7 @@ export async function runCli(
       const imported = fromFlag || fromEnv;
       if (imported) {
         await persist.set({ accessToken: imported, tokenType: 'Bearer', scope: 'creator' });
-        if (fileKeychainOptedIn(env)) {
+        if (fileKeychainOptedIn(env) && fromEnv) {
           io.stderr.write(`${FILE_FALLBACK_WARNING}\n`);
         }
         io.stdout.write(fromFlag ? 'signed in with --token\n' : 'signed in with GAMEDEV_TOKEN\n');

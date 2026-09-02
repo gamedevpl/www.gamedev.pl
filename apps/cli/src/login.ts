@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { hostname as osHostname } from 'node:os';
 import { cliUsage } from './bin-name.js';
 import { CliError, EXIT_AUTH, EXIT_INPUT } from './exit-codes.js';
-import { FILE_FALLBACK_WARNING, fileKeychainOptedIn, type TokenStore } from './keychain.js';
+import type { TokenStore } from './keychain.js';
 import { authorizeUrl, GAMEDEV_CLI_CLIENT_ID, randomVerifier, s256Challenge } from './oauth.js';
 import { openUrl as defaultOpenUrl } from './open-url.js';
 import { glyphs, wantsColor } from './renderer.js';
@@ -216,8 +216,5 @@ export async function runLoopbackLogin(input: LoopbackLoginInput): Promise<void>
     tokenType: tokens.tokenType,
     scope: tokens.scope,
   });
-  if (fileKeychainOptedIn(env) && input.store.kind === 'encrypted-file') {
-    input.stderr?.write(`${FILE_FALLBACK_WARNING}\n`);
-  }
   input.stdout.write(`${g.ok} signed in\n`);
 }

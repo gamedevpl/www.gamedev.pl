@@ -191,8 +191,12 @@ describe('login verb', () => {
     const stdout = new PassThrough();
     const stderr = new PassThrough();
     let out = '';
+    let err = '';
     stdout.on('data', (chunk: Buffer) => {
       out += chunk.toString();
+    });
+    stderr.on('data', (chunk: Buffer) => {
+      err += chunk.toString();
     });
     const code = await runCli(
       ['node', 'gamedevpl', 'login'],
@@ -205,6 +209,7 @@ describe('login verb', () => {
     );
     expect(code).toBe(EXIT_GREEN);
     expect(out).toContain('signed in with GAMEDEV_TOKEN');
+    expect(err.match(/WARNING: tokens stored/g) ?? []).toHaveLength(1);
     const stored = await encryptedFileStore({ HOME: dir, GAMEDEV_TOKEN_FILE: path }).get();
     expect(stored?.accessToken).toBe('gdpl_pat_import');
   });
@@ -217,8 +222,12 @@ describe('login verb', () => {
     const stdout = new PassThrough();
     const stderr = new PassThrough();
     let out = '';
+    let err = '';
     stdout.on('data', (chunk: Buffer) => {
       out += chunk.toString();
+    });
+    stderr.on('data', (chunk: Buffer) => {
+      err += chunk.toString();
     });
     const code = await runCli(
       ['node', 'gamedevpl', 'login', '--token', 'gdpl_pat_flag'],
@@ -232,6 +241,7 @@ describe('login verb', () => {
     expect(code).toBe(EXIT_GREEN);
     expect(out).toContain('signed in with --token');
     expect(out).not.toContain('GAMEDEV_TOKEN');
+    expect(err.match(/WARNING: tokens stored/g) ?? []).toHaveLength(1);
     const stored = await encryptedFileStore({ HOME: dir, GAMEDEV_TOKEN_FILE: path }).get();
     expect(stored?.accessToken).toBe('gdpl_pat_flag');
   });
