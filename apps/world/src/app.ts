@@ -22,6 +22,7 @@ import { ZONE_PROTOCOL_VERSION } from '@gamedevpl/contract';
 export { ZONE_PROTOCOL_VERSION };
 
 import {
+  createFrameLimiter,
   DEFAULT_MAX_SOCKETS_PER_IP,
   MAX_SOCKET_FRAME_BYTES as MAX_FRAME_BYTES,
   MAX_SOCKET_FRAMES_PER_SECOND as MAX_FRAMES_PER_SECOND,
@@ -49,18 +50,6 @@ const ClientFrameSchema = z.discriminatedUnion('t', [
   z.object({ t: z.literal('resync') }),
   z.object({ t: z.literal('bye') }),
 ]);
-
-/** Sliding-window frame limiter for one connection. */
-class FrameLimiter {
-  private timestamps: number[] = [];
-
-  allow(now: number): boolean {
-    this.timestamps = this.timestamps.filter((at) => now - at < 1000);
-    if (this.timestamps.length >= MAX_FRAMES_PER_SECOND) return false;
-    this.timestamps.push(now);
-    return true;
-  }
-}
 
 export interface WorldAppOptions extends Omit<ZoneHostOptions, 'secret'> {
   secret?: string;
@@ -112,7 +101,7 @@ export async function buildWorldApp(options: WorldAppOptions): Promise<WorldApp>
   }));
 
   app.get('/zone/ws', { websocket: true }, (socket, request) => {
-    const limiter = new FrameLimiter();
+    const limiter = createFrameLimiter(MAX_FRAMES_PER_SECOND);
     let zoneId: string | null = null;
     let slot = -1;
     let admitting = false;

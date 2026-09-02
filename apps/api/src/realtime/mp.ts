@@ -2,6 +2,7 @@ import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import {
+  createFrameLimiter,
   DEFAULT_MAX_SOCKETS_PER_IP,
   INPUT_KEYS,
   MAX_SOCKET_FRAME_BYTES,
@@ -478,18 +479,6 @@ export class RoomRegistry {
   }
 }
 
-/** Sliding-window frame limiter for one connection. */
-class FrameLimiter {
-  private timestamps: number[] = [];
-
-  allow(now: number): boolean {
-    this.timestamps = this.timestamps.filter((timestamp) => now - timestamp < 1000);
-    if (this.timestamps.length >= MAX_FRAMES_PER_SECOND) return false;
-    this.timestamps.push(now);
-    return true;
-  }
-}
-
 export interface MultiplayerRoutesOptions {
   registry?: RoomRegistry;
   /** Max rooms one IP may open per hour. */
@@ -667,7 +656,7 @@ export async function registerMultiplayerRoutes(
   if (options.relayClient) return;
 
   app.get('/api/mp/ws', { websocket: true }, (socket, request) => {
-    const limiter = new FrameLimiter();
+    const limiter = createFrameLimiter(MAX_FRAMES_PER_SECOND);
     let role: 'none' | 'host' | 'guest' = 'none';
     let roomCode: string | null = null;
     let slotNumber = 0;

@@ -1,5 +1,6 @@
 import type { SocketStatus } from '@gamedevpl/contract';
 import { parseZoneServerFrame, zoneSocketUrl, ZONE_PROTOCOL_VERSION, type ZoneServerFrame } from './protocol.js';
+import { createReconnectBackoff, type ReconnectBackoff } from '../core/reconnectBackoff.js';
 
 /**
  * One websocket to a zone host, for one player.
@@ -38,12 +39,10 @@ export interface ZoneClientOptions {
  */
 const FINAL_REASONS = new Set(['kicked', 'expired', 'bad_ticket', 'zone_not_found', 'bye', 'unsupported']);
 
-const MAX_RETRIES = 8;
-
 export class ZoneClient {
   private socket: WebSocket | null = null;
   private readonly options: ZoneClientOptions;
-  private retries = 0;
+  private readonly backoff: ReconnectBackoff = createReconnectBackoff();
   private retryTimer: number | null = null;
   private disposed = false;
 
@@ -53,7 +52,7 @@ export class ZoneClient {
 
   connect(): void {
     if (this.disposed) return;
-    this.options.onStatus(this.retries === 0 ? 'connecting' : 'reconnecting');
+    this.options.onStatus(this.backoff.isFirstAttempt() ? 'connecting' : 'reconnecting');
 
     let socket: WebSocket;
     try {
@@ -68,7 +67,7 @@ export class ZoneClient {
     this.socket = socket;
 
     socket.onopen = () => {
-      this.retries = 0;
+      this.backoff.reset();
       // The ticket travels in the first frame, never in the URL: query strings land in
       // access logs and Referer headers, which is the same rule party join tokens follow.
       socket.send(
@@ -107,13 +106,13 @@ export class ZoneClient {
 
   private scheduleRetry(): void {
     if (this.disposed) return;
-    this.retries += 1;
-    if (this.retries > MAX_RETRIES) {
+    const delay = this.backoff.nextDelayMs();
+    if (delay === null) {
+      // Unlike party mode, a spent budget disposes the client.
       this.disposed = true;
       this.options.onStatus('closed', 'unreachable');
       return;
     }
-    const delay = Math.min(500 * 2 ** (this.retries - 1), 8000);
     this.options.onStatus('reconnecting');
     this.retryTimer = window.setTimeout(() => this.connect(), delay);
   }
