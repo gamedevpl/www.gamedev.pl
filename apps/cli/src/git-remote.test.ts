@@ -37,9 +37,9 @@ describe('git-remote-gamedevpl', () => {
   });
 
   it('resolves no slug when the remote URL and checkout file are missing', () => {
-    expect(remoteSlugFromArgv(['node', 'git-remote-gamedev'], null)).toBe('');
-    expect(remoteSlugFromArgv(['node', 'git-remote-gamedev'], 'ghost-roads')).toBe('ghost-roads');
-    expect(remoteSlugFromArgv(['node', 'git-remote-gamedev', 'origin', 'gamedev://ghost-roads'], null)).toBe(
+    expect(remoteSlugFromArgv(['node', 'git-remote-gamedevpl'], null)).toBe('');
+    expect(remoteSlugFromArgv(['node', 'git-remote-gamedevpl'], 'ghost-roads')).toBe('ghost-roads');
+    expect(remoteSlugFromArgv(['node', 'git-remote-gamedevpl', 'origin', 'gamedevpl://ghost-roads'], null)).toBe(
       'ghost-roads',
     );
   });
