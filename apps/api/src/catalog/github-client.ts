@@ -302,11 +302,7 @@ export interface GitHubClient {
    * on its open PR.
    */
   createIssueComment(issueOrPrNumber: number, body: string): Promise<{ id: number }>;
-  /**
-   * Rewrites an issue body. Used once, right after creation, to add the build-channel
-   * credentials — they are derived from the issue number, which GitHub only assigns
-   * when the issue already exists.
-   */
+  /** Rewrites an issue body. No production caller — the issue-first flow is retired. */
   updateIssueBody(issueNumber: number, body: string): Promise<void>;
   /** Closes an issue — a creator abandoning their build. */
   closeIssue(issueNumber: number): Promise<void>;
