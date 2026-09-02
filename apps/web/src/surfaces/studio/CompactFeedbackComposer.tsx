@@ -28,9 +28,7 @@ interface CompactFeedbackComposerProps {
   onStopAndSwitchToSelf: () => void;
 }
 
-// The studio thread's reply box: field and send, nothing else — see FeedbackPanel for the
-// shared state and send logic this renders. Split out because it is a distinct, self-contained
-// UI shape from the full-page composer, not a variant of the same markup.
+// The studio thread's reply box; FeedbackPanel owns the shared state.
 export function CompactFeedbackComposer({
   text,
   onTextChange,
@@ -103,6 +101,7 @@ export function CompactFeedbackComposer({
         }}
         onKeyDown={(event) => {
           // Enter sends; Shift+Enter keeps a newline (same as RemixAsk).
+
           // Skip while IME is composing — Enter confirms a candidate there.
           const native = event.nativeEvent;
           if (event.key !== 'Enter' || event.shiftKey || native.isComposing || native.keyCode === 229) {
@@ -233,7 +232,6 @@ export function CompactFeedbackComposer({
           )}
         </div>
       </div>
-      {/* Sending's indicator now sits inline next to Send, above */}
       {error || notice ? (
         <div className="status-feedback-actions">
           {error ? <p className="error">{error}</p> : <p className="status-feedback-notice">{notice}</p>}

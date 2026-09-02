@@ -19,17 +19,11 @@ export type BuilderHandoffHandler = () => Promise<void | { pending?: boolean }> 
 
 const SENT_RECEIPT_MS = 4500;
 
-/**
- * Revision loop: the creator describes what to change. The feedback is relayed to the
- * build agent (POST .../feedback), which queues it into the agent's inbox as a message
- * explicitly marked as data-not-instructions, so the agent picks it up on its next report.
- * Shown while the game is still in progress (or needs changes) — a published game can't be
- * revised here.
- *
- * `building` swaps the copy for the stretch before a playable draft exists: there is
- * nothing to have "played" yet, and the useful ask is a course correction rather than a
- * revision.
- */
+// Revision loop: the creator's feedback queues into the agent's inbox.
+
+// Shown only while building or needs-changes — published games use /improve instead.
+
+// `building`: no draft exists yet, so the ask is a course correction.
 export function FeedbackPanel({
   token,
   published,
@@ -53,37 +47,32 @@ export function FeedbackPanel({
   onDraftConsumed,
 }: {
   token: string;
-  /** Routes the message: an improvement on the live game, or a change on the build. */
+  // Live-game improvement, or an in-progress build change.
   published: boolean;
   building: boolean;
   agentWorking?: boolean;
-  /** The thread's reply box rather than a page section — field and send, nothing else. */
+  // Thread reply box, not a page section: field and send, nothing else.
   compact?: boolean;
-  /** Show builder choice — the next send opens a new round. */
+  // Show builder choice — the next send opens a new round.
   chooseBuilder?: boolean;
   initialBuilder?: BuilderKind;
-  /** Builder of the *current* round — drives self-build routing copy. */
+  // Builder of the *current* round — drives self-build routing copy.
   roundBuilder?: BuilderKind;
   stall?: SubmissionStatus['stall'];
   failureReason?: string;
-  /** Internal job phase — gate-green drafts need honest "start your agent" routing. */
+  // Internal job phase — gate-green drafts need honest "start your agent" routing.
   phase?: SubmissionStatus['phase'];
   onSwitchToPlatform?: BuilderHandoffHandler;
   onSwitchToSelf?: BuilderHandoffHandler;
   handoffPending?: BuilderKind;
   // Why platform is unavailable, if it is. See BuilderChoice.
   platformUnavailable?: BuilderUnavailableReason;
-  /**
-   * Hide the "saved until you start your agent" line — the connect card above already
-   * says we are waiting, so a third copy under the box is noise.
-   */
+  // Hides "saved until you start your agent" — connect card already said it.
   suppressRouteNote?: boolean;
   onSent: (text: string) => void;
-  /**
-   * A published-game improvement opened a new job; called with its token so the view
-   * can move the creator onto the new build thread. Only fires on the `published`
-   * path — a draft revision continues the current round and stays on this thread.
-   */
+  // A published improvement opens a new job and moves the view.
+
+  // Only fires when published; a draft revision stays on this thread.
   onPublishedImprove?: (token: string) => void;
   draft?: { text: string; seq: number } | null;
   onDraftConsumed?: () => void;
@@ -94,11 +83,9 @@ export function FeedbackPanel({
   const [error, setError] = useState<string | null>(null);
   const [quickActionDismissed, setQuickActionDismissed] = useState(false);
   const [stopRequested, setStopRequested] = useState(false);
-  // Sent, kept, and *not* acted on: the API took the message but no round started behind
-  // it. Its own slot rather than `error`, because nothing failed on the creator's side and
-  // there is nothing for them to redo — the note is safe and will be read by the next
-  // round. Without this the composer says "sent" and the thread then says nothing for
-  // hours, which is exactly how an exhausted agent allowance reads as a hung game.
+  // Sent but no round started — its own slot, distinct from error.
+
+  // Nothing failed; the note stays visible until the next round reads it.
   const [notice, setNotice] = useState<string | null>(null);
   const [builder, setBuilder] = useState<BuilderKind>(initialBuilder);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -138,9 +125,9 @@ export function FeedbackPanel({
     setQuickActionDismissed(false);
   }, [failureReason, token]);
 
-  // A receipt is confirmation, not furniture: clear it on its own so the composer returns
-  // to one row. Typing also clears it (below); the timer covers the common case where the
-  // creator just watches the thread after send.
+  // A receipt, not furniture — clears itself so the box returns.
+
+  // Typing also clears it; this timer covers watching the thread after send.
   useEffect(() => {
     if (state !== 'sent') return;
     const timer = window.setTimeout(() => setState('idle'), SENT_RECEIPT_MS);
@@ -148,8 +135,9 @@ export function FeedbackPanel({
   }, [state]);
 
   const trimmed = text.trim();
-  // When choosing a builder for a new round, the selector is the truth; otherwise the
-  // current round's builder drives the honest self-build routing note.
+  // Choosing a builder: the selector is the truth for a new round.
+
+  // Otherwise the current round's builder drives the routing note.
   const routeBuilder = chooseBuilder ? builder : roundBuilder;
   const composerRoute = selfComposerRoute({
     builder: routeBuilder,
@@ -163,17 +151,17 @@ export function FeedbackPanel({
       : composerRoute === 'waiting'
         ? 'statusView.feedback.sentSelfWaiting'
         : null;
-  // Active self rounds already imply a listening agent — repeating that above the
-  // box is chrome noise (the placeholder covers "what to write"). Waiting is the
-  // case that still needs a sentence: the note will not be read until they start
-  // their agent again — unless the connect card already said that (`suppressRouteNote`).
+  // Active self rounds already imply a listening agent — repeating it is noise.
+
+  // Waiting still needs a note: read only once they restart their agent.
+
+  // Unless suppressRouteNote — the connect card above already said it.
   const routeNoteKey =
     !suppressRouteNote && composerRoute === 'waiting' ? 'statusView.feedback.routeSelfWaiting' : null;
 
-  // The composer grows with what is typed, which is what replaced the resize grip: once
-  // the send button moved inside the box, a drag handle in the middle of its right edge
-  // read as a rendering fault. Capped, so a long message scrolls instead of pushing the
-  // conversation off the top of the screen.
+  // Grows with typing, replacing the old resize grip in the box.
+
+  // Capped height: a long message scrolls instead of pushing the page.
   const autoGrow = () => {
     const input = inputRef.current;
     if (!input) return;
@@ -187,11 +175,11 @@ export function FeedbackPanel({
     setState('sending');
     setError(null);
     setNotice(null);
-    // Show "Sending…" for the whole HTTP round trip. Do **not** abort the fetch from
-    // the browser: aborting does not cancel the Fastify handler, so a timed-out UI that
-    // re-enabled Send could dispatch a second improve/feedback while the first was still
-    // finishing (double job, double quota, round token invalidated). The agent-tasks
-    // client bounds the server call; this button stays disabled until that answer lands.
+    // Shows Sending for the whole round trip — never abort the fetch.
+
+    // Aborting doesn't cancel the Fastify handler — risks a duplicate dispatch.
+
+    // Send stays disabled until the server call actually returns.
     try {
       const roundBuilder = chooseBuilder ? builder : undefined;
       // Normalized to PNG for the backend's signature check.
@@ -200,21 +188,20 @@ export function FeedbackPanel({
         const referenceImages = await toBase64PngList(attachments.map((a) => a.dataUrl));
         if (referenceImages.length > 0) context = { referenceImages };
       }
-      // The new job an improvement opened, if this send was one — the thread hands over
-      // to it once the local echo and receipt are in place, below.
+      // New job from an improvement hands the thread over once ready.
       let handoffToken: string | undefined;
-      // Same box, same act, different destination — decided here from the state the
-      // server reported rather than by asking the creator which one they meant.
-      // Shortest call shape for the ordinary case — tests assert on it.
+      // Same box, different destination — decided from the server's reported state.
+
+      // Shortest call shape for the ordinary case; tests assert on it.
       if (published) {
         const improved = roundBuilder
           ? await submitImprovement(token, message, context, roundBuilder)
           : context
             ? await submitImprovement(token, message, context)
             : await submitImprovement(token, message);
-        // Publishing is terminal: the improvement is a new job with its own token. The
-        // builder memory is keyed by token in localStorage, so persist the choice under
-        // the *new* token as well — the old token's memory dies with its round.
+        // Publishing is terminal — the improvement is a new job, new token.
+
+        // Builder memory is keyed by token — persist it under the new one.
         handoffToken = improved.token;
       } else {
         const result = roundBuilder
@@ -229,22 +216,18 @@ export function FeedbackPanel({
         }
       }
       if (roundBuilder) {
-        // A published improve moved to a new token; save the choice there too so the new
-        // build thread's composer/connect defaults to it before its status echoes back.
+        // Published improve moved to a new token; save the choice there too.
         saveLastBuilder(handoffToken ?? token, roundBuilder);
         recordStudioStep('builder_chosen', roundBuilder);
       }
       setState('sent');
       setText('');
       resetAttachments();
-      // Back to the CSS height rather than the height the sent message grew it to: an
-      // empty box the size of the last paragraph is a leftover, not a state.
+      // Reset to CSS height — not the sent message's grown size.
       if (inputRef.current) inputRef.current.style.height = '';
-      // Echo it into the activity feed straight away: the API only sees it once the
-      // comment round-trips through GitHub, which is a poll or two away.
+      // Echoes locally now; the next status poll picks up the real state.
       onSent(message);
-      // Then move the creator onto the new build thread. Last, so the receipt and the
-      // local echo are already committed before the thread this box lives in is swapped.
+      // Moves onto the new thread last, after the receipt and echo commit.
       if (handoffToken) onPublishedImprove?.(handoffToken);
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
@@ -270,8 +253,7 @@ export function FeedbackPanel({
     setBuilder(next);
   };
 
-  // Three states, one box. The copy is the only thing that changes, and it changes so
-  // the creator can see where their message is about to go without having chosen.
+  // Three states, one box — copy alone shows where the message will go.
   const hintKey = published
     ? 'statusView.feedback.hintPublished'
     : building
@@ -282,19 +264,18 @@ export function FeedbackPanel({
     : building
       ? 'statusView.feedback.titleBuilding'
       : 'statusView.feedback.title';
-  // The composer gets its own, much shorter version of the same three hints. The
-  // paragraph reads fine above a page; as placeholder text on a phone it ran to four
-  // lines and the box clipped the last of them mid-word — worse in Polish, where the
-  // same sentence is longer. The placeholder now says where the message goes and stops.
+  // Composer uses a shorter hint — the full paragraph clipped on phone placeholders.
+
+  // Worse in Polish (longer); placeholder now just says where it goes.
   const composerHintKey = published
     ? 'statusView.feedback.composerHintPublished'
     : building
       ? 'statusView.feedback.composerHintBuilding'
       : 'statusView.feedback.composerHint';
 
-  // Sticky builder signal in the composer toolbar (Claude/Cursor shape): always when
-  // the next send can choose, and while a round is mid-flight so routing stays visible.
-  // Handoff controls live here too; the transcript remains status-only.
+  // Sticky builder badge (Claude/Cursor shape): visible when choosable or mid-flight.
+
+  // Handoff controls live here too; the transcript stays status-only.
   const effectiveBuilder = chooseBuilder ? builder : (roundBuilder ?? builder);
   const showBuilderBadge =
     chooseBuilder || effectiveBuilder === 'self' || Boolean(onSwitchToSelf) || (agentWorking && Boolean(roundBuilder));
@@ -345,9 +326,9 @@ export function FeedbackPanel({
     </div>
   );
 
-  // Standalone status page still shows a brief receipt next to Send. The studio
-  // composer does not: the message is echoed into the thread immediately, so a
-  // second "Sent!" under the box is the same confirmation twice.
+  // Standalone status page shows a receipt next to Send; studio doesn't.
+
+  // Studio echoes into the thread already — a second Sent! would repeat it.
   const sentReceipt =
     state === 'sent' && !notice && !error ? (
       <div className="status-feedback-receipt" role="status">
@@ -367,7 +348,8 @@ export function FeedbackPanel({
     ) : null;
 
   // Compact composer: field above, builder/send toolbar below.
-  // Empty (`is-empty`): placeholder and send share one row.
+
+  // is-empty: placeholder and send share one row.
   if (compact) {
     return (
       <CompactFeedbackComposer

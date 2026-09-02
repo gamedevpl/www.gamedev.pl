@@ -5,8 +5,7 @@ export type ComposerAttachment = { id: string; name: string; dataUrl: string };
 
 export const MAX_COMPOSER_ATTACHMENTS = 4;
 
-// Composer attachment state: uploaded images and inline sketches (capped at
-// MAX_COMPOSER_ATTACHMENTS), plus the attach-menu open/close and outside-click handling.
+// Attachment state: uploads and sketches, capped at MAX_COMPOSER_ATTACHMENTS.
 export function useComposerAttachments(sending: boolean) {
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   // FileReader work not yet landed in attachments — Send waits for it.
