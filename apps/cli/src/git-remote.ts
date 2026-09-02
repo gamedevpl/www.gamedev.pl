@@ -1,5 +1,11 @@
 export const GIT_REMOTE_CAPS = ['fetch', 'push', 'option'] as const;
 
+/** Git launches `git-remote-<scheme> <remote> <url>`; the slug is in the URL. */
+export function remoteSlugFromArgv(argv: string[]): string {
+  const url = argv[3] ?? argv[2] ?? '';
+  return url.replace(/^gamedev:\/\//, '').replace(/\/$/, '');
+}
+
 export function handleHelperLine(line: string, slug: string): string[] {
   const [cmd, ...rest] = line.trim().split(' ');
   if (cmd === 'capabilities') return ['fetch', 'push', 'option', ''];
