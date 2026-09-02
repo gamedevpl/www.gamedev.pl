@@ -192,8 +192,19 @@ describe('POST /api/submissions/:token/turn (CL-10, CL-11)', () => {
     expect(res.json().kind).toBe('reply');
     expect(res.json().text).toMatch(/out of capacity/i);
     expect(res.json()).not.toHaveProperty('roundId');
+    const replyText = res.json().text as string;
     const messages = await store.listCreatorMessages(jobId);
     expect(messages.some((message) => message.origin === 'studio_ack')).toBe(false);
+    expect(messages.some((message) => message.origin === 'studio' && message.text === replyText)).toBe(true);
+    const history = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}/turns`,
+      headers,
+    });
+    expect(history.statusCode).toBe(200);
+    expect(history.json()).toEqual({
+      turns: [{ message: 'make the robots blue', reply: replyText }],
+    });
     await app.close();
   });
 

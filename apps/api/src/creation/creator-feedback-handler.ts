@@ -299,14 +299,15 @@ export async function handleCreatorFeedback(
   if (outcome.started) await appendStudioAck();
   invalidateStatusCache(jobId);
   if (mode === 'turn') {
-    return outcome.started
-      ? sendTurnBuild(reply, jobId, studioAckText)
-      : sendTurnReply(
-          reply,
-          outcome.reason === 'no_capacity'
-            ? 'Saved — but no build round could start: the build agent is out of capacity right now.'
-            : "Saved — but a new build round didn't start.",
-        );
+    if (outcome.started) return sendTurnBuild(reply, jobId, studioAckText);
+    const text =
+      outcome.reason === 'no_capacity'
+        ? 'Saved — but no build round could start: the build agent is out of capacity right now.'
+        : "Saved — but a new build round didn't start.";
+    if (store && queued) {
+      await store.appendCreatorMessage(jobId, text, { origin: 'studio', delivered: true }).catch(() => {});
+    }
+    return sendTurnReply(reply, text);
   }
   return sendFeedbackOk(reply, shotId, outcome.started ? {} : { roundStarted: false, reason: outcome.reason });
 }
