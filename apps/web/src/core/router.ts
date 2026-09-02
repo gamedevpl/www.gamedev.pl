@@ -375,7 +375,7 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     !normalizedPath.slice(1).includes('/') &&
     rootHandle &&
     CREATOR_HANDLE_PATTERN.test(rootHandle) &&
-    !RESERVED_HANDLE_SEGMENTS.has(rootHandle)
+    (rootHandle === PLATFORM_HANDLE || !RESERVED_HANDLE_SEGMENTS.has(rootHandle))
   ) {
     return { view: 'creator', handle: rootHandle };
   }

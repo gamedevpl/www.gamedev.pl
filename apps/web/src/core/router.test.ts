@@ -179,19 +179,15 @@ describe('parsePathRoute', () => {
         slug: 'neon-courier',
       });
     }
-    // The platform namespace is an address even though nobody can claim it — it is
-    // where games with no creator to name live.
+    expect(parsePathRoute('/gamedevpl')).toEqual({ view: 'creator', handle: 'gamedevpl' });
     expect(parsePathRoute('/gamedevpl/brick-storm')).toEqual({
       view: 'game',
       handle: 'gamedevpl',
       slug: 'brick-storm',
     });
-    // Other reserved segments stay closed.
     expect(parsePathRoute('/health/brick-storm')).toEqual({ view: 'notFound' });
     expect(parsePathRoute('/studio/brick-storm')).toEqual({ view: 'studio', game: 'brick-storm' });
-    // Unknown tab is a 404, not a silent fallback — same rule as the studio tabs.
     expect(parsePathRoute('/nightshift/neon-courier/nope')).toEqual({ view: 'notFound' });
-    // Handle and slug keep their own grammars.
     expect(parsePathRoute('/Nightshift/neon-courier')).toEqual({ view: 'notFound' });
     expect(parsePathRoute('/nightshift/Neon%20Courier')).toEqual({ view: 'notFound' });
     expect(parsePathRoute('/nightshift/-bad')).toEqual({ view: 'notFound' });
@@ -321,6 +317,10 @@ describe('path builders', () => {
   it('sends game page Up to the owning creator profile', () => {
     expect(navUpTarget({ view: 'game', handle: 'nightshift', slug: 'neon-courier' })).toEqual({
       path: '/nightshift',
+      labelKey: 'upCreator',
+    });
+    expect(navUpTarget({ view: 'game', handle: 'gamedevpl', slug: 'brick-storm' })).toEqual({
+      path: '/gamedevpl',
       labelKey: 'upCreator',
     });
   });
