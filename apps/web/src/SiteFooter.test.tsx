@@ -58,8 +58,7 @@ describe('SiteFooter project links', () => {
     expect(repoLink?.rel).toContain('noopener');
     expect(repoLink?.classList.contains('site-footer__github')).toBe(true);
     expect(repoLink?.querySelector('img')).not.toBeNull();
-    expect(links().some((a) => a.getAttribute('href') === '/cli')).toBe(false);
-    expect(links().some((a) => a.getAttribute('href') === '/connect')).toBe(false);
+    expect(links().some((a) => ['/cli', '/connect'].includes(a.getAttribute('href') ?? ''))).toBe(false);
   });
 
   it('sends Contact to the in-app form, not GitHub issues or a bare mailto', async () => {
