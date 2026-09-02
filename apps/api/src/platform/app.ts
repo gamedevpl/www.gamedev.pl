@@ -51,7 +51,7 @@ import { resolveLocalGamesDir } from '../catalog/local-games-repo.js';
 import { registerMultiplayerRoutes, type MultiplayerRoutesOptions } from '../realtime/mp.js';
 import { createRelayClientFromEnv, isRelayOnly } from '../realtime/mp-relay.js';
 import { registerNotificationRoutes } from '../notifications/notifications.js';
-import { emitProposalNotification } from '../notifications/notify.js';
+import { emitProposalNotification, emitReviewSweep } from '../notifications/notify.js';
 import { registerPlayerFeedbackRoutes, type PlayerFeedbackRoutesOptions } from '../community/player-feedback.js';
 import { registerReviewRoutes, type ReviewRoutesOptions } from '../community/review.js';
 import { registerPushRoutes } from '../notifications/push-routes.js';
@@ -663,6 +663,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     adminUids,
     listCatalog: defaultReviewCatalog,
     emitDeps: submissionSeams.buildNotifyDeps(),
+    emitReviewSweep,
     ...options.reviewRoutes,
   });
 
