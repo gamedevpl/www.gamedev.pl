@@ -1,4 +1,5 @@
 import type { SocketStatus } from '@gamedevpl/contract';
+import { createReconnectBackoff, type ReconnectBackoff } from '../../core/reconnectBackoff.js';
 import {
   parseServerFrame,
   PROTOCOL_VERSION,
@@ -32,7 +33,7 @@ export interface RoomClientOptions {
 export class RoomClient {
   private socket: WebSocket | null = null;
   private options: RoomClientOptions;
-  private retries = 0;
+  private readonly backoff: ReconnectBackoff = createReconnectBackoff();
   private retryTimer: number | null = null;
   private disposed = false;
 
@@ -53,13 +54,13 @@ export class RoomClient {
 
   connect(): void {
     if (this.disposed) return;
-    this.options.onStatus(this.retries === 0 ? 'connecting' : 'reconnecting');
+    this.options.onStatus(this.backoff.isFirstAttempt() ? 'connecting' : 'reconnecting');
 
     const socket = new WebSocket(roomSocketUrl());
     this.socket = socket;
 
     socket.onopen = () => {
-      this.retries = 0;
+      this.backoff.reset();
       socket.send(
         JSON.stringify({
           t: 'hello',
@@ -101,12 +102,11 @@ export class RoomClient {
 
   private scheduleRetry(): void {
     if (this.disposed) return;
-    this.retries += 1;
-    if (this.retries > 8) {
+    const delay = this.backoff.nextDelayMs();
+    if (delay === null) {
       this.options.onStatus('closed', 'unreachable');
       return;
     }
-    const delay = Math.min(500 * 2 ** (this.retries - 1), 8000);
     this.options.onStatus('reconnecting');
     this.retryTimer = window.setTimeout(() => this.connect(), delay);
   }

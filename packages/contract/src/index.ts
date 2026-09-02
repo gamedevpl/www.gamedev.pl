@@ -97,6 +97,7 @@ export {
 } from './review-vocab.js';
 export { SOCKET_STATUSES, type SocketStatus } from './socket-status.js';
 export { DEFAULT_MAX_SOCKETS_PER_IP, MAX_SOCKET_FRAME_BYTES, MAX_SOCKET_FRAMES_PER_SECOND } from './socket-limits.js';
+export { createFrameLimiter, type FrameLimiter } from './frame-limiter.js';
 export type {
   BuildEvent,
   BuildMediaItem,
