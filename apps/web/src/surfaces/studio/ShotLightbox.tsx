@@ -29,7 +29,14 @@ export function ShotLightbox({ token, item, onClose }: { token: string; item: Bu
         onClick={(event) => event.stopPropagation()}
       />
       {item.label ? <p className="status-lightbox-caption">{item.label}</p> : null}
-      <button type="button" className="status-lightbox-close" onClick={onClose}>
+      <button
+        type="button"
+        className="status-lightbox-close"
+        onClick={(event) => {
+          event.stopPropagation();
+          onClose();
+        }}
+      >
         {t('statusView.gallery.close')}
       </button>
     </div>
