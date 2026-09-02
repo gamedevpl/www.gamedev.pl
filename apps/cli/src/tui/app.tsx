@@ -17,7 +17,10 @@ export function ReplApp({ session, color }: { session: TuiSession; color: boolea
     };
   }, [stdout]);
   useInput((input, key) => {
-    if (state.mode === 'busy') return;
+    if (state.mode === 'busy') {
+      if (key.ctrl && input === 'c') session.cancel();
+      return;
+    }
     if (key.escape || (key.ctrl && input === 'c')) {
       session.cancel();
       return;

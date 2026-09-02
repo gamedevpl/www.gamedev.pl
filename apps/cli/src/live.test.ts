@@ -49,6 +49,16 @@ describe('status watch', () => {
     ).toEqual(['building', 'smoke 1/4', 'https://www.gamedev.pl/play/sky']);
   });
 
+  it('strips control sequences from failure.reason', () => {
+    const esc = String.fromCharCode(27);
+    expect(
+      formatStatusLines(
+        { status: 'needs_changes', failure: { reason: `${esc}[31mred${esc}[0m` } },
+        'https://www.gamedev.pl',
+      ),
+    ).toEqual(['needs_changes', 'red']);
+  });
+
   it('paints a TTY watch instead of appending status lines', async () => {
     let calls = 0;
     const api = createApi({

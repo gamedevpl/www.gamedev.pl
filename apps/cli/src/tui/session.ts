@@ -23,7 +23,7 @@ export type TuiSession = {
   close: () => void;
 };
 
-export function createTuiSession(banner: string): TuiSession {
+export function createTuiSession(banner: string, onBusyCancel?: () => void): TuiSession {
   let state: TuiState = {
     lines: banner ? [banner] : [],
     live: [],
@@ -113,7 +113,10 @@ export function createTuiSession(banner: string): TuiSession {
         emit();
         return;
       }
-      if (!pending) return;
+      if (!pending) {
+        onBusyCancel?.();
+        return;
+      }
       const resolve = pending;
       pending = null;
       state = { ...state, mode: 'busy', draft: '', live: [], choices: [] };

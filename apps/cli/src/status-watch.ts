@@ -1,3 +1,4 @@
+import { sanitizeEventPayload } from './ansi.js';
 import { EXIT_GREEN } from './exit-codes.js';
 import { createLiveScreen } from './live.js';
 import { getStatus, isTerminalStatus, previewUrl, type RoundStatus } from './turn.js';
@@ -19,7 +20,7 @@ export function formatStatusLines(status: RoundStatus, origin: string): string[]
     lines.push(`${status.gateProgress.stage} ${status.gateProgress.index}/${status.gateProgress.total}`);
   }
   if (status.preview?.slug) lines.push(previewUrl(origin, status.preview.slug));
-  if (status.failure?.reason) lines.push(status.failure.reason);
+  if (status.failure?.reason) lines.push(sanitizeEventPayload(status.failure.reason));
   return lines;
 }
 

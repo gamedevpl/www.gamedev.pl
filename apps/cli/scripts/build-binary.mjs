@@ -1,5 +1,5 @@
 import { build } from 'esbuild';
-import { chmodSync, mkdirSync } from 'node:fs';
+import { chmodSync, mkdirSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -24,4 +24,6 @@ await build({
 });
 
 chmodSync(join(outDir, 'gamedevpl.mjs'), 0o755);
+const wasm = readdirSync(outDir).filter((name) => name.endsWith('.wasm'));
+if (wasm.length) throw new Error(`bundle emitted sidecar wasm: ${wasm.join(', ')}`);
 console.log('bundled dist/gamedevpl.mjs — shebang Node script, Ink+yoga inlined');

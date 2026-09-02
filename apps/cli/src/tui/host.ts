@@ -16,8 +16,13 @@ export async function runInkRepl(input: {
 }): Promise<number> {
   const isTty = Boolean(input.io.stdout.isTTY);
   const color = wantsColor(input.env, isTty);
-  const session = createTuiSession(replBanner(isTty, input.env));
-  const instance = render(createElement(ReplApp, { session, color }), {
+  const host: { instance?: ReturnType<typeof render> } = {};
+  const session = createTuiSession(replBanner(isTty, input.env), () => {
+    session.close();
+    host.instance?.unmount();
+    process.exit(EXIT_GREEN);
+  });
+  host.instance = render(createElement(ReplApp, { session, color }), {
     stdin: input.io.stdin,
     stdout: input.io.stdout,
     exitOnCtrlC: false,
@@ -42,7 +47,7 @@ export async function runInkRepl(input: {
     }
   } finally {
     session.close();
-    instance.unmount();
+    host.instance?.unmount();
   }
   return EXIT_GREEN;
 }

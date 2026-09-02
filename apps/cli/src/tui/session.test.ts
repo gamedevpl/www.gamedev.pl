@@ -15,6 +15,20 @@ describe('tui session', () => {
     expect(await picked).toBe('chaotic');
   });
 
+  it('exits busy work from cancel when no prompt is pending', async () => {
+    let interrupted = 0;
+    const session = createTuiSession('', () => {
+      interrupted += 1;
+    });
+    const typed = session.prompt();
+    session.setDraft('go');
+    session.submit();
+    expect(await typed).toBe('go');
+    expect(session.get().mode).toBe('busy');
+    session.cancel();
+    expect(interrupted).toBe(1);
+  });
+
   it('clears the draft on cancel, then quits', async () => {
     const session = createTuiSession('');
     const first = session.prompt();
