@@ -4,7 +4,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import { endOpenAgentSessions } from '../agent-surface/agent-session-revocation.js';
-import { InvalidSessionError, readSessionToken, SESSION_COOKIE_NAME } from './auth.js';
+import { InvalidSessionError, readSessionCookie, readSessionToken } from './auth.js';
 import { escapeHtml, MASCOT_SVG, OAUTH_PAGE_STYLES } from './oauth-page-chrome.js';
 import { redirectUriAllowed } from './oauth-redirect.js';
 import { verifyPkceS256 } from './oauth-pkce.js';
@@ -78,8 +78,8 @@ function noteDcrHit(ip: string, nowMs: number): void {
 }
 
 function readUidFromSession(request: FastifyRequest, sessionSecret: string, sessionSecretPrev?: string): string | null {
-  const cookie = request.cookies[SESSION_COOKIE_NAME];
-  if (!cookie || typeof cookie !== 'string') return null;
+  const { token: cookie } = readSessionCookie(request.cookies);
+  if (!cookie) return null;
   try {
     const payload = readSessionToken(cookie, sessionSecret, sessionSecretPrev);
     return payload.uid;

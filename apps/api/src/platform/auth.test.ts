@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   DEFAULT_SESSION_DURATION_SECONDS,
   InvalidSessionError,
+  LEGACY_SESSION_COOKIE_NAME,
   mintSessionToken,
   registerAuthPlugin,
   SESSION_COOKIE_NAME,
@@ -359,6 +360,49 @@ describe('Auth API Routes', () => {
     expect(JSON.parse(meRes.body).user.uid).toBe('g:10002');
   });
 
+  // An old cookie must survive and come back renamed.
+  it('authenticates a pre-rename cookie and re-mints it under the new name', async () => {
+    const { app, store } = await setupTestServer();
+    await store.upsertUser({ uid: 'g:10009', email: 'legacy@example.com' });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/auth/me',
+      headers: {
+        // Long-lived: proves the re-mint follows the name, not expiry.
+        cookie: `${LEGACY_SESSION_COOKIE_NAME}=${mintSessionToken('g:10009', 'test-secret-key', DEFAULT_SESSION_DURATION_SECONDS)}`,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).user.uid).toBe('g:10009');
+
+    const setCookie = [res.headers['set-cookie'] ?? []].flat().join('\n');
+    expect(setCookie).toContain(`${SESSION_COOKIE_NAME}=`);
+    // Retired here, or the browser keeps a stripped name.
+    expect(setCookie).toContain(`${LEGACY_SESSION_COOKIE_NAME}=;`);
+  });
+
+  it('prefers the new cookie when a browser carries both', async () => {
+    const { app, store } = await setupTestServer();
+    await store.upsertUser({ uid: 'g:10010', email: 'current@example.com' });
+    await store.upsertUser({ uid: 'g:10011', email: 'stale@example.com' });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/auth/me',
+      headers: {
+        cookie: [
+          `${SESSION_COOKIE_NAME}=${mintSessionToken('g:10010', 'test-secret-key')}`,
+          `${LEGACY_SESSION_COOKIE_NAME}=${mintSessionToken('g:10011', 'test-secret-key')}`,
+        ].join('; '),
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).user.uid).toBe('g:10010');
+  });
+
   it('blocks old credentials while deletion is pending and restores the account on sign-in', async () => {
     const { app, store } = await setupTestServer({
       'restore-token': { sub: '10005', email: 'restore@example.com' },
@@ -417,6 +461,50 @@ describe('Auth API Routes', () => {
     expect(JSON.parse(login.body).user).not.toHaveProperty('admin');
   });
 
+  // Renewal must not append the old identity after a sign-in.
+  it('does not re-mint the previous identity when signing in with a pre-rename cookie', async () => {
+    const { app, store } = await setupTestServer({ 'newcomer-token': { sub: '20002', email: 'b@example.com' } });
+    await store.upsertUser({ uid: 'g:20001', email: 'a@example.com' });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'newcomer-token' },
+      headers: {
+        cookie: `${LEGACY_SESSION_COOKIE_NAME}=${mintSessionToken('g:20001', 'test-secret-key')}`,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).user.uid).toBe('g:20002');
+
+    // The browser must hold the account the response named.
+    const issued = res.cookies.filter((entry) => entry.name === SESSION_COOKIE_NAME);
+    expect(issued).toHaveLength(1);
+    expect(readSessionToken(issued[0]!.value, 'test-secret-key').uid).toBe('g:20002');
+  });
+
+  // Logout must not re-mint the session it just cleared.
+  it('does not re-mint a session when logging out with a pre-rename cookie', async () => {
+    const { app, store } = await setupTestServer();
+    await store.upsertUser({ uid: 'g:10012', email: 'legacy-logout@example.com' });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/logout',
+      headers: {
+        cookie: `${LEGACY_SESSION_COOKIE_NAME}=${mintSessionToken('g:10012', 'test-secret-key')}`,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const setCookie = [res.headers['set-cookie'] ?? []].flat().join('\n');
+    expect(setCookie).toContain(`${SESSION_COOKIE_NAME}=;`);
+    expect(setCookie).toContain(`${LEGACY_SESSION_COOKIE_NAME}=;`);
+    // Guards a second, non-empty __session from the renewal hook.
+    expect(setCookie).not.toMatch(new RegExp(`${SESSION_COOKIE_NAME}=[^;\\s]`));
+  });
+
   it('POST /api/auth/logout clears session cookie', async () => {
     const { app } = await setupTestServer();
 
@@ -426,8 +514,10 @@ describe('Auth API Routes', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const setCookie = res.headers['set-cookie'] as string;
+    // Both names: the old one still authenticates.
+    const setCookie = [res.headers['set-cookie'] ?? []].flat().join('\n');
     expect(setCookie).toContain(`${SESSION_COOKIE_NAME}=;`);
+    expect(setCookie).toContain(`${LEGACY_SESSION_COOKIE_NAME}=;`);
   });
 
   it('returns 503 when authentication is unconfigured in production', async () => {
