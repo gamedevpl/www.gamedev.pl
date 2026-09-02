@@ -4141,7 +4141,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
       kind: 'reply' as const,
       text: 'Still building.',
       tokens: { input: 500, output: 40 },
-      model: 'gemini-3.7-flash',
+      model: 'gemini-3.8-flash',
     }));
     const { app, authHeaders, store } = await createApp({
       githubClient: createGithubClientStub({ jobId: 90 }).githubClient,
@@ -4167,7 +4167,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
 
     const record = await store.getSubmission(job.jobId);
     const entry = record?.costs?.find((cost) => cost.kind === 'chat');
-    expect(entry).toMatchObject({ by: 'gemini-3.7-flash', tokens: { input: 500, output: 40 } });
+    expect(entry).toMatchObject({ by: 'gemini-3.8-flash', tokens: { input: 500, output: 40 } });
     await app.close();
   });
 
@@ -6686,7 +6686,7 @@ describe('seeded dispatch', () => {
           slug,
           files: [{ path: 'game.ts', content: 'export {};\n' }],
           references: ['apex-sprint'],
-          usage: { inputTokens: 30_000, outputTokens: 9_000, model: 'gemini-3.7-flash' },
+          usage: { inputTokens: 30_000, outputTokens: 9_000, model: 'gemini-3.8-flash' },
           elapsedMs: 41_000,
           compiles: false,
           repaired: false,
@@ -6737,7 +6737,7 @@ describe('seeded dispatch', () => {
     // premium request with no numbers behind it.
     const seedCost = record?.costs?.find((entry) => entry.kind === 'seed');
     expect(seedCost?.tokens).toEqual({ input: 30_000, output: 9_000 });
-    expect(seedCost?.by).toBe('gemini-3.7-flash');
+    expect(seedCost?.by).toBe('gemini-3.8-flash');
 
     await app.close();
   });
@@ -6824,7 +6824,7 @@ describe('seeded dispatch', () => {
           slug: request.slug,
           files: [{ path: 'game.ts', content: 'export {};\n' }],
           references: ['apex-sprint'],
-          usage: { inputTokens: 100, outputTokens: 50, model: 'gemini-3.7-flash', provider: 'vertex' },
+          usage: { inputTokens: 100, outputTokens: 50, model: 'gemini-3.8-flash', provider: 'vertex' },
           elapsedMs: 1_000,
           compiles: true,
           repaired: false,

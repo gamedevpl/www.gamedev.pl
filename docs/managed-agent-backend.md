@@ -386,7 +386,7 @@ npm run managed:probe -w @gamedevpl/api -- --vendor gemini --wait \
   --wait-seconds 120 --budget-tokens 50000
 ```
 
-`--vendor gemini` defaults to `gemini-3.7-flash`; `GEMINI_API_KEY` or
+`--vendor gemini` defaults to `gemini-3.8-flash`; `GEMINI_API_KEY` or
 `MANAGED_AGENT_API_KEY` supplies the credential and `--model` overrides the model label.
 
 OpenAI also uses a native token ceiling, forwarded as `max_output_tokens` — a partial
