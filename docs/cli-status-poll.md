@@ -20,7 +20,7 @@ One response carries the fields a terminal needs; there is no second status API.
 
 ## Cadence
 
-Match `apps/web/src/studioStatusPoll.ts`:
+Match `apps/web/src/surfaces/studio/studioStatusPoll.ts`:
 
 - **3s** while the round is active (`status === 'building'`, `phase === 'dispatched'`, or stall `no_agent_yet` / `ended` / `quiet`).
 - **10s** when idle, including `needs_changes` (a later turn can start another round).
