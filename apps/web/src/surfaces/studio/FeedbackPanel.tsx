@@ -25,9 +25,10 @@ const SENT_RECEIPT_MS = 4500;
 
 /**
  * Revision loop: the creator describes what to change. The feedback is relayed to the
- * build agent (POST .../feedback), which both comments it onto the issue and queues it
- * on the build channel, so the agent picks it up on its next report. Shown while the
- * game is still in progress (or needs changes) — a published game can't be revised here.
+ * build agent (POST .../feedback), which queues it into the agent's inbox as a message
+ * explicitly marked as data-not-instructions, so the agent picks it up on its next report.
+ * Shown while the game is still in progress (or needs changes) — a published game can't be
+ * revised here.
  *
  * `building` swaps the copy for the stretch before a playable draft exists: there is
  * nothing to have "played" yet, and the useful ask is a course correction rather than a

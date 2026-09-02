@@ -8,9 +8,9 @@ gamedev.pl is becoming a catalog and creation surface for AI-assisted browser ga
 2. A coding agent implements it as real HTML/CSS/JS in a dedicated games repository.
 3. A human reviews the spec and implementation together.
 4. A publish workflow makes the game immediately playable from the catalog.
-5. Players can later propose changes to their own published games; an agent updates the
+5. A creator can later propose changes to their own published game; an agent updates the
    spec and implementation, and a maintainer reviews before it republishes (no PR — see
-   [`architecture.md`](./architecture.md)).
+   [`architecture.md`](./architecture.md)). Player-facing remix is not built yet.
 
 This is intentionally **not** real-time generation. Creation is closer to commissioning a
 game: asynchronous, visible, and reviewable. (The local deterministic mock generator this
