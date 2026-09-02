@@ -11,22 +11,16 @@ import {
   getSubmissionPreview,
   handoffToPlatform,
   handoffToSelf,
-  buildMediaUrl,
-  type BuildMediaItem,
   type BuildPlayableItem,
-  type PriorRoundHistory,
   type SubmissionApiError,
   type SubmissionPreview,
   type SubmissionStatus,
 } from '../../submissionApi.js';
 import { NAVIGATE_EVENT, statusPath, studioPath } from '../../core/router.js';
-import { formatRelativeTime } from '../../relativeTime.js';
 import { connectCardMode, selfStatusCopy, shouldShowConnectCard } from '../../selfBuildCopy.js';
 import { StudioConnectCard } from './StudioConnectCard.js';
-import { StudioPriorRounds } from './StudioPriorRounds.js';
 import { pollDelayMs } from './studioStatusPoll.js';
 import { pokeStudioStatus, subscribeStudioStatus } from './studioStatusStore.js';
-import { studioThreadContentScrollTop, studioThreadNearContentEnd } from './studioThreadScroll.js';
 import { recordStudioStep, type StudioStepDetail } from '../../visitTelemetry.js';
 import '../../build-progress.css';
 import './status-header.css';
@@ -35,8 +29,11 @@ import './status-play-card.css';
 import './status-thread.css';
 import { FeedbackPanel } from './FeedbackPanel.js';
 import { BuildProgressPanel } from './BuildProgressPanel.js';
-import { ShotLightbox } from './ShotLightbox.js';
-import { buildActivityFeed, type ActivityEntry, type PendingRevision } from './buildActivityFeed.js';
+import { buildActivityFeed, type PendingRevision } from './buildActivityFeed.js';
+import { BuildHeartbeat } from './BuildHeartbeat.js';
+import { presenceThought } from './presenceThought.js';
+import { ThreadStream } from './ThreadStream.js';
+import { ThreadContextBar } from './ThreadContextBar.js';
 
 function copyInputFromStatus(status: SubmissionStatus | null | undefined) {
   return {
@@ -131,54 +128,6 @@ const STATUS_ICONS: Record<SubmissionStatus['status'], PixelIconName> = {
 // The linear happy path the timeline visualizes. needs_changes branches off it,
 // so it's handled as a separate "halted" state rather than a timeline position.
 const TIMELINE_STEPS: SubmissionStatus['status'][] = ['queued', 'building', 'in_review', 'publishing', 'published'];
-
-/** How long a presence thought stays as the thread-bar headline before falling back. */
-const PRESENCE_THOUGHT_MS = 90_000;
-
-/**
- * Ambient MCP presence for the live working turn — a thought headline on the
- * pulsing last transcript row, not a durable chat bubble.
- * Fresh for {@link PRESENCE_THOUGHT_MS}; cleared server-side when real progress arrives.
- */
-function presenceThought(
-  status: SubmissionStatus | null,
-  nowMs: number = Date.now(),
-): { key: string; at: number } | null {
-  const presence = status?.lastAgentPresence;
-  if (!presence?.key) return null;
-  const at = Date.parse(presence.at);
-  if (!Number.isFinite(at) || nowMs - at > PRESENCE_THOUGHT_MS) return null;
-  return { key: presence.key, at };
-}
-
-/**
- * "Live · updated 3 minutes ago" — the build's pulse.
- *
- * This replaced a stopwatch counting from submission, which was the page's most
- * prominent number and its least informative: on a build that had delivered, passed
- * its checks and been waiting to go live for hours, it read "In progress for 8h 00m"
- * directly above a checklist saying every task was done. Time since the last sign of
- * life answers the question the stopwatch was being read for — is this thing moving? —
- * and keeps answering it correctly once the agent has finished.
- *
- * Re-renders on a slow timer because the text is a relative time that goes stale on
- * its own; the minute granularity is why 30s is often enough and 1s would be waste.
- */
-function BuildHeartbeat({ at }: { at: number }) {
-  const { t, i18n } = useTranslation();
-  const [, setTick] = useState(0);
-
-  useEffect(() => {
-    const id = window.setInterval(() => setTick((n) => n + 1), 30_000);
-    return () => window.clearInterval(id);
-  }, []);
-
-  return (
-    <span className="status-heartbeat">
-      {t('statusView.updatedAgo', { time: formatRelativeTime(at, i18n.language) })}
-    </span>
-  );
-}
 
 function StatusTimeline({ current }: { current: SubmissionStatus['status'] }) {
   const { t } = useTranslation();
@@ -1310,290 +1259,6 @@ function PlayCard({
           </button>
         ) : null}
       </div>
-    </div>
-  );
-}
-
-/**
- * The thread, in the shape a conversation actually has.
- *
- * The build's story used to be a log: a bordered box titled BUILD ACTIVITY, rows of
- * 12px text behind an icon column, timestamps hard right. Everything in it was true and
- * none of it read as somebody talking. Here the agent's turns are ordinary prose at full
- * width with nothing drawn around them, and the creator's are quiet bubbles on the other
- * side — the asymmetry every chat client uses, and deliberately the way round where the
- * agent's words are the ones with room to breathe.
- *
- * Scrolls in its own pane so the composer beneath it never moves, and sticks to the
- * bottom as the agent talks — unless the reader has scrolled up, which is them saying
- * they are reading something and would like it to stay put.
- */
-type ThreadWorkingState = {
-  /** Coarse phase — "Writing code" / "Starting agent". */
-  label: string;
-  /** Fresh ambient presence thought, when one is flashing. */
-  thoughtLabel: string | null;
-  thoughtKey: string | null;
-  thoughtAt: number | null;
-  heartbeatAt: number | null;
-};
-
-function ThreadStream({
-  token,
-  entries,
-  emptyLabel,
-  priorRounds,
-  priorSlug,
-  after,
-  working = null,
-  stickNonce = 0,
-}: {
-  token: string;
-  entries: ActivityEntry[];
-  emptyLabel: string;
-  /** Superseded jobs on this game — collapsed above the live turns. */
-  priorRounds?: PriorRoundHistory[];
-  priorSlug?: string;
-  /** Renders inside the scroller after the turns — tall surfaces (connect card) belong
-   *  here, not in the pinned foot, or a phone has no room left for the conversation. */
-  after?: ReactNode;
-  /**
-   * Live agent work — last row in the transcript (Claude-shaped), not a foot caption.
-   * Pulses while the agent is mid-build; cleared the moment work is no longer active.
-   */
-  working?: ThreadWorkingState | null;
-  /** Bump when `after` / `working` appears so a stick-to-bottom reader still sees it. */
-  stickNonce?: number;
-}) {
-  const { t, i18n } = useTranslation();
-  const [zoomed, setZoomed] = useState<BuildMediaItem | null>(null);
-  const [broken, setBroken] = useState<string[]>([]);
-  const [, setThoughtTick] = useState(0);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const stickToBottomRef = useRef(true);
-
-  const onScroll = () => {
-    const pane = scrollRef.current;
-    if (!pane) return;
-    // Content end, not the runway pad.
-    stickToBottomRef.current = studioThreadNearContentEnd(pane);
-  };
-
-  useEffect(() => {
-    const pane = scrollRef.current;
-    if (!pane || !stickToBottomRef.current) return;
-    // Do not scroll into the Claude/Cursor runway.
-    pane.scrollTop = studioThreadContentScrollTop(pane);
-  }, [entries.length, stickNonce, working?.label, working?.thoughtLabel]);
-
-  // Presence ages out client-side; one timeout at expiry so the working line falls
-  // back to the coarse phase without waiting on the next status poll.
-  useEffect(() => {
-    if (!working?.thoughtAt || !working.thoughtLabel) return;
-    const remaining = working.thoughtAt + PRESENCE_THOUGHT_MS - Date.now();
-    if (remaining <= 0) {
-      setThoughtTick((n) => n + 1);
-      return;
-    }
-    const id = window.setTimeout(() => setThoughtTick((n) => n + 1), remaining);
-    return () => window.clearTimeout(id);
-  }, [working?.thoughtAt, working?.thoughtLabel]);
-
-  const thoughtFresh =
-    working?.thoughtAt != null &&
-    working.thoughtLabel != null &&
-    working.thoughtLabel.length > 0 &&
-    Date.now() - working.thoughtAt <= PRESENCE_THOUGHT_MS;
-  const workingHeadline = thoughtFresh && working?.thoughtLabel ? working.thoughtLabel : working?.label;
-
-  return (
-    <div className="studio-thread-scroll" ref={scrollRef} onScroll={onScroll}>
-      {/* Short threads sit above the composer, not under the lid. */}
-      <div className="studio-thread-scroll-body">
-        {priorSlug && priorRounds && priorRounds.length > 0 ? (
-          <StudioPriorRounds slug={priorSlug} rounds={priorRounds} />
-        ) : null}
-        {entries.length === 0 && !working ? <p className="studio-thread-empty">{emptyLabel}</p> : null}
-        <ol className="studio-thread-turns">
-          {entries.map((entry, index) => {
-            const mine = entry.kind === 'revision';
-            const isStudioVoice = entry.kind === 'studio';
-            const media = entry.media?.filter((item) => !broken.includes(item.ref)) ?? [];
-            return (
-              <li
-                key={`${entry.kind}-${entry.at}-${index}`}
-                className={`studio-turn${mine ? ' is-mine' : ''}${isStudioVoice ? ' is-studio-voice' : ''}${entry.pending ? ' is-pending' : ''}`}
-              >
-                <div className="studio-turn-body">
-                  {/* The step is a closed set, so it is our own translated copy rather than
-                      a machine translation of whatever the agent happened to write. */}
-                  {!mine && entry.step ? (
-                    <span className="studio-turn-kicker">{t(`statusView.progress.steps.${entry.step}`)}</span>
-                  ) : null}
-                  {/* A relayed request wears its provenance. Unlabelled, an agent's own
-                      summary of a chat held elsewhere reads as words the creator typed. */}
-                  {mine && entry.relayed ? (
-                    <span className="studio-turn-kicker">{t('statusView.progress.relayedRequest')}</span>
-                  ) : null}
-                  {entry.kind === 'studio' ? (
-                    <span className="studio-turn-kicker studio-turn-kicker-studio">
-                      {t('statusView.progress.studioVoice')}
-                    </span>
-                  ) : null}
-                  <p className="studio-turn-text">{entry.text}</p>
-                  {media.length > 0 ? (
-                    <span className="studio-turn-shots">
-                      {media.map((item) => (
-                        <button
-                          key={item.ref}
-                          type="button"
-                          className="build-activity-shot"
-                          onClick={() => setZoomed(item)}
-                          title={t('statusView.gallery.expand')}
-                        >
-                          <img
-                            src={buildMediaUrl(token, item)}
-                            alt={item.label || t('statusView.gallery.alt')}
-                            loading="lazy"
-                            onError={() => setBroken((refs) => [...refs, item.ref])}
-                          />
-                        </button>
-                      ))}
-                    </span>
-                  ) : null}
-                </div>
-                <time className="studio-turn-time" dateTime={new Date(entry.at).toISOString()}>
-                  {entry.pending ? (
-                    t('statusView.progress.yourRequestSending')
-                  ) : mine && entry.delivered !== undefined ? (
-                    <>
-                      <span className={`studio-turn-delivery${entry.delivered ? ' is-delivered' : ' is-queued'}`}>
-                        {t(
-                          entry.delivered
-                            ? 'statusView.progress.yourRequestDelivered'
-                            : 'statusView.progress.yourRequestQueued',
-                        )}
-                      </span>
-                      {' · '}
-                      {formatRelativeTime(entry.at, i18n.language)}
-                    </>
-                  ) : (
-                    formatRelativeTime(entry.at, i18n.language)
-                  )}
-                </time>
-              </li>
-            );
-          })}
-          {working && workingHeadline ? (
-            <li className={`studio-turn is-working${thoughtFresh ? ' is-thought' : ''}`} aria-live="polite">
-              <div
-                className="studio-turn-working"
-                key={
-                  thoughtFresh && working.thoughtKey
-                    ? `thought:${working.thoughtKey}:${working.thoughtAt}`
-                    : `phase:${working.label}`
-                }
-              >
-                <span className="studio-turn-working-pulse" aria-hidden="true" />
-                <span className="studio-turn-working-label">{workingHeadline}</span>
-              </div>
-              {working.heartbeatAt !== null ? (
-                <span className="studio-turn-time">
-                  <BuildHeartbeat at={working.heartbeatAt} />
-                </span>
-              ) : null}
-            </li>
-          ) : null}
-        </ol>
-        {after}
-      </div>
-      {/* Runway under turns — stick targets body end, not this pad. */}
-      <div className="studio-thread-scroll-pad" aria-hidden="true" />
-      {zoomed ? <ShotLightbox token={token} item={zoomed} onClose={() => setZoomed(null)} /> : null}
-    </div>
-  );
-}
-
-/**
- * The bar between the thread and the composer: where the work is, and the one thing to
- * do about it.
- *
- * Replaces a five-step timeline, a progress bar, a status pill and a sentence — four
- * things saying where the build was, stacked above the conversation and pushing it down
- * the page. This says it once, in the place the eye already is because the composer is
- * directly underneath.
- */
-function ThreadContextBar({
-  phase,
-  thought,
-  heartbeatAt,
-  progress,
-  primary,
-  active = false,
-}: {
-  phase: string;
-  /** Fresh MCP presence thought — replaces the coarse phase as a short headline flash. */
-  thought?: { key: string; at: number } | null;
-  heartbeatAt: number | null;
-  progress?: { done: number; total: number };
-  primary?: { label: string; onClick: () => void };
-  /** Agent is mid-build — show motion so "Writing code" does not read as stuck text. */
-  active?: boolean;
-}) {
-  const { t } = useTranslation();
-  const [, setTick] = useState(0);
-
-  // Presence ages out client-side; one timeout at expiry so the headline falls back
-  // without a status poll — and without a lingering interval after the flash ends.
-  useEffect(() => {
-    if (!thought) return;
-    const remaining = thought.at + PRESENCE_THOUGHT_MS - Date.now();
-    if (remaining <= 0) {
-      setTick((n) => n + 1);
-      return;
-    }
-    const id = window.setTimeout(() => setTick((n) => n + 1), remaining);
-    return () => window.clearTimeout(id);
-  }, [thought]);
-
-  const thoughtFresh = thought !== null && thought !== undefined && Date.now() - thought.at <= PRESENCE_THOUGHT_MS;
-  const thoughtLabel =
-    thoughtFresh && thought
-      ? t(`statusView.presence.${thought.key}`, {
-          defaultValue: '',
-        })
-      : '';
-  const headline = thoughtLabel || phase;
-  const showingThought = Boolean(thoughtLabel);
-
-  return (
-    <div className={`studio-thread-context${active ? ' is-active' : ''}${showingThought ? ' is-thought' : ''}`}>
-      <span className="studio-context-state">
-        <span
-          className="studio-context-phase"
-          key={showingThought ? `thought:${thought!.key}:${thought!.at}` : `phase:${phase}`}
-        >
-          {active ? <span className="studio-context-phase-spinner" aria-hidden="true" /> : null}
-          {headline}
-        </span>
-        {heartbeatAt !== null ? (
-          <span className="studio-context-beat">
-            <BuildHeartbeat at={heartbeatAt} />
-          </span>
-        ) : null}
-      </span>
-      <span className="studio-context-actions">
-        {progress && progress.total > 0 ? (
-          <span className="studio-context-progress">
-            {t('statusView.progress.checklistCount', { done: progress.done, total: progress.total })}
-          </span>
-        ) : null}
-        {primary ? (
-          <button type="button" className="primary-btn status-play-cta" onClick={primary.onClick}>
-            <PixelIcon name="play" size={13} /> {primary.label}
-          </button>
-        ) : null}
-      </span>
     </div>
   );
 }
