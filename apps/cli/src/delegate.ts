@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { formatAdapterEvent } from './ansi.js';
+import { formatAdapterEvent, sanitizeEventPayload } from './ansi.js';
 import type { AdapterSpec } from './adapters.js';
 
 export const CREATOR_TOKEN_PATTERN = /gdpl_oat_/;
@@ -30,7 +30,7 @@ export function parseEventLine(line: string): string | null {
 export function renderDelegateStream(adapter: string, lines: string[], verbose: boolean): string[] {
   const out: string[] = [];
   for (const line of lines) {
-    if (verbose) out.push(`${adapter} raw ${line}`);
+    if (verbose) out.push(`${adapter} raw ${sanitizeEventPayload(line)}`);
     const payload = parseEventLine(line);
     if (payload) out.push(formatAdapterEvent(adapter, payload));
   }

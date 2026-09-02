@@ -37,4 +37,13 @@ describe('delegation event rendering', () => {
     }
     expect(lines.join('\n')).not.toMatch(/^✓ preview green$/m);
   });
+
+  it('strips OSC from verbose raw adapter lines', () => {
+    const osc = `${String.fromCharCode(27)}]0;pwn${String.fromCharCode(7)}`;
+    const lines = renderDelegateStream('codex', [`{"text":"${osc}hi"}`], true);
+    expect(lines.some((line) => line.startsWith('codex raw '))).toBe(true);
+    for (const line of lines) {
+      expect(line.includes(String.fromCharCode(27))).toBe(false);
+    }
+  });
 });
