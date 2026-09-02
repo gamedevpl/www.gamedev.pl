@@ -64,8 +64,9 @@ what each destructive one actually consumes, and why the rest are hidden.
 
 **CLI.** `apps/cli` is the `gamedev` terminal client (no local model). With no verb it
 opens a REPL: describe a game, then iterate. `gamedev checkout <slug>` is the own-editor
-path. Installers (`/install.sh`) stay 404 until the `CLI_SURFACE` deploy flag is on and a
-`cli-v*` release exists; until then `npm run bundle -w @gamedevpl/cli`. Details:
+path. Installers (`/install.sh`) 404 while `CLI_SURFACE` is off. With the flag on, the
+route serves the script even if no `cli-v*` GitHub release exists yet — that download is
+what fails then. Until a release ships, `npm run bundle -w @gamedevpl/cli`. Details:
 [`apps/cli/README.md`](./apps/cli/README.md).
 
 > **Creating games is in closed beta.** The tools load for anyone; the calls need an
