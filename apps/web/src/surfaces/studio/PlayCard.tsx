@@ -30,11 +30,11 @@ export function PlayCard({
         {subtitle ? <p className="status-play-card-sub">{subtitle}</p> : null}
       </div>
       <div className="status-play-card-actions">
-        <button className="primary-btn status-play-cta" onClick={onPlay}>
+        <button type="button" className="primary-btn status-play-cta" onClick={onPlay}>
           <PixelIcon name="play" size={13} /> {cta}
         </button>
         {secondary ? (
-          <button className="secondary-btn status-playtest-cta" onClick={secondary.onClick}>
+          <button type="button" className="secondary-btn status-playtest-cta" onClick={secondary.onClick}>
             <PixelIcon name="wrench" size={13} /> {secondary.label}
           </button>
         ) : null}
