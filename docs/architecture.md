@@ -28,8 +28,11 @@ apps/
              service, not part of the API image.
   e2e/       Vitest suites that drive the deployed site.
 packages/
-  contract/  Types and vocabularies shared by every app: route tables, status
-             enums, protocol versions, limits. The only package both sides import.
+  contract/  Types and vocabularies: route tables, status enums, protocol
+             versions, limits. Depended on by apps/{api,web,world} and by
+             zone-core — not by apps/e2e, which drives the deployed site over
+             HTTP and needs no shared types. It is the only workspace package
+             apps/web imports.
   zone-core/ The zone simulation kernel — schema, ticket, cage, zone. Imported by
              apps/world and by apps/api's realtime bucket.
 infra/       Deploy scripts, Cloud Build configs, env manifest. Scripts, not IaC.
