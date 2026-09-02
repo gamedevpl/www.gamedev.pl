@@ -8,6 +8,7 @@ The shipped file is a Node 20 shebang script, so that pairing is gone.
 (`dist/gamedevpl.mjs`). The bundle aliases `react-devtools-core` to an empty
 module and uses a `createRequire` banner so CJS bits inside Ink load.
 
-The REPL is Ink: append-only transcript (`<Static>`), a boxed composer, and an arrow-key
-picker for refine choices. Verbs and pipes stay non-Ink. `status --watch` still uses
-`src/live.ts` (a few rows, not a dashboard). Glyphs stay in `src/renderer.ts`.
+The REPL is Ink: `ReplApp` maps the last `rows-7` transcript lines (not `<Static>`), a
+boxed composer, and an arrow-key picker for refine choices. Verbs and pipes stay
+non-Ink. `status --watch` still uses `src/live.ts` (a few rows, not a dashboard).
+Glyphs stay in `src/renderer.ts`.
