@@ -107,7 +107,9 @@ snapshot on merge. **Store lane:** games built through the platform, delivered o
 channel and held in the publication registry with their sources in GCS — these are never
 committed to the games repo, and the play route checks them first. A slug with no publication
 record is a repo-lane game; that is the literal test in `apps/api/src/community/proposal-base.ts`,
-which is the one place the difference is resolved. See
+which resolves the difference for a proposal's source base. The serving paths decide
+independently — `catalog/game-play-route.ts` checks store first, `catalog/catalog-routes.ts`
+merges repo entries with untaken store publications. See
 [`architecture.md`](docs/architecture.md) for the full picture.
 
 Self-hosted agent execution (the

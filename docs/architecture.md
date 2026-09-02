@@ -167,9 +167,10 @@ Neither lane lets a creator publish. Accepting a change adopts a green version; 
 still the operator step below — `store.setPublication` has exactly one production caller,
 the admin-only route in `creation/job-admin-routes.ts`.
 
-`community/proposal-base.ts` is the one place the difference is resolved, so everything
-downstream — the remix on-ramp, an agent's proposal round, the diff — asks one question and
-gets back a file set plus a base to pin against.
+`community/proposal-base.ts` is the one place the difference is resolved **for a proposal's
+source base** — the serving paths below make their own lane decisions independently. So
+everything downstream of a proposal — the remix on-ramp, an agent's proposal round, the
+diff — asks one question and gets back a file set plus a base to pin against.
 
 ## The flows
 
@@ -194,7 +195,10 @@ flowchart LR
   publications whose slugs are **not already taken** by a repo entry. That is the mechanism
   behind "the repo lane wins catalog ties".
 
-Neither lane assembles a game on the request path. Both are sealed earlier:
+In the snapshot-backed configuration neither lane assembles a game on the request path —
+both are sealed earlier. (With `GAMES_SNAPSHOT_BUCKET` unset, the repo-lane path has no
+snapshot reader to consult and does assemble per request from the fixture sources; that is
+the local/dev configuration, not production.)
 
 - **Store lane** — the gate produces `bundle.html` as a derived artefact; the play route
   serves those bytes as-is.
