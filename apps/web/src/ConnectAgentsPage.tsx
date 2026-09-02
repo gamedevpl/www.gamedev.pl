@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
 import { useCliSurfaceEnabled } from './useCliSurfaceEnabled.js';
@@ -12,6 +13,18 @@ export function ConnectAgentsPage({ onBack, onStudio }: { onBack: () => void; on
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://www.gamedev.pl';
   const mcpUrl = `${origin}${MCP_PATH}`;
   const install = `curl -fsSL ${origin}/install.sh | bash`;
+
+  useEffect(() => {
+    const scrollHash = (): void => {
+      const id = window.location.hash.replace(/^#/, '');
+      if (id === 'mcp' || id === 'cli') {
+        document.getElementById(id)?.scrollIntoView({ block: 'start' });
+      }
+    };
+    scrollHash();
+    window.addEventListener('hashchange', scrollHash);
+    return () => window.removeEventListener('hashchange', scrollHash);
+  }, []);
 
   return (
     <article className="connect-page">

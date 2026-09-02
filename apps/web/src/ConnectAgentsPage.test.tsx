@@ -79,4 +79,19 @@ describe('ConnectAgentsPage', () => {
     expect(container.textContent).toMatch(/install\.sh/);
     expect(container.textContent).toMatch(/Node 20/);
   });
+
+  it('scrolls the hashed section into view on mount', async () => {
+    if (!Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView')) {
+      Object.defineProperty(Element.prototype, 'scrollIntoView', { value: () => {}, writable: true });
+    }
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => undefined);
+    window.location.hash = '#cli';
+    try {
+      await draw(false);
+      expect(spy.mock.instances).toContain(container.querySelector('#cli'));
+    } finally {
+      window.location.hash = '';
+      spy.mockRestore();
+    }
+  });
 });
