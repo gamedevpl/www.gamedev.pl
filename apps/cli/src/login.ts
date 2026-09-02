@@ -74,7 +74,7 @@ async function exchangeCode(input: {
   if (!res.ok) {
     throw new CliError(`sign-in failed — run \`${cliUsage('login')}\` again`, EXIT_AUTH, cliUsage('login'));
   }
-  const body = (await res.json()) as {
+  const body = (await res.json().catch(() => ({}))) as {
     access_token?: string;
     refresh_token?: string;
     token_type?: string;
