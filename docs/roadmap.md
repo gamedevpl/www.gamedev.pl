@@ -87,11 +87,14 @@ allowance display, and creator steering before a draft exists.
 
 **Goal:** let a player propose a change while preserving review and ownership.
 
-The **machinery is built and running, but only for the creator's own games.**
-`POST /api/submissions/:token/feedback` moderates and sanitizes the text, delivers it into the
-agent's build channel as a message explicitly marked as data-not-instructions, and queues it
-into the agent inbox — which is exactly the "capture a change request → agent round → preview in
-the same sandbox → never auto-merge" loop the phase describes (not a scoped issue or a PR).
+The **machinery is built and running, but only for the creator's own games.** For a game
+still building, `POST /api/submissions/:token/feedback` moderates and sanitizes the text and
+queues it into the agent inbox as a message explicitly marked as data-not-instructions. For a
+published game, `POST /api/submissions/:token/improve` (`creation/improve-routes.ts`) does the
+published-game equivalent — `feedback` 409s once `publishedAt` is set — moderating the text and
+opening a new round via `startImprovementRound`. Either way this is exactly the "capture a
+change request → agent round → preview in the same sandbox → never auto-merge" loop the phase
+describes (not a scoped issue or a PR).
 
 Still open, and this is the actual remaining work of the phase:
 

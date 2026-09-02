@@ -130,13 +130,13 @@ separate, cookieless origin remains the right call. Phone tilt (`GameKit.createS
 owned by the shell and relayed into the iframe over `gdp` — games never read
 DeviceOrientation themselves. Tilt stays optional; keyboard / pad remain enough.
 
-**2. Creator-submitted specs are untrusted input.** The app files them into our repo under our
-identity, which is content submission rather than compute-on-behalf — a much weaker concern
-than the one we just removed, but not nothing:
+**2. Creator-submitted specs are untrusted input.** The app dispatches them to an agent backend
+under our identity, which is content submission rather than compute-on-behalf — a much weaker
+concern than the one we just removed, but not nothing:
 
 - **Abuse/spam**: rate-limit submissions; don't let anyone flood the agent backend with rounds.
-- **Moderation**: spec text lands in a public repo under our identity. It needs review before,
-  or shortly after, it appears.
+- **Moderation**: spec text lands in our (private) repo under our identity. It needs review
+  before, or shortly after, it appears.
 - **Attribution**: record who submitted a spec, and be clear about what rights that implies.
 - **Prompt injection**: a spec is read by agents, so it can attempt to steer them. Agents
   working the repo must treat spec content as **data, not instructions**, and the repo's

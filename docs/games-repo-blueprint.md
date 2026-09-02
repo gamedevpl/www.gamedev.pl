@@ -4,10 +4,12 @@
 > ([`games-repo.md`](./games-repo.md)) exists and is live as the repo lane's system of record
 > (see [`architecture.md`](./architecture.md#two-catalog-lanes)). The layout, spec format, and
 > validation gate below are still broadly representative, but §6 "How work reaches an agent"
-> describes an issue-first flow that was never built that way: a round is dispatched to an agent
-> backend and delivered over the build channel (`submit_sources`), not via issue-filing or
-> Copilot PR assignment. See [`architecture.md`](./architecture.md) for the real flow. Read this
-> as design history, not as current fact.
+> describes an issue-first flow that shipped substantially as written — auto-assigning a
+> labeled issue to Copilot, which opened the PR — and was **retired on 2026-07-30**, not one
+> that was never built. A round is now dispatched straight to an agent backend and delivered
+> over the build channel (`submit_sources`), not via issue-filing or Copilot PR assignment. See
+> [`architecture.md`](./architecture.md) for the real flow. Read this as design history, not as
+> current fact.
 
 ## 1. Layout
 
@@ -158,23 +160,25 @@ And it gives the **separate, cookieless origin** for games for free — the publ
 isn't the app's origin. A security property we wanted anyway falls out of the deployment shape
 rather than needing to be engineered.
 
-## 6. How work reaches an agent — superseded, kept for history
+## 6. How work reaches an agent — retired, kept for history
 
-This section described the originally planned issue-first flow. It was not built this way; see
-the status banner above and [`architecture.md`](./architecture.md) for the real mechanism (a
+This section described the issue-first flow, and it shipped substantially as written: a
+`new-game`-labeled issue was auto-assigned to Copilot (verified 2026-07-22), which opened the
+PR. It was **retired on 2026-07-30** when dispatch moved straight to an agent backend — see the
+status banner above and [`architecture.md`](./architecture.md) for the current mechanism (a
 round dispatched to an agent backend, delivered over the build channel, checked by a Cloud Build
 gate, and approved by an operator).
 
-1. ~~A creator submits a spec through gamedev.pl (or opens an issue directly).~~
-2. ~~The app files an issue using the `new-game` template, containing the proposed spec body and
-   the submitter's handle.~~
-3. ~~The issue is assigned to Copilot (see the `copilot-orchestration` skill).~~
-4. ~~Copilot's PR creates **both** `SPEC.md` and the implementation, in one game directory.~~
-5. ~~Review is the moderation point — spec and code are judged together, before anything is public.~~
-6. ~~Merge → publish → it appears in the catalog.~~
+1. A creator submits a spec through gamedev.pl (or opens an issue directly).
+2. The app files an issue using the `new-game` template, containing the proposed spec body and
+   the submitter's handle.
+3. The issue is assigned to Copilot (see the `copilot-orchestration` skill).
+4. Copilot's PR creates **both** `SPEC.md` and the implementation, in one game directory.
+5. Review is the moderation point — spec and code are judged together, before anything is public.
+6. Merge → publish → it appears in the catalog.
 
-The spec-first vs. issue-first tradeoff discussed in the original draft is moot: neither issues
-nor PRs are the delivery mechanism.
+The spec-first vs. issue-first tradeoff discussed in the original draft is moot now: neither
+issues nor PRs are the delivery mechanism any more.
 
 ## 7. Seed content — historical
 

@@ -8,7 +8,9 @@ gamedev.pl is becoming a catalog and creation surface for AI-assisted browser ga
 2. A coding agent implements it as real HTML/CSS/JS in a dedicated games repository.
 3. A human reviews the spec and implementation together.
 4. A publish workflow makes the game immediately playable from the catalog.
-5. Players can later propose changes that follow the same spec → PR → review path.
+5. Players can later propose changes to their own published games; an agent updates the
+   spec and implementation, and a maintainer reviews before it republishes (no PR — see
+   [`architecture.md`](./architecture.md)).
 
 This is intentionally **not** real-time generation. Creation is closer to commissioning a
 game: asynchronous, visible, and reviewable. (The local deterministic mock generator this
@@ -48,8 +50,9 @@ An operator approves; publishing is a registry write
 ```
 
 The creator sees honest asynchronous states such as submitted, under review, agent working,
-gate running, and published. See [`architecture.md`](./architecture.md) for the full flow,
-including the two catalog lanes this loop can land in.
+gate running, and published. This loop always lands in the **store lane** — see
+[`architecture.md`](./architecture.md#two-catalog-lanes) for the full flow and for how the
+repo lane's older games differ.
 
 ### 2. Play ✅
 
