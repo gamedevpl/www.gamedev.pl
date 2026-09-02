@@ -37,37 +37,40 @@ export async function runGitRemoteHelper(argv: string[], env: NodeJS.ProcessEnv 
   }
   const api = createApi({ origin: originFromEnv(env), store: storeFromEnv(env), env });
   const rl = createInterface({ input: stdin, crlfDelay: Infinity });
-  const iter = rl[Symbol.asyncIterator]();
-  await runRemoteHelper(slug, {
-    readLine: async () => {
-      const next = await iter.next();
-      return next.done ? null : String(next.value);
-    },
-    write: (line) => stdout.write(line.endsWith('\n') ? line : `${line}\n`),
-    fetchVersions: async (game) => {
-      const body = await api.request<{ versions: Array<{ version: string; createdAt: string }> }>(
-        'GET',
-        `/api/me/studio/games/${game}/versions`,
-      );
-      return body.versions;
-    },
-    fetchTree: async (game, version) => {
-      const body = await api.request<{ files: Array<{ path: string; content: string }> }>(
-        'GET',
-        `/api/me/studio/games/${game}/versions/${version}/tree`,
-      );
-      return body.files;
-    },
-    importScript: async (script) => {
-      stdout.write(script.endsWith('\n') ? script : `${script}\n`);
-    },
-    pushReconcile: async () => {
-      const diff = await diffGame({ api, slug, dest: process.cwd() });
-      return diff.unreconciled ? 'unreconciled' : 'ok';
-    },
-  });
-  rl.close();
-  return 0;
+  try {
+    const iter = rl[Symbol.asyncIterator]();
+    await runRemoteHelper(slug, {
+      readLine: async () => {
+        const next = await iter.next();
+        return next.done ? null : String(next.value);
+      },
+      write: (line) => stdout.write(line.endsWith('\n') ? line : `${line}\n`),
+      fetchVersions: async (game) => {
+        const body = await api.request<{ versions: Array<{ version: string; createdAt: string }> }>(
+          'GET',
+          `/api/me/studio/games/${game}/versions`,
+        );
+        return body.versions;
+      },
+      fetchTree: async (game, version) => {
+        const body = await api.request<{ files: Array<{ path: string; content: string }> }>(
+          'GET',
+          `/api/me/studio/games/${game}/versions/${version}/tree`,
+        );
+        return body.files;
+      },
+      importScript: async (script) => {
+        stdout.write(script.endsWith('\n') ? script : `${script}\n`);
+      },
+      pushReconcile: async () => {
+        const diff = await diffGame({ api, slug, dest: process.cwd() });
+        return diff.unreconciled ? 'unreconciled' : 'ok';
+      },
+    });
+    return 0;
+  } finally {
+    rl.close();
+  }
 }
 
 if (process.argv[1] && /git-remote-main\.(js|ts)$/.test(process.argv[1])) {

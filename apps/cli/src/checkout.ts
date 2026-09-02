@@ -88,10 +88,14 @@ export async function checkoutGame(input: {
     : await input.api.requestBytes(`/api/me/studio/games/${input.slug}/workspace`);
   const tgz = join(input.dest, '.gamedev-workspace.tgz');
   writeFileSync(tgz, archive);
-  run('tar', ['-xzf', '.gamedev-workspace.tgz'], input.dest);
-  writeFileSync(join(input.dest, '.gamedev-slug'), input.slug);
-  run('git', ['init'], input.dest);
-  run('git', ['remote', 'add', 'origin', `gamedev://${input.slug}`], input.dest);
+  try {
+    run('tar', ['-xzf', '.gamedev-workspace.tgz'], input.dest);
+    writeFileSync(join(input.dest, '.gamedev-slug'), input.slug);
+    run('git', ['init'], input.dest);
+    run('git', ['remote', 'add', 'origin', `gamedev://${input.slug}`], input.dest);
+  } finally {
+    rmSync(tgz, { force: true });
+  }
   return { dest: input.dest, remote: `gamedev://${input.slug}` };
 }
 

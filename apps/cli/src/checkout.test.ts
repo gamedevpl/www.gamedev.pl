@@ -28,6 +28,7 @@ describe('checkout', () => {
     expect(commands).toContain('tar -xzf .gamedev-workspace.tgz');
     expect(commands).toContain('git init');
     expect(commands).toContain('git remote add origin gamedev://ghost-roads');
+    expect(existsSync(join(dest, '.gamedev-workspace.tgz'))).toBe(false);
   });
 
   it('treats a missing remote file as unreconciled', () => {

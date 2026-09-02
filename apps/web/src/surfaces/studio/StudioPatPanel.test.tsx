@@ -8,6 +8,7 @@ import { StudioPatPanel } from './StudioPatPanel.js';
 
 describe('StudioPatPanel', () => {
   beforeEach(async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     vi.stubGlobal(
       'fetch',
@@ -32,12 +33,12 @@ describe('StudioPatPanel', () => {
   });
 
   afterEach(() => {
+    delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
     document.body.innerHTML = '';
     vi.unstubAllGlobals();
   });
 
   it('mints a token from a session and shows it once', async () => {
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const host = document.createElement('div');
     document.body.append(host);
     const root = createRoot(host);
