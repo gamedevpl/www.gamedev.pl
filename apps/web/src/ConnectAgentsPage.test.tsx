@@ -82,7 +82,11 @@ describe('ConnectAgentsPage', () => {
 
   it('scrolls the hashed section into view on mount', async () => {
     if (!Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView')) {
-      Object.defineProperty(Element.prototype, 'scrollIntoView', { value: () => {}, writable: true });
+      Object.defineProperty(Element.prototype, 'scrollIntoView', {
+        value: () => {},
+        writable: true,
+        configurable: true,
+      });
     }
     const spy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => undefined);
     window.location.hash = '#cli';
