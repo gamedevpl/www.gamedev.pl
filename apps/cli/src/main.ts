@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { resolve as resolvePath } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { createInterface } from 'node:readline/promises';
 import { stdin, stdout, stderr } from 'node:process';
 import { parseArgv, jsonMode, SLASH_VERBS } from './argv.js';
@@ -133,6 +135,15 @@ export async function runCli(
   }
 }
 
-if (process.argv[1] && /main\.(js|ts)$/.test(process.argv[1])) {
+export function isLaunchedEntry(entry: string | undefined, moduleUrl: string = import.meta.url): boolean {
+  if (!entry) return false;
+  try {
+    return moduleUrl === pathToFileURL(resolvePath(entry)).href;
+  } catch {
+    return false;
+  }
+}
+
+if (isLaunchedEntry(process.argv[1])) {
   void runCli(process.argv, process.env).then((code) => process.exit(code));
 }

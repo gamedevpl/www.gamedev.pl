@@ -3,12 +3,14 @@ import { CliError, EXIT_RED } from './exit-codes.js';
 
 export type VerifyStage = 'typecheck' | 'check_static' | 'check_game';
 
+type VerifyRun = (cmd: string, args: string[], cwd: string) => { status: number | null; stderr: string };
+
 export function runLadder(input: {
   cwd: string;
   publish: boolean;
-  run?: (cmd: string, args: string[], cwd: string) => { status: number; stderr: string };
+  run?: VerifyRun;
 }): { ok: true } | { ok: false; stage: VerifyStage; detail: string } {
-  const run = input.run ?? ((cmd, args, cwd) => spawnSync(cmd, args, { cwd, encoding: 'utf8' }));
+  const run: VerifyRun = input.run ?? ((cmd, args, cwd) => spawnSync(cmd, args, { cwd, encoding: 'utf8' }));
   const steps: Array<{ stage: VerifyStage; args: string[] }> = [
     { stage: 'typecheck', args: ['run', 'typecheck'] },
     { stage: 'check_static', args: ['run', 'check:static'] },

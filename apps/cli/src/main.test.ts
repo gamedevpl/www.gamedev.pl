@@ -1,6 +1,8 @@
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { PassThrough } from 'node:stream';
 import { describe, expect, it } from 'vitest';
-import { runCli } from './main.js';
+import { isLaunchedEntry, runCli } from './main.js';
 import { EXIT_AUTH, EXIT_GREEN, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 
 function io() {
@@ -44,5 +46,11 @@ describe('runCli verbs', () => {
   it('refuses unreconciled submit/diff without --force', async () => {
     const streams = io();
     expect(await runCli(['node', 'gamedev', 'diff'], {}, streams)).toBe(EXIT_REFUSED);
+  });
+
+  it('runs when launched as the bundled gamedev.mjs, not only main.ts', () => {
+    const entry = resolve('/tmp/gamedev.mjs');
+    expect(isLaunchedEntry(entry, pathToFileURL(entry).href)).toBe(true);
+    expect(isLaunchedEntry('/tmp/other.js', pathToFileURL(entry).href)).toBe(false);
   });
 });
