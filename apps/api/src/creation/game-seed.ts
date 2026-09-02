@@ -35,7 +35,17 @@ import type { QueryKnowledgeFn } from './knowledge-search.js';
  * objective ("collect at least one star"), and a seed that leaves it there fails the
  * gate's accept stage structurally, for every game, no matter how good the draft is.
  */
-const TOP_LEVEL_ALLOWED = new Set(['SPEC.md', 'GAME.json', 'game.ts', 'index.html', 'style.css', 'ACCEPTANCE.json', 'EDITOR.json', 'EDITOR.ts', 'EDITOR.content.json']);
+const TOP_LEVEL_ALLOWED = new Set([
+  'SPEC.md',
+  'GAME.json',
+  'game.ts',
+  'index.html',
+  'style.css',
+  'ACCEPTANCE.json',
+  'EDITOR.json',
+  'EDITOR.ts',
+  'EDITOR.content.json',
+]);
 
 /** The fence label carrying the hand-off note rather than a file. */
 const NOTES_FENCE = 'NOTES';
@@ -268,7 +278,8 @@ export function collectSeedFiles(parsed: ParsedSeedResponse, slug: string): Seed
  */
 export function isUsableSeed(files: SeedFile[]): boolean {
   const paths = new Set(files.map((file) => file.path));
-  const hasModule = files.some((file) => file.path.startsWith('game/') && file.path.endsWith('.ts')); const hasEditor = paths.has('EDITOR.json');
+  const hasModule = files.some((file) => file.path.startsWith('game/') && file.path.endsWith('.ts'));
+  const hasEditor = paths.has('EDITOR.json');
   return paths.has('game.ts') && paths.has('SPEC.md') && hasModule && hasEditor;
 }
 
@@ -537,7 +548,7 @@ export class ModelGameSeeder implements GameSeeder {
     spec: string,
     providerId: string,
   ): Promise<{ picks: string[]; usage: SeedUsage }> {
-    // Raw thinkingBudget:0 also 400s on gemini-3.7-flash; 'low' is the floor.
+    // Raw thinkingBudget:0 also 400s on gemini-3.8-flash; 'low' is the floor.
     // Reasoning-locked models reject temperature overrides; schema constraints suffice.
     const result = await this.client(providerId)(buildPickPrompt(context, spec, this.references))
       .responseFormat(this.pickResponseFormat())

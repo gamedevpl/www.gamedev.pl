@@ -160,7 +160,7 @@ export class VertexSpecRefiner implements SpecRefiner {
         region: this.options.region,
         defaultRegion: 'global',
         model: this.options.model,
-        defaultModel: 'gemini-3.7-flash',
+        defaultModel: 'gemini-3.8-flash',
         generationConfig: {
           responseMimeType: 'application/json',
         } as VertexGenerationConfig,
@@ -176,7 +176,7 @@ export class VertexSpecRefiner implements SpecRefiner {
         region: this.options.region,
         defaultRegion: 'global',
         model: this.options.model,
-        defaultModel: 'gemini-3.7-flash',
+        defaultModel: 'gemini-3.8-flash',
       });
     return this.groundingClient;
   }

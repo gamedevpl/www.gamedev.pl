@@ -175,7 +175,7 @@ export class VertexThemeExtractor implements ThemeExtractor {
         region: this.options.region,
         defaultRegion: 'global',
         model: this.options.model,
-        defaultModel: 'gemini-3.7-flash',
+        defaultModel: 'gemini-3.8-flash',
         // Thinking level goes via `.thinking()` below — see moderation.ts's VertexChecker.
         generationConfig: {
           responseMimeType: 'application/json',

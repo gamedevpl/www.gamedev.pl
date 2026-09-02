@@ -112,7 +112,10 @@ describe('seed path containment', () => {
       'game.ts',
       'index.html',
       'style.css',
-      'ACCEPTANCE.json', 'EDITOR.json', 'EDITOR.ts', 'EDITOR.content.json',
+      'ACCEPTANCE.json',
+      'EDITOR.json',
+      'EDITOR.ts',
+      'EDITOR.content.json',
       'game/model.ts',
       'game/ai/steering.ts',
     ]) {
@@ -198,7 +201,8 @@ describe('isUsableSeed', () => {
     // The failure mode this exists for: a seed branch that claims a scaffold exists
     // while containing nothing the agent could continue.
     expect(isUsableSeed([file('SPEC.md')])).toBe(false);
-    expect(isUsableSeed([file('EDITOR.ts'), file('SPEC.md'), file('game.ts'), file('game/model.ts')])).toBe(false); expect(isUsableSeed([file('SPEC.md'), file('game.ts')])).toBe(false);
+    expect(isUsableSeed([file('EDITOR.ts'), file('SPEC.md'), file('game.ts'), file('game/model.ts')])).toBe(false);
+    expect(isUsableSeed([file('SPEC.md'), file('game.ts')])).toBe(false);
     expect(isUsableSeed([])).toBe(false);
   });
 });
@@ -337,7 +341,7 @@ function stubClient(responses: { text: string; inputTokens?: number; outputToken
     const response = responses[Math.min(call++, responses.length - 1)];
     return makeChain(() => ({
       parts: [{ type: 'text' as const, text: response.text }],
-      model: 'gemini-3.7-flash',
+      model: 'gemini-3.8-flash',
       usage: { inputTokens: response.inputTokens ?? 100, outputTokens: response.outputTokens ?? 50 },
     }));
   };
@@ -352,7 +356,7 @@ function stubClientWithPrompts(responses: { text: string }[]) {
     const response = responses[Math.min(call++, responses.length - 1)];
     return makeChain(() => ({
       parts: [{ type: 'text' as const, text: response.text }],
-      model: 'gemini-3.7-flash',
+      model: 'gemini-3.8-flash',
       usage: { inputTokens: 100, outputTokens: 50 },
     }));
   }) as unknown as ConstructorParameters<typeof ModelGameSeeder>[0]['client'];
@@ -411,13 +415,13 @@ interface GameKitGameContext {
 describe('ModelGameSeeder', () => {
   const request = { slug: 'my-game', title: 'My Game', spec: 'A game about tanks' };
 
-  it('asks for the low thinking floor, not a raw budget gemini-3.7-flash rejects', async () => {
+  it('asks for the low thinking floor, not a raw budget gemini-3.8-flash rejects', async () => {
     const thinkingArgs: unknown[] = [];
     const client = (() =>
       makeChain(
         () => ({
           parts: [{ type: 'text' as const, text: '{"picks":["apex-sprint"]}' }],
-          model: 'gemini-3.7-flash',
+          model: 'gemini-3.8-flash',
           usage: { inputTokens: 100, outputTokens: 10 },
         }),
         { onThinking: (arg) => thinkingArgs.push(arg) },
@@ -450,7 +454,7 @@ describe('ModelGameSeeder', () => {
     expect(draft!.usage).toEqual({
       inputTokens: 30_400,
       outputTokens: 8_010,
-      model: 'gemini-3.7-flash',
+      model: 'gemini-3.8-flash',
       provider: 'vertex',
     });
   });
@@ -478,7 +482,7 @@ describe('ModelGameSeeder', () => {
           if (thisCall !== 0) throw new Error('the generate call must stream, not run()');
           return {
             parts: [{ type: 'text' as const, text: '{"picks":["apex-sprint"]}' }],
-            model: 'gemini-3.7-flash',
+            model: 'gemini-3.8-flash',
             usage: { inputTokens: 100, outputTokens: 10 },
           };
         },
@@ -489,7 +493,7 @@ describe('ModelGameSeeder', () => {
             type: 'done' as const,
             result: {
               parts: [{ type: 'text' as const, text: GOOD_DRAFT }],
-              model: 'gemini-3.7-flash',
+              model: 'gemini-3.8-flash',
               usage: { inputTokens: 30_000, outputTokens: 8_000 },
             },
           };
@@ -754,7 +758,12 @@ describe('ModelGameSeeder', () => {
     expect(draft!.compiles).toBe(true);
     expect(draft!.repaired).toBe(true);
     expect(draft!.files.find((file) => file.path === 'game/model.ts')!.content).toBe('export const SPEED = 4;\n');
-    expect(draft!.files.map((file) => file.path).sort()).toEqual(['EDITOR.json', 'SPEC.md', 'game.ts', 'game/model.ts']);
+    expect(draft!.files.map((file) => file.path).sort()).toEqual([
+      'EDITOR.json',
+      'SPEC.md',
+      'game.ts',
+      'game/model.ts',
+    ]);
     // The repair round is billed like the rounds before it.
     expect(draft!.usage.inputTokens).toBe(400 + 30_000 + 9_000);
     expect(draft!.usage.outputTokens).toBe(10 + 8_000 + 700);

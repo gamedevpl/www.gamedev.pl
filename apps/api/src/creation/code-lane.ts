@@ -40,7 +40,7 @@ import { formatRemixTurns } from './remix-turns.js';
  * compile. No agent, no tools, no credentials in a runtime.
  */
 
-export const DEFAULT_CODE_MODEL = 'gemini-3.7-flash';
+export const DEFAULT_CODE_MODEL = 'gemini-3.8-flash';
 export const DEFAULT_PICK_TIMEOUT_MS = 8000;
 export const DEFAULT_EDIT_TIMEOUT_MS = 20000;
 /** Rounds of "here is the compiler error, try again" before giving up. */

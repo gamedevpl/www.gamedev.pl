@@ -206,7 +206,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
 
     expect(registry.platformByVendor.get('gemini')?.name).toBe('managed:gemini');
     expect(info).toHaveBeenCalledWith(
-      expect.objectContaining({ vendor: 'gemini', model: 'gemini-3.7-flash' }),
+      expect.objectContaining({ vendor: 'gemini', model: 'gemini-3.8-flash' }),
       'managed agent dispatch enabled',
     );
   });
@@ -226,7 +226,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
     createAgentBackendRegistryFromEnv({ info, warn: vi.fn() });
 
     expect(info).toHaveBeenCalledWith(
-      expect.objectContaining({ vendor: 'gemini', model: 'gemini-3.7-flash' }),
+      expect.objectContaining({ vendor: 'gemini', model: 'gemini-3.8-flash' }),
       'managed agent dispatch enabled',
     );
   });
