@@ -67,6 +67,7 @@ describe('loopback login', () => {
     });
     expect(io.read().out).toContain('opening the browser to sign in');
     expect(io.read().out).toContain('signed in');
+    expect(io.read().out).not.toContain('/oauth/authorize');
     expect(tokenBody).toContain('grant_type=authorization_code');
     expect(tokenBody).toContain('code=auth-code-1');
     expect(tokenBody).toContain('code_verifier=');

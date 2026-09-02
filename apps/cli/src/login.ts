@@ -173,7 +173,6 @@ export async function runLoopbackLogin(input: LoopbackLoginInput): Promise<void>
   input.stdout.write(`${g.work} opening the browser to sign in\n`);
   const opened = await open(url);
   if (!opened) input.stdout.write(`open ${url}\n`);
-  else input.stdout.write(`${url}\n`);
   let result: CallbackResult;
   try {
     result = await new Promise((resolve, reject) => {
