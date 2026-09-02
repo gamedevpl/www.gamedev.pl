@@ -32,7 +32,6 @@ function publishedGithubClient(): GitHubClient {
     },
   ];
   return {
-    createIssue: async () => ({ number: 42 }),
     getIssueState: async () => ({ state: 'open' }),
     findLinkedPR: async () => mergedPr,
     getGameSources: async () => null,
@@ -53,7 +52,6 @@ function buildingGithubClient(): GitHubClient {
     changedFiles: ['games/sky-dodge/index.html'],
   };
   return {
-    createIssue: async () => ({ number: 42 }),
     getIssueState: async () => ({ state: 'open' }),
     findLinkedPR: async () => openPr,
     getGameSources: async () => null,

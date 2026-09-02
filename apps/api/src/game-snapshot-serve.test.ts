@@ -41,13 +41,11 @@ function createGithubStub(catalog: CatalogGameEntry[]) {
   const getGameSources = vi.fn(async () => gameSources());
   const getGameMedia = vi.fn(async () => new Uint8Array([0x67, 0x69, 0x74]));
   const githubClient = {
-    createIssue: vi.fn(async () => ({ number: 1 })),
     getIssueState: vi.fn(async () => ({ state: 'open' as const })),
     findLinkedPR: vi.fn(async () => null),
     createIssueComment: vi.fn(async () => ({ id: 1 })),
     updateIssueBody: vi.fn(async () => {}),
     closeIssue: vi.fn(async () => {}),
-    closePullRequest: vi.fn(async () => {}),
     getGameSources,
     getGameMedia,
     getCatalog,

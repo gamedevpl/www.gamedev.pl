@@ -38,12 +38,6 @@ import { generateStyleCss, type Theme } from '../platform/theme-css-generator.js
 
 export type { CatalogGameTouch } from './catalog-touch.js';
 
-interface CreateIssueInput {
-  title: string;
-  body: string;
-  labels: string[];
-}
-
 export interface PullRequestCommit {
   /** First line of the commit message — a human-readable step in the build. */
   message: string;
@@ -299,7 +293,6 @@ export function parseSubmittedBy(raw: string | undefined | null): string | null 
 }
 
 export interface GitHubClient {
-  createIssue(input: CreateIssueInput): Promise<{ number: number }>;
   getIssueState(issueNumber: number): Promise<{ state: 'open' | 'closed' }>;
   findLinkedPR(issueNumber: number): Promise<LinkedPullRequest | null>;
   /**
@@ -309,28 +302,15 @@ export interface GitHubClient {
    * on its open PR.
    */
   createIssueComment(issueOrPrNumber: number, body: string): Promise<{ id: number }>;
-  /**
-   * Rewrites an issue body. Used once, right after creation, to add the build-channel
-   * credentials — they are derived from the issue number, which GitHub only assigns
-   * when the issue already exists.
-   */
+  /** Rewrites an issue body. No production caller — the issue-first flow is retired. */
   updateIssueBody(issueNumber: number, body: string): Promise<void>;
-  /**
-   * Closes an issue (a creator abandoning their build) or an open pull request.
-   * The REST issues endpoint covers both — a PR is an issue for state purposes —
-   * but PRs are closed through the pulls endpoint so GitHub records it as such.
-   */
+  /** Closes an issue. No production caller — the issue-first flow is retired. */
   closeIssue(issueNumber: number): Promise<void>;
-  closePullRequest(pullNumber: number): Promise<void>;
   /**
    * Opens a pull request for an existing branch, or returns the open one if there
-   * already is one.
-   *
-   * Exists for one narrow reason: GitHub's agent tasks API can only resume work on a
-   * branch that has an **open pull request** — without one, the `head_ref` asking it to
-   * resume is silently ignored and the agent branches fresh instead. So a revision round
-   * has to guarantee the PR exists first. The PR is never merged and nothing reads it;
-   * it is resumption context, and the adapter closes it when the job finishes.
+   * already is one. The sole production caller, `proposal-apply-bot.ts`, uses this for
+   * the repo-lane merge-back: the PR it opens goes through the games repo's normal
+   * CODEOWNERS review and merge, same as any other PR.
    */
   ensureOpenPullRequest(input: { headRef: string; baseRef: string; title: string; body: string }): Promise<{
     number: number;
@@ -988,14 +968,6 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
   }
 
   return {
-    async createIssue(input) {
-      const result = await requestJson<{ number: number }>(`https://api.github.com/repos/${repo}/issues`, {
-        method: 'POST',
-        body: JSON.stringify(input),
-      });
-      return { number: result.number };
-    },
-
     async getIssueState(issueNumber) {
       const result = await requestJson<{ state: 'open' | 'closed' }>(
         `https://api.github.com/repos/${repo}/issues/${issueNumber}`,
@@ -1105,13 +1077,6 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
 
     async closeIssue(issueNumber) {
       await requestJson(`https://api.github.com/repos/${repo}/issues/${issueNumber}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ state: 'closed' }),
-      });
-    },
-
-    async closePullRequest(pullNumber) {
-      await requestJson(`https://api.github.com/repos/${repo}/pulls/${pullNumber}`, {
         method: 'PATCH',
         body: JSON.stringify({ state: 'closed' }),
       });

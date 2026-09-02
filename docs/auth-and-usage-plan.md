@@ -109,8 +109,9 @@ the coarse outer layer (and is the only limiter on `/api/auth/*`).
   - `requireSession` Fastify guard applied per-route. Basic-Auth hook stays outermost.
 - `apps/api/src/platform/store.ts` (new) — thin Firestore wrapper with an **in-memory fake for tests**
   (same seam pattern as the `githubClient` stubs; unit tests never touch real Firestore).
-- `submissions.ts` — owner recorded on create; transactional quota check before
-  `createIssue`; preview requires session; counters incremented on spend.
+- `submissions.ts` — owner recorded on create; transactional quota check before job
+  creation (native-job allocation and direct agent dispatch, not a GitHub issue); preview
+  requires session; counters incremented on spend.
 
 ## Web changes
 
