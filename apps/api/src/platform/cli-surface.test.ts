@@ -22,6 +22,9 @@ describe('cliSurfaceEnabled', () => {
 describe('reserved installer routes', () => {
   it('does not treat /cli as a known SPA shell path', () => {
     expect(isKnownSpaShellPath('/cli')).toBe(false);
+    expect(isKnownSpaShellPath('/creators/cli')).toBe(false);
+    expect(isKnownSpaShellPath('/gamedevpl')).toBe(true);
+    expect(isKnownSpaShellPath('/creators/gamedevpl')).toBe(true);
   });
 
   it('404s /install.sh and /install.ps1 as JSON, not the SPA shell', async () => {

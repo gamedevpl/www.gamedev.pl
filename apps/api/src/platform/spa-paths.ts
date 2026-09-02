@@ -49,11 +49,6 @@ const ADMIN_PATTERN =
 /** Last path segment looks like a file (`sw.js`, `icon.png`, `foo.woff2`). */
 const STATIC_ASSET_PATTERN = /\/[^/]+\.[a-zA-Z0-9]+$/;
 
-// Same as parsePathRoute: platform handle is addressable.
-function isAddressableHandle(handle: string): boolean {
-  return handle === PLATFORM_HANDLE || !RESERVED_HANDLES.has(handle);
-}
-
 export function normalizePathname(urlOrPath: string): string {
   const withoutQuery = urlOrPath.split('?')[0] ?? urlOrPath;
   const pathname = withoutQuery.startsWith('/') ? withoutQuery : `/${withoutQuery}`;
@@ -126,14 +121,15 @@ export function isKnownSpaShellPath(urlOrPath: string): boolean {
   if (JOIN_PATTERN.test(pathname)) return true;
   if (INVITE_PATTERN.test(pathname)) return true;
 
-  const creatorAlias = pathname.match(CREATOR_ALIAS_PATTERN);
-  if (creatorAlias?.[1]) return isAddressableHandle(creatorAlias[1]);
-  if (ROOT_CREATOR_PATTERN.test(pathname)) return isAddressableHandle(pathname.slice(1));
+  const creatorAlias = pathname.match(CREATOR_ALIAS_PATTERN)?.[1];
+  if (creatorAlias) return creatorAlias === PLATFORM_HANDLE || !RESERVED_HANDLES.has(creatorAlias);
+  if (ROOT_CREATOR_PATTERN.test(pathname))
+    return pathname.slice(1) === PLATFORM_HANDLE || !RESERVED_HANDLES.has(pathname.slice(1));
 
   // Reserved handles are not addresses — except the platform's own, which is where
   // every game with no creator to name lives (creator-profile.ts PLATFORM_HANDLE).
   const gamePageMatch = pathname.match(GAME_PAGE_PATTERN);
-  if (gamePageMatch?.[1]) return isAddressableHandle(gamePageMatch[1]);
+  if (gamePageMatch?.[1]) return gamePageMatch[1] === PLATFORM_HANDLE || !RESERVED_HANDLES.has(gamePageMatch[1]);
 
   return false;
 }
