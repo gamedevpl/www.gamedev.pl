@@ -67,9 +67,9 @@ function render(entries: CatalogEntry[]) {
 }
 
 describe('RailCard hover video preview', () => {
-  it('shows the editor capability badge on editable rail cards', () => {
+  it('does not show an editor capability badge on editable rail cards', () => {
     render([withVideo]);
-    expect(container.querySelector('[title="This game has a built-in content editor"]')).not.toBeNull();
+    expect(container.querySelector('[title="This game has a built-in content editor"]')).toBeNull();
   });
 
   it('arms the trailer after a mouse hover dwell and drops it on leave', async () => {
