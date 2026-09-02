@@ -265,7 +265,11 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
   const creatorMatch = normalizedPath.match(/^\/creators\/([^/]+)$/);
   if (creatorMatch?.[1]) {
     const handle = decodeSegment(creatorMatch[1]);
-    if (handle && CREATOR_HANDLE_PATTERN.test(handle)) {
+    if (
+      handle &&
+      CREATOR_HANDLE_PATTERN.test(handle) &&
+      (handle === PLATFORM_HANDLE || !RESERVED_HANDLE_SEGMENTS.has(handle))
+    ) {
       return { view: 'creator', handle };
     }
     return { view: 'notFound' };

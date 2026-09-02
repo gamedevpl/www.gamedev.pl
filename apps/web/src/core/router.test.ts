@@ -224,8 +224,8 @@ describe('parsePathRoute', () => {
     expect(parsePathRoute('/creators/ada_lovelace')).toEqual({ view: 'creator', handle: 'ada_lovelace' });
     expect(parsePathRoute('/creators/ab')).toEqual({ view: 'notFound' });
     expect(parsePathRoute('/creators/Ada')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/creators/cli')).toEqual({ view: 'notFound' });
   });
-
   // A cited clause has to survive the trip: `/terms#zglaszanie` is what goes into a
   // reply telling someone how to report content, and if the fragment knocked the
   // route back to home it would land them on the front page instead.
