@@ -12,12 +12,8 @@ import {
   handoffToPlatform,
   handoffToSelf,
   buildMediaUrl,
-  type BuildEvent,
   type BuildMediaItem,
-  type BuildEventKind,
   type BuildPlayableItem,
-  type BuildProgress,
-  type BuildStep,
   type PriorRoundHistory,
   type SubmissionApiError,
   type SubmissionPreview,
@@ -38,6 +34,9 @@ import './status-timeline.css';
 import './status-play-card.css';
 import './status-thread.css';
 import { FeedbackPanel } from './FeedbackPanel.js';
+import { BuildProgressPanel } from './BuildProgressPanel.js';
+import { ShotLightbox } from './ShotLightbox.js';
+import { buildActivityFeed, type ActivityEntry, type PendingRevision } from './buildActivityFeed.js';
 
 function copyInputFromStatus(status: SubmissionStatus | null | undefined) {
   return {
@@ -217,9 +216,6 @@ function StatusTimeline({ current }: { current: SubmissionStatus['status'] }) {
     </ol>
   );
 }
-
-/** A change request sent from this tab, echoed locally until the API returns it. */
-type PendingRevision = { text: string; at: number };
 
 /** Failure reasons with their own copy; anything newer gets the generic sentence. */
 const FAILURE_COPY_KEYS = new Set([
@@ -1319,48 +1315,6 @@ function PlayCard({
 }
 
 /**
- * One picture of the build, full size, over the page.
- *
- * The pictures live on the timeline as thumbnails, which is where they belong: they
- * are things that happened, in among the sentences and commits describing the same
- * moments. But a thumbnail of a game is close to useless — you cannot see whether the
- * bridge holds — so any of them opens here at whatever size the viewport allows.
- */
-function ShotLightbox({ token, item, onClose }: { token: string; item: BuildMediaItem; onClose: () => void }) {
-  const { t } = useTranslation();
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
-
-  return (
-    <div
-      className="status-lightbox"
-      role="dialog"
-      aria-modal="true"
-      aria-label={item.label || t('statusView.gallery.alt')}
-      onClick={onClose}
-    >
-      {/* The image swallows the click so only the backdrop closes. */}
-      <img
-        className="status-lightbox-image"
-        src={buildMediaUrl(token, item)}
-        alt={item.label || t('statusView.gallery.alt')}
-        onClick={(event) => event.stopPropagation()}
-      />
-      {item.label ? <p className="status-lightbox-caption">{item.label}</p> : null}
-      <button type="button" className="status-lightbox-close" onClick={onClose}>
-        {t('statusView.gallery.close')}
-      </button>
-    </div>
-  );
-}
-
-/**
  * The thread, in the shape a conversation actually has.
  *
  * The build's story used to be a log: a bordered box titled BUILD ACTIVITY, rows of
@@ -1640,317 +1594,6 @@ function ThreadContextBar({
           </button>
         ) : null}
       </span>
-    </div>
-  );
-}
-
-/**
- * One entry in the build story. Agent commits and the creator's own change requests
- * are interleaved on a single timeline: a creator needs to see that what they asked
- * for went in, and *when* — a bare list of commit subjects reads as an unmoving wall.
- */
-/** After this much silence from the agent, the page explains the gap. */
-const QUIET_BUILD_MS = 15 * 60_000;
-
-type ActivityEntry = {
-  // 'studio': the chat agent's own turn — a third voice, not is-mine.
-  kind: 'commit' | 'revision' | 'event' | 'media' | 'studio';
-  text: string;
-  at: number;
-  /** Sent from this tab but not yet echoed back by the API. */
-  pending?: boolean;
-  /** For agent events: the step it reported, rendered from our own translations. */
-  step?: BuildStep;
-  eventKind?: BuildEventKind;
-  /**
-   * For revisions: set when an agent wrote the request on the creator's behalf. The row
-   * stays on the creator's side of the thread — it is still their request — but says so
-   * rather than passing an agent's summary off as something the creator typed.
-   */
-  relayed?: boolean;
-  // Whether the agent has picked this message up from its inbox yet.
-  delivered?: boolean;
-  /** Pictures shown as thumbnails on this row, expandable to full size. */
-  media?: BuildMediaItem[];
-};
-
-/** Icon per feed entry. Agent events say what kind of moment they are. */
-const EVENT_ICONS: Record<BuildEventKind, PixelIconName> = {
-  step: 'wrench',
-  milestone: 'star',
-  asking: 'pencil',
-  blocked: 'bolt',
-  done: 'check',
-};
-
-/**
- * Places the build's pictures on the timeline.
- *
- * A screenshot the agent pushed is a moment, so it gets its own row at the time it
- * was taken. The captures committed on the branch are not moments — they are one set
- * describing how the game looks at its latest commit — so they share a single row,
- * dated to that commit rather than scattered across the feed at identical times.
- */
-function mediaEntries(media: BuildMediaItem[], commitTime: number, caption: string): ActivityEntry[] {
-  const branch = media.filter((item) => item.source === 'branch');
-  const entries: ActivityEntry[] =
-    branch.length > 0 ? [{ kind: 'media', text: caption, at: commitTime, media: branch }] : [];
-
-  for (const shot of media) {
-    if (shot.source === 'branch') continue;
-    entries.push({
-      kind: 'media',
-      text: shot.label ?? caption,
-      at: shot.createdAt ? Date.parse(shot.createdAt) : commitTime,
-      media: [shot],
-    });
-  }
-  return entries;
-}
-
-function buildActivityFeed(
-  progress: BuildProgress | undefined,
-  events: BuildEvent[],
-  pendingRevisions: PendingRevision[],
-  media: BuildMediaItem[],
-  mediaCaption: string,
-): ActivityEntry[] {
-  // Branch captures belong at the commit that carries them; without commits the best
-  // available answer is "now", which keeps them at the top where they are useful.
-  const newestCommit = (progress?.commits ?? [])
-    .map((commit) => Date.parse(commit.committedDate))
-    .filter((time) => Number.isFinite(time))
-    .sort((a, b) => b - a)[0];
-
-  const entries: ActivityEntry[] = [
-    ...mediaEntries(media, newestCommit ?? Date.now(), mediaCaption),
-    ...events.map((event) => ({
-      kind: 'event' as const,
-      text: event.text,
-      at: Date.parse(event.createdAt),
-      step: event.step,
-      eventKind: event.kind,
-    })),
-    ...(progress?.commits ?? []).map((commit) => ({
-      kind: 'commit' as const,
-      text: commit.message,
-      at: Date.parse(commit.committedDate),
-    })),
-    ...(progress?.revisions ?? []).map((revision) =>
-      revision.origin === 'studio'
-        ? { kind: 'studio' as const, text: revision.text, at: Date.parse(revision.createdAt) }
-        : {
-            kind: 'revision' as const,
-            text: revision.text,
-            at: Date.parse(revision.createdAt),
-            delivered: revision.delivered,
-            ...(revision.origin === 'agent' ? { relayed: true } : {}),
-          },
-    ),
-  ];
-
-  // A revision the API has already echoed back must not appear twice.
-  const known = new Set((progress?.revisions ?? []).map((revision) => revision.text));
-  for (const pending of pendingRevisions) {
-    if (!known.has(pending.text)) {
-      entries.push({ kind: 'revision', text: pending.text, at: pending.at, pending: true });
-    }
-  }
-
-  // Oldest first, because this is a conversation and that is the order conversations
-  // are read in: the newest thing sits at the bottom, next to the box you reply in.
-  // It used to be newest-first, which put the creator's own last message at the top,
-  // furthest from the composer, and made the thread read backwards once it had more
-  // than a couple of entries in it.
-  return entries.filter((entry) => Number.isFinite(entry.at)).sort((a, b) => a.at - b.at);
-}
-
-function BuildProgressPanel({
-  token,
-  progress,
-  events,
-  media,
-  pendingRevisions,
-}: {
-  token: string;
-  progress?: BuildProgress;
-  events: BuildEvent[];
-  media: BuildMediaItem[];
-  pendingRevisions: PendingRevision[];
-}) {
-  const { t, i18n } = useTranslation();
-  // A capture can vanish between the poll that listed it and the request for its
-  // bytes — the agent force-pushes its branch mid-build — so a picture that fails to
-  // load is dropped rather than left as a broken frame.
-  const [broken, setBroken] = useState<string[]>([]);
-  const [zoomed, setZoomed] = useState<BuildMediaItem | null>(null);
-  const shownMedia = media.filter((item) => !broken.includes(item.ref));
-  const activity = buildActivityFeed(progress, events, pendingRevisions, shownMedia, t('statusView.gallery.caption'));
-  const checklist = progress?.checklist ?? [];
-  // The agent's own latest word, in order of directness: an event it pushed over the
-  // build channel, then the journal it committed, then nothing.
-  const latestEvent = events[0];
-  const headline = latestEvent?.text ?? progress?.note;
-
-  if (checklist.length === 0 && activity.length === 0 && !headline) {
-    return null;
-  }
-
-  // A count the agent reported beats one we infer from ticked checkboxes.
-  const reportedProgress = events.find((event) => event.progress)?.progress;
-  const doneCount = reportedProgress?.done ?? checklist.filter((item) => item.checked).length;
-  const totalCount = reportedProgress?.total ?? checklist.length;
-  const donePercent = totalCount === 0 ? 0 : (doneCount / totalCount) * 100;
-  // What the agent says it is doing beats what we infer from its checklist — fall
-  // back to the first unfinished task only when it has written nothing.
-  const currentStep = headline ? undefined : checklist.find((item) => !item.checked);
-  const lastUpdate = activity[activity.length - 1];
-  // A long gap between pushes is normal, but silence with no explanation reads as
-  // "it's broken" — say so plainly instead of letting the creator guess.
-  const isQuiet = lastUpdate !== undefined && Date.now() - lastUpdate.at > QUIET_BUILD_MS;
-
-  return (
-    <div className="build-progress">
-      {headline ? (
-        <p className="build-progress-note" aria-live="polite">
-          <span className="build-progress-note-label">
-            {latestEvent?.step
-              ? t(`statusView.progress.steps.${latestEvent.step}`)
-              : t('statusView.progress.agentSays')}
-          </span>
-          <span className="build-progress-note-text">{headline}</span>
-        </p>
-      ) : null}
-
-      {totalCount > 0 ? (
-        <div className="build-progress-checklist">
-          <div className="build-progress-heading-row">
-            <h3 className="build-progress-heading">{t('statusView.progress.checklistTitle')}</h3>
-            <span className="build-progress-count">
-              {t('statusView.progress.checklistCount', { done: doneCount, total: totalCount })}
-            </span>
-          </div>
-          <div
-            className="build-progress-bar"
-            role="progressbar"
-            aria-valuenow={doneCount}
-            aria-valuemin={0}
-            aria-valuemax={totalCount}
-          >
-            <div className="build-progress-bar-fill" style={{ width: `${donePercent}%` }} />
-          </div>
-          {currentStep ? (
-            <p className="build-progress-current">
-              <span className="build-progress-current-spinner" aria-hidden="true" />
-              {t('statusView.progress.currentStep', { step: currentStep.text })}
-            </p>
-          ) : null}
-          <ul>
-            {checklist.map((item, index) => (
-              <li key={index} className={item.checked ? 'checklist-done' : 'checklist-pending'}>
-                <span aria-hidden="true">
-                  <PixelIcon name={item.checked ? 'check' : 'checkbox'} size={12} />
-                </span>{' '}
-                {item.text}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {activity.length > 0 ? (
-        <div className="build-progress-commits">
-          <div className="build-progress-heading-row">
-            <h3 className="build-progress-heading">{t('statusView.progress.activityTitle')}</h3>
-            {lastUpdate ? (
-              <span className="build-progress-count">
-                {t('statusView.progress.lastUpdate', {
-                  time: formatRelativeTime(lastUpdate.at, i18n.language),
-                })}
-              </span>
-            ) : null}
-          </div>
-          {isQuiet ? <p className="build-progress-quiet">{t('statusView.progress.quietHint')}</p> : null}
-          <ul className="build-activity-list">
-            {activity.map((entry, index) => (
-              <li
-                key={`${entry.kind}-${entry.at}-${index}`}
-                className={[
-                  'build-activity-item',
-                  `build-activity-${entry.kind}`,
-                  // The creator's own messages sit on the other side of the thread, the
-                  // way they do in any conversation — without it, a request they sent and
-                  // the agent's reply to it are two identical grey rows.
-                  entry.kind === 'revision' ? 'is-mine' : '',
-                  index === activity.length - 1 ? 'build-progress-commit-latest' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-              >
-                <span className="build-activity-icon" aria-hidden="true">
-                  <PixelIcon
-                    name={
-                      entry.kind === 'revision'
-                        ? 'pencil'
-                        : entry.kind === 'media'
-                          ? 'eye'
-                          : entry.kind === 'studio'
-                            ? 'sparkle'
-                            : entry.kind === 'event'
-                              ? EVENT_ICONS[entry.eventKind ?? 'step']
-                              : 'wrench'
-                    }
-                    size={12}
-                  />
-                </span>
-                <span className="build-activity-body">
-                  {entry.kind === 'revision' ? (
-                    <span className="build-activity-label">
-                      {entry.pending
-                        ? t('statusView.progress.yourRequestSending')
-                        : entry.relayed
-                          ? t('statusView.progress.relayedRequest')
-                          : t('statusView.progress.yourRequest')}
-                    </span>
-                  ) : entry.kind === 'studio' ? (
-                    <span className="build-activity-label">{t('statusView.progress.studioVoice')}</span>
-                  ) : entry.step ? (
-                    // The step is a closed set, so it is real translated copy rather
-                    // than a machine translation of whatever the agent happened to write.
-                    <span className="build-activity-label">{t(`statusView.progress.steps.${entry.step}`)}</span>
-                  ) : null}
-                  <span className="build-activity-text">{entry.text}</span>
-                  {entry.media ? (
-                    <span className="build-activity-shots">
-                      {entry.media.map((item) => (
-                        <button
-                          key={item.ref}
-                          type="button"
-                          className="build-activity-shot"
-                          onClick={() => setZoomed(item)}
-                          title={t('statusView.gallery.expand')}
-                        >
-                          <img
-                            src={buildMediaUrl(token, item)}
-                            alt={item.label || t('statusView.gallery.alt')}
-                            loading="lazy"
-                            onError={() => setBroken((refs) => [...refs, item.ref])}
-                          />
-                        </button>
-                      ))}
-                    </span>
-                  ) : null}
-                </span>
-                <time className="build-activity-time" dateTime={new Date(entry.at).toISOString()}>
-                  {entry.pending ? '' : formatRelativeTime(entry.at, i18n.language)}
-                </time>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {zoomed ? <ShotLightbox token={token} item={zoomed} onClose={() => setZoomed(null)} /> : null}
     </div>
   );
 }
