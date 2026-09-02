@@ -48,7 +48,7 @@
     "@google-cloud/firestore": "^8.7.0",
     "diff": "^9.0.0",
     "esbuild": "0.25.12",
-    "fastify": "^5.10.0",
+    "fastify": "^5.12.1",
     "fastify-rate-limit": "npm:@fastify/rate-limit@^11.1.0",
     "genaicode": "^2.3.0",
     "google-auth-library": "^10.9.0",
