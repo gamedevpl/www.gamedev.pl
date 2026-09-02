@@ -1,5 +1,6 @@
 import type { VisitRouteKind } from '@gamedevpl/contract';
 
+// Kind only: never tokens, slugs, or other URL params.
 export function routeKind(view: string): VisitRouteKind {
   switch (view) {
     case 'play':

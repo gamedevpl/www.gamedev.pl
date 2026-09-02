@@ -163,9 +163,13 @@ export interface VisitEvent {
   utmSource?: string;
   utmMedium?: string;
   utmCampaign?: string;
+  // cli_step: curl, ps1, or update. Never a uid.
   channel?: string;
+  // cli_step: linux, darwin, or win32. Never a uid.
   os?: string;
+  // cli_step: which adapter ran. Never a uid.
   adapter?: string;
+  // cli_step: verify_failed rung. Never a uid.
   stage?: string;
 }
 
