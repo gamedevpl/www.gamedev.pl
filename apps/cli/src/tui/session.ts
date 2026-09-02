@@ -58,7 +58,12 @@ export function createTuiSession(banner: string): TuiSession {
       emit();
     },
     setDraft(draft) {
-      state = { ...state, draft: draft.replace(/[\u0000-\u001f\u007f]/g, '') };
+      let next = '';
+      for (const ch of draft) {
+        const code = ch.charCodeAt(0);
+        if (code >= 32 && code !== 127) next += ch;
+      }
+      state = { ...state, draft: next };
       emit();
     },
     movePick(delta) {
