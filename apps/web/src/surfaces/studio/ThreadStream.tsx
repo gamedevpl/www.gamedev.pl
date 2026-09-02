@@ -8,7 +8,6 @@ import { BuildHeartbeat } from './BuildHeartbeat.js';
 import { PRESENCE_THOUGHT_MS } from './presenceThought.js';
 import { ShotLightbox } from './ShotLightbox.js';
 import type { ActivityEntry } from './buildActivityFeed.js';
-import './status-thread.css';
 
 export type ThreadWorkingState = {
   // Coarse phase — "Writing code" / "Starting agent".
@@ -128,7 +127,7 @@ export function ThreadStream({
                             src={buildMediaUrl(token, item)}
                             alt={item.label || t('statusView.gallery.alt')}
                             loading="lazy"
-                            onError={() => setBroken((refs) => [...refs, item.ref])}
+                            onError={() => setBroken((refs) => (refs.includes(item.ref) ? refs : [...refs, item.ref]))}
                           />
                         </button>
                       ))}

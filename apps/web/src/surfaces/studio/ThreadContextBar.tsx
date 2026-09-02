@@ -25,17 +25,19 @@ export function ThreadContextBar({
   const { t } = useTranslation();
   const [, setTick] = useState(0);
 
+  const thoughtAt = thought?.at ?? null;
+
   // One timeout at expiry so the headline falls back without a poll.
   useEffect(() => {
-    if (!thought) return;
-    const remaining = thought.at + PRESENCE_THOUGHT_MS - Date.now();
+    if (thoughtAt === null) return;
+    const remaining = thoughtAt + PRESENCE_THOUGHT_MS - Date.now();
     if (remaining <= 0) {
       setTick((n) => n + 1);
       return;
     }
     const id = window.setTimeout(() => setTick((n) => n + 1), remaining);
     return () => window.clearTimeout(id);
-  }, [thought]);
+  }, [thoughtAt]);
 
   const thoughtFresh = thought !== null && thought !== undefined && Date.now() - thought.at <= PRESENCE_THOUGHT_MS;
   const thoughtLabel =
