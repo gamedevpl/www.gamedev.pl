@@ -566,7 +566,7 @@
     "apps/web/src/surfaces/studio/CreatorStudioView.handoff.test.tsx": 291,
     "apps/web/src/surfaces/studio/CreatorStudioView.test.tsx": 858,
     "apps/web/src/surfaces/studio/CreatorStudioView.theater.test.tsx": 69,
-    "apps/web/src/surfaces/studio/CreatorStudioView.tsx": 2931,
+    "apps/web/src/surfaces/studio/CreatorStudioView.tsx": 1806,
     "apps/web/src/surfaces/studio/EditorCollections.test.tsx": 13,
     "apps/web/src/surfaces/studio/editorJsonLiveDiff.ts": 92,
     "apps/web/src/surfaces/studio/EditorPanel.test.tsx": 16,
