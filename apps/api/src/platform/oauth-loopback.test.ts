@@ -11,7 +11,7 @@ import {
 } from './oauth-cli-test-app.js';
 import { InMemoryStore } from './store.js';
 
-describe('OAuth loopback redirects (CL-06)', () => {
+describe('OAuth loopback redirects (CL-05)', () => {
   let app: FastifyInstance | undefined;
   let restore: (() => void) | undefined;
 

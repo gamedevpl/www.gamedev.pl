@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DEVICE_CODE_TTL_MS, DEVICE_GRANT_TYPE } from './oauth-device.js';
 import { GAMEDEV_CLI_CLIENT_ID } from './oauth-first-party.js';
-import { buildOAuthApp, enableCliSurface, sessionCookie } from './oauth-cli-test-app.js';
+import { buildOAuthApp, enableCliSurface, sessionCookie, SESSION_SECRET } from './oauth-cli-test-app.js';
+import { consentToken } from './oauth-consent.js';
 import { InMemoryStore } from './store.js';
 
 describe('OAuth device authorization (CL-08)', () => {
@@ -21,6 +22,15 @@ describe('OAuth device authorization (CL-08)', () => {
     if (app) await app.close();
     app = undefined;
   });
+
+  function deviceConsent(uid = 'g:boss'): string {
+    return consentToken({
+      uid,
+      clientId: GAMEDEV_CLI_CLIENT_ID,
+      codeChallenge: 'device',
+      secret: SESSION_SECRET,
+    });
+  }
 
   async function setup(): Promise<InMemoryStore> {
     const store = new InMemoryStore();
@@ -91,11 +101,23 @@ describe('OAuth device authorization (CL-08)', () => {
     expect(rushed.statusCode).toBe(400);
     expect(rushed.json()).toEqual({ error: 'slow_down' });
 
+    const page = await app!.inject({
+      method: 'GET',
+      url: '/device',
+      headers: { cookie: sessionCookie('g:boss') },
+    });
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toContain('name="consent_token"');
+
     const approve = await app!.inject({
       method: 'POST',
       url: '/device',
       headers: { cookie: sessionCookie('g:boss'), 'content-type': 'application/x-www-form-urlencoded' },
-      payload: new URLSearchParams({ user_code: body.user_code, action: 'approve' }).toString(),
+      payload: new URLSearchParams({
+        user_code: body.user_code,
+        action: 'approve',
+        consent_token: deviceConsent(),
+      }).toString(),
     });
     expect(approve.statusCode).toBe(200);
     expect(approve.body).toMatch(/Approved/i);
@@ -135,10 +157,46 @@ describe('OAuth device authorization (CL-08)', () => {
       method: 'POST',
       url: '/device',
       headers: { cookie: sessionCookie('g:boss'), 'content-type': 'application/x-www-form-urlencoded' },
-      payload: new URLSearchParams({ user_code: body.user_code }).toString(),
+      payload: new URLSearchParams({
+        user_code: body.user_code,
+        consent_token: deviceConsent(),
+      }).toString(),
     });
     expect(missing.statusCode).toBe(200);
     expect(missing.body).toMatch(/Choose Approve or Deny/i);
+    expect(missing.body).not.toMatch(/Approved/i);
+
+    const poll = await app!.inject({
+      method: 'POST',
+      url: '/oauth/token',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({
+        grant_type: DEVICE_GRANT_TYPE,
+        device_code: body.device_code,
+        client_id: GAMEDEV_CLI_CLIENT_ID,
+      }).toString(),
+    });
+    expect(poll.statusCode).toBe(400);
+    expect(poll.json()).toEqual({ error: 'authorization_pending' });
+  });
+
+  it('does not approve a device code without a valid consent token', async () => {
+    await setup();
+    const issued = await app!.inject({
+      method: 'POST',
+      url: '/oauth/device',
+      headers: { 'content-type': 'application/json' },
+      payload: { client_id: GAMEDEV_CLI_CLIENT_ID, scope: 'creator' },
+    });
+    const body = issued.json() as { device_code: string; user_code: string };
+    const missing = await app!.inject({
+      method: 'POST',
+      url: '/device',
+      headers: { cookie: sessionCookie('g:boss'), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({ user_code: body.user_code, action: 'approve' }).toString(),
+    });
+    expect(missing.statusCode).toBe(200);
+    expect(missing.body).toMatch(/Refresh this page/i);
     expect(missing.body).not.toMatch(/Approved/i);
 
     const poll = await app!.inject({

@@ -4,7 +4,8 @@ import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import { InvalidSessionError, readSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { cliSurfaceEnabled } from './cli-surface.js';
 import { escapeHtml, MASCOT_SVG, OAUTH_PAGE_STYLES } from './oauth-page-chrome.js';
-import { isGamedevCliClient, sanitizeDeviceName } from './oauth-first-party.js';
+import { consentToken, consentTokenValid } from './oauth-consent.js';
+import { isGamedevCliClient, sanitizeDeviceName, GAMEDEV_CLI_CLIENT_ID } from './oauth-first-party.js';
 import { CREATOR_SCOPE, formatOAuthScope, MAX_OAUTH_GRANTS_PER_UID, parseOAuthScopes } from './oauth-scopes.js';
 import {
   AS_REFRESH_TOKEN_TTL_MS,
@@ -71,7 +72,11 @@ function readUid(request: FastifyRequest, sessionSecret: string, sessionSecretPr
   }
 }
 
-function devicePage(input: { userCode: string; error?: string }): string {
+function deviceConsent(uid: string, secret: string): string {
+  return consentToken({ uid, clientId: GAMEDEV_CLI_CLIENT_ID, codeChallenge: 'device', secret });
+}
+
+function devicePage(input: { userCode: string; consentToken: string; error?: string }): string {
   const error = input.error ? `<p class="hint">${escapeHtml(input.error)}</p>` : '';
   return `<!doctype html>
 <html lang="en">
@@ -88,6 +93,7 @@ function devicePage(input: { userCode: string; error?: string }): string {
     <p class="lead">Enter the code shown in your terminal.</p>
     ${error}
     <form method="post" action="/device">
+      <input type="hidden" name="consent_token" value="${escapeHtml(input.consentToken)}" />
       <label>Code <input name="user_code" value="${escapeHtml(input.userCode)}" autocomplete="off" /></label>
       <div class="actions">
         <button type="submit" name="action" value="approve" class="approve">Approve</button>
@@ -164,7 +170,7 @@ export function registerOAuthDeviceRoutes(
       typeof (request.query as { user_code?: string }).user_code === 'string'
         ? (request.query as { user_code: string }).user_code.trim().toUpperCase()
         : '';
-    return reply.type('text/html').send(devicePage({ userCode }));
+    return reply.type('text/html').send(devicePage({ userCode, consentToken: deviceConsent(uid, sessionSecret) }));
   });
 
   app.post('/device', async (request, reply) => {
@@ -173,21 +179,27 @@ export function registerOAuthDeviceRoutes(
     if (!uid) {
       return reply.redirect(`${canonicalAppBaseUrl()}/studio?oauth_return=/device`);
     }
-    const body = (request.body ?? {}) as { user_code?: string; action?: string };
+    const expected = deviceConsent(uid, sessionSecret);
+    const body = (request.body ?? {}) as { user_code?: string; action?: string; consent_token?: string };
     const userCode = typeof body.user_code === 'string' ? body.user_code.trim().toUpperCase() : '';
+    const page = (error?: string, code = userCode) =>
+      reply.type('text/html').send(devicePage({ userCode: code, consentToken: expected, error }));
+    if (!consentTokenValid(typeof body.consent_token === 'string' ? body.consent_token : '', expected)) {
+      return page('Refresh this page and try again.');
+    }
     const row = pending.get(userCode);
     if (!row || row.expiresAt <= now()) {
-      return reply.type('text/html').send(devicePage({ userCode, error: 'That code is unknown or expired.' }));
+      return page('That code is unknown or expired.');
     }
     if (body.action === 'deny') {
       row.denied = true;
-      return reply.type('text/html').send(devicePage({ userCode: '', error: 'Denied. You can close this page.' }));
+      return page('Denied. You can close this page.', '');
     }
     if (body.action !== 'approve') {
-      return reply.type('text/html').send(devicePage({ userCode, error: 'Choose Approve or Deny to continue.' }));
+      return page('Choose Approve or Deny to continue.');
     }
     row.uid = uid;
-    return reply.type('text/html').send(devicePage({ userCode: '', error: 'Approved. Return to your terminal.' }));
+    return page('Approved. Return to your terminal.', '');
   });
 }
 
