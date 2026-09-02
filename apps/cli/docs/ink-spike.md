@@ -4,8 +4,8 @@ Tried (Wave C): a compiled single-file binary plus Ink. **No-go then** because t
 pairing was Node SEA / bun-compile + Ink's reconciler, raw-mode stdin, and `SIGWINCH`.
 The shipped file is a Node 20 shebang script, so that pairing is gone.
 
-**Ink is in.** `yoga-layout` 3.2 inlines wasm as base64 JS, so the installer stays one
-esbuild file (`dist/gamedevpl.mjs`). The bundle aliases `react-devtools-core` to an empty
+**Ink is in.** esbuild bundles Ink and `yoga-layout` into one shebang file
+(`dist/gamedevpl.mjs`). The bundle aliases `react-devtools-core` to an empty
 module and uses a `createRequire` banner so CJS bits inside Ink load.
 
 The REPL is Ink: append-only transcript (`<Static>`), a boxed composer, and an arrow-key
