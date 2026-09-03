@@ -4,4 +4,4 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 mkdirSync(join(root, 'dist'), { recursive: true });
-copyFileSync(join(root, 'adapters.json'), join(root, 'dist', 'adapters.json'));
+copyFileSync(join(root, 'src/adapters.json'), join(root, 'dist', 'adapters.json'));

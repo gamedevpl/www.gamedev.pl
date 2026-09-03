@@ -1244,7 +1244,8 @@
     "aiDisclosure": "Games on gamedev.pl are created by artificial intelligence from descriptions written by users. They may contain errors.",
     "projectNav": "Project",
     "openSource": "Open source",
-    "reportBug": "Report a bug"
+    "reportBug": "Report a bug",
+    "cli": "gamedev CLI"
   },
   "contact": {
     "title": "Contact",
@@ -1642,6 +1643,10 @@
       "kimi": "Kimi",
       "cli": "CLI"
     },
+    "gamedevCli": {
+      "title": "gamedev CLI",
+      "hint": "Needs Node 20 — same as a working copy. Then connect this game. Same round as MCP — no extra secret."
+    },
     "rotate": {
       "start": "Rotate key",
       "confirm": "Rotating stops any agent still using the old key. Continue?",
@@ -1662,7 +1667,7 @@
   },
   "workspaceCheckout": {
     "title": "Work on this game in your own IDE",
-    "hint": "Get a working copy — this game's sources, a setup script and a README, ready for your own editor and your own Git repo. The game stays here: when you're done, your agent delivers the changes back and they go through the usual round, gate and review before anything is published.",
+    "hint": "Get a working copy — this game's sources, a setup script and a README, ready for your own editor. Deliver changes back with `gamedev submit`; they go through the usual round, gate and review before anything is published.",
     "action": "Get working copy",
     "pending": "Preparing your working copy…",
     "done": "Your working copy is on its way to your downloads.",
@@ -1676,7 +1681,7 @@
   },
   "oauthClients": {
     "title": "Connected coding agents",
-    "hint": "Agents authorized to access your games through MCP. Disconnecting one removes its access immediately.",
+    "hint": "Agents and the gamedev CLI authorized to access your games. Disconnecting one removes its access immediately.",
     "loading": "Loading connected clients…",
     "loadError": "We couldn't load connected clients right now.",
     "revokeError": "We couldn't disconnect that client. Try again in a moment.",

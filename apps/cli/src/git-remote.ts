@@ -14,11 +14,6 @@ export function refuseNonFastForward(): string {
   return `error ${unreconciledMessage()}`;
 }
 
-export function remoteSlugFromArgv(argv: string[]): string {
-  const url = argv[3] ?? argv[2] ?? '';
-  return url.replace(/^gamedev:\/\//, '').replace(/\/$/, '');
-}
-
 export function handleHelperLine(line: string, slug: string): string[] {
   const [cmd] = line.trim().split(' ');
   if (cmd === 'capabilities') return ['import', 'push', 'option', ''];

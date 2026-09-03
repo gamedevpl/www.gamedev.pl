@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "adapters": [
+    {
+      "name": "claude",
+      "command": "claude",
+      "versionFlag": "--version",
+      "headless": ["-p", "--output-format", "stream-json"],
+      "events": { "flag": "--output-format=stream-json", "dialect": "ndjson" },
+      "budget": { "turns": "--max-turns" },
+      "cwd": "game-dir",
+      "exit": { "success": [0], "failure": [1] }
+    },
+    {
+      "name": "codex",
+      "command": "codex",
+      "versionFlag": "--version",
+      "headless": ["exec", "--json"],
+      "events": { "flag": "--json", "dialect": "jsonl" },
+      "cwd": "game-dir",
+      "exit": { "success": [0], "failure": [1] }
+    },
+    {
+      "name": "gemini",
+      "command": "gemini",
+      "versionFlag": "--version",
+      "headless": ["-p"],
+      "events": { "flag": "", "dialect": "ndjson" },
+      "cwd": "game-dir",
+      "exit": { "success": [0], "failure": [1] }
+    },
+    {
+      "name": "vibe",
+      "command": "vibe",
+      "versionFlag": "--version",
+      "headless": ["--prompt"],
+      "events": { "flag": "--output", "dialect": "ndjson" },
+      "budget": { "turns": "--max-turns", "price": "--max-price" },
+      "cwd": "game-dir",
+      "exit": { "success": [0], "failure": [1] }
+    }
+  ]
+}

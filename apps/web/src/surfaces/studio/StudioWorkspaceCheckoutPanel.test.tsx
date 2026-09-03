@@ -115,7 +115,7 @@ describe('StudioWorkspaceCheckoutPanel', () => {
     const text = container.textContent ?? '';
     expect(text).toContain('Work on this game in your own IDE');
     expect(text).toContain('working copy');
-    expect(text).toMatch(/delivers the changes back/i);
+    expect(text).toMatch(/gamedev submit/i);
     expect(text).toMatch(/gate and review/i);
     // The feature is explicitly not a way to walk off with the game.
     expect(text).not.toMatch(/export|eject|take your game|download your game/i);

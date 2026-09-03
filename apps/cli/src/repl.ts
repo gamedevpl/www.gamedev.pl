@@ -1,7 +1,8 @@
 import { createTwoRegion, glyphs, wantsColor } from './renderer.js';
-import { completeSlash, SLASH_VERBS } from './argv.js';
+import { completeSlash, parseArgv, SLASH_VERBS, type SlashVerb } from './argv.js';
 import { postTurn } from './turn.js';
 import type { ApiClient } from './api.js';
+import { dispatchReadVerb } from './verbs.js';
 import { answerDraft, beginIntake, formatQuestion, submitIdea, type IntakeDraft } from './create.js';
 
 export type ReplLineResult = {
@@ -30,11 +31,30 @@ export async function handleReplLine(input: {
   const trimmed = input.line.trim();
   if (!trimmed) return { next: 'continue' };
   if (trimmed === '/quit' || trimmed === '/exit') return { next: 'quit' };
-  if (trimmed === '/help') {
-    input.write(SLASH_VERBS.map((verb) => `/${verb}`).join('\n'));
-    return { next: 'continue' };
-  }
-  if (trimmed.startsWith('/') && !trimmed.includes(' ')) {
+  if (trimmed.startsWith('/')) {
+    const [cmd, ...rest] = trimmed.slice(1).split(/\s+/);
+    if (cmd === 'help') {
+      input.write(SLASH_VERBS.map((verb) => `/${verb}`).join('\n'));
+      return { next: 'continue' };
+    }
+    if (cmd && (SLASH_VERBS as readonly string[]).includes(cmd)) {
+      const parsed = parseArgv(['node', 'cli', cmd, ...rest]);
+      const chunks: string[] = [];
+      const stdout = { write: (s: string) => (chunks.push(s), true) } as unknown as NodeJS.WriteStream;
+      const code = await dispatchReadVerb({
+        verb: cmd as SlashVerb,
+        args: parsed.args,
+        flags: parsed.flags,
+        api: input.api,
+        io: { stdout },
+      });
+      if (code !== null) {
+        input.write(chunks.join('').trimEnd() || `/${cmd}`);
+        return { next: 'continue' };
+      }
+      input.write(`run it as gamedev ${cmd}`);
+      return { next: 'continue' };
+    }
     const matches = completeSlash(trimmed);
     if (matches.length) input.write(matches.map((verb) => `/${verb}`).join('  '));
     return { next: 'continue' };

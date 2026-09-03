@@ -15,6 +15,7 @@ import { isConnectCollapsed, setConnectCollapsed } from '../../connectCollapse.j
 import { readStorageItem, writeStorageItem } from '../../core/persistence.js';
 import type { ConnectCardMode } from '../../selfBuildCopy.js';
 import { recordStudioStep } from '../../visitTelemetry.js';
+import { GamedevCliConnectTab } from './GamedevCliConnectTab.js';
 import './studio-connect.css';
 import './studio-connect-wizard.css';
 
@@ -631,6 +632,7 @@ export function StudioConnectCard({
           </div>
         </div>
       )}
+      <GamedevCliConnectTab slug={payload.slug} />
     </>
   ) : null;
 
@@ -782,8 +784,6 @@ export function StudioConnectCard({
         )
       ) : null}
 
-      {/* End-of-card dismiss: the title-row chip is easy to miss once the title wraps on
-          a phone; readers finish at the waiting line and need a clear exit there. */}
       {collapsible && !error && payload && !loading ? (
         <div className="studio-connect-foot-dismiss">
           <button

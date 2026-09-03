@@ -153,6 +153,10 @@ function paragraphsToHtml(paragraphs: string[]): string {
     .join('\n');
 }
 
+function cliPageUrl(siteUrl: string): string {
+  return `${siteUrl.replace(/\/$/, '')}/cli`;
+}
+
 const welcomeCopy: Record<Locale, (p: BetaWelcomeParams) => { subject: string; paragraphs: string[] }> = {
   en: ({ givenName, siteUrl }) => ({
     subject: "You're in — gamedev.pl closed beta",
@@ -166,6 +170,7 @@ const welcomeCopy: Record<Locale, (p: BetaWelcomeParams) => { subject: string; p
         '2. If you have an idea, try making one: describe it in a sentence and let an agent build it.',
         '3. Tell me what feels off, confusing, or delightful. Reply to this email, or use the contact form on the site. I read everything.',
       ].join('\n'),
+      `If you work in a terminal: ${cliPageUrl(siteUrl)}`,
       'This is a real beta. Things will break, and that is useful.',
       'See you inside,\nGrzegorz\ngamedev.pl',
     ],
@@ -182,6 +187,7 @@ const welcomeCopy: Record<Locale, (p: BetaWelcomeParams) => { subject: string; p
         '2. Jeśli masz pomysł, spróbuj zbudować własną: opisz ją zdaniem, agent zrobi resztę.',
         '3. Napisz, gdy coś zgrzyta, jest niejasne albo akurat trafione. Najłatwiej: odpowiedz na tego maila albo użyj formularza kontaktowego na stronie. Czytam wszystko.',
       ].join('\n'),
+      `Jeśli wolisz terminal: ${cliPageUrl(siteUrl)}`,
       'To prawdziwa beta. Rzeczy będą się psuć — i właśnie o to chodzi.',
       'Do zobaczenia,\nGrzegorz\ngamedev.pl',
     ],

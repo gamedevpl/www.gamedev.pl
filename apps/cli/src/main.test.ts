@@ -1,7 +1,6 @@
-import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { PassThrough } from 'node:stream';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { isLaunchedEntry, runCli } from './main.js';
 import { EXIT_AUTH, EXIT_GREEN, EXIT_INPUT } from './exit-codes.js';
 
@@ -53,9 +52,25 @@ describe('runCli verbs', () => {
     expect(await runCli(['node', 'gamedev', 'diff'], { HOME: '/tmp/gamedev-cli-empty' }, streams)).toBe(EXIT_INPUT);
   });
 
-  it('runs when launched as the bundled gamedev.mjs, not only main.ts', () => {
-    const entry = resolve('/tmp/gamedev.mjs');
-    expect(isLaunchedEntry(entry, pathToFileURL(entry).href)).toBe(true);
-    expect(isLaunchedEntry('/tmp/other.js', pathToFileURL(entry).href)).toBe(false);
+  it('treats the installed script name as a direct launch', () => {
+    const dest = '/home/me/.local/bin/gamedev';
+    expect(isLaunchedEntry(dest, pathToFileURL(dest).href)).toBe(true);
+    expect(isLaunchedEntry(dest, pathToFileURL('/tmp/vitest').href)).toBe(false);
+    expect(isLaunchedEntry(undefined)).toBe(false);
+  });
+
+  it('stops status --watch after a terminal published read', async () => {
+    let calls = 0;
+    vi.stubGlobal('fetch', async () => {
+      calls += 1;
+      return new Response(JSON.stringify({ status: 'published', slug: 'sky-dodge' }), { status: 200 });
+    });
+    const streams = io();
+    expect(
+      await runCli(['node', 'gamedev', 'status', 'tok', '--watch'], { GAMEDEV_TOKEN: 'gdpl_pat_x' }, streams),
+    ).toBe(EXIT_GREEN);
+    expect(calls).toBe(1);
+    expect(streams.read().out).toContain('published');
+    vi.unstubAllGlobals();
   });
 });

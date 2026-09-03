@@ -1258,7 +1258,8 @@
     "aiDisclosure": "Gry w serwisie gamedev.pl tworzy sztuczna inteligencja na podstawie opisów napisanych przez użytkowników. Mogą zawierać błędy.",
     "projectNav": "Projekt",
     "openSource": "Otwarte źródła",
-    "reportBug": "Zgłoś błąd"
+    "reportBug": "Zgłoś błąd",
+    "cli": "gamedev CLI"
   },
   "contact": {
     "title": "Kontakt",
@@ -1656,6 +1657,10 @@
       "kimi": "Kimi",
       "cli": "CLI"
     },
+    "gamedevCli": {
+      "title": "gamedev CLI",
+      "hint": "Potrzebujesz Node 20 — tak jak przy kopii roboczej. Potem podłącz tę grę. Ta sama runda co MCP — bez dodatkowego sekretu."
+    },
     "rotate": {
       "start": "Obróć klucz",
       "confirm": "Obrócenie zatrzyma każdego agenta, który nadal używa starego klucza. Kontynuować?",
@@ -1676,7 +1681,7 @@
   },
   "workspaceCheckout": {
     "title": "Pracuj nad tą grą we własnym IDE",
-    "hint": "Pobierz kopię roboczą — źródła tej gry, skrypt konfiguracyjny i README, gotowe dla Twojego edytora i Twojego repozytorium Git. Gra zostaje tutaj: gdy skończysz, Twój agent oddaje zmiany, a te przechodzą zwykłą rundę, bramkę i recenzję, zanim cokolwiek zostanie opublikowane.",
+    "hint": "Pobierz kopię roboczą — źródła tej gry, skrypt konfiguracyjny i README, gotowe dla Twojego edytora. Oddaj zmiany poleceniem `gamedev submit`; przechodzą zwykłą rundę, bramkę i recenzję, zanim cokolwiek zostanie opublikowane.",
     "action": "Pobierz kopię roboczą",
     "pending": "Przygotowujemy kopię roboczą…",
     "done": "Kopia robocza trafia do Twoich pobranych plików.",
@@ -1690,7 +1695,7 @@
   },
   "oauthClients": {
     "title": "Podłączone agenty kodujące",
-    "hint": "Agenty z dostępem do Twoich gier przez MCP. Odłączenie natychmiast odbiera dostęp.",
+    "hint": "Agenty i gamedev CLI z dostępem do Twoich gier. Odłączenie natychmiast odbiera dostęp.",
     "loading": "Wczytywanie podłączonych klientów…",
     "loadError": "Nie udało się wczytać podłączonych klientów.",
     "revokeError": "Nie udało się odłączyć tego klienta. Spróbuj za chwilę.",

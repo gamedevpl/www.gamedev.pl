@@ -11,10 +11,11 @@ import { CliError, EXIT_GREEN, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js'
 import { describeError, pipeNeedsFlag } from './errors.js';
 import { handleReplLine, replBanner } from './repl.js';
 import type { IntakeDraft } from './create.js';
-import { getStatus, previewUrl } from './turn.js';
+import { getStatus, isTerminalStatus, previewUrl } from './turn.js';
 import { checkoutGame, diffGame, pullGame, readCheckoutSlug, unreconciledMessage } from './checkout.js';
 import { runLadder, assertLadderGreen } from './verify.js';
 import { runGitRemoteHelper } from './git-remote-main.js';
+import { dispatchReadVerb } from './verbs.js';
 
 function storeFromEnv(env: NodeJS.ProcessEnv): TokenStore {
   if (env.GAMEDEV_TOKEN) {
@@ -73,11 +74,19 @@ export async function runCli(
     if (verb === 'status') {
       const token = args[0];
       if (!token) throw new CliError('gamedev status <token-or-slug>', EXIT_INPUT, '<token>');
-      const status = await getStatus(api, token);
-      if (asJson) io.stdout.write(`${JSON.stringify(status)}\n`);
-      else {
-        io.stdout.write(`${status.status}${status.stall ? ` (${status.stall})` : ''}\n`);
-        if (status.preview?.slug) io.stdout.write(`${previewUrl(api.origin, status.preview.slug)}\n`);
+      const max = typeof flags.watch === 'string' ? Number(flags.watch) || 30 : flags.watch ? 30 : 1;
+      let delay = 2000;
+      let status = await getStatus(api, token);
+      for (let i = 1; i <= max; i += 1) {
+        if (asJson) io.stdout.write(`${JSON.stringify(status)}\n`);
+        else {
+          io.stdout.write(`${status.status}${status.stall ? ` (${status.stall})` : ''}\n`);
+          if (status.preview?.slug) io.stdout.write(`${previewUrl(api.origin, status.preview.slug)}\n`);
+        }
+        if (!flags.watch || i === max || isTerminalStatus(status.status)) break;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        delay = Math.min(Math.round(delay * 1.5), 15_000);
+        status = await getStatus(api, token);
       }
       return EXIT_GREEN;
     }
@@ -122,6 +131,8 @@ export async function runCli(
       io.stdout.write(`gamedev connect ${args[0] ?? ''}\n`);
       return EXIT_GREEN;
     }
+    const read = await dispatchReadVerb({ verb, args, flags, api, io });
+    if (read !== null) return read;
     if (verb === 'repl') {
       if (!tty) throw pipeNeedsFlag('a verb such as gamedev whoami');
       io.stdout.write(`${replBanner(true, env)}\n`);
