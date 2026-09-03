@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { isUnattributable, logUnattributableClient } from './client-address-metrics.js';
 
 // Forgeable unless nothing can reach the service around the edge.
 const EDGE_CLIENT_IP_HEADER = 'fastly-client-ip';
@@ -39,5 +40,19 @@ export function registerClientAddress(app: FastifyInstance): void {
   app.decorateRequest('clientIp', '');
   app.addHook('onRequest', async (request) => {
     request.clientIp = resolveClientIp(request);
+  });
+
+  // These callers share one bucket, so record whether that refused anyone.
+  app.addHook('onResponse', async (request, reply) => {
+    if (!isUnattributable(request.clientIp)) return;
+    const forwardedFor = request.headers['x-forwarded-for'];
+    logUnattributableClient(request.log, {
+      route: request.routeOptions?.url ?? 'unrouted',
+      method: request.method,
+      statusCode: reply.statusCode,
+      rateLimited: reply.statusCode === 429,
+      authenticated: Boolean(request.user),
+      forwardedFor: typeof forwardedFor === 'string' ? forwardedFor : null,
+    });
   });
 }

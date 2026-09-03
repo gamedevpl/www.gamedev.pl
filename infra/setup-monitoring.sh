@@ -325,6 +325,22 @@ ensure_log_metric knowledge_query_calls \
   'knowledge_query calls, any mode. Backs alert A26.' \
   "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"knowledge_query answered\""
 
+# Callers Cloud Run could not attribute: X-Forwarded-For arrives holding 0.0.0.0, the
+# unspecified address, so every one of them lands in a single shared per-IP bucket. Measured
+# at ~3% of requests and present since 2026-08-04, long before any CDN work. Harmless while
+# traffic is low and a trap under a wave, which is when a shared bucket refuses hardest.
+#
+# The counter that matters is the rateLimited field, not the volume: it says whether the
+# shared bucket has actually refused anyone yet, which is what decides the fix. Failing open
+# would be wrong here — the auth brute-force limiter reads the same address, and anyone able
+# to reach us by this path would get unlimited attempts.
+#
+# The message string is the contract with apps/api/src/platform/client-address-metrics.ts,
+# asserted from both sides by client-address-metrics.test.ts.
+ensure_log_metric unattributable_client_requests \
+  'Requests whose caller Cloud Run reported as the unspecified address (shared rate-limit bucket).' \
+  "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"unattributable client address\""
+
 # The in-process tsc preflight (typecheck-preflight.ts) abandons a check that ran past its
 # soft wall and accepts the delivery unvalidated rather than blocking the agent — the same
 # fail-open shape as everywhere else in this pipeline. One skip is a heavy round (a big
