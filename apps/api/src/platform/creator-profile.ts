@@ -6,21 +6,15 @@
  * SPEC.md never carries identity. See www.gamedev.pl-ops docs/creator-profiles-plan.md.
  */
 
-/** Lowercase handle: starts with a letter, then letters/digits/underscores. */
 import type { AvatarMode } from '@gamedevpl/contract';
 
+/** Lowercase handle: starts with a letter, then letters/digits/underscores. */
 export const HANDLE_PATTERN = /^[a-z][a-z0-9_]{2,23}$/;
 
 export const PROFILE_NAME_MAX = 40;
 export const PROFILE_BIO_MAX = 280;
-
-/** How long after a rename before the old handle can be claimed by someone else. */
 export const HANDLE_RENAME_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
 
-/**
- * Path segments, brand, and vocabulary a creator must not claim as a handle.
- * Kept lowercase; matching is case-insensitive after normalisation.
- */
 /**
  * The handle platform-authored games live under, so every published game has an
  * address in the `/:handle/:slug` namespace.
@@ -33,12 +27,17 @@ export const HANDLE_RENAME_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
  */
 export const PLATFORM_HANDLE = 'gamedevpl';
 
+/**
+ * Path segments, brand, and vocabulary a creator must not claim as a handle.
+ * Kept lowercase; matching is case-insensitive after normalisation.
+ */
 export const RESERVED_HANDLES: ReadonlySet<string> = new Set([
   'admin',
   'administrator',
   'anonymous',
   'api',
   'auth',
+  'cli',
   'contact',
   'create',
   'creator',

@@ -22,7 +22,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { rememberBounded } from '../platform/bounded-map.js';
 import type { Store, VisitEvent } from '../platform/store.js';
-
+import { cliStepEventSchema, toCliVisitEvent } from './visit-cli-event.js';
+import { isVisitTelemetryRateLimited } from './visit-telemetry-limit.js';
 /**
  * Visit telemetry intake — the write half of the funnel that play telemetry cannot see.
  *
@@ -45,8 +46,6 @@ import type { Store, VisitEvent } from '../platform/store.js';
 const MAX_EVENTS_PER_REQUEST = 25;
 const MAX_EVENTS_PER_VISIT = 200;
 const MAX_COMPLETION_EVENTS_PER_VISIT = 50;
-const MAX_REQUESTS_PER_WINDOW = 60;
-const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const MAX_VISIT_MS = 24 * 60 * 60 * 1000;
 /** How far back an event may be dated from its flush — bounds client-supplied offsets. */
 const MAX_BACKDATE_MS = 6 * 60 * 60 * 1000;
@@ -57,8 +56,6 @@ const MAX_BACKDATE_MS = 6 * 60 * 60 * 1000;
  * caller a fresh window, and real client addresses are not cheap to vary.
  */
 const MAX_TRACKED_VISITS = 5000;
-const MAX_TRACKED_IPS = 20_000;
-
 const RouteKindSchema = z.enum(VISIT_ROUTE_KINDS);
 const CreateStepSchema = z.enum(CREATE_STEPS);
 const WaitlistStepSchema = z.enum(WAITLIST_STEPS);
@@ -141,6 +138,7 @@ const EventSchema = z.discriminatedUnion('type', [
     ...offsetField,
   }),
   z.object({ type: z.literal('code_step'), step: CodeStepSchema, ...offsetField }),
+  cliStepEventSchema(offsetField),
   z.object({
     type: z.literal('code_completion'),
     kind: CodeCompletionKindSchema,
@@ -163,17 +161,6 @@ export interface VisitTelemetryRoutesOptions {
   now?: () => number;
 }
 
-function isRateLimited(buckets: Map<string, number[]>, key: string, currentTime: number): boolean {
-  const hits = (buckets.get(key) ?? []).filter((timestamp) => currentTime - timestamp < RATE_LIMIT_WINDOW_MS);
-  if (hits.length >= MAX_REQUESTS_PER_WINDOW) {
-    rememberBounded(buckets, key, hits, MAX_TRACKED_IPS);
-    return true;
-  }
-  hits.push(currentTime);
-  rememberBounded(buckets, key, hits, MAX_TRACKED_IPS);
-  return false;
-}
-
 export async function registerVisitTelemetryRoutes(
   app: FastifyInstance,
   options: VisitTelemetryRoutesOptions,
@@ -193,7 +180,7 @@ export async function registerVisitTelemetryRoutes(
       return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
     }
 
-    if (isRateLimited(requestsByIp, request.clientIp, currentTime)) {
+    if (isVisitTelemetryRateLimited(requestsByIp, request.clientIp, currentTime)) {
       return reply.status(429).send({ error: 'too many telemetry requests' });
     }
 
@@ -284,6 +271,8 @@ export async function registerVisitTelemetryRoutes(
           return { ...base, type: event.type, step: event.step };
         case 'code_step':
           return { ...base, type: event.type, step: event.step };
+        case 'cli_step':
+          return toCliVisitEvent(base, event);
         case 'code_completion':
           return {
             ...base,

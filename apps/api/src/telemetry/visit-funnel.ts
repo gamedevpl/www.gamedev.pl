@@ -27,7 +27,7 @@ import {
   type WaitlistStep,
 } from '@gamedevpl/contract';
 import type { VisitEvent } from '../platform/store.js';
-
+import { summarizeCliFunnel } from './visit-cli-funnel.js';
 /**
  * Aggregates raw visit events into the funnel — the Stage 0 metrics of gtm-plan.md in the private www.gamedev.pl-ops repo.
  *
@@ -41,9 +41,7 @@ import type { VisitEvent } from '../platform/store.js';
  * strings the intake already validated.
  */
 
-/** Buckets for "how long did it take to reach a first play", in seconds. */
 const TIME_TO_PLAY_BUCKETS = [10, 30, 60, 180, 600] as const;
-
 export interface VisitFunnel {
   /** Distinct visits (tabs) seen in the window. */
   visits: number;
@@ -110,6 +108,7 @@ export interface VisitFunnel {
    */
   editing: Array<{ step: EditorStep; visits: number }>;
   coding: Array<{ step: CodeStep; visits: number }>;
+  cli: ReturnType<typeof summarizeCliFunnel>;
   completion: CodeCompletionFunnel;
   /**
    * The NL tuning lane, against `asked` as its denominator: of the sittings that
@@ -530,6 +529,7 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       step,
       visits: rollups.filter((rollup) => rollup.codeSteps.has(step)).length,
     })),
+    cli: summarizeCliFunnel(events),
     completion: {
       requests: completionRows.reduce((total, row) => total + row.requests, 0),
       shown: completionRows.reduce((total, row) => total + row.shown, 0),

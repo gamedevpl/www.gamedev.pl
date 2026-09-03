@@ -193,6 +193,13 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
     `coding` to `VisitFunnel` (`visit-funnel.ts`), rendered as a Code surface block on
     `VisitFunnelPanel` beside Editing. `CODE_STEPS` lives in the shared vocabulary module
     like the others.
+  - **CLI (`gamedev`) funnel write-side shipped, operator panel unread (CL-01 / CL-39):**
+    `cli_step` (`installed` → `authorized` → `first_turn` → `build_requested` →
+    `delivered` → `published`, plus `delegate_offered`/`delegate_used`/`verify_failed`
+    beside the ladder) is on the visit stream with closed `channel` / `os` / `adapter` /
+    `stage` dimensions. Never source text, prompts, file paths, or game titles.
+    `summarizeVisitFunnel` already rolls it up as `cli`; the VisitFunnelPanel block is
+    CL-39. `bot:` exclusion is unchanged — visit events are unattributed.
   - ~~Managed delivery preflight / gate effectiveness unmeasured~~ — **closed (MR-07)**:
     server log metrics in `delivery-metrics.ts` (`delivery preflight refused`,
     `delivery accepted`, `delivery gate verdict`) answer whether audio/symbols/typecheck

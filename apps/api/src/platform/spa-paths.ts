@@ -121,15 +121,15 @@ export function isKnownSpaShellPath(urlOrPath: string): boolean {
   if (JOIN_PATTERN.test(pathname)) return true;
   if (INVITE_PATTERN.test(pathname)) return true;
 
-  if (CREATOR_ALIAS_PATTERN.test(pathname)) return true;
-  if (ROOT_CREATOR_PATTERN.test(pathname)) return !RESERVED_HANDLES.has(pathname.slice(1));
+  const creatorAlias = pathname.match(CREATOR_ALIAS_PATTERN)?.[1];
+  if (creatorAlias) return creatorAlias === PLATFORM_HANDLE || !RESERVED_HANDLES.has(creatorAlias);
+  if (ROOT_CREATOR_PATTERN.test(pathname))
+    return pathname.slice(1) === PLATFORM_HANDLE || !RESERVED_HANDLES.has(pathname.slice(1));
 
   // Reserved handles are not addresses — except the platform's own, which is where
   // every game with no creator to name lives (creator-profile.ts PLATFORM_HANDLE).
   const gamePageMatch = pathname.match(GAME_PAGE_PATTERN);
-  if (gamePageMatch?.[1]) {
-    return gamePageMatch[1] === PLATFORM_HANDLE || !RESERVED_HANDLES.has(gamePageMatch[1]);
-  }
+  if (gamePageMatch?.[1]) return gamePageMatch[1] === PLATFORM_HANDLE || !RESERVED_HANDLES.has(gamePageMatch[1]);
 
   return false;
 }

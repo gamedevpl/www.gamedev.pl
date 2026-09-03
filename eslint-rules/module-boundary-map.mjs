@@ -74,6 +74,8 @@ const FILE_BUCKET = {
   'dev-seed-studio': 'platform',
   'openai-apps-challenge': 'platform',
   'spa-paths': 'platform',
+  // Kill switch + reserved installer routes for the gamedev CLI surface (CL-02).
+  'cli-surface': 'platform',
   'theme-css-generator': 'platform',
   translate: 'platform',
   'localize-intake': 'platform',
@@ -365,6 +367,9 @@ const FILE_BUCKET = {
   'telemetry-trends': 'telemetry',
   'visit-funnel': 'telemetry',
   'visit-telemetry': 'telemetry',
+  'visit-cli-event': 'telemetry',
+  'visit-cli-funnel': 'telemetry',
+  'visit-telemetry-limit': 'telemetry',
   'creator-metrics': 'telemetry',
   'chat-agent-metrics': 'telemetry',
 

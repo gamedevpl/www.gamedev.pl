@@ -76,6 +76,7 @@ import { registerSubmissionRoutes, type SubmissionRoutesOptions } from '../submi
 import { mintToken } from './submission-token.js';
 import { registerTelemetryRoutes, type TelemetryRoutesOptions } from '../telemetry/telemetry.js';
 import { registerVisitTelemetryRoutes } from '../telemetry/visit-telemetry.js';
+import { registerCliSurfaceRoutes } from './cli-surface.js';
 import { registerVoteRoutes, type VoteRoutesOptions } from '../community/votes.js';
 import { registerRecommendationRoutes, type RecommendationRoutesOptions } from '../catalog/recommendations.js';
 import { createCombinedPublishedSlugGate, createPublishedSlugGateFromEnv } from '../catalog/published-slugs.js';
@@ -91,7 +92,6 @@ import { registerCreatorAgentKeyRoutes } from '../agent-surface/creator-agent-ke
 import { isPublishedEntry } from '@gamedevpl/contract';
 
 const GAME_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-
 function parsePublicPlaySlugs(value: string | undefined): string[] {
   return [
     ...new Set(
@@ -522,7 +522,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Safe to leave open: the handler never reads request.user and records nothing
   // that identifies a visitor, so it costs nothing to admit from the open internet.
   await registerVisitTelemetryRoutes(app, { store });
-
+  await registerCliSurfaceRoutes(app);
   // Thumbs up/down (docs/improvement-loop-plan.md, signal source #2). Casting or
   // clearing a vote needs a session (request.user), same as push subscriptions; the
   // count read does not, so a shared game link shows real numbers to a visitor who

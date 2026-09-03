@@ -2,6 +2,11 @@ import {
   PLAY_VIAS,
   type AssistStep,
   type BetaWelcomeStep,
+  type CliAdapter,
+  type CliInstallChannel,
+  type CliPlatformOs,
+  type CliStep,
+  type CliVerifyStage,
   type CodeCompletionKind,
   type CodeCompletionOutcome,
   type CodeStep,
@@ -19,10 +24,18 @@ import {
   type WaitlistStep,
 } from '@gamedevpl/contract';
 import { NAVIGATE_EVENT, parsePathRoute } from './core/router.js';
+import { routeKind } from './visitRouteKind.js';
+
+export { routeKind } from './visitRouteKind.js';
 
 export type {
   AssistStep,
   BetaWelcomeStep,
+  CliAdapter,
+  CliInstallChannel,
+  CliPlatformOs,
+  CliStep,
+  CliVerifyStage,
   CodeCompletionKind,
   CodeCompletionOutcome,
   CodeStep,
@@ -109,6 +122,14 @@ export type VisitEvent =
   | { type: 'assist_step'; step: AssistStep }
   | { type: 'remix_step'; step: RemixStep; via?: RemixPaintedVia; control?: RemixControl }
   | { type: 'code_step'; step: CodeStep }
+  | {
+      type: 'cli_step';
+      step: CliStep;
+      channel?: CliInstallChannel;
+      os?: CliPlatformOs;
+      adapter?: CliAdapter;
+      stage?: CliVerifyStage;
+    }
   | {
       type: 'code_completion';
       kind: CodeCompletionKind;
@@ -209,62 +230,6 @@ export function utmFields(
     ...(utmMedium === undefined ? {} : { utmMedium }),
     ...(utmCampaign === undefined ? {} : { utmCampaign }),
   };
-}
-
-/**
- * The route's kind, with every parameter discarded.
- *
- * Status and join routes carry capability tokens; play carries a slug.
- * Reducing to the bare view name here is what guarantees none of them can reach the
- * wire, rather than relying on each call site to remember.
- */
-export function routeKind(view: string): VisitRouteKind {
-  switch (view) {
-    case 'play':
-    case 'join':
-    case 'invite':
-    case 'legal':
-    case 'studio':
-    case 'notFound':
-      return view;
-    case 'studioWelcome':
-    case 'studioConnect':
-      return 'studio';
-    // Legacy view name — `/draft/` parses as `play` now. Map here too so any leftover
-    // caller still reports `play` (the `draft` VisitRouteKind only remains for reading
-    // historical rows, not for new emissions).
-    case 'draft':
-      return 'play';
-    // The public game page is its own acquisition surface — the funnel's question 2
-    // ("does a visit that arrives on a game page play a second game") needs it
-    // distinguishable from a direct /play deep link, so it does not fold into `play`.
-    case 'game':
-      return 'game';
-    // Its own surface — cold traffic can land here, not just via home.
-    case 'create':
-      return 'create';
-    // Its own surface too, same reasoning as `create`.
-    case 'party':
-      return 'party';
-    // The console reports as `health`, the name it had when the funnel started
-    // recording it. Renaming the bucket would split one surface's history in two.
-    case 'admin':
-      return 'health';
-    // Reviewer desk is the same unlisted-console posture as `/admin`.
-    case 'review':
-      return 'health';
-    // Contact shares the public-chrome posture of legal pages (reachable without a
-    // session, outside the creator funnel). Folding it into `legal` keeps the
-    // visit vocabulary stable without inventing a new funnel bucket for a form.
-    case 'contact':
-      return 'legal';
-    // Public creator profiles share the open-chrome posture of legal/contact; fold
-    // into `legal` so the visit vocabulary stays stable without a new funnel bucket.
-    case 'creator':
-      return 'legal';
-    default:
-      return 'home';
-  }
 }
 
 /**
@@ -505,6 +470,35 @@ export function recordCodeStep(step: CodeStep): void {
   currentSession.record({ type: 'code_step', step });
 }
 
+export type RecordCliStepInput = {
+  step: CliStep;
+  channel?: CliInstallChannel;
+  os?: CliPlatformOs;
+  adapter?: CliAdapter;
+  stage?: CliVerifyStage;
+};
+
+let recordedCliSteps = new Set<string>();
+
+function cliStepKey(input: RecordCliStepInput): string {
+  return [input.step, input.channel, input.os, input.adapter, input.stage].filter(Boolean).join(':');
+}
+
+export function recordCliStep(input: RecordCliStepInput): void {
+  if (!currentSession) return;
+  const key = cliStepKey(input);
+  if (recordedCliSteps.has(key)) return;
+  recordedCliSteps.add(key);
+  currentSession.record({
+    type: 'cli_step',
+    step: input.step,
+    ...(input.channel ? { channel: input.channel } : {}),
+    ...(input.os ? { os: input.os } : {}),
+    ...(input.adapter ? { adapter: input.adapter } : {}),
+    ...(input.stage ? { stage: input.stage } : {}),
+  });
+}
+
 const MAX_COMPLETION_LATENCY_MS = 30_000;
 const MAX_COMPLETION_CANDIDATES = 5_000;
 const MAX_COMPLETION_CHARS = 4_000;
@@ -571,6 +565,7 @@ export function setVisitSessionForTesting(session: VisitSession | null): void {
   recordedAssistSteps = new Set();
   recordedRemixSteps = new Set();
   recordedCodeSteps = new Set();
+  recordedCliSteps = new Set();
 }
 
 export interface StartVisitTrackingOptions {

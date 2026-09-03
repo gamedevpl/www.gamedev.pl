@@ -335,7 +335,7 @@ done
 #
 # The rule this file already states for REMIX_DEBUG applies to every one of them: both
 # supported paths carry a flag, or neither should.
-for FLAG_VAR in CODE_LANE EDITOR_ASSIST MCP_AUTHORIZATION_SERVERS MCP_UI CODE_SURFACE TAB_COMPLETE; do
+for FLAG_VAR in CODE_LANE EDITOR_ASSIST MCP_AUTHORIZATION_SERVERS MCP_UI CODE_SURFACE TAB_COMPLETE CLI_SURFACE; do
   eval "FLAG_VAL=\${${FLAG_VAR}:-}"
   if [ -n "${FLAG_VAL}" ]; then
     ENV_VARS="${ENV_VARS}|${FLAG_VAR}=${FLAG_VAL}"

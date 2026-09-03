@@ -179,19 +179,15 @@ describe('parsePathRoute', () => {
         slug: 'neon-courier',
       });
     }
-    // The platform namespace is an address even though nobody can claim it — it is
-    // where games with no creator to name live.
+    expect(parsePathRoute('/gamedevpl')).toEqual({ view: 'creator', handle: 'gamedevpl' });
     expect(parsePathRoute('/gamedevpl/brick-storm')).toEqual({
       view: 'game',
       handle: 'gamedevpl',
       slug: 'brick-storm',
     });
-    // Other reserved segments stay closed.
     expect(parsePathRoute('/health/brick-storm')).toEqual({ view: 'notFound' });
     expect(parsePathRoute('/studio/brick-storm')).toEqual({ view: 'studio', game: 'brick-storm' });
-    // Unknown tab is a 404, not a silent fallback — same rule as the studio tabs.
     expect(parsePathRoute('/nightshift/neon-courier/nope')).toEqual({ view: 'notFound' });
-    // Handle and slug keep their own grammars.
     expect(parsePathRoute('/Nightshift/neon-courier')).toEqual({ view: 'notFound' });
     expect(parsePathRoute('/nightshift/Neon%20Courier')).toEqual({ view: 'notFound' });
     expect(parsePathRoute('/nightshift/-bad')).toEqual({ view: 'notFound' });
@@ -228,8 +224,8 @@ describe('parsePathRoute', () => {
     expect(parsePathRoute('/creators/ada_lovelace')).toEqual({ view: 'creator', handle: 'ada_lovelace' });
     expect(parsePathRoute('/creators/ab')).toEqual({ view: 'notFound' });
     expect(parsePathRoute('/creators/Ada')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/creators/cli')).toEqual({ view: 'notFound' });
   });
-
   // A cited clause has to survive the trip: `/terms#zglaszanie` is what goes into a
   // reply telling someone how to report content, and if the fragment knocked the
   // route back to home it would land them on the front page instead.
@@ -321,6 +317,10 @@ describe('path builders', () => {
   it('sends game page Up to the owning creator profile', () => {
     expect(navUpTarget({ view: 'game', handle: 'nightshift', slug: 'neon-courier' })).toEqual({
       path: '/nightshift',
+      labelKey: 'upCreator',
+    });
+    expect(navUpTarget({ view: 'game', handle: 'gamedevpl', slug: 'brick-storm' })).toEqual({
+      path: '/gamedevpl',
       labelKey: 'upCreator',
     });
   });

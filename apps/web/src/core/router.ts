@@ -1,4 +1,5 @@
 import type { LegalDocId } from '../legal/types.js';
+import { decodeSegment } from '../pathSegment.js';
 
 /**
  * Creator Studio work surface. Persisted in the URL so a refresh or shared link
@@ -161,18 +162,17 @@ export type AppRoute =
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const BETA_INVITE_CODE_PATTERN = /^[A-Za-z0-9_-]{32}$/;
 
-/** Creator handles — keep aligned with apps/api/src/creation/creator-profile.ts HANDLE_PATTERN. */
+/** Creator handles — keep aligned with apps/api/src/platform/creator-profile.ts HANDLE_PATTERN. */
 const CREATOR_HANDLE_PATTERN = /^[a-z][a-z0-9_]{2,23}$/;
 
 /**
  * Where games with no creator to name live — keep aligned with `PLATFORM_HANDLE` in
- * apps/api/src/creation/creator-profile.ts. Reserved against claiming, but a real address.
+ * apps/api/src/platform/creator-profile.ts. Reserved against claiming, but a real address.
  */
 export const PLATFORM_HANDLE = 'gamedevpl';
-
 /**
  * Handles nobody can claim — keep aligned with `RESERVED_HANDLES` in
- * apps/api/src/creation/creator-profile.ts (same duplication contract as spa-paths.ts).
+ * apps/api/src/platform/creator-profile.ts (same duplication contract as spa-paths.ts).
  * The game-page matcher checks it so `/health/<slug>`-shaped typos stay 404s on
  * the client exactly as the API's shell allowlist answers them.
  */
@@ -182,6 +182,7 @@ const RESERVED_HANDLE_SEGMENTS = new Set([
   'anonymous',
   'api',
   'auth',
+  'cli',
   'contact',
   'create',
   'creator',
@@ -219,24 +220,6 @@ const RESERVED_HANDLE_SEGMENTS = new Set([
 // Canonical play prefix is `/play`. `/ay` and `/ai` are accepted aliases (same view);
 // the app rewrites them to `/play/<slug>` so shared URLs stay consistent.
 const PLAY_PREFIX_PATTERN = /^\/(play|ay|ai)\/([^/]+)$/;
-
-/**
- * Percent-decode one path segment, or null when it is not decodable.
- *
- * `decodeURIComponent` throws on malformed encoding — `/play/%E0` is a URIError, not a
- * bad slug — and a throw here takes the whole app down on a route parse, which is the
- * one function in the client that must never fail. A segment that cannot be decoded is
- * a segment that cannot match anything, so null flows into the same `notFound` every
- * other unrecognised path takes. The API's shell allowlist has always guarded these the
- * same way (see spa-paths.ts); the client simply did not.
- */
-function decodeSegment(segment: string): string | null {
-  try {
-    return decodeURIComponent(segment);
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Parse the SPA route from pathname (+ optional hash for the join credential).
@@ -282,7 +265,11 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
   const creatorMatch = normalizedPath.match(/^\/creators\/([^/]+)$/);
   if (creatorMatch?.[1]) {
     const handle = decodeSegment(creatorMatch[1]);
-    if (handle && CREATOR_HANDLE_PATTERN.test(handle)) {
+    if (
+      handle &&
+      CREATOR_HANDLE_PATTERN.test(handle) &&
+      (handle === PLATFORM_HANDLE || !RESERVED_HANDLE_SEGMENTS.has(handle))
+    ) {
       return { view: 'creator', handle };
     }
     return { view: 'notFound' };
@@ -388,7 +375,12 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
   // `/studio`, `/privacy`, etc. keep their meaning. Those segments are also reserved at
   // handle-claim time; the ordering here is defense in depth for old data and typos.
   const rootHandle = decodeSegment(normalizedPath.slice(1));
-  if (!normalizedPath.slice(1).includes('/') && rootHandle && CREATOR_HANDLE_PATTERN.test(rootHandle)) {
+  if (
+    !normalizedPath.slice(1).includes('/') &&
+    rootHandle &&
+    CREATOR_HANDLE_PATTERN.test(rootHandle) &&
+    (rootHandle === PLATFORM_HANDLE || !RESERVED_HANDLE_SEGMENTS.has(rootHandle))
+  ) {
     return { view: 'creator', handle: rootHandle };
   }
 
