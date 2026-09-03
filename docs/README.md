@@ -63,6 +63,7 @@ survives only in this repo's early history.
 | [`own-ide-checkout.md`](./own-ide-checkout.md)                     | 🚧 A working copy for creators who prefer their own IDE — checkout, deliver back, one delivery contract |
 | [`cli-status-poll.md`](./cli-status-poll.md)                       | How a non-browser client watches a round: one status read, poll cadence, backoff (CL-12)                |
 | [`cli-pre-job-intake.md`](./cli-pre-job-intake.md)                 | Refine → submit stays client-side for the CLI's first milestone (CL-13)                                 |
+| [`../apps/cli/README.md`](../apps/cli/README.md)                   | `gamedev` terminal client in this repo — a separate `gamedevpl/gamedev-cli` repo is not planned         |
 | [`notifications-plan.md`](./notifications-plan.md)                 | Notify creators/players of transitions: detection sweep, per-user storage, in-app → email → push        |
 | [`creator-qa-plan.md`](./creator-qa-plan.md)                       | Clarifying-questions pass before spec freeze — raises the hit rate of the one-shot agent run            |
 | [`improvement-loop-plan.md`](./improvement-loop-plan.md)           | After publish: player signals → per-game scorecard → agent-assisted fixes and suggestions               |

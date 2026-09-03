@@ -1,0 +1,28 @@
+{
+  "name": "@gamedevpl/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "gamedev": "./dist/main.js",
+    "git-remote-gamedev": "./dist/git-remote-main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-adapters.mjs",
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "dev": "tsx src/main.ts",
+    "bundle": "node scripts/build-binary.mjs"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.14.15",
+    "esbuild": "0.25.12",
+    "tsx": "^4.16.5",
+    "typescript": "^5.5.4",
+    "vitest": "^3.2.7"
+  }
+}
