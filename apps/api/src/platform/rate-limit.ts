@@ -12,5 +12,7 @@ export async function registerRateLimit(app: FastifyInstance): Promise<void> {
     global: false,
     max: 100,
     timeWindow: '1 minute',
+    // Default keys on request.ip, which is the edge behind a CDN.
+    keyGenerator: (request) => request.clientIp,
   });
 }

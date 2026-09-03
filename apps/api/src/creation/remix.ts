@@ -1273,7 +1273,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
 
       const saved = await saveRemixAsStudioDraft({
         uid: request.user!.uid,
-        ip: request.ip,
+        ip: request.clientIp,
         parentSlug: session.slug,
         parentVersion,
         parentTitle: session.title,

@@ -149,7 +149,7 @@ export async function registerCreatorMediaRoutes(
       }
 
       const currentTime = now();
-      if (isRateLimited(mediaByIp, request.ip, currentTime, maxMediaPerWindow, mediaRateLimitWindowMs)) {
+      if (isRateLimited(mediaByIp, request.clientIp, currentTime, maxMediaPerWindow, mediaRateLimitWindowMs)) {
         return reply.status(429).send({ error: 'too many game requests, please try again later' });
       }
 
@@ -209,7 +209,7 @@ export async function registerCreatorMediaRoutes(
       }
 
       const currentTime = now();
-      if (isRateLimited(mediaByIp, request.ip, currentTime, maxMediaPerWindow, mediaRateLimitWindowMs)) {
+      if (isRateLimited(mediaByIp, request.clientIp, currentTime, maxMediaPerWindow, mediaRateLimitWindowMs)) {
         return reply.status(429).send({ error: 'too many game requests, please try again later' });
       }
 

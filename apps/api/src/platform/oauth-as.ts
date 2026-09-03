@@ -409,7 +409,7 @@ export function registerOAuthAuthorizationServerRoutes(
     { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
     async (request, reply) => {
       const nowMs = now();
-      if (isDcrRateLimited(request.ip, nowMs)) {
+      if (isDcrRateLimited(request.clientIp, nowMs)) {
         return reply.status(429).send({ error: 'too_many_requests' });
       }
 
@@ -423,7 +423,7 @@ export function registerOAuthAuthorizationServerRoutes(
         return reply.status(400).send({ error: 'invalid_client_metadata' });
       }
 
-      noteDcrHit(request.ip, nowMs);
+      noteDcrHit(request.clientIp, nowMs);
       const clientId = randomBytes(16).toString('hex');
       const record: OAuthClientRecord = {
         clientId,

@@ -166,7 +166,7 @@ export async function registerPlayerFeedbackRoutes(
       const currentTime = now();
 
       // 3. Coarse per-IP rate limit.
-      if (isRateLimited(feedbackByIp, request.ip, currentTime, maxPerWindow, rateLimitWindowMs)) {
+      if (isRateLimited(feedbackByIp, request.clientIp, currentTime, maxPerWindow, rateLimitWindowMs)) {
         return reply.status(429).send({ error: 'too many feedback requests, please try again later' });
       }
 

@@ -321,7 +321,7 @@ export function registerCreateGameRoute(app: FastifyInstance, deps: CreateGameRo
 
     const created = await createGame({
       uid: request.user!.uid,
-      ip: request.ip,
+      ip: request.clientIp,
       payload: request.body,
       acceptLanguage: request.headers['accept-language'],
       log: request.log,

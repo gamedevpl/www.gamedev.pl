@@ -53,7 +53,7 @@ export async function registerGamePlayRoute(
 
     const slug = z.string().parse((request.params as { slug?: string }).slug);
     const currentTime = now();
-    if (isRateLimited(gamesByIp, request.ip, currentTime, maxGamesPerWindow, gamesRateLimitWindowMs)) {
+    if (isRateLimited(gamesByIp, request.clientIp, currentTime, maxGamesPerWindow, gamesRateLimitWindowMs)) {
       return reply.status(429).send({ error: 'too many game requests, please try again later' });
     }
 

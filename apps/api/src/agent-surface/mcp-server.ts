@@ -534,7 +534,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     const response = await app.inject({
       method,
       url: path,
-      remoteAddress: request.ip,
+      remoteAddress: request.clientIp,
       headers: {
         authorization: `Bearer ${channelToken}`,
         'content-type': 'application/json',
@@ -1019,7 +1019,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           return toolErr('the MCP build endpoint is not configured');
         }
 
-        if (isOverInvalidStartLimit(invalidStartsByIp, ctx.request.ip, now())) {
+        if (isOverInvalidStartLimit(invalidStartsByIp, ctx.request.clientIp, now())) {
           return toolErr(
             'too many invalid start attempts — ask the creator for the current prompt in their Studio thread',
           );
@@ -1314,7 +1314,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   };
 
   function noteInvalidStart(request: FastifyRequest): void {
-    noteInvalidStartHit(invalidStartsByIp, request.ip, now());
+    noteInvalidStartHit(invalidStartsByIp, request.clientIp, now());
   }
 
   async function handleJsonRpc(request: FastifyRequest, reply: FastifyReply, message: JsonRpcRequest) {

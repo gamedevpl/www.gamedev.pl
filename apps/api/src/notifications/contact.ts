@@ -110,7 +110,7 @@ export async function registerContactRoutes(app: FastifyInstance, options: Conta
         return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
       }
 
-      if (isRateLimited(byIp, request.ip, now(), maxPerWindow, rateLimitWindowMs)) {
+      if (isRateLimited(byIp, request.clientIp, now(), maxPerWindow, rateLimitWindowMs)) {
         return reply.status(429).send({ error: 'too many contact requests, please try again later' });
       }
 
