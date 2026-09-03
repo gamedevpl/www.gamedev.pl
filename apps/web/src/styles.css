@@ -310,6 +310,11 @@
   padding: 10px 14px;
   border-radius: 8px;
   font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  box-sizing: border-box;
 }
 
 .dropdown-menu .nav-link:hover {
@@ -5187,6 +5192,70 @@ button.builder-mode-selector:disabled {
   margin: 0 auto;
   padding: 1rem 1.25rem 3rem;
   line-height: 1.65;
+}
+
+.connect-page {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1rem 1.25rem 3rem;
+  line-height: 1.65;
+}
+
+.connect-jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin: 0 0 1.75rem;
+}
+
+.connect-jump a {
+  color: var(--turquoise);
+}
+
+.connect-section {
+  margin: 0 0 2rem;
+}
+
+.connect-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.2rem;
+  margin: 0 0 0.75rem;
+}
+
+.connect-snippet {
+  overflow-x: auto;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  font-size: 0.9rem;
+}
+
+.connect-list {
+  margin: 0.75rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.connect-list li + li {
+  margin-top: 0.4rem;
+}
+
+.connect-list .connect-inapp {
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.connect-hint,
+.connect-note {
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 .contact-back {

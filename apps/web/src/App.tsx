@@ -15,6 +15,7 @@ import { resolveCreateInitialPrompt } from './createInitialPrompt.js';
 import {
   adminPath,
   canonicalPath,
+  connectPath,
   createPath,
   creatorPath,
   gamePath,
@@ -34,6 +35,7 @@ import { StudioConnectWizard } from './surfaces/studio/StudioConnectWizard.js';
 import type { PublicCreatorProfile } from './creatorProfileApi.js';
 import { LegalPage } from './LegalPage.js';
 import { ContactPage } from './ContactPage.js';
+import { ConnectAgentsPage } from './ConnectAgentsPage.js';
 import { CreatePage } from './CreatePage.js';
 import { ProposalsPage } from './ProposalsPage.js';
 import { CreatorProfilePage } from './CreatorProfilePage.js';
@@ -238,6 +240,7 @@ export function App() {
         privacy: t('legal.privacy'),
         terms: t('legal.terms'),
         contact: t('pageTitle.contact'),
+        connect: t('pageTitle.connect'),
         create: t('pageTitle.create'),
         party: t('pageTitle.party'),
         proposals: t('pageTitle.proposals'),
@@ -823,6 +826,11 @@ export function App() {
     window.scrollTo(0, 0);
   }
 
+  function handleConnectNav() {
+    navigate(connectPath());
+    window.scrollTo(0, 0);
+  }
+
   // Play lives on home only. Elsewhere, queue the anchor and go there — the
   // existing pending-scroll effect resolves it once the target (which may still be
   // loading) has actually mounted.
@@ -834,6 +842,20 @@ export function App() {
     setPendingScrollTarget(anchorId);
     navigate('/');
   }
+
+  const navHeader = {
+    activeBuildCount,
+    onHome: () => navigate('/'),
+    onStudio: () => navigate(studioPath()),
+    onAdmin: () => navigate(adminPath()),
+    onReview: () => navigate(reviewPath()),
+    onCreate: handleCreateNav,
+    onPlay: () => handleHomeAnchorNav('play-anchor'),
+    onParty: handlePartyNav,
+    onConnect: handleConnectNav,
+    upTarget: headerUp,
+    onUp: navigate,
+  };
 
   function handlePlayGame(game: CatalogEntry, via?: PlayVia) {
     // In-place Play from home/profile/game page; `/play/<slug>` auto-opens itself.
@@ -966,18 +988,7 @@ export function App() {
   if (route.view === 'legal') {
     return (
       <div className="app app--legal">
-        <NavHeader
-          activeBuildCount={activeBuildCount}
-          onHome={() => navigate('/')}
-          onStudio={() => navigate(studioPath())}
-          onAdmin={() => navigate(adminPath())}
-          onReview={() => navigate(reviewPath())}
-          onCreate={handleCreateNav}
-          onPlay={() => handleHomeAnchorNav('play-anchor')}
-          onParty={handlePartyNav}
-          upTarget={headerUp}
-          onUp={navigate}
-        />
+        <NavHeader {...navHeader} />
         <main className="content">
           <LegalPage doc={route.doc} onBack={() => navigate('/')} />
         </main>
@@ -986,24 +997,17 @@ export function App() {
     );
   }
 
-  // Same early exit as legal: the published contact point must work without a session.
-  if (route.view === 'contact') {
+  // Open chrome: contact and /connect work without a session.
+  if (route.view === 'contact' || route.view === 'connect') {
     return (
-      <div className="app app--contact">
-        <NavHeader
-          activeBuildCount={activeBuildCount}
-          onHome={() => navigate('/')}
-          onStudio={() => navigate(studioPath())}
-          onAdmin={() => navigate(adminPath())}
-          onReview={() => navigate(reviewPath())}
-          onCreate={handleCreateNav}
-          onPlay={() => handleHomeAnchorNav('play-anchor')}
-          onParty={handlePartyNav}
-          upTarget={headerUp}
-          onUp={navigate}
-        />
+      <div className={route.view === 'contact' ? 'app app--contact' : 'app app--connect'}>
+        <NavHeader {...navHeader} />
         <main className="content">
-          <ContactPage onBack={() => navigate('/')} />
+          {route.view === 'contact' ? (
+            <ContactPage onBack={() => navigate('/')} />
+          ) : (
+            <ConnectAgentsPage onBack={() => navigate('/')} onStudio={() => navigate(studioPath())} />
+          )}
         </main>
         <SiteFooter />
       </div>
@@ -1014,18 +1018,7 @@ export function App() {
   if (route.view === 'creator') {
     return (
       <div className="app app--creator">
-        <NavHeader
-          activeBuildCount={activeBuildCount}
-          onHome={() => navigate('/')}
-          onStudio={() => navigate(studioPath())}
-          onAdmin={() => navigate(adminPath())}
-          onReview={() => navigate(reviewPath())}
-          onCreate={handleCreateNav}
-          onPlay={() => handleHomeAnchorNav('play-anchor')}
-          onParty={handlePartyNav}
-          upTarget={headerUp}
-          onUp={navigate}
-        />
+        <NavHeader {...navHeader} />
         <main className="content">
           <CreatorProfilePage
             handle={route.handle}
@@ -1051,18 +1044,7 @@ export function App() {
   if (route.view === 'game' && !authLoading && (!privateBeta || user)) {
     return (
       <div className="app app--game">
-        <NavHeader
-          activeBuildCount={activeBuildCount}
-          onHome={() => navigate('/')}
-          onStudio={() => navigate(studioPath())}
-          onAdmin={() => navigate(adminPath())}
-          onReview={() => navigate(reviewPath())}
-          onCreate={handleCreateNav}
-          onPlay={() => handleHomeAnchorNav('play-anchor')}
-          onParty={handlePartyNav}
-          upTarget={headerUp}
-          onUp={navigate}
-        />
+        <NavHeader {...navHeader} />
         <main className="content">
           <GamePage
             key={`${route.handle}/${route.slug}`}
@@ -1092,18 +1074,7 @@ export function App() {
   if (route.view === 'proposals') {
     return (
       <div className="app app--proposals">
-        <NavHeader
-          activeBuildCount={activeBuildCount}
-          onHome={() => navigate('/')}
-          onStudio={() => navigate(studioPath())}
-          onAdmin={() => navigate(adminPath())}
-          onReview={() => navigate(reviewPath())}
-          onCreate={handleCreateNav}
-          onPlay={() => handleHomeAnchorNav('play-anchor')}
-          onParty={handlePartyNav}
-          upTarget={headerUp}
-          onUp={navigate}
-        />
+        <NavHeader {...navHeader} />
         <main className="content">
           <ProposalsPage />
         </main>
@@ -1117,18 +1088,7 @@ export function App() {
   if (route.view === 'notFound') {
     return (
       <div className="app app--not-found">
-        <NavHeader
-          activeBuildCount={activeBuildCount}
-          onHome={() => navigate('/')}
-          onStudio={() => navigate(studioPath())}
-          onAdmin={() => navigate(adminPath())}
-          onReview={() => navigate(reviewPath())}
-          onCreate={handleCreateNav}
-          onPlay={() => handleHomeAnchorNav('play-anchor')}
-          onParty={handlePartyNav}
-          upTarget={headerUp}
-          onUp={navigate}
-        />
+        <NavHeader {...navHeader} />
         <main className="content">
           <NotFoundPage onHome={() => navigate('/')} />
         </main>
@@ -1168,18 +1128,7 @@ export function App() {
   if (unpublishedPlayTheater) {
     return (
       <div className="app app--unpublished-play">
-        <NavHeader
-          activeBuildCount={activeBuildCount}
-          onHome={() => navigate('/')}
-          onStudio={() => navigate(studioPath())}
-          onAdmin={() => navigate(adminPath())}
-          onReview={() => navigate(reviewPath())}
-          onCreate={handleCreateNav}
-          onPlay={() => handleHomeAnchorNav('play-anchor')}
-          onParty={handlePartyNav}
-          upTarget={headerUp}
-          onUp={navigate}
-        />
+        <NavHeader {...navHeader} />
         <main className="content">
           <UnpublishedPlayView slug={route.slug} onExit={exitOverlay} onTitle={setUnpublishedPlayTitle} />
         </main>
@@ -1197,19 +1146,10 @@ export function App() {
   return (
     <div className="app">
       <NavHeader
-        activeBuildCount={activeBuildCount}
-        onHome={() => navigate('/')}
-        onStudio={() => navigate(studioPath())}
-        onAdmin={() => navigate(adminPath())}
-        onReview={() => navigate(reviewPath())}
-        onCreate={handleCreateNav}
-        onPlay={() => handleHomeAnchorNav('play-anchor')}
-        onParty={handlePartyNav}
+        {...navHeader}
         isOnCreate={route.view === 'create'}
         isOnParty={route.view === 'party'}
         isOnStudio={route.view === 'studio' || route.view === 'studioWelcome' || route.view === 'studioConnect'}
-        upTarget={headerUp}
-        onUp={navigate}
       />
 
       {/* Standalone PWA has no browser pull-to-refresh; this restores it on home only,

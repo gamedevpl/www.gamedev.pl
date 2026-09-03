@@ -4,7 +4,8 @@ Terminal front door for gamedev.pl. **No local model.** Coding happens by delega
 vendor CLI the creator already has, or by the platform builder.
 
 This package lives in the public app monorepo. A separate `gamedevpl/gamedev-cli`
-repo is not planned.
+repo is not planned. On the site: [www.gamedev.pl/connect](https://www.gamedev.pl/connect)
+(header menu → Connect an agent).
 
 ## Install
 

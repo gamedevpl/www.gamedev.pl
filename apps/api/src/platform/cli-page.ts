@@ -14,7 +14,7 @@ export function cliPageHtml(origin: string): string {
   <main>
     <p class="brand">${MASCOT_SVG} gamedev.pl</p>
     <h1>gamedev, in a terminal</h1>
-    <p class="lead">A conversational front door for making and iterating games on gamedev.pl. It has no model of its own. Coding happens on the platform, or by a tool you already installed.</p>
+    <p class="lead">A conversational front door for making and iterating games on gamedev.pl. It has no model of its own. Coding happens on the platform, or by a tool you already installed. MCP and this CLI are documented together at <a href="/connect">/connect</a>.</p>
     <h2>Install</h2>
     <pre class="redirect">${install}</pre>
     <p class="hint">Needs Node 20+ — same as a game checkout. Windows: <code>irm ${escapeHtml(origin)}/install.ps1 | iex</code>. The script verifies a SHA-256 before it writes <code>~/.local/bin</code>.</p>

@@ -137,6 +137,7 @@ export type AppRoute =
   // Public contact form. Same early-exit posture as legal: a contact point behind
   // sign-in is not a published contact point.
   | { view: 'contact' }
+  | { view: 'connect' }
   // /create landing page; same closed-beta gate as home, not open-chrome.
   | { view: 'create' }
   // /party: the multiplayer destination. Same closed-beta gate as create.
@@ -183,6 +184,7 @@ const RESERVED_HANDLE_SEGMENTS = new Set([
   'api',
   'auth',
   'cli',
+  'connect',
   'contact',
   'create',
   'creator',
@@ -196,6 +198,7 @@ const RESERVED_HANDLE_SEGMENTS = new Set([
   'help',
   'invite',
   'join',
+  'mcp',
   'me',
   'null',
   'official',
@@ -215,6 +218,10 @@ const RESERVED_HANDLE_SEGMENTS = new Set([
   'undefined',
   'www',
 ]);
+
+function isAddressableHandle(handle: string): boolean {
+  return CREATOR_HANDLE_PATTERN.test(handle) && (handle === PLATFORM_HANDLE || !RESERVED_HANDLE_SEGMENTS.has(handle));
+}
 
 // Canonical play prefix is `/play`. `/ay` and `/ai` are accepted aliases (same view);
 // the app rewrites them to `/play/<slug>` so shared URLs stay consistent.
@@ -244,6 +251,10 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     return { view: 'contact' };
   }
 
+  if (normalizedPath === '/connect' || normalizedPath === '/mcp') {
+    return { view: 'connect' };
+  }
+
   if (normalizedPath === '/create') {
     return { view: 'create' };
   }
@@ -264,11 +275,7 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
   const creatorMatch = normalizedPath.match(/^\/creators\/([^/]+)$/);
   if (creatorMatch?.[1]) {
     const handle = decodeSegment(creatorMatch[1]);
-    if (
-      handle &&
-      CREATOR_HANDLE_PATTERN.test(handle) &&
-      (handle === PLATFORM_HANDLE || !RESERVED_HANDLE_SEGMENTS.has(handle))
-    ) {
+    if (handle && isAddressableHandle(handle)) {
       return { view: 'creator', handle };
     }
     return { view: 'notFound' };
@@ -374,12 +381,7 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
   // `/studio`, `/privacy`, etc. keep their meaning. Those segments are also reserved at
   // handle-claim time; the ordering here is defense in depth for old data and typos.
   const rootHandle = decodeSegment(normalizedPath.slice(1));
-  if (
-    !normalizedPath.slice(1).includes('/') &&
-    rootHandle &&
-    CREATOR_HANDLE_PATTERN.test(rootHandle) &&
-    (rootHandle === PLATFORM_HANDLE || !RESERVED_HANDLE_SEGMENTS.has(rootHandle))
-  ) {
+  if (!normalizedPath.slice(1).includes('/') && rootHandle && isAddressableHandle(rootHandle)) {
     return { view: 'creator', handle: rootHandle };
   }
 
@@ -393,16 +395,7 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     const handle = decodeSegment(gameMatch[1]);
     const slug = decodeSegment(gameMatch[2]);
     const tabSegment = gameMatch[3] ? decodeSegment(gameMatch[3]) : undefined;
-    if (
-      handle &&
-      CREATOR_HANDLE_PATTERN.test(handle) &&
-      // The platform handle is reserved against claiming but *is* an address: it is
-      // where games with no creator to name live. Keep aligned with spa-paths.ts.
-      (handle === PLATFORM_HANDLE || !RESERVED_HANDLE_SEGMENTS.has(handle)) &&
-      slug &&
-      SLUG_PATTERN.test(slug) &&
-      tabSegment !== null
-    ) {
+    if (handle && isAddressableHandle(handle) && slug && SLUG_PATTERN.test(slug) && tabSegment !== null) {
       if (!tabSegment) {
         return { view: 'game', handle, slug };
       }
@@ -565,6 +558,7 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
     case 'review':
     case 'legal':
     case 'contact':
+    case 'connect':
     case 'create':
     case 'party':
     case 'creator':
@@ -620,6 +614,11 @@ export function legalPath(doc: LegalDocId, sectionId?: string): string {
 /** URL for the public contact form. */
 export function contactPath(): string {
   return '/contact';
+}
+
+/** Public MCP + CLI page. `#mcp` / `#cli` jump to a section. */
+export function connectPath(section?: 'mcp' | 'cli'): string {
+  return section ? `/connect#${section}` : '/connect';
 }
 
 // URL for the creation landing page.

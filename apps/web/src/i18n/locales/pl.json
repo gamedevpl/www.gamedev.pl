@@ -109,6 +109,7 @@
     "navParty": "Impreza",
     "navArcade": "Gry",
     "navStudio": "Studio",
+    "navConnect": "Podłącz agenta",
     "navFeed": "Strumień Agentów",
     "activeBuilds": "w trakcie: {{count}}",
     "upHome": "Wróć do strony głównej",
@@ -1258,8 +1259,34 @@
     "aiDisclosure": "Gry w serwisie gamedev.pl tworzy sztuczna inteligencja na podstawie opisów napisanych przez użytkowników. Mogą zawierać błędy.",
     "projectNav": "Projekt",
     "openSource": "Otwarte źródła",
-    "reportBug": "Zgłoś błąd",
-    "cli": "gamedev CLI"
+    "reportBug": "Zgłoś błąd"
+  },
+  "connectAgents": {
+    "title": "Podłącz agenta",
+    "intro": "Dwoje drzwi, te same gry. Wskaż agenta kodującego na gamedev.pl przez MCP albo rozmawiaj w terminalu przez gamedev CLI. Żadne nie ma własnego modelu — kod powstaje na platformie albo w narzędziu, które już masz.",
+    "back": "Wróć do serwisu",
+    "jump": "Na tej stronie",
+    "beta": "Tworzenie gier jest w zamkniętej becie. Połączenie ładuje się dla każdego; wywołania wymagają zatwierdzonego konta twórcy.",
+    "mcp": {
+      "nav": "MCP",
+      "title": "MCP — własny agent kodujący",
+      "lead": "Serwer jest zdalny i nic nie trzeba instalować. Zaloguj się przez OAuth, gdy klient o to poprosi.",
+      "oauth": "Wklej URL do Claude Code, Codex, Cursora, VS Code albo dowolnego klienta MCP.",
+      "studio": "Już w grze? Karta Connect w Studio ma instalację jednym kliknięciem dla Cursora i VS Code.",
+      "studioLink": "Otwórz Studio",
+      "claude": "Kolejność instalacji wtyczki Claude",
+      "registry": "Oficjalny rejestr MCP"
+    },
+    "cli": {
+      "nav": "gamedev CLI",
+      "title": "gamedev CLI — terminal",
+      "lead": "Rozmowny front door. Opisz pomysł, odpowiedz na pytania, obserwuj bramkę. Checkout idzie do Twojego edytora; git push nie jest ścieżką oddania.",
+      "installHint": "Potrzebujesz Node 20+ — tak jak przy kopii roboczej. Windows: irm https://www.gamedev.pl/install.ps1 | iex. Skrypt weryfikuje sumę kontrolną zanim zapisze ~/.local/bin.",
+      "installPending": "Instalatory nie są jeszcze publiczne. Klient jest w tym repozytorium w apps/cli; zbierz go lokalnie: npm run bundle -w @gamedevpl/cli.",
+      "repl": "gamedev bez czasownika otwiera REPL: opisz grę, potem iteruj.",
+      "checkout": "gamedev checkout <slug> do własnego edytora. Oddajesz poleceniem gamedev submit.",
+      "ci": "CI: GAMEDEV_TOKEN z secrets. Nigdy nie przekazuj tokenu OAuth twórcy do sub-agenta."
+    }
   },
   "contact": {
     "title": "Kontakt",
@@ -1411,6 +1438,7 @@
     "studio": "Studio Twórcy",
     "notFound": "Nie znaleziono strony",
     "contact": "Kontakt",
+    "connect": "Podłącz agenta",
     "create": "Zbuduj grę",
     "party": "Tryb imprezowy",
     "playNamed": "Graj: {{title}}",

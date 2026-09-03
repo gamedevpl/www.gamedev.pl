@@ -25,6 +25,8 @@ describe('creator-profile validation', () => {
     expect(isValidHandle('Ada')).toBe(false);
     expect(isValidHandle('ada-lovelace')).toBe(false);
     expect(isReservedHandle('creators')).toBe(true);
+    expect(isReservedHandle('connect')).toBe(true);
+    expect(isReservedHandle('mcp')).toBe(true);
     expect(validateHandleShape('Admin')).toBe('reserved');
     expect(validateHandleShape('!!')).toBe('invalid');
   });

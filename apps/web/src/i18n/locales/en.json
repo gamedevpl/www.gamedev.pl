@@ -109,6 +109,7 @@
     "navParty": "Party",
     "navArcade": "Games",
     "navStudio": "Studio",
+    "navConnect": "Connect an agent",
     "navFeed": "Agent Stream",
     "activeBuilds": "{{count}} in progress",
     "upHome": "Back to home",
@@ -1244,8 +1245,34 @@
     "aiDisclosure": "Games on gamedev.pl are created by artificial intelligence from descriptions written by users. They may contain errors.",
     "projectNav": "Project",
     "openSource": "Open source",
-    "reportBug": "Report a bug",
-    "cli": "gamedev CLI"
+    "reportBug": "Report a bug"
+  },
+  "connectAgents": {
+    "title": "Connect an agent",
+    "intro": "Two doors, same games. Point a coding agent at gamedev.pl over MCP, or talk in a terminal with the gamedev CLI. Neither has a model of its own — coding happens on the platform or in a tool you already installed.",
+    "back": "Back to the site",
+    "jump": "On this page",
+    "beta": "Creating games is in closed beta. The connection loads for anyone; the calls need an approved creator account.",
+    "mcp": {
+      "nav": "MCP",
+      "title": "MCP — your own coding agent",
+      "lead": "The server is remote and needs no install. Sign in with OAuth when the client asks.",
+      "oauth": "Paste the URL into Claude Code, Codex, Cursor, VS Code, or any MCP-capable client.",
+      "studio": "Already in a game? Studio’s Connect card has one-click install for Cursor and VS Code.",
+      "studioLink": "Open Studio",
+      "claude": "Claude plugin install sequence",
+      "registry": "Official MCP Registry"
+    },
+    "cli": {
+      "nav": "gamedev CLI",
+      "title": "gamedev CLI — a terminal",
+      "lead": "A conversational front door. Type an idea, answer refine questions, watch the gate. Checkout uses your editor; git push is not a delivery path.",
+      "installHint": "Needs Node 20+ — same as a game checkout. Windows: irm https://www.gamedev.pl/install.ps1 | iex. The script checksum-verifies before it writes ~/.local/bin.",
+      "installPending": "Installers are not public yet. The client lives in this repo at apps/cli; bundle it locally with npm run bundle -w @gamedevpl/cli.",
+      "repl": "gamedev with no verb opens a REPL: describe a game, then iterate.",
+      "checkout": "gamedev checkout <slug> for your own editor. Deliver with gamedev submit.",
+      "ci": "CI: GAMEDEV_TOKEN from secrets. Never pass the creator OAuth token to a sub-agent."
+    }
   },
   "contact": {
     "title": "Contact",
@@ -1397,6 +1424,7 @@
     "studio": "Creator Studio",
     "notFound": "Page not found",
     "contact": "Contact",
+    "connect": "Connect an agent",
     "create": "Build a game",
     "party": "Party mode",
     "playNamed": "Play {{title}}",

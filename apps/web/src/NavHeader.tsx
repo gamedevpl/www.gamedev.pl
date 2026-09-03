@@ -34,11 +34,8 @@ type NavHeaderProps = {
   onParty: () => void;
   // Highlights the Party item when already on /party.
   isOnParty?: boolean;
-  /**
-   * Android-style Up target for non-home surfaces. Null on home, join, play, and
-   * while an immersive theater owns escape. Never history.back() — deep links
-   * still land on a real parent.
-   */
+  onConnect: () => void;
+  /** Android-style Up target. Null on home/join/play/theater. Never history.back(). */
   upTarget?: { path: string; ariaLabel: string } | null;
   onUp?: (path: string) => void;
 };
@@ -55,6 +52,7 @@ export function NavHeader({
   onPlay,
   onParty,
   isOnParty = false,
+  onConnect,
   upTarget = null,
   onUp,
 }: NavHeaderProps) {
@@ -66,16 +64,7 @@ export function NavHeader({
   const menuContainerRef = useRef<HTMLDivElement>(null);
   // Header mark mimes the visitor: pull a phone and scroll a tiny feed while the page moves.
   const pageScrolling = usePageScrolling();
-  /**
-   * How many jobs are waiting on this person. Only ever read for an operator.
-   *
-   * Whether someone *is* one comes from the session (`user.admin`) rather than from
-   * probing an operator endpoint and reading its 404 as "no". That probe was the
-   * obvious implementation and the wrong one: it asked a settled question on every page
-   * load, and for everybody who is not an operator — which is everybody — it answered
-   * with an error in the browser console. The deploy gate that fails on console errors
-   * caught it, correctly.
-   */
+  // Operator badge uses the session, not a 404 probe.
   const [alertCount, setAlertCount] = useState<number | null>(null);
   const [reviewRemaining, setReviewRemaining] = useState<number | null>(null);
   const isOperator = user?.admin === true;
@@ -321,6 +310,16 @@ export function NavHeader({
                 }}
               >
                 <PixelIcon name="phone" size={14} /> {t('header.navParty')}
+              </button>
+
+              <button
+                className="nav-link"
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  onConnect();
+                }}
+              >
+                <PixelIcon name="code" size={14} /> {t('header.navConnect')}
               </button>
 
               {/* Operators only — everyone else never learns this exists, which is the

@@ -212,10 +212,10 @@ describe('betaWelcomeEmail', () => {
     expect(en.text).toContain('Hi Anna,');
     expect(en.text).toContain(params.siteUrl);
     expect(en.text).toMatch(/Reply to this email/i);
-    expect(en.text).toContain(`${params.siteUrl}/cli`);
-    expect(betaWelcomeEmail('en', { ...params, siteUrl: 'https://staging.example' }).text).toContain(
-      'https://staging.example/cli',
-    );
+    expect(en.text).toContain(`${params.siteUrl}/connect`);
+    expect(
+      betaWelcomeEmail('en', { ...params, siteUrl: 'https://staging.example' }).text,
+    ).toContain('https://staging.example/connect');
     expect(en.text.toLowerCase()).not.toContain('arcade');
     expect(en.html).toContain('Hi Anna,');
 

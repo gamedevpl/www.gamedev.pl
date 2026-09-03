@@ -43,13 +43,17 @@ playability it does not have.
 The interesting engineering is written up in [`docs/`](./docs) — start with
 [`docs/README.md`](./docs/README.md).
 
-## Connect your agent (MCP)
+## Connect your agent (MCP or the `gamedev` CLI)
 
-The server is remote and needs no install: point an MCP-capable client at
+Two doors, same games. The on-site page is
+[`https://www.gamedev.pl/connect`](https://www.gamedev.pl/connect) (also `/mcp`). It lives
+in the header menu, not on `/create` or public game pages.
+
+**MCP.** The server is remote and needs no install: point an MCP-capable client at
 `https://www.gamedev.pl/api/mcp` and sign in with OAuth. Claude users can install it as a
 plugin instead — [`listings/mcp/claude-plugin/README.md`](./listings/mcp/claude-plugin/README.md)
 has the exact sequence, including the connector approval that installing does not do on its
-own.
+own. The official registry entry is `pl.gamedev/creator`.
 
 The tools cover one build round: opening or rejoining it, reading the brief and the engine
 kit, asking the kit and docs a question, staging and delivering source files, checking the
@@ -57,6 +61,13 @@ quality gate, and exchanging progress, screenshots and messages with the creator
 more exist and are deliberately never advertised, so an agent will not discover them.
 [`listings/mcp/README.md`](./listings/mcp/README.md) lists every tool with its annotations,
 what each destructive one actually consumes, and why the rest are hidden.
+
+**CLI.** `apps/cli` is the `gamedev` terminal client (no local model). With no verb it
+opens a REPL: describe a game, then iterate. `gamedev checkout <slug>` is the own-editor
+path. Installers (`/install.sh`) 404 while `CLI_SURFACE` is off. With the flag on, the
+route serves the script even if no `cli-v*` GitHub release exists yet — that download is
+what fails then. Until a release ships, `npm run bundle -w @gamedevpl/cli`. Details:
+[`apps/cli/README.md`](./apps/cli/README.md).
 
 > **Creating games is in closed beta.** The tools load for anyone; the calls need an
 > approved creator account. That is the gate, not an outage —
@@ -99,6 +110,7 @@ it, please report it privately — see [`SECURITY.md`](./SECURITY.md).
 ```
 apps/
   web/               Vite + React + TypeScript — arcade, player, Creator Studio
+  cli/               `gamedev` terminal client (see Connect your agent above)
   api/               Fastify + TypeScript — catalog, jobs, auth, agent channel, multiplayer
   api/fixtures/      Games-repo-shaped content so the app runs with no credentials
   e2e/               Playwright checks for critical browser and production flows

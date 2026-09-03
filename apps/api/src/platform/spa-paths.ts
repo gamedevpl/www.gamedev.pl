@@ -81,6 +81,8 @@ export function isKnownSpaShellPath(urlOrPath: string): boolean {
     pathname === '/terms' ||
     pathname === '/health' ||
     pathname === '/contact' ||
+    pathname === '/connect' ||
+    pathname === '/mcp' ||
     pathname === '/create' ||
     pathname === '/party'
   ) {
