@@ -1,8 +1,9 @@
+import { SUBMISSION_IN_FLIGHT_STATES } from '@gamedevpl/contract';
 import type { SubmissionState } from './submissionApi.js';
 import type { StudioGame } from './studioApi.js';
 
 /** In-progress builds — same “live” treatment as the home rail / studio shelf. */
-export const STUDIO_LIVE_STATUSES = new Set<SubmissionState>(['queued', 'building', 'in_review', 'publishing']);
+export const STUDIO_LIVE_STATUSES: ReadonlySet<SubmissionState> = new Set(SUBMISSION_IN_FLIGHT_STATES);
 
 export type StudioShelfFilter = 'all' | 'building' | 'live';
 

@@ -303,6 +303,8 @@
   border: 1px solid rgba(0, 228, 172, 0.4);
   background: rgba(0, 228, 172, 0.12);
   color: var(--turquoise);
+  /* A <button> would otherwise take the UA control font. */
+  font-family: inherit;
   font-size: 0.72rem;
   line-height: 1;
   vertical-align: middle;

@@ -269,8 +269,6 @@
     "cameraBadge": "Camera play",
     "cameraTooltip": "This game can show your camera behind the play surface — nothing is recorded or sent",
     "savesBadge": "Saves progress",
-    "editorBadge": "Editable",
-    "editorTooltip": "This game has a built-in content editor",
     "sortLabel": "Sort games",
     "toolbarLabel": "Catalog filters and sort",
     "yoursBadge": "Yours",

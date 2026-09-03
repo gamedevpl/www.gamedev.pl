@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { isSubmissionInFlight } from '@gamedevpl/contract';
 import { pageOwnerGames } from './owner-games.js';
 import { mintToken } from '../platform/submission-token.js';
 import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
@@ -80,5 +81,20 @@ export async function registerCreatorSelfRoutes(
       truncated,
       totalGames: total,
     });
+  });
+
+  // The header badge's number only -- reads open rounds, not the shelf.
+  app.get('/api/submissions/mine/active-count', async (request, reply) => {
+    if (!checkUserAccess(request, reply)) {
+      return;
+    }
+    if (!store) {
+      return reply.send({ active: 0 });
+    }
+
+    const open = await store.listOpenRoundsByOwner(request.user!.uid);
+    const { games } = pageOwnerGames(open, 'shelf');
+    const active = games.filter(({ tip }) => isSubmissionInFlight(tip.lastStatus ?? tip.lastNotifiedStatus)).length;
+    return reply.send({ active });
   });
 }

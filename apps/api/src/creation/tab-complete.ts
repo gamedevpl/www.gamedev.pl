@@ -2,7 +2,7 @@ import { resultText, type GenAIClient, type GenerationResult } from 'genaicode';
 import { createVertexClient, type VertexGenerationConfig } from '../platform/genai.js';
 
 // TA-01: prompt-based FIM — Vertex Gemini has no suffix field.
-export const DEFAULT_TAB_COMPLETE_MODEL = 'gemini-3.7-flash';
+export const DEFAULT_TAB_COMPLETE_MODEL = 'gemini-3.8-flash';
 export const DEFAULT_TAB_COMPLETE_TIMEOUT_MS = 4000;
 // continue.dev's shape: ~700 tokens prefix, ~300 suffix, ~4 chars/token.
 export const MAX_PREFIX_CHARS = 3000;

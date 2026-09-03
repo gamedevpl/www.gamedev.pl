@@ -4141,7 +4141,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
       kind: 'reply' as const,
       text: 'Still building.',
       tokens: { input: 500, output: 40 },
-      model: 'gemini-3.7-flash',
+      model: 'gemini-3.8-flash',
     }));
     const { app, authHeaders, store } = await createApp({
       githubClient: createGithubClientStub({ jobId: 90 }).githubClient,
@@ -4167,7 +4167,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
 
     const record = await store.getSubmission(job.jobId);
     const entry = record?.costs?.find((cost) => cost.kind === 'chat');
-    expect(entry).toMatchObject({ by: 'gemini-3.7-flash', tokens: { input: 500, output: 40 } });
+    expect(entry).toMatchObject({ by: 'gemini-3.8-flash', tokens: { input: 500, output: 40 } });
     await app.close();
   });
 
@@ -4703,6 +4703,60 @@ describe('GET /api/submissions/mine', () => {
     expect(body.truncated).toBe(false);
     expect(body.submissions).toHaveLength(3);
     expect(new Set(body.submissions.map((item) => item.slug))).toEqual(new Set(['game-0', 'game-1', 'game-2']));
+
+    await app.close();
+  });
+});
+
+describe('GET /api/submissions/mine/active-count', () => {
+  it('counts only builds still in flight, not everything the creator ever made', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const store = new InMemoryStore();
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+
+    await store.createSubmission(21, 'g:test-user', 'Building');
+    await store.setSubmissionLastStatus(21, 'building');
+    await store.createSubmission(22, 'g:test-user', 'Shipped');
+    await store.setSubmissionLastStatus(22, 'published');
+    await store.setSubmissionNotifiedStatus(22, 'published');
+    await store.createSubmission(23, 'g:test-user', 'Bounced');
+    await store.setSubmissionLastStatus(23, 'needs_changes');
+    // Just submitted: no status yet, and the badge must not blank.
+    await store.createSubmission(24, 'g:test-user', 'Fresh');
+    await store.createSubmission(25, 'g:someone-else', 'Not mine');
+    await store.setSubmissionLastStatus(25, 'building');
+
+    const res = await app.inject({ method: 'GET', url: '/api/submissions/mine/active-count', headers: authHeaders });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ active: 2 });
+
+    await app.close();
+  });
+
+  it('drops an abandoned build the same way the shelf does', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const store = new InMemoryStore();
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+
+    await store.createSubmission(31, 'g:test-user', 'Walked away');
+    await store.setSubmissionAbandoned(31, '2026-01-01T00:00:00.000Z');
+
+    const res = await app.inject({ method: 'GET', url: '/api/submissions/mine/active-count', headers: authHeaders });
+
+    expect(res.json()).toEqual({ active: 0 });
+
+    await app.close();
+  });
+
+  it('refuses a visitor with no session', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const store = new InMemoryStore();
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+
+    const res = await app.inject({ method: 'GET', url: '/api/submissions/mine/active-count' });
+
+    expect(res.statusCode).toBe(401);
 
     await app.close();
   });
@@ -6686,7 +6740,7 @@ describe('seeded dispatch', () => {
           slug,
           files: [{ path: 'game.ts', content: 'export {};\n' }],
           references: ['apex-sprint'],
-          usage: { inputTokens: 30_000, outputTokens: 9_000, model: 'gemini-3.7-flash' },
+          usage: { inputTokens: 30_000, outputTokens: 9_000, model: 'gemini-3.8-flash' },
           elapsedMs: 41_000,
           compiles: false,
           repaired: false,
@@ -6737,7 +6791,7 @@ describe('seeded dispatch', () => {
     // premium request with no numbers behind it.
     const seedCost = record?.costs?.find((entry) => entry.kind === 'seed');
     expect(seedCost?.tokens).toEqual({ input: 30_000, output: 9_000 });
-    expect(seedCost?.by).toBe('gemini-3.7-flash');
+    expect(seedCost?.by).toBe('gemini-3.8-flash');
 
     await app.close();
   });
@@ -6824,7 +6878,7 @@ describe('seeded dispatch', () => {
           slug: request.slug,
           files: [{ path: 'game.ts', content: 'export {};\n' }],
           references: ['apex-sprint'],
-          usage: { inputTokens: 100, outputTokens: 50, model: 'gemini-3.7-flash', provider: 'vertex' },
+          usage: { inputTokens: 100, outputTokens: 50, model: 'gemini-3.8-flash', provider: 'vertex' },
           elapsedMs: 1_000,
           compiles: true,
           repaired: false,

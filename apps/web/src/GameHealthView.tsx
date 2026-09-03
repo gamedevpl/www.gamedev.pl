@@ -16,7 +16,7 @@ import { GrowthPanel } from './GrowthPanel.js';
 import { ScorecardPanel } from './ScorecardPanel.js';
 import { TelemetryOverview } from './TelemetryOverview.js';
 import { TelemetryTrendsPanel } from './TelemetryTrendsPanel.js';
-import { formatSeconds } from './core/formatSeconds.js';
+import { formatSeconds } from './surfaces/studio/studioHealth.js';
 
 /**
  * Operator view over play telemetry (docs/improvement-loop-plan.md IL-2).

@@ -118,7 +118,7 @@ export interface VertexCheckerOptions {
   projectId?: string;
   region?: string;
   model?: string;
-  // Gemini 3 thinking level ('low' | 'medium' | 'high'). gemini-3.7-flash dropped
+  // Gemini 3 thinking level ('low' | 'medium' | 'high'). gemini-3.8-flash dropped
   // 'minimal' (400 THINKING_LEVEL_MINIMAL unsupported) — 'low' is now the floor.
   thinkingLevel?: string;
   timeoutMs?: number;
@@ -162,7 +162,7 @@ export class VertexChecker implements ContentChecker {
         region: this.options.region,
         defaultRegion: 'global',
         model: this.options.model,
-        defaultModel: 'gemini-3.7-flash',
+        defaultModel: 'gemini-3.8-flash',
         // Thinking level goes on the request via `.thinking()` below, not here: genaicode's
         // Google provider computes its own thinkingConfig from `request.thinking` whenever a
         // request calls `.json()`, and that computed value — MINIMAL when `.thinking()` was

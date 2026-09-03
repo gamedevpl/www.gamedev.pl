@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../platform/app.js';
 import { InMemoryStore } from '../platform/store.js';
+import { SESSION_COOKIE_NAME } from '../platform/auth.js';
 import type { ContentChecker } from '../platform/moderation.js';
 
 const allowAll: ContentChecker = {
@@ -19,9 +20,9 @@ async function sessionCookie(app: Awaited<ReturnType<typeof buildApp>>, uid = 'l
     payload: { uid },
   });
   expect(res.statusCode).toBe(200);
-  const cookie = res.cookies.find((c) => c.name === 'gamedev_session');
+  const cookie = res.cookies.find((c) => c.name === SESSION_COOKIE_NAME);
   expect(cookie?.value).toBeTruthy();
-  return `gamedev_session=${cookie!.value}`;
+  return `${SESSION_COOKIE_NAME}=${cookie!.value}`;
 }
 
 const sampleChecklist = {

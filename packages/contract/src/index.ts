@@ -118,7 +118,12 @@ export type {
   SubmissionStatusResponse,
   SubmissionStatusResponseBase,
 } from './submission-status.js';
-export { SUBMISSION_STATES, type SubmissionState } from './submission-state.js';
+export {
+  SUBMISSION_IN_FLIGHT_STATES,
+  SUBMISSION_STATES,
+  isSubmissionInFlight,
+  type SubmissionState,
+} from './submission-state.js';
 export type {
   StudioBuildsResponse,
   StudioGame,

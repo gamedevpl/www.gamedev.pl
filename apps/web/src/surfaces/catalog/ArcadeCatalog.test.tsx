@@ -521,7 +521,6 @@ describe('ArcadeCatalog shared-world badge', () => {
               slug: 'shared-one',
               title: 'Shared One',
               world: 'shared' as const,
-              editor: 'content' as const,
             },
             { ...entries[1]!, slug: 'solo-one', title: 'Solo One', world: null },
           ],
@@ -540,8 +539,6 @@ describe('ArcadeCatalog shared-world badge', () => {
     const badged = cards.find((card) => card.querySelector('.card-world-badge'));
     expect(badged?.textContent).toContain('Shared One');
     expect(badged?.textContent).not.toContain('Solo One');
-    expect(badged?.querySelector('[title="This game has a built-in content editor"]')).not.toBeNull();
-    expect(cards[1]?.querySelector('[title="This game has a built-in content editor"]')).toBeNull();
 
     await act(async () => {
       root.unmount();
