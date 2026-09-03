@@ -246,6 +246,19 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     delivered: SubmissionRecord[];
   }
 
+  // Cached for the badge; dropped when this reviewer submits a verdict.
+  const assessedSlugs = new Map<string, { at: number; slugs: Set<string> }>();
+  const ASSESSED_TTL_MS = 60_000;
+
+  async function assessedSlugsFor(reviewerUid: string): Promise<Set<string>> {
+    const hit = assessedSlugs.get(reviewerUid);
+    if (hit && now() - hit.at < ASSESSED_TTL_MS) return hit.slugs;
+    const rows = await store.listGameAssessmentsByReviewer(reviewerUid);
+    const slugs = new Set(rows.map((row) => row.slug));
+    assessedSlugs.set(reviewerUid, { at: now(), slugs });
+    return slugs;
+  }
+
   // Loaded once per request, not once per targeted slug.
   async function loadReviewPools(): Promise<ReviewPools> {
     let catalog: ReviewCatalogEntry[];
@@ -427,8 +440,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
           : null,
       };
     }
-    const mine = await store.listGameAssessmentsByReviewer(uid);
-    const done = new Set(mine.map((row) => row.slug));
+    const done = await assessedSlugsFor(uid);
     const unlocked = releasedSlugs(open, now());
     const sweepRemaining = unlocked.filter((slug) => !done.has(slug) && !targetedSlugs.has(slug)).length;
     return {
@@ -512,6 +524,9 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
       clientContext: normalizeClientContext(body.data.clientContext),
       gameVersion,
     });
+
+    // Their own verdict must show on their next badge poll.
+    assessedSlugs.delete(reviewerUid);
 
     if (targeted) {
       await store.resolveReReviewRequest(body.data.slug, reviewerUid);

@@ -612,6 +612,10 @@ export class InMemoryStore implements Store {
     return this.submissionQueryStore.listSubmissionsByOwner(ownerUid, opts);
   }
 
+  async listOpenRoundsByOwner(ownerUid: string): Promise<SubmissionRecord[]> {
+    return this.submissionQueryStore.listOpenRoundsByOwner(ownerUid);
+  }
+
   async listQueuedSubmissions(): Promise<SubmissionRecord[]> {
     return this.submissionQueryStore.listQueuedSubmissions();
   }

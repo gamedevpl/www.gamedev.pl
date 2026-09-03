@@ -94,6 +94,8 @@ export interface SubmissionRecord {
    * ping someone; wrong for showing them what their game is doing.
    */
   lastStatus?: SubmissionStatus;
+  // Denormalized isRoundOpen -- the sweep and badge query this instead of scanning.
+  openRound?: boolean;
   /**
    * The language the creator submitted in. Told to the agent over the build channel
    * so it can write its progress updates in that language directly — which beats

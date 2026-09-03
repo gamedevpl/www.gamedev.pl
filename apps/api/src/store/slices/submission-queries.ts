@@ -1,5 +1,6 @@
 import type { Firestore } from '@google-cloud/firestore';
-import { isSweepActive } from '../../platform/sweep-scope.js';
+import { isRoundOpen, isSweepActive } from '../../platform/sweep-scope.js';
+import { backfillOpenRound } from '../open-round-backfill.js';
 import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
 
 export interface SubmissionQueryStore {
@@ -26,6 +27,9 @@ export interface SubmissionQueryStore {
 
   // Every submission a creator owns, newest first -- backs the "my games" rail.
   listSubmissionsByOwner(ownerUid: string, opts?: { limit?: number }): Promise<SubmissionRecord[]>;
+
+  // The creator's unfinished rounds only -- what the header badge counts.
+  listOpenRoundsByOwner(ownerUid: string): Promise<SubmissionRecord[]>;
 
   listQueuedSubmissions(): Promise<SubmissionRecord[]>;
 }
@@ -89,6 +93,13 @@ export class InMemorySubmissionQueryStore implements SubmissionQueryStore {
     return opts?.limit !== undefined ? sorted.slice(0, opts.limit) : sorted;
   }
 
+  async listOpenRoundsByOwner(ownerUid: string): Promise<SubmissionRecord[]> {
+    return Array.from(this.submissions.values())
+      .filter((s) => s.ownerUid === ownerUid && isRoundOpen(s))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((s) => ({ ...s }));
+  }
+
   async listQueuedSubmissions(): Promise<SubmissionRecord[]> {
     return Array.from(this.submissions.values())
       .filter((s) => s.state === 'queued')
@@ -99,6 +110,24 @@ export class InMemorySubmissionQueryStore implements SubmissionQueryStore {
 
 export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
   constructor(private db: Firestore) {}
+
+  private migration: Promise<unknown> | null = null;
+
+  // Once per container; the marker doc makes it once ever.
+  private async migrated(): Promise<void> {
+    // Never cache a rejection, or one blip disables the flag.
+    this.migration ??= backfillOpenRound(this.db).catch((error) => {
+      this.migration = null;
+      throw error;
+    });
+    await this.migration;
+  }
+
+  // Single-field equality; Firestore indexes `openRound` without any configuration.
+  private async openRounds() {
+    await this.migrated();
+    return this.db.collection('submissions').where('openRound', '==', true);
+  }
 
   async listRecentlyPublished(limit: number): Promise<SubmissionRecord[]> {
     // Auto-indexed single-field orderBy; docs without publishedAt are excluded by definition.
@@ -128,8 +157,8 @@ export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
   }
 
   async listActiveSubmissions(): Promise<SubmissionRecord[]> {
-    // 'in' would need a composite index and miss unset lastNotifiedStatus docs.
-    const snap = await this.db.collection('submissions').get();
+    // isSweepActive needs three fields, so it filters the narrowed set.
+    const snap = await (await this.openRounds()).get();
     return snap.docs.map((d) => fromStoredSubmission(d.data())).filter(isSweepActive);
   }
 
@@ -157,6 +186,15 @@ export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
       .map((d) => fromStoredSubmission(d.data()))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return opts?.limit !== undefined ? sorted.slice(0, opts.limit) : sorted;
+  }
+
+  async listOpenRoundsByOwner(ownerUid: string): Promise<SubmissionRecord[]> {
+    // Two equality clauses -- Firestore intersects the two single-field indexes.
+    const snap = await (await this.openRounds()).where('ownerUid', '==', ownerUid).get();
+    return snap.docs
+      .map((d) => fromStoredSubmission(d.data()))
+      .filter(isRoundOpen)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   async listQueuedSubmissions(): Promise<SubmissionRecord[]> {

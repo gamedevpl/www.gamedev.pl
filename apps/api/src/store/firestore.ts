@@ -268,7 +268,7 @@ export class FirestoreStore implements Store {
           {
             ownerUid: DELETED_ACCOUNT_UID,
             ...(!record.publishedAt
-              ? { abandonedAt: record.abandonedAt ?? at, draftSharedAt: FieldValue.delete() }
+              ? { abandonedAt: record.abandonedAt ?? at, draftSharedAt: FieldValue.delete(), openRound: false }
               : {}),
           },
           { merge: true },
@@ -690,6 +690,10 @@ export class FirestoreStore implements Store {
 
   async listSubmissionsByOwner(ownerUid: string, opts?: { limit?: number }): Promise<SubmissionRecord[]> {
     return this.submissionQueryStore.listSubmissionsByOwner(ownerUid, opts);
+  }
+
+  async listOpenRoundsByOwner(ownerUid: string): Promise<SubmissionRecord[]> {
+    return this.submissionQueryStore.listOpenRoundsByOwner(ownerUid);
   }
 
   async listQueuedSubmissions(): Promise<SubmissionRecord[]> {

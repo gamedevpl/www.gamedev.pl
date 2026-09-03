@@ -176,6 +176,17 @@ export async function listMySubmissions(): Promise<MySubmission[]> {
   return page.submissions;
 }
 
+// The header badge's number, counted server-side.
+export async function fetchActiveBuildCount(): Promise<number> {
+  const response = await fetch(`${API_BASE}/api/submissions/mine/active-count`, { credentials: 'include' });
+
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+
+  return ((await response.json()) as { active?: number }).active ?? 0;
+}
+
 export async function getSubmissionPreview(token: string, version?: string): Promise<SubmissionPreview> {
   const query = version ? `?version=${encodeURIComponent(version)}` : '';
   const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/preview${query}`);

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from './AuthContext.js';
-import { listMySubmissions, type SubmissionState } from './submissionApi.js';
-import { STUDIO_LIVE_STATUSES } from './studioShelf.js';
+import { fetchActiveBuildCount } from './submissionApi.js';
 
 /**
  * How many of this creator's builds are actually in flight right now.
@@ -11,20 +10,11 @@ import { STUDIO_LIVE_STATUSES } from './studioShelf.js';
  * into a lifetime tally shown as if it were "in progress" — and read zero on a second
  * device with builds running. Ownership is server-side, so ask the server.
  *
- * One store read per poll (`/api/submissions/mine` returns stored statuses, no GitHub
- * fan-out), and slower than the home rail: the badge is a glance, not a watch.
+ * `/api/submissions/mine/active-count` exists for exactly this poll: the shelf route it
+ * used to call reads a creator's entire job history, which at one request a minute per
+ * open tab was the single largest source of Firestore reads on the site.
  */
-const REFRESH_MS = 60_000;
-
-/**
- * A submission with no derived status yet counts as in flight: the list already drops
- * abandoned builds, and `lastKnownStatus` is filled by the two-minute sweep — so the
- * only records without one are the builds just submitted. Excluding them would blank
- * the badge for the first two minutes, which is exactly when a creator looks at it.
- */
-function isInFlight(status: SubmissionState | null): boolean {
-  return status === null || STUDIO_LIVE_STATUSES.has(status);
-}
+const REFRESH_MS = 180_000;
 
 /**
  * @param refreshKey bump to re-read immediately (e.g. right after a new submission).
@@ -48,9 +38,9 @@ export function useActiveBuildCount(refreshKey = 0, enabled = true): number {
 
     async function load() {
       try {
-        const submissions = await listMySubmissions();
+        const active = await fetchActiveBuildCount();
         if (cancelled) return;
-        setCount(submissions.filter((submission) => isInFlight(submission.lastKnownStatus)).length);
+        setCount(active);
       } catch {
         // Signed out mid-poll, or the API is unreachable. A badge is not worth an
         // error state — leave the last known count and try again on the next tick.
@@ -58,9 +48,17 @@ export function useActiveBuildCount(refreshKey = 0, enabled = true): number {
     }
 
     void load();
-    const timer = window.setInterval(() => void load(), REFRESH_MS);
+    // A background tab cannot show the badge, so it has no reason to keep asking.
+    const tick = () => {
+      if (!document.hidden) void load();
+    };
+    // Catch up on the way back rather than waiting out the rest of the interval.
+    const onVisible = () => tick();
+    document.addEventListener('visibilitychange', onVisible);
+    const timer = window.setInterval(tick, REFRESH_MS);
     return () => {
       cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
       window.clearInterval(timer);
     };
   }, [user, refreshKey, enabled]);
