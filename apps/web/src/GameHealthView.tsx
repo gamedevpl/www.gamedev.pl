@@ -16,6 +16,7 @@ import { GrowthPanel } from './GrowthPanel.js';
 import { ScorecardPanel } from './ScorecardPanel.js';
 import { TelemetryOverview } from './TelemetryOverview.js';
 import { TelemetryTrendsPanel } from './TelemetryTrendsPanel.js';
+import { formatSeconds } from './core/formatSeconds.js';
 
 /**
  * Operator view over play telemetry (docs/improvement-loop-plan.md IL-2).
@@ -33,13 +34,6 @@ import { TelemetryTrendsPanel } from './TelemetryTrendsPanel.js';
  */
 
 const WINDOWS = [1, 7, 30];
-
-function formatSeconds(seconds: number): string {
-  if (seconds < 60) return `${Math.round(seconds)}s`;
-  const minutes = Math.floor(seconds / 60);
-  const rest = Math.round(seconds % 60);
-  return rest === 0 ? `${minutes}m` : `${minutes}m ${rest}s`;
-}
 
 function percent(rate: number): string {
   return `${Math.round(rate * 100)}%`;

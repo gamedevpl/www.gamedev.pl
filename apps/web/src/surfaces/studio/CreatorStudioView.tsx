@@ -41,6 +41,7 @@ import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
 import { StudioDetailsBuildProgress } from './StudioDetailsBuildProgress.js';
 import { StudioDetailsMedia } from './StudioDetailsMedia.js';
 import { ContributionsSetting } from '../../ContributionsSetting.js';
+import { formatSeconds } from '../../core/formatSeconds.js';
 import { ProposalReviewPanel } from '../review/ProposalReviewPanel.js';
 import { StudioOAuthClientsPanel } from './StudioOAuthClientsPanel.js';
 import { StudioWorkspaceCheckoutPanel } from './StudioWorkspaceCheckoutPanel.js';
@@ -171,13 +172,6 @@ function resolveTab(game: StudioGame, requested?: StudioTab): StudioTab {
  */
 function studioAddress(game: StudioGame): string {
   return game.slug ?? game.token;
-}
-
-function formatSeconds(seconds: number): string {
-  if (seconds < 60) return `${Math.round(seconds)}s`;
-  const minutes = Math.floor(seconds / 60);
-  const rest = Math.round(seconds % 60);
-  return rest === 0 ? `${minutes}m` : `${minutes}m ${rest}s`;
 }
 
 function percent(rate: number): string {
