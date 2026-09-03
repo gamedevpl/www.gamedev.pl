@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AppLoadingScreen } from './AppLoadingScreen.js';
-import { fetchPublishedGame, type GameFetchError } from './catalog.js';
+import { GameLoadScreen } from './GameLoadScreen.js';
 import { GameTheater } from './GameTheater.js';
+import { usePublishedGameFetch } from './usePublishedGameFetch.js';
 
 type UnpublishedPlayViewProps = {
   slug: string;
@@ -25,7 +25,7 @@ type UnpublishedPlayViewProps = {
  */
 export function UnpublishedPlayView({ slug, onExit, onTitle }: UnpublishedPlayViewProps) {
   const { t } = useTranslation();
-  const [game, setGame] = useState<{ title: string; html: string } | null>(null);
+  const { game, progress, error: fetchError } = usePublishedGameFetch(slug);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -37,28 +37,16 @@ export function UnpublishedPlayView({ slug, onExit, onTitle }: UnpublishedPlayVi
   }, [onTitle]);
 
   useEffect(() => {
-    let cancelled = false;
-    setGame(null);
-    setError(null);
+    if (!fetchError) {
+      setError(null);
+      return;
+    }
+    const status = fetchError?.status;
+    // 404/409: not shared / not ready / unknown. Anything else is a glitch — don't
+    // tell the owner their draft vanished when the request just failed.
+    setError(status === 404 || status === 409 ? t('draft.notFound') : t('draft.error'));
+  }, [fetchError, t]);
 
-    fetchPublishedGame(slug)
-      .then((result) => {
-        if (!cancelled) setGame({ title: result.title, html: result.html });
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        const status = (err as GameFetchError).status;
-        // 404/409: not shared / not ready / unknown. Anything else is a glitch — don't
-        // tell the owner their draft vanished when the request just failed.
-        setError(status === 404 || status === 409 ? t('draft.notFound') : t('draft.error'));
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [slug, t]);
-
-  // Lock the page for loading and play — both are full-viewport overlays.
   useEffect(() => {
     if (error) return;
     document.body.classList.add('player-open');
@@ -87,8 +75,7 @@ export function UnpublishedPlayView({ slug, onExit, onTitle }: UnpublishedPlayVi
   }
 
   if (!game) {
-    // Match /play catalog wait: full-page mascot, not a spinner.
-    return <AppLoadingScreen onExit={onExit} />;
+    return <GameLoadScreen onExit={onExit} progress={progress} />;
   }
 
   return (

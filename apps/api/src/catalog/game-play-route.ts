@@ -13,6 +13,7 @@ import type { GitHubClient } from './github-client.js';
 import type { CatalogRoutesHandle } from './catalog-routes.js';
 import type { DraftPreviewRoutesHandle } from '../delivery/draft-preview-routes.js';
 import type { Store } from '../platform/store.js';
+import { createAssembledGameCache } from './assembled-game-cache.js';
 
 export interface GamePlayRouteOptions {
   store?: Store;
@@ -39,8 +40,8 @@ export async function registerGamePlayRoute(
   const maxGamesPerWindow = options.maxGamesPerWindow ?? 60;
   const gamesRateLimitWindowMs = options.gamesRateLimitWindowMs ?? 60 * 1000;
 
-  const gameTtlMs = 5 * 60_000;
-  const gameCache = new Map<string, { expiresAt: number; value: { slug: string; title: string; html: string } }>();
+  // Byte+entry LRU so 24 MiB documents cannot fill RAM.
+  const gameCache = createAssembledGameCache();
   const gamesByIp = new Map<string, number[]>();
 
   // Snapshot baked build preferred; falls back to assembling GitHub sources.
@@ -57,16 +58,16 @@ export async function registerGamePlayRoute(
       return reply.status(429).send({ error: 'too many game requests, please try again later' });
     }
 
-    const cached = gameCache.get(slug);
-    if (cached && cached.expiresAt > currentTime) {
-      return reply.send(cached.value);
+    const cached = gameCache.get(slug, currentTime);
+    if (cached) {
+      return reply.send(cached);
     }
 
     try {
       // Store-published first: delivered games are never committed to the repo.
       const stored = await catalog.storePublishedGame(slug);
       if (stored) {
-        gameCache.set(slug, { value: stored, expiresAt: currentTime + gameTtlMs });
+        gameCache.set(slug, stored, currentTime);
         return reply.send(stored);
       }
 
@@ -87,7 +88,7 @@ export async function registerGamePlayRoute(
         if (!snapshotGame) {
           throw new SnapshotIncompleteError(`published game "${slug}" is missing from the snapshot`);
         }
-        gameCache.set(slug, { value: snapshotGame, expiresAt: currentTime + gameTtlMs });
+        gameCache.set(slug, snapshotGame, currentTime);
         return reply.send(snapshotGame);
       }
 
@@ -107,7 +108,7 @@ export async function registerGamePlayRoute(
       // restrictNetwork: published games are self-contained, like unreviewed previews.
       const html = assembleGameHtml(project, { restrictNetwork: true });
       const value = { slug, title: project.title, html };
-      gameCache.set(slug, { value, expiresAt: currentTime + gameTtlMs });
+      gameCache.set(slug, value, currentTime);
       return reply.send(value);
     } catch (error) {
       if (error instanceof SnapshotUnavailableError) {
@@ -138,7 +139,7 @@ export async function registerGamePlayRoute(
 
   return {
     invalidateGameCache(slug: string): void {
-      gameCache.delete(slug);
+      gameCache.invalidate(slug);
     },
   };
 }

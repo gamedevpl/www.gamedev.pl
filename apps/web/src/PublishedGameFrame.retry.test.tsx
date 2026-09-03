@@ -60,7 +60,7 @@ describe('PublishedGameFrame retry', () => {
     await act(async () => root.unmount());
   });
 
-  it('covers the wait with the full-viewport mascot, not a loading line', async () => {
+  it('covers the wait with the mascot and a download bar', async () => {
     let resolveGame!: (value: { slug: string; title: string; html: string }) => void;
     vi.mocked(fetchPublishedGame).mockImplementation(
       () =>
@@ -76,7 +76,7 @@ describe('PublishedGameFrame retry', () => {
 
     expect(container.querySelector('.app-loading-screen')).not.toBeNull();
     expect(container.querySelector('iframe')).toBeNull();
-    expect(container.textContent).not.toMatch(/loading game/i);
+    expect(container.textContent).toMatch(/loading game/i);
 
     await act(async () => {
       resolveGame({

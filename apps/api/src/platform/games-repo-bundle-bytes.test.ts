@@ -6,7 +6,7 @@ describe('extractMaxBundleBytes (raster-inclusive)', () => {
     const source = `
       const GAME_BUDGET_BYTES = 936 * 1024;
       const GAMEKIT_PLATFORM_BYTES = 410_000;
-      const RASTER_ASSET_BUDGET_BYTES = 3 * 1024 * 1024;
+      const RASTER_ASSET_BUDGET_BYTES = 24 * 1024 * 1024;
       const MAX_BUNDLE_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES + RASTER_ASSET_BUDGET_BYTES;
     `;
     expect(extractMaxBundleBytes(source)).toBe(MAX_PROJECT_BYTES);
@@ -17,7 +17,7 @@ describe('extractMaxBundleBytes (raster-inclusive)', () => {
       const GAME_BUDGET_BYTES = 936 * 1024;
       const GAMEKIT_TOUCH_BYTES = 7_501 + 5_560;
       const GAMEKIT_PLATFORM_BYTES = GAMEKIT_TOUCH_BYTES + 396_939;
-      const RASTER_ASSET_BUDGET_BYTES = 3 * 1024 * 1024;
+      const RASTER_ASSET_BUDGET_BYTES = 24 * 1024 * 1024;
       const MAX_BUNDLE_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES + RASTER_ASSET_BUDGET_BYTES;
     `;
     expect(extractMaxBundleBytes(source)).toBe(MAX_PROJECT_BYTES);

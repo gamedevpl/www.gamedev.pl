@@ -241,6 +241,7 @@
     },
     "loading": "Loading games…",
     "gameLoading": "Loading game…",
+    "gameLoadingSize": "{{loaded}} / {{total}}",
     "gameLoadError": "Could not load this game.",
     "retry": "Retry",
     "refreshError": "Could not refresh the catalog. {{message}}",

@@ -3295,6 +3295,50 @@ a.user-name--profile:focus-visible {
   color: var(--turquoise);
 }
 
+.app-loading-screen__bar {
+  width: min(240px, 70vw);
+  height: 8px;
+  border-radius: 99px;
+  background: #1c2740;
+  overflow: hidden;
+}
+
+.app-loading-screen__bar-fill {
+  height: 100%;
+  width: 0;
+  background: var(--turquoise, #00e4ac);
+  transition: width 0.15s linear;
+}
+
+.app-loading-screen__bar.is-indeterminate .app-loading-screen__bar-fill {
+  width: 32%;
+  animation: app-loading-bar-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes app-loading-bar-slide {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+.app-loading-screen__status {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted, #c5d0da);
+  text-align: center;
+}
+
+.app-loading-screen__size {
+  display: block;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-heading, #eff8ff);
+}
+
 .app-loading-screen__spinner {
   width: 36px;
   height: 36px;
@@ -3307,6 +3351,17 @@ a.user-name--profile:focus-visible {
 @keyframes app-loading-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-loading-screen__bar-fill {
+    transition: none;
+  }
+
+  .app-loading-screen__bar.is-indeterminate .app-loading-screen__bar-fill {
+    animation: none;
+    width: 40%;
   }
 }
 

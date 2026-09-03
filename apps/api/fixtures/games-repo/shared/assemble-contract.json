@@ -36,8 +36,8 @@
   ],
   "authorBudgetBytes": 958464,
   "platformCeilingBytes": 410000,
-  "rasterBudgetBytes": 3145728,
-  "maxProjectBytes": 4514192,
+  "rasterBudgetBytes": 25165824,
+  "maxProjectBytes": 26534288,
   "audio": {
     "musicField": "string",
     "musicTracksField": "string[]",

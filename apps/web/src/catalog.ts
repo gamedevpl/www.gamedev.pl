@@ -235,25 +235,6 @@ function parseCatalogSubmittedBy(value: unknown): string | null {
 }
 
 /** Thrown by {@link fetchPublishedGame} so callers can tell a miss from a glitch. */
-export type GameFetchError = Error & { status?: number };
-
-export async function fetchPublishedGame(slug: string): Promise<PublishedGame> {
-  // Credentialed because a game is playable at this address before it is published —
-  // by its creator always, by anyone else once the creator shares it. Without the
-  // session cookie a creator opening their own unpublished game gets a 404.
-  const response = await fetch(`${API_BASE}/api/games/${encodeURIComponent(slug)}`, { credentials: 'include' });
-
-  if (!response.ok) {
-    const error = new Error(
-      await readApiErrorMessage(response, `Game request failed (${response.status})`),
-    ) as GameFetchError;
-    error.status = response.status;
-    throw error;
-  }
-
-  const body = (await response.json()) as PublishedGame;
-  if (typeof body?.html !== 'string' || typeof body?.title !== 'string') {
-    throw new Error('Game response was malformed');
-  }
-  return body;
-}
+export type { GameFetchError } from './fetchPublishedGame.js';
+export type { FetchProgress } from './fetchProgress.js';
+export { fetchPublishedGame } from './fetchPublishedGame.js';
