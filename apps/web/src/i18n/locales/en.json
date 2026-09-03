@@ -1269,6 +1269,7 @@
       "lead": "A conversational front door. Type an idea, answer refine questions, watch the gate. Checkout uses your editor; git push is not a delivery path.",
       "installHint": "Needs Node 20+ — same as a game checkout. Windows: irm https://www.gamedev.pl/install.ps1 | iex. The script checksum-verifies before it writes ~/.local/bin.",
       "installPending": "Installers are not public yet. The client lives in this repo at apps/cli; bundle it locally with npm run bundle -w @gamedevpl/cli.",
+      "login": "gamedevpl login opens your browser. Approve once — no token to copy.",
       "repl": "gamedevpl with no verb opens a REPL: describe a game, then iterate.",
       "checkout": "gamedevpl checkout <slug> for your own editor. Deliver with gamedevpl submit.",
       "ci": "CI: GAMEDEV_TOKEN from secrets. Never pass the creator OAuth token to a sub-agent."
@@ -1673,7 +1674,7 @@
     },
     "gamedevCli": {
       "title": "gamedevpl CLI",
-      "hint": "Needs Node 20 — same as a working copy. Then connect this game. Same round as MCP — no extra secret."
+      "hint": "Needs Node 20. Run gamedevpl login (browser opens), then connect this game. Same round as MCP."
     },
     "rotate": {
       "start": "Rotate key",

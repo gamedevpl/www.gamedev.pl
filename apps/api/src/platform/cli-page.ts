@@ -20,14 +20,14 @@ export function cliPageHtml(origin: string): string {
     <p class="hint">Needs Node 20+ — same as a game checkout. Windows: <code>irm ${escapeHtml(origin)}/install.ps1 | iex</code>. The script verifies a SHA-256 before it writes <code>~/.local/bin</code>.</p>
     <h2>Journeys</h2>
     <ul class="can">
-      <li><code>gamedevpl login</code> then describe a game — refine, watch the gate, open a preview.</li>
+      <li><code>gamedevpl login</code> opens a browser — approve once, no token to copy. Then describe a game.</li>
       <li><code>gamedevpl checkout &lt;slug&gt;</code> for your own editor; <code>git push</code> uses <code>git-remote-gamedevpl</code>.</li>
       <li>CI: <code>GAMEDEV_TOKEN</code> from secrets, <code>gamedevpl submit --json</code>.</li>
     </ul>
     <h2>Security posture</h2>
     <ul class="cannot">
       <li>Checksums on every install and update. No postinstall beyond the copy.</li>
-      <li>Tokens in an encrypted file under ~/.config/gamedev.</li>
+      <li>Tokens in an encrypted file under ~/.config/gamedevpl.</li>
       <li>Revoke the grant in Studio to kill CLI access on the next request.</li>
       <li>A sub-agent never receives your OAuth token — round-scoped credentials only.</li>
     </ul>
