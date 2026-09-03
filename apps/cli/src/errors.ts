@@ -1,3 +1,4 @@
+import { cliUsage } from './bin-name.js';
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 
 export function describeError(error: unknown): { message: string; next?: string; code: number } {
@@ -7,7 +8,7 @@ export function describeError(error: unknown): { message: string; next?: string;
   if (error instanceof TypeError) {
     return {
       message: 'offline or proxy failure — check the network and try again',
-      next: 'gamedev whoami',
+      next: cliUsage('whoami'),
       code: EXIT_REFUSED,
     };
   }
@@ -29,7 +30,7 @@ export function moderationRefusal(): CliError {
 
 export function mustFixGate(stage?: string): CliError {
   const where = stage ? ` at ${stage}` : '';
-  return new CliError(`gate red${where} — fix locally, then gamedev submit`, EXIT_REFUSED);
+  return new CliError(`gate red${where} — fix locally, then ${cliUsage('submit')}`, EXIT_REFUSED);
 }
 
 export function otherBuilder(builder: string): CliError {

@@ -1,6 +1,6 @@
 # CLI pre-job intake
 
-For the first CLI milestone, refine → submit stays **client-side**. The `gamedev` binary
+For the first CLI milestone, refine → submit stays **client-side**. The `gamedevpl` binary
 drives the existing create routes itself:
 
 1. `POST /api/submissions/refine` — clarifying questions (same flow as Studio).

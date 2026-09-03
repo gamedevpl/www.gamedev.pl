@@ -141,7 +141,7 @@ describe('OAuth device authorization (CL-08)', () => {
       url: '/api/me/oauth-grants',
       headers: { cookie: sessionCookie('g:boss') },
     });
-    expect(grants.json()).toEqual([expect.objectContaining({ clientLabel: 'gamedev CLI on headless-box' })]);
+    expect(grants.json()).toEqual([expect.objectContaining({ clientLabel: 'gamedevpl CLI on headless-box' })]);
   });
 
   it('does not approve a device code unless action is approve', async () => {

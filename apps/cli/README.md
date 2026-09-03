@@ -1,4 +1,4 @@
-# gamedev CLI (apps/cli)
+# gamedevpl CLI (apps/cli)
 
 Terminal front door for gamedev.pl. **No local model.** Coding happens by delegating to a
 vendor CLI the creator already has, or by the platform builder.
@@ -17,9 +17,9 @@ curl -fsSL https://www.gamedev.pl/install.sh | bash
 ```
 
 The installer is 404 until the `CLI_SURFACE` deploy flag is on. Checksums come from GitHub
-Releases tagged `cli-v*` (one `gamedev` asset). `gamedev update` uses the same channel.
+Releases tagged `cli-v*` (one `gamedevpl` asset). `gamedevpl update` uses the same channel.
 
-Until a release exists: `npm run bundle -w @gamedevpl/cli` and run `apps/cli/dist/gamedev.mjs`.
+Until a release exists: `npm run bundle -w @gamedevpl/cli` and run `apps/cli/dist/gamedevpl.mjs`.
 
 ## Verbs
 
@@ -29,4 +29,4 @@ Until a release exists: `npm run bundle -w @gamedevpl/cli` and run `apps/cli/dis
 Exit codes: `0` gate green · `1` gate red · `2` refused · `3` auth · `4` input required.
 
 CI: `GAMEDEV_TOKEN` from secrets. Never pass the creator OAuth token to a sub-agent.
-`git push` / `git pull` against a checkout use `git-remote-gamedev` (same script).
+`git push` / `git pull` against a checkout use `git-remote-gamedevpl` (same script).

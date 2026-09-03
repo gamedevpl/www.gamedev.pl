@@ -27,7 +27,7 @@ describe('GamedevCliConnectTab', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(host.textContent).toContain('gamedev connect ghost-roads');
+    expect(host.textContent).toContain('gamedevpl connect ghost-roads');
     expect(host.textContent).toContain(`${window.location.origin}/install.sh`);
     await act(async () => root.unmount());
   });

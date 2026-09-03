@@ -81,7 +81,7 @@ describe('VisitFunnelPanel', () => {
     const text = render(response({ visits: 4, visitsWithPlay: 3, bounces: 1, plays: 5 }));
     expect(text).toContain('75%');
     expect(text).toContain('reached a game');
-    expect(text).toContain('gamedev CLI');
+    expect(text).toContain('gamedevpl CLI');
   });
 
   it('shows dashes rather than a fake zero when nobody played', () => {

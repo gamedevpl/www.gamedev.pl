@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "bin": {
-    "gamedev": "./dist/main.js",
-    "git-remote-gamedev": "./dist/git-remote-main.js"
+    "gamedevpl": "./dist/main.js",
+    "git-remote-gamedevpl": "./dist/git-remote-main.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-adapters.mjs",

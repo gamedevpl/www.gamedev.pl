@@ -7,10 +7,13 @@ import { originFromEnv } from './oauth.js';
 import { diffGame } from './checkout.js';
 import { runRemoteHelper } from './git-remote.js';
 import { readFileSync, existsSync } from 'node:fs';
+import { GIT_REMOTE_SCHEME } from './bin-name.js';
 import { join } from 'node:path';
 
 function slugFromUrl(url: string): string {
-  return url.replace(/^gamedev:\/\//, '').replace(/\/$/, '');
+  const prefix = `${GIT_REMOTE_SCHEME}://`;
+  const stripped = url.startsWith(prefix) ? url.slice(prefix.length) : url;
+  return stripped.replace(/\/$/, '');
 }
 
 export function remoteSlugFromArgv(argv: string[], cwdSlug: string | null): string {

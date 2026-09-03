@@ -1263,7 +1263,7 @@
   },
   "connectAgents": {
     "title": "Podłącz agenta",
-    "intro": "Dwoje drzwi, te same gry. Wskaż agenta kodującego na gamedev.pl przez MCP albo rozmawiaj w terminalu przez gamedev CLI. Żadne nie ma własnego modelu — kod powstaje na platformie albo w narzędziu, które już masz.",
+    "intro": "Dwoje drzwi, te same gry. Wskaż agenta kodującego na gamedev.pl przez MCP albo rozmawiaj w terminalu przez gamedevpl CLI. Żadne nie ma własnego modelu — kod powstaje na platformie albo w narzędziu, które już masz.",
     "back": "Wróć do serwisu",
     "jump": "Na tej stronie",
     "beta": "Tworzenie gier jest w zamkniętej becie. Połączenie ładuje się dla każdego; wywołania wymagają zatwierdzonego konta twórcy.",
@@ -1278,13 +1278,13 @@
       "registry": "Oficjalny rejestr MCP"
     },
     "cli": {
-      "nav": "gamedev CLI",
-      "title": "gamedev CLI — terminal",
+      "nav": "gamedevpl CLI",
+      "title": "gamedevpl CLI — terminal",
       "lead": "Rozmowny front door. Opisz pomysł, odpowiedz na pytania, obserwuj bramkę. Checkout idzie do Twojego edytora; git push nie jest ścieżką oddania.",
       "installHint": "Potrzebujesz Node 20+ — tak jak przy kopii roboczej. Windows: irm https://www.gamedev.pl/install.ps1 | iex. Skrypt weryfikuje sumę kontrolną zanim zapisze ~/.local/bin.",
       "installPending": "Instalatory nie są jeszcze publiczne. Klient jest w tym repozytorium w apps/cli; zbierz go lokalnie: npm run bundle -w @gamedevpl/cli.",
-      "repl": "gamedev bez czasownika otwiera REPL: opisz grę, potem iteruj.",
-      "checkout": "gamedev checkout <slug> do własnego edytora. Oddajesz poleceniem gamedev submit.",
+      "repl": "gamedevpl bez czasownika otwiera REPL: opisz grę, potem iteruj.",
+      "checkout": "gamedevpl checkout <slug> do własnego edytora. Oddajesz poleceniem gamedevpl submit.",
       "ci": "CI: GAMEDEV_TOKEN z secrets. Nigdy nie przekazuj tokenu OAuth twórcy do sub-agenta."
     }
   },
@@ -1686,7 +1686,7 @@
       "cli": "CLI"
     },
     "gamedevCli": {
-      "title": "gamedev CLI",
+      "title": "gamedevpl CLI",
       "hint": "Potrzebujesz Node 20 — tak jak przy kopii roboczej. Potem podłącz tę grę. Ta sama runda co MCP — bez dodatkowego sekretu."
     },
     "rotate": {
@@ -1709,7 +1709,7 @@
   },
   "workspaceCheckout": {
     "title": "Pracuj nad tą grą we własnym IDE",
-    "hint": "Pobierz kopię roboczą — źródła tej gry, skrypt konfiguracyjny i README, gotowe dla Twojego edytora. Oddaj zmiany poleceniem `gamedev submit`; przechodzą zwykłą rundę, bramkę i recenzję, zanim cokolwiek zostanie opublikowane.",
+    "hint": "Pobierz kopię roboczą — źródła tej gry, skrypt konfiguracyjny i README, gotowe dla Twojego edytora. Oddaj zmiany poleceniem `gamedevpl submit`; przechodzą zwykłą rundę, bramkę i recenzję, zanim cokolwiek zostanie opublikowane.",
     "action": "Pobierz kopię roboczą",
     "pending": "Przygotowujemy kopię roboczą…",
     "done": "Kopia robocza trafia do Twoich pobranych plików.",
@@ -1723,7 +1723,7 @@
   },
   "oauthClients": {
     "title": "Podłączone agenty kodujące",
-    "hint": "Agenty i gamedev CLI z dostępem do Twoich gier. Odłączenie natychmiast odbiera dostęp.",
+    "hint": "Agenty i gamedevpl CLI z dostępem do Twoich gier. Odłączenie natychmiast odbiera dostęp.",
     "loading": "Wczytywanie podłączonych klientów…",
     "loadError": "Nie udało się wczytać podłączonych klientów.",
     "revokeError": "Nie udało się odłączyć tego klienta. Spróbuj za chwilę.",

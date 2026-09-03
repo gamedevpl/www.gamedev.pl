@@ -1,4 +1,5 @@
 import type { ApiClient } from './api.js';
+import { cliUsage } from './bin-name.js';
 import { jsonMode } from './argv.js';
 import { CliError, EXIT_GREEN, EXIT_INPUT } from './exit-codes.js';
 import { defaultInstallDest, updateCli } from './update.js';
@@ -46,7 +47,7 @@ export async function dispatchReadVerb(input: {
   }
   if (verb === 'share') {
     const slug = args[0];
-    if (!slug) throw new CliError('gamedev share <slug>', EXIT_INPUT, '<slug>');
+    if (!slug) throw new CliError(cliUsage('share', '<slug>'), EXIT_INPUT, '<slug>');
     const url = `${api.origin}/play/${slug}`;
     emit(io, asJson, { url }, url);
     return EXIT_GREEN;
@@ -64,7 +65,7 @@ export async function dispatchReadVerb(input: {
   }
   if (verb === 'builder') {
     const slug = args[0];
-    if (!slug) throw new CliError('gamedev builder <slug>', EXIT_INPUT, '<slug>');
+    if (!slug) throw new CliError(cliUsage('builder', '<slug>'), EXIT_INPUT, '<slug>');
     const studio = await api.request<{ games?: Array<{ slug?: string; token?: string }> }>(
       'GET',
       `/api/me/studio?game=${encodeURIComponent(slug)}`,

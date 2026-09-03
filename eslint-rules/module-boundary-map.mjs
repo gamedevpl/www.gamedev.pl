@@ -80,7 +80,7 @@ const FILE_BUCKET = {
   'dev-seed-studio': 'platform',
   'openai-apps-challenge': 'platform',
   'spa-paths': 'platform',
-  // Kill switch + reserved installer routes for the gamedev CLI surface (CL-02).
+  // Kill switch + reserved installer routes for the gamedevpl CLI surface (CL-02).
   'cli-surface': 'platform',
   'cli-installers': 'platform',
   'cli-page': 'platform',

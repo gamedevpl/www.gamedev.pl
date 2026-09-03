@@ -193,7 +193,7 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
     `coding` to `VisitFunnel` (`visit-funnel.ts`), rendered as a Code surface block on
     `VisitFunnelPanel` beside Editing. `CODE_STEPS` lives in the shared vocabulary module
     like the others.
-  - **CLI (`gamedev`) funnel write-side shipped, operator panel unread (CL-01 / CL-39):**
+  - **CLI (`gamedevpl`) funnel write-side shipped, operator panel unread (CL-01 / CL-39):**
     `cli_step` (`installed` → `authorized` → `first_turn` → `build_requested` →
     `delivered` → `published`, plus `delegate_offered`/`delegate_used`/`verify_failed`
     beside the ladder) is on the visit stream with closed `channel` / `os` / `adapter` /
