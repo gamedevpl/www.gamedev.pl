@@ -41,6 +41,14 @@ import { pollDelayMs } from './studioStatusPoll.js';
 import { isRoundSealed } from './roundSealed.js';
 import '../../editor-kit.css';
 import '../../editor-kit-side.css';
+import {
+  firstTileKey,
+  itemsOf,
+  mergeDraft,
+  pathCollection,
+  tilemapCollection,
+  useLabel,
+} from './editorPanelHelpers.js';
 
 /**
  * The studio's Edit surface (EditorKit L3): renders a game's own editor
@@ -80,15 +88,6 @@ type PublishState =
   /** 409 not_sealed: polling the round's status, will retry publish once it seals. */
   | { kind: 'waiting' }
   | { kind: 'error'; message: string };
-
-import {
-  firstTileKey,
-  itemsOf,
-  mergeDraft,
-  pathCollection,
-  tilemapCollection,
-  useLabel,
-} from './editorPanelHelpers.js';
 
 export function EditorPanel(props: {
   game: StudioGame;

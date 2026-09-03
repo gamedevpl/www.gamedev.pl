@@ -14,13 +14,13 @@ export function useRemixGrip({
   chromeHidden?: boolean;
   onRevealChrome?: () => void;
 }) {
-  const dragRef = useRef<{ startY: number; moved: boolean } | null>(null);
+  const dragRef = useRef<{ startY: number } | null>(null);
   const dragConsumedRef = useRef(false);
 
   function onPointerDown(event: ReactPointerEvent<HTMLElement>) {
     event.currentTarget.setPointerCapture?.(event.pointerId);
     dragConsumedRef.current = false;
-    dragRef.current = { startY: event.clientY, moved: false };
+    dragRef.current = { startY: event.clientY };
   }
 
   function onPointerMove(event: ReactPointerEvent<HTMLElement>) {
@@ -28,7 +28,6 @@ export function useRemixGrip({
     if (!drag) return;
     const dy = event.clientY - drag.startY;
     if (Math.abs(dy) < GRIP_DRAG_PX) return;
-    drag.moved = true;
     dragConsumedRef.current = true;
     if (dy > GRIP_DRAG_PX) {
       dragRef.current = null;
