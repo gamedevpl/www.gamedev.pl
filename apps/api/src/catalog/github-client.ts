@@ -28,12 +28,9 @@ import {
 import { appendDeclaredImageSources, bakeGameImageAssets, resolveGameImageBytes } from './bake-game-images.js';
 import { parseGameManifest } from './parse-game-manifest.js';
 import { isRateLimitResponse } from '../platform/github-rate-limit.js';
-import {
-  generateIndexHtml,
-  hasPlayableHowToPlay,
-  type GameManifest as IndexHtmlManifest,
-} from './index-html-generator.js';
-import { mergeMusicTrackMaps, parseGameMusicTracks, parseMusicCatalogTracks } from './music-tracks.js';
+import { generateIndexHtml, type GameManifest as IndexHtmlManifest } from './index-html-generator.js';
+import { hasPlayableHowToPlay } from '../platform/how-to-play.js';
+import { mergeMusicTrackMaps, parseGameMusicTracks, parseMusicCatalogTracks } from '../platform/music-tracks.js';
 import { generateStyleCss, type Theme } from '../platform/theme-css-generator.js';
 
 export type { CatalogGameTouch } from './catalog-touch.js';

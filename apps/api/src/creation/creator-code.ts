@@ -17,7 +17,7 @@ import {
   type StagedSourceEntry,
 } from '../delivery/games-store.js';
 import type { TabCompleteGate } from './creation-limits.js';
-import type { GitHubClient } from '../catalog/github-client.js';
+import { parseSpecTitle, type GitHubClient } from '../catalog/github-client.js';
 import { resolveJobState } from './job-state.js';
 import { createKitFileStore, type KitFileStore } from '../agent-surface/kit-files.js';
 import { parseKitRegistry } from '../platform/kit-registry.js';
@@ -43,7 +43,11 @@ import {
 } from '../delivery/staged-preview.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { MAX_PREFIX_CHARS, MAX_SUFFIX_CHARS, tabCompleteEnabled, type TabCompleter } from './tab-complete.js';
-import { sharedSourcesFromKitTree } from './typecheck-preflight.js';
+import {
+  runTypecheckPreflight,
+  sharedSourcesFromKitTree,
+  TYPECHECK_PREFLIGHT_MAX_REFUSALS,
+} from './typecheck-preflight.js';
 import { typeCheckGame } from './type-check.js';
 
 /**
@@ -212,6 +216,10 @@ export async function registerCreatorCodeRoutes(
             onSourcesDelivered: options.onSourcesDelivered,
             onEvent: (jobId) => options.scheduleStagedPreview?.(jobId),
             log: options.log,
+            parseSpecTitle,
+            runTypecheckPreflight,
+            sharedSourcesFromKitTree,
+            typecheckPreflightMaxRefusals: TYPECHECK_PREFLIGHT_MAX_REFUSALS,
           })
         : null;
   /** CE-19: per-slug cooldown between manual deliveries. Process-local, same posture

@@ -3,7 +3,7 @@ import {
   encodeRasterSourceContent,
   isRasterSourcePath,
   mimeForImagePath,
-} from '../catalog/raster-assets.js';
+} from '../platform/raster-source.js';
 
 export function sourceObjectBytes(path: string, content: string): Buffer {
   if (isRasterSourcePath(path)) return decodeRasterSourceContent(path, content);

@@ -12,6 +12,12 @@ import {
   type SourceDeliveryAuthority,
 } from './source-delivery.js';
 import type { StagedPreviewPublisher } from './staged-preview.js';
+import { parseSpecTitle } from '../catalog/github-client.js';
+import {
+  runTypecheckPreflight,
+  sharedSourcesFromKitTree,
+  TYPECHECK_PREFLIGHT_MAX_REFUSALS,
+} from '../creation/typecheck-preflight.js';
 
 const ISSUE = 701;
 const SLUG = 'managed-comet';
@@ -107,6 +113,10 @@ async function setup(opts?: {
     onEvent: vi.fn(),
     log,
     translator: opts?.translator ?? new NoopTranslator(),
+    parseSpecTitle,
+    runTypecheckPreflight,
+    sharedSourcesFromKitTree,
+    typecheckPreflightMaxRefusals: TYPECHECK_PREFLIGHT_MAX_REFUSALS,
   });
   const authority: SourceDeliveryAuthority = {
     backend: BACKEND,
