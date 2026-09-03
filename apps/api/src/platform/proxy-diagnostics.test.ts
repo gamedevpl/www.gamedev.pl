@@ -45,7 +45,24 @@ describe('GET /api/diagnostics/proxy', () => {
     expect(body.headers['fastly-client-ip']).toBe('203.0.113.7');
     // FH-02 turns on this: does Origin survive the trip?
     expect(body.headers.origin).toBe('https://www.gamedev.pl');
-    expect(typeof body.resolvedIp).toBe('string');
+    // trustProxy: 1, so the rightmost entry is the one trusted.
+    expect(body.resolvedIp).toBe('198.51.100.2');
+    await app.close();
+  });
+
+  it('counts only real hops, so padding cannot inflate the answer', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:looker', email: 'looker@example.com' });
+    const app = await appWith(store);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/diagnostics/proxy',
+      headers: { cookie: session('g:looker'), 'x-forwarded-for': '203.0.113.7,  198.51.100.2 ,' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as ProxyDiagnosticsResponse).forwardedForHops).toBe(2);
     await app.close();
   });
 
@@ -61,7 +78,10 @@ describe('GET /api/diagnostics/proxy', () => {
     });
 
     expect(res.statusCode).toBe(200);
+    const body = res.json() as ProxyDiagnosticsResponse;
     // Reflecting its own auth header would be a credential leak.
+    expect(Object.keys(body.headers)).not.toContain('authorization');
+    expect(Object.keys(body.headers)).not.toContain('cookie');
     expect(res.body).not.toContain('gdpl_pat_secret');
     expect(res.body).not.toContain(SESSION_COOKIE_NAME);
     await app.close();

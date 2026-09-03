@@ -24,9 +24,15 @@ function headerValue(request: FastifyRequest, name: string): string | null {
 export interface ProxyDiagnosticsResponse {
   // What Fastify resolved; every per-IP rate limiter buckets on this.
   resolvedIp: string;
-  // Entries in X-Forwarded-For, so a hop count can be chosen.
+  // Non-empty X-Forwarded-For entries, so a hop count can be chosen.
   forwardedForHops: number;
   headers: Record<string, string | null>;
+}
+
+// Padding and empty segments are legal, and would inflate the count.
+function countForwardedForHops(forwardedFor: string | null): number {
+  if (!forwardedFor) return 0;
+  return forwardedFor.split(',').filter((entry) => entry.trim() !== '').length;
 }
 
 // Authenticated-only, so it needs no beta-wall exemption.
@@ -37,10 +43,9 @@ export function registerProxyDiagnosticsRoutes(app: FastifyInstance): void {
     const headers: Record<string, string | null> = {};
     for (const name of FORWARDING_HEADERS) headers[name] = headerValue(request, name);
 
-    const forwardedFor = headers['x-forwarded-for'];
     const response: ProxyDiagnosticsResponse = {
       resolvedIp: request.ip,
-      forwardedForHops: forwardedFor ? forwardedFor.split(',').length : 0,
+      forwardedForHops: countForwardedForHops(headers['x-forwarded-for']),
       headers,
     };
     return reply.send(response);

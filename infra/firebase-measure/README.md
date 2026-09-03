@@ -4,9 +4,11 @@ Answers the two questions FH-02 and FH-08 hang on, which no document settles and
 logs cannot: does `Origin` survive a Hosting rewrite, and what does the service resolve as
 `request.ip` once an extra proxy hop exists.
 
-**Not the production config.** Everything rewrites to the live service and no static files
-ship, so the only variable is whether Hosting sits in the path. FH-04's `firebase.json`
-serves `/assets/*` from Hosting and is separate work.
+**Not the production config.** The one static file, `public/index.html`, is a deploy
+marker: Hosting matches static files before rewrites, so it answers at `/` and confirms the
+channel is live. Every other path, `/api/*` included, rewrites to the live service, so the
+only variable on the measured routes is whether Hosting sits in the path. FH-04's
+`firebase.json` serves `/assets/*` from Hosting and is separate work.
 
 ## Run it from this directory
 
