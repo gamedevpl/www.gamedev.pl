@@ -40,6 +40,8 @@ describe('GET /api/diagnostics/proxy', () => {
     });
 
     expect(res.statusCode).toBe(200);
+    // An intermediary replaying one caller's diagnostics would leak.
+    expect(res.headers['cache-control']).toBe('no-store');
     const body = res.json() as ProxyDiagnosticsResponse;
     expect(body.forwardedForHops).toBe(2);
     expect(body.headers['fastly-client-ip']).toBe('203.0.113.7');

@@ -38,6 +38,8 @@ function countForwardedForHops(forwardedFor: string | null): number {
 // Authenticated-only, so it needs no beta-wall exemption.
 export function registerProxyDiagnosticsRoutes(app: FastifyInstance): void {
   app.get('/api/diagnostics/proxy', async (request, reply) => {
+    // Fetched through a CDN by design, so a cached copy would mislead.
+    reply.header('Cache-Control', 'no-store');
     if (!request.user) return reply.status(401).send({ error: 'authentication required' });
 
     const headers: Record<string, string | null> = {};
