@@ -24,7 +24,7 @@ function headerValue(request: FastifyRequest, name: string): string | null {
 export interface ProxyDiagnosticsResponse {
   // What Fastify resolved; every per-IP rate limiter buckets on this.
   resolvedIp: string;
-  // Non-empty X-Forwarded-For entries, so a hop count can be chosen.
+  // Non-empty XFF entries, so a hop count can be chosen.
   forwardedForHops: number;
   headers: Record<string, string | null>;
 }
