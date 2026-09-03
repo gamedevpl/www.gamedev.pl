@@ -1,14 +1,14 @@
 # Measurement-only Hosting config
 
-Answers the two questions FH-02 and FH-08 hang on, which no document settles and Cloud Run
-logs cannot: does `Origin` survive a Hosting rewrite, and what does the service resolve as
-`request.ip` once an extra proxy hop exists.
+Answers two questions that no document settles and Cloud Run logs cannot: does `Origin`
+survive a Hosting rewrite, and what does the service resolve as `request.ip` once an extra
+proxy hop exists in front of it.
 
 **Not the production config.** The one static file, `public/index.html`, is a deploy
 marker: Hosting matches static files before rewrites, so it answers at `/` and confirms the
 channel is live. Every other path, `/api/*` included, rewrites to the live service, so the
-only variable on the measured routes is whether Hosting sits in the path. FH-04's
-`firebase.json` serves `/assets/*` from Hosting and is separate work.
+only variable on the measured routes is whether Hosting sits in the path. Serving real
+assets from Hosting is separate work with its own config.
 
 ## Run it from this directory
 
@@ -52,20 +52,26 @@ admin).
 
 Deploying to a **preview channel** needs no DNS and no custom domain, and does not put
 Hosting in front of `www.gamedev.pl` — it serves on a throwaway `*.web.app` URL. Nothing
-about production changes until a custom domain is attached, which is FH-05.
+about production changes until a custom domain is attached, which is a later step.
 
 ## Then compare the two paths
 
-Signed in, or with a personal access token:
+Signed in, or with a personal access token. `curl` sends no `Origin` of its own, so pass one
+explicitly — otherwise both paths report `null` and the comparison proves nothing:
 
 ```bash
-curl -s -H "Authorization: Bearer <pat>" https://<service>.run.app/api/diagnostics/proxy
-curl -s -H "Authorization: Bearer <pat>" https://<preview-url>/api/diagnostics/proxy
+curl -s -H "Authorization: Bearer <pat>" -H "Origin: https://www.gamedev.pl" \
+  https://<service>.run.app/api/diagnostics/proxy
+curl -s -H "Authorization: Bearer <pat>" -H "Origin: https://www.gamedev.pl" \
+  https://<preview-url>/api/diagnostics/proxy
 ```
 
-- `resolvedIp` differing between them is the **FH-08** answer — and if the Hosting one is not
-  the caller's own address, no `trustProxy` hop count fixes it and the app must read whichever
-  header does carry the client.
-- `headers.origin` surviving is the **FH-02** answer.
+Repeat the second one with `-H "Origin: https://evil.example"`: a foreign origin must not
+come back allowed, or the check being designed around it is worthless.
 
-Clean up when done: `npx firebase-tools hosting:channel:delete measure`.
+- `headers.origin` surviving the rewrite is the first answer.
+- `resolvedIp` differing between the two paths is the second. Read it together with
+  `headers['x-forwarded-for']` before concluding anything: if the echoed chain still
+  contains the caller's real address, a larger `trustProxy` hop count reaches it and that is
+  the fix. Only when the chain no longer carries the caller at all must the app read
+  whichever vendor header does.

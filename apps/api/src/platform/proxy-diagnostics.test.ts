@@ -43,7 +43,7 @@ describe('GET /api/diagnostics/proxy', () => {
     const body = res.json() as ProxyDiagnosticsResponse;
     expect(body.forwardedForHops).toBe(2);
     expect(body.headers['fastly-client-ip']).toBe('203.0.113.7');
-    // FH-02 turns on this: does Origin survive the trip?
+    // The CSRF replacement hangs on this: does Origin survive?
     expect(body.headers.origin).toBe('https://www.gamedev.pl');
     // trustProxy: 1, so the rightmost entry is the one trusted.
     expect(body.resolvedIp).toBe('198.51.100.2');
