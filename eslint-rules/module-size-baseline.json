@@ -341,7 +341,7 @@
     "apps/api/src/platform/apple-auth.test.ts": 203,
     "apps/api/src/platform/apple-auth.ts": 161,
     "apps/api/src/platform/auth.test.ts": 905,
-    "apps/api/src/platform/auth.ts": 1006,
+    "apps/api/src/platform/auth.ts": 1005,
     "apps/api/src/platform/bearer.ts": 19,
     "apps/api/src/platform/bounded-map.test.ts": 45,
     "apps/api/src/platform/bounded-map.ts": 35,

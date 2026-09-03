@@ -350,6 +350,8 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
   const authRateLimitWindowMs = 60 * 60 * 1000;
   const maxAuthRequestsPerWindow = 20;
   const authAttemptsByIp = new Map<string, number[]>();
+  const tooManyAuthAttempts = (ip: string) =>
+    isRateLimited(authAttemptsByIp, ip, Date.now(), maxAuthRequestsPerWindow, authRateLimitWindowMs);
 
   await app.register(cookie);
 
@@ -481,10 +483,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         return reply.status(503).send({ error: 'authentication is not configured' });
       }
 
-      const currentTime = Date.now();
-      if (
-        isRateLimited(authAttemptsByIp, request.clientIp, currentTime, maxAuthRequestsPerWindow, authRateLimitWindowMs)
-      ) {
+      if (tooManyAuthAttempts(request.clientIp)) {
         return reply.status(429).send({ error: 'too many login attempts, please try again later' });
       }
 
@@ -595,10 +594,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         return reply.status(503).send({ error: 'sign in with apple is not configured' });
       }
 
-      const currentTime = Date.now();
-      if (
-        isRateLimited(authAttemptsByIp, request.clientIp, currentTime, maxAuthRequestsPerWindow, authRateLimitWindowMs)
-      ) {
+      if (tooManyAuthAttempts(request.clientIp)) {
         return reply.status(429).send({ error: 'too many login attempts, please try again later' });
       }
 
@@ -714,10 +710,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         return reply.status(503).send({ error: 'authentication is not configured' });
       }
 
-      const currentTime = Date.now();
-      if (
-        isRateLimited(authAttemptsByIp, request.clientIp, currentTime, maxAuthRequestsPerWindow, authRateLimitWindowMs)
-      ) {
+      if (tooManyAuthAttempts(request.clientIp)) {
         return reply.status(429).send({ error: 'too many requests, please try again later' });
       }
 
