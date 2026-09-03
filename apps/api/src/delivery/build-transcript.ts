@@ -1,5 +1,6 @@
 // Creator conversation, served in windows — get_kit_api hit a token ceiling at whole.
 
+import { isMcpPresenceEventText } from '../agent-surface/mcp-presence.js';
 import { isStudioOrigin, type Store, type SubmissionRecord } from '../platform/store.js';
 
 // Fenced instrumentation block the feedback relay staples onto a creator message.
@@ -49,11 +50,9 @@ export type TranscriptWindow = {
 export async function loadBuildTranscript(
   store: TranscriptStore,
   record: SubmissionRecord,
-  // N1: injected so this module has no value-level agent-surface import.
-  isPresenceEventText: (text: string, createdAt?: string) => boolean,
   opts?: { cursor?: string; limit?: number },
 ): Promise<TranscriptWindow> {
-  const { entries: all, truncatedAtSource } = await collectTranscriptEntries(store, record, isPresenceEventText);
+  const { entries: all, truncatedAtSource } = await collectTranscriptEntries(store, record);
 
   const requestedLimit = opts?.limit !== undefined ? Math.floor(opts.limit) : DEFAULT_TRANSCRIPT_WINDOW_ENTRIES;
   const windowSize = Math.min(
@@ -90,7 +89,6 @@ function windowBytes(entries: TranscriptEntry[], start: number, end: number): nu
 async function collectTranscriptEntries(
   store: TranscriptStore,
   record: SubmissionRecord,
-  isPresenceEventText: (text: string, createdAt?: string) => boolean,
 ): Promise<{ entries: TranscriptEntry[]; truncatedAtSource: boolean }> {
   const eligibleSiblings = record.slug
     ? (await store.listSubmissionsBySlug(record.slug)).filter(
@@ -125,7 +123,7 @@ async function collectTranscriptEntries(
       }));
       // Pre-#661 presence leftovers hidden; a real report_progress after it is kept.
       const eventEntries: TranscriptEntry[] = events
-        .filter((event) => !isPresenceEventText(event.text, event.createdAt))
+        .filter((event) => !isMcpPresenceEventText(event.text, event.createdAt))
         .map((event) => ({
           kind: 'build_progress' as const,
           text: event.text.slice(0, MAX_TRANSCRIPT_ENTRY_CHARS),

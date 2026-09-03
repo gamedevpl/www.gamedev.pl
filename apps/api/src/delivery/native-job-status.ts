@@ -1,10 +1,12 @@
 import { detectStall, toSubmissionStatus } from '../creation/job-state.js';
 import { gateCrashStall } from './gate-crash.js';
+import { sessionCrashStall } from '../creation/session-crash.js';
 import { sealRefusal } from './seal-preview.js';
 import { toRecentBuilds } from './recent-builds.js';
 import { revisionOriginOf } from './build-status.js';
 import { stripPlaytestContext } from './build-transcript.js';
-import type { BuilderKind } from '../creation/builder.js';
+import { codeSurfaceEnabled, isLiveAgentRound } from '../creation/code-surface.js';
+import { selfBuildDeliveryCap, type BuilderKind } from '../creation/builder.js';
 import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
 import type { GamesStore } from './games-store.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
@@ -16,11 +18,6 @@ export interface NativeJobStatusOptions {
   builderOf: (record: SubmissionRecord | null | undefined) => BuilderKind;
   managedAvailabilityGate?: ManagedAvailabilityGate | null;
   gamesStore?: GamesStore;
-  // N1: injected so this module has no value-level creation/ import.
-  sessionCrashStall: (record: SubmissionRecord) => void;
-  codeSurfaceEnabled: () => boolean;
-  isLiveAgentRound: (record: SubmissionRecord) => boolean;
-  selfBuildDeliveryCap: () => number;
 }
 
 export interface NativeJobStatusAssembler {
@@ -29,17 +26,7 @@ export interface NativeJobStatusAssembler {
 
 // Single status derivation, shared by the status route and the notify sweep.
 export function createNativeJobStatusAssembler(options: NativeJobStatusOptions): NativeJobStatusAssembler {
-  const {
-    store,
-    now,
-    builderOf,
-    managedAvailabilityGate,
-    gamesStore,
-    sessionCrashStall,
-    codeSurfaceEnabled,
-    isLiveAgentRound,
-    selfBuildDeliveryCap,
-  } = options;
+  const { store, now, builderOf, managedAvailabilityGate, gamesStore } = options;
 
   // Projects the job's own record — no issue or PR here.
   async function nativeJobStatus(record: SubmissionRecord): Promise<SubmissionStatusResponse> {

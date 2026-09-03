@@ -1,6 +1,6 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { decodeRasterSourceContent, isRasterSourcePath } from '../platform/raster-source.js';
+import { decodeRasterSourceContent, isRasterSourcePath } from '../catalog/raster-assets.js';
 import type { GamesStore, VersionManifest } from './games-store.js';
 
 export async function materializeCandidate(

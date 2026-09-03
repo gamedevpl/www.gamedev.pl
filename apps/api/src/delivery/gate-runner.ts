@@ -22,6 +22,8 @@
 import { readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { materializeCandidate } from './gate-materialize.js';
+import type { GameProject } from '@gamedevpl/contract';
+import { assembleGameHtml } from '../platform/assemble.js';
 import { firstGateScreenshotPath } from './gate-screenshot.js';
 import {
   createGateStageBannerParser,
@@ -32,6 +34,7 @@ import {
 } from './gate-progress.js';
 import type { GamesStore } from './games-store.js';
 import { isKitEngineRefSupported, kitOutdatedReport, type KitRegistry } from '../platform/kit-window.js';
+import { createLocalGamesClient } from '../catalog/local-games-repo.js';
 
 export interface GateOutcome {
   green: boolean;
@@ -139,6 +142,39 @@ export interface GateRunnerDeps {
 const DEFAULT_ARTIFACT_ROOTS = {
   media: (slug: string) => path.join('games', slug, 'media'),
 };
+
+/**
+ * Assembles the served document from the harness the check just passed against.
+ *
+ * Deliberately *not* the games repo's own `dist/` build output, which is what this used
+ * to store. That output is the repo's idea of a playable page; it is not ours, and the
+ * difference is the whole of serve-time policy — the restrictive CSP that stops a game
+ * calling home, the AI Act art. 50(2) provenance marking, the credential scan, the byte
+ * budget. All four live in `assembleGameHtml`, none of them are in `tools/build.ts`, and
+ * shipping the repo's build meant shipping a document with none of them.
+ *
+ * Assembling here rather than at serve time is what keeps one definition of "what a
+ * served game is" across the three things that need one: the creator's draft preview,
+ * the published game, and the snapshot bake. It also belongs here for the reason the
+ * gate itself does — this repo owns the policy, and the harness is already checked out
+ * with the GameKit modules the assembler has to resolve.
+ */
+async function assembleFromHarness(harness: string, slug: string): Promise<string | null> {
+  const client = createLocalGamesClient({ rootDir: harness });
+  const sources = await client.getGameSources('main', slug);
+  if (!sources) return null;
+
+  const project: GameProject = {
+    title: sources.title ?? slug,
+    description: '',
+    html: sources.indexHtml,
+    js: sources.gameJs,
+    css: sources.styleCss,
+  };
+  // Matches the bake and the play route exactly: a game is self-contained by repo
+  // policy, so it is locked to its own inline assets.
+  return assembleGameHtml(project, { restrictNetwork: true });
+}
 
 /**
  * Files the capture harness produces that are worth keeping.
@@ -531,8 +567,8 @@ async function storePreviewStrict(
   version: string,
   harness: string,
 ): Promise<string[]> {
-  const preview = await deps.assembleBundle?.(harness, slug);
-  if (preview == null) {
+  const preview = await (deps.assembleBundle ?? assembleFromHarness)(harness, slug);
+  if (preview === null) {
     throw new Error(`check:game --preview passed for ${slug} but its sources could not be assembled`);
   }
   await deps.store.putDerivedArtifact(
@@ -592,8 +628,8 @@ async function collectArtifacts(
   // store a version that reads as publishable and has nothing to publish — and the
   // failure would surface later, as a creator's preview that never appears, rather
   // than here where the run that caused it is still in front of someone.
-  const bundle = await deps.assembleBundle?.(harness, slug);
-  if (bundle == null) throw new Error(`check:game passed for ${slug} but its sources could not be assembled`);
+  const bundle = await (deps.assembleBundle ?? assembleFromHarness)(harness, slug);
+  if (bundle === null) throw new Error(`check:game passed for ${slug} but its sources could not be assembled`);
   await deps.store.putDerivedArtifact(
     slug,
     version,

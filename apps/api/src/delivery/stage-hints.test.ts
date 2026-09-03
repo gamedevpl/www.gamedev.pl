@@ -4,7 +4,6 @@ import type { GamesStore, SourceFile, VersionManifest } from './games-store.js';
 import type { Store } from '../platform/store.js';
 import { KIT_ROOT_DIR } from '../platform/kit-registry.js';
 import { computeStageAdvisories } from './stage-hints.js';
-import { runTypecheckPreflight, sharedSourcesFromKitTree } from '../creation/typecheck-preflight.js';
 
 const KIT_DTS = `
 interface GameKitDrawStyle { fill?: string; }
@@ -73,8 +72,6 @@ const BASE_INPUT = {
   engineRef: 'engine-1',
   store: fakeStore,
   record: {} as { slug?: string; previewVersion?: string; deliveredVersion?: string },
-  runTypecheckPreflight,
-  sharedSourcesFromKitTree,
 };
 
 describe('computeStageAdvisories', () => {

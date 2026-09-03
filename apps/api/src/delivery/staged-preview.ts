@@ -38,7 +38,7 @@ import {
 } from '../platform/assemble.js';
 import { MAX_BUILD_PREVIEW_BYTES } from './build-preview-limits.js';
 import type { GamesStore, SourceFile } from './games-store.js';
-import { hasPlayableHowToPlay } from '../platform/how-to-play.js';
+import { hasPlayableHowToPlay } from '../catalog/index-html-generator.js';
 import type { GitHubClient } from '../catalog/github-client.js';
 import {
   resolveRoundBaseVersion,

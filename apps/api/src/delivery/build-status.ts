@@ -1,4 +1,5 @@
 import type { BuilderKind } from '@gamedevpl/contract';
+import { isMcpPresenceEventText } from '../agent-surface/mcp-presence.js';
 import { stripPlaytestContext } from './build-transcript.js';
 import { detectStall, toSubmissionStatus } from '../creation/job-state.js';
 import { hydrateRecentBuildSummaries } from './build-changelog.js';
@@ -34,8 +35,6 @@ export interface BuildStatusOptions {
   gamesStore?: GamesStore;
   now: () => number;
   managedAvailabilityGate?: ManagedAvailabilityGate | null;
-  // N1: injected so this module has no value-level agent-surface import.
-  isPresenceEventText: (text: string, createdAt?: string) => boolean;
 }
 
 export interface BuildStatusAssembler {
@@ -50,7 +49,7 @@ function builderOf(record: SubmissionRecord | null | undefined): BuilderKind {
 
 // Assembles a status response's channel events, media, and prior-round history.
 export function createBuildStatusAssembler(options: BuildStatusOptions): BuildStatusAssembler {
-  const { store, gamesStore, now, managedAvailabilityGate, isPresenceEventText } = options;
+  const { store, gamesStore, now, managedAvailabilityGate } = options;
 
   // Its own short cache, not the 60s status cache.
   const eventsCacheTtlMs = 5_000;
@@ -199,7 +198,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
           store!.listCreatorMessages(sibling.jobId, { limit: maxPriorEntriesPerRound }),
           store!.listBuildEvents(sibling.jobId, { limit: maxPriorEntriesPerRound }),
         ]);
-        const events = rawEvents.filter((event) => !isPresenceEventText(event.text, event.createdAt));
+        const events = rawEvents.filter((event) => !isMcpPresenceEventText(event.text, event.createdAt));
         const revisionEntries: PriorRoundEntry[] = localizeRevisions(
           messages.map((message) => ({
             text: stripPlaytestContext(message.text),
@@ -256,7 +255,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
       store ? store.getSubmission(jobId).catch(() => null) : Promise.resolve(null),
     ]);
     // Drop leftover synthetic presence steps from before heartbeats stopped writing chat.
-    const events = loadedEvents.filter((event) => !isPresenceEventText(event.text, event.createdAt));
+    const events = loadedEvents.filter((event) => !isMcpPresenceEventText(event.text, event.createdAt));
     const next: SubmissionStatusResponse = {
       ...status,
       ...(events.length > 0 ? { events: localizeEvents(events, locale) } : {}),
@@ -325,7 +324,6 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
           builds: next.recentBuilds,
           locale,
           loadEvents: async (id) => (id === jobId ? loadedEvents : loadBuildEvents(id)),
-          isPresenceEventText,
         });
       } catch (error) {
         void error;

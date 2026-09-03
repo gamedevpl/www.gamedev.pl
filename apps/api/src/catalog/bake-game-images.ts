@@ -4,9 +4,12 @@ import {
   assertImageSignature,
   decodeRasterSourceContent,
   encodeRasterSourceContent,
+  imageLoaderBootJs,
+  imageLoaderHtml,
   mimeForImagePath,
-} from '../platform/raster-source.js';
-import { imageLoaderBootJs, imageLoaderHtml, parseGameImages, type ImageManifest } from './raster-assets.js';
+  parseGameImages,
+  type ImageManifest,
+} from './raster-assets.js';
 
 export async function resolveGameImageBytes(
   relative: string,

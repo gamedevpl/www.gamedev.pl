@@ -29,8 +29,8 @@ import {
 } from '../platform/games-repo-contract.js';
 import type { GateProgress, GateProgressStage } from './gate-progress.js';
 import { applyGateVerdict, applyPreviewGateVerdict, applyHealthVerdict } from './version-verdict.js';
-import { hasPlayableHowToPlay } from '../platform/how-to-play.js';
-import { isRasterSourcePath } from '../platform/raster-source.js';
+import { hasPlayableHowToPlay } from '../catalog/index-html-generator.js';
+import { isRasterSourcePath } from '../catalog/raster-assets.js';
 import { forbiddenDeliveryPathReason, forbiddenIndexHtmlWriteReason } from './delivery-path-guard.js';
 import {
   canonicalizeUploadedSource,

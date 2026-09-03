@@ -6,6 +6,7 @@ import {
   logDeliveryPreflightRefused,
 } from '../platform/delivery-metrics.js';
 import { InvalidUploadError, type GamesStore, type SourceFile } from './games-store.js';
+import { parseSpecTitle } from '../catalog/github-client.js';
 import {
   canTransition,
   resolveJobState,
@@ -13,12 +14,16 @@ import {
   type JobState,
   type TransitionActor,
 } from '../creation/job-state.js';
-import type { KitFileStore, KitTree } from '../agent-surface/kit-files.js';
+import type { KitFileStore } from '../agent-surface/kit-files.js';
 import { normalizeAtIntake } from '../platform/localize-intake.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { createTranslatorFromEnv, type Translator } from '../platform/translate.js';
-import type { TypecheckPreflightResult } from '../creation/typecheck-preflight.js';
+import {
+  runTypecheckPreflight,
+  sharedSourcesFromKitTree,
+  TYPECHECK_PREFLIGHT_MAX_REFUSALS,
+} from '../creation/typecheck-preflight.js';
 import type { StagedPreviewPublisher } from './staged-preview.js';
 
 export interface SourceDeliveryAuthority {
@@ -117,15 +122,6 @@ export interface SourceDeliveryServiceOptions {
   };
   // Same lazy-default pattern as agent-channel.ts / submissions.ts.
   translator?: Translator;
-  // N1: injected so this module has no value-level creation/catalog import.
-  parseSpecTitle: (specMd: string) => string | null;
-  runTypecheckPreflight: (input: {
-    slug: string;
-    sources: Record<string, string>;
-    kitShared: Record<string, string>;
-  }) => Promise<TypecheckPreflightResult>;
-  sharedSourcesFromKitTree: (tree: KitTree) => Record<string, string>;
-  typecheckPreflightMaxRefusals: number;
 }
 
 const DEFAULT_MAX_SUBMITS_PER_WINDOW = 20;
@@ -317,19 +313,19 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       if (options.kitFileStore && engineRefForCheck) {
         try {
           const tree = await options.kitFileStore.loadTree(engineRefForCheck);
-          const kitShared = options.sharedSourcesFromKitTree(tree);
+          const kitShared = sharedSourcesFromKitTree(tree);
           const sources: Record<string, string> = {};
           for (const file of input.files) {
             sources[file.path.trim()] = file.content;
           }
-          const check = await options.runTypecheckPreflight({
+          const check = await runTypecheckPreflight({
             slug: input.slug,
             sources,
             kitShared,
           });
           if (!check.ok) {
             const prior = record.roundTypecheckPreflightRefusals ?? 0;
-            if (prior < options.typecheckPreflightMaxRefusals) {
+            if (prior < TYPECHECK_PREFLIGHT_MAX_REFUSALS) {
               await options.store.incrementRoundTypecheckPreflightRefusals(input.jobId);
               await emitRefusal('typecheck');
               throw new InvalidUploadError(check.message, 'typecheck');
@@ -350,7 +346,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
             );
             pendingThreadEvents.push({
               kind: 'blocked',
-              text: `Delivered without a passing typecheck after ${options.typecheckPreflightMaxRefusals} failed attempts: ${check.message}`,
+              text: `Delivered without a passing typecheck after ${TYPECHECK_PREFLIGHT_MAX_REFUSALS} failed attempts: ${check.message}`,
             });
           } else {
             // A skipped check is not a pass; leave the bypass state alone.
@@ -466,7 +462,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       }
 
       const spec = input.files.find((file) => file.path === 'SPEC.md')?.content;
-      const deliveredTitle = spec ? options.parseSpecTitle(spec) : null;
+      const deliveredTitle = spec ? parseSpecTitle(spec) : null;
       if (deliveredTitle) {
         const sanitized = sanitizeCreatorText(deliveredTitle, { singleLine: true }).slice(0, 80);
         if (sanitized.length >= 3 && sanitized !== record.title) {

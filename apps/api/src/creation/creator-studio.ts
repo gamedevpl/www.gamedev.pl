@@ -7,7 +7,6 @@ import { codeSurfaceEnabled } from './code-surface.js';
 import { collapseJobsToOwnerGames, MAX_OWNER_GAMES, pageOwnerGames } from './owner-games.js';
 import { readTarEntries, type TarEntry } from '../platform/tar.js';
 import { hydrateRecentBuildSummaries } from '../delivery/build-changelog.js';
-import { isMcpPresenceEventText } from '../agent-surface/mcp-presence.js';
 import { toRecentBuilds } from '../delivery/recent-builds.js';
 import type {
   StudioBuildsResponse,
@@ -350,7 +349,6 @@ export async function registerCreatorStudioRoutes(
         builds: toRecentBuilds(pagedVersions),
         ...(locale ? { locale } : {}),
         loadEvents: (jobId) => store.listBuildEvents(jobId, { limit: 20 }),
-        isPresenceEventText: isMcpPresenceEventText,
       }),
       totalCount,
     };
