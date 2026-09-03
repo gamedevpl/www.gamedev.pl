@@ -10,6 +10,7 @@ import Fastify, {
   type FastifyServerOptions,
 } from 'fastify';
 import { registerAccessTokenRoutes, type AccessTokenRoutesOptions } from './access-token-routes.js';
+import { registerProxyDiagnosticsRoutes } from './proxy-diagnostics.js';
 import { registerJobAdminRoutes } from '../creation/job-admin-routes.js';
 import { createGameSeederFromEnv } from '../agent-surface/agent-backend-env.js';
 import { createGcsGamesStore } from '../delivery/games-store.js';
@@ -743,6 +744,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // a Google identity, or any bypass route. Same operator allowlist as the views above,
   // and session-only, so a token can never mint another.
   await registerAccessTokenRoutes(app, { store, adminUids, now: options.accessTokenRoutes?.now });
+  registerProxyDiagnosticsRoutes(app);
 
   // The build queue, answered from the store alone. Until jobs carried their own state
   // there was nothing to answer it with: deriving every in-flight submission's status on
