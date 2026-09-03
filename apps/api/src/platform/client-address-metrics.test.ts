@@ -16,7 +16,8 @@ describe('isUnattributable', () => {
   it('names the addresses that are never a caller', () => {
     expect(isUnattributable('0.0.0.0')).toBe(true);
     expect(isUnattributable('::')).toBe(true);
-    expect(isUnattributable('')).toBe(true);
+    // An upgrade with no socket, a different and already-handled case.
+    expect(isUnattributable('')).toBe(false);
     expect(isUnattributable('203.0.113.7')).toBe(false);
   });
 });

@@ -6,8 +6,9 @@ export const UNATTRIBUTABLE_CLIENT_LOG_MSG = 'unattributable client address';
 export const IP_BUCKET_REFUSAL_LOG_MSG = 'unattributable client refused by ip limiter';
 
 // The unspecified address in either family, never a real caller.
-const UNATTRIBUTABLE = new Set(['0.0.0.0', '::', '::0', '']);
+const UNATTRIBUTABLE = new Set(['0.0.0.0', '::', '::0']);
 
+// Empty means no socket, which is a different case entirely.
 export function isUnattributable(clientIp: string): boolean {
   return UNATTRIBUTABLE.has(clientIp.trim());
 }
