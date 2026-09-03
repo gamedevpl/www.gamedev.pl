@@ -165,7 +165,7 @@ export async function registerDraftPreviewRoutes(
       const requestedVersion =
         typeof query?.version === 'string' && /^[a-zA-Z0-9_-]+$/.test(query.version) ? query.version : undefined;
       const currentTime = now();
-      if (isRateLimited(previewsByIp, request.ip, currentTime, maxPreviewsPerWindow, previewRateLimitWindowMs)) {
+      if (isRateLimited(previewsByIp, request.clientIp, currentTime, maxPreviewsPerWindow, previewRateLimitWindowMs)) {
         return reply.status(429).send({ error: 'too many preview requests, please try again later' });
       }
 
@@ -202,7 +202,7 @@ export async function registerDraftPreviewRoutes(
       return reply.status(404).send({ error: 'draft not found' });
     }
 
-    if (isRateLimited(previewsByIp, request.ip, now(), maxPreviewsPerWindow, previewRateLimitWindowMs)) {
+    if (isRateLimited(previewsByIp, request.clientIp, now(), maxPreviewsPerWindow, previewRateLimitWindowMs)) {
       return reply.status(429).send({ error: 'too many preview requests, please try again later' });
     }
 

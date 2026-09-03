@@ -482,7 +482,9 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
       }
 
       const currentTime = Date.now();
-      if (isRateLimited(authAttemptsByIp, request.ip, currentTime, maxAuthRequestsPerWindow, authRateLimitWindowMs)) {
+      if (
+        isRateLimited(authAttemptsByIp, request.clientIp, currentTime, maxAuthRequestsPerWindow, authRateLimitWindowMs)
+      ) {
         return reply.status(429).send({ error: 'too many login attempts, please try again later' });
       }
 
@@ -594,7 +596,9 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
       }
 
       const currentTime = Date.now();
-      if (isRateLimited(authAttemptsByIp, request.ip, currentTime, maxAuthRequestsPerWindow, authRateLimitWindowMs)) {
+      if (
+        isRateLimited(authAttemptsByIp, request.clientIp, currentTime, maxAuthRequestsPerWindow, authRateLimitWindowMs)
+      ) {
         return reply.status(429).send({ error: 'too many login attempts, please try again later' });
       }
 
@@ -711,7 +715,9 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
       }
 
       const currentTime = Date.now();
-      if (isRateLimited(authAttemptsByIp, request.ip, currentTime, maxAuthRequestsPerWindow, authRateLimitWindowMs)) {
+      if (
+        isRateLimited(authAttemptsByIp, request.clientIp, currentTime, maxAuthRequestsPerWindow, authRateLimitWindowMs)
+      ) {
         return reply.status(429).send({ error: 'too many requests, please try again later' });
       }
 

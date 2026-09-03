@@ -230,6 +230,43 @@ half wrote the replacement. Three separate defects came from breaking one half o
 cookie last; a replacement leaving the 30-day old cookie standing beside a 12-hour new
 one). The tests in `auth.test.ts` and `access-token-routes.test.ts` pin each case.
 
+## The client address, and `TRUST_EDGE_CLIENT_IP`
+
+Every per-IP rate limiter — including the auth brute-force one — and every abuse record
+reads `request.clientIp`, not `request.ip`. The two are the same today. They stop being the
+same the moment a CDN fronts the service, and the difference is silent.
+
+Cloud Run _appends_ its immediate peer to `X-Forwarded-For` rather than replacing the
+header. With nothing in front, the rightmost entry is the caller and `trustProxy: 1`
+resolves it — which is also what makes a client-supplied `X-Forwarded-For: 1.2.3.4` prefix
+harmless. Put Firebase Hosting in front and the chain becomes
+`<caller>,<Google frontend>`: the rightmost entry is now the edge, so every limiter would
+bucket the whole internet onto a handful of Google addresses.
+
+**Raising `trustProxy` is not the fix**, and this is the trap worth spelling out. A larger
+hop count would reach the caller's entry behind the edge, but it would equally trust a
+forged prefix on any request that did _not_ arrive through the edge — and the service's own
+`*.run.app` URL stays publicly reachable, so that path does not close by itself.
+
+So the caller is read from `Fastly-Client-IP`, a header the edge overwrites (a forged one
+sent through Hosting is discarded and replaced — measured, not assumed). A header is only
+as trustworthy as the guarantee that nothing can reach the service around the proxy that
+sets it, which is what the flag records:
+
+- **`TRUST_EDGE_CLIENT_IP` unset or anything but `true`** (the default, and the current
+  production state): the header is ignored entirely and `clientIp` is `request.ip`. Safe
+  while the service is reachable directly, which it is today.
+- **`TRUST_EDGE_CLIENT_IP=true`**: `clientIp` comes from `Fastly-Client-IP` when it holds
+  exactly one address, falling back to `request.ip` otherwise.
+
+**Do not set it to `true` until the direct Cloud Run URL is closed** — ingress restricted to
+internal and load balancing, or an equivalent proof that traffic came through Hosting.
+Setting it while the service answers directly replaces a broken limiter with a bypassable
+one, which is worse, because it looks correct.
+
+`GET /api/diagnostics/proxy` reports `resolvedIp` (Fastify's) and `clientIp` (the effective
+one) side by side, so the two can be compared through either path after a change.
+
 ## Outbound email (Resend)
 
 Email is used for **beta invites** today (`npm run beta:invite`) and is the shared

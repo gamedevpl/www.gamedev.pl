@@ -22,8 +22,10 @@ function headerValue(request: FastifyRequest, name: string): string | null {
 }
 
 export interface ProxyDiagnosticsResponse {
-  // What Fastify resolved; every per-IP rate limiter buckets on this.
+  // What Fastify resolved from the socket and the trusted hop.
   resolvedIp: string;
+  // What the app actually buckets on; see client-address.ts.
+  clientIp: string;
   // Non-empty XFF entries, so a hop count can be chosen.
   forwardedForHops: number;
   headers: Record<string, string | null>;
@@ -47,6 +49,7 @@ export function registerProxyDiagnosticsRoutes(app: FastifyInstance): void {
 
     const response: ProxyDiagnosticsResponse = {
       resolvedIp: request.ip,
+      clientIp: request.clientIp,
       forwardedForHops: countForwardedForHops(headers['x-forwarded-for']),
       headers,
     };

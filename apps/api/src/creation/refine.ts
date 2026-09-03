@@ -406,7 +406,7 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
     }
 
     const currentTime = Date.now();
-    if (isRateLimited(refinesByIp, request.ip, currentTime, maxRefinesPerWindowPerIp, rateLimitWindowMs)) {
+    if (isRateLimited(refinesByIp, request.clientIp, currentTime, maxRefinesPerWindowPerIp, rateLimitWindowMs)) {
       return reply.status(429).send({ error: 'too many refine requests, please try again later' });
     }
 

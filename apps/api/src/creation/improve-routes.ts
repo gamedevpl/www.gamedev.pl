@@ -177,7 +177,7 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
         scope: 'improve',
         record,
         locale: record.locale ?? 'en',
-        ip: request.ip,
+        ip: request.clientIp,
         uid: request.user!.uid,
         images: referenceImages,
       });

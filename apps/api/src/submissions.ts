@@ -1335,7 +1335,15 @@ export async function registerSubmissionRoutes(
       const token = z.string().parse((request.params as { token?: string }).token);
       const locale = normalizeLocale((request.query as { locale?: string } | undefined)?.locale);
       const currentTime = now();
-      if (isRateLimited(statusChecksByIp, request.ip, currentTime, maxStatusChecksPerWindow, statusRateLimitWindowMs)) {
+      if (
+        isRateLimited(
+          statusChecksByIp,
+          request.clientIp,
+          currentTime,
+          maxStatusChecksPerWindow,
+          statusRateLimitWindowMs,
+        )
+      ) {
         return reply.status(429).send({ error: 'too many status checks, please try again later' });
       }
 

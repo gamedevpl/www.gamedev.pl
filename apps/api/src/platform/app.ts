@@ -10,6 +10,7 @@ import Fastify, {
   type FastifyServerOptions,
 } from 'fastify';
 import { registerAccessTokenRoutes, type AccessTokenRoutesOptions } from './access-token-routes.js';
+import { registerClientAddress } from './client-address.js';
 import { registerProxyDiagnosticsRoutes } from './proxy-diagnostics.js';
 import { registerJobAdminRoutes } from '../creation/job-admin-routes.js';
 import { createGameSeederFromEnv } from '../agent-surface/agent-backend-env.js';
@@ -203,17 +204,7 @@ export interface BuildAppOptions {
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
-  // Cloud Run terminates the connection and proxies to this container, so without
-  // trustProxy every request.ip is the proxy's own address (169.254.x.x) —
-  // collapsing every per-IP rate limiter in the app into one shared, site-wide
-  // bucket.
-  //
-  // The hop count matters and must not be `true`: Cloud Run *appends* the real
-  // client IP to X-Forwarded-For rather than replacing it, so a client sending
-  // `X-Forwarded-For: 1.2.3.4` produces "1.2.3.4, <real ip>". `true` trusts every
-  // hop and takes the leftmost entry — letting any caller choose their own rate
-  // limit bucket. Trusting exactly one hop resolves to the rightmost entry, which
-  // is the only one Cloud Run itself wrote, so spoofed prefixes are ignored.
+  // trustProxy stays 1, and raising it is a spoofing hole: see docs/deployment.md.
   // maxParamLength: a remix id is a self-describing token (apps/api/src/remix.ts)
   // that carries the game's slug, so it is longer than Fastify's 100-character
   // default allows. Over the limit the router answers 414 before any handler runs
@@ -224,6 +215,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     trustProxy: 1,
     routerOptions: { maxParamLength: MAX_REMIX_ID_LENGTH },
   });
+
+  registerClientAddress(app);
 
   // Fastify's default 500 echoes err.message; 4xx replies pass through.
   app.setErrorHandler((error: FastifyError, request, reply) => {

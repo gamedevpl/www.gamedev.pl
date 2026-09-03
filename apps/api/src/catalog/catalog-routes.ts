@@ -301,7 +301,7 @@ export async function registerCatalogRoutes(
       parsedParams.data.filename.endsWith('.png') && isVariantWidth(requestedWidth) ? requestedWidth : undefined;
 
     const currentTime = now();
-    if (isRateLimited(mediaByIp, request.ip, currentTime, maxMediaPerWindow, mediaRateLimitWindowMs)) {
+    if (isRateLimited(mediaByIp, request.clientIp, currentTime, maxMediaPerWindow, mediaRateLimitWindowMs)) {
       return reply.status(429).send({ error: 'too many game requests, please try again later' });
     }
 

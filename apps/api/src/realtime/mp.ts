@@ -512,10 +512,10 @@ export { DEFAULT_MAX_SOCKETS_PER_IP };
 /**
  * The address to bucket a connection under, or null when it cannot be determined.
  *
- * `request.ip` is the value we want — `trustProxy` resolves the real client rather
- * than Cloud Run's proxy, which is the whole reason app.ts sets it — but the getter
- * reads `raw.socket.remoteAddress`, and an upgrade request with no underlying socket
- * makes it throw rather than return undefined.
+ * `request.clientIp` is the value we want — it resolves the real client rather than
+ * Cloud Run's proxy or, behind a CDN, the edge; see platform/client-address.ts. It is
+ * empty rather than absent for an upgrade request with no underlying socket, because
+ * the `request.ip` behind it throws there rather than returning undefined.
  *
  * Null (rather than a shared "unknown" bucket) is the deliberate choice: connections
  * we cannot classify simply are not capped. Collapsing them together would let one
@@ -525,7 +525,7 @@ export { DEFAULT_MAX_SOCKETS_PER_IP };
  */
 function connectionAddress(request: FastifyRequest): string | null {
   try {
-    return request.ip || null;
+    return request.clientIp || null;
   } catch {
     return null;
   }
@@ -590,7 +590,7 @@ export async function registerMultiplayerRoutes(
         return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
       }
 
-      if (isRateLimited(roomsByIp, request.ip, Date.now(), maxRoomsPerWindow, 60 * 60 * 1000)) {
+      if (isRateLimited(roomsByIp, request.clientIp, Date.now(), maxRoomsPerWindow, 60 * 60 * 1000)) {
         return reply.status(429).send({ error: 'too many rooms' });
       }
 

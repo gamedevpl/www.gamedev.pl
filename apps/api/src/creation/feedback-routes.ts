@@ -124,7 +124,7 @@ export function registerFeedbackRoutes(app: FastifyInstance, options: FeedbackRo
       const currentTime = now();
 
       // 2. Coarse per-IP rate limit.
-      if (isRateLimited(feedbackByIp, request.ip, currentTime, maxFeedbackPerWindow, feedbackRateLimitWindowMs)) {
+      if (isRateLimited(feedbackByIp, request.clientIp, currentTime, maxFeedbackPerWindow, feedbackRateLimitWindowMs)) {
         return reply.status(429).send({ error: 'too many feedback requests, please try again later' });
       }
 
@@ -224,7 +224,7 @@ export function registerFeedbackRoutes(app: FastifyInstance, options: FeedbackRo
           scope: 'draft',
           record,
           locale: creatorLocale,
-          ip: request.ip,
+          ip: request.clientIp,
           uid: request.user!.uid,
           images: referenceImages,
         });

@@ -121,7 +121,7 @@ export function createGameCreateTools(deps: GameCreateToolsDeps): Record<string,
 
         const created = await createGame({
           uid: creatorUid,
-          ip: ctx.request.ip,
+          ip: ctx.request.clientIp,
           // Without this an agent that omits locale pins the game to English.
           acceptLanguage: ctx.request.headers['accept-language'],
           openedBy: 'agent',
