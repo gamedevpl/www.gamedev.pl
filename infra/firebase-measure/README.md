@@ -13,18 +13,40 @@ serves `/assets/*` from Hosting and is separate work.
 Paths in `firebase.json` resolve against the directory holding it, so `cd` here rather than
 passing `--config` — one less thing to get wrong:
 
+Nothing here carries a trailing `#` comment. Interactive zsh does not treat `#` as a
+comment unless `INTERACTIVE_COMMENTS` is set, so an annotated command line pasted into it
+arrives as extra arguments and the CLI answers "Too many arguments".
+
 ```bash
 cd infra/firebase-measure
 npx firebase-tools login
-npx firebase-tools projects:addfirebase gamedevpl   # skip if Firebase is already on the project
-npx firebase-tools hosting:sites:create gamedevpl   # "could not find sites for project" means this step
+```
+
+Add Firebase to the Google Cloud project. Needed once, and needed even though the project
+already exists — a plain GCP project is not a Firebase project, and until this runs every
+Hosting call answers "404, Requested entity was not found":
+
+```bash
+npx firebase-tools projects:addfirebase gamedevpl
+```
+
+Create the Hosting site. A Firebase project can still have no site, which is the
+"could not find sites for project" error. Site IDs are a global namespace, so if
+`gamedevpl` is taken pick another and set it as `hosting.site` in `firebase.json`:
+
+```bash
+npx firebase-tools hosting:sites:create gamedevpl
+```
+
+Deploy to a preview channel:
+
+```bash
 npx firebase-tools hosting:channel:deploy measure --expires 1d
 ```
 
-`hosting:sites:create` is the step that is easy to miss: a Google Cloud project can be known
-to Firebase and still have no Hosting site, and the deploy then fails with _"could not find
-sites for project"_. Site IDs live in a global namespace, so if `gamedevpl` is taken pick
-another and set it as `hosting.site` here.
+Read the two errors as a ladder: a 404 on the project means the first command is missing,
+"no sites" means the second. Both need enough rights on the project (owner, or Firebase
+admin).
 
 Deploying to a **preview channel** needs no DNS and no custom domain, and does not put
 Hosting in front of `www.gamedev.pl` — it serves on a throwaway `*.web.app` URL. Nothing
