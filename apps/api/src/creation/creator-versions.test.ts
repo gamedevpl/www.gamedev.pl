@@ -3,7 +3,7 @@ import type { GamesStore, VersionManifest } from '../delivery/games-store.js';
 import { enableCliSurface, mintCreatorTokens } from '../platform/oauth-cli-test-app.js';
 import { buildApp } from '../platform/app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
-import { InMemoryStore } from '../platform/store.js';
+import { InMemoryStore, type SubmissionRecord } from '../platform/store.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 const SLUG = 'comet-courier';
@@ -17,6 +17,13 @@ const SOURCES: Record<string, string> = {
   'SPEC.md': '---\nslug: comet-courier\n---\n',
   'game.ts': 'export const speed = 3;\n',
 };
+
+function setCreatedAt(store: InMemoryStore, jobId: number, createdAt: string): void {
+  const map = (store as unknown as { submissions: Map<number, SubmissionRecord> }).submissions;
+  const sub = map.get(jobId);
+  if (!sub) throw new Error(`no submission ${jobId}`);
+  map.set(jobId, { ...sub, createdAt });
+}
 
 function stubGamesStore(): GamesStore {
   const manifest = {
@@ -83,6 +90,34 @@ describe('owner version history (CL-29a)', () => {
       headers: sessionHeaders('g:other'),
     });
     expect(stolen.statusCode).toBe(404);
+  });
+
+  it('404s the former owner after the slug transfers', async () => {
+    await store.upsertUser({ uid: 'g:other' });
+    await store.createSubmission(99, 'g:other', 'Taken');
+    await store.setSubmissionSlug(99, SLUG);
+    setCreatedAt(store, 42, '2026-08-01T00:00:00.000Z');
+    setCreatedAt(store, 99, '2026-09-01T00:00:00.000Z');
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      submissionRoutes: {
+        submissionTokenSecret: 'secret',
+        agentChannel: { gamesStore: stubGamesStore() },
+      },
+    });
+    const former = await app.inject({
+      method: 'GET',
+      url: `/api/me/studio/games/${SLUG}/versions`,
+      headers: sessionHeaders('g:creator'),
+    });
+    expect(former.statusCode).toBe(404);
+    const current = await app.inject({
+      method: 'GET',
+      url: `/api/me/studio/games/${SLUG}/versions`,
+      headers: sessionHeaders('g:other'),
+    });
+    expect(current.statusCode).toBe(200);
   });
 
   it('refuses version reads from a blocked owner', async () => {

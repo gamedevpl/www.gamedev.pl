@@ -66,6 +66,13 @@ describe('self-service PAT mint (CL-31)', () => {
     });
     expect(viaOauth.statusCode).toBe(404);
 
+    const agentKeyViaOauth = await app.inject({
+      method: 'GET',
+      url: '/api/me/creator-agent-key',
+      headers: { authorization: `Bearer ${tokens.access_token}` },
+    });
+    expect(agentKeyViaOauth.statusCode).toBe(404);
+
     const revoked = await app.inject({
       method: 'DELETE',
       url: `/api/me/access-tokens/${body.tokenId}`,

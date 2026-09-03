@@ -79,6 +79,7 @@ export function writeGameFiles(dest: string, slug: string, files: TreeFile[]): v
   for (const file of files) {
     const abs = join(dest, 'games', slug, file.path);
     mkdirSync(dirname(abs), { recursive: true });
+    if (existsSync(abs) && lstatSync(abs).isSymbolicLink()) rmSync(abs);
     writeFileSync(abs, file.content);
   }
 }

@@ -1,5 +1,5 @@
 import { sanitizeEventPayload } from './ansi.js';
-import { EXIT_GREEN } from './exit-codes.js';
+import { EXIT_GREEN, EXIT_RED } from './exit-codes.js';
 import { createLiveScreen } from './live.js';
 import { getStatus, isTerminalStatus, previewUrl, type RoundStatus } from './turn.js';
 import type { ApiClient } from './api.js';
@@ -46,5 +46,6 @@ export async function runStatusVerb(input: {
     await sleep(statusWatchDelayMs(status));
     status = await getStatus(input.api, input.token);
   }
+  if (status.failure?.reason === 'gate_red' || status.previewGate?.green === false) return EXIT_RED;
   return EXIT_GREEN;
 }
