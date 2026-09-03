@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { PassThrough } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { isLaunchedEntry, runCli } from './main.js';
-import { EXIT_AUTH, EXIT_GREEN, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
+import { EXIT_AUTH, EXIT_GREEN, EXIT_INPUT } from './exit-codes.js';
 
 function io() {
   const stdout = new PassThrough();
@@ -43,9 +43,14 @@ describe('runCli verbs', () => {
     expect(await runCli(['node', 'gamedev', 'whoami'], { HOME: '/tmp/gamedev-cli-empty' }, streams)).toBe(EXIT_AUTH);
   });
 
-  it('refuses unreconciled submit/diff without --force', async () => {
+  it('diff --force skips the platform read', async () => {
     const streams = io();
-    expect(await runCli(['node', 'gamedev', 'diff'], {}, streams)).toBe(EXIT_REFUSED);
+    expect(await runCli(['node', 'gamedev', 'diff', '--force'], {}, streams)).toBe(EXIT_GREEN);
+  });
+
+  it('exits 4 when diff has no slug and no checkout', async () => {
+    const streams = io();
+    expect(await runCli(['node', 'gamedev', 'diff'], { HOME: '/tmp/gamedev-cli-empty' }, streams)).toBe(EXIT_INPUT);
   });
 
   it('runs when launched as the bundled gamedev.mjs, not only main.ts', () => {
