@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppLoadingScreen } from './AppLoadingScreen.js';
 import { GameFrame } from './GameFrame.js';
-import { fetchPublishedGame } from './catalog.js';
+import { fetchPublishedGame, type FetchProgress } from './catalog.js';
 import { PixelIcon } from './PixelIcon.js';
 import { useGameTelemetry } from './gamePlayer.js';
 import { rememberRecentPlay } from './recentPlays.js';
@@ -78,6 +78,7 @@ export function PublishedGameFrame({
 }: PublishedGameFrameProps) {
   const { t } = useTranslation();
   const [html, setHtml] = useState<string | null>(null);
+  const [loadProgress, setLoadProgress] = useState<FetchProgress>({ loaded: 0, total: null });
   const [failed, setFailed] = useState(false);
   const [gameTitle, setGameTitle] = useState<string>(title);
   // Bumped by the Retry control so a failed fetch can be re-attempted without
@@ -132,24 +133,33 @@ export function PublishedGameFrame({
 
   useEffect(() => {
     let cancelled = false;
+    const abort = new AbortController();
     setHtml(null);
     setFailed(false);
+    setLoadProgress({ loaded: 0, total: null });
     setGameTitle(title);
     setRemixHtml(null);
 
-    fetchPublishedGame(slug)
+    fetchPublishedGame(slug, {
+      signal: abort.signal,
+      onProgress: (progress) => {
+        if (!cancelled) setLoadProgress(progress);
+      },
+    })
       .then((game) => {
         if (!cancelled) {
           setHtml(game.html);
           if (game.title) setGameTitle(game.title);
         }
       })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
+      .catch((err: unknown) => {
+        if (cancelled || (err instanceof Error && err.name === 'AbortError')) return;
+        setFailed(true);
       });
 
     return () => {
       cancelled = true;
+      abort.abort();
     };
   }, [slug, title, loadAttempt]);
 
@@ -195,7 +205,7 @@ export function PublishedGameFrame({
     );
   }
   if (html === null) {
-    return <AppLoadingScreen />;
+    return <AppLoadingScreen progress={loadProgress} />;
   }
   // `embed` describes chrome, not ownership — the theater always embeds — so the
   // gate is the explicit prop plus "this frame is one player's", which a party

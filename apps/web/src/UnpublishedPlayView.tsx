@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppLoadingScreen } from './AppLoadingScreen.js';
-import { fetchPublishedGame, type GameFetchError } from './catalog.js';
+import { fetchPublishedGame, type FetchProgress, type GameFetchError } from './catalog.js';
 import { GameTheater } from './GameTheater.js';
 
 type UnpublishedPlayViewProps = {
@@ -26,6 +26,7 @@ type UnpublishedPlayViewProps = {
 export function UnpublishedPlayView({ slug, onExit, onTitle }: UnpublishedPlayViewProps) {
   const { t } = useTranslation();
   const [game, setGame] = useState<{ title: string; html: string } | null>(null);
+  const [loadProgress, setLoadProgress] = useState<FetchProgress>({ loaded: 0, total: null });
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -38,15 +39,22 @@ export function UnpublishedPlayView({ slug, onExit, onTitle }: UnpublishedPlayVi
 
   useEffect(() => {
     let cancelled = false;
+    const abort = new AbortController();
     setGame(null);
+    setLoadProgress({ loaded: 0, total: null });
     setError(null);
 
-    fetchPublishedGame(slug)
+    fetchPublishedGame(slug, {
+      signal: abort.signal,
+      onProgress: (progress) => {
+        if (!cancelled) setLoadProgress(progress);
+      },
+    })
       .then((result) => {
         if (!cancelled) setGame({ title: result.title, html: result.html });
       })
       .catch((err: unknown) => {
-        if (cancelled) return;
+        if (cancelled || (err instanceof Error && err.name === 'AbortError')) return;
         const status = (err as GameFetchError).status;
         // 404/409: not shared / not ready / unknown. Anything else is a glitch — don't
         // tell the owner their draft vanished when the request just failed.
@@ -55,6 +63,7 @@ export function UnpublishedPlayView({ slug, onExit, onTitle }: UnpublishedPlayVi
 
     return () => {
       cancelled = true;
+      abort.abort();
     };
   }, [slug, t]);
 
@@ -87,8 +96,8 @@ export function UnpublishedPlayView({ slug, onExit, onTitle }: UnpublishedPlayVi
   }
 
   if (!game) {
-    // Match /play catalog wait: full-page mascot, not a spinner.
-    return <AppLoadingScreen onExit={onExit} />;
+    // Same overlay as published play, with download progress.
+    return <AppLoadingScreen onExit={onExit} progress={loadProgress} />;
   }
 
   return (

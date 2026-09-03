@@ -50,7 +50,7 @@ function validContract(): Record<string, unknown> {
 
 describe('games-repo-contract (website half)', () => {
   it('keeps the serve budget at the Check 4 total (games-repo MAX_BUNDLE_BYTES)', () => {
-    expect(MAX_PROJECT_BYTES).toBe(4_514_192);
+    expect(MAX_PROJECT_BYTES).toBe(26_534_288);
     expect(GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES + RASTER_ASSET_BUDGET_BYTES).toBe(MAX_PROJECT_BYTES);
     // assemble.ts must re-export the same number — a second literal would drift.
     expect(ASSEMBLE_MAX).toBe(MAX_PROJECT_BYTES);

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createGitHubClient } from './github-client.js';
+import { RASTER_ASSET_MAX_FILE_BYTES } from '../platform/raster-contract.js';
 
 const repo = 'gamedevpl/www.gamedev.pl-games';
 const TINY_PNG = Buffer.from(
@@ -79,7 +80,7 @@ describe('getGameSources images', () => {
         engine: { modules: ['input'] },
         images: { bg: 'scenes/glade/bg.png' },
       }),
-      'games/painted/scenes/glade/bg.png': new Uint8Array(400 * 1024 + 1),
+      'games/painted/scenes/glade/bg.png': new Uint8Array(RASTER_ASSET_MAX_FILE_BYTES + 1),
     });
     const client = createGitHubClient({ token: 'test-token', repo, fetchImpl: contentsFetch(files) });
     await expect(client.getGameSources('main', 'painted')).rejects.toThrow(/quantized PNG\/WebP must stay under/);

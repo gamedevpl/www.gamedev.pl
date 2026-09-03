@@ -241,6 +241,7 @@
     },
     "loading": "Wczytywanie gier…",
     "gameLoading": "Wczytywanie gry…",
+    "gameLoadingSize": "{{loaded}} / {{total}}",
     "gameLoadError": "Nie udało się wczytać tej gry.",
     "retry": "Spróbuj ponownie",
     "refreshError": "Nie udało się odświeżyć katalogu. {{message}}",

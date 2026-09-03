@@ -88,4 +88,12 @@ describe('play loading covers the site chrome', () => {
     expect(nested).toMatch(/z-index:\s*1/);
     expect(ruleBody('.game-theater-bar')).toMatch(/z-index:\s*10/);
   });
+
+  it('draws a download track under the mascot, matching the in-game decode bar', () => {
+    const bar = ruleBody('.app-loading-screen__bar');
+    expect(bar).toMatch(/width:\s*min\(240px,\s*70vw\)/);
+    expect(bar).toMatch(/height:\s*8px/);
+    expect(bar).toMatch(/overflow:\s*hidden/);
+    expect(ruleBody('.app-loading-screen__bar-fill')).toMatch(/background:\s*var\(--turquoise/);
+  });
 });

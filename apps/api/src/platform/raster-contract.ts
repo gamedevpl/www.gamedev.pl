@@ -1,6 +1,6 @@
-export const RASTER_ASSET_BUDGET_BYTES = 3 * 1024 * 1024;
+export const RASTER_ASSET_BUDGET_BYTES = 24 * 1024 * 1024;
 
-export const RASTER_ASSET_MAX_FILE_BYTES = 400 * 1024;
+export const RASTER_ASSET_MAX_FILE_BYTES = 3 * 1024 * 1024;
 
 export const IMAGES_CONTRACT = {
   manifestField: 'images',
