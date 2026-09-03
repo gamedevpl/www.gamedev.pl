@@ -21,7 +21,9 @@ export function useCodeSurfaceLanguageService({
   const pendingUpdatesRef = useRef<Array<{ path: string; content: string | null }>>([]);
   const initRef = useRef(false);
   const [ready, setReady] = useState(false);
-  const kitDeclarationRef = useRef<string | null>(null);
+
+  // State, not a ref: a null worker leaves `ready` false forever.
+  const [kitDeclaration, setKitDeclaration] = useState<string | null>(null);
 
   // GA-04: keyed on editable/slug — avoids a re-fetch cleanup race.
   useEffect(() => {
@@ -38,7 +40,7 @@ export function useCodeSurfaceLanguageService({
     void (async () => {
       const kit = await fetchCodeSurfaceKitDeclaration(slug);
       if (cancelled) return;
-      kitDeclarationRef.current = kit?.declaration ?? null;
+      setKitDeclaration(kit?.declaration ?? null);
       const service = await createCodeSurfaceLanguageService(initialFiles, kit?.declaration ?? null);
       if (cancelled) {
         service?.destroy();
@@ -61,6 +63,7 @@ export function useCodeSurfaceLanguageService({
       pendingUpdatesRef.current = [];
       initRef.current = false;
       setReady(false);
+      setKitDeclaration(null);
     };
   }, [slug]);
 
@@ -69,5 +72,5 @@ export function useCodeSurfaceLanguageService({
     queueLanguageFileUpdate(pendingUpdatesRef.current, serviceRef.current, path, content);
   }, []);
 
-  return { ready, serviceRef, kitDeclarationRef, queueUpdate };
+  return { ready, serviceRef, kitDeclaration, queueUpdate };
 }

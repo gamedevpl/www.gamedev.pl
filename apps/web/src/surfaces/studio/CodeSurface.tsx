@@ -376,7 +376,7 @@ export function CodeSurface({
   const {
     ready: languageServiceReady,
     serviceRef: languageServiceRef,
-    kitDeclarationRef,
+    kitDeclaration,
     queueUpdate: queueLanguageUpdate,
   } = useCodeSurfaceLanguageService({ slug, editable, sourcesRef, draftsRef });
 
@@ -529,7 +529,7 @@ export function CodeSurface({
   function handleGotoDefinition(vfsPath: string, from: number, to: number) {
     const path = fromVfsPath(vfsPath);
     if (path === KIT_DECLARATION_PATH) {
-      const declaration = kitDeclarationRef.current;
+      const declaration = kitDeclaration;
       if (!declaration) return;
       setKitViewerLine(declaration.slice(0, from).split('\n').length);
       return;
@@ -951,7 +951,7 @@ export function CodeSurface({
       run: () => void runTypecheck(),
     });
   }
-  if (kitDeclarationRef.current) {
+  if (kitDeclaration) {
     actionsCommands.push({
       id: 'kit',
       label: t('studioPanel.code.actions.commandKit'),
@@ -1331,9 +1331,9 @@ export function CodeSurface({
         />
       ) : null}
 
-      {kitViewerLine !== null && kitDeclarationRef.current ? (
+      {kitViewerLine !== null && kitDeclaration ? (
         <CodeSurfaceKitViewer
-          declaration={kitDeclarationRef.current}
+          declaration={kitDeclaration}
           activeLine={kitViewerLine}
           onClose={() => setKitViewerLine(null)}
         />
