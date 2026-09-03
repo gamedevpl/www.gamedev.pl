@@ -23,7 +23,6 @@ import {
   CodeSurfaceApiError,
   deliverCodeSurface,
   fetchCodeSurfaceCompletion,
-  fetchCodeSurfaceKitDeclaration,
   discardCodeSurfaceEdits,
   fetchCodeSurfaceSources,
   rebuildCodeSurfaceStage,
@@ -43,24 +42,31 @@ import {
   setCodeSurfaceSessionState,
 } from './codeSurfaceSessionState.js';
 import {
-  AGENT_GUIDE,
-  codeSurfaceToolNames,
   isAgentModeEnabled,
   registerCodeSurfaceWebMcpTools,
-  runAgentConsoleCommand,
   setAgentModeEnabled,
   subscribeAgentActivity,
 } from './webmcp.js';
-import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
-import { flushLanguageFileUpdates, queueLanguageFileUpdate } from './codeSurfaceLanguageBind.js';
+import { CodeSurfaceAgentMode } from './CodeSurfaceAgentMode.js';
+import { useCodeSurfaceLanguageService } from './useCodeSurfaceLanguageService.js';
+import { CodeSurfaceKitViewer } from './CodeSurfaceKitViewer.js';
 import {
-  createCodeSurfaceLanguageService,
-  fromVfsPath,
-  KIT_DECLARATION_PATH,
-  toVfsPath,
-  type CodeSurfaceLanguageService,
-} from './codeSurfaceLanguageService.js';
-import { type CodeLanguage, tokenizeLine } from './codeTokens.js';
+  AGENT_ACTIVITY_BANNER_MS,
+  AUTOSAVE_MS,
+  isTsPath,
+  languageFor,
+  markFileStaged,
+  parseDiagnostic,
+  PREVIEW_DEBOUNCE_MS,
+  STAGE_REBUILD_COOLDOWN_MS,
+  TYPECHECK_DEBOUNCE_MS,
+  type DiscardState,
+  type RebuildState,
+  type SaveState,
+  type SyncPreviewState,
+} from './codeSurfaceHelpers.js';
+import { fromVfsPath, KIT_DECLARATION_PATH, toVfsPath } from './codeSurfaceLanguageService.js';
+import { tokenizeLine } from './codeTokens.js';
 import { diffLines } from './diffLines.js';
 import { declaredParamDefaultChanges, type DeclaredParamChange } from './editorJsonLiveDiff.js';
 import { clampParamValue, parseEditorParams, scrubStep, withParamDefault } from './editorParamsScrub.js';
@@ -108,33 +114,6 @@ class CodeMirrorBoundary extends Component<{ fallback: ReactNode; children: Reac
   }
 }
 
-/** `type-check.ts`'s `file:line: message` shape, back into a structured diagnostic. */
-function parseDiagnostic(raw: string): { path: string; line: number; message: string } | null {
-  const match = /^(.+?):(\d+): (.+)$/.exec(raw);
-  if (!match) return null;
-  return { path: match[1]!, line: Number(match[2]), message: match[3]! };
-}
-
-const AUTOSAVE_MS = 1500;
-// "Agent is editing" banner duration after the last WebMCP tool call.
-const AGENT_ACTIVITY_BANNER_MS = 4_000;
-const TYPECHECK_DEBOUNCE_MS = 400;
-// Wait after the last stage write before arming a preview rebuild.
-const PREVIEW_DEBOUNCE_MS = 2_500;
-
-// Mirrors staged-preview.ts's STAGED_PREVIEW_MIN_GAP_MS: floor between rebuilds.
-const STAGE_REBUILD_COOLDOWN_MS = 25_000;
-
-// Agent console: how many past command/result pairs stay visible on the page.
-const AGENT_CONSOLE_HISTORY_LIMIT = 20;
-type AgentConsoleHistoryEntry = { n: number; command: string; output: string; ok: boolean };
-
-type SaveState = 'clean' | 'dirty' | 'saving' | 'saved' | 'error';
-type RebuildState = 'idle' | 'pending' | 'cooling';
-type DiscardState = 'idle' | 'discarding';
-// Track 2's near-instant preview, distinct from the debounced `rebuildState`.
-type SyncPreviewState = 'idle' | 'pending' | 'ready';
-
 export type CodeSurfaceProps = {
   slug: string;
   onBack: () => void;
@@ -148,45 +127,6 @@ export type CodeSurfaceProps = {
   // Fires when the menu closes with nothing picked.
   onActionsMenuCancelled?: () => void;
 };
-
-function languageFor(path: string): CodeLanguage {
-  if (path.endsWith('.ts') || path.endsWith('.tsx')) return 'typescript';
-  if (path.endsWith('.json')) return 'json';
-  if (path.endsWith('.css')) return 'css';
-  if (path.endsWith('.html')) return 'html';
-  if (path.endsWith('.md')) return 'markdown';
-  return 'text';
-}
-
-// GA-04: mirrors type-check.ts's own .ts filter.
-function isTsPath(path: string): boolean {
-  return path.endsWith('.ts') || path.endsWith('.tsx');
-}
-
-function markFileStaged(sources: CodeSurfaceSources, path: string, content: string): CodeSurfaceSources {
-  const lines = content.split('\n').length;
-  const bytes = new TextEncoder().encode(content).length;
-  return {
-    ...sources,
-    files: sources.files.map((entry) =>
-      entry.path === path
-        ? {
-            ...entry,
-            content,
-            stagedBy: 'owner',
-            budget: entry.budget
-              ? {
-                  ...entry.budget,
-                  lines,
-                  bytes,
-                  oversize: lines > entry.budget.maxLines || bytes > entry.budget.maxBytes,
-                }
-              : undefined,
-          }
-        : entry,
-    ),
-  };
-}
 
 export function CodeSurface({
   slug,
@@ -230,9 +170,6 @@ export function CodeSurface({
   const [agentModeOpen, setAgentModeOpen] = useState(false);
   const [agentModeEnabled, setAgentModeEnabledState] = useState(() => isAgentModeEnabled(slug));
   // DOM console for browser agents that can type but not call tools.
-  const [agentConsoleInput, setAgentConsoleInput] = useState('{"tool":"get_sources","input":{}}');
-  const [agentConsoleHistory, setAgentConsoleHistory] = useState<AgentConsoleHistoryEntry[]>([]);
-  const [agentConsoleBusy, setAgentConsoleBusy] = useState(false);
 
   const openedRecordedRef = useRef(false);
   // Focus holder before the actions menu opened; restored on close.
@@ -240,7 +177,6 @@ export function CodeSurface({
   const fileOpenedRecordedRef = useRef(new Set<string>());
   const filePickerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const railRef = useRef<HTMLElement | null>(null);
-  const kitViewerBodyRef = useRef<HTMLPreElement | null>(null);
   /** One autosave timer per dirty path, not one shared timer — editing a second file
    * inside the debounce window must not cancel the first file's pending save. */
   const saveTimersRef = useRef<Map<string, number>>(new Map());
@@ -263,13 +199,6 @@ export function CodeSurface({
   const onPreviewReadyRef = useRef(onPreviewReady);
   onPreviewReadyRef.current = onPreviewReady;
 
-  // GA-04: a ref, not state — languageServiceReady below signals it exists.
-  const languageServiceRef = useRef<CodeSurfaceLanguageService | null>(null);
-  const pendingTsUpdatesRef = useRef<Array<{ path: string; content: string | null }>>([]);
-  const languageServiceInitRef = useRef(false);
-  const [languageServiceReady, setLanguageServiceReady] = useState(false);
-  // GA-09: cached for the kit read-only hop.
-  const kitDeclarationRef = useRef<string | null>(null);
   const [pendingJump, setPendingJump] = useState<{ path: string; from: number; to: number } | null>(null);
   const [kitViewerLine, setKitViewerLine] = useState<number | null>(null);
 
@@ -286,12 +215,6 @@ export function CodeSurface({
       inline: 'nearest',
     });
   }, [selected]);
-
-  // GA-09: centers the jump target the moment the kit viewer opens.
-  useEffect(() => {
-    if (kitViewerLine === null) return;
-    kitViewerBodyRef.current?.querySelector('.is-jump-target')?.scrollIntoView?.({ block: 'center' });
-  }, [kitViewerLine]);
 
   const load = useCallback(
     (isInitialLoad: boolean) => {
@@ -414,25 +337,6 @@ export function CodeSurface({
     return () => document.removeEventListener('keydown', onKeyDown, true);
   }, [openActionsMenu]);
 
-  // GA-09: Escape closes the kit viewer, like the file picker.
-  useEffect(() => {
-    if (kitViewerLine === null) return undefined;
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setKitViewerLine(null);
-    }
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [kitViewerLine]);
-
-  useEffect(() => {
-    if (!agentModeOpen) return undefined;
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setAgentModeOpen(false);
-    }
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [agentModeOpen]);
-
   useEffect(
     () => () => {
       // Unmount flushes pending autosaves — direct calls, no setState after unmount.
@@ -469,6 +373,13 @@ export function CodeSurface({
 
   const editable = sources !== null && !sources.readOnly;
 
+  const {
+    ready: languageServiceReady,
+    serviceRef: languageServiceRef,
+    kitDeclarationRef,
+    queueUpdate: queueLanguageUpdate,
+  } = useCodeSurfaceLanguageService({ slug, editable, sourcesRef, draftsRef });
+
   // Re-reads the creator's stored opt-in whenever the round changes.
   useEffect(() => {
     setAgentModeEnabledState(isAgentModeEnabled(slug));
@@ -484,23 +395,6 @@ export function CodeSurface({
     setAgentModeEnabledState(next);
     setAgentModeEnabled(slug, next);
     recordCodeStep(next ? 'agent_mode_enabled' : 'agent_mode_disabled');
-  }
-
-  async function runAgentConsole() {
-    if (agentConsoleBusy) return;
-    setAgentConsoleBusy(true);
-    recordCodeStep('agent_console_run');
-    const command = agentConsoleInput;
-    try {
-      const result = await runAgentConsoleCommand(slug, command);
-      setAgentConsoleHistory((prev) => {
-        const n = (prev[0]?.n ?? 0) + 1;
-        const entry: AgentConsoleHistoryEntry = { n, command, output: result.output, ok: result.ok };
-        return [entry, ...prev].slice(0, AGENT_CONSOLE_HISTORY_LIMIT);
-      });
-    } finally {
-      setAgentConsoleBusy(false);
-    }
   }
 
   useEffect(() => {
@@ -538,47 +432,6 @@ export function CodeSurface({
     };
   }, [load, selected]);
 
-  // GA-04: keyed on editable/slug — avoids a re-fetch cleanup race.
-  useEffect(() => {
-    if (!editable || languageServiceInitRef.current) return undefined;
-    const sourcesAtStart = sourcesRef.current;
-    if (!sourcesAtStart) return undefined;
-    languageServiceInitRef.current = true;
-    let cancelled = false;
-    const initialFiles = Object.fromEntries(
-      sourcesAtStart.files
-        .filter((entry) => isTsPath(entry.path))
-        .map((entry) => [entry.path, draftsRef.current[entry.path] ?? entry.content]),
-    );
-    void (async () => {
-      const kit = await fetchCodeSurfaceKitDeclaration(slug);
-      if (cancelled) return;
-      kitDeclarationRef.current = kit?.declaration ?? null;
-      const service = await createCodeSurfaceLanguageService(initialFiles, kit?.declaration ?? null);
-      if (cancelled) {
-        service?.destroy();
-        return;
-      }
-      languageServiceRef.current = service;
-      if (service) flushLanguageFileUpdates(pendingTsUpdatesRef.current, service);
-      setLanguageServiceReady(service !== null);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [editable, slug]);
-
-  // Slug change or unmount tears the worker down for a rebuild.
-  useEffect(() => {
-    return () => {
-      languageServiceRef.current?.destroy();
-      languageServiceRef.current = null;
-      pendingTsUpdatesRef.current = [];
-      languageServiceInitRef.current = false;
-      setLanguageServiceReady(false);
-    };
-  }, [slug]);
-
   const file = useMemo(() => sources?.files.find((entry) => entry.path === selected) ?? null, [sources, selected]);
   const content = selected !== null ? (drafts[selected] ?? file?.content ?? '') : '';
   const diff = useMemo(() => {
@@ -596,7 +449,7 @@ export function CodeSurface({
   const languageServiceForEditor = useMemo(() => {
     if (!languageServiceReady || !languageServiceRef.current || !file || !isTsPath(file.path)) return undefined;
     return { worker: languageServiceRef.current.worker, path: toVfsPath(file.path) };
-  }, [languageServiceReady, file]);
+  }, [languageServiceReady, languageServiceRef, file]);
 
   // GA-09: a cross-file jump, consumed once the target mounts.
   const initialSelectionForEditor = useMemo(() => {
@@ -791,7 +644,7 @@ export function CodeSurface({
         return false;
       }
     },
-    [slug, schedulePreviewRebuild],
+    [slug, schedulePreviewRebuild, languageServiceRef],
   );
 
   // Fires and tracks an autosave so a delete can await it.
@@ -941,8 +794,7 @@ export function CodeSurface({
     onError: (message) => setDeliverMessage(message),
     onRebuild: schedulePreviewRebuild,
     onDiscard: discardWorkingCopy,
-    onTsUpdate: (path, content) =>
-      queueLanguageFileUpdate(pendingTsUpdatesRef.current, languageServiceRef.current, path, content),
+    onTsUpdate: (path, content) => queueLanguageUpdate(path, content),
   });
 
   // The fixit under a refused delivery: stage the file, open it.
@@ -1480,125 +1332,20 @@ export function CodeSurface({
       ) : null}
 
       {kitViewerLine !== null && kitDeclarationRef.current ? (
-        <div className="code-surface-kit-backdrop" role="presentation" onClick={() => setKitViewerLine(null)}>
-          <section
-            className="code-surface-kit-viewer"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="code-surface-kit-viewer-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <header className="code-surface-kit-viewer-head">
-              <h3 id="code-surface-kit-viewer-title">{t('studioPanel.code.kitViewerTitle')}</h3>
-              <button
-                type="button"
-                className="code-surface-kit-close"
-                onClick={() => setKitViewerLine(null)}
-                aria-label={t('studioPanel.code.kitViewerClose')}
-              >
-                <PixelIcon name="close" size={13} />
-              </button>
-            </header>
-            <pre className="code-surface-readonly-view code-surface-kit-viewer-body" ref={kitViewerBodyRef}>
-              {kitDeclarationRef.current.split('\n').map((line, index) => (
-                <div key={index} className={`code-surface-line${index + 1 === kitViewerLine ? ' is-jump-target' : ''}`}>
-                  <span className="code-surface-line-number">{index + 1}</span>
-                  <span className="code-surface-line-text">
-                    {tokenizeLine(line, 'typescript').map((token, tokenIndex) => (
-                      <span key={tokenIndex} className={`code-tok code-tok-${token.kind}`}>
-                        {token.text}
-                      </span>
-                    ))}
-                  </span>
-                </div>
-              ))}
-            </pre>
-          </section>
-        </div>
+        <CodeSurfaceKitViewer
+          declaration={kitDeclarationRef.current}
+          activeLine={kitViewerLine}
+          onClose={() => setKitViewerLine(null)}
+        />
       ) : null}
 
       {agentModeOpen ? (
-        <div className="code-surface-agent-mode-backdrop" role="presentation" onClick={() => setAgentModeOpen(false)}>
-          <section
-            className="code-surface-agent-mode-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="code-surface-agent-mode-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <header className="code-surface-agent-mode-head">
-              <h3 id="code-surface-agent-mode-title">{t('studioPanel.code.agentMode.title')}</h3>
-              <button
-                type="button"
-                className="modal-close-btn"
-                onClick={() => setAgentModeOpen(false)}
-                aria-label={t('studioPanel.code.agentMode.close')}
-              >
-                <PixelIcon name="close" size={13} />
-              </button>
-            </header>
-
-            <div className="code-surface-agent-mode-section">
-              <label className="code-surface-agent-mode-toggle">
-                <input
-                  type="checkbox"
-                  checked={agentModeEnabled}
-                  onChange={(event) => toggleAgentMode(event.target.checked)}
-                />
-                {t('studioPanel.code.agentMode.webmcpToggle')}
-              </label>
-              <p className="code-surface-agent-mode-hint">{t('studioPanel.code.agentMode.webmcpHint')}</p>
-            </div>
-
-            <div className="code-surface-agent-mode-section">
-              <h4>{t('studioPanel.code.agentMode.bridgeTitle')}</h4>
-              <p className="code-surface-agent-mode-hint">{t('studioPanel.code.agentMode.bridgeHint', { slug })}</p>
-              <StudioCreatorAgentKeyPanel />
-            </div>
-
-            <div className="code-surface-agent-mode-section">
-              <h4>{t('studioPanel.code.agentMode.consoleTitle')}</h4>
-              <p className="code-surface-agent-mode-hint">{t('studioPanel.code.agentMode.consoleHint')}</p>
-              <p className="code-surface-agent-console-tools">{codeSurfaceToolNames().join(' · ')}</p>
-              <textarea
-                className="code-surface-agent-console-input"
-                value={agentConsoleInput}
-                onChange={(event) => setAgentConsoleInput(event.target.value)}
-                spellCheck={false}
-                rows={4}
-                aria-label={t('studioPanel.code.agentMode.consoleInputLabel')}
-              />
-              <button
-                type="button"
-                className="code-surface-agent-console-run"
-                onClick={() => void runAgentConsole()}
-                disabled={agentConsoleBusy}
-              >
-                {agentConsoleBusy
-                  ? t('studioPanel.code.agentMode.consoleRunning')
-                  : t('studioPanel.code.agentMode.consoleRun')}
-              </button>
-              {agentConsoleHistory.length > 0 ? (
-                <ol className="code-surface-agent-console-history" aria-live="polite">
-                  {agentConsoleHistory.map((entry) => (
-                    <li key={entry.n} className={`code-surface-agent-console-entry${entry.ok ? '' : ' is-error'}`}>
-                      <div className="code-surface-agent-console-entry-command">
-                        #{entry.n} {entry.command}
-                      </div>
-                      <pre className="code-surface-agent-console-output" tabIndex={0}>
-                        {entry.output}
-                      </pre>
-                    </li>
-                  ))}
-                </ol>
-              ) : null}
-              <details className="code-surface-agent-console-guide">
-                <summary>{t('studioPanel.code.agentMode.consoleGuide')}</summary>
-                <pre>{AGENT_GUIDE}</pre>
-              </details>
-            </div>
-          </section>
-        </div>
+        <CodeSurfaceAgentMode
+          slug={slug}
+          enabled={agentModeEnabled}
+          onToggle={toggleAgentMode}
+          onClose={() => setAgentModeOpen(false)}
+        />
       ) : null}
 
       <CodeSurfaceTreeInputs {...tree.inputProps} />

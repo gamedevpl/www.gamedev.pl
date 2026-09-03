@@ -1,12 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type MutableRefObject,
-  type PointerEvent as ReactPointerEvent,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
 import { editorContentMessage, type EditorSelection } from './editorBridge.js';
@@ -52,6 +44,8 @@ import {
   type RemixNote,
 } from './remixSessionPersist.js';
 import { NAVIGATE_EVENT, playPath } from './core/router.js';
+import { useRemixGrip } from './useRemixGrip.js';
+import { RemixActionRow, RemixKeepOffer, RemixTranscript } from './RemixChatParts.js';
 import './remix-composer.css';
 import './remix-result.css';
 import './remix-editor-stage.css';
@@ -61,7 +55,6 @@ const KEEP_OFFER_AFTER = 3;
 /** After this many landings the sheet becomes a mini sidebar chat. */
 const CHAT_MODE_AFTER = 2;
 /** Pointer travel (px) before a grip drag counts as expand/collapse. */
-const GRIP_DRAG_PX = 40;
 
 type ChatTurn = RemixChatTurn;
 
@@ -246,9 +239,13 @@ export function RemixPanel(props: {
    * Resets to expanded whenever chat mode is first earned.
    */
   const [chatExpanded, setChatExpanded] = useState(() => restored?.chatExpanded ?? true);
-  const gripDragRef = useRef<{ startY: number; moved: boolean } | null>(null);
+  const gripHandlers = useRemixGrip({
+    expanded: chatExpanded,
+    setExpanded: setChatExpanded,
+    chromeHidden: props.theaterChromeHidden,
+    onRevealChrome: props.onRevealChrome,
+  });
   /** Set when a grip drag already acted, so the trailing click does not toggle again. */
-  const gripDragConsumedRef = useRef(false);
   /** Only the newest swap is watched — older listeners would stack and over-count breaks. */
   const swapWatchStopRef = useRef<(() => void) | null>(null);
   /**
@@ -763,47 +760,6 @@ export function RemixPanel(props: {
     return ingestRemixSummary(summary, utteranceText, i18n.language, fallback);
   }
 
-  function onGripPointerDown(event: ReactPointerEvent<HTMLElement>) {
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    gripDragConsumedRef.current = false;
-    gripDragRef.current = { startY: event.clientY, moved: false };
-  }
-
-  function onGripPointerMove(event: ReactPointerEvent<HTMLElement>) {
-    const drag = gripDragRef.current;
-    if (!drag) return;
-    const dy = event.clientY - drag.startY;
-    if (Math.abs(dy) < GRIP_DRAG_PX) return;
-    drag.moved = true;
-    gripDragConsumedRef.current = true;
-    if (dy > GRIP_DRAG_PX) {
-      gripDragRef.current = null;
-      setChatExpanded(false);
-    } else if (dy < -GRIP_DRAG_PX) {
-      gripDragRef.current = null;
-      setChatExpanded(true);
-      props.onRevealChrome?.();
-    }
-  }
-
-  function onGripPointerUp() {
-    gripDragRef.current = null;
-  }
-
-  function onGripActivate() {
-    // A completed drag already changed state — don't toggle again on the click.
-    if (gripDragConsumedRef.current) {
-      gripDragConsumedRef.current = false;
-      return;
-    }
-    if (!chatExpanded || props.theaterChromeHidden) {
-      setChatExpanded(true);
-      props.onRevealChrome?.();
-      return;
-    }
-    setChatExpanded(false);
-  }
-
   function dismissKeepOffer() {
     setKeepOfferOpen(false);
     setKeepOfferDismissed(true);
@@ -1198,41 +1154,6 @@ export function RemixPanel(props: {
   // honest answer is to accept the words and let the wall decide — so it types.
   const canType = session ? session.canAssist || session.canCode : true;
 
-  function keepOfferForm() {
-    return (
-      <section className="remix-keep-offer" aria-labelledby="remix-keep-heading">
-        <h3 id="remix-keep-heading" className="remix-keep-heading">
-          {t('remix.keepOfferTitle')}
-        </h3>
-        <p className="remix-keep-body">{t('remix.keepOfferBody')}</p>
-        <label className="remix-keep-field">
-          <span>{t('remix.keepOfferName')}</span>
-          <input
-            type="text"
-            value={keepTitle}
-            maxLength={80}
-            placeholder={t('remix.keepOfferNamePlaceholder')}
-            disabled={saving}
-            onChange={(event) => setKeepTitle(event.target.value)}
-          />
-        </label>
-        <div className="remix-actions-row">
-          <button
-            type="button"
-            className="remix-btn is-primary"
-            disabled={saving || keepTitle.trim().length < 2 || lane !== 'idle'}
-            onClick={() => void saveAsMine()}
-          >
-            {saving ? t('remix.saving') : t('remix.keepOfferConfirm')}
-          </button>
-          <button type="button" className="remix-btn is-quiet" disabled={saving} onClick={dismissKeepOffer}>
-            {t('remix.keepOfferDismiss')}
-          </button>
-        </div>
-      </section>
-    );
-  }
-
   /** The composer, in its two sizes: the door, and the way back for a second change. */
   function composer(compact: boolean) {
     return (
@@ -1272,85 +1193,17 @@ export function RemixPanel(props: {
     );
   }
 
-  /** Mini-chat scrollback — only after the panel has docked into chat mode. */
-  function transcript() {
-    if (!chatMode || chatTurns.length === 0) return null;
-    const working = lane === 'asking' || lane === 'building';
-    return (
-      <ol ref={transcriptRef} className="remix-transcript" aria-label={t('remix.chatAria')}>
-        {chatTurns.map((turn) => (
-          <li key={turn.id} className={`remix-bubble is-${turn.role}${turn.missed ? ' is-miss' : ''}`}>
-            <span className="remix-bubble-text">{turn.text}</span>
-            {turn.canUndo && (undo || changed?.undoCode) ? (
-              <button
-                type="button"
-                className={`remix-bubble-undo${changed?.broke ? ' is-urgent' : ''}`}
-                disabled={lane !== 'idle' || saving}
-                onClick={() => (changed?.undoCode ? void undoCode() : undoLast())}
-              >
-                {t('remix.undo')}
-              </button>
-            ) : null}
-          </li>
-        ))}
-        {working ? (
-          <li className="remix-bubble is-assistant is-pending" aria-live="polite">
-            <span className="remix-bubble-text">
-              {lane === 'building' ? (slow ? t('remix.buildingSlow') : t('remix.building')) : t('remix.asking')}
-            </span>
-            {lane === 'building' ? (
-              <span className="remix-bar" aria-hidden="true">
-                <i />
-              </span>
-            ) : null}
-          </li>
-        ) : null}
-      </ol>
-    );
-  }
-
-  function actionRow() {
-    // In chat mode Undo lives on the last assistant bubble — the row keeps
-    // Share / Propose only, so it does not compete with the message it undoes.
-    const showUndo = !chatMode && Boolean(undo || changed?.undoCode);
-    if (!changed || !(changed.canShare || canPropose || showUndo)) return null;
-    return (
-      <div className="remix-actions-row">
-        {changed.canShare ? (
-          <button type="button" className="remix-btn is-primary" onClick={() => void share()}>
-            {t('remix.share')}
-          </button>
-        ) : null}
-        {canPropose && !proposing && !proposed ? (
-          <button type="button" className="remix-btn is-quiet" onClick={() => setProposing(true)}>
-            {t('propose.action')}
-          </button>
-        ) : null}
-        {showUndo ? (
-          <button
-            type="button"
-            className={`remix-btn ${changed.broke ? 'is-primary' : 'is-quiet'}`}
-            disabled={lane !== 'idle' || saving}
-            onClick={() => (changed.undoCode ? void undoCode() : undoLast())}
-          >
-            {t('remix.undo')}
-          </button>
-        ) : null}
-      </div>
-    );
-  }
-
   function grip() {
     return (
       <button
         type="button"
         className="remix-grip"
         aria-label={chatExpanded && !props.theaterChromeHidden ? t('remix.collapse') : t('remix.expand')}
-        onPointerDown={onGripPointerDown}
-        onPointerMove={onGripPointerMove}
-        onPointerUp={onGripPointerUp}
-        onPointerCancel={onGripPointerUp}
-        onClick={onGripActivate}
+        onPointerDown={gripHandlers.onPointerDown}
+        onPointerMove={gripHandlers.onPointerMove}
+        onPointerUp={gripHandlers.onPointerUp}
+        onPointerCancel={gripHandlers.onPointerUp}
+        onClick={gripHandlers.onActivate}
       />
     );
   }
@@ -1535,7 +1388,18 @@ export function RemixPanel(props: {
         </div>
       </div>
 
-      {transcript()}
+      <RemixTranscript
+        transcriptRef={transcriptRef}
+        chatMode={chatMode}
+        chatTurns={chatTurns}
+        lane={lane}
+        slow={slow}
+        saving={saving}
+        undo={undo}
+        changed={changed}
+        onUndo={undoLast}
+        onUndoCode={() => void undoCode()}
+      />
 
       {lane === 'building' && !chatMode ? (
         /*
@@ -1588,16 +1452,43 @@ export function RemixPanel(props: {
             </p>
           ) : null}
           {keepOfferOpen && !changed.broke ? (
-            keepOfferForm()
+            <RemixKeepOffer
+              keepTitle={keepTitle}
+              saving={saving}
+              lane={lane}
+              onTitleChange={setKeepTitle}
+              onConfirm={() => void saveAsMine()}
+              onDismiss={dismissKeepOffer}
+            />
           ) : (
             <>
-              {actionRow()}
+              <RemixActionRow
+                chatMode={chatMode}
+                lane={lane}
+                saving={saving}
+                undo={undo}
+                changed={changed}
+                canPropose={canPropose}
+                proposing={proposing}
+                proposed={proposed}
+                onShare={() => void share()}
+                onPropose={() => setProposing(true)}
+                onUndo={undoLast}
+                onUndoCode={() => void undoCode()}
+              />
               {composer(true)}
             </>
           )}
         </>
       ) : keepOfferOpen ? (
-        keepOfferForm()
+        <RemixKeepOffer
+          keepTitle={keepTitle}
+          saving={saving}
+          lane={lane}
+          onTitleChange={setKeepTitle}
+          onConfirm={() => void saveAsMine()}
+          onDismiss={dismissKeepOffer}
+        />
       ) : canType ? (
         <>
           {composer(chatMode)}
