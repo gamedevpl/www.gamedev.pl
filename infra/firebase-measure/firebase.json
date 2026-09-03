@@ -1,6 +1,7 @@
 {
   "hosting": {
-    "public": "infra/firebase-measure/public",
+    "site": "gamedevpl",
+    "public": "public",
     "ignore": ["**/.*"],
     "rewrites": [
       {
