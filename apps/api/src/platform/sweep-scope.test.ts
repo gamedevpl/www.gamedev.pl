@@ -55,15 +55,7 @@ describe('isRoundOpen', () => {
 
   it('never hides a job the sweep still wants — the flag is only ever a prefilter', () => {
     // A stale false would drop a build from the sweep forever.
-    const statuses = [
-      undefined,
-      'queued',
-      'building',
-      'in_review',
-      'publishing',
-      'published',
-      'needs_changes',
-    ] as const;
+    const statuses = [undefined, 'queued', 'building', 'in_review', 'publishing', 'published', 'needs_changes'] as const;
     const states = [undefined, 'building', 'submitted', 'needs_changes', 'published'] as const;
     for (const lastNotifiedStatus of statuses) {
       for (const lastStatus of statuses) {
