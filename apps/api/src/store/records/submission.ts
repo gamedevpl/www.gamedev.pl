@@ -84,6 +84,8 @@ export interface SubmissionRecord {
    * a submission once it reaches a terminal, already-notified state.
    */
   lastNotifiedStatus?: SubmissionStatus;
+  // Indexed active flag; lets notify-sweep avoid full-collection scans.
+  sweepActive?: boolean;
   /**
    * The last status actually derived from GitHub, recorded on every derivation.
    *

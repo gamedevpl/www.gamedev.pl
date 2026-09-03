@@ -128,8 +128,8 @@ export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
   }
 
   async listActiveSubmissions(): Promise<SubmissionRecord[]> {
-    // 'in' would need a composite index and miss unset lastNotifiedStatus docs.
-    const snap = await this.db.collection('submissions').get();
+    // Avoids full collection scans on 2-min notify sweep.
+    const snap = await this.db.collection('submissions').where('sweepActive', '==', true).get();
     return snap.docs.map((d) => fromStoredSubmission(d.data())).filter(isSweepActive);
   }
 

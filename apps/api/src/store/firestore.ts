@@ -268,7 +268,7 @@ export class FirestoreStore implements Store {
           {
             ownerUid: DELETED_ACCOUNT_UID,
             ...(!record.publishedAt
-              ? { abandonedAt: record.abandonedAt ?? at, draftSharedAt: FieldValue.delete() }
+              ? { abandonedAt: record.abandonedAt ?? at, draftSharedAt: FieldValue.delete(), sweepActive: false }
               : {}),
           },
           { merge: true },

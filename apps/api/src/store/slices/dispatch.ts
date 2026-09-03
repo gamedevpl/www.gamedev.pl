@@ -1,4 +1,5 @@
 import type { Firestore } from '@google-cloud/firestore';
+import { isSweepActive } from '../../platform/sweep-scope.js';
 import {
   nextRoundGeneration,
   transitionClosesRound,
@@ -13,7 +14,7 @@ import {
   type JobSeedOutcome,
   type JobCostEntry,
 } from '../records/dispatch.js';
-import type { SubmissionRecord } from '../records/submission.js';
+import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
 import { clearRoundSignals } from './rounds.js';
 
 export interface DispatchStore {
@@ -68,10 +69,12 @@ export class InMemoryDispatchStore implements DispatchStore {
       if (transition.by !== 'operator') return false;
     }
     const closes = transitionClosesRound(transition);
+    const sweepActive = isSweepActive({ ...sub, state: transition.to });
     const next: SubmissionRecord = {
       ...sub,
       state: transition.to,
       stateSince: transition.at,
+      sweepActive,
       transitions: [...(sub.transitions ?? []), transition].slice(-MAX_JOB_TRANSITIONS),
       ...(closes
         ? {
@@ -196,7 +199,7 @@ export class FirestoreDispatchStore implements DispatchStore {
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) return false;
-      const current = snap.data() as SubmissionRecord;
+      const current = fromStoredSubmission(snap.data());
       // Same race as InMemoryDispatchStore -- a new reason wins only for the operator.
       if (current.state === transition.to) {
         const last = current.transitions?.at(-1);
@@ -204,11 +207,13 @@ export class FirestoreDispatchStore implements DispatchStore {
         if (transition.by !== 'operator') return false;
       }
       const closes = transitionClosesRound(transition);
+      const sweepActive = isSweepActive({ ...current, state: transition.to });
       if (closes) {
         const next: SubmissionRecord = {
           ...current,
           state: transition.to,
           stateSince: transition.at,
+          sweepActive,
           transitions: [...(current.transitions ?? []), transition].slice(-MAX_JOB_TRANSITIONS),
           roundGeneration: nextRoundGeneration(current.roundGeneration),
           roundDeliveryCount: 0,
@@ -226,6 +231,7 @@ export class FirestoreDispatchStore implements DispatchStore {
           {
             state: transition.to,
             stateSince: transition.at,
+            sweepActive,
             transitions: [...(current.transitions ?? []), transition].slice(-MAX_JOB_TRANSITIONS),
           },
           { merge: true },

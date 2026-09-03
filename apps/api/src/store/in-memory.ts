@@ -150,7 +150,9 @@ export class InMemoryStore implements Store {
       this.submissions.set(submission.jobId, {
         ...submission,
         ownerUid: DELETED_ACCOUNT_UID,
-        ...(!submission.publishedAt ? { abandonedAt: submission.abandonedAt ?? at, draftSharedAt: undefined } : {}),
+        ...(!submission.publishedAt
+          ? { abandonedAt: submission.abandonedAt ?? at, draftSharedAt: undefined, sweepActive: false }
+          : {}),
       });
     }
 

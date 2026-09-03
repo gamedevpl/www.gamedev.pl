@@ -1,4 +1,5 @@
 import { FieldValue, type Firestore } from '@google-cloud/firestore';
+import { isSweepActive } from '../../platform/sweep-scope.js';
 import type { SubmissionStatus } from '../../platform/submission-status.js';
 import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
 
@@ -62,6 +63,7 @@ export class InMemorySubmissionStore implements SubmissionStore {
       // Legacy records predating this field stay unset until their round closes.
       roundGeneration: 1,
       roundStartedAt: createdAt,
+      sweepActive: true,
     };
     this.submissions.set(jobId, record);
     return { ...record };
@@ -74,7 +76,11 @@ export class InMemorySubmissionStore implements SubmissionStore {
 
   async setSubmissionNotifiedStatus(jobId: number, status: SubmissionStatus): Promise<void> {
     const sub = this.submissions.get(jobId);
-    if (sub) this.submissions.set(jobId, { ...sub, lastNotifiedStatus: status });
+    if (sub) {
+      const next = { ...sub, lastNotifiedStatus: status };
+      next.sweepActive = isSweepActive(next);
+      this.submissions.set(jobId, next);
+    }
   }
 
   async setSubmissionLastStatus(jobId: number, status: SubmissionStatus): Promise<void> {
@@ -117,7 +123,7 @@ export class InMemorySubmissionStore implements SubmissionStore {
 
   async setSubmissionAbandoned(jobId: number, at: string): Promise<void> {
     const sub = this.submissions.get(jobId);
-    if (sub) this.submissions.set(jobId, { ...sub, abandonedAt: at });
+    if (sub) this.submissions.set(jobId, { ...sub, abandonedAt: at, sweepActive: false });
   }
 
   async setDraftShared(jobId: number, at: string | null): Promise<void> {
@@ -171,6 +177,7 @@ export class FirestoreSubmissionStore implements SubmissionStore {
       title,
       roundGeneration: 1,
       roundStartedAt: createdAt,
+      sweepActive: true,
     };
     // Dual-write the pre-rename key too: a rollback to the previous revision (traffic
     // reassignment, seconds, no rebuild — docs/runbooks/rollback-deploy.md) runs code that
@@ -186,7 +193,18 @@ export class FirestoreSubmissionStore implements SubmissionStore {
   }
 
   async setSubmissionNotifiedStatus(jobId: number, status: SubmissionStatus): Promise<void> {
-    await this.ref(jobId).set({ lastNotifiedStatus: status }, { merge: true });
+    const ref = this.ref(jobId);
+    if (status === 'published') {
+      await ref.set({ lastNotifiedStatus: status, sweepActive: false }, { merge: true });
+      return;
+    }
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const current = fromStoredSubmission(snap.data());
+      const sweepActive = isSweepActive({ ...current, lastNotifiedStatus: status });
+      tx.set(ref, { lastNotifiedStatus: status, sweepActive }, { merge: true });
+    });
   }
 
   async setSubmissionLastStatus(jobId: number, status: SubmissionStatus): Promise<void> {
@@ -231,7 +249,7 @@ export class FirestoreSubmissionStore implements SubmissionStore {
   }
 
   async setSubmissionAbandoned(jobId: number, at: string): Promise<void> {
-    await this.ref(jobId).set({ abandonedAt: at }, { merge: true });
+    await this.ref(jobId).set({ abandonedAt: at, sweepActive: false }, { merge: true });
   }
 
   async setDraftShared(jobId: number, at: string | null): Promise<void> {
