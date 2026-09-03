@@ -47,12 +47,13 @@ export function useActiveBuildCount(refreshKey = 0, enabled = true): number {
       }
     }
 
-    void load();
-    // A background tab cannot show the badge, so it has no reason to keep asking.
+    // A background tab cannot show the badge, so it has no reason to ask.
     const tick = () => {
       if (!document.hidden) void load();
     };
-    // Catch up on the way back rather than waiting out the rest of the interval.
+    // Mounting in a hidden tab waits for the visibilitychange below.
+    tick();
+    // Catch up on the way back rather than waiting out the interval.
     const onVisible = () => tick();
     document.addEventListener('visibilitychange', onVisible);
     const timer = window.setInterval(tick, REFRESH_MS);

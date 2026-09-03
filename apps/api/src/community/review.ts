@@ -251,8 +251,12 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
   const ASSESSED_TTL_MS = 60_000;
 
   async function assessedSlugsFor(reviewerUid: string): Promise<Set<string>> {
+    // Swept here, so a reviewer who stops polling stops costing memory.
+    for (const [uid, entry] of assessedSlugs) {
+      if (now() - entry.at >= ASSESSED_TTL_MS) assessedSlugs.delete(uid);
+    }
     const hit = assessedSlugs.get(reviewerUid);
-    if (hit && now() - hit.at < ASSESSED_TTL_MS) return hit.slugs;
+    if (hit) return hit.slugs;
     const rows = await store.listGameAssessmentsByReviewer(reviewerUid);
     const slugs = new Set(rows.map((row) => row.slug));
     assessedSlugs.set(reviewerUid, { at: now(), slugs });

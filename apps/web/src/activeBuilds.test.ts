@@ -82,6 +82,22 @@ describe('useActiveBuildCount', () => {
     root.unmount();
   });
 
+  it('does not poll at all when it mounts in a background tab', async () => {
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+    mockedCount.mockResolvedValue(2);
+
+    const { root } = await renderCount();
+    expect(mockedCount).not.toHaveBeenCalled();
+
+    hidden.mockReturnValue(false);
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(mockedCount).toHaveBeenCalledTimes(1);
+
+    root.unmount();
+  });
+
   it('skips the poll while the tab is hidden, and catches up when it comes back', async () => {
     mockedCount.mockResolvedValue(2);
     const { root } = await renderCount();
