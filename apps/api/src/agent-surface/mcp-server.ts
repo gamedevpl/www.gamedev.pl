@@ -100,7 +100,7 @@ import {
   pendingCountFromPayload,
   type NudgeWarning,
 } from './mcp-session-nudges.js';
-import { looksLikeAsAccessToken, verifyAsAccessToken } from '../platform/oauth-tokens.js';
+import { looksLikeAsAccessToken, verifyMcpAsAccessToken as verifyAsAccessToken } from '../platform/oauth-scopes.js';
 import type { SourceFile } from '../delivery/games-store.js';
 import type { ProposalBase } from '../platform/store.js';
 import { seedPayload } from './seed-status.js';

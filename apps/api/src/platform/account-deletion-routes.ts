@@ -24,7 +24,7 @@ export function registerAccountDeletionRoutes(app: FastifyInstance, options: Acc
 
   app.delete('/api/me/account', async (request, reply) => {
     if (!request.user) return reply.status(401).send({ error: 'authentication required' });
-    if (request.authMethod !== 'session') return reply.status(403).send({ error: 'browser session required' });
+    if (request.authMethod !== 'session') return reply.status(404).send({ error: 'not_found' });
 
     const body = DeleteAccountBody.safeParse(request.body);
     if (!body.success) return reply.status(400).send({ error: 'confirmation required' });

@@ -136,7 +136,12 @@ function isApiRequest(url) {
  * healthy to curl and in a fresh incognito window, because neither runs this worker.
  */
 function isServerRenderedRoute(url) {
-  return url.pathname === '/oauth' || url.pathname.startsWith('/oauth/') || url.pathname.startsWith('/.well-known/');
+  return (
+    url.pathname === '/device' ||
+    url.pathname === '/oauth' ||
+    url.pathname.startsWith('/oauth/') ||
+    url.pathname.startsWith('/.well-known/')
+  );
 }
 
 self.addEventListener('fetch', (event) => {

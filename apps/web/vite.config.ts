@@ -55,12 +55,11 @@ function pathnameOf(req: IncomingMessage): string {
 }
 
 function isViteInternal(pathname: string): boolean {
+  const prefixes = ['/api', '/oauth/', '/.well-known', '/@', '/node_modules', '/src', '/__'];
   return (
-    pathname.startsWith('/api') ||
-    pathname.startsWith('/@') ||
-    pathname.startsWith('/node_modules') ||
-    pathname.startsWith('/src') ||
-    pathname.startsWith('/__') ||
+    prefixes.some((p) => pathname.startsWith(p)) ||
+    pathname === '/oauth' ||
+    pathname === '/device' ||
     pathname === '/index.html'
   );
 }
@@ -129,9 +128,9 @@ export default defineConfig({
   plugins: [react(), spaProper404(), shellPrecache()],
   server: {
     port: 5173,
-    proxy: {
-      '/api': { target: apiTarget, changeOrigin: true },
-    },
+    proxy: Object.fromEntries(
+      ['/api', '/oauth', '/device', '/.well-known'].map((p) => [p, { target: apiTarget, changeOrigin: true }]),
+    ),
   },
   // GA-02: tsWorker.ts needs code-split chunks; IIFE can't.
   worker: {

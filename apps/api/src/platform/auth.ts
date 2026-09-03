@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { OAuth2Client } from 'google-auth-library';
 import { z } from 'zod';
 import { resolveAccessTokenRecord, resolveAccessTokenUser } from './access-token-service.js';
+import { resolveBearerIdentity } from './oauth-request-auth.js';
 import { isAdmin, isAdminSession } from './admin-session.js';
 import { isReviewer, isReviewerSession } from '../community/review.js';
 import { resolveAppleAccount } from './apple-account.js';
@@ -223,7 +224,7 @@ declare module 'fastify' {
      * the operator surfaces, and token issuance itself — check this rather than just
      * `user`, so a leaked token can never widen its own privileges.
      */
-    authMethod: 'session' | 'token' | null;
+    authMethod: 'session' | 'token' | 'oauth' | null;
   }
 }
 
@@ -378,18 +379,6 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     }
   };
 
-  /**
-   * Resolve a personal access token from the Authorization header
-   * (docs/agent-access-tokens.md).
-   *
-   * The checks themselves live in access-token-service.ts, shared with the browser
-   * sign-in form, so the header and the form can never disagree about which tokens are
-   * good. What is specific to this door is the question of which Bearer credentials are
-   * even candidates: this API carries others that are not PATs (the build channel's
-   * per-issue tokens, the scheduler's OIDC tokens), and the `gdpl_pat_` prefix check
-   * inside the resolver is what keeps those out — they fall through untouched to the
-   * handlers that do understand them.
-   */
   const getAccessTokenUser = async (request: FastifyRequest): Promise<User | null> => {
     const bearer = readBearerToken(request.headers.authorization);
     if (!bearer) return null;
@@ -404,16 +393,12 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     if (!isAuthConfigured) return;
     const { user, needsRenewal, fromToken } = await getSessionUser(request);
     if (!user) {
-      // No cookie session — fall back to a personal access token. Deliberately second:
-      // a browser that has both should be treated as the human it is.
-      const tokenUser = await getAccessTokenUser(request);
-      if (tokenUser) {
-        request.user = tokenUser;
-        request.authMethod = 'token';
+      // Cookie first; PAT and creator-scoped OAuth are the programmatic doors.
+      const identity = await resolveBearerIdentity(store, request.headers.authorization);
+      if (identity) {
+        request.user = identity.user;
+        request.authMethod = identity.method;
       }
-      // No `activeDays` write on this path, and that is the point: the list feeds the
-      // creator-return metric, and an agent polling on a schedule would report perfect
-      // retention for an account that is not a person.
       return;
     }
 
@@ -786,8 +771,11 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     '/api/beta-invites/claim',
     { config: { rateLimit: { max: maxAuthRequestsPerWindow, timeWindow: authRateLimitWindowMs } } },
     async (request, reply) => {
-      if (request.authMethod !== 'session' || !request.user) {
+      if (!request.user) {
         return reply.status(401).send({ error: 'authentication required' });
+      }
+      if (request.authMethod !== 'session') {
+        return reply.status(404).send({ error: 'not_found' });
       }
       const parsed = BetaInviteClaimSchema.safeParse(request.body);
       if (!parsed.success) {

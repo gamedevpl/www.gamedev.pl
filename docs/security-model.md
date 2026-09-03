@@ -75,6 +75,10 @@ route. The properties that keep this inside the threat model:
 - **Issuance requires an admin session.** A token-authenticated request is refused by every
   operator surface, so a leaked token cannot mint another or read across other people's
   games.
+- OAuth access tokens with the `creator` scope (`gdpl_oat_`) are the same class-A door for
+  creator routes. Tokens that hold only `mcp` do not authenticate those routes. Operator
+  surfaces, account deletion, and invite claim answer **404** (not 403) for any
+  non-session credential — PAT or OAuth. A token never mints another token.
 - Only `sha256(secret)` is stored, in its own collection, never on the user document that
   gets serialized to browsers.
 - Revocation is a delete and takes effect on the next request — no redeploy, unlike

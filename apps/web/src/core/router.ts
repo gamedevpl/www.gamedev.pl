@@ -188,6 +188,7 @@ const RESERVED_HANDLE_SEGMENTS = new Set([
   'creator',
   'creators',
   'dev',
+  'device',
   'draft',
   'gamedev',
   'gamedevpl',
@@ -202,9 +203,7 @@ const RESERVED_HANDLE_SEGMENTS = new Set([
   'play',
   'platform',
   'privacy',
-  // First-class product route (the proposer's tracker). Same reason as `studio` /
-  // `play`: `/proposals` resolves before the root-handle fallback, and without this
-  // the game-page matcher would read `/proposals/<slug>` as a game under that handle.
+  // `/proposals` is a first-class route, same as `studio` / `play`.
   'proposals',
   'review',
   'root',

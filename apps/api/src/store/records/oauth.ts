@@ -1,7 +1,7 @@
 /** OAuth dynamic or CIMD-registered MCP client (BY-18b). */
 export interface OAuthClientRecord {
   clientId: string;
-  registrationType: 'dcr' | 'cimd';
+  registrationType: 'dcr' | 'cimd' | 'first-party';
   redirectUris: string[];
   clientName?: string;
   tokenEndpointAuthMethod: 'none';
@@ -22,6 +22,7 @@ export interface OAuthGrantRecord {
   currentRefreshTokenId: string;
   currentRefreshHash: string;
   refreshExpiresAt: string;
+  deviceName?: string;
 }
 
 export interface OAuthAccessTokenRecord {
@@ -45,6 +46,7 @@ export interface OAuthAuthCodeRecord {
   expiresAt: string;
   usedAt?: string;
   grantId?: string;
+  deviceName?: string;
 }
 
 export type RotateRefreshTokenResult =

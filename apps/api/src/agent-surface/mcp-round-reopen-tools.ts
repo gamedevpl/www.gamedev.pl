@@ -15,7 +15,7 @@ import {
 } from './agent-game-key.js';
 import { findActiveRoundForSlug, findDraftJobForSlug } from './agent-game-key-resolve.js';
 import { creatorOwnsSlug } from '../platform/slug-ownership.js';
-import { looksLikeAsAccessToken, verifyAsAccessToken } from '../platform/oauth-tokens.js';
+import { looksLikeAsAccessToken, verifyMcpAsAccessToken as verifyAsAccessToken } from '../platform/oauth-scopes.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
