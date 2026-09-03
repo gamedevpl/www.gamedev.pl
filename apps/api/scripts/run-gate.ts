@@ -39,9 +39,45 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import type { GameProject } from '@gamedevpl/contract';
 import { gateProgressFor, type GateProgressLane, type GateProgressStage } from '../src/delivery/gate-progress.js';
 import { runGate } from '../src/delivery/gate-runner.js';
 import { createGcsGamesStore } from '../src/delivery/games-store.js';
+import { createLocalGamesClient } from '../src/catalog/local-games-repo.js';
+import { assembleGameHtml } from '../src/platform/assemble.js';
+
+/**
+ * Assembles the served document from the harness the check just passed against.
+ *
+ * Deliberately *not* the games repo's own `dist/` build output, which is what this used
+ * to store. That output is the repo's idea of a playable page; it is not ours, and the
+ * difference is the whole of serve-time policy — the restrictive CSP that stops a game
+ * calling home, the AI Act art. 50(2) provenance marking, the credential scan, the byte
+ * budget. All four live in `assembleGameHtml`, none of them are in `tools/build.ts`, and
+ * shipping the repo's build meant shipping a document with none of them.
+ *
+ * Assembling here rather than at serve time is what keeps one definition of "what a
+ * served game is" across the three things that need one: the creator's draft preview,
+ * the published game, and the snapshot bake. It also belongs here for the reason the
+ * gate itself does — this repo owns the policy, and the harness is already checked out
+ * with the GameKit modules the assembler has to resolve.
+ */
+async function assembleFromHarness(harness: string, slug: string): Promise<string | null> {
+  const client = createLocalGamesClient({ rootDir: harness });
+  const sources = await client.getGameSources('main', slug);
+  if (!sources) return null;
+
+  const project: GameProject = {
+    title: sources.title ?? slug,
+    description: '',
+    html: sources.indexHtml,
+    js: sources.gameJs,
+    css: sources.styleCss,
+  };
+  // Matches the bake and the play route exactly: a game is self-contained by repo
+  // policy, so it is locked to its own inline assets.
+  return assembleGameHtml(project, { restrictNetwork: true });
+}
 
 function arg(name: string): string | undefined {
   const index = process.argv.indexOf(`--${name}`);
@@ -126,6 +162,7 @@ async function main(): Promise<void> {
     {
       store,
       run,
+      assembleBundle: assembleFromHarness,
       onProgress: (progress) => store.putGateProgress(slug, version, progress).catch(() => {}),
       async prepareHarness(engineRef) {
         // A real clone rather than the tarball reader the bake uses: the gate has to *run*

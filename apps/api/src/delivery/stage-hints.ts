@@ -1,16 +1,15 @@
 // Runs submit_sources' typecheck/audio checks per staged file, as hints.
-import type { KitFileStore } from '../agent-surface/kit-files.js';
+import type { KitFileStore, KitTree } from '../agent-surface/kit-files.js';
 import type { GamesStore } from './games-store.js';
 import type { BaseVersionRecord, BaseVersionStore } from '../platform/round-base-version.js';
 import { overlayGameSources, readDeliveredSources } from './staged-preview.js';
-import { runTypecheckPreflight, sharedSourcesFromKitTree } from '../creation/typecheck-preflight.js';
 import { KIT_ROOT_DIR } from '../platform/kit-registry.js';
 import {
   mergeMusicTrackMaps,
   parseGameMusicTracks,
   parseMusicCatalogTracks,
   type MusicTracksMap,
-} from '../catalog/music-tracks.js';
+} from '../platform/music-tracks.js';
 
 // Tighter than submit's budget — hot endpoint, runs several times a round.
 const STAGE_TYPECHECK_BUDGET_MS = 4_000;
@@ -36,6 +35,14 @@ export async function computeStageAdvisories(input: {
   engineRef: string | undefined;
   path: string;
   content: string;
+  // N1: injected so this module has no value-level creation/ import.
+  runTypecheckPreflight?: (opts: {
+    slug: string;
+    sources: Record<string, string>;
+    kitShared: Record<string, string>;
+    budgetMs?: number;
+  }) => Promise<{ ok: boolean; message?: string }>;
+  sharedSourcesFromKitTree?: (tree: KitTree) => Record<string, string>;
 }): Promise<StageAdvisories> {
   const result: StageAdvisories = {};
   const normalized = input.path.trim().replaceAll('\\', '/');
@@ -52,7 +59,7 @@ export async function computeStageAdvisories(input: {
   const overlay = await buildOverlay(input);
   overlay[normalized] = input.content;
 
-  if (isTs) {
+  if (isTs && input.runTypecheckPreflight && input.sharedSourcesFromKitTree) {
     try {
       const sources: Record<string, string> = {};
       let sourceBytes = 0;
@@ -62,10 +69,10 @@ export async function computeStageAdvisories(input: {
         sourceBytes += Buffer.byteLength(content, 'utf8');
       }
       if (sourceBytes <= STAGE_TYPECHECK_MAX_SOURCE_BYTES) {
-        const check = await runTypecheckPreflight({
+        const check = await input.runTypecheckPreflight({
           slug: input.slug,
           sources,
-          kitShared: sharedSourcesFromKitTree(tree),
+          kitShared: input.sharedSourcesFromKitTree(tree),
           budgetMs: STAGE_TYPECHECK_BUDGET_MS,
         });
         if (!check.ok) result.typecheckHint = check.message;
