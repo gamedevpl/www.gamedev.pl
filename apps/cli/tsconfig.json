@@ -3,10 +3,11 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "types": ["node"],
+    "types": ["node", "react"],
+    "jsx": "react-jsx",
     "declaration": false,
     "declarationMap": false
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "dist"]
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "dist"]
 }

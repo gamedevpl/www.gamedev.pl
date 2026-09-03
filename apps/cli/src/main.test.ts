@@ -43,6 +43,13 @@ describe('runCli verbs', () => {
     expect(await runCli(['node', 'gamedevpl'], {}, streams)).toBe(EXIT_INPUT);
   });
 
+  it('exits 4 when repl stdout is redirected', async () => {
+    const streams = io();
+    streams.stdin.isTTY = true;
+    expect(await runCli(['node', 'gamedevpl'], {}, streams)).toBe(EXIT_INPUT);
+    expect(streams.read().err).toMatch(/non-TTY/);
+  });
+
   it('exits 3 when whoami has no credential', async () => {
     const streams = io();
     expect(await runCli(['node', 'gamedevpl', 'whoami'], { HOME: '/tmp/gamedev-cli-empty' }, streams)).toBe(EXIT_AUTH);

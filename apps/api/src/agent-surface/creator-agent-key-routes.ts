@@ -102,8 +102,8 @@ export function registerCreatorAgentKeyRoutes(app: FastifyInstance, options: Cre
    * only — does not resurrect a key (call POST to mint again).
    */
   app.get('/api/me/creator-agent-key', async (request, reply) => {
-    const uid = request.user?.uid;
-    if (!uid) return reply.status(401).send({ error: 'unauthorized' });
+    const uid = request.authMethod === 'session' ? request.user?.uid : undefined;
+    if (!uid) return reply.status(404).send({ error: 'not found' });
 
     const at = new Date(now()).toISOString();
     const existing = await store.getCreatorAgentKey(uid);
@@ -127,8 +127,8 @@ export function registerCreatorAgentKeyRoutes(app: FastifyInstance, options: Cre
     '/api/me/creator-agent-key',
     { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      const uid = request.user?.uid;
-      if (!uid) return reply.status(401).send({ error: 'unauthorized' });
+      const uid = request.authMethod === 'session' ? request.user?.uid : undefined;
+      if (!uid) return reply.status(404).send({ error: 'not found' });
 
       const at = new Date(now()).toISOString();
       const record = await store.reactivateCreatorAgentKey(uid, at);
@@ -142,8 +142,8 @@ export function registerCreatorAgentKeyRoutes(app: FastifyInstance, options: Cre
     '/api/me/creator-agent-key/rotate',
     { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      const uid = request.user?.uid;
-      if (!uid) return reply.status(401).send({ error: 'unauthorized' });
+      const uid = request.authMethod === 'session' ? request.user?.uid : undefined;
+      if (!uid) return reply.status(404).send({ error: 'not found' });
 
       const at = new Date(now()).toISOString();
       await store.ensureCreatorAgentKey(uid, at);
@@ -165,8 +165,8 @@ export function registerCreatorAgentKeyRoutes(app: FastifyInstance, options: Cre
     '/api/me/creator-agent-key',
     { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      const uid = request.user?.uid;
-      if (!uid) return reply.status(401).send({ error: 'unauthorized' });
+      const uid = request.authMethod === 'session' ? request.user?.uid : undefined;
+      if (!uid) return reply.status(404).send({ error: 'not found' });
 
       const existing = await store.getCreatorAgentKey(uid);
       if (!existing) return reply.status(404).send({ error: 'not_found' });

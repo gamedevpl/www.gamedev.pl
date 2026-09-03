@@ -67,6 +67,14 @@ export default [
     },
   },
   {
+    files: ['apps/cli/**/*.tsx'],
+    plugins: { 'react-hooks': reactHooks },
+    rules: {
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
+    },
+  },
+  {
     files: ['apps/web/**/*.ts', 'apps/web/**/*.tsx'],
     plugins: { 'react-hooks': reactHooks, 'react-refresh': reactRefresh },
     rules: {

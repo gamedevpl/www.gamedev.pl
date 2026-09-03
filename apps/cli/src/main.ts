@@ -16,13 +16,9 @@ import { runLoopbackLogin } from './login.js';
 import { originFromEnv } from './oauth.js';
 import { CliError, EXIT_GREEN, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { describeError, pipeNeedsFlag } from './errors.js';
-import { createReadlineHost } from './host.js';
-import { handleReplLine, replBanner } from './repl.js';
-import type { IntakeDraft } from './create.js';
 import { checkoutGame, diffGame, pullGame, readCheckoutSlug, unreconciledMessage } from './checkout.js';
 import { runLadder, assertLadderGreen } from './verify.js';
 import { runGitRemoteHelper } from './git-remote-main.js';
-import { glyphs, wantsColor } from './renderer.js';
 import { runStatusVerb } from './status-watch.js';
 import { dispatchReadVerb } from './verbs.js';
 
@@ -160,30 +156,14 @@ export async function runCli(
     const read = await dispatchReadVerb({ verb, args, flags, api, io });
     if (read !== null) return read;
     if (verb === 'repl') {
-      if (!tty) throw pipeNeedsFlag(`a verb such as ${cliUsage('whoami')}`);
-      io.stdout.write(`${replBanner(true, env)}\n`);
-      const host = createReadlineHost(io);
-      const g = glyphs(wantsColor(env, tty));
-      let token = typeof flags.token === 'string' ? flags.token : null;
-      let draft: IntakeDraft | null = null;
-      try {
-        for (;;) {
-          const line = await host.prompt(`${g.prompt} `);
-          const result = await handleReplLine({
-            line,
-            api,
-            token,
-            draft,
-            write: (s) => host.writeLine(s),
-          });
-          if (result.token !== undefined) token = result.token;
-          if (result.draft !== undefined) draft = result.draft;
-          if (result.next === 'quit') break;
-        }
-      } finally {
-        host.close();
-      }
-      return EXIT_GREEN;
+      if (!tty || !io.stdout.isTTY) throw pipeNeedsFlag(`a verb such as ${cliUsage('whoami')}`);
+      const { runInkRepl } = await import('./tui/host.js');
+      return runInkRepl({
+        api,
+        env,
+        io,
+        token: typeof flags.token === 'string' ? flags.token : null,
+      });
     }
     io.stderr.write(`unknown verb ${verb} — ${cliUsage('help')}\n`);
     return EXIT_INPUT;

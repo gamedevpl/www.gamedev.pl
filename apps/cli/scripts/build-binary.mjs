@@ -1,5 +1,5 @@
 import { build } from 'esbuild';
-import { chmodSync, mkdirSync } from 'node:fs';
+import { chmodSync, mkdirSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -14,9 +14,16 @@ await build({
   target: 'node20',
   format: 'esm',
   outfile: join(outDir, 'gamedevpl.mjs'),
-  banner: { js: '#!/usr/bin/env node' },
   packages: 'bundle',
+  alias: {
+    'react-devtools-core': join(root, 'scripts/empty-devtools.mjs'),
+  },
+  banner: {
+    js: '#!/usr/bin/env node\nimport { createRequire } from "node:module";\nconst require = createRequire(import.meta.url);',
+  },
 });
 
 chmodSync(join(outDir, 'gamedevpl.mjs'), 0o755);
-console.log('bundled dist/gamedevpl.mjs — shebang Node script, no native binary');
+const wasm = readdirSync(outDir).filter((name) => name.endsWith('.wasm'));
+if (wasm.length) throw new Error(`bundle emitted sidecar wasm: ${wasm.join(', ')}`);
+console.log('bundled dist/gamedevpl.mjs — shebang Node script, Ink+yoga inlined');

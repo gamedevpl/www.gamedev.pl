@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync, existsSync, symlinkSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync, existsSync, symlinkSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
@@ -64,5 +64,17 @@ describe('checkout', () => {
     writeGameFiles(dest, 'ghost-roads', [{ path: 'game.ts', content: 'next\n' }]);
     expect(existsSync(secret)).toBe(true);
     expect(existsSync(join(dest, 'games', 'ghost-roads', 'leak'))).toBe(false);
+  });
+
+  it('unlinks a matching symlink before writing the pulled file', () => {
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-ln2-'));
+    const outside = mkdtempSync(join(tmpdir(), 'gdpl-out2-'));
+    const secret = join(outside, 'secret.txt');
+    writeFileSync(secret, 'keep\n');
+    mkdirSync(join(dest, 'games', 'ghost-roads'), { recursive: true });
+    symlinkSync(secret, join(dest, 'games', 'ghost-roads', 'game.ts'));
+    writeGameFiles(dest, 'ghost-roads', [{ path: 'game.ts', content: 'next\n' }]);
+    expect(readFileSync(secret, 'utf8')).toBe('keep\n');
+    expect(readFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'utf8')).toBe('next\n');
   });
 });

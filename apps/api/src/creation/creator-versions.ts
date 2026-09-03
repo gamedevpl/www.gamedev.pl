@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { GamesStore } from '../delivery/games-store.js';
+import { creatorOwnsSlug } from '../platform/slug-ownership.js';
 import type { Store } from '../platform/store.js';
 
 const SlugParams = z.object({
@@ -18,8 +19,7 @@ export interface CreatorVersionRoutesOptions {
 
 async function requireOwner(store: Store, uid: string | undefined, slug: string): Promise<'auth' | 'missing' | 'ok'> {
   if (!uid) return 'auth';
-  const records = await store.listSubmissionsByOwner(uid);
-  return records.some((record) => record.slug === slug) ? 'ok' : 'missing';
+  return (await creatorOwnsSlug(store, slug, uid)) ? 'ok' : 'missing';
 }
 
 export async function registerCreatorVersionRoutes(

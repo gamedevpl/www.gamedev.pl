@@ -3,7 +3,7 @@ import { createLiveScreen, renderLive } from './live.js';
 import { formatStatusLines, runStatusVerb, statusWatchDelayMs } from './status-watch.js';
 import { createApi } from './api.js';
 import { memoryStore } from './keychain.js';
-import { EXIT_GREEN } from './exit-codes.js';
+import { EXIT_GREEN, EXIT_RED } from './exit-codes.js';
 
 describe('live screen', () => {
   it('truncates live lines to the terminal width', () => {
@@ -49,6 +49,16 @@ describe('status watch', () => {
     ).toEqual(['building', 'smoke 1/4', 'https://www.gamedev.pl/play/sky']);
   });
 
+  it('strips control sequences from failure.reason', () => {
+    const esc = String.fromCharCode(27);
+    expect(
+      formatStatusLines(
+        { status: 'needs_changes', failure: { reason: `${esc}[31mred${esc}[0m` } },
+        'https://www.gamedev.pl',
+      ),
+    ).toEqual(['needs_changes', 'red']);
+  });
+
   it('paints a TTY watch instead of appending status lines', async () => {
     let calls = 0;
     const api = createApi({
@@ -75,5 +85,43 @@ describe('status watch', () => {
     expect(calls).toBe(2);
     expect(chunks.join('')).toContain('\x1b[');
     expect(chunks.join('')).toContain('published');
+  });
+
+  it('returns EXIT_RED when the publish gate is red', async () => {
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_pat_x', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async () =>
+        new Response(JSON.stringify({ status: 'needs_changes', failure: { reason: 'gate_red' } }), { status: 200 }),
+    });
+    expect(
+      await runStatusVerb({
+        api,
+        token: 'tok',
+        maxPolls: 1,
+        asJson: false,
+        live: false,
+        stdout: { write: () => true } as unknown as NodeJS.WriteStream,
+      }),
+    ).toBe(EXIT_RED);
+  });
+
+  it('returns EXIT_RED when the preview gate is red', async () => {
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_pat_x', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async () =>
+        new Response(JSON.stringify({ status: 'needs_changes', previewGate: { green: false } }), { status: 200 }),
+    });
+    expect(
+      await runStatusVerb({
+        api,
+        token: 'tok',
+        maxPolls: 1,
+        asJson: false,
+        live: false,
+        stdout: { write: () => true } as unknown as NodeJS.WriteStream,
+      }),
+    ).toBe(EXIT_RED);
   });
 });
