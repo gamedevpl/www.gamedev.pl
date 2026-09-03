@@ -341,6 +341,18 @@ ensure_log_metric unattributable_client_requests \
   'Requests whose caller Cloud Run reported as the unspecified address (shared rate-limit bucket).' \
   "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"unattributable client address\""
 
+# The one that decides the fix. Volume above only says how many share the bucket; this says
+# whether the bucket has refused anyone, which is a different question and the answer nobody
+# has. Its own message rather than a status filter on the metric above, because a 429 there
+# can be a per-account quota (creation/improve-routes.ts) that has nothing to do with the
+# shared address — counting those would answer this question wrongly and confidently.
+#
+# Emitted only where the refusal is provable: the IP-keyed sliding window in
+# platform/ip-rate-limit.ts, and the rate-limit plugin's own onExceeded.
+ensure_log_metric unattributable_client_refusals \
+  'An IP-keyed limiter refused a caller with no attributable address.' \
+  "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"unattributable client refused by ip limiter\""
+
 # The in-process tsc preflight (typecheck-preflight.ts) abandons a check that ran past its
 # soft wall and accepts the delivery unvalidated rather than blocking the agent — the same
 # fail-open shape as everywhere else in this pipeline. One skip is a heavy round (a big
