@@ -5,7 +5,6 @@ import { z } from 'zod';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import { endOpenAgentSessions } from '../agent-surface/agent-session-revocation.js';
 import { InvalidSessionError, readSessionCookie, readSessionToken } from './auth.js';
-import { escapeHtml, MASCOT_SVG, OAUTH_PAGE_STYLES } from './oauth-page-chrome.js';
 import { isRateLimited } from './ip-rate-limit.js';
 import { cliSurfaceEnabled } from './cli-surface.js';
 import { DEVICE_GRANT_TYPE, exchangeDeviceCode, registerOAuthDeviceRoutes } from './oauth-device.js';
