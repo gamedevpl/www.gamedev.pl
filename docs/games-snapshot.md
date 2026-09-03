@@ -204,11 +204,13 @@ a compromise of this repo rather than of the games repo.
 IAM is split by direction: the deploy service account has `storage.objectAdmin` (it
 writes), the Cloud Run runtime SA has `storage.objectViewer` (it reads). A compromised
 runtime cannot rewrite what it serves. `infra/setup-gcp.sh` step 7 provisions all of it,
-including a 90-day lifecycle rule on `snapshots/`.
+including a 14-day lifecycle rule on `snapshots/`.
 
-If the games repo ever goes 90 days without a merge, the live snapshot ages out and
-published serving returns **503** until a fresh bake restores `current.json` — the
-lifecycle rule is a cost control, not a soft degrade to GitHub.
+The window is bounded by bakes rather than merges: `publish-games.yml` rebuilds on a
+04:23 UTC cron whether or not anything merged. It would take 14 consecutive failed
+bakes for the live snapshot to age out and published serving to return **503** until
+a fresh bake restores `current.json` — the lifecycle rule is a cost control, not a
+soft degrade to GitHub.
 
 ## What this does not solve
 

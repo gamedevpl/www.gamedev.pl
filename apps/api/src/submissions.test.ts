@@ -4708,6 +4708,60 @@ describe('GET /api/submissions/mine', () => {
   });
 });
 
+describe('GET /api/submissions/mine/active-count', () => {
+  it('counts only builds still in flight, not everything the creator ever made', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const store = new InMemoryStore();
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+
+    await store.createSubmission(21, 'g:test-user', 'Building');
+    await store.setSubmissionLastStatus(21, 'building');
+    await store.createSubmission(22, 'g:test-user', 'Shipped');
+    await store.setSubmissionLastStatus(22, 'published');
+    await store.setSubmissionNotifiedStatus(22, 'published');
+    await store.createSubmission(23, 'g:test-user', 'Bounced');
+    await store.setSubmissionLastStatus(23, 'needs_changes');
+    // Just submitted: no status yet, and the badge must not blank.
+    await store.createSubmission(24, 'g:test-user', 'Fresh');
+    await store.createSubmission(25, 'g:someone-else', 'Not mine');
+    await store.setSubmissionLastStatus(25, 'building');
+
+    const res = await app.inject({ method: 'GET', url: '/api/submissions/mine/active-count', headers: authHeaders });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ active: 2 });
+
+    await app.close();
+  });
+
+  it('drops an abandoned build the same way the shelf does', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const store = new InMemoryStore();
+    const { app, authHeaders } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+
+    await store.createSubmission(31, 'g:test-user', 'Walked away');
+    await store.setSubmissionAbandoned(31, '2026-01-01T00:00:00.000Z');
+
+    const res = await app.inject({ method: 'GET', url: '/api/submissions/mine/active-count', headers: authHeaders });
+
+    expect(res.json()).toEqual({ active: 0 });
+
+    await app.close();
+  });
+
+  it('refuses a visitor with no session', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const store = new InMemoryStore();
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret, store });
+
+    const res = await app.inject({ method: 'GET', url: '/api/submissions/mine/active-count' });
+
+    expect(res.statusCode).toBe(401);
+
+    await app.close();
+  });
+});
+
 describe('GET /api/drafts/:slug (shareable, read-only)', () => {
   const openPrWithGame: LinkedPullRequest = {
     number: 30,

@@ -191,10 +191,12 @@ gcloud storage buckets add-iam-policy-binding "gs://${SNAPSHOT_BUCKET}" \
   >/dev/null
 
 # Old snapshots are dead weight once the pointer moves past them, but they are
-# also the rollback path, so they are kept for a quarter rather than a day. If the
-# games repo ever goes 90 days without a merge the live snapshot ages out and
-# published serving returns 503 until a fresh bake restores current.json — the
-# lifecycle rule is a cost control, not a soft degrade to GitHub.
+# also the rollback path, so they are kept for a fortnight rather than a day.
+# The window is bounded by BAKES, not merges: publish-games.yml runs a full
+# rebuild on a 04:23 UTC cron whether or not anything merged, so 14 days costs
+# a fortnight of rollback points and nothing else. It would take 14 consecutive
+# failed bakes for the live snapshot to age out and published serving to return
+# 503 — the lifecycle rule is a cost control, not a soft degrade to GitHub.
 LIFECYCLE_FILE="$(mktemp)"
 cat > "$LIFECYCLE_FILE" <<'EOF'
 {
@@ -202,7 +204,7 @@ cat > "$LIFECYCLE_FILE" <<'EOF'
     "rule": [
       {
         "action": { "type": "Delete" },
-        "condition": { "age": 90, "matchesPrefix": ["snapshots/"] }
+        "condition": { "age": 14, "matchesPrefix": ["snapshots/"] }
       }
     ]
   }
@@ -213,7 +215,7 @@ gcloud storage buckets update "gs://${SNAPSHOT_BUCKET}" \
   --project="$PROJECT_ID" \
   >/dev/null
 rm -f "$LIFECYCLE_FILE"
-echo "    IAM (deployer: write, Cloud Run: read) and 90-day lifecycle applied."
+echo "    IAM (deployer: write, Cloud Run: read) and 14-day lifecycle applied."
 
 # The games store (apps/api/src/games-store.ts) — the system of record for creator
 # game content, as opposed to the snapshot, which is a rebuildable projection of it.

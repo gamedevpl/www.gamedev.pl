@@ -1,4 +1,5 @@
 import { FieldValue, type Firestore } from '@google-cloud/firestore';
+import { isRoundOpen } from '../../platform/sweep-scope.js';
 import type { SubmissionStatus } from '../../platform/submission-status.js';
 import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
 
@@ -175,7 +176,7 @@ export class FirestoreSubmissionStore implements SubmissionStore {
     // Dual-write the pre-rename key too: a rollback to the previous revision (traffic
     // reassignment, seconds, no rebuild — docs/runbooks/rollback-deploy.md) runs code that
     // only reads `issueNumber`. Drop once that revision is no longer a rollback target.
-    await this.ref(jobId).set({ ...record, issueNumber: jobId });
+    await this.ref(jobId).set({ ...record, issueNumber: jobId, openRound: true });
     return record;
   }
 
@@ -185,12 +186,23 @@ export class FirestoreSubmissionStore implements SubmissionStore {
     return fromStoredSubmission(snap.data());
   }
 
+  // Read-first: the flag needs fields this write does not touch.
+  private async setStatus(jobId: number, patch: Partial<SubmissionRecord>): Promise<void> {
+    const ref = this.ref(jobId);
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const next = { ...fromStoredSubmission(snap.data()), ...patch };
+      tx.set(ref, { ...patch, openRound: isRoundOpen(next) }, { merge: true });
+    });
+  }
+
   async setSubmissionNotifiedStatus(jobId: number, status: SubmissionStatus): Promise<void> {
-    await this.ref(jobId).set({ lastNotifiedStatus: status }, { merge: true });
+    await this.setStatus(jobId, { lastNotifiedStatus: status });
   }
 
   async setSubmissionLastStatus(jobId: number, status: SubmissionStatus): Promise<void> {
-    await this.ref(jobId).set({ lastStatus: status }, { merge: true });
+    await this.setStatus(jobId, { lastStatus: status });
   }
 
   async setSubmissionSlug(jobId: number, slug: string): Promise<void> {
@@ -231,7 +243,8 @@ export class FirestoreSubmissionStore implements SubmissionStore {
   }
 
   async setSubmissionAbandoned(jobId: number, at: string): Promise<void> {
-    await this.ref(jobId).set({ abandonedAt: at }, { merge: true });
+    // Abandonment closes the round, so no read is needed.
+    await this.ref(jobId).set({ abandonedAt: at, openRound: false }, { merge: true });
   }
 
   async setDraftShared(jobId: number, at: string | null): Promise<void> {
