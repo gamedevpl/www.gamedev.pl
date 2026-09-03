@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FirestoreStore } from '../platform/store.js';
 import { fakeFirestore } from './fake-firestore.js';
-import { backfillOpenRound } from './open-round-backfill.js';
+import { OPEN_ROUND_RESCAN_INTERVAL_MS, backfillOpenRound } from './open-round-backfill.js';
 
 // Queries on openRound are blind to a document without it.
 
@@ -34,12 +34,35 @@ describe('backfillOpenRound', () => {
     expect((await db.collection('submissions').doc('2').get()).data()?.openRound).toBe(false);
   });
 
-  it('runs once ever — the marker, not the container, decides', async () => {
+  it('does not rescan between intervals', async () => {
     const { db } = fakeFirestore();
     await seedLegacyJobs(db);
     await backfillOpenRound(db);
 
     expect(await backfillOpenRound(db)).toBe(0);
+  });
+
+  it('picks up a job a rolled-back revision created after the first pass', async () => {
+    const { db } = fakeFirestore();
+    let clock = Date.parse('2026-03-01T12:00:00.000Z');
+    const now = () => clock;
+    await seedLegacyJobs(db);
+    await backfillOpenRound(db, now);
+
+    // Traffic reassignment put an old revision back in front.
+    clock += OPEN_ROUND_RESCAN_INTERVAL_MS + 1;
+    await db.collection('submissions').doc('3').set({
+      jobId: 3,
+      ownerUid: 'g:creator',
+      createdAt: new Date(clock).toISOString(),
+      title: 'created during a rollback',
+      lastStatus: 'building',
+    });
+
+    expect(await backfillOpenRound(db, now)).toBe(1);
+    expect((await db.collection('submissions').doc('3').get()).data()?.openRound).toBe(true);
+    // Only the tail is re-read; the seeded jobs predate the window.
+    expect((await db.collection('counters').doc('openRoundBackfill').get()).data()?.scanned).toBe(1);
   });
 
   it('makes a legacy in-flight job visible to the sweep again', async () => {

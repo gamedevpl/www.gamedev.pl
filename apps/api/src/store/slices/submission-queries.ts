@@ -1,6 +1,6 @@
 import type { Firestore } from '@google-cloud/firestore';
 import { isRoundOpen, isSweepActive } from '../../platform/sweep-scope.js';
-import { backfillOpenRound } from '../open-round-backfill.js';
+import { OPEN_ROUND_RESCAN_INTERVAL_MS, backfillOpenRound } from '../open-round-backfill.js';
 import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
 
 export interface SubmissionQueryStore {
@@ -112,14 +112,24 @@ export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
   constructor(private db: Firestore) {}
 
   private migration: Promise<unknown> | null = null;
+  private migratedAt = 0;
 
-  // Once per container; later ones skip, and racing passes are idempotent.
+  // Re-checked periodically: a rollback still writes unflagged rows.
   private async migrated(): Promise<void> {
-    // Never cache a rejection, or one blip disables the flag.
-    this.migration ??= backfillOpenRound(this.db).catch((error) => {
-      this.migration = null;
-      throw error;
-    });
+    // One pass at a time; concurrent passes would be idempotent anyway.
+    if (this.migration) {
+      await this.migration;
+      return;
+    }
+    if (Date.now() - this.migratedAt < OPEN_ROUND_RESCAN_INTERVAL_MS) return;
+    // A failed pass leaves migratedAt alone, so the next query retries it.
+    this.migration = backfillOpenRound(this.db)
+      .then(() => {
+        this.migratedAt = Date.now();
+      })
+      .finally(() => {
+        this.migration = null;
+      });
     await this.migration;
   }
 
