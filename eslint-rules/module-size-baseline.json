@@ -391,7 +391,7 @@
     "apps/api/src/platform/oauth-tokens.ts": 185,
     "apps/api/src/platform/openai-apps-challenge.test.ts": 66,
     "apps/api/src/platform/openai-apps-challenge.ts": 46,
-    "apps/api/src/platform/rate-limit.ts": 16,
+    "apps/api/src/platform/rate-limit.ts": 18,
     "apps/api/src/platform/server.ts": 27,
     "apps/api/src/platform/slug-ownership.ts": 22,
     "apps/api/src/platform/spa-paths.test.ts": 119,

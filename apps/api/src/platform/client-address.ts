@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 
-// The edge overwrites this, so a forged one cannot survive.
+// Forgeable unless nothing can reach the service around the edge.
 const EDGE_CLIENT_IP_HEADER = 'fastly-client-ip';
 
 // Only where nothing can reach the service directly.

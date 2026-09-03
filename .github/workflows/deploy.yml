@@ -147,6 +147,7 @@ jobs:
           VAPID_SUBJECT: ${{ vars.VAPID_SUBJECT }}
           VERTEX_MODEL: ${{ vars.VERTEX_MODEL }}
           VERTEX_REGION: ${{ vars.VERTEX_REGION }}
+          TRUST_EDGE_CLIENT_IP: ${{ vars.TRUST_EDGE_CLIENT_IP }}
           ZONE_HOST_URL: ${{ vars.ZONE_HOST_URL }}
         run: |
           SECRET_MAPPINGS=()
