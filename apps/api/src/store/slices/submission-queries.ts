@@ -113,7 +113,7 @@ export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
 
   private migration: Promise<unknown> | null = null;
 
-  // Once per container; the marker doc makes it once ever.
+  // Once per container; later ones skip, and racing passes are idempotent.
   private async migrated(): Promise<void> {
     // Never cache a rejection, or one blip disables the flag.
     this.migration ??= backfillOpenRound(this.db).catch((error) => {

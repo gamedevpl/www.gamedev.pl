@@ -48,6 +48,8 @@ describe('useActiveBuildCount', () => {
   afterEach(() => {
     document.body.innerHTML = '';
     vi.useRealTimers();
+    // The document.hidden spies would otherwise leak into later jsdom tests.
+    vi.restoreAllMocks();
   });
 
   it('shows the count the server derived, without reading the whole shelf', async () => {
