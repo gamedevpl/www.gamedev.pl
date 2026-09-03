@@ -23,7 +23,7 @@ export function CodeSurfaceKitViewer({
     bodyRef.current?.querySelector('.is-jump-target')?.scrollIntoView?.({ block: 'center' });
   }, [activeLine]);
 
-  // GA-09: Escape closes it, like the file picker. Latest onClose via ref so this attaches once.
+  // GA-09: Escape closes it, like the file picker.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') onCloseRef.current();
