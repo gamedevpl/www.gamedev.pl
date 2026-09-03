@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameLoadScreen } from './GameLoadScreen.js';
-import { type GameFetchError } from './catalog.js';
 import { GameTheater } from './GameTheater.js';
 import { usePublishedGameFetch } from './usePublishedGameFetch.js';
 
@@ -42,7 +41,7 @@ export function UnpublishedPlayView({ slug, onExit, onTitle }: UnpublishedPlayVi
       setError(null);
       return;
     }
-    const status = (fetchError as GameFetchError).status;
+    const status = fetchError?.status;
     // 404/409: not shared / not ready / unknown. Anything else is a glitch — don't
     // tell the owner their draft vanished when the request just failed.
     setError(status === 404 || status === 409 ? t('draft.notFound') : t('draft.error'));

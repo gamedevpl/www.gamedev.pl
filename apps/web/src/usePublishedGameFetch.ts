@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react';
-import { fetchPublishedGame, type FetchProgress, type PublishedGame } from './catalog.js';
+import { fetchPublishedGame, type FetchProgress, type GameFetchError, type PublishedGame } from './catalog.js';
+
+function asFetchError(err: unknown): GameFetchError {
+  if (err instanceof Error) return err as GameFetchError;
+  return new Error(typeof err === 'string' ? err : 'Game request failed') as GameFetchError;
+}
 
 export function usePublishedGameFetch(slug: string, attempt = 0) {
   const [game, setGame] = useState<PublishedGame | null>(null);
   const [progress, setProgress] = useState<FetchProgress>({ loaded: 0, total: null });
-  const [error, setError] = useState<unknown>(null);
+  const [error, setError] = useState<GameFetchError | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -24,7 +29,7 @@ export function usePublishedGameFetch(slug: string, attempt = 0) {
       })
       .catch((err: unknown) => {
         if (cancelled || (err instanceof Error && err.name === 'AbortError')) return;
-        setError(err);
+        setError(asFetchError(err));
       });
 
     return () => {
