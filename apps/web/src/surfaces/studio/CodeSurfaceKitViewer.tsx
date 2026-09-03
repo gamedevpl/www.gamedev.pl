@@ -15,20 +15,22 @@ export function CodeSurfaceKitViewer({
 }) {
   const { t } = useTranslation();
   const bodyRef = useRef<HTMLPreElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   // GA-09: centers the jump target the moment the viewer opens.
   useEffect(() => {
     bodyRef.current?.querySelector('.is-jump-target')?.scrollIntoView?.({ block: 'center' });
   }, [activeLine]);
 
-  // GA-09: Escape closes it, like the file picker.
+  // GA-09: Escape closes it, like the file picker. Latest onClose via ref so this attaches once.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') onCloseRef.current();
     }
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+  }, []);
 
   return (
     <div className="code-surface-kit-backdrop" role="presentation" onClick={() => onClose()}>
