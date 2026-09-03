@@ -1339,14 +1339,13 @@ export function CodeSurface({
         />
       ) : null}
 
-      {agentModeOpen ? (
-        <CodeSurfaceAgentMode
-          slug={slug}
-          enabled={agentModeEnabled}
-          onToggle={toggleAgentMode}
-          onClose={() => setAgentModeOpen(false)}
-        />
-      ) : null}
+      <CodeSurfaceAgentMode
+        slug={slug}
+        open={agentModeOpen}
+        enabled={agentModeEnabled}
+        onToggle={toggleAgentMode}
+        onClose={() => setAgentModeOpen(false)}
+      />
 
       <CodeSurfaceTreeInputs {...tree.inputProps} />
       <CodeSurfaceTreeDialogs {...tree.dialogProps} />

@@ -13,11 +13,13 @@ type AgentConsoleHistoryEntry = { n: number; command: string; output: string; ok
 // The WebMCP opt-in and the tool console, one dialog.
 export function CodeSurfaceAgentMode({
   slug,
+  open,
   enabled,
   onToggle,
   onClose,
 }: {
   slug: string;
+  open: boolean;
   enabled: boolean;
   onToggle: (next: boolean) => void;
   onClose: () => void;
@@ -28,12 +30,13 @@ export function CodeSurfaceAgentMode({
   const [agentConsoleBusy, setAgentConsoleBusy] = useState(false);
 
   useEffect(() => {
+    if (!open) return undefined;
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') onClose();
     }
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+  }, [open, onClose]);
 
   async function runAgentConsole() {
     if (agentConsoleBusy) return;
@@ -51,6 +54,9 @@ export function CodeSurfaceAgentMode({
       setAgentConsoleBusy(false);
     }
   }
+
+  // Stays mounted while closed so command, history and run survive.
+  if (!open) return null;
 
   return (
     <div className="code-surface-agent-mode-backdrop" role="presentation" onClick={() => onClose()}>
