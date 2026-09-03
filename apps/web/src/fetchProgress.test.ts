@@ -66,6 +66,7 @@ describe('readResponseBody', () => {
     await readResponseBody(new Response(stream, { headers: { 'content-length': '4' } }), (progress) =>
       updates.push(progress),
     );
+    expect(updates.some((update) => update.total === null)).toBe(true);
     expect(updates.at(-1)?.total).toBeNull();
     expect(updates.at(-1)?.loaded).toBe(encoded.byteLength);
   });

@@ -1388,7 +1388,7 @@ describe('SubmissionStatusView', () => {
 
     // Credentialed: this address serves a game before it is published too, and the
     // creator's own session is what makes that theirs to open.
-    expect(fetchSpy).toHaveBeenCalledWith('/api/games/sky-dodge', { credentials: 'include' });
+    expect(fetchSpy).toHaveBeenCalledWith('/api/games/sky-dodge', expect.objectContaining({ credentials: 'include' }));
     const iframe = container.querySelector('iframe[title="Sky Dodge"]');
     expect(iframe?.getAttribute('sandbox')).toBe('allow-scripts allow-pointer-lock');
     // Runs via srcDoc (no external origin), wrapped with the embed bridge in the

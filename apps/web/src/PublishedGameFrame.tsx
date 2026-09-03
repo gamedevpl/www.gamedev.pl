@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AppLoadingScreen } from './AppLoadingScreen.js';
 import { GameFrame } from './GameFrame.js';
-import { fetchPublishedGame, type FetchProgress } from './catalog.js';
+import { GameLoadScreen } from './GameLoadScreen.js';
+import { usePublishedGameFetch } from './usePublishedGameFetch.js';
 import { PixelIcon } from './PixelIcon.js';
 import { useGameTelemetry } from './gamePlayer.js';
 import { rememberRecentPlay } from './recentPlays.js';
@@ -77,13 +77,10 @@ export function PublishedGameFrame({
   onRevealChrome,
 }: PublishedGameFrameProps) {
   const { t } = useTranslation();
-  const [html, setHtml] = useState<string | null>(null);
-  const [loadProgress, setLoadProgress] = useState<FetchProgress>({ loaded: 0, total: null });
-  const [failed, setFailed] = useState(false);
   const [gameTitle, setGameTitle] = useState<string>(title);
-  // Bumped by the Retry control so a failed fetch can be re-attempted without
-  // leaving the theater (which would otherwise be the only way to try again).
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const { game, progress, error } = usePublishedGameFetch(slug, loadAttempt);
+  const html = game?.html ?? null;
   /**
    * A remix swaps the whole document — the only way new code can enter an
    * opaque-origin, eval-free frame. Held apart from the fetched html so closing
@@ -132,36 +129,13 @@ export function PublishedGameFrame({
   }, [slug, html, trackPlay]);
 
   useEffect(() => {
-    let cancelled = false;
-    const abort = new AbortController();
-    setHtml(null);
-    setFailed(false);
-    setLoadProgress({ loaded: 0, total: null });
     setGameTitle(title);
     setRemixHtml(null);
-
-    fetchPublishedGame(slug, {
-      signal: abort.signal,
-      onProgress: (progress) => {
-        if (!cancelled) setLoadProgress(progress);
-      },
-    })
-      .then((game) => {
-        if (!cancelled) {
-          setHtml(game.html);
-          if (game.title) setGameTitle(game.title);
-        }
-      })
-      .catch((err: unknown) => {
-        if (cancelled || (err instanceof Error && err.name === 'AbortError')) return;
-        setFailed(true);
-      });
-
-    return () => {
-      cancelled = true;
-      abort.abort();
-    };
   }, [slug, title, loadAttempt]);
+
+  useEffect(() => {
+    if (game?.title) setGameTitle(game.title);
+  }, [game]);
 
   useEffect(() => {
     let cancelled = false;
@@ -194,7 +168,7 @@ export function PublishedGameFrame({
     if ((remixOpenNonce ?? 0) > 0 || (painterNonce ?? 0) > 0) setRemixOpen(true);
   }, [remixOpenNonce, painterNonce]);
 
-  if (failed) {
+  if (error) {
     return (
       <div className="load-error" role="alert">
         <p className="error">{t('catalog.gameLoadError')}</p>
@@ -205,7 +179,7 @@ export function PublishedGameFrame({
     );
   }
   if (html === null) {
-    return <AppLoadingScreen progress={loadProgress} />;
+    return <GameLoadScreen progress={progress} />;
   }
   // `embed` describes chrome, not ownership — the theater always embeds — so the
   // gate is the explicit prop plus "this frame is one player's", which a party

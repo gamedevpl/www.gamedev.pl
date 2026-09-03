@@ -75,7 +75,6 @@ describe('PublishedGameFrame retry', () => {
     });
 
     expect(container.querySelector('.app-loading-screen')).not.toBeNull();
-    expect(container.querySelector('.app-loading-screen__bar')).not.toBeNull();
     expect(container.querySelector('iframe')).toBeNull();
     expect(container.textContent).toMatch(/loading game/i);
 

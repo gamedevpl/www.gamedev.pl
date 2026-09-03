@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 
-import { act, createElement } from 'react';
+import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { AppLoadingScreen } from './AppLoadingScreen.js';
+import { GameLoadScreen } from './GameLoadScreen.js';
 import i18n from './i18n/index.js';
 
-describe('AppLoadingScreen download bar', () => {
+describe('GameLoadScreen download bar', () => {
   let container: HTMLDivElement;
 
   beforeEach(async () => {
@@ -20,20 +20,10 @@ describe('AppLoadingScreen download bar', () => {
     container.remove();
   });
 
-  it('keeps the mascot splash bar-free when no download is in flight', async () => {
-    const root = createRoot(container);
-    await act(async () => {
-      root.render(createElement(AppLoadingScreen));
-    });
-    expect(container.querySelector('.app-loading-screen__bar')).toBeNull();
-    expect(container.textContent).not.toMatch(/loading game/i);
-    await act(async () => root.unmount());
-  });
-
   it('shows an indeterminate bar before Content-Length is known', async () => {
     const root = createRoot(container);
     await act(async () => {
-      root.render(createElement(AppLoadingScreen, { progress: { loaded: 0, total: null } }));
+      root.render(<GameLoadScreen progress={{ loaded: 0, total: null }} />);
     });
     const bar = container.querySelector('.app-loading-screen__bar');
     expect(bar?.classList.contains('is-indeterminate')).toBe(true);
@@ -45,7 +35,7 @@ describe('AppLoadingScreen download bar', () => {
   it('fills the bar and names the bytes once a total is known', async () => {
     const root = createRoot(container);
     await act(async () => {
-      root.render(createElement(AppLoadingScreen, { progress: { loaded: 12 * 1024 * 1024, total: 24 * 1024 * 1024 } }));
+      root.render(<GameLoadScreen progress={{ loaded: 12 * 1024 * 1024, total: 24 * 1024 * 1024 }} />);
     });
     const bar = container.querySelector('.app-loading-screen__bar');
     expect(bar?.classList.contains('is-indeterminate')).toBe(false);

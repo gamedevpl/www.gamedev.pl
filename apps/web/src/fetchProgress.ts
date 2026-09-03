@@ -42,6 +42,6 @@ export async function readResponseBody(
     onProgress?.({ loaded, total });
   }
   chunks.push(decoder.decode());
-  onProgress?.({ loaded, total: total ?? loaded });
+  onProgress?.({ loaded, total });
   return chunks.join('');
 }
