@@ -6,9 +6,8 @@ import {
   type ChatAgentStatus,
   type StudioChatAgent,
 } from './chat-agent.js';
-import { MAX_CHAT_TURNS, rememberChatTurn, type ChatTurn } from './chat-turns.js';
+import { loadRecentChatTurns } from './chat-turns-history.js';
 import { isMcpPresenceEventText } from '../agent-surface/mcp-presence.js';
-import { stripPlaytestContext } from '../delivery/build-transcript.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
 import { asChatAgentLogger, logChatAgentDecision, logChatAgentFailOpen } from '../telemetry/chat-agent-metrics.js';
 import { normalizeAtIntake, type IntakeText } from '../platform/localize-intake.js';
@@ -104,35 +103,6 @@ export function createChatOrchestration(options: ChatOrchestrationOptions): Chat
     };
   }
 
-  // Recent turns for the chat agent's history, oldest first.
-  async function recentChatTurns(jobId: number): Promise<ChatTurn[]> {
-    if (!store) return [];
-    const raw = await store.listCreatorMessages(jobId, { limit: MAX_CHAT_TURNS * 3 });
-    let turns: ChatTurn[] = [];
-    let pending: string | null = null;
-    for (const message of raw) {
-      if (message.origin === 'studio') {
-        if (pending !== null) {
-          turns = rememberChatTurn(turns, { message: pending, reply: message.text });
-          pending = null;
-        }
-        continue;
-      }
-      if (message.origin === 'studio_ack') {
-        if (pending !== null) {
-          turns = rememberChatTurn(turns, { message: pending, built: true, ackText: message.text });
-          pending = null;
-        }
-        continue;
-      }
-      // Unpaired: sent to the builder either way, ack or not.
-      if (pending !== null) turns = rememberChatTurn(turns, { message: pending, built: true });
-      pending = stripPlaytestContext(message.text);
-    }
-    if (pending !== null) turns = rememberChatTurn(turns, { message: pending, built: true });
-    return turns;
-  }
-
   async function runChatAgent(input: {
     jobId: number;
     message: string;
@@ -172,7 +142,7 @@ export function createChatOrchestration(options: ChatOrchestrationOptions): Chat
       }
       const [status, history] = await Promise.all([
         buildChatAgentStatus(input.record, input.scope),
-        recentChatTurns(input.jobId),
+        loadRecentChatTurns(store, input.jobId),
       ]);
       const decision = await chatAgent.decide({
         message: input.message,

@@ -43,3 +43,13 @@ export const FeedbackRequestSchema = z.object({
     })
     .optional(),
 });
+
+export const TurnRequestSchema = z.object({
+  text: z
+    .string({ required_error: 'text is required', invalid_type_error: 'text is required' })
+    .trim()
+    .min(1, 'text is required')
+    .max(2000, 'text must be at most 2000 characters'),
+  builder: z.enum(BUILDERS).optional(),
+  context: FeedbackRequestSchema.shape.context,
+});
