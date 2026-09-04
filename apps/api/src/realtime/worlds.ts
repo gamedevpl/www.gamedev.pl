@@ -56,6 +56,7 @@ export interface WorldRoutesOptions {
   /** Absent (no games repo configured) makes every slug answer 404, like votes. */
   worlds?: WorldSchemaSource | null;
   contentChecker: ContentChecker;
+  now?: () => number;
 }
 
 /**
@@ -94,17 +95,38 @@ function toPublicEntry(entry: WorldEntryRecord, worldId: string, uid: string | u
 
 export async function registerWorldRoutes(app: FastifyInstance, options: WorldRoutesOptions): Promise<void> {
   const { store, worlds, contentChecker } = options;
+  const now = options.now ?? Date.now;
 
   // Lower than a save's. A world write is a deliberate player action — planting a
   // thing, leaving a note — not something a game loop emits, and the module coalesces
   // per key on a four-second timer. Anything above this rate is a bug or an attempt.
   const writeRateLimit = { max: 30, timeWindow: 60_000 };
 
+  // A read costs the whole collection, and game code sets the cadence.
+  const readRateLimit = { max: 60, timeWindow: 60_000 };
+
+  // Keyed by world, so a crowd costs one read, not many.
+  const CACHE_TTL_MS = 3_000;
+  // Cached raw: rows are shared, `mine` and `writable` are not.
+  const cache = new Map<string, { at: number; entries: WorldEntryRecord[] }>();
+
+  async function entriesFor(worldId: string): Promise<WorldEntryRecord[]> {
+    // Swept on read, so an idle world holds nothing here.
+    for (const [id, entry] of cache) {
+      if (now() - entry.at >= CACHE_TTL_MS) cache.delete(id);
+    }
+    const hit = cache.get(worldId);
+    if (hit) return hit.entries;
+    const entries = await store.listWorldEntries(worldId);
+    cache.set(worldId, { at: now(), entries });
+    return entries;
+  }
+
   async function schemaFor(slug: string): Promise<WorldSchema | null> {
     return (await worlds?.getSchema(slug)) ?? null;
   }
 
-  app.get('/api/games/:slug/world', async (request, reply) => {
+  app.get('/api/games/:slug/world', { config: { rateLimit: readRateLimit } }, async (request, reply) => {
     const params = ParamsSchema.safeParse(request.params);
     if (!params.success) {
       return reply.status(400).send({ error: params.error.issues[0]?.message ?? 'invalid slug' });
@@ -116,7 +138,7 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
     if (!schema) return reply.status(404).send({ error: 'world not found' });
 
     const worldId = worldIdFor(params.data.slug);
-    const entries = await store.listWorldEntries(worldId);
+    const entries = await entriesFor(worldId);
     const uid = request.user?.uid;
     return reply.send({
       entries: entries.map((entry) => toPublicEntry(entry, worldId, uid)),
@@ -192,6 +214,8 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
     }
 
     const worldId = worldIdFor(params.data.slug);
+    // Their own change must not wait out the shared window.
+    cache.delete(worldId);
     return reply.send({ ok: true, entry: toPublicEntry(result.entry, worldId, request.user.uid) });
   });
 
@@ -207,6 +231,7 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
     // catalog its entries are still something a player wrote, and "take my thing back"
     // must keep working — a 404 would strand a row nobody can reach.
     const removed = await store.deleteWorldEntry(worldIdFor(params.data.slug), params.data.key, request.user.uid);
+    cache.delete(worldIdFor(params.data.slug));
     if (!removed) {
       // Also the answer for an entry that belongs to somebody else: not found and not
       // yours are the same sentence, so the route cannot be used to probe what exists.

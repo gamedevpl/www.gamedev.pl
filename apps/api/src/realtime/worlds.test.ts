@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../platform/app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
 import type { ContentChecker } from '../platform/moderation.js';
@@ -353,5 +353,141 @@ describe('shared world routes', () => {
     expect(await store.getWorldEntry('garden', 'plot.1')).toBeNull();
     await app.close();
     await unpublished.close();
+  });
+});
+
+// A read costs the whole collection, and game code sets the cadence.
+describe('shared world reads are bounded', () => {
+  let store: InMemoryStore;
+  let clock: number;
+  const now = () => clock;
+
+  beforeEach(async () => {
+    store = new InMemoryStore();
+    clock = Date.parse('2026-03-01T12:00:00.000Z');
+    await store.upsertUser({ uid: 'g:alice' });
+    await store.upsertUser({ uid: 'g:bob' });
+  });
+
+  async function cachingApp() {
+    return buildApp({
+      store,
+      sessionSecret,
+      contentChecker: permissiveChecker,
+      worldRoutes: { worlds: worldSource({ garden }), now },
+    });
+  }
+
+  async function plant(app: Awaited<ReturnType<typeof cachingApp>>, uid: string, key: string) {
+    return app.inject({
+      method: 'PUT',
+      url: `/api/games/garden/world/${key}`,
+      headers: authHeaders(uid),
+      payload: plot({ plant: 'oak', note: 'hello' }),
+    });
+  }
+
+  it('serves a crowd from one collection read instead of one each', async () => {
+    const app = await cachingApp();
+    await plant(app, 'g:alice', 'plot.1');
+    const reads = vi.spyOn(store, 'listWorldEntries');
+
+    for (let i = 0; i < 5; i += 1) {
+      const res = await app.inject({ method: 'GET', url: '/api/games/garden/world' });
+      expect(res.json().entries).toHaveLength(1);
+    }
+
+    expect(reads).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
+  it('reads again once the window has passed', async () => {
+    const app = await cachingApp();
+    await plant(app, 'g:alice', 'plot.1');
+    const reads = vi.spyOn(store, 'listWorldEntries');
+
+    await app.inject({ method: 'GET', url: '/api/games/garden/world' });
+    clock += 3_000;
+    await app.inject({ method: 'GET', url: '/api/games/garden/world' });
+
+    expect(reads).toHaveBeenCalledTimes(2);
+    await app.close();
+  });
+
+  it('shows a player their own write immediately, not when the window lapses', async () => {
+    const app = await cachingApp();
+    await app.inject({ method: 'GET', url: '/api/games/garden/world' });
+
+    await plant(app, 'g:alice', 'plot.1');
+    const res = await app.inject({ method: 'GET', url: '/api/games/garden/world' });
+
+    expect(res.json().entries).toHaveLength(1);
+    await app.close();
+  });
+
+  it('shows a delete immediately too', async () => {
+    const app = await cachingApp();
+    await plant(app, 'g:alice', 'plot.1');
+    await app.inject({ method: 'GET', url: '/api/games/garden/world' });
+
+    await app.inject({ method: 'DELETE', url: '/api/games/garden/world/plot.1', headers: authHeaders('g:alice') });
+    const res = await app.inject({ method: 'GET', url: '/api/games/garden/world' });
+
+    expect(res.json().entries).toHaveLength(0);
+    await app.close();
+  });
+
+  it('never lets one viewer read another viewer as the owner', async () => {
+    // A warm shared cache must not make Alice's plot Bob's.
+    const app = await cachingApp();
+    await plant(app, 'g:alice', 'plot.1');
+
+    const mine = await app.inject({ method: 'GET', url: '/api/games/garden/world', headers: authHeaders('g:alice') });
+    const theirs = await app.inject({ method: 'GET', url: '/api/games/garden/world', headers: authHeaders('g:bob') });
+    const anon = await app.inject({ method: 'GET', url: '/api/games/garden/world' });
+
+    expect(mine.json().entries[0].mine).toBe(true);
+    expect(theirs.json().entries[0].mine).toBe(false);
+    expect(anon.json().entries[0].mine).toBe(false);
+    expect(theirs.json().writable).toBe(true);
+    expect(anon.json().writable).toBe(false);
+    await app.close();
+  });
+
+  it('rate-limits a client that reads far faster than a world changes', async () => {
+    // The ceiling on one runaway game loop, not on a crowd.
+    const app = await cachingApp();
+    let limited: number | undefined;
+    for (let attempt = 0; attempt < 61; attempt += 1) {
+      const res = await app.inject({ method: 'GET', url: '/api/games/garden/world' });
+      if (res.statusCode === 429) {
+        limited = attempt;
+        break;
+      }
+    }
+
+    expect(limited).toBe(60);
+    await app.close();
+  });
+
+  it('keeps the rows of one world out of another', async () => {
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      contentChecker: permissiveChecker,
+      worldRoutes: { worlds: worldSource({ garden, meadow: garden }), now },
+    });
+    await app.inject({
+      method: 'PUT',
+      url: '/api/games/garden/world/plot.1',
+      headers: authHeaders('g:alice'),
+      payload: plot({ plant: 'oak', note: 'hello' }),
+    });
+    await app.inject({ method: 'GET', url: '/api/games/garden/world' });
+
+    const res = await app.inject({ method: 'GET', url: '/api/games/meadow/world' });
+
+    expect(res.json().entries).toHaveLength(0);
+    await app.close();
   });
 });
