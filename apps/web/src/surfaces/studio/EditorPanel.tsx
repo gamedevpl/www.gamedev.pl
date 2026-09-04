@@ -27,14 +27,10 @@ import {
   fetchGameEditor,
   publishEditorContent,
   requestEditorAssist,
-  type EditorCollectionSpec,
   type EditorContentDoc,
   type EditorLayersDoc,
   type EditorItemContent,
-  type EditorLabel,
   type EditorParamValue,
-  type EditorPathSpec,
-  type EditorTilemapSpec,
   type EditorLayerSpec,
   type GameEditorState,
   type StudioApiError,
@@ -45,6 +41,14 @@ import { pollDelayMs } from './studioStatusPoll.js';
 import { isRoundSealed } from './roundSealed.js';
 import '../../editor-kit.css';
 import '../../editor-kit-side.css';
+import {
+  firstTileKey,
+  itemsOf,
+  mergeDraft,
+  pathCollection,
+  tilemapCollection,
+  useLabel,
+} from './editorPanelHelpers.js';
 
 /**
  * The studio's Edit surface (EditorKit L3): renders a game's own editor
@@ -84,51 +88,6 @@ type PublishState =
   /** 409 not_sealed: polling the round's status, will retry publish once it seals. */
   | { kind: 'waiting' }
   | { kind: 'error'; message: string };
-
-function useLabel(): (label: EditorLabel) => string {
-  const { i18n } = useTranslation();
-  return useCallback((label: EditorLabel) => (i18n.language?.startsWith('pl') ? label.pl : label.en), [i18n.language]);
-}
-
-/**
- * A saved draft with the game's current defaults underneath. The point is
- * params added *after* the draft was saved: the server refuses a document
- * missing a declared param, so a pre-params draft must not resurface without
- * the new defaults filled in.
- */
-function mergeDraft(loaded: GameEditorState): EditorContentDoc {
-  if (!loaded.draft) return loaded.content;
-  const merged: EditorContentDoc = { ...loaded.content, ...loaded.draft.content };
-  if (loaded.definition.params) {
-    merged.params = {
-      ...((loaded.content.params ?? {}) as Record<string, EditorParamValue>),
-      ...((loaded.draft.content.params ?? {}) as Record<string, EditorParamValue>),
-    };
-  }
-  return merged;
-}
-
-/** A collection's items out of the mixed content document (params ride beside them). */
-function itemsOf(doc: EditorContentDoc, key: string): EditorItemContent[] {
-  return (doc[key] ?? []) as EditorItemContent[];
-}
-
-/** The palette's initial selection — entities have no tiles to paint with. */
-function firstTileKey(spec: EditorCollectionSpec | undefined): string | null {
-  if (!spec || spec.item.widget !== 'tilemap') return null;
-  return spec.item.tiles.find((tile) => tile.key.length > 0)?.key ?? null;
-}
-
-/** Narrows a collection to its tilemap spec — entities render no board. */
-function tilemapCollection(
-  spec: EditorCollectionSpec | null,
-): (EditorCollectionSpec & { item: EditorTilemapSpec }) | null {
-  return spec && spec.item.widget === 'tilemap' ? (spec as EditorCollectionSpec & { item: EditorTilemapSpec }) : null;
-}
-
-function pathCollection(spec: EditorCollectionSpec | null): (EditorCollectionSpec & { item: EditorPathSpec }) | null {
-  return spec && spec.item.widget === 'path' ? (spec as EditorCollectionSpec & { item: EditorPathSpec }) : null;
-}
 
 export function EditorPanel(props: {
   game: StudioGame;
