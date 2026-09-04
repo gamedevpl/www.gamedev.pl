@@ -39,9 +39,29 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import type { GameProject } from '@gamedevpl/contract';
 import { gateProgressFor, type GateProgressLane, type GateProgressStage } from '../src/delivery/gate-progress.js';
 import { runGate } from '../src/delivery/gate-runner.js';
 import { createGcsGamesStore } from '../src/delivery/games-store.js';
+import { createLocalGamesClient } from '../src/catalog/local-games-repo.js';
+import { assembleGameHtml } from '../src/platform/assemble.js';
+
+// Not the repo's dist/ build — assembleGameHtml applies our serve-time policy.
+async function assembleFromHarness(harness: string, slug: string): Promise<string | null> {
+  const client = createLocalGamesClient({ rootDir: harness });
+  const sources = await client.getGameSources('main', slug);
+  if (!sources) return null;
+
+  const project: GameProject = {
+    title: sources.title ?? slug,
+    description: '',
+    html: sources.indexHtml,
+    js: sources.gameJs,
+    css: sources.styleCss,
+  };
+  // Self-contained by repo policy, same as the bake and play route.
+  return assembleGameHtml(project, { restrictNetwork: true });
+}
 
 function arg(name: string): string | undefined {
   const index = process.argv.indexOf(`--${name}`);
@@ -126,6 +146,7 @@ async function main(): Promise<void> {
     {
       store,
       run,
+      assembleBundle: assembleFromHarness,
       onProgress: (progress) => store.putGateProgress(slug, version, progress).catch(() => {}),
       async prepareHarness(engineRef) {
         // A real clone rather than the tarball reader the bake uses: the gate has to *run*

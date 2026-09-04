@@ -24,7 +24,7 @@ import {
   type UploadKind,
   type UploadTokenClaims,
 } from './agent-upload-token.js';
-import { isRasterSourcePath } from '../catalog/raster-assets.js';
+import { isRasterSourcePath } from '../platform/raster-source.js';
 import { MAX_BUILD_PREVIEW_BYTES } from '../delivery/build-preview-limits.js';
 import { loadBuildTranscript } from '../delivery/build-transcript.js';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
@@ -53,6 +53,8 @@ import { largeSourceFileHint } from '../creation/module-size.js';
 import { gameManifestHint } from './game-manifest-hint.js';
 import { resolveRoundBaseVersion } from '../platform/round-base-version.js';
 import { computeStageAdvisories } from '../delivery/stage-hints.js';
+import { runTypecheckPreflight, sharedSourcesFromKitTree } from '../creation/typecheck-preflight.js';
+import { isMcpPresenceEventText } from './mcp-presence.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from '../creation/source-patch.js';
 import { overlayGameSources } from '../delivery/staged-preview.js';
 import { SourceDeliveryValidationError, type SourceDeliveryService } from '../delivery/source-delivery.js';
@@ -1295,6 +1297,8 @@ export async function registerAgentChannelRoutes(
           engineRef: record.roundKitEngineRef,
           path: staged.path,
           content: parsed.data.content,
+          runTypecheckPreflight,
+          sharedSourcesFromKitTree,
         });
         return reply.send({
           accepted: true,
@@ -1400,6 +1404,8 @@ export async function registerAgentChannelRoutes(
           engineRef: record.roundKitEngineRef,
           path: staged.path,
           content,
+          runTypecheckPreflight,
+          sharedSourcesFromKitTree,
         });
         return reply.send({
           accepted: true,
@@ -1583,6 +1589,8 @@ export async function registerAgentChannelRoutes(
                 engineRef: record.roundKitEngineRef,
                 path: tsFile.path,
                 content: tsFile.content,
+                runTypecheckPreflight,
+                sharedSourcesFromKitTree,
               })
             ).typecheckHint
           : undefined;
@@ -1599,6 +1607,8 @@ export async function registerAgentChannelRoutes(
                 engineRef: record.roundKitEngineRef,
                 path: gameJson.path,
                 content: gameJson.content,
+                runTypecheckPreflight,
+                sharedSourcesFromKitTree,
               })
             ).audioHint
           : undefined;
@@ -1916,7 +1926,7 @@ export async function registerAgentChannelRoutes(
         let summary = parsed.data.summary;
         if (!summary && store) {
           const recent = await store.listBuildEvents(jobId, { limit: 20 });
-          summary = pickLatestChangelogText(recent);
+          summary = pickLatestChangelogText(recent, isMcpPresenceEventText);
         }
         const delivery = await options.sourceDelivery.deliver({
           jobId,
@@ -2090,7 +2100,7 @@ export async function registerAgentChannelRoutes(
       const { jobId, record } = resolved;
 
       const query = request.query as { cursor?: string; limit?: string };
-      const transcript = await loadBuildTranscript(store!, record, {
+      const transcript = await loadBuildTranscript(store!, record, isMcpPresenceEventText, {
         ...(query.cursor !== undefined ? { cursor: query.cursor } : {}),
         ...(optionalFiniteQuery(query.limit) !== undefined ? { limit: optionalFiniteQuery(query.limit) } : {}),
       });

@@ -1,7 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
-import { decodeRasterSourceContent, encodeRasterSourceContent, isRasterSourcePath } from '../catalog/raster-assets.js';
+import { decodeRasterSourceContent, encodeRasterSourceContent, isRasterSourcePath } from '../platform/raster-source.js';
 import { decodeCanonicalBase64Utf8, InvalidBase64Error } from '../platform/canonical-base64.js';
 import { selfBuildDeliveryCap } from '../platform/self-build-delivery-cap.js';
 import { MAX_UPLOAD_FILES } from '../delivery/games-store.js';

@@ -359,6 +359,7 @@ describe('runGate', () => {
       store,
       prepareHarness: harnessDir,
       run: async () => ({ code: 1, output }),
+      assembleBundle: stubAssemble,
     });
 
     expect(outcome.green).toBe(false);
@@ -666,6 +667,7 @@ describe('runGate', () => {
       store,
       prepareHarness: harnessDir,
       run: async () => ({ code: 0, output: '' }),
+      assembleBundle: stubAssemble,
     });
 
     expect(outcome.green).toBe(false);
@@ -681,6 +683,7 @@ describe('runGate', () => {
         store,
         prepareHarness: harnessDir,
         run: async () => ({ code: 0, output: '' }),
+        assembleBundle: stubAssemble,
       }),
     ).rejects.toThrow(/which is not stored/);
   });
@@ -688,7 +691,12 @@ describe('runGate', () => {
   it('does not publish anything — it only records a verdict', async () => {
     // Publishing on green would delete the human review that is the moderation boundary.
     const { store } = stubStore();
-    const deps: GateRunnerDeps = { store, prepareHarness: harnessDir, run: async () => ({ code: 0, output: '' }) };
+    const deps: GateRunnerDeps = {
+      store,
+      prepareHarness: harnessDir,
+      run: async () => ({ code: 0, output: '' }),
+      assembleBundle: stubAssemble,
+    };
 
     await runGate('comet-courier', 'v1', deps);
 

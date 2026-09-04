@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AgentChannelOptions } from './agent-surface/agent-channel.js';
 import type { McpServerOptions } from './agent-surface/mcp-server.js';
+import { isMcpPresenceEventText } from './agent-surface/mcp-presence.js';
 import { registerNotifySweepRoutes } from './notifications/notify-sweep-routes.js';
 import { createCreationGate, createChatGate, type ChatGate, type CreationGate } from './creation/creation-limits.js';
 import {
@@ -9,7 +10,12 @@ import {
   type ManagedAvailabilityGate,
   type ManagedUnavailableReason,
 } from './agent-surface/managed-availability.js';
-import { createGitHubClient, type CatalogGameEntry, type GitHubClient } from './catalog/github-client.js';
+import {
+  createGitHubClient,
+  parseSpecTitle,
+  type CatalogGameEntry,
+  type GitHubClient,
+} from './catalog/github-client.js';
 import { createSnapshotReaderFromEnv, type GameSnapshotReader } from './catalog/game-snapshot.js';
 import { registerAdminGameRoutes } from './catalog/admin-game-routes.js';
 import { createSlugResolver } from './catalog/slug-resolver.js';
@@ -43,6 +49,14 @@ import {
 } from './agent-surface/agent-backend-env.js';
 import { createSeedAvailabilityGate, type SeedAvailabilityGate } from './creation/seed-availability.js';
 import { isActiveBuildRound, type BuilderKind } from './creation/builder.js';
+import { codeSurfaceEnabled, isLiveAgentRound } from './creation/code-surface.js';
+import { sessionCrashStall } from './creation/session-crash.js';
+import { selfBuildDeliveryCap } from './platform/self-build-delivery-cap.js';
+import {
+  runTypecheckPreflight,
+  sharedSourcesFromKitTree,
+  TYPECHECK_PREFLIGHT_MAX_REFUSALS,
+} from './creation/typecheck-preflight.js';
 import { DEFAULT_SEED_PROVIDER, type GameSeeder } from './creation/game-seed.js';
 import { createSourceDeliveryService } from './delivery/source-delivery.js';
 import { createKitFileStore } from './agent-surface/kit-files.js';
@@ -1045,6 +1059,7 @@ export async function registerSubmissionRoutes(
     gamesStore: options.agentChannel?.gamesStore,
     now,
     managedAvailabilityGate,
+    isPresenceEventText: isMcpPresenceEventText,
   });
   const { attachBuildEvents } = buildStatus;
 
@@ -1176,6 +1191,10 @@ export async function registerSubmissionRoutes(
     builderOf,
     managedAvailabilityGate,
     gamesStore: options.agentChannel?.gamesStore,
+    sessionCrashStall,
+    codeSurfaceEnabled,
+    isLiveAgentRound,
+    selfBuildDeliveryCap,
   });
 
   /**
@@ -1642,6 +1661,10 @@ export async function registerSubmissionRoutes(
           onSourcesDelivered: options.agentChannel?.onSourcesDelivered,
           onEvent: invalidateDeliveryCaches,
           log: app.log,
+          parseSpecTitle,
+          runTypecheckPreflight,
+          sharedSourcesFromKitTree,
+          typecheckPreflightMaxRefusals: TYPECHECK_PREFLIGHT_MAX_REFUSALS,
         })
       : undefined;
 

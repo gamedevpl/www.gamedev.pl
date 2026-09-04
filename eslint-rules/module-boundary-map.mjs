@@ -31,7 +31,7 @@ export const MODULE_BUCKETS = [
  * `eslint .` pass; every other bucket stays warn-only via `npm run module-boundary` until
  * its own turn. Append to this list, never edit its enforcement elsewhere.
  */
-export const ENFORCED_BUCKETS = ['telemetry', 'catalog', 'realtime', 'notifications', 'community'];
+export const ENFORCED_BUCKETS = ['telemetry', 'catalog', 'realtime', 'notifications', 'community', 'delivery'];
 
 const DEFAULT_BUCKET = 'platform';
 
@@ -124,6 +124,10 @@ const FILE_BUCKET = {
   'games-repo-contract': 'platform',
   'games-repo-bundle-bytes': 'platform',
   'raster-contract': 'platform',
+  'raster-source': 'platform',
+  'music-tracks': 'platform',
+  'how-to-play': 'platform',
+  'spec-frontmatter': 'platform',
   'kit-registry': 'platform',
   'kit-window': 'platform',
   'round-base-version': 'platform',
@@ -306,7 +310,6 @@ const FILE_BUCKET = {
   'game-play-route': 'catalog',
   'assembled-game-cache': 'catalog',
   'slug-resolver': 'catalog',
-  'music-tracks': 'catalog',
   'catalog-enricher': 'catalog',
   'catalog-indexer': 'catalog',
   'catalog-vector-index': 'catalog',

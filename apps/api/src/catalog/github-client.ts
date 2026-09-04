@@ -28,12 +28,10 @@ import {
 import { appendDeclaredImageSources, bakeGameImageAssets, resolveGameImageBytes } from './bake-game-images.js';
 import { parseGameManifest } from './parse-game-manifest.js';
 import { isRateLimitResponse } from '../platform/github-rate-limit.js';
-import {
-  generateIndexHtml,
-  hasPlayableHowToPlay,
-  type GameManifest as IndexHtmlManifest,
-} from './index-html-generator.js';
-import { mergeMusicTrackMaps, parseGameMusicTracks, parseMusicCatalogTracks } from './music-tracks.js';
+import { generateIndexHtml, type GameManifest as IndexHtmlManifest } from './index-html-generator.js';
+import { hasPlayableHowToPlay } from '../platform/how-to-play.js';
+import { mergeMusicTrackMaps, parseGameMusicTracks, parseMusicCatalogTracks } from '../platform/music-tracks.js';
+import { parseSpecFrontmatter, parseSpecTitle } from '../platform/spec-frontmatter.js';
 import { generateStyleCss, type Theme } from '../platform/theme-css-generator.js';
 
 export type { CatalogGameTouch } from './catalog-touch.js';
@@ -1904,31 +1902,4 @@ export function catalogEntryFromSpec(
   };
 }
 
-function parseSpecFrontmatter(specMd: string): Record<string, string> {
-  const matched = /^---\s*\n([\s\S]*?)\n---/.exec(specMd);
-  if (!matched?.[1]) {
-    return {};
-  }
-
-  const data: Record<string, string> = {};
-  for (const line of matched[1].split(/\r?\n/)) {
-    const separatorIndex = line.indexOf(':');
-    if (separatorIndex === -1) {
-      continue;
-    }
-    const key = line.slice(0, separatorIndex).trim();
-    const value = line
-      .slice(separatorIndex + 1)
-      .trim()
-      .replace(/^["']|["']$/g, '');
-    if (key) {
-      data[key] = value;
-    }
-  }
-  return data;
-}
-
-/** Extracts the `title:` value from a game's SPEC.md YAML frontmatter, if any. */
-export function parseSpecTitle(specMd: string): string | null {
-  return parseSpecFrontmatter(specMd).title || null;
-}
+export { parseSpecTitle };
