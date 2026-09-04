@@ -241,7 +241,14 @@ export function App() {
       setIsAuthModalOpen(true);
       return;
     }
-    window.location.replace(oauthReturn);
+    try {
+      const oauthUrl = new URL(oauthReturn, window.location.origin);
+      if (oauthUrl.origin !== window.location.origin) return;
+      if (oauthUrl.pathname !== '/oauth/authorize' && oauthUrl.pathname !== '/device') return;
+      window.location.replace(`${oauthUrl.pathname}${oauthUrl.search}`);
+    } catch {
+      return;
+    }
   }, [authLoading, user]);
 
   // Unpublished `/play/<slug>` uses UnpublishedPlayView's own theater (not `stageContent`),
