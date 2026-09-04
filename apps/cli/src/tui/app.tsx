@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
 import { CLI_BIN } from '../bin-name.js';
 import { glyphs } from '../renderer.js';
+import { CLI_VERSION } from '../update.js';
 import type { TuiSession, TuiState } from './session.js';
 
 export function ReplApp({ session, color }: { session: TuiSession; color: boolean }) {
@@ -52,8 +53,9 @@ export function ReplApp({ session, color }: { session: TuiSession; color: boolea
   const border = color ? 'round' : 'single';
   const accent = color ? 'cyan' : undefined;
   const prompt = glyphs(color).prompt;
-  const body = Math.max(4, rows - 7);
+  const body = Math.max(4, rows - 8);
   const shown = state.lines.slice(-body);
+  const footer = `${state.identity || CLI_BIN} · ${CLI_VERSION}`;
   return (
     <Box flexDirection="column" height={rows}>
       <Box flexDirection="column" flexGrow={1}>
@@ -67,14 +69,16 @@ export function ReplApp({ session, color }: { session: TuiSession; color: boolea
         ))}
       </Box>
       <Box flexDirection="column" borderStyle={border} borderColor={accent} paddingX={1}>
-        <Text dimColor>{CLI_BIN}</Text>
         {state.mode === 'pick' ? (
-          state.choices.map((choice, index) => (
-            <Text key={`pick:${index}:${choice}`} color={index === state.pickIndex ? accent : undefined}>
-              {index === state.pickIndex ? '▸ ' : '  '}
-              {choice}
-            </Text>
-          ))
+          <>
+            {state.question ? <Text>{state.question}</Text> : null}
+            {state.choices.map((choice, index) => (
+              <Text key={`pick:${index}:${choice}`} color={index === state.pickIndex ? accent : undefined}>
+                {index === state.pickIndex ? '▸ ' : '  '}
+                {choice}
+              </Text>
+            ))}
+          </>
         ) : state.mode === 'busy' ? (
           <Text dimColor>▸ …</Text>
         ) : (
@@ -83,6 +87,7 @@ export function ReplApp({ session, color }: { session: TuiSession; color: boolea
           </Text>
         )}
       </Box>
+      <Text dimColor>{footer}</Text>
     </Box>
   );
 }

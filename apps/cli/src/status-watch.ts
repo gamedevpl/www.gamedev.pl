@@ -24,6 +24,70 @@ export function formatStatusLines(status: RoundStatus, origin: string): string[]
   return lines;
 }
 
+export function statusFingerprint(status: RoundStatus): string {
+  const gate = status.gateProgress;
+  const preview = status.previewGate;
+  return [
+    status.status,
+    status.phase ?? '',
+    status.stall ?? '',
+    gate ? `${gate.stage}:${gate.index}/${gate.total}` : '',
+    status.preview?.slug ?? '',
+    status.slug ?? '',
+    status.failure?.reason ?? '',
+    preview == null ? '' : preview.green ? '1' : '0',
+  ].join('|');
+}
+
+const REPAIRABLE_REASONS = new Set(['gate_red', 'kit_outdated', 'gate_crashed', 'session_crashed']);
+
+export function isRepairableNeedsChanges(status: RoundStatus): boolean {
+  if (status.status !== 'needs_changes') return false;
+  const reason = status.failure?.reason ? sanitizeEventPayload(status.failure.reason) : '';
+  if (reason && REPAIRABLE_REASONS.has(reason)) return true;
+  return status.previewGate?.green === false;
+}
+
+export function isRoundBoundary(status: RoundStatus): boolean {
+  if (isTerminalStatus(status.status)) return true;
+  return status.status === 'needs_changes' && !isRepairableNeedsChanges(status);
+}
+
+export function formatStatusEvent(status: RoundStatus): string {
+  if (isRepairableNeedsChanges(status)) {
+    const why = status.failure?.reason ?? 'preview red';
+    return `needs_changes (${sanitizeEventPayload(why)})`;
+  }
+  if (status.status === 'needs_changes' && status.previewGate?.green) {
+    return 'round finished — Studio is waiting (preview green)';
+  }
+  if (status.status === 'needs_changes') {
+    const why = status.failure?.reason ? ` (${sanitizeEventPayload(status.failure.reason)})` : '';
+    return `round finished — needs_changes${why}`;
+  }
+  if (status.status === 'published') return 'published';
+  if (status.status === 'abandoned') return 'abandoned';
+  const stall = status.stall ? ` (${status.stall})` : '';
+  if (status.gateProgress) {
+    const { stage, index, total } = status.gateProgress;
+    return `${status.status}${stall} · ${stage} ${index}/${total}`;
+  }
+  return `${status.status}${stall}`;
+}
+
+export function shouldAnnounceStatus(status: RoundStatus, previousKey: string, key: string): boolean {
+  if (key === previousKey) return false;
+  return isRoundBoundary(status);
+}
+
+export function formatRoundLive(status: RoundStatus, origin: string): string[] {
+  const lines = [formatStatusEvent(status)];
+  if (status.preview?.slug) lines.push(previewUrl(origin, status.preview.slug));
+  const reason = status.failure?.reason ? sanitizeEventPayload(status.failure.reason) : '';
+  if (reason && !lines[0]?.includes(reason)) lines.push(reason);
+  return lines.slice(0, 4);
+}
+
 export async function runStatusVerb(input: {
   api: ApiClient;
   token: string;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createTuiSession } from './session.js';
+import { createTuiSession, formatSessionIdentity } from './session.js';
 
 describe('tui session', () => {
   it('resolves a prompt from submit and a pick from the highlighted choice', async () => {
@@ -13,6 +13,26 @@ describe('tui session', () => {
     session.movePick(1);
     session.submit();
     expect(await picked).toBe('chaotic');
+  });
+
+  it('keeps live status across submit and stores the picker question', async () => {
+    const session = createTuiSession('banner');
+    session.setLive(['building']);
+    session.setIdentity('gt · maze');
+    const picked = session.prompt(['calm', 'chaotic'], 'What tone?');
+    expect(session.get().question).toBe('What tone?');
+    session.submit();
+    expect(await picked).toBe('calm');
+    expect(session.get().live).toEqual(['building']);
+    expect(session.get().identity).toBe('gt · maze');
+    expect(session.get().question).toBe('');
+  });
+
+  it('splits a multiline banner into transcript rows', () => {
+    const session = createTuiSession('one\ntwo');
+    expect(session.get().lines).toEqual(['one', 'two']);
+    expect(formatSessionIdentity('gt', 'maze')).toBe('gt · maze');
+    expect(formatSessionIdentity('', 'maze')).toBe('maze');
   });
 
   it('exits busy work from cancel when no prompt is pending', async () => {

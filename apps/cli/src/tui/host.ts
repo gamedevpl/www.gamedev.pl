@@ -6,7 +6,8 @@ import { wantsColor } from '../renderer.js';
 import type { ApiClient } from '../api.js';
 import type { IntakeDraft } from '../create.js';
 import { ReplApp } from './app.js';
-import { createTuiSession } from './session.js';
+import { createRoundWatch } from './round-watch.js';
+import { createTuiSession, formatSessionIdentity } from './session.js';
 
 export async function runInkRepl(input: {
   api: ApiClient;
@@ -29,11 +30,31 @@ export async function runInkRepl(input: {
     patchConsole: false,
   });
   let token = input.token;
+  let who = '';
+  let slug = '';
+  const paintIdentity = (): void => session.setIdentity(formatSessionIdentity(who, slug));
+  void input.api
+    .request<{ handle?: string; uid?: string }>('GET', '/api/me/profile')
+    .then((profile) => {
+      who = profile.handle ?? profile.uid ?? '';
+      paintIdentity();
+    })
+    .catch(() => undefined);
+  const watch = createRoundWatch({
+    getToken: () => token,
+    api: input.api,
+    setLive: (live) => session.setLive(live),
+    announce: (text) => session.writeLine(text),
+    onSlug: (next) => {
+      slug = next;
+      paintIdentity();
+    },
+  });
   let draft: IntakeDraft | null = null;
   try {
     for (;;) {
       const asking = draft?.questions[draft.index];
-      const line = await session.prompt(asking?.choices);
+      const line = await session.prompt(asking?.choices, asking?.prompt);
       const result = await handleReplLine({
         line,
         api: input.api,
@@ -41,11 +62,19 @@ export async function runInkRepl(input: {
         draft,
         write: (text) => session.writeLine(text),
       });
-      if (result.token !== undefined) token = result.token;
+      if (result.token !== undefined) {
+        token = result.token;
+        watch.poke();
+      }
+      if (result.slug) {
+        slug = result.slug;
+        paintIdentity();
+      }
       if (result.draft !== undefined) draft = result.draft;
       if (result.next === 'quit') break;
     }
   } finally {
+    watch.stop();
     session.close();
     host.instance?.unmount();
   }

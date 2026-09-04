@@ -3,6 +3,8 @@ export type TuiMode = 'prompt' | 'pick' | 'busy';
 export type TuiState = {
   lines: string[];
   live: string[];
+  identity: string;
+  question: string;
   mode: TuiMode;
   draft: string;
   choices: string[];
@@ -14,19 +16,26 @@ export type TuiSession = {
   subscribe: (fn: (state: TuiState) => void) => () => void;
   writeLine: (text: string) => void;
   setLive: (live: string[]) => void;
+  setIdentity: (identity: string) => void;
   setDraft: (draft: string) => void;
   deleteLast: () => void;
   movePick: (delta: number) => void;
-  prompt: (choices?: string[]) => Promise<string>;
+  prompt: (choices?: string[], question?: string) => Promise<string>;
   submit: () => void;
   cancel: () => void;
   close: () => void;
 };
 
+export function formatSessionIdentity(who: string, slug: string): string {
+  return [who, slug].filter(Boolean).join(' · ');
+}
+
 export function createTuiSession(banner: string, onBusyCancel?: () => void): TuiSession {
   let state: TuiState = {
-    lines: banner ? [banner] : [],
+    lines: banner ? banner.split('\n') : [],
     live: [],
+    identity: '',
+    question: '',
     mode: 'busy',
     draft: '',
     choices: [],
@@ -51,11 +60,15 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
       };
     },
     writeLine(text) {
-      state = { ...state, lines: [...state.lines, text] };
+      state = { ...state, lines: [...state.lines, ...text.split('\n')] };
       emit();
     },
     setLive(live) {
       state = { ...state, live: live.slice(0, 4) };
+      emit();
+    },
+    setIdentity(identity) {
+      state = { ...state, identity };
       emit();
     },
     setDraft(draft) {
@@ -79,7 +92,7 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
       state = { ...state, pickIndex: (state.pickIndex + delta + n) % n };
       emit();
     },
-    prompt(choices) {
+    prompt(choices, question) {
       if (pending) {
         const stale = pending;
         pending = null;
@@ -91,6 +104,7 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
           ...state,
           mode: choices?.length ? 'pick' : 'prompt',
           choices: choices ?? [],
+          question: question ?? '',
           pickIndex: 0,
           draft: '',
         };
@@ -103,7 +117,7 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
       const resolve = pending;
       pending = null;
       const spoken = line.trim() ? [...state.lines, `› ${line}`] : state.lines;
-      state = { ...state, lines: spoken, mode: 'busy', draft: '', live: [], choices: [] };
+      state = { ...state, lines: spoken, mode: 'busy', draft: '', choices: [], question: '', pickIndex: 0 };
       emit();
       resolve(line);
     },
@@ -119,7 +133,7 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
       }
       const resolve = pending;
       pending = null;
-      state = { ...state, mode: 'busy', draft: '', live: [], choices: [] };
+      state = { ...state, mode: 'busy', draft: '', choices: [], question: '', pickIndex: 0 };
       emit();
       resolve('/quit');
     },

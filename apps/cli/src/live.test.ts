@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { createLiveScreen, renderLive } from './live.js';
-import { formatStatusLines, runStatusVerb, statusWatchDelayMs } from './status-watch.js';
+import {
+  formatStatusLines,
+  formatStatusEvent,
+  formatRoundLive,
+  runStatusVerb,
+  shouldAnnounceStatus,
+  statusWatchDelayMs,
+} from './status-watch.js';
 import { createApi } from './api.js';
 import { memoryStore } from './keychain.js';
 import { EXIT_GREEN, EXIT_RED } from './exit-codes.js';
@@ -85,6 +92,44 @@ describe('status watch', () => {
     expect(calls).toBe(2);
     expect(chunks.join('')).toContain('\x1b[');
     expect(chunks.join('')).toContain('published');
+  });
+
+  it('announces a finished Studio round even on the first poll', () => {
+    expect(
+      shouldAnnounceStatus({ status: 'needs_changes', previewGate: { green: true } }, '', 'needs_changes|||1'),
+    ).toBe(true);
+    expect(shouldAnnounceStatus({ status: 'building' }, '', 'building')).toBe(false);
+    expect(shouldAnnounceStatus({ status: 'building', stall: 'quiet' }, 'building', 'building|quiet')).toBe(false);
+    expect(formatStatusEvent({ status: 'needs_changes', previewGate: { green: true } })).toBe(
+      'round finished — Studio is waiting (preview green)',
+    );
+  });
+
+  it('keeps gate_red as an open round and skips gate-progress announcements', () => {
+    expect(shouldAnnounceStatus({ status: 'needs_changes', failure: { reason: 'gate_red' } }, '', 'k')).toBe(false);
+    expect(formatStatusEvent({ status: 'needs_changes', failure: { reason: 'gate_red' } })).toBe(
+      'needs_changes (gate_red)',
+    );
+    expect(formatStatusEvent({ status: 'needs_changes', previewGate: { green: false } })).toBe(
+      'needs_changes (preview red)',
+    );
+    expect(
+      shouldAnnounceStatus(
+        { status: 'building', gateProgress: { stage: 'smoke', index: 2, total: 4 } },
+        'building',
+        'building|smoke:2/4',
+      ),
+    ).toBe(false);
+  });
+
+  it('does not repeat a sanitized failure reason on the live strip', () => {
+    const esc = String.fromCharCode(27);
+    expect(
+      formatRoundLive(
+        { status: 'needs_changes', failure: { reason: `${esc}[31mgate_red${esc}[0m` } },
+        'https://www.gamedev.pl',
+      ),
+    ).toEqual(['needs_changes (gate_red)']);
   });
 
   it('returns EXIT_RED when the publish gate is red', async () => {
