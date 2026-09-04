@@ -269,7 +269,7 @@
     "apps/api/src/delivery/gate-crash.ts": 212,
     "apps/api/src/delivery/gate-progress.test.ts": 42,
     "apps/api/src/delivery/gate-progress.ts": 94,
-    "apps/api/src/delivery/gate-runner.test.ts": 721,
+    "apps/api/src/delivery/gate-runner.test.ts": 729,
     "apps/api/src/delivery/gate-runner.ts": 669,
     "apps/api/src/delivery/gate-screenshot.test.ts": 61,
     "apps/api/src/delivery/gate-screenshot.ts": 52,
