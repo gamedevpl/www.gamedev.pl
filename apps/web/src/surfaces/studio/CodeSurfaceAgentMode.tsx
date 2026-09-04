@@ -28,6 +28,7 @@ export function CodeSurfaceAgentMode({
   const [agentConsoleInput, setAgentConsoleInput] = useState('{"tool":"get_sources","input":{}}');
   const [agentConsoleHistory, setAgentConsoleHistory] = useState<AgentConsoleHistoryEntry[]>([]);
   const [agentConsoleBusy, setAgentConsoleBusy] = useState(false);
+  const agentConsoleBusyRef = useRef(false);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
@@ -41,7 +42,8 @@ export function CodeSurfaceAgentMode({
   }, [open]);
 
   async function runAgentConsole() {
-    if (agentConsoleBusy) return;
+    if (agentConsoleBusyRef.current) return;
+    agentConsoleBusyRef.current = true;
     setAgentConsoleBusy(true);
     recordCodeStep('agent_console_run');
     const command = agentConsoleInput;
@@ -53,6 +55,7 @@ export function CodeSurfaceAgentMode({
         return [entry, ...prev].slice(0, AGENT_CONSOLE_HISTORY_LIMIT);
       });
     } finally {
+      agentConsoleBusyRef.current = false;
       setAgentConsoleBusy(false);
     }
   }

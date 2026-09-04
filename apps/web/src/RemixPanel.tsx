@@ -54,7 +54,6 @@ import './remix-editor-stage.css';
 const KEEP_OFFER_AFTER = 3;
 /** After this many landings the sheet becomes a mini sidebar chat. */
 const CHAT_MODE_AFTER = 2;
-/** Pointer travel (px) before a grip drag counts as expand/collapse. */
 
 type ChatTurn = RemixChatTurn;
 
