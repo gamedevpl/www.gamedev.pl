@@ -42,9 +42,12 @@ jobs:
         with:
           subject-path: apps/cli/dist/release/*
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: cli-v${{ env.VERSION }}
-          name: gamedevpl CLI v${{ env.VERSION }}
-          generate_release_notes: true
-          files: apps/cli/dist/release/*
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "cli-v$VERSION" \
+            --title "gamedevpl CLI v$VERSION" \
+            --target "$GITHUB_SHA" \
+            --generate-notes \
+            apps/cli/dist/release/*
