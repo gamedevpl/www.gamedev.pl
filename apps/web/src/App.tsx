@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { fetchCatalog, gamePageHandle, type CatalogEntry } from './catalog.js';
@@ -14,22 +14,20 @@ import { MIN_CONCEPT_LENGTH } from './conceptLength.js';
 import { resolveCreateInitialPrompt } from './createInitialPrompt.js';
 import {
   adminPath,
-  canonicalPath,
   connectPath,
   createPath,
   creatorPath,
   gamePath,
   NAVIGATE_EVENT,
   navUpTarget,
-  parsePathRoute,
   partyPath,
   playPath,
   reviewPath,
   studioPath,
   studioWelcomePath,
   studioConnectPath,
-  type AppRoute,
 } from './core/router.js';
+import { readLocationRoute, RouteChunkBoundary } from './appRouteRecovery.js';
 import { StudioWelcomeView } from './surfaces/studio/StudioWelcomeView.js';
 import { StudioConnectWizard } from './surfaces/studio/StudioConnectWizard.js';
 import type { PublicCreatorProfile } from './creatorProfileApi.js';
@@ -60,41 +58,6 @@ const CreatorStudioView = lazy(() =>
 const ReviewDesk = lazy(() => import('./surfaces/review/ReviewDesk.js').then((m) => ({ default: m.ReviewDesk })));
 const PartyPage = lazy(() => import('./surfaces/party/PartyPage.js').then((m) => ({ default: m.PartyPage })));
 
-/**
- * Catches a lazy route chunk's import() rejecting — a client that stayed open across
- * a deploy asks for a content-hashed filename the new build no longer serves, which
- * `apps/api/src/platform/app.ts`'s static handler hard-404s. Unlike `CodeSurface.tsx`'s
- * `CodeMirrorBoundary`, there is no lesser-but-working surface to degrade to here, so
- * the fallback is a reload prompt rather than a substitute — the same recovery the
- * service-worker shell's `AppUpdateBanner` already offers, for the client that has no
- * active worker to show it (registration unsupported, blocked, or not yet complete).
- */
-class RouteChunkBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
-  state = { failed: false };
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-  componentDidCatch() {
-    // Advisory only — the fallback's reload prompt is the whole recovery.
-  }
-  render() {
-    return this.state.failed ? this.props.fallback : this.props.children;
-  }
-}
-
-/**
- * Read the current URL into an AppRoute, putting the browser on the current address
- * first — `/ay|/ai/<slug>` → `/play/<slug>`, `/status/<token>` → `/studio/<token>`,
- * `/health` → `/admin/telemetry`. The old address still works; it just does not stay
- * in the bar to be copied out of.
- */
-function readLocationRoute(): AppRoute {
-  const canonical = canonicalPath(window.location.pathname);
-  if (canonical) {
-    window.history.replaceState(null, '', canonical);
-  }
-  return parsePathRoute(window.location.pathname, window.location.hash);
-}
 import { submitSpec, refineSpec, type SubmissionApiError, type PlatformBuilderAvailability } from './submissionApi.js';
 import { submissionErrorKey } from './submissionErrors.js';
 import { useActiveBuildCount } from './activeBuilds.js';
