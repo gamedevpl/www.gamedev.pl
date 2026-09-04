@@ -20,6 +20,8 @@ export type TuiSession = {
   setDraft: (draft: string) => void;
   deleteLast: () => void;
   movePick: (delta: number) => void;
+  historyPrev: () => void;
+  historyNext: () => void;
   prompt: (choices?: string[], question?: string) => Promise<string>;
   submit: () => void;
   cancel: () => void;
@@ -43,6 +45,9 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
   };
   const listeners = new Set<(next: TuiState) => void>();
   let pending: ((line: string) => void) | null = null;
+  const history: string[] = [];
+  let histIndex = 0;
+  let stash = '';
 
   const emit = (): void => {
     for (const listener of listeners) listener(state);
@@ -92,6 +97,19 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
       state = { ...state, pickIndex: (state.pickIndex + delta + n) % n };
       emit();
     },
+    historyPrev() {
+      if (state.mode !== 'prompt' || !history.length || histIndex === 0) return;
+      if (histIndex === history.length) stash = state.draft;
+      histIndex -= 1;
+      state = { ...state, draft: history[histIndex] ?? '' };
+      emit();
+    },
+    historyNext() {
+      if (state.mode !== 'prompt' || histIndex >= history.length) return;
+      histIndex += 1;
+      state = { ...state, draft: histIndex === history.length ? stash : (history[histIndex] ?? '') };
+      emit();
+    },
     prompt(choices, question) {
       if (pending) {
         const stale = pending;
@@ -100,6 +118,8 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
       }
       return new Promise((resolve) => {
         pending = resolve;
+        histIndex = history.length;
+        stash = '';
         state = {
           ...state,
           mode: choices?.length ? 'pick' : 'prompt',
@@ -117,6 +137,12 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
       const resolve = pending;
       pending = null;
       const spoken = line.trim() ? [...state.lines, `› ${line}`] : state.lines;
+      if (line.trim() && history[history.length - 1] !== line.trim()) {
+        history.push(line.trim());
+        if (history.length > 50) history.shift();
+      }
+      histIndex = history.length;
+      stash = '';
       state = { ...state, lines: spoken, mode: 'busy', draft: '', choices: [], question: '', pickIndex: 0 };
       emit();
       resolve(line);

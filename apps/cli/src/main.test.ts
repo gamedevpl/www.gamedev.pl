@@ -38,6 +38,14 @@ describe('runCli verbs', () => {
     expect(streams.read().err).toMatch(/encrypted file/);
   });
 
+  it('prints a described verb list for --help', async () => {
+    const streams = io();
+    expect(await runCli(['node', 'gamedevpl', '--help'], { HOME: '/tmp/gamedev-cli-empty' }, streams)).toBe(EXIT_GREEN);
+    const out = streams.read().out;
+    expect(out).toContain('open a browser and sign in');
+    expect(out).not.toMatch(/gamedevpl <[a-z]+\|/);
+  });
+
   it('exits 4 when repl is run without a TTY', async () => {
     const streams = io();
     expect(await runCli(['node', 'gamedevpl'], {}, streams)).toBe(EXIT_INPUT);

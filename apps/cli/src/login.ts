@@ -7,18 +7,9 @@ import type { TokenStore } from './keychain.js';
 import { authorizeUrl, GAMEDEV_CLI_CLIENT_ID, randomVerifier, s256Challenge } from './oauth.js';
 import { openUrl as defaultOpenUrl } from './open-url.js';
 import { glyphs, wantsColor } from './renderer.js';
+import { loopbackPage } from './login-page.js';
 
 export const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
-
-const DONE_PAGE =
-  '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>gamedevpl</title></head><body><p>Signed in. You can close this tab.</p></body></html>';
-const DENY_PAGE =
-  '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>gamedevpl</title></head><body><p>Sign-in cancelled. You can close this tab.</p></body></html>';
-const BAD_PAGE =
-  '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>gamedevpl</title></head><body><p>This sign-in link is invalid. Return to the terminal.</p></body></html>';
-
-const FAIL_PAGE =
-  '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>gamedevpl</title></head><body><p>Sign-in failed. Return to the terminal.</p></body></html>';
 
 type CallbackResult = { kind: 'code'; code: string } | { kind: 'denied'; error: string };
 
@@ -117,22 +108,22 @@ function listen(expectedState: string): Promise<{
       }
       const state = url.searchParams.get('state') ?? '';
       if (!sameSecret(state, expectedState)) {
-        sendHtml(res, 400, BAD_PAGE);
+        sendHtml(res, 400, loopbackPage('bad'));
         return;
       }
       const err = url.searchParams.get('error');
       if (err) {
         const cancelled = err === 'access_denied';
-        sendHtml(res, 200, cancelled ? DENY_PAGE : FAIL_PAGE);
+        sendHtml(res, 200, cancelled ? loopbackPage('deny') : loopbackPage('fail'));
         settle?.({ kind: 'denied', error: err });
         return;
       }
       const code = url.searchParams.get('code') ?? '';
       if (!code) {
-        sendHtml(res, 400, BAD_PAGE);
+        sendHtml(res, 400, loopbackPage('bad'));
         return;
       }
-      sendHtml(res, 200, DONE_PAGE);
+      sendHtml(res, 200, loopbackPage('done'));
       settle?.({ kind: 'code', code });
     });
     server.once('error', rejectListen);

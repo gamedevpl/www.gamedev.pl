@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { closedBetaWall, describeError, pipeNeedsFlag, quotaExhausted } from './errors.js';
+import { closedBetaWall, describeError, formatError, pipeNeedsFlag, quotaExhausted } from './errors.js';
 import { EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 
 describe('error UX', () => {
@@ -8,5 +8,6 @@ describe('error UX', () => {
     expect(quotaExhausted().exitCode).toBe(EXIT_REFUSED);
     expect(pipeNeedsFlag('--agent').exitCode).toBe(EXIT_INPUT);
     expect(describeError(pipeNeedsFlag('--yes')).next).toBe('--yes');
+    expect(formatError(pipeNeedsFlag('--yes'))).toContain('next: --yes');
   });
 });

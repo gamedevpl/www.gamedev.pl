@@ -61,7 +61,10 @@ describe('loopback login', () => {
         expect(redirect).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/callback$/);
         const hit = await fetch(`${redirect}?code=auth-code-1&state=${state}`);
         expect(hit.status).toBe(200);
-        expect(await hit.text()).toContain('Signed in');
+        const html = await hit.text();
+        expect(html).toContain('Signed in');
+        expect(html).toContain('--turquoise');
+        expect(html).toContain('class="mascot"');
         return true;
       },
     });
