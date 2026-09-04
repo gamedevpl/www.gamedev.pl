@@ -541,6 +541,7 @@
       "checks": "Kontrole",
       "checksOk": "Wszystkie kontrole zaliczone",
       "checksElsewhere": "Popraw przed publikacją: {{list}}",
+      "checksFromGame": "własne kontrole tej gry",
       "addItem": "Dodaj: {{name}}",
       "removeItem": "Usuń",
       "empty": "Nie ma jeszcze nic do edycji.",

@@ -826,7 +826,7 @@
     "apps/web/src/surfaces/studio/editorJsonLiveDiff.ts": 88,
     "apps/web/src/surfaces/studio/EditorPanel.surfaceMode.test.ts": 45,
     "apps/web/src/surfaces/studio/EditorPanel.test.tsx": 285,
-    "apps/web/src/surfaces/studio/EditorPanel.tsx": 1084,
+    "apps/web/src/surfaces/studio/EditorPanel.tsx": 1090,
     "apps/web/src/surfaces/studio/editorParamsScrub.test.ts": 115,
     "apps/web/src/surfaces/studio/editorParamsScrub.ts": 78,
     "apps/web/src/surfaces/studio/EditorSurface.test.tsx": 74,

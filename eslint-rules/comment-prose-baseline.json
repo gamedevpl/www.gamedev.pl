@@ -570,6 +570,7 @@
     "apps/web/src/surfaces/studio/CreatorStudioView.tsx": 1806,
     "apps/web/src/surfaces/studio/EditorCollections.test.tsx": 13,
     "apps/web/src/surfaces/studio/editorJsonLiveDiff.ts": 92,
+    "apps/web/src/surfaces/studio/EditorPanel.publishGate.test.tsx": 22,
     "apps/web/src/surfaces/studio/EditorPanel.test.tsx": 16,
     "apps/web/src/surfaces/studio/EditorPanel.tsx": 564,
     "apps/web/src/surfaces/studio/studio-shell.css.test.ts": 42,

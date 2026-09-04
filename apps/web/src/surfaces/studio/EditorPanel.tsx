@@ -447,6 +447,11 @@ export function EditorPanel(props: {
   }
 
   async function publishNow() {
+    // The not_sealed retry calls this directly, bypassing the disabled button.
+    if (allProblems.length > 0) {
+      setPublish({ kind: 'idle' });
+      return;
+    }
     // Flush any pending edit first, so what publishes is what the creator sees —
     // and stop if that flush did not land. A rejected save (409 from another tab,
     // 422 from moderation or the schema, or a dropped connection) leaves the
@@ -555,6 +560,8 @@ export function EditorPanel(props: {
             : [];
         }),
         ...(layeredWideProblems.length > 0 ? ['Layers'] : []),
+        // Guarded: a dead controller's stale checks must not strand Publish.
+        ...(controllerActive && props.controller?.checks?.ok === false ? [t('studioPanel.editor.checksFromGame')] : []),
       ]
     : [];
   const tilemapItem = item && isTilemapItem(item) ? item : null;
