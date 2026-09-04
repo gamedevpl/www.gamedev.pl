@@ -98,10 +98,27 @@ describe('status watch', () => {
       shouldAnnounceStatus({ status: 'needs_changes', previewGate: { green: true } }, '', 'needs_changes|||1'),
     ).toBe(true);
     expect(shouldAnnounceStatus({ status: 'building' }, '', 'building')).toBe(false);
-    expect(shouldAnnounceStatus({ status: 'building', stall: 'quiet' }, 'building', 'building|quiet')).toBe(true);
+    expect(shouldAnnounceStatus({ status: 'building', stall: 'quiet' }, 'building', 'building|quiet')).toBe(false);
     expect(formatStatusEvent({ status: 'needs_changes', previewGate: { green: true } })).toBe(
       'round finished — Studio is waiting (preview green)',
     );
+  });
+
+  it('keeps gate_red as an open round and skips gate-progress announcements', () => {
+    expect(shouldAnnounceStatus({ status: 'needs_changes', failure: { reason: 'gate_red' } }, '', 'k')).toBe(false);
+    expect(formatStatusEvent({ status: 'needs_changes', failure: { reason: 'gate_red' } })).toBe(
+      'needs_changes (gate_red)',
+    );
+    expect(formatStatusEvent({ status: 'needs_changes', previewGate: { green: false } })).toBe(
+      'needs_changes (preview red)',
+    );
+    expect(
+      shouldAnnounceStatus(
+        { status: 'building', gateProgress: { stage: 'smoke', index: 2, total: 4 } },
+        'building',
+        'building|smoke:2/4',
+      ),
+    ).toBe(false);
   });
 
   it('returns EXIT_RED when the publish gate is red', async () => {

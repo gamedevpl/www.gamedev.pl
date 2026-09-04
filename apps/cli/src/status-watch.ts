@@ -39,12 +39,26 @@ export function statusFingerprint(status: RoundStatus): string {
   ].join('|');
 }
 
+const REPAIRABLE_REASONS = new Set(['gate_red', 'kit_outdated', 'gate_crashed', 'session_crashed']);
+
+export function isRepairableNeedsChanges(status: RoundStatus): boolean {
+  if (status.status !== 'needs_changes') return false;
+  if (status.failure?.reason && REPAIRABLE_REASONS.has(status.failure.reason)) return true;
+  return status.previewGate?.green === false;
+}
+
+export function isRoundBoundary(status: RoundStatus): boolean {
+  if (isTerminalStatus(status.status)) return true;
+  return status.status === 'needs_changes' && !isRepairableNeedsChanges(status);
+}
+
 export function formatStatusEvent(status: RoundStatus): string {
+  if (isRepairableNeedsChanges(status)) {
+    const why = status.failure?.reason ?? 'preview red';
+    return `needs_changes (${sanitizeEventPayload(why)})`;
+  }
   if (status.status === 'needs_changes' && status.previewGate?.green) {
     return 'round finished — Studio is waiting (preview green)';
-  }
-  if (status.status === 'needs_changes' && status.previewGate?.green === false) {
-    return 'round finished — preview gate red';
   }
   if (status.status === 'needs_changes') {
     const why = status.failure?.reason ? ` (${sanitizeEventPayload(status.failure.reason)})` : '';
@@ -62,8 +76,7 @@ export function formatStatusEvent(status: RoundStatus): string {
 
 export function shouldAnnounceStatus(status: RoundStatus, previousKey: string, key: string): boolean {
   if (key === previousKey) return false;
-  if (status.status === 'needs_changes' || isTerminalStatus(status.status)) return true;
-  return previousKey !== '';
+  return isRoundBoundary(status);
 }
 
 export function formatRoundLive(status: RoundStatus, origin: string): string[] {

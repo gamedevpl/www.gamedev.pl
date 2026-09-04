@@ -1,4 +1,4 @@
-import { getStatus, type RoundStatus } from '../turn.js';
+import { getStatus, isTerminalStatus, type RoundStatus } from '../turn.js';
 import {
   formatRoundLive,
   formatStatusEvent,
@@ -44,6 +44,10 @@ export function createRoundWatch(input: {
           const key = statusFingerprint(status);
           if (shouldAnnounceStatus(status, lastKey, key)) input.announce(formatStatusEvent(status));
           lastKey = key;
+          if (isTerminalStatus(status.status)) {
+            stopped = true;
+            break;
+          }
         } catch {
           // 404 until a game is open
         }

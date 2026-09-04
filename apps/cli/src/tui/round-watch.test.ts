@@ -38,4 +38,29 @@ describe('round watch', () => {
     expect(live.at(-1)?.[0]).toContain('round finished');
     expect(slugs).toEqual(['diminishing-sparks', 'diminishing-sparks']);
   });
+
+  it('stops polling once the round is published', async () => {
+    let polls = 0;
+    const announced: string[] = [];
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_oat_t', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async () => {
+        polls += 1;
+        return new Response(JSON.stringify({ status: 'published' }), { status: 200 });
+      },
+    });
+    const watch = createRoundWatch({
+      getToken: () => 'tok',
+      api,
+      setLive: () => undefined,
+      announce: (text) => announced.push(text),
+      sleep: async () => {
+        throw new Error('should not sleep after published');
+      },
+    });
+    await watch.run;
+    expect(polls).toBe(1);
+    expect(announced).toEqual(['published']);
+  });
 });
