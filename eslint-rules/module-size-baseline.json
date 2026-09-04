@@ -197,7 +197,7 @@
     "apps/api/src/creation/editor-assist.ts": 269,
     "apps/api/src/creation/editor-contract.test.ts": 356,
     "apps/api/src/creation/editor-contract.ts": 1392,
-    "apps/api/src/creation/editor-drafts.test.ts": 721,
+    "apps/api/src/creation/editor-drafts.test.ts": 723,
     "apps/api/src/creation/editor-drafts.ts": 673,
     "apps/api/src/creation/game-seed.test.ts": 969,
     "apps/api/src/creation/game-seed.ts": 761,
