@@ -41,12 +41,16 @@ const permissiveChecker: ContentChecker = {
   }),
 };
 
-async function appWith(store: InMemoryStore, schemas: Record<string, WorldSchema> = { garden }) {
+async function appWith(
+  store: InMemoryStore,
+  schemas: Record<string, WorldSchema> = { garden },
+  worldRoutes: Record<string, unknown> = {},
+) {
   return buildApp({
     store,
     sessionSecret,
     contentChecker: permissiveChecker,
-    worldRoutes: { worlds: worldSource(schemas) },
+    worldRoutes: { worlds: worldSource(schemas), ...worldRoutes },
   });
 }
 
@@ -112,6 +116,39 @@ describe('shared world routes', () => {
     });
     expect(asAlice.json().entries[0].mine).toBe(true);
     expect(asAlice.json().writable).toBe(true);
+    await app.close();
+  });
+
+  it('stops moderating world text once the day is spent', async () => {
+    let calls = 0;
+    const counting: ContentChecker = {
+      check: async () => ({ allowed: true }),
+      checkFields: async () => {
+        calls += 1;
+        return { allowed: true };
+      },
+    };
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      contentChecker: counting,
+      worldRoutes: { worlds: worldSource({ garden }), dailyWorldWriteQuota: 1 },
+    });
+
+    const write = (key: string) =>
+      app.inject({
+        method: 'PUT',
+        url: `/api/games/garden/world/${key}`,
+        headers: authHeaders('g:alice'),
+        payload: plot({ plant: 'oak', note: 'mine' }),
+      });
+
+    expect((await write('plot.1')).statusCode).toBe(200);
+    expect(calls).toBe(1);
+
+    // A paid classifier per text field, reachable by any signed-in player.
+    expect((await write('plot.2')).statusCode).toBe(429);
+    expect(calls).toBe(1);
     await app.close();
   });
 

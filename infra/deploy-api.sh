@@ -135,6 +135,8 @@ SUGGESTION_SWEEP_AUDIENCE="${SUGGESTION_SWEEP_AUDIENCE:-}"
 HEALTH_SWEEP_AUDIENCE="${HEALTH_SWEEP_AUDIENCE:-}"
 ACCOUNT_DELETION_SWEEP_AUDIENCE="${ACCOUNT_DELETION_SWEEP_AUDIENCE:-}"
 DISPATCH_REAPER_AUDIENCE="${DISPATCH_REAPER_AUDIENCE:-}"
+# Arms the alert-pulled spend brake; unset leaves the endpoint refusing everything.
+SPEND_BRAKE_AUDIENCE="${SPEND_BRAKE_AUDIENCE:-}"
 HEALTH_SWEEP_BATCH="${HEALTH_SWEEP_BATCH:-}"
 # Web Push (docs/notifications-plan.md M2). Public key is public by design (env var);
 # the private key is a Secret Manager secret wired in below. Push is off without them.
@@ -449,6 +451,9 @@ if [ -n "$SUGGESTION_SWEEP_AUDIENCE" ]; then
 fi
 if [ -n "$DISPATCH_REAPER_AUDIENCE" ]; then
   ENV_VARS="${ENV_VARS}|DISPATCH_REAPER_AUDIENCE=${DISPATCH_REAPER_AUDIENCE}"
+fi
+if [ -n "$SPEND_BRAKE_AUDIENCE" ]; then
+  ENV_VARS="${ENV_VARS}|SPEND_BRAKE_AUDIENCE=${SPEND_BRAKE_AUDIENCE}"
 fi
 if [ -n "$VAPID_PUBLIC_KEY" ]; then
   ENV_VARS="${ENV_VARS}|VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}"

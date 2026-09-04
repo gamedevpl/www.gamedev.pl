@@ -67,6 +67,30 @@ describe('embedding-service', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('serves one cache entry for queries that differ only in case or spacing', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ embedding: { values: [0.6, 0.8] } }),
+    } as Response);
+
+    const service = new VertexEmbeddingService({ model: 'gemini-embedding-2' });
+    vi.spyOn(
+      (service as unknown as { auth: { getClient: () => Promise<unknown> } }).auth,
+      'getClient',
+    ).mockResolvedValue({
+      getAccessToken: async () => ({ token: 'mock-token' }),
+    });
+
+    // A debounced prompt produces exactly this family of near-duplicates.
+    await service.embedQuery('Snake');
+    await service.embedQuery('snake');
+    await service.embedQuery('  snake  ');
+    await service.embedQuery('snake   game');
+    await service.embedQuery('snake game');
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
   it('generates document embedding with title/result prefix for gemini models', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,

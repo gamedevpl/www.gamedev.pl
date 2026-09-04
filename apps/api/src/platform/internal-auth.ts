@@ -67,6 +67,8 @@ const AUDIENCE_ENV_VAR = {
   healthSweep: 'HEALTH_SWEEP_AUDIENCE',
   accountDeletionSweep: 'ACCOUNT_DELETION_SWEEP_AUDIENCE',
   dispatchReaper: 'DISPATCH_REAPER_AUDIENCE',
+  // Cloud Monitoring's Pub/Sub push, not the scheduler.
+  spendBrake: 'SPEND_BRAKE_AUDIENCE',
   // Not a sweep and not called by the scheduler: this one is the app service calling the
   // split-out party relay (mp-relay.ts). The mechanism is identical — a Google-signed OIDC
   // token, audience-pinned to the callee's URL — so it reuses this seam rather than

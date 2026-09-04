@@ -20,6 +20,7 @@ import type { ContentChecker } from '../platform/moderation.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
 import { MAX_UTTERANCE_LENGTH, applyAssistPatches, assistEnabled, type EditorAssistant } from './editor-assist.js';
 import type { EditingGate } from './creation-limits.js';
+import { peekQuota } from '../platform/quota-peek.js';
 
 /**
  * The Creator Studio content editor's API (EditorKit L3/L4 — the platform half
@@ -261,6 +262,24 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
     return texts;
   }
 
+  // Text saved once was moderated then; only new values pay.
+  async function storedDraftTexts(
+    uid: string,
+    slug: string,
+    definition: EditorDefinition,
+  ): Promise<ReadonlySet<string>> {
+    try {
+      const existing = await store.getEditorDraft(uid, slug);
+      if (!existing) return new Set();
+      const parsed: unknown = JSON.parse(existing.content);
+      if (!parsed || typeof parsed !== 'object') return new Set();
+      return new Set(textFields(definition, parsed as Record<string, unknown>));
+    } catch {
+      // Unreadable means nothing is known-checked; check everything.
+      return new Set();
+    }
+  }
+
   app.get('/api/me/games/:slug/editor', async (request, reply) => {
     if (!requireUser(request, reply)) return;
     const resolved = await resolveEditable(request, reply);
@@ -311,9 +330,13 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
 
       // Declared text is shown to players once published, so it is moderated at
       // the same point every other creator text is: on the write.
+      const slugForDraft = resolved.submission.slug as string;
       const texts = textFields(resolved.definition, body.data.content);
-      if (texts.length > 0 && options.contentChecker) {
-        const verdict = await options.contentChecker.checkFields(texts);
+      // Autosave resends every field; each costs a paid call.
+      const alreadyChecked = await storedDraftTexts(request.user!.uid, slugForDraft, resolved.definition);
+      const unchecked = texts.filter((text) => !alreadyChecked.has(text));
+      if (unchecked.length > 0 && options.contentChecker) {
+        const verdict = await options.contentChecker.checkFields(unchecked);
         if (!verdict.allowed) {
           logModerationRejection(request.log, {
             surface: 'editor_draft',
@@ -324,7 +347,7 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
         }
       }
 
-      const slug = resolved.submission.slug as string;
+      const slug = slugForDraft;
       // The compare and the increment happen inside one store transaction: doing
       // it here as read-then-write would let two tabs on the same base revision
       // both succeed, with one edit lost and both told they were saved.
@@ -376,6 +399,15 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
         return reply.status(409).send({ error: 'this game has no tunable settings' });
       }
 
+      const assistDateStr = new Date(now()).toISOString().slice(0, 10);
+      const assistQuotaLimit =
+        options.dailyAssistQuota ?? Number(process.env.DAILY_ASSIST_QUOTA ?? DEFAULT_DAILY_ASSIST_QUOTA);
+      // Free read first: an exhausted account buys no classification.
+      const assistPeek = await peekQuota(store, request.user!.uid, assistDateStr, assistQuotaLimit, 'assists');
+      if (!assistPeek.allowed) {
+        return reply.status(429).send({ error: 'daily tuning-assist quota exceeded' });
+      }
+
       // Moderation first, before a paid call and before the text reaches a model
       // — same fail-closed posture as every other creator-text path.
       if (options.contentChecker) {
@@ -390,13 +422,8 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
         }
       }
 
-      const dateStr = new Date(now()).toISOString().slice(0, 10);
-      const quota = await store.checkAndIncrementQuota(
-        request.user!.uid,
-        dateStr,
-        options.dailyAssistQuota ?? Number(process.env.DAILY_ASSIST_QUOTA ?? DEFAULT_DAILY_ASSIST_QUOTA),
-        'assists',
-      );
+      const dateStr = assistDateStr;
+      const quota = await store.checkAndIncrementQuota(request.user!.uid, dateStr, assistQuotaLimit, 'assists');
       if (!quota.allowed) {
         return reply.status(429).send({ error: 'daily tuning-assist quota exceeded' });
       }

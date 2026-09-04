@@ -19,6 +19,7 @@ import type { GamesStore } from '../delivery/games-store.js';
 import type { Store } from '../platform/store.js';
 import type { ContentChecker } from '../platform/moderation.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
+import { peekQuota } from '../platform/quota-peek.js';
 import { assembleGameHtml } from '../platform/assemble.js';
 import type { GitHubClient } from '../catalog/github-client.js';
 import { type EditingGate, type CreationGate } from './creation-limits.js';
@@ -92,6 +93,9 @@ export const REMIX_TTL_MS = 60 * 60_000;
 export const MAX_REMIX_SESSIONS = 500;
 /** Code edits per session — a bound on spend, and on how far a remix can drift. */
 export const MAX_CODE_EDITS = 12;
+
+// Remix had only the global cap; one account drained the day.
+export const DEFAULT_DAILY_REMIX_QUOTA = 120;
 
 interface RemixSession {
   id: string;
@@ -281,6 +285,7 @@ export interface RemixRoutesOptions {
    */
   resolveProposalBase?: (slug: string) => Promise<{ base: ProposalBase; files: SourceFile[] } | null>;
   store?: Store;
+  dailyRemixQuota?: number;
   gamesStore?: GamesStore;
   githubClient?: GitHubClient;
   /** Ref the repo-published games are served from — the rebuild pins to it. */
@@ -314,9 +319,55 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
    * Runs after moderation and the per-route limits, immediately before the paid
    * call, so a refusal never spends anything and a spend is never refused late.
    */
-  async function spendEditSlot(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
-    if (!options.editingGate) return true;
+  // Free read before the classifier: a resting platform refuses for nothing.
+  async function editHeadroom(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
     const dateStr = new Date(now()).toISOString().slice(0, 10);
+    if (options.store) {
+      const headroom = await peekQuota(
+        options.store,
+        request.user!.uid,
+        dateStr,
+        options.dailyRemixQuota ?? Number(process.env.DAILY_REMIX_QUOTA ?? DEFAULT_DAILY_REMIX_QUOTA),
+        'remixEdits',
+      );
+      if (!headroom.allowed) {
+        reply.status(429).send({ error: 'daily remix limit reached — the game still plays' });
+        return false;
+      }
+    }
+    if (!options.editingGate) return true;
+    const gate = await options.editingGate.peek(request.user!.uid, dateStr);
+    if (!gate.allowed) {
+      reply.status(503).send({ error: 'editing is resting right now — the game still plays' });
+      return false;
+    }
+    return true;
+  }
+
+  // One slot used to buy five calls; reconciled after.
+  async function spendExtraEditSlots(request: FastifyRequest, extra: number): Promise<void> {
+    if (!options.editingGate || extra <= 0) return;
+    const dateStr = new Date(now()).toISOString().slice(0, 10);
+    for (let index = 0; index < extra; index += 1) {
+      await options.editingGate.checkAndSpend(request.user!.uid, dateStr);
+    }
+  }
+
+  async function spendEditSlot(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
+    const dateStr = new Date(now()).toISOString().slice(0, 10);
+    if (options.store) {
+      const quota = await options.store.checkAndIncrementQuota(
+        request.user!.uid,
+        dateStr,
+        options.dailyRemixQuota ?? Number(process.env.DAILY_REMIX_QUOTA ?? DEFAULT_DAILY_REMIX_QUOTA),
+        'remixEdits',
+      );
+      if (!quota.allowed) {
+        reply.status(429).send({ error: 'daily remix limit reached — the game still plays' });
+        return false;
+      }
+    }
+    if (!options.editingGate) return true;
     const gate = await options.editingGate.checkAndSpend(request.user!.uid, dateStr);
     if (!gate.allowed) {
       reply.status(503).send({ error: 'editing is resting right now — the game still plays' });
@@ -618,6 +669,8 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       const body = AssistSchema.safeParse(request.body);
       if (!body.success) return reply.status(400).send({ error: 'invalid request' });
 
+      if (!(await editHeadroom(request, reply))) return;
+
       // Anonymous players reach a model here, so the same fail-closed check every
       // other creator-text path uses runs first, before a paid call.
       if (options.contentChecker) {
@@ -756,6 +809,8 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       const body = AssistSchema.safeParse(request.body);
       if (!body.success) return reply.status(400).send({ error: 'invalid request' });
 
+      if (!(await editHeadroom(request, reply))) return;
+
       if (options.contentChecker) {
         const verdict = await options.contentChecker.check(body.data.utterance);
         if (!verdict.allowed) {
@@ -824,6 +879,9 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         // on purpose: opening it is a deploy, because it should be deliberate,
         // and closing it must not wait for one, because until it closes the log
         // is filling with players' own words. Emission is what this gates — the
+        // The earlier slot covers one call; the rest land here.
+        await spendExtraEditSlots(request, Math.max(0, (outcome.tokens?.calls ?? 1) - 1));
+
         // lane may still assemble a trace, but nothing leaves the process.
         const tracing = codeLaneDebugEnabled() && !(await options.editingGate?.isTracePaused());
         if (tracing) {

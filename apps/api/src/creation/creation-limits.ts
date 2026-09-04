@@ -1,4 +1,5 @@
 import { BOT_UID_PREFIX, type CreationLimits, type Store } from '../platform/store.js';
+import { resolveDefaultGlobalDailyBotCallCap } from '../platform/bot-allowance.js';
 
 /**
  * The global creation circuit-breaker (private ops repo, readiness item 6).
@@ -120,24 +121,39 @@ export interface CreationGate {
   readLimits(): Promise<CreationLimits & { source: 'stored' | 'default' }>;
 }
 
-/**
- * Automation accounts are outside the breaker entirely: not paused, not capped, and
- * not counted.
- *
- * The reason is operational rather than generous. Pausing creation is an incident
- * response, and the deploy pipeline's own smoke checks run as `bot:` accounts — a
- * tripped cap or an active pause that turned the deploy gate red would take away the
- * ability to ship a fix at exactly the moment one is needed. Bots are already the
- * "not a creator" namespace (creator metrics and the digest both exclude them by this
- * prefix), so counting them against a creator-spend ceiling would also be measuring
- * the wrong thing.
- *
- * This is safe rather than a hole because a `bot:` account is still an ordinary
- * standard-tier user for the *per-user* quota, tokens are admin-minted and revocable,
- * and the namespace cannot be self-assigned.
- */
-function bypassesBreaker(uid: string): boolean {
+// Automation stays outside the creator ceilings and the pause, not outside every cap.
+
+// A pause is incident response; the deploy's own smoke checks run as `bot:`.
+
+// So bot spend goes against its own counter, leaving the creator allowance alone.
+function isAutomationAccount(uid: string): boolean {
   return uid.startsWith(BOT_UID_PREFIX);
+}
+
+
+// Never consults a pause: it must not block the deploy that fixes the incident.
+async function spendBotAllowance(
+  store: Store,
+  dateStr: string,
+  logWarn: (payload: Record<string, unknown>, message: string) => void,
+): Promise<CreationGateOutcome> {
+  const cap = resolveDefaultGlobalDailyBotCallCap();
+  if (cap <= 0) return { allowed: true };
+  try {
+    const spent = await store.checkAndIncrementGlobalBotCalls(dateStr, cap);
+    if (!spent.allowed) {
+      logWarn({ dateStr, cap, current: spent.current }, 'global daily automation cap reached; refusing bot calls');
+      return { allowed: false, reason: 'over_capacity' };
+    }
+    if (spent.current >= Math.ceil(cap * 0.8)) {
+      logWarn({ dateStr, cap, current: spent.current }, 'global daily automation cap is over 80% spent');
+    }
+    return { allowed: true };
+  } catch (error) {
+    // A blip must never be what stops a deploy smoke check.
+    logWarn({ err: error, dateStr }, 'automation counter unreachable; admitting the bot call');
+    return { allowed: true };
+  }
 }
 
 export function createCreationGate(options: CreationGateOptions): CreationGate {
@@ -183,7 +199,7 @@ export function createCreationGate(options: CreationGateOptions): CreationGate {
     },
 
     async checkAndSpend(uid, dateStr) {
-      if (bypassesBreaker(uid)) return { allowed: true };
+      if (isAutomationAccount(uid)) return spendBotAllowance(store, dateStr, logWarn);
 
       const { value } = await limits();
       if (value.paused) {
@@ -228,6 +244,8 @@ export function createCreationGate(options: CreationGateOptions): CreationGate {
 export interface EditingGate {
   /** Decides and spends one of the day's editing-model slots, or refuses. */
   checkAndSpend(uid: string, dateStr: string): Promise<CreationGateOutcome>;
+  // Read-only headroom check, for use before a paid classifier runs.
+  peek(uid: string, dateStr: string): Promise<CreationGateOutcome>;
   /**
    * Whether the operator has closed the code-lane trace window.
    *
@@ -288,8 +306,27 @@ export function createEditingGate(options: CreationGateOptions): EditingGate {
       return (await limits()).remixTracePaused === true;
     },
 
+    async peek(uid, dateStr) {
+      if (isAutomationAccount(uid)) return spendBotAllowance(store, dateStr, logWarn);
+
+      const value = await limits();
+      if (value.editingPaused) return { allowed: false, reason: 'paused' };
+
+      const cap = value.globalDailyEditCap ?? defaultCap;
+      if (cap <= 0) return { allowed: false, reason: 'over_capacity' };
+
+      try {
+        const current = await store.getGlobalEditCount(dateStr);
+        return current >= cap ? { allowed: false, reason: 'over_capacity' } : { allowed: true };
+      } catch (error) {
+        // Never authoritative: checkAndSpend decides, this only avoids paying first.
+        logWarn({ err: error, dateStr }, 'global edit counter unreachable; skipping the headroom peek');
+        return { allowed: true };
+      }
+    },
+
     async checkAndSpend(uid, dateStr) {
-      if (bypassesBreaker(uid)) return { allowed: true };
+      if (isAutomationAccount(uid)) return spendBotAllowance(store, dateStr, logWarn);
 
       const value = await limits();
       if (value.editingPaused) return { allowed: false, reason: 'paused' };
@@ -362,7 +399,7 @@ export function createChatGate(options: CreationGateOptions): ChatGate {
 
   return {
     async checkAndSpend(uid, dateStr) {
-      if (bypassesBreaker(uid)) return { allowed: true };
+      if (isAutomationAccount(uid)) return spendBotAllowance(store, dateStr, logWarn);
 
       const value = await limits();
       if (value.chatPaused) return { allowed: false, reason: 'paused' };
@@ -405,6 +442,23 @@ export function resolveDefaultGlobalDailyTabCompleteTokenCap(
     if (Number.isFinite(parsed) && parsed >= 0) return parsed;
   }
   return DEFAULT_GLOBAL_DAILY_TAB_COMPLETE_TOKEN_CAP;
+}
+
+// Anonymous search has no per-user quota beneath it.
+export const DEFAULT_GLOBAL_DAILY_SEARCH_EMBEDDING_CAP = 20_000;
+
+// Same not-configured semantics as the submission cap resolver above.
+export function resolveDefaultGlobalDailySearchEmbeddingCap(
+  override?: number,
+  env: NodeJS.ProcessEnv = process.env,
+): number {
+  if (typeof override === 'number' && Number.isFinite(override) && override >= 0) return override;
+  const raw = env.GLOBAL_DAILY_SEARCH_EMBEDDING_CAP?.trim();
+  if (raw) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return DEFAULT_GLOBAL_DAILY_SEARCH_EMBEDDING_CAP;
 }
 
 // Worst-case request cost: prefix + suffix chars plus the output cap.
@@ -457,7 +511,10 @@ export function createTabCompleteGate(options: CreationGateOptions): TabComplete
 
   return {
     async peek(uid, dateStr) {
-      if (bypassesBreaker(uid)) return { allowed: true, reserved: false };
+      if (isAutomationAccount(uid)) {
+        const bot = await spendBotAllowance(store, dateStr, logWarn);
+        return bot.allowed ? { allowed: true, reserved: false } : { allowed: false, reason: bot.reason };
+      }
       const value = await limits();
       if (value.tabCompletePaused) return { allowed: false, reason: 'paused' };
       const cap = value.globalDailyTabCompleteTokenCap ?? defaultCap;
@@ -484,7 +541,7 @@ export function createTabCompleteGate(options: CreationGateOptions): TabComplete
     },
 
     async spend(uid, dateStr, tokens, reserved) {
-      if (bypassesBreaker(uid)) return;
+      if (isAutomationAccount(uid)) return;
       const value = await limits();
       const cap = value.globalDailyTabCompleteTokenCap ?? defaultCap;
       // Only release a reservation that peek() actually recorded.
@@ -496,6 +553,178 @@ export function createTabCompleteGate(options: CreationGateOptions): TabComplete
         }
       } catch (error) {
         logWarn({ err: error, dateStr }, 'global tab-complete token counter unreachable; usage not recorded');
+      }
+    },
+  };
+}
+
+export interface SearchGate {
+  // Call before embedQuery; null uid is anonymous, counted globally only.
+  checkAndSpend(uid: string | null, dateStr: string): Promise<CreationGateOutcome>;
+}
+
+// Same chassis as the editing and chat gates, guarding query embeddings.
+export function createSearchGate(options: CreationGateOptions): SearchGate {
+  const { store } = options;
+  const now = options.now ?? Date.now;
+  const ttlMs = options.ttlMs ?? DEFAULT_CREATION_LIMITS_TTL_MS;
+  const defaultCap = resolveDefaultGlobalDailySearchEmbeddingCap(options.defaultGlobalDailyCap);
+  const logWarn = options.logWarn ?? (() => {});
+
+  const defaults: CreationLimits = {
+    paused: false,
+    globalDailySubmissionCap: null,
+    editingPaused: false,
+    globalDailyEditCap: null,
+    searchPaused: false,
+    globalDailySearchEmbeddingCap: null,
+    managedDailyCap: null,
+    managedDailyUserCap: null,
+  };
+  let cache: { value: CreationLimits; expiresAt: number } | null = null;
+
+  async function limits(): Promise<CreationLimits> {
+    if (cache && cache.expiresAt > now()) return cache.value;
+    try {
+      const stored = (await store.getCreationLimits()) ?? defaults;
+      cache = { value: stored, expiresAt: now() + ttlMs };
+      return stored;
+    } catch (error) {
+      if (cache) {
+        logWarn({ err: error }, 'creation limits unreadable; search gate using the last known values');
+        return cache.value;
+      }
+      logWarn({ err: error }, 'creation limits unreadable and never read; search gate using defaults');
+      return defaults;
+    }
+  }
+
+  return {
+    async checkAndSpend(uid, dateStr) {
+      if (uid !== null && isAutomationAccount(uid)) return spendBotAllowance(store, dateStr, logWarn);
+      const value = await limits();
+      if (value.searchPaused) return { allowed: false, reason: 'paused' };
+      const cap = value.globalDailySearchEmbeddingCap ?? defaultCap;
+      if (cap <= 0) return { allowed: false, reason: 'over_capacity' };
+      try {
+        const spent = await store.checkAndIncrementGlobalSearchEmbeddings(dateStr, cap);
+        if (!spent.allowed) {
+          logWarn(
+            { dateStr, cap, current: spent.current },
+            'global daily search embedding cap reached; serving search without embeddings',
+          );
+          return { allowed: false, reason: 'over_capacity' };
+        }
+        if (spent.current >= Math.ceil(cap * 0.8)) {
+          logWarn({ dateStr, cap, current: spent.current }, 'global daily search embedding cap is over 80% spent');
+        }
+        return { allowed: true };
+      } catch (error) {
+        // A blip is not over capacity; admitting it must stay greppable.
+        logWarn(
+          { err: error, dateStr },
+          'global search embedding counter unreachable; admitting the request uncounted',
+        );
+        return { allowed: true };
+      }
+    },
+  };
+}
+
+// Each gate run is a 30-minute E2_HIGHCPU_8 build; nothing counted them.
+export const DEFAULT_GLOBAL_DAILY_GATE_RUN_CAP = 400;
+
+// Same not-configured semantics as the submission cap resolver above.
+export function resolveDefaultGlobalDailyGateRunCap(override?: number, env: NodeJS.ProcessEnv = process.env): number {
+  if (typeof override === 'number' && Number.isFinite(override) && override >= 0) return override;
+  const raw = env.GLOBAL_DAILY_GATE_RUN_CAP?.trim();
+  if (raw) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return DEFAULT_GLOBAL_DAILY_GATE_RUN_CAP;
+}
+
+export interface GateRunGate {
+  // Spends a gate-build slot immediately before one starts.
+  checkAndSpend(uid: string, dateStr: string): Promise<CreationGateOutcome>;
+  // Read-only headroom, for refusing a delivery before it writes anything.
+  peek(uid: string, dateStr: string): Promise<CreationGateOutcome>;
+}
+
+// Same chassis as the other breakers, guarding Cloud Build minutes.
+export function createGateRunGate(options: CreationGateOptions): GateRunGate {
+  const { store } = options;
+  const now = options.now ?? Date.now;
+  const ttlMs = options.ttlMs ?? DEFAULT_CREATION_LIMITS_TTL_MS;
+  const defaultCap = resolveDefaultGlobalDailyGateRunCap(options.defaultGlobalDailyCap);
+  const logWarn = options.logWarn ?? (() => {});
+
+  const defaults: CreationLimits = {
+    paused: false,
+    globalDailySubmissionCap: null,
+    editingPaused: false,
+    globalDailyEditCap: null,
+    gatePaused: false,
+    globalDailyGateRunCap: null,
+    managedDailyCap: null,
+    managedDailyUserCap: null,
+  };
+  let cache: { value: CreationLimits; expiresAt: number } | null = null;
+
+  async function limits(): Promise<CreationLimits> {
+    if (cache && cache.expiresAt > now()) return cache.value;
+    try {
+      const stored = (await store.getCreationLimits()) ?? defaults;
+      cache = { value: stored, expiresAt: now() + ttlMs };
+      return stored;
+    } catch (error) {
+      if (cache) {
+        logWarn({ err: error }, 'creation limits unreadable; gate-run gate using the last known values');
+        return cache.value;
+      }
+      logWarn({ err: error }, 'creation limits unreadable and never read; gate-run gate using defaults');
+      return defaults;
+    }
+  }
+
+  return {
+    async peek(uid, dateStr) {
+      if (isAutomationAccount(uid)) return { allowed: true };
+      const value = await limits();
+      if (value.gatePaused) return { allowed: false, reason: 'paused' };
+      const cap = value.globalDailyGateRunCap ?? defaultCap;
+      if (cap <= 0) return { allowed: false, reason: 'over_capacity' };
+      try {
+        const current = await store.getGlobalGateRunCount(dateStr);
+        return current >= cap ? { allowed: false, reason: 'over_capacity' } : { allowed: true };
+      } catch (error) {
+        // Never authoritative: checkAndSpend decides when the build actually starts.
+        logWarn({ err: error, dateStr }, 'global gate-run counter unreachable; skipping the headroom peek');
+        return { allowed: true };
+      }
+    },
+
+    async checkAndSpend(uid, dateStr) {
+      if (isAutomationAccount(uid)) return spendBotAllowance(store, dateStr, logWarn);
+      const value = await limits();
+      if (value.gatePaused) return { allowed: false, reason: 'paused' };
+      const cap = value.globalDailyGateRunCap ?? defaultCap;
+      if (cap <= 0) return { allowed: false, reason: 'over_capacity' };
+      try {
+        const spent = await store.checkAndIncrementGlobalGateRuns(dateStr, cap);
+        if (!spent.allowed) {
+          logWarn({ dateStr, cap, current: spent.current }, 'global daily gate-run cap reached; refusing deliveries');
+          return { allowed: false, reason: 'over_capacity' };
+        }
+        if (spent.current >= Math.ceil(cap * 0.8)) {
+          logWarn({ dateStr, cap, current: spent.current }, 'global daily gate-run cap is over 80% spent');
+        }
+        return { allowed: true };
+      } catch (error) {
+        // A blip must not stop deliveries; other caps still hold.
+        logWarn({ err: error, dateStr }, 'global gate-run counter unreachable; admitting the delivery');
+        return { allowed: true };
       }
     },
   };

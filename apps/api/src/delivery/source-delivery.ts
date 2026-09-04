@@ -1,4 +1,4 @@
-import { selfBuildDeliveryCap } from '../platform/self-build-delivery-cap.js';
+import { selfBuildDeliveryCap, selfBuildJobDeliveryCap } from '../platform/self-build-delivery-cap.js';
 import {
   asDeliveryLogger,
   builderLabelFromRecord,
@@ -57,7 +57,7 @@ export interface SourceDeliveryAccepted {
 
 export type SourceDeliveryRejected = {
   accepted: false;
-  rejected: 'stopped' | 'rate_limited' | 'delivery_cap';
+  rejected: 'stopped' | 'rate_limited' | 'delivery_cap' | 'job_delivery_cap' | 'gate_capacity';
   deliveryCap?: number;
   deliveriesUsed?: number;
 };
@@ -131,10 +131,18 @@ export interface SourceDeliveryServiceOptions {
   }) => Promise<TypecheckPreflightResult>;
   sharedSourcesFromKitTree: (tree: KitTree) => Record<string, string>;
   typecheckPreflightMaxRefusals: number;
+  // Platform-wide daily ceiling on gate builds. Absent means uncounted.
+  gateRunGate?: {
+    checkAndSpend(uid: string, dateStr: string): Promise<{ allowed: boolean }>;
+    peek(uid: string, dateStr: string): Promise<{ allowed: boolean }>;
+  } | null;
 }
 
 const DEFAULT_MAX_SUBMITS_PER_WINDOW = 20;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+
+// When the map passes this, sweep the entries whose window has emptied.
+const MAX_TRACKED_BUILDS = 500;
 
 // Matches agent-channel.ts's MAX_EVENT_TEXT — same field, same reader, same cap.
 const MAX_DELIVERY_EVENT_TEXT = 300;
@@ -221,6 +229,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
   const maxSubmitsPerWindow = options.maxSubmitsPerWindow ?? DEFAULT_MAX_SUBMITS_PER_WINDOW;
   const submitsByBuild = new Map<number, number[]>();
 
+  // Burst smoothing only: in-memory, so the durable caps do the real work.
   function isRateLimited(jobId: number): boolean {
     const currentTime = now();
     const hits = (submitsByBuild.get(jobId) ?? []).filter(
@@ -232,6 +241,14 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
     }
     hits.push(currentTime);
     submitsByBuild.set(jobId, hits);
+    // Drop emptied windows so the map cannot grow forever.
+    if (submitsByBuild.size > MAX_TRACKED_BUILDS) {
+      for (const [key, timestamps] of submitsByBuild) {
+        if (timestamps.every((timestamp) => currentTime - timestamp >= RATE_LIMIT_WINDOW_MS)) {
+          submitsByBuild.delete(key);
+        }
+      }
+    }
     return false;
   }
 
@@ -265,6 +282,13 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       if (stopReason(record)) return { accepted: false, rejected: 'stopped' };
       if (isRateLimited(input.jobId)) return { accepted: false, rejected: 'rate_limited' };
 
+      // Read-only: the slot is spent where a build actually starts.
+      if (options.gateRunGate) {
+        const dateStr = new Date(now()).toISOString().slice(0, 10);
+        const headroom = await options.gateRunGate.peek(record.ownerUid, dateStr);
+        if (!headroom.allowed) return { accepted: false, rejected: 'gate_capacity' };
+      }
+
       if (record.builder === 'self') {
         const cap = selfBuildDeliveryCap();
         const used = record.roundDeliveryCount ?? 0;
@@ -274,6 +298,17 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
             rejected: 'delivery_cap',
             deliveryCap: cap,
             deliveriesUsed: used,
+          };
+        }
+        // The per-round cap resets on reopen; this one does not.
+        const jobCap = selfBuildJobDeliveryCap();
+        const jobUsed = record.jobDeliveryCount ?? 0;
+        if (jobUsed >= jobCap) {
+          return {
+            accepted: false,
+            rejected: 'job_delivery_cap',
+            deliveryCap: jobCap,
+            deliveriesUsed: jobUsed,
           };
         }
         if (!input.kitEngineRef) {
@@ -503,6 +538,12 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
           .catch((err: unknown) => {
             options.log?.warn?.({ err, slug: input.slug, version }, 'candidate preview generation failed');
           });
+      }
+
+      // Spent here: a refused or invalid delivery starts no build.
+      if (options.gateRunGate) {
+        const dateStr = new Date(now()).toISOString().slice(0, 10);
+        await options.gateRunGate.checkAndSpend(record.ownerUid, dateStr);
       }
 
       const gate = await options.onSourcesDelivered?.({

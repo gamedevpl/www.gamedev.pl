@@ -46,6 +46,14 @@ export interface CreationLimits {
   globalDailyChatCap?: number | null;
   // Refuse the tab-complete ghost-text lane outright (TA-*); Play/editing untouched.
   tabCompletePaused?: boolean;
+  // Refuse semantic search; the client keeps its own local match.
+  searchPaused?: boolean;
+  // Refuse to start new gate builds; delivered sources are kept, not lost.
+  gatePaused?: boolean;
+  // Daily gate builds, everyone together. Each is a 30-minute E2_HIGHCPU_8 run.
+  globalDailyGateRunCap?: number | null;
+  // Daily query embeddings, everyone together — anonymous traffic's only ceiling.
+  globalDailySearchEmbeddingCap?: number | null;
   // Shared daily token ceiling for ghost-text completion, everyone together.
   globalDailyTabCompleteTokenCap?: number | null;
   // Switches the `platform` option; `auto` defers to whether a backend exists.
@@ -58,6 +66,8 @@ export interface CreationLimits {
   managedDailyUserCap: number | null;
   // Round 0's kill switch; no env var exists for it.
   seedingMode?: 'auto' | 'off';
+  // Daily seed pipelines, everyone together. Each is the priciest call we make.
+  globalDailySeedCap?: number | null;
   // Runtime override; unset defers to SEED_PROVIDER. Free-form: providers self-register.
   seedProviderOverride?: string | null;
   /** Who last changed this and when, so a leftover pause is legible as a leftover. */
@@ -95,4 +105,10 @@ export interface UsageCounters {
   managedBuilds: number;
   // Ghost-text completion calls today (TA-01), one per model call.
   tabCompletes: number;
+  // Semantic catalog searches today, one per paid query embedding. Signed-in only.
+  searchQueries: number;
+  // World entries written today; each moderates its text fields.
+  worldWrites: number;
+  // Remix model calls today. Studio's lanes count separately, under `assists`.
+  remixEdits: number;
 }

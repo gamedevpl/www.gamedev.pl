@@ -5,7 +5,7 @@ export interface RoundBudgetStore {
   // Increments and returns how many seed regenerations this job has asked for.
   incrementSeedRegenerations(jobId: number): Promise<number>;
 
-  // Increments and returns the per-round sources-delivery count.
+  // Increments the per-round and whole-job sources-delivery counts.
   incrementRoundDeliveryCount(jobId: number): Promise<number>;
 
   // Bumps the typecheck-preflight refusal count for this round.
@@ -39,7 +39,8 @@ export class InMemoryRoundBudgetStore implements RoundBudgetStore {
     const sub = this.submissions.get(jobId);
     if (!sub) return 0;
     const roundDeliveryCount = (sub.roundDeliveryCount ?? 0) + 1;
-    this.submissions.set(jobId, { ...sub, roundDeliveryCount });
+    const jobDeliveryCount = (sub.jobDeliveryCount ?? 0) + 1;
+    this.submissions.set(jobId, { ...sub, roundDeliveryCount, jobDeliveryCount });
     return roundDeliveryCount;
   }
 
@@ -117,7 +118,8 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
       if (!snap.exists) return 0;
       const current = snap.data() as SubmissionRecord;
       const roundDeliveryCount = (current.roundDeliveryCount ?? 0) + 1;
-      tx.set(ref, { roundDeliveryCount }, { merge: true });
+      const jobDeliveryCount = (current.jobDeliveryCount ?? 0) + 1;
+      tx.set(ref, { roundDeliveryCount, jobDeliveryCount }, { merge: true });
       return roundDeliveryCount;
     });
   }

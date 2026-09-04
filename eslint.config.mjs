@@ -67,6 +67,15 @@ export default [
     },
   },
   {
+    // A paid call added on a hot path with no counter is what the 2026-08-04
+    // incident was; tests pin the ordering, this pins that one exists at all.
+    files: ['apps/api/src/**/*.ts'],
+    ignores: ['apps/api/src/**/*.test.ts'],
+    rules: {
+      'gamedev/metered-call': 'error',
+    },
+  },
+  {
     files: ['apps/cli/**/*.tsx'],
     plugins: { 'react-hooks': reactHooks },
     rules: {

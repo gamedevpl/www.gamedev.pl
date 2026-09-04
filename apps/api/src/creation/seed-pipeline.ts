@@ -103,6 +103,8 @@ export function createSeedPipeline(options: SeedPipelineOptions): SeedPipeline {
     if (!store) return { reason: 'no_store' };
     // Checked before the paid call, so "off" costs nothing.
     if (!(await seedAvailabilityGate.seedingEnabled())) return { reason: 'seeding_off' };
+    const seedDateStr = new Date(now()).toISOString().slice(0, 10);
+    if (!(await seedAvailabilityGate.spendSeedSlot(seedDateStr))) return { reason: 'seeding_off' };
     // Resolved before the try so a failed attempt still names the vendor.
     const provider = await seedAvailabilityGate.resolveProvider();
     try {

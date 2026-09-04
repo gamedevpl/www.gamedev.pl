@@ -241,6 +241,8 @@ export interface SubmissionRecord {
    * (`SELF_BUILD_DELIVERY_CAP`); resets when a new round opens.
    */
   roundDeliveryCount?: number;
+  // Deliveries over this job's whole life. Never reset — reopening is cheap.
+  jobDeliveryCount?: number;
   // Typecheck preflight refusals this round (cap 2).
   roundTypecheckPreflightRefusals?: number;
   // Grouped diagnostics when accepting past that cap.

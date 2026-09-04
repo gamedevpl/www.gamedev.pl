@@ -4,7 +4,14 @@ import type { AgentChannelOptions } from './agent-surface/agent-channel.js';
 import type { McpServerOptions } from './agent-surface/mcp-server.js';
 import { isMcpPresenceEventText } from './agent-surface/mcp-presence.js';
 import { registerNotifySweepRoutes } from './notifications/notify-sweep-routes.js';
-import { createCreationGate, createChatGate, type ChatGate, type CreationGate } from './creation/creation-limits.js';
+import {
+  createCreationGate,
+  createChatGate,
+  createGateRunGate,
+  createSearchGate,
+  type ChatGate,
+  type CreationGate,
+} from './creation/creation-limits.js';
 import {
   createManagedAvailabilityGate,
   type ManagedAvailabilityGate,
@@ -1116,6 +1123,16 @@ export async function registerSubmissionRoutes(
     githubClient,
     publishedRef,
     getCatalogEntries: catalogRoutes.getCatalogEntries,
+    now,
+    // Built here rather than in the route: `catalog` does not import `creation`.
+    searchGate: store
+      ? createSearchGate({
+          store,
+          now,
+          ttlMs: options.creationLimitsTtlMs,
+          logWarn: (payload, message) => app.log.warn(payload, message),
+        })
+      : null,
   });
   await registerCreatorMediaRoutes(app, {
     store,
@@ -1663,6 +1680,12 @@ export async function registerSubmissionRoutes(
           stagedPreviews: stagedPreviews ?? undefined,
           now,
           maxSubmitsPerWindow: options.agentChannel?.maxSubmitsPerWindow,
+          gateRunGate: createGateRunGate({
+            store,
+            now,
+            ttlMs: options.creationLimitsTtlMs,
+            logWarn: (payload, message) => app.log.warn(payload, message),
+          }),
           onSourcesDelivered: options.agentChannel?.onSourcesDelivered,
           onEvent: invalidateDeliveryCaches,
           log: app.log,

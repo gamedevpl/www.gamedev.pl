@@ -173,7 +173,13 @@ const FILE_BUCKET = {
   'kit-file-kind': 'platform',
   'seed-outcome': 'platform',
   'game-module-path': 'platform',
+  'agent-quota-headroom': 'agent-surface',
+  'quota-shards': 'platform',
   'proposal-limits': 'platform',
+  // A Store helper and a config resolver: every bucket may read them.
+  'quota-peek': 'platform',
+  'bot-allowance': 'platform',
+  'spend-brake': 'platform',
   'feedback-themes-contract': 'platform',
   'managed-builder-error': 'platform',
   'upload-error': 'platform',

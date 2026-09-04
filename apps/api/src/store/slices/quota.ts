@@ -46,6 +46,9 @@ export function emptyUsageCounters(): UsageCounters {
     chats: 0,
     managedBuilds: 0,
     tabCompletes: 0,
+    searchQueries: 0,
+    worldWrites: 0,
+    remixEdits: 0,
   };
 }
 
@@ -149,6 +152,16 @@ export class InMemoryQuotaStore implements QuotaStore {
           ? patch.globalDailyChatCap
           : (this.creationLimits?.globalDailyChatCap ?? null),
       tabCompletePaused: patch.tabCompletePaused ?? this.creationLimits?.tabCompletePaused ?? false,
+      searchPaused: patch.searchPaused ?? this.creationLimits?.searchPaused ?? false,
+      gatePaused: patch.gatePaused ?? this.creationLimits?.gatePaused ?? false,
+      globalDailyGateRunCap:
+        patch.globalDailyGateRunCap !== undefined
+          ? patch.globalDailyGateRunCap
+          : (this.creationLimits?.globalDailyGateRunCap ?? null),
+      globalDailySearchEmbeddingCap:
+        patch.globalDailySearchEmbeddingCap !== undefined
+          ? patch.globalDailySearchEmbeddingCap
+          : (this.creationLimits?.globalDailySearchEmbeddingCap ?? null),
       globalDailyTabCompleteTokenCap:
         patch.globalDailyTabCompleteTokenCap !== undefined
           ? patch.globalDailyTabCompleteTokenCap
@@ -165,6 +178,10 @@ export class InMemoryQuotaStore implements QuotaStore {
           ? patch.managedDailyUserCap
           : (this.creationLimits?.managedDailyUserCap ?? null),
       seedingMode: patch.seedingMode ?? this.creationLimits?.seedingMode ?? 'auto',
+      globalDailySeedCap:
+        patch.globalDailySeedCap !== undefined
+          ? patch.globalDailySeedCap
+          : (this.creationLimits?.globalDailySeedCap ?? null),
       seedProviderOverride:
         patch.seedProviderOverride !== undefined
           ? patch.seedProviderOverride
@@ -278,6 +295,11 @@ export class FirestoreQuotaStore implements QuotaStore {
       tabCompletePaused: data?.tabCompletePaused === true,
       globalDailyTabCompleteTokenCap:
         typeof data?.globalDailyTabCompleteTokenCap === 'number' ? data.globalDailyTabCompleteTokenCap : null,
+      searchPaused: data?.searchPaused === true,
+      gatePaused: data?.gatePaused === true,
+      globalDailyGateRunCap: typeof data?.globalDailyGateRunCap === 'number' ? data.globalDailyGateRunCap : null,
+      globalDailySearchEmbeddingCap:
+        typeof data?.globalDailySearchEmbeddingCap === 'number' ? data.globalDailySearchEmbeddingCap : null,
       managedBuilderMode:
         data?.managedBuilderMode === 'off' || data?.managedBuilderMode === 'coming_soon'
           ? data.managedBuilderMode
@@ -290,6 +312,7 @@ export class FirestoreQuotaStore implements QuotaStore {
       managedDailyCap: typeof data?.managedDailyCap === 'number' ? data.managedDailyCap : null,
       managedDailyUserCap: typeof data?.managedDailyUserCap === 'number' ? data.managedDailyUserCap : null,
       seedingMode: data?.seedingMode === 'off' ? 'off' : 'auto',
+      globalDailySeedCap: typeof data?.globalDailySeedCap === 'number' ? data.globalDailySeedCap : null,
       seedProviderOverride: typeof data?.seedProviderOverride === 'string' ? data.seedProviderOverride : null,
       ...(data?.updatedAt ? { updatedAt: data.updatedAt } : {}),
       ...(data?.updatedBy ? { updatedBy: data.updatedBy } : {}),
@@ -317,6 +340,16 @@ export class FirestoreQuotaStore implements QuotaStore {
         globalDailyChatCap:
           patch.globalDailyChatCap !== undefined ? patch.globalDailyChatCap : (existing.globalDailyChatCap ?? null),
         tabCompletePaused: patch.tabCompletePaused ?? existing.tabCompletePaused ?? false,
+        searchPaused: patch.searchPaused ?? existing.searchPaused ?? false,
+        gatePaused: patch.gatePaused ?? existing.gatePaused ?? false,
+        globalDailyGateRunCap:
+          patch.globalDailyGateRunCap !== undefined
+            ? patch.globalDailyGateRunCap
+            : (existing.globalDailyGateRunCap ?? null),
+        globalDailySearchEmbeddingCap:
+          patch.globalDailySearchEmbeddingCap !== undefined
+            ? patch.globalDailySearchEmbeddingCap
+            : (existing.globalDailySearchEmbeddingCap ?? null),
         globalDailyTabCompleteTokenCap:
           patch.globalDailyTabCompleteTokenCap !== undefined
             ? patch.globalDailyTabCompleteTokenCap
@@ -331,6 +364,8 @@ export class FirestoreQuotaStore implements QuotaStore {
         managedDailyUserCap:
           patch.managedDailyUserCap !== undefined ? patch.managedDailyUserCap : (existing.managedDailyUserCap ?? null),
         seedingMode: patch.seedingMode ?? existing.seedingMode ?? 'auto',
+        globalDailySeedCap:
+          patch.globalDailySeedCap !== undefined ? patch.globalDailySeedCap : (existing.globalDailySeedCap ?? null),
         seedProviderOverride:
           patch.seedProviderOverride !== undefined
             ? patch.seedProviderOverride

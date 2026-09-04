@@ -81,6 +81,11 @@ async function setup(opts?: {
   failPutCandidateSources?: boolean;
   translator?: Translator;
   stagedPreviews?: Pick<StagedPreviewPublisher, 'publishCandidate'>;
+  gateRunGate?: {
+    checkAndSpend(uid: string, dateStr: string): Promise<{ allowed: boolean }>;
+    peek(uid: string, dateStr: string): Promise<{ allowed: boolean }>;
+  } | null;
+  builder?: 'self';
 }) {
   const store = new InMemoryStore();
   await store.createSubmission(ISSUE, 'owner', 'Original title');
@@ -117,6 +122,7 @@ async function setup(opts?: {
     runTypecheckPreflight,
     sharedSourcesFromKitTree,
     typecheckPreflightMaxRefusals: TYPECHECK_PREFLIGHT_MAX_REFUSALS,
+    ...(opts?.gateRunGate !== undefined ? { gateRunGate: opts.gateRunGate } : {}),
   });
   const authority: SourceDeliveryAuthority = {
     backend: BACKEND,
@@ -165,6 +171,65 @@ describe('shared source delivery', () => {
       title: 'Managed Comet',
     });
     expect(record?.deliveredVersion).toBeUndefined();
+  });
+
+  it('refuses a delivery once the daily gate-build allowance is spent', async () => {
+    let allowed = true;
+    const { service, authority, gate } = await setup({
+      gateRunGate: { checkAndSpend: async () => ({ allowed }), peek: async () => ({ allowed }) },
+    });
+
+    const first = await service.deliver({
+      jobId: ISSUE,
+      slug: SLUG,
+      files: PREVIEW_FILES,
+      mode: 'preview',
+      backend: BACKEND,
+      authority,
+    });
+    expect(first).toMatchObject({ accepted: true });
+    expect(gate).toHaveBeenCalledTimes(1);
+
+    allowed = false;
+    const refused = await service.deliver({
+      jobId: ISSUE,
+      slug: SLUG,
+      files: PREVIEW_FILES,
+      mode: 'preview',
+      backend: BACKEND,
+      authority,
+    });
+    // A preview delivery is a 30-minute build too.
+    expect(refused).toEqual({ accepted: false, rejected: 'gate_capacity' });
+    expect(gate).toHaveBeenCalledTimes(1);
+  });
+
+  it('spends no gate slot for a delivery that never starts a build', async () => {
+    let spent = 0;
+    const { service, authority, gate } = await setup({
+      failPutCandidateSources: true,
+      gateRunGate: {
+        peek: async () => ({ allowed: true }),
+        checkAndSpend: async () => {
+          spent += 1;
+          return { allowed: true };
+        },
+      },
+    });
+    await expect(
+      service.deliver({
+        jobId: ISSUE,
+        slug: SLUG,
+        files: PREVIEW_FILES,
+        mode: 'preview',
+        backend: BACKEND,
+        authority,
+      }),
+    ).rejects.toThrow();
+
+    // The counter counts builds; a rejected delivery starts none.
+    expect(gate).not.toHaveBeenCalled();
+    expect(spent).toBe(0);
   });
 
   it('uses the same service for publish side effects and transition', async () => {

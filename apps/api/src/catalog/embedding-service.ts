@@ -79,7 +79,8 @@ export class VertexEmbeddingService {
     if (!trimmed) return [];
 
     const role = options.role ?? 'query';
-    const cacheKey = `${role}:${options.title ?? ''}:${trimmed}`;
+    // Normalised like knowledge-search: a debounced prompt else mints near-duplicates.
+    const cacheKey = `${role}:${options.title ?? ''}:${trimmed.toLowerCase().replace(/\s+/g, ' ')}`;
     const cached = this.cache.get(cacheKey);
     if (cached) return cached;
 
@@ -100,9 +101,7 @@ export class VertexEmbeddingService {
         if (role === 'query') {
           promptText = `task: search result | query: ${trimmed}`;
         } else {
-          promptText = options.title
-            ? `title: ${options.title} | text: ${trimmed}`
-            : `title: none | text: ${trimmed}`;
+          promptText = options.title ? `title: ${options.title} | text: ${trimmed}` : `title: none | text: ${trimmed}`;
         }
       }
 
