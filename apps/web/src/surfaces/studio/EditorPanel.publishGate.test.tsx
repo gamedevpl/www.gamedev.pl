@@ -10,10 +10,17 @@ import type { EditorDefinition, GameEditorState, StudioGame } from '../../studio
 const fetchGameEditor = vi.hoisted(() => vi.fn());
 const putEditorDraft = vi.hoisted(() => vi.fn());
 const publishEditorContent = vi.hoisted(() => vi.fn());
+const listMySubmissions = vi.hoisted(() => vi.fn());
+const getSubmissionStatus = vi.hoisted(() => vi.fn());
 
 vi.mock('../../studioApi.js', async () => {
   const actual = await vi.importActual<typeof import('../../studioApi.js')>('../../studioApi.js');
   return { ...actual, fetchGameEditor, putEditorDraft, publishEditorContent };
+});
+
+vi.mock('../../submissionApi.js', async () => {
+  const actual = await vi.importActual<typeof import('../../submissionApi.js')>('../../submissionApi.js');
+  return { ...actual, listMySubmissions, getSubmissionStatus };
 });
 
 vi.mock('../../visitTelemetry.js', () => ({ recordAssistStep: vi.fn(), recordEditorStep: vi.fn() }));
@@ -57,6 +64,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   act(() => root?.unmount());
   root = null;
   container.remove();
@@ -119,5 +127,45 @@ describe("EK2-29 — a controller's own checks gate Publish", () => {
     );
 
     expect(publishButton().disabled).toBe(false);
+  });
+});
+
+describe('EK2-29 — the not_sealed retry re-checks before it fires', () => {
+  it('refuses the queued retry when the game turns its checks red mid-wait', async () => {
+    vi.useFakeTimers();
+    const notSealed = Object.assign(new Error('not_sealed'), { status: 409, code: 'not_sealed' });
+    publishEditorContent.mockRejectedValueOnce(notSealed).mockResolvedValueOnce({ version: 'v2', jobId: 43 });
+    listMySubmissions.mockResolvedValue([
+      { token: 'round-1', slug: game.slug, title: game.title, createdAt: '', lastKnownStatus: 'building' },
+    ]);
+    getSubmissionStatus.mockResolvedValue({ status: 'building', phase: 'gating' });
+
+    await renderWithController(controllerState({ checks: { ok: true, problems: [] } }));
+    await act(async () => {
+      publishButton().click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(publishEditorContent).toHaveBeenCalledTimes(1);
+
+    // Checks go red while the retry still waits for the seal.
+    await act(async () => {
+      root!.render(
+        <EditorPanel
+          game={game}
+          controller={controllerState({ checks: { ok: false, problems: ['Needs at least one exit'] } })}
+          onOpenPlaytest={vi.fn()}
+          onBack={vi.fn()}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    getSubmissionStatus.mockResolvedValue({ status: 'in_review', phase: 'ready_for_review' });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+
+    // Still one — the retry bypasses the button, so the guard lives in publishNow.
+    expect(publishEditorContent).toHaveBeenCalledTimes(1);
   });
 });
