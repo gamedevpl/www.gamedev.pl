@@ -56,6 +56,7 @@ export interface WorldRoutesOptions {
   /** Absent (no games repo configured) makes every slug answer 404, like votes. */
   worlds?: WorldSchemaSource | null;
   contentChecker: ContentChecker;
+  now?: () => number;
 }
 
 /**
@@ -94,17 +95,58 @@ function toPublicEntry(entry: WorldEntryRecord, worldId: string, uid: string | u
 
 export async function registerWorldRoutes(app: FastifyInstance, options: WorldRoutesOptions): Promise<void> {
   const { store, worlds, contentChecker } = options;
+  const now = options.now ?? Date.now;
 
   // Lower than a save's. A world write is a deliberate player action — planting a
   // thing, leaving a note — not something a game loop emits, and the module coalesces
   // per key on a four-second timer. Anything above this rate is a bug or an attempt.
   const writeRateLimit = { max: 30, timeWindow: 60_000 };
 
+  // A read costs the whole collection, and game code sets the cadence.
+  const readRateLimit = { max: 60, timeWindow: 60_000 };
+
+  // Keyed by world, so a crowd costs one read, not many.
+  const CACHE_TTL_MS = 3_000;
+  // Cached raw: rows are shared, `mine` and `writable` are not.
+  const cache = new Map<string, { at: number; entries: WorldEntryRecord[] }>();
+  // One read in flight per world; the rest await it.
+  const reading = new Map<string, { rows: Promise<WorldEntryRecord[]>; stale: boolean }>();
+
+  // A write's rows beat any read already in flight.
+  function invalidate(worldId: string): void {
+    cache.delete(worldId);
+    const inFlight = reading.get(worldId);
+    if (inFlight) inFlight.stale = true;
+  }
+
+  async function entriesFor(worldId: string): Promise<WorldEntryRecord[]> {
+    // Swept on read, so an idle world holds nothing here.
+    for (const [id, entry] of cache) {
+      if (now() - entry.at >= CACHE_TTL_MS) cache.delete(id);
+    }
+    const hit = cache.get(worldId);
+    if (hit) return hit.entries;
+
+    // Else a cold window costs one read per simultaneous player.
+    const joined = reading.get(worldId);
+    if (joined) return joined.rows;
+
+    const started = {
+      rows: store.listWorldEntries(worldId).finally(() => reading.delete(worldId)),
+      stale: false,
+    };
+    reading.set(worldId, started);
+    const entries = await started.rows;
+    // A write landed mid-read; caching this would undo it.
+    if (!started.stale) cache.set(worldId, { at: now(), entries });
+    return entries;
+  }
+
   async function schemaFor(slug: string): Promise<WorldSchema | null> {
     return (await worlds?.getSchema(slug)) ?? null;
   }
 
-  app.get('/api/games/:slug/world', async (request, reply) => {
+  app.get('/api/games/:slug/world', { config: { rateLimit: readRateLimit } }, async (request, reply) => {
     const params = ParamsSchema.safeParse(request.params);
     if (!params.success) {
       return reply.status(400).send({ error: params.error.issues[0]?.message ?? 'invalid slug' });
@@ -116,7 +158,7 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
     if (!schema) return reply.status(404).send({ error: 'world not found' });
 
     const worldId = worldIdFor(params.data.slug);
-    const entries = await store.listWorldEntries(worldId);
+    const entries = await entriesFor(worldId);
     const uid = request.user?.uid;
     return reply.send({
       entries: entries.map((entry) => toPublicEntry(entry, worldId, uid)),
@@ -192,6 +234,8 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
     }
 
     const worldId = worldIdFor(params.data.slug);
+    // Their own change must not wait out the shared window.
+    invalidate(worldId);
     return reply.send({ ok: true, entry: toPublicEntry(result.entry, worldId, request.user.uid) });
   });
 
@@ -206,7 +250,9 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
     // No schema gate here, matching the save route's delete. If a game leaves the
     // catalog its entries are still something a player wrote, and "take my thing back"
     // must keep working — a 404 would strand a row nobody can reach.
-    const removed = await store.deleteWorldEntry(worldIdFor(params.data.slug), params.data.key, request.user.uid);
+    const worldId = worldIdFor(params.data.slug);
+    const removed = await store.deleteWorldEntry(worldId, params.data.key, request.user.uid);
+    invalidate(worldId);
     if (!removed) {
       // Also the answer for an entry that belongs to somebody else: not found and not
       // yours are the same sentence, so the route cannot be used to probe what exists.
