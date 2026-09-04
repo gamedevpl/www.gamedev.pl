@@ -118,6 +118,7 @@ import {
   type Store,
   type SubmissionRecord,
 } from './store.js';
+import { VertexNextIdeaGenerator, type NextIdeaGenerator } from './next-ideas.js';
 import {
   CREATOR_FEEDBACK_MARKER,
   countCreatorClarifications,
@@ -407,6 +408,10 @@ export interface SubmissionRoutesOptions {
   dailyFeedbackQuota?: number;
   /** Separate from submissions so improving a live game does not crowd out creating one. */
   dailyImprovementQuota?: number;
+  // Layer-2 idea chips (NP-1); fails open — undefined means always empty.
+  nextIdeaGenerator?: NextIdeaGenerator;
+  // Daily cap on explicit "show different ideas" chip regenerations.
+  dailyNextIdeasQuota?: number;
   // Fronts every feedback/improve message (chat-agent.ts). Always on when set.
   chatAgent?: StudioChatAgent;
   // The chat agent's own circuit breaker (creation-limits.ts); null disables.
@@ -728,6 +733,9 @@ export async function registerSubmissionRoutes(
   // Start small (docs/improvement-loop-plan.md): agent runs are scarce, and a published
   // improvement is a real implementer job — not a draft tweak.
   const dailyImprovementQuota = options.dailyImprovementQuota ?? Number(process.env.DAILY_IMPROVEMENT_QUOTA ?? '2');
+  // Layer-2 idea chips (NP-1) — lazy Vertex client, like chatAgent.
+  const nextIdeaGenerator = options.nextIdeaGenerator ?? new VertexNextIdeaGenerator();
+  const dailyNextIdeasQuota = options.dailyNextIdeasQuota ?? Number(process.env.DAILY_NEXT_IDEAS_QUOTA ?? '10');
   // See chat-agent.ts. Lazy Vertex client — cheap to construct unconditionally.
   const chatAgent = options.chatAgent ?? new VertexStudioChatAgent();
   const chatAgentLog = asChatAgentLogger(app.log);
@@ -2073,6 +2081,9 @@ export async function registerSubmissionRoutes(
   const statusRateLimitWindowMs = 60 * 1000;
   const maxStatusChecksPerWindow = 120;
   const statusChecksByIp = new Map<string, number[]>();
+  const nextIdeasRateLimitWindowMs = 60 * 1000;
+  const maxNextIdeasChecksPerWindow = 60;
+  const nextIdeasByIp = new Map<string, number[]>();
   /**
    * Used by `relayedMessageLocalization` and by nothing else in this file.
    *
@@ -4108,6 +4119,90 @@ export async function registerSubmissionRoutes(
       }
 
       return reply.send(await attachBuildEvents(status, issueNumber, locale));
+    },
+  );
+
+  // Layer-2 idea chips (NP-1): lazy-generated, cached per delivered version.
+  app.get(
+    '/api/submissions/:token/next-ideas',
+    { config: { rateLimit: { max: maxNextIdeasChecksPerWindow, timeWindow: nextIdeasRateLimitWindowMs } } },
+    async (request, reply) => {
+      if (!submissionTokenSecret || !store) {
+        return reply.status(503).send({ error: 'submissions are not configured' });
+      }
+
+      if (!checkUserAccess(request, reply)) {
+        return;
+      }
+
+      const token = z.string().parse((request.params as { token?: string }).token);
+      const regenerate = (request.query as { regenerate?: string } | undefined)?.regenerate === '1';
+      const currentTime = now();
+      if (
+        isRateLimited(nextIdeasByIp, request.ip, currentTime, maxNextIdeasChecksPerWindow, nextIdeasRateLimitWindowMs)
+      ) {
+        return reply.status(429).send({ error: 'too many requests, please try again later' });
+      }
+
+      let issueNumber: number;
+      try {
+        issueNumber = verifyToken(token, submissionTokenSecret);
+      } catch (error) {
+        if (error instanceof InvalidTokenError) {
+          return reply.status(400).send({ error: 'invalid submission token' });
+        }
+        throw error;
+      }
+
+      const record = await store.getSubmission(issueNumber);
+      if (!record) {
+        return reply.status(404).send({ error: 'submission not found' });
+      }
+
+      const published = Boolean(record.publishedAt);
+      // Live game: creator-only, like the improve route's ownership check.
+      if (published && record.ownerUid !== request.user!.uid) {
+        return reply.status(403).send({ error: 'only the creator can see improvement ideas' });
+      }
+
+      const version = published ? (record.deliveredVersion ?? record.previewVersion) : record.deliveredVersion;
+      // Nothing delivered yet (or no concept to reason from) — nothing to suggest.
+      if (!version || !record.spec) {
+        return reply.send({ ideas: [] });
+      }
+
+      const cached = !regenerate && record.nextIdeasVersion === version ? record.nextIdeas : undefined;
+      if (cached) {
+        return reply.send({ ideas: cached });
+      }
+
+      if (regenerate) {
+        const dateStr = new Date(currentTime).toISOString().slice(0, 10);
+        const quota = await store.checkAndIncrementQuota(request.user!.uid, dateStr, dailyNextIdeasQuota, 'nextIdeas');
+        if (!quota.allowed) {
+          if (quota.tier === 'blocked') {
+            return reply.status(403).send({ error: 'account is blocked' });
+          }
+          return reply.status(429).send({ error: 'daily idea quota exceeded' });
+        }
+      }
+
+      const ideas = await nextIdeaGenerator.generate({
+        spec: record.spec,
+        qa: record.qa,
+        title: record.title,
+        published,
+        locale: record.locale,
+      });
+
+      try {
+        await store.setSubmissionNextIdeas(issueNumber, ideas, version);
+      } catch (writeError) {
+        // The chips still render this once; only the caching is lost.
+        request.log.error({ err: writeError }, 'failed to cache next-idea chips');
+      }
+
+      return reply.send({ ideas });
     },
   );
 

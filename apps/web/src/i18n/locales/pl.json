@@ -897,6 +897,7 @@
       "composerHintPublished": "Opisz ulepszenie",
       "debugCi": "Napraw testy",
       "debugCiPrompt": "Napraw nieudane testy i wyślij poprawioną wersję.",
+      "ideasRegenerate": "Pokaż inne pomysły",
       "placeholder": "np. przyspiesz samochód, dodaj drugą trasę, użyj jaśniejszych kolorów…",
       "submit": "Wyślij uwagi",
       "stopTitle": "Zatrzymaj bieżącą budowę i przełącz się na swojego agenta",

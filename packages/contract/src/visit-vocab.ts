@@ -66,6 +66,10 @@ export const STUDIO_STEPS = [
   'gate_verdict',
   'round_opened',
   'workspace_checkout',
+  // NP-1: Layer-2 next-prompt idea chips.
+  'idea_chip_shown',
+  'idea_chip_used',
+  'idea_chip_regenerated',
 ] as const;
 export type StudioStep = (typeof STUDIO_STEPS)[number];
 

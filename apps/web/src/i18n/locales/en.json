@@ -889,6 +889,7 @@
       "composerHintPublished": "Describe an improvement",
       "debugCi": "Fix checks",
       "debugCiPrompt": "Fix the failing checks and submit a fixed build.",
+      "ideasRegenerate": "Show different ideas",
       "placeholder": "e.g. make the car faster, add a second track, use brighter colours…",
       "submit": "Send feedback",
       "stopTitle": "Stop the current build and switch to your agent",

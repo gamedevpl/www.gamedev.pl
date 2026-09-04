@@ -17,6 +17,7 @@ import { createManagedAvailabilityGate, type ManagedAvailabilityGate } from './m
 import { StubStudioChatAgent, type ChatAgentRequest, type StudioChatAgent } from './chat-agent.js';
 import type { ChatGate } from './creation-limits.js';
 import type { InternalAuthVerifier } from './internal-auth.js';
+import { StubNextIdeaGenerator, type NextIdeaGenerator } from './next-ideas.js';
 
 const secret = 'submission-secret';
 const repo = 'gamedevpl/www.gamedev.pl-games';
@@ -145,6 +146,8 @@ async function createApp(params: {
   chatAgent?: StudioChatAgent;
   dailyChatQuota?: number;
   chatGate?: ChatGate | null;
+  nextIdeaGenerator?: NextIdeaGenerator;
+  dailyNextIdeasQuota?: number;
 }): Promise<{ app: FastifyInstance; store: Store; authHeaders: Record<string, string> }> {
   const store = params.store ?? new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
@@ -175,6 +178,8 @@ async function createApp(params: {
       chatAgent: params.chatAgent ?? new StubStudioChatAgent({ kind: 'build' }),
       ...(params.dailyChatQuota !== undefined ? { dailyChatQuota: params.dailyChatQuota } : {}),
       ...(params.chatGate !== undefined ? { chatGate: params.chatGate } : {}),
+      nextIdeaGenerator: params.nextIdeaGenerator ?? new StubNextIdeaGenerator(),
+      ...(params.dailyNextIdeasQuota !== undefined ? { dailyNextIdeasQuota: params.dailyNextIdeasQuota } : {}),
     },
   });
   return { app, store, authHeaders: getAuthHeaders('g:test-user') };
@@ -2129,8 +2134,23 @@ describe('submission routes', () => {
     expect(status.statusCode).toBe(200);
     // `total` is the bar's denominator: preview 6, publish 12.
     expect(status.json().recentBuilds).toEqual([
-      { version: 'v3', createdAt: '2026-08-10T09:00:00.000Z', mode: 'preview', verdict: 'red', status: 'kit_outdated', total: 6, finishedInMs: 120000 },
-      { version: 'v2', createdAt: '2026-08-10T08:00:00.000Z', mode: 'publish', verdict: 'green', total: 12, finishedInMs: 120000 },
+      {
+        version: 'v3',
+        createdAt: '2026-08-10T09:00:00.000Z',
+        mode: 'preview',
+        verdict: 'red',
+        status: 'kit_outdated',
+        total: 6,
+        finishedInMs: 120000,
+      },
+      {
+        version: 'v2',
+        createdAt: '2026-08-10T08:00:00.000Z',
+        mode: 'publish',
+        verdict: 'green',
+        total: 12,
+        finishedInMs: 120000,
+      },
       { version: 'v1', createdAt: '2026-08-10T07:00:00.000Z', mode: 'publish', verdict: 'pending', total: 12 },
     ]);
 
@@ -3492,6 +3512,195 @@ describe('published game route', () => {
     await app.inject({ method: 'GET', url: '/api/games/foo' });
     expect(getGameSources).toHaveBeenCalledTimes(2);
 
+    await app.close();
+  });
+});
+
+describe('GET /api/submissions/:token/next-ideas', () => {
+  function countingGenerator(ideas: Awaited<ReturnType<NextIdeaGenerator['generate']>> = []) {
+    const state = { calls: 0 };
+    const generator: NextIdeaGenerator = {
+      async generate() {
+        state.calls += 1;
+        return ideas;
+      },
+    };
+    return { generator, state };
+  }
+
+  const sampleIdeas = [
+    {
+      id: 'idea_0',
+      label: { en: 'Add music', pl: 'Dodaj muzykę' },
+      prompt: { en: 'Add background music', pl: 'Dodaj muzykę w tle' },
+    },
+  ];
+
+  it('rejects unauthenticated requests with 401', async () => {
+    const { app } = await createApp({ submissionTokenSecret: secret });
+    const res = await app.inject({ method: 'GET', url: `/api/submissions/${mintToken(123, secret)}/next-ideas` });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('rejects an invalid token with 400', async () => {
+    const { app, authHeaders } = await createApp({ submissionTokenSecret: secret });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/submissions/not-a-token/next-ideas',
+      headers: authHeaders,
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('returns 404 for a submission that does not exist', async () => {
+    const { app, authHeaders } = await createApp({ submissionTokenSecret: secret });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(123, secret)}/next-ideas`,
+      headers: authHeaders,
+    });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('answers with no ideas, and no generator call, before anything is delivered', async () => {
+    const store = new InMemoryStore();
+    const { generator, state } = countingGenerator(sampleIdeas);
+    const { app, authHeaders } = await createApp({
+      submissionTokenSecret: secret,
+      store,
+      nextIdeaGenerator: generator,
+    });
+    await store.createSubmission(123, 'g:test-user', 'Sky Dodge');
+    await store.setSubmissionBrief(123, { spec: 'Dodge falling rocks in a canyon.', qa: [] });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(123, secret)}/next-ideas`,
+      headers: authHeaders,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ideas: [] });
+    expect(state.calls).toBe(0);
+    await app.close();
+  });
+
+  it('generates once for a delivered draft, then serves the cache on the next read', async () => {
+    const store = new InMemoryStore();
+    const { generator, state } = countingGenerator(sampleIdeas);
+    const { app, authHeaders } = await createApp({
+      submissionTokenSecret: secret,
+      store,
+      nextIdeaGenerator: generator,
+    });
+    await store.createSubmission(123, 'g:test-user', 'Sky Dodge');
+    await store.setSubmissionBrief(123, { spec: 'Dodge falling rocks in a canyon.', qa: [] });
+    await store.setSubmissionDeliveredVersion(123, 'v1');
+
+    const token = mintToken(123, secret);
+    const first = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}/next-ideas`,
+      headers: authHeaders,
+    });
+    expect(first.statusCode).toBe(200);
+    expect(first.json()).toEqual({ ideas: sampleIdeas });
+
+    const second = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}/next-ideas`,
+      headers: authHeaders,
+    });
+    expect(second.statusCode).toBe(200);
+    expect(second.json()).toEqual({ ideas: sampleIdeas });
+
+    expect(state.calls).toBe(1);
+    await app.close();
+  });
+
+  it('regenerates on ?regenerate=1 and spends the daily quota', async () => {
+    const store = new InMemoryStore();
+    const { generator, state } = countingGenerator(sampleIdeas);
+    const { app, authHeaders } = await createApp({
+      submissionTokenSecret: secret,
+      store,
+      nextIdeaGenerator: generator,
+      dailyNextIdeasQuota: 1,
+    });
+    await store.createSubmission(123, 'g:test-user', 'Sky Dodge');
+    await store.setSubmissionBrief(123, { spec: 'Dodge falling rocks in a canyon.', qa: [] });
+    await store.setSubmissionDeliveredVersion(123, 'v1');
+    const token = mintToken(123, secret);
+
+    await app.inject({ method: 'GET', url: `/api/submissions/${token}/next-ideas`, headers: authHeaders });
+    expect(state.calls).toBe(1);
+
+    const regenerated = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}/next-ideas?regenerate=1`,
+      headers: authHeaders,
+    });
+    expect(regenerated.statusCode).toBe(200);
+    expect(state.calls).toBe(2);
+
+    const overQuota = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}/next-ideas?regenerate=1`,
+      headers: authHeaders,
+    });
+    expect(overQuota.statusCode).toBe(429);
+    expect(state.calls).toBe(2);
+    await app.close();
+  });
+
+  it('serves the published surface only to the game’s owner', async () => {
+    const store = new InMemoryStore();
+    const { generator } = countingGenerator(sampleIdeas);
+    await store.upsertUser({ uid: 'g:someone-else' });
+    const { app, authHeaders } = await createApp({
+      submissionTokenSecret: secret,
+      store,
+      nextIdeaGenerator: generator,
+    });
+    await store.createSubmission(123, 'g:someone-else', 'Sky Dodge');
+    await store.setSubmissionSlug(123, 'sky-dodge');
+    await store.setSubmissionBrief(123, { spec: 'Dodge falling rocks in a canyon.', qa: [] });
+    await store.setSubmissionDeliveredVersion(123, 'v1');
+    await store.setSubmissionPublishedAt(123, '2026-07-20T00:00:00.000Z');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(123, secret)}/next-ideas`,
+      headers: authHeaders,
+    });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('serves the published surface to the owner', async () => {
+    const store = new InMemoryStore();
+    const { generator, state } = countingGenerator(sampleIdeas);
+    const { app, authHeaders } = await createApp({
+      submissionTokenSecret: secret,
+      store,
+      nextIdeaGenerator: generator,
+    });
+    await store.createSubmission(123, 'g:test-user', 'Sky Dodge');
+    await store.setSubmissionSlug(123, 'sky-dodge');
+    await store.setSubmissionBrief(123, { spec: 'Dodge falling rocks in a canyon.', qa: [] });
+    await store.setSubmissionDeliveredVersion(123, 'v1');
+    await store.setSubmissionPublishedAt(123, '2026-07-20T00:00:00.000Z');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(123, secret)}/next-ideas`,
+      headers: authHeaders,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ideas: sampleIdeas });
+    expect(state.calls).toBe(1);
     await app.close();
   });
 });

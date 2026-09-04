@@ -11,6 +11,7 @@ import { HANDOFF_STALE_MS } from './StudioConnectCard.js';
 import {
   abandonSubmission,
   getChannelPlayable,
+  getNextIdeas,
   getSubmissionPreview,
   getSubmissionStatus,
   handoffToPlatform,
@@ -41,6 +42,8 @@ vi.mock('./submissionApi', async () => {
     handoffToSelf: vi.fn(),
     submitFeedback: vi.fn(),
     abandonSubmission: vi.fn(),
+    // Defaults to no ideas, matching the real fail-open endpoint.
+    getNextIdeas: vi.fn().mockResolvedValue([]),
   };
 });
 
@@ -51,6 +54,7 @@ const mockedHandoffToPlatform = vi.mocked(handoffToPlatform);
 const mockedHandoffToSelf = vi.mocked(handoffToSelf);
 const mockedSubmitFeedback = vi.mocked(submitFeedback);
 const mockedAbandonSubmission = vi.mocked(abandonSubmission);
+const mockedGetNextIdeas = vi.mocked(getNextIdeas);
 const mockedSubmitImprovement = vi.mocked(submitImprovement);
 const mockedRecordStudioStep = vi.mocked(recordStudioStep);
 
@@ -2841,6 +2845,102 @@ describe('SubmissionStatusView expectations & failures', () => {
       'gate-red-token',
       'Fix the failing checks and submit a fixed build.',
     );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('shows platform-suggested idea chips that only prefill the composer', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+    });
+    mockedGetNextIdeas.mockResolvedValueOnce([
+      {
+        id: 'idea_0',
+        label: { en: 'Add music', pl: 'Dodaj muzykę' },
+        prompt: { en: 'Add background music to the menu.', pl: 'Dodaj muzykę w tle menu.' },
+      },
+    ]);
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'ideas-token', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(mockedGetNextIdeas).toHaveBeenCalledWith('ideas-token');
+    const chip = container.querySelector<HTMLButtonElement>('.status-feedback-idea-chip');
+    expect(chip?.textContent).toContain('Add music');
+
+    const textarea = container.querySelector<HTMLTextAreaElement>('.status-feedback-input');
+    expect(textarea?.value).toBe('');
+
+    await act(async () => {
+      chip?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+
+    expect(textarea?.value).toBe('Add background music to the menu.');
+    expect(mockedSubmitFeedback).not.toHaveBeenCalled();
+    expect(mockedRecordStudioStep).toHaveBeenCalledWith('idea_chip_used', 'platform');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('regenerates ideas on the ghost chip without spending a send', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+    });
+    mockedGetNextIdeas.mockResolvedValueOnce([
+      {
+        id: 'idea_0',
+        label: { en: 'Add music', pl: 'Dodaj muzykę' },
+        prompt: { en: 'Add background music.', pl: 'Dodaj muzykę.' },
+      },
+    ]);
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'ideas-token', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    mockedGetNextIdeas.mockResolvedValueOnce([
+      {
+        id: 'idea_1',
+        label: { en: 'Add a boss fight', pl: 'Dodaj walkę z bossem' },
+        prompt: { en: 'Add a boss fight at the end.', pl: 'Dodaj walkę z bossem na koniec.' },
+      },
+    ]);
+
+    const ghost = container.querySelector<HTMLButtonElement>('.status-feedback-quick-action-ghost');
+    expect(ghost).not.toBeNull();
+
+    await act(async () => {
+      ghost?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+
+    expect(mockedGetNextIdeas).toHaveBeenCalledWith('ideas-token', { regenerate: true });
+    expect(container.querySelector('.status-feedback-idea-chip')?.textContent).toContain('Add a boss fight');
+    expect(mockedSubmitFeedback).not.toHaveBeenCalled();
 
     await act(async () => {
       root.unmount();

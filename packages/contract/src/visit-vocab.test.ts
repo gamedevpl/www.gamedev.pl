@@ -94,6 +94,9 @@ describe('visit vocab', () => {
       'gate_verdict',
       'round_opened',
       'workspace_checkout',
+      'idea_chip_shown',
+      'idea_chip_used',
+      'idea_chip_regenerated',
     ]);
   });
 

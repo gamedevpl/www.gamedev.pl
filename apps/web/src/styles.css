@@ -6953,6 +6953,38 @@ a.user-name--profile:focus-visible {
   outline-offset: 2px;
 }
 
+.status-feedback-idea-chips {
+  flex-wrap: wrap;
+}
+
+.status-feedback-idea-chip {
+  border-color: color-mix(in srgb, var(--accent-blue, #38bdf8) 38%, transparent);
+  background: color-mix(in srgb, var(--accent-blue, #38bdf8) 10%, transparent);
+  color: var(--accent-blue, #38bdf8);
+}
+
+.status-feedback-idea-chip:hover {
+  border-color: color-mix(in srgb, var(--accent-blue, #38bdf8) 62%, transparent);
+  background: color-mix(in srgb, var(--accent-blue, #38bdf8) 16%, transparent);
+}
+
+.status-feedback-idea-chip:focus-visible {
+  outline-color: var(--accent-blue, #38bdf8);
+}
+
+.status-feedback-quick-action-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted, #94a3b8);
+  font-weight: 600;
+}
+
+.status-feedback-quick-action-ghost:hover {
+  border-color: transparent;
+  color: var(--accent-blue, #38bdf8);
+  background: color-mix(in srgb, var(--accent-blue, #38bdf8) 8%, transparent);
+}
+
 .status-composer.is-compact.is-empty .status-feedback-input {
   grid-column: 1;
   grid-row: auto;
@@ -13023,7 +13055,6 @@ button.builder-mode-selector:disabled {
     animation: none;
   }
 }
-
 
 .studio-strip-phase-pill {
   flex: none;

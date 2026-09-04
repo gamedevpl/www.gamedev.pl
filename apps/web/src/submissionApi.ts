@@ -319,6 +319,25 @@ export async function getSubmissionStatus(token: string, locale?: string): Promi
   return (await response.json()) as SubmissionStatus;
 }
 
+// Layer-2 idea chips (NP-1) — server-generated, bilingual, prefill-only.
+export type NextIdea = {
+  id: string;
+  label: { en: string; pl: string };
+  prompt: { en: string; pl: string };
+};
+
+export async function getNextIdeas(token: string, options: { regenerate?: boolean } = {}): Promise<NextIdea[]> {
+  const query = options.regenerate ? '?regenerate=1' : '';
+  const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/next-ideas${query}`);
+
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+
+  const body = (await response.json()) as { ideas?: NextIdea[] };
+  return body.ideas ?? [];
+}
+
 /**
  * The signed-in creator's own games. Server-side ownership means this works on a
  * device that never saved the tracking link — the tokens come back with it.

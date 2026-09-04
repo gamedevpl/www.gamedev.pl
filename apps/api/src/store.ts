@@ -31,6 +31,7 @@ import {
 import { isSweepActive } from './sweep-scope.js';
 import type { DeclineReason, ProposalState, ProposalTransition } from './proposal-state.js';
 import type { BuildEvent, SubmissionStatus } from './submission-status.js';
+import type { NextIdea } from './next-ideas.js';
 
 /**
  * Uid namespace for automation accounts (docs/agent-access-tokens.md).
@@ -240,6 +241,10 @@ export interface SubmissionRecord {
    * question worth being able to answer later; clearing it turns sharing back off.
    */
   draftSharedAt?: string;
+  // Layer-2 idea chips, cached against their generation version.
+  nextIdeas?: NextIdea[];
+  // deliveredVersion/previewVersion nextIdeas was generated for; undefined means never.
+  nextIdeasVersion?: string;
   /**
    * How many clarifying questions the creator actually answered before this was
    * submitted — 0 when they skipped the QA panel or it had nothing to ask.
@@ -814,6 +819,8 @@ export interface UsageCounters {
   managedBuilds: number;
   // Ghost-text completion calls today (TA-01), one per model call.
   tabCompletes: number;
+  // On-demand regenerations of Layer-2 next-prompt chips (NP-1).
+  nextIdeas: number;
 }
 
 /**
@@ -2071,6 +2078,8 @@ export interface Store {
   setSubmissionAbandoned(issueNumber: number, at: string): Promise<void>;
   /** Turns the creator's shared draft link on (a timestamp) or off (null). */
   setDraftShared(issueNumber: number, at: string | null): Promise<void>;
+  // Caches Layer-2 idea chips against their generation version.
+  setSubmissionNextIdeas(issueNumber: number, ideas: NextIdea[], forVersion: string): Promise<void>;
   /**
    * Reads what is currently published for a slug, or null when nothing ever was.
    *
@@ -2835,6 +2844,7 @@ function emptyUsageCounters(): UsageCounters {
     chats: 0,
     managedBuilds: 0,
     tabCompletes: 0,
+    nextIdeas: 0,
   };
 }
 
@@ -3645,6 +3655,11 @@ export class InMemoryStore implements Store {
     if (at) next.draftSharedAt = at;
     else delete next.draftSharedAt;
     this.submissions.set(issueNumber, next);
+  }
+
+  async setSubmissionNextIdeas(issueNumber: number, ideas: NextIdea[], forVersion: string): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (sub) this.submissions.set(issueNumber, { ...sub, nextIdeas: ideas, nextIdeasVersion: forVersion });
   }
 
   async setSubmissionLocale(issueNumber: number, locale: string): Promise<void> {
@@ -6306,6 +6321,13 @@ export class FirestoreStore implements Store {
       .collection('submissions')
       .doc(String(issueNumber))
       .set({ draftSharedAt: at ?? FieldValue.delete() }, { merge: true });
+  }
+
+  async setSubmissionNextIdeas(issueNumber: number, ideas: NextIdea[], forVersion: string): Promise<void> {
+    await this.db
+      .collection('submissions')
+      .doc(String(issueNumber))
+      .set({ nextIdeas: ideas, nextIdeasVersion: forVersion }, { merge: true });
   }
 
   async setSubmissionLocale(issueNumber: number, locale: string): Promise<void> {

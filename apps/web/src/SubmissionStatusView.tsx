@@ -9,6 +9,7 @@ import { PixelIcon, type PixelIconName } from './PixelIcon.js';
 import {
   abandonSubmission,
   getChannelPlayable,
+  getNextIdeas,
   getSubmissionPreview,
   getSubmissionStatus,
   handoffToPlatform,
@@ -20,6 +21,7 @@ import {
   type BuildEventKind,
   type BuildProgress,
   type BuildStep,
+  type NextIdea,
   type PriorRoundHistory,
   type SubmissionApiError,
   type SubmissionPreview,
@@ -1420,11 +1422,15 @@ function FeedbackPanel({
   draft?: { text: string; seq: number } | null;
   onDraftConsumed?: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [text, setText] = useState('');
   const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [quickActionDismissed, setQuickActionDismissed] = useState(false);
+  // Layer-2 idea chips (NP-1) — cached per delivered version.
+  const [ideas, setIdeas] = useState<NextIdea[]>([]);
+  const [ideasRegenerating, setIdeasRegenerating] = useState(false);
+  const ideaLocale = i18n.language?.toLowerCase().startsWith('pl') ? 'pl' : 'en';
   const [stopRequested, setStopRequested] = useState(false);
   // Sent, kept, and *not* acted on: the API took the message but no round started behind
   // it. Its own slot rather than `error`, because nothing failed on the creator's side and
@@ -1433,6 +1439,8 @@ function FeedbackPanel({
   // hours, which is exactly how an exhausted agent allowance reads as a hung game.
   const [notice, setNotice] = useState<string | null>(null);
   const [builder, setBuilder] = useState<BuilderKind>(initialBuilder);
+  const builderRef = useRef<BuilderKind>(roundBuilder ?? initialBuilder);
+  builderRef.current = roundBuilder ?? initialBuilder;
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   // FileReader work not yet landed in attachments — Send waits for it.
@@ -1492,6 +1500,21 @@ function FeedbackPanel({
   useEffect(() => {
     setQuickActionDismissed(false);
   }, [failureReason, token]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIdeas([]);
+    getNextIdeas(token)
+      .then((fetched) => {
+        if (cancelled) return;
+        setIdeas(fetched);
+        if (fetched.length > 0) recordStudioStep('idea_chip_shown', builderRef.current);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   // A receipt is confirmation, not furniture: clear it on its own so the composer returns
   // to one row. Typing also clears it (below); the timer covers the common case where the
@@ -1659,6 +1682,27 @@ function FeedbackPanel({
     void send(t('statusView.feedback.debugCiPrompt'));
   };
 
+  // Prefill only — sending stays the creator's own act.
+  const applyIdea = (idea: NextIdea) => {
+    setText(idea.prompt[ideaLocale] ?? idea.prompt.en);
+    if (state === 'sent') setState('idle');
+    recordStudioStep('idea_chip_used', builderRef.current);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      autoGrow();
+    });
+  };
+
+  const regenerateIdeas = () => {
+    if (ideasRegenerating) return;
+    setIdeasRegenerating(true);
+    recordStudioStep('idea_chip_regenerated', builderRef.current);
+    getNextIdeas(token, { regenerate: true })
+      .then(setIdeas)
+      .catch(() => {})
+      .finally(() => setIdeasRegenerating(false));
+  };
+
   const handleBuilderChange = (next: BuilderKind) => {
     setBuilder(next);
   };
@@ -1738,6 +1782,32 @@ function FeedbackPanel({
     </div>
   );
 
+  // Idea chips — the map's "up next" nodes (NP-1).
+  const ideaChipsRow =
+    ideas.length > 0 && state !== 'sending' ? (
+      <div className="status-feedback-quick-actions status-feedback-idea-chips">
+        {ideas.map((idea) => (
+          <button
+            key={idea.id}
+            type="button"
+            className="status-feedback-quick-action status-feedback-idea-chip"
+            onClick={() => applyIdea(idea)}
+          >
+            <PixelIcon name="sparkle" size={12} />
+            {idea.label[ideaLocale] ?? idea.label.en}
+          </button>
+        ))}
+        <button
+          type="button"
+          className="status-feedback-quick-action status-feedback-quick-action-ghost"
+          onClick={regenerateIdeas}
+          disabled={ideasRegenerating}
+        >
+          {t('statusView.feedback.ideasRegenerate')}
+        </button>
+      </div>
+    ) : null;
+
   // Standalone status page still shows a brief receipt next to Send. The studio
   // composer does not: the message is echoed into the thread immediately, so a
   // second "Sent!" under the box is the same confirmation twice.
@@ -1783,7 +1853,9 @@ function FeedbackPanel({
               {t('statusView.feedback.debugCi')}
             </button>
           </div>
-        ) : null}
+        ) : (
+          ideaChipsRow
+        )}
         {routeNoteKey && !sending && state !== 'sent' && !error && !notice ? (
           <p className="status-feedback-route">{t(routeNoteKey)}</p>
         ) : null}
@@ -1954,7 +2026,9 @@ function FeedbackPanel({
             {t('statusView.feedback.debugCi')}
           </button>
         </div>
-      ) : null}
+      ) : (
+        ideaChipsRow
+      )}
       <textarea
         className="status-feedback-input"
         value={text}
