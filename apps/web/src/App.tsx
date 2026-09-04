@@ -1,7 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { fetchCatalog, gamePageHandle, type CatalogEntry } from './catalog.js';
+import { gamePageHandle, type CatalogEntry } from './catalog.js';
+import { useCatalogData } from './useCatalogData.js';
 import { GameTheater } from './GameTheater.js';
 import { NavHeader } from './NavHeader.js';
 import { HeroPromptSection } from './HeroPromptSection.js';
@@ -95,14 +96,6 @@ export function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const publicPlayAllowed = route.view === 'play' && publicPlaySlugs.includes(route.slug);
 
-  // Catalog state
-  const [catalogStatus, setCatalogStatus] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [catalogError, setCatalogError] = useState<string | null>(null);
-  const [catalogEntries, setCatalogEntries] = useState<CatalogEntry[]>([]);
-  // Bumped by the catalog Retry control so a failed load can be re-fetched without
-  // a full page reload (transient GitHub blips show up as 502s).
-  const [catalogReloadKey, setCatalogReloadKey] = useState(0);
-
   // Local storage saved specs
   const [savedSpecs, setSavedSpecs] = useState<SavedSpec[]>(() => getSavedSpecs());
   // Bumped after a new submission so in-progress cards in the Games gallery appear.
@@ -119,6 +112,16 @@ export function App() {
   // Consumed by the render above; gone before any second read reaches it.
   useEffect(() => {
     partySeedRef.current = null;
+  });
+
+  const { catalogStatus, catalogError, catalogEntries, handleRetryCatalog, handlePullToRefresh } = useCatalogData({
+    user,
+    privateBeta,
+    authLoading,
+    publicPlayAllowed,
+    routeView: route.view,
+    setRecommendationsRefreshKey,
+    setMyGamesRefreshKey,
   });
 
   // Stage content
@@ -300,72 +303,6 @@ export function App() {
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [stageContent]);
-
-  useEffect(() => {
-    // Wait until /api/health has told us whether PRIVATE_BETA is on — privateBeta
-    // defaults to false, so fetching before that would 401-spam (and log noise) for
-    // every anonymous visitor during closed beta.
-    if (authLoading) return;
-    // Promotional deep links load the game directly, without opening the catalog.
-    if (publicPlayAllowed) return;
-    // In private-beta mode /api/catalog requires a session — an anonymous fetch
-    // would just 401. Don't fetch (and don't render an error) until signed in.
-    // Outside private beta, catalog reads stay public (owner decision).
-    if (privateBeta && !user) return;
-    // Home, /play, /create, and /party all need the catalog loaded.
-    if (route.view !== 'home' && route.view !== 'play' && route.view !== 'create' && route.view !== 'party') return;
-
-    let cancelled = false;
-    // Soft refreshes (Retry, pull-to-refresh) keep the last-good grid on screen —
-    // flipping to `loading` would blank the arcade for every pull. First load and
-    // recovering from an error still show the busy mascot.
-    setCatalogStatus((prev) => (prev === 'ready' ? 'ready' : 'loading'));
-    // Clear a previous soft-refresh notice as soon as another attempt starts, so the
-    // banner does not linger over a grid that is already being re-fetched.
-    setCatalogError(null);
-
-    void fetchCatalog()
-      .then((entries) => {
-        if (cancelled) return;
-        setCatalogEntries(entries);
-        setCatalogError(null);
-        setCatalogStatus('ready');
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        // Keep whatever was on screen if a soft refresh fails — a transient 502
-        // should not erase a catalog the visitor was already browsing. The error
-        // still lands in `catalogError` so ArcadeCatalog can show a non-blocking
-        // refresh-failed banner above the last-good grid (full error UI only when
-        // there was nothing to keep).
-        setCatalogEntries((prev) => (prev.length > 0 ? prev : []));
-        setCatalogError(err instanceof Error ? err.message : null);
-        setCatalogStatus((prev) => (prev === 'ready' ? 'ready' : 'error'));
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user, privateBeta, authLoading, publicPlayAllowed, route.view, catalogReloadKey]);
-
-  const handleRetryCatalog = useCallback(() => {
-    setCatalogReloadKey((n) => n + 1);
-  }, []);
-
-  // Soft-refresh the home surfaces the installed PWA cannot reach with the browser's
-  // own pull-to-refresh (standalone display mode has no chrome gesture). Bumping the
-  // same keys Retry / post-play already use keeps recommendations and "My games" in
-  // sync with the catalog list.
-  const handlePullToRefresh = useCallback(async () => {
-    setCatalogReloadKey((n) => n + 1);
-    setRecommendationsRefreshKey((n) => n + 1);
-    setMyGamesRefreshKey((n) => n + 1);
-    // Give the catalog effect a beat to settle before the indicator dismisses. The
-    // fetch itself is raced by the effect; we only need the gesture to feel finished.
-    await new Promise<void>((resolve) => {
-      window.setTimeout(resolve, 450);
-    });
-  }, []);
 
   // The static chrome follows the language switcher instantly; the AI questions do
   // not — they were authored in whatever language the refine call used. Re-ask when
