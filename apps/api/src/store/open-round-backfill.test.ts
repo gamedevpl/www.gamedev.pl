@@ -51,13 +51,16 @@ describe('backfillOpenRound', () => {
 
     // Traffic reassignment put an old revision back in front.
     clock += OPEN_ROUND_RESCAN_INTERVAL_MS + 1;
-    await db.collection('submissions').doc('3').set({
-      jobId: 3,
-      ownerUid: 'g:creator',
-      createdAt: new Date(clock).toISOString(),
-      title: 'created during a rollback',
-      lastStatus: 'building',
-    });
+    await db
+      .collection('submissions')
+      .doc('3')
+      .set({
+        jobId: 3,
+        ownerUid: 'g:creator',
+        createdAt: new Date(clock).toISOString(),
+        title: 'created during a rollback',
+        lastStatus: 'building',
+      });
 
     expect(await backfillOpenRound(db, now)).toBe(1);
     expect((await db.collection('submissions').doc('3').get()).data()?.openRound).toBe(true);
