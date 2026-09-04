@@ -1,35 +1,18 @@
-import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { flushSync } from 'react-dom';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fetchCatalog, gamePageHandle, type CatalogEntry } from './catalog.js';
-import { GameTheater } from './GameTheater.js';
+import { useCatalogData } from './useCatalogData.js';
 import { NavHeader } from './NavHeader.js';
 import { HeroPromptSection } from './HeroPromptSection.js';
 import { ArcadeCatalog } from './surfaces/catalog/ArcadeCatalog.js';
 import { UnpublishedPlayView } from './UnpublishedPlayView.js';
-import { PixelIcon } from './PixelIcon.js';
-import { CreatorQA, type QAQuestion } from './CreatorQA.js';
-import { deriveTitleFromConcept } from './gameTitle.js';
-import { MIN_CONCEPT_LENGTH } from './conceptLength.js';
+import { CreatorQA } from './CreatorQA.js';
 import { resolveCreateInitialPrompt } from './createInitialPrompt.js';
-import {
-  adminPath,
-  canonicalPath,
-  connectPath,
-  createPath,
-  creatorPath,
-  gamePath,
-  NAVIGATE_EVENT,
-  navUpTarget,
-  parsePathRoute,
-  partyPath,
-  playPath,
-  reviewPath,
-  studioPath,
-  studioWelcomePath,
-  studioConnectPath,
-  type AppRoute,
-} from './core/router.js';
+import { adminPath, creatorPath, navUpTarget, playPath, reviewPath, studioPath } from './core/router.js';
+import { RouteChunkBoundary } from './appRouteRecovery.js';
+import { useAppNavigation } from './useAppNavigation.js';
+import { useGameTheater } from './useGameTheater.js';
+import { StageOverlay } from './StageOverlay.js';
+import { useSpecSubmissionFlow } from './useSpecSubmissionFlow.js';
 import { StudioWelcomeView } from './surfaces/studio/StudioWelcomeView.js';
 import { StudioConnectWizard } from './surfaces/studio/StudioConnectWizard.js';
 import type { PublicCreatorProfile } from './creatorProfileApi.js';
@@ -50,6 +33,17 @@ import { SiteFooter } from './SiteFooter.js';
 import { resolveDocumentTitle } from './pageTitle.js';
 import { useDocumentTitle } from './useDocumentTitle.js';
 
+import { useActiveBuildCount } from './activeBuilds.js';
+import { getSavedSpecs, type SavedSpec } from './mySpecs.js';
+import { useAuth } from './AuthContext.js';
+import { AuthModal } from './AuthModal.js';
+import { BottomCta } from './BottomCta.js';
+import { ClosedBetaSplash } from './ClosedBetaSplash.js';
+import { BetaInvitePage } from './BetaInvitePage.js';
+import { AppLoadingScreen } from './AppLoadingScreen.js';
+import { ControllerView } from './surfaces/party/ControllerView.js';
+import { parseOAuthReturnParam } from './oauthReturn.js';
+
 // Deferred: an anonymous player playing a published game never has to pay for the
 // weight of the admin console, the studio (and everything it drags in — the code
 // editor, the remix panel), the review desk, or party's multiplayer client.
@@ -60,85 +54,10 @@ const CreatorStudioView = lazy(() =>
 const ReviewDesk = lazy(() => import('./surfaces/review/ReviewDesk.js').then((m) => ({ default: m.ReviewDesk })));
 const PartyPage = lazy(() => import('./surfaces/party/PartyPage.js').then((m) => ({ default: m.PartyPage })));
 
-/**
- * Catches a lazy route chunk's import() rejecting — a client that stayed open across
- * a deploy asks for a content-hashed filename the new build no longer serves, which
- * `apps/api/src/platform/app.ts`'s static handler hard-404s. Unlike `CodeSurface.tsx`'s
- * `CodeMirrorBoundary`, there is no lesser-but-working surface to degrade to here, so
- * the fallback is a reload prompt rather than a substitute — the same recovery the
- * service-worker shell's `AppUpdateBanner` already offers, for the client that has no
- * active worker to show it (registration unsupported, blocked, or not yet complete).
- */
-class RouteChunkBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
-  state = { failed: false };
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-  componentDidCatch() {
-    // Advisory only — the fallback's reload prompt is the whole recovery.
-  }
-  render() {
-    return this.state.failed ? this.props.fallback : this.props.children;
-  }
-}
-
-/**
- * Read the current URL into an AppRoute, putting the browser on the current address
- * first — `/ay|/ai/<slug>` → `/play/<slug>`, `/status/<token>` → `/studio/<token>`,
- * `/health` → `/admin/telemetry`. The old address still works; it just does not stay
- * in the bar to be copied out of.
- */
-function readLocationRoute(): AppRoute {
-  const canonical = canonicalPath(window.location.pathname);
-  if (canonical) {
-    window.history.replaceState(null, '', canonical);
-  }
-  return parsePathRoute(window.location.pathname, window.location.hash);
-}
-import { submitSpec, refineSpec, type SubmissionApiError, type PlatformBuilderAvailability } from './submissionApi.js';
-import { submissionErrorKey } from './submissionErrors.js';
-import { useActiveBuildCount } from './activeBuilds.js';
-import { getSavedSpecs, saveSpec, type SavedSpec } from './mySpecs.js';
-import { saveLastBuilder, type BuilderKind } from './builderKind.js';
-import { clearPendingQa, loadPendingQa, savePendingQa, type PendingQaAnswers } from './pendingQa.js';
-import { useAuth } from './AuthContext.js';
-import { AuthModal } from './AuthModal.js';
-import { BottomCta } from './BottomCta.js';
-import { recordCreateStep, recordStudioStep, type PlayVia } from './visitTelemetry.js';
-import { ClosedBetaSplash } from './ClosedBetaSplash.js';
-import { BetaInvitePage } from './BetaInvitePage.js';
-import { BetaWelcomeSplash } from './BetaWelcomeSplash.js';
-import { AppLoadingScreen } from './AppLoadingScreen.js';
-import { ControllerView } from './surfaces/party/ControllerView.js';
-import { PartyStage } from './surfaces/party/PartyStage.js';
-import { createPartySession, type PartySession } from './surfaces/party/mpApi.js';
-import { parseOAuthReturnParam } from './oauthReturn.js';
-
-type StageContent =
-  | {
-      type: 'catalog';
-      game: CatalogEntry;
-      initialRemixOpen?: boolean;
-      initialRemixRequest?: string;
-      // Which home page surface launched this play, if it did.
-      via?: PlayVia;
-    }
-  | { type: 'party'; game: CatalogEntry; session: PartySession; via?: PlayVia };
-
 export function App() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { user, loading: authLoading, privateBeta, publicPlaySlugs, showBetaWelcome, dismissBetaWelcome } = useAuth();
-  const [route, setRoute] = useState(() => readLocationRoute());
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const publicPlayAllowed = route.view === 'play' && publicPlaySlugs.includes(route.slug);
-
-  // Catalog state
-  const [catalogStatus, setCatalogStatus] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [catalogError, setCatalogError] = useState<string | null>(null);
-  const [catalogEntries, setCatalogEntries] = useState<CatalogEntry[]>([]);
-  // Bumped by the catalog Retry control so a failed load can be re-fetched without
-  // a full page reload (transient GitHub blips show up as 502s).
-  const [catalogReloadKey, setCatalogReloadKey] = useState(0);
 
   // Local storage saved specs
   const [savedSpecs, setSavedSpecs] = useState<SavedSpec[]>(() => getSavedSpecs());
@@ -158,54 +77,69 @@ export function App() {
     partySeedRef.current = null;
   });
 
-  // Stage content
-  const [stageContent, setStageContent] = useState<StageContent | null>(null);
+  const {
+    route,
+    navigate,
+    exitOverlay,
+    handleCreateNav,
+    handlePartyCreateNav,
+    handlePartyNav,
+    handleConnectNav,
+    handleHomeAnchorNav,
+  } = useAppNavigation({ partySeedRef, setPendingScrollTarget });
+
+  const publicPlayAllowed = route.view === 'play' && publicPlaySlugs.includes(route.slug);
+
+  const { catalogStatus, catalogError, catalogEntries, handleRetryCatalog, handlePullToRefresh } = useCatalogData({
+    user,
+    privateBeta,
+    authLoading,
+    publicPlayAllowed,
+    routeView: route.view,
+    setRecommendationsRefreshKey,
+    setMyGamesRefreshKey,
+  });
+
+  const {
+    stageContent,
+    partyError,
+    handlePlayGame,
+    handleRemixGame,
+    handleExitCatalogTheater,
+    handleExitPartyTheater,
+    handlePlayTogether,
+  } = useGameTheater({
+    route,
+    catalogEntries,
+    catalogStatus,
+    user,
+    navigate,
+    setIsAuthModalOpen,
+    setRecommendationsRefreshKey,
+  });
+
   // Builds actually in flight, from the server — the header badge's source of truth.
   // Paused while a game is on screen because the player covers the header.
   const activeBuildCount = useActiveBuildCount(myGamesRefreshKey, !stageContent);
 
-  // Greenfield submission state
-  // 'refining' is the spec-refiner call that precedes a submission — a few seconds
-  // during which nothing has been submitted yet, so the UI must not claim otherwise.
-  const [submissionStatus, setSubmissionStatus] = useState<'idle' | 'refining' | 'loading'>('idle');
-  const [submissionError, setSubmissionError] = useState<string | null>(null);
-  const submissionStatusRef = useRef(submissionStatus);
-  submissionStatusRef.current = submissionStatus;
+  const {
+    submissionStatus,
+    submissionError,
+    pendingSpec,
+    qaQuestions,
+    qaBuilder,
+    qaFormKey,
+    latestAnswersRef,
+    platformBuilderAvailability,
+    setPlatformBuilderAvailability,
+    handleSubmitSpec,
+    handleQaComplete,
+    handleQaCancel,
+    handleQaAnswersChange,
+    handleQaTitleChange,
+    handleQaBuilderChange,
+  } = useSpecSubmissionFlow({ user, navigate, setIsAuthModalOpen, setSavedSpecs, setMyGamesRefreshKey });
 
-  // Clarifying-questions gate: a submission runs the spec refiner first, and when
-  // it returns questions the creator must answer them before generation proceeds.
-  // pendingSpec holds the spec awaiting those answers.
-  // Seeded from localStorage so a reload mid-round resumes instead of throwing the
-  // questions away and charging another refine to ask them again.
-  const restoredQa = useRef(loadPendingQa());
-  const [qaQuestions, setQaQuestions] = useState<QAQuestion[]>(restoredQa.current?.questions ?? []);
-  const [pendingSpec, setPendingSpec] = useState<{ title: string; concept: string; displayName: string } | null>(
-    restoredQa.current?.spec ?? null,
-  );
-  // Kept out of pendingSpec — too large for its localStorage-backed persistence.
-  const pendingReferenceImagesRef = useRef<string[] | undefined>(undefined);
-  // Language the parked questions were written in. Empty when an older blob never
-  // recorded one — that mismatch with the live UI language is what triggers a
-  // one-shot re-ask so English chips don't stick under a Polish chrome.
-  const [qaLocale, setQaLocale] = useState<string>(restoredQa.current?.locale ?? '');
-  // Who builds this round — parked with the confirm session so a reload keeps it.
-  const [qaBuilder, setQaBuilder] = useState<BuilderKind>(restoredQa.current?.builder ?? 'platform');
-  const qaBuilderRef = useRef(qaBuilder);
-  qaBuilderRef.current = qaBuilder;
-  // Whether the Gamedev.pl (platform) builder can be picked right now — reported by the
-  // hero's own quota poll, which already fetches this alongside the daily allowance.
-  const [platformBuilderAvailability, setPlatformBuilderAvailability] = useState<PlatformBuilderAvailability>();
-  // Bumped when questions are rewritten for a new language so CreatorQA remounts
-  // with empty answers — English chip labels must not survive as "selected" under
-  // Polish options that no longer match.
-  const [qaFormKey, setQaFormKey] = useState(0);
-  // Kept next to the QA state so the language-switch effect can clear it too.
-  const latestAnswersRef = useRef<PendingQaAnswers>(restoredQa.current?.answers ?? { selected: {}, custom: {} });
-
-  // Demo generator state
-
-  // Multiplayer lobby state
-  const [partyError, setPartyError] = useState<string | null>(null);
   // Unpublished `/play/<slug>` title, reported once the document loads.
   const [unpublishedPlayTitle, setUnpublishedPlayTitle] = useState<string | null>(null);
   /** Display name for `/:handle` once the public profile loads. */
@@ -275,234 +209,6 @@ export function App() {
     setGameTitle(null);
   }, [gameRouteSlug]);
 
-  useEffect(() => {
-    // popstate covers back/forward (and path changes via history API). hashchange
-    // is required for hybrid join URLs: the credential lives in the fragment, and
-    // editing only the hash (paste `/join/<code>#<token>` while already on that
-    // path) does not fire popstate.
-    const syncRoute = () => {
-      setRoute(readLocationRoute());
-    };
-
-    window.addEventListener('popstate', syncRoute);
-    window.addEventListener('hashchange', syncRoute);
-    return () => {
-      window.removeEventListener('popstate', syncRoute);
-      window.removeEventListener('hashchange', syncRoute);
-    };
-  }, []);
-
-  // Lock page scroll while the full-viewport game player is open so the fixed
-  // overlay is the only scrollable surface (the game handles its own scroll).
-  useEffect(() => {
-    if (!stageContent) return;
-    document.body.classList.add('player-open');
-    return () => document.body.classList.remove('player-open');
-  }, [stageContent]);
-
-  // `/play/<slug>` auto-opens theater once the catalog confirms the game.
-  // Close replaces onto the canonical page; in-place Play is untouched.
-  useEffect(() => {
-    if (stageContent?.type === 'catalog') {
-      const entry = catalogEntries.find((game) => game.slug === stageContent.game.slug);
-      if (entry && stageContent.game !== entry) {
-        setStageContent((prev) =>
-          prev?.type === 'catalog' && prev.game.slug === entry.slug ? { ...prev, game: entry } : prev,
-        );
-      }
-      if (route.view === 'play' && catalogStatus === 'ready' && !entry) {
-        setStageContent(null);
-      }
-      return;
-    }
-
-    if (route.view !== 'play') return;
-    const entry = catalogEntries.find((game) => game.slug === route.slug);
-    // Wait so unknown slugs do not flash a 404 theater.
-    if (catalogStatus !== 'ready' || !entry) return;
-
-    setStageContent({ type: 'catalog', game: entry });
-  }, [route, catalogEntries, catalogStatus, stageContent]);
-
-  // Guard against accidental reload/close while a game is open. The browser shows
-  // its native "Leave site?" confirmation; games run in a sandboxed iframe with no
-  // access to parent storage, so their internal progress can't be persisted here —
-  // this at least prevents losing it by a stray Cmd-R.
-  useEffect(() => {
-    if (!stageContent) return;
-    const warn = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, [stageContent]);
-
-  useEffect(() => {
-    // Wait until /api/health has told us whether PRIVATE_BETA is on — privateBeta
-    // defaults to false, so fetching before that would 401-spam (and log noise) for
-    // every anonymous visitor during closed beta.
-    if (authLoading) return;
-    // Promotional deep links load the game directly, without opening the catalog.
-    if (publicPlayAllowed) return;
-    // In private-beta mode /api/catalog requires a session — an anonymous fetch
-    // would just 401. Don't fetch (and don't render an error) until signed in.
-    // Outside private beta, catalog reads stay public (owner decision).
-    if (privateBeta && !user) return;
-    // Home, /play, /create, and /party all need the catalog loaded.
-    if (route.view !== 'home' && route.view !== 'play' && route.view !== 'create' && route.view !== 'party') return;
-
-    let cancelled = false;
-    // Soft refreshes (Retry, pull-to-refresh) keep the last-good grid on screen —
-    // flipping to `loading` would blank the arcade for every pull. First load and
-    // recovering from an error still show the busy mascot.
-    setCatalogStatus((prev) => (prev === 'ready' ? 'ready' : 'loading'));
-    // Clear a previous soft-refresh notice as soon as another attempt starts, so the
-    // banner does not linger over a grid that is already being re-fetched.
-    setCatalogError(null);
-
-    void fetchCatalog()
-      .then((entries) => {
-        if (cancelled) return;
-        setCatalogEntries(entries);
-        setCatalogError(null);
-        setCatalogStatus('ready');
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        // Keep whatever was on screen if a soft refresh fails — a transient 502
-        // should not erase a catalog the visitor was already browsing. The error
-        // still lands in `catalogError` so ArcadeCatalog can show a non-blocking
-        // refresh-failed banner above the last-good grid (full error UI only when
-        // there was nothing to keep).
-        setCatalogEntries((prev) => (prev.length > 0 ? prev : []));
-        setCatalogError(err instanceof Error ? err.message : null);
-        setCatalogStatus((prev) => (prev === 'ready' ? 'ready' : 'error'));
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user, privateBeta, authLoading, publicPlayAllowed, route.view, catalogReloadKey]);
-
-  const handleRetryCatalog = useCallback(() => {
-    setCatalogReloadKey((n) => n + 1);
-  }, []);
-
-  // Soft-refresh the home surfaces the installed PWA cannot reach with the browser's
-  // own pull-to-refresh (standalone display mode has no chrome gesture). Bumping the
-  // same keys Retry / post-play already use keeps recommendations and "My games" in
-  // sync with the catalog list.
-  const handlePullToRefresh = useCallback(async () => {
-    setCatalogReloadKey((n) => n + 1);
-    setRecommendationsRefreshKey((n) => n + 1);
-    setMyGamesRefreshKey((n) => n + 1);
-    // Give the catalog effect a beat to settle before the indicator dismisses. The
-    // fetch itself is raced by the effect; we only need the gesture to feel finished.
-    await new Promise<void>((resolve) => {
-      window.setTimeout(resolve, 450);
-    });
-  }, []);
-
-  // The static chrome follows the language switcher instantly; the AI questions do
-  // not — they were authored in whatever language the refine call used. Re-ask when
-  // the UI language changes mid-round (or a restored session was parked under a
-  // different language) so a Polish UI never keeps showing English chips.
-  const qaRelocalizingRef = useRef(false);
-  const pendingSpecRef = useRef(pendingSpec);
-  pendingSpecRef.current = pendingSpec;
-  useEffect(() => {
-    const parked = pendingSpecRef.current;
-    if (!parked) return;
-    const targetLocale = i18n.resolvedLanguage ?? i18n.language;
-    if (qaLocale === targetLocale) return;
-    // A real submit is in flight — don't yank the questions out from under it.
-    if (submissionStatusRef.current === 'loading') return;
-    if (qaRelocalizingRef.current) return;
-
-    let cancelled = false;
-    qaRelocalizingRef.current = true;
-    setSubmissionStatus('refining');
-    const concept = parked.concept;
-
-    async function relocalizeQa() {
-      try {
-        const refined = await refineSpec({ concept, locale: targetLocale });
-        if (cancelled) return;
-        // A real submit started while refine was in flight — drop the relocalization.
-        if (submissionStatusRef.current === 'loading') return;
-
-        const questions = refined.questions;
-        // Fail-open: when Vertex times out or errors, it returns empty questions.
-        // Keep the existing questions and parked session instead of wiping them into a name-only panel.
-        if (questions.length === 0) return;
-
-        // Prefer the live parked spec so a title edit mid-flight is not overwritten.
-        const liveSpec = pendingSpecRef.current;
-        if (!liveSpec) return;
-
-        // Preserve user-entered custom answers across questions matching by ID or index.
-        const oldCustom = latestAnswersRef.current.custom ?? {};
-        const oldQuestions = qaQuestions;
-        const preservedCustom: Record<string, string> = {};
-
-        questions.forEach((newQ, idx) => {
-          const customById = oldCustom[newQ.id];
-          const oldQ = oldQuestions[idx];
-          const customByIndex = oldQ ? oldCustom[oldQ.id] : undefined;
-          const val = customById || customByIndex;
-          if (val && val.trim()) {
-            preservedCustom[newQ.id] = val;
-          }
-        });
-
-        const newAnswers: PendingQaAnswers = { selected: {}, custom: preservedCustom };
-
-        setQaQuestions(questions);
-        setQaLocale(targetLocale);
-        latestAnswersRef.current = newAnswers;
-        // Drop restored answers so a remounted panel doesn't revive English selections.
-        if (restoredQa.current) {
-          restoredQa.current = {
-            ...restoredQa.current,
-            questions,
-            answers: newAnswers,
-            locale: targetLocale,
-            savedAt: Date.now(),
-          };
-        }
-        savePendingQa({
-          spec: liveSpec,
-          questions,
-          answers: newAnswers,
-          locale: targetLocale,
-          builder: qaBuilderRef.current,
-        });
-        setQaFormKey((key) => key + 1);
-      } catch {
-        // Keep the previous questions rather than blanking the panel on a blip.
-      } finally {
-        qaRelocalizingRef.current = false;
-        if (!cancelled && submissionStatusRef.current === 'refining') {
-          setSubmissionStatus('idle');
-        }
-      }
-    }
-
-    void relocalizeQa();
-    return () => {
-      cancelled = true;
-      // Strict Mode remounts (and a follow-up language flip) must be allowed to start
-      // a new call; leaving the guard latched would park the panel on "analyzing".
-      qaRelocalizingRef.current = false;
-    };
-    // Depend on the concept, not the whole pendingSpec object: title edits must not
-    // cancel and restart a language switch mid-flight. submissionStatus is read to
-    // skip during submit; listing it would cancel the relocalize when we flip to
-    // 'refining' ourselves.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
-  }, [i18n.language, i18n.resolvedLanguage, pendingSpec?.concept, qaLocale]);
-
   // Menu navigation is scroll-to-section, but the sections only exist on the home
   // route — from a status page we have to go home first and scroll once the target
   // has mounted (the Games gallery may still be loading).
@@ -538,244 +244,6 @@ export function App() {
     window.location.replace(oauthReturn);
   }, [authLoading, user]);
 
-  // The generation gate: before spending a submission we run the spec refiner. If it
-  // returns clarifying questions, generation pauses on the QA panel until they're
-  // answered; a clean spec submits straight through. A refiner error stops here too.
-  async function handleSubmitSpec(concept: string, displayName: string = '', referenceImages?: string[]) {
-    if (!user) {
-      // The wall between "wrote an idea" and "made an account". Everything before this
-      // is anonymous, so this is the only place that drop-off is visible at all.
-      recordCreateStep('signin_required');
-      setIsAuthModalOpen(true);
-      return;
-    }
-
-    const trimmedConcept = concept.trim();
-    if (!trimmedConcept) return;
-
-    // Catch a too-short concept before the fail-open refiner would.
-    if (trimmedConcept.length < MIN_CONCEPT_LENGTH) {
-      setSubmissionError(t('errors.conceptTooShort', { minLength: MIN_CONCEPT_LENGTH }));
-      return;
-    }
-
-    setSubmissionStatus('refining');
-    setSubmissionError(null);
-
-    let questions: QAQuestion[];
-    let suggestedTitle: string | undefined;
-    try {
-      const refined = await refineSpec({ concept: trimmedConcept, locale: i18n.language });
-      questions = refined.questions;
-      suggestedTitle = refined.suggestedTitle;
-    } catch {
-      // Fail-closed: stop here and let the creator retry, rather than falling
-      // through to a truncated title as if refinement had succeeded.
-      setSubmissionError(t('errors.refineFailed'));
-      setSubmissionStatus('idle');
-      return;
-    }
-
-    if (questions.length > 0) recordCreateStep('qa_shown');
-
-    // The confirm step always happens now, questions or not: it is where the game gets
-    // its name, and a build must not start without one the creator has seen.
-    const spec = {
-      title: suggestedTitle ?? deriveTitleFromConcept(trimmedConcept),
-      concept: trimmedConcept,
-      displayName: displayName.trim(),
-    };
-    const locale = i18n.resolvedLanguage ?? i18n.language;
-    pendingReferenceImagesRef.current = referenceImages;
-    setPendingSpec(spec);
-    setQaQuestions(questions);
-    setQaLocale(locale);
-    setQaBuilder('platform');
-    latestAnswersRef.current = { selected: {}, custom: {} };
-    savePendingQa({
-      spec,
-      questions,
-      answers: { selected: {}, custom: {} },
-      locale,
-      builder: 'platform',
-    });
-    setQaFormKey((key) => key + 1);
-    setSubmissionStatus('idle');
-  }
-
-  // Actually creates the submission (after the QA gate) and jumps to its status page.
-  async function submitRefinedSpec(title: string, concept: string, displayName: string, builder: BuilderKind) {
-    setSubmissionStatus('loading');
-    setSubmissionError(null);
-
-    try {
-      const response = await submitSpec({
-        title,
-        concept,
-        displayName: displayName || undefined,
-        // The agent is told this, so its progress updates arrive already written in
-        // the creator's language rather than machine-translated afterwards.
-        locale: i18n.language,
-        builder,
-        referenceImages: pendingReferenceImagesRef.current,
-      });
-
-      // Save to localStorage
-      const updatedSpecs = saveSpec({
-        token: response.token,
-        title,
-        concept,
-        createdAt: Date.now(),
-        ...(response.slug ? { slug: response.slug } : {}),
-      });
-      setSavedSpecs(updatedSpecs);
-      setMyGamesRefreshKey((key) => key + 1);
-      saveLastBuilder(response.token, builder);
-
-      setSubmissionStatus('idle');
-      recordCreateStep('submission_created', builder);
-      recordStudioStep('builder_chosen', builder);
-
-      // Only now is the QA panel done: it stayed up, in its submitting state, for the
-      // whole call. A no-op when the spec never went through the gate.
-      setQaQuestions([]);
-      setPendingSpec(null);
-      pendingReferenceImagesRef.current = undefined;
-      setQaLocale('');
-      setQaBuilder('platform');
-      clearPendingQa();
-
-      // Platform → welcome; self → connect chapter. Never auto-enter Studio.
-      const address = response.slug ?? response.token;
-      navigate(builder === 'platform' ? studioWelcomePath(address) : studioConnectPath(address));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : t('errors.generic');
-      const apiErr = err instanceof Error ? (err as SubmissionApiError) : undefined;
-      setSubmissionError(
-        t(
-          submissionErrorKey({
-            message,
-            ...(apiErr?.status !== undefined ? { status: apiErr.status } : {}),
-            ...(apiErr?.category !== undefined ? { category: apiErr.category } : {}),
-          }),
-        ),
-      );
-      setSubmissionStatus('idle');
-    }
-  }
-
-  // The panel stays mounted until the submission actually lands. Clearing it first
-  // dropped the creator into blank space for however long the API took to create the
-  // issue — they had just clicked a button and the page answered by deleting itself.
-  // On failure it stays up with the error, so the answers survive a retry.
-  const handleQaComplete = async (finalConcept: string, title: string, builder: BuilderKind) => {
-    const spec = pendingSpec;
-    if (!spec) return;
-    // The name the creator settled on, which is the step that gates the build.
-    recordCreateStep('title_confirmed');
-    await submitRefinedSpec(title, finalConcept, spec.displayName, builder);
-  };
-
-  const handleQaCancel = () => {
-    setQaQuestions([]);
-    setPendingSpec(null);
-    pendingReferenceImagesRef.current = undefined;
-    setQaLocale('');
-    setQaBuilder('platform');
-    clearPendingQa();
-  };
-
-  // Every keystroke and chip lands in storage, so the round survives a reload at any
-  // point rather than only between questions.
-  const handleQaAnswersChange = useCallback(
-    (answers: PendingQaAnswers) => {
-      latestAnswersRef.current = answers;
-      if (!pendingSpec) return;
-      savePendingQa({
-        spec: pendingSpec,
-        questions: qaQuestions,
-        answers,
-        locale: qaLocale,
-        builder: qaBuilder,
-      });
-    },
-    [pendingSpec, qaQuestions, qaLocale, qaBuilder],
-  );
-
-  // The name is parked with the answers, for the same reason: an edited title is work,
-  // and a reload that kept the answers but silently restored the model's suggestion
-  // would be the one part of the panel that lies about having been saved.
-  const handleQaTitleChange = useCallback(
-    (title: string) => {
-      if (!pendingSpec) return;
-      const spec = { ...pendingSpec, title };
-      setPendingSpec(spec);
-      savePendingQa({
-        spec,
-        questions: qaQuestions,
-        answers: latestAnswersRef.current,
-        locale: qaLocale,
-        builder: qaBuilder,
-      });
-    },
-    [pendingSpec, qaQuestions, qaLocale, qaBuilder],
-  );
-
-  const handleQaBuilderChange = useCallback(
-    (builder: BuilderKind) => {
-      setQaBuilder(builder);
-      if (!pendingSpec) return;
-      savePendingQa({
-        spec: pendingSpec,
-        questions: qaQuestions,
-        answers: latestAnswersRef.current,
-        locale: qaLocale,
-        builder,
-      });
-    },
-    [pendingSpec, qaQuestions, qaLocale],
-  );
-
-  // Track where a full-viewport /play overlay was opened from within the app
-  // (e.g. from Creator Studio /studio/...), so closing it returns to that opener.
-  const playReturnPathRef = useRef<string | null>(null);
-
-  const navigate = useCallback((path: string, options?: { replace?: boolean }) => {
-    // When navigating to a /play route from elsewhere in the app, record the
-    // origin path so exitOverlay can return to it.
-    if (path.startsWith('/play/') && !window.location.pathname.startsWith('/play/')) {
-      playReturnPathRef.current = window.location.pathname + window.location.search;
-    }
-
-    // Update the URL (the source of truth) and the route synchronously so
-    // navigation is immediate (and testable) without waiting for popstate.
-    if (options?.replace) {
-      window.history.replaceState(null, '', path);
-    } else {
-      window.history.pushState(null, '', path);
-    }
-    // pushState/replaceState are silent, so announce the navigation for anything
-    // living outside this component (see NAVIGATE_EVENT). Dispatched before the
-    // state update so a listener reading window.location sees the URL we just set.
-    window.dispatchEvent(new CustomEvent(NAVIGATE_EVENT, { detail: { path } }));
-    setRoute(readLocationRoute());
-  }, []);
-
-  /**
-   * Closing a full-viewport overlay that owns the URL — unpublished draft or public play.
-   * Returns to the in-app opener (e.g. Creator Studio) if launched from within the app,
-   * or safely falls back to Home (`/`) on direct visits.
-   */
-  const exitOverlay = useCallback(() => {
-    const returnPath = playReturnPathRef.current;
-    playReturnPathRef.current = null;
-    if (returnPath && !returnPath.startsWith('/play/')) {
-      navigate(returnPath);
-      return;
-    }
-    navigate('/');
-  }, [navigate]);
-
   // Unpublished `/play/<slug>` uses UnpublishedPlayView's own theater (not `stageContent`),
   // so hide Up the same way — Close / the error home link own escape there.
   // Only after the catalog is ready: a catalog *error* must keep GameDetailPage's
@@ -793,56 +261,6 @@ export function App() {
     return { path: target.path, ariaLabel: t(`header.${target.labelKey}`) };
   }, [route, stageContent, unpublishedPlayTheater, t]);
 
-  // Deliberate click focuses even on phones, unlike page-load autofocus.
-  function handleCreateNav() {
-    flushSync(() => {
-      navigate(createPath());
-    });
-    // A new page starts at the top, not the old offset.
-    window.scrollTo(0, 0);
-    const input = document.querySelector<HTMLTextAreaElement>('#hero-prompt .big-prompt-input');
-    input?.focus({ preventScroll: true });
-  }
-
-  // Same handoff as Create, concept pre-loaded with party framing.
-  function handlePartyCreateNav() {
-    partySeedRef.current = t('party.customStarterPrompt');
-    flushSync(() => {
-      navigate(createPath());
-    });
-    window.scrollTo(0, 0);
-    const input = document.querySelector<HTMLTextAreaElement>('#hero-prompt .big-prompt-input');
-    if (input) {
-      input.focus({ preventScroll: true });
-      // Cursor at the end so typing continues the sentence, not overwrites it.
-      input.setSelectionRange(input.value.length, input.value.length);
-    }
-  }
-
-  // A real destination now, not a scroll to the home rail.
-  function handlePartyNav() {
-    navigate(partyPath());
-    // A new page starts at the top, not mid-scroll.
-    window.scrollTo(0, 0);
-  }
-
-  function handleConnectNav() {
-    navigate(connectPath());
-    window.scrollTo(0, 0);
-  }
-
-  // Play lives on home only. Elsewhere, queue the anchor and go there — the
-  // existing pending-scroll effect resolves it once the target (which may still be
-  // loading) has actually mounted.
-  function handleHomeAnchorNav(anchorId: string) {
-    if (route.view === 'home') {
-      document.getElementById(anchorId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      return;
-    }
-    setPendingScrollTarget(anchorId);
-    navigate('/');
-  }
-
   const navHeader = {
     activeBuildCount,
     onHome: () => navigate('/'),
@@ -857,121 +275,15 @@ export function App() {
     onUp: navigate,
   };
 
-  function handlePlayGame(game: CatalogEntry, via?: PlayVia) {
-    // In-place Play from home/profile/game page; `/play/<slug>` auto-opens itself.
-    const fullEntry = catalogEntries.find((e) => e.slug === game.slug) ?? game;
-    setStageContent({ type: 'catalog', game: fullEntry, ...(via === undefined ? {} : { via }) });
-    // Soft refresh so "continue" / genre picks update after the next home visit.
-    setRecommendationsRefreshKey((n) => n + 1);
-  }
-
-  function handleRemixGame(game: CatalogEntry, initialRemixRequest?: string) {
-    // The game still has to be mounted for Remix to swap and preview its document,
-    // but the sheet opens on the first frame — no theater detour and second wrench.
-    setStageContent({ type: 'catalog', game, initialRemixOpen: true, initialRemixRequest });
-  }
-
-  function handleExitCatalogTheater() {
-    // Deep-linked `/play` → canonical page (replace). Else dismiss overlay only.
-    if (route.view === 'play' && stageContent?.type === 'catalog') {
-      const game = stageContent.game;
-      navigate(gamePath(gamePageHandle(game), game.slug), { replace: true });
-      setStageContent(null);
-      return;
-    }
-    setStageContent(null);
-  }
-
-  function handleExitPartyTheater() {
-    if (route.view === 'play' && stageContent?.type === 'party') {
-      const game = stageContent.game;
-      navigate(gamePath(gamePageHandle(game), game.slug), { replace: true });
-      setStageContent(null);
-      return;
-    }
-    setStageContent(null);
-  }
-
-  async function handlePlayTogether(game: CatalogEntry, via?: PlayVia) {
-    if (!user) {
-      setIsAuthModalOpen(true);
-      return;
-    }
-    if (!game.multiplayer) return;
-
-    setPartyError(null);
-    try {
-      const session = await createPartySession(game.slug, game.multiplayer.maxPlayers);
-      setStageContent({ type: 'party', game, session, ...(via === undefined ? {} : { via }) });
-      document.getElementById('stage')?.scrollIntoView?.({ behavior: 'smooth' });
-    } catch (error) {
-      setPartyError(error instanceof Error ? error.message : t('errors.generic'));
-    }
-  }
-
-  // Full-viewport theater / party overlay. Rendered from every branch that can open
-  // it — including the open-chrome early returns for `/:handle` and `/:handle/:slug`.
-  // Those routes set `stageContent` (and with it `body.player-open` scroll lock) the
-  // same way home and `/play` do; if the overlay only lived in the signed-in main
-  // return, Play/Remix on a game page would lock the page and show nothing.
+  // Rendered from every branch that can open it, so a game-page Play covers the page.
   const stageOverlay = (
-    <>
-      {stageContent?.type === 'party' && (
-        <section id="stage" className="panel stage is-playing-full-viewport">
-          <div className="game-theater-bar">
-            <div className="game-theater-meta">
-              <span className="theater-badge">
-                <PixelIcon name="phone" size={13} /> {t('party.badge')}
-              </span>
-              <h2 className="theater-title">{stageContent.game.title}</h2>
-            </div>
-            <div className="game-theater-actions">
-              <button
-                className="secondary-btn exit-btn"
-                onClick={handleExitPartyTheater}
-                aria-label={t('catalog.exitPlayer', { defaultValue: 'Close' })}
-                title={t('catalog.exitPlayer', { defaultValue: 'Close' })}
-              >
-                <PixelIcon name="close" size={14} />
-              </button>
-            </div>
-          </div>
-          <div className="game-viewport-container">
-            <PartyStage
-              key={stageContent.session.code}
-              game={stageContent.game}
-              session={stageContent.session}
-              via={stageContent.via}
-              onExit={handleExitPartyTheater}
-            />
-          </div>
-        </section>
-      )}
-
-      {stageContent?.type === 'catalog' && (
-        <GameTheater
-          key={stageContent.game.slug}
-          title={stageContent.game.title}
-          // AI Act art. 50 needs a disclosure at the point of consumption; keep
-          // it short so the title stays the hero of the bar.
-          badge={{ icon: 'sparkle', label: t('ai.generatedShort') }}
-          source={{ slug: stageContent.game.slug }}
-          onExit={handleExitCatalogTheater}
-          orientation={stageContent.game.orientation}
-          reportSlug={stageContent.game.slug}
-          submittedBy={stageContent.game.submittedBy}
-          creatorHandle={stageContent.game.creatorHandle}
-          controls={stageContent.game.controls}
-          touch={stageContent.game.touch}
-          editor={stageContent.game.editor}
-          via={stageContent.via}
-          initialRemixOpen={stageContent.initialRemixOpen}
-          initialRemixRequest={stageContent.initialRemixRequest}
-        />
-      )}
-
-      {showBetaWelcome && user && <BetaWelcomeSplash onContinue={dismissBetaWelcome} />}
-    </>
+    <StageOverlay
+      stageContent={stageContent}
+      onExitCatalogTheater={handleExitCatalogTheater}
+      onExitPartyTheater={handleExitPartyTheater}
+      showBetaWelcome={Boolean(showBetaWelcome && user)}
+      onDismissBetaWelcome={dismissBetaWelcome}
+    />
   );
 
   // A phone that scanned a lobby QR is anonymous by design: it has no session and
