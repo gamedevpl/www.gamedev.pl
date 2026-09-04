@@ -119,7 +119,7 @@ export interface GateRunnerDeps {
    * Builds the document that will actually be served, from the checked harness.
    * Injected so the runner can be tested without esbuild or a games-repo tree.
    */
-  assembleBundle?: (harness: string, slug: string) => Promise<string | null>;
+  assembleBundle: (harness: string, slug: string) => Promise<string | null>;
   /**
    * The Creator Kit window. Injected so tests can fix the registry without GCS;
    * production reads `kits/current.json` via {@link GamesStore.getKitRegistry}.
@@ -531,8 +531,8 @@ async function storePreviewStrict(
   version: string,
   harness: string,
 ): Promise<string[]> {
-  const preview = await deps.assembleBundle?.(harness, slug);
-  if (preview == null) {
+  const preview = await deps.assembleBundle(harness, slug);
+  if (preview === null) {
     throw new Error(`check:game --preview passed for ${slug} but its sources could not be assembled`);
   }
   await deps.store.putDerivedArtifact(
@@ -592,8 +592,8 @@ async function collectArtifacts(
   // store a version that reads as publishable and has nothing to publish — and the
   // failure would surface later, as a creator's preview that never appears, rather
   // than here where the run that caused it is still in front of someone.
-  const bundle = await deps.assembleBundle?.(harness, slug);
-  if (bundle == null) throw new Error(`check:game passed for ${slug} but its sources could not be assembled`);
+  const bundle = await deps.assembleBundle(harness, slug);
+  if (bundle === null) throw new Error(`check:game passed for ${slug} but its sources could not be assembled`);
   await deps.store.putDerivedArtifact(
     slug,
     version,
