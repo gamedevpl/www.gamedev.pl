@@ -180,6 +180,7 @@ const FILE_BUCKET = {
   'quota-peek': 'platform',
   'bot-allowance': 'platform',
   'spend-brake': 'platform',
+  'gate-run-ceiling': 'platform',
   'feedback-themes-contract': 'platform',
   'managed-builder-error': 'platform',
   'upload-error': 'platform',

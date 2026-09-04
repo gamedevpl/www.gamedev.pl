@@ -78,6 +78,14 @@ const AUDIENCE_ENV_VAR = {
 
 export type InternalSweep = keyof typeof AUDIENCE_ENV_VAR;
 
+// Callers that are not the scheduler, and the env var naming each.
+
+// Anything absent here is a scheduler job, authenticated by NOTIFY_SWEEP_SA.
+const CALLER_SA_ENV_VAR: Partial<Record<InternalSweep, string>> = {
+  mpRelay: 'MP_RELAY_CALLER_SA',
+  spendBrake: 'SPEND_BRAKE_CALLER_SA',
+};
+
 /**
  * Build the internal-auth verifier from env: OIDC when both the sweep's audience and
  * NOTIFY_SWEEP_SA are set, otherwise deny-all (endpoint present but closed).
@@ -90,9 +98,10 @@ export function createInternalAuthVerifierFromEnv(
   sweep: InternalSweep = 'notifySweep',
 ): InternalAuthVerifier {
   const audience = env[AUDIENCE_ENV_VAR[sweep]]?.trim();
-  // The scheduler jobs share one identity; the relay is called by the app service, so it
-  // authenticates a different caller and must not be opened by the scheduler's SA.
-  const serviceAccountEmail = (sweep === 'mpRelay' ? env.MP_RELAY_CALLER_SA : env.NOTIFY_SWEEP_SA)?.trim();
+  // The relay and the brake have their own callers, opened by neither sweep.
+  const serviceAccountEmail = CALLER_SA_ENV_VAR[sweep]
+    ? env[CALLER_SA_ENV_VAR[sweep]]?.trim()
+    : env.NOTIFY_SWEEP_SA?.trim();
   if (audience && serviceAccountEmail) {
     return new OidcInternalAuthVerifier({ audience, serviceAccountEmail });
   }

@@ -81,10 +81,7 @@ async function setup(opts?: {
   failPutCandidateSources?: boolean;
   translator?: Translator;
   stagedPreviews?: Pick<StagedPreviewPublisher, 'publishCandidate'>;
-  gateRunGate?: {
-    checkAndSpend(uid: string, dateStr: string): Promise<{ allowed: boolean }>;
-    peek(uid: string, dateStr: string): Promise<{ allowed: boolean }>;
-  } | null;
+  gateRunGate?: { peek(uid: string, dateStr: string): Promise<{ allowed: boolean }> } | null;
   builder?: 'self';
 }) {
   const store = new InMemoryStore();
@@ -176,7 +173,7 @@ describe('shared source delivery', () => {
   it('refuses a delivery once the daily gate-build allowance is spent', async () => {
     let allowed = true;
     const { service, authority, gate } = await setup({
-      gateRunGate: { checkAndSpend: async () => ({ allowed }), peek: async () => ({ allowed }) },
+      gateRunGate: { peek: async () => ({ allowed }) },
     });
 
     const first = await service.deliver({
@@ -204,14 +201,13 @@ describe('shared source delivery', () => {
     expect(gate).toHaveBeenCalledTimes(1);
   });
 
-  it('spends no gate slot for a delivery that never starts a build', async () => {
-    let spent = 0;
+  it('never spends a slot itself — the ceiling is charged where the build starts', async () => {
+    let peeked = 0;
     const { service, authority, gate } = await setup({
       failPutCandidateSources: true,
       gateRunGate: {
-        peek: async () => ({ allowed: true }),
-        checkAndSpend: async () => {
-          spent += 1;
+        peek: async () => {
+          peeked += 1;
           return { allowed: true };
         },
       },
@@ -227,9 +223,9 @@ describe('shared source delivery', () => {
       }),
     ).rejects.toThrow();
 
-    // The counter counts builds; a rejected delivery starts none.
+    // A rejected delivery starts no build, so it costs nothing.
     expect(gate).not.toHaveBeenCalled();
-    expect(spent).toBe(0);
+    expect(peeked).toBe(1);
   });
 
   it('uses the same service for publish side effects and transition', async () => {

@@ -18,6 +18,7 @@ import { createGcsGamesStore } from '../delivery/games-store.js';
 import { createGcsObjectStore } from '../delivery/gcs-sign.js';
 import { createQueryKnowledgeFromEnv } from '../creation/knowledge-search.js';
 import { createCloudBuildGateTrigger, gateTriggerOptionsFromEnv } from '../delivery/gate-trigger.js';
+import { withGateRunCeiling } from './gate-run-ceiling.js';
 import { registerAdminRoutes } from './admin.js';
 import { parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
@@ -55,7 +56,12 @@ import { VertexTabCompleter, type TabCompleter } from '../creation/tab-complete.
 import { registerRemixRoutes, MAX_REMIX_ID_LENGTH } from '../creation/remix.js';
 import { canProposeTo, openProposal, reconcileProposalGate, transitionProposal } from '../community/proposals.js';
 import { isProposerTurn, toPublicProposalState } from '../community/proposal-state.js';
-import { createEditingGate, createCreationGate, createTabCompleteGate } from '../creation/creation-limits.js';
+import {
+  createEditingGate,
+  createCreationGate,
+  createGateRunGate,
+  createTabCompleteGate,
+} from '../creation/creation-limits.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { registerContactRoutes, type ContactRoutesOptions } from '../notifications/contact.js';
 import { registerEmailRoutes } from '../notifications/email-routes.js';
@@ -367,9 +373,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const objectStore =
     options.submissionRoutes?.agentChannel?.objectStore ??
     (gamesStoreBucket ? createGcsObjectStore({ bucket: gamesStoreBucket }) : undefined);
-  const gateTrigger =
+  // Wrapped once here so every entry point — delivery, editor, remix, proposals,
+  // re-gate and the health sweep — starts builds through the same daily ceiling.
+  const gateTrigger = withGateRunCeiling(
     options.submissionRoutes?.agentChannel?.onSourcesDelivered ??
-    createCloudBuildGateTrigger(gateTriggerOptionsFromEnv(), app.log);
+      createCloudBuildGateTrigger(gateTriggerOptionsFromEnv(), app.log),
+    createGateRunGate({ store, logWarn: (payload, msg) => app.log.warn(payload, msg) }),
+    { logWarn: (payload, msg) => app.log.warn(payload, msg) },
+  );
   // Off unless KNOWLEDGE_SEARCH_ENGINE_ID is set — see knowledge-search.ts.
   const knowledgeSearch =
     options.submissionRoutes?.agentChannel?.knowledgeSearch ?? createQueryKnowledgeFromEnv(app.log);

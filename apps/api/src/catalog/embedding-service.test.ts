@@ -205,4 +205,55 @@ describe('embedding-service', () => {
     expect(logs.length).toBe(1);
     expect(logs[0]).toContain('Vertex embedding generation failed');
   });
+  it('asks the cost gate once per paid call, and never for a cache hit', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ embedding: { values: [0.6, 0.8] } }),
+    } as Response);
+
+    const asked: string[] = [];
+    const service = new VertexEmbeddingService({
+      model: 'gemini-embedding-2',
+      beforePaidCall: (options) => {
+        asked.push(options.role ?? 'query');
+        return true;
+      },
+    });
+    vi.spyOn(
+      (service as unknown as { auth: { getClient: () => Promise<unknown> } }).auth,
+      'getClient',
+    ).mockResolvedValue({
+      getAccessToken: async () => ({ token: 'mock-token' }),
+    });
+
+    await service.embedQuery('arcade football');
+    // Same text again: served from cache, so nobody is billed.
+    await service.embedQuery('arcade football');
+    // An index build embeds documents through the same boundary.
+    await service.embedDocument('a football game', 'Football');
+
+    expect(asked).toEqual(['query', 'document']);
+  });
+
+  it('makes no request at all when the cost gate refuses', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ embedding: { values: [0.6, 0.8] } }),
+    } as Response);
+
+    const service = new VertexEmbeddingService({
+      model: 'gemini-embedding-2',
+      beforePaidCall: () => false,
+    });
+    vi.spyOn(
+      (service as unknown as { auth: { getClient: () => Promise<unknown> } }).auth,
+      'getClient',
+    ).mockResolvedValue({
+      getAccessToken: async () => ({ token: 'mock-token' }),
+    });
+
+    // A refusal reads like a miss, exactly as an outage does.
+    expect(await service.embedQuery('arcade football')).toEqual([]);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 });

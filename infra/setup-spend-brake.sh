@@ -24,8 +24,11 @@
 #   ./infra/setup-spend-brake.sh
 #   PROJECT_ID=… HOST=… ./infra/setup-spend-brake.sh
 #
-# After running it, set SPEND_BRAKE_AUDIENCE and NOTIFY_SWEEP_SA on the service (both
-# are in infra/env-manifest.json, so the deploy paths already thread them) and redeploy.
+# After running it, set SPEND_BRAKE_AUDIENCE and SPEND_BRAKE_CALLER_SA on the service
+# (both are in infra/env-manifest.json, so the deploy paths already thread them) and
+# redeploy. The brake has its own caller variable on purpose: NOTIFY_SWEEP_SA is the
+# scheduler identity every sweep authenticates against, and overwriting it here to make
+# the brake work would quietly close the sweeps instead.
 # Until the audience is set the endpoint answers 401 to everything, which is the right
 # default for a route that can pause the product.
 
@@ -36,8 +39,9 @@ HOST="${HOST:-www.gamedev.pl}"
 TOPIC="${TOPIC:-spend-brake}"
 SUBSCRIPTION="${SUBSCRIPTION:-spend-brake-push}"
 CHANNEL_NAME="${CHANNEL_NAME:-Spend brake}"
-# Reuses the scheduler's identity: same shape of caller, same OIDC mechanism.
-INVOKER_SA="${INVOKER_SA:-scheduler@${PROJECT_ID}.iam.gserviceaccount.com}"
+# Its own identity: this caller is a Pub/Sub push subscription, and the one thing it can
+# do is pause lanes. Nothing else should gain that by being a scheduler job.
+INVOKER_SA="${INVOKER_SA:-spend-brake@${PROJECT_ID}.iam.gserviceaccount.com}"
 BRAKE_URL="https://${HOST}/api/internal/spend-brake"
 
 # Which policies pull which lanes. A policy pauses only what its own runaway can be
@@ -79,6 +83,15 @@ fi
 echo "    ${CHANNEL_ID}"
 
 echo "==> 3/4 Push subscription -> ${BRAKE_URL}"
+# Created here rather than assumed: the subscription and the service must agree on one
+# identity, and an SA that does not exist yet fails at push time, not at setup time.
+INVOKER_ID="${INVOKER_SA%%@*}"
+if [[ "$INVOKER_SA" == *"@${PROJECT_ID}.iam.gserviceaccount.com" ]]; then
+  gcloud iam service-accounts describe "$INVOKER_SA" --project "$PROJECT_ID" >/dev/null 2>&1 ||
+    gcloud iam service-accounts create "$INVOKER_ID" \
+      --project "$PROJECT_ID" \
+      --display-name="Spend brake push caller"
+fi
 # The audience is the endpoint's own URL, so a token minted for this subscription
 # cannot be replayed against any other internal route.
 if gcloud pubsub subscriptions describe "$SUBSCRIPTION" --project "$PROJECT_ID" >/dev/null 2>&1; then
@@ -125,7 +138,7 @@ cat <<EOF
 Done. Two things left, both on the service rather than here:
 
   SPEND_BRAKE_AUDIENCE=${BRAKE_URL}
-  NOTIFY_SWEEP_SA=${INVOKER_SA}
+  SPEND_BRAKE_CALLER_SA=${INVOKER_SA}
 
 Until the audience is set the endpoint refuses everything, so the brake is armed only
 after the next deploy. Verify by publishing a test notification:

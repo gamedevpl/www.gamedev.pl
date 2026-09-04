@@ -229,12 +229,16 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
     }
 
     if (validated.texts.length > 0) {
-      await store.checkAndIncrementQuota(
+      // Authoritative: concurrent writes all pass the peek above, one increment wins.
+      const spent = await store.checkAndIncrementQuota(
         request.user.uid,
         dateStr,
         options.dailyWorldWriteQuota ?? Number(process.env.DAILY_WORLD_WRITE_QUOTA ?? DEFAULT_DAILY_WORLD_WRITE_QUOTA),
         'worldWrites',
       );
+      if (!spent.allowed) {
+        return reply.status(429).send({ error: 'daily world-entry quota exceeded' });
+      }
     }
 
     const result = await store.putWorldEntry({

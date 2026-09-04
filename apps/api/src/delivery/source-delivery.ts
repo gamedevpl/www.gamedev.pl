@@ -131,9 +131,8 @@ export interface SourceDeliveryServiceOptions {
   }) => Promise<TypecheckPreflightResult>;
   sharedSourcesFromKitTree: (tree: KitTree) => Record<string, string>;
   typecheckPreflightMaxRefusals: number;
-  // Platform-wide daily ceiling on gate builds. Absent means uncounted.
+  // Read-only: refuses early. Slots are spent in platform/gate-run-ceiling.ts.
   gateRunGate?: {
-    checkAndSpend(uid: string, dateStr: string): Promise<{ allowed: boolean }>;
     peek(uid: string, dateStr: string): Promise<{ allowed: boolean }>;
   } | null;
 }
@@ -282,7 +281,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       if (stopReason(record)) return { accepted: false, rejected: 'stopped' };
       if (isRateLimited(input.jobId)) return { accepted: false, rejected: 'rate_limited' };
 
-      // Read-only: the slot is spent where a build actually starts.
+      // Read-only: a delivery refused later costs the ceiling nothing.
       if (options.gateRunGate) {
         const dateStr = new Date(now()).toISOString().slice(0, 10);
         const headroom = await options.gateRunGate.peek(record.ownerUid, dateStr);
@@ -538,12 +537,6 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
           .catch((err: unknown) => {
             options.log?.warn?.({ err, slug: input.slug, version }, 'candidate preview generation failed');
           });
-      }
-
-      // Spent here: a refused or invalid delivery starts no build.
-      if (options.gateRunGate) {
-        const dateStr = new Date(now()).toISOString().slice(0, 10);
-        await options.gateRunGate.checkAndSpend(record.ownerUid, dateStr);
       }
 
       const gate = await options.onSourcesDelivered?.({

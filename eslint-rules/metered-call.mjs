@@ -48,7 +48,7 @@ const GATED_AT_CALLER = {
   'creation/seed-provider-vertex.ts': 'seedAvailabilityGate, in seed-pipeline.ts',
   'community/feedback-themes.ts': 'THEME_CALL_BUDGET, in scorecard.ts',
   'catalog/catalog-enricher.ts': 'enrichmentAttempted, in catalog-indexer.ts',
-  'catalog/embedding-service.ts': 'searchGate, in catalog-search-routes.ts',
+  'catalog/embedding-service.ts': 'searchGate via beforePaidCall, in catalog-search-routes.ts',
 };
 
 function gatedAtCaller(filename) {

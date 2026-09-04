@@ -7,7 +7,10 @@ import type { Store } from '../platform/store.js';
 
 // Structural: catalog does not import creation (N1 module map).
 export interface CatalogSearchGate {
+  // One slot per paid embedding, at the cache-miss boundary.
   checkAndSpend(uid: string | null, dateStr: string): Promise<{ allowed: boolean }>;
+  // Read-only headroom, so an exhausted lane refuses before it embeds.
+  peek(uid: string | null, dateStr: string): Promise<{ allowed: boolean }>;
 }
 
 // Stops one account draining the platform's day.
@@ -30,9 +33,18 @@ export async function registerCatalogSearchRoutes(
   options: CatalogSearchRoutesOptions,
 ): Promise<void> {
   const { store, githubClient, publishedRef, getCatalogEntries } = options;
+  const searchGate = options.searchGate ?? null;
+  const nowMs = () => (options.now ?? Date.now)();
+  const today = () => new Date(nowMs()).toISOString().slice(0, 10);
 
   const embeddingService = new VertexEmbeddingService({
     log: (msg) => app.log.warn(msg),
+    // Counted per paid embedding: a cold instance embeds the whole catalog.
+    beforePaidCall: async () => {
+      if (!searchGate) return false;
+      const spent = await searchGate.checkAndSpend(null, today());
+      return spent.allowed;
+    },
   });
   const catalogVectorIndex = new CatalogVectorIndex();
   const indexer = new CatalogIndexer({
@@ -44,8 +56,6 @@ export async function registerCatalogSearchRoutes(
     vectorIndex: catalogVectorIndex,
     log: (msg) => app.log.warn(msg),
   });
-
-  const searchGate = options.searchGate ?? null;
 
   app.get(
     '/api/catalog/search',
@@ -64,18 +74,17 @@ export async function registerCatalogSearchRoutes(
         return reply.send({ match: null, score: 0 });
       }
 
-      const nowMs = (options.now ?? Date.now)();
-      const dateStr = new Date(nowMs).toISOString().slice(0, 10);
+      const dateStr = today();
       // Anonymous is first-class: the hero prompt outlives the beta wall.
       const uid = request.user?.uid ?? null;
 
-      // Before ensureIndex too: that embeds the whole catalog.
-      const gate = await searchGate.checkAndSpend(uid, dateStr);
+      // Read-only: an exhausted lane refuses before ensureIndex embeds anything.
+      const gate = await searchGate.peek(uid, dateStr);
       if (!gate.allowed) {
         return reply.send({ match: null, score: 0 });
       }
 
-      // After the global gate, as elsewhere; overcounts by one at worst.
+      // After the headroom peek, as elsewhere; one request is one query.
       if (uid && store) {
         const quota = await store.checkAndIncrementQuota(
           uid,

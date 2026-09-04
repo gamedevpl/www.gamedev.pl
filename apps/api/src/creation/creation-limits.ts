@@ -130,7 +130,6 @@ function isAutomationAccount(uid: string): boolean {
   return uid.startsWith(BOT_UID_PREFIX);
 }
 
-
 // Never consults a pause: it must not block the deploy that fixes the incident.
 async function spendBotAllowance(
   store: Store,
@@ -138,7 +137,8 @@ async function spendBotAllowance(
   logWarn: (payload: Record<string, unknown>, message: string) => void,
 ): Promise<CreationGateOutcome> {
   const cap = resolveDefaultGlobalDailyBotCallCap();
-  if (cap <= 0) return { allowed: true };
+  // Zero is closed, as in every other lane — not an accidental way back to unbounded.
+  if (cap <= 0) return { allowed: false, reason: 'over_capacity' };
   try {
     const spent = await store.checkAndIncrementGlobalBotCalls(dateStr, cap);
     if (!spent.allowed) {
@@ -307,7 +307,9 @@ export function createEditingGate(options: CreationGateOptions): EditingGate {
     },
 
     async peek(uid, dateStr) {
-      if (isAutomationAccount(uid)) return spendBotAllowance(store, dateStr, logWarn);
+      // Read-only by contract: spending here would charge automation for work that
+      // may never happen, and charge it twice when checkAndSpend follows.
+      if (isAutomationAccount(uid)) return { allowed: true };
 
       const value = await limits();
       if (value.editingPaused) return { allowed: false, reason: 'paused' };
@@ -559,8 +561,10 @@ export function createTabCompleteGate(options: CreationGateOptions): TabComplete
 }
 
 export interface SearchGate {
-  // Call before embedQuery; null uid is anonymous, counted globally only.
+  // Spends one slot per paid embedding call, at the cache-miss boundary.
   checkAndSpend(uid: string | null, dateStr: string): Promise<CreationGateOutcome>;
+  // Read-only headroom, for refusing a search before it embeds anything.
+  peek(uid: string | null, dateStr: string): Promise<CreationGateOutcome>;
 }
 
 // Same chassis as the editing and chat gates, guarding query embeddings.
@@ -600,6 +604,23 @@ export function createSearchGate(options: CreationGateOptions): SearchGate {
   }
 
   return {
+    async peek(uid, dateStr) {
+      // Read-only: an index build spends per embedding, not per search request.
+      if (uid !== null && isAutomationAccount(uid)) return { allowed: true };
+      const value = await limits();
+      if (value.searchPaused) return { allowed: false, reason: 'paused' };
+      const cap = value.globalDailySearchEmbeddingCap ?? defaultCap;
+      if (cap <= 0) return { allowed: false, reason: 'over_capacity' };
+      try {
+        const current = await store.getGlobalSearchEmbeddingCount(dateStr);
+        return current >= cap ? { allowed: false, reason: 'over_capacity' } : { allowed: true };
+      } catch (error) {
+        // Never authoritative: checkAndSpend decides when an embedding is paid for.
+        logWarn({ err: error, dateStr }, 'global search embedding counter unreachable; skipping the headroom peek');
+        return { allowed: true };
+      }
+    },
+
     async checkAndSpend(uid, dateStr) {
       if (uid !== null && isAutomationAccount(uid)) return spendBotAllowance(store, dateStr, logWarn);
       const value = await limits();
