@@ -1,5 +1,5 @@
 import type { AgentBackend, SeedFiles } from '../agent-surface/agent-backend.js';
-import { mintAgentToken, mintManagedMcpOpener } from '../agent-surface/agent-token.js';
+import { mintAgentToken, mintManagedMcpOpener } from '../platform/agent-token.js';
 import type { ManagedAvailabilityGate, ManagedUnavailableReason } from '../agent-surface/managed-availability.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { BuilderKind } from './builder.js';

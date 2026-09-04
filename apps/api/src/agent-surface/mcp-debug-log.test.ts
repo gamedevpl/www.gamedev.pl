@@ -2,7 +2,7 @@ import { Writable } from 'node:stream';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mintGameAgentKey } from './agent-game-key.js';
-import { mintAgentToken } from './agent-token.js';
+import { mintAgentToken } from '../platform/agent-token.js';
 import { buildApp } from '../platform/app.js';
 import {
   classifyMcpBearerKind,

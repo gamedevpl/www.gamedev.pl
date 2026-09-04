@@ -9,7 +9,8 @@ import {
   type JobStall,
   type JobState,
 } from './job-state.js';
-import { isPublishableMode, type GamesStore } from '../delivery/games-store.js';
+import type { GamesStore } from '../delivery/games-store.js';
+import { isPublishableMode } from '../platform/publication-state.js';
 import { BOT_UID_PREFIX, type Store, type SubmissionRecord } from '../platform/store.js';
 
 /**

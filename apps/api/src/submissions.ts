@@ -35,6 +35,8 @@ import { registerGamePlayRoute } from './catalog/game-play-route.js';
 import { registerCatalogSearchRoutes } from './catalog/catalog-search-routes.js';
 import { registerDraftPreviewRoutes } from './delivery/draft-preview-routes.js';
 import { registerCreatorMediaRoutes } from './delivery/creator-media.js';
+import { probeGateCrash } from './delivery/gate-crash.js';
+import { postGateScreenshotToThread } from './delivery/gate-screenshot.js';
 import { createBuildStatusAssembler } from './delivery/build-status.js';
 import { createChatOrchestration } from './creation/chat-orchestration.js';
 import { createStagedPreviewPublisher, type StagedPreviewOptions } from './delivery/staged-preview.js';
@@ -1067,6 +1069,7 @@ export async function registerSubmissionRoutes(
     store,
     now,
     log: app.log,
+    isPresenceEventText: isMcpPresenceEventText,
     chatAgent: options.chatAgent,
     chatGate,
     dailyChatQuota,
@@ -1227,6 +1230,8 @@ export async function registerSubmissionRoutes(
     releaseWorkspace,
     resumeBuild,
     acknowledgeBuilderHandoff,
+    probeGateCrash,
+    postGateScreenshot: postGateScreenshotToThread,
   });
 
   /**

@@ -14,7 +14,7 @@ import {
   readBearerToken,
   verifyAgentToken,
   type AgentTokenAccess,
-} from './agent-token.js';
+} from '../platform/agent-token.js';
 import {
   assertUploadTokenUnexpired,
   DEFAULT_UPLOAD_URL_TTL_SECONDS,
@@ -25,7 +25,7 @@ import {
   type UploadTokenClaims,
 } from './agent-upload-token.js';
 import { isRasterSourcePath } from '../platform/raster-source.js';
-import { MAX_BUILD_PREVIEW_BYTES } from '../delivery/build-preview-limits.js';
+import { MAX_BUILD_PREVIEW_BYTES } from '../platform/build-preview-limits.js';
 import { loadBuildTranscript } from '../delivery/build-transcript.js';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
 import { readGateVerdict } from '../delivery/gate-verdict.js';
@@ -56,10 +56,10 @@ import { computeStageAdvisories } from '../delivery/stage-hints.js';
 import { runTypecheckPreflight, sharedSourcesFromKitTree } from '../creation/typecheck-preflight.js';
 import { isMcpPresenceEventText } from './mcp-presence.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from '../creation/source-patch.js';
-import { overlayGameSources } from '../delivery/staged-preview.js';
+import { overlayGameSources } from '../platform/game-overlay.js';
 import { SourceDeliveryValidationError, type SourceDeliveryService } from '../delivery/source-delivery.js';
 import { type BuilderHandoff, type CreatorMessage, type Store, type SubmissionRecord } from '../platform/store.js';
-import { pickLatestChangelogText } from '../delivery/build-changelog.js';
+import { pickLatestChangelogText } from '../platform/build-changelog.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from '../platform/submission-status.js';
 import { normalizeAtIntake, type IntakeText } from '../platform/localize-intake.js';
 import { createTranslatorFromEnv, type Translator } from '../platform/translate.js';

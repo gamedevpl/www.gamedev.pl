@@ -8,13 +8,12 @@ import {
   type PartitionScanBudget,
 } from '../platform/telemetry-health.js';
 import {
-  createDefaultThemeExtractor,
   MAX_FEEDBACK_ROWS,
   MIN_FEEDBACK_FOR_THEMES,
   NoopThemeExtractor,
   type FeedbackTheme,
   type ThemeExtractor,
-} from '../community/feedback-themes.js';
+} from '../platform/feedback-themes-contract.js';
 import type { Scorecard, Store, TelemetryEvent } from '../platform/store.js';
 
 /**
@@ -239,7 +238,7 @@ export interface ScorecardRoutesOptions {
   now?: () => number;
   windowDays?: number;
   budget?: PartitionScanBudget;
-  /** Injected by tests; production builds one from the environment. */
+  // N1: app.ts picks the extractor; this only uses it.
   themeExtractor?: ThemeExtractor;
 }
 
@@ -247,7 +246,7 @@ export async function registerScorecardRoutes(app: FastifyInstance, options: Sco
   const { store, internalAuthVerifier } = options;
   // Resolved once per app rather than per request: building it is cheap and lazy, and a
   // per-request construction would be a per-request chance to reach for credentials.
-  const themeExtractor = options.themeExtractor ?? createDefaultThemeExtractor();
+  const themeExtractor = options.themeExtractor ?? new NoopThemeExtractor();
 
   // Cloud Scheduler POSTs here nightly with an OIDC token, exactly as the notification
   // sweep does. The rate ceiling is a runaway guard, not the access control — OIDC is.

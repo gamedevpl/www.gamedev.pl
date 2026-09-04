@@ -1,6 +1,6 @@
 import { gunzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
-import { readTarEntries, type TarEntry } from '../platform/tar.js';
+import { readTarEntries, type TarEntry } from './tar.js';
 import { composeWorkspaceArchive, stripCommonRoot, WorkspaceCompositionError } from './workspace-archive.js';
 
 function entry(path: string, body = ''): TarEntry {

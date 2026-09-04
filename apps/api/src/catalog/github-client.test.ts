@@ -1,7 +1,8 @@
 import { gzipSync } from 'node:zlib';
 import { describe, expect, it, vi } from 'vitest';
 import { fetchGamesRepoArchive } from '../platform/games-repo-archive.js';
-import { createGitHubClient, resolveGameTypeScriptPath } from './github-client.js';
+import { createGitHubClient } from './github-client.js';
+import { resolveGameTypeScriptPath } from '../platform/game-module-path.js';
 
 describe('resolveGameTypeScriptPath', () => {
   it.each([

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../platform/app.js';
-import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
+import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from '../platform/agent-token.js';
 import { mintGameAgentKey } from './agent-game-key.js';
 import { mintMcpSessionKey } from './mcp-session-key.js';
 import {

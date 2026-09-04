@@ -8,7 +8,7 @@ import {
 } from './agent-build-brief.js';
 import { seedPayload } from './seed-status.js';
 import { dispatchAttempt, type Store, type SubmissionRecord } from '../platform/store.js';
-import type { AgentTokenAccess } from './agent-token.js';
+import type { AgentTokenAccess } from '../platform/agent-token.js';
 
 // Round brief and creator-attached reference images the agent starts from.
 export interface AgentChannelBriefRoutesDeps {

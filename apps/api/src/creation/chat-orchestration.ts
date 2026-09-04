@@ -7,9 +7,8 @@ import {
   type StudioChatAgent,
 } from './chat-agent.js';
 import { loadRecentChatTurns } from './chat-turns-history.js';
-import { isMcpPresenceEventText } from '../agent-surface/mcp-presence.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
-import { asChatAgentLogger, logChatAgentDecision, logChatAgentFailOpen } from '../telemetry/chat-agent-metrics.js';
+import { asChatAgentLogger, logChatAgentDecision, logChatAgentFailOpen } from '../platform/chat-agent-metrics.js';
 import { normalizeAtIntake, type IntakeText } from '../platform/localize-intake.js';
 import { MAX_REVISION_CHARS } from '../platform/submission-status.js';
 import { createTranslatorFromEnv, type Translator } from '../platform/translate.js';
@@ -27,6 +26,8 @@ export interface ChatOrchestrationOptions {
   chatGate?: ChatGate | null;
   dailyChatQuota: number;
   translator?: Translator;
+  // N1: injected so this module has no value-level agent-surface import.
+  isPresenceEventText: (text: string, createdAt?: string) => boolean;
 }
 
 export interface ChatOrchestration {
@@ -52,7 +53,7 @@ function builderOf(record: SubmissionRecord | null | undefined): BuilderKind {
 
 // Runs the mini chat agent that fields feedback/improve turns before dispatch.
 export function createChatOrchestration(options: ChatOrchestrationOptions): ChatOrchestration {
-  const { store, now, chatGate, dailyChatQuota } = options;
+  const { store, now, chatGate, dailyChatQuota, isPresenceEventText } = options;
   const chatAgent = options.chatAgent ?? new VertexStudioChatAgent();
   const chatAgentLog = asChatAgentLogger(options.log);
   // Only these two writes may call this — see git history for why.
@@ -94,7 +95,7 @@ export function createChatOrchestration(options: ChatOrchestrationOptions): Chat
       pendingCount: pending.length,
       // listBuildEvents is newest-first; describeStatus labels these oldest-first.
       recentEvents: events
-        .filter((event) => !isMcpPresenceEventText(event.text, event.createdAt))
+        .filter((event) => !isPresenceEventText(event.text, event.createdAt))
         .map((event) => event.text)
         .reverse(),
       minutesSinceLastSignal: record.lastAgentSignalAt

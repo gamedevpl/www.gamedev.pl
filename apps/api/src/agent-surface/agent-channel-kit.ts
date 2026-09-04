@@ -10,7 +10,7 @@ import {
   parseKitSidecar,
 } from '../platform/kit-registry.js';
 import type { GateVerdictSummary } from '../delivery/gate-verdict.js';
-import type { AgentTokenAccess } from './agent-token.js';
+import type { AgentTokenAccess } from '../platform/agent-token.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 
 export interface AgentChannelKitRoutesDeps {

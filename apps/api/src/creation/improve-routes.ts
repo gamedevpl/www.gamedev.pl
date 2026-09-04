@@ -1,12 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { MANAGED_UNAVAILABLE_ERROR, type ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
+import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
+import { MANAGED_UNAVAILABLE_ERROR } from '../platform/managed-builder-error.js';
 import type { GitHubClient } from '../catalog/github-client.js';
-import {
-  storeCreatorPlaytestShot,
-  storeCreatorReferenceImages,
-  formatPlaytestContextBlock,
-} from '../delivery/creator-media.js';
+import { storeCreatorPlaytestShot, storeCreatorReferenceImages } from '../platform/creator-media-store.js';
+import { formatPlaytestContextBlock } from '../platform/playtest-context.js';
 import type { ContentChecker } from '../platform/moderation.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';

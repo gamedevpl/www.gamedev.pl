@@ -11,9 +11,9 @@
  */
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { InvalidAgentTokenError } from './agent-token.js';
+import { InvalidAgentTokenError } from '../platform/agent-token.js';
 
-export { InvalidAgentTokenError } from './agent-token.js';
+export { InvalidAgentTokenError } from '../platform/agent-token.js';
 
 const SCOPE = 'agent-game-v1';
 /** Wire marker so this shape can never parse as a round-scoped key. */

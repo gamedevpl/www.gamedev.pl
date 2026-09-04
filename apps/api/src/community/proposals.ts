@@ -54,18 +54,21 @@ import {
 } from '../platform/store.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { isPublished } from '../platform/publication-state.js';
+import {
+  MAX_PROPOSAL_DESCRIPTION_LENGTH,
+  MAX_PROPOSAL_MESSAGE_LENGTH,
+  MAX_PROPOSAL_TITLE_LENGTH,
+  MIN_PROPOSAL_DESCRIPTION_LENGTH,
+  PROPOSAL_NO_JOB,
+} from '../platform/proposal-limits.js';
 
-/**
- * `jobId` written onto a proposal's version manifest.
- *
- * Zero, because a proposal has no job — and it must not have one. A submission record for
- * a proposal would be owned by the proposer and carry the target's slug, which is exactly
- * the shape `creatorOwnsSlug` reads as a transfer: sending a proposal would take the game
- * away from the person you sent it to. Job ids start at `JOB_ID_FLOOR` (1,000,000), so
- * zero is unambiguously "no job" and every equality check against a real job id already
- * refuses it. The real provenance lives in `manifest.proposal`.
- */
-export const PROPOSAL_NO_JOB = 0;
+export {
+  MAX_PROPOSAL_DESCRIPTION_LENGTH,
+  MAX_PROPOSAL_MESSAGE_LENGTH,
+  MAX_PROPOSAL_TITLE_LENGTH,
+  MIN_PROPOSAL_DESCRIPTION_LENGTH,
+  PROPOSAL_NO_JOB,
+};
 
 /**
  * Fallback when no logger was injected — a sweep or a test calling the domain layer
@@ -74,11 +77,6 @@ export const PROPOSAL_NO_JOB = 0;
  * contexts that have no request.
  */
 const SILENT_LOG = { warn: () => {} } as unknown as FastifyBaseLogger;
-
-export const MAX_PROPOSAL_TITLE_LENGTH = 120;
-export const MIN_PROPOSAL_DESCRIPTION_LENGTH = 20;
-export const MAX_PROPOSAL_DESCRIPTION_LENGTH = 2000;
-export const MAX_PROPOSAL_MESSAGE_LENGTH = 2000;
 
 export type ProposalRefusal =
   | 'contributions_off'

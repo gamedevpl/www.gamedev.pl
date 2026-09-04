@@ -1,9 +1,9 @@
 import { detectStall, toSubmissionStatus } from '../creation/job-state.js';
 import { gateCrashStall } from './gate-crash.js';
-import { sealRefusal } from './seal-preview.js';
+import { sealRefusal } from '../platform/seal-preview.js';
 import { toRecentBuilds } from './recent-builds.js';
 import { revisionOriginOf } from './build-status.js';
-import { stripPlaytestContext } from './build-transcript.js';
+import { stripPlaytestContext } from '../platform/playtest-context.js';
 import type { BuilderKind } from '../creation/builder.js';
 import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
 import type { GamesStore } from './games-store.js';

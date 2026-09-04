@@ -1,6 +1,6 @@
 import { assembleGameHtml } from '../platform/assemble.js';
-import { MAX_BUILD_PREVIEW_BYTES } from '../delivery/build-preview-limits.js';
-import { overlayGameSources } from '../delivery/staged-preview.js';
+import { MAX_BUILD_PREVIEW_BYTES } from '../platform/build-preview-limits.js';
+import { overlayGameSources } from '../platform/game-overlay.js';
 import type { AgentBackend, SeedDelivery } from '../agent-surface/agent-backend.js';
 import type { GitHubClient } from '../catalog/github-client.js';
 import type { GameSeeder, SeedDraft, SeedFile } from './game-seed.js';

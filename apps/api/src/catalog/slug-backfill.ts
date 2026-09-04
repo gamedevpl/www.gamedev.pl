@@ -6,8 +6,11 @@
 // drift — this writes permanent public addresses, and a second implementation would be a
 // second set of collision rules.
 
-import { mintGameSlug } from './slug.js';
+import { mintGameSlug } from '../platform/slug.js';
+import { settleSlugClaim, type SlugClaimProbe } from '../platform/slug-ownership.js';
 import type { SubmissionRecord } from '../platform/store.js';
+
+export type { SlugClaimProbe };
 
 /** The slice of the store a backfill touches. */
 export interface SlugBackfillStore {
@@ -16,9 +19,6 @@ export interface SlugBackfillStore {
   getSubmissionBySlug(slug: string): Promise<SubmissionRecord | null>;
 }
 
-/** Whether anything already answers to this name; `except` excuses a record's own slug. */
-export type SlugClaimProbe = (slug: string, except?: number) => Promise<boolean>;
-
 export interface SlugBackfillResult {
   ok: true;
   dryRun: boolean;
@@ -26,42 +26,6 @@ export interface SlugBackfillResult {
   named: number;
   failed: number;
   games: Array<{ jobId: number; title: string; slug: string | null }>;
-}
-
-/**
- * Reads back a slug a job just wrote, and settles who actually holds it.
- *
- * `getSubmissionBySlug` is the same oracle every later lookup uses — the draft route, the
- * play route, the delivery check — so asking it "who owns this name" is exactly the
- * question that matters, and it answers deterministically even when two records share a
- * slug. Whoever it does not name has lost the race and takes a different name; the winner
- * is undisturbed and never learns any of this happened.
- *
- * Returns the slug this job ended up with, or null when even the second attempt lost.
- */
-export async function settleSlugClaim(
-  store: SlugBackfillStore,
-  jobId: number,
-  slug: string,
-  title: string,
-  isSlugClaimed: SlugClaimProbe,
-): Promise<string | null> {
-  const holds = async (candidate: string): Promise<boolean> => {
-    const holder = await store.getSubmissionBySlug(candidate);
-    return holder?.jobId === jobId;
-  };
-
-  if (await holds(slug)) return slug;
-
-  // Lost. Mint again, this time treating anything we do not ourselves hold as taken,
-  // and write it before re-reading — the second write is what makes the second read
-  // meaningful.
-  const retry = await mintGameSlug(title, async (candidate) => {
-    if (candidate === slug) return true;
-    return isSlugClaimed(candidate, jobId);
-  });
-  await store.setSubmissionSlug(jobId, retry);
-  return (await holds(retry)) ? retry : null;
 }
 
 /**

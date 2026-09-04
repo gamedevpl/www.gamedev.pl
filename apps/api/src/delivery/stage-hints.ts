@@ -2,7 +2,7 @@
 import type { KitFileStore, KitTree } from '../agent-surface/kit-files.js';
 import type { GamesStore } from './games-store.js';
 import type { BaseVersionRecord, BaseVersionStore } from '../platform/round-base-version.js';
-import { overlayGameSources, readDeliveredSources } from './staged-preview.js';
+import { overlayGameSources, readDeliveredSources } from '../platform/game-overlay.js';
 import { KIT_ROOT_DIR } from '../platform/kit-registry.js';
 import {
   mergeMusicTrackMaps,

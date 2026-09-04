@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mintAgentToken, mintLegacyAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
+import { mintAgentToken, mintLegacyAgentToken, STALE_AGENT_TOKEN_REASON } from '../platform/agent-token.js';
 import { verifyUploadToken } from './agent-upload-token.js';
 import type { AgentChannelOptions } from './agent-channel.js';
 import { MAX_TRANSCRIPT_LIST_ENTRIES } from '../delivery/build-transcript.js';

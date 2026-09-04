@@ -2,7 +2,16 @@
 
 // `archived` and `disabled` both mean "was published, is not live now".
 
+import type { DeliveryMode } from '@gamedevpl/contract';
 import type { PublicationRecord } from '../delivery/games-store.js';
+
+// Whether a version in this mode may ever be published.
+
+// One named place, so a fourth mode cannot skip it.
+export function isPublishableMode(mode: DeliveryMode | undefined): boolean {
+  // Absent means a pre-field legacy manifest: those are publishes.
+  return mode !== 'preview' && mode !== 'proposal';
+}
 
 type PublicationLike = Pick<PublicationRecord, 'state'>;
 

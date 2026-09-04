@@ -9,7 +9,7 @@ import {
 } from '../creation/example-files.js';
 import { exampleUnpackCommand } from '../platform/kit-registry.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from '../delivery/gcs-sign.js';
-import type { AgentTokenAccess } from './agent-token.js';
+import type { AgentTokenAccess } from '../platform/agent-token.js';
 import type { SubmissionRecord } from '../platform/store.js';
 
 // The curated first-party exemplar cluster: catalog, tarball, and file reads.

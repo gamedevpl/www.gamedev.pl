@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { AGENT_BUILD_RULES_DIGEST, briefLocales, buildConstraints, splitConceptBrief } from './agent-build-brief.js';
+import { AGENT_BUILD_RULES_DIGEST, briefLocales, buildConstraints } from './agent-build-brief.js';
+import { splitConceptBrief } from '../platform/submission-status.js';
 import { MAX_PROJECT_BYTES } from '../platform/games-repo-contract.js';
 
 describe('splitConceptBrief', () => {

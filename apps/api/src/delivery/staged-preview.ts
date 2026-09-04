@@ -36,15 +36,10 @@ import {
   EmptyProjectError,
   ProjectTooLargeError,
 } from '../platform/assemble.js';
-import { MAX_BUILD_PREVIEW_BYTES } from './build-preview-limits.js';
+import { MAX_BUILD_PREVIEW_BYTES } from '../platform/build-preview-limits.js';
 import type { GamesStore, SourceFile } from './games-store.js';
-import { hasPlayableHowToPlay } from '../platform/how-to-play.js';
+import { hasPlayableOverlay, overlayGameSources, readDeliveredSources } from '../platform/game-overlay.js';
 import type { GitHubClient } from '../catalog/github-client.js';
-import {
-  resolveRoundBaseVersion,
-  type BaseVersionRecord,
-  type BaseVersionStore,
-} from '../platform/round-base-version.js';
 import type { Store } from '../platform/store.js';
 
 /**
@@ -146,102 +141,6 @@ export type StagedPreviewOutcome =
   | 'skipped'
   /** Something threw. Logged, never surfaced to the agent. */
   | 'failed';
-
-/** One layer of the overlay, newest-wins. Absent layers are simply not passed. */
-export type OverlayLayers = {
-  /** The round's staging buffer — what the agent is writing right now. */
-  staged?: Array<SourceFile & { deleted?: true }>;
-  /** The last version this game delivered, so a one-file tweak still renders a whole game. */
-  delivered?: SourceFile[];
-  /** The generated round-0 draft, when the agent has not replaced it yet. */
-  seed?: SourceFile[];
-};
-
-/**
- * Flattens the layers into the `overrides` map `getGameSources` takes.
- *
- * Order is the whole point. An improvement round stages one edited file against a game
- * that already exists, and a new round stages against a seed it is part-way through
- * replacing — in both cases rendering the staged file alone would show a game with holes,
- * and rendering the base alone would show work the agent has already moved past. Staged
- * beats delivered beats seed, which is newest-first by construction.
- */
-export function overlayGameSources(layers: OverlayLayers): Record<string, string> {
-  const overlay: Record<string, string> = Object.create(null) as Record<string, string>;
-  for (const layer of [layers.seed, layers.delivered]) {
-    for (const file of layer ?? []) overlay[file.path] = file.content;
-  }
-  for (const file of layers.staged ?? []) {
-    if (file.deleted) delete overlay[file.path];
-    else overlay[file.path] = file.content;
-  }
-  return overlay;
-}
-
-/**
- * The delivered sources a round improves, when there are any.
- *
- * Reads the same base version the channel's `GET /sources` does (round-base-version.ts),
- * because an improvement round inherits a slug long before it delivers anything of its
- * own, and without the base layer a one-file stage would render (or typecheck) a game
- * with holes.
- */
-export async function readDeliveredSources(input: {
-  gamesStore: Pick<GamesStore, 'getManifest' | 'getSourceFile'>;
-  store: BaseVersionStore;
-  record: BaseVersionRecord & { slug?: string };
-}): Promise<SourceFile[]> {
-  const { gamesStore, store, record } = input;
-  const slug = record.slug;
-  if (!slug) return [];
-  const version = await resolveRoundBaseVersion(store, record, slug);
-  if (!version) return [];
-
-  const manifest = await gamesStore.getManifest(slug, version);
-  if (!manifest) return [];
-  const files = await Promise.all(
-    manifest.sourceFiles.map(async (path) => ({
-      path,
-      content: await gamesStore.getSourceFile(slug, version!, path),
-    })),
-  );
-  // A hole in the base is not fatal: the staged layer may supply that very file, and
-  // a caller-specific readiness check (or the typecheck itself) reports the rest.
-  return files.filter((file): file is SourceFile => file.content !== null);
-}
-
-/** True when the overlay carries everything an assembly needs from the game's own tree. */
-export function hasPlayableOverlay(overlay: Record<string, string>): boolean {
-  // trim(), matching getGameSources: a whitespace-only file is absent, not staged.
-  const staged = (path: string): boolean => typeof overlay[path] === 'string' && overlay[path].trim().length > 0;
-  if (!staged('game.ts') || !staged('GAME.json')) return false;
-  // Neither means half-staged: a quiet no.
-  if (!staged('index.html') && !manifestDeclaresHowToPlay(overlay['GAME.json'])) return false;
-  // The assembler derives CSS from GAME.json themes.
-  // Otherwise require style.css to reject partial trees.
-  return staged('style.css') || manifestDeclaresTheme(overlay['GAME.json']);
-}
-
-function manifestDeclaresHowToPlay(source: string | undefined): boolean {
-  if (typeof source !== 'string') return false;
-  try {
-    const manifest = JSON.parse(source) as { howToPlay?: unknown };
-    return hasPlayableHowToPlay(manifest.howToPlay);
-  } catch {
-    // Mid-write manifests are invalid JSON
-    return false;
-  }
-}
-
-function manifestDeclaresTheme(source: string | undefined): boolean {
-  if (typeof source !== 'string') return false;
-  try {
-    const manifest = JSON.parse(source) as { theme?: unknown };
-    return typeof manifest.theme === 'object' && manifest.theme !== null;
-  } catch {
-    return false;
-  }
-}
 
 /** Same shape `mcp-presence.ts` uses: callers own the map, this keeps it bounded. */
 function noteJob<K, V>(entries: Map<K, V>, key: K, value: V, maxJobs = MAX_STAGED_PREVIEW_JOBS): void {

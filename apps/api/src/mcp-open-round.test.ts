@@ -8,7 +8,7 @@ import {
   SLUG_NOT_ON_ACCOUNT_REASON,
 } from './agent-surface/agent-game-key.js';
 import { resolveGameAgentKeyForOpenRound } from './agent-surface/agent-game-key-resolve.js';
-import { mintAgentToken } from './agent-surface/agent-token.js';
+import { mintAgentToken } from './platform/agent-token.js';
 import { buildApp } from './platform/app.js';
 import type { ContentChecker } from './platform/moderation.js';
 import type { GamesStore } from './delivery/games-store.js';

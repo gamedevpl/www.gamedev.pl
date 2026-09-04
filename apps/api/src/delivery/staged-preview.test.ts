@@ -1,12 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createStagedPreviewPublisher,
-  hasPlayableOverlay,
-  overlayGameSources,
   STAGED_PREVIEW_LABEL,
   STAGED_PREVIEW_LABEL_PL,
   type StagedPreviewOptions,
 } from './staged-preview.js';
+import { hasPlayableOverlay, overlayGameSources } from '../platform/game-overlay.js';
 
 /**
  * The publisher's whole job is to answer "is there something to show yet?" about a tree

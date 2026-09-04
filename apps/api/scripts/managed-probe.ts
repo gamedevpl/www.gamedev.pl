@@ -3,7 +3,7 @@
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import type { BuildBrief } from '../src/agent-surface/agent-backend.js';
-import { mintManagedMcpOpener } from '../src/agent-surface/agent-token.js';
+import { mintManagedMcpOpener } from '../src/platform/agent-token.js';
 import { buildPrompt } from '../src/delivery/build-prompt.js';
 import { createManagedProvider } from '../src/agent-surface/managed-agent.js';
 import '../src/agent-surface/managed-provider-anthropic.js';

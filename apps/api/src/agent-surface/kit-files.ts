@@ -19,7 +19,10 @@ import {
   parseKitSidecar,
 } from '../platform/kit-registry.js';
 import { isKitEngineRefSupported } from '../platform/kit-window.js';
+import { kitFileKind, type KitFileKind } from '../platform/kit-file-kind.js';
 import { readTarEntries } from '../platform/tar.js';
+
+export { kitFileKind, type KitFileKind };
 
 /** Whole-file reads above this must use fragments instead. */
 export const KIT_READ_MAX_BYTES = 48 * 1024;
@@ -45,34 +48,6 @@ export const KIT_BATCH_MAX_TOTAL_BYTES = 128 * 1024;
 export const KIT_TREE_MAX_BYTES = 8 * 1024 * 1024;
 /** Keep current + previous trees warm (N / N−1 window). */
 const KIT_TREE_CACHE_CAPACITY = 2;
-
-const BINARY_EXTENSIONS = new Set([
-  '.wav',
-  '.png',
-  '.jpg',
-  '.jpeg',
-  '.gif',
-  '.webp',
-  '.ico',
-  '.bmp',
-  '.woff',
-  '.woff2',
-  '.ttf',
-  '.otf',
-  '.eot',
-  '.zip',
-  '.gz',
-  '.tgz',
-  '.7z',
-  '.bin',
-  '.wasm',
-  '.mp3',
-  '.ogg',
-  '.mp4',
-  '.webm',
-]);
-
-export type KitFileKind = 'text' | 'binary';
 
 export interface KitFileMeta {
   path: string;
@@ -104,18 +79,6 @@ export class KitFilesError extends Error {
     this.name = 'KitFilesError';
     this.code = code;
   }
-}
-
-export function kitFileKind(path: string, bytes: Buffer): KitFileKind {
-  const lower = path.toLowerCase();
-  const dot = lower.lastIndexOf('.');
-  if (dot !== -1 && BINARY_EXTENSIONS.has(lower.slice(dot))) {
-    return 'binary';
-  }
-  // NUL in the first 8 KiB → binary (UTF-16 / opaque).
-  const probe = bytes.subarray(0, Math.min(bytes.length, 8 * 1024));
-  if (probe.includes(0)) return 'binary';
-  return 'text';
 }
 
 /**

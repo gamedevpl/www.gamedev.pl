@@ -18,31 +18,6 @@ export function buildConstraints(orientation: string = DEFAULT_BUILD_ORIENTATION
   };
 }
 
-/**
- * Split a creator concept into the free-text spec and the QA answers block.
- *
- * Clarifications are appended by CreatorQA under an English `## Creator clarifications`
- * marker (see submission-status.ts). Parsed from the *raw* concept because sanitization
- * strips `#` and would destroy the marker.
- */
-export function splitConceptBrief(rawConcept: string): { spec: string; qa: string[] } {
-  const marker = '## Creator clarifications';
-  const index = rawConcept.indexOf(marker);
-  if (index === -1) {
-    return { spec: rawConcept.trim(), qa: [] };
-  }
-  const spec = rawConcept.slice(0, index).trim();
-  const qa = rawConcept
-    .slice(index)
-    .split('\n')
-    .slice(1)
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith('- '))
-    .map((line) => line.slice(2).trim())
-    .filter(Boolean);
-  return { spec, qa };
-}
-
 /** Locales the agent should write progress / UI copy for. Always includes English. */
 export function briefLocales(creatorLocale: string | undefined): string[] {
   const primary = (creatorLocale ?? 'en').trim() || 'en';

@@ -6,6 +6,7 @@ import { InMemoryStore } from '../platform/store.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { GitHubClient } from '../catalog/github-client.js';
 import type { EditorAssistant } from './editor-assist.js';
+import { openProposal } from '../community/proposals.js';
 
 /*
  * The remix surface's promises, tested at the route: it is signed-in only for
@@ -167,6 +168,7 @@ async function buildTestApp(
   });
   await registerRemixRoutes(app, {
     store,
+    openProposal,
     gamesStore: overrides.gamesStore ?? stubGamesStore(),
     githubClient: stubGitHubClient(seen),
     publishedRef: 'main',
@@ -586,6 +588,7 @@ describe('remix routes', () => {
     let tracePaused = false;
     await registerRemixRoutes(instance, {
       store,
+      openProposal,
       gamesStore: stubGamesStore(),
       githubClient: stubGitHubClient([]),
       publishedRef: 'main',
@@ -751,6 +754,7 @@ describe('remix across the two catalog eras', () => {
     });
     await registerRemixRoutes(instance, {
       store,
+      openProposal,
       gamesStore: overrides.gamesStore ?? stubGamesStore(),
       githubClient: stubGitHubClient(seen, overrides.sourceMapCalls ?? []),
       publishedRef: 'main',
@@ -835,6 +839,7 @@ describe('remix across the two catalog eras', () => {
     };
     await registerRemixRoutes(instance, {
       store,
+      openProposal,
       gamesStore: stubGamesStore(),
       githubClient: client,
       publishedRef: 'main',

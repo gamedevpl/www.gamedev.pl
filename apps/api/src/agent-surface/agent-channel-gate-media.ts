@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { AGENT_CHANNEL_ROUTES, MAX_AGENT_SHOT_BYTES } from '@gamedevpl/contract';
-import { STALE_AGENT_TOKEN_REASON } from './agent-token.js';
-import type { AgentTokenAccess } from './agent-token.js';
+import { STALE_AGENT_TOKEN_REASON } from '../platform/agent-token.js';
+import type { AgentTokenAccess } from '../platform/agent-token.js';
 import { deriveGateStatusString, type GateVerdictSummary } from '../delivery/gate-verdict.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from '../delivery/gcs-sign.js';
 import { gateCrashStall } from '../delivery/gate-crash.js';

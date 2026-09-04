@@ -1,10 +1,10 @@
 import type { AgentBackend, SeedFiles } from '../agent-surface/agent-backend.js';
-import { mintAgentToken, mintManagedMcpOpener } from '../agent-surface/agent-token.js';
+import { mintAgentToken, mintManagedMcpOpener } from '../platform/agent-token.js';
 import type { GameSeeder } from './game-seed.js';
 import type { BuilderKind } from './builder.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { buildDispatchIssueBody } from './create-game.js';
-import { seedOutcomeFor } from '../agent-surface/seed-status.js';
+import { seedOutcomeFor } from '../platform/seed-outcome.js';
 import { isActiveBuildRound } from './builder.js';
 import { canTransition } from './job-state.js';
 import type { SeedPipeline } from './seed-pipeline.js';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { InvalidAgentTokenError } from './agent-token.js';
+import { InvalidAgentTokenError } from '../platform/agent-token.js';
 import {
   assertUploadTokenUnexpired,
   mintUploadToken,

@@ -4,7 +4,7 @@ import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import { seedPayload } from './seed-status.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
-import type { AgentTokenAccess } from './agent-token.js';
+import type { AgentTokenAccess } from '../platform/agent-token.js';
 
 // Empty body is ordinary: a steer is optional.
 const RegenerateSeedRequestSchema = z.object({

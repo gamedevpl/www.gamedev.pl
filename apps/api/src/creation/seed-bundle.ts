@@ -17,7 +17,7 @@
 
 import { build, type Message } from 'esbuild';
 import type { SeedFile } from './game-seed.js';
-import { resolveGameTypeScriptPath } from '../catalog/github-client.js';
+import { resolveGameTypeScriptPath } from '../platform/game-module-path.js';
 import { MAX_SOURCE_GRAPH_MODULES, SOURCE_GRAPH_BUDGET_BYTES } from '../platform/games-repo-contract.js';
 
 /** Same ceilings as the play-path bundler, so agreement between the two is by value. */

@@ -17,8 +17,10 @@
 // flag flip plus a re-bake instead of a revert-and-wait, and what stops a stray object
 // resurrecting a withdrawn game.
 
-import type { DeliveryMode, PreflightKind } from '@gamedevpl/contract';
+import type { DeliveryMode } from '@gamedevpl/contract';
 import { randomBytes } from 'node:crypto';
+import { isPublishableMode } from '../platform/publication-state.js';
+import { InvalidUploadError, type PreflightRefusalKind } from '../platform/upload-error.js';
 import { GoogleAuth } from 'google-auth-library';
 import {
   DELIVERY_EXTRA_MODULE_PATTERN,
@@ -133,33 +135,9 @@ export interface SourceFile {
  */
 export type { DeliveryMode } from '@gamedevpl/contract';
 
-/**
- * Whether a version in this mode may ever be published.
- *
- * Called by every path that can make a version live. Deliberately a named predicate
- * rather than an inline `!== 'proposal'`: it is the single place the rule is stated, so a
- * fourth mode cannot be added without an answer here.
- */
-export function isPublishableMode(mode: DeliveryMode | undefined): boolean {
-  // Absent means a legacy manifest from before the field existed — those are publishes.
-  return mode !== 'preview' && mode !== 'proposal';
-}
+export { isPublishableMode };
 
-// Preflight kinds counted by delivery metrics.
-export type PreflightRefusalKind = PreflightKind;
-
-export class InvalidUploadError extends Error {
-  readonly kind?: PreflightRefusalKind;
-  // Required paths the upload lacked, so a caller can offer them.
-  readonly missingPaths?: readonly string[];
-
-  constructor(message: string, kind?: PreflightRefusalKind, missingPaths?: readonly string[]) {
-    super(message);
-    this.name = 'InvalidUploadError';
-    this.kind = kind;
-    this.missingPaths = missingPaths;
-  }
-}
+export { InvalidUploadError, type PreflightRefusalKind };
 
 /** Staging manifest lost a race — caller should re-read and retry. */
 export class StagingGenerationMismatchError extends Error {

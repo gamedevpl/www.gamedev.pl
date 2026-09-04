@@ -1,5 +1,5 @@
 import { MAX_CHAT_TURNS, rememberChatTurn, type ChatTurn } from './chat-turns.js';
-import { stripPlaytestContext } from '../delivery/build-transcript.js';
+import { stripPlaytestContext } from '../platform/playtest-context.js';
 import type { CreatorMessage } from '../platform/store.js';
 
 export { MAX_CHAT_TURNS, rememberChatTurn, type ChatTurn };
