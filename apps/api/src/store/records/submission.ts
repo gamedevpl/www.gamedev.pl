@@ -1,4 +1,4 @@
-import type { AgentTaskState } from '../../creation/agent-state.js';
+import type { AgentTaskState } from '../../platform/agent-state.js';
 import type { SeedFiles } from '../../agent-surface/agent-backend.js';
 import type { BuilderKind } from '../../creation/builder.js';
 import type { JobState, JobTransition } from '../../creation/job-state.js';

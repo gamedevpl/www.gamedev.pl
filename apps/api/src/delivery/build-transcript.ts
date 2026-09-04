@@ -1,6 +1,11 @@
 // Creator conversation, served in windows — get_kit_api hit a token ceiling at whole.
 
 import { stripPlaytestContext } from '../platform/playtest-context.js';
+import {
+  DEFAULT_TRANSCRIPT_WINDOW_ENTRIES,
+  MAX_TRANSCRIPT_WINDOW_BYTES,
+  MAX_TRANSCRIPT_WINDOW_ENTRIES,
+} from '../platform/transcript-window.js';
 import { isStudioOrigin, type Store, type SubmissionRecord } from '../platform/store.js';
 
 export type TranscriptEntry = {
@@ -16,14 +21,10 @@ export const MAX_TRANSCRIPT_LIST_ENTRIES = 300;
 // A single entry's cap, above creator-feedback's 2000 chars.
 export const MAX_TRANSCRIPT_ENTRY_CHARS = 4000;
 
-// Window size when the caller asks for none.
-export const DEFAULT_TRANSCRIPT_WINDOW_ENTRIES = 20;
-// Ceiling on a caller's requested limit.
-export const MAX_TRANSCRIPT_WINDOW_ENTRIES = 50;
-// Per-window byte ceiling; a long entry shrinks the window instead.
-export const MAX_TRANSCRIPT_WINDOW_BYTES = 20_000;
-
 type TranscriptStore = Pick<Store, 'listSubmissionsBySlug' | 'listCreatorMessages' | 'listBuildEvents'>;
+
+// One page request: no cursor returns the tail.
+export type TranscriptPage = { cursor?: string; limit?: number };
 
 export type TranscriptWindow = {
   // Oldest first, matching how a reader wants to read a conversation.
@@ -42,7 +43,7 @@ export async function loadBuildTranscript(
   record: SubmissionRecord,
   // N1: injected so this module has no value-level agent-surface import.
   isPresenceEventText: (text: string, createdAt?: string) => boolean,
-  opts?: { cursor?: string; limit?: number },
+  opts?: TranscriptPage,
 ): Promise<TranscriptWindow> {
   const { entries: all, truncatedAtSource } = await collectTranscriptEntries(store, record, isPresenceEventText);
 

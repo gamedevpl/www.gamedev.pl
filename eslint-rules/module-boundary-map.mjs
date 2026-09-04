@@ -39,6 +39,7 @@ export const ENFORCED_BUCKETS = [
   'community',
   'delivery',
   'creation',
+  'agent-surface',
 ];
 
 const DEFAULT_BUCKET = 'platform';
@@ -176,6 +177,17 @@ const FILE_BUCKET = {
   'feedback-themes-contract': 'platform',
   'managed-builder-error': 'platform',
   'upload-error': 'platform',
+  // The vendor-neutral state vocabulary every agent backend reports in, read by
+  // the store, job-state, creation and agent-surface alike.
+  'agent-state': 'platform',
+  // Pure parsers, caps and refusal rules with no owner bucket: a media manifest,
+  // GitHub's in-flight run statuses, transcript window caps, the unified-diff
+  // patcher, and the deliverable-path refusals a delivery and a proposal share.
+  'game-media': 'platform',
+  'github-run-status': 'platform',
+  'transcript-window': 'platform',
+  'source-patch': 'platform',
+  'delivery-path-guard': 'platform',
 
   // creation: jobs, rounds, dispatch, seed, refine
   'draft-lifecycle-routes': 'creation',
@@ -197,7 +209,6 @@ const FILE_BUCKET = {
   'quota-gate': 'creation',
   builder: 'creation',
   'typecheck-preflight': 'creation',
-  'source-patch': 'creation',
   'code-lane': 'creation',
   'code-surface': 'creation',
   'symbol-map': 'creation',
@@ -211,8 +222,6 @@ const FILE_BUCKET = {
   'remix-view': 'creation',
   'remix-suggestions': 'creation',
   'remix-turns': 'creation',
-  'agent-state': 'creation',
-  'agent-tasks': 'creation',
   'chat-agent': 'creation',
   'chat-orchestration': 'creation',
   'chat-turns': 'creation',
@@ -232,12 +241,14 @@ const FILE_BUCKET = {
   'seed-provider-openai': 'creation',
   'seed-provider-openrouter': 'creation',
   'seed-provider-vertex': 'creation',
+  // The env half of round-0 seeding, split out of agent-surface's backend registry:
+  // which seed vendor is configured is creation's question, not the agent surface's.
+  'seed-provider-env': 'creation',
   'game-seed': 'creation',
   'seed-paths': 'creation',
   'session-crash': 'creation',
   scorecard: 'creation',
   'knowledge-search': 'creation',
-  'example-files': 'creation',
   // Collapses jobs to distinct games for the Studio shelf -- pure Store-record
   // grouping, no catalog dependency, only ever read by creator-studio.ts.
   'owner-games': 'creation',
@@ -301,6 +312,13 @@ const FILE_BUCKET = {
   'agent-build-brief': 'agent-surface',
   'agent-build-examples': 'agent-surface',
   'seed-status': 'agent-surface',
+  // Same rule, other buckets: the curated exemplar store, the Copilot agent-tasks
+  // client, the build brief every backend renders, and the gate verdict the channel
+  // route and MCP `start` share -- none is read by the bucket it used to live in.
+  'example-files': 'agent-surface',
+  'agent-tasks': 'agent-surface',
+  'build-prompt': 'agent-surface',
+  'gate-verdict': 'agent-surface',
   // GAME.json shape hint surfaced by the MCP tools -- reads catalog's own
   // games-repo-contract.js but is never consumed inside catalog/ itself.
   'game-manifest-hint': 'agent-surface',
@@ -314,18 +332,15 @@ const FILE_BUCKET = {
   'stage-hints': 'delivery',
   'games-store': 'delivery',
   'games-store-raster': 'delivery',
-  'delivery-path-guard': 'delivery',
   'source-file-bytes': 'delivery',
   'gate-materialize': 'delivery',
   'gate-runner-raster': 'delivery',
   'build-transcript': 'delivery',
-  'build-prompt': 'delivery',
   'source-delivery': 'delivery',
   'recent-builds': 'delivery',
   'gate-runner': 'delivery',
   'gate-progress': 'delivery',
   'gate-trigger': 'delivery',
-  'gate-verdict': 'delivery',
   'gate-crash': 'delivery',
   'gate-screenshot': 'delivery',
   'native-job-status': 'delivery',

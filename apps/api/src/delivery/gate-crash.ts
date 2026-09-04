@@ -3,7 +3,7 @@
 import { GoogleAuth } from 'google-auth-library';
 
 import type { JobCostEntry, SubmissionRecord } from '../platform/store.js';
-import { canTransition, type JobStall, type JobTransition } from '../creation/job-state.js';
+import { canTransition, type JobTransition } from '../creation/job-state.js';
 import { gateTriggerOptionsFromEnv } from './gate-trigger.js';
 
 // The A28 log metric keys on this exact string.
@@ -39,13 +39,6 @@ export function lastGateRunRef(costs: JobCostEntry[] | undefined, since: string 
     if (!best || at >= best.at) best = { at, ref: entry.ref };
   }
   return best?.ref;
-}
-
-// Append-ordered, so the last entry is current; `at` is not ordered.
-export function gateCrashStall(record: Pick<SubmissionRecord, 'state' | 'transitions'>): JobStall | null {
-  if (record.state !== 'needs_changes') return null;
-  const last = record.transitions?.[record.transitions.length - 1];
-  return last?.reason === 'gate_crashed' ? 'gate_crashed' : null;
 }
 
 interface CrashLogger {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { BuildBrief } from '../agent-surface/agent-backend.js';
+import type { BuildBrief } from './agent-backend.js';
 import { buildPrompt } from './build-prompt.js';
 
 const BRIEF: BuildBrief = {

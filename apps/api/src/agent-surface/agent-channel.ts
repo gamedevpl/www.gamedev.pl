@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { AGENT_CHANNEL_ROUTES, MAX_AGENT_SHOT_BYTES } from '@gamedevpl/contract';
-import { createExampleFileStore } from '../creation/example-files.js';
+import { createExampleFileStore } from './example-files.js';
 import { registerAgentChannelExamplesRoutes } from './agent-channel-examples.js';
 import { registerAgentChannelBriefRoutes } from './agent-channel-brief.js';
 import { registerAgentChannelSeedRoutes } from './agent-channel-seed.js';
@@ -26,18 +26,14 @@ import {
 } from './agent-upload-token.js';
 import { isRasterSourcePath } from '../platform/raster-source.js';
 import { MAX_BUILD_PREVIEW_BYTES } from '../platform/build-preview-limits.js';
-import { loadBuildTranscript } from '../delivery/build-transcript.js';
+import type { TranscriptPage, TranscriptWindow } from '../delivery/build-transcript.js';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
-import { readGateVerdict } from '../delivery/gate-verdict.js';
+import { readGateVerdict } from './gate-verdict.js';
 import type { GcsObjectStore } from '../delivery/gcs-sign.js';
-import {
-  forbiddenIndexHtmlWriteReason,
-  InvalidUploadError,
-  MAX_UPLOAD_BYTES,
-  MAX_UPLOAD_FILES,
-  type DeliveryMode,
-  type GamesStore,
-} from '../delivery/games-store.js';
+import type { DeliveryMode, GamesStore } from '../delivery/games-store.js';
+import { forbiddenIndexHtmlWriteReason } from '../platform/delivery-path-guard.js';
+import { InvalidUploadError } from '../platform/upload-error.js';
+import { DELIVERY_MAX_FILES, DELIVERY_MAX_UPLOAD_BYTES } from '../platform/games-repo-contract.js';
 import { canTransition, resolveJobState, type JobState } from '../creation/job-state.js';
 import { createKitFileStore } from './kit-files.js';
 import { registerAgentChannelKitFileRoutes } from './agent-channel-kit-files.js';
@@ -52,12 +48,11 @@ import { seedPayload } from './seed-status.js';
 import { largeSourceFileHint } from '../creation/module-size.js';
 import { gameManifestHint } from './game-manifest-hint.js';
 import { resolveRoundBaseVersion } from '../platform/round-base-version.js';
-import { computeStageAdvisories } from '../delivery/stage-hints.js';
-import { runTypecheckPreflight, sharedSourcesFromKitTree } from '../creation/typecheck-preflight.js';
+import type { StageAdvisories, StageAdvisoriesSubject } from '../delivery/stage-hints.js';
 import { isMcpPresenceEventText } from './mcp-presence.js';
-import { applyExactReplace, applySourcePatch, SourcePatchError } from '../creation/source-patch.js';
+import { applyExactReplace, applySourcePatch, SourcePatchError } from '../platform/source-patch.js';
 import { overlayGameSources } from '../platform/game-overlay.js';
-import { SourceDeliveryValidationError, type SourceDeliveryService } from '../delivery/source-delivery.js';
+import type { SourceDeliveryService, SourceDeliveryValidationError } from '../delivery/source-delivery.js';
 import { type BuilderHandoff, type CreatorMessage, type Store, type SubmissionRecord } from '../platform/store.js';
 import { pickLatestChangelogText } from '../platform/build-changelog.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from '../platform/submission-status.js';
@@ -162,8 +157,8 @@ const BuildSourcesInputSchema = z
           content: z.string().max(1_000_000),
         }),
       )
-      // Keep in lockstep with games-store MAX_UPLOAD_FILES (MCP advertise the same).
-      .max(MAX_UPLOAD_FILES, 'too many files')
+      // Keep in lockstep with the delivery contract (MCP advertise the same).
+      .max(DELIVERY_MAX_FILES, 'too many files')
       .optional(),
     /**
      * Assemble the job's staged buffer (built via PUT …/sources/stage) instead of
@@ -504,6 +499,13 @@ export interface AgentChannelOptions {
   maxSubmitsPerWindow?: number;
   /** Shared source-delivery core used by HTTP/MCP and managed harvest. */
   sourceDelivery?: SourceDeliveryService;
+
+  // N1: delivery's refusal, narrowed so this module imports no class.
+  isSourceDeliveryValidationError?: (error: unknown) => error is SourceDeliveryValidationError;
+  // N1: delivery's staging advisories, already bound to creation's preflight.
+  computeStageAdvisories?: (input: StageAdvisoriesSubject) => Promise<StageAdvisories>;
+  // N1: delivery reads the conversation; the presence filter is bound already.
+  loadBuildTranscript?: (store: Store, record: SubmissionRecord, opts?: TranscriptPage) => Promise<TranscriptWindow>;
   /** Called when a candidate version lands, so the job can move on to the gate. */
   /**
    * Starts whatever verifies a delivery. May answer with what the run cost — the gate
@@ -603,6 +605,8 @@ export async function registerAgentChannelRoutes(
   const maxKnowledgeAnswersPerWindow = options.maxKnowledgeAnswersPerWindow ?? 15;
   const maxKnowledgeChunksPerWindow = options.maxKnowledgeChunksPerWindow ?? 30;
   const knowledgeSearch = options.knowledgeSearch;
+  // N1: unwired means no staging advisory, never a delivery/ import from here.
+  const stageAdvisories = options.computeStageAdvisories ?? (async (): Promise<StageAdvisories> => ({}));
 
   // Raw PUT parsers for curl --upload-file (octet-stream / PNG / text).
   const parseRawBuffer = (
@@ -1286,7 +1290,7 @@ export async function registerAgentChannelRoutes(
         options.onSourcesStaged?.({ jobId, slug, roundGeneration });
         const hint = largeSourceFileHint(staged.path, staged.bytes, parsed.data.content);
         const manifestHint = gameManifestHint(staged.path, parsed.data.content);
-        const advisories = await computeStageAdvisories({
+        const advisories = await stageAdvisories({
           kitFileStore,
           gamesStore: options.gamesStore,
           store: store!,
@@ -1297,8 +1301,6 @@ export async function registerAgentChannelRoutes(
           engineRef: record.roundKitEngineRef,
           path: staged.path,
           content: parsed.data.content,
-          runTypecheckPreflight,
-          sharedSourcesFromKitTree,
         });
         return reply.send({
           accepted: true,
@@ -1393,7 +1395,7 @@ export async function registerAgentChannelRoutes(
         options.onSourcesStaged?.({ jobId, slug, roundGeneration });
         const hint = largeSourceFileHint(staged.path, staged.bytes, content);
         const manifestHint = gameManifestHint(staged.path, content);
-        const advisories = await computeStageAdvisories({
+        const advisories = await stageAdvisories({
           kitFileStore,
           gamesStore: options.gamesStore,
           store: store!,
@@ -1404,8 +1406,6 @@ export async function registerAgentChannelRoutes(
           engineRef: record.roundKitEngineRef,
           path: staged.path,
           content,
-          runTypecheckPreflight,
-          sharedSourcesFromKitTree,
         });
         return reply.send({
           accepted: true,
@@ -1578,7 +1578,7 @@ export async function registerAgentChannelRoutes(
         const gameJson = prepared.find((item) => item.path === 'GAME.json');
         const typecheckHint = tsFile
           ? (
-              await computeStageAdvisories({
+              await stageAdvisories({
                 kitFileStore,
                 gamesStore: options.gamesStore,
                 store: store!,
@@ -1589,14 +1589,12 @@ export async function registerAgentChannelRoutes(
                 engineRef: record.roundKitEngineRef,
                 path: tsFile.path,
                 content: tsFile.content,
-                runTypecheckPreflight,
-                sharedSourcesFromKitTree,
               })
             ).typecheckHint
           : undefined;
         const audioHint = gameJson
           ? (
-              await computeStageAdvisories({
+              await stageAdvisories({
                 kitFileStore,
                 gamesStore: options.gamesStore,
                 store: store!,
@@ -1607,8 +1605,6 @@ export async function registerAgentChannelRoutes(
                 engineRef: record.roundKitEngineRef,
                 path: gameJson.path,
                 content: gameJson.content,
-                runTypecheckPreflight,
-                sharedSourcesFromKitTree,
               })
             ).audioHint
           : undefined;
@@ -1659,8 +1655,8 @@ export async function registerAgentChannelRoutes(
         return reply.send({
           files: [],
           totalBytes: 0,
-          maxBytes: MAX_UPLOAD_BYTES,
-          maxFiles: MAX_UPLOAD_FILES,
+          maxBytes: DELIVERY_MAX_UPLOAD_BYTES,
+          maxFiles: DELIVERY_MAX_FILES,
           updatedAt: null,
         });
       }
@@ -1974,7 +1970,7 @@ export async function registerAgentChannelRoutes(
           ...(await channelState(jobId, fresh)),
         });
       } catch (error) {
-        if (error instanceof SourceDeliveryValidationError) {
+        if (options.isSourceDeliveryValidationError?.(error)) {
           return reply.status(400).send({ error: error.message, reason: error.reason });
         }
         // A rejected upload is the agent's to fix, so the reason goes back in full. This
@@ -2099,8 +2095,11 @@ export async function registerAgentChannelRoutes(
       if (!resolved) return reply;
       const { jobId, record } = resolved;
 
+      if (!options.loadBuildTranscript) {
+        return reply.status(503).send({ error: 'the transcript is not configured on this deployment' });
+      }
       const query = request.query as { cursor?: string; limit?: string };
-      const transcript = await loadBuildTranscript(store!, record, isMcpPresenceEventText, {
+      const transcript = await options.loadBuildTranscript(store!, record, {
         ...(query.cursor !== undefined ? { cursor: query.cursor } : {}),
         ...(optionalFiniteQuery(query.limit) !== undefined ? { limit: optionalFiniteQuery(query.limit) } : {}),
       });

@@ -33,9 +33,14 @@ import { hasPlayableHowToPlay } from '../platform/how-to-play.js';
 import { mergeMusicTrackMaps, parseGameMusicTracks, parseMusicCatalogTracks } from '../platform/music-tracks.js';
 import { resolveGameTypeScriptPath } from '../platform/game-module-path.js';
 import { parseSpecFrontmatter, parseSpecTitle } from '../platform/spec-frontmatter.js';
+import { parseGameMedia } from '../platform/game-media.js';
+import { IN_FLIGHT_RUN_STATUSES } from '../platform/github-run-status.js';
 import { generateStyleCss, type Theme } from '../platform/theme-css-generator.js';
 
 export type { CatalogGameTouch } from './catalog-touch.js';
+
+// Pure vocabulary, re-exported for this bucket's own callers.
+export { IN_FLIGHT_RUN_STATUSES, parseGameMedia };
 
 export interface PullRequestCommit {
   /** First line of the commit message — a human-readable step in the build. */
@@ -59,9 +64,6 @@ export interface WorkflowRun {
   headBranch?: string;
   createdAt?: string;
 }
-
-// Statuses meaning the run still burns time.
-export const IN_FLIGHT_RUN_STATUSES = ['queued', 'in_progress', 'requested', 'waiting', 'pending'];
 
 export interface LinkedPullRequest {
   number: number;
@@ -1790,43 +1792,6 @@ function parseCommittedMultiplayer(value: unknown): CatalogGameMultiplayer | nul
     return null;
   }
   return { mode: 'controllers', minPlayers: multiplayer.minPlayers, maxPlayers: multiplayer.maxPlayers };
-}
-
-/**
- * Turns a capture harness `media/metadata.json` into the catalog's media shape.
- *
- * Exported so the store-publish path can apply the same allowlist the repo path uses
- * when serving `/api/games/:slug/media/:filename` — a second parser would be a second
- * answer to "which filenames are public".
- */
-export function parseGameMedia(metadataJson: string | null): CatalogGameMedia | null {
-  if (!metadataJson) {
-    return null;
-  }
-
-  try {
-    const metadata = JSON.parse(metadataJson) as {
-      captures?: Record<string, { file?: unknown }>;
-      video?: { file?: unknown };
-    };
-    const screenshots = Object.entries(metadata.captures ?? {})
-      .filter(
-        (entry): entry is [string, { file: string }] =>
-          /^[a-z0-9][a-z0-9-]*$/.test(entry[0]) &&
-          typeof entry[1]?.file === 'string' &&
-          /^[a-z0-9][a-z0-9-]*\.png$/.test(entry[1].file),
-      )
-      .slice(0, 8)
-      .map(([name, capture]) => ({ name, file: capture.file }));
-    const video =
-      typeof metadata.video?.file === 'string' && /^[a-z0-9][a-z0-9-]*\.mp4$/.test(metadata.video.file)
-        ? metadata.video.file
-        : null;
-
-    return screenshots.length > 0 || video ? { screenshots, video } : null;
-  } catch {
-    return null;
-  }
 }
 
 /**

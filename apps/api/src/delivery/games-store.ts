@@ -33,7 +33,7 @@ import type { GateProgress, GateProgressStage } from './gate-progress.js';
 import { applyGateVerdict, applyPreviewGateVerdict, applyHealthVerdict } from './version-verdict.js';
 import { hasPlayableHowToPlay } from '../platform/how-to-play.js';
 import { isRasterSourcePath } from '../platform/raster-source.js';
-import { forbiddenDeliveryPathReason, forbiddenIndexHtmlWriteReason } from './delivery-path-guard.js';
+import { forbiddenDeliveryPathReason, forbiddenIndexHtmlWriteReason } from '../platform/delivery-path-guard.js';
 import {
   canonicalizeUploadedSource,
   measureUploadedSourceBytes,
@@ -48,7 +48,7 @@ import { findUnresolvedSourceLinks, formatSourceLinkError, sourceFilesToMap } fr
 import { BANNED_ANY_GUIDANCE, describeBannedAnyFinding, findBannedAnyUsages } from './ts-any-scan.js';
 import { missingFreshEditorFile } from './editor-upload-requirements.js';
 
-export { forbiddenDeliveryPathReason, forbiddenIndexHtmlWriteReason } from './delivery-path-guard.js';
+export { forbiddenDeliveryPathReason, forbiddenIndexHtmlWriteReason } from '../platform/delivery-path-guard.js';
 
 export type { GateProgress } from './gate-progress.js';
 

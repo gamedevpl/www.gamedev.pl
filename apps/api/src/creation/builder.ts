@@ -4,48 +4,15 @@
 
 import { BUILDERS, isBuilderKind, type BuilderKind } from '@gamedevpl/contract';
 import type { JobState, JobStall, JobTransition } from './job-state.js';
+import { allowsSelfToPlatformHandoff, isActiveBuildRound } from './job-state.js';
 import { DEFAULT_SELF_BUILD_DELIVERY_CAP, selfBuildDeliveryCap } from '../platform/self-build-delivery-cap.js';
 import { DEFAULT_SELF_BUILD_CONNECT_DAYS, selfBuildConnectDays } from '../platform/self-build-connect-days.js';
 
 export { BUILDERS, isBuilderKind, type BuilderKind, DEFAULT_SELF_BUILD_DELIVERY_CAP, selfBuildDeliveryCap };
 export { DEFAULT_SELF_BUILD_CONNECT_DAYS, selfBuildConnectDays };
 
-/** Whether the current round is still live. */
-export function isActiveBuildRound(record: { state?: JobState; transitions?: JobTransition[] }): boolean {
-  const state = record.state;
-  switch (state) {
-    case 'queued':
-    case 'dispatched':
-    case 'building':
-    case 'submitted':
-    case 'publishing':
-      return true;
-    case 'needs_changes': {
-      const last = [...(record.transitions ?? [])].reverse().find((transition) => transition.to === 'needs_changes');
-      return last?.reason === 'gate_red' || last?.reason === 'kit_outdated';
-    }
-    default:
-      return false;
-  }
-}
-
-/** Stalls that unlock self→platform handoff. */
-const SELF_TO_PLATFORM_HANDOFF_STALLS: ReadonlySet<JobStall> = new Set(['ended', 'quiet', 'no_agent_yet']);
-
-/** Allows self→platform handoff after signal loss or creator confirmation. */
-export function allowsSelfToPlatformHandoff(input: {
-  currentBuilder: BuilderKind;
-  requestedBuilder: BuilderKind;
-  stall?: string | null;
-  /** When set, unlocks even if stall was overwritten by `gate_not_started`. */
-  agentEndedAt?: string | null;
-  creatorRequested?: boolean;
-}): boolean {
-  if (input.requestedBuilder !== 'platform' || input.currentBuilder !== 'self') return false;
-  if (input.creatorRequested) return true;
-  if (input.agentEndedAt) return true;
-  return typeof input.stall === 'string' && SELF_TO_PLATFORM_HANDOFF_STALLS.has(input.stall as JobStall);
-}
+// Both are pure JobState/JobStall predicates, so job-state.ts owns them.
+export { allowsSelfToPlatformHandoff, isActiveBuildRound };
 
 /** Whether the creator may replace the active builder for this round. */
 export function allowsCreatorBuilderHandoff(input: {

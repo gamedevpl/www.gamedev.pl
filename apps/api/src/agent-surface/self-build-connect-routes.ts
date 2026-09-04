@@ -1,7 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { allowsSelfToPlatformHandoff, isActiveBuildRound } from '../creation/builder.js';
-import { detectStall } from '../creation/job-state.js';
+import { allowsSelfToPlatformHandoff, detectStall, isActiveBuildRound } from '../creation/job-state.js';
 import { InvalidTokenError, verifyToken } from '../platform/submission-token.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { mintConnectPayload } from './self-build-connect.js';

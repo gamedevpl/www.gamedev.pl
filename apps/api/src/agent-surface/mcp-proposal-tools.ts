@@ -1,16 +1,13 @@
 import { looksLikeCreatorAgentKey } from './agent-creator-key.js';
 import { verifyDurableCreatorAgentKey } from './agent-creator-key-resolve.js';
 import { looksLikeAsAccessToken, verifyMcpAsAccessToken as verifyAsAccessToken } from '../platform/oauth-scopes.js';
-import {
-  canProposeTo,
-  openProposal,
-  reconcileProposalGate,
-  transitionProposal,
-  PROPOSAL_NO_JOB,
-} from '../community/proposals.js';
-import { isProposerTurn, toPublicProposalState } from '../community/proposal-state.js';
-import { forbiddenIndexHtmlWriteReason, type GamesStore, type SourceFile } from '../delivery/games-store.js';
-import type { Store, ProposalBase } from '../platform/store.js';
+import type { OpenProposalInput, OpenProposalResult, ProposalDeps, ProposalRefusal } from '../community/proposals.js';
+import type { ProposalActor, ProposalPublicState, ProposalState } from '../community/proposal-state.js';
+import type { OwnerOfRecord } from '../community/owner-of-record.js';
+import { PROPOSAL_NO_JOB } from '../platform/proposal-limits.js';
+import type { GamesStore, SourceFile } from '../delivery/games-store.js';
+import { forbiddenIndexHtmlWriteReason } from '../platform/delivery-path-guard.js';
+import type { ProposalRecord, Store, ProposalBase } from '../platform/store.js';
 import type { ContentChecker } from '../platform/moderation.js';
 import {
   toolOk,
@@ -34,8 +31,29 @@ const WRITES_ONCE = {
   openWorldHint: false,
 } as const;
 
+// N1: community owns the proposal state machine; these tools are handed it.
+export interface ProposalDomain {
+  canProposeTo: (
+    store: Store,
+    slug: string,
+    proposerUid: string,
+  ) => Promise<{ ok: true; owner: OwnerOfRecord } | { ok: false; reason: ProposalRefusal }>;
+  openProposal: (deps: ProposalDeps, input: OpenProposalInput) => Promise<OpenProposalResult>;
+  reconcileProposalGate: (deps: ProposalDeps, id: string) => Promise<ProposalRecord | null>;
+  transitionProposal: (
+    record: ProposalRecord,
+    to: ProposalState,
+    by: ProposalActor,
+    at: string,
+    reason?: string,
+  ) => boolean;
+  isProposerTurn: (state: ProposalState) => boolean;
+  toPublicProposalState: (state: ProposalState) => ProposalPublicState;
+}
+
 export interface ProposalToolsDeps {
   store: Store | undefined;
+  proposals: ProposalDomain;
   agentTokenSecret: string | undefined;
   platformConnectorSecret: string | undefined;
   now: () => number;
@@ -69,6 +87,8 @@ export function createProposalTools(deps: ProposalToolsDeps): Record<string, Pro
     contentChecker,
     onSourcesDelivered,
   } = deps;
+  const { canProposeTo, openProposal, reconcileProposalGate, transitionProposal } = deps.proposals;
+  const { isProposerTurn, toPublicProposalState } = deps.proposals;
 
   // Who is calling, without asking whether they own anything the target game.
   async function resolveProposerUid(

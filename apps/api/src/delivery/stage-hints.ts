@@ -21,7 +21,8 @@ export type StageAdvisories = {
   audioHint?: string;
 };
 
-export async function computeStageAdvisories(input: {
+// What one staged file needs checking, minus the injected preflight pair.
+export type StageAdvisoriesSubject = {
   kitFileStore: KitFileStore | null;
   gamesStore: GamesStore;
   store: BaseVersionStore;
@@ -35,6 +36,9 @@ export async function computeStageAdvisories(input: {
   engineRef: string | undefined;
   path: string;
   content: string;
+};
+
+export type StageAdvisoriesInput = StageAdvisoriesSubject & {
   // N1: injected so this module has no value-level creation/ import.
   runTypecheckPreflight?: (opts: {
     slug: string;
@@ -43,7 +47,9 @@ export async function computeStageAdvisories(input: {
     budgetMs?: number;
   }) => Promise<{ ok: boolean; message?: string }>;
   sharedSourcesFromKitTree?: (tree: KitTree) => Record<string, string>;
-}): Promise<StageAdvisories> {
+};
+
+export async function computeStageAdvisories(input: StageAdvisoriesInput): Promise<StageAdvisories> {
   const result: StageAdvisories = {};
   const normalized = input.path.trim().replaceAll('\\', '/');
   const isTs = normalized.endsWith('.ts') || normalized.endsWith('.tsx');
