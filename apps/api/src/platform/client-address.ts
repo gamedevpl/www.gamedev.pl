@@ -5,6 +5,9 @@ import { onIpRefusal } from './ip-rate-limit.js';
 // Forgeable unless nothing can reach the service around the edge.
 const EDGE_CLIENT_IP_HEADER = 'fastly-client-ip';
 
+// hop===0 reproduces removed numeric trustProxy hop-count (`trustProxy: 1`).
+export const trustProxyOneHop = (_address: string, hop: number): boolean => hop === 0;
+
 // Only where nothing can reach the service directly.
 export function trustsEdgeClientIp(): boolean {
   return process.env.TRUST_EDGE_CLIENT_IP?.trim() === 'true';

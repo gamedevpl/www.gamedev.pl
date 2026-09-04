@@ -10,7 +10,7 @@ import Fastify, {
   type FastifyServerOptions,
 } from 'fastify';
 import { registerAccessTokenRoutes, type AccessTokenRoutesOptions } from './access-token-routes.js';
-import { registerClientAddress } from './client-address.js';
+import { registerClientAddress, trustProxyOneHop } from './client-address.js';
 import { registerProxyDiagnosticsRoutes } from './proxy-diagnostics.js';
 import { registerJobAdminRoutes } from '../creation/job-admin-routes.js';
 import { createGameSeederFromEnv } from '../creation/seed-provider-env.js';
@@ -223,7 +223,7 @@ export interface BuildAppOptions {
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
-  // trustProxy stays 1, and raising it is a spoofing hole: see docs/deployment.md.
+  // trustProxy stays at one hop; raising it is a spoofing hole: see docs/deployment.md.
   // maxParamLength: a remix id is a self-describing token (apps/api/src/remix.ts)
   // that carries the game's slug, so it is longer than Fastify's 100-character
   // default allows. Over the limit the router answers 414 before any handler runs
@@ -231,7 +231,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // nothing in the logs. MAX_REMIX_ID_LENGTH is the bound the minter respects.
   const app = Fastify({
     logger: options.logger ?? false,
-    trustProxy: 1,
+    trustProxy: trustProxyOneHop,
     routerOptions: { maxParamLength: MAX_REMIX_ID_LENGTH },
   });
 

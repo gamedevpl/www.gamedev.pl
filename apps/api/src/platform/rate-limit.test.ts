@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import Fastify from 'fastify';
-import { registerClientAddress } from './client-address.js';
+import { registerClientAddress, trustProxyOneHop } from './client-address.js';
 import { registerRateLimit } from './rate-limit.js';
 
 afterEach(() => {
@@ -8,7 +8,7 @@ afterEach(() => {
 });
 
 async function appWithCappedRoute() {
-  const app = Fastify({ trustProxy: 1 });
+  const app = Fastify({ trustProxy: trustProxyOneHop });
   registerClientAddress(app);
   await registerRateLimit(app);
   app.get('/capped', { config: { rateLimit: { max: 2, timeWindow: '1 minute' } } }, async () => ({ ok: true }));
