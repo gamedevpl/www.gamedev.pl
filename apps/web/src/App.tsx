@@ -1,13 +1,10 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { gamePageHandle, type CatalogEntry } from './catalog.js';
 import { useCatalogData } from './useCatalogData.js';
-import { GameTheater } from './GameTheater.js';
 import { NavHeader } from './NavHeader.js';
 import { HeroPromptSection } from './HeroPromptSection.js';
 import { ArcadeCatalog } from './surfaces/catalog/ArcadeCatalog.js';
 import { UnpublishedPlayView } from './UnpublishedPlayView.js';
-import { PixelIcon } from './PixelIcon.js';
 import { CreatorQA, type QAQuestion } from './CreatorQA.js';
 import { deriveTitleFromConcept } from './gameTitle.js';
 import { MIN_CONCEPT_LENGTH } from './conceptLength.js';
@@ -15,7 +12,6 @@ import { resolveCreateInitialPrompt } from './createInitialPrompt.js';
 import {
   adminPath,
   creatorPath,
-  gamePath,
   navUpTarget,
   playPath,
   reviewPath,
@@ -25,6 +21,8 @@ import {
 } from './core/router.js';
 import { RouteChunkBoundary } from './appRouteRecovery.js';
 import { useAppNavigation } from './useAppNavigation.js';
+import { useGameTheater } from './useGameTheater.js';
+import { StageOverlay } from './StageOverlay.js';
 import { StudioWelcomeView } from './surfaces/studio/StudioWelcomeView.js';
 import { StudioConnectWizard } from './surfaces/studio/StudioConnectWizard.js';
 import type { PublicCreatorProfile } from './creatorProfileApi.js';
@@ -64,26 +62,12 @@ import { clearPendingQa, loadPendingQa, savePendingQa, type PendingQaAnswers } f
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
 import { BottomCta } from './BottomCta.js';
-import { recordCreateStep, recordStudioStep, type PlayVia } from './visitTelemetry.js';
+import { recordCreateStep, recordStudioStep } from './visitTelemetry.js';
 import { ClosedBetaSplash } from './ClosedBetaSplash.js';
 import { BetaInvitePage } from './BetaInvitePage.js';
-import { BetaWelcomeSplash } from './BetaWelcomeSplash.js';
 import { AppLoadingScreen } from './AppLoadingScreen.js';
 import { ControllerView } from './surfaces/party/ControllerView.js';
-import { PartyStage } from './surfaces/party/PartyStage.js';
-import { createPartySession, type PartySession } from './surfaces/party/mpApi.js';
 import { parseOAuthReturnParam } from './oauthReturn.js';
-
-type StageContent =
-  | {
-      type: 'catalog';
-      game: CatalogEntry;
-      initialRemixOpen?: boolean;
-      initialRemixRequest?: string;
-      // Which home page surface launched this play, if it did.
-      via?: PlayVia;
-    }
-  | { type: 'party'; game: CatalogEntry; session: PartySession; via?: PlayVia };
 
 export function App() {
   const { t, i18n } = useTranslation();
@@ -131,8 +115,24 @@ export function App() {
     setMyGamesRefreshKey,
   });
 
-  // Stage content
-  const [stageContent, setStageContent] = useState<StageContent | null>(null);
+  const {
+    stageContent,
+    partyError,
+    handlePlayGame,
+    handleRemixGame,
+    handleExitCatalogTheater,
+    handleExitPartyTheater,
+    handlePlayTogether,
+  } = useGameTheater({
+    route,
+    catalogEntries,
+    catalogStatus,
+    user,
+    navigate,
+    setIsAuthModalOpen,
+    setRecommendationsRefreshKey,
+  });
+
   // Builds actually in flight, from the server — the header badge's source of truth.
   // Paused while a game is on screen because the player covers the header.
   const activeBuildCount = useActiveBuildCount(myGamesRefreshKey, !stageContent);
@@ -177,8 +177,6 @@ export function App() {
 
   // Demo generator state
 
-  // Multiplayer lobby state
-  const [partyError, setPartyError] = useState<string | null>(null);
   // Unpublished `/play/<slug>` title, reported once the document loads.
   const [unpublishedPlayTitle, setUnpublishedPlayTitle] = useState<string | null>(null);
   /** Display name for `/:handle` once the public profile loads. */
@@ -247,52 +245,6 @@ export function App() {
   useEffect(() => {
     setGameTitle(null);
   }, [gameRouteSlug]);
-
-  // Lock page scroll while the full-viewport game player is open so the fixed
-  // overlay is the only scrollable surface (the game handles its own scroll).
-  useEffect(() => {
-    if (!stageContent) return;
-    document.body.classList.add('player-open');
-    return () => document.body.classList.remove('player-open');
-  }, [stageContent]);
-
-  // `/play/<slug>` auto-opens theater once the catalog confirms the game.
-  // Close replaces onto the canonical page; in-place Play is untouched.
-  useEffect(() => {
-    if (stageContent?.type === 'catalog') {
-      const entry = catalogEntries.find((game) => game.slug === stageContent.game.slug);
-      if (entry && stageContent.game !== entry) {
-        setStageContent((prev) =>
-          prev?.type === 'catalog' && prev.game.slug === entry.slug ? { ...prev, game: entry } : prev,
-        );
-      }
-      if (route.view === 'play' && catalogStatus === 'ready' && !entry) {
-        setStageContent(null);
-      }
-      return;
-    }
-
-    if (route.view !== 'play') return;
-    const entry = catalogEntries.find((game) => game.slug === route.slug);
-    // Wait so unknown slugs do not flash a 404 theater.
-    if (catalogStatus !== 'ready' || !entry) return;
-
-    setStageContent({ type: 'catalog', game: entry });
-  }, [route, catalogEntries, catalogStatus, stageContent]);
-
-  // Guard against accidental reload/close while a game is open. The browser shows
-  // its native "Leave site?" confirmation; games run in a sandboxed iframe with no
-  // access to parent storage, so their internal progress can't be persisted here —
-  // this at least prevents losing it by a stray Cmd-R.
-  useEffect(() => {
-    if (!stageContent) return;
-    const warn = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, [stageContent]);
 
   // The static chrome follows the language switcher instantly; the AI questions do
   // not — they were authored in whatever language the refine call used. Re-ask when
@@ -657,121 +609,15 @@ export function App() {
     onUp: navigate,
   };
 
-  function handlePlayGame(game: CatalogEntry, via?: PlayVia) {
-    // In-place Play from home/profile/game page; `/play/<slug>` auto-opens itself.
-    const fullEntry = catalogEntries.find((e) => e.slug === game.slug) ?? game;
-    setStageContent({ type: 'catalog', game: fullEntry, ...(via === undefined ? {} : { via }) });
-    // Soft refresh so "continue" / genre picks update after the next home visit.
-    setRecommendationsRefreshKey((n) => n + 1);
-  }
-
-  function handleRemixGame(game: CatalogEntry, initialRemixRequest?: string) {
-    // The game still has to be mounted for Remix to swap and preview its document,
-    // but the sheet opens on the first frame — no theater detour and second wrench.
-    setStageContent({ type: 'catalog', game, initialRemixOpen: true, initialRemixRequest });
-  }
-
-  function handleExitCatalogTheater() {
-    // Deep-linked `/play` → canonical page (replace). Else dismiss overlay only.
-    if (route.view === 'play' && stageContent?.type === 'catalog') {
-      const game = stageContent.game;
-      navigate(gamePath(gamePageHandle(game), game.slug), { replace: true });
-      setStageContent(null);
-      return;
-    }
-    setStageContent(null);
-  }
-
-  function handleExitPartyTheater() {
-    if (route.view === 'play' && stageContent?.type === 'party') {
-      const game = stageContent.game;
-      navigate(gamePath(gamePageHandle(game), game.slug), { replace: true });
-      setStageContent(null);
-      return;
-    }
-    setStageContent(null);
-  }
-
-  async function handlePlayTogether(game: CatalogEntry, via?: PlayVia) {
-    if (!user) {
-      setIsAuthModalOpen(true);
-      return;
-    }
-    if (!game.multiplayer) return;
-
-    setPartyError(null);
-    try {
-      const session = await createPartySession(game.slug, game.multiplayer.maxPlayers);
-      setStageContent({ type: 'party', game, session, ...(via === undefined ? {} : { via }) });
-      document.getElementById('stage')?.scrollIntoView?.({ behavior: 'smooth' });
-    } catch (error) {
-      setPartyError(error instanceof Error ? error.message : t('errors.generic'));
-    }
-  }
-
-  // Full-viewport theater / party overlay. Rendered from every branch that can open
-  // it — including the open-chrome early returns for `/:handle` and `/:handle/:slug`.
-  // Those routes set `stageContent` (and with it `body.player-open` scroll lock) the
-  // same way home and `/play` do; if the overlay only lived in the signed-in main
-  // return, Play/Remix on a game page would lock the page and show nothing.
+  // Rendered from every branch that can open it, so a game-page Play covers the page.
   const stageOverlay = (
-    <>
-      {stageContent?.type === 'party' && (
-        <section id="stage" className="panel stage is-playing-full-viewport">
-          <div className="game-theater-bar">
-            <div className="game-theater-meta">
-              <span className="theater-badge">
-                <PixelIcon name="phone" size={13} /> {t('party.badge')}
-              </span>
-              <h2 className="theater-title">{stageContent.game.title}</h2>
-            </div>
-            <div className="game-theater-actions">
-              <button
-                className="secondary-btn exit-btn"
-                onClick={handleExitPartyTheater}
-                aria-label={t('catalog.exitPlayer', { defaultValue: 'Close' })}
-                title={t('catalog.exitPlayer', { defaultValue: 'Close' })}
-              >
-                <PixelIcon name="close" size={14} />
-              </button>
-            </div>
-          </div>
-          <div className="game-viewport-container">
-            <PartyStage
-              key={stageContent.session.code}
-              game={stageContent.game}
-              session={stageContent.session}
-              via={stageContent.via}
-              onExit={handleExitPartyTheater}
-            />
-          </div>
-        </section>
-      )}
-
-      {stageContent?.type === 'catalog' && (
-        <GameTheater
-          key={stageContent.game.slug}
-          title={stageContent.game.title}
-          // AI Act art. 50 needs a disclosure at the point of consumption; keep
-          // it short so the title stays the hero of the bar.
-          badge={{ icon: 'sparkle', label: t('ai.generatedShort') }}
-          source={{ slug: stageContent.game.slug }}
-          onExit={handleExitCatalogTheater}
-          orientation={stageContent.game.orientation}
-          reportSlug={stageContent.game.slug}
-          submittedBy={stageContent.game.submittedBy}
-          creatorHandle={stageContent.game.creatorHandle}
-          controls={stageContent.game.controls}
-          touch={stageContent.game.touch}
-          editor={stageContent.game.editor}
-          via={stageContent.via}
-          initialRemixOpen={stageContent.initialRemixOpen}
-          initialRemixRequest={stageContent.initialRemixRequest}
-        />
-      )}
-
-      {showBetaWelcome && user && <BetaWelcomeSplash onContinue={dismissBetaWelcome} />}
-    </>
+    <StageOverlay
+      stageContent={stageContent}
+      onExitCatalogTheater={handleExitCatalogTheater}
+      onExitPartyTheater={handleExitPartyTheater}
+      showBetaWelcome={Boolean(showBetaWelcome && user)}
+      onDismissBetaWelcome={dismissBetaWelcome}
+    />
   );
 
   // A phone that scanned a lobby QR is anonymous by design: it has no session and
