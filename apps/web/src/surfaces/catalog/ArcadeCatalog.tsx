@@ -1,42 +1,25 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import './catalog-toolbar.css';
 import './catalog.css';
 import { useAuth } from '../../AuthContext.js';
 import { type CatalogEntry } from '../../catalog.js';
 import { CatalogCard } from './CatalogCard.js';
-import {
-  CATALOG_CATEGORY_IDS,
-  categorizeCatalogEntry,
-  entriesInCategory,
-  type CatalogCategoryId,
-} from './catalogCategory.js';
-import { buildCatalogPageTokens, CATALOG_PAGE_SIZE } from './catalogPagination.js';
-import {
-  applyCatalogFilters,
-  CATALOG_SORT_MODES,
-  catalogSortNeedsSignals,
-  DEFAULT_CATALOG_SORT,
-  orderCatalogEntries,
-  readCatalogFilters,
-  readCatalogSortMode,
-  writeCatalogFilters,
-  writeCatalogSortMode,
-  type CatalogFilterId,
-  type CatalogSortMode,
-} from './catalogSort.js';
-import { CatalogRail, FeaturedGame } from './CatalogRail.js';
+import { categorizeCatalogEntry, entriesInCategory } from './catalogCategory.js';
+import { buildCatalogPageTokens } from './catalogPagination.js';
+import { CATALOG_SORT_MODES, catalogSortNeedsSignals } from './catalogSort.js';
+import { CatalogRail, FeaturedGame, RAIL_CARD_LIMIT } from './CatalogRail.js';
 import { MascotMoment } from '../../Mascot.js';
 import { PixelIcon } from '../../PixelIcon.js';
 import { getRecentPlays } from '../../recentPlays.js';
 import { watchCatalogScrollIdle } from './catalogScrollIdle.js';
+import { useCatalogBrowsing } from './useCatalogBrowsing.js';
+import { useCatalogOrdering } from './useCatalogOrdering.js';
+import { useCatalogSortAndFilters } from './useCatalogSortAndFilters.js';
 import { useCatalogSortSignals } from './useCatalogSortSignals.js';
 import { useCreatorShelf } from './useCreatorShelf.js';
 import { useFeaturedPool } from './useFeaturedPool.js';
 import type { PlayVia } from '../../visitTelemetry.js';
-
-// Rail length before it scrolls, same for every rail.
-const RAIL_CARD_LIMIT = 12;
 
 type ArcadeCatalogProps = {
   catalogStatus: 'loading' | 'ready' | 'error';
@@ -65,14 +48,8 @@ export function ArcadeCatalog({
   const { user, loading: authLoading } = useAuth();
   const viewerUid = user?.uid ?? null;
   const locale = i18n.language;
-  const [sortMode, setSortMode] = useState<CatalogSortMode>(() =>
-    typeof localStorage === 'undefined' ? DEFAULT_CATALOG_SORT : readCatalogSortMode(),
-  );
-  const [filters, setFilters] = useState<Set<CatalogFilterId>>(() =>
-    typeof localStorage === 'undefined' ? new Set() : readCatalogFilters(),
-  );
-  const [sortMenuOpen, setSortMenuOpen] = useState(false);
-  const sortMenuRef = useRef<HTMLDivElement | null>(null);
+  const { sortMode, filters, sortMenuOpen, sortMenuRef, toggleSortMenu, handleSortChange, toggleFilter, clearFilters } =
+    useCatalogSortAndFilters();
   const { signals, signalsReady } = useCatalogSortSignals(viewerUid, recommendationsRefreshKey);
   const { mySlugs, creatorGamesReady } = useCreatorShelf({
     authLoading,
@@ -81,37 +58,8 @@ export function ArcadeCatalog({
     creatorGamesRefreshKey,
   });
   const { featuredPool, featuredPoolReady } = useFeaturedPool();
-  /** Grid order committed for the current sort/filter/viewer; later signal refresh must not reshuffle. */
-  const [displayedEntries, setDisplayedEntries] = useState<CatalogEntry[]>([]);
-  const desiredOrderRef = useRef<CatalogEntry[]>([]);
-  const paintedOrderKeyRef = useRef<string | null>(null);
-  // Set by a shelf's See all; cleared by All or Clear.
-  const [categoryFilter, setCategoryFilter] = useState<CatalogCategoryId | null>(null);
-  const [browsePage, setBrowsePage] = useState(1);
 
   useEffect(() => watchCatalogScrollIdle(), []);
-
-  // Close the sort menu on outside tap or Escape — phones have no hover to dismiss it.
-  useEffect(() => {
-    if (!sortMenuOpen) return;
-    const onPointer = (event: PointerEvent) => {
-      if (sortMenuRef.current && !sortMenuRef.current.contains(event.target as Node)) {
-        setSortMenuOpen(false);
-      }
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setSortMenuOpen(false);
-    };
-    const timer = window.setTimeout(() => {
-      document.addEventListener('pointerdown', onPointer);
-    }, 0);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      window.clearTimeout(timer);
-      document.removeEventListener('pointerdown', onPointer);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [sortMenuOpen]);
 
   const hasCatalog = catalogStatus === 'ready' && catalogEntries.length > 0;
   // My games only makes sense when signed in and you have a published game of yours.
@@ -121,30 +69,37 @@ export function ArcadeCatalog({
   const notPlayedOnly = filters.has('not_played');
   const filtersActive = yourGamesOnly || notPlayedOnly;
 
-  const desiredOrder = useMemo(() => {
-    // Ignore a sticky your_games pref when signed out or you have nothing yours —
-    // otherwise the whole catalog would look empty for no good reason.
-    const activeFilters = canFilterYourGames ? filters : new Set([...filters].filter((id) => id !== 'your_games'));
-    const filtered = applyCatalogFilters(catalogEntries, activeFilters, signals.affinityLastPlayed, mySlugs);
-    return orderCatalogEntries(filtered, sortMode, signals, mySlugs);
-  }, [catalogEntries, sortMode, filters, signals, mySlugs, canFilterYourGames]);
-  desiredOrderRef.current = desiredOrder;
-
-  const filterKey = [...filters].sort().join(',');
-  // recommendationsRefreshKey: post-play re-rank is deliberate user-visible intent.
-  const userOrderKey = `${sortMode}|${filterKey}|${viewerUid ?? ''}|r${recommendationsRefreshKey}`;
-
-  // A stale page number from a filtered list is not a page.
-  useEffect(() => {
-    setBrowsePage(1);
-  }, [userOrderKey, categoryFilter]);
-
   const awaitingSignals =
     catalogStatus === 'ready' && catalogEntries.length > 0 && catalogSortNeedsSignals(sortMode) && !signalsReady;
   // Hold the grid while auth is unknown, and while a signed-in shelf is still loading.
   const awaitingCreatorShelf = authLoading || (Boolean(viewerUid) && !creatorGamesReady);
   const catalogPending = catalogStatus === 'loading' || awaitingSignals || awaitingCreatorShelf || !featuredPoolReady;
   const layoutReady = catalogStatus === 'ready' && !awaitingSignals && !awaitingCreatorShelf;
+
+  const { desiredOrder, displayedEntries, userOrderKey } = useCatalogOrdering({
+    catalogEntries,
+    sortMode,
+    filters,
+    signals,
+    mySlugs,
+    canFilterYourGames,
+    viewerUid,
+    recommendationsRefreshKey,
+    layoutReady,
+  });
+  const {
+    categoryFilter,
+    clearCategoryFilter,
+    shelfCategories,
+    browseEntries,
+    pageEntries,
+    browsePageCount,
+    clampedBrowsePage,
+    scrollToShelf,
+    jumpToAll,
+    seeAllInCategory,
+    changeBrowsePage,
+  } = useCatalogBrowsing({ displayedEntries, userOrderKey });
 
   // Curated surfaces above the grid, gated on layoutReady like the grid.
 
@@ -207,88 +162,6 @@ export function ArcadeCatalog({
 
   // Also wait for the pool, or the rail shifts after it loads.
   const showCurated = layoutReady && hasCatalog && featuredPoolReady;
-
-  // Commit order once per sort/filter/viewer (and when the shelf/signals first land).
-  // A later recommendations refresh that differs from the sessionStorage cache must
-  // not reshuffle cards under the reader's thumb.
-  useLayoutEffect(() => {
-    if (!layoutReady) {
-      paintedOrderKeyRef.current = null;
-      return;
-    }
-    if (paintedOrderKeyRef.current === userOrderKey) return;
-    paintedOrderKeyRef.current = userOrderKey;
-    setDisplayedEntries(desiredOrderRef.current);
-  }, [layoutReady, userOrderKey]);
-
-  function handleSortChange(mode: CatalogSortMode) {
-    setSortMode(mode);
-    writeCatalogSortMode(mode);
-    setSortMenuOpen(false);
-  }
-
-  function toggleFilter(id: CatalogFilterId) {
-    setFilters((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      writeCatalogFilters(next);
-      return next;
-    });
-  }
-
-  function clearFilters() {
-    setFilters(() => {
-      const next = new Set<CatalogFilterId>();
-      writeCatalogFilters(next);
-      return next;
-    });
-  }
-
-  function scrollToShelf(id: CatalogCategoryId) {
-    document.getElementById(`shelf-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  function scrollToBrowseEverything() {
-    document.getElementById('browse-everything')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  function jumpToAll() {
-    setCategoryFilter(null);
-    scrollToBrowseEverything();
-  }
-
-  function seeAllInCategory(id: CatalogCategoryId) {
-    setCategoryFilter(id);
-    scrollToBrowseEverything();
-  }
-
-  // A shorter destination page must not leave the reader stranded past its end.
-  function changeBrowsePage(next: number) {
-    setBrowsePage(next);
-    scrollToBrowseEverything();
-  }
-
-  // Shelves below the fold, same order as the grid, grouped by category.
-  const shelfCategories = useMemo(
-    () =>
-      CATALOG_CATEGORY_IDS.map((id) => ({
-        id,
-        entries: entriesInCategory(displayedEntries, id).slice(0, RAIL_CARD_LIMIT),
-      })).filter((shelf) => shelf.entries.length > 0),
-    [displayedEntries],
-  );
-
-  const browseEntries = useMemo(
-    () => (categoryFilter ? entriesInCategory(displayedEntries, categoryFilter) : displayedEntries),
-    [displayedEntries, categoryFilter],
-  );
-  const browsePageCount = Math.max(1, Math.ceil(browseEntries.length / CATALOG_PAGE_SIZE));
-  const clampedBrowsePage = Math.min(browsePage, browsePageCount);
-  const pageEntries = useMemo(
-    () => browseEntries.slice((clampedBrowsePage - 1) * CATALOG_PAGE_SIZE, clampedBrowsePage * CATALOG_PAGE_SIZE),
-    [browseEntries, clampedBrowsePage],
-  );
 
   const emptyMessage =
     yourGamesOnly && notPlayedOnly && (catalogEntries.length > 0 || mySlugs.size > 0)
@@ -405,7 +278,7 @@ export function ArcadeCatalog({
                   aria-expanded={sortMenuOpen}
                   aria-haspopup="menu"
                   aria-label={t('catalog.sortLabel')}
-                  onClick={() => setSortMenuOpen((open) => !open)}
+                  onClick={toggleSortMenu}
                 >
                   <span className="catalog-sort-trigger-label">{t(`catalog.sort.${sortMode}`)}</span>
                   <span className="catalog-sort-caret" aria-hidden="true">
@@ -442,7 +315,7 @@ export function ArcadeCatalog({
         {categoryFilter ? (
           <div className="catalog-category-active">
             <span>{t('catalog.categoryFilterActive', { category: t(`catalog.categories.${categoryFilter}`) })}</span>
-            <button type="button" className="catalog-category-clear" onClick={() => setCategoryFilter(null)}>
+            <button type="button" className="catalog-category-clear" onClick={clearCategoryFilter}>
               {t('catalog.clearFilters')}
             </button>
           </div>
@@ -482,7 +355,7 @@ export function ArcadeCatalog({
         ) : showCategoryEmpty ? (
           <MascotMoment className="catalog-state" emotion="curious" size={64} title={t('mascot.curiousAlt')}>
             <p>{t('catalog.emptyCategory', { category: t(`catalog.categories.${categoryFilter}`) })}</p>
-            <button type="button" className="secondary-btn" onClick={() => setCategoryFilter(null)}>
+            <button type="button" className="secondary-btn" onClick={clearCategoryFilter}>
               {t('catalog.clearFilters')}
             </button>
           </MascotMoment>
