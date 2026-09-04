@@ -55,4 +55,9 @@ arguments and the CLI answers "Too many arguments".
 Attaching `www.gamedev.pl` to Hosting changes what the service sees. `TRUST_EDGE_CLIENT_IP`
 must be turned on in the same window — behind the edge, `request.ip` is Google's frontend, so
 leaving it off collapses every per-IP limiter onto a handful of addresses and starts refusing
-real traffic on product routes. See `docs/deployment.md` for the condition that flag records.
+real traffic on product routes.
+
+Turning it on is safe even though the service's `*.run.app` URL stays reachable: the edge
+header is only trusted when the peer Cloud Run appended is one of Google's own addresses,
+which a direct caller cannot arrange. Closing the direct URL by configuration was measured
+to be impossible without also killing the rewrite. See `docs/deployment.md`.

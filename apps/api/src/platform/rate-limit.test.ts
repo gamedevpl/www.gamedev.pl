@@ -15,8 +15,13 @@ async function appWithCappedRoute() {
   return app;
 }
 
+// Behind Google's own edge; nowhere else reads the header.
 function get(app: Awaited<ReturnType<typeof appWithCappedRoute>>, edgeIp: string) {
-  return app.inject({ method: 'GET', url: '/capped', headers: { 'fastly-client-ip': edgeIp } });
+  return app.inject({
+    method: 'GET',
+    url: '/capped',
+    headers: { 'x-forwarded-for': `203.0.113.7, 66.102.8.69`, 'fastly-client-ip': edgeIp },
+  });
 }
 
 describe('the plugin limiter keys on the same address as the rest of the app', () => {

@@ -1,11 +1,17 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { isUnattributable, logIpBucketRefusal, logUnattributableClient } from './client-address-metrics.js';
+import {
+  isUnattributable,
+  logEdgeHeaderUntrusted,
+  logIpBucketRefusal,
+  logUnattributableClient,
+} from './client-address-metrics.js';
+import { isGoogleOwnAddress, startEdgeRangeRefresh } from './edge-ranges.js';
 import { onIpRefusal } from './ip-rate-limit.js';
 
-// Forgeable unless nothing can reach the service around the edge.
+// Trusted only behind a peer that is Google's own edge.
 const EDGE_CLIENT_IP_HEADER = 'fastly-client-ip';
 
-// Only where nothing can reach the service directly.
+// A kill switch; the peer check is what makes it safe.
 export function trustsEdgeClientIp(): boolean {
   return process.env.TRUST_EDGE_CLIENT_IP?.trim() === 'true';
 }
@@ -18,16 +24,30 @@ function singleAddress(raw: string | string[] | undefined): string | null {
   return value;
 }
 
-// Behind the edge this is not the caller.
-export function resolveClientIp(request: FastifyRequest): string {
-  const edge = trustsEdgeClientIp() ? singleAddress(request.headers[EDGE_CLIENT_IP_HEADER]) : null;
-  if (edge) return edge;
-  // No socket on an upgrade; the getter throws.
+// No socket on an upgrade; the getter throws.
+function appendedPeer(request: FastifyRequest): string {
   try {
     return request.ip;
   } catch {
     return '';
   }
+}
+
+// Cloud Run appends the peer itself, so a caller cannot choose it.
+export function cameThroughEdge(request: FastifyRequest): boolean {
+  return isGoogleOwnAddress(appendedPeer(request));
+}
+
+// Behind the edge the appended peer is not the caller.
+export function resolveClientIp(request: FastifyRequest): string {
+  const peer = appendedPeer(request);
+  if (!trustsEdgeClientIp()) return peer;
+  const edge = singleAddress(request.headers[EDGE_CLIENT_IP_HEADER]);
+  if (!edge) return peer;
+  if (isGoogleOwnAddress(peer)) return edge;
+  // Forged, or a Google range the snapshot lacks.
+  logEdgeHeaderUntrusted(request.log, { peer, claimed: edge.slice(0, 64) });
+  return peer;
 }
 
 declare module 'fastify' {
@@ -42,6 +62,12 @@ export function registerClientAddress(app: FastifyInstance): void {
   app.addHook('onRequest', async (request) => {
     request.clientIp = resolveClientIp(request);
   });
+
+  // Tests never reach Google; production keeps the snapshot fresh.
+  if (trustsEdgeClientIp() && process.env.NODE_ENV !== 'test') {
+    const stop = startEdgeRangeRefresh(app.log);
+    app.addHook('onClose', async () => stop());
+  }
 
   // The plugin stamps this header only on its own refusals.
   const refusedByPlugin = (reply: { statusCode: number; getHeader: (name: string) => unknown }) =>

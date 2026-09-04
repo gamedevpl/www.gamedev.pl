@@ -353,6 +353,18 @@ ensure_log_metric unattributable_client_refusals \
   'An IP-keyed limiter refused a caller with no attributable address.' \
   "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"unattributable client refused by ip limiter\""
 
+# Fastly-Client-IP arrived but the peer Cloud Run appended is not one of Google's own
+# addresses, so the header was ignored. Two causes, both worth a look: a header forged and
+# sent straight at the service — the bypass the peer check exists to stop — or a Google range
+# newer than the bundled snapshot. A burst from one peer is the former; a steady trickle
+# from Google-looking peers is the latter, fixed by node infra/refresh-edge-ranges.mjs.
+#
+# The message string is the contract with apps/api/src/platform/client-address-metrics.ts,
+# asserted from both sides by client-address-metrics.test.ts.
+ensure_log_metric edge_header_untrusted \
+  'Fastly-Client-IP present but the appended peer is not Google-own (forgery or stale ranges).' \
+  "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"edge client header not trusted\""
+
 # The in-process tsc preflight (typecheck-preflight.ts) abandons a check that ran past its
 # soft wall and accepts the delivery unvalidated rather than blocking the agent — the same
 # fail-open shape as everywhere else in this pipeline. One skip is a heavy round (a big

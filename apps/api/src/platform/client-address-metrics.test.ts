@@ -6,6 +6,7 @@ import Fastify from 'fastify';
 import { registerClientAddress } from './client-address.js';
 import { registerRateLimit } from './rate-limit.js';
 import {
+  EDGE_HEADER_UNTRUSTED_LOG_MSG,
   IP_BUCKET_REFUSAL_LOG_MSG,
   isUnattributable,
   UNATTRIBUTABLE_CLIENT_LOG_MSG,
@@ -25,14 +26,17 @@ describe('isUnattributable', () => {
 async function appReporting(records: { msg: string; context: object }[]) {
   const app = Fastify({ trustProxy: 1, logger: { level: 'warn' } });
   const capture = ((context: object, msg: string) => {
-    if (msg === UNATTRIBUTABLE_CLIENT_LOG_MSG || msg === IP_BUCKET_REFUSAL_LOG_MSG) records.push({ msg, context });
+    if ([UNATTRIBUTABLE_CLIENT_LOG_MSG, IP_BUCKET_REFUSAL_LOG_MSG, EDGE_HEADER_UNTRUSTED_LOG_MSG].includes(msg)) {
+      records.push({ msg, context });
+    }
   }) as typeof app.log.warn;
   app.log.warn = capture;
-  registerClientAddress(app);
-  await registerRateLimit(app);
+  // Before registerClientAddress, whose own onRequest hook logs first.
   app.addHook('onRequest', async (request) => {
     request.log.warn = capture;
   });
+  registerClientAddress(app);
+  await registerRateLimit(app);
   app.get('/capped', { config: { rateLimit: { max: 1, timeWindow: '1 minute' } } }, async () => ({ ok: true }));
   // A per-account quota, which is not the shared bucket.
   app.get('/quota', async (_request, reply) => reply.status(429).send({ error: 'daily quota exceeded' }));
@@ -82,6 +86,29 @@ describe('reporting an unattributable caller', () => {
   });
 });
 
+describe('a forged edge header sent straight at the service', () => {
+  afterEach(() => {
+    onIpRefusal(null);
+    delete process.env.TRUST_EDGE_CLIENT_IP;
+  });
+
+  it('is reported with the peer that gave it away', async () => {
+    process.env.TRUST_EDGE_CLIENT_IP = 'true';
+    const records: { msg: string; context: object }[] = [];
+    const app = await appReporting(records);
+
+    await app.inject({
+      method: 'GET',
+      url: '/capped',
+      headers: { 'x-forwarded-for': '203.0.113.7, 198.51.100.2', 'fastly-client-ip': '9.9.9.9' },
+    });
+    await app.close();
+
+    const untrusted = records.find((r) => r.msg === EDGE_HEADER_UNTRUSTED_LOG_MSG);
+    expect(untrusted?.context).toEqual({ edgeHeaderUntrusted: { peer: '198.51.100.2', claimed: '9.9.9.9' } });
+  });
+});
+
 describe('the in-handler sliding window', () => {
   afterEach(() => onIpRefusal(null));
 
@@ -106,5 +133,7 @@ describe('the alert that reads these logs', () => {
     expect(script).toContain(UNATTRIBUTABLE_CLIENT_LOG_MSG);
     expect(IP_BUCKET_REFUSAL_LOG_MSG).toBe('unattributable client refused by ip limiter');
     expect(script).toContain(IP_BUCKET_REFUSAL_LOG_MSG);
+    expect(EDGE_HEADER_UNTRUSTED_LOG_MSG).toBe('edge client header not trusted');
+    expect(script).toContain(EDGE_HEADER_UNTRUSTED_LOG_MSG);
   });
 });
