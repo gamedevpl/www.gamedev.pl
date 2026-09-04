@@ -17,7 +17,8 @@ import {
   type StagedSourceEntry,
 } from '../delivery/games-store.js';
 import type { TabCompleteGate } from './creation-limits.js';
-import { parseSpecTitle, type GitHubClient } from '../catalog/github-client.js';
+import type { GitHubClient } from '../catalog/github-client.js';
+import { parseSpecTitle } from '../platform/spec-frontmatter.js';
 import { resolveJobState } from './job-state.js';
 import { createKitFileStore, type KitFileStore } from '../agent-surface/kit-files.js';
 import { parseKitRegistry } from '../platform/kit-registry.js';

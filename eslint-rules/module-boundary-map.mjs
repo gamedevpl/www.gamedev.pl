@@ -127,6 +127,7 @@ const FILE_BUCKET = {
   'raster-source': 'platform',
   'music-tracks': 'platform',
   'how-to-play': 'platform',
+  'spec-frontmatter': 'platform',
   'kit-registry': 'platform',
   'kit-window': 'platform',
   'round-base-version': 'platform',
