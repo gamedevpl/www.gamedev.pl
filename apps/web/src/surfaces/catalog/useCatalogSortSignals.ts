@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getRecentPlays } from '../../recentPlays.js';
 import {
   fetchCatalogSortSignals,
@@ -48,8 +48,10 @@ export function useCatalogSortSignals(
   viewerUid: string | null,
   recommendationsRefreshKey: number,
 ): { signals: CatalogSortSignals; signalsReady: boolean } {
-  const [signals, setSignals] = useState<CatalogSortSignals>(() => initialSignals(viewerUid).signals);
-  const [signalsReady, setSignalsReady] = useState(() => initialSignals(viewerUid).ready);
+  const initialRef = useRef<{ signals: CatalogSortSignals; ready: boolean }>();
+  if (!initialRef.current) initialRef.current = initialSignals(viewerUid);
+  const [signals, setSignals] = useState<CatalogSortSignals>(() => initialRef.current!.signals);
+  const [signalsReady, setSignalsReady] = useState(() => initialRef.current!.ready);
 
   useEffect(() => {
     let cancelled = false;

@@ -410,11 +410,11 @@ export function CatalogCard({
             }
           </div>
           <div className="card-actions">
-            <button className="primary-btn" onClick={() => onPlayGame(entry)}>
+            <button type="button" className="primary-btn" onClick={() => onPlayGame(entry)}>
               <PixelIcon name="play" size={13} /> {t('catalog.play')}
             </button>
             {entry.multiplayer && (
-              <button className="secondary-btn party-btn" onClick={() => onPlayTogether(entry)}>
+              <button type="button" className="secondary-btn party-btn" onClick={() => onPlayTogether(entry)}>
                 <PixelIcon name="phone" size={13} /> {t('party.playTogether')}
               </button>
             )}
