@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import type { GameHealth } from '../../healthApi.js';
 import type { StudioGame, StudioScorecard } from '../../studioApi.js';
 import { AutonomySetting } from './AutonomySetting.js';
-import { formatSeconds } from './studioHealth.js';
+import { formatSeconds } from '../../relativeTime.js';
 import { SuggestedImprovements } from './StudioSuggestions.js';
 
 const WINDOWS = [1, 7, 30];

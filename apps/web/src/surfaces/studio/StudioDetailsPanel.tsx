@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon, type PixelIconName } from '../../PixelIcon.js';
-import { formatRelativeTime } from '../../relativeTime.js';
+import { formatRelativeTime, formatSeconds } from '../../relativeTime.js';
 import type { GameHealth } from '../../healthApi.js';
 import { abandonSubmission, deleteGame } from '../../submissionApi.js';
 import type { StudioScorecard } from '../../studioApi.js';
@@ -17,7 +17,6 @@ import { StudioDetailsMedia } from './StudioDetailsMedia.js';
 import { StudioOAuthClientsPanel } from './StudioOAuthClientsPanel.js';
 import { StudioPatPanel } from './StudioPatPanel.js';
 import { StudioWorkspaceCheckoutPanel } from './StudioWorkspaceCheckoutPanel.js';
-import { formatSeconds } from './studioHealth.js';
 
 // One pane at a time, chosen by icon.
 export type DetailsPaneId = 'overview' | 'connect' | 'build' | 'media' | 'workspace' | 'keys' | 'stats';
