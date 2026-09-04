@@ -7,8 +7,11 @@ import { type CatalogEntry } from '../../catalog.js';
 import { CatalogCard } from './CatalogCard.js';
 import { categorizeCatalogEntry, entriesInCategory } from './catalogCategory.js';
 import { buildCatalogPageTokens } from './catalogPagination.js';
-import { CATALOG_SORT_MODES, catalogSortNeedsSignals } from './catalogSort.js';
-import { CatalogRail, FeaturedGame, RAIL_CARD_LIMIT } from './CatalogRail.js';
+import { catalogSortNeedsSignals } from './catalogSort.js';
+import { RAIL_CARD_LIMIT } from './CatalogRail.js';
+import { ArcadeCategoryShelves } from './ArcadeCategoryShelves.js';
+import { ArcadeCuratedRails } from './ArcadeCuratedRails.js';
+import { ArcadeToolbar } from './ArcadeToolbar.js';
 import { MascotMoment } from '../../Mascot.js';
 import { PixelIcon } from '../../PixelIcon.js';
 import { getRecentPlays } from '../../recentPlays.js';
@@ -178,73 +181,27 @@ export function ArcadeCatalog({
 
   return (
     <>
-      {showCurated && featuredEntry && (
-        <div id="play-anchor">
-          <FeaturedGame
-            entry={featuredEntry}
-            onPlayGame={onPlayGame}
-            onPlayTogether={onPlayTogether}
-            moreLikeThis={featuredMoreLikeThis}
-          />
-        </div>
-      )}
       {showCurated && (
-        <>
-          <CatalogRail
-            heading={t('catalog.rails.startHere')}
-            entries={startHereEntries}
-            via="rail_start_here"
-            onPlayGame={onPlayGame}
-          />
-          <CatalogRail
-            heading={t('catalog.rails.continuePlaying')}
-            entries={continuePlayingEntries}
-            via="rail_continue"
-            onPlayGame={onPlayGame}
-          />
-          <CatalogRail
-            id="party-rail"
-            heading={t('catalog.rails.party')}
-            entries={partyEntries}
-            via="rail_party"
-            onPlayGame={onPlayGame}
-            onPlayTogether={onPlayTogether}
-            headingAside={partyEntries.length > 0 ? String(partyEntries.length) : undefined}
-          />
-          <CatalogRail
-            heading={t('catalog.rails.recentlyAdded')}
-            entries={recentlyAddedEntries}
-            via="rail_new"
-            onPlayGame={onPlayGame}
-          />
-        </>
+        <ArcadeCuratedRails
+          featuredEntry={featuredEntry}
+          featuredMoreLikeThis={featuredMoreLikeThis}
+          startHereEntries={startHereEntries}
+          continuePlayingEntries={continuePlayingEntries}
+          partyEntries={partyEntries}
+          recentlyAddedEntries={recentlyAddedEntries}
+          onPlayGame={onPlayGame}
+          onPlayTogether={onPlayTogether}
+        />
       )}
       {showCurated && shelfCategories.length > 0 && (
-        <>
-          <nav className="catalog-jumpbar" aria-label={t('catalog.jumpBarLabel')}>
-            <button type="button" className="jump-chip is-all" onClick={jumpToAll}>
-              {t('catalog.jumpAll')}
-            </button>
-            {shelfCategories.map((shelf) => (
-              <button key={shelf.id} type="button" className="jump-chip" onClick={() => scrollToShelf(shelf.id)}>
-                <span className={`jump-chip-dot cat-${shelf.id}`} aria-hidden="true" />
-                {t(`catalog.categories.${shelf.id}`)}
-              </button>
-            ))}
-          </nav>
-          {shelfCategories.map((shelf) => (
-            <div id={`shelf-${shelf.id}`} key={shelf.id} className={`catalog-shelf cat-${shelf.id}`}>
-              <CatalogRail
-                heading={t(`catalog.categories.${shelf.id}`)}
-                entries={shelf.entries}
-                via="shelf"
-                onPlayGame={onPlayGame}
-                onPlayTogether={onPlayTogether}
-                onSeeAll={() => seeAllInCategory(shelf.id)}
-              />
-            </div>
-          ))}
-        </>
+        <ArcadeCategoryShelves
+          shelfCategories={shelfCategories}
+          onJumpToAll={jumpToAll}
+          onScrollToShelf={scrollToShelf}
+          onSeeAll={seeAllInCategory}
+          onPlayGame={onPlayGame}
+          onPlayTogether={onPlayTogether}
+        />
       )}
       <section id="arcade" className={`arcade-section${catalogPending ? ' is-pending' : ''}`}>
         <div id="browse-everything" className="arcade-header">
@@ -252,63 +209,17 @@ export function ArcadeCatalog({
             <h2 className="arcade-title">{t('catalog.browseEverything')}</h2>
           </div>
           {showControls ? (
-            <div className="catalog-toolbar" role="group" aria-label={t('catalog.toolbarLabel')}>
-              {canFilterYourGames ? (
-                <button
-                  type="button"
-                  className={`catalog-filter-trigger${yourGamesOnly ? ' is-active' : ''}`}
-                  aria-pressed={yourGamesOnly}
-                  onClick={() => toggleFilter('your_games')}
-                >
-                  {t('catalog.filter.your_games')}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className={`catalog-filter-trigger${notPlayedOnly ? ' is-active' : ''}`}
-                aria-pressed={notPlayedOnly}
-                onClick={() => toggleFilter('not_played')}
-              >
-                {t('catalog.filter.not_played')}
-              </button>
-              <div className={`catalog-sort-menu${sortMenuOpen ? ' is-open' : ''}`} ref={sortMenuRef}>
-                <button
-                  type="button"
-                  className="catalog-sort-trigger"
-                  aria-expanded={sortMenuOpen}
-                  aria-haspopup="menu"
-                  aria-label={t('catalog.sortLabel')}
-                  onClick={toggleSortMenu}
-                >
-                  <span className="catalog-sort-trigger-label">{t(`catalog.sort.${sortMode}`)}</span>
-                  <span className="catalog-sort-caret" aria-hidden="true">
-                    ▾
-                  </span>
-                </button>
-                {sortMenuOpen ? (
-                  <ul className="catalog-sort-panel" role="menu" aria-label={t('catalog.sortLabel')}>
-                    {CATALOG_SORT_MODES.map((mode) => (
-                      <li key={mode} role="none">
-                        <button
-                          type="button"
-                          role="menuitemradio"
-                          className={`catalog-sort-option${sortMode === mode ? ' is-active' : ''}`}
-                          aria-checked={sortMode === mode}
-                          onClick={() => handleSortChange(mode)}
-                        >
-                          {sortMode === mode ? (
-                            <PixelIcon name="check" size={12} />
-                          ) : (
-                            <span className="catalog-sort-check-spacer" />
-                          )}
-                          <span className="catalog-sort-option-label">{t(`catalog.sort.${mode}`)}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </div>
-            </div>
+            <ArcadeToolbar
+              canFilterYourGames={canFilterYourGames}
+              yourGamesOnly={yourGamesOnly}
+              notPlayedOnly={notPlayedOnly}
+              onToggleFilter={toggleFilter}
+              sortMode={sortMode}
+              sortMenuOpen={sortMenuOpen}
+              sortMenuRef={sortMenuRef}
+              onToggleSortMenu={toggleSortMenu}
+              onSortChange={handleSortChange}
+            />
           ) : null}
         </div>
 
