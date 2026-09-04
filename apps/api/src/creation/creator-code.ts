@@ -9,13 +9,9 @@ import {
 import { isActiveBuildRound } from './builder.js';
 import { codeSurfaceEnabled, isLiveAgentRound, isOpenAgentRound } from './code-surface.js';
 import type { GcsObjectStore } from '../delivery/gcs-sign.js';
-import {
-  InvalidUploadError,
-  MAX_UPLOAD_FILES,
-  type GamesStore,
-  type SourceFile,
-  type StagedSourceEntry,
-} from '../delivery/games-store.js';
+import type { GamesStore, SourceFile, StagedSourceEntry } from '../delivery/games-store.js';
+import { DELIVERY_MAX_FILES } from '../platform/games-repo-contract.js';
+import { InvalidUploadError } from '../platform/upload-error.js';
 import type { TabCompleteGate } from './creation-limits.js';
 import type { GitHubClient } from '../catalog/github-client.js';
 import { parseSpecTitle } from '../platform/spec-frontmatter.js';
@@ -36,12 +32,8 @@ import {
   SourceDeliveryValidationError,
   type SourceDeliveryService,
 } from '../delivery/source-delivery.js';
-import {
-  hasPlayableOverlay,
-  overlayGameSources,
-  readDeliveredSources,
-  type StagedPreviewPublisher,
-} from '../delivery/staged-preview.js';
+import { hasPlayableOverlay, overlayGameSources, readDeliveredSources } from '../platform/game-overlay.js';
+import type { StagedPreviewPublisher } from '../delivery/staged-preview.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { MAX_PREFIX_CHARS, MAX_SUFFIX_CHARS, tabCompleteEnabled, type TabCompleter } from './tab-complete.js';
 import {
@@ -644,7 +636,7 @@ export async function registerCreatorCodeRoutes(
   );
 
   const DiscardInputSchema = z.object({
-    paths: z.array(z.string().trim().min(1).max(120)).max(MAX_UPLOAD_FILES).optional(),
+    paths: z.array(z.string().trim().min(1).max(120)).max(DELIVERY_MAX_FILES).optional(),
   });
 
   /**
@@ -800,7 +792,7 @@ export async function registerCreatorCodeRoutes(
   const TypecheckInputSchema = z.object({
     overlay: z
       .array(z.object({ path: z.string().trim().min(1).max(120), content: z.string().max(1_000_000) }))
-      .max(MAX_UPLOAD_FILES)
+      .max(DELIVERY_MAX_FILES)
       .optional(),
   });
 

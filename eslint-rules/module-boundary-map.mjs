@@ -143,6 +143,31 @@ const FILE_BUCKET = {
   // env-flag reader -- neither has business logic tied to any one bucket.
   'github-rate-limit': 'platform',
   'editor-kit-env': 'platform',
+  // HMAC capability tokens, the sibling of submission-token.ts/access-token.ts. Pure
+  // node:crypto over a caller-supplied secret, with no agent-surface state at all.
+  'agent-token': 'platform',
+  // Slug minting and claim settlement. Pure aside from caller-supplied probes, and
+  // read by creation, catalog and the backfill CLI alike.
+  slug: 'platform',
+  // Pure predicates and formatters shared across buckets: a byte ceiling, a changelog
+  // over plain events, a tar composition, a seal refusal, a chat-agent log shape.
+  'build-preview-limits': 'platform',
+  'build-changelog': 'platform',
+  'workspace-archive': 'platform',
+  'seal-preview': 'platform',
+  'chat-agent-metrics': 'platform',
+  // Wire vocabulary and pure helpers factored out of one bucket's module because
+  // creation needs them without that bucket's stateful half.
+  'playtest-context': 'platform',
+  'creator-media-store': 'platform',
+  'game-overlay': 'platform',
+  'kit-file-kind': 'platform',
+  'seed-outcome': 'platform',
+  'game-module-path': 'platform',
+  'proposal-limits': 'platform',
+  'feedback-themes-contract': 'platform',
+  'managed-builder-error': 'platform',
+  'upload-error': 'platform',
 
   // creation: jobs, rounds, dispatch, seed, refine
   'draft-lifecycle-routes': 'creation',
@@ -175,6 +200,7 @@ const FILE_BUCKET = {
   'editor-drafts': 'creation',
   remix: 'creation',
   'remix-save': 'creation',
+  'remix-view': 'creation',
   'remix-suggestions': 'creation',
   'remix-turns': 'creation',
   'agent-state': 'creation',
@@ -199,6 +225,7 @@ const FILE_BUCKET = {
   'seed-provider-openrouter': 'creation',
   'seed-provider-vertex': 'creation',
   'game-seed': 'creation',
+  'seed-paths': 'creation',
   'session-crash': 'creation',
   scorecard: 'creation',
   'knowledge-search': 'creation',
@@ -239,7 +266,6 @@ const FILE_BUCKET = {
   'mcp-debug-log': 'agent-surface',
   'mcp-install-links': 'agent-surface',
   'mcp-presence': 'agent-surface',
-  'agent-token': 'agent-surface',
   'agent-upload-token': 'agent-surface',
   'agent-session-revocation': 'agent-surface',
   'agent-creator-key': 'agent-surface',
@@ -276,7 +302,6 @@ const FILE_BUCKET = {
   'creator-media': 'delivery',
   'draft-preview-routes': 'delivery',
   'editor-upload-requirements': 'delivery',
-  'seal-preview': 'delivery',
   'staged-preview': 'delivery',
   'stage-hints': 'delivery',
   'games-store': 'delivery',
@@ -285,10 +310,7 @@ const FILE_BUCKET = {
   'source-file-bytes': 'delivery',
   'gate-materialize': 'delivery',
   'gate-runner-raster': 'delivery',
-  'workspace-archive': 'delivery',
   'build-transcript': 'delivery',
-  'build-changelog': 'delivery',
-  'build-preview-limits': 'delivery',
   'build-prompt': 'delivery',
   'source-delivery': 'delivery',
   'recent-builds': 'delivery',
@@ -334,7 +356,6 @@ const FILE_BUCKET = {
   'games-repo-contract-check': 'catalog',
   'local-games-repo': 'catalog',
   'index-html-generator': 'catalog',
-  slug: 'catalog',
   'slug-backfill': 'catalog',
 
   // community: votes, feedback, review, proposals, suggestions
@@ -386,7 +407,6 @@ const FILE_BUCKET = {
   'visit-cli-funnel': 'telemetry',
   'visit-telemetry-limit': 'telemetry',
   'creator-metrics': 'telemetry',
-  'chat-agent-metrics': 'telemetry',
 
   // notifications
   notify: 'notifications',

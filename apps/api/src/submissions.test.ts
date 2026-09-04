@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { assertAgentTokenActive, mintAgentToken, verifyAgentToken } from './agent-surface/agent-token.js';
+import { assertAgentTokenActive, mintAgentToken, verifyAgentToken } from './platform/agent-token.js';
 import { buildApp } from './platform/app.js';
 import type { GameSeeder, SeedDraft } from './creation/game-seed.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './platform/auth.js';

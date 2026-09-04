@@ -1,5 +1,5 @@
-import { mintGameSlug } from './slug.js';
-import { settleSlugClaim } from './slug-backfill.js';
+import { mintGameSlug } from '../platform/slug.js';
+import { settleSlugClaim } from '../platform/slug-ownership.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 
 export interface SlugResolverOptions {

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from './app.js';
-import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from '../agent-surface/agent-token.js';
+import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
 import { mintGameAgentKey } from '../agent-surface/agent-game-key.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { cimdSupportsPublicClientAuth, consentToken, OAUTH_AS_METADATA_PATH } from './oauth-as.js';

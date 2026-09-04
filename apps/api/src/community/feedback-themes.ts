@@ -2,6 +2,16 @@ import type { GenAIClient } from 'genaicode';
 import { z } from 'zod';
 import { createVertexClient, type VertexGenerationConfig } from '../platform/genai.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
+import {
+  MAX_FEEDBACK_ROWS,
+  MIN_FEEDBACK_FOR_THEMES,
+  NoopThemeExtractor,
+  type FeedbackTheme,
+  type ThemeExtractor,
+} from '../platform/feedback-themes-contract.js';
+
+export { MAX_FEEDBACK_ROWS, MIN_FEEDBACK_FOR_THEMES, NoopThemeExtractor };
+export type { FeedbackTheme, ThemeExtractor };
 
 /**
  * Distils written player feedback into a handful of recurring themes
@@ -31,34 +41,9 @@ import { sanitizeCreatorText } from '../platform/submission-status.js';
  *    it later.
  */
 
-/**
- * Below this many feedback rows a game gets no themes at all.
- *
- * Three is the smallest number where a shared theme is evidence of something rather than a
- * paraphrase of a single note. This is a privacy floor as much as a quality one: with one
- * or two rows, any honest summary is close to quoting, and the writers are identifiable to
- * anyone who read the original.
- */
-export const MIN_FEEDBACK_FOR_THEMES = 3;
-
-/** Most recent rows considered. Bounds both the prompt size and the cost per game. */
-export const MAX_FEEDBACK_ROWS = 200;
-
 /** Ceilings on what a model may put into a scorecard. */
 export const MAX_THEMES = 8;
 export const MAX_THEME_LENGTH = 80;
-
-export interface FeedbackTheme {
-  /** A short phrase describing what several players said. Untrusted text. */
-  theme: string;
-  /** How many of the considered notes support it, clamped to what was actually read. */
-  count: number;
-}
-
-export interface ThemeExtractor {
-  /** Returns themes for these notes, or `[]` when there is too little to summarize. */
-  extract(texts: string[]): Promise<FeedbackTheme[]>;
-}
 
 const ThemesSchema = z.object({
   themes: z
@@ -195,21 +180,6 @@ export class VertexThemeExtractor implements ThemeExtractor {
       .json((value) => ThemesSchema.parse(value));
 
     return clampThemes(result.themes, considered.length);
-  }
-}
-
-/**
- * An extractor that returns nothing, used wherever Vertex should not be called.
- *
- * Returning `[]` rather than throwing is the same judgement the rest of the telemetry path
- * makes: no themes must read as "nothing was summarized", which is true, and never as a
- * broken sweep. A game with no themes and a game whose extraction failed look identical in
- * the scorecard *by design* — both are an absence of evidence, and the operator page
- * renders absence as absence.
- */
-export class NoopThemeExtractor implements ThemeExtractor {
-  async extract(): Promise<FeedbackTheme[]> {
-    return [];
   }
 }
 

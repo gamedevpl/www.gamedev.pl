@@ -10,7 +10,7 @@ import {
   type KitFileStore,
 } from './kit-files.js';
 import { KitRegistryError } from '../platform/kit-registry.js';
-import type { AgentTokenAccess } from './agent-token.js';
+import type { AgentTokenAccess } from '../platform/agent-token.js';
 import type { SubmissionRecord } from '../platform/store.js';
 
 // The Creator Kit read cluster: single file, batch, and windowed fragment reads.

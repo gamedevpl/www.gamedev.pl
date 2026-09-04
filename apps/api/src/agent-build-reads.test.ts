@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { gzipSync } from 'node:zlib';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-surface/agent-token.js';
+import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './platform/agent-token.js';
 import { AGENT_BUILD_RULES_DIGEST } from './agent-surface/agent-build-brief.js';
 import { listAgentBuildExamples } from './agent-surface/agent-build-examples.js';
 import { buildApp } from './platform/app.js';

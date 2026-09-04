@@ -1,7 +1,7 @@
 import type { BuilderKind } from '@gamedevpl/contract';
-import { stripPlaytestContext } from './build-transcript.js';
+import { stripPlaytestContext } from '../platform/playtest-context.js';
 import { detectStall, toSubmissionStatus } from '../creation/job-state.js';
-import { hydrateRecentBuildSummaries } from './build-changelog.js';
+import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
 import { isStudioOrigin } from '../platform/store.js';
 import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
 import type { GamesStore } from './games-store.js';

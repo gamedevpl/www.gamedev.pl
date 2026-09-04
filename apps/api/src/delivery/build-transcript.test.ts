@@ -5,9 +5,8 @@ import {
   MAX_TRANSCRIPT_LIST_ENTRIES,
   MAX_TRANSCRIPT_ROUNDS,
   MAX_TRANSCRIPT_WINDOW_ENTRIES,
-  PLAYTEST_CONTEXT_HEADER,
-  stripPlaytestContext,
 } from './build-transcript.js';
+import { PLAYTEST_CONTEXT_HEADER, stripPlaytestContext } from '../platform/playtest-context.js';
 import { isMcpPresenceEventText, mcpPresenceText } from '../agent-surface/mcp-presence.js';
 import type { CreatorMessage, Store, SubmissionRecord } from '../platform/store.js';
 import type { BuildEvent } from '../platform/submission-status.js';

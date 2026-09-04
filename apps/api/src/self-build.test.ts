@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentBackend, BuildBrief, SeedFiles } from './agent-surface/agent-backend.js';
-import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-surface/agent-token.js';
+import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './platform/agent-token.js';
 import { buildApp } from './platform/app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './platform/auth.js';
 import type { GamesStore } from './delivery/games-store.js';

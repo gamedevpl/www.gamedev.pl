@@ -19,7 +19,7 @@
 import { Readable } from 'node:stream';
 import { createGunzip } from 'node:zlib';
 import type { GcsObjectStore } from '../delivery/gcs-sign.js';
-import { kitFileKind, type KitFileKind } from '../agent-surface/kit-files.js';
+import { kitFileKind, type KitFileKind } from '../platform/kit-file-kind.js';
 import { readTarEntries } from '../platform/tar.js';
 
 /** Whole-file reads above this are refused — an exemplar module is never this big. */

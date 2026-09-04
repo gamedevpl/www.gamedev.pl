@@ -8,7 +8,7 @@ import {
   mintAgentToken,
   mintManagedMcpOpener,
   STALE_AGENT_TOKEN_REASON,
-} from './agent-token.js';
+} from '../platform/agent-token.js';
 import { mintGameAgentKey } from './agent-game-key.js';
 import { buildApp } from '../platform/app.js';
 import type { GamesStore } from '../delivery/games-store.js';

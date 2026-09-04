@@ -31,6 +31,7 @@ import { isRateLimitResponse } from '../platform/github-rate-limit.js';
 import { generateIndexHtml, type GameManifest as IndexHtmlManifest } from './index-html-generator.js';
 import { hasPlayableHowToPlay } from '../platform/how-to-play.js';
 import { mergeMusicTrackMaps, parseGameMusicTracks, parseMusicCatalogTracks } from '../platform/music-tracks.js';
+import { resolveGameTypeScriptPath } from '../platform/game-module-path.js';
 import { parseSpecFrontmatter, parseSpecTitle } from '../platform/spec-frontmatter.js';
 import { generateStyleCss, type Theme } from '../platform/theme-css-generator.js';
 
@@ -165,36 +166,8 @@ const MAX_SOURCE_GRAPH_BYTES = SOURCE_GRAPH_BUDGET_BYTES;
  */
 const GAME_KIT_MODULE_ENTRIES = GAME_KIT_VERTICAL_ENTRIES;
 
-/**
- * Maps a relative import specifier onto a `.ts` source path.
- *
- * The games repo authors TypeScript the way TypeScript ESM projects do: an import
- * may write `./foo.ts`, `./foo.js` (emit path — source is still `foo.ts`), or `./foo`.
- * The play-time bundler has to accept all three or every modular game 502s while the
- * games repo's own assemble (which resolves the same way) stays green.
- *
- * Returns null when the specifier is not a relative TypeScript module path.
- */
 /** What `getGameFile` will read. Declarations and manifests, never source or media. */
 const GAME_FILE_READS = new Set(['GAME.json', 'SPEC.md', 'EDITOR.json']);
-
-export function resolveGameTypeScriptPath(resolveDir: string, specifier: string): string | null {
-  if (!specifier.startsWith('./') && !specifier.startsWith('../')) {
-    return null;
-  }
-  const resolvedPath = path.posix.resolve(resolveDir, specifier);
-  if (resolvedPath.endsWith('.ts')) {
-    return resolvedPath;
-  }
-  if (resolvedPath.endsWith('.js')) {
-    return `${resolvedPath.slice(0, -'.js'.length)}.ts`;
-  }
-  // Extensionless — only accept bare paths (no other extension). `./foo.json` stays rejected.
-  if (path.posix.extname(resolvedPath) !== '') {
-    return null;
-  }
-  return `${resolvedPath}.ts`;
-}
 
 interface SourcedAudioCatalog {
   sounds?: Record<string, { mime?: unknown }>;

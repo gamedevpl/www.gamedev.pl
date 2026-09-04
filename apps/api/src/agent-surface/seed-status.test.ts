@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { resolveSeedStatus, seedNoticeFor, seedOutcomeFor, seedPayload } from './seed-status.js';
+import { resolveSeedStatus, seedNoticeFor, seedPayload } from './seed-status.js';
+import { seedOutcomeFor } from '../platform/seed-outcome.js';
 
 describe('seed-status', () => {
   it('prefers stored files over a stale pending flag', () => {

@@ -11,9 +11,9 @@ import {
   type EditorDefinition,
 } from './editor-contract.js';
 import type { GamesStore, SourceFile, VersionManifest } from '../delivery/games-store.js';
-import { InvalidUploadError } from '../delivery/games-store.js';
-import { mintGameSlug } from '../catalog/slug.js';
-import { settleSlugClaim } from '../catalog/slug-backfill.js';
+import { InvalidUploadError } from '../platform/upload-error.js';
+import { mintGameSlug } from '../platform/slug.js';
+import { settleSlugClaim } from '../platform/slug-ownership.js';
 import type { Store } from '../platform/store.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { mintToken } from '../platform/submission-token.js';

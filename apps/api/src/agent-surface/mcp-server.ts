@@ -62,7 +62,7 @@ import {
   verifyManagedMcpOpener,
   type AgentTokenAccess,
   type AgentTokenClaims,
-} from './agent-token.js';
+} from '../platform/agent-token.js';
 import { selfBuildDeliveryCap } from '../platform/self-build-delivery-cap.js';
 import type { ManagedUnavailableReason } from './managed-availability.js';
 import { type GamesStore } from '../delivery/games-store.js';

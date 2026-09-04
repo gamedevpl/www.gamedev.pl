@@ -1,6 +1,6 @@
 import { BUILDERS, MAX_SHOT_BYTES } from '@gamedevpl/contract';
 import { z } from 'zod';
-import { MAX_REFERENCE_IMAGES } from '../delivery/creator-media.js';
+import { MAX_REFERENCE_IMAGES } from '../platform/creator-media-store.js';
 
 // Shared by the create, feedback and improve routes, which now live apart.
 export const MAX_SHOT_BASE64_CHARS = Math.ceil((MAX_SHOT_BYTES * 4) / 3) + 1024;

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-surface/agent-token.js';
+import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './platform/agent-token.js';
 import { buildApp } from './platform/app.js';
 import type { GamesStore } from './delivery/games-store.js';
 import type { GcsObjectStore } from './delivery/gcs-sign.js';

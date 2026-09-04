@@ -15,7 +15,7 @@ import {
   verifyGameAgentKey,
   type GameAgentKeyClaims,
 } from './agent-game-key.js';
-import { InvalidAgentTokenError } from './agent-token.js';
+import { InvalidAgentTokenError } from '../platform/agent-token.js';
 import { isActiveBuildRound } from '../creation/builder.js';
 import type { GameAgentKeyRecord, Store, SubmissionRecord } from '../platform/store.js';
 import { creatorOwnsSlug } from '../platform/slug-ownership.js';

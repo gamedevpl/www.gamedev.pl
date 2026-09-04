@@ -6,7 +6,7 @@ import { KitRegistryError, parseKitRegistry, parseKitSidecar } from '../platform
 import { codeSurfaceEnabled } from './code-surface.js';
 import { collapseJobsToOwnerGames, MAX_OWNER_GAMES, pageOwnerGames } from './owner-games.js';
 import { readTarEntries, type TarEntry } from '../platform/tar.js';
-import { hydrateRecentBuildSummaries } from '../delivery/build-changelog.js';
+import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
 import { isMcpPresenceEventText } from '../agent-surface/mcp-presence.js';
 import { toRecentBuilds } from '../delivery/recent-builds.js';
 import type {
@@ -25,7 +25,7 @@ export type CreatorScorecardSummary = StudioScorecard;
 export type CreatorScorecardsResponse = StudioScorecardsResponse;
 export type CreatorStudioGamesResponse = StudioGamesResponse;
 export type CreatorBuildsResponse = StudioBuildsResponse;
-import { composeWorkspaceArchive, WorkspaceCompositionError } from '../delivery/workspace-archive.js';
+import { composeWorkspaceArchive, WorkspaceCompositionError } from '../platform/workspace-archive.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { Store, TelemetryEvent } from '../platform/store.js';
 import { normalizeLocale } from '../platform/translate.js';

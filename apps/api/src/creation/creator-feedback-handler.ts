@@ -1,11 +1,8 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { GitHubClient } from '../catalog/github-client.js';
-import {
-  formatPlaytestContextBlock,
-  storeCreatorPlaytestShot,
-  storeCreatorReferenceImages,
-} from '../delivery/creator-media.js';
+import { storeCreatorPlaytestShot, storeCreatorReferenceImages } from '../platform/creator-media-store.js';
+import { formatPlaytestContextBlock } from '../platform/playtest-context.js';
 import { cliSurfaceEnabled } from '../platform/cli-surface.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';

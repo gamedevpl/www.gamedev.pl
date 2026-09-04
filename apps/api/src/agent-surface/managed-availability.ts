@@ -10,8 +10,7 @@ export type ManagedUnavailableReason = BuilderUnavailableReason;
 
 export type ManagedAvailability = { available: true } | { available: false; reason: ManagedUnavailableReason };
 
-// Wire error code for a refused `builder: 'platform'` request.
-export const MANAGED_UNAVAILABLE_ERROR = 'platform_builder_unavailable';
+export { MANAGED_UNAVAILABLE_ERROR } from '../platform/managed-builder-error.js';
 
 export const DEFAULT_MANAGED_AVAILABILITY_TTL_MS = 60_000;
 

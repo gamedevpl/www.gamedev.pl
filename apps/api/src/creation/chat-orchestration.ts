@@ -9,7 +9,7 @@ import {
 import { loadRecentChatTurns } from './chat-turns-history.js';
 import { isMcpPresenceEventText } from '../agent-surface/mcp-presence.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
-import { asChatAgentLogger, logChatAgentDecision, logChatAgentFailOpen } from '../telemetry/chat-agent-metrics.js';
+import { asChatAgentLogger, logChatAgentDecision, logChatAgentFailOpen } from '../platform/chat-agent-metrics.js';
 import { normalizeAtIntake, type IntakeText } from '../platform/localize-intake.js';
 import { MAX_REVISION_CHARS } from '../platform/submission-status.js';
 import { createTranslatorFromEnv, type Translator } from '../platform/translate.js';

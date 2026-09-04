@@ -8,7 +8,7 @@ import { decodeCanonicalBase64Utf8, InvalidBase64Error } from '../platform/canon
 import { largeSourceFileHint, moduleSizeWarnings } from '../creation/module-size.js';
 import { gameManifestHint } from './game-manifest-hint.js';
 import type { SubmissionRecord } from '../platform/store.js';
-import type { AgentTokenClaims } from './agent-token.js';
+import type { AgentTokenClaims } from '../platform/agent-token.js';
 import {
   toolOk,
   toolErr,

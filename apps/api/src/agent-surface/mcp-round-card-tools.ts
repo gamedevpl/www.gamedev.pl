@@ -3,7 +3,7 @@ import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
 import { selfBuildDeliveryCap } from '../platform/self-build-delivery-cap.js';
 import { detectStall, resolveJobState, toSubmissionStatus } from '../creation/job-state.js';
-import type { AgentTokenAccess } from './agent-token.js';
+import type { AgentTokenAccess } from '../platform/agent-token.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import {
   toolOk,

@@ -8,7 +8,7 @@ import {
 } from './agent-creator-key.js';
 import { NO_OPEN_ROUND_REASON, PLATFORM_ROUND_REASON, SLUG_NOT_ON_ACCOUNT_REASON } from './agent-game-key.js';
 import { mintGameAgentKey } from './agent-game-key.js';
-import { mintAgentToken } from './agent-token.js';
+import { mintAgentToken } from '../platform/agent-token.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
 import { buildApp } from '../platform/app.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from '../catalog/github-client.js';
