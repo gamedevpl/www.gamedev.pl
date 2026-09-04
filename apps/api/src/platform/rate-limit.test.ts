@@ -8,7 +8,7 @@ afterEach(() => {
 });
 
 async function appWithCappedRoute() {
-  const app = Fastify({ trustProxy: 1 });
+  const app = Fastify({ trustProxy: (_address, hop) => hop === 0 });
   registerClientAddress(app);
   await registerRateLimit(app);
   app.get('/capped', { config: { rateLimit: { max: 2, timeWindow: '1 minute' } } }, async () => ({ ok: true }));

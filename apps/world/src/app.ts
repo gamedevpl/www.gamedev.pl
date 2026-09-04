@@ -73,7 +73,7 @@ export async function buildWorldApp(options: WorldAppOptions): Promise<WorldApp>
   // Cloud Run appends the real client IP to X-Forwarded-For rather than replacing it, so
   // trusting exactly one hop resolves to the entry Cloud Run itself wrote. `true` would
   // take the leftmost and let any caller pick their own rate-limit bucket.
-  const app = Fastify({ logger: options.logger ?? false, trustProxy: 1 });
+  const app = Fastify({ logger: options.logger ?? false, trustProxy: (_address, hop) => hop === 0 });
   const host = new ZoneHost({
     ...options,
     secret,
