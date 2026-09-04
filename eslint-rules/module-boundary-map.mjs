@@ -39,6 +39,7 @@ export const ENFORCED_BUCKETS = [
   'community',
   'delivery',
   'creation',
+  'agent-surface',
 ];
 
 const DEFAULT_BUCKET = 'platform';
