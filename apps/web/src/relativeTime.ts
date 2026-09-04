@@ -29,6 +29,15 @@ export function formatRelativeTime(timestamp: string | number, locale: string, n
   return formatter.format(0, 'second');
 }
 
+// "45s" / "1m 30s". Round the total first, else "1m 60s".
+export function formatSeconds(seconds: number): string {
+  const total = Math.round(seconds);
+  if (total < 60) return `${total}s`;
+  const minutes = Math.floor(total / 60);
+  const rest = total % 60;
+  return rest === 0 ? `${minutes}m` : `${minutes}m ${rest}s`;
+}
+
 /** "4s" / "2m 14s" / "1h 03m" — a running clock, not a point in the past. */
 export function formatDuration(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
