@@ -7,9 +7,8 @@ import { codeSurfaceEnabled } from './code-surface.js';
 import { collapseJobsToOwnerGames, MAX_OWNER_GAMES, pageOwnerGames } from './owner-games.js';
 import { readTarEntries, type TarEntry } from '../platform/tar.js';
 import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
-import { isMcpPresenceEventText } from '../agent-surface/mcp-presence.js';
-import { toRecentBuilds } from '../delivery/recent-builds.js';
 import type {
+  RecentBuild,
   StudioBuildsResponse,
   StudioGame,
   StudioGamesResponse,
@@ -26,7 +25,7 @@ export type CreatorScorecardsResponse = StudioScorecardsResponse;
 export type CreatorStudioGamesResponse = StudioGamesResponse;
 export type CreatorBuildsResponse = StudioBuildsResponse;
 import { composeWorkspaceArchive, WorkspaceCompositionError } from '../platform/workspace-archive.js';
-import type { GamesStore } from '../delivery/games-store.js';
+import type { GamesStore, VersionManifest } from '../delivery/games-store.js';
 import type { Store, TelemetryEvent } from '../platform/store.js';
 import { normalizeLocale } from '../platform/translate.js';
 import { isPublished } from '../platform/publication-state.js';
@@ -65,6 +64,10 @@ export interface CreatorStudioRoutesOptions {
   /** Reads the workspace scaffold and signs the kit URL the scaffold fetches. */
   objectStore?: GcsObjectStore;
   now?: () => number;
+  // N1: agent-surface's presence vocabulary, injected rather than imported.
+  isPresenceEventText: (text: string, createdAt?: string) => boolean;
+  // N1: delivery's own manifest mapping, injected the same way.
+  toRecentBuilds: (manifests: readonly VersionManifest[]) => RecentBuild[];
 }
 
 /** Ceiling on the scaffold we will unpack — it is a handful of text files, not a kit. */
@@ -347,10 +350,10 @@ export async function registerCreatorStudioRoutes(
 
     const body: CreatorBuildsResponse = {
       builds: await hydrateRecentBuildSummaries({
-        builds: toRecentBuilds(pagedVersions),
+        builds: options.toRecentBuilds(pagedVersions),
         ...(locale ? { locale } : {}),
         loadEvents: (jobId) => store.listBuildEvents(jobId, { limit: 20 }),
-        isPresenceEventText: isMcpPresenceEventText,
+        isPresenceEventText: options.isPresenceEventText,
       }),
       totalCount,
     };

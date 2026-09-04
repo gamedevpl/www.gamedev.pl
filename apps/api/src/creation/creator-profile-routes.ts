@@ -15,7 +15,7 @@ import {
   type AvatarMode,
   type PublicCreatorProfile,
 } from '../platform/creator-profile.js';
-import { catalogEntryFromSpec, type CatalogGameEntry } from '../catalog/github-client.js';
+import type { CatalogGameEntry } from '../catalog/github-client.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { Store } from '../platform/store.js';
 import { isPublished } from '../platform/publication-state.js';
@@ -47,6 +47,12 @@ export interface CreatorProfileRoutesOptions {
   gamesStore?: GamesStore | null;
   /** Repo-backed catalog lookup; this source wins in the public media route too. */
   getRepoPublishedCatalogEntry?: (slug: string) => Promise<CatalogGameEntry | null>;
+  // N1: catalog's own SPEC.md parse, injected not imported.
+  catalogEntryFromSpec: (
+    slug: string,
+    specMd: string,
+    readSibling: (name: string) => string | null,
+  ) => CatalogGameEntry | null;
   now?: () => number;
 }
 
@@ -231,6 +237,7 @@ export async function registerCreatorProfileRoutes(
       store,
       gamesStore ?? null,
       getRepoPublishedCatalogEntry,
+      options.catalogEntryFromSpec,
       user.uid,
       profile,
     );
@@ -243,6 +250,7 @@ async function listCreatorPublishedGames(
   store: Store,
   gamesStore: GamesStore | null,
   getRepoPublishedCatalogEntry: ((slug: string) => Promise<CatalogGameEntry | null>) | undefined,
+  catalogEntryFromSpec: CreatorProfileRoutesOptions['catalogEntryFromSpec'],
   ownerUid: string,
   profile: PublicCreatorProfile,
 ): Promise<CatalogGameEntry[]> {

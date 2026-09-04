@@ -61,7 +61,7 @@ export interface RoundsStore {
   setSeedStatus(jobId: number, status: 'pending' | 'unavailable'): Promise<void>;
 }
 
-// Mirrors delivery/seal-preview.ts's sealRefusal — store cannot import delivery.
+// Mirrors platform/seal-preview.ts's sealRefusal, kept free of its import.
 function isSealable(record: Pick<SubmissionRecord, 'state' | 'slug' | 'previewVersion' | 'deliveredVersion'>): boolean {
   return (
     record.state === 'ready_for_review' && !record.deliveredVersion && Boolean(record.slug && record.previewVersion)

@@ -22,6 +22,7 @@ import { registerAdminRoutes } from './admin.js';
 import { parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { registerCreatorProfileRoutes } from '../creation/creator-profile-routes.js';
+import { catalogEntryFromSpec } from '../catalog/github-client.js';
 import { registerGamePageRoutes, type GamePageRoutesOptions } from '../catalog/game-page-routes.js';
 import { registerGameFollowRoutes, type GameFollowRoutesOptions } from '../notifications/game-follow-routes.js';
 import { createFollowerFanout } from '../notifications/game-follow-notify.js';
@@ -32,12 +33,23 @@ import { applyProposalToRepo } from '../community/proposal-apply-bot.js';
 import { createSnapshotReaderFromEnv, type GameSnapshotStore } from '../catalog/game-snapshot.js';
 import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
 import { registerCreatorCodeRoutes, type CreatorCodeRoutesOptions } from '../creation/creator-code.js';
+import { createKitFileStore } from '../agent-surface/kit-files.js';
+import { createSourceDeliveryService } from '../delivery/source-delivery.js';
+import { parseSpecTitle } from './spec-frontmatter.js';
+import {
+  runTypecheckPreflight,
+  sharedSourcesFromKitTree,
+  TYPECHECK_PREFLIGHT_MAX_REFUSALS,
+} from '../creation/typecheck-preflight.js';
 import { registerCreatorStudioRoutes } from '../creation/creator-studio.js';
+import { isMcpPresenceEventText } from '../agent-surface/mcp-presence.js';
+import { toRecentBuilds } from '../delivery/recent-builds.js';
 import { registerEditorRoutes } from '../creation/editor-drafts.js';
 import { VertexEditorAssistant, type EditorAssistant } from '../creation/editor-assist.js';
 import { VertexCodeLane } from '../creation/code-lane.js';
 import { VertexTabCompleter, type TabCompleter } from '../creation/tab-complete.js';
 import { registerRemixRoutes, MAX_REMIX_ID_LENGTH } from '../creation/remix.js';
+import { openProposal } from '../community/proposals.js';
 import { createEditingGate, createCreationGate, createTabCompleteGate } from '../creation/creation-limits.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { registerContactRoutes, type ContactRoutesOptions } from '../notifications/contact.js';
@@ -67,6 +79,7 @@ import {
   type SuggestionInboxRoutesOptions,
 } from '../community/suggestion-inbox.js';
 import { registerScorecardRoutes, type ScorecardRoutesOptions } from '../creation/scorecard.js';
+import { createDefaultThemeExtractor } from '../community/feedback-themes.js';
 import { createInternalAuthVerifierFromEnv } from './internal-auth.js';
 import { registerRefineRoute, type SpecRefiner } from '../creation/refine.js';
 import { BOT_UID_PREFIX, InMemoryStore, type Store } from './store.js';
@@ -664,6 +677,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await registerScorecardRoutes(app, {
     store,
     internalAuthVerifier: createInternalAuthVerifierFromEnv(process.env, 'scorecardSweep'),
+    // Vertex in production, nothing anywhere else — community owns that choice.
+    themeExtractor: createDefaultThemeExtractor(),
     ...options.scorecardRoutes,
   });
 
@@ -775,6 +790,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     gamesStore,
     mintStatusToken: submissionTokenSecret ? (jobId) => mintToken(jobId, submissionTokenSecret) : undefined,
     objectStore,
+    // N1: the two cross-bucket reads the build rail needs, wired here rather
+    // than imported from creation/.
+    isPresenceEventText: isMcpPresenceEventText,
+    toRecentBuilds,
   });
   await registerCreatorVersionRoutes(app, { store, gamesStore });
   await registerCreatorPatRoutes(app, { store });
@@ -784,6 +803,23 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // agent channel uses. `invalidateStatusCache` / `scheduleStagedPreview` are the two
   // seams `registerSubmissionRoutes` exposes so an owner write busts the same cache and
   // arms the same staged-preview assembly an agent write does (CE-12).
+  // N1: the kit reader and the delivery service are agent-surface's and delivery's
+  // own machinery. Built here, at the composition root, and handed to the routes.
+  const creatorKitFileStore = objectStore ? createKitFileStore(objectStore) : null;
+  const creatorSourceDelivery = gamesStore
+    ? createSourceDeliveryService({
+        store,
+        gamesStore,
+        kitFileStore: creatorKitFileStore,
+        onSourcesDelivered: gateTrigger,
+        onEvent: (jobId) => submissionSeams.scheduleStagedPreview?.(jobId),
+        log: app.log,
+        parseSpecTitle,
+        runTypecheckPreflight,
+        sharedSourcesFromKitTree,
+        typecheckPreflightMaxRefusals: TYPECHECK_PREFLIGHT_MAX_REFUSALS,
+      })
+    : null;
   await registerCreatorCodeRoutes(app, {
     store,
     gamesStore,
@@ -798,6 +834,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     tabCompleteGate: createTabCompleteGate({ store, logWarn: (payload, msg) => app.log.warn(payload, msg) }),
     mintStatusToken: submissionTokenSecret ? (jobId) => mintToken(jobId, submissionTokenSecret) : undefined,
     ...options.creatorCodeRoutes,
+    kitFileStore: options.creatorCodeRoutes?.kitFileStore ?? creatorKitFileStore,
+    sourceDelivery: options.creatorCodeRoutes?.sourceDelivery ?? creatorSourceDelivery,
   });
 
   // The Creator Studio content editor (EditorKit): drafts in Firestore, publish
@@ -831,6 +869,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await registerRemixRoutes(app, {
     store,
     gamesStore,
+    // N1: community's own domain call, wired here rather than imported by creation/.
+    openProposal,
     editingGate,
     creationGate,
     submissionTokenSecret,
@@ -916,6 +956,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     store,
     gamesStore,
     getRepoPublishedCatalogEntry: submissionSeams.getRepoPublishedCatalogEntry,
+    // N1: catalog owns the SPEC.md parse; the profile page is handed it.
+    catalogEntryFromSpec,
   });
 
   // The game page at `/:handle/:slug` — one aggregate read per game.

@@ -29,14 +29,13 @@ import {
   type RemixSaveContent,
   type RemixSaveParams,
 } from './remix-save.js';
+import type { OpenProposalInput, OpenProposalResult, ProposalDeps } from '../community/proposals.js';
 import {
-  openProposal,
-  PROPOSAL_NO_JOB,
   MAX_PROPOSAL_DESCRIPTION_LENGTH,
   MAX_PROPOSAL_TITLE_LENGTH,
   MIN_PROPOSAL_DESCRIPTION_LENGTH,
-  type ProposalDeps,
-} from '../community/proposals.js';
+  PROPOSAL_NO_JOB,
+} from '../platform/proposal-limits.js';
 import type { ProposalBase } from '../platform/store.js';
 import type { SourceFile } from '../delivery/games-store.js';
 import { isPublished } from '../platform/publication-state.js';
@@ -265,6 +264,8 @@ function readRemixId(id: string): { uidTag: string; slug: string; expiresAt: num
 export interface RemixRoutesOptions {
   /** Tells somebody a proposal moved. Best effort — see ProposalDeps.notify. */
   notifyProposal?: ProposalDeps['notify'];
+  // N1: community owns opening a proposal; this route is handed the function.
+  openProposal: (deps: ProposalDeps, input: OpenProposalInput) => Promise<OpenProposalResult>;
   /**
    * Starts the gate on a delivered candidate. Shared with the delivery path so a
    * proposal is checked by exactly the machinery a creator's own upload is.
@@ -1049,7 +1050,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       const files = Object.entries(merged).map(([path, fileContent]) => ({ path, content: fileContent }));
       bakeRemixEditorDefaults(files, session.definition, params, content);
 
-      const result = await openProposal(
+      const result = await options.openProposal(
         {
           store: options.store,
           gamesStore: options.gamesStore,

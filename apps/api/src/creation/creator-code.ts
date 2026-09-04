@@ -14,9 +14,8 @@ import { DELIVERY_MAX_FILES } from '../platform/games-repo-contract.js';
 import { InvalidUploadError } from '../platform/upload-error.js';
 import type { TabCompleteGate } from './creation-limits.js';
 import type { GitHubClient } from '../catalog/github-client.js';
-import { parseSpecTitle } from '../platform/spec-frontmatter.js';
 import { resolveJobState } from './job-state.js';
-import { createKitFileStore, type KitFileStore } from '../agent-surface/kit-files.js';
+import type { KitFileStore } from '../agent-surface/kit-files.js';
 import { parseKitRegistry } from '../platform/kit-registry.js';
 import {
   assessModuleSize,
@@ -27,20 +26,12 @@ import {
 } from './module-size.js';
 import { resolveRoundBaseVersion } from '../platform/round-base-version.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from './source-patch.js';
-import {
-  createSourceDeliveryService,
-  SourceDeliveryValidationError,
-  type SourceDeliveryService,
-} from '../delivery/source-delivery.js';
+import type { SourceDeliveryService } from '../delivery/source-delivery.js';
 import { hasPlayableOverlay, overlayGameSources, readDeliveredSources } from '../platform/game-overlay.js';
 import type { StagedPreviewPublisher } from '../delivery/staged-preview.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { MAX_PREFIX_CHARS, MAX_SUFFIX_CHARS, tabCompleteEnabled, type TabCompleter } from './tab-complete.js';
-import {
-  runTypecheckPreflight,
-  sharedSourcesFromKitTree,
-  TYPECHECK_PREFLIGHT_MAX_REFUSALS,
-} from './typecheck-preflight.js';
+import { sharedSourcesFromKitTree } from './typecheck-preflight.js';
 import { typeCheckGame } from './type-check.js';
 
 /**
@@ -62,7 +53,7 @@ export interface CreatorCodeRoutesOptions {
   store: Store;
   gamesStore?: GamesStore;
   objectStore?: GcsObjectStore;
-  /** Test/production kit resolution seam; defaults to a fresh store over `objectStore`. */
+  // N1: built at the composition root, never here — see app.ts.
   kitFileStore?: KitFileStore | null;
   // Track 2: the fast-lane synchronous preview route's engine half.
   githubClient?: Pick<GitHubClient, 'getGameSources'>;
@@ -87,6 +78,7 @@ export interface CreatorCodeRoutesOptions {
     version: string;
     mode?: 'health' | 'preview' | 'proposal';
   }) => Promise<{ buildId?: string; accepted?: boolean } | void> | void;
+  // N1: delivery owns this service; app.ts builds it.
   sourceDelivery?: SourceDeliveryService | null;
   mintStatusToken?: (jobId: number) => string;
   log?: {
@@ -191,30 +183,8 @@ export async function registerCreatorCodeRoutes(
   options: CreatorCodeRoutesOptions,
 ): Promise<void> {
   const { store } = options;
-  const kitFileStore =
-    options.kitFileStore !== undefined
-      ? options.kitFileStore
-      : options.objectStore
-        ? createKitFileStore(options.objectStore)
-        : null;
-  const sourceDelivery: SourceDeliveryService | null =
-    options.sourceDelivery !== undefined
-      ? options.sourceDelivery
-      : options.gamesStore
-        ? createSourceDeliveryService({
-            store: options.store,
-            gamesStore: options.gamesStore,
-            kitFileStore,
-            stagedPreviews: options.stagedPreviews,
-            onSourcesDelivered: options.onSourcesDelivered,
-            onEvent: (jobId) => options.scheduleStagedPreview?.(jobId),
-            log: options.log,
-            parseSpecTitle,
-            runTypecheckPreflight,
-            sharedSourcesFromKitTree,
-            typecheckPreflightMaxRefusals: TYPECHECK_PREFLIGHT_MAX_REFUSALS,
-          })
-        : null;
+  const kitFileStore = options.kitFileStore ?? null;
+  const sourceDelivery: SourceDeliveryService | null = options.sourceDelivery ?? null;
   /** CE-19: per-slug cooldown between manual deliveries. Process-local, same posture
    * as source-delivery.ts's own per-build rate limiter. */
   const lastDeliverAt = new Map<string, number>();
@@ -1192,7 +1162,7 @@ export async function registerCreatorCodeRoutes(
         options.invalidateStatusCache?.(record.jobId);
         return reply.send(outcome);
       } catch (error) {
-        if (error instanceof SourceDeliveryValidationError || error instanceof InvalidUploadError) {
+        if (error instanceof InvalidUploadError) {
           // `error` stays the sentence; `code`/`missing` drive the fixit.
           const missing = error instanceof InvalidUploadError ? error.missingPaths : undefined;
           return reply.status(400).send({
@@ -1314,7 +1284,7 @@ export async function registerCreatorCodeRoutes(
           ...(token ? { token } : {}),
         });
       } catch (error) {
-        if (error instanceof SourceDeliveryValidationError || error instanceof InvalidUploadError) {
+        if (error instanceof InvalidUploadError) {
           const missing = error instanceof InvalidUploadError ? error.missingPaths : undefined;
           return reply.status(400).send({
             error: error.message,

@@ -1,7 +1,5 @@
 import { deriveGateStatusString, derivePreviewGateStatus } from '@gamedevpl/contract';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
-import { postGateScreenshotToThread } from '../delivery/gate-screenshot.js';
-import { probeGateCrash } from '../delivery/gate-crash.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import {
   builderLabelFromRecord,
@@ -52,6 +50,25 @@ export interface JobReconcilerDeps {
     acknowledgedAt: string;
     log: { error: (context: object, message: string) => void };
   }) => Promise<{ started: boolean; reason?: string }>;
+
+  // N1: delivery's own gate reads, injected rather than imported across buckets.
+  probeGateCrash: (
+    record: SubmissionRecord,
+    deps: {
+      store: { recordJobTransition: (jobId: number, transition: JobTransition) => Promise<boolean> } | null;
+      gamesStore: GamesStore | undefined;
+      log: ReconcilerLog;
+      now: () => number;
+    },
+  ) => Promise<JobTransition | null>;
+  postGateScreenshot: (input: {
+    store: Store;
+    gamesStore: GamesStore;
+    jobId: number;
+    slug: string;
+    version: string;
+    screenshotPath: string;
+  }) => Promise<{ id: string } | null>;
 }
 
 export interface JobReconciler {
@@ -75,6 +92,8 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
     releaseWorkspace,
     resumeBuild,
     acknowledgeBuilderHandoff,
+    probeGateCrash,
+    postGateScreenshot,
   } = deps;
 
   // Asks the backend what happened to a job whose agent went quiet.
@@ -269,7 +288,8 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
           break;
         }
       }
-      if (!version || !manifest) return sweep ? probeGateCrash(record, { store, gamesStore, log, now }) : null;
+      if (!version || !manifest)
+        return sweep ? probeGateCrash(record, { store: store ?? null, gamesStore, log, now }) : null;
       const emitGateMetric = async (input: {
         mode: 'preview' | 'publish';
         outcome: 'passed' | 'failed';
@@ -327,7 +347,7 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
 
         // The creator sees what the platform check saw, on the usual path.
         if (verdict.screenshot) {
-          await postGateScreenshotToThread({
+          await postGateScreenshot({
             store,
             gamesStore,
             jobId: record.jobId,
@@ -342,7 +362,7 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
       }
       // mode=preview never writes manifest.gate — still emit metrics for green/red.
       const preview = manifest?.previewGate;
-      if (!preview) return sweep ? probeGateCrash(record, { store, gamesStore, log, now }) : null;
+      if (!preview) return sweep ? probeGateCrash(record, { store: store ?? null, gamesStore, log, now }) : null;
       await emitGateMetric({
         mode: 'preview',
         outcome: preview.green ? 'passed' : 'failed',
@@ -361,7 +381,7 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
       const recorded = await store.recordJobTransition(record.jobId, transition);
       if (!recorded) return null;
       if (preview.screenshot) {
-        await postGateScreenshotToThread({
+        await postGateScreenshot({
           store,
           gamesStore,
           jobId: record.jobId,

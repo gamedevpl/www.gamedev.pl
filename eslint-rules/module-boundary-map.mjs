@@ -31,7 +31,15 @@ export const MODULE_BUCKETS = [
  * `eslint .` pass; every other bucket stays warn-only via `npm run module-boundary` until
  * its own turn. Append to this list, never edit its enforcement elsewhere.
  */
-export const ENFORCED_BUCKETS = ['telemetry', 'catalog', 'realtime', 'notifications', 'community', 'delivery'];
+export const ENFORCED_BUCKETS = [
+  'telemetry',
+  'catalog',
+  'realtime',
+  'notifications',
+  'community',
+  'delivery',
+  'creation',
+];
 
 const DEFAULT_BUCKET = 'platform';
 
