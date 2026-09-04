@@ -272,7 +272,7 @@
     "apps/api/src/platform/slug.test.ts": 135,
     "apps/api/src/platform/slug.ts": 596,
     "apps/api/src/platform/source-patch.test.ts": 25,
-    "apps/api/src/platform/source-patch.ts": 320,
+    "apps/api/src/platform/source-patch.ts": 321,
     "apps/api/src/platform/spa-paths.test.ts": 101,
     "apps/api/src/platform/spa-paths.ts": 440,
     "apps/api/src/platform/store.test.ts": 394,
