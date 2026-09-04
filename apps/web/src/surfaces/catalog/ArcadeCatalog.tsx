@@ -17,7 +17,6 @@ import {
   CATALOG_SORT_MODES,
   catalogSortNeedsSignals,
   DEFAULT_CATALOG_SORT,
-  EMPTY_CATALOG_SORT_SIGNALS,
   orderCatalogEntries,
   readCatalogFilters,
   readCatalogSortMode,
@@ -25,27 +24,19 @@ import {
   writeCatalogSortMode,
   type CatalogFilterId,
   type CatalogSortMode,
-  type CatalogSortSignals,
 } from './catalogSort.js';
 import { CatalogRail, FeaturedGame } from './CatalogRail.js';
-import { loadCreatorGames, publishedCreatorSlugs, type CreatorGameItem } from '../../creatorGames.js';
-import { fetchFeaturedSlugs } from '../../featuredApi.js';
 import { MascotMoment } from '../../Mascot.js';
 import { PixelIcon } from '../../PixelIcon.js';
 import { getRecentPlays } from '../../recentPlays.js';
-import {
-  fetchCatalogSortSignals,
-  readCachedCatalogSortPayload,
-  type CatalogSortPayload,
-} from '../../recommendationsApi.js';
 import { watchCatalogScrollIdle } from './catalogScrollIdle.js';
+import { useCatalogSortSignals } from './useCatalogSortSignals.js';
+import { useCreatorShelf } from './useCreatorShelf.js';
+import { useFeaturedPool } from './useFeaturedPool.js';
 import type { PlayVia } from '../../visitTelemetry.js';
 
 // Rail length before it scrolls, same for every rail.
 const RAIL_CARD_LIMIT = 12;
-
-// Caps the featured-pool wait; a stall must not block the grid.
-const FEATURED_POOL_TIMEOUT_MS = 1200;
 
 type ArcadeCatalogProps = {
   catalogStatus: 'loading' | 'ready' | 'error';
@@ -59,42 +50,6 @@ type ArcadeCatalogProps = {
   /** Bump after a new submission so Yours pins refresh. */
   creatorGamesRefreshKey?: number;
 };
-
-function payloadToSignals(payload: CatalogSortPayload): CatalogSortSignals {
-  return {
-    recommended: payload.items.map((item) => item.slug),
-    newest: payload.newest,
-    sessions: new Map(payload.popularity.map((row) => [row.slug, row.sessions])),
-    affinityLastPlayed: new Map(payload.lastPlayed.map((row) => [row.slug, row.lastPlayedAt])),
-  };
-}
-
-function sameCatalogSortSignals(a: CatalogSortSignals, b: CatalogSortSignals): boolean {
-  if (a.recommended.length !== b.recommended.length || a.newest.length !== b.newest.length) return false;
-  if (a.sessions.size !== b.sessions.size || a.affinityLastPlayed.size !== b.affinityLastPlayed.size) return false;
-  for (let i = 0; i < a.recommended.length; i++) {
-    if (a.recommended[i] !== b.recommended[i]) return false;
-  }
-  for (let i = 0; i < a.newest.length; i++) {
-    if (a.newest[i] !== b.newest[i]) return false;
-  }
-  for (const [slug, sessions] of a.sessions) {
-    if (b.sessions.get(slug) !== sessions) return false;
-  }
-  for (const [slug, at] of a.affinityLastPlayed) {
-    if (b.affinityLastPlayed.get(slug) !== at) return false;
-  }
-  return true;
-}
-
-function initialSignals(viewerUid: string | null): { signals: CatalogSortSignals; ready: boolean } {
-  if (typeof sessionStorage === 'undefined') {
-    return { signals: EMPTY_CATALOG_SORT_SIGNALS, ready: false };
-  }
-  const cached = readCachedCatalogSortPayload(viewerUid);
-  if (!cached) return { signals: EMPTY_CATALOG_SORT_SIGNALS, ready: false };
-  return { signals: payloadToSignals(cached), ready: true };
-}
 
 export function ArcadeCatalog({
   catalogStatus,
@@ -118,12 +73,14 @@ export function ArcadeCatalog({
   );
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
   const sortMenuRef = useRef<HTMLDivElement | null>(null);
-  const [signals, setSignals] = useState<CatalogSortSignals>(() => initialSignals(viewerUid).signals);
-  const [signalsReady, setSignalsReady] = useState(() => initialSignals(viewerUid).ready);
-  const [creatorItems, setCreatorItems] = useState<CreatorGameItem[]>([]);
-  // Starts false until auth resolves: a null→uid transition must not paint an
-  // unpinned grid first and then flip back to loading when the shelf gate applies.
-  const [creatorGamesReady, setCreatorGamesReady] = useState(false);
+  const { signals, signalsReady } = useCatalogSortSignals(viewerUid, recommendationsRefreshKey);
+  const { mySlugs, creatorGamesReady } = useCreatorShelf({
+    authLoading,
+    viewerUid,
+    locale,
+    creatorGamesRefreshKey,
+  });
+  const { featuredPool, featuredPoolReady } = useFeaturedPool();
   /** Grid order committed for the current sort/filter/viewer; later signal refresh must not reshuffle. */
   const [displayedEntries, setDisplayedEntries] = useState<CatalogEntry[]>([]);
   const desiredOrderRef = useRef<CatalogEntry[]>([]);
@@ -133,74 +90,6 @@ export function ArcadeCatalog({
   const [browsePage, setBrowsePage] = useState(1);
 
   useEffect(() => watchCatalogScrollIdle(), []);
-
-  // Fetch sort signals as soon as the arcade mounts — in parallel with App's
-  // catalog fetch — so cold load waits for max(catalog, signals), not their sum.
-  // Cache is viewer-scoped; a matching cache paints immediately, then the network
-  // response replaces it only when the payload actually differs (account switch,
-  // affinity drift) or an explicit post-play refresh asked for a re-rank.
-  useEffect(() => {
-    let cancelled = false;
-    const cached = readCachedCatalogSortPayload(viewerUid);
-    if (cached) {
-      setSignals(payloadToSignals(cached));
-      setSignalsReady(true);
-    } else {
-      setSignalsReady(false);
-    }
-    const forceReplace = recommendationsRefreshKey > 0;
-    void fetchCatalogSortSignals(getRecentPlays(), viewerUid)
-      .then((payload) => {
-        if (cancelled) return;
-        const next = payloadToSignals(payload);
-        if (forceReplace) {
-          setSignals(next);
-        } else {
-          setSignals((prev) => (sameCatalogSortSignals(prev, next) ? prev : next));
-        }
-        setSignalsReady(true);
-      })
-      .catch(() => {
-        // Transport failure must not leave the arcade stuck on the loading mascot.
-        if (cancelled) return;
-        setSignalsReady(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [recommendationsRefreshKey, viewerUid]);
-
-  useEffect(() => {
-    if (authLoading) return;
-    if (!viewerUid) {
-      setCreatorItems([]);
-      setCreatorGamesReady(true);
-      return;
-    }
-    // Drop the previous viewer's shelf immediately on account switch.
-    setCreatorItems([]);
-    setCreatorGamesReady(false);
-  }, [authLoading, viewerUid, locale]);
-
-  // Creator shelf feeds the Studio chip and "Yours" pins — never the grid itself.
-  useEffect(() => {
-    if (authLoading || !viewerUid) return;
-    let cancelled = false;
-    void loadCreatorGames(locale).then((items) => {
-      if (cancelled) return;
-      setCreatorItems(items);
-      setCreatorGamesReady(true);
-    });
-    const timer = window.setInterval(() => {
-      void loadCreatorGames(locale).then((items) => {
-        if (!cancelled) setCreatorItems(items);
-      });
-    }, 30_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [authLoading, viewerUid, creatorGamesRefreshKey, locale]);
 
   // Close the sort menu on outside tap or Escape — phones have no hover to dismiss it.
   useEffect(() => {
@@ -223,28 +112,6 @@ export function ArcadeCatalog({
       document.removeEventListener('keydown', onKey);
     };
   }, [sortMenuOpen]);
-
-  const mySlugs = useMemo(() => publishedCreatorSlugs(creatorItems), [creatorItems]);
-
-  // Curated pool for the featured slot; fetched once, not personalized.
-  const [featuredPool, setFeaturedPool] = useState<string[]>([]);
-  // Gates showCurated; fetchFeaturedSlugs fails open, so this always resolves.
-  const [featuredPoolReady, setFeaturedPoolReady] = useState(false);
-  useEffect(() => {
-    let settled = false;
-    const settle = (slugs: string[]) => {
-      if (settled) return;
-      settled = true;
-      setFeaturedPool(slugs);
-      setFeaturedPoolReady(true);
-    };
-    void fetchFeaturedSlugs().then(settle);
-    const timer = window.setTimeout(() => settle([]), FEATURED_POOL_TIMEOUT_MS);
-    return () => {
-      settled = true;
-      window.clearTimeout(timer);
-    };
-  }, []);
 
   const hasCatalog = catalogStatus === 'ready' && catalogEntries.length > 0;
   // My games only makes sense when signed in and you have a published game of yours.
