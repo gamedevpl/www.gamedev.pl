@@ -19,8 +19,15 @@ curl -fsSL https://www.gamedev.pl/install.sh | bash
 The installer is 404 until the `CLI_SURFACE` deploy flag is on. Checksums come from GitHub
 Releases tagged `cli-v*` (one `gamedevpl` asset). `gamedevpl update` uses the same channel.
 
-Until a release exists: `npm run bundle -w @gamedevpl/cli` and run `apps/cli/dist/gamedevpl.mjs`.
-The bundled script inlines Ink (React for terminals). `gamedevpl` with no verb is that TUI.
+Until a release exists, from the repo root after a pull:
+
+```bash
+npm install
+npm run bundle -w @gamedevpl/cli
+node apps/cli/dist/gamedevpl.mjs help
+```
+
+`ink` is a workspace dependency. Skipping `npm install` makes esbuild fail with `Could not resolve "ink"`. The bundled script inlines Ink. `gamedevpl` with no verb is that TUI.
 
 ## Verbs
 
