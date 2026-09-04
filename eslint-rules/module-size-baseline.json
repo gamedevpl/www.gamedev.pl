@@ -484,7 +484,7 @@
     "apps/web/src/App.gamePageTheater.test.ts": 250,
     "apps/web/src/App.overlayExit.test.ts": 313,
     "apps/web/src/App.qa.test.ts": 484,
-    "apps/web/src/App.tsx": 1378,
+    "apps/web/src/App.tsx": 624,
     "apps/web/src/AppleSignInButton.test.tsx": 120,
     "apps/web/src/AppleSignInButton.tsx": 149,
     "apps/web/src/AppLoadingScreen.tsx": 29,
