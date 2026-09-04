@@ -23,7 +23,7 @@ describe('isUnattributable', () => {
 });
 
 async function appReporting(records: { msg: string; context: object }[]) {
-  const app = Fastify({ trustProxy: 1, logger: { level: 'warn' } });
+  const app = Fastify({ trustProxy: (_address, hop) => hop === 0, logger: { level: 'warn' } });
   const capture = ((context: object, msg: string) => {
     if (msg === UNATTRIBUTABLE_CLIENT_LOG_MSG || msg === IP_BUCKET_REFUSAL_LOG_MSG) records.push({ msg, context });
   }) as typeof app.log.warn;

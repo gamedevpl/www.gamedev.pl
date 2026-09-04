@@ -231,7 +231,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // nothing in the logs. MAX_REMIX_ID_LENGTH is the bound the minter respects.
   const app = Fastify({
     logger: options.logger ?? false,
-    trustProxy: 1,
+    trustProxy: (_address, hop) => hop === 0,
     routerOptions: { maxParamLength: MAX_REMIX_ID_LENGTH },
   });
 
