@@ -284,6 +284,24 @@ Two concrete instances of that (observed 2026-07-23):
   functions write the same piece of state, the sequence (A then B then A) is the test,
   not A and B separately. A latch that means “stop trying” is only safe if nothing else
   can raise the value underneath it.
+- **Stepping a corpse with the live combat solver is not the same as advancing a collapse
+  pose.** Observed (bonfire-arena / www.gamedev.pl-games#1198 review, 2026-09-01):
+  `stepFighter()` was the only writer of `fallen`, and runtime skipped it on `e.dead`, so
+  knights vanished standing. A unit test that called `stepFighter` on a dead fighter
+  passed. Wiring the full solver back in left residual `arm.vel` in the still-live
+  clash/strike loop; the capture path then never reached `won`. A/B against the pre-fix
+  commit proved the regression was the corpse step, not the rebase. `trace:classify`
+  on a later fallen-only path was render-only. Advance the pose field the spec names;
+  do not keep a dead blade in the exchange.
+- **Games-repo `gate-attest` follows CI scope, not the "one game → check:game" heuristic.**
+  Observed (bonfire-arena / www.gamedev.pl-games#1237, 2026-09-01): a game-only read of
+  rule 5b replaced a correct `npm run check:catalog-static` attest with
+  `check:game -- bonfire-arena`. CI still classified the diff as `static` because it also
+  touched `tools/idle-agency.ts` and `tools/tests/` (`isStaticOk` widens scoped → static).
+  The attest job then failed: required command `check:catalog-static`. Ask
+  `node tools/gate-attest.mjs expected` (or the Actions log's `Required command:`) for
+  the SHA you are opening; do not "correct" a static attest down to `check:game` just
+  because a `games/<slug>/` path is in the diff. `check:pr` remains an accepted alias.
 
 ## Read the diff against the spec
 
