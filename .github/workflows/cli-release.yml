@@ -49,5 +49,5 @@ jobs:
           gh release create "cli-v$VERSION" \
             --title "gamedevpl CLI v$VERSION" \
             --target "$GITHUB_SHA" \
-            --generate-notes \
+            --notes "Install: \`curl -fsSL https://www.gamedev.pl/install.sh | bash\`" \
             apps/cli/dist/release/*
