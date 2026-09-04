@@ -16,6 +16,9 @@ import type { PlayVia } from '../../visitTelemetry.js';
 
 // Curated home page surfaces above the full catalog grid.
 
+// Rail length before it scrolls, same for every rail.
+export const RAIL_CARD_LIMIT = 12;
+
 // Same dwell delay as CatalogCard, to skip arming during scroll sweeps.
 const RAIL_HOVER_INTENT_MS = 240;
 

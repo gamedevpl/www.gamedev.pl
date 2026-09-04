@@ -743,7 +743,7 @@
     "apps/web/src/surfaces/admin/WaitlistPanel.test.tsx": 197,
     "apps/web/src/surfaces/admin/WaitlistPanel.tsx": 347,
     "apps/web/src/surfaces/catalog/ArcadeCatalog.test.tsx": 1163,
-    "apps/web/src/surfaces/catalog/ArcadeCatalog.tsx": 1116,
+    "apps/web/src/surfaces/catalog/ArcadeCatalog.tsx": 329,
     "apps/web/src/surfaces/catalog/catalogCategory.test.ts": 77,
     "apps/web/src/surfaces/catalog/catalogCategory.ts": 52,
     "apps/web/src/surfaces/catalog/catalogPagination.test.ts": 25,

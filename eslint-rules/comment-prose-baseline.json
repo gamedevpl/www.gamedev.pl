@@ -546,7 +546,7 @@
     "apps/web/src/surfaces/admin/WaitlistPanel.test.tsx": 11,
     "apps/web/src/surfaces/admin/WaitlistPanel.tsx": 164,
     "apps/web/src/surfaces/catalog/ArcadeCatalog.test.tsx": 74,
-    "apps/web/src/surfaces/catalog/ArcadeCatalog.tsx": 830,
+    "apps/web/src/surfaces/catalog/ArcadeCatalog.tsx": 54,
     "apps/web/src/surfaces/catalog/catalogScrollIdle.ts": 142,
     "apps/web/src/surfaces/catalog/catalogSort.ts": 196,
     "apps/web/src/surfaces/party/ControllerView.tsx": 127,
