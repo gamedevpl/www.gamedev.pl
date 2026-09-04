@@ -63,4 +63,46 @@ describe('round watch', () => {
     expect(polls).toBe(1);
     expect(announced).toEqual(['published']);
   });
+
+  it('paints auth failures on the live strip and ignores 404', async () => {
+    const live: string[][] = [];
+    const holder: { current?: ReturnType<typeof createRoundWatch> } = {};
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_oat_t', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async () => {
+        holder.current?.stop();
+        return new Response('{}', { status: 401 });
+      },
+    });
+    holder.current = createRoundWatch({
+      getToken: () => 'tok',
+      api,
+      setLive: (lines) => live.push(lines),
+      announce: () => undefined,
+      sleep: async () => undefined,
+    });
+    await holder.current.run;
+    expect(live[0]?.[0]).toMatch(/credential expired/);
+
+    const ignored: string[][] = [];
+    const miss: { current?: ReturnType<typeof createRoundWatch> } = {};
+    const missingApi = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_oat_t', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async () => {
+        miss.current?.stop();
+        return new Response('{}', { status: 404 });
+      },
+    });
+    miss.current = createRoundWatch({
+      getToken: () => 'tok',
+      api: missingApi,
+      setLive: (lines) => ignored.push(lines),
+      announce: () => undefined,
+      sleep: async () => undefined,
+    });
+    await miss.current.run;
+    expect(ignored).toEqual([]);
+  });
 });

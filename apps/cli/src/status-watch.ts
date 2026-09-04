@@ -43,7 +43,8 @@ const REPAIRABLE_REASONS = new Set(['gate_red', 'kit_outdated', 'gate_crashed', 
 
 export function isRepairableNeedsChanges(status: RoundStatus): boolean {
   if (status.status !== 'needs_changes') return false;
-  if (status.failure?.reason && REPAIRABLE_REASONS.has(status.failure.reason)) return true;
+  const reason = status.failure?.reason ? sanitizeEventPayload(status.failure.reason) : '';
+  if (reason && REPAIRABLE_REASONS.has(reason)) return true;
   return status.previewGate?.green === false;
 }
 
@@ -82,9 +83,8 @@ export function shouldAnnounceStatus(status: RoundStatus, previousKey: string, k
 export function formatRoundLive(status: RoundStatus, origin: string): string[] {
   const lines = [formatStatusEvent(status)];
   if (status.preview?.slug) lines.push(previewUrl(origin, status.preview.slug));
-  if (status.failure?.reason && !lines[0]?.includes(status.failure.reason)) {
-    lines.push(sanitizeEventPayload(status.failure.reason));
-  }
+  const reason = status.failure?.reason ? sanitizeEventPayload(status.failure.reason) : '';
+  if (reason && !lines[0]?.includes(reason)) lines.push(reason);
   return lines.slice(0, 4);
 }
 

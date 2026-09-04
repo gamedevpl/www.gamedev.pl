@@ -3,6 +3,7 @@ import { createLiveScreen, renderLive } from './live.js';
 import {
   formatStatusLines,
   formatStatusEvent,
+  formatRoundLive,
   runStatusVerb,
   shouldAnnounceStatus,
   statusWatchDelayMs,
@@ -119,6 +120,16 @@ describe('status watch', () => {
         'building|smoke:2/4',
       ),
     ).toBe(false);
+  });
+
+  it('does not repeat a sanitized failure reason on the live strip', () => {
+    const esc = String.fromCharCode(27);
+    expect(
+      formatRoundLive(
+        { status: 'needs_changes', failure: { reason: `${esc}[31mgate_red${esc}[0m` } },
+        'https://www.gamedev.pl',
+      ),
+    ).toEqual(['needs_changes (gate_red)']);
   });
 
   it('returns EXIT_RED when the publish gate is red', async () => {

@@ -1,4 +1,6 @@
 import { getStatus, isTerminalStatus, type RoundStatus } from '../turn.js';
+import { CliError } from '../exit-codes.js';
+import { describeError } from '../errors.js';
 import {
   formatRoundLive,
   formatStatusEvent,
@@ -48,8 +50,10 @@ export function createRoundWatch(input: {
             stopped = true;
             break;
           }
-        } catch {
-          // 404 until a game is open
+        } catch (error) {
+          if (!(error instanceof CliError && error.message === 'not found')) {
+            input.setLive([describeError(error).message]);
+          }
         }
       }
       if (stopped) break;
