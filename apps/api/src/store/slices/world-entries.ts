@@ -5,6 +5,9 @@ export interface WorldEntriesStore {
   // Every entry in one shared world. The public read -- no uid involved.
   listWorldEntries(worldId: string): Promise<WorldEntryRecord[]>;
 
+  // Bumped by every write, so "changed?" costs one document, not the collection.
+  getWorldRevision(worldId: string): Promise<number>;
+
   // One entry, or null. Used to settle ownership before a write.
   getWorldEntry(worldId: string, key: string): Promise<WorldEntryRecord | null>;
 
@@ -33,9 +36,18 @@ export interface WorldEntriesStore {
 
 export class InMemoryWorldEntriesStore implements WorldEntriesStore {
   private worldEntries = new Map<string, Map<string, WorldEntryRecord>>();
+  private revisions = new Map<string, number>();
+
+  private bump(worldId: string): void {
+    this.revisions.set(worldId, (this.revisions.get(worldId) ?? 0) + 1);
+  }
 
   async listWorldEntries(worldId: string): Promise<WorldEntryRecord[]> {
     return [...(this.worldEntries.get(worldId)?.values() ?? [])].map((entry) => ({ ...entry }));
+  }
+
+  async getWorldRevision(worldId: string): Promise<number> {
+    return this.revisions.get(worldId) ?? 0;
   }
 
   async getWorldEntry(worldId: string, key: string): Promise<WorldEntryRecord | null> {
@@ -70,6 +82,7 @@ export class InMemoryWorldEntriesStore implements WorldEntriesStore {
     };
     world.set(options.key, entry);
     this.worldEntries.set(options.worldId, world);
+    this.bump(options.worldId);
     return { ok: true, entry: { ...entry } };
   }
 
@@ -78,6 +91,7 @@ export class InMemoryWorldEntriesStore implements WorldEntriesStore {
     const existing = world?.get(key);
     if (!existing || existing.ownerUid !== uid) return false;
     world!.delete(key);
+    this.bump(worldId);
     return true;
   }
 
@@ -99,12 +113,15 @@ export class InMemoryWorldEntriesStore implements WorldEntriesStore {
 
   async deleteWorldEntriesForUser(uid: string): Promise<number> {
     let removed = 0;
-    for (const world of this.worldEntries.values()) {
+    for (const [worldId, world] of this.worldEntries) {
+      let touched = false;
       for (const entry of [...world.values()]) {
         if (entry.ownerUid !== uid) continue;
         world.delete(entry.key);
         removed += 1;
+        touched = true;
       }
+      if (touched) this.bump(worldId);
     }
     return removed;
   }
@@ -116,6 +133,20 @@ export class FirestoreWorldEntriesStore implements WorldEntriesStore {
   // Worlds are top-level (not per-user); worldId is opaque, today == slug.
   private worldCollection(worldId: string) {
     return this.db.collection('worlds').doc(worldId).collection('worldEntries');
+  }
+
+  // The entries' parent; holds the revision and nothing else today.
+  private worldDoc(worldId: string) {
+    return this.db.collection('worlds').doc(worldId);
+  }
+
+  private revisionOf(data: Record<string, unknown> | undefined): number {
+    return typeof data?.rev === 'number' ? data.rev : 0;
+  }
+
+  async getWorldRevision(worldId: string): Promise<number> {
+    const snap = await this.worldDoc(worldId).get();
+    return this.revisionOf(snap.data());
   }
 
   private toWorldEntry(id: string, data: Record<string, unknown>): WorldEntryRecord {
@@ -152,8 +183,10 @@ export class FirestoreWorldEntriesStore implements WorldEntriesStore {
   }): Promise<{ ok: true; entry: WorldEntryRecord } | { ok: false; reason: 'conflict' | 'quota' | 'full' }> {
     const ref = this.worldCollection(options.worldId).doc(options.key);
     // Transaction: check-then-write would let two racers double-claim a plot.
+    const worldRef = this.worldDoc(options.worldId);
     return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
+      // Reads precede writes, as Firestore transactions require.
+      const [snap, worldSnap] = await Promise.all([tx.get(ref), tx.get(worldRef)]);
       const existing = snap.exists ? this.toWorldEntry(options.key, snap.data() ?? {}) : null;
       if (existing && existing.ownerUid !== options.uid) return { ok: false as const, reason: 'conflict' as const };
 
@@ -182,19 +215,31 @@ export class FirestoreWorldEntriesStore implements WorldEntriesStore {
         createdAt: entry.createdAt,
         updatedAt: entry.updatedAt,
       });
+      // Same transaction, so no reader sees one without the other.
+      tx.set(worldRef, { rev: this.revisionOf(worldSnap.data()) + 1 }, { merge: true });
       return { ok: true as const, entry };
     });
   }
 
   async deleteWorldEntry(worldId: string, key: string, uid: string): Promise<boolean> {
     const ref = this.worldCollection(worldId).doc(key);
+    const worldRef = this.worldDoc(worldId);
     return this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
+      const [snap, worldSnap] = await Promise.all([tx.get(ref), tx.get(worldRef)]);
       if (!snap.exists) return false;
       // Re-checked inside the transaction, ordered against a concurrent write.
       if (this.toWorldEntry(key, snap.data() ?? {}).ownerUid !== uid) return false;
       tx.delete(ref);
+      tx.set(worldRef, { rev: this.revisionOf(worldSnap.data()) + 1 }, { merge: true });
       return true;
+    });
+  }
+
+  private async bumpRevision(worldId: string): Promise<void> {
+    const ref = this.worldDoc(worldId);
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      tx.set(ref, { rev: this.revisionOf(snap.data()) + 1 }, { merge: true });
     });
   }
 
@@ -228,6 +273,9 @@ export class FirestoreWorldEntriesStore implements WorldEntriesStore {
       for (const doc of snap.docs.slice(index, index + 400)) batch.delete(doc.ref);
       await batch.commit();
     }
+    // Else an erased world serves the removed rows from cache.
+    const worlds = new Set(snap.docs.map((doc) => doc.ref.parent.parent?.id).filter(Boolean) as string[]);
+    for (const worldId of worlds) await this.bumpRevision(worldId);
     return snap.docs.length;
   }
 }
