@@ -2,14 +2,15 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { formatAdapterEvent, sanitizeEventPayload } from './ansi.js';
 import type { AdapterSpec } from './adapters.js';
 
-export const CREATOR_TOKEN_PATTERN = /gdpl_oat_/;
+// A PAT reaches the whole account, not just one round.
+export const CREATOR_TOKEN_PATTERN = /gdpl_(oat|pat)_/;
 
 export function childEnv(parent: NodeJS.ProcessEnv, roundToken: string): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(parent)) {
     if (value === undefined) continue;
     if (CREATOR_TOKEN_PATTERN.test(value)) continue;
-    if (/GAMEDEV_TOKEN|GDPL_OAT|OAUTH_ACCESS/i.test(key)) continue;
+    if (/GAMEDEV_TOKEN|GDPL_OAT|GDPL_PAT|OAUTH_ACCESS/i.test(key)) continue;
     env[key] = value;
   }
   env.GAMEDEV_ROUND_TOKEN = roundToken;

@@ -25,6 +25,24 @@ describe('delegation credential boundary', () => {
     expect(env.GAMEDEV_ROUND_TOKEN).toBe('round-scoped-only');
     expect(env.PATH).toBe('/usr/bin');
   });
+
+  // A PAT is class-A, so the child never sees one.
+  it('strips creator PAT material under any variable name', () => {
+    const env = childEnv(
+      {
+        PATH: '/usr/bin',
+        CI_TOKEN: 'gdpl_pat_0123456789abcdef_secret',
+        GDPL_PAT_BACKUP: 'whatever',
+        HOME: '/tmp',
+      },
+      'round-scoped-only',
+    );
+    expect(JSON.stringify(env)).not.toMatch(/gdpl_pat_/);
+    expect(env.CI_TOKEN).toBeUndefined();
+    expect(env.GDPL_PAT_BACKUP).toBeUndefined();
+    expect(env.GAMEDEV_ROUND_TOKEN).toBe('round-scoped-only');
+    expect(env.PATH).toBe('/usr/bin');
+  });
 });
 
 describe('delegation event rendering', () => {
