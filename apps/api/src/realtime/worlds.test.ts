@@ -454,6 +454,43 @@ describe('shared world reads are bounded', () => {
     await app.close();
   });
 
+  it('collapses simultaneous cold reads into one collection read', async () => {
+    const app = await cachingApp();
+    await plant(app, 'g:alice', 'plot.1');
+    const reads = vi.spyOn(store, 'listWorldEntries');
+
+    const all = await Promise.all(
+      Array.from({ length: 5 }, () => app.inject({ method: 'GET', url: '/api/games/garden/world' })),
+    );
+
+    expect(reads).toHaveBeenCalledTimes(1);
+    for (const res of all) expect(res.json().entries).toHaveLength(1);
+    await app.close();
+  });
+
+  it('does not let a read started before a write repopulate the old rows', async () => {
+    const app = await cachingApp();
+    await plant(app, 'g:alice', 'plot.1');
+    const before = await store.listWorldEntries('garden');
+
+    let release: (rows: typeof before) => void = () => {};
+    const reads = vi
+      .spyOn(store, 'listWorldEntries')
+      .mockReturnValueOnce(new Promise((resolve) => (release = resolve)));
+
+    // The write lands under a read holding pre-write rows.
+    const stale = app.inject({ method: 'GET', url: '/api/games/garden/world' });
+    await plant(app, 'g:alice', 'plot.2');
+    release(before);
+    expect((await stale).json().entries).toHaveLength(1);
+
+    reads.mockRestore();
+    const fresh = await app.inject({ method: 'GET', url: '/api/games/garden/world' });
+
+    expect(fresh.json().entries).toHaveLength(2);
+    await app.close();
+  });
+
   it('rate-limits a client that reads far faster than a world changes', async () => {
     // The ceiling on one runaway game loop, not on a crowd.
     const app = await cachingApp();

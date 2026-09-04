@@ -109,6 +109,15 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
   const CACHE_TTL_MS = 3_000;
   // Cached raw: rows are shared, `mine` and `writable` are not.
   const cache = new Map<string, { at: number; entries: WorldEntryRecord[] }>();
+  // One read in flight per world; the rest await it.
+  const reading = new Map<string, { rows: Promise<WorldEntryRecord[]>; stale: boolean }>();
+
+  // A write's rows beat any read already in flight.
+  function invalidate(worldId: string): void {
+    cache.delete(worldId);
+    const inFlight = reading.get(worldId);
+    if (inFlight) inFlight.stale = true;
+  }
 
   async function entriesFor(worldId: string): Promise<WorldEntryRecord[]> {
     // Swept on read, so an idle world holds nothing here.
@@ -117,8 +126,19 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
     }
     const hit = cache.get(worldId);
     if (hit) return hit.entries;
-    const entries = await store.listWorldEntries(worldId);
-    cache.set(worldId, { at: now(), entries });
+
+    // Else a cold window costs one read per simultaneous player.
+    const joined = reading.get(worldId);
+    if (joined) return joined.rows;
+
+    const started = {
+      rows: store.listWorldEntries(worldId).finally(() => reading.delete(worldId)),
+      stale: false,
+    };
+    reading.set(worldId, started);
+    const entries = await started.rows;
+    // A write landed mid-read; caching this would undo it.
+    if (!started.stale) cache.set(worldId, { at: now(), entries });
     return entries;
   }
 
@@ -215,7 +235,7 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
 
     const worldId = worldIdFor(params.data.slug);
     // Their own change must not wait out the shared window.
-    cache.delete(worldId);
+    invalidate(worldId);
     return reply.send({ ok: true, entry: toPublicEntry(result.entry, worldId, request.user.uid) });
   });
 
@@ -230,8 +250,9 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
     // No schema gate here, matching the save route's delete. If a game leaves the
     // catalog its entries are still something a player wrote, and "take my thing back"
     // must keep working — a 404 would strand a row nobody can reach.
-    const removed = await store.deleteWorldEntry(worldIdFor(params.data.slug), params.data.key, request.user.uid);
-    cache.delete(worldIdFor(params.data.slug));
+    const worldId = worldIdFor(params.data.slug);
+    const removed = await store.deleteWorldEntry(worldId, params.data.key, request.user.uid);
+    invalidate(worldId);
     if (!removed) {
       // Also the answer for an entry that belongs to somebody else: not found and not
       // yours are the same sentence, so the route cannot be used to probe what exists.
