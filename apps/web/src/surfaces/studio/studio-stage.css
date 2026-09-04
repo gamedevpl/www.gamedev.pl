@@ -17,14 +17,17 @@
   position: absolute;
   inset: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: space-between;
   overflow: hidden;
 }
 
 .studio-stage-frame {
-  position: absolute;
-  inset: 0;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  width: 100%;
 }
 
 .studio-stage-frame .game-frame,
@@ -42,8 +45,10 @@
 }
 
 .studio-stage-void {
-  position: absolute;
-  inset: 0;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  width: 100%;
   background: radial-gradient(ellipse at center, rgba(0, 228, 172, 0.06), transparent 65%);
 }
 
@@ -188,24 +193,61 @@
   justify-content: center;
 }
 
-/* Version ribbon (the honesty organ) — bottom-center, non-dismissible. */
+/* Stage statusbar — VS Code / CodeSurface-style bar at bottom of stage. */
+.studio-stage-statusbar {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 28px;
+  padding: 3px 10px;
+  border-top: 1px solid var(--panel-border);
+  background: rgba(148, 163, 184, 0.05);
+}
+
+.studio-stage-statusbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 22px;
+}
+
+/* Narrow viewports: let the bar wrap into two lines rather than clip controls (CodeSurface parity). */
+@media (max-width: 640px) {
+  .studio-stage-statusbar-row {
+    flex-wrap: wrap;
+    height: auto;
+  }
+}
+
+.studio-stage-statusbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.studio-stage-statusbar-left::-webkit-scrollbar {
+  display: none;
+}
+
+.studio-stage-statusbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+/* Version ribbon (the honesty organ) — inside stage status bar. */
 .studio-version-ribbon {
-  position: absolute;
-  z-index: 25;
-  left: 50%;
-  bottom: 14px;
-  transform: translateX(-50%);
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  max-width: calc(100% - 24px);
-  padding: 5px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--panel-border);
-  background: rgba(8, 12, 16, 0.82);
-  backdrop-filter: blur(6px);
   font-size: 0.72rem;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--muted);
   white-space: nowrap;
 }
@@ -218,6 +260,7 @@
 
 .studio-version-ribbon.has-exception .studio-version-ribbon-exception {
   color: #fca5a5;
+  font-weight: 600;
 }
 
 .studio-version-ribbon-depth {
@@ -232,12 +275,44 @@
 }
 
 .studio-stage-play-bar {
-  position: absolute;
-  z-index: 25;
-  right: 14px;
-  bottom: 14px;
   display: inline-flex;
-  gap: 8px;
+  align-items: center;
+  gap: 6px;
+}
+
+.studio-stage-statusbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.studio-stage-statusbar-btn.primary-btn {
+  border: 1px solid var(--turquoise);
+  background: var(--turquoise);
+  color: #08241d;
+  font-weight: 700;
+}
+
+.studio-stage-statusbar-btn.primary-btn:hover {
+  background: #34ecd0;
+}
+
+.studio-stage-statusbar-btn.secondary-btn {
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.studio-stage-statusbar-btn.secondary-btn:hover {
+  color: var(--text);
+  border-color: var(--muted);
 }
 
 .studio-stage-sheet {
