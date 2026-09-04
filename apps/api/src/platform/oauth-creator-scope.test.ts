@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { consentToken, OAUTH_AS_METADATA_PATH } from './oauth-as.js';
 import { GAMEDEV_CLI_CLIENT_ID } from './oauth-first-party.js';
 import { pkceChallengeS256 } from './oauth-pkce.js';
-import { MAX_OAUTH_GRANTS_PER_UID } from './oauth-scopes.js';
+import { MAX_OAUTH_GRANTS_PER_UID, OAUTH_GRANT_CAP_DESCRIPTION } from './oauth-scopes.js';
 import { MCP_ENDPOINT_PATH } from '../agent-surface/self-build-connect.js';
 import {
   buildOAuthApp,
@@ -247,6 +247,49 @@ describe('OAuth creator scope (CL-04..CL-07, CL-09)', () => {
     expect(await store.listOAuthGrantsByOwner('g:boss')).toHaveLength(0);
   });
 
+  it('reuses the CLI grant when the same device signs in again', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    app = await buildOAuthApp(store);
+    const first = await mintCreatorTokens(app, { uid: 'g:boss', device: 'sputnik-2' });
+    const second = await mintCreatorTokens(app, { uid: 'g:boss', device: 'sputnik-2' });
+    expect(first.access_token).toBeTruthy();
+    expect(second.access_token).toBeTruthy();
+    expect(first.refresh_token).not.toBe(second.refresh_token);
+    expect(await store.listOAuthGrantsByOwner('g:boss')).toHaveLength(1);
+
+    const stale = await app.inject({
+      method: 'POST',
+      url: '/oauth/token',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: first.refresh_token,
+      }).toString(),
+    });
+    expect(stale.statusCode).toBe(400);
+
+    const profile = await app.inject({
+      method: 'GET',
+      url: '/api/me/profile',
+      headers: { authorization: `Bearer ${second.access_token}` },
+    });
+    expect(profile.statusCode).toBe(200);
+  });
+
+  it('does not consume a grant slot on same-device relogin at the cap', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    app = await buildOAuthApp(store);
+    for (let i = 0; i < MAX_OAUTH_GRANTS_PER_UID - 1; i += 1) {
+      await mintCreatorTokens(app, { uid: 'g:boss', device: `dev-${i}` });
+    }
+    await mintCreatorTokens(app, { uid: 'g:boss', device: 'sputnik-2' });
+    const again = await mintCreatorTokens(app, { uid: 'g:boss', device: 'sputnik-2' });
+    expect(again.access_token).toBeTruthy();
+    expect((await store.listOAuthGrantsByOwner('g:boss')).length).toBe(MAX_OAUTH_GRANTS_PER_UID);
+  });
+
   it('caps grants per account', async () => {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:boss' });
@@ -254,8 +297,33 @@ describe('OAuth creator scope (CL-04..CL-07, CL-09)', () => {
     for (let i = 0; i < MAX_OAUTH_GRANTS_PER_UID; i += 1) {
       await mintCreatorTokens(app, { uid: 'g:boss', device: `dev-${i}` });
     }
-    const denied = await mintCreatorTokens(app, { uid: 'g:boss', device: 'one-too-many' });
-    expect(denied.access_token).toBeUndefined();
+    const challenge = pkceChallengeS256(CLI_VERIFIER);
+    const denied = await app.inject({
+      method: 'POST',
+      url: '/oauth/authorize',
+      headers: { cookie: sessionCookie('g:boss'), 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({
+        response_type: 'code',
+        client_id: GAMEDEV_CLI_CLIENT_ID,
+        redirect_uri: CLI_LOOPBACK,
+        scope: 'creator',
+        state: 'xyz',
+        code_challenge: challenge,
+        code_challenge_method: 'S256',
+        action: 'approve',
+        device: 'one-too-many',
+        consent_token: consentToken({
+          uid: 'g:boss',
+          clientId: GAMEDEV_CLI_CLIENT_ID,
+          codeChallenge: challenge,
+          secret: SESSION_SECRET,
+        }),
+      }).toString(),
+    });
+    expect(denied.statusCode).toBe(302);
+    const location = new URL(denied.headers.location as string);
+    expect(location.searchParams.get('error')).toBe('access_denied');
+    expect(location.searchParams.get('error_description')).toBe(OAUTH_GRANT_CAP_DESCRIPTION);
     expect((await store.listOAuthGrantsByOwner('g:boss')).length).toBe(MAX_OAUTH_GRANTS_PER_UID);
   });
 

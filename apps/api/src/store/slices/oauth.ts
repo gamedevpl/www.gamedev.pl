@@ -46,7 +46,7 @@ export interface OAuthStore {
     nowMs: number;
   }): Promise<RotateRefreshTokenResult>;
 
-  // First token issue after authorization_code exchange (no refresh yet).
+  // Issue or replace the refresh family after an authorization_code exchange.
   issueOAuthTokensFromGrant(input: {
     grantId: string;
     refreshTokenId: string;
@@ -192,7 +192,9 @@ export class InMemoryOAuthStore implements OAuthStore {
   }): Promise<OAuthGrantRecord | null> {
     const grant = this.oauthGrants.get(input.grantId);
     if (!grant || grant.revokedAt) return null;
-    if (grant.currentRefreshTokenId) return null;
+    if (grant.currentRefreshTokenId) {
+      this.oauthRefreshTokenIndex.delete(grant.currentRefreshTokenId);
+    }
 
     const updated: OAuthGrantRecord = {
       ...grant,
@@ -384,7 +386,9 @@ export class FirestoreOAuthStore implements OAuthStore {
       if (!snap.exists) return null;
       const grant = snap.data() as OAuthGrantRecord;
       if (grant.revokedAt) return null;
-      if (grant.currentRefreshTokenId) return null;
+      if (grant.currentRefreshTokenId) {
+        tx.delete(this.db.collection('oauthRefreshTokens').doc(grant.currentRefreshTokenId));
+      }
 
       const updated: OAuthGrantRecord = {
         ...grant,

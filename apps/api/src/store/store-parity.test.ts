@@ -66,6 +66,56 @@ describeStoreContract('oauth', (makeStore) => {
     expect(await store.listOAuthGrantsByOwner('g:user-1')).toHaveLength(0);
   });
 
+  it('replaces the refresh family when the same grant is issued again', async () => {
+    const store = makeStore();
+    await store.createOAuthGrant({
+      grantId: 'grant-issue',
+      clientId: 'client-1',
+      ownerUid: 'g:user-1',
+      scope: 'creator',
+      createdAt: '2026-08-22T00:00:00Z',
+      refreshFamilyId: 'grant-issue',
+      currentRefreshTokenId: '',
+      currentRefreshHash: '',
+      refreshExpiresAt: '2026-09-22T00:00:00Z',
+    });
+    const nowMs = Date.parse('2026-08-22T00:10:00Z');
+    const first = await store.issueOAuthTokensFromGrant({
+      grantId: 'grant-issue',
+      refreshTokenId: 'refresh-a',
+      refreshHash: 'hash-a',
+      refreshExpiresAt: '2026-09-22T00:00:00Z',
+      nowMs,
+      accessToken: {
+        tokenId: 'access-a',
+        grantId: 'grant-issue',
+        ownerUid: 'g:user-1',
+        secretHash: 'secret-a',
+        expiresAt: '2026-08-22T01:00:00Z',
+        createdAt: '2026-08-22T00:10:00Z',
+      },
+    });
+    expect(first?.currentRefreshTokenId).toBe('refresh-a');
+    const second = await store.issueOAuthTokensFromGrant({
+      grantId: 'grant-issue',
+      refreshTokenId: 'refresh-b',
+      refreshHash: 'hash-b',
+      refreshExpiresAt: '2026-09-22T00:00:00Z',
+      nowMs,
+      accessToken: {
+        tokenId: 'access-b',
+        grantId: 'grant-issue',
+        ownerUid: 'g:user-1',
+        secretHash: 'secret-b',
+        expiresAt: '2026-08-22T01:00:00Z',
+        createdAt: '2026-08-22T00:10:00Z',
+      },
+    });
+    expect(second?.currentRefreshTokenId).toBe('refresh-b');
+    expect(await store.getOAuthGrantByRefreshTokenId('refresh-a')).toBeNull();
+    expect(await store.getOAuthGrantByRefreshTokenId('refresh-b')).toMatchObject({ grantId: 'grant-issue' });
+  });
+
   it('deletes an access token once, then reports nothing left to delete', async () => {
     const store = makeStore();
     await store.createOAuthAccessToken({

@@ -27,6 +27,15 @@ export function sanitizeDeviceName(raw: string | undefined): string {
   return 'this device';
 }
 
+export function sameCliDeviceGrant(
+  grant: { clientId: string; deviceName?: string },
+  clientId: string,
+  device: string | undefined,
+): boolean {
+  if (!isGamedevCliClient(clientId) || grant.clientId !== clientId) return false;
+  return (grant.deviceName ?? 'this device') === sanitizeDeviceName(device);
+}
+
 export function gamedevCliGrantLabel(deviceName: string): string {
   return `gamedevpl CLI on ${deviceName}`;
 }

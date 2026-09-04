@@ -101,6 +101,32 @@ describe('loopback login', () => {
     expect(await store.get()).toBeNull();
   });
 
+  it('does not call a described access_denied a cancelled sign-in', async () => {
+    const store = memoryStore();
+    const io = sink();
+    await expect(
+      runLoopbackLogin({
+        origin: 'https://www.gamedev.pl',
+        store,
+        stdout: io.stdout,
+        timeoutMs: 4000,
+        fetch: async () => new Response('{}', { status: 500 }),
+        openUrl: async (url) => {
+          const parsed = new URL(url);
+          const redirect = parsed.searchParams.get('redirect_uri');
+          const state = parsed.searchParams.get('state');
+          const hit = await fetch(
+            `${redirect}?error=access_denied&error_description=too+many+connected+clients&state=${state}`,
+          );
+          expect(hit.status).toBe(200);
+          expect(await hit.text()).toContain('Sign-in failed');
+          return true;
+        },
+      }),
+    ).rejects.toMatchObject({ message: 'too many connected clients', exitCode: EXIT_AUTH });
+    expect(await store.get()).toBeNull();
+  });
+
   it('surfaces non-cancel OAuth errors instead of calling them cancelled', async () => {
     const store = memoryStore();
     const io = sink();
