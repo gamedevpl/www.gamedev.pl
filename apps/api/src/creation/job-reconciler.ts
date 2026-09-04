@@ -288,8 +288,7 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
           break;
         }
       }
-      if (!version || !manifest)
-        return sweep ? probeGateCrash(record, { store: store ?? null, gamesStore, log, now }) : null;
+      if (!version || !manifest) return sweep ? probeGateCrash(record, { store, gamesStore, log, now }) : null;
       const emitGateMetric = async (input: {
         mode: 'preview' | 'publish';
         outcome: 'passed' | 'failed';
@@ -362,7 +361,7 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
       }
       // mode=preview never writes manifest.gate — still emit metrics for green/red.
       const preview = manifest?.previewGate;
-      if (!preview) return sweep ? probeGateCrash(record, { store: store ?? null, gamesStore, log, now }) : null;
+      if (!preview) return sweep ? probeGateCrash(record, { store, gamesStore, log, now }) : null;
       await emitGateMetric({
         mode: 'preview',
         outcome: preview.green ? 'passed' : 'failed',
