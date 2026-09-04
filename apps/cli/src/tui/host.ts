@@ -34,15 +34,6 @@ export async function runInkRepl(input: {
   let who = '';
   let slug = '';
   const paintIdentity = (): void => session.setIdentity(formatSessionIdentity(who, slug));
-  try {
-    const profile = await input.api.request<{ handle?: string; uid?: string }>('GET', '/api/me/profile');
-    who = profile.handle ?? profile.uid ?? '';
-    paintIdentity();
-  } catch (error) {
-    who = 'not signed in';
-    paintIdentity();
-    session.writeLine(formatError(error));
-  }
   const watch = createRoundWatch({
     getToken: () => token,
     api: input.api,
@@ -53,6 +44,18 @@ export async function runInkRepl(input: {
       paintIdentity();
     },
   });
+  // Don't block the prompt on profile.
+  void input.api.request<{ handle?: string; uid?: string }>('GET', '/api/me/profile').then(
+    (profile) => {
+      who = profile.handle ?? profile.uid ?? '';
+      paintIdentity();
+    },
+    (error: unknown) => {
+      who = 'not signed in';
+      paintIdentity();
+      session.writeLine(formatError(error));
+    },
+  );
   let draft: IntakeDraft | null = null;
   try {
     for (;;) {

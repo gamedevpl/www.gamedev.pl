@@ -9,21 +9,18 @@ const STYLES = `<style>
   * { box-sizing: border-box; }
   body {
     margin: 0; min-height: 100vh; display: grid; place-items: center;
-    background: var(--bg);
+    padding: 1.5rem; background: var(--bg);
     background-image: radial-gradient(circle at 50% 0%, #1a232b 0%, #0f1418 70%);
     color: var(--text);
-    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; line-height: 1.55;
   }
-  main {
-    max-width: 28rem; margin: 1.5rem; background: var(--panel);
-    border: 1px solid var(--panel-border); border-radius: 14px; padding: 2rem;
-    text-align: center;
-  }
-  .brand { margin: 0 0 1rem; font-size: 0.8rem; font-weight: 700; color: var(--turquoise);
-    display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
-  .mascot { display: block; flex: none; width: 70px; height: 60px; color: var(--turquoise); }
-  h1 { font-size: 1.5rem; line-height: 1.2; margin: 0 0 0.5rem; }
-  p { margin: 0; color: var(--muted); }
+  main { width: min(26rem, 100%); background: var(--panel);
+    border: 1px solid var(--panel-border); border-radius: 14px; padding: 1.75rem 2rem; }
+  .brand { margin: 0 0 1.25rem; font-size: 0.8rem; font-weight: 700; color: var(--turquoise);
+    display: flex; align-items: center; gap: 0.5rem; }
+  .mascot { display: block; flex: none; }
+  h1 { font-size: 1.5rem; line-height: 1.2; margin: 0 0 0.75rem; }
+  .lead { margin: 0; color: var(--muted); }
 </style>`;
 
 const COPY = {
@@ -47,9 +44,9 @@ export function loopbackPage(kind: LoopbackPageKind): string {
 </head>
 <body>
   <main>
-    <p class="brand">${MASCOT_SVG} gamedev.pl</p>
+    <p class="brand">${MASCOT_SVG}<span>gamedev.pl</span></p>
     <h1>${copy.title}</h1>
-    <p>${copy.lead}</p>
+    <p class="lead">${copy.lead}</p>
   </main>
 </body>
 </html>`;

@@ -17,7 +17,7 @@ const BLURB: Record<SlashVerb, string> = {
   login: 'open a browser and sign in',
   logout: 'forget the stored grant',
   whoami: 'print the signed-in identity',
-  submit: 'run the local gate and submit',
+  submit: 'run the local gate, no upload',
   pull: 'refresh a checkout',
   diff: 'unreconciled local files',
   update: 'install a newer CLI',
