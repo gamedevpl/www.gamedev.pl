@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchCodeSurfaceKitDeclaration, type CodeSurfaceSources } from './codeSurfaceApi.js';
-import { flushLanguageFileUpdates, queueLanguageFileUpdate } from './codeSurfaceLanguageBind.js';
+import { flushLanguageFileUpdates, queueLanguageFileUpdate, type PendingTsUpdates } from './codeSurfaceLanguageBind.js';
 import { createCodeSurfaceLanguageService, type CodeSurfaceLanguageService } from './codeSurfaceLanguageService.js';
 import { isTsPath } from './codeSurfaceHelpers.js';
 
@@ -18,7 +18,7 @@ export function useCodeSurfaceLanguageService({
 }) {
   // GA-04: a ref, not state — `ready` below signals it exists.
   const serviceRef = useRef<CodeSurfaceLanguageService | null>(null);
-  const pendingUpdatesRef = useRef<Array<{ path: string; content: string | null }>>([]);
+  const pendingUpdatesRef = useRef<PendingTsUpdates>(new Map());
   const initRef = useRef(false);
   const [ready, setReady] = useState(false);
 
@@ -60,7 +60,7 @@ export function useCodeSurfaceLanguageService({
     return () => {
       serviceRef.current?.destroy();
       serviceRef.current = null;
-      pendingUpdatesRef.current = [];
+      pendingUpdatesRef.current = new Map();
       initRef.current = false;
       setReady(false);
       setKitDeclaration(null);

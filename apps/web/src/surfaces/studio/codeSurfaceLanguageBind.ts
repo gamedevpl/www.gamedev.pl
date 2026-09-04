@@ -4,6 +4,10 @@ export type LanguageFileService = {
 };
 
 export type PendingTsUpdate = { path: string; content: string | null };
+export type PendingTsUpdates = Map<string, string | null>;
+
+// Bounds queue growth when the worker never boots (GA-04 latent leak).
+const MAX_PENDING_LANGUAGE_FILE_UPDATES = 500;
 
 export function bindLanguageWorker<
   W extends {
@@ -29,19 +33,26 @@ export function applyLanguageFileUpdate(service: LanguageFileService, path: stri
 }
 
 export function queueLanguageFileUpdate(
-  pending: PendingTsUpdate[],
+  pending: PendingTsUpdates,
   service: LanguageFileService | null,
   path: string,
   content: string | null,
 ): void {
   if (!service) {
-    pending.push({ path, content });
+    pending.delete(path);
+    pending.set(path, content);
+    while (pending.size > MAX_PENDING_LANGUAGE_FILE_UPDATES) {
+      const oldest = pending.keys().next().value;
+      if (oldest === undefined) break;
+      pending.delete(oldest);
+    }
     return;
   }
   applyLanguageFileUpdate(service, path, content);
 }
 
-export function flushLanguageFileUpdates(pending: PendingTsUpdate[], service: LanguageFileService): void {
-  const queued = pending.splice(0, pending.length);
-  for (const update of queued) applyLanguageFileUpdate(service, update.path, update.content);
+export function flushLanguageFileUpdates(pending: PendingTsUpdates, service: LanguageFileService): void {
+  const queued = [...pending];
+  pending.clear();
+  for (const [path, content] of queued) applyLanguageFileUpdate(service, path, content);
 }
