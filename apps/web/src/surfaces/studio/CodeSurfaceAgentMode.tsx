@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from '../../PixelIcon.js';
 import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
@@ -28,15 +28,17 @@ export function CodeSurfaceAgentMode({
   const [agentConsoleInput, setAgentConsoleInput] = useState('{"tool":"get_sources","input":{}}');
   const [agentConsoleHistory, setAgentConsoleHistory] = useState<AgentConsoleHistoryEntry[]>([]);
   const [agentConsoleBusy, setAgentConsoleBusy] = useState(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return undefined;
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') onCloseRef.current();
     }
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [open, onClose]);
+  }, [open]);
 
   async function runAgentConsole() {
     if (agentConsoleBusy) return;

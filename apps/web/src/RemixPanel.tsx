@@ -245,7 +245,6 @@ export function RemixPanel(props: {
     chromeHidden: props.theaterChromeHidden,
     onRevealChrome: props.onRevealChrome,
   });
-  /** Set when a grip drag already acted, so the trailing click does not toggle again. */
   /** Only the newest swap is watched — older listeners would stack and over-count breaks. */
   const swapWatchStopRef = useRef<(() => void) | null>(null);
   /**
