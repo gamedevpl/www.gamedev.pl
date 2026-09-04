@@ -66,7 +66,7 @@ what each destructive one actually consumes, and why the rest are hidden.
 opens a REPL: describe a game, then iterate. `gamedevpl checkout <slug>` is the own-editor
 path. Installers (`/install.sh`) 404 while `CLI_SURFACE` is off. With the flag on, the
 route serves the script even if no `cli-v*` GitHub release exists yet — that download is
-what fails then. Until a release ships, `npm run bundle -w @gamedevpl/cli`. Details:
+what fails then. Until a release ships, `npm install` then `npm run bundle -w @gamedevpl/cli`. Details:
 [`apps/cli/README.md`](./apps/cli/README.md).
 
 > **Creating games is in closed beta.** The tools load for anyone; the calls need an

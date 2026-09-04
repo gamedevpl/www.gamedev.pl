@@ -52,6 +52,7 @@ jobs:
       - run: npm run type-check
       - run: npm run test
       - run: npm run build
+      - run: npm run bundle -w @gamedevpl/cli && node apps/cli/dist/gamedevpl.mjs help
 
   # Cross-repo lockstep with gamedevpl/www.gamedev.pl-games (issue #247). The unit
   # tests above already pin this repo's half + a GameKit-shaped fixture; this job
