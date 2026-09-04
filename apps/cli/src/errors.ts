@@ -15,6 +15,11 @@ export function describeError(error: unknown): { message: string; next?: string;
   return { message: error instanceof Error ? error.message : String(error), code: EXIT_REFUSED };
 }
 
+export function formatError(error: unknown): string {
+  const shown = describeError(error);
+  return shown.next ? `${shown.message}\nnext: ${shown.next}` : shown.message;
+}
+
 export function closedBetaWall(position?: number): CliError {
   const place = position !== undefined ? ` You are #${position} on the waitlist.` : '';
   return new CliError(`closed beta — this account is not admitted yet.${place}`, EXIT_REFUSED);

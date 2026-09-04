@@ -3,6 +3,7 @@ import { Box, Text, useInput, useStdout } from 'ink';
 import { CLI_BIN } from '../bin-name.js';
 import { glyphs } from '../renderer.js';
 import { CLI_VERSION } from '../update.js';
+import { isMascotLine, MASCOT_COLOR } from './mascot.js';
 import type { TuiSession, TuiState } from './session.js';
 
 export function ReplApp({ session, color }: { session: TuiSession; color: boolean }) {
@@ -39,6 +40,14 @@ export function ReplApp({ session, color }: { session: TuiSession; color: boolea
       }
       return;
     }
+    if (key.upArrow) {
+      session.historyPrev();
+      return;
+    }
+    if (key.downArrow) {
+      session.historyNext();
+      return;
+    }
     if (key.return) {
       session.submit();
       return;
@@ -60,7 +69,9 @@ export function ReplApp({ session, color }: { session: TuiSession; color: boolea
     <Box flexDirection="column" height={rows}>
       <Box flexDirection="column" flexGrow={1}>
         {shown.map((line, index) => (
-          <Text key={`${index}:${line.slice(0, 32)}`}>{line}</Text>
+          <Text key={`${index}:${line.slice(0, 32)}`} color={color && isMascotLine(line) ? MASCOT_COLOR : undefined}>
+            {line}
+          </Text>
         ))}
         {state.live.map((line, index) => (
           <Text key={`live:${index}:${line.slice(0, 32)}`} dimColor>

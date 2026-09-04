@@ -77,6 +77,27 @@ describe('tui session', () => {
     expect(await second).toBe('hello');
   });
 
+  it('walks prompt history with prev/next', async () => {
+    const session = createTuiSession('');
+    const first = session.prompt();
+    session.setDraft('one');
+    session.submit();
+    await first;
+    const second = session.prompt();
+    session.setDraft('two');
+    session.submit();
+    await second;
+    void session.prompt();
+    session.historyPrev();
+    expect(session.get().draft).toBe('two');
+    session.historyPrev();
+    expect(session.get().draft).toBe('one');
+    session.historyNext();
+    expect(session.get().draft).toBe('two');
+    session.historyNext();
+    expect(session.get().draft).toBe('');
+  });
+
   it('deletes the last code point, not a UTF-16 unit', () => {
     const session = createTuiSession('');
     void session.prompt();

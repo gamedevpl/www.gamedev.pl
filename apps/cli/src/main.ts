@@ -3,7 +3,7 @@ import { resolve as resolvePath } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { stdin, stdout, stderr } from 'node:process';
 import { parseArgv, jsonMode, SLASH_VERBS } from './argv.js';
-import { CLI_BIN, GIT_REMOTE_HELPER, GIT_REMOTE_SCHEME, cliUsage } from './bin-name.js';
+import { GIT_REMOTE_HELPER, GIT_REMOTE_SCHEME, cliUsage } from './bin-name.js';
 import { createApi, requireTtyFlag } from './api.js';
 import {
   encryptedFileStore,
@@ -21,6 +21,7 @@ import { runLadder, assertLadderGreen } from './verify.js';
 import { runGitRemoteHelper } from './git-remote-main.js';
 import { runStatusVerb } from './status-watch.js';
 import { dispatchReadVerb } from './verbs.js';
+import { formatHelp } from './help.js';
 
 function storeFromEnv(env: NodeJS.ProcessEnv, warn: (line: string) => void): TokenStore {
   const token = env.GAMEDEV_TOKEN?.trim();
@@ -61,8 +62,8 @@ export async function runCli(
   const tty = Boolean(io.stdin.isTTY);
 
   try {
-    if (verb === 'help' || flags.help) {
-      io.stdout.write(`${CLI_BIN} <${SLASH_VERBS.join('|')}>\n`);
+    if (verb === 'help' || flags.help || flags.h) {
+      io.stdout.write(`${formatHelp()}\n`);
       return EXIT_GREEN;
     }
     if (verb === 'login') {

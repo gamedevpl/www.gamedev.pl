@@ -7,6 +7,8 @@ import type { ApiClient } from './api.js';
 import { dispatchReadVerb } from './verbs.js';
 import { answerDraft, beginIntake, formatQuestion, submitIdea, type IntakeDraft } from './create.js';
 import { CLI_VERSION } from './update.js';
+import { formatError } from './errors.js';
+import { formatHelp } from './help.js';
 import { MASCOT_ASCII } from './tui/mascot.js';
 
 export type ReplLineResult = {
@@ -39,7 +41,7 @@ export async function handleReplLine(input: {
   if (trimmed.startsWith('/')) {
     const [cmd, ...rest] = trimmed.slice(1).split(/\s+/);
     if (cmd === 'help') {
-      input.write(SLASH_VERBS.map((verb) => `/${verb}`).join('\n'));
+      input.write(formatHelp(true));
       return { next: 'continue' };
     }
     if (cmd === 'status') {
@@ -52,27 +54,32 @@ export async function handleReplLine(input: {
         const status = await getStatus(input.api, tok);
         input.write(formatStatusLines(status, input.api.origin).join('\n'));
       } catch (error) {
-        input.write(error instanceof Error ? error.message : String(error));
+        input.write(formatError(error));
       }
       return { next: 'continue' };
     }
     if (cmd && (SLASH_VERBS as readonly string[]).includes(cmd)) {
-      const parsed = parseArgv(['node', 'cli', cmd, ...rest]);
-      const chunks: string[] = [];
-      const stdout = { write: (s: string) => (chunks.push(s), true) } as unknown as NodeJS.WriteStream;
-      const code = await dispatchReadVerb({
-        verb: cmd as SlashVerb,
-        args: parsed.args,
-        flags: parsed.flags,
-        api: input.api,
-        io: { stdout },
-      });
-      if (code !== null) {
-        input.write(chunks.join('').trimEnd() || `/${cmd}`);
+      try {
+        const parsed = parseArgv(['node', 'cli', cmd, ...rest]);
+        const chunks: string[] = [];
+        const stdout = { write: (s: string) => (chunks.push(s), true) } as unknown as NodeJS.WriteStream;
+        const code = await dispatchReadVerb({
+          verb: cmd as SlashVerb,
+          args: parsed.args,
+          flags: parsed.flags,
+          api: input.api,
+          io: { stdout },
+        });
+        if (code !== null) {
+          input.write(chunks.join('').trimEnd() || `/${cmd}`);
+          return { next: 'continue' };
+        }
+        input.write(`run it as ${cliUsage(cmd)}`);
+        return { next: 'continue' };
+      } catch (error) {
+        input.write(formatError(error));
         return { next: 'continue' };
       }
-      input.write(`run it as ${cliUsage(cmd)}`);
-      return { next: 'continue' };
     }
     const matches = completeSlash(trimmed);
     if (matches.length) input.write(matches.map((verb) => `/${verb}`).join('  '));
@@ -95,14 +102,19 @@ export async function handleReplLine(input: {
       }
       return await openFromSpec(input.api, started, input.write);
     } catch (error) {
-      input.write(error instanceof Error ? error.message : String(error));
+      input.write(formatError(error));
       return { next: 'continue', draft: input.draft ?? null };
     }
   }
-  const result = await postTurn(input.api, input.token, trimmed);
-  if (result.kind === 'reply') input.write(`◆ ${result.text}`);
-  else input.write(`▸ build ${result.roundId}${result.ack ? ` — ${result.ack}` : ''}`);
-  return { next: 'continue' };
+  try {
+    const result = await postTurn(input.api, input.token, trimmed);
+    if (result.kind === 'reply') input.write(`◆ ${result.text}`);
+    else input.write(`▸ build ${result.roundId}${result.ack ? ` — ${result.ack}` : ''}`);
+    return { next: 'continue' };
+  } catch (error) {
+    input.write(formatError(error));
+    return { next: 'continue' };
+  }
 }
 
 export function replBanner(isTty: boolean, env: NodeJS.ProcessEnv): string {

@@ -1,6 +1,7 @@
 import { render } from 'ink';
 import { createElement } from 'react';
 import { EXIT_GREEN } from '../exit-codes.js';
+import { formatError } from '../errors.js';
 import { handleReplLine, replBanner } from '../repl.js';
 import { wantsColor } from '../renderer.js';
 import type { ApiClient } from '../api.js';
@@ -33,13 +34,6 @@ export async function runInkRepl(input: {
   let who = '';
   let slug = '';
   const paintIdentity = (): void => session.setIdentity(formatSessionIdentity(who, slug));
-  void input.api
-    .request<{ handle?: string; uid?: string }>('GET', '/api/me/profile')
-    .then((profile) => {
-      who = profile.handle ?? profile.uid ?? '';
-      paintIdentity();
-    })
-    .catch(() => undefined);
   const watch = createRoundWatch({
     getToken: () => token,
     api: input.api,
@@ -50,18 +44,36 @@ export async function runInkRepl(input: {
       paintIdentity();
     },
   });
+  // Don't block the prompt on profile.
+  void input.api.request<{ handle?: string; uid?: string }>('GET', '/api/me/profile').then(
+    (profile) => {
+      who = profile.handle ?? profile.uid ?? '';
+      paintIdentity();
+    },
+    (error: unknown) => {
+      who = 'not signed in';
+      paintIdentity();
+      session.writeLine(formatError(error));
+    },
+  );
   let draft: IntakeDraft | null = null;
   try {
     for (;;) {
       const asking = draft?.questions[draft.index];
       const line = await session.prompt(asking?.choices, asking?.prompt);
-      const result = await handleReplLine({
-        line,
-        api: input.api,
-        token,
-        draft,
-        write: (text) => session.writeLine(text),
-      });
+      let result;
+      try {
+        result = await handleReplLine({
+          line,
+          api: input.api,
+          token,
+          draft,
+          write: (text) => session.writeLine(text),
+        });
+      } catch (error) {
+        session.writeLine(formatError(error));
+        continue;
+      }
       if (result.token !== undefined) {
         token = result.token;
         watch.poke();

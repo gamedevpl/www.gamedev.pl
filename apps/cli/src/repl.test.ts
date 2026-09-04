@@ -179,11 +179,49 @@ describe('repl turn loop', () => {
     expect(result.next).toBe('continue');
     expect(JSON.parse(lines.join('\n'))).toEqual({ submissions: [{ slug: 'sky-dodge' }] });
   });
+
+  it('writes auth errors from slash verbs instead of throwing', async () => {
+    const lines: string[] = [];
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_oat_dead', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async () => new Response('{}', { status: 401 }),
+    });
+    const result = await handleReplLine({
+      line: '/games',
+      api,
+      token: 'tok',
+      write: (s) => lines.push(s),
+    });
+    expect(result.next).toBe('continue');
+    expect(lines.join('\n')).toContain('credential expired');
+    expect(lines.join('\n')).toContain('gamedevpl login');
+  });
+
+  it('prints described help from /help', async () => {
+    const lines: string[] = [];
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_oat_t', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async () => new Response('{}', { status: 404 }),
+    });
+    const result = await handleReplLine({
+      line: '/help',
+      api,
+      token: null,
+      write: (s) => lines.push(s),
+    });
+    expect(result.next).toBe('continue');
+    expect(lines.join('\n')).toContain('open a browser');
+    expect(lines.join('\n')).not.toMatch(/gamedevpl <[a-z]+\|/);
+  });
 });
 
 describe('repl banner', () => {
   it('draws the mascot on a TTY and stays one line in a pipe', () => {
     expect(replBanner(true, {})).toContain(MASCOT_ASCII);
+    expect(replBanner(true, {})).toContain('█');
+    expect(replBanner(true, {})).not.toContain('╭');
     expect(replBanner(false, {})).not.toContain('╭');
   });
 });
