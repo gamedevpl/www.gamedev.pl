@@ -90,6 +90,8 @@ export interface CreateGameDeps {
     builder: BuilderKind;
     log: { error: (context: object, message: string) => void };
   }) => Promise<unknown>;
+  // Hands dispatch to /api/internal/seed; false means run it here.
+  enqueueSeed?: (jobId: number) => Promise<boolean>;
 }
 
 // The whole creation path: validate, limit, moderate, gate, quota, slug, dispatch.
@@ -123,6 +125,7 @@ export function createGameCreator(deps: CreateGameDeps): {
     isSlugClaimed,
     confirmSlugClaim,
     dispatchBuild,
+    enqueueSeed,
   } = deps;
 
   async function createGame(input: {
@@ -271,16 +274,28 @@ export function createGameCreator(deps: CreateGameDeps): {
       const builder: BuilderKind = requestedBuilder;
       // Persist before returning: Connect and Studio read `record.builder` immediately.
       await store.setRoundBuilder(jobId, builder, { resetRoundBudget: false });
-      void dispatchBuild({
-        jobId,
-        slug,
-        spec: issueBody,
-        locale: creatorLocale,
-        builder,
-        log: dispatchLog,
-      }).catch((error: unknown) => {
-        dispatchLog.error({ err: error, jobId }, 'background dispatch failed');
-      });
+      const dispatchInline = () =>
+        dispatchBuild({
+          jobId,
+          slug,
+          spec: issueBody,
+          locale: creatorLocale,
+          builder,
+          log: dispatchLog,
+        }).catch((error: unknown) => {
+          dispatchLog.error({ err: error, jobId }, 'background dispatch failed');
+        });
+      // Inside a request the seed gets CPU; afterwards it may not.
+      if (enqueueSeed) {
+        void enqueueSeed(jobId)
+          .then((accepted) => (accepted ? undefined : dispatchInline()))
+          .catch((error: unknown) => {
+            dispatchLog.error({ err: error, jobId }, 'seed handoff failed, dispatching inline');
+            return dispatchInline();
+          });
+      } else {
+        void dispatchInline();
+      }
 
       input.log.info?.({ jobId, slug, via: input.openedBy === 'agent' ? 'mcp' : 'studio' }, 'game created');
       return { ok: true, jobId, slug };

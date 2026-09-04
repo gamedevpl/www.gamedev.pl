@@ -76,6 +76,7 @@ import { registerPushRoutes } from '../notifications/push-routes.js';
 import { registerDigestRoutes, type DigestRoutesOptions } from './digest.js';
 import { parseBatchSize, registerHealthSweepRoutes, type HealthSweepRoutesOptions } from '../catalog/game-health.js';
 import { registerSuggestionSweepRoutes, type SuggestionSweepRoutesOptions } from '../community/suggestion-sweep.js';
+import { registerSeedDispatchRoute, type SeedDispatchRouteOptions } from '../creation/seed-dispatch.js';
 import { registerDispatchReaperRoutes, type DispatchReaperRoutesOptions } from '../creation/dispatch-reaper.js';
 import {
   buildImprovementBrief,
@@ -189,6 +190,7 @@ export interface BuildAppOptions {
   scorecardRoutes?: Partial<Omit<ScorecardRoutesOptions, 'store'>>;
   digestRoutes?: Partial<Omit<DigestRoutesOptions, 'store'>>;
   suggestionSweepRoutes?: Partial<Omit<SuggestionSweepRoutesOptions, 'store'>>;
+  seedDispatchRoutes?: Partial<Omit<SeedDispatchRouteOptions, 'dispatchQueuedJob'>>;
   dispatchReaperRoutes?: Partial<Omit<DispatchReaperRoutesOptions, 'store' | 'redispatchQueuedJob'>>;
   /** Seams for the published-shelf health sweep; defaults to OIDC-or-deny-all from env. */
   healthSweepRoutes?: Partial<HealthSweepRoutesOptions>;
@@ -734,6 +736,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     redispatchQueuedJob: submissionSeams.redispatchQueuedJob,
     internalAuthVerifier: createInternalAuthVerifierFromEnv(process.env, 'dispatchReaper'),
     ...options.dispatchReaperRoutes,
+  });
+
+  // The service calling itself so round-0 seeding runs inside a request (seed-dispatch.ts).
+  await registerSeedDispatchRoute(app, {
+    dispatchQueuedJob: submissionSeams.dispatchQueuedJob,
+    internalAuthVerifier: createInternalAuthVerifierFromEnv(process.env, 'seedDispatch'),
+    ...options.seedDispatchRoutes,
   });
 
   // The break-and-nudge loop's own clock (game-health.ts). A published game serves from a

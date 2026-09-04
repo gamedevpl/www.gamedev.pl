@@ -22,6 +22,11 @@ import { createSlugResolver } from './catalog/slug-resolver.js';
 import { registerSelfBuildConnectRoutes } from './agent-surface/self-build-connect-routes.js';
 import { registerDraftLifecycleRoutes } from './creation/draft-lifecycle-routes.js';
 import { createGameCreator, registerCreateGameRoute } from './creation/create-game.js';
+import {
+  createSeedDispatchClientFromEnv,
+  type DispatchQueuedJob,
+  type SeedDispatchClient,
+} from './creation/seed-dispatch.js';
 import { createDispatcher } from './creation/dispatch-build.js';
 import { createResumeBuild, type ResumeOutcome } from './creation/resume-build.js';
 import { createJobReconciler } from './creation/job-reconciler.js';
@@ -176,6 +181,8 @@ export interface SubmissionRoutesOptions {
   dailyChatQuota?: number;
   contentChecker?: ContentChecker;
   internalAuthVerifier?: InternalAuthVerifier;
+  // Seed handoff (seed-dispatch.ts); undefined reads env, null forces inline.
+  seedDispatch?: SeedDispatchClient | null;
   /** Mailer for notification email fan-out; defaults to createMailerFromEnv(). */
   notifyMailer?: Mailer;
   /** Absolute origin for email links; defaults to APP_BASE_URL or https://www.gamedev.pl. */
@@ -366,6 +373,8 @@ export interface SubmissionRoutesHandle {
     jobId: number;
     log: { error: (context: object, message: string) => void };
   }) => Promise<{ outcome: 'retried' | 'exhausted' | 'skipped'; reason?: string }>;
+  // /api/internal/seed's worker: first dispatch from the stored brief.
+  dispatchQueuedJob: DispatchQueuedJob;
 }
 
 /**
@@ -1015,7 +1024,9 @@ export async function registerSubmissionRoutes(
   });
   const { seedDeliveryFor, seedBuild, regenerateSeed, publishSeedPreview } = seedPipeline;
 
-  const { dispatchBuild, redispatchQueuedJob } = createDispatcher({
+  const seedDispatch =
+    options.seedDispatch === undefined ? createSeedDispatchClientFromEnv(process.env, app.log) : options.seedDispatch;
+  const { dispatchBuild, redispatchQueuedJob, dispatchQueuedJob } = createDispatcher({
     store,
     submissionTokenSecret,
     gameSeeder,
@@ -1265,6 +1276,7 @@ export async function registerSubmissionRoutes(
     isSlugClaimed,
     confirmSlugClaim,
     dispatchBuild,
+    ...(seedDispatch ? { enqueueSeed: (jobId: number) => seedDispatch.enqueue(jobId) } : {}),
   });
 
   registerCreateGameRoute(app, {
@@ -1714,5 +1726,6 @@ export async function registerSubmissionRoutes(
     invalidateStatusCache,
     scheduleStagedPreview: stagedPreviews ? (jobId) => stagedPreviews.schedule(jobId) : null,
     redispatchQueuedJob,
+    dispatchQueuedJob,
   };
 }

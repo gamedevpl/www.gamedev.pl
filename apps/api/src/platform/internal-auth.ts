@@ -72,6 +72,8 @@ const AUDIENCE_ENV_VAR = {
   // token, audience-pinned to the callee's URL — so it reuses this seam rather than
   // growing a second one. Its caller identity differs, hence its own SA env var below.
   mpRelay: 'MP_RELAY_AUDIENCE',
+  // App calling itself for seeding (seed-dispatch.ts); runtime SA.
+  seedDispatch: 'SEED_DISPATCH_AUDIENCE',
 } as const;
 
 export type InternalSweep = keyof typeof AUDIENCE_ENV_VAR;
@@ -90,7 +92,9 @@ export function createInternalAuthVerifierFromEnv(
   const audience = env[AUDIENCE_ENV_VAR[sweep]]?.trim();
   // The scheduler jobs share one identity; the relay is called by the app service, so it
   // authenticates a different caller and must not be opened by the scheduler's SA.
-  const serviceAccountEmail = (sweep === 'mpRelay' ? env.MP_RELAY_CALLER_SA : env.NOTIFY_SWEEP_SA)?.trim();
+  const serviceAccountEmail = (
+    sweep === 'mpRelay' ? env.MP_RELAY_CALLER_SA : sweep === 'seedDispatch' ? env.SEED_DISPATCH_SA : env.NOTIFY_SWEEP_SA
+  )?.trim();
   if (audience && serviceAccountEmail) {
     return new OidcInternalAuthVerifier({ audience, serviceAccountEmail });
   }

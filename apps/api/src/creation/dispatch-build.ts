@@ -276,5 +276,29 @@ export function createDispatcher(deps: DispatcherDeps) {
     return { outcome: 'retried' };
   }
 
-  return { dispatchBuild, redispatchQueuedJob };
+  // First dispatch from stored state; claims nothing, fails nothing.
+  async function dispatchQueuedJob(input: {
+    jobId: number;
+    log: { error: (context: object, message: string) => void };
+  }): Promise<{ outcome: 'dispatched' | 'skipped'; reason?: string }> {
+    if (!store) return { outcome: 'skipped', reason: 'store_unavailable' };
+    const record = await store.getSubmission(input.jobId);
+    if (!record) return { outcome: 'skipped', reason: 'not_found' };
+    if (record.state !== 'queued' || (record.dispatch?.refs?.length ?? 0) > 0) {
+      return { outcome: 'skipped', reason: 'not_queued' };
+    }
+    const spec = reconstructDispatchSpec(record);
+    if (!spec) return { outcome: 'skipped', reason: 'no_spec' };
+    const dispatched = await dispatchBuild({
+      jobId: input.jobId,
+      ...(record.slug ? { slug: record.slug } : {}),
+      spec,
+      locale: record.locale ?? 'en',
+      builder: builderOf(record),
+      log: input.log,
+    });
+    return dispatched ? { outcome: 'dispatched' } : { outcome: 'skipped', reason: 'declined' };
+  }
+
+  return { dispatchBuild, redispatchQueuedJob, dispatchQueuedJob };
 }
