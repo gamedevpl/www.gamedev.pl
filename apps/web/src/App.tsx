@@ -1,5 +1,4 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { gamePageHandle, type CatalogEntry } from './catalog.js';
 import { useCatalogData } from './useCatalogData.js';
@@ -15,20 +14,17 @@ import { MIN_CONCEPT_LENGTH } from './conceptLength.js';
 import { resolveCreateInitialPrompt } from './createInitialPrompt.js';
 import {
   adminPath,
-  connectPath,
-  createPath,
   creatorPath,
   gamePath,
-  NAVIGATE_EVENT,
   navUpTarget,
-  partyPath,
   playPath,
   reviewPath,
   studioPath,
   studioWelcomePath,
   studioConnectPath,
 } from './core/router.js';
-import { readLocationRoute, RouteChunkBoundary } from './appRouteRecovery.js';
+import { RouteChunkBoundary } from './appRouteRecovery.js';
+import { useAppNavigation } from './useAppNavigation.js';
 import { StudioWelcomeView } from './surfaces/studio/StudioWelcomeView.js';
 import { StudioConnectWizard } from './surfaces/studio/StudioConnectWizard.js';
 import type { PublicCreatorProfile } from './creatorProfileApi.js';
@@ -92,9 +88,7 @@ type StageContent =
 export function App() {
   const { t, i18n } = useTranslation();
   const { user, loading: authLoading, privateBeta, publicPlaySlugs, showBetaWelcome, dismissBetaWelcome } = useAuth();
-  const [route, setRoute] = useState(() => readLocationRoute());
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const publicPlayAllowed = route.view === 'play' && publicPlaySlugs.includes(route.slug);
 
   // Local storage saved specs
   const [savedSpecs, setSavedSpecs] = useState<SavedSpec[]>(() => getSavedSpecs());
@@ -113,6 +107,19 @@ export function App() {
   useEffect(() => {
     partySeedRef.current = null;
   });
+
+  const {
+    route,
+    navigate,
+    exitOverlay,
+    handleCreateNav,
+    handlePartyCreateNav,
+    handlePartyNav,
+    handleConnectNav,
+    handleHomeAnchorNav,
+  } = useAppNavigation({ partySeedRef, setPendingScrollTarget });
+
+  const publicPlayAllowed = route.view === 'play' && publicPlaySlugs.includes(route.slug);
 
   const { catalogStatus, catalogError, catalogEntries, handleRetryCatalog, handlePullToRefresh } = useCatalogData({
     user,
@@ -240,23 +247,6 @@ export function App() {
   useEffect(() => {
     setGameTitle(null);
   }, [gameRouteSlug]);
-
-  useEffect(() => {
-    // popstate covers back/forward (and path changes via history API). hashchange
-    // is required for hybrid join URLs: the credential lives in the fragment, and
-    // editing only the hash (paste `/join/<code>#<token>` while already on that
-    // path) does not fire popstate.
-    const syncRoute = () => {
-      setRoute(readLocationRoute());
-    };
-
-    window.addEventListener('popstate', syncRoute);
-    window.addEventListener('hashchange', syncRoute);
-    return () => {
-      window.removeEventListener('popstate', syncRoute);
-      window.removeEventListener('hashchange', syncRoute);
-    };
-  }, []);
 
   // Lock page scroll while the full-viewport game player is open so the fixed
   // overlay is the only scrollable surface (the game handles its own scroll).
@@ -636,46 +626,6 @@ export function App() {
     [pendingSpec, qaQuestions, qaLocale],
   );
 
-  // Track where a full-viewport /play overlay was opened from within the app
-  // (e.g. from Creator Studio /studio/...), so closing it returns to that opener.
-  const playReturnPathRef = useRef<string | null>(null);
-
-  const navigate = useCallback((path: string, options?: { replace?: boolean }) => {
-    // When navigating to a /play route from elsewhere in the app, record the
-    // origin path so exitOverlay can return to it.
-    if (path.startsWith('/play/') && !window.location.pathname.startsWith('/play/')) {
-      playReturnPathRef.current = window.location.pathname + window.location.search;
-    }
-
-    // Update the URL (the source of truth) and the route synchronously so
-    // navigation is immediate (and testable) without waiting for popstate.
-    if (options?.replace) {
-      window.history.replaceState(null, '', path);
-    } else {
-      window.history.pushState(null, '', path);
-    }
-    // pushState/replaceState are silent, so announce the navigation for anything
-    // living outside this component (see NAVIGATE_EVENT). Dispatched before the
-    // state update so a listener reading window.location sees the URL we just set.
-    window.dispatchEvent(new CustomEvent(NAVIGATE_EVENT, { detail: { path } }));
-    setRoute(readLocationRoute());
-  }, []);
-
-  /**
-   * Closing a full-viewport overlay that owns the URL — unpublished draft or public play.
-   * Returns to the in-app opener (e.g. Creator Studio) if launched from within the app,
-   * or safely falls back to Home (`/`) on direct visits.
-   */
-  const exitOverlay = useCallback(() => {
-    const returnPath = playReturnPathRef.current;
-    playReturnPathRef.current = null;
-    if (returnPath && !returnPath.startsWith('/play/')) {
-      navigate(returnPath);
-      return;
-    }
-    navigate('/');
-  }, [navigate]);
-
   // Unpublished `/play/<slug>` uses UnpublishedPlayView's own theater (not `stageContent`),
   // so hide Up the same way — Close / the error home link own escape there.
   // Only after the catalog is ready: a catalog *error* must keep GameDetailPage's
@@ -692,56 +642,6 @@ export function App() {
     if (!target) return null;
     return { path: target.path, ariaLabel: t(`header.${target.labelKey}`) };
   }, [route, stageContent, unpublishedPlayTheater, t]);
-
-  // Deliberate click focuses even on phones, unlike page-load autofocus.
-  function handleCreateNav() {
-    flushSync(() => {
-      navigate(createPath());
-    });
-    // A new page starts at the top, not the old offset.
-    window.scrollTo(0, 0);
-    const input = document.querySelector<HTMLTextAreaElement>('#hero-prompt .big-prompt-input');
-    input?.focus({ preventScroll: true });
-  }
-
-  // Same handoff as Create, concept pre-loaded with party framing.
-  function handlePartyCreateNav() {
-    partySeedRef.current = t('party.customStarterPrompt');
-    flushSync(() => {
-      navigate(createPath());
-    });
-    window.scrollTo(0, 0);
-    const input = document.querySelector<HTMLTextAreaElement>('#hero-prompt .big-prompt-input');
-    if (input) {
-      input.focus({ preventScroll: true });
-      // Cursor at the end so typing continues the sentence, not overwrites it.
-      input.setSelectionRange(input.value.length, input.value.length);
-    }
-  }
-
-  // A real destination now, not a scroll to the home rail.
-  function handlePartyNav() {
-    navigate(partyPath());
-    // A new page starts at the top, not mid-scroll.
-    window.scrollTo(0, 0);
-  }
-
-  function handleConnectNav() {
-    navigate(connectPath());
-    window.scrollTo(0, 0);
-  }
-
-  // Play lives on home only. Elsewhere, queue the anchor and go there — the
-  // existing pending-scroll effect resolves it once the target (which may still be
-  // loading) has actually mounted.
-  function handleHomeAnchorNav(anchorId: string) {
-    if (route.view === 'home') {
-      document.getElementById(anchorId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      return;
-    }
-    setPendingScrollTarget(anchorId);
-    navigate('/');
-  }
 
   const navHeader = {
     activeBuildCount,
