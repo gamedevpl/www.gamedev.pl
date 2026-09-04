@@ -3,7 +3,6 @@ export type LanguageFileService = {
   deleteFile?: (path: string) => void;
 };
 
-export type PendingTsUpdate = { path: string; content: string | null };
 export type PendingTsUpdates = Map<string, string | null>;
 
 // Bounds queue growth when the worker never boots (GA-04 latent leak).
