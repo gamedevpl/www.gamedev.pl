@@ -6,7 +6,9 @@ export type LanguageFileService = {
 export type PendingTsUpdates = Map<string, string | null>;
 
 // Bounds queue growth when the worker never boots (GA-04 latent leak).
-const MAX_PENDING_LANGUAGE_FILE_UPDATES = 500;
+// Sized well above any realistic bulk-edit burst (e.g. a multi-hundred-file folder
+// move queues 2 entries/file) so eviction only bites a worker that never boots.
+export const MAX_PENDING_LANGUAGE_FILE_UPDATES = 5000;
 
 export function bindLanguageWorker<
   W extends {

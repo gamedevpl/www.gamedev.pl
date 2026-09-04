@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { flushLanguageFileUpdates, queueLanguageFileUpdate } from './codeSurfaceLanguageBind.js';
+import {
+  flushLanguageFileUpdates,
+  MAX_PENDING_LANGUAGE_FILE_UPDATES,
+  queueLanguageFileUpdate,
+} from './codeSurfaceLanguageBind.js';
 
 describe('codeSurfaceLanguageBind', () => {
   it('queues updates until a service exists, then flushes in order', () => {
@@ -30,7 +34,7 @@ describe('codeSurfaceLanguageBind', () => {
 
   it('caps pending updates and evicts the oldest untouched path first', () => {
     const pending = new Map<string, string | null>();
-    const cap = 500;
+    const cap = MAX_PENDING_LANGUAGE_FILE_UPDATES;
     const overflow = cap + 50;
     for (let i = 0; i < overflow; i++) {
       queueLanguageFileUpdate(pending, null, `file-${i}.ts`, `content-${i}`);
