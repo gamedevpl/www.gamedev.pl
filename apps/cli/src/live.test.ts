@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { createLiveScreen, renderLive } from './live.js';
-import { formatStatusLines, runStatusVerb, statusWatchDelayMs } from './status-watch.js';
+import {
+  formatStatusLines,
+  formatStatusEvent,
+  runStatusVerb,
+  shouldAnnounceStatus,
+  statusWatchDelayMs,
+} from './status-watch.js';
 import { createApi } from './api.js';
 import { memoryStore } from './keychain.js';
 import { EXIT_GREEN, EXIT_RED } from './exit-codes.js';
@@ -85,6 +91,17 @@ describe('status watch', () => {
     expect(calls).toBe(2);
     expect(chunks.join('')).toContain('\x1b[');
     expect(chunks.join('')).toContain('published');
+  });
+
+  it('announces a finished Studio round even on the first poll', () => {
+    expect(
+      shouldAnnounceStatus({ status: 'needs_changes', previewGate: { green: true } }, '', 'needs_changes|||1'),
+    ).toBe(true);
+    expect(shouldAnnounceStatus({ status: 'building' }, '', 'building')).toBe(false);
+    expect(shouldAnnounceStatus({ status: 'building', stall: 'quiet' }, 'building', 'building|quiet')).toBe(true);
+    expect(formatStatusEvent({ status: 'needs_changes', previewGate: { green: true } })).toBe(
+      'round finished — Studio is waiting (preview green)',
+    );
   });
 
   it('returns EXIT_RED when the publish gate is red', async () => {

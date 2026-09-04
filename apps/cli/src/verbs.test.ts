@@ -64,4 +64,15 @@ describe('dispatchReadVerb', () => {
     expect(await dispatchReadVerb({ verb: 'share', args: ['sky-dodge'], flags: {}, api, io })).toBe(EXIT_GREEN);
     expect(io.read()).toContain('/play/sky-dodge');
   });
+
+  it('prints quota as a sentence, not raw JSON', async () => {
+    const io = out();
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_pat_x', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async () => new Response(JSON.stringify({ submissions: { used: 1, limit: 5 } }), { status: 200 }),
+    });
+    expect(await dispatchReadVerb({ verb: 'quota', args: [], flags: {}, api, io })).toBe(EXIT_GREEN);
+    expect(io.read().trim()).toBe('1 of 5 submissions today');
+  });
 });

@@ -24,6 +24,57 @@ export function formatStatusLines(status: RoundStatus, origin: string): string[]
   return lines;
 }
 
+export function statusFingerprint(status: RoundStatus): string {
+  const gate = status.gateProgress;
+  const preview = status.previewGate;
+  return [
+    status.status,
+    status.phase ?? '',
+    status.stall ?? '',
+    gate ? `${gate.stage}:${gate.index}/${gate.total}` : '',
+    status.preview?.slug ?? '',
+    status.slug ?? '',
+    status.failure?.reason ?? '',
+    preview == null ? '' : preview.green ? '1' : '0',
+  ].join('|');
+}
+
+export function formatStatusEvent(status: RoundStatus): string {
+  if (status.status === 'needs_changes' && status.previewGate?.green) {
+    return 'round finished — Studio is waiting (preview green)';
+  }
+  if (status.status === 'needs_changes' && status.previewGate?.green === false) {
+    return 'round finished — preview gate red';
+  }
+  if (status.status === 'needs_changes') {
+    const why = status.failure?.reason ? ` (${sanitizeEventPayload(status.failure.reason)})` : '';
+    return `round finished — needs_changes${why}`;
+  }
+  if (status.status === 'published') return 'published';
+  if (status.status === 'abandoned') return 'abandoned';
+  const stall = status.stall ? ` (${status.stall})` : '';
+  if (status.gateProgress) {
+    const { stage, index, total } = status.gateProgress;
+    return `${status.status}${stall} · ${stage} ${index}/${total}`;
+  }
+  return `${status.status}${stall}`;
+}
+
+export function shouldAnnounceStatus(status: RoundStatus, previousKey: string, key: string): boolean {
+  if (key === previousKey) return false;
+  if (status.status === 'needs_changes' || isTerminalStatus(status.status)) return true;
+  return previousKey !== '';
+}
+
+export function formatRoundLive(status: RoundStatus, origin: string): string[] {
+  const lines = [formatStatusEvent(status)];
+  if (status.preview?.slug) lines.push(previewUrl(origin, status.preview.slug));
+  if (status.failure?.reason && !lines[0]?.includes(status.failure.reason)) {
+    lines.push(sanitizeEventPayload(status.failure.reason));
+  }
+  return lines.slice(0, 4);
+}
+
 export async function runStatusVerb(input: {
   api: ApiClient;
   token: string;

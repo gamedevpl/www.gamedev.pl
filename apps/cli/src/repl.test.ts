@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { handleReplLine } from './repl.js';
+import { handleReplLine, replBanner } from './repl.js';
 import { createApi } from './api.js';
 import { memoryStore } from './keychain.js';
+import { MASCOT_ASCII } from './tui/mascot.js';
 
 describe('repl turn loop', () => {
   it('prints a reply and does not invent a second request', async () => {
@@ -55,6 +56,7 @@ describe('repl turn loop', () => {
     expect(seen.some((row) => row.includes('/refine'))).toBe(true);
     expect(seen.some((row) => row.startsWith('POST ') && row.endsWith('/api/submissions'))).toBe(true);
     expect(result.token).toBe('new-tok');
+    expect(result.slug).toBe('robot-garden');
     expect(lines.join('\n')).toContain('robot-garden');
   });
 
@@ -97,6 +99,7 @@ describe('repl turn loop', () => {
     });
     expect(opened.token).toBe('new-tok');
     expect(opened.draft).toBeNull();
+    expect(opened.slug).toBe('robot-garden');
   });
 
   it('treats a blank line as a no-op', async () => {
@@ -122,13 +125,37 @@ describe('repl turn loop', () => {
       fetch: async () => new Response('{}', { status: 404 }),
     });
     const result = await handleReplLine({
-      line: '/status tok',
+      line: '/connect sky',
       api,
       token: 'tok',
       write: (s) => lines.push(s),
     });
     expect(result.next).toBe('continue');
-    expect(lines.join('\n')).toBe('run it as gamedevpl status');
+    expect(lines.join('\n')).toBe('run it as gamedevpl connect');
+  });
+
+  it('prints the open session status from /status', async () => {
+    const lines: string[] = [];
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_oat_t', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url) => {
+        if (String(url).endsWith('/api/submissions/tok')) {
+          return new Response(JSON.stringify({ status: 'needs_changes', previewGate: { green: true } }), {
+            status: 200,
+          });
+        }
+        return new Response('{}', { status: 404 });
+      },
+    });
+    const result = await handleReplLine({
+      line: '/status',
+      api,
+      token: 'tok',
+      write: (s) => lines.push(s),
+    });
+    expect(result.next).toBe('continue');
+    expect(lines.join('\n')).toContain('needs_changes');
   });
 
   it('parses slash-verb flags the same way as argv', async () => {
@@ -151,5 +178,12 @@ describe('repl turn loop', () => {
     });
     expect(result.next).toBe('continue');
     expect(JSON.parse(lines.join('\n'))).toEqual({ submissions: [{ slug: 'sky-dodge' }] });
+  });
+});
+
+describe('repl banner', () => {
+  it('draws the mascot on a TTY and stays one line in a pipe', () => {
+    expect(replBanner(true, {})).toContain(MASCOT_ASCII);
+    expect(replBanner(false, {})).not.toContain('╭');
   });
 });

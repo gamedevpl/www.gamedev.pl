@@ -11,6 +11,13 @@ function emit(io: Io, asJson: boolean, data: unknown, line: string): void {
   io.stdout.write(asJson ? `${JSON.stringify(data)}\n` : `${line}\n`);
 }
 
+export function formatQuotaLine(data: Record<string, unknown>): string {
+  const submissions = data.submissions as { used?: number; limit?: number | null } | undefined;
+  if (!submissions || typeof submissions.used !== 'number') return JSON.stringify(data);
+  if (submissions.limit == null) return `${submissions.used} submissions today (no daily ceiling)`;
+  return `${submissions.used} of ${submissions.limit} submissions today`;
+}
+
 export async function dispatchReadVerb(input: {
   verb: string;
   args: string[];
@@ -37,7 +44,7 @@ export async function dispatchReadVerb(input: {
   }
   if (verb === 'quota') {
     const data = await api.request<Record<string, unknown>>('GET', '/api/me/quota');
-    emit(io, asJson, data, JSON.stringify(data));
+    emit(io, asJson, data, formatQuotaLine(data));
     return EXIT_GREEN;
   }
   if (verb === 'notifications') {

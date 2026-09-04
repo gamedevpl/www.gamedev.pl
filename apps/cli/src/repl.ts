@@ -1,14 +1,18 @@
 import { CLI_BIN, cliUsage } from './bin-name.js';
 import { glyphs, wantsColor } from './renderer.js';
 import { completeSlash, parseArgv, SLASH_VERBS, type SlashVerb } from './argv.js';
-import { postTurn } from './turn.js';
+import { getStatus, postTurn } from './turn.js';
+import { formatStatusLines } from './status-watch.js';
 import type { ApiClient } from './api.js';
 import { dispatchReadVerb } from './verbs.js';
 import { answerDraft, beginIntake, formatQuestion, submitIdea, type IntakeDraft } from './create.js';
+import { CLI_VERSION } from './update.js';
+import { MASCOT_ASCII } from './tui/mascot.js';
 
 export type ReplLineResult = {
   next: 'continue' | 'quit';
   token?: string | null;
+  slug?: string;
   draft?: IntakeDraft | null;
 };
 
@@ -19,7 +23,7 @@ async function openFromSpec(
 ): Promise<ReplLineResult> {
   const created = await submitIdea(api, spec.title, spec.concept);
   write(`▸ opened ${created.slug ?? created.token}`);
-  return { next: 'continue', token: created.token, draft: null };
+  return { next: 'continue', token: created.token, draft: null, slug: created.slug };
 }
 
 export async function handleReplLine(input: {
@@ -36,6 +40,20 @@ export async function handleReplLine(input: {
     const [cmd, ...rest] = trimmed.slice(1).split(/\s+/);
     if (cmd === 'help') {
       input.write(SLASH_VERBS.map((verb) => `/${verb}`).join('\n'));
+      return { next: 'continue' };
+    }
+    if (cmd === 'status') {
+      const tok = rest[0] || input.token;
+      if (!tok) {
+        input.write(`run it as ${cliUsage('status')}`);
+        return { next: 'continue' };
+      }
+      try {
+        const status = await getStatus(input.api, tok);
+        input.write(formatStatusLines(status, input.api.origin).join('\n'));
+      } catch (error) {
+        input.write(error instanceof Error ? error.message : String(error));
+      }
       return { next: 'continue' };
     }
     if (cmd && (SLASH_VERBS as readonly string[]).includes(cmd)) {
@@ -89,5 +107,6 @@ export async function handleReplLine(input: {
 
 export function replBanner(isTty: boolean, env: NodeJS.ProcessEnv): string {
   const g = glyphs(wantsColor(env, isTty));
-  return `${g.agent} ${CLI_BIN} — ${g.prompt} to talk, /help for verbs`;
+  const hint = `${g.agent} ${CLI_BIN} ${CLI_VERSION} — ${g.prompt} to talk, /help for verbs`;
+  return isTty ? `${MASCOT_ASCII}\n${hint}` : hint;
 }
