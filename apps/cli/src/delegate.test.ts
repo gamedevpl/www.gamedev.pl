@@ -26,9 +26,7 @@ describe('delegation credential boundary', () => {
     expect(env.PATH).toBe('/usr/bin');
   });
 
-  // A PAT is class-A too: it reaches the whole creator lifecycle, so it is a
-  // bigger prize than the round key we deliberately hand over. CI creators hold
-  // one under names we do not control, so the value pattern has to catch it.
+  // A PAT is class-A, so the child never sees one.
   it('strips creator PAT material under any variable name', () => {
     const env = childEnv(
       {

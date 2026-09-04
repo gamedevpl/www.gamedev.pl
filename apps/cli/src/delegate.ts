@@ -2,8 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { formatAdapterEvent, sanitizeEventPayload } from './ansi.js';
 import type { AdapterSpec } from './adapters.js';
 
-// Every account-scoped credential shape, not just OAuth. A PAT reaches the whole
-// creator lifecycle, so it must never ride into a sub-agent either.
+// A PAT reaches the whole account, not just one round.
 export const CREATOR_TOKEN_PATTERN = /gdpl_(oat|pat)_/;
 
 export function childEnv(parent: NodeJS.ProcessEnv, roundToken: string): NodeJS.ProcessEnv {
