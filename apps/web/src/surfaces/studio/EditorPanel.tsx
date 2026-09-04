@@ -555,6 +555,11 @@ export function EditorPanel(props: {
             : [];
         }),
         ...(layeredWideProblems.length > 0 ? ['Layers'] : []),
+        // Bridge-reported, so not in the declared constraints above. Guarded on
+        // controllerActive: a failed controller's stale checks must not strand Publish.
+        ...(controllerActive && props.controller?.checks && !props.controller.checks.ok
+          ? [t('studioPanel.editor.checksFromGame')]
+          : []),
       ]
     : [];
   const tilemapItem = item && isTilemapItem(item) ? item : null;

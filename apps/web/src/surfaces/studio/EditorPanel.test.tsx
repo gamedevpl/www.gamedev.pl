@@ -4,6 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n/index.js';
+import type { EditorControllerState } from '../../editorBridge.js';
 import type { EditorContentDoc, EditorDefinition, GameEditorState, StudioGame } from '../../studioApi.js';
 
 const fetchGameEditor = vi.hoisted(() => vi.fn());
@@ -79,6 +80,40 @@ async function renderEditor(editorPushRef?: { current: ((content: EditorContentD
     root!.render(<EditorPanel game={game} editorPushRef={editorPushRef} onOpenPlaytest={vi.fn()} onBack={vi.fn()} />);
     await Promise.resolve();
   });
+}
+
+/** A controller state with only the fields EditorPanel reads. */
+function controllerState(overrides: Partial<EditorControllerState> = {}): EditorControllerState {
+  return {
+    status: 'ready',
+    view: { kind: 'rail', children: [] } as unknown as EditorControllerState['view'],
+    reason: null,
+    selected: null,
+    pendingChange: null,
+    uiRequest: null,
+    checks: null,
+    canvasBox: null,
+    sendEvent: vi.fn(),
+    sendSelection: vi.fn(),
+    sendUiResult: vi.fn(),
+    acknowledgeChange: vi.fn(),
+    useFallback: vi.fn(),
+    ...overrides,
+  };
+}
+
+async function renderWithController(controller: EditorControllerState) {
+  root = createRoot(container);
+  await act(async () => {
+    root!.render(<EditorPanel game={game} controller={controller} onOpenPlaytest={vi.fn()} onBack={vi.fn()} />);
+    await Promise.resolve();
+  });
+}
+
+function publishButton(): HTMLButtonElement {
+  const button = container.querySelector<HTMLButtonElement>('.studio-head-action.is-primary');
+  expect(button).not.toBeNull();
+  return button!;
 }
 
 function dragSlider(value: string) {
@@ -281,5 +316,30 @@ describe('EditorPanel publish (not_sealed retry)', () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
     expect(publishEditorContent).toHaveBeenCalledTimes(1); // no runaway retries burning the rate limit
+  });
+});
+
+describe("EK2-29 — a controller's own checks gate Publish", () => {
+  it('disables Publish while the game reports its own validation problems', async () => {
+    await renderWithController(controllerState({ checks: { ok: false, problems: ['Needs at least one exit'] } }));
+
+    expect(publishButton().disabled).toBe(true);
+    // Named in the blocking list, so the creator knows what refuses.
+    expect(container.textContent).toContain(i18n.t('studioPanel.editor.checksFromGame'));
+  });
+
+  it('leaves Publish enabled once the game reports its checks green', async () => {
+    await renderWithController(controllerState({ checks: { ok: true, problems: [] } }));
+
+    expect(publishButton().disabled).toBe(false);
+  });
+
+  it('never strands Publish on a controller that failed — degrade, never break', async () => {
+    // Stale checks from a dead controller must not lock Publish.
+    await renderWithController(
+      controllerState({ status: 'failed', view: null, checks: { ok: false, problems: ['stale'] } }),
+    );
+
+    expect(publishButton().disabled).toBe(false);
   });
 });

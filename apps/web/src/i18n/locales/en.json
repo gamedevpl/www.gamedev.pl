@@ -535,6 +535,7 @@
       "checks": "Checks",
       "checksOk": "All checks pass",
       "checksElsewhere": "Fix before publishing: {{list}}",
+      "checksFromGame": "this game's own checks",
       "addItem": "Add {{name}}",
       "removeItem": "Remove",
       "empty": "Nothing to edit yet.",
