@@ -12,7 +12,7 @@
     "apps/api/scripts/remix-lane-judge.ts": 394,
     "apps/api/scripts/remix-lane-probe.ts": 221,
     "apps/api/scripts/remix-lane-sweep.ts": 313,
-    "apps/api/scripts/run-gate.ts": 744,
+    "apps/api/scripts/run-gate.ts": 692,
     "apps/api/scripts/slug-backfill.ts": 296,
     "apps/api/scripts/verify-erase-signals.ts": 217,
     "apps/api/src/agent-build-media.test.ts": 667,

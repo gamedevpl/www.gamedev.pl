@@ -46,8 +46,7 @@ import { createGcsGamesStore } from '../src/delivery/games-store.js';
 import { createLocalGamesClient } from '../src/catalog/local-games-repo.js';
 import { assembleGameHtml } from '../src/platform/assemble.js';
 
-// Not the repo's own dist/ build: assembleGameHtml applies our serve-time policy.
-// Assembled here, not at serve time, to share one definition across preview/publish/bake.
+// Not the repo's dist/ build — assembleGameHtml applies our serve-time policy.
 async function assembleFromHarness(harness: string, slug: string): Promise<string | null> {
   const client = createLocalGamesClient({ rootDir: harness });
   const sources = await client.getGameSources('main', slug);
@@ -60,8 +59,7 @@ async function assembleFromHarness(harness: string, slug: string): Promise<strin
     js: sources.gameJs,
     css: sources.styleCss,
   };
-  // Matches the bake and the play route exactly: a game is self-contained by repo
-  // policy, so it is locked to its own inline assets.
+  // Self-contained by repo policy, same as the bake and play route.
   return assembleGameHtml(project, { restrictNetwork: true });
 }
 
