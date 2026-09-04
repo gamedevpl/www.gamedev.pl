@@ -407,7 +407,7 @@ relay's failure modes.
 None of that is true any more. The platform owns build orchestration: a job state
 machine ([job-state.ts](../apps/api/src/creation/job-state.ts)), a backend seam every coding agent
 plugs into ([agent-backend.ts](../apps/api/src/agent-surface/agent-backend.ts)), and dispatch through
-the Copilot **agent tasks** API ([agent-tasks.ts](../apps/api/src/creation/agent-tasks.ts)) that
+the Copilot **agent tasks** API ([agent-tasks.ts](../apps/api/src/agent-surface/agent-tasks.ts)) that
 starts work from a bare prompt with no issue, no label, and no relay.
 
 What that changes for this plan, concretely:

@@ -2,7 +2,7 @@ import type { FastifyRequest } from 'fastify';
 import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
 import { DEFAULT_UPLOAD_URL_TTL_SECONDS, mintUploadToken, uploadCurlCommand } from './agent-upload-token.js';
-import { assertDeliverableSourcePath, InvalidUploadError } from '../delivery/games-store.js';
+import { InvalidUploadError } from '../platform/upload-error.js';
 import { decodeRasterSourceContent, encodeRasterSourceContent, isRasterSourcePath } from '../platform/raster-source.js';
 import { decodeCanonicalBase64Utf8, InvalidBase64Error } from '../platform/canonical-base64.js';
 import { largeSourceFileHint, moduleSizeWarnings } from '../creation/module-size.js';
@@ -64,6 +64,8 @@ export interface SourceStageToolsDeps {
   ) => Promise<{ statusCode: number; json: () => unknown }>;
   agentTokenSecret: string | undefined;
   now: () => number;
+  // N1: delivery's deliverable-path vocabulary, applied here without importing it.
+  assertDeliverableSourcePath: (path: string) => string;
 }
 
 export interface SourceStageToolEntry {
@@ -76,7 +78,7 @@ export interface SourceStageToolEntry {
 
 // Fetch existing sources, then push new content into staging.
 export function createSourceStageTools(deps: SourceStageToolsDeps): Record<string, SourceStageToolEntry> {
-  const { resolveAuth, injectChannel, agentTokenSecret, now } = deps;
+  const { resolveAuth, injectChannel, agentTokenSecret, now, assertDeliverableSourcePath } = deps;
 
   return {
     get_sources: {

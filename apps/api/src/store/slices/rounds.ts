@@ -1,5 +1,5 @@
 import type { Firestore } from '@google-cloud/firestore';
-import type { AgentTaskState } from '../../creation/agent-state.js';
+import type { AgentTaskState } from '../../platform/agent-state.js';
 import type { SeedFiles } from '../../agent-surface/agent-backend.js';
 import type { BuilderKind } from '../../creation/builder.js';
 import { nextRoundGeneration, type JobTransition } from '../../creation/job-state.js';

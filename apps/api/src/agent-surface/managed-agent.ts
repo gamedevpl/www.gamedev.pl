@@ -1,5 +1,6 @@
 // Vendor-neutral seam for hosted coding-agent platforms.
-import type { AgentTaskState } from '../creation/agent-state.js';
+import type { AgentTaskState } from '../platform/agent-state.js';
+import type { CopilotGitHubClientFactory } from './managed-provider-copilot.js';
 
 // Coarse reasoning budget; vendors name it differently.
 export type ManagedAgentEffort = 'low' | 'medium' | 'high';
@@ -190,6 +191,8 @@ export interface ManagedProviderConfig {
   baseUrl?: string;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
+  // Copilot: builds the Actions client that cancels a run.
+  githubClientFactory?: CopilotGitHubClientFactory;
 }
 
 export type ManagedProviderFactory = (config: ManagedProviderConfig) => ManagedAgentProvider;

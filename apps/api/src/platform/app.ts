@@ -13,7 +13,7 @@ import { registerAccessTokenRoutes, type AccessTokenRoutesOptions } from './acce
 import { registerClientAddress } from './client-address.js';
 import { registerProxyDiagnosticsRoutes } from './proxy-diagnostics.js';
 import { registerJobAdminRoutes } from '../creation/job-admin-routes.js';
-import { createGameSeederFromEnv } from '../agent-surface/agent-backend-env.js';
+import { createGameSeederFromEnv } from '../creation/seed-provider-env.js';
 import { createGcsGamesStore } from '../delivery/games-store.js';
 import { createGcsObjectStore } from '../delivery/gcs-sign.js';
 import { createQueryKnowledgeFromEnv } from '../creation/knowledge-search.js';
@@ -34,7 +34,10 @@ import { createSnapshotReaderFromEnv, type GameSnapshotStore } from '../catalog/
 import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
 import { registerCreatorCodeRoutes, type CreatorCodeRoutesOptions } from '../creation/creator-code.js';
 import { createKitFileStore } from '../agent-surface/kit-files.js';
-import { createSourceDeliveryService } from '../delivery/source-delivery.js';
+import { createSourceDeliveryService, isSourceDeliveryValidationError } from '../delivery/source-delivery.js';
+import { assertDeliverableSourcePath } from '../delivery/games-store.js';
+import { computeStageAdvisories } from '../delivery/stage-hints.js';
+import { loadBuildTranscript } from '../delivery/build-transcript.js';
 import { parseSpecTitle } from './spec-frontmatter.js';
 import {
   runTypecheckPreflight,
@@ -49,7 +52,8 @@ import { VertexEditorAssistant, type EditorAssistant } from '../creation/editor-
 import { VertexCodeLane } from '../creation/code-lane.js';
 import { VertexTabCompleter, type TabCompleter } from '../creation/tab-complete.js';
 import { registerRemixRoutes, MAX_REMIX_ID_LENGTH } from '../creation/remix.js';
-import { openProposal } from '../community/proposals.js';
+import { canProposeTo, openProposal, reconcileProposalGate, transitionProposal } from '../community/proposals.js';
+import { isProposerTurn, toPublicProposalState } from '../community/proposal-state.js';
 import { createEditingGate, createCreationGate, createTabCompleteGate } from '../creation/creation-limits.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { registerContactRoutes, type ContactRoutesOptions } from '../notifications/contact.js';
@@ -83,7 +87,7 @@ import { createDefaultThemeExtractor } from '../community/feedback-themes.js';
 import { createInternalAuthVerifierFromEnv } from './internal-auth.js';
 import { registerRefineRoute, type SpecRefiner } from '../creation/refine.js';
 import { BOT_UID_PREFIX, InMemoryStore, type Store } from './store.js';
-import { registerAgentChannelRoutes } from '../agent-surface/agent-channel.js';
+import { registerAgentChannelRoutes, type AgentChannelOptions } from '../agent-surface/agent-channel.js';
 import { registerMcpServerRoutes } from '../agent-surface/mcp-server.js';
 import { registerSubmissionRoutes, type SubmissionRoutesOptions } from '../submissions.js';
 import { mintToken } from './submission-token.js';
@@ -402,7 +406,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Env registry selects managed; explicit platform backends still win.
   const resolvedAgentBackends = options.submissionRoutes?.agentBackends;
 
-  const agentChannelOptions = {
+  const agentChannelOptions: AgentChannelOptions = {
     ...options.submissionRoutes?.agentChannel,
     // Without a bucket the delivery verb answers 503 rather than accepting an agent's
     // work and silently dropping it — which is the right behaviour for local
@@ -414,6 +418,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // and never verified, so it can never publish — the upload path would end in a
     // queue nobody drains.
     onSourcesDelivered: gateTrigger,
+    // N1: delivery's and creation's machinery, bound here rather than imported.
+    isSourceDeliveryValidationError,
+    computeStageAdvisories: (input) =>
+      computeStageAdvisories({ ...input, runTypecheckPreflight, sharedSourcesFromKitTree }),
+    loadBuildTranscript: (transcriptStore, record, opts) =>
+      loadBuildTranscript(transcriptStore, record, isMcpPresenceEventText, opts),
   };
 
   const platformConnectorSecret = options.platformConnectorSecret ?? process.env.COPILOT_MCP_CONNECTOR_SECRET;
@@ -429,26 +439,29 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     agentBackend: options.submissionRoutes?.agentBackend,
     // Self needs store callbacks inside registerSubmissionRoutes; do not pre-build it.
     agentBackends: resolvedAgentBackends,
-    managedBackendDeps:
-      options.submissionRoutes?.managedBackendDeps ??
-      (options.submissionRoutes?.agentBackend
-        ? undefined
-        : {
-            readSignals: async (jobId) => {
-              const record = await store.getSubmission(jobId);
-              return record
-                ? {
-                    deliveredVersion: record.deliveredVersion,
-                    previewVersion: record.previewVersion,
-                    agentEndedAt: record.agentEndedAt,
-                  }
-                : null;
-            },
-            readCredentialRef: async (jobId, sessionRef) => {
-              const record = await store.getSubmission(jobId);
-              return record?.dispatch?.credentialRefs?.[sessionRef];
-            },
-          }),
+    managedBackendDeps: {
+      // N1: catalog's GitHub client, built here for copilot's run cancel.
+      githubClientFactory: createGitHubClient,
+      ...(options.submissionRoutes?.managedBackendDeps ??
+        (options.submissionRoutes?.agentBackend
+          ? undefined
+          : {
+              readSignals: async (jobId: number) => {
+                const record = await store.getSubmission(jobId);
+                return record
+                  ? {
+                      deliveredVersion: record.deliveredVersion,
+                      previewVersion: record.previewVersion,
+                      agentEndedAt: record.agentEndedAt,
+                    }
+                  : null;
+              },
+              readCredentialRef: async (jobId: number, sessionRef: string) => {
+                const record = await store.getSubmission(jobId);
+                return record?.dispatch?.credentialRefs?.[sessionRef];
+              },
+            })),
+    },
     gameSeeder:
       options.submissionRoutes?.gameSeeder ?? createGameSeederFromEnv(app.log, knowledgeSearch, snapshotReader),
     agentChannel: agentChannelOptions,
@@ -473,6 +486,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // Proposal rounds: an agent contributing to a game its creator does not own.
     resolveProposalBase: resolveBaseForProposal,
     onSourcesDelivered: gateTrigger,
+    // N1: community's state machine and delivery's path rule, wired here.
+    proposals: {
+      canProposeTo,
+      openProposal,
+      reconcileProposalGate,
+      transitionProposal,
+      isProposerTurn,
+      toPublicProposalState,
+    },
+    assertDeliverableSourcePath,
   });
 
   // Multiplayer room relay (docs/multiplayer-plan.md). Registered after the auth

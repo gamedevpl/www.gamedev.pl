@@ -1,7 +1,5 @@
-import { type GamesStore } from './games-store.js';
+import type { GamesStore } from '../delivery/games-store.js';
 import { derivePreviewGateStatus } from '@gamedevpl/contract';
-
-export { deriveGateStatusString } from '@gamedevpl/contract';
 
 // Shared by the channel's gate route and MCP `start`.
 export interface GateVerdictSummary {

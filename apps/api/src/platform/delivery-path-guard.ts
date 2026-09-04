@@ -1,4 +1,4 @@
-import { DELIVERY_FIXED_FILES } from '../platform/games-repo-contract.js';
+import { DELIVERY_FIXED_FILES } from './games-repo-contract.js';
 
 const FORBIDDEN_DELIVERY_BASENAME =
   /^(tsconfig(\..*)?\.json|package(-lock)?\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|composer\.json|\.npmrc|\.eslintrc(\..*)?|vite\.config\..+|webpack\.config\..+|rollup\.config\..+|jest\.config\..+|vitest\.config\..+)$/i;

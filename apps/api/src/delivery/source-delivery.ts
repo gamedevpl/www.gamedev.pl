@@ -91,6 +91,11 @@ export class SourceDeliveryValidationError extends InvalidUploadError {
   }
 }
 
+// Narrowed here so a caller can read `reason` without importing the class.
+export function isSourceDeliveryValidationError(error: unknown): error is SourceDeliveryValidationError {
+  return error instanceof SourceDeliveryValidationError;
+}
+
 export interface SourceDeliveryService {
   deliver(input: SourceDeliveryInput): Promise<SourceDeliveryOutcome>;
 }

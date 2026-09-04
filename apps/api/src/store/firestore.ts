@@ -1,7 +1,7 @@
 import type { Store } from '../platform/store.js';
 import type { SeedFiles } from '../agent-surface/agent-backend.js';
 import type { ProposalState } from '../community/proposal-state.js';
-import type { AgentTaskState } from '../creation/agent-state.js';
+import type { AgentTaskState } from '../platform/agent-state.js';
 import type { BuilderKind } from '../creation/builder.js';
 import type { AgentSessionTokens, JobTransition } from '../creation/job-state.js';
 import type { PublicationHealthCheck, PublicationRecord } from '../delivery/games-store.js';

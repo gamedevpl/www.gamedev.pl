@@ -1,5 +1,4 @@
-import { detectStall, toSubmissionStatus } from '../creation/job-state.js';
-import { gateCrashStall } from './gate-crash.js';
+import { detectStall, gateCrashStall, toSubmissionStatus } from '../creation/job-state.js';
 import { sealRefusal } from '../platform/seal-preview.js';
 import { toRecentBuilds } from './recent-builds.js';
 import { revisionOriginOf } from './build-status.js';

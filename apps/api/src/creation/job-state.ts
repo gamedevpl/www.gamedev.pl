@@ -11,7 +11,7 @@
 // own — so the rules can be tested directly and reused by the status route, the
 // reconciler sweep, and the operator surface alike.
 
-import type { AgentTaskState } from './agent-state.js';
+import type { AgentTaskState } from '../platform/agent-state.js';
 import type { ManagedBudgetStop, ManagedSessionUsage } from '../agent-surface/managed-agent.js';
 import { JOB_STALL_VALUES, JOB_STATES, type BuilderKind, type JobStall, type JobState } from '@gamedevpl/contract';
 import type { SubmissionStatus } from '../platform/submission-status.js';
@@ -512,4 +512,48 @@ export function shouldAutoAbandonSelfRound(input: {
   if (!Number.isFinite(opened)) return false;
   const windowMs = input.connectDays * 24 * 60 * 60 * 1000;
   return input.now - opened >= windowMs;
+}
+
+// Append-ordered, so the last entry is current; `at` is not ordered.
+export function gateCrashStall(record: { state?: JobState; transitions?: JobTransition[] }): JobStall | null {
+  if (record.state !== 'needs_changes') return null;
+  const last = record.transitions?.[record.transitions.length - 1];
+  return last?.reason === 'gate_crashed' ? 'gate_crashed' : null;
+}
+
+/** Whether the current round is still live. */
+export function isActiveBuildRound(record: { state?: JobState; transitions?: JobTransition[] }): boolean {
+  const state = record.state;
+  switch (state) {
+    case 'queued':
+    case 'dispatched':
+    case 'building':
+    case 'submitted':
+    case 'publishing':
+      return true;
+    case 'needs_changes': {
+      const last = [...(record.transitions ?? [])].reverse().find((transition) => transition.to === 'needs_changes');
+      return last?.reason === 'gate_red' || last?.reason === 'kit_outdated';
+    }
+    default:
+      return false;
+  }
+}
+
+/** Stalls that unlock self→platform handoff. */
+const SELF_TO_PLATFORM_HANDOFF_STALLS: ReadonlySet<JobStall> = new Set(['ended', 'quiet', 'no_agent_yet']);
+
+/** Allows self→platform handoff after signal loss or creator confirmation. */
+export function allowsSelfToPlatformHandoff(input: {
+  currentBuilder: BuilderKind;
+  requestedBuilder: BuilderKind;
+  stall?: string | null;
+  /** When set, unlocks even if stall was overwritten by `gate_not_started`. */
+  agentEndedAt?: string | null;
+  creatorRequested?: boolean;
+}): boolean {
+  if (input.requestedBuilder !== 'platform' || input.currentBuilder !== 'self') return false;
+  if (input.creatorRequested) return true;
+  if (input.agentEndedAt) return true;
+  return typeof input.stall === 'string' && SELF_TO_PLATFORM_HANDOFF_STALLS.has(input.stall as JobStall);
 }

@@ -15,13 +15,13 @@
 //   2. `head_ref` is silently ignored without an open PR      (see AgentTaskInput.headRef)
 //   3. `model` echoes back namespaced, not as sent            (see normalizeModel)
 
-import { isAgentTaskState, type AgentTaskState } from './agent-state.js';
+import { isAgentTaskState, type AgentTaskState } from '../platform/agent-state.js';
 import { isRateLimitResponse } from '../platform/github-rate-limit.js';
 
 const AGENT_TASKS_API_VERSION = '2026-03-10';
 
 // Every backend shares this vocabulary, so it lives in agent-state.ts.
-export { AGENT_TASK_STATES, type AgentTaskState } from './agent-state.js';
+export { AGENT_TASK_STATES, type AgentTaskState } from '../platform/agent-state.js';
 
 /**
  * Models accepted by the API. GitHub notes the list "may change over time and depend on

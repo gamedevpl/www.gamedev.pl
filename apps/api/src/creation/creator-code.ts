@@ -25,7 +25,7 @@ import {
   MODULE_SOFT_LIMIT_LINES,
 } from './module-size.js';
 import { resolveRoundBaseVersion } from '../platform/round-base-version.js';
-import { applyExactReplace, applySourcePatch, SourcePatchError } from './source-patch.js';
+import { applyExactReplace, applySourcePatch, SourcePatchError } from '../platform/source-patch.js';
 import type { SourceDeliveryService } from '../delivery/source-delivery.js';
 import { hasPlayableOverlay, overlayGameSources, readDeliveredSources } from '../platform/game-overlay.js';
 import type { StagedPreviewPublisher } from '../delivery/staged-preview.js';

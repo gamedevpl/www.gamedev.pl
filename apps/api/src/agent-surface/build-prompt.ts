@@ -1,6 +1,6 @@
 // The brief every backend gives its agent. Rationale: docs/build-brief.md.
 
-import type { BuildBrief } from '../agent-surface/agent-backend.js';
+import type { BuildBrief } from './agent-backend.js';
 
 // Untrusted spec, fenced; delivery stated exactly once.
 export function buildPrompt(brief: BuildBrief): string {

@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { AGENT_CHANNEL_ROUTES, type BuilderKind } from '@gamedevpl/contract';
+import { AGENT_CHANNEL_ROUTES, deriveGateStatusString, type BuilderKind } from '@gamedevpl/contract';
 import {
   toolOk,
   toolErr,
@@ -23,7 +23,7 @@ import { createInboxTools } from './mcp-inbox-tools.js';
 import { createSeedTools } from './mcp-seed-tools.js';
 import { createRoundCardTools } from './mcp-round-card-tools.js';
 import { createGateMediaTools } from './mcp-gate-media-tools.js';
-import { createProposalTools } from './mcp-proposal-tools.js';
+import { createProposalTools, type ProposalDomain } from './mcp-proposal-tools.js';
 import { createSourceStageTools } from './mcp-source-stage-tools.js';
 import { createSourcePatchTools } from './mcp-source-patch-tools.js';
 import { createSourceSubmitTools } from './mcp-source-submit-tools.js';
@@ -65,8 +65,8 @@ import {
 } from '../platform/agent-token.js';
 import { selfBuildDeliveryCap } from '../platform/self-build-delivery-cap.js';
 import type { ManagedUnavailableReason } from './managed-availability.js';
-import { type GamesStore } from '../delivery/games-store.js';
-import { deriveGateStatusString, readGateVerdict } from '../delivery/gate-verdict.js';
+import type { GamesStore } from '../delivery/games-store.js';
+import { readGateVerdict } from './gate-verdict.js';
 import type { GcsObjectStore } from '../delivery/gcs-sign.js';
 import {
   assertMcpSessionKeyUnexpired,
@@ -228,6 +228,10 @@ export interface McpServerOptions {
   contentChecker?: ContentChecker;
   dailyImprovementQuota?: number;
   dailyFeedbackQuota?: number;
+  // N1: community's proposal state machine, wired at the composition root.
+  proposals: ProposalDomain;
+  // N1: delivery's deliverable-path vocabulary, applied without importing it.
+  assertDeliverableSourcePath: (path: string) => string;
 }
 
 interface JsonRpcRequest {
@@ -442,12 +446,13 @@ function startToolResult(structured: { sessionKey: string } & Record<string, unk
   };
 }
 
-export async function registerMcpServerRoutes(app: FastifyInstance, options: McpServerOptions = {}): Promise<void> {
+export async function registerMcpServerRoutes(app: FastifyInstance, options: McpServerOptions): Promise<void> {
   const store = options.store;
   const agentTokenSecret = options.agentTokenSecret ?? process.env.SUBMISSION_TOKEN_SECRET;
   const platformConnectorSecret = options.platformConnectorSecret;
   const now = options.now ?? Date.now;
   const allowedOrigins = options.allowedOrigins ?? parseAllowedOrigins();
+  const assertDeliverableSourcePath = options.assertDeliverableSourcePath;
   const startImprovementRound = options.startImprovementRound;
   const continueDraftRound = options.continueDraftRound;
   const createGame = options.createGame;
@@ -1282,6 +1287,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       resolveProposalBase: resolveProposalBaseFor,
       contentChecker,
       onSourcesDelivered: dispatchProposalGate,
+      proposals: options.proposals,
     }),
     ...createRoundReopenTools({
       store,
@@ -1301,7 +1307,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     ...createKitFileTools({ resolveAuth, injectChannel }),
     ...createSeedTools({ resolveAuth, injectChannel }),
 
-    ...createSourceStageTools({ resolveAuth, injectChannel, agentTokenSecret, now }),
+    ...createSourceStageTools({ resolveAuth, injectChannel, agentTokenSecret, now, assertDeliverableSourcePath }),
     ...createExampleTools({ resolveAuth, injectChannel }),
 
     ...createSourcePatchTools({ resolveAuth, injectChannel }),

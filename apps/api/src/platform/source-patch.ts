@@ -310,4 +310,7 @@ export function applyMultipleExactReplaces(input: ApplyMultipleExactReplacesInpu
 }
 
 /** @deprecated Prefer {@link largeSourceFileHint} from `module-size.js`. Re-exported for callers. */
-export { largeSourceFileHint, MODULE_SOFT_LIMIT_BYTES as LARGE_SOURCE_FILE_HINT_BYTES } from './module-size.js';
+export {
+  largeSourceFileHint,
+  MODULE_SOFT_LIMIT_BYTES as LARGE_SOURCE_FILE_HINT_BYTES,
+} from '../creation/module-size.js';

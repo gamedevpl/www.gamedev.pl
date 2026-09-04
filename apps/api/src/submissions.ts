@@ -44,11 +44,11 @@ import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './
 import type { AgentBackend, SeedFiles } from './agent-surface/agent-backend.js';
 import {
   createAgentBackendRegistryFromEnv,
-  createSeedProvidersFromEnv,
   resolveBuilderBackend,
   type AgentBackendRegistry,
   type ManagedBackendDeps,
 } from './agent-surface/agent-backend-env.js';
+import { createSeedProvidersFromEnv } from './creation/seed-provider-env.js';
 import { createSeedAvailabilityGate, type SeedAvailabilityGate } from './creation/seed-availability.js';
 import { isActiveBuildRound, type BuilderKind } from './creation/builder.js';
 import { codeSurfaceEnabled, isLiveAgentRound } from './creation/code-surface.js';

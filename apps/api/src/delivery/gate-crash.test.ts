@@ -3,11 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createCloudBuildOutcomeReader,
   createGateCrashProbe,
-  gateCrashStall,
   lastGateRunRef,
   outcomeFromBuildStatus,
   type GateCrashProbeDeps,
 } from './gate-crash.js';
+import { gateCrashStall } from '../creation/job-state.js';
 import type { SubmissionRecord } from '../platform/store.js';
 
 const NOW = Date.parse('2026-08-21T09:00:00.000Z');

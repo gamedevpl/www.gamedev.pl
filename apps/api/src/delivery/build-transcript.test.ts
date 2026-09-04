@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  DEFAULT_TRANSCRIPT_WINDOW_ENTRIES,
-  loadBuildTranscript,
-  MAX_TRANSCRIPT_LIST_ENTRIES,
-  MAX_TRANSCRIPT_ROUNDS,
-  MAX_TRANSCRIPT_WINDOW_ENTRIES,
-} from './build-transcript.js';
+import { loadBuildTranscript, MAX_TRANSCRIPT_LIST_ENTRIES, MAX_TRANSCRIPT_ROUNDS } from './build-transcript.js';
+import { DEFAULT_TRANSCRIPT_WINDOW_ENTRIES, MAX_TRANSCRIPT_WINDOW_ENTRIES } from '../platform/transcript-window.js';
 import { PLAYTEST_CONTEXT_HEADER, stripPlaytestContext } from '../platform/playtest-context.js';
 import { isMcpPresenceEventText, mcpPresenceText } from '../agent-surface/mcp-presence.js';
 import type { CreatorMessage, Store, SubmissionRecord } from '../platform/store.js';

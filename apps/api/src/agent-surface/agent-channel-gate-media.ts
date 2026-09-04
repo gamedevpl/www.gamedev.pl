@@ -1,11 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { AGENT_CHANNEL_ROUTES, MAX_AGENT_SHOT_BYTES } from '@gamedevpl/contract';
+import { AGENT_CHANNEL_ROUTES, MAX_AGENT_SHOT_BYTES, deriveGateStatusString } from '@gamedevpl/contract';
 import { STALE_AGENT_TOKEN_REASON } from '../platform/agent-token.js';
 import type { AgentTokenAccess } from '../platform/agent-token.js';
-import { deriveGateStatusString, type GateVerdictSummary } from '../delivery/gate-verdict.js';
+import type { GateVerdictSummary } from './gate-verdict.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from '../delivery/gcs-sign.js';
-import { gateCrashStall } from '../delivery/gate-crash.js';
-import { parseGameMedia } from '../catalog/github-client.js';
+import { gateCrashStall } from '../creation/job-state.js';
+import { parseGameMedia } from '../platform/game-media.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { SubmissionRecord } from '../platform/store.js';
 

@@ -4,7 +4,7 @@ import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import { decodeRasterSourceContent, encodeRasterSourceContent, isRasterSourcePath } from '../platform/raster-source.js';
 import { decodeCanonicalBase64Utf8, InvalidBase64Error } from '../platform/canonical-base64.js';
 import { selfBuildDeliveryCap } from '../platform/self-build-delivery-cap.js';
-import { MAX_UPLOAD_FILES } from '../delivery/games-store.js';
+import { DELIVERY_MAX_FILES } from '../platform/games-repo-contract.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import {
   toolOk,
@@ -26,7 +26,7 @@ const CONSUMES = {
   openWorldHint: false,
 } as const;
 
-const MAX_SUBMIT_FILES = MAX_UPLOAD_FILES;
+const MAX_SUBMIT_FILES = DELIVERY_MAX_FILES;
 
 interface AuthedSubmitJob {
   jobId: number;
