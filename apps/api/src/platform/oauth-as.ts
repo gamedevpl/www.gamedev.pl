@@ -557,6 +557,7 @@ export function registerOAuthAuthorizationServerRoutes(
         refreshExpiresAt: new Date(nowMs + AS_REFRESH_TOKEN_TTL_MS).toISOString(),
         accessToken: accessRecord,
         nowMs,
+        scope: consumed.scope,
       });
       if (!issued) return reply.status(400).send({ error: 'invalid_grant' });
 
@@ -565,7 +566,7 @@ export function registerOAuthAuthorizationServerRoutes(
         refresh_token: refresh.token,
         expires_in: Math.floor(AS_ACCESS_TOKEN_TTL_MS / 1000),
         token_type: 'Bearer',
-        scope: grant.scope,
+        scope: issued.scope,
       });
     }
 

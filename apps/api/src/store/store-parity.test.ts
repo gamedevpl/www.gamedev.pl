@@ -72,7 +72,7 @@ describeStoreContract('oauth', (makeStore) => {
       grantId: 'grant-issue',
       clientId: 'client-1',
       ownerUid: 'g:user-1',
-      scope: 'creator',
+      scope: 'mcp creator',
       createdAt: '2026-08-22T00:00:00Z',
       refreshFamilyId: 'grant-issue',
       currentRefreshTokenId: '',
@@ -96,12 +96,32 @@ describeStoreContract('oauth', (makeStore) => {
       },
     });
     expect(first?.currentRefreshTokenId).toBe('refresh-a');
+    const rotated = await store.rotateOAuthRefreshToken({
+      refreshTokenId: 'refresh-a',
+      refreshSecretHash: 'hash-a',
+      newRefreshTokenId: 'refresh-rot',
+      newRefreshHash: 'hash-rot',
+      newRefreshExpiresAt: '2026-09-22T00:00:00Z',
+      nowMs,
+      newAccessToken: {
+        tokenId: 'access-rot',
+        grantId: 'grant-issue',
+        ownerUid: 'g:user-1',
+        secretHash: 'secret-rot',
+        expiresAt: '2026-08-22T01:00:00Z',
+        createdAt: '2026-08-22T00:10:00Z',
+      },
+    });
+    expect(rotated.ok).toBe(true);
+    expect(await store.getOAuthGrantByRefreshTokenId('refresh-a')).toMatchObject({ grantId: 'grant-issue' });
+
     const second = await store.issueOAuthTokensFromGrant({
       grantId: 'grant-issue',
       refreshTokenId: 'refresh-b',
       refreshHash: 'hash-b',
       refreshExpiresAt: '2026-09-22T00:00:00Z',
       nowMs,
+      scope: 'creator',
       accessToken: {
         tokenId: 'access-b',
         grantId: 'grant-issue',
@@ -112,8 +132,30 @@ describeStoreContract('oauth', (makeStore) => {
       },
     });
     expect(second?.currentRefreshTokenId).toBe('refresh-b');
+    expect(second?.scope).toBe('creator');
     expect(await store.getOAuthGrantByRefreshTokenId('refresh-a')).toBeNull();
+    expect(await store.getOAuthGrantByRefreshTokenId('refresh-rot')).toBeNull();
     expect(await store.getOAuthGrantByRefreshTokenId('refresh-b')).toMatchObject({ grantId: 'grant-issue' });
+
+    const stale = await store.rotateOAuthRefreshToken({
+      refreshTokenId: 'refresh-a',
+      refreshSecretHash: 'hash-a',
+      newRefreshTokenId: 'refresh-stale',
+      newRefreshHash: 'hash-stale',
+      newRefreshExpiresAt: '2026-09-22T00:00:00Z',
+      nowMs,
+      newAccessToken: {
+        tokenId: 'access-stale',
+        grantId: 'grant-issue',
+        ownerUid: 'g:user-1',
+        secretHash: 'secret-stale',
+        expiresAt: '2026-08-22T01:00:00Z',
+        createdAt: '2026-08-22T00:10:00Z',
+      },
+    });
+    expect(stale).toEqual({ ok: false, reason: 'invalid' });
+    expect((await store.getOAuthGrant('grant-issue'))?.revokedAt).toBeUndefined();
+    expect((await store.getOAuthGrant('grant-issue'))?.currentRefreshTokenId).toBe('refresh-b');
   });
 
   it('deletes an access token once, then reports nothing left to delete', async () => {

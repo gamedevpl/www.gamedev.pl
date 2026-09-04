@@ -1344,6 +1344,7 @@ export class FirestoreStore implements Store {
     refreshExpiresAt: string;
     accessToken: OAuthAccessTokenRecord;
     nowMs: number;
+    scope?: string;
   }): Promise<OAuthGrantRecord | null> {
     return this.oauthStore.issueOAuthTokensFromGrant(input);
   }

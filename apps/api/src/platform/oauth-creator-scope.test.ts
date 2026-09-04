@@ -252,13 +252,7 @@ describe('OAuth creator scope (CL-04..CL-07, CL-09)', () => {
     await store.upsertUser({ uid: 'g:boss' });
     app = await buildOAuthApp(store);
     const first = await mintCreatorTokens(app, { uid: 'g:boss', device: 'sputnik-2' });
-    const second = await mintCreatorTokens(app, { uid: 'g:boss', device: 'sputnik-2' });
-    expect(first.access_token).toBeTruthy();
-    expect(second.access_token).toBeTruthy();
-    expect(first.refresh_token).not.toBe(second.refresh_token);
-    expect(await store.listOAuthGrantsByOwner('g:boss')).toHaveLength(1);
-
-    const stale = await app.inject({
+    const rotated = await app.inject({
       method: 'POST',
       url: '/oauth/token',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -267,8 +261,41 @@ describe('OAuth creator scope (CL-04..CL-07, CL-09)', () => {
         refresh_token: first.refresh_token,
       }).toString(),
     });
-    expect(stale.statusCode).toBe(400);
+    expect(rotated.statusCode).toBe(200);
+    const rotatedRefresh = (rotated.json() as { refresh_token: string }).refresh_token;
 
+    const second = await mintCreatorTokens(app, { uid: 'g:boss', device: 'sputnik-2' });
+    expect(first.access_token).toBeTruthy();
+    expect(second.access_token).toBeTruthy();
+    expect(await store.listOAuthGrantsByOwner('g:boss')).toHaveLength(1);
+
+    for (const refresh of [first.refresh_token, rotatedRefresh]) {
+      const stale = await app.inject({
+        method: 'POST',
+        url: '/oauth/token',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        payload: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refresh }).toString(),
+      });
+      expect(stale.statusCode).toBe(400);
+    }
+
+    const profile = await app.inject({
+      method: 'GET',
+      url: '/api/me/profile',
+      headers: { authorization: `Bearer ${second.access_token}` },
+    });
+    expect(profile.statusCode).toBe(200);
+  });
+
+  it('replaces a reused grant scope with the newly approved one', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    app = await buildOAuthApp(store);
+    const broad = await mintCreatorTokens(app, { uid: 'g:boss', device: 'sputnik-2', scope: 'mcp creator' });
+    expect(broad.scope).toBe('mcp creator');
+    const second = await mintCreatorTokens(app, { uid: 'g:boss', device: 'sputnik-2', scope: 'creator' });
+    expect(second.scope).toBe('creator');
+    expect((await store.listOAuthGrantsByOwner('g:boss'))[0]?.scope).toBe('creator');
     const profile = await app.inject({
       method: 'GET',
       url: '/api/me/profile',
