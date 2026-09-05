@@ -60,15 +60,27 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
 
-      - name: Build image via Cloud Build
+      - name: Build and push image
+        # Built on this runner, not in Cloud Build. CI already builds this exact Dockerfile
+        # here for its image-boot check, so every master push was paying Cloud Build to do
+        # it a second time — 627 builds and ~1,900 default-pool minutes in August 2026, for
+        # work GitHub's runner does inside its free allowance. infra/cloudbuild.yaml stays
+        # as the hand-run path behind infra/deploy-api.sh.
+        env:
+          VITE_GOOGLE_OAUTH_CLIENT_ID: ${{ vars.GOOGLE_OAUTH_CLIENT_ID }}
+          VITE_APPLE_SERVICES_ID: ${{ vars.APPLE_SERVICES_ID }}
+          VITE_MP_RELAY_URL: ${{ vars.MP_RELAY_URL }}
         run: |
           SHORT_SHA=$(echo "${DEPLOY_SHA}" | cut -c1-7)
           IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/app:${SHORT_SHA}"
           echo "IMAGE=${IMAGE}" >> $GITHUB_ENV
-          gcloud builds submit . \
-            --config infra/cloudbuild.yaml \
-            --substitutions "_IMAGE=${IMAGE},_GOOGLE_OAUTH_CLIENT_ID=${{ vars.GOOGLE_OAUTH_CLIENT_ID }},_APPLE_SERVICES_ID=${{ vars.APPLE_SERVICES_ID }},_MP_RELAY_URL=${{ vars.MP_RELAY_URL }}" \
-            --project "$PROJECT_ID"
+          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+          docker build -f apps/api/Dockerfile \
+            --build-arg "VITE_GOOGLE_OAUTH_CLIENT_ID=${VITE_GOOGLE_OAUTH_CLIENT_ID}" \
+            --build-arg "VITE_APPLE_SERVICES_ID=${VITE_APPLE_SERVICES_ID}" \
+            --build-arg "VITE_MP_RELAY_URL=${VITE_MP_RELAY_URL}" \
+            -t "${IMAGE}" .
+          docker push "${IMAGE}"
 
       - name: Deploy candidate revision to Cloud Run
         # Repo variables arrive as step env rather than being interpolated into the script.
@@ -91,6 +103,8 @@ jobs:
           EDITOR_ASSIST: ${{ vars.EDITOR_ASSIST }}
           GOOGLE_OAUTH_CLIENT_ID: ${{ vars.GOOGLE_OAUTH_CLIENT_ID }}
           HEALTH_SWEEP_AUDIENCE: ${{ vars.HEALTH_SWEEP_AUDIENCE }}
+          SEED_DISPATCH_AUDIENCE: ${{ vars.SEED_DISPATCH_AUDIENCE }}
+          SEED_DISPATCH_SA: ${{ vars.SEED_DISPATCH_SA }}
           HEALTH_SWEEP_BATCH: ${{ vars.HEALTH_SWEEP_BATCH }}
           KNOWLEDGE_SEARCH_COLLECTION: ${{ vars.KNOWLEDGE_SEARCH_COLLECTION }}
           KNOWLEDGE_SEARCH_ENGINE_ID: ${{ vars.KNOWLEDGE_SEARCH_ENGINE_ID }}
@@ -271,7 +285,7 @@ jobs:
           PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
           SWEEP_SA="notify-sweep@${PROJECT_ID}.iam.gserviceaccount.com"
           ACCOUNT_DELETION_SWEEP_URL="https://${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app/api/internal/account-deletion-sweep"
-          ENV_VARS="^|^GAMES_REPO=${GAMES_REPO}|GAMES_SNAPSHOT_BUCKET=${GAMES_SNAPSHOT_BUCKET}|GAMES_STORE_BUCKET=${GAMES_STORE_BUCKET}|GATE_BUILD_PROJECT=${PROJECT_ID}|GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}|APPLE_CLIENT_IDS=${APPLE_CLIENT_IDS}|WEB_ORIGIN=https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl|CANONICAL_HOST=www.gamedev.pl|MCP_AUTHORIZATION_SERVERS=https://www.gamedev.pl|PRIVATE_BETA=true|PUBLIC_PLAY_SLUGS=${PUBLIC_PLAY_SLUGS_VAL}|EDITORKIT_V2=${EDITORKIT_V2_VAL}|BETA_ALLOWED_UIDS=${BETA_ALLOWED_UIDS}|BETA_ALLOWED_EMAILS=${BETA_ALLOWED_EMAILS}|ADMIN_UIDS=${ADMIN_UIDS}|REVIEWER_UIDS=${REVIEWER_UIDS}|NOTIFY_SWEEP_AUDIENCE=${NOTIFY_SWEEP_AUDIENCE}|NOTIFY_SWEEP_SA=${SWEEP_SA}|SCORECARD_SWEEP_AUDIENCE=${SCORECARD_SWEEP_AUDIENCE}|DIGEST_SWEEP_AUDIENCE=${DIGEST_SWEEP_AUDIENCE}|SUGGESTION_SWEEP_AUDIENCE=${SUGGESTION_SWEEP_AUDIENCE}|HEALTH_SWEEP_AUDIENCE=${HEALTH_SWEEP_AUDIENCE}|DISPATCH_REAPER_AUDIENCE=${DISPATCH_REAPER_AUDIENCE}|SPEND_BRAKE_AUDIENCE=${SPEND_BRAKE_AUDIENCE}|SPEND_BRAKE_CALLER_SA=${SPEND_BRAKE_CALLER_SA}|ACCOUNT_DELETION_SWEEP_AUDIENCE=${ACCOUNT_DELETION_SWEEP_URL}|VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}|VAPID_SUBJECT=${VAPID_SUBJECT}|OPENAI_APPS_CHALLENGE_TOKEN=${OPENAI_APPS_CHALLENGE_TOKEN}|TRUST_EDGE_CLIENT_IP=${TRUST_EDGE_CLIENT_IP:-false}"
+          ENV_VARS="^|^GAMES_REPO=${GAMES_REPO}|GAMES_SNAPSHOT_BUCKET=${GAMES_SNAPSHOT_BUCKET}|GAMES_STORE_BUCKET=${GAMES_STORE_BUCKET}|GATE_BUILD_PROJECT=${PROJECT_ID}|GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}|APPLE_CLIENT_IDS=${APPLE_CLIENT_IDS}|WEB_ORIGIN=https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl|CANONICAL_HOST=www.gamedev.pl|MCP_AUTHORIZATION_SERVERS=https://www.gamedev.pl|PRIVATE_BETA=true|PUBLIC_PLAY_SLUGS=${PUBLIC_PLAY_SLUGS_VAL}|EDITORKIT_V2=${EDITORKIT_V2_VAL}|BETA_ALLOWED_UIDS=${BETA_ALLOWED_UIDS}|BETA_ALLOWED_EMAILS=${BETA_ALLOWED_EMAILS}|ADMIN_UIDS=${ADMIN_UIDS}|REVIEWER_UIDS=${REVIEWER_UIDS}|NOTIFY_SWEEP_AUDIENCE=${NOTIFY_SWEEP_AUDIENCE}|NOTIFY_SWEEP_SA=${SWEEP_SA}|SCORECARD_SWEEP_AUDIENCE=${SCORECARD_SWEEP_AUDIENCE}|DIGEST_SWEEP_AUDIENCE=${DIGEST_SWEEP_AUDIENCE}|SUGGESTION_SWEEP_AUDIENCE=${SUGGESTION_SWEEP_AUDIENCE}|HEALTH_SWEEP_AUDIENCE=${HEALTH_SWEEP_AUDIENCE}|DISPATCH_REAPER_AUDIENCE=${DISPATCH_REAPER_AUDIENCE}|SPEND_BRAKE_AUDIENCE=${SPEND_BRAKE_AUDIENCE}|SPEND_BRAKE_CALLER_SA=${SPEND_BRAKE_CALLER_SA}|SEED_DISPATCH_AUDIENCE=${SEED_DISPATCH_AUDIENCE}|SEED_DISPATCH_SA=${SEED_DISPATCH_SA}|ACCOUNT_DELETION_SWEEP_AUDIENCE=${ACCOUNT_DELETION_SWEEP_URL}|VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}|VAPID_SUBJECT=${VAPID_SUBJECT}|OPENAI_APPS_CHALLENGE_TOKEN=${OPENAI_APPS_CHALLENGE_TOKEN}|TRUST_EDGE_CLIENT_IP=${TRUST_EDGE_CLIENT_IP:-false}"
           for MANAGED_VAR in MANAGED_AGENT_VENDOR MANAGED_AGENT_MODEL MANAGED_AGENT_GEMINI_MODEL MANAGED_AGENT_OPENAI_MODEL MANAGED_AGENT_ID MANAGED_AGENT_ENVIRONMENT_ID MANAGED_AGENT_MAX_SECONDS MANAGED_AGENT_MAX_LIST_COST_CENTS MANAGED_AGENT_COPILOT_MAX_CREDITS MANAGED_AGENT_MAX_TOTAL_TOKENS MANAGED_AGENT_VAULT_IDS MANAGED_AGENT_MCP_URL MANAGED_AGENT_DELIVERY_MODE MANAGED_AGENT_COPILOT_MCP_REPO MANAGED_AGENT_COPILOT_MCP_BASE_REF MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT; do
             MANAGED_VAL="${!MANAGED_VAR}"
             if [ -n "$MANAGED_VAL" ]; then
@@ -459,7 +473,8 @@ jobs:
             --allow-unauthenticated \
             --min-instances 0 \
             --max-instances "$MAX_INSTANCES" \
-            --no-cpu-throttling \
+            --cpu-throttling \
+            --timeout 900 \
             --memory 1Gi \
             --port 8080 \
             --set-env-vars "$ENV_VARS" \
@@ -848,8 +863,10 @@ jobs:
 
           if [ "$NEEDS_BUILD" = true ]; then
             echo "Building ${TARGET_IMAGE}"
-            gcloud builds submit . --config infra/cloudbuild-world.yaml \
-              --substitutions "_IMAGE=${TARGET_IMAGE}" --project "$PROJECT_ID"
+            # Same runner-side build as the app image, for the same reason.
+            gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+            docker build -f apps/world/Dockerfile -t "${TARGET_IMAGE}" .
+            docker push "${TARGET_IMAGE}"
             # --image alone, never --set-env-vars: this step must not be able to
             # reconfigure the zone host by omission. Its env and secrets are
             # deploy-world.sh's business.

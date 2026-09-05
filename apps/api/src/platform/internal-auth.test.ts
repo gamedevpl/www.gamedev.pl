@@ -82,6 +82,20 @@ describe('createInternalAuthVerifierFromEnv', () => {
     expect(v).toBeInstanceOf(OidcInternalAuthVerifier);
   });
 
+  it('opens the seed handoff only for its own audience and the runtime SA', () => {
+    const env = {
+      SEED_DISPATCH_AUDIENCE: 'https://svc/api/internal/seed',
+      SEED_DISPATCH_SA: 'runtime@proj.iam.gserviceaccount.com',
+      NOTIFY_SWEEP_SA: 'sched@proj.iam.gserviceaccount.com',
+    } as NodeJS.ProcessEnv;
+    expect(createInternalAuthVerifierFromEnv(env, 'seedDispatch')).toBeInstanceOf(OidcInternalAuthVerifier);
+    // The scheduler's SA must not open the seed route.
+    const { SEED_DISPATCH_SA: _omit, ...withoutRuntimeSa } = env;
+    expect(createInternalAuthVerifierFromEnv(withoutRuntimeSa as NodeJS.ProcessEnv, 'seedDispatch')).toBeInstanceOf(
+      DenyAllInternalAuthVerifier,
+    );
+  });
+
   it('will not open the spend brake to the scheduler identity', () => {
     // Arming the brake must not mean editing the sweeps' identity.
     const withSweepSaOnly = createInternalAuthVerifierFromEnv(

@@ -539,6 +539,10 @@ export class FirestoreStore implements Store {
     return this.submissionStore.setSubmissionClarificationCount(jobId, count);
   }
 
+  async setSubmissionDispatchBrief(jobId: number, brief: string): Promise<void> {
+    return this.submissionStore.setSubmissionDispatchBrief(jobId, brief);
+  }
+
   async setSubmissionBrief(
     jobId: number,
     brief: { spec: string; qa: string[]; specIsSystemGenerated?: boolean },
@@ -702,6 +706,10 @@ export class FirestoreStore implements Store {
 
   async claimDispatchReaperAttempt(jobId: number, at: string): Promise<boolean> {
     return this.dispatchStore.claimDispatchReaperAttempt(jobId, at);
+  }
+
+  async claimInitialDispatch(jobId: number, at: string): Promise<boolean> {
+    return this.dispatchStore.claimInitialDispatch(jobId, at);
   }
 
   async checkAndIncrementQuota(

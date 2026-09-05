@@ -74,6 +74,8 @@ const AUDIENCE_ENV_VAR = {
   // token, audience-pinned to the callee's URL — so it reuses this seam rather than
   // growing a second one. Its caller identity differs, hence its own SA env var below.
   mpRelay: 'MP_RELAY_AUDIENCE',
+  // App calling itself for seeding (seed-dispatch.ts); runtime SA.
+  seedDispatch: 'SEED_DISPATCH_AUDIENCE',
 } as const;
 
 export type InternalSweep = keyof typeof AUDIENCE_ENV_VAR;
@@ -84,6 +86,7 @@ export type InternalSweep = keyof typeof AUDIENCE_ENV_VAR;
 const CALLER_SA_ENV_VAR: Partial<Record<InternalSweep, string>> = {
   mpRelay: 'MP_RELAY_CALLER_SA',
   spendBrake: 'SPEND_BRAKE_CALLER_SA',
+  seedDispatch: 'SEED_DISPATCH_SA',
 };
 
 /**
