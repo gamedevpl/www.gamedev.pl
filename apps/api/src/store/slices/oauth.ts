@@ -46,7 +46,7 @@ export interface OAuthStore {
     nowMs: number;
   }): Promise<RotateRefreshTokenResult>;
 
-  // First token issue after authorization_code exchange (no refresh yet).
+  // Issue or replace the refresh family after an authorization_code exchange.
   issueOAuthTokensFromGrant(input: {
     grantId: string;
     refreshTokenId: string;
@@ -54,6 +54,7 @@ export interface OAuthStore {
     refreshExpiresAt: string;
     accessToken: OAuthAccessTokenRecord;
     nowMs: number;
+    scope?: string;
   }): Promise<OAuthGrantRecord | null>;
 }
 
@@ -189,13 +190,17 @@ export class InMemoryOAuthStore implements OAuthStore {
     refreshExpiresAt: string;
     accessToken: OAuthAccessTokenRecord;
     nowMs: number;
+    scope?: string;
   }): Promise<OAuthGrantRecord | null> {
     const grant = this.oauthGrants.get(input.grantId);
     if (!grant || grant.revokedAt) return null;
-    if (grant.currentRefreshTokenId) return null;
+    for (const [tokenId, grantId] of this.oauthRefreshTokenIndex) {
+      if (grantId === input.grantId) this.oauthRefreshTokenIndex.delete(tokenId);
+    }
 
     const updated: OAuthGrantRecord = {
       ...grant,
+      ...(input.scope ? { scope: input.scope } : {}),
       currentRefreshTokenId: input.refreshTokenId,
       currentRefreshHash: input.refreshHash,
       refreshExpiresAt: input.refreshExpiresAt,
@@ -377,17 +382,21 @@ export class FirestoreOAuthStore implements OAuthStore {
     refreshExpiresAt: string;
     accessToken: OAuthAccessTokenRecord;
     nowMs: number;
+    scope?: string;
   }): Promise<OAuthGrantRecord | null> {
     const grantRef = this.db.collection('oauthGrants').doc(input.grantId);
+    const indexQuery = this.db.collection('oauthRefreshTokens').where('grantId', '==', input.grantId);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(grantRef);
       if (!snap.exists) return null;
       const grant = snap.data() as OAuthGrantRecord;
       if (grant.revokedAt) return null;
-      if (grant.currentRefreshTokenId) return null;
+      const indexes = await tx.get(indexQuery);
+      for (const doc of indexes.docs) tx.delete(doc.ref);
 
       const updated: OAuthGrantRecord = {
         ...grant,
+        ...(input.scope ? { scope: input.scope } : {}),
         currentRefreshTokenId: input.refreshTokenId,
         currentRefreshHash: input.refreshHash,
         refreshExpiresAt: input.refreshExpiresAt,

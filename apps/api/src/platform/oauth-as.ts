@@ -9,11 +9,18 @@ import { isRateLimited } from './ip-rate-limit.js';
 import { cliSurfaceEnabled } from './cli-surface.js';
 import { DEVICE_GRANT_TYPE, exchangeDeviceCode, registerOAuthDeviceRoutes } from './oauth-device.js';
 import { consentHtml, consentToken, consentTokenValid } from './oauth-consent.js';
-import { gamedevCliClient, gamedevCliGrantLabel, isGamedevCliClient, sanitizeDeviceName } from './oauth-first-party.js';
+import {
+  gamedevCliClient,
+  gamedevCliGrantLabel,
+  isGamedevCliClient,
+  sameCliDeviceGrant,
+  sanitizeDeviceName,
+} from './oauth-first-party.js';
 import {
   advertisedOAuthScopes,
   formatOAuthScope,
   MAX_OAUTH_GRANTS_PER_UID,
+  OAUTH_GRANT_CAP_DESCRIPTION,
   parseOAuthScopes,
   scopeHasMcp,
 } from './oauth-scopes.js';
@@ -206,10 +213,11 @@ function clientLabel(client: OAuthClientRecord, grant?: OAuthGrantRecord, redire
   return client.clientId;
 }
 
-function oauthErrorRedirect(redirectUri: string, error: string, state?: string): string {
+function oauthErrorRedirect(redirectUri: string, error: string, state?: string, description?: string): string {
   const url = new URL(redirectUri);
   url.searchParams.set('error', error);
   if (state) url.searchParams.set('state', state);
+  if (description) url.searchParams.set('error_description', description);
   return url.toString();
 }
 
@@ -437,8 +445,11 @@ export function registerOAuthAuthorizationServerRoutes(
 
     const nowMs = now();
     const held = await store.listOAuthGrantsByOwner(uid);
-    if (held.length >= MAX_OAUTH_GRANTS_PER_UID) {
-      return reply.redirect(oauthErrorRedirect(params.redirect_uri, 'access_denied', params.state));
+    const reused = held.find((grant) => sameCliDeviceGrant(grant, params.client_id, params.device));
+    if (!reused && held.length >= MAX_OAUTH_GRANTS_PER_UID) {
+      return reply.redirect(
+        oauthErrorRedirect(params.redirect_uri, 'access_denied', params.state, OAUTH_GRANT_CAP_DESCRIPTION),
+      );
     }
 
     const authCode = generateAsAuthCode();
@@ -452,7 +463,7 @@ export function registerOAuthAuthorizationServerRoutes(
       codeChallengeMethod: 'S256',
       scope,
       expiresAt: new Date(nowMs + AS_AUTH_CODE_TTL_MS).toISOString(),
-      grantId: randomUUID(),
+      grantId: reused?.grantId ?? randomUUID(),
       ...(isGamedevCliClient(params.client_id) ? { deviceName: sanitizeDeviceName(params.device) } : {}),
     });
 
@@ -546,6 +557,7 @@ export function registerOAuthAuthorizationServerRoutes(
         refreshExpiresAt: new Date(nowMs + AS_REFRESH_TOKEN_TTL_MS).toISOString(),
         accessToken: accessRecord,
         nowMs,
+        scope: consumed.scope,
       });
       if (!issued) return reply.status(400).send({ error: 'invalid_grant' });
 
@@ -554,7 +566,7 @@ export function registerOAuthAuthorizationServerRoutes(
         refresh_token: refresh.token,
         expires_in: Math.floor(AS_ACCESS_TOKEN_TTL_MS / 1000),
         token_type: 'Bearer',
-        scope: grant.scope,
+        scope: issued.scope,
       });
     }
 
