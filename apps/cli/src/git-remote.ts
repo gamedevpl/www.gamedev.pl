@@ -66,8 +66,13 @@ export type HelperIo = {
   fetchVersions: (slug: string) => Promise<VersionRef[]>;
   fetchTree: (slug: string, version: string) => Promise<TreeFile[]>;
   importScript: (script: string) => Promise<void>;
-  pushReconcile: () => Promise<PushResult>;
+  pushReconcile: (src: string) => Promise<PushResult>;
 };
+
+export function pushSrcRef(rest: string[]): string | null {
+  const src = rest.join(' ').split(':')[0]?.trim() ?? '';
+  return src || null;
+}
 
 export async function runRemoteHelper(slug: string, io: HelperIo): Promise<void> {
   const pendingImport = { want: false };
@@ -94,8 +99,13 @@ export async function runRemoteHelper(slug: string, io: HelperIo): Promise<void>
     } else if (cmd === 'option') io.write('ok\n');
     else if (cmd === 'import' || cmd === 'fetch') pendingImport.want = true;
     else if (cmd === 'push') {
-      const result = await io.pushReconcile();
+      const src = pushSrcRef(rest);
       const dst = rest.join(' ').split(':')[1] ?? 'refs/heads/main';
+      if (!src) {
+        io.write('error push: missing source ref\n\n');
+        continue;
+      }
+      const result = await io.pushReconcile(src);
       if (!result.ok) io.write(`error ${result.message}\n\n`);
       else io.write(`ok ${dst}\n\n`);
     } else io.write(`${handleHelperLine(trimmed, slug).join('\n')}\n`);

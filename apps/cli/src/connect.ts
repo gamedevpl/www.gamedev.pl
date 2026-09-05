@@ -1,8 +1,11 @@
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { randomUUID } from 'node:crypto';
 import type { ApiClient } from './api.js';
 import { detectAdapter, loadAdapters, whichOnPath, type AdapterSpec } from './adapters.js';
 import { cliUsage } from './bin-name.js';
-import { childEnv, renderDelegateStream, spawnAdapter } from './delegate.js';
+import { CREATOR_TOKEN_PATTERN, childEnv, renderDelegateStream, spawnAdapter } from './delegate.js';
 import { CliError, EXIT_AUTH, EXIT_INPUT, EXIT_RED, EXIT_REFUSED } from './exit-codes.js';
 import { studioToken } from './studio.js';
 
@@ -42,17 +45,72 @@ async function defaultAdapterRun(input: {
   return { code, lines };
 }
 
+function authorizationValue(header: string): string {
+  return header.replace(/^Authorization:\s*/i, '');
+}
+
+function installHeader(header: string): string {
+  return /^Authorization:/i.test(header) ? header : `Authorization: ${header}`;
+}
+
+export function claudeMcpAddCommand(mcpUrl: string, authorizationHeader: string): string {
+  return `claude mcp add --transport http gamedevpl ${mcpUrl} --header "${installHeader(authorizationHeader)}"`;
+}
+
+function mcpConfigBody(payload: ConnectPayload): string {
+  return `${JSON.stringify(
+    {
+      mcpServers: {
+        gamedevpl: {
+          type: 'http',
+          url: payload.mcpUrl,
+          headers: { Authorization: authorizationValue(payload.authorizationHeader ?? '') },
+        },
+      },
+    },
+    null,
+    2,
+  )}\n`;
+}
+
 function formatHandoff(payload: ConnectPayload, slug: string): string[] {
   const lines = [`MCP handoff for ${payload.slug ?? slug}`];
   if (payload.mcpUrl) lines.push(`mcp: ${payload.mcpUrl}`);
   if (payload.authorizationHeaderMasked) lines.push(`auth: ${payload.authorizationHeaderMasked}`);
-  if (payload.authorizationHeader) lines.push(payload.authorizationHeader);
+  if (payload.mcpUrl && payload.authorizationHeader) {
+    lines.push('install:');
+    lines.push(`  ${claudeMcpAddCommand(payload.mcpUrl, payload.authorizationHeader)}`);
+  }
   if (payload.kickoffPrompt) {
     lines.push('kickoff:');
     lines.push(payload.kickoffPrompt);
   }
-  if (payload.installSnippets?.claudeCode) lines.push(payload.installSnippets.claudeCode);
   return lines;
+}
+
+function requireMcpAuth(payload: ConnectPayload | null): asserts payload is ConnectPayload & {
+  mcpUrl: string;
+  authorizationHeader: string;
+} {
+  if (!payload?.mcpUrl || !payload.authorizationHeader) {
+    throw new CliError(
+      'connect payload has no MCP authorization; re-run `gamedevpl login`',
+      EXIT_AUTH,
+      cliUsage('login'),
+    );
+  }
+  if (CREATOR_TOKEN_PATTERN.test(payload.authorizationHeader)) {
+    throw new CliError(
+      'connect payload has no MCP authorization; re-run `gamedevpl login`',
+      EXIT_AUTH,
+      cliUsage('login'),
+    );
+  }
+}
+
+function withMcpConfig(spec: AdapterSpec, mcpPath: string): AdapterSpec {
+  if (spec.name !== 'claude') return spec;
+  return { ...spec, headless: [...spec.headless, '--mcp-config', mcpPath] };
 }
 
 export async function connectGame(input: {
@@ -85,19 +143,16 @@ export async function connectGame(input: {
     });
   }
 
-  let payload: ConnectPayload | null = null;
+  let payload: ConnectPayload;
   try {
     payload = await input.api.request<ConnectPayload>('GET', `/api/submissions/${encodeURIComponent(token)}/connect`);
   } catch (error) {
-    if (!input.agent) {
-      if (error instanceof CliError && error.exitCode === EXIT_AUTH) throw error;
-      throw new CliError(
-        'connect unavailable — switch this round to self in Studio, or pass --handoff',
-        EXIT_REFUSED,
-        `${cliUsage('connect', input.slug)} --handoff`,
-      );
-    }
-    input.write('MCP handoff unavailable — spawning a local adapter. Deliver with gamedevpl submit.');
+    if (error instanceof CliError && error.exitCode === EXIT_AUTH) throw error;
+    throw new CliError(
+      'connect unavailable — switch this round to self in Studio, or pass --handoff',
+      EXIT_REFUSED,
+      `${cliUsage('connect', input.slug)} --handoff`,
+    );
   }
 
   if (payload?.mcpUrl) {
@@ -121,19 +176,28 @@ export async function connectGame(input: {
       `install ${input.agent}, or omit --agent for the MCP handoff`,
     );
   }
+  requireMcpAuth(payload);
 
-  const cwd = spec.cwd === 'game-dir' ? join(input.dest, 'games', input.slug) : input.dest;
-  const result = await (input.runAdapter ?? defaultAdapterRun)({
-    spec,
-    prompt:
-      payload?.kickoffPrompt ?? `Edit ${input.slug} in this checkout. The creator will deliver with gamedevpl submit.`,
-    cwd,
-    env: childEnv(env, token),
-  });
-  for (const line of renderDelegateStream(spec.name, result.lines, false)) input.write(line);
-  if ((result.code ?? 1) !== 0) {
-    throw new CliError(`${spec.name} exited ${result.code ?? 'null'}`, EXIT_RED, cliUsage('submit'));
+  mkdirSync(input.dest, { recursive: true });
+  writeFileSync(join(input.dest, '.mcp.json'), mcpConfigBody(payload));
+  const mcpPath = join(tmpdir(), `gamedev-mcp-${randomUUID()}.json`);
+  writeFileSync(mcpPath, mcpConfigBody(payload));
+  try {
+    const cwd = spec.cwd === 'game-dir' ? join(input.dest, 'games', input.slug) : input.dest;
+    const result = await (input.runAdapter ?? defaultAdapterRun)({
+      spec: withMcpConfig(spec, mcpPath),
+      prompt:
+        payload.kickoffPrompt ?? `Edit ${input.slug} in this checkout. The creator will deliver with gamedevpl submit.`,
+      cwd,
+      env: childEnv(env, '', { url: payload.mcpUrl, authorization: payload.authorizationHeader }),
+    });
+    for (const line of renderDelegateStream(spec.name, result.lines, false)) input.write(line);
+    if ((result.code ?? 1) !== 0) {
+      throw new CliError(`${spec.name} exited ${result.code ?? 'null'}`, EXIT_RED, cliUsage('submit'));
+    }
+    input.write(`adapter finished — review the tree, then ${cliUsage('submit')}`);
+    return { spawned: true, mcp: true };
+  } finally {
+    rmSync(mcpPath, { force: true });
   }
-  input.write(`adapter finished — review the tree, then ${cliUsage('submit')}`);
-  return { spawned: true, mcp: Boolean(payload?.mcpUrl) };
 }

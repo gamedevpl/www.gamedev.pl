@@ -1,6 +1,8 @@
 import type { ApiClient } from './api.js';
-import { inspectGame, localGameFiles, writeBase, writeGameFiles, fetchLatestTree } from './checkout.js';
-import { syncRefuse, type SyncResult, type TreeFile } from './checkout-sync.js';
+import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { inspectGame, localGameFiles, writeBase, fetchLatestTree } from './checkout.js';
+import { hashesOf, hashContent, pathInside, syncRefuse, type SyncResult, type TreeFile } from './checkout-sync.js';
 import { otherBuilder } from './errors.js';
 import { CliError, EXIT_RED, EXIT_REFUSED } from './exit-codes.js';
 import { assertLadderGreen, runLadder } from './verify.js';
@@ -67,7 +69,7 @@ export async function submitGame(input: {
   run?: Parameters<typeof runLadder>[0]['run'];
 }): Promise<SubmitResult> {
   const first = await inspectGame(input);
-  if (first.sync.kind === 'clean') {
+  if (first.sync.kind === 'clean' && !input.publish && !input.force) {
     return { kind: 'nothing', sync: first.sync };
   }
   if (
@@ -88,7 +90,7 @@ export async function submitGame(input: {
     const refused = syncRefuse(latest.sync, 'submit');
     throw new CliError(`platform changed during verify — ${refused.message}`, EXIT_REFUSED, refused.next);
   }
-  if (!input.force && latest.sync.kind === 'clean') {
+  if (latest.sync.kind === 'clean' && !input.publish && !input.force) {
     return { kind: 'nothing', sync: latest.sync };
   }
   if (!input.force && latest.sync.kind === 'platform_only') {
@@ -138,6 +140,8 @@ export async function submitGame(input: {
     mapHttpError(error);
   }
 
+  const uploaded = localGameFiles(input.dest, input.slug);
+  const snapshot = hashesOf(uploaded);
   const mode: DeliverMode = input.publish ? 'publish' : 'preview';
   let delivered: DeliverReply;
   try {
@@ -157,10 +161,10 @@ export async function submitGame(input: {
   const version = delivered.version ?? latest.sync.version;
   try {
     const tree = await fetchLatestTree(input.api, input.slug);
-    writeGameFiles(input.dest, input.slug, tree.files);
+    mergeDeliveredFiles(input.dest, input.slug, snapshot, tree.files);
     writeBase(input.dest, tree.version, tree.files);
   } catch {
-    writeBase(input.dest, version, localGameFiles(input.dest, input.slug));
+    writeBase(input.dest, version, uploaded);
   }
   return {
     kind: 'delivered',
@@ -171,6 +175,17 @@ export async function submitGame(input: {
     ...(delivered.buildId ? { buildId: delivered.buildId } : {}),
     staged,
   };
+}
+
+function mergeDeliveredFiles(dest: string, slug: string, snapshot: Record<string, string>, fetched: TreeFile[]): void {
+  const root = join(dest, 'games', slug);
+  for (const file of fetched) {
+    const abs = pathInside(root, file.path);
+    const now = existsSync(abs) ? hashContent(readFileSync(abs, 'utf8')) : undefined;
+    if (now !== snapshot[file.path]) continue;
+    mkdirSync(dirname(abs), { recursive: true });
+    writeFileSync(abs, file.content);
+  }
 }
 
 function extraStagedPaths(api: ApiClient, slug: string, planned: string[]): Promise<string[]> {

@@ -5,15 +5,22 @@ import type { AdapterSpec } from './adapters.js';
 // A PAT reaches the whole account, not just one round.
 export const CREATOR_TOKEN_PATTERN = /gdpl_(oat|pat)_/;
 
-export function childEnv(parent: NodeJS.ProcessEnv, roundToken: string): NodeJS.ProcessEnv {
+export type ChildMcp = { url: string; authorization: string };
+
+export function childEnv(parent: NodeJS.ProcessEnv, roundToken: string, mcp?: ChildMcp): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(parent)) {
     if (value === undefined) continue;
     if (CREATOR_TOKEN_PATTERN.test(value)) continue;
-    if (/GAMEDEV_TOKEN|GDPL_OAT|GDPL_PAT|OAUTH_ACCESS/i.test(key)) continue;
+    if (/GAMEDEV_TOKEN|GAMEDEV_ACCESS_TOKEN|GDPL_OAT|GDPL_PAT|OAUTH_ACCESS/i.test(key)) continue;
     env[key] = value;
   }
-  env.GAMEDEV_ROUND_TOKEN = roundToken;
+  delete env.GAMEDEV_ROUND_TOKEN;
+  if (roundToken && !CREATOR_TOKEN_PATTERN.test(roundToken)) env.GAMEDEV_ROUND_TOKEN = roundToken;
+  if (mcp) {
+    env.GAMEDEVPL_MCP_URL = mcp.url;
+    if (!CREATOR_TOKEN_PATTERN.test(mcp.authorization)) env.GAMEDEVPL_MCP_AUTHORIZATION = mcp.authorization;
+  }
   return env;
 }
 
