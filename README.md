@@ -63,7 +63,7 @@ more exist and are deliberately never advertised, so an agent will not discover 
 what each destructive one actually consumes, and why the rest are hidden.
 
 **CLI.** `apps/cli` is the `gamedevpl` terminal client (no local model). With no verb it
-opens a REPL: describe a game, then iterate. `gamedevpl checkout <slug>` is the own-editor
+opens a REPL: talk first; a game starts when you ask for one. `gamedevpl checkout <slug>` is the own-editor
 path. Installers (`/install.sh`) 404 while `CLI_SURFACE` is off. With the flag on, the
 route serves the script even if no `cli-v*` GitHub release exists yet — that download is
 what fails then. Until a release ships, `npm install` then `npm run bundle -w @gamedevpl/cli`. Details:

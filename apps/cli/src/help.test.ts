@@ -17,7 +17,7 @@ describe('formatHelp', () => {
   it('prefixes slash verbs for the REPL', () => {
     const out = formatHelp(true);
     expect(out).toContain('/login');
-    expect(out).toContain('↑/↓ history');
+    expect(out).toContain('a game starts when you ask');
     expect(out).toContain('/quit');
   });
 });

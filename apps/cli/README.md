@@ -19,6 +19,9 @@ curl -fsSL https://www.gamedev.pl/install.sh | bash
 The installer is 404 until the `CLI_SURFACE` deploy flag is on. Checksums come from GitHub
 Releases tagged `cli-v*` (one `gamedevpl` asset). `gamedevpl update` uses the same channel.
 
+The REPL talks to `POST /api/cli/chat` on the API. Model keys stay on the server. A game
+starts only when that chat decides you asked for one.
+
 Until a release exists, from the repo root after a pull:
 
 ```bash

@@ -5,7 +5,7 @@ import { getStatus, postTurn } from './turn.js';
 import { formatStatusLines } from './status-watch.js';
 import type { ApiClient } from './api.js';
 import { dispatchReadVerb } from './verbs.js';
-import { answerDraft, beginIntake, formatQuestion, submitIdea, type IntakeDraft } from './create.js';
+import { postCliChat } from './chat.js';
 import { CLI_VERSION } from './update.js';
 import { formatError } from './errors.js';
 import { formatHelp } from './help.js';
@@ -15,24 +15,14 @@ export type ReplLineResult = {
   next: 'continue' | 'quit';
   token?: string | null;
   slug?: string;
-  draft?: IntakeDraft | null;
+  conversationId?: string;
 };
-
-async function openFromSpec(
-  api: ApiClient,
-  spec: { title: string; concept: string },
-  write: (s: string) => void,
-): Promise<ReplLineResult> {
-  const created = await submitIdea(api, spec.title, spec.concept);
-  write(`▸ opened ${created.slug ?? created.token}`);
-  return { next: 'continue', token: created.token, draft: null, slug: created.slug };
-}
 
 export async function handleReplLine(input: {
   line: string;
   api: ApiClient;
   token: string | null;
-  draft?: IntakeDraft | null;
+  conversationId?: string;
   write: (s: string) => void;
 }): Promise<ReplLineResult> {
   const trimmed = input.line.trim();
@@ -87,23 +77,16 @@ export async function handleReplLine(input: {
   }
   if (!input.token) {
     try {
-      if (input.draft) {
-        const answered = answerDraft(input.draft, trimmed);
-        if (answered.kind === 'ask') {
-          input.write(formatQuestion(answered.draft));
-          return { next: 'continue', draft: answered.draft };
-        }
-        return await openFromSpec(input.api, answered, input.write);
+      const result = await postCliChat(input.api, trimmed, input.conversationId);
+      if (result.kind === 'create') {
+        input.write(`▸ opened ${result.slug}${result.ack ? ` — ${result.ack}` : ''}`);
+        return { next: 'continue', token: result.token, slug: result.slug };
       }
-      const started = await beginIntake(input.api, trimmed);
-      if (started.kind === 'ask') {
-        input.write(formatQuestion(started.draft));
-        return { next: 'continue', draft: started.draft };
-      }
-      return await openFromSpec(input.api, started, input.write);
+      input.write(`◆ ${result.text}`);
+      return { next: 'continue', conversationId: result.conversationId };
     } catch (error) {
       input.write(formatError(error));
-      return { next: 'continue', draft: input.draft ?? null };
+      return { next: 'continue', conversationId: input.conversationId };
     }
   }
   try {

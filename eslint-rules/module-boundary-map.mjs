@@ -230,6 +230,8 @@ const FILE_BUCKET = {
   'remix-suggestions': 'creation',
   'remix-turns': 'creation',
   'chat-agent': 'creation',
+  'intake-agent': 'creation',
+  'cli-chat-routes': 'creation',
   'chat-orchestration': 'creation',
   'chat-turns': 'creation',
   'chat-turns-history': 'creation',

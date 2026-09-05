@@ -1267,11 +1267,11 @@
     "cli": {
       "nav": "gamedevpl CLI",
       "title": "gamedevpl CLI — a terminal",
-      "lead": "A conversational front door. Type an idea, answer refine questions, watch the gate. Checkout uses your editor; git push is not a delivery path.",
+      "lead": "A conversational front door. Talk first; a game starts when you ask for one. Checkout uses your editor; git push is not a delivery path.",
       "installHint": "Needs Node 20+ — same as a game checkout. Windows: irm https://www.gamedev.pl/install.ps1 | iex. The script checksum-verifies before it writes ~/.local/bin.",
       "installPending": "Installers are not public yet. The client lives in this repo at apps/cli; bundle it locally with npm run bundle -w @gamedevpl/cli.",
       "login": "gamedevpl login opens your browser. Approve once — no token to copy.",
-      "repl": "gamedevpl with no verb opens a REPL: describe a game, then iterate.",
+      "repl": "gamedevpl with no verb opens a REPL: talk first, then start a game when you are ready.",
       "checkout": "gamedevpl checkout <slug> for your own editor. Deliver with gamedevpl submit.",
       "ci": "CI: GAMEDEV_TOKEN from secrets. Never pass the creator OAuth token to a sub-agent."
     }

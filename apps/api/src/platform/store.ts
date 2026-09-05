@@ -83,6 +83,8 @@ import type { TelemetryStore } from '../store/slices/telemetry.js';
 export type { TelemetryStore };
 import type { OAuthStore } from '../store/slices/oauth.js';
 export type { OAuthStore };
+import type { CliChatStore } from '../store/slices/cli-chat.js';
+export type { CliChatStore };
 import type { PlayerDataStore } from '../store/slices/player-data.js';
 export type { PlayerDataStore };
 import type { WorldEntriesStore } from '../store/slices/world-entries.js';
@@ -206,23 +208,7 @@ export interface AccountErasureStore {
   deleteAccountIdentity(uid: string, at: string): Promise<AccountIdentityDeletionResult>;
 }
 
-// RoundsStore, InMemoryRoundsStore and FirestoreRoundsStore live in
-// ./store/slices/rounds.js; RoundBudgetStore and its implementations live in
-// ./store/slices/round-budget.js (Phase 2 wave 4).
-
-// DispatchStore, InMemoryDispatchStore and FirestoreDispatchStore live in
-// ./store/slices/dispatch.js -- imported at the top of the file (Phase 2 wave 4).
-
-// SubmissionStore and SubmissionQueryStore, their InMemory and Firestore
-// implementations, live in ./store/slices/submission.js and
-// ./store/slices/submission-queries.js (Phase 2 wave 4).
-
-// BuildLogStore and BuildMediaStore, their InMemory and Firestore
-// implementations, live in ./store/slices/build-log.js and
-// ./store/slices/build-media.js (Phase 2 wave 4).
-
-// PublicationStore, InMemoryPublicationStore and FirestorePublicationStore live in
-// ./store/slices/publication.js -- imported at the top of the file (Phase 2 wave 4).
+// Slice implementations live next to each interface; this file only composes them.
 
 // Not delegated -- InMemory's listGameSlugs reaches into Social/Contribution/Review's
 // Maps, which a delegate-only PublicationStore slice must not depend on.
@@ -231,40 +217,6 @@ export interface GameSlugsStore {
   // subcollections (votes, feedback, scorecard) -- the erase path's game-discovery walk.
   listGameSlugs(): Promise<string[]>;
 }
-
-// TelemetryStore, InMemoryTelemetryStore and FirestoreTelemetryStore live in
-// ./store/slices/telemetry.js -- imported at the top of the file (Phase 2 wave 4).
-
-// QuotaStore, InMemoryQuotaStore and FirestoreQuotaStore live in ./store/slices/quota.js;
-// GlobalQuotaStore and its InMemory/Firestore implementations live in
-// ./store/slices/quota-global.js -- imported at the top of the file (Phase 2 wave 4).
-
-// AccessStore, InMemoryAccessStore and FirestoreAccessStore live in
-// ./store/slices/access.js -- imported at the top of the file (Phase 2 wave 4).
-
-// NotificationsStore, InMemoryNotificationsStore and FirestoreNotificationsStore live in
-// ./store/slices/notifications.js -- imported at the top of the file (Phase 2 wave 4).
-
-// SocialStore, InMemorySocialStore and FirestoreSocialStore live in
-// ./store/slices/social.js -- imported at the top of the file (Phase 2 wave 4).
-
-// ReviewStore/ReviewSweepStore, their InMemory and Firestore implementations live in
-// ./store/slices/review.js and ./store/slices/review-sweeps.js (Phase 2 wave 4).
-
-// PlayerDataStore, InMemoryPlayerDataStore and FirestorePlayerDataStore live in
-// ./store/slices/player-data.js -- imported at the top of the file (Phase 2 wave 4).
-
-// ContributionStore, InMemoryContributionStore and FirestoreContributionStore live in
-// ./store/slices/contribution.js -- imported at the top of the file (Phase 2 wave 4).
-
-// AccessTokensStore, InMemoryAccessTokensStore and FirestoreAccessTokensStore live in
-// ./store/slices/access-tokens.js -- imported at the top of the file (Phase 2 wave 4).
-
-// AgentKeysStore, InMemoryAgentKeysStore and FirestoreAgentKeysStore live in
-// ./store/slices/agent-keys.js -- imported at the top of the file (Phase 2 wave 4).
-
-// OAuthStore, InMemoryOAuthStore and FirestoreOAuthStore live in
-// ./store/slices/oauth.js -- imported at the top of the file (Phase 2 wave 4).
 
 export interface Store
   extends
@@ -293,7 +245,8 @@ export interface Store
     AccessTokensStore,
     AgentKeysStore,
     CatalogEnrichmentStore,
-    OAuthStore {}
+    OAuthStore,
+    CliChatStore {}
 
 // The two implementations moved to ./store/in-memory.js and ./store/firestore.js.
 

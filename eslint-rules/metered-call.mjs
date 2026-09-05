@@ -42,6 +42,7 @@ const PAID_SEAMS = [
  */
 const GATED_AT_CALLER = {
   'creation/chat-agent.ts': 'chatGate, in chat-orchestration.ts',
+  'creation/intake-agent.ts': 'chatGate and chats quota, in cli-chat-routes.ts',
   'creation/code-lane.ts': 'editingGate, in remix.ts',
   'creation/editor-assist.ts': 'editingGate, in editor-drafts.ts',
   'creation/tab-complete.ts': 'tabCompleteGate, in creator-code.ts',

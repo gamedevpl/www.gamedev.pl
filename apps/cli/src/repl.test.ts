@@ -29,7 +29,7 @@ describe('repl turn loop', () => {
     expect(lines.join('\n')).not.toMatch(/build /);
   });
 
-  it('drives refine then submit when there is no open game', async () => {
+  it('talks through the chat endpoint when there is no open game', async () => {
     const lines: string[] = [];
     const seen: string[] = [];
     const api = createApi({
@@ -38,11 +38,11 @@ describe('repl turn loop', () => {
       fetch: async (url, init) => {
         const path = String(url);
         seen.push(`${init?.method ?? 'GET'} ${path}`);
-        if (path.endsWith('/api/submissions/refine')) {
-          return new Response(JSON.stringify({ questions: [], suggestedTitle: 'Robot Garden' }), { status: 200 });
-        }
-        if (path.endsWith('/api/submissions') && init?.method === 'POST') {
-          return new Response(JSON.stringify({ token: 'new-tok', slug: 'robot-garden' }), { status: 200 });
+        if (path.endsWith('/api/cli/chat')) {
+          return new Response(
+            JSON.stringify({ kind: 'reply', text: 'What should it feel like?', conversationId: 'conv-1' }),
+            { status: 200 },
+          );
         }
         return new Response('{}', { status: 404 });
       },
@@ -53,53 +53,45 @@ describe('repl turn loop', () => {
       token: null,
       write: (s) => lines.push(s),
     });
-    expect(seen.some((row) => row.includes('/refine'))).toBe(true);
-    expect(seen.some((row) => row.startsWith('POST ') && row.endsWith('/api/submissions'))).toBe(true);
-    expect(result.token).toBe('new-tok');
-    expect(result.slug).toBe('robot-garden');
-    expect(lines.join('\n')).toContain('robot-garden');
+    expect(seen.some((row) => row.includes('/api/cli/chat'))).toBe(true);
+    expect(seen.some((row) => row.includes('/refine'))).toBe(false);
+    expect(seen.some((row) => row.startsWith('POST ') && row.endsWith('/api/submissions'))).toBe(false);
+    expect(result.token).toBeUndefined();
+    expect(result.conversationId).toBe('conv-1');
+    expect(lines.join('\n')).toContain('What should it feel like');
   });
 
-  it('asks refine questions before submitting', async () => {
+  it('opens a game only when the chat endpoint returns create', async () => {
     const lines: string[] = [];
     const api = createApi({
       origin: 'https://www.gamedev.pl',
       store: memoryStore({ accessToken: 'gdpl_oat_t', tokenType: 'Bearer', scope: 'creator' }),
-      fetch: async (url, init) => {
+      fetch: async (url) => {
         const path = String(url);
-        if (path.endsWith('/api/submissions/refine')) {
+        if (path.endsWith('/api/cli/chat')) {
           return new Response(
             JSON.stringify({
-              questions: [{ id: 'tone', question: 'What tone?', options: [{ label: 'calm' }] }],
-              suggestedTitle: 'Robot Garden',
+              kind: 'create',
+              token: 'new-tok',
+              slug: 'robot-garden',
+              conversationId: 'conv-1',
+              ack: 'Opening it.',
             }),
             { status: 200 },
           );
         }
-        if (path.endsWith('/api/submissions') && init?.method === 'POST') {
-          return new Response(JSON.stringify({ token: 'new-tok', slug: 'robot-garden' }), { status: 200 });
-        }
         return new Response('{}', { status: 404 });
       },
     });
-    const asked = await handleReplLine({
-      line: 'A garden full of robots.',
-      api,
-      token: null,
-      write: (s) => lines.push(s),
-    });
-    expect(asked.draft?.questions).toHaveLength(1);
-    expect(lines.join('\n')).toContain('What tone?');
     const opened = await handleReplLine({
-      line: 'calm',
+      line: 'Make a garden full of robots that water the plants.',
       api,
       token: null,
-      draft: asked.draft,
       write: (s) => lines.push(s),
     });
     expect(opened.token).toBe('new-tok');
-    expect(opened.draft).toBeNull();
     expect(opened.slug).toBe('robot-garden');
+    expect(lines.join('\n')).toContain('robot-garden');
   });
 
   it('treats a blank line as a no-op', async () => {

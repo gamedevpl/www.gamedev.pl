@@ -27,7 +27,7 @@ export function formatHelp(slash = false): string {
   const prefix = slash ? '/' : '';
   const rows = SLASH_VERBS.map((verb) => `  ${(prefix + verb).padEnd(18)}${BLURB[verb]}`);
   const intro = slash
-    ? [`${CLI_BIN} ${CLI_VERSION}`, '', '  type to talk · ↑/↓ history · /quit to leave', '']
+    ? [`${CLI_BIN} ${CLI_VERSION}`, '', '  type to talk — a game starts when you ask · /quit to leave', '']
     : [
         `${CLI_BIN} ${CLI_VERSION} — Studio from a terminal`,
         '',

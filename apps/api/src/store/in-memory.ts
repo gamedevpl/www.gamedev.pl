@@ -58,6 +58,7 @@ import { InMemoryAgentKeysStore } from './slices/agent-keys.js';
 import { InMemoryBuildLogStore } from './slices/build-log.js';
 import { InMemoryBuildMediaStore } from './slices/build-media.js';
 import { InMemoryCatalogEnrichmentStore } from './slices/catalog-enrichment.js';
+import { InMemoryCliChatStore, type CliChatRecord } from './slices/cli-chat.js';
 import { InMemoryContributionStore } from './slices/contribution.js';
 import { InMemoryDispatchStore } from './slices/dispatch.js';
 import { InMemoryIdentityStore } from './slices/identity.js';
@@ -101,11 +102,10 @@ export class InMemoryStore implements Store {
   private playerDataStore = new InMemoryPlayerDataStore();
   private worldEntriesStore = new InMemoryWorldEntriesStore();
   private contributionStore = new InMemoryContributionStore();
-  // tokenId -> personal access token record
   private accessTokensStore = new InMemoryAccessTokensStore();
-  // slug -> durable per-game agent opener state (BY-23)
   private agentKeysStore = new InMemoryAgentKeysStore();
   private oauthStore = new InMemoryOAuthStore();
+  private cliChatStore = new InMemoryCliChatStore();
 
   async getUser(uid: string): Promise<User | null> {
     return this.identityStore.getUser(uid);
@@ -183,12 +183,12 @@ export class InMemoryStore implements Store {
       if (record.ownerUid === uid) this.agentKeysStore.gameAgentKeys.delete(slug);
     }
     this.agentKeysStore.creatorAgentKeys.delete(uid);
+    this.cliChatStore.chats.delete(uid);
     for (const [id, suggestion] of [...this.contributionStore.suggestions]) {
       if (suggestion.ownerUid === uid) {
         this.contributionStore.suggestions.set(id, { ...suggestion, ownerUid: null, updatedAt: at });
       }
     }
-    // Reaches into InMemoryOAuthStore's Maps directly -- documented exception, see PR.
     for (const [clientId, client] of [...this.oauthStore.oauthClients]) {
       if (client.ownerUid === uid) this.oauthStore.oauthClients.set(clientId, { ...client, ownerUid: undefined });
     }
@@ -741,7 +741,10 @@ export class InMemoryStore implements Store {
     return this.globalQuotaStore.getGlobalBotCallCount(dateStr);
   }
 
-  async checkAndIncrementGlobalBotCalls(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
+  async checkAndIncrementGlobalBotCalls(
+    dateStr: string,
+    limit: number,
+  ): Promise<{ allowed: boolean; current: number }> {
     return this.globalQuotaStore.checkAndIncrementGlobalBotCalls(dateStr, limit);
   }
 
@@ -1116,7 +1119,6 @@ export class InMemoryStore implements Store {
     return this.contributionStore.purgeLegacyGameSuggestions(limit);
   }
 
-  // Test-only seed for the legacy-suggestion purge above; not on the Store interface.
   seedLegacyGameSuggestion(slug: string): void {
     this.contributionStore.seedLegacyGameSuggestion(slug);
   }
@@ -1184,9 +1186,6 @@ export class InMemoryStore implements Store {
   }
 
   async listGameSlugs(): Promise<string[]> {
-    // Union of every slug this store knows anything about, mirroring Firestore's
-    // `listDocuments()`, which also returns a game whose document never existed but
-    // whose subcollections do.
     return [
       ...new Set([
         ...this.socialStore.votes.keys(),
@@ -1341,8 +1340,9 @@ export class InMemoryStore implements Store {
     return this.oauthStore.issueOAuthTokensFromGrant(input);
   }
 
-  // Test/inspection only — production reads go through `listWaitlistEntries`.
   waitlistEntries(): WaitlistEntry[] {
     return Array.from(this.accessStore.waitlist.values());
   }
+  getCliChat = (uid: string) => this.cliChatStore.getCliChat(uid);
+  putCliChat = (uid: string, record: CliChatRecord) => this.cliChatStore.putCliChat(uid, record);
 }

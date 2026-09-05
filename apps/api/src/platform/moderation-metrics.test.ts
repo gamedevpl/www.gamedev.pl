@@ -99,12 +99,12 @@ describe('every moderating module reports its rejections', () => {
     .filter((name) => MODERATES.test(readFileSync(resolve(apiSrcRoot, name), 'utf8')));
 
   it('finds the call sites it means to check', () => {
-    // Without this the suite below passes vacuously the moment the pattern stops matching
-    // — for instance if the checker is ever renamed or wrapped.
+    // Vacuous if the pattern stops matching after a rename or wrap.
     expect(callSites.sort()).toEqual([
       'agent-surface/mcp-round-reopen-tools.ts',
       'community/player-feedback.ts',
       'community/proposals.ts',
+      'creation/cli-chat-routes.ts',
       'creation/create-game.ts',
       'creation/creator-feedback-handler.ts',
       'creation/editor-drafts.ts',
