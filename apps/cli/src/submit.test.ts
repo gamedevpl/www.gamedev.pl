@@ -318,6 +318,51 @@ describe('submitGame', () => {
     expect(base.files['game.ts']).toBe(hashContent('B'));
   });
 
+  it('keeps files edited while stage is in flight', async () => {
+    const dest = checkout([{ path: 'game.ts', content: 'A' }]);
+    writeFileSync(join(dest, 'games', SLUG, 'game.ts'), 'D');
+    let delivered = false;
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url, init) => {
+        const path = String(url);
+        if (path.endsWith('/versions') && !path.includes('/tree')) {
+          return json({
+            versions: [{ version: delivered ? 'v2' : 'v1', createdAt: '2026-09-01', sourceFiles: ['game.ts'] }],
+          });
+        }
+        if (path.includes('/tree')) {
+          return json({
+            version: delivered ? 'v2' : 'v1',
+            files: [{ path: 'game.ts', content: delivered ? 'D' : 'A' }],
+          });
+        }
+        if (path.endsWith('/sources')) return json({ files: [{ path: 'game.ts', content: 'A' }] });
+        if (path.endsWith('/sources/stage') && init?.method === 'PUT') {
+          const body = JSON.parse(String(init?.body ?? '{}')) as { path: string; content: string };
+          expect(body).toEqual({ path: 'game.ts', content: 'D' });
+          writeFileSync(join(dest, 'games', SLUG, 'game.ts'), 'E');
+          return json({ accepted: true });
+        }
+        if (path.endsWith('/sources/deliver')) {
+          delivered = true;
+          return json({ accepted: true, version: 'v2', mode: 'preview', gateStarted: true });
+        }
+        return json({}, 404);
+      },
+    });
+    const result = await submitGame({ api, slug: SLUG, dest, run: () => ({ status: 0, stderr: '' }) });
+    expect(result.kind).toBe('delivered');
+    expect(readFileSync(join(dest, 'games', SLUG, 'game.ts'), 'utf8')).toBe('E');
+    const stagedBase = JSON.parse(readFileSync(join(dest, '.gamedev-base.json'), 'utf8')) as {
+      version: string;
+      files: Record<string, string>;
+    };
+    expect(stagedBase.version).toBe('v2');
+    expect(stagedBase.files['game.ts']).toBe(hashContent('D'));
+  });
+
   it('returns nothing on a clean tree without --publish or --force', async () => {
     const dest = checkout([{ path: 'game.ts', content: 'A' }]);
     const seen: string[] = [];

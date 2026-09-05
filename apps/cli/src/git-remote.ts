@@ -74,6 +74,16 @@ export function pushSrcRef(rest: string[]): string | null {
   return src || null;
 }
 
+export function pushDstRef(rest: string[]): string {
+  return rest.join(' ').split(':')[1]?.trim() || 'refs/heads/main';
+}
+
+export function formatPushStatus(dst: string, result: PushResult): string {
+  if (result.ok) return `ok ${dst}`;
+  const why = result.message.replace(/[\r\n]+/g, ' ').trim() || 'push failed';
+  return `error ${dst} ${why}`;
+}
+
 export async function runRemoteHelper(slug: string, io: HelperIo): Promise<void> {
   const pendingImport = { want: false };
   for (;;) {
@@ -100,14 +110,13 @@ export async function runRemoteHelper(slug: string, io: HelperIo): Promise<void>
     else if (cmd === 'import' || cmd === 'fetch') pendingImport.want = true;
     else if (cmd === 'push') {
       const src = pushSrcRef(rest);
-      const dst = rest.join(' ').split(':')[1] ?? 'refs/heads/main';
+      const dst = pushDstRef(rest);
       if (!src) {
-        io.write('error push: missing source ref\n\n');
+        io.write(`${formatPushStatus(dst, { ok: false, message: 'missing source ref' })}\n\n`);
         continue;
       }
       const result = await io.pushReconcile(src);
-      if (!result.ok) io.write(`error ${result.message}\n\n`);
-      else io.write(`ok ${dst}\n\n`);
+      io.write(`${formatPushStatus(dst, result)}\n\n`);
     } else io.write(`${handleHelperLine(trimmed, slug).join('\n')}\n`);
   }
 }

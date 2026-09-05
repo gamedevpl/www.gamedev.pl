@@ -1,10 +1,12 @@
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 import { BASE_FILE } from './checkout-sync.js';
 
 const ARCHIVE_BYTES = 80 * 1024 * 1024;
+const SKIP_SCAFFOLD = new Set(['.git', 'games']);
+const LINK_SCAFFOLD = new Set(['node_modules', 'shared']);
 
 function spawnOrThrow(cmd: string, args: string[], input?: Buffer): Buffer {
   const result = spawnSync(cmd, args, {
@@ -18,6 +20,20 @@ function spawnOrThrow(cmd: string, args: string[], input?: Buffer): Buffer {
   return Buffer.isBuffer(result.stdout) ? result.stdout : Buffer.from(result.stdout ?? '');
 }
 
+function copyVerifyScaffold(cwd: string, dest: string): void {
+  mkdirSync(dest, { recursive: true });
+  for (const name of readdirSync(cwd)) {
+    if (SKIP_SCAFFOLD.has(name)) continue;
+    const from = join(cwd, name);
+    const to = join(dest, name);
+    if (LINK_SCAFFOLD.has(name)) {
+      symlinkSync(from, to);
+      continue;
+    }
+    cpSync(from, to, { recursive: true });
+  }
+}
+
 export function materializePushCheckout(input: {
   repo: string;
   srcRef: string;
@@ -25,7 +41,7 @@ export function materializePushCheckout(input: {
   cwd: string;
   dest: string;
 }): string {
-  mkdirSync(input.dest, { recursive: true });
+  copyVerifyScaffold(input.cwd, input.dest);
   const archive = spawnOrThrow('git', [
     '-C',
     input.repo,

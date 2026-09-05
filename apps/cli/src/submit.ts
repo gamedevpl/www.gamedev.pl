@@ -127,7 +127,9 @@ export async function submitGame(input: {
       );
     }
   }
-  const localMap = new Map(localGameFiles(input.dest, input.slug).map((file) => [file.path, file]));
+  const uploaded = localGameFiles(input.dest, input.slug);
+  const snapshot = hashesOf(uploaded);
+  const localMap = new Map(uploaded.map((file) => [file.path, file]));
   const staged: string[] = [];
   try {
     for (const path of paths) {
@@ -139,9 +141,6 @@ export async function submitGame(input: {
   } catch (error) {
     mapHttpError(error);
   }
-
-  const uploaded = localGameFiles(input.dest, input.slug);
-  const snapshot = hashesOf(uploaded);
   const mode: DeliverMode = input.publish ? 'publish' : 'preview';
   let delivered: DeliverReply;
   try {

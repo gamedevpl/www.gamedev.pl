@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -178,8 +178,6 @@ export async function connectGame(input: {
   }
   requireMcpAuth(payload);
 
-  mkdirSync(input.dest, { recursive: true });
-  writeFileSync(join(input.dest, '.mcp.json'), mcpConfigBody(payload));
   const mcpPath = join(tmpdir(), `gamedev-mcp-${randomUUID()}.json`);
   writeFileSync(mcpPath, mcpConfigBody(payload));
   try {

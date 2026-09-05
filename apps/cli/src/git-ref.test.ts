@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -37,6 +37,25 @@ describe('materializePushCheckout', () => {
     expect(readFileSync(join(repo, 'games', SLUG, 'game.ts'), 'utf8')).toBe('UNCOMMITTED-C');
     expect(readFileSync(join(dest, '.gamedev-slug'), 'utf8').trim()).toBe(SLUG);
     expect(readFileSync(join(dest, '.gamedev-base.json'), 'utf8')).toContain('v1');
+  });
+
+  it('copies package.json, tools, and kit so the src commit can typecheck', () => {
+    const repo = dirtyRepo();
+    writeFileSync(join(repo, 'package.json'), '{"scripts":{"typecheck":"node -e process.exit(0)"}}\n');
+    mkdirSync(join(repo, 'tools'));
+    writeFileSync(join(repo, 'tools', 'check.mjs'), 'export {}\n');
+    mkdirSync(join(repo, 'shared'));
+    writeFileSync(join(repo, 'shared', 'kit.ts'), 'export const kit = 1;\n');
+    mkdirSync(join(repo, 'node_modules'));
+    writeFileSync(join(repo, 'node_modules', 'marker'), 'kit\n');
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-push-'));
+    materializePushCheckout({ repo, srcRef: 'HEAD', slug: SLUG, cwd: repo, dest });
+    expect(readFileSync(join(dest, 'package.json'), 'utf8')).toContain('typecheck');
+    expect(readFileSync(join(dest, 'tools', 'check.mjs'), 'utf8')).toContain('export');
+    expect(readFileSync(join(dest, 'shared', 'kit.ts'), 'utf8')).toContain('kit');
+    expect(readFileSync(join(dest, 'node_modules', 'marker'), 'utf8')).toBe('kit\n');
+    expect(readFileSync(join(dest, 'games', SLUG, 'game.ts'), 'utf8')).toBe('COMMITTED-B');
+    expect(existsSync(join(dest, '.git'))).toBe(false);
   });
 
   it('refuses a missing games tree on the source ref', () => {

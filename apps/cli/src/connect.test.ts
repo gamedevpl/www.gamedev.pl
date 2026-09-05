@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
@@ -112,7 +112,7 @@ describe('connectGame', () => {
         const mcpPath = spec.headless[mcpIdx + 1];
         expect(mcpPath).toBeTruthy();
         expect(readFileSync(mcpPath, 'utf8')).toContain('gdpl_cak_secret');
-        expect(readFileSync(join(dest, '.mcp.json'), 'utf8')).toContain('gdpl_cak_secret');
+        expect(existsSync(join(dest, '.mcp.json'))).toBe(false);
         return { code: 0, lines: ['{"text":"edited"}'] };
       },
       write: () => undefined,
@@ -126,6 +126,40 @@ describe('connectGame', () => {
     const tempCfg = seenSpecs[0]?.[seenSpecs[0].indexOf('--mcp-config') + 1];
     expect(tempCfg).toBeTruthy();
     expect(existsSync(tempCfg)).toBe(false);
+  });
+
+  it('does not overwrite a checkout .mcp.json', async () => {
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-connect-'));
+    writeFileSync(join(dest, '.mcp.json'), '{"mcpServers":{"other":{"url":"https://example.invalid"}}}\n');
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_oat_creator', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url) => {
+        if (String(url).includes('/api/me/studio?game=')) {
+          return json({ games: [{ slug: 'sky-dodge', token: 'round-tok' }] });
+        }
+        if (String(url).includes('/connect')) {
+          return json({
+            slug: 'sky-dodge',
+            mcpUrl: 'https://www.gamedev.pl/api/mcp',
+            kickoffPrompt: 'Build it',
+            authorizationHeader: 'Authorization: Bearer gdpl_cak_secret',
+          });
+        }
+        return json({}, 404);
+      },
+    });
+    await connectGame({
+      api,
+      slug: 'sky-dodge',
+      dest,
+      agent: 'claude',
+      which: (cmd) => (cmd === 'claude' ? '/usr/bin/claude' : null),
+      runAdapter: async () => ({ code: 0, lines: [] }),
+      write: () => undefined,
+    });
+    expect(readFileSync(join(dest, '.mcp.json'), 'utf8')).toContain('example.invalid');
+    expect(readFileSync(join(dest, '.mcp.json'), 'utf8')).not.toContain('gdpl_cak_secret');
   });
 
   it('refuses to spawn without MCP authorization', async () => {
