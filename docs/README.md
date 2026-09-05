@@ -62,7 +62,7 @@ survives only in this repo's early history.
 | [`remix-to-pr.md`](./remix-to-pr.md)                               | Spec for the player-remix → pull-request feature                                                        |
 | [`own-ide-checkout.md`](./own-ide-checkout.md)                     | 🚧 A working copy for creators who prefer their own IDE — checkout, deliver back, one delivery contract |
 | [`cli-status-poll.md`](./cli-status-poll.md)                       | How a non-browser client watches a round: one status read, poll cadence, backoff (CL-12)                |
-| [`cli-pre-job-intake.md`](./cli-pre-job-intake.md)                 | Refine → submit stays client-side for the CLI's first milestone (CL-13)                                 |
+| [`cli-pre-job-intake.md`](./cli-pre-job-intake.md)                 | Pre-game REPL talk is a server-side intake agent (`POST /api/cli/chat`); a game starts only on intent   |
 | [`../apps/cli/README.md`](../apps/cli/README.md)                   | `gamedevpl` terminal client in this repo — public page: `/connect`                                      |
 | [`notifications-plan.md`](./notifications-plan.md)                 | Notify creators/players of transitions: detection sweep, per-user storage, in-app → email → push        |
 | [`creator-qa-plan.md`](./creator-qa-plan.md)                       | Clarifying-questions pass before spec freeze — raises the hit rate of the one-shot agent run            |

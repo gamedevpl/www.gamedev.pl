@@ -1,5 +1,5 @@
 import { cliUsage } from './bin-name.js';
-import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
+import { CliError, EXIT_AUTH, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 
 export function describeError(error: unknown): { message: string; next?: string; code: number } {
   if (error instanceof CliError) {
@@ -40,6 +40,14 @@ export function mustFixGate(stage?: string): CliError {
 
 export function otherBuilder(builder: string): CliError {
   return new CliError(`this game is mid-round with ${builder} — wait or /builder to hand off`, EXIT_REFUSED);
+}
+
+export function grantRevoked(): CliError {
+  return new CliError(`sign-in was revoked — run \`${cliUsage('login')}\``, EXIT_AUTH, cliUsage('login'));
+}
+
+export function credentialExpired(): CliError {
+  return new CliError(`credential expired — run \`${cliUsage('login')}\``, EXIT_AUTH, cliUsage('login'));
 }
 
 export function pipeNeedsFlag(flag: string): CliError {

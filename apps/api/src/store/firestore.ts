@@ -58,6 +58,7 @@ import { FirestoreAgentKeysStore } from './slices/agent-keys.js';
 import { FirestoreBuildLogStore } from './slices/build-log.js';
 import { FirestoreBuildMediaStore } from './slices/build-media.js';
 import { FirestoreCatalogEnrichmentStore } from './slices/catalog-enrichment.js';
+import { FirestoreCliChatStore, type CliChatRecord } from './slices/cli-chat.js';
 import { FirestoreContributionStore } from './slices/contribution.js';
 import { FirestoreDispatchStore } from './slices/dispatch.js';
 import { FirestoreIdentityStore } from './slices/identity.js';
@@ -105,6 +106,7 @@ export class FirestoreStore implements Store {
   private buildLogStore: FirestoreBuildLogStore;
   private buildMediaStore: FirestoreBuildMediaStore;
   private catalogEnrichmentStore: FirestoreCatalogEnrichmentStore;
+  private cliChatStore: FirestoreCliChatStore;
 
   constructor(db?: Firestore) {
     this.db = db ?? new Firestore();
@@ -132,6 +134,7 @@ export class FirestoreStore implements Store {
     this.buildLogStore = new FirestoreBuildLogStore(this.db);
     this.buildMediaStore = new FirestoreBuildMediaStore(this.db);
     this.catalogEnrichmentStore = new FirestoreCatalogEnrichmentStore(this.db);
+    this.cliChatStore = new FirestoreCliChatStore(this.db);
   }
 
   async getUser(uid: string): Promise<User | null> {
@@ -174,9 +177,7 @@ export class FirestoreStore implements Store {
       .map(({ record }) => record.slug!)
       .sort();
 
-    // Resolve every account-owned collection before the first write. Besides making the
-    // dry operational failure mode easier to reason about, this ensures an index error
-    // cannot leave a half-deleted identity.
+    // Resolve owned collections first so an index error cannot half-delete.
     const email = user?.email?.toLowerCase();
     const [
       accessTokens,
@@ -220,10 +221,7 @@ export class FirestoreStore implements Store {
       this.db.collection('betaInvites').where('claimedUid', '==', uid).get(),
     ]);
 
-    // Refresh-token index rows historically carry only grantId, so ownerUid is absent.
-    // Join them to the owned grants rather than leaving a credential lookup pointing at
-    // a deleted account. The ownerUid query above still covers newer rows if that field
-    // is added later.
+    // Refresh rows may lack ownerUid; join them through owned grants.
     const grantIds = new Set(oauthGrants.docs.map((doc) => doc.id));
     const refreshByGrant = await Promise.all(
       [...grantIds].map((grantId) => this.db.collection('oauthRefreshTokens').where('grantId', '==', grantId).get()),
@@ -259,6 +257,7 @@ export class FirestoreStore implements Store {
     deleteRefs.set(`creatorAgentKeys/${uid}`, this.db.collection('creatorAgentKeys').doc(uid));
     deleteRefs.set(`usage/${uid}`, this.db.collection('usage').doc(uid));
     deleteRefs.set(`users/${uid}`, this.db.collection('users').doc(uid));
+    deleteRefs.set(`cliChats/${uid}`, this.db.collection('cliChats').doc(uid));
 
     const writes: Array<(batch: FirebaseFirestore.WriteBatch) => void> = [];
     for (const { doc, record } of owned) {
@@ -283,8 +282,7 @@ export class FirestoreStore implements Store {
     }
     for (const ref of deleteRefs.values()) writes.push((batch) => batch.delete(ref));
 
-    // Keep below Firestore's 500-operation ceiling. Every operation is idempotent, so a
-    // transport failure between batches is safely completed by retrying the request.
+    // Stay under Firestore's 500-op batch cap.
     const BATCH_SIZE = 450;
     for (let start = 0; start < writes.length; start += BATCH_SIZE) {
       const batch = this.db.batch();
@@ -821,7 +819,10 @@ export class FirestoreStore implements Store {
     return this.globalQuotaStore.getGlobalBotCallCount(dateStr);
   }
 
-  async checkAndIncrementGlobalBotCalls(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
+  async checkAndIncrementGlobalBotCalls(
+    dateStr: string,
+    limit: number,
+  ): Promise<{ allowed: boolean; current: number }> {
     return this.globalQuotaStore.checkAndIncrementGlobalBotCalls(dateStr, limit);
   }
 
@@ -1185,10 +1186,7 @@ export class FirestoreStore implements Store {
   }
 
   async listGameSlugs(): Promise<string[]> {
-    // `listDocuments()` rather than `get()`: it lists references without reading
-    // documents, and — the part that matters here — it includes games whose parent
-    // document was never written but which have subcollections underneath. A game that
-    // only ever received feedback is exactly that case, and a `get()` would miss it.
+    // listDocuments includes games that only have subcollections, which get() would miss.
     const refs = await this.db.collection('games').listDocuments();
     return refs.map((ref) => ref.id).sort();
   }
@@ -1409,4 +1407,6 @@ export class FirestoreStore implements Store {
   }): Promise<OAuthGrantRecord | null> {
     return this.oauthStore.issueOAuthTokensFromGrant(input);
   }
+  getCliChat = (uid: string) => this.cliChatStore.getCliChat(uid);
+  putCliChat = (uid: string, record: CliChatRecord) => this.cliChatStore.putCliChat(uid, record);
 }

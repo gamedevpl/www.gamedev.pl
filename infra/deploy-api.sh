@@ -320,7 +320,7 @@ fi
 # None of them survived a deploy before this. On 2026-08-04 a TRANSLATE_BUILD_LOG=false
 # set by hand fixed a spend leak, then vanished under an unrelated deploy ten minutes
 # later and the leak resumed unnoticed. A lever that reverts itself is worse than none.
-for VERTEX_VAR in VERTEX_MODEL VERTEX_REGION TRANSLATE_BUILD_LOG; do
+for VERTEX_VAR in VERTEX_MODEL VERTEX_REGION TRANSLATE_BUILD_LOG CLI_CHAT_MODEL; do
   eval "VERTEX_VAL=\${${VERTEX_VAR}:-}"
   if [ -n "${VERTEX_VAL}" ]; then
     ENV_VARS="${ENV_VARS}|${VERTEX_VAR}=${VERTEX_VAL}"

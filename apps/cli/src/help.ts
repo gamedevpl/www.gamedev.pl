@@ -9,7 +9,7 @@ const BLURB: Record<SlashVerb, string> = {
   profile: 'signed-in profile',
   handle: 'get or set handle',
   builder: 'who is building — builder <slug>',
-  connect: 'MCP / agent connect',
+  connect: 'MCP handoff, or --agent',
   checkout: 'clone a game — checkout <slug>',
   quota: "today's submission budget",
   notifications: 'unread notifications',
@@ -17,9 +17,9 @@ const BLURB: Record<SlashVerb, string> = {
   login: 'open a browser and sign in',
   logout: 'forget the stored grant',
   whoami: 'print the signed-in identity',
-  submit: 'run the local gate, no upload',
-  pull: 'refresh a checkout',
-  diff: 'unreconciled local files',
+  submit: 'deliver sources after the local ladder',
+  pull: 'update a checkout from the platform',
+  diff: 'three-way sync against the checkout base',
   update: 'install a newer CLI',
 };
 
@@ -27,7 +27,7 @@ export function formatHelp(slash = false): string {
   const prefix = slash ? '/' : '';
   const rows = SLASH_VERBS.map((verb) => `  ${(prefix + verb).padEnd(18)}${BLURB[verb]}`);
   const intro = slash
-    ? [`${CLI_BIN} ${CLI_VERSION}`, '', '  type to talk · ↑/↓ history · /quit to leave', '']
+    ? [`${CLI_BIN} ${CLI_VERSION}`, '', '  type to talk — a game starts when you ask · /quit to leave', '']
     : [
         `${CLI_BIN} ${CLI_VERSION} — Studio from a terminal`,
         '',

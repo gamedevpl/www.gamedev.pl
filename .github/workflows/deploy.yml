@@ -96,6 +96,7 @@ jobs:
           BETA_ALLOWED_UIDS: ${{ vars.BETA_ALLOWED_UIDS }}
           CODE_LANE: ${{ vars.CODE_LANE }}
           CODE_SURFACE: ${{ vars.CODE_SURFACE }}
+          CLI_CHAT_MODEL: ${{ vars.CLI_CHAT_MODEL }}
           CLI_SURFACE: ${{ vars.CLI_SURFACE }}
           DIGEST_SWEEP_AUDIENCE: ${{ vars.DIGEST_SWEEP_AUDIENCE }}
           DISPATCH_REAPER_AUDIENCE: ${{ vars.DISPATCH_REAPER_AUDIENCE }}
@@ -423,7 +424,7 @@ jobs:
           # leak twice — the flag was applied, worked for ten minutes, and vanished under
           # an unrelated deploy. An emergency lever that quietly reverts is worse than no
           # lever, because the operator believes the incident is over.
-          for VERTEX_VAR in VERTEX_MODEL VERTEX_REGION TRANSLATE_BUILD_LOG; do
+          for VERTEX_VAR in VERTEX_MODEL VERTEX_REGION TRANSLATE_BUILD_LOG CLI_CHAT_MODEL; do
             VERTEX_VAL="${!VERTEX_VAR}"
             if [ -n "$VERTEX_VAL" ]; then
               ENV_VARS="${ENV_VARS}|${VERTEX_VAR}=${VERTEX_VAL}"

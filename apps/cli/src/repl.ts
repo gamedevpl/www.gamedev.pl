@@ -4,8 +4,11 @@ import { completeSlash, parseArgv, SLASH_VERBS, type SlashVerb } from './argv.js
 import { getStatus, postTurn } from './turn.js';
 import { formatStatusLines } from './status-watch.js';
 import type { ApiClient } from './api.js';
+import { checkoutGame, diffGame, formatSyncLines, pullGame, readCheckoutSlug } from './checkout.js';
+import { connectGame } from './connect.js';
+import { formatSubmitLines, submitGame } from './submit.js';
 import { dispatchReadVerb } from './verbs.js';
-import { answerDraft, beginIntake, formatQuestion, submitIdea, type IntakeDraft } from './create.js';
+import { postCliChat } from './chat.js';
 import { CLI_VERSION } from './update.js';
 import { formatError } from './errors.js';
 import { formatHelp } from './help.js';
@@ -15,24 +18,14 @@ export type ReplLineResult = {
   next: 'continue' | 'quit';
   token?: string | null;
   slug?: string;
-  draft?: IntakeDraft | null;
+  conversationId?: string;
 };
-
-async function openFromSpec(
-  api: ApiClient,
-  spec: { title: string; concept: string },
-  write: (s: string) => void,
-): Promise<ReplLineResult> {
-  const created = await submitIdea(api, spec.title, spec.concept);
-  write(`▸ opened ${created.slug ?? created.token}`);
-  return { next: 'continue', token: created.token, draft: null, slug: created.slug };
-}
 
 export async function handleReplLine(input: {
   line: string;
   api: ApiClient;
   token: string | null;
-  draft?: IntakeDraft | null;
+  conversationId?: string;
   write: (s: string) => void;
 }): Promise<ReplLineResult> {
   const trimmed = input.line.trim();
@@ -53,6 +46,63 @@ export async function handleReplLine(input: {
       try {
         const status = await getStatus(input.api, tok);
         input.write(formatStatusLines(status, input.api.origin).join('\n'));
+      } catch (error) {
+        input.write(formatError(error));
+      }
+      return { next: 'continue' };
+    }
+    if (cmd === 'submit') {
+      try {
+        const parsed = parseArgv(['node', 'cli', 'submit', ...rest]);
+        const dest = parsed.args[0] ?? process.cwd();
+        const slug = (typeof parsed.flags.slug === 'string' ? parsed.flags.slug : null) ?? readCheckoutSlug(dest);
+        if (!slug) {
+          input.write(`run it as ${cliUsage('submit', '[dir]')}`);
+          return { next: 'continue' };
+        }
+        const result = await submitGame({
+          api: input.api,
+          slug,
+          dest,
+          force: parsed.flags.force === true,
+          publish: parsed.flags.publish === true,
+        });
+        input.write(formatSubmitLines(result, slug).join('\n'));
+      } catch (error) {
+        input.write(formatError(error));
+      }
+      return { next: 'continue' };
+    }
+    if (cmd === 'connect' || cmd === 'checkout' || cmd === 'pull' || cmd === 'diff') {
+      try {
+        const parsed = parseArgv(['node', 'cli', cmd, ...rest]);
+        const cwd = process.cwd();
+        const slug = parsed.args[0] || (cmd === 'checkout' ? undefined : readCheckoutSlug(cwd));
+        if (!slug) {
+          input.write(`run it as ${cliUsage(cmd)}`);
+          return { next: 'continue' };
+        }
+        if (cmd === 'checkout') {
+          const dest = parsed.args[1] ?? slug;
+          const result = await checkoutGame({ api: input.api, slug, dest });
+          input.write(`checked out ${slug} → ${result.dest}`);
+        } else if (cmd === 'pull') {
+          const dest = parsed.args[1] ?? cwd;
+          const pulled = await pullGame({ api: input.api, slug, dest, force: parsed.flags.force === true });
+          input.write(`pulled ${slug} @ ${pulled.version}`);
+        } else if (cmd === 'diff') {
+          const dest = parsed.args[1] ?? cwd;
+          input.write(formatSyncLines(await diffGame({ api: input.api, slug, dest })).join('\n'));
+        } else {
+          await connectGame({
+            api: input.api,
+            slug,
+            dest: cwd,
+            agent: typeof parsed.flags.agent === 'string' ? parsed.flags.agent : undefined,
+            handoff: parsed.flags.handoff === true,
+            write: input.write,
+          });
+        }
       } catch (error) {
         input.write(formatError(error));
       }
@@ -87,23 +137,21 @@ export async function handleReplLine(input: {
   }
   if (!input.token) {
     try {
-      if (input.draft) {
-        const answered = answerDraft(input.draft, trimmed);
-        if (answered.kind === 'ask') {
-          input.write(formatQuestion(answered.draft));
-          return { next: 'continue', draft: answered.draft };
-        }
-        return await openFromSpec(input.api, answered, input.write);
+      const result = await postCliChat(input.api, trimmed, input.conversationId);
+      if (result.kind === 'create') {
+        input.write(`▸ opened ${result.slug}${result.ack ? ` — ${result.ack}` : ''}`);
+        return {
+          next: 'continue',
+          token: result.token,
+          slug: result.slug,
+          conversationId: result.conversationId,
+        };
       }
-      const started = await beginIntake(input.api, trimmed);
-      if (started.kind === 'ask') {
-        input.write(formatQuestion(started.draft));
-        return { next: 'continue', draft: started.draft };
-      }
-      return await openFromSpec(input.api, started, input.write);
+      input.write(`◆ ${result.text}`);
+      return { next: 'continue', conversationId: result.conversationId };
     } catch (error) {
       input.write(formatError(error));
-      return { next: 'continue', draft: input.draft ?? null };
+      return { next: 'continue', conversationId: input.conversationId };
     }
   }
   try {

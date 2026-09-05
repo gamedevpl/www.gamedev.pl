@@ -43,6 +43,17 @@ describe('delegation credential boundary', () => {
     expect(env.GAMEDEV_ROUND_TOKEN).toBe('round-scoped-only');
     expect(env.PATH).toBe('/usr/bin');
   });
+
+  it('passes MCP auth without a round-token alias', () => {
+    const env = childEnv({ PATH: '/usr/bin', GAMEDEV_ACCESS_TOKEN: 'gdpl_oat_creator' }, '', {
+      url: 'https://www.gamedev.pl/api/mcp',
+      authorization: 'Authorization: Bearer gdpl_cak_secret',
+    });
+    expect(env.GAMEDEV_ROUND_TOKEN).toBeUndefined();
+    expect(env.GAMEDEV_ACCESS_TOKEN).toBeUndefined();
+    expect(env.GAMEDEVPL_MCP_URL).toBe('https://www.gamedev.pl/api/mcp');
+    expect(env.GAMEDEVPL_MCP_AUTHORIZATION).toBe('Authorization: Bearer gdpl_cak_secret');
+  });
 });
 
 describe('delegation event rendering', () => {

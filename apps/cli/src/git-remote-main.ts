@@ -1,14 +1,18 @@
 #!/usr/bin/env node
 import { createInterface } from 'node:readline';
 import { stdin, stdout } from 'node:process';
-import { createApi } from './api.js';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { createApi, type ApiClient } from './api.js';
 import { encryptedFileStore, memoryStore } from './keychain.js';
 import { originFromEnv } from './oauth.js';
-import { diffGame } from './checkout.js';
-import { runRemoteHelper } from './git-remote.js';
-import { readFileSync, existsSync } from 'node:fs';
+import { describeError } from './errors.js';
+import { submitGame, type SubmitResult } from './submit.js';
+import { runRemoteHelper, type PushResult } from './git-remote.js';
+import { materializePushCheckout } from './git-ref.js';
 import { GIT_REMOTE_SCHEME } from './bin-name.js';
-import { join } from 'node:path';
+import { localGameFiles, writeBase } from './checkout.js';
 
 function slugFromUrl(url: string): string {
   const prefix = `${GIT_REMOTE_SCHEME}://`;
@@ -30,6 +34,37 @@ function storeFromEnv(env: NodeJS.ProcessEnv) {
 function readSlugFile(cwd: string): string | null {
   const path = join(cwd, '.gamedev-slug');
   return existsSync(path) ? readFileSync(path, 'utf8').trim() : null;
+}
+
+function adoptCheckoutBase(cwd: string, slug: string, dest: string, result: SubmitResult): void {
+  if (result.kind === 'delivered') writeBase(cwd, result.version, result.files);
+  else writeBase(cwd, result.sync.version, localGameFiles(dest, slug));
+}
+
+export async function reconcilePush(input: {
+  api: ApiClient;
+  slug: string;
+  cwd: string;
+  srcRef: string;
+  submit?: typeof submitGame;
+}): Promise<PushResult> {
+  const tmp = mkdtempSync(join(tmpdir(), 'gamedev-push-'));
+  try {
+    const dest = materializePushCheckout({
+      repo: input.cwd,
+      srcRef: input.srcRef,
+      slug: input.slug,
+      cwd: input.cwd,
+      dest: tmp,
+    });
+    const result = await (input.submit ?? submitGame)({ api: input.api, slug: input.slug, dest });
+    adoptCheckoutBase(input.cwd, input.slug, dest, result);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: describeError(error).message };
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
 }
 
 export async function runGitRemoteHelper(argv: string[], env: NodeJS.ProcessEnv = process.env): Promise<number> {
@@ -65,10 +100,7 @@ export async function runGitRemoteHelper(argv: string[], env: NodeJS.ProcessEnv 
       importScript: async (script) => {
         stdout.write(script.endsWith('\n') ? script : `${script}\n`);
       },
-      pushReconcile: async () => {
-        const diff = await diffGame({ api, slug, dest: process.cwd() });
-        return diff.unreconciled ? 'unreconciled' : 'ok';
-      },
+      pushReconcile: async (src) => reconcilePush({ api, slug, cwd: process.cwd(), srcRef: src }),
     });
     return 0;
   } finally {

@@ -1281,11 +1281,11 @@
     "cli": {
       "nav": "gamedevpl CLI",
       "title": "gamedevpl CLI — terminal",
-      "lead": "Rozmowny front door. Opisz pomysł, odpowiedz na pytania, obserwuj bramkę. Checkout idzie do Twojego edytora; git push nie jest ścieżką oddania.",
+      "lead": "Rozmowny front door. Najpierw rozmowa; gra startuje, kiedy o nią poprosisz. Checkout idzie do Twojego edytora; git push nie jest ścieżką oddania.",
       "installHint": "Potrzebujesz Node 20+ — tak jak przy kopii roboczej. Windows: irm https://www.gamedev.pl/install.ps1 | iex. Skrypt weryfikuje sumę kontrolną zanim zapisze ~/.local/bin.",
       "installPending": "Instalatory nie są jeszcze publiczne. Klient jest w tym repozytorium w apps/cli; zbierz go lokalnie: npm run bundle -w @gamedevpl/cli.",
       "login": "gamedevpl login otwiera przeglądarkę. Zatwierdzasz raz — bez kopiowania tokenu.",
-      "repl": "gamedevpl bez czasownika otwiera REPL: opisz grę, potem iteruj.",
+      "repl": "gamedevpl bez czasownika otwiera REPL: najpierw rozmowa, gra dopiero gdy o nią poprosisz.",
       "checkout": "gamedevpl checkout <slug> do własnego edytora. Oddajesz poleceniem gamedevpl submit.",
       "ci": "CI: GAMEDEV_TOKEN z secrets. Nigdy nie przekazuj tokenu OAuth twórcy do sub-agenta."
     }

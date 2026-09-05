@@ -69,11 +69,11 @@ export const privacyPl: LegalDocument = {
               'Do 24 miesięcy po zamknięciu sprawy',
             ],
             [
-              'Treści, które tworzysz: opis gry, tytuł, odpowiedzi na pytania doprecyzowujące, uwagi do gotowej gry, ' +
+              'Treści, które tworzysz: opis gry, tytuł, odpowiedzi doprecyzowujące, czat CLI przed grą, uwagi do gotowej gry, ' +
                 'przesłane szkice i obrazy',
               'Zbudowanie gry przez agenta AI i jej opublikowanie',
               'art. 6 ust. 1 lit. b — wykonanie umowy',
-              'Bezterminowo dla gier opublikowanych (są częścią historii projektu); zgłoszenia nieopublikowane — 24 miesiące',
+              'Bezterminowo dla gier opublikowanych; zgłoszenia nieopublikowane — 24 miesiące; czat CLI do usunięcia konta',
             ],
             [
               'Publiczny profil twórcy, który zajmujesz przed publikacją: unikalny handle, nazwa wyświetlana, krótkie ' +
@@ -402,7 +402,7 @@ export const privacyPl: LegalDocument = {
             `Możesz w każdej chwili zaplanować usunięcie konta w ustawieniach konta albo napisać na [${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}). ` +
             'Usunięcie następuje po 14-dniowym okresie na zmianę decyzji. Ponowne zalogowanie przed wykonaniem usunięcia anuluje dyspozycję. ' +
             'Po upływie tego okresu usuwamy dane Twojego konta, adres e-mail, subskrypcje powiadomień, oddane przez Ciebie głosy i ' +
-            'wpisane uwagi do gier, zapis tego, które gry otwierałeś na potrzeby rekomendacji, zapisane postępy w grach, które je przechowują, wszystko, co zbudowałeś we ' +
+            'wpisane uwagi do gier, czat CLI sprzed powstania gry, zapis tego, które gry otwierałeś na potrzeby rekomendacji, zapisane postępy w grach, które je przechowują, wszystko, co zbudowałeś we ' +
             'wspólnych światach gier, Twój publiczny profil twórcy (handle, nazwę wyświetlaną, bio, preferencję avatara) ' +
             'oraz rezerwację handle, i powiązanie zgłoszeń z Twoją osobą. Usunięcie tego, co ' +
             'zbudowałeś we wspólnym świecie, usuwa to również z widoku innych graczy.',

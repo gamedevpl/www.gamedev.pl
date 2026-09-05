@@ -28,12 +28,14 @@ import { registerAdminGameRoutes } from './catalog/admin-game-routes.js';
 import { createSlugResolver } from './catalog/slug-resolver.js';
 import { registerSelfBuildConnectRoutes } from './agent-surface/self-build-connect-routes.js';
 import { registerDraftLifecycleRoutes } from './creation/draft-lifecycle-routes.js';
+import { registerCliChatRoutes } from './creation/cli-chat-routes.js';
 import { createGameCreator, registerCreateGameRoute } from './creation/create-game.js';
 import {
   createSeedDispatchClientFromEnv,
   type DispatchQueuedJob,
   type SeedDispatchClient,
 } from './creation/seed-dispatch.js';
+import type { IntakeAgent } from './creation/intake-agent.js';
 import { createDispatcher } from './creation/dispatch-build.js';
 import { createResumeBuild, type ResumeOutcome } from './creation/resume-build.js';
 import { createJobReconciler } from './creation/job-reconciler.js';
@@ -180,6 +182,7 @@ export interface SubmissionRoutesOptions {
   dailyImprovementQuota?: number;
   // Fronts every feedback/improve message (chat-agent.ts). Always on when set.
   chatAgent?: StudioChatAgent;
+  intakeAgent?: IntakeAgent;
   // The chat agent's own circuit breaker (creation-limits.ts); null disables.
   chatGate?: ChatGate | null;
   // Ceiling used when the config doc sets none (creation-limits.ts).
@@ -1271,21 +1274,6 @@ export async function registerSubmissionRoutes(
     postGateScreenshot: postGateScreenshotToThread,
   });
 
-  /**
-   * Creates a game. The whole of it: beta/blocked check, payload validation, per-IP
-   * limit, moderation, the global creation circuit-breaker, per-user quota, slug mint
-   * and claim, brief persistence, and dispatch — in that order, for the reasons each
-   * step documents.
-   *
-   * Lifted out of the HTTP route so the MCP `create_game` tool runs the identical
-   * sequence instead of a second copy of it. A creator reaching this through their
-   * coding agent is spending the same quota against the same limits as one reaching it
-   * through Studio, and two implementations of that is how the two drift into having
-   * different rules.
-   *
-   * Returns a result rather than writing to a reply, so the caller maps it to whatever
-   * its transport uses — status codes here, tool errors over MCP.
-   */
   const { createGame } = createGameCreator({
     store,
     githubClient,
@@ -1310,6 +1298,17 @@ export async function registerSubmissionRoutes(
     submissionTokenSecret,
     checkUserAccess,
     createGame,
+  });
+
+  registerCliChatRoutes(app, {
+    store,
+    contentChecker,
+    submissionTokenSecret,
+    createGame,
+    intakeAgent: options.intakeAgent,
+    chatGate,
+    dailyChatQuota,
+    now,
   });
 
   registerHandoffSealRoutes(app, {

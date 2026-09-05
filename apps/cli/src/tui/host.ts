@@ -5,7 +5,6 @@ import { formatError } from '../errors.js';
 import { handleReplLine, replBanner } from '../repl.js';
 import { wantsColor } from '../renderer.js';
 import type { ApiClient } from '../api.js';
-import type { IntakeDraft } from '../create.js';
 import { ReplApp } from './app.js';
 import { createRoundWatch } from './round-watch.js';
 import { createTuiSession, formatSessionIdentity } from './session.js';
@@ -31,6 +30,7 @@ export async function runInkRepl(input: {
     patchConsole: false,
   });
   let token = input.token;
+  let conversationId: string | undefined;
   let who = '';
   let slug = '';
   const paintIdentity = (): void => session.setIdentity(formatSessionIdentity(who, slug));
@@ -56,18 +56,16 @@ export async function runInkRepl(input: {
       session.writeLine(formatError(error));
     },
   );
-  let draft: IntakeDraft | null = null;
   try {
     for (;;) {
-      const asking = draft?.questions[draft.index];
-      const line = await session.prompt(asking?.choices, asking?.prompt);
+      const line = await session.prompt();
       let result;
       try {
         result = await handleReplLine({
           line,
           api: input.api,
           token,
-          draft,
+          conversationId,
           write: (text) => session.writeLine(text),
         });
       } catch (error) {
@@ -82,7 +80,7 @@ export async function runInkRepl(input: {
         slug = result.slug;
         paintIdentity();
       }
-      if (result.draft !== undefined) draft = result.draft;
+      if (result.conversationId !== undefined) conversationId = result.conversationId;
       if (result.next === 'quit') break;
     }
   } finally {

@@ -1,6 +1,10 @@
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import { handleReplLine, replBanner } from './repl.js';
 import { createApi } from './api.js';
+import { writeBase, writeGameFiles } from './checkout.js';
 import { memoryStore } from './keychain.js';
 import { MASCOT_ASCII } from './tui/mascot.js';
 
@@ -29,7 +33,7 @@ describe('repl turn loop', () => {
     expect(lines.join('\n')).not.toMatch(/build /);
   });
 
-  it('drives refine then submit when there is no open game', async () => {
+  it('talks through the chat endpoint when there is no open game', async () => {
     const lines: string[] = [];
     const seen: string[] = [];
     const api = createApi({
@@ -38,11 +42,11 @@ describe('repl turn loop', () => {
       fetch: async (url, init) => {
         const path = String(url);
         seen.push(`${init?.method ?? 'GET'} ${path}`);
-        if (path.endsWith('/api/submissions/refine')) {
-          return new Response(JSON.stringify({ questions: [], suggestedTitle: 'Robot Garden' }), { status: 200 });
-        }
-        if (path.endsWith('/api/submissions') && init?.method === 'POST') {
-          return new Response(JSON.stringify({ token: 'new-tok', slug: 'robot-garden' }), { status: 200 });
+        if (path.endsWith('/api/cli/chat')) {
+          return new Response(
+            JSON.stringify({ kind: 'reply', text: 'What should it feel like?', conversationId: 'conv-1' }),
+            { status: 200 },
+          );
         }
         return new Response('{}', { status: 404 });
       },
@@ -53,53 +57,46 @@ describe('repl turn loop', () => {
       token: null,
       write: (s) => lines.push(s),
     });
-    expect(seen.some((row) => row.includes('/refine'))).toBe(true);
-    expect(seen.some((row) => row.startsWith('POST ') && row.endsWith('/api/submissions'))).toBe(true);
-    expect(result.token).toBe('new-tok');
-    expect(result.slug).toBe('robot-garden');
-    expect(lines.join('\n')).toContain('robot-garden');
+    expect(seen.some((row) => row.includes('/api/cli/chat'))).toBe(true);
+    expect(seen.some((row) => row.includes('/refine'))).toBe(false);
+    expect(seen.some((row) => row.startsWith('POST ') && row.endsWith('/api/submissions'))).toBe(false);
+    expect(result.token).toBeUndefined();
+    expect(result.conversationId).toBe('conv-1');
+    expect(lines.join('\n')).toContain('What should it feel like');
   });
 
-  it('asks refine questions before submitting', async () => {
+  it('opens a game only when the chat endpoint returns create', async () => {
     const lines: string[] = [];
     const api = createApi({
       origin: 'https://www.gamedev.pl',
       store: memoryStore({ accessToken: 'gdpl_oat_t', tokenType: 'Bearer', scope: 'creator' }),
-      fetch: async (url, init) => {
+      fetch: async (url) => {
         const path = String(url);
-        if (path.endsWith('/api/submissions/refine')) {
+        if (path.endsWith('/api/cli/chat')) {
           return new Response(
             JSON.stringify({
-              questions: [{ id: 'tone', question: 'What tone?', options: [{ label: 'calm' }] }],
-              suggestedTitle: 'Robot Garden',
+              kind: 'create',
+              token: 'new-tok',
+              slug: 'robot-garden',
+              conversationId: 'conv-1',
+              ack: 'Opening it.',
             }),
             { status: 200 },
           );
         }
-        if (path.endsWith('/api/submissions') && init?.method === 'POST') {
-          return new Response(JSON.stringify({ token: 'new-tok', slug: 'robot-garden' }), { status: 200 });
-        }
         return new Response('{}', { status: 404 });
       },
     });
-    const asked = await handleReplLine({
-      line: 'A garden full of robots.',
-      api,
-      token: null,
-      write: (s) => lines.push(s),
-    });
-    expect(asked.draft?.questions).toHaveLength(1);
-    expect(lines.join('\n')).toContain('What tone?');
     const opened = await handleReplLine({
-      line: 'calm',
+      line: 'Make a garden full of robots that water the plants.',
       api,
       token: null,
-      draft: asked.draft,
       write: (s) => lines.push(s),
     });
     expect(opened.token).toBe('new-tok');
-    expect(opened.draft).toBeNull();
     expect(opened.slug).toBe('robot-garden');
+    expect(opened.conversationId).toBe('conv-1');
+    expect(lines.join('\n')).toContain('robot-garden');
   });
 
   it('treats a blank line as a no-op', async () => {
@@ -117,12 +114,23 @@ describe('repl turn loop', () => {
     expect(posts).toBe(0);
   });
 
-  it('tells the user to run known non-REPL verbs as gamedevpl <verb>', async () => {
+  it('connects from /connect instead of printing a fake success', async () => {
     const lines: string[] = [];
     const api = createApi({
       origin: 'https://www.gamedev.pl',
       store: memoryStore({ accessToken: 'gdpl_oat_t', tokenType: 'Bearer', scope: 'creator' }),
-      fetch: async () => new Response('{}', { status: 404 }),
+      fetch: async (url) => {
+        if (String(url).includes('/api/me/studio?game=')) {
+          return new Response(JSON.stringify({ games: [{ slug: 'sky', token: 'tok-1' }] }), { status: 200 });
+        }
+        if (String(url).endsWith('/connect')) {
+          return new Response(
+            JSON.stringify({ slug: 'sky', mcpUrl: 'https://www.gamedev.pl/api/mcp', kickoffPrompt: 'Build sky' }),
+            { status: 200 },
+          );
+        }
+        return new Response('{}', { status: 404 });
+      },
     });
     const result = await handleReplLine({
       line: '/connect sky',
@@ -131,7 +139,8 @@ describe('repl turn loop', () => {
       write: (s) => lines.push(s),
     });
     expect(result.next).toBe('continue');
-    expect(lines.join('\n')).toBe('run it as gamedevpl connect');
+    expect(lines.join('\n')).toContain('https://www.gamedev.pl/api/mcp');
+    expect(lines.join('\n')).not.toBe('run it as gamedevpl connect');
   });
 
   it('prints the open session status from /status', async () => {
@@ -196,6 +205,55 @@ describe('repl turn loop', () => {
     expect(result.next).toBe('continue');
     expect(lines.join('\n')).toContain('credential expired');
     expect(lines.join('\n')).toContain('gamedevpl login');
+  });
+
+  it('treats /submit dest like the one-shot verb, not as a slug', async () => {
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-repl-sub-'));
+    writeGameFiles(dest, 'ghost-roads', [{ path: 'game.ts', content: 'A' }]);
+    writeBase(dest, 'v1', [{ path: 'game.ts', content: 'A' }]);
+    writeFileSync(join(dest, '.gamedev-slug'), 'ghost-roads');
+    const lines: string[] = [];
+    const seen: string[] = [];
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_oat_t', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url) => {
+        const path = String(url);
+        seen.push(path);
+        if (path.endsWith('/versions') && !path.includes('/tree')) {
+          return new Response(
+            JSON.stringify({ versions: [{ version: 'v1', createdAt: '2026-09-01', sourceFiles: ['game.ts'] }] }),
+            { status: 200 },
+          );
+        }
+        if (path.includes('/tree')) {
+          return new Response(JSON.stringify({ version: 'v1', files: [{ path: 'game.ts', content: 'A' }] }), {
+            status: 200,
+          });
+        }
+        return new Response('{}', { status: 404 });
+      },
+    });
+    const delivered = await handleReplLine({
+      line: `/submit --slug ghost-roads ${dest}`,
+      api,
+      token: 'tok',
+      write: (s) => lines.push(s),
+    });
+    expect(delivered.next).toBe('continue');
+    expect(seen.some((path) => path.includes('/studio/games/ghost-roads/'))).toBe(true);
+    expect(lines.join('\n')).toMatch(/nothing to deliver|ghost-roads/);
+
+    lines.length = 0;
+    const missing = await handleReplLine({
+      line: '/submit not-a-checkout',
+      api,
+      token: 'tok',
+      write: (s) => lines.push(s),
+    });
+    expect(missing.next).toBe('continue');
+    expect(lines.join('\n')).toContain('gamedevpl submit [dir]');
+    expect(seen.some((path) => path.includes('/studio/games/not-a-checkout/'))).toBe(false);
   });
 
   it('prints described help from /help', async () => {

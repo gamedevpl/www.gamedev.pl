@@ -3,9 +3,8 @@
  *
  * Every layer of the content-safety design was built and then never observed. Rejections
  * happen — a 422 goes back to the creator and the event evaporates. That is fine for one
- * clumsy phrasing and useless for the question the owner actually needs answered when the
- * beta opens: *is anyone probing this, and where?* A moderator with no numbers cannot tell
- * a deny-list that is working from one that stopped being called.
+ * clumsy phrasing and useless for the question the owner actually needs answered: is anyone
+ * probing this, and where? A moderator cannot tell a working deny-list from a dead one.
  *
  * So every rejection emits one structured line, from here and nowhere else. One place
  * matters more than it looks: there are seven call sites across six modules, each of which
@@ -50,6 +49,7 @@ export type ModerationSurface =
   | 'remix_code' // a player's code-change request on a published game
   | 'remix_share' // declared text a player is about to put behind a share link
   | 'remix_save' // title / text params baked into a private Studio fork
+  | 'cli_chat' // pre-game CLI intake before a game exists
   | 'contact' // the public contact form, no session required
   | 'proposal' // a proposed change to somebody else's game: title, description, review replies
   | 'mock_prompt'; // the dev-only mock generator route

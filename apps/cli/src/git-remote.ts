@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { cliUsage } from './bin-name.js';
 import { unreconciledMessage } from './checkout.js';
 
 export const GIT_REMOTE_CAPS = ['import', 'push', 'option'] as const;
@@ -59,14 +58,31 @@ export function fastImportScript(input: {
   return chunks.join('\n');
 }
 
+export type PushResult = { ok: true } | { ok: false; message: string };
+
 export type HelperIo = {
   readLine: () => Promise<string | null>;
   write: (line: string) => void;
   fetchVersions: (slug: string) => Promise<VersionRef[]>;
   fetchTree: (slug: string, version: string) => Promise<TreeFile[]>;
   importScript: (script: string) => Promise<void>;
-  pushReconcile: () => Promise<'ok' | 'unreconciled'>;
+  pushReconcile: (src: string) => Promise<PushResult>;
 };
+
+export function pushSrcRef(rest: string[]): string | null {
+  const src = rest.join(' ').split(':')[0]?.trim() ?? '';
+  return src || null;
+}
+
+export function pushDstRef(rest: string[]): string {
+  return rest.join(' ').split(':')[1]?.trim() || 'refs/heads/main';
+}
+
+export function formatPushStatus(dst: string, result: PushResult): string {
+  if (result.ok) return `ok ${dst}`;
+  const why = result.message.replace(/[\r\n]+/g, ' ').trim() || 'push failed';
+  return `error ${dst} ${why}`;
+}
 
 export async function runRemoteHelper(slug: string, io: HelperIo): Promise<void> {
   const pendingImport = { want: false };
@@ -93,10 +109,14 @@ export async function runRemoteHelper(slug: string, io: HelperIo): Promise<void>
     } else if (cmd === 'option') io.write('ok\n');
     else if (cmd === 'import' || cmd === 'fetch') pendingImport.want = true;
     else if (cmd === 'push') {
-      const result = await io.pushReconcile();
-      const dst = rest.join(' ').split(':')[1] ?? 'refs/heads/main';
-      if (result === 'unreconciled') io.write(`${refuseNonFastForward()}\n\n`);
-      else io.write(`error ${dst} git push is not a delivery path — use ${cliUsage('submit')}\n\n`);
+      const src = pushSrcRef(rest);
+      const dst = pushDstRef(rest);
+      if (!src) {
+        io.write(`${formatPushStatus(dst, { ok: false, message: 'missing source ref' })}\n\n`);
+        continue;
+      }
+      const result = await io.pushReconcile(src);
+      io.write(`${formatPushStatus(dst, result)}\n\n`);
     } else io.write(`${handleHelperLine(trimmed, slug).join('\n')}\n`);
   }
 }

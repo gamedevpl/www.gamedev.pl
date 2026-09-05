@@ -66,11 +66,11 @@ export const privacyEn: LegalDocument = {
               'Up to 24 months after we close the conversation',
             ],
             [
-              'Content you create: game description, title, answers to clarifying questions, feedback on a finished ' +
+              'Content you create: game description, title, clarifying answers, pre-game CLI chat, feedback on a finished ' +
                 'game, uploaded sketches and images',
               'Having an AI agent build your game and publishing it',
               'Art. 6(1)(b) — performance of a contract',
-              'Indefinitely for published games (they are part of the project record); unpublished submissions — 24 months',
+              'Indefinitely for published games; unpublished submissions — 24 months; CLI chat until you delete the account',
             ],
             [
               'Public creator profile you claim before publishing: unique handle, display name, short bio, and ' +
@@ -390,7 +390,7 @@ export const privacyEn: LegalDocument = {
             `You can schedule deletion at any time in Account settings, or ask us at [${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}). ` +
             'Deletion happens after a 14-day recovery period. Signing in again before cleanup cancels the request. ' +
             'When the period ends we remove your account data, email address, notification subscriptions, the votes and written ' +
-            'feedback you left on games, the record of which games you opened for recommendations, your saved ' +
+            'feedback you left on games, CLI chat from before a game existed, the record of which games you opened for recommendations, your saved ' +
             'progress in games that keep it, anything you built in a ' +
             'game’s shared world, your public creator profile (handle, display name, bio, avatar preference) and ' +
             'the handle reservation, and the link between your submissions and you. Removing what you built ' +
