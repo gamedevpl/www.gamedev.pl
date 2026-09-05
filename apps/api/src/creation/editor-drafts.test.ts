@@ -356,6 +356,30 @@ describe('editor draft routes', () => {
     expect(stale.json().revision).toBe(1);
   });
 
+  it("starts no build once the day's gate-run ceiling is spent", async () => {
+    // The editor publishes through the trigger delivery uses, ceiling included.
+    await store.setCreationLimits({ globalDailyGateRunCap: 0 }, 'test');
+    const gateRuns: string[] = [];
+    const { app } = await createApp({ gateRuns });
+    await app.inject({
+      method: 'PUT',
+      url: '/api/me/games/garden-gather/editor/draft',
+      headers: authHeaders('g:alice'),
+      payload: {
+        content: { gardens: [{ properties: { name: 'Published' }, rows: ['########', '#.@...*#', '########'] }] },
+      },
+    });
+    const publish = await app.inject({
+      method: 'POST',
+      url: '/api/me/games/garden-gather/editor/publish',
+      headers: authHeaders('g:alice'),
+    });
+
+    // Stored and unverified: it cannot publish, and re-gates tomorrow.
+    expect(publish.statusCode).toBe(200);
+    expect(gateRuns).toEqual([]);
+  });
+
   it('publishes the draft as a content-only candidate: defaults swapped, module regenerated, gate started', async () => {
     const gateRuns: string[] = [];
     const { app, stored } = await createApp({ gateRuns });

@@ -5,11 +5,26 @@ import { CatalogVectorIndex } from './catalog-vector-index.js';
 import { CatalogIndexer } from './catalog-indexer.js';
 import type { Store } from '../platform/store.js';
 
+// Structural: catalog does not import creation (N1 module map).
+export interface CatalogSearchGate {
+  // One slot per paid embedding, at the cache-miss boundary.
+  checkAndSpend(uid: string | null, dateStr: string): Promise<{ allowed: boolean }>;
+  // Read-only headroom, so an exhausted lane refuses before it embeds.
+  peek(uid: string | null, dateStr: string): Promise<{ allowed: boolean }>;
+}
+
+// Stops one account draining the platform's day.
+export const DEFAULT_DAILY_SEARCH_QUOTA = 500;
+
 export interface CatalogSearchRoutesOptions {
   store?: Store;
   githubClient: GitHubClient | null;
   publishedRef: string;
   getCatalogEntries: () => Promise<CatalogGameEntry[]>;
+  // No gate degrades to no search, never to uncounted spend.
+  searchGate?: CatalogSearchGate | null;
+  dailySearchQuota?: number;
+  now?: () => number;
 }
 
 // Multimodal semantic vector search across catalog games.
@@ -18,9 +33,18 @@ export async function registerCatalogSearchRoutes(
   options: CatalogSearchRoutesOptions,
 ): Promise<void> {
   const { store, githubClient, publishedRef, getCatalogEntries } = options;
+  const searchGate = options.searchGate ?? null;
+  const nowMs = () => (options.now ?? Date.now)();
+  const today = () => new Date(nowMs()).toISOString().slice(0, 10);
 
   const embeddingService = new VertexEmbeddingService({
     log: (msg) => app.log.warn(msg),
+    // Counted per paid embedding: a cold instance embeds the whole catalog.
+    beforePaidCall: async () => {
+      if (!searchGate) return false;
+      const spent = await searchGate.checkAndSpend(null, today());
+      return spent.allowed;
+    },
   });
   const catalogVectorIndex = new CatalogVectorIndex();
   const indexer = new CatalogIndexer({
@@ -45,6 +69,34 @@ export async function registerCatalogSearchRoutes(
         return reply.send({ match: null, score: 0 });
       }
 
+      // Every refusal returns a miss: search only enhances the local match.
+      if (!searchGate) {
+        return reply.send({ match: null, score: 0 });
+      }
+
+      const dateStr = today();
+      // Anonymous is first-class: the hero prompt outlives the beta wall.
+      const uid = request.user?.uid ?? null;
+
+      // Read-only: an exhausted lane refuses before ensureIndex embeds anything.
+      const gate = await searchGate.peek(uid, dateStr);
+      if (!gate.allowed) {
+        return reply.send({ match: null, score: 0 });
+      }
+
+      // After the headroom peek, as elsewhere; one request is one query.
+      if (uid && store) {
+        const quota = await store.checkAndIncrementQuota(
+          uid,
+          dateStr,
+          options.dailySearchQuota ?? Number(process.env.DAILY_SEARCH_QUOTA ?? DEFAULT_DAILY_SEARCH_QUOTA),
+          'searchQueries',
+        );
+        if (!quota.allowed) {
+          return reply.send({ match: null, score: 0 });
+        }
+      }
+
       try {
         if (catalogVectorIndex.size() === 0) {
           await indexer.ensureIndex();
@@ -64,7 +116,9 @@ export async function registerCatalogSearchRoutes(
           });
         }
         return reply.send({ match: null, score: 0 });
-      } catch {
+      } catch (error) {
+        // A miss and a broken lane must not look identical outside.
+        request.log.warn({ err: error, queryLength: query.length }, 'catalog search failed');
         return reply.send({ match: null, score: 0 });
       }
     },

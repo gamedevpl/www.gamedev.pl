@@ -67,6 +67,30 @@ describe('embedding-service', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('serves one cache entry for queries that differ only in case or spacing', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ embedding: { values: [0.6, 0.8] } }),
+    } as Response);
+
+    const service = new VertexEmbeddingService({ model: 'gemini-embedding-2' });
+    vi.spyOn(
+      (service as unknown as { auth: { getClient: () => Promise<unknown> } }).auth,
+      'getClient',
+    ).mockResolvedValue({
+      getAccessToken: async () => ({ token: 'mock-token' }),
+    });
+
+    // A debounced prompt produces exactly this family of near-duplicates.
+    await service.embedQuery('Snake');
+    await service.embedQuery('snake');
+    await service.embedQuery('  snake  ');
+    await service.embedQuery('snake   game');
+    await service.embedQuery('snake game');
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
   it('generates document embedding with title/result prefix for gemini models', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
@@ -180,5 +204,56 @@ describe('embedding-service', () => {
     expect(vec).toEqual([]);
     expect(logs.length).toBe(1);
     expect(logs[0]).toContain('Vertex embedding generation failed');
+  });
+  it('asks the cost gate once per paid call, and never for a cache hit', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ embedding: { values: [0.6, 0.8] } }),
+    } as Response);
+
+    const asked: string[] = [];
+    const service = new VertexEmbeddingService({
+      model: 'gemini-embedding-2',
+      beforePaidCall: (options) => {
+        asked.push(options.role ?? 'query');
+        return true;
+      },
+    });
+    vi.spyOn(
+      (service as unknown as { auth: { getClient: () => Promise<unknown> } }).auth,
+      'getClient',
+    ).mockResolvedValue({
+      getAccessToken: async () => ({ token: 'mock-token' }),
+    });
+
+    await service.embedQuery('arcade football');
+    // Same text again: served from cache, so nobody is billed.
+    await service.embedQuery('arcade football');
+    // An index build embeds documents through the same boundary.
+    await service.embedDocument('a football game', 'Football');
+
+    expect(asked).toEqual(['query', 'document']);
+  });
+
+  it('makes no request at all when the cost gate refuses', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ embedding: { values: [0.6, 0.8] } }),
+    } as Response);
+
+    const service = new VertexEmbeddingService({
+      model: 'gemini-embedding-2',
+      beforePaidCall: () => false,
+    });
+    vi.spyOn(
+      (service as unknown as { auth: { getClient: () => Promise<unknown> } }).auth,
+      'getClient',
+    ).mockResolvedValue({
+      getAccessToken: async () => ({ token: 'mock-token' }),
+    });
+
+    // A refusal reads like a miss, exactly as an outage does.
+    expect(await service.embedQuery('arcade football')).toEqual([]);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

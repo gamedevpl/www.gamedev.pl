@@ -82,6 +82,27 @@ describe('createInternalAuthVerifierFromEnv', () => {
     expect(v).toBeInstanceOf(OidcInternalAuthVerifier);
   });
 
+  it('will not open the spend brake to the scheduler identity', () => {
+    // Arming the brake must not mean editing the sweeps' identity.
+    const withSweepSaOnly = createInternalAuthVerifierFromEnv(
+      {
+        SPEND_BRAKE_AUDIENCE: 'https://svc/api/internal/spend-brake',
+        NOTIFY_SWEEP_SA: 'sched@proj.iam.gserviceaccount.com',
+      } as NodeJS.ProcessEnv,
+      'spendBrake',
+    );
+    expect(withSweepSaOnly).toBeInstanceOf(DenyAllInternalAuthVerifier);
+
+    const withOwnCaller = createInternalAuthVerifierFromEnv(
+      {
+        SPEND_BRAKE_AUDIENCE: 'https://svc/api/internal/spend-brake',
+        SPEND_BRAKE_CALLER_SA: 'spend-brake@proj.iam.gserviceaccount.com',
+      } as NodeJS.ProcessEnv,
+      'spendBrake',
+    );
+    expect(withOwnCaller).toBeInstanceOf(OidcInternalAuthVerifier);
+  });
+
   it('uses a separate audience for the account deletion sweep', () => {
     const v = createInternalAuthVerifierFromEnv(
       {

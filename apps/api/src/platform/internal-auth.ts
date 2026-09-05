@@ -67,6 +67,8 @@ const AUDIENCE_ENV_VAR = {
   healthSweep: 'HEALTH_SWEEP_AUDIENCE',
   accountDeletionSweep: 'ACCOUNT_DELETION_SWEEP_AUDIENCE',
   dispatchReaper: 'DISPATCH_REAPER_AUDIENCE',
+  // Cloud Monitoring's Pub/Sub push, not the scheduler.
+  spendBrake: 'SPEND_BRAKE_AUDIENCE',
   // Not a sweep and not called by the scheduler: this one is the app service calling the
   // split-out party relay (mp-relay.ts). The mechanism is identical — a Google-signed OIDC
   // token, audience-pinned to the callee's URL — so it reuses this seam rather than
@@ -75,6 +77,14 @@ const AUDIENCE_ENV_VAR = {
 } as const;
 
 export type InternalSweep = keyof typeof AUDIENCE_ENV_VAR;
+
+// Callers that are not the scheduler, and the env var naming each.
+
+// Anything absent here is a scheduler job, authenticated by NOTIFY_SWEEP_SA.
+const CALLER_SA_ENV_VAR: Partial<Record<InternalSweep, string>> = {
+  mpRelay: 'MP_RELAY_CALLER_SA',
+  spendBrake: 'SPEND_BRAKE_CALLER_SA',
+};
 
 /**
  * Build the internal-auth verifier from env: OIDC when both the sweep's audience and
@@ -88,9 +98,10 @@ export function createInternalAuthVerifierFromEnv(
   sweep: InternalSweep = 'notifySweep',
 ): InternalAuthVerifier {
   const audience = env[AUDIENCE_ENV_VAR[sweep]]?.trim();
-  // The scheduler jobs share one identity; the relay is called by the app service, so it
-  // authenticates a different caller and must not be opened by the scheduler's SA.
-  const serviceAccountEmail = (sweep === 'mpRelay' ? env.MP_RELAY_CALLER_SA : env.NOTIFY_SWEEP_SA)?.trim();
+  // The relay and the brake have their own callers, opened by neither sweep.
+  const serviceAccountEmail = CALLER_SA_ENV_VAR[sweep]
+    ? env[CALLER_SA_ENV_VAR[sweep]]?.trim()
+    : env.NOTIFY_SWEEP_SA?.trim();
   if (audience && serviceAccountEmail) {
     return new OidcInternalAuthVerifier({ audience, serviceAccountEmail });
   }
