@@ -40,7 +40,7 @@ import { createJobReconciler } from './creation/job-reconciler.js';
 import { registerHandoffSealRoutes } from './creation/handoff-seal-routes.js';
 import { registerFeedbackRoutes } from './creation/feedback-routes.js';
 import { registerImproveRoutes } from './creation/improve-routes.js';
-import { createSeedPipeline } from './creation/seed-pipeline.js';
+import { createSeedPipeline, type SeedPipeline } from './creation/seed-pipeline.js';
 import { registerCreatorSelfRoutes } from './creation/creator-self-routes.js';
 import { registerCatalogRoutes } from './catalog/catalog-routes.js';
 import { registerGamePlayRoute } from './catalog/game-play-route.js';
@@ -382,6 +382,9 @@ export interface SubmissionRoutesHandle {
   }) => Promise<{ outcome: 'retried' | 'exhausted' | 'skipped'; reason?: string }>;
   // /api/internal/seed's worker: first dispatch from the stored brief.
   dispatchQueuedJob: DispatchQueuedJob;
+  // The seed route's other jobs: regenerate a seed, assemble a preview.
+  regenerateSeedNow: SeedPipeline['runSeedRegeneration'];
+  publishStagedPreviewNow: ((jobId: number) => Promise<unknown>) | null;
 }
 
 /**
@@ -1019,6 +1022,8 @@ export async function registerSubmissionRoutes(
     );
   }
 
+  const seedDispatch =
+    options.seedDispatch === undefined ? createSeedDispatchClientFromEnv(process.env, app.log) : options.seedDispatch;
   const seedPipeline = createSeedPipeline({
     store,
     now,
@@ -1028,11 +1033,15 @@ export async function registerSubmissionRoutes(
     backendFor,
     githubClient,
     publishedRef,
+    ...(seedDispatch
+      ? {
+          handoff: (jobId: number, steer?: string) =>
+            seedDispatch.enqueue(jobId, { action: 'regenerate', ...(steer ? { steer } : {}) }),
+        }
+      : {}),
   });
   const { seedDeliveryFor, seedBuild, regenerateSeed, publishSeedPreview } = seedPipeline;
 
-  const seedDispatch =
-    options.seedDispatch === undefined ? createSeedDispatchClientFromEnv(process.env, app.log) : options.seedDispatch;
   const { dispatchBuild, redispatchQueuedJob, dispatchQueuedJob } = createDispatcher({
     store,
     submissionTokenSecret,
@@ -1292,7 +1301,7 @@ export async function registerSubmissionRoutes(
     submissionsByIp,
     isSlugClaimed,
     confirmSlugClaim,
-    dispatchBuild,
+    dispatchQueuedJob,
     ...(seedDispatch ? { enqueueSeed: (jobId: number) => seedDispatch.enqueue(jobId) } : {}),
   });
 
@@ -1677,6 +1686,7 @@ export async function registerSubmissionRoutes(
           ...options.stagedPreview,
           now,
           log: app.log,
+          ...(seedDispatch ? { handoff: (jobId: number) => seedDispatch.enqueue(jobId, { action: 'staged-preview' }) } : {}),
           onPublished: (jobId) => {
             buildStatus.invalidateEvents(jobId);
             invalidateStatusCache(jobId);
@@ -1750,5 +1760,7 @@ export async function registerSubmissionRoutes(
     scheduleStagedPreview: stagedPreviews ? (jobId) => stagedPreviews.schedule(jobId) : null,
     redispatchQueuedJob,
     dispatchQueuedJob,
+    regenerateSeedNow: seedPipeline.runSeedRegeneration,
+    publishStagedPreviewNow: stagedPreviews ? (jobId: number) => stagedPreviews.publishNow(jobId) : null,
   };
 }

@@ -13,9 +13,11 @@ import type { InternalAuthVerifier } from '../platform/internal-auth.js';
 
 // Unconfigured or refused, create-game seeds inline as before.
 
+export type SeedWork = { action: 'dispatch' | 'regenerate' | 'staged-preview'; steer?: string };
+
 export interface SeedDispatchClient {
-  // True once the callee has started; false means dispatch inline.
-  enqueue(jobId: number): Promise<boolean>;
+  // True once the callee has started; false means do the work here.
+  enqueue(jobId: number, work?: SeedWork): Promise<boolean>;
 }
 
 export interface SeedDispatchClientOptions {
@@ -47,7 +49,7 @@ export function createSeedDispatchClient(options: SeedDispatchClientOptions): Se
   const timeoutMs = options.timeoutMs ?? 20_000;
 
   return {
-    async enqueue(jobId) {
+    async enqueue(jobId, work = { action: 'dispatch' }) {
       const token = await authTokenFor(options.audience);
       if (!token) {
         options.log?.warn({ jobId }, 'seed handoff: no identity token, dispatching inline');
@@ -60,7 +62,7 @@ export function createSeedDispatchClient(options: SeedDispatchClientOptions): Se
         const response = await fetchImpl(options.audience, {
           method: 'POST',
           headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-          body: JSON.stringify({ jobId }),
+          body: JSON.stringify({ jobId, ...work }),
           signal: abort.signal,
         });
         clearTimeout(timer);
@@ -93,12 +95,36 @@ export type DispatchQueuedJob = (input: {
   log: { error: (context: object, message: string) => void };
 }) => Promise<{ outcome: 'dispatched' | 'skipped'; reason?: string }>;
 
+type DispatchLog = { error: (context: object, message: string) => void };
+
 export interface SeedDispatchRouteOptions {
   dispatchQueuedJob: DispatchQueuedJob;
+  regenerateSeedNow?: ((input: { jobId: number; steer?: string; log: DispatchLog }) => Promise<void>) | null;
+  publishStagedPreviewNow?: ((jobId: number) => Promise<unknown>) | null;
   internalAuthVerifier: InternalAuthVerifier;
 }
 
-const BodySchema = z.object({ jobId: z.number().int().positive() });
+const BodySchema = z.object({
+  jobId: z.number().int().positive(),
+  action: z.enum(['dispatch', 'regenerate', 'staged-preview']).default('dispatch'),
+  steer: z.string().max(4000).optional(),
+});
+
+function workFor(
+  options: SeedDispatchRouteOptions,
+  input: { jobId: number; action: SeedWork['action']; steer?: string; log: DispatchLog },
+): (() => Promise<{ outcome: string; reason?: string }>) | null {
+  const { jobId, steer, log } = input;
+  if (input.action === 'regenerate') {
+    const run = options.regenerateSeedNow;
+    return run ? () => run({ jobId, ...(steer ? { steer } : {}), log }).then(() => ({ outcome: 'regenerated' })) : null;
+  }
+  if (input.action === 'staged-preview') {
+    const run = options.publishStagedPreviewNow;
+    return run ? () => run(jobId).then((outcome) => ({ outcome: String(outcome) })) : null;
+  }
+  return () => options.dispatchQueuedJob({ jobId, log });
+}
 
 export async function registerSeedDispatchRoute(app: FastifyInstance, options: SeedDispatchRouteOptions): Promise<void> {
   app.post(
@@ -110,18 +136,21 @@ export async function registerSeedDispatchRoute(app: FastifyInstance, options: S
       }
       const body = BodySchema.safeParse(request.body);
       if (!body.success) return reply.status(400).send({ error: 'invalid job id' });
-      const { jobId } = body.data;
+      const { jobId, action, steer } = body.data;
+      const work = workFor(options, { jobId, action, steer, log: request.log });
+      // Refused before headers, so the caller falls back to doing it inline.
+      if (!work) return reply.status(503).send({ error: `${action} is not handled here` });
 
       // Headers now, body later: the caller lets go, this request keeps CPU.
       reply.hijack();
       reply.raw.writeHead(202, { 'content-type': 'application/json', 'cache-control': 'no-store' });
       reply.raw.write(' ');
       try {
-        const result = await options.dispatchQueuedJob({ jobId, log: request.log });
-        request.log.info({ jobId, ...result }, 'seed dispatch complete');
+        const result = await work();
+        request.log.info({ jobId, action, ...result }, 'seed work complete');
         reply.raw.end(JSON.stringify(result));
       } catch (error) {
-        request.log.error({ err: error, jobId }, 'seed dispatch failed');
+        request.log.error({ err: error, jobId, action }, 'seed work failed');
         reply.raw.end(JSON.stringify({ outcome: 'failed' }));
       }
     },

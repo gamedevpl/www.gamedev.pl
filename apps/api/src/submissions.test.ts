@@ -7497,22 +7497,41 @@ describe('round-0 seeding handed to /api/internal/seed', () => {
   const acceptAll: InternalAuthVerifier = { verify: async () => true };
   const payload = { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' };
 
-  it('leaves the job queued for the seed route when the handoff is accepted', async () => {
+  it('persists the brief, then awaits the handoff before answering the creator', async () => {
     const { githubClient } = createGithubClientStub({});
     const { backend, briefs } = createBackendStub();
-    const enqueue = vi.fn(async () => true);
+    let release: () => void = () => {};
+    const seenBrief: Array<string | undefined> = [];
+    const refs: { store?: Store } = {};
+    const enqueue = vi.fn(async (jobId: number) => {
+      seenBrief.push((await refs.store!.getSubmission(jobId))?.dispatchBrief);
+      await new Promise<void>((resolve) => (release = resolve));
+      return true;
+    });
     const { app, authHeaders, store } = await createApp({
       githubClient,
       agentBackend: backend,
       submissionTokenSecret: secret,
       seedDispatch: { enqueue },
     });
+    refs.store = store;
 
-    const res = await app.inject({ method: 'POST', url: '/api/submissions', headers: authHeaders, payload });
+    let answered = false;
+    const pending = app
+      .inject({ method: 'POST', url: '/api/submissions', headers: authHeaders, payload })
+      .then((res) => {
+        answered = true;
+        return res;
+      });
+    await vi.waitFor(() => expect(enqueue).toHaveBeenCalledTimes(1));
+    // Still in flight: the handoff has not been accepted yet.
+    expect(answered).toBe(false);
+    release();
+    const res = await pending;
+
     expect(res.statusCode).toBe(200);
+    expect(seenBrief[0]).toContain('delivering parcels');
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-
-    expect(enqueue).toHaveBeenCalledWith(job.jobId);
     expect(job.state).toBe('queued');
     expect(job.dispatch?.refs ?? []).toHaveLength(0);
     expect(briefs).toHaveLength(0);
@@ -7530,13 +7549,14 @@ describe('round-0 seeding handed to /api/internal/seed', () => {
     });
 
     await app.inject({ method: 'POST', url: '/api/submissions', headers: authHeaders, payload });
-    const [job] = await store.listSubmissionsByOwner('g:test-user');
-
-    expect(job.dispatch?.refs?.length).toBeGreaterThan(0);
+    await vi.waitFor(async () => {
+      const [job] = await store.listSubmissionsByOwner('g:test-user');
+      expect(job.dispatch?.refs?.length).toBeGreaterThan(0);
+    });
     await app.close();
   });
 
-  it('the seed route dispatches a queued job once, from its stored brief', async () => {
+  it('the seed route dispatches a queued job once, from the persisted brief', async () => {
     const { githubClient } = createGithubClientStub({});
     const { backend, briefs } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
@@ -7554,7 +7574,9 @@ describe('round-0 seeding handed to /api/internal/seed', () => {
     expect(JSON.parse(first.body.trim())).toEqual({ outcome: 'dispatched' });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
     expect(job.dispatch?.refs?.length).toBeGreaterThan(0);
+    // Byte for byte the inline path's brief, sanitized at creation.
     expect(briefs).toHaveLength(1);
+    expect(briefs[0]!.spec).toBe(job.dispatchBrief);
 
     // Replayed, it must not start a second session.
     const again = await app.inject({ method: 'POST', url: '/api/internal/seed', payload: { jobId: queued.jobId } });
@@ -7563,7 +7585,37 @@ describe('round-0 seeding handed to /api/internal/seed', () => {
     await app.close();
   });
 
-  it('refuses the seed route without a verified caller, and a body without a job id', async () => {
+  it('a handoff that started but looked refused cannot be doubled by the inline fallback', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const { backend, briefs } = createBackendStub();
+    const refs: { app?: FastifyInstance } = {};
+    // The callee finished; the caller saw a timeout and reports false.
+    const enqueue = async (jobId: number) => {
+      await refs.app!.inject({ method: 'POST', url: '/api/internal/seed', payload: { jobId } });
+      return false;
+    };
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      seedDispatch: { enqueue },
+      seedDispatchRoutes: { internalAuthVerifier: acceptAll },
+    });
+    refs.app = app;
+
+    await app.inject({ method: 'POST', url: '/api/submissions', headers: authHeaders, payload });
+    await vi.waitFor(async () => {
+      const [job] = await store.listSubmissionsByOwner('g:test-user');
+      expect(job.dispatch?.refs?.length).toBeGreaterThan(0);
+    });
+    // Give the losing fallback every chance to (wrongly) run before asserting.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(briefs).toHaveLength(1);
+    await app.close();
+  });
+
+  it('refuses the seed route without a verified caller, a bad body, or an unhandled action', async () => {
     const { githubClient } = createGithubClientStub({});
     const { backend } = createBackendStub();
     const { app } = await createApp({ githubClient, agentBackend: backend, submissionTokenSecret: secret });
@@ -7577,10 +7629,17 @@ describe('round-0 seeding handed to /api/internal/seed', () => {
       githubClient,
       agentBackend: backend,
       submissionTokenSecret: secret,
-      seedDispatchRoutes: { internalAuthVerifier: acceptAll },
+      seedDispatchRoutes: { internalAuthVerifier: acceptAll, publishStagedPreviewNow: null },
     });
     const bad = await open.app.inject({ method: 'POST', url: '/api/internal/seed', payload: { jobId: 'x' } });
     expect(bad.statusCode).toBe(400);
+    // Refused before headers, so a caller falls back inline.
+    const unhandled = await open.app.inject({
+      method: 'POST',
+      url: '/api/internal/seed',
+      payload: { jobId: 1, action: 'staged-preview' },
+    });
+    expect(unhandled.statusCode).toBe(503);
     await open.app.close();
   });
 });

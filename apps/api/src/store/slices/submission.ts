@@ -44,6 +44,8 @@ export interface SubmissionStore {
   setSubmissionClarificationCount(jobId: number, count: number): Promise<void>;
 
   // Persists what the agent builds from; written once, not cleared on rounds.
+  setSubmissionDispatchBrief(jobId: number, brief: string): Promise<void>;
+
   setSubmissionBrief(
     jobId: number,
     brief: { spec: string; qa: string[]; specIsSystemGenerated?: boolean },
@@ -138,6 +140,11 @@ export class InMemorySubmissionStore implements SubmissionStore {
   async setSubmissionClarificationCount(jobId: number, count: number): Promise<void> {
     const sub = this.submissions.get(jobId);
     if (sub) this.submissions.set(jobId, { ...sub, clarificationCount: count });
+  }
+
+  async setSubmissionDispatchBrief(jobId: number, brief: string): Promise<void> {
+    const sub = this.submissions.get(jobId);
+    if (sub) this.submissions.set(jobId, { ...sub, dispatchBrief: brief });
   }
 
   async setSubmissionBrief(
@@ -258,6 +265,10 @@ export class FirestoreSubmissionStore implements SubmissionStore {
 
   async setSubmissionClarificationCount(jobId: number, count: number): Promise<void> {
     await this.ref(jobId).set({ clarificationCount: count }, { merge: true });
+  }
+
+  async setSubmissionDispatchBrief(jobId: number, brief: string): Promise<void> {
+    await this.ref(jobId).set({ dispatchBrief: brief }, { merge: true });
   }
 
   async setSubmissionBrief(

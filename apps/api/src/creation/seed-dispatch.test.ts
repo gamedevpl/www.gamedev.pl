@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createSeedDispatchClient, createSeedDispatchClientFromEnv } from './seed-dispatch.js';
+import Fastify from 'fastify';
+import { createSeedDispatchClient, createSeedDispatchClientFromEnv, registerSeedDispatchRoute } from './seed-dispatch.js';
 
 // The client answers one question: did the callee take it?
 
@@ -21,7 +22,17 @@ describe('createSeedDispatchClient', () => {
     expect(url).toBe(audience);
     expect(init.method).toBe('POST');
     expect((init.headers as Record<string, string>).authorization).toBe('Bearer id-token');
-    expect(JSON.parse(String(init.body))).toEqual({ jobId: 42 });
+    expect(JSON.parse(String(init.body))).toEqual({ jobId: 42, action: 'dispatch' });
+  });
+
+  it('carries the kind of work and the steer, so one route serves every seed job', async () => {
+    const fetchImpl = respond(202);
+    const client = createSeedDispatchClient({ audience, authTokenFor: token, fetchImpl });
+
+    await client.enqueue(7, { action: 'regenerate', steer: 'more enemies' });
+
+    const [, init] = fetchImpl.mock.calls[0]! as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({ jobId: 7, action: 'regenerate', steer: 'more enemies' });
   });
 
   it('returns false on any other status, so the caller dispatches inline', async () => {
@@ -67,5 +78,61 @@ describe('createSeedDispatchClientFromEnv', () => {
     expect(createSeedDispatchClientFromEnv({} as NodeJS.ProcessEnv)).toBeNull();
     expect(createSeedDispatchClientFromEnv({ SEED_DISPATCH_AUDIENCE: '  ' } as NodeJS.ProcessEnv)).toBeNull();
     expect(createSeedDispatchClientFromEnv({ SEED_DISPATCH_AUDIENCE: audience } as NodeJS.ProcessEnv)).not.toBeNull();
+  });
+});
+
+describe('registerSeedDispatchRoute', () => {
+  const acceptAll = { verify: async () => true };
+
+  async function routeApp(handlers: Partial<Parameters<typeof registerSeedDispatchRoute>[1]>) {
+    const app = Fastify();
+    await registerSeedDispatchRoute(app, {
+      internalAuthVerifier: acceptAll,
+      dispatchQueuedJob: async () => ({ outcome: 'dispatched' as const }),
+      ...handlers,
+    });
+    return app;
+  }
+
+  it('runs a regeneration with its steer and reports it in the held-open body', async () => {
+    const regenerateSeedNow = vi.fn(async () => undefined);
+    const app = await routeApp({ regenerateSeedNow });
+
+    const res = await app.inject({ method: 'POST', url: '/api/internal/seed', payload: { jobId: 3, action: 'regenerate', steer: 'calmer' } });
+
+    expect(res.statusCode).toBe(202);
+    expect(JSON.parse(res.body.trim())).toEqual({ outcome: 'regenerated' });
+    expect(regenerateSeedNow).toHaveBeenCalledWith(expect.objectContaining({ jobId: 3, steer: 'calmer' }));
+    await app.close();
+  });
+
+  it('assembles a staged preview and reports the assembler outcome', async () => {
+    const publishStagedPreviewNow = vi.fn(async () => 'published');
+    const app = await routeApp({ publishStagedPreviewNow });
+
+    const res = await app.inject({ method: 'POST', url: '/api/internal/seed', payload: { jobId: 4, action: 'staged-preview' } });
+
+    expect(JSON.parse(res.body.trim())).toEqual({ outcome: 'published' });
+    expect(publishStagedPreviewNow).toHaveBeenCalledWith(4);
+    await app.close();
+  });
+
+  it('answers 503 before any headers when the work is not wired here', async () => {
+    const app = await routeApp({ regenerateSeedNow: null });
+
+    const res = await app.inject({ method: 'POST', url: '/api/internal/seed', payload: { jobId: 5, action: 'regenerate' } });
+
+    expect(res.statusCode).toBe(503);
+    await app.close();
+  });
+
+  it('reports a failure in the body rather than a 5xx, since the headers are gone', async () => {
+    const app = await routeApp({ dispatchQueuedJob: async () => { throw new Error('boom'); } });
+
+    const res = await app.inject({ method: 'POST', url: '/api/internal/seed', payload: { jobId: 6 } });
+
+    expect(res.statusCode).toBe(202);
+    expect(JSON.parse(res.body.trim())).toEqual({ outcome: 'failed' });
+    await app.close();
   });
 });

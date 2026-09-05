@@ -82,14 +82,8 @@ export interface CreateGameDeps {
   submissionsByIp: Map<string, number[]>;
   isSlugClaimed: (slug: string) => Promise<boolean>;
   confirmSlugClaim: (jobId: number, wanted: string, title: string) => Promise<string | null>;
-  dispatchBuild: (input: {
-    jobId: number;
-    slug: string;
-    spec: string;
-    locale: string;
-    builder: BuilderKind;
-    log: { error: (context: object, message: string) => void };
-  }) => Promise<unknown>;
+  // First dispatch from the stored brief, atomically claimed (dispatch-build.ts).
+  dispatchQueuedJob: (input: { jobId: number; log: { error: (context: object, message: string) => void } }) => Promise<unknown>;
   // Hands dispatch to /api/internal/seed; false means run it here.
   enqueueSeed?: (jobId: number) => Promise<boolean>;
 }
@@ -124,7 +118,7 @@ export function createGameCreator(deps: CreateGameDeps): {
     submissionsByIp,
     isSlugClaimed,
     confirmSlugClaim,
-    dispatchBuild,
+    dispatchQueuedJob,
     enqueueSeed,
   } = deps;
 
@@ -274,27 +268,20 @@ export function createGameCreator(deps: CreateGameDeps): {
       const builder: BuilderKind = requestedBuilder;
       // Persist before returning: Connect and Studio read `record.builder` immediately.
       await store.setRoundBuilder(jobId, builder, { resetRoundBudget: false });
-      const dispatchInline = () =>
-        dispatchBuild({
-          jobId,
-          slug,
-          spec: issueBody,
-          locale: creatorLocale,
-          builder,
-          log: dispatchLog,
-        }).catch((error: unknown) => {
+      // The brief the first dispatch sends, whichever path sends it.
+      await store.setSubmissionDispatchBrief(jobId, issueBody);
+      // Awaited: after this response, un-handed-off work may stall.
+      const accepted = enqueueSeed
+        ? await enqueueSeed(jobId).catch((error: unknown) => {
+            dispatchLog.error({ err: error, jobId }, 'seed handoff failed, dispatching inline');
+            return false;
+          })
+        : false;
+      if (!accepted) {
+        // Claim-guarded, so a handoff that actually started cannot be doubled.
+        void dispatchQueuedJob({ jobId, log: dispatchLog }).catch((error: unknown) => {
           dispatchLog.error({ err: error, jobId }, 'background dispatch failed');
         });
-      // Inside a request the seed gets CPU; afterwards it may not.
-      if (enqueueSeed) {
-        void enqueueSeed(jobId)
-          .then((accepted) => (accepted ? undefined : dispatchInline()))
-          .catch((error: unknown) => {
-            dispatchLog.error({ err: error, jobId }, 'seed handoff failed, dispatching inline');
-            return dispatchInline();
-          });
-      } else {
-        void dispatchInline();
       }
 
       input.log.info?.({ jobId, slug, via: input.openedBy === 'agent' ? 'mcp' : 'studio' }, 'game created');

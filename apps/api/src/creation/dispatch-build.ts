@@ -190,7 +190,8 @@ export function createDispatcher(deps: DispatcherDeps) {
 
       // Failures here are their own problem; the build is already out.
       if (draft?.compiles) {
-        void publishSeedPreview({
+        // Awaited: an esbuild pass, and this request holds the CPU.
+        await publishSeedPreview({
           jobId: input.jobId,
           slug: draft.slug,
           files: draft.files,
@@ -287,8 +288,12 @@ export function createDispatcher(deps: DispatcherDeps) {
     if (record.state !== 'queued' || (record.dispatch?.refs?.length ?? 0) > 0) {
       return { outcome: 'skipped', reason: 'not_queued' };
     }
-    const spec = reconstructDispatchSpec(record);
+    // The sanitized brief from creation; reconstruction is the legacy fallback.
+    const spec = record.dispatchBrief ?? reconstructDispatchSpec(record);
     if (!spec) return { outcome: 'skipped', reason: 'no_spec' };
+    // Atomic: a handoff and its inline fallback can both arrive here.
+    const claimed = await store.claimInitialDispatch(input.jobId, new Date(now()).toISOString());
+    if (!claimed) return { outcome: 'skipped', reason: 'already_claimed' };
     const dispatched = await dispatchBuild({
       jobId: input.jobId,
       ...(record.slug ? { slug: record.slug } : {}),

@@ -763,6 +763,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // The service calling itself so round-0 seeding runs inside a request (seed-dispatch.ts).
   await registerSeedDispatchRoute(app, {
     dispatchQueuedJob: submissionSeams.dispatchQueuedJob,
+    regenerateSeedNow: submissionSeams.regenerateSeedNow,
+    publishStagedPreviewNow: submissionSeams.publishStagedPreviewNow,
     internalAuthVerifier: createInternalAuthVerifierFromEnv(process.env, 'seedDispatch'),
     ...options.seedDispatchRoutes,
   });
