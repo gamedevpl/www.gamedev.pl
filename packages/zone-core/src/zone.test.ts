@@ -3,6 +3,7 @@ import { createNodeVmCage, type SimCage, type SimInstance } from './cage.js';
 import { ZONE_SNAPSHOT_VERSION, type ZoneSnapshot } from './contract.js';
 import { parseZoneSchema, type ZoneSchema } from './schema.js';
 import {
+  PARK_GRACE_MS,
   Zone,
   ZoneFullError,
   type SimSource,
@@ -211,7 +212,7 @@ describe('a live zone', () => {
 });
 
 describe('hibernation', () => {
-  it('sleeps the moment the last player leaves', async () => {
+  it('stops ticking the moment the last player leaves, and writes the world out', async () => {
     const h = harness();
     await h.zone.join('player-a');
     h.runTicks(5);
@@ -220,11 +221,58 @@ describe('hibernation', () => {
 
     // Not "ticks more slowly" — stops. This is the step the whole cost model rests on:
     // no sockets, no zone, no instance.
-    expect(h.zone.state).toBe('sleeping');
+    expect(h.zone.state).toBe('parked');
     expect(h.store.saved.has('ember-watch')).toBe(true);
     const before = h.zone.currentTick;
+    const writes = h.store.writes;
     h.runTicks(10);
     expect(h.zone.currentTick).toBe(before);
+    expect(h.store.writes).toBe(writes);
+  });
+
+  it('forgets the world once the grace has passed, without a second write', async () => {
+    const h = harness();
+    await h.zone.join('player-a');
+    h.runTicks(5);
+    h.zone.leave(0);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const writes = h.store.writes;
+
+    h.setNow(1_000_500 + PARK_GRACE_MS - 1);
+    h.zone.pump();
+    expect(h.zone.state).toBe('parked');
+
+    h.setNow(1_000_500 + PARK_GRACE_MS);
+    h.zone.pump();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    // Nothing ticked while parked; the park-time snapshot is still the world.
+    expect(h.zone.state).toBe('sleeping');
+    expect(h.store.writes).toBe(writes);
+  });
+
+  it('lets a player back inside the grace without reloading anything', async () => {
+    let loads = 0;
+    const store = new FakeStore();
+    const originalLoad = store.load.bind(store);
+    store.load = async (zoneId) => {
+      loads += 1;
+      return originalLoad(zoneId);
+    };
+    const h = harness({ store });
+    await h.zone.join('player-a');
+    h.runTicks(5);
+    h.zone.leave(0);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(loads).toBe(1);
+
+    // Screen locked, tab backgrounded: the socket comes back seconds later.
+    h.setNow(1_000_500 + 5_000);
+    await h.zone.join('player-a');
+    expect(h.zone.state).toBe('live');
+    // No Firestore read, and the five seconds were caught up as a cold wake would.
+    expect(loads).toBe(1);
+    await h.zone.hibernate('empty');
+    expect(JSON.parse(store.saved.get('ember-watch')!.state).slept).toBe(50);
   });
 
   it('resumes on the exact generator position it left', async () => {

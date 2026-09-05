@@ -42,6 +42,9 @@ const CHECKPOINT_EVERY_SECONDS = 1;
  *  instance dies without warning — an unscheduled hibernate costs at most this much. */
 export const SNAPSHOT_EVERY_MS = 30_000;
 
+// Emptied zones stay in memory this long; docs/p3-zone-host-infra.md §4.
+export const PARK_GRACE_MS = 60_000;
+
 /**
  * Ticks that may run over budget before the zone is put to sleep.
  *
@@ -88,7 +91,7 @@ const SIM_CALL_TIMEOUT_MS = Math.max(MAX_TICK_MS * 8, 200);
  */
 const SIM_STARTUP_TIMEOUT_MS = 5_000;
 
-export type ZoneStatus = 'sleeping' | 'live' | 'closed';
+export type ZoneStatus = 'sleeping' | 'live' | 'parked' | 'closed';
 
 export interface ZoneSnapshotStore {
   load(zoneId: string): Promise<ZoneSnapshot | null>;
@@ -170,6 +173,8 @@ export class Zone {
   private accumulatorMs = 0;
   private lastPumpAt = 0;
   private lastSnapshotAt = 0;
+  // When the last player left, while the world is still held.
+  private parkedAt = 0;
   private recentOverruns: number[] = [];
   /** Set while a wake is in flight, so two arrivals cannot each start one. */
   private waking: Promise<void> | null = null;
@@ -191,6 +196,11 @@ export class Zone {
 
   get playerCount(): number {
     return this.seats.size;
+  }
+
+  // Zero unless parked.
+  get parkedSince(): number {
+    return this.status === 'parked' ? this.parkedAt : 0;
   }
 
   get currentTick(): number {
@@ -236,11 +246,27 @@ export class Zone {
     return slot;
   }
 
-  /** Retires a seat. When it was the last one, the zone hibernates rather than idling. */
+  /** Retires a seat. When it was the last one, the zone parks rather than idling. */
   leave(slot: number): void {
     if (!this.seats.delete(slot)) return;
     if (this.status === 'live') this.pending.push({ slot, k: 'leave' });
-    if (this.seats.size === 0) void this.hibernate('empty');
+    if (this.seats.size === 0) void this.park();
+  }
+
+  // Snapshot now, as hibernation did; keep the sim so a return skips the reload.
+  private async park(): Promise<void> {
+    if (this.status !== 'live') return;
+    try {
+      await this.persist();
+    } catch {
+      // Same loss bound as a failed periodic write.
+    }
+    if (this.status !== 'live') return;
+    this.status = 'parked';
+    this.parkedAt = this.now();
+    this.pending = [];
+    this.accumulatorMs = 0;
+    this.lastPumpAt = 0;
   }
 
   /**
@@ -295,6 +321,10 @@ export class Zone {
    * to a point and then simply forgiven — the world is authoritative, not punctual.
    */
   pump(now: number = this.now()): void {
+    if (this.status === 'parked' && now - this.parkedAt >= PARK_GRACE_MS) {
+      void this.hibernate('empty');
+      return;
+    }
     if (this.status !== 'live' || !this.sim) return;
 
     if (this.lastPumpAt === 0) this.lastPumpAt = now;
@@ -417,6 +447,8 @@ export class Zone {
   }
 
   private async wakeUp(): Promise<void> {
+    if (this.status === 'parked' && this.sim && (await this.wakeFromMemory())) return;
+
     const sources = await this.options.source.load(this.slug);
     if (!sources) throw new ZoneUnavailableError(`no simulation is published for ${this.slug}`);
 
@@ -476,6 +508,32 @@ export class Zone {
     this.pending = [];
   }
 
+  // Memory holds exactly the park snapshot; only the catch-up is owed.
+  private async wakeFromMemory(): Promise<boolean> {
+    const sim = this.sim!;
+    const now = this.now();
+    const elapsed = Math.max(0, now - this.parkedAt);
+    if (elapsed > 0) {
+      try {
+        sim.wake(elapsed);
+      } catch (error) {
+        if (!isSimTimeoutError(error)) throw error;
+        // Fall through to the cold path, which rebuilds from that same snapshot.
+        sim.dispose();
+        this.sim = null;
+        this.status = 'sleeping';
+        return false;
+      }
+    }
+    this.status = 'live';
+    this.accumulatorMs = 0;
+    this.lastPumpAt = now;
+    this.lastSnapshotAt = now;
+    this.recentOverruns = [];
+    this.pending = [];
+    return true;
+  }
+
   /** Writes the zone to Firestore. Refuses a state that JSON would mangle on the way back. */
   private async persist(): Promise<void> {
     if (!this.sim) return;
@@ -510,6 +568,11 @@ export class Zone {
    * drains it. An empty zone is one Firestore document.
    */
   async hibernate(reason: string): Promise<void> {
+    // Parked: snapshot already written, nothing ticked since, nobody to tell.
+    if (this.status === 'parked') {
+      this.teardown();
+      return;
+    }
     if (this.status !== 'live') return;
     try {
       await this.persist();
@@ -541,6 +604,7 @@ export class Zone {
     this.pending = [];
     this.accumulatorMs = 0;
     this.lastPumpAt = 0;
+    this.parkedAt = 0;
   }
 
   /** Retires the zone for good — the host is shutting down or evicting it. */
