@@ -872,6 +872,36 @@ jobs:
             echo "Zone host healthy at ${ZONE_URL}"
           fi
 
+      - name: Upload web assets to Firebase Hosting
+        # Before promotion, so the assets are in place when the new index.html goes live.
+        #
+        # Only apps/web/dist/assets is uploaded. Hosting appends `cookie` to Vary on anything
+        # it takes from a Cloud Run rewrite, and each signed-in caller carries a distinct
+        # __session, so an asset fetched through the rewrite is cached per user and never
+        # shared — measured 2026-09-04. Files Hosting serves itself carry no cookie in Vary.
+        #
+        # index.html is deliberately NOT uploaded: Hosting matches static files before
+        # rewrites, so it would bypass the origin's SPA shell handling.
+        #
+        # A hash mismatch between this upload and the image degrades to serving from the
+        # origin rather than 404ing, because the ** rewrite catches whatever Hosting lacks
+        # and the image always carries a complete copy. That is what makes this safe to run
+        # on every deploy.
+        #
+        # Needs roles/firebasehosting.admin on the deploy service account.
+        run: |
+          # npm ci alone leaves the workspace packages unbuilt, and apps/web will not
+          # typecheck against their stale dists.
+          npm run build:packages
+          npm run build --workspace apps/web
+          rm -rf infra/firebase/public/assets
+          cp -r apps/web/dist/assets infra/firebase/public/assets
+          npx firebase-tools deploy \
+            --only hosting \
+            --project "$PROJECT_ID" \
+            --config infra/firebase/firebase.json \
+            --non-interactive
+
       - name: Promote candidate revision to 100% traffic
         run: |
           gcloud run services update-traffic "$SERVICE" \
