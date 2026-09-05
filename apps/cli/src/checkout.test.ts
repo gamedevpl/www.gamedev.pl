@@ -5,8 +5,10 @@ import { describe, expect, it } from 'vitest';
 import {
   checkoutGame,
   changedPaths,
+  inspectGame,
   localGameFiles,
   pullGame,
+  readBase,
   unreconciledMessage,
   writeBase,
   writeGameFiles,
@@ -222,6 +224,33 @@ describe('checkout', () => {
       message: expect.stringMatching(/no base version/),
     });
     expect(readFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'utf8')).toBe('B');
+  });
+
+  it('advances a stale base when the working copy already matches the platform', async () => {
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-base-'));
+    writeGameFiles(dest, 'ghost-roads', [{ path: 'game.ts', content: 'C' }]);
+    writeBase(dest, 'v1', [{ path: 'game.ts', content: 'A' }]);
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url) => {
+        if (String(url).endsWith('/versions')) {
+          return new Response(
+            JSON.stringify({ versions: [{ version: 'v2', createdAt: '2026-09-02', sourceFiles: ['game.ts'] }] }),
+            { status: 200 },
+          );
+        }
+        return new Response(JSON.stringify({ version: 'v2', files: [{ path: 'game.ts', content: 'C' }] }), {
+          status: 200,
+        });
+      },
+    });
+    await inspectGame({ api, slug: 'ghost-roads', dest });
+    expect(readBase(dest)?.version).toBe('v2');
+    writeFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'D');
+    const after = await inspectGame({ api, slug: 'ghost-roads', dest });
+    expect(after.sync.kind).toBe('local_only');
+    expect(after.sync.conflict).toEqual([]);
   });
 
   it('refuses a path that would leave the checkout', () => {

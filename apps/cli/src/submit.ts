@@ -99,6 +99,32 @@ export async function submitGame(input: {
   const paths = input.force
     ? changedPathsForced(localGameFiles(input.dest, input.slug), latest.tree.files)
     : latest.sync.local;
+  let extra: string[] = [];
+  try {
+    extra = await extraStagedPaths(input.api, input.slug, paths);
+  } catch (error) {
+    mapHttpError(error);
+  }
+  if (extra.length && !input.force) {
+    throw new CliError(
+      `Studio has unsent staged files (${extra.join(', ')}) — discard them in Studio, or pass --force`,
+      EXIT_REFUSED,
+    );
+  }
+  if (extra.length) {
+    try {
+      await input.api.request('POST', `/api/me/studio/games/${input.slug}/sources/stage/discard`, {});
+      extra = await extraStagedPaths(input.api, input.slug, paths);
+    } catch (error) {
+      mapHttpError(error);
+    }
+    if (extra.length) {
+      throw new CliError(
+        `staged files remain after discard (${extra.join(', ')}) — drop them in Studio, then submit`,
+        EXIT_REFUSED,
+      );
+    }
+  }
   const localMap = new Map(localGameFiles(input.dest, input.slug).map((file) => [file.path, file]));
   const staged: string[] = [];
   try {
@@ -145,6 +171,21 @@ export async function submitGame(input: {
     ...(delivered.buildId ? { buildId: delivered.buildId } : {}),
     staged,
   };
+}
+
+function extraStagedPaths(api: ApiClient, slug: string, planned: string[]): Promise<string[]> {
+  return api
+    .request<{ files?: Array<{ path: string; stagedBy?: string }>; deleted?: string[] }>(
+      'GET',
+      `/api/me/studio/games/${slug}/sources`,
+    )
+    .then((body) => {
+      const overlay = [
+        ...(body.files ?? []).filter((file) => file.stagedBy).map((file) => file.path),
+        ...(body.deleted ?? []),
+      ];
+      return [...new Set(overlay)].filter((path) => !planned.includes(path)).sort();
+    });
 }
 
 function changedPathsForced(local: TreeFile[], remote: TreeFile[]): string[] {

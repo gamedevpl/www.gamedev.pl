@@ -130,4 +130,31 @@ describe('connectGame', () => {
     expect(seen.some((row) => row.startsWith('POST ') && row.endsWith('/handoff'))).toBe(true);
     expect(seen.some((row) => row.startsWith('GET ') && row.endsWith('/connect'))).toBe(true);
   });
+
+  it('does not hand off when the requested adapter is missing', async () => {
+    const seen: string[] = [];
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url, init) => {
+        seen.push(`${init?.method ?? 'GET'} ${String(url)}`);
+        if (String(url).includes('/api/me/studio?game='))
+          return json({ games: [{ slug: 'sky-dodge', token: 'tok-1' }] });
+        if (String(url).endsWith('/handoff')) return json({ ok: true });
+        return json({}, 404);
+      },
+    });
+    await expect(
+      connectGame({
+        api,
+        slug: 'sky-dodge',
+        dest: '/tmp',
+        agent: 'claude',
+        handoff: true,
+        which: () => null,
+        write: () => undefined,
+      }),
+    ).rejects.toMatchObject({ message: expect.stringMatching(/not on PATH/) });
+    expect(seen.some((row) => row.endsWith('/handoff'))).toBe(false);
+  });
 });

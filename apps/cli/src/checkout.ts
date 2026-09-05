@@ -132,7 +132,7 @@ export async function inspectGame(input: { api: ApiClient; slug: string; dest: s
   const base = readBase(input.dest);
   const local = localGameFiles(input.dest, input.slug);
   const sync = classify({ local, remote: tree.files, remoteVersion: tree.version, base });
-  if (!base && sync.kind === 'clean') {
+  if (sync.kind === 'clean') {
     writeBase(input.dest, tree.version, tree.files);
   }
   return { sync, tree };

@@ -37,6 +37,7 @@ describe('submitGame', () => {
           return json({ versions: [{ version: 'v1', createdAt: '2026-09-01', sourceFiles: ['game.ts'] }] });
         }
         if (path.includes('/tree')) return json({ version: 'v1', files: [{ path: 'game.ts', content: 'A' }] });
+        if (path.endsWith('/sources')) return json({ files: [{ path: 'game.ts', content: 'A' }] });
         if (path.endsWith('/sources/stage') && init?.method === 'PUT') {
           const body = JSON.parse(String(init?.body ?? '{}')) as { path: string; content: string };
           expect(body).toEqual({ path: 'game.ts', content: 'B' });
@@ -149,6 +150,7 @@ describe('submitGame', () => {
           return json({ versions: [{ version: 'v1', createdAt: '2026-09-01', sourceFiles: ['game.ts'] }] });
         }
         if (String(url).includes('/tree')) return json({ version: 'v1', files: [{ path: 'game.ts', content: 'A' }] });
+        if (String(url).endsWith('/sources')) return json({ files: [{ path: 'game.ts', content: 'A' }] });
         if (String(url).endsWith('/sources/stage')) return json({ accepted: true });
         if (String(url).endsWith('/sources/deliver')) return json({ accepted: false, rejected: 'rate_limited' });
         return json({}, 404);
@@ -157,5 +159,85 @@ describe('submitGame', () => {
     await expect(submitGame({ api, slug: SLUG, dest, run: () => ({ status: 0, stderr: '' }) })).rejects.toMatchObject({
       message: expect.stringMatching(/rate_limited/),
     });
+  });
+
+  it('refuses leftover Studio staged files the checkout did not change', async () => {
+    const dest = checkout([{ path: 'game.ts', content: 'A' }]);
+    writeFileSync(join(dest, 'games', SLUG, 'game.ts'), 'B');
+    const seen: string[] = [];
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url, init) => {
+        const path = String(url);
+        seen.push(`${init?.method ?? 'GET'} ${path}`);
+        if (path.endsWith('/versions') && !path.includes('/tree')) {
+          return json({ versions: [{ version: 'v1', createdAt: '2026-09-01', sourceFiles: ['game.ts'] }] });
+        }
+        if (path.includes('/tree')) return json({ version: 'v1', files: [{ path: 'game.ts', content: 'A' }] });
+        if (path.endsWith('/sources')) {
+          return json({
+            files: [
+              { path: 'game.ts', content: 'A' },
+              { path: 'hud.ts', content: 'studio', stagedBy: 'owner' },
+            ],
+          });
+        }
+        return json({}, 404);
+      },
+    });
+    await expect(submitGame({ api, slug: SLUG, dest, run: () => ({ status: 0, stderr: '' }) })).rejects.toMatchObject({
+      exitCode: EXIT_REFUSED,
+      message: expect.stringMatching(/hud\.ts/),
+    });
+    expect(seen.some((row) => row.includes('/sources/stage'))).toBe(false);
+  });
+
+  it('discards leftover Studio staged files on --force, then delivers', async () => {
+    const dest = checkout([{ path: 'game.ts', content: 'A' }]);
+    writeFileSync(join(dest, 'games', SLUG, 'game.ts'), 'B');
+    const seen: string[] = [];
+    let discarded = false;
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url, init) => {
+        const path = String(url);
+        seen.push(`${init?.method ?? 'GET'} ${path}`);
+        if (path.endsWith('/versions') && !path.includes('/tree')) {
+          return json({ versions: [{ version: 'v1', createdAt: '2026-09-01', sourceFiles: ['game.ts'] }] });
+        }
+        if (path.includes('/tree')) return json({ version: 'v1', files: [{ path: 'game.ts', content: 'A' }] });
+        if (path.endsWith('/sources')) {
+          return json({
+            files: discarded
+              ? [{ path: 'game.ts', content: 'A' }]
+              : [
+                  { path: 'game.ts', content: 'A' },
+                  { path: 'hud.ts', content: 'studio', stagedBy: 'owner' },
+                ],
+          });
+        }
+        if (path.endsWith('/sources/stage/discard')) {
+          discarded = true;
+          return json({ cleared: 1 });
+        }
+        if (path.endsWith('/sources/stage') && init?.method === 'PUT') return json({ accepted: true });
+        if (path.endsWith('/sources/deliver')) {
+          return json({ accepted: true, version: 'v2', mode: 'preview', gateStarted: true });
+        }
+        return json({}, 404);
+      },
+    });
+    const result = await submitGame({
+      api,
+      slug: SLUG,
+      dest,
+      force: true,
+      run: () => ({ status: 0, stderr: '' }),
+    });
+    expect(result.kind).toBe('delivered');
+    expect(seen.some((row) => row.startsWith('POST ') && row.endsWith('/sources/stage/discard'))).toBe(true);
+    expect(seen.some((row) => row.startsWith('PUT ') && row.endsWith('/sources/stage'))).toBe(true);
   });
 });

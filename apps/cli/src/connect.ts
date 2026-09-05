@@ -68,6 +68,16 @@ export async function connectGame(input: {
 }): Promise<{ spawned: boolean; mcp: boolean }> {
   const env = input.env ?? process.env;
   const token = await studioToken(input.api, input.slug);
+  const spec = input.agent
+    ? detectAdapter(input.agent, input.which ?? ((cmd) => whichOnPath(cmd, env)), loadAdapters(env))
+    : null;
+  if (input.agent && !spec) {
+    throw new CliError(
+      `adapter ${input.agent} is not on PATH`,
+      EXIT_INPUT,
+      `install ${input.agent}, or omit --agent for the MCP handoff`,
+    );
+  }
   if (input.handoff) {
     await input.api.request('POST', `/api/submissions/${encodeURIComponent(token)}/handoff`, {
       builder: 'self',
@@ -104,8 +114,6 @@ export async function connectGame(input: {
     }
     return { spawned: false, mcp: true };
   }
-
-  const spec = detectAdapter(input.agent, input.which ?? ((cmd) => whichOnPath(cmd, env)), loadAdapters(env));
   if (!spec) {
     throw new CliError(
       `adapter ${input.agent} is not on PATH`,
@@ -113,6 +121,7 @@ export async function connectGame(input: {
       `install ${input.agent}, or omit --agent for the MCP handoff`,
     );
   }
+
   const cwd = spec.cwd === 'game-dir' ? join(input.dest, 'games', input.slug) : input.dest;
   const result = await (input.runAdapter ?? defaultAdapterRun)({
     spec,

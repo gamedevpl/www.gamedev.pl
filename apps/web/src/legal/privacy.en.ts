@@ -66,11 +66,17 @@ export const privacyEn: LegalDocument = {
               'Up to 24 months after we close the conversation',
             ],
             [
-              'Content you create: game description, title, clarifying answers, pre-game CLI chat, feedback on a finished ' +
+              'Content you create: game description, title, clarifying answers, feedback on a finished ' +
                 'game, uploaded sketches and images',
               'Having an AI agent build your game and publishing it',
               'Art. 6(1)(b) — performance of a contract',
               'Indefinitely for published games (they are part of the project record); unpublished submissions — 24 months',
+            ],
+            [
+              'Pre-game CLI chat: the last 16 turns typed in the gamedevpl terminal before a game is opened',
+              'Helping you describe a game before we create it',
+              'Art. 6(1)(b) — performance of a contract',
+              'Until you delete your account; the history is reset when a game is opened',
             ],
             [
               'Public creator profile you claim before publishing: unique handle, display name, short bio, and ' +

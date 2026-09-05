@@ -69,11 +69,17 @@ export const privacyPl: LegalDocument = {
               'Do 24 miesięcy po zamknięciu sprawy',
             ],
             [
-              'Treści, które tworzysz: opis gry, tytuł, odpowiedzi doprecyzowujące, czat CLI przed grą, uwagi do gotowej gry, ' +
+              'Treści, które tworzysz: opis gry, tytuł, odpowiedzi doprecyzowujące, uwagi do gotowej gry, ' +
                 'przesłane szkice i obrazy',
               'Zbudowanie gry przez agenta AI i jej opublikowanie',
               'art. 6 ust. 1 lit. b — wykonanie umowy',
               'Bezterminowo dla gier opublikowanych (są częścią historii projektu); zgłoszenia nieopublikowane — 24 miesiące',
+            ],
+            [
+              'Czat CLI przed grą: ostatnie 16 tur wpisanych w terminalu gamedevpl zanim powstanie gra',
+              'Pomoc w opisaniu gry zanim ją otworzymy',
+              'art. 6 ust. 1 lit. b — wykonanie umowy',
+              'Do usunięcia konta; historia jest zerowana po otwarciu gry',
             ],
             [
               'Publiczny profil twórcy, który zajmujesz przed publikacją: unikalny handle, nazwa wyświetlana, krótkie ' +
