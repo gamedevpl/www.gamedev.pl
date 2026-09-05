@@ -110,7 +110,7 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
   // Ceiling on what a change that skipped the counter can hide.
   const SNAPSHOT_MAX_AGE_MS = 5 * 60_000;
   // Cached raw: rows are shared, `mine` and `writable` are not.
-  const cache = new Map<string, { at: number; readAt: number; rev: number; entries: WorldEntryRecord[] }>();
+  const cache = new Map<string, { at: number; readAt: number; rev: string; entries: WorldEntryRecord[] }>();
   // One read in flight per world; the rest await it.
   const reading = new Map<string, { rows: Promise<WorldEntryRecord[]>; stale: boolean }>();
 
@@ -122,7 +122,7 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
   }
 
   // Revision first: a racing write then costs a redundant refresh, never staleness.
-  async function refresh(worldId: string, held?: { rev: number; entries: WorldEntryRecord[] }) {
+  async function refresh(worldId: string, held?: { rev: string; entries: WorldEntryRecord[] }) {
     const rev = await store.getWorldRevision(worldId);
     // The point: an unchanged world costs one document.
     if (held && rev === held.rev) return { rev, entries: held.entries, full: false };

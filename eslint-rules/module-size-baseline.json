@@ -441,7 +441,7 @@
     "apps/api/src/store/firestore.ts": 1354,
     "apps/api/src/store/in-memory.ts": 1290,
     "apps/api/src/store/slices/world-entries.test.ts": 68,
-    "apps/api/src/store/slices/world-entries.ts": 281,
+    "apps/api/src/store/slices/world-entries.ts": 288,
     "apps/api/src/submissions.test.ts": 7405,
     "apps/api/src/submissions.ts": 1718,
     "apps/api/src/tab-complete-deploy-flag.test.ts": 28,

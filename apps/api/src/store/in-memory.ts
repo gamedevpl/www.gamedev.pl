@@ -896,7 +896,7 @@ export class InMemoryStore implements Store {
     return this.worldEntriesStore.listWorldEntries(worldId);
   }
 
-  async getWorldRevision(worldId: string): Promise<number> {
+  async getWorldRevision(worldId: string): Promise<string> {
     return this.worldEntriesStore.getWorldRevision(worldId);
   }
 

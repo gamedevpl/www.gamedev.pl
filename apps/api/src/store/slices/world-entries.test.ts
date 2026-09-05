@@ -15,7 +15,7 @@ const backends: Array<[string, () => WorldEntriesStore]> = [
 
 describe.each(backends)('world revision (%s)', (_name, make) => {
   it('starts at zero for a world nobody has written', async () => {
-    expect(await make().getWorldRevision('garden')).toBe(0);
+    expect(await make().getWorldRevision('garden')).toBe('');
   });
 
   it('moves on a claim, an edit and a delete', async () => {
@@ -23,15 +23,15 @@ describe.each(backends)('world revision (%s)', (_name, make) => {
 
     await store.putWorldEntry(plot('g:alice', 'plot.1'));
     const claimed = await store.getWorldRevision('garden');
-    expect(claimed).toBeGreaterThan(0);
+    expect(claimed).not.toBe('');
 
     // An edit is as visible as a claim, so it counts too.
     await store.putWorldEntry(plot('g:alice', 'plot.1'));
     const edited = await store.getWorldRevision('garden');
-    expect(edited).toBeGreaterThan(claimed);
+    expect(edited).not.toBe(claimed);
 
     await store.deleteWorldEntry('garden', 'plot.1', 'g:alice');
-    expect(await store.getWorldRevision('garden')).toBeGreaterThan(edited);
+    expect(await store.getWorldRevision('garden')).not.toBe(edited);
   });
 
   it('holds still for a write that changed nothing', async () => {
@@ -55,14 +55,14 @@ describe.each(backends)('world revision (%s)', (_name, make) => {
 
     expect(await store.deleteWorldEntriesForUser('g:bob')).toBe(1);
 
-    expect(await store.getWorldRevision('garden')).toBeGreaterThan(before);
+    expect(await store.getWorldRevision('garden')).not.toBe(before);
   });
 
   it('keeps the revision of one world out of another', async () => {
     const store = make();
     await store.putWorldEntry({ ...plot('g:alice', 'plot.1'), worldId: 'meadow' });
 
-    expect(await store.getWorldRevision('meadow')).toBeGreaterThan(0);
-    expect(await store.getWorldRevision('garden')).toBe(0);
+    expect(await store.getWorldRevision('meadow')).not.toBe('');
+    expect(await store.getWorldRevision('garden')).toBe('');
   });
 });
