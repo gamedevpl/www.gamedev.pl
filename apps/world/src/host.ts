@@ -112,9 +112,9 @@ export class ZoneHost {
     return [...this.zones.values()].filter((zone) => zone.state === 'live').length;
   }
 
-  // Live and parked alike.
+  // Live and parked; a slept zone awaiting the sweep is not held.
   get heldZoneCount(): number {
-    return this.zones.size;
+    return [...this.zones.values()].filter((zone) => zone.state === 'live' || zone.state === 'parked').length;
   }
 
   start(): void {

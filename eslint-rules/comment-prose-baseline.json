@@ -661,7 +661,7 @@
     "packages/zone-core/src/testSims.ts": 473,
     "packages/zone-core/src/ticket.test.ts": 142,
     "packages/zone-core/src/ticket.ts": 397,
-    "packages/zone-core/src/zone.test.ts": 699,
-    "packages/zone-core/src/zone.ts": 1890
+    "packages/zone-core/src/zone.test.ts": 714,
+    "packages/zone-core/src/zone.ts": 1916
   }
 }

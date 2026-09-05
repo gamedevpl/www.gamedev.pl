@@ -250,6 +250,39 @@ describe('hibernation', () => {
     expect(h.store.writes).toBe(writes);
   });
 
+  it('is parked the instant the last player leaves, not after the write lands', async () => {
+    // A zone still live through the write would tick empty and park under a rejoin.
+    const store = new FakeStore();
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const originalSave = store.save.bind(store);
+    store.save = async (zoneId, snapshot) => {
+      await gate;
+      return originalSave(zoneId, snapshot);
+    };
+    const h = harness({ store });
+    await h.zone.join('player-a');
+    h.runTicks(5);
+    const tickAtLeave = h.zone.currentTick;
+    h.zone.leave(0);
+
+    expect(h.zone.state).toBe('parked');
+    h.runTicks(3);
+    expect(h.zone.currentTick).toBe(tickAtLeave);
+
+    await h.zone.join('player-a');
+    expect(h.zone.state).toBe('live');
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    // The write landing later must not park an occupied world.
+    expect(h.zone.state).toBe('live');
+    h.runTicks(2);
+    expect(h.zone.currentTick).toBe(tickAtLeave + 2);
+    expect(store.saved.get('ember-watch')!.tick).toBe(tickAtLeave);
+  });
+
   it('lets a player back inside the grace without reloading anything', async () => {
     let loads = 0;
     const store = new FakeStore();

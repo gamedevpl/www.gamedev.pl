@@ -250,23 +250,28 @@ export class Zone {
   leave(slot: number): void {
     if (!this.seats.delete(slot)) return;
     if (this.status === 'live') this.pending.push({ slot, k: 'leave' });
-    if (this.seats.size === 0) void this.park();
+    if (this.seats.size === 0) this.park();
   }
 
   // Snapshot now, as hibernation did; keep the sim so a return skips the reload.
-  private async park(): Promise<void> {
-    if (this.status !== 'live') return;
+  private park(): void {
+    if (this.status !== 'live' || !this.sim) return;
+    let record: ZoneSnapshot;
     try {
-      await this.persist();
-    } catch {
-      // Same loss bound as a failed periodic write.
+      record = this.captureSnapshot();
+    } catch (error) {
+      void this.fail(describeStateProblem(error));
+      return;
     }
-    if (this.status !== 'live') return;
+    // Flipped before the write, so a mid-write tick or rejoin sees parked.
     this.status = 'parked';
     this.parkedAt = this.now();
     this.pending = [];
     this.accumulatorMs = 0;
     this.lastPumpAt = 0;
+    this.options.store.save(this.id, record).catch(() => {
+      // Same loss bound as a failed periodic write.
+    });
   }
 
   /**
@@ -534,14 +539,19 @@ export class Zone {
     return true;
   }
 
+  // Synchronous, so what is written is what the sim held at this instant.
+  private captureSnapshot(): ZoneSnapshot {
+    const { state, draws } = this.sim!.snapshot();
+    return { version: ZONE_SNAPSHOT_VERSION, seed: this.seed, tick: this.tick, draws, state, savedAt: this.now() };
+  }
+
   /** Writes the zone to Firestore. Refuses a state that JSON would mangle on the way back. */
   private async persist(): Promise<void> {
     if (!this.sim) return;
 
-    let state: string;
-    let draws: number;
+    let record: ZoneSnapshot;
     try {
-      ({ state, draws } = this.sim.snapshot());
+      record = this.captureSnapshot();
     } catch (error) {
       // Storing a state JSON cannot carry would produce a world that silently changes
       // shape the first time this zone woke up, which is worse than not storing it. So
@@ -550,14 +560,7 @@ export class Zone {
       return;
     }
 
-    await this.options.store.save(this.id, {
-      version: ZONE_SNAPSHOT_VERSION,
-      seed: this.seed,
-      tick: this.tick,
-      draws,
-      state,
-      savedAt: this.now(),
-    });
+    await this.options.store.save(this.id, record);
   }
 
   /**
