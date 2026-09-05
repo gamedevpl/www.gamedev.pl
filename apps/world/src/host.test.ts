@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createNodeVmCage,
   mintZoneTicket,
+  PARK_GRACE_MS,
   parseZoneSchema,
   ZONE_TICKET_TTL_MS,
   type SimSource,
@@ -77,24 +78,23 @@ function pausedSource(): { source: SimSource; release: () => void } {
   };
 }
 
-function ticketFor(player: string): string {
-  return mintZoneTicket(
-    { zone: 'ember-watch', slug: 'ember-watch', player, expiresAt: Date.now() + ZONE_TICKET_TTL_MS },
-    SECRET,
-  );
+function ticketFor(player: string, zone = 'ember-watch'): string {
+  return mintZoneTicket({ zone, slug: 'ember-watch', player, expiresAt: Date.now() + ZONE_TICKET_TTL_MS }, SECRET);
 }
 
 function silentConnection(): ZoneConnection {
   return { send: () => {}, close: () => {} };
 }
 
-function makeHost(source: SimSource): ZoneHost {
+function makeHost(source: SimSource, now?: () => number, maxZones?: number): ZoneHost {
   return new ZoneHost({
     cage: createNodeVmCage(),
     source,
     store: memoryStore(),
     schemas: { getSchema: async (slug) => (slug === 'ember-watch' ? SCHEMA : null) },
     secret: SECRET,
+    now,
+    maxZones,
   });
 }
 
@@ -126,22 +126,56 @@ describe('ZoneHost admission', () => {
     host.shutdown?.();
   });
 
-  it('still reaps a zone once the last joiner has gone', async () => {
+  it('holds an emptied zone through its grace, then reaps it', async () => {
     // The guard is scoped to admissions in flight, not a licence to keep empty zones —
     // min-instances 0 is only honest if an empty world stops existing.
     const { source, release } = pausedSource();
-    const host = makeHost(source);
+    let clock = Date.now();
+    const host = makeHost(source, () => clock);
     release();
     const ticket = ticketFor('p1');
     const connection = silentConnection();
     const seated = await host.admit(ticket, connection);
 
     host.release('ember-watch', seated.slot, connection);
-    // Hibernation writes the final snapshot before it drops the sim, so the zone is still
-    // live for a microtask after the last seat goes.
+    // Parking writes the snapshot first, so the zone is live one microtask longer.
     await new Promise((resolve) => setImmediate(resolve));
-    host.pump(Date.now());
+    host.pump(clock);
     expect(host.liveZoneCount).toBe(0);
+    expect(host.heldZoneCount).toBe(1);
+
+    clock += PARK_GRACE_MS;
+    host.pump(clock);
+    await new Promise((resolve) => setImmediate(resolve));
+    host.pump(clock);
+    expect(host.heldZoneCount).toBe(0);
+    host.shutdown?.();
+  });
+
+  it('evicts the longest-parked zone rather than refusing a new one', async () => {
+    const { source, release } = pausedSource();
+    let clock = Date.now();
+    const host = makeHost(source, () => clock, 2);
+    release();
+
+    const a = silentConnection();
+    const seatedA = await host.admit(ticketFor('p1', 'zone-a'), a);
+    host.release('zone-a', seatedA.slot, a);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    clock += 1_000;
+    const b = silentConnection();
+    const seatedB = await host.admit(ticketFor('p2', 'zone-b'), b);
+    host.release('zone-b', seatedB.slot, b);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(host.heldZoneCount).toBe(2);
+
+    const third = await host.admit(ticketFor('p3', 'zone-c'), silentConnection());
+    expect(third.zoneId).toBe('zone-c');
+    expect(host.heldZoneCount).toBe(2);
+    // zone-a went; zone-b, parked a second later, is still held.
+    const back = await host.admit(ticketFor('p2', 'zone-b'), silentConnection());
+    expect(back.zone).toBe(seatedB.zone);
     host.shutdown?.();
   });
 
@@ -166,6 +200,33 @@ describe('ZoneHost admission', () => {
     const later = await host.admit(ticketFor('p3'), silentConnection());
     expect(later.zone).toBe(a.zone);
     expect(host.liveZoneCount).toBe(1);
+    host.shutdown?.();
+  });
+  it('does not orphan a parked zone whose owner returns as it is being evicted', async () => {
+    // Eviction yields once; a rejoin landing in that gap must not find a zone the host
+    // is about to drop from its books, or the player sits in a world nothing pumps.
+    const { source, release } = pausedSource();
+    let clock = Date.now();
+    const host = makeHost(source, () => clock, 2);
+    release();
+
+    const a = silentConnection();
+    const seatedA = await host.admit(ticketFor('p1', 'zone-a'), a);
+    host.release('zone-a', seatedA.slot, a);
+    clock += 1_000;
+    const b = silentConnection();
+    const seatedB = await host.admit(ticketFor('p2', 'zone-b'), b);
+    host.release('zone-b', seatedB.slot, b);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const opening = host.admit(ticketFor('p3', 'zone-c'), silentConnection());
+    const returning = host.admit(ticketFor('p1', 'zone-a'), silentConnection());
+    const [, raced] = await Promise.all([opening, returning]);
+
+    // The world the returning player got is the one the host still holds.
+    const again = await host.admit(ticketFor('p4', 'zone-a'), silentConnection());
+    expect(again.zone).toBe(raced.zone);
+    expect(again.zone.state).toBe('live');
     host.shutdown?.();
   });
 });

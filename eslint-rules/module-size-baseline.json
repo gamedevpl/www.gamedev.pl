@@ -961,8 +961,8 @@
     "apps/web/vitest.config.ts": 13,
     "apps/world/src/app.test.ts": 360,
     "apps/world/src/app.ts": 279,
-    "apps/world/src/host.test.ts": 210,
-    "apps/world/src/host.ts": 293,
+    "apps/world/src/host.test.ts": 271,
+    "apps/world/src/host.ts": 321,
     "apps/world/src/server.ts": 111,
     "apps/world/src/sim-source.ts": 203,
     "apps/world/src/snapshot-store.ts": 92,
@@ -1044,13 +1044,13 @@
     "packages/zone-core/src/cage.ts": 464,
     "packages/zone-core/src/contract.test.ts": 123,
     "packages/zone-core/src/contract.ts": 222,
-    "packages/zone-core/src/index.ts": 83,
+    "packages/zone-core/src/index.ts": 84,
     "packages/zone-core/src/schema.test.ts": 141,
     "packages/zone-core/src/schema.ts": 142,
     "packages/zone-core/src/testSims.ts": 155,
     "packages/zone-core/src/ticket.test.ts": 101,
     "packages/zone-core/src/ticket.ts": 111,
-    "packages/zone-core/src/zone.test.ts": 517,
-    "packages/zone-core/src/zone.ts": 574
+    "packages/zone-core/src/zone.test.ts": 598,
+    "packages/zone-core/src/zone.ts": 641
   }
 }
