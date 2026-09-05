@@ -144,7 +144,8 @@ export type CodeLaneOutcome =
       region: { file: string; name: string };
       summary?: { en: string; pl: string };
       rounds: number;
-      tokens: { input: number; output: number };
+      // `calls` counts billed model calls, repair rounds included.
+      tokens: { input: number; output: number; calls?: number };
       /** Present only under `REMIX_DEBUG`. */
       trace?: CodeLaneTrace;
     }
@@ -154,7 +155,7 @@ export type CodeLaneOutcome =
       reason: 'no_region' | 'refused' | 'did_not_compile' | 'error';
       detail?: string;
       summary?: { en: string; pl: string };
-      tokens: { input: number; output: number };
+      tokens: { input: number; output: number; calls?: number };
       /**
        * Present only under `REMIX_DEBUG` — and on failures above all. A flag
        * that traced only the runs that worked would be silent on exactly the
@@ -356,8 +357,9 @@ export class VertexCodeLane {
     prompt: string,
     timeoutMs: number,
     parse: (value: unknown) => T,
-    tokens: { input: number; output: number },
+    tokens: { input: number; output: number; calls?: number },
   ): Promise<T> {
+    tokens.calls = (tokens.calls ?? 0) + 1;
     const result: GenerationResult = await this.getClient()(prompt)
       .thinking({ level: 'low' })
       .temperature(0.1)

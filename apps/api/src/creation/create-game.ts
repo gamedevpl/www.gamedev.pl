@@ -17,7 +17,7 @@ import { normalizeLocale } from '../platform/translate.js';
 import type { BuilderKind } from './builder.js';
 import { CREATION_REFUSAL_CODES, type CreationGate } from './creation-limits.js';
 import { ReferenceImagesSchema, REFERENCE_IMAGES_BODY_LIMIT_BYTES } from './feedback-request.js';
-import { peekQuota } from './quota-gate.js';
+import { peekQuota } from '../platform/quota-peek.js';
 
 const TITLE_TOO_LONG_MSG = `title must be at most ${MAX_TITLE_LENGTH} characters`;
 
@@ -82,14 +82,10 @@ export interface CreateGameDeps {
   submissionsByIp: Map<string, number[]>;
   isSlugClaimed: (slug: string) => Promise<boolean>;
   confirmSlugClaim: (jobId: number, wanted: string, title: string) => Promise<string | null>;
-  dispatchBuild: (input: {
-    jobId: number;
-    slug: string;
-    spec: string;
-    locale: string;
-    builder: BuilderKind;
-    log: { error: (context: object, message: string) => void };
-  }) => Promise<unknown>;
+  // First dispatch from the stored brief, atomically claimed (dispatch-build.ts).
+  dispatchQueuedJob: (input: { jobId: number; log: { error: (context: object, message: string) => void } }) => Promise<unknown>;
+  // Hands dispatch to /api/internal/seed; false means run it here.
+  enqueueSeed?: (jobId: number) => Promise<boolean>;
 }
 
 // The whole creation path: validate, limit, moderate, gate, quota, slug, dispatch.
@@ -122,7 +118,8 @@ export function createGameCreator(deps: CreateGameDeps): {
     submissionsByIp,
     isSlugClaimed,
     confirmSlugClaim,
-    dispatchBuild,
+    dispatchQueuedJob,
+    enqueueSeed,
   } = deps;
 
   async function createGame(input: {
@@ -271,16 +268,21 @@ export function createGameCreator(deps: CreateGameDeps): {
       const builder: BuilderKind = requestedBuilder;
       // Persist before returning: Connect and Studio read `record.builder` immediately.
       await store.setRoundBuilder(jobId, builder, { resetRoundBudget: false });
-      void dispatchBuild({
-        jobId,
-        slug,
-        spec: issueBody,
-        locale: creatorLocale,
-        builder,
-        log: dispatchLog,
-      }).catch((error: unknown) => {
-        dispatchLog.error({ err: error, jobId }, 'background dispatch failed');
-      });
+      // The brief the first dispatch sends, whichever path sends it.
+      await store.setSubmissionDispatchBrief(jobId, issueBody);
+      // Awaited: after this response, un-handed-off work may stall.
+      const accepted = enqueueSeed
+        ? await enqueueSeed(jobId).catch((error: unknown) => {
+            dispatchLog.error({ err: error, jobId }, 'seed handoff failed, dispatching inline');
+            return false;
+          })
+        : false;
+      if (!accepted) {
+        // Claim-guarded, so a handoff that actually started cannot be doubled.
+        void dispatchQueuedJob({ jobId, log: dispatchLog }).catch((error: unknown) => {
+          dispatchLog.error({ err: error, jobId }, 'background dispatch failed');
+        });
+      }
 
       input.log.info?.({ jobId, slug, via: input.openedBy === 'agent' ? 'mcp' : 'studio' }, 'game created');
       return { ok: true, jobId, slug };

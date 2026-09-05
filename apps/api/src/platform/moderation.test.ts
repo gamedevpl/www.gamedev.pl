@@ -171,6 +171,69 @@ describe('VertexChecker', () => {
     const verdict = await checker.check('A completely clean game concept');
     expect(verdict).toEqual({ allowed: false, category: 'other' });
   });
+
+  it('serves a decided verdict for the same text without paying again', async () => {
+    let calls = 0;
+    const checker = new VertexChecker({
+      vertexFetcher: async () => {
+        calls += 1;
+        return { allowed: true };
+      },
+    });
+
+    expect(await checker.check('A cozy farming game')).toEqual({ allowed: true });
+    expect(await checker.check('A cozy farming game')).toEqual({ allowed: true });
+    expect(await checker.check('A cozy farming game')).toEqual({ allowed: true });
+    expect(calls).toBe(1);
+  });
+
+  it('caches rejections too, and keys on the exact text', async () => {
+    let calls = 0;
+    const checker = new VertexChecker({
+      vertexFetcher: async (prompt) => {
+        calls += 1;
+        return prompt.includes('nasty') ? { allowed: false, category: 'other' } : { allowed: true };
+      },
+    });
+
+    expect(await checker.check('something nasty happens')).toEqual({ allowed: false, category: 'other' });
+    expect(await checker.check('something nasty happens')).toEqual({ allowed: false, category: 'other' });
+    expect(calls).toBe(1);
+
+    // A different string is never a cache hit.
+    expect(await checker.check('something pleasant happens')).toEqual({ allowed: true });
+    expect(calls).toBe(2);
+  });
+
+  it('never caches the fail-closed outcome of an unreachable classifier', async () => {
+    let calls = 0;
+    const checker = new VertexChecker({
+      vertexFetcher: async () => {
+        calls += 1;
+        if (calls === 1) throw new Error('Vertex AI network timeout');
+        return { allowed: true };
+      },
+    });
+
+    // The first verdict describes Vertex being down, not the text.
+    expect(await checker.check('A completely clean game concept')).toEqual({ allowed: false, category: 'other' });
+    expect(await checker.check('A completely clean game concept')).toEqual({ allowed: true });
+    expect(calls).toBe(2);
+  });
+
+  it('checkFields pays once for repeated identical fields', async () => {
+    let calls = 0;
+    const checker = new VertexChecker({
+      vertexFetcher: async () => {
+        calls += 1;
+        return { allowed: true };
+      },
+    });
+
+    // Autosave resubmits every field; identical values must not each pay.
+    expect(await checker.checkFields(['My Game', 'My Game', 'My Game'])).toEqual({ allowed: true });
+    expect(calls).toBe(1);
+  });
 });
 
 describe('VertexChecker over a genaicode client', () => {

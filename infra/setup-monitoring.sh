@@ -353,6 +353,18 @@ ensure_log_metric unattributable_client_refusals \
   'An IP-keyed limiter refused a caller with no attributable address.' \
   "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"unattributable client refused by ip limiter\""
 
+# Fastly-Client-IP arrived but the peer Cloud Run appended is not one of Google's own
+# addresses, so the header was ignored. Two causes, both worth a look: a header forged and
+# sent straight at the service — the bypass the peer check exists to stop — or a Google range
+# newer than the bundled snapshot. A burst from one peer is the former; a steady trickle
+# from Google-looking peers is the latter, fixed by node infra/refresh-edge-ranges.mjs.
+#
+# The message string is the contract with apps/api/src/platform/client-address-metrics.ts,
+# asserted from both sides by client-address-metrics.test.ts.
+ensure_log_metric edge_header_untrusted \
+  'Fastly-Client-IP present but the appended peer is not Google-own (forgery or stale ranges).' \
+  "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"edge client header not trusted\""
+
 # The in-process tsc preflight (typecheck-preflight.ts) abandons a check that ran past its
 # soft wall and accepts the delivery unvalidated rather than blocking the agent — the same
 # fail-open shape as everywhere else in this pipeline. One skip is a heavy round (a big
@@ -784,6 +796,45 @@ cat > "${POLICY_DIR}/a28.json" <<EOF
   "alertStrategy": { "autoClose": "86400s" },
   "documentation": {
     "content": "A gate Cloud Build finished without writing manifest.gate or manifest.previewGate, so the delivery can never be verified or published and the creator's page will sit on 'verification failed on our side'. This is a platform fault by construction — a game that merely fails its checks writes a red verdict and never reaches this metric. Triage: Logs Explorer, jsonPayload.msg=\"delivery gate crashed\", take jsonPayload.delivery.buildId and read it with 'gcloud builds log <id> --project=gamedevpl'. The usual cause is the gate container failing before it can run: a workspace package that npm ci symlinks but never builds (infra/cloudbuild-gate.yaml must run 'npm run build:packages' ahead of gate:run), a bad platform ref, or the gate-runner SA losing a permission. If several games trip this at once, treat it as a full gate outage — every delivery in flight is stuck and none of their creators are being told anything useful. Affected rounds stay open, so once the cause is fixed the agent only needs to deliver again.",
+    "mimeType": "text/markdown"
+  }
+}
+EOF
+
+# A29 -- Firestore write rate. The database has no spend signal at all today: the cost
+# model is per-operation, and the failure that produces a surprise bill is volume from a
+# loop, not one expensive query. Every ceiling this project added in 2026-08 is itself a
+# Firestore counter, so a runaway now shows up here before it shows up on the invoice --
+# and a hot document (one shard taking every write) shows up as latency at the same time.
+#
+# Threshold: the closed beta's steady state is a few writes a second at most. 25/s
+# sustained over ten minutes is roughly an order of magnitude above that, low enough to
+# catch a loop early and high enough that a normal creation burst does not page anybody.
+# Recalibrate against real numbers once there is a week of them -- see the note at the
+# bottom of this file for how A24/A25 were done.
+cat > "${POLICY_DIR}/a29.json" <<EOF
+{
+  "displayName": "A29 Firestore write rate",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "sustained document writes well above steady state",
+    "conditionThreshold": {
+      "filter": "metric.type=\"firestore.googleapis.com/document/write_count\" AND resource.type=\"firestore_instance\"",
+      "aggregations": [{
+        "alignmentPeriod": "600s",
+        "perSeriesAligner": "ALIGN_RATE",
+        "crossSeriesReducer": "REDUCE_SUM"
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 25,
+      "duration": "600s",
+      "trigger": { "count": 1 }
+    }
+  }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
+  "alertStrategy": { "autoClose": "86400s" },
+  "documentation": {
+    "content": "Firestore is taking far more writes than the closed beta's steady state, sustained for ten minutes. Firestore bills per operation, so this is a cost signal as much as a load one, and it is the only one the database has -- there is no per-document budget and no equivalent of the Vertex token alarm. Likely causes, in the order they have actually happened: a client polling a route that writes on read; a sweep or reaper looping over a growing collection without a batch ceiling; one of the global spend counters in apps/api/src/store/slices/quota-global.ts becoming a hot document under a traffic burst (searchEmbeddings and moderationCalls are sharded across ten documents each for exactly this reason -- if a single shard is taking every write, the shard key is broken, not the traffic). Triage: Metrics Explorer, group firestore.googleapis.com/document/write_count by collection_id to find which collection is growing, then Logs Explorer on the app service for the route driving it. The creation, editing, chat, search and gate lanes can each be paused from the admin console's Limits tab within a minute, which stops their counters writing as a side effect.",
     "mimeType": "text/markdown"
   }
 }

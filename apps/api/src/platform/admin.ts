@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { isAdminSession } from './admin-session.js';
 import { MANAGED_AGENT_VENDORS } from '../agent-surface/agent-backend-env.js';
 import { DEFAULT_SEED_PROVIDER } from '../creation/game-seed.js';
+import { resolveDefaultGlobalDailySeedCap } from '../creation/seed-availability.js';
 import {
   recentPartitions,
   scanPartitions,
@@ -41,6 +42,8 @@ import {
   DEFAULT_CREATION_LIMITS_TTL_MS,
   resolveDefaultGlobalDailyCap,
   resolveDefaultGlobalDailyTabCompleteTokenCap,
+  resolveDefaultGlobalDailySearchEmbeddingCap,
+  resolveDefaultGlobalDailyGateRunCap,
 } from '../creation/creation-limits.js';
 import {
   BOT_UID_PREFIX,
@@ -165,8 +168,15 @@ export interface CreationLimitsResponse {
     // TA-01's own breaker (creator-code-tab-autocomplete-research.md).
     tabCompletePaused: boolean;
     globalDailyTabCompleteTokenCap: number;
-    // Round 0's kill switch and provider picker.
+    // Semantic catalog search — the one lane anonymous traffic can reach (CC-01).
+    searchPaused: boolean;
+    globalDailySearchEmbeddingCap: number;
+    // Each gate run is a 30-minute E2_HIGHCPU_8 build.
+    gatePaused: boolean;
+    globalDailyGateRunCap: number;
+    // Round 0's kill switch, ceiling and provider picker.
     seedingMode: 'auto' | 'off';
+    globalDailySeedCap: number;
     seedProvider: {
       stored: string | null;
       effective: string;
@@ -175,7 +185,18 @@ export interface CreationLimitsResponse {
       defaultProvider: string | null;
     };
   };
-  today: { dateStr: string; submissions: number; managedBuilds: number; tabCompleteTokens: number };
+  // What today cost, without opening the billing console.
+  today: {
+    dateStr: string;
+    submissions: number;
+    managedBuilds: number;
+    tabCompleteTokens: number;
+    searchEmbeddings: number;
+    gateRuns: number;
+    seeds: number;
+    moderationCalls: number;
+    botCalls: number;
+  };
   /** Upper bound, in ms, on how long a change takes to reach every instance. */
   propagationMs: number;
 }
@@ -207,6 +228,11 @@ const CreationLimitsPatchSchema = z
     // TA-01's own breaker, denominated in tokens rather than calls.
     tabCompletePaused: z.boolean().optional(),
     globalDailyTabCompleteTokenCap: z.number().int().min(0).max(50_000_000).nullable().optional(),
+    searchPaused: z.boolean().optional(),
+    globalDailySearchEmbeddingCap: z.number().int().min(0).max(10_000_000).nullable().optional(),
+    gatePaused: z.boolean().optional(),
+    globalDailyGateRunCap: z.number().int().min(0).max(100_000).nullable().optional(),
+    globalDailySeedCap: z.number().int().min(0).max(100_000).nullable().optional(),
     // Same document: whether the platform builder is offered. See managed-availability.ts.
     managedBuilderMode: z.enum(MANAGED_BUILDER_MODES).optional(),
     // null clears the override, same as globalDailySubmissionCap above.
@@ -228,13 +254,18 @@ const CreationLimitsPatchSchema = z
       patch.globalDailyChatCap !== undefined ||
       patch.tabCompletePaused !== undefined ||
       patch.globalDailyTabCompleteTokenCap !== undefined ||
+      patch.searchPaused !== undefined ||
+      patch.globalDailySearchEmbeddingCap !== undefined ||
+      patch.gatePaused !== undefined ||
+      patch.globalDailyGateRunCap !== undefined ||
+      patch.globalDailySeedCap !== undefined ||
       patch.managedBuilderMode !== undefined ||
       patch.managedAgentVendorOverride !== undefined ||
       patch.managedDailyCap !== undefined ||
       patch.managedDailyUserCap !== undefined ||
       patch.seedingMode !== undefined ||
       patch.seedProviderOverride !== undefined,
-    'nothing to change: send paused, globalDailySubmissionCap, editingPaused, globalDailyEditCap, chatPaused, globalDailyChatCap, tabCompletePaused, globalDailyTabCompleteTokenCap, managedBuilderMode, managedAgentVendorOverride, managedDailyCap, managedDailyUserCap, seedingMode and/or seedProviderOverride',
+    'nothing to change: send paused, globalDailySubmissionCap, editingPaused, globalDailyEditCap, chatPaused, globalDailyChatCap, tabCompletePaused, globalDailyTabCompleteTokenCap, searchPaused, globalDailySearchEmbeddingCap, gatePaused, globalDailyGateRunCap, globalDailySeedCap, managedBuilderMode, managedAgentVendorOverride, managedDailyCap, managedDailyUserCap, seedingMode and/or seedProviderOverride',
   );
 
 const PublicPlayPatchSchema = z.object({
@@ -427,11 +458,26 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
   /** Reads the stored breaker plus today's spend, uncached — an operator wants truth. */
   async function readCreationLimits(): Promise<CreationLimitsResponse> {
     const dateStr = new Date(now()).toISOString().slice(0, 10);
-    const [stored, submissions, managedBuilds, tabCompleteTokens] = await Promise.all([
+    const [
+      stored,
+      submissions,
+      managedBuilds,
+      tabCompleteTokens,
+      searchEmbeddings,
+      gateRuns,
+      seeds,
+      moderationCalls,
+      botCalls,
+    ] = await Promise.all([
       store.getCreationLimits(),
       store.getGlobalSubmissionCount(dateStr),
       store.getGlobalManagedBuildCount(dateStr),
       store.getGlobalTabCompleteTokenCount(dateStr),
+      store.getGlobalSearchEmbeddingCount(dateStr),
+      store.getGlobalGateRunCount(dateStr),
+      store.getGlobalSeedCount(dateStr),
+      store.getGlobalModerationCount(dateStr),
+      store.getGlobalBotCallCount(dateStr),
     ]);
     const storedVendor = stored?.managedAgentVendorOverride ?? null;
     // An invalid default must not report as effective when nothing overrode it.
@@ -464,7 +510,13 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
         tabCompletePaused: stored?.tabCompletePaused === true,
         globalDailyTabCompleteTokenCap:
           stored?.globalDailyTabCompleteTokenCap ?? resolveDefaultGlobalDailyTabCompleteTokenCap(),
+        searchPaused: stored?.searchPaused === true,
+        globalDailySearchEmbeddingCap:
+          stored?.globalDailySearchEmbeddingCap ?? resolveDefaultGlobalDailySearchEmbeddingCap(),
+        gatePaused: stored?.gatePaused === true,
+        globalDailyGateRunCap: stored?.globalDailyGateRunCap ?? resolveDefaultGlobalDailyGateRunCap(),
         seedingMode: stored?.seedingMode ?? 'auto',
+        globalDailySeedCap: stored?.globalDailySeedCap ?? resolveDefaultGlobalDailySeedCap(),
         seedProvider: {
           stored: storedSeedProvider,
           effective: effectiveSeedProvider,
@@ -473,7 +525,17 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
           defaultProvider: defaultSeedProvider,
         },
       },
-      today: { dateStr, submissions, managedBuilds, tabCompleteTokens },
+      today: {
+        dateStr,
+        submissions,
+        managedBuilds,
+        tabCompleteTokens,
+        searchEmbeddings,
+        gateRuns,
+        seeds,
+        moderationCalls,
+        botCalls,
+      },
       propagationMs: creationLimitsTtlMs,
     };
   }

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { GenAIClient } from 'genaicode';
 import { z } from 'zod';
 import { createVertexClient, type VertexGenerationConfig } from './genai.js';
@@ -127,6 +128,8 @@ export interface VertexCheckerOptions {
   // Lower-level seam than `vertexFetcher`: swap the genaicode client (i.e. a stub
   // ModelProvider) to exercise real prompt/response handling with no network.
   client?: GenAIClient;
+  // Fired per billed call; cache hits and regex refusals do not.
+  onPaidCall?: () => void;
 }
 
 const VerdictSchema = z.object({
@@ -139,6 +142,10 @@ export class VertexChecker implements ContentChecker {
   private thinkingLevel: string;
   private timeoutMs: number;
   private patternChecker: PatternChecker;
+  // Keyed on exact text: byte-identical inputs only.
+  private verdictCache = new Map<string, { verdict: ModerationVerdict; expiresAt: number }>();
+  private static readonly VERDICT_CACHE_MAX = 1000;
+  private static readonly VERDICT_CACHE_TTL_MS = 10 * 60 * 1000;
   private vertexFetcher?: (prompt: string) => Promise<{ allowed: boolean; category?: string }>;
   // Built lazily so constructing a checker never reaches for GCP credentials —
   // tests inject `vertexFetcher` and must stay offline.
@@ -174,6 +181,30 @@ export class VertexChecker implements ContentChecker {
     return this.client;
   }
 
+  private cacheKey(text: string): string {
+    // Identity in the key: a model change retires old verdicts.
+    const identity = `${this.options.model ?? 'default'}:${this.thinkingLevel}`;
+    return `${identity}:${createHash('sha256').update(text).digest('hex')}`;
+  }
+
+  private readCachedVerdict(key: string, now: number): ModerationVerdict | null {
+    const hit = this.verdictCache.get(key);
+    if (!hit) return null;
+    if (hit.expiresAt <= now) {
+      this.verdictCache.delete(key);
+      return null;
+    }
+    return hit.verdict;
+  }
+
+  private writeCachedVerdict(key: string, verdict: ModerationVerdict, now: number): void {
+    if (this.verdictCache.size >= VertexChecker.VERDICT_CACHE_MAX) {
+      const oldest = this.verdictCache.keys().next().value;
+      if (oldest) this.verdictCache.delete(oldest);
+    }
+    this.verdictCache.set(key, { verdict, expiresAt: now + VertexChecker.VERDICT_CACHE_TTL_MS });
+  }
+
   async check(text: string): Promise<ModerationVerdict> {
     // 1. Always run fast L1 regex pre-filter first
     const patternVerdict = await this.patternChecker.check(text);
@@ -181,16 +212,26 @@ export class VertexChecker implements ContentChecker {
       return patternVerdict;
     }
 
-    // 2. Run Vertex AI LLM moderation check
+    // 2. Serve a fresh decided verdict for this exact text
+    const now = Date.now();
+    const key = this.cacheKey(text);
+    const cached = this.readCachedVerdict(key, now);
+    if (cached) return cached;
+
+    // 3. Run Vertex AI LLM moderation check
+    this.options.onPaidCall?.();
     try {
       const result = await this.callVertex(text);
-      if (!result.allowed) {
-        const cat = isValidCategory(result.category) ? (result.category as RejectCategory) : 'other';
-        return { allowed: false, category: cat };
-      }
-      return { allowed: true };
+      const verdict: ModerationVerdict = result.allowed
+        ? { allowed: true }
+        : {
+            allowed: false,
+            category: isValidCategory(result.category) ? (result.category as RejectCategory) : 'other',
+          };
+      this.writeCachedVerdict(key, verdict, now);
+      return verdict;
     } catch (err) {
-      // Fail closed on error or timeout per safety spec
+      // Fail closed, never cached: describes Vertex, not the text.
       console.warn('Vertex AI moderation failed or timed out, failing closed:', err);
       return { allowed: false, category: 'other' };
     }

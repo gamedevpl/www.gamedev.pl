@@ -246,26 +246,39 @@ bucket the whole internet onto a handful of Google addresses.
 **Raising `trustProxy` is not the fix**, and this is the trap worth spelling out. A larger
 hop count would reach the caller's entry behind the edge, but it would equally trust a
 forged prefix on any request that did _not_ arrive through the edge — and the service's own
-`*.run.app` URL stays publicly reachable, so that path does not close by itself.
+`*.run.app` URL stays publicly reachable. Measured 2026-09-04 on a throwaway service: the
+Hosting rewrite reaches Cloud Run by the same path as public traffic, so neither
+`--no-default-url` nor `--ingress=internal-and-cloud-load-balancing` can close that URL
+without killing the rewrite too. The direct path cannot be closed by configuration.
 
 So the caller is read from `Fastly-Client-IP`, a header the edge overwrites (a forged one
-sent through Hosting is discarded and replaced — measured, not assumed). A header is only
-as trustworthy as the guarantee that nothing can reach the service around the proxy that
-sets it, which is what the flag records:
+sent through Hosting is discarded and replaced — measured, not assumed), **and only when the
+request provably came through Google's edge.** The proof is the peer Cloud Run appended:
+through Hosting it is one of Google's own addresses (`66.102.8.x` was measured); sent
+directly it is the caller's. A caller cannot choose that entry — Cloud Run writes it — so
+the only way to satisfy the check is to actually go through Hosting, where the header is
+overwritten anyway. `apps/api/src/platform/edge-ranges.ts` holds the check; "Google's own"
+is Google's documented definition, the prefixes in `goog.json` that are not in
+`cloud.json`, evaluated per address at runtime because a customer VM can sit inside a
+parent range Google owns. `infra/refresh-edge-ranges.mjs` regenerates the bundled snapshot,
+and the service refreshes it in the background.
 
-- **`TRUST_EDGE_CLIENT_IP` unset or anything but `true`** (the default, and the current
-  production state): the header is ignored entirely and `clientIp` is `request.ip`. Safe
-  while the service is reachable directly, which it is today.
+The flag is now a kill switch rather than a precondition:
+
+- **`TRUST_EDGE_CLIENT_IP` unset or anything but `true`** (the default, and the state
+  before the cutover): the header is ignored entirely and `clientIp` is `request.ip`.
 - **`TRUST_EDGE_CLIENT_IP=true`**: `clientIp` comes from `Fastly-Client-IP` when it holds
-  exactly one address, falling back to `request.ip` otherwise.
+  exactly one address _and_ the appended peer is Google's own, falling back to
+  `request.ip` otherwise. A header that fails the peer check is logged as
+  `edge client header not trusted` with the peer that gave it away.
 
-**Do not set it to `true` until the direct Cloud Run URL is closed** — ingress restricted to
-internal and load balancing, or an equivalent proof that traffic came through Hosting.
-Setting it while the service answers directly replaces a broken limiter with a bypassable
-one, which is worse, because it looks correct.
+**Turn it on in the same window as the DNS cutover.** Behind the edge with the flag off,
+every limiter shares Google's frontend addresses and starts refusing real traffic on
+product routes; with it on before the cutover, nothing changes, because no request carries
+a Google-own peer yet.
 
-`GET /api/diagnostics/proxy` reports `resolvedIp` (Fastify's) and `clientIp` (the effective
-one) side by side, so the two can be compared through either path after a change.
+`GET /api/diagnostics/proxy` reports `resolvedIp`, `clientIp` and `peerIsGoogleEdge` side
+by side, so the three can be compared through either path after a change.
 
 ## Outbound email (Resend)
 

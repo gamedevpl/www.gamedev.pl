@@ -138,6 +138,50 @@ describe('CatalogIndexer', () => {
     expect(mockGithubClient.getGameFile).not.toHaveBeenCalled();
   });
 
+  it('backs off a failing rebuild of a non-empty stale index', async () => {
+    vi.useFakeTimers();
+    try {
+      let attempts = 0;
+      const getEntriesSpy = vi.fn().mockImplementation(async () => {
+        attempts += 1;
+        // Succeed once, then fail every rebuild after it.
+        if (attempts === 1) return [mockEntries[0]!];
+        throw new Error('catalog unavailable');
+      });
+      const indexer = new CatalogIndexer({
+        store: mockStore,
+        githubClient: mockGithubClient,
+        publishedRef: 'main',
+        getCatalogEntries: getEntriesSpy,
+        embeddingService: mockEmbeddingService,
+        vectorIndex,
+      });
+
+      await indexer.ensureIndex();
+      expect(vectorIndex.size()).toBe(1);
+      expect(getEntriesSpy).toHaveBeenCalledTimes(1);
+
+      // Let it go stale: now non-empty and stale.
+      await vi.advanceTimersByTimeAsync(11 * 60 * 1000);
+
+      await indexer.ensureIndex();
+      expect(getEntriesSpy).toHaveBeenCalledTimes(2);
+
+      // Without backoff each request starts another full-catalog pass.
+      await indexer.ensureIndex();
+      await indexer.ensureIndex();
+      await indexer.ensureIndex();
+      expect(getEntriesSpy).toHaveBeenCalledTimes(2);
+
+      // Past the window, exactly one more attempt.
+      await vi.advanceTimersByTimeAsync(61 * 1000);
+      await indexer.ensureIndex();
+      expect(getEntriesSpy).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('handles in-flight latch and ensures index without redundant builds', async () => {
     const getEntriesSpy = vi.fn().mockResolvedValue([mockEntries[0]!]);
     const indexer = new CatalogIndexer({

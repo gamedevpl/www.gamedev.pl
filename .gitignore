@@ -22,3 +22,6 @@ coverage
 # Playwright/browser run artifacts (apps/e2e)
 test-results
 playwright-report
+
+# Staged for the Hosting upload; built from apps/web, never committed.
+infra/firebase/public/assets/

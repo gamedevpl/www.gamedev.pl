@@ -27,6 +27,8 @@ export class CatalogIndexer {
 
   private indexBuildPromise: Promise<void> | null = null;
   private isEnrichingInBackground = false;
+  // Bounds re-enrichment when the store write keeps failing.
+  private enrichmentAttempted = new Set<string>();
   private lastIndexBuildAttemptTime = 0;
   private lastIndexBuildSuccessTime = 0;
   private static readonly INDEX_TTL_MS = 10 * 60 * 1000;
@@ -94,7 +96,8 @@ export class CatalogIndexer {
       (entry) =>
         !entry.tagline?.en && !entry.tagline?.pl && (!entry.searchKeywords || entry.searchKeywords.length === 0),
     );
-    if (unEnriched.length === 0) return;
+    const pending = unEnriched.filter((entry) => !this.enrichmentAttempted.has(entry.slug));
+    if (pending.length === 0) return;
 
     this.isEnrichingInBackground = true;
     const client = this.githubClient;
@@ -103,7 +106,8 @@ export class CatalogIndexer {
 
     void (async () => {
       try {
-        for (const entry of unEnriched) {
+        for (const entry of pending) {
+          this.enrichmentAttempted.add(entry.slug);
           try {
             const spec = await client.getGameFile(this.publishedRef, entry.slug, 'SPEC.md');
             if (spec) {
@@ -140,7 +144,9 @@ export class CatalogIndexer {
   ensureIndex(): Promise<void> {
     const isStale = Date.now() - this.lastIndexBuildSuccessTime > CatalogIndexer.INDEX_TTL_MS;
     const isRecentAttempt = Date.now() - this.lastIndexBuildAttemptTime < CatalogIndexer.RETRY_BACKOFF_MS;
-    if ((this.vectorIndex.size() > 0 && !isStale) || (this.vectorIndex.size() === 0 && isRecentAttempt)) {
+    const isFresh = this.vectorIndex.size() > 0 && !isStale;
+    // Backoff covers a stale non-empty index, not just an empty one.
+    if (isFresh || isRecentAttempt) {
       return Promise.resolve();
     }
     if (!this.indexBuildPromise) {

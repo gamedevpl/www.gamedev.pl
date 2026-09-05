@@ -199,7 +199,8 @@ describe('code lane', () => {
     const lane = new VertexCodeLane({ client });
 
     const result = await lane.run({ slug: 'g', sources: SOURCES, utterance: 'faster' }, async () => ({ ok: true }));
-    expect(result.tokens).toEqual({ input: 200, output: 40 });
+    // `calls` is what the edit cap reconciles against.
+    expect(result.tokens).toEqual({ input: 200, output: 40, calls: 2 });
   });
 
   it("shows the editing call the game's other types, so it cannot invent a field", async () => {

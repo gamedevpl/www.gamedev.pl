@@ -241,6 +241,8 @@ export interface SubmissionRecord {
    * (`SELF_BUILD_DELIVERY_CAP`); resets when a new round opens.
    */
   roundDeliveryCount?: number;
+  // Deliveries over this job's whole life. Never reset — reopening is cheap.
+  jobDeliveryCount?: number;
   // Typecheck preflight refusals this round (cap 2).
   roundTypecheckPreflightRefusals?: number;
   // Grouped diagnostics when accepting past that cap.
@@ -269,6 +271,10 @@ export interface SubmissionRecord {
   qa?: string[];
   // Set before the reaper's one retry of a job stuck queued.
   dispatchReaperAttemptedAt?: string;
+  // Set by whichever caller won the first dispatch; the reaper ignores it.
+  initialDispatchClaimedAt?: string;
+  // The exact brief the first dispatch sends, sanitized once at creation.
+  dispatchBrief?: string;
   // True when `spec` is a machine-assembled brief, not creator words.
   specIsSystemGenerated?: boolean;
 }

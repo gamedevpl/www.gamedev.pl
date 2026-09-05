@@ -539,6 +539,10 @@ export class FirestoreStore implements Store {
     return this.submissionStore.setSubmissionClarificationCount(jobId, count);
   }
 
+  async setSubmissionDispatchBrief(jobId: number, brief: string): Promise<void> {
+    return this.submissionStore.setSubmissionDispatchBrief(jobId, brief);
+  }
+
   async setSubmissionBrief(
     jobId: number,
     brief: { spec: string; qa: string[]; specIsSystemGenerated?: boolean },
@@ -704,6 +708,10 @@ export class FirestoreStore implements Store {
     return this.dispatchStore.claimDispatchReaperAttempt(jobId, at);
   }
 
+  async claimInitialDispatch(jobId: number, at: string): Promise<boolean> {
+    return this.dispatchStore.claimInitialDispatch(jobId, at);
+  }
+
   async checkAndIncrementQuota(
     uid: string,
     dateStr: string,
@@ -773,6 +781,56 @@ export class FirestoreStore implements Store {
 
   async adjustGlobalTabCompleteTokens(dateStr: string, delta: number): Promise<number> {
     return this.globalQuotaStore.adjustGlobalTabCompleteTokens(dateStr, delta);
+  }
+
+  async getGlobalEditCount(dateStr: string): Promise<number> {
+    return this.globalQuotaStore.getGlobalEditCount(dateStr);
+  }
+
+  async getGlobalSearchEmbeddingCount(dateStr: string): Promise<number> {
+    return this.globalQuotaStore.getGlobalSearchEmbeddingCount(dateStr);
+  }
+
+  async checkAndIncrementGlobalSearchEmbeddings(
+    dateStr: string,
+    limit: number,
+  ): Promise<{ allowed: boolean; current: number }> {
+    return this.globalQuotaStore.checkAndIncrementGlobalSearchEmbeddings(dateStr, limit);
+  }
+
+  async getGlobalGateRunCount(dateStr: string): Promise<number> {
+    return this.globalQuotaStore.getGlobalGateRunCount(dateStr);
+  }
+
+  async checkAndIncrementGlobalGateRuns(
+    dateStr: string,
+    limit: number,
+  ): Promise<{ allowed: boolean; current: number }> {
+    return this.globalQuotaStore.checkAndIncrementGlobalGateRuns(dateStr, limit);
+  }
+
+  async getGlobalSeedCount(dateStr: string): Promise<number> {
+    return this.globalQuotaStore.getGlobalSeedCount(dateStr);
+  }
+
+  async checkAndIncrementGlobalSeeds(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
+    return this.globalQuotaStore.checkAndIncrementGlobalSeeds(dateStr, limit);
+  }
+
+  async getGlobalBotCallCount(dateStr: string): Promise<number> {
+    return this.globalQuotaStore.getGlobalBotCallCount(dateStr);
+  }
+
+  async checkAndIncrementGlobalBotCalls(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
+    return this.globalQuotaStore.checkAndIncrementGlobalBotCalls(dateStr, limit);
+  }
+
+  async getGlobalModerationCount(dateStr: string): Promise<number> {
+    return this.globalQuotaStore.getGlobalModerationCount(dateStr);
+  }
+
+  async incrementGlobalModerationCalls(dateStr: string, calls: number): Promise<number> {
+    return this.globalQuotaStore.incrementGlobalModerationCalls(dateStr, calls);
   }
 
   async getGlobalManagedBuildCount(dateStr: string): Promise<number> {
@@ -974,6 +1032,10 @@ export class FirestoreStore implements Store {
 
   async listWorldEntries(worldId: string): Promise<WorldEntryRecord[]> {
     return this.worldEntriesStore.listWorldEntries(worldId);
+  }
+
+  async getWorldRevision(worldId: string): Promise<string> {
+    return this.worldEntriesStore.getWorldRevision(worldId);
   }
 
   async getWorldEntry(worldId: string, key: string): Promise<WorldEntryRecord | null> {

@@ -4,10 +4,11 @@ import { looksLikeAsAccessToken, verifyMcpAsAccessToken as verifyAsAccessToken }
 import type { OpenProposalInput, OpenProposalResult, ProposalDeps, ProposalRefusal } from '../community/proposals.js';
 import type { ProposalActor, ProposalPublicState, ProposalState } from '../community/proposal-state.js';
 import type { OwnerOfRecord } from '../community/owner-of-record.js';
-import { PROPOSAL_NO_JOB } from '../platform/proposal-limits.js';
+import { canSubmitProposal, MAX_PROPOSAL_SUBMITS, PROPOSAL_NO_JOB } from '../platform/proposal-limits.js';
 import type { GamesStore, SourceFile } from '../delivery/games-store.js';
 import { forbiddenIndexHtmlWriteReason } from '../platform/delivery-path-guard.js';
 import type { ProposalRecord, Store, ProposalBase } from '../platform/store.js';
+
 import type { ContentChecker } from '../platform/moderation.js';
 import {
   toolOk,
@@ -265,6 +266,13 @@ export function createProposalTools(deps: ProposalToolsDeps): Record<string, Pro
           return toolErr('this proposal is not yours to change right now');
         }
 
+        // Every submit starts a gate build.
+        if (!canSubmitProposal(record.submitCount)) {
+          return toolErr(
+            `this proposal has used its ${MAX_PROPOSAL_SUBMITS} gate runs — open a fresh proposal to keep going`,
+          );
+        }
+
         const files = Array.isArray(args.files)
           ? (args.files as Array<{ path?: unknown; content?: unknown }>)
               .filter((file) => typeof file?.path === 'string' && typeof file?.content === 'string')
@@ -303,6 +311,7 @@ export function createProposalTools(deps: ProposalToolsDeps): Record<string, Pro
 
         const at = new Date(now()).toISOString();
         record.version = version;
+        record.submitCount = (record.submitCount ?? 0) + 1;
         transitionProposal(record, 'submitted', 'proposer', at, 'submitted');
         await store.putProposal(record);
 

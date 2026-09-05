@@ -5,6 +5,9 @@ export const UNATTRIBUTABLE_CLIENT_LOG_MSG = 'unattributable client address';
 // Separate message: only an IP-keyed limiter can prove the bucket refused.
 export const IP_BUCKET_REFUSAL_LOG_MSG = 'unattributable client refused by ip limiter';
 
+// The edge header arrived without Google's edge as the appended peer.
+export const EDGE_HEADER_UNTRUSTED_LOG_MSG = 'edge client header not trusted';
+
 // The unspecified address in either family, never a real caller.
 const UNATTRIBUTABLE = new Set(['0.0.0.0', '::', '::0']);
 
@@ -33,4 +36,8 @@ export function logUnattributableClient(log: Logger, telemetry: UnattributableCl
 
 export function logIpBucketRefusal(log: Logger, telemetry: { clientIp: string }): void {
   log.warn({ ipBucketRefusal: telemetry }, IP_BUCKET_REFUSAL_LOG_MSG);
+}
+
+export function logEdgeHeaderUntrusted(log: Logger, telemetry: { peer: string; claimed: string }): void {
+  log.warn({ edgeHeaderUntrusted: telemetry }, EDGE_HEADER_UNTRUSTED_LOG_MSG);
 }

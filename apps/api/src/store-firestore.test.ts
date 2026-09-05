@@ -694,3 +694,39 @@ describe('FirestoreStore.markCreatorMessagesDelivered', () => {
     expect(await store.listCreatorMessages(9)).toEqual([]);
   });
 });
+
+describe('sharded spend counters', () => {
+  it('spreads writes across shards instead of one hot document', async () => {
+    const { db, docs, key } = fakeFirestore();
+    const store = new FirestoreStore(db);
+
+    for (let i = 0; i < 40; i += 1) {
+      await store.checkAndIncrementGlobalSearchEmbeddings('2026-08-30', 1000);
+    }
+
+    // Firestore takes about one write per second per document; a per-keystroke
+    // counter on a single doc is the bottleneck exactly when a runaway is on.
+    const touched = [...docs.keys()].filter((k) => k.includes('searchEmbeddings'));
+    expect(touched.length).toBeGreaterThan(1);
+    expect(await store.getGlobalSearchEmbeddingCount('2026-08-30')).toBe(40);
+    // The day's single document is not where this lands any more.
+    expect(docs.get(key('globalUsage', '2026-08-30'))?.searchEmbeddings).toBeUndefined();
+  });
+
+  it('still refuses at the cap, and counts moderation the same way', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+
+    let admitted = 0;
+    for (let i = 0; i < 40; i += 1) {
+      if ((await store.checkAndIncrementGlobalSearchEmbeddings('2026-08-30', 20)).allowed) admitted += 1;
+    }
+    // Shard ceilings sum to the ceiling; skew can refuse sooner, never later.
+    expect(admitted).toBeGreaterThan(0);
+    expect(admitted).toBeLessThanOrEqual(20);
+
+    await store.incrementGlobalModerationCalls('2026-08-30', 3);
+    await store.incrementGlobalModerationCalls('2026-08-30', 2);
+    expect(await store.getGlobalModerationCount('2026-08-30')).toBe(5);
+  });
+});

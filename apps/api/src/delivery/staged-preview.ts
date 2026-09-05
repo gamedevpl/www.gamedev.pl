@@ -174,6 +174,8 @@ export interface StagedPreviewOptions {
   keepPreviews?: number;
   /** Called after a preview lands, so a cached status response is dropped. */
   onPublished?: (jobId: number) => void;
+  // Assembles inside a request (seed-dispatch.ts); false means assemble here.
+  handoff?: (jobId: number) => Promise<boolean>;
   log: {
     warn: (context: object, message: string) => void;
     error: (context: object, message: string) => void;
@@ -374,7 +376,11 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
           arm(jobId, burstStartedAt, busyRetryMs);
           return;
         }
-        void publishNow(jobId).catch((error: unknown) => {
+        void (async () => {
+          // An esbuild pass from a timer: no request holds CPU unless handed off.
+          if (options.handoff && (await options.handoff(jobId).catch(() => false))) return;
+          await publishNow(jobId);
+        })().catch((error: unknown) => {
           options.log.error({ jobId, err: error }, 'staged preview attempt failed unexpectedly');
         });
       },

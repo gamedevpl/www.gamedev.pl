@@ -42,8 +42,8 @@ import { ClosedBetaSplash } from './ClosedBetaSplash.js';
 import { BetaInvitePage } from './BetaInvitePage.js';
 import { AppLoadingScreen } from './AppLoadingScreen.js';
 import { ControllerView } from './surfaces/party/ControllerView.js';
-import { parseOAuthReturnParam } from './oauthReturn.js';
-import { replaceWithOAuthReturn } from './oauthReturnRedirect.js';
+import { navigateToOAuthReturn, parseOAuthReturnParam } from './oauthRedirect.js';
+
 // Deferred: an anonymous player playing a published game never has to pay for the
 // weight of the admin console, the studio (and everything it drags in — the code
 // editor, the remix panel), the review desk, or party's multiplayer client.
@@ -241,7 +241,7 @@ export function App() {
       setIsAuthModalOpen(true);
       return;
     }
-    replaceWithOAuthReturn(oauthReturn);
+    navigateToOAuthReturn(oauthReturn, window.location);
   }, [authLoading, user]);
 
   // Unpublished `/play/<slug>` uses UnpublishedPlayView's own theater (not `stageContent`),

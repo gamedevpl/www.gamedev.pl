@@ -266,6 +266,7 @@
     "apps/api/src/platform/oauth-tokens.ts": 129,
     "apps/api/src/platform/openai-apps-challenge.test.ts": 62,
     "apps/api/src/platform/openai-apps-challenge.ts": 181,
+    "apps/api/src/platform/quota-peek.ts": 223,
     "apps/api/src/platform/rate-limit.ts": 59,
     "apps/api/src/platform/seal-preview.ts": 58,
     "apps/api/src/platform/server.ts": 59,
@@ -642,8 +643,8 @@
     "apps/web/vitest.config.ts": 44,
     "apps/world/src/app.test.ts": 331,
     "apps/world/src/app.ts": 648,
-    "apps/world/src/host.test.ts": 514,
-    "apps/world/src/host.ts": 909,
+    "apps/world/src/host.test.ts": 548,
+    "apps/world/src/host.ts": 935,
     "apps/world/src/server.ts": 240,
     "apps/world/src/sim-source.ts": 400,
     "apps/world/src/snapshot-store.ts": 224,
@@ -660,7 +661,7 @@
     "packages/zone-core/src/testSims.ts": 473,
     "packages/zone-core/src/ticket.test.ts": 142,
     "packages/zone-core/src/ticket.ts": 397,
-    "packages/zone-core/src/zone.test.ts": 684,
-    "packages/zone-core/src/zone.ts": 1862
+    "packages/zone-core/src/zone.test.ts": 714,
+    "packages/zone-core/src/zone.ts": 1916
   }
 }

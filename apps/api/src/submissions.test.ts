@@ -139,6 +139,9 @@ async function createApp(params: {
   chatAgent?: StudioChatAgent;
   dailyChatQuota?: number;
   chatGate?: ChatGate | null;
+  // Undefined reads env, unset under vitest, so the default is inline.
+  seedDispatch?: SeedDispatchClient | null;
+  seedDispatchRoutes?: { internalAuthVerifier: InternalAuthVerifier };
 }): Promise<{ app: FastifyInstance; store: Store; authHeaders: Record<string, string> }> {
   const store = params.store ?? new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
@@ -147,6 +150,7 @@ async function createApp(params: {
     sessionSecret,
     ...(params.adminUids ? { adminUids: params.adminUids } : {}),
     ...(params.contentChecker ? { contentChecker: params.contentChecker } : {}),
+    ...(params.seedDispatchRoutes ? { seedDispatchRoutes: params.seedDispatchRoutes } : {}),
     submissionRoutes: {
       githubToken: params.githubClient ? 'token' : undefined,
       submissionTokenSecret: params.submissionTokenSecret,
@@ -169,6 +173,7 @@ async function createApp(params: {
       chatAgent: params.chatAgent ?? new StubStudioChatAgent({ kind: 'build' }),
       ...(params.dailyChatQuota !== undefined ? { dailyChatQuota: params.dailyChatQuota } : {}),
       ...(params.chatGate !== undefined ? { chatGate: params.chatGate } : {}),
+      ...(params.seedDispatch !== undefined ? { seedDispatch: params.seedDispatch } : {}),
     },
   });
   return { app, store, authHeaders: getAuthHeaders('g:test-user') };
@@ -301,6 +306,66 @@ describe('submission routes authentication & quota', () => {
     });
     expect(limited.statusCode).toBe(429);
     expect(moderation.calls).toBe(10);
+
+    await app.close();
+  });
+
+  it('spends nothing on moderation once the improvement quota is exhausted', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const { backend } = createBackendStub();
+    const moderation = countingChecker();
+    const { app, store, authHeaders } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      dailyImprovementQuota: 1,
+      contentChecker: moderation.checker,
+    });
+
+    const published = await store.allocateJobId();
+    await store.createSubmission(published, 'g:test-user', 'Crashy');
+    await store.setSubmissionSlug(published, 'crashy');
+    await store.setSubmissionPublishedAt(published, '2026-07-01T00:00:00.000Z');
+    const url = `/api/submissions/${mintToken(published, secret)}/improve`;
+    const payload = { feedback: 'Players keep falling through the floor on level two.' };
+
+    const first = await app.inject({ method: 'POST', url, headers: authHeaders, payload });
+    expect(first.statusCode).toBe(200);
+    expect(moderation.calls).toBe(1);
+
+    const exceeded = await app.inject({ method: 'POST', url, headers: authHeaders, payload });
+    expect(exceeded.statusCode).toBe(429);
+    // The refusal is free; paying to earn a 429 is not.
+    expect(moderation.calls).toBe(1);
+
+    await app.close();
+  });
+
+  it('spends nothing on moderation once the feedback quota is exhausted', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const { backend } = createBackendStub();
+    const moderation = countingChecker();
+    const { app, store, authHeaders } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      dailyFeedbackQuota: 0,
+      contentChecker: moderation.checker,
+    });
+
+    const job = await store.allocateJobId();
+    await store.createSubmission(job, 'g:test-user', 'Crashy');
+    await store.setSubmissionSlug(job, 'crashy');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(job, secret)}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'The second level is impossible to finish.' },
+    });
+
+    expect(res.statusCode).toBe(429);
+    expect(moderation.calls).toBe(0);
 
     await app.close();
   });
@@ -6824,6 +6889,30 @@ describe('seeded dispatch', () => {
     await app.close();
   });
 
+  it('skips the paid call once the daily seed allowance is spent', async () => {
+    const stub = createGithubClientStub({});
+    const { backend, briefs } = createBackendStub();
+    const seeded: string[] = [];
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:test-user' });
+    // On/off was a seed's only bound before this.
+    await store.setCreationLimits({ globalDailySeedCap: 0 }, 'g:boss');
+    const { app, response } = await submitOne('Comet Courier', {
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: seederStub({}, (slug) => seeded.push(slug)),
+      store,
+    });
+
+    expect(response.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
+    expect(seeded).toEqual([]);
+    expect(briefs[0].seed).toBeUndefined();
+
+    await app.close();
+  });
+
   it('passes the console-selected provider through to the seeder, and records it', async () => {
     const stub = createGithubClientStub({});
     const { backend, briefs } = createBackendStub();
@@ -7401,5 +7490,156 @@ describe('operator title backfill', () => {
     expect(response.json().games[0].changed).toBe(false);
 
     await app.close();
+  });
+});
+
+describe('round-0 seeding handed to /api/internal/seed', () => {
+  const acceptAll: InternalAuthVerifier = { verify: async () => true };
+  const payload = { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' };
+
+  it('persists the brief, then awaits the handoff before answering the creator', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const { backend, briefs } = createBackendStub();
+    let release: () => void = () => {};
+    const seenBrief: Array<string | undefined> = [];
+    const refs: { store?: Store } = {};
+    const enqueue = vi.fn(async (jobId: number) => {
+      seenBrief.push((await refs.store!.getSubmission(jobId))?.dispatchBrief);
+      await new Promise<void>((resolve) => (release = resolve));
+      return true;
+    });
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      seedDispatch: { enqueue },
+    });
+    refs.store = store;
+
+    let answered = false;
+    const pending = app
+      .inject({ method: 'POST', url: '/api/submissions', headers: authHeaders, payload })
+      .then((res) => {
+        answered = true;
+        return res;
+      });
+    await vi.waitFor(() => expect(enqueue).toHaveBeenCalledTimes(1));
+    // Still in flight: the handoff has not been accepted yet.
+    expect(answered).toBe(false);
+    release();
+    const res = await pending;
+
+    expect(res.statusCode).toBe(200);
+    expect(seenBrief[0]).toContain('delivering parcels');
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    expect(job.state).toBe('queued');
+    expect(job.dispatch?.refs ?? []).toHaveLength(0);
+    expect(briefs).toHaveLength(0);
+    await app.close();
+  });
+
+  it('dispatches inline when the handoff is refused, so a misconfiguration costs nothing', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const { backend } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      seedDispatch: { enqueue: async () => false },
+    });
+
+    await app.inject({ method: 'POST', url: '/api/submissions', headers: authHeaders, payload });
+    await vi.waitFor(async () => {
+      const [job] = await store.listSubmissionsByOwner('g:test-user');
+      expect(job.dispatch?.refs?.length).toBeGreaterThan(0);
+    });
+    await app.close();
+  });
+
+  it('the seed route dispatches a queued job once, from the persisted brief', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const { backend, briefs } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      seedDispatch: { enqueue: async () => true },
+      seedDispatchRoutes: { internalAuthVerifier: acceptAll },
+    });
+    await app.inject({ method: 'POST', url: '/api/submissions', headers: authHeaders, payload });
+    const [queued] = await store.listSubmissionsByOwner('g:test-user');
+
+    const first = await app.inject({ method: 'POST', url: '/api/internal/seed', payload: { jobId: queued.jobId } });
+    expect(first.statusCode).toBe(202);
+    expect(JSON.parse(first.body.trim())).toEqual({ outcome: 'dispatched' });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    expect(job.dispatch?.refs?.length).toBeGreaterThan(0);
+    // Byte for byte the inline path's brief, sanitized at creation.
+    expect(briefs).toHaveLength(1);
+    expect(briefs[0]!.spec).toBe(job.dispatchBrief);
+
+    // Replayed, it must not start a second session.
+    const again = await app.inject({ method: 'POST', url: '/api/internal/seed', payload: { jobId: queued.jobId } });
+    expect(JSON.parse(again.body.trim())).toEqual({ outcome: 'skipped', reason: 'not_queued' });
+    expect(briefs).toHaveLength(1);
+    await app.close();
+  });
+
+  it('a handoff that started but looked refused cannot be doubled by the inline fallback', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const { backend, briefs } = createBackendStub();
+    const refs: { app?: FastifyInstance } = {};
+    // The callee finished; the caller saw a timeout and reports false.
+    const enqueue = async (jobId: number) => {
+      await refs.app!.inject({ method: 'POST', url: '/api/internal/seed', payload: { jobId } });
+      return false;
+    };
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      seedDispatch: { enqueue },
+      seedDispatchRoutes: { internalAuthVerifier: acceptAll },
+    });
+    refs.app = app;
+
+    await app.inject({ method: 'POST', url: '/api/submissions', headers: authHeaders, payload });
+    await vi.waitFor(async () => {
+      const [job] = await store.listSubmissionsByOwner('g:test-user');
+      expect(job.dispatch?.refs?.length).toBeGreaterThan(0);
+    });
+    // Give the losing fallback every chance to (wrongly) run before asserting.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(briefs).toHaveLength(1);
+    await app.close();
+  });
+
+  it('refuses the seed route without a verified caller, a bad body, or an unhandled action', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const { backend } = createBackendStub();
+    const { app } = await createApp({ githubClient, agentBackend: backend, submissionTokenSecret: secret });
+
+    // No verifier injected: env-built is deny-all under vitest.
+    const denied = await app.inject({ method: 'POST', url: '/api/internal/seed', payload: { jobId: 1 } });
+    expect(denied.statusCode).toBe(401);
+    await app.close();
+
+    const open = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      seedDispatchRoutes: { internalAuthVerifier: acceptAll, publishStagedPreviewNow: null },
+    });
+    const bad = await open.app.inject({ method: 'POST', url: '/api/internal/seed', payload: { jobId: 'x' } });
+    expect(bad.statusCode).toBe(400);
+    // Refused before headers, so a caller falls back inline.
+    const unhandled = await open.app.inject({
+      method: 'POST',
+      url: '/api/internal/seed',
+      payload: { jobId: 1, action: 'staged-preview' },
+    });
+    expect(unhandled.statusCode).toBe(503);
+    await open.app.close();
   });
 });

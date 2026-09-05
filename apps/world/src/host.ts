@@ -112,6 +112,11 @@ export class ZoneHost {
     return [...this.zones.values()].filter((zone) => zone.state === 'live').length;
   }
 
+  // Live and parked; a slept zone awaiting the sweep is not held.
+  get heldZoneCount(): number {
+    return [...this.zones.values()].filter((zone) => zone.state === 'live' || zone.state === 'parked').length;
+  }
+
   start(): void {
     if (this.sweep) return;
     this.sweep = setInterval(() => this.pump(), SWEEP_MS);
@@ -127,11 +132,32 @@ export class ZoneHost {
       zone.pump(at);
       // A zone that put itself to sleep — empty, or over budget — is dropped here rather
       // than lingering as an object the next join would find in a half state.
-      if (zone.state !== 'live' && (this.members.get(zoneId)?.size ?? 0) === 0 && !this.admitting.has(zoneId)) {
+      // A parked one is held on purpose: the next arrival skips the reload.
+      if (
+        zone.state !== 'live' &&
+        zone.state !== 'parked' &&
+        (this.members.get(zoneId)?.size ?? 0) === 0 &&
+        !this.admitting.has(zoneId)
+      ) {
         this.zones.delete(zoneId);
         this.members.delete(zoneId);
       }
     }
+  }
+
+  // A parked zone never outranks a player who wants to open one.
+  private async evictParked(): Promise<boolean> {
+    let oldest: { zoneId: string; zone: Zone } | null = null;
+    for (const [zoneId, zone] of this.zones) {
+      if (zone.state !== 'parked' || (this.members.get(zoneId)?.size ?? 0) > 0 || this.admitting.has(zoneId)) continue;
+      if (!oldest || zone.parkedSince < oldest.zone.parkedSince) oldest = { zoneId, zone };
+    }
+    if (!oldest) return false;
+    // Unregistered before the await: a rejoin racing this must build a fresh zone.
+    this.zones.delete(oldest.zoneId);
+    this.members.delete(oldest.zoneId);
+    await oldest.zone.hibernate('evicted');
+    return true;
   }
 
   /**
@@ -154,7 +180,9 @@ export class ZoneHost {
 
     let zone = this.zones.get(claims.zone);
     if (!zone) {
-      if (this.zones.size >= this.maxZones) throw new ZoneAdmissionError('host_full', named);
+      if (this.zones.size >= this.maxZones && !(await this.evictParked())) {
+        throw new ZoneAdmissionError('host_full', named);
+      }
       zone = new Zone({
         id: claims.zone,
         slug: claims.slug,
