@@ -109,10 +109,12 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
   // A read costs the whole collection, and game code sets the cadence.
   const readRateLimit = { max: 60, timeWindow: 60_000 };
 
-  // Keyed by world, so a crowd costs one read, not many.
+  // How long a checked snapshot is trusted without asking the store anything.
   const CACHE_TTL_MS = 3_000;
+  // Ceiling on what a change that skipped the counter can hide.
+  const SNAPSHOT_MAX_AGE_MS = 5 * 60_000;
   // Cached raw: rows are shared, `mine` and `writable` are not.
-  const cache = new Map<string, { at: number; entries: WorldEntryRecord[] }>();
+  const cache = new Map<string, { at: number; readAt: number; rev: string; entries: WorldEntryRecord[] }>();
   // One read in flight per world; the rest await it.
   const reading = new Map<string, { rows: Promise<WorldEntryRecord[]>; stale: boolean }>();
 
@@ -123,27 +125,45 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
     if (inFlight) inFlight.stale = true;
   }
 
+  // Revision first: a racing write then costs a redundant refresh, never staleness.
+  async function refresh(worldId: string, held?: { rev: string; entries: WorldEntryRecord[] }) {
+    const rev = await store.getWorldRevision(worldId);
+    // The point: an unchanged world costs one document.
+    if (held && rev === held.rev) return { rev, entries: held.entries, full: false };
+    return { rev, entries: await store.listWorldEntries(worldId), full: true };
+  }
+
   async function entriesFor(worldId: string): Promise<WorldEntryRecord[]> {
     // Swept on read, so an idle world holds nothing here.
     for (const [id, entry] of cache) {
-      if (now() - entry.at >= CACHE_TTL_MS) cache.delete(id);
+      if (now() - entry.readAt >= SNAPSHOT_MAX_AGE_MS) cache.delete(id);
     }
     const hit = cache.get(worldId);
-    if (hit) return hit.entries;
+    if (hit && now() - hit.at < CACHE_TTL_MS) return hit.entries;
 
     // Else a cold window costs one read per simultaneous player.
     const joined = reading.get(worldId);
     if (joined) return joined.rows;
 
-    const started = {
-      rows: store.listWorldEntries(worldId).finally(() => reading.delete(worldId)),
+    const started: { rows: Promise<WorldEntryRecord[]>; stale: boolean } = {
+      rows: refresh(worldId, hit)
+        .then((next) => {
+          // A write landed mid-read; caching this would undo it.
+          if (!started.stale) {
+            cache.set(worldId, {
+              at: now(),
+              readAt: next.full ? now() : (hit?.readAt ?? now()),
+              rev: next.rev,
+              entries: next.entries,
+            });
+          }
+          return next.entries;
+        })
+        .finally(() => reading.delete(worldId)),
       stale: false,
     };
     reading.set(worldId, started);
-    const entries = await started.rows;
-    // A write landed mid-read; caching this would undo it.
-    if (!started.stale) cache.set(worldId, { at: now(), entries });
-    return entries;
+    return started.rows;
   }
 
   async function schemaFor(slug: string): Promise<WorldSchema | null> {

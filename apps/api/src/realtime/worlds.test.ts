@@ -438,16 +438,60 @@ describe('shared world reads are bounded', () => {
     await app.close();
   });
 
-  it('reads again once the window has passed', async () => {
+  it('asks the revision, not the collection, once the window has passed', async () => {
     const app = await cachingApp();
     await plant(app, 'g:alice', 'plot.1');
     const reads = vi.spyOn(store, 'listWorldEntries');
+    const revs = vi.spyOn(store, 'getWorldRevision');
 
     await app.inject({ method: 'GET', url: '/api/games/garden/world' });
     clock += 3_000;
     await app.inject({ method: 'GET', url: '/api/games/garden/world' });
 
-    expect(reads).toHaveBeenCalledTimes(2);
+    // The second window costs one document, whatever the world holds.
+    expect(revs).toHaveBeenCalledTimes(2);
+    expect(reads).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
+  it('re-reads the collection when the revision has moved', async () => {
+    const app = await cachingApp();
+    await plant(app, 'g:alice', 'plot.1');
+    await app.inject({ method: 'GET', url: '/api/games/garden/world' });
+    const reads = vi.spyOn(store, 'listWorldEntries');
+
+    // Straight to the store, so route invalidation cannot explain it.
+    await store.putWorldEntry({
+      worldId: 'garden',
+      key: 'plot.9',
+      uid: 'g:bob',
+      fields: { plant: 'fern', note: 'hi' },
+      maxPerPlayer: 2,
+      maxEntries: 100,
+    });
+    clock += 3_000;
+    const res = await app.inject({ method: 'GET', url: '/api/games/garden/world' });
+
+    expect(reads).toHaveBeenCalledTimes(1);
+    expect(res.json().entries).toHaveLength(2);
+    await app.close();
+  });
+
+  it('re-reads the collection eventually even if nothing bumped the revision', async () => {
+    const app = await cachingApp();
+    await plant(app, 'g:alice', 'plot.1');
+    await app.inject({ method: 'GET', url: '/api/games/garden/world' });
+    const reads = vi.spyOn(store, 'listWorldEntries');
+
+    clock += 3_000;
+    await app.inject({ method: 'GET', url: '/api/games/garden/world' });
+    expect(reads).not.toHaveBeenCalled();
+
+    // A console edit bumps nothing; the snapshot still expires.
+    clock += 5 * 60_000;
+    await app.inject({ method: 'GET', url: '/api/games/garden/world' });
+
+    expect(reads).toHaveBeenCalledTimes(1);
     await app.close();
   });
 
