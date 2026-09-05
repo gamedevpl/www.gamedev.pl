@@ -9,9 +9,11 @@ on:
     types: [opened, reopened, synchronize, ready_for_review]
 
 # Least-privilege GITHUB_TOKEN: both jobs only read the repo (checkout, npm,
-# gitleaks, gate). No writes to issues/PRs/contents.
+# gitleaks, gate) and, for the CLI changelog guard, the PR's file list.
+# No writes to issues/PRs/contents.
 permissions:
   contents: read
+  pull-requests: read
 
 # Superseded PR heads prove nothing the newer run does not. Master runs stay
 # queued — deploy waits on CI via workflow_run, so cancelling a master CI run
@@ -49,6 +51,16 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run lint
+      # A change to the shipped CLI must move apps/cli/CHANGELOG.md (see
+      # .claude/skills/cli-release/SKILL.md). Diffing needs the PR's file list, which
+      # a depth-1 checkout cannot give; gh reads it with the job's own token.
+      - name: CLI changelog guard
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          files=$(gh pr diff "${{ github.event.pull_request.number }}" --name-only | paste -sd, -)
+          node eslint-rules/cli-changelog-check.mjs --files "$files"
       - run: npm run type-check
       - run: npm run test
       - run: npm run build

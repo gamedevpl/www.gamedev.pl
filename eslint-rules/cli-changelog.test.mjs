@@ -1,0 +1,127 @@
+import { describe, expect, it } from 'vitest';
+import {
+  bumpKind,
+  cliSourceTouched,
+  nextVersion,
+  parseChangelog,
+  releaseNotes,
+  renderCut,
+  unreleasedSection,
+} from './cli-changelog-lib.mjs';
+
+const sample = `# gamedevpl CLI changelog
+
+Intro prose that must survive a cut.
+
+## Unreleased
+
+### Added
+
+- A new verb (#10)
+- Another one
+  that wraps a line
+
+### Fixed
+
+- A crash (#11)
+
+### Internal
+
+- Refactor nobody sees
+
+## 0.1.0 — 2026-09-04
+
+First release.
+`;
+
+describe('parseChangelog', () => {
+  it('reads sections, categories and wrapped entries', () => {
+    const parsed = parseChangelog(sample);
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.sections.map((s) => s.version)).toEqual(['Unreleased', '0.1.0']);
+    const unreleased = unreleasedSection(parsed);
+    expect(unreleased.categories.Added).toEqual(['A new verb (#10)', 'Another one that wraps a line']);
+    expect(unreleased.categories.Fixed).toEqual(['A crash (#11)']);
+    expect(parsed.sections[1].date).toBe('2026-09-04');
+  });
+
+  it('flags unknown categories, orphan entries and a missing Unreleased', () => {
+    const parsed = parseChangelog(`# x\n\n## 0.1.0 — 2026-01-01\n\n- orphan\n\n### Removed\n\n- nope\n`);
+    expect(parsed.errors.join('\n')).toMatch(/outside a "### Category"/);
+    expect(parsed.errors.join('\n')).toMatch(/unknown category "Removed"/);
+    expect(parsed.errors.join('\n')).toMatch(/missing "## Unreleased"/);
+  });
+
+  it('flags a version header without a date', () => {
+    const parsed = parseChangelog(`## Unreleased\n\n## 0.2.0\n`);
+    expect(parsed.errors.join('\n')).toMatch(/0\.2\.0 has no date/);
+  });
+});
+
+describe('bumpKind + nextVersion', () => {
+  const section = (categories) => ({
+    categories: { Breaking: [], Added: [], Fixed: [], Internal: [], ...categories },
+  });
+
+  it('picks the highest category present', () => {
+    expect(bumpKind(section({ Fixed: ['x'] }))).toBe('patch');
+    expect(bumpKind(section({ Fixed: ['x'], Added: ['y'] }))).toBe('minor');
+    expect(bumpKind(section({ Added: ['y'], Breaking: ['z'] }))).toBe('major');
+  });
+
+  it('Internal alone never releases', () => {
+    expect(bumpKind(section({ Internal: ['refactor'] }))).toBeNull();
+    expect(nextVersion('0.1.0', null)).toBeNull();
+  });
+
+  it('bumps semver, and treats breaking as minor before 1.0', () => {
+    expect(nextVersion('0.1.0', 'patch')).toBe('0.1.1');
+    expect(nextVersion('0.1.3', 'minor')).toBe('0.2.0');
+    expect(nextVersion('0.4.2', 'major')).toBe('0.5.0');
+    expect(nextVersion('1.4.2', 'major')).toBe('2.0.0');
+    expect(nextVersion('1.4.2', 'minor')).toBe('1.5.0');
+  });
+});
+
+describe('renderCut', () => {
+  it('moves Unreleased under the version and leaves a fresh empty Unreleased', () => {
+    const cut = renderCut(sample, '0.2.0', '2026-09-05');
+    const parsed = parseChangelog(cut);
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.sections.map((s) => s.version)).toEqual(['Unreleased', '0.2.0', '0.1.0']);
+    expect(bumpKind(unreleasedSection(parsed))).toBeNull();
+    expect(parsed.sections[1].categories.Added).toHaveLength(2);
+    expect(parsed.sections[1].categories.Internal).toEqual(['Refactor nobody sees']);
+    expect(cut).toContain('Intro prose that must survive a cut.');
+    expect(cut).toContain('First release.');
+    expect(cut).not.toMatch(/\n{3,}/);
+  });
+
+  it('refuses a malformed changelog', () => {
+    expect(() => renderCut('## 0.1.0\n', '0.2.0', '2026-01-01')).toThrow(/missing "## Unreleased"/);
+  });
+});
+
+describe('releaseNotes', () => {
+  it('renders categories without Internal', () => {
+    const notes = releaseNotes(renderCut(sample, '0.2.0', '2026-09-05'), '0.2.0');
+    expect(notes).toContain('### Added');
+    expect(notes).toContain('- A crash (#11)');
+    expect(notes).not.toContain('Internal');
+  });
+
+  it('falls back to prose for a hand-written section', () => {
+    expect(releaseNotes(sample, '0.1.0')).toBe('First release.');
+    expect(releaseNotes(sample, '9.9.9')).toBeNull();
+  });
+});
+
+describe('cliSourceTouched', () => {
+  it('counts shipped CLI code and adapters, not tests or docs', () => {
+    expect(cliSourceTouched(['apps/cli/src/main.ts'])).toBe(true);
+    expect(cliSourceTouched(['apps/cli/adapters.json'])).toBe(true);
+    expect(cliSourceTouched(['apps/cli/scripts/build-binary.mjs'])).toBe(true);
+    expect(cliSourceTouched(['apps/cli/src/main.test.ts'])).toBe(false);
+    expect(cliSourceTouched(['apps/cli/README.md', 'apps/web/src/App.tsx'])).toBe(false);
+  });
+});

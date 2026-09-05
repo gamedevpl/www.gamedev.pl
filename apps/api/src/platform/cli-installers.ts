@@ -26,7 +26,11 @@ base="https://github.com/gamedevpl/www.gamedev.pl/releases/download/${CLI_RELEAS
 tmp=$(mktemp -d "\${TMPDIR:-/tmp}/gamedevpl.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 echo "fetching $asset from GitHub Releases (cli-v$VERSION)"
-curl -fsSL "$base/$asset" -o "$tmp/$asset"
+if ! curl -fsSL "$base/$asset" -o "$tmp/$asset"; then
+  echo "cli-v$VERSION is not published yet; falling back to the latest release"
+  base="https://github.com/gamedevpl/www.gamedev.pl/releases/latest/download"
+  curl -fsSL "$base/$asset" -o "$tmp/$asset"
+fi
 curl -fsSL "$base/SHA256SUMS" -o "$tmp/SHA256SUMS"
 expected=$(grep " $asset$" "$tmp/SHA256SUMS" | cut -d ' ' -f 1)
 if command -v sha256sum >/dev/null 2>&1; then
@@ -65,7 +69,13 @@ $tmp = New-TemporaryFile | ForEach-Object { Remove-Item $_; New-Item -ItemType D
 try {
   $bin = Join-Path $tmp.FullName $asset
   $sums = Join-Path $tmp.FullName "SHA256SUMS"
-  Invoke-WebRequest -UseBasicParsing "$base/$asset" -OutFile $bin
+  try {
+    Invoke-WebRequest -UseBasicParsing "$base/$asset" -OutFile $bin
+  } catch {
+    Write-Host "cli-v$version is not published yet; falling back to the latest release"
+    $base = "https://github.com/gamedevpl/www.gamedev.pl/releases/latest/download"
+    Invoke-WebRequest -UseBasicParsing "$base/$asset" -OutFile $bin
+  }
   Invoke-WebRequest -UseBasicParsing "$base/SHA256SUMS" -OutFile $sums
   $expected = (Select-String -Path $sums -Pattern $asset).Line.Split(" ")[0].ToLower()
   $actual = (Get-FileHash -Algorithm SHA256 $bin).Hash.ToLower()
