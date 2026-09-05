@@ -594,6 +594,7 @@ describe('remix routes', () => {
       publishedRef: 'main',
       editingGate: {
         checkAndSpend: async () => ({ allowed: true }),
+        peek: async () => ({ allowed: true }),
         isTracePaused: async () => tracePaused,
       },
       codeLane: {

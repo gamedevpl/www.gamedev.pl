@@ -6,6 +6,7 @@ import type { GitHubClient } from '../catalog/github-client.js';
 import { storeCreatorPlaytestShot, storeCreatorReferenceImages } from '../platform/creator-media-store.js';
 import { formatPlaytestContextBlock } from '../platform/playtest-context.js';
 import type { ContentChecker } from '../platform/moderation.js';
+import { peekQuota } from '../platform/quota-peek.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
@@ -126,6 +127,21 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
         return reply.status(409).send({
           error: 'this game is not published yet; use feedback on the draft instead',
         });
+      }
+
+      // Free read first: a spent quota should refuse for nothing.
+      const improveHeadroom = await peekQuota(
+        store,
+        request.user!.uid,
+        new Date(now()).toISOString().slice(0, 10),
+        dailyImprovementQuota,
+        'improvements',
+      );
+      if (!improveHeadroom.allowed) {
+        if (improveHeadroom.tier === 'blocked') {
+          return reply.status(403).send({ error: 'account is blocked' });
+        }
+        return reply.status(429).send({ error: 'daily improvement quota exceeded' });
       }
 
       const moderation = await contentChecker.checkFields([parsed.data.feedback]);

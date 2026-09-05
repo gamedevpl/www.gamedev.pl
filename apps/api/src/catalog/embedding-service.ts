@@ -10,6 +10,8 @@ export interface VertexEmbeddingOptions {
   region?: string;
   model?: string;
   log?: (message: string) => void;
+  // Consulted per paid call; false skips it. Cache hits never ask.
+  beforePaidCall?: (options: EmbedOptions) => Promise<boolean> | boolean;
 }
 
 // Compute L2 Euclidean norm of a vector.
@@ -52,6 +54,7 @@ export class VertexEmbeddingService {
   private region: string;
   private model: string;
   private log?: (message: string) => void;
+  private beforePaidCall?: (options: EmbedOptions) => Promise<boolean> | boolean;
   private cache = new Map<string, number[]>();
   private static readonly MAX_CACHE_SIZE = 500;
 
@@ -60,6 +63,7 @@ export class VertexEmbeddingService {
     this.region = options.region ?? process.env.VERTEX_REGION ?? 'global';
     this.model = options.model ?? VERTEX_EMBEDDING_MODEL;
     this.log = options.log;
+    this.beforePaidCall = options.beforePaidCall;
     this.auth = new GoogleAuth({ scopes: [SCOPE] });
   }
 
@@ -79,9 +83,16 @@ export class VertexEmbeddingService {
     if (!trimmed) return [];
 
     const role = options.role ?? 'query';
-    const cacheKey = `${role}:${options.title ?? ''}:${trimmed}`;
+    // Normalised like knowledge-search: a debounced prompt else mints near-duplicates.
+    const cacheKey = `${role}:${options.title ?? ''}:${trimmed.toLowerCase().replace(/\s+/g, ' ')}`;
     const cached = this.cache.get(cacheKey);
     if (cached) return cached;
+
+    // The paid boundary: index builds pass through here too.
+    if (this.beforePaidCall && !(await this.beforePaidCall({ ...options, role }))) {
+      this.log?.(`Vertex embedding refused by the cost gate for "${trimmed.slice(0, 40)}"`);
+      return [];
+    }
 
     try {
       const client = await this.auth.getClient();
@@ -100,9 +111,7 @@ export class VertexEmbeddingService {
         if (role === 'query') {
           promptText = `task: search result | query: ${trimmed}`;
         } else {
-          promptText = options.title
-            ? `title: ${options.title} | text: ${trimmed}`
-            : `title: none | text: ${trimmed}`;
+          promptText = options.title ? `title: ${options.title} | text: ${trimmed}` : `title: none | text: ${trimmed}`;
         }
       }
 

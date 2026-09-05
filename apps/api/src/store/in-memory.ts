@@ -695,6 +695,56 @@ export class InMemoryStore implements Store {
     return this.globalQuotaStore.adjustGlobalTabCompleteTokens(dateStr, delta);
   }
 
+  async getGlobalEditCount(dateStr: string): Promise<number> {
+    return this.globalQuotaStore.getGlobalEditCount(dateStr);
+  }
+
+  async getGlobalSearchEmbeddingCount(dateStr: string): Promise<number> {
+    return this.globalQuotaStore.getGlobalSearchEmbeddingCount(dateStr);
+  }
+
+  async checkAndIncrementGlobalSearchEmbeddings(
+    dateStr: string,
+    limit: number,
+  ): Promise<{ allowed: boolean; current: number }> {
+    return this.globalQuotaStore.checkAndIncrementGlobalSearchEmbeddings(dateStr, limit);
+  }
+
+  async getGlobalGateRunCount(dateStr: string): Promise<number> {
+    return this.globalQuotaStore.getGlobalGateRunCount(dateStr);
+  }
+
+  async checkAndIncrementGlobalGateRuns(
+    dateStr: string,
+    limit: number,
+  ): Promise<{ allowed: boolean; current: number }> {
+    return this.globalQuotaStore.checkAndIncrementGlobalGateRuns(dateStr, limit);
+  }
+
+  async getGlobalSeedCount(dateStr: string): Promise<number> {
+    return this.globalQuotaStore.getGlobalSeedCount(dateStr);
+  }
+
+  async checkAndIncrementGlobalSeeds(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
+    return this.globalQuotaStore.checkAndIncrementGlobalSeeds(dateStr, limit);
+  }
+
+  async getGlobalBotCallCount(dateStr: string): Promise<number> {
+    return this.globalQuotaStore.getGlobalBotCallCount(dateStr);
+  }
+
+  async checkAndIncrementGlobalBotCalls(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
+    return this.globalQuotaStore.checkAndIncrementGlobalBotCalls(dateStr, limit);
+  }
+
+  async getGlobalModerationCount(dateStr: string): Promise<number> {
+    return this.globalQuotaStore.getGlobalModerationCount(dateStr);
+  }
+
+  async incrementGlobalModerationCalls(dateStr: string, calls: number): Promise<number> {
+    return this.globalQuotaStore.incrementGlobalModerationCalls(dateStr, calls);
+  }
+
   async getGlobalManagedBuildCount(dateStr: string): Promise<number> {
     return this.globalQuotaStore.getGlobalManagedBuildCount(dateStr);
   }

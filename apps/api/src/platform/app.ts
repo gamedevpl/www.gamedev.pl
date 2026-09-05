@@ -18,6 +18,7 @@ import { createGcsGamesStore } from '../delivery/games-store.js';
 import { createGcsObjectStore } from '../delivery/gcs-sign.js';
 import { createQueryKnowledgeFromEnv } from '../creation/knowledge-search.js';
 import { createCloudBuildGateTrigger, gateTriggerOptionsFromEnv } from '../delivery/gate-trigger.js';
+import { withGateRunCeiling } from './gate-run-ceiling.js';
 import { registerAdminRoutes } from './admin.js';
 import { parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
@@ -32,6 +33,7 @@ import { resolveProposalBase } from '../community/proposal-base.js';
 import { applyProposalToRepo } from '../community/proposal-apply-bot.js';
 import { createSnapshotReaderFromEnv, type GameSnapshotStore } from '../catalog/game-snapshot.js';
 import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
+import { registerSpendBrakeRoutes } from './spend-brake.js';
 import { registerCreatorCodeRoutes, type CreatorCodeRoutesOptions } from '../creation/creator-code.js';
 import { createKitFileStore } from '../agent-surface/kit-files.js';
 import { createSourceDeliveryService, isSourceDeliveryValidationError } from '../delivery/source-delivery.js';
@@ -54,7 +56,12 @@ import { VertexTabCompleter, type TabCompleter } from '../creation/tab-complete.
 import { registerRemixRoutes, MAX_REMIX_ID_LENGTH } from '../creation/remix.js';
 import { canProposeTo, openProposal, reconcileProposalGate, transitionProposal } from '../community/proposals.js';
 import { isProposerTurn, toPublicProposalState } from '../community/proposal-state.js';
-import { createEditingGate, createCreationGate, createTabCompleteGate } from '../creation/creation-limits.js';
+import {
+  createEditingGate,
+  createCreationGate,
+  createGateRunGate,
+  createTabCompleteGate,
+} from '../creation/creation-limits.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { registerContactRoutes, type ContactRoutesOptions } from '../notifications/contact.js';
 import { registerEmailRoutes } from '../notifications/email-routes.js';
@@ -84,7 +91,7 @@ import {
 } from '../community/suggestion-inbox.js';
 import { registerScorecardRoutes, type ScorecardRoutesOptions } from '../creation/scorecard.js';
 import { createDefaultThemeExtractor } from '../community/feedback-themes.js';
-import { createInternalAuthVerifierFromEnv } from './internal-auth.js';
+import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
 import { registerRefineRoute, type SpecRefiner } from '../creation/refine.js';
 import { BOT_UID_PREFIX, InMemoryStore, type Store } from './store.js';
 import { registerAgentChannelRoutes, type AgentChannelOptions } from '../agent-surface/agent-channel.js';
@@ -204,6 +211,8 @@ export interface BuildAppOptions {
   accountDeletionRoutes?: Partial<
     Omit<AccountDeletionRoutesOptions, 'store' | 'adminUids' | 'internalAuthVerifier'>
   > & { internalAuthVerifier?: AccountDeletionRoutesOptions['internalAuthVerifier'] };
+  // Seam for the spend brake; OIDC-or-deny-all from env.
+  spendBrakeRoutes?: { internalAuthVerifier?: InternalAuthVerifier };
   // Private beta allowlist — uids (comma-separated) allowed to sign in and access gated routes
   betaAllowedUids?: string;
   // Private beta allowlist — Google-verified emails (comma-separated, case-insensitive)
@@ -321,7 +330,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       .filter(Boolean),
   );
 
-  const contentChecker = options.contentChecker ?? createDefaultContentChecker();
+  // Count moderation before capping it.
+  const contentChecker =
+    options.contentChecker ??
+    createDefaultContentChecker({
+      onPaidCall: () => {
+        const dateStr = new Date(Date.now()).toISOString().slice(0, 10);
+        void store?.incrementGlobalModerationCalls(dateStr, 1).catch(() => {});
+      },
+    });
 
   // Auth plugin registers cookies, /api/auth/* endpoints, and user session decorator.
   // The private-beta allowlist is enforced inside the plugin on /api/auth/google.
@@ -356,9 +373,14 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const objectStore =
     options.submissionRoutes?.agentChannel?.objectStore ??
     (gamesStoreBucket ? createGcsObjectStore({ bucket: gamesStoreBucket }) : undefined);
-  const gateTrigger =
+  // Wrapped once here so every entry point — delivery, editor, remix, proposals,
+  // re-gate and the health sweep — starts builds through the same daily ceiling.
+  const gateTrigger = withGateRunCeiling(
     options.submissionRoutes?.agentChannel?.onSourcesDelivered ??
-    createCloudBuildGateTrigger(gateTriggerOptionsFromEnv(), app.log);
+      createCloudBuildGateTrigger(gateTriggerOptionsFromEnv(), app.log),
+    createGateRunGate({ store, logWarn: (payload, msg) => app.log.warn(payload, msg) }),
+    { logWarn: (payload, msg) => app.log.warn(payload, msg) },
+  );
   // Off unless KNOWLEDGE_SEARCH_ENGINE_ID is set — see knowledge-search.ts.
   const knowledgeSearch =
     options.submissionRoutes?.agentChannel?.knowledgeSearch ?? createQueryKnowledgeFromEnv(app.log);
@@ -1004,6 +1026,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       createInternalAuthVerifierFromEnv(process.env, 'accountDeletionSweep'),
     now: options.accountDeletionRoutes?.now,
     graceMs: options.accountDeletionRoutes?.graceMs,
+  });
+  // An alert can pause a lane itself.
+  await registerSpendBrakeRoutes(app, {
+    store,
+    internalAuthVerifier:
+      options.spendBrakeRoutes?.internalAuthVerifier ?? createInternalAuthVerifierFromEnv(process.env, 'spendBrake'),
   });
 
   /**

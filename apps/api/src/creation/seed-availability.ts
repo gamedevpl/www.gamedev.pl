@@ -16,9 +16,23 @@ export interface SeedAvailabilityOptions {
   logWarn?: (payload: Record<string, unknown>, message: string) => void;
 }
 
+// A seed is our priciest call; on/off was its only bound.
+export const DEFAULT_GLOBAL_DAILY_SEED_CAP = 300;
+
+export function resolveDefaultGlobalDailySeedCap(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.GLOBAL_DAILY_SEED_CAP?.trim();
+  if (raw) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return DEFAULT_GLOBAL_DAILY_SEED_CAP;
+}
+
 export interface SeedAvailabilityGate {
   // False means: do not attempt a seed. Round 0's kill switch.
   seedingEnabled(): Promise<boolean>;
+  // Spends a seed slot immediately before a paid pipeline runs.
+  spendSeedSlot(dateStr: string): Promise<boolean>;
   // Stored override if configured, else the default. Never an unconfigured id.
   resolveProvider(): Promise<string>;
 }
@@ -53,6 +67,28 @@ export function createSeedAvailabilityGate(options: SeedAvailabilityOptions): Se
     return (stored?.seedingMode ?? 'auto') !== 'off';
   }
 
+  async function spendSeedSlot(dateStr: string): Promise<boolean> {
+    if (!store) return true;
+    const stored = await config();
+    const cap = stored?.globalDailySeedCap ?? resolveDefaultGlobalDailySeedCap();
+    if (cap <= 0) return false;
+    try {
+      const spent = await store.checkAndIncrementGlobalSeeds(dateStr, cap);
+      if (!spent.allowed) {
+        logWarn({ dateStr, cap, current: spent.current }, 'global daily seed cap reached; refusing seed pipelines');
+        return false;
+      }
+      if (spent.current >= Math.ceil(cap * 0.8)) {
+        logWarn({ dateStr, cap, current: spent.current }, 'global daily seed cap is over 80% spent');
+      }
+      return true;
+    } catch (error) {
+      // A blip must not stop round 0; other caps hold.
+      logWarn({ err: error, dateStr }, 'global seed counter unreachable; admitting the seed');
+      return true;
+    }
+  }
+
   async function resolveProvider(): Promise<string> {
     const stored = await config();
     const override = stored?.seedProviderOverride;
@@ -60,5 +96,5 @@ export function createSeedAvailabilityGate(options: SeedAvailabilityOptions): Se
     return defaultProvider;
   }
 
-  return { seedingEnabled, resolveProvider };
+  return { seedingEnabled, spendSeedSlot, resolveProvider };
 }

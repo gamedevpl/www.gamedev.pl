@@ -56,8 +56,12 @@ export interface WorldRoutesOptions {
   /** Absent (no games repo configured) makes every slug answer 404, like votes. */
   worlds?: WorldSchemaSource | null;
   contentChecker: ContentChecker;
+  dailyWorldWriteQuota?: number;
   now?: () => number;
 }
+
+// A world write moderates every text field it carries.
+export const DEFAULT_DAILY_WORLD_WRITE_QUOTA = 200;
 
 /**
  * Today a game has exactly one world and its id is the slug. The id is kept opaque
@@ -212,6 +216,18 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
     const validated = validateWorldEntry(schema, body.data.fields);
     if (!validated.ok) return reply.status(400).send({ error: validated.error });
 
+    // A paid classifier per field, for any signed-in player.
+    const dateStr = new Date((options.now ?? Date.now)()).toISOString().slice(0, 10);
+    if (validated.texts.length > 0) {
+      // Read-only peek; `blocked` is already refused above.
+      const worldQuota =
+        options.dailyWorldWriteQuota ?? Number(process.env.DAILY_WORLD_WRITE_QUOTA ?? DEFAULT_DAILY_WORLD_WRITE_QUOTA);
+      const usage = await store.getUsage(request.user.uid, dateStr);
+      if ((usage.worldWrites ?? 0) >= worldQuota) {
+        return reply.status(429).send({ error: 'daily world-entry quota exceeded' });
+      }
+    }
+
     // Moderation before storage, never after. An entry is visible to every other player
     // the moment it lands, so there is no window in which a rejected string is merely
     // "pending review" — it would already have been read.
@@ -229,6 +245,19 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
         // all, and the client's `errors.contentRejected.<category>` lookup would resolve to
         // nothing. Every other moderated route already normalized here; this one did not.
         return reply.status(422).send({ error: 'that text was rejected', category: verdict.category ?? 'other' });
+      }
+    }
+
+    if (validated.texts.length > 0) {
+      // Authoritative: concurrent writes all pass the peek above, one increment wins.
+      const spent = await store.checkAndIncrementQuota(
+        request.user.uid,
+        dateStr,
+        options.dailyWorldWriteQuota ?? Number(process.env.DAILY_WORLD_WRITE_QUOTA ?? DEFAULT_DAILY_WORLD_WRITE_QUOTA),
+        'worldWrites',
+      );
+      if (!spent.allowed) {
+        return reply.status(429).send({ error: 'daily world-entry quota exceeded' });
       }
     }
 
