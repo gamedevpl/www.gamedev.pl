@@ -8,10 +8,11 @@ import { createApi, type ApiClient } from './api.js';
 import { encryptedFileStore, memoryStore } from './keychain.js';
 import { originFromEnv } from './oauth.js';
 import { describeError } from './errors.js';
-import { submitGame } from './submit.js';
+import { submitGame, type SubmitResult } from './submit.js';
 import { runRemoteHelper, type PushResult } from './git-remote.js';
 import { materializePushCheckout } from './git-ref.js';
 import { GIT_REMOTE_SCHEME } from './bin-name.js';
+import { localGameFiles, writeBase } from './checkout.js';
 
 function slugFromUrl(url: string): string {
   const prefix = `${GIT_REMOTE_SCHEME}://`;
@@ -35,6 +36,11 @@ function readSlugFile(cwd: string): string | null {
   return existsSync(path) ? readFileSync(path, 'utf8').trim() : null;
 }
 
+function adoptCheckoutBase(cwd: string, slug: string, dest: string, result: SubmitResult): void {
+  if (result.kind === 'delivered') writeBase(cwd, result.version, result.files);
+  else writeBase(cwd, result.sync.version, localGameFiles(dest, slug));
+}
+
 export async function reconcilePush(input: {
   api: ApiClient;
   slug: string;
@@ -51,7 +57,8 @@ export async function reconcilePush(input: {
       cwd: input.cwd,
       dest: tmp,
     });
-    await (input.submit ?? submitGame)({ api: input.api, slug: input.slug, dest });
+    const result = await (input.submit ?? submitGame)({ api: input.api, slug: input.slug, dest });
+    adoptCheckoutBase(input.cwd, input.slug, dest, result);
     return { ok: true };
   } catch (error) {
     return { ok: false, message: describeError(error).message };

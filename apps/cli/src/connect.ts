@@ -108,9 +108,44 @@ function requireMcpAuth(payload: ConnectPayload | null): asserts payload is Conn
   }
 }
 
-function withMcpConfig(spec: AdapterSpec, mcpPath: string): AdapterSpec {
-  if (spec.name !== 'claude') return spec;
-  return { ...spec, headless: [...spec.headless, '--mcp-config', mcpPath] };
+function tomlString(value: string): string {
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+function adapterMcpSupported(name: string): boolean {
+  return name === 'claude' || name === 'codex';
+}
+
+function wireAdapterMcp(
+  spec: AdapterSpec,
+  payload: { mcpUrl: string; authorizationHeader: string },
+): { spec: AdapterSpec; cleanup: string[] } {
+  if (spec.name === 'claude') {
+    const mcpPath = join(tmpdir(), `gamedev-mcp-${randomUUID()}.json`);
+    writeFileSync(mcpPath, mcpConfigBody(payload));
+    return { spec: { ...spec, headless: [...spec.headless, '--mcp-config', mcpPath] }, cleanup: [mcpPath] };
+  }
+  if (spec.name === 'codex') {
+    const auth = authorizationValue(payload.authorizationHeader);
+    return {
+      spec: {
+        ...spec,
+        headless: [
+          '-c',
+          `mcp_servers.gamedevpl.url=${tomlString(payload.mcpUrl)}`,
+          '-c',
+          `mcp_servers.gamedevpl.http_headers={ Authorization = ${tomlString(auth)} }`,
+          ...spec.headless,
+        ],
+      },
+      cleanup: [],
+    };
+  }
+  throw new CliError(
+    `adapter ${spec.name} has no MCP wiring — use claude or codex, or omit --agent`,
+    EXIT_INPUT,
+    cliUsage('connect'),
+  );
 }
 
 export async function connectGame(input: {
@@ -134,6 +169,13 @@ export async function connectGame(input: {
       `adapter ${input.agent} is not on PATH`,
       EXIT_INPUT,
       `install ${input.agent}, or omit --agent for the MCP handoff`,
+    );
+  }
+  if (spec && !adapterMcpSupported(spec.name)) {
+    throw new CliError(
+      `adapter ${spec.name} has no MCP wiring — use claude or codex, or omit --agent`,
+      EXIT_INPUT,
+      cliUsage('connect'),
     );
   }
   if (input.handoff) {
@@ -178,12 +220,11 @@ export async function connectGame(input: {
   }
   requireMcpAuth(payload);
 
-  const mcpPath = join(tmpdir(), `gamedev-mcp-${randomUUID()}.json`);
-  writeFileSync(mcpPath, mcpConfigBody(payload));
+  const wired = wireAdapterMcp(spec, payload);
   try {
     const cwd = spec.cwd === 'game-dir' ? join(input.dest, 'games', input.slug) : input.dest;
     const result = await (input.runAdapter ?? defaultAdapterRun)({
-      spec: withMcpConfig(spec, mcpPath),
+      spec: wired.spec,
       prompt:
         payload.kickoffPrompt ?? `Edit ${input.slug} in this checkout. The creator will deliver with gamedevpl submit.`,
       cwd,
@@ -196,6 +237,6 @@ export async function connectGame(input: {
     input.write(`adapter finished — review the tree, then ${cliUsage('submit')}`);
     return { spawned: true, mcp: true };
   } finally {
-    rmSync(mcpPath, { force: true });
+    for (const path of wired.cleanup) rmSync(path, { force: true });
   }
 }

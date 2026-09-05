@@ -19,6 +19,7 @@ export type SubmitResult =
       gateStarted: boolean;
       buildId?: string;
       staged: string[];
+      files: TreeFile[];
     };
 
 type StageReply = { accepted?: boolean; error?: string; message?: string };
@@ -158,10 +159,12 @@ export async function submitGame(input: {
     );
   }
   const version = delivered.version ?? latest.sync.version;
+  let files = uploaded;
   try {
     const tree = await fetchLatestTree(input.api, input.slug);
     mergeDeliveredFiles(input.dest, input.slug, snapshot, tree.files);
     writeBase(input.dest, tree.version, tree.files);
+    files = tree.files;
   } catch {
     writeBase(input.dest, version, uploaded);
   }
@@ -173,6 +176,7 @@ export async function submitGame(input: {
     gateStarted: delivered.gateStarted === true,
     ...(delivered.buildId ? { buildId: delivered.buildId } : {}),
     staged,
+    files,
   };
 }
 

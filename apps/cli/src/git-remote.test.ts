@@ -10,7 +10,8 @@ import {
   shaForVersion,
 } from './git-remote.js';
 import { reconcilePush, remoteSlugFromArgv } from './git-remote-main.js';
-import { unreconciledMessage, writeBase, writeGameFiles } from './checkout.js';
+import { unreconciledMessage, writeBase, writeGameFiles, readBase } from './checkout.js';
+import { hashContent } from './checkout-sync.js';
 import { createApi } from './api.js';
 import { memoryStore } from './keychain.js';
 import { chmodSync, mkdirSync, mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
@@ -186,6 +187,71 @@ rl.on('close', () => process.exit(0));
     expect(result).toEqual({ ok: true });
     expect(seen).toEqual(['COMMITTED-B']);
     expect(readFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'utf8')).toBe('UNCOMMITTED-C');
+  });
+
+  it('adopts the delivered base in the original checkout after a successful push', async () => {
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-push-'));
+    const git = (args: string[]) => {
+      const result = spawnSync('git', args, { cwd: dest, encoding: 'utf8' });
+      if (result.status !== 0) throw new Error(result.stderr || args.join(' '));
+    };
+    git(['init']);
+    git(['config', 'user.email', 'cli@test']);
+    git(['config', 'user.name', 'cli']);
+    git(['config', 'commit.gpgsign', 'false']);
+    writeGameFiles(dest, 'ghost-roads', [{ path: 'game.ts', content: 'COMMITTED-B' }]);
+    writeFileSync(join(dest, '.gamedev-slug'), 'ghost-roads');
+    writeBase(dest, 'v1', [{ path: 'game.ts', content: 'A' }]);
+    git(['add', '-A']);
+    git(['commit', '-m', 'b']);
+    writeFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'UNCOMMITTED-C');
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async () => new Response('{}', { status: 404 }),
+    });
+    const result = await reconcilePush({
+      api,
+      slug: 'ghost-roads',
+      cwd: dest,
+      srcRef: 'HEAD',
+      submit: async ({ dest: isolated }) => ({
+        kind: 'delivered',
+        sync: { kind: 'local_only', version: 'v1', local: ['game.ts'], platform: [], conflict: [] },
+        version: 'v2',
+        mode: 'preview',
+        gateStarted: true,
+        staged: ['game.ts'],
+        files: [{ path: 'game.ts', content: readFileSync(join(isolated, 'games', 'ghost-roads', 'game.ts'), 'utf8') }],
+      }),
+    });
+    expect(result).toEqual({ ok: true });
+    expect(readFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'utf8')).toBe('UNCOMMITTED-C');
+    const base = readBase(dest);
+    expect(base?.version).toBe('v2');
+    expect(base?.files['game.ts']).toBe(hashContent('COMMITTED-B'));
+    git(['add', '-A']);
+    git(['commit', '-m', 'c']);
+    let isolatedBase: ReturnType<typeof readBase> = null;
+    let isolatedGame = '';
+    const next = await reconcilePush({
+      api,
+      slug: 'ghost-roads',
+      cwd: dest,
+      srcRef: 'HEAD',
+      submit: async ({ dest: isolated }) => {
+        isolatedBase = readBase(isolated);
+        isolatedGame = readFileSync(join(isolated, 'games', 'ghost-roads', 'game.ts'), 'utf8');
+        return {
+          kind: 'nothing',
+          sync: { kind: 'local_only', version: 'v2', local: ['game.ts'], platform: [], conflict: [] },
+        };
+      },
+    });
+    expect(next).toEqual({ ok: true });
+    expect(isolatedGame).toBe('UNCOMMITTED-C');
+    expect(isolatedBase?.version).toBe('v2');
+    expect(isolatedBase?.files['game.ts']).toBe(hashContent('COMMITTED-B'));
   });
 
   it('resolves no slug when the remote URL and checkout file are missing', () => {
