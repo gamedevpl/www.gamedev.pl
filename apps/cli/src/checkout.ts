@@ -149,7 +149,7 @@ export async function pullGame(input: {
   if (input.force) {
     writeGameFiles(input.dest, input.slug, tree.files);
     writeBase(input.dest, tree.version, tree.files);
-    return { version: tree.version, sync, kept: [...sync.local] };
+    return { version: tree.version, sync, kept: [] };
   }
   if (sync.kind === 'clean' || sync.kind === 'platform_only') {
     writeGameFiles(input.dest, input.slug, tree.files);

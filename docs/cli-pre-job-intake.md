@@ -3,8 +3,9 @@
 The REPL talks to a **server-side intake agent** before a game exists. The `gamedevpl`
 binary never holds model keys.
 
-1. `POST /api/cli/chat` — a cheap model (OpenRouter Gemini Flash Lite by default, Vertex
-   Flash Lite if that key is missing) with the last few turns of this creator's conversation.
+1. `POST /api/cli/chat` — a cheap model (OpenRouter Gemini 3.5 Flash Lite by default,
+   Vertex Gemini 3.5 Flash Lite if that key is missing) with the last few turns of this
+   creator's conversation. Override with `CLI_CHAT_MODEL`.
 2. A `reply` is just talk. A `create` calls the same `createGame` path Studio and MCP use,
    then `POST /api/submissions/:token/turn` takes over.
 

@@ -1,7 +1,13 @@
 import { genaicode } from 'genaicode';
 import type { GenerationRequest, GenerationResult } from 'genaicode';
 import { describe, expect, it } from 'vitest';
-import { failClosedReply, IntakeChatAgent, StubIntakeAgent } from './intake-agent.js';
+import {
+  DEFAULT_INTAKE_MODEL,
+  DEFAULT_VERTEX_INTAKE_MODEL,
+  failClosedReply,
+  IntakeChatAgent,
+  StubIntakeAgent,
+} from './intake-agent.js';
 
 function textResult(text: string): GenerationResult {
   return { parts: [{ type: 'text', text }] };
@@ -31,6 +37,11 @@ function failingClient(error: Error) {
 }
 
 describe('IntakeChatAgent', () => {
+  it('defaults to Gemini 3.5 Flash Lite', () => {
+    expect(DEFAULT_INTAKE_MODEL).toBe('google/gemini-3.5-flash-lite');
+    expect(DEFAULT_VERTEX_INTAKE_MODEL).toBe('gemini-3.5-flash-lite');
+  });
+
   it('returns a reply and never creates on a greeting', async () => {
     const agent = new IntakeChatAgent({ client: stubClient(textResult('Cześć! Jaki game chcesz zrobić?')) });
     const decision = await agent.decide({ message: 'hej', history: [] });

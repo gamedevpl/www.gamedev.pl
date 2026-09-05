@@ -51,7 +51,29 @@ export async function handleReplLine(input: {
       }
       return { next: 'continue' };
     }
-    if (cmd === 'connect' || cmd === 'checkout' || cmd === 'pull' || cmd === 'diff' || cmd === 'submit') {
+    if (cmd === 'submit') {
+      try {
+        const parsed = parseArgv(['node', 'cli', 'submit', ...rest]);
+        const dest = parsed.args[0] ?? process.cwd();
+        const slug = (typeof parsed.flags.slug === 'string' ? parsed.flags.slug : null) ?? readCheckoutSlug(dest);
+        if (!slug) {
+          input.write(`run it as ${cliUsage('submit', '[dir]')}`);
+          return { next: 'continue' };
+        }
+        const result = await submitGame({
+          api: input.api,
+          slug,
+          dest,
+          force: parsed.flags.force === true,
+          publish: parsed.flags.publish === true,
+        });
+        input.write(formatSubmitLines(result, slug).join('\n'));
+      } catch (error) {
+        input.write(formatError(error));
+      }
+      return { next: 'continue' };
+    }
+    if (cmd === 'connect' || cmd === 'checkout' || cmd === 'pull' || cmd === 'diff') {
       try {
         const parsed = parseArgv(['node', 'cli', cmd, ...rest]);
         const cwd = process.cwd();
@@ -71,16 +93,6 @@ export async function handleReplLine(input: {
         } else if (cmd === 'diff') {
           const dest = parsed.args[1] ?? cwd;
           input.write(formatSyncLines(await diffGame({ api: input.api, slug, dest })).join('\n'));
-        } else if (cmd === 'submit') {
-          const dest = parsed.args[0] ?? cwd;
-          const result = await submitGame({
-            api: input.api,
-            slug: (typeof parsed.flags.slug === 'string' ? parsed.flags.slug : null) ?? readCheckoutSlug(dest) ?? slug,
-            dest,
-            force: parsed.flags.force === true,
-            publish: parsed.flags.publish === true,
-          });
-          input.write(formatSubmitLines(result, slug).join('\n'));
         } else {
           await connectGame({
             api: input.api,
@@ -128,7 +140,12 @@ export async function handleReplLine(input: {
       const result = await postCliChat(input.api, trimmed, input.conversationId);
       if (result.kind === 'create') {
         input.write(`▸ opened ${result.slug}${result.ack ? ` — ${result.ack}` : ''}`);
-        return { next: 'continue', token: result.token, slug: result.slug };
+        return {
+          next: 'continue',
+          token: result.token,
+          slug: result.slug,
+          conversationId: result.conversationId,
+        };
       }
       input.write(`◆ ${result.text}`);
       return { next: 'continue', conversationId: result.conversationId };

@@ -4,8 +4,8 @@ import { createVertexClient } from '../platform/genai.js';
 import { DEFAULT_OPENROUTER_BASE_URL } from './seed-provider-openrouter.js';
 import type { CliChatTurn } from '../store/slices/cli-chat.js';
 
-export const DEFAULT_INTAKE_MODEL = 'google/gemini-2.5-flash-lite';
-export const DEFAULT_VERTEX_INTAKE_MODEL = 'gemini-2.5-flash-lite';
+export const DEFAULT_INTAKE_MODEL = 'google/gemini-3.5-flash-lite';
+export const DEFAULT_VERTEX_INTAKE_MODEL = 'gemini-3.5-flash-lite';
 export const DEFAULT_INTAKE_TIMEOUT_MS = 12_000;
 export const MAX_INTAKE_PROMPT_CHARS = 8_000;
 export const MAX_INTAKE_REPLY_CHARS = 2_000;
@@ -79,7 +79,7 @@ function createIntakeClient(options: { client?: GenAIClient; model?: string }): 
   return createVertexClient({
     defaultRegion: 'global',
     defaultModel: DEFAULT_VERTEX_INTAKE_MODEL,
-    model: options.model,
+    model: options.model ?? DEFAULT_VERTEX_INTAKE_MODEL,
   });
 }
 

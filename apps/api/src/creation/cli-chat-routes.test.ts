@@ -165,6 +165,43 @@ describe('POST /api/cli/chat', () => {
     expect(owned[0]?.title).toBe('Robot Garden');
   });
 
+  it('returns the stored conversationId after create', async () => {
+    const seen: Array<{ message: string; history: Array<{ role: string; text: string }> }> = [];
+    const {
+      app,
+      store,
+      authHeaders: headers,
+    } = await createApp({
+      intakeAgent: {
+        async decide(request) {
+          seen.push({ message: request.message, history: request.history });
+          if (request.message.includes('robot')) {
+            return {
+              kind: 'create',
+              title: 'Robot Garden',
+              concept: 'A garden full of robots that water the plants and fight weeds.',
+            };
+          }
+          return { kind: 'reply', text: `got ${request.message}` };
+        },
+      },
+    });
+    const first = await chat(app, headers, { text: 'hej' });
+    const beforeCreate = first.json().conversationId as string;
+    const created = await chat(app, headers, { text: 'zrób grę o robotach w ogrodzie', conversationId: beforeCreate });
+    expect(created.statusCode).toBe(200);
+    const body = created.json() as { kind: string; conversationId: string };
+    expect(body.kind).toBe('create');
+    const saved = await store.getCliChat('g:test-user');
+    expect(body.conversationId).toBe(saved?.conversationId);
+    expect(body.conversationId).not.toBe(beforeCreate);
+    expect(saved?.turns).toEqual([]);
+    const follow = await chat(app, headers, { text: 'jeszcze jedno', conversationId: body.conversationId });
+    expect(follow.statusCode).toBe(200);
+    expect(follow.json().conversationId).toBe(body.conversationId);
+    expect(seen.at(-1)?.history).toEqual([]);
+  });
+
   it('moderates before calling the model', async () => {
     const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'nope' }));
     const { app, authHeaders: headers } = await createApp({

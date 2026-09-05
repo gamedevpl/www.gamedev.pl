@@ -1,6 +1,10 @@
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import { handleReplLine, replBanner } from './repl.js';
 import { createApi } from './api.js';
+import { writeBase, writeGameFiles } from './checkout.js';
 import { memoryStore } from './keychain.js';
 import { MASCOT_ASCII } from './tui/mascot.js';
 
@@ -91,6 +95,7 @@ describe('repl turn loop', () => {
     });
     expect(opened.token).toBe('new-tok');
     expect(opened.slug).toBe('robot-garden');
+    expect(opened.conversationId).toBe('conv-1');
     expect(lines.join('\n')).toContain('robot-garden');
   });
 
@@ -200,6 +205,55 @@ describe('repl turn loop', () => {
     expect(result.next).toBe('continue');
     expect(lines.join('\n')).toContain('credential expired');
     expect(lines.join('\n')).toContain('gamedevpl login');
+  });
+
+  it('treats /submit dest like the one-shot verb, not as a slug', async () => {
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-repl-sub-'));
+    writeGameFiles(dest, 'ghost-roads', [{ path: 'game.ts', content: 'A' }]);
+    writeBase(dest, 'v1', [{ path: 'game.ts', content: 'A' }]);
+    writeFileSync(join(dest, '.gamedev-slug'), 'ghost-roads');
+    const lines: string[] = [];
+    const seen: string[] = [];
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_oat_t', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url) => {
+        const path = String(url);
+        seen.push(path);
+        if (path.endsWith('/versions') && !path.includes('/tree')) {
+          return new Response(
+            JSON.stringify({ versions: [{ version: 'v1', createdAt: '2026-09-01', sourceFiles: ['game.ts'] }] }),
+            { status: 200 },
+          );
+        }
+        if (path.includes('/tree')) {
+          return new Response(JSON.stringify({ version: 'v1', files: [{ path: 'game.ts', content: 'A' }] }), {
+            status: 200,
+          });
+        }
+        return new Response('{}', { status: 404 });
+      },
+    });
+    const delivered = await handleReplLine({
+      line: `/submit --slug ghost-roads ${dest}`,
+      api,
+      token: 'tok',
+      write: (s) => lines.push(s),
+    });
+    expect(delivered.next).toBe('continue');
+    expect(seen.some((path) => path.includes('/studio/games/ghost-roads/'))).toBe(true);
+    expect(lines.join('\n')).toMatch(/nothing to deliver|ghost-roads/);
+
+    lines.length = 0;
+    const missing = await handleReplLine({
+      line: '/submit not-a-checkout',
+      api,
+      token: 'tok',
+      write: (s) => lines.push(s),
+    });
+    expect(missing.next).toBe('continue');
+    expect(lines.join('\n')).toContain('gamedevpl submit [dir]');
+    expect(seen.some((path) => path.includes('/studio/games/not-a-checkout/'))).toBe(false);
   });
 
   it('prints described help from /help', async () => {

@@ -76,8 +76,6 @@ Accepted sources, a started gate, a gate verdict, and publish are four different
 
 ## One delivery allowlist, not two
 
-## One delivery allowlist, not two
-
 Which files a game may deliver used to be a literal here and a second literal in the games
 repo's `tools/submit.mjs`. It drifted three times — `TRACE.json`, then `PLAYTEST.json`, then
 `AGENT.json` — and each drift meant a correct game was refused at upload for sending a file

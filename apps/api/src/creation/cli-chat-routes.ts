@@ -146,8 +146,9 @@ export function registerCliChatRoutes(app: FastifyInstance, options: CliChatRout
       }
       const token = mintToken(created.jobId, submissionTokenSecret);
       request.log.info({ cliChat: { outcome: 'create' }, slug: created.slug }, 'cli intake chat');
+      const nextConversationId = randomUUID();
       await store.putCliChat(uid, {
-        conversationId: randomUUID(),
+        conversationId: nextConversationId,
         turns: [],
         updatedAt: new Date(now()).toISOString(),
       });
@@ -155,7 +156,7 @@ export function registerCliChatRoutes(app: FastifyInstance, options: CliChatRout
         kind: 'create',
         token,
         slug: created.slug,
-        conversationId,
+        conversationId: nextConversationId,
         ...(decision.ack ? { ack: decision.ack } : {}),
       });
     },

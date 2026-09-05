@@ -129,6 +129,47 @@ describe('checkout', () => {
     expect(readFileSync(join(dest, 'games', 'ghost-roads', 'hud.ts'), 'utf8')).toBe('H2');
   });
 
+  it('overwrites local files on pull --force and reports none kept', async () => {
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-plf-'));
+    writeGameFiles(dest, 'ghost-roads', [
+      { path: 'game.ts', content: 'A' },
+      { path: 'hud.ts', content: 'h' },
+    ]);
+    writeBase(dest, 'v1', [
+      { path: 'game.ts', content: 'A' },
+      { path: 'hud.ts', content: 'h' },
+    ]);
+    writeFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'B');
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url) => {
+        if (String(url).endsWith('/versions')) {
+          return new Response(
+            JSON.stringify({
+              versions: [{ version: 'v2', createdAt: '2026-09-02', sourceFiles: ['game.ts', 'hud.ts'] }],
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            version: 'v2',
+            files: [
+              { path: 'game.ts', content: 'A' },
+              { path: 'hud.ts', content: 'H2' },
+            ],
+          }),
+          { status: 200 },
+        );
+      },
+    });
+    const pulled = await pullGame({ api, slug: 'ghost-roads', dest, force: true });
+    expect(pulled.kept).toEqual([]);
+    expect(readFileSync(join(dest, 'games', 'ghost-roads', 'game.ts'), 'utf8')).toBe('A');
+    expect(readFileSync(join(dest, 'games', 'ghost-roads', 'hud.ts'), 'utf8')).toBe('H2');
+  });
+
   it('refuses a conflicting pull without deleting local files', async () => {
     const dest = mkdtempSync(join(tmpdir(), 'gdpl-cf-'));
     writeGameFiles(dest, 'ghost-roads', [{ path: 'game.ts', content: 'A' }]);
