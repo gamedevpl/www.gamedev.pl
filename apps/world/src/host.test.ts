@@ -202,6 +202,33 @@ describe('ZoneHost admission', () => {
     expect(host.liveZoneCount).toBe(1);
     host.shutdown?.();
   });
+  it('does not orphan a parked zone whose owner returns as it is being evicted', async () => {
+    // Eviction yields once; a rejoin landing in that gap must not find a zone the host
+    // is about to drop from its books, or the player sits in a world nothing pumps.
+    const { source, release } = pausedSource();
+    let clock = Date.now();
+    const host = makeHost(source, () => clock, 2);
+    release();
+
+    const a = silentConnection();
+    const seatedA = await host.admit(ticketFor('p1', 'zone-a'), a);
+    host.release('zone-a', seatedA.slot, a);
+    clock += 1_000;
+    const b = silentConnection();
+    const seatedB = await host.admit(ticketFor('p2', 'zone-b'), b);
+    host.release('zone-b', seatedB.slot, b);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const opening = host.admit(ticketFor('p3', 'zone-c'), silentConnection());
+    const returning = host.admit(ticketFor('p1', 'zone-a'), silentConnection());
+    const [, raced] = await Promise.all([opening, returning]);
+
+    // The world the returning player got is the one the host still holds.
+    const again = await host.admit(ticketFor('p4', 'zone-a'), silentConnection());
+    expect(again.zone).toBe(raced.zone);
+    expect(again.zone.state).toBe('live');
+    host.shutdown?.();
+  });
 });
 
 describe('a refused admission', () => {

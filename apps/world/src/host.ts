@@ -153,9 +153,10 @@ export class ZoneHost {
       if (!oldest || zone.parkedSince < oldest.zone.parkedSince) oldest = { zoneId, zone };
     }
     if (!oldest) return false;
-    await oldest.zone.hibernate('evicted');
+    // Unregistered before the await: a rejoin racing this must build a fresh zone.
     this.zones.delete(oldest.zoneId);
     this.members.delete(oldest.zoneId);
+    await oldest.zone.hibernate('evicted');
     return true;
   }
 
