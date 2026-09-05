@@ -11,7 +11,7 @@ import { loopbackPage } from './login-page.js';
 
 export const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 
-type CallbackResult = { kind: 'code'; code: string } | { kind: 'denied'; error: string };
+type CallbackResult = { kind: 'code'; code: string } | { kind: 'denied'; error: string; description?: string };
 
 export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -113,9 +113,14 @@ function listen(expectedState: string): Promise<{
       }
       const err = url.searchParams.get('error');
       if (err) {
-        const cancelled = err === 'access_denied';
+        const description = url.searchParams
+          .get('error_description')
+          ?.replace(/[\r\n]/g, ' ')
+          .trim()
+          .slice(0, 200);
+        const cancelled = err === 'access_denied' && !description;
         sendHtml(res, 200, cancelled ? loopbackPage('deny') : loopbackPage('fail'));
-        settle?.({ kind: 'denied', error: err });
+        settle?.({ kind: 'denied', error: err, ...(description ? { description } : {}) });
         return;
       }
       const code = url.searchParams.get('code') ?? '';
@@ -185,11 +190,11 @@ export async function runLoopbackLogin(input: LoopbackLoginInput): Promise<void>
     await loop.close();
   }
   if (result.kind === 'denied') {
-    if (result.error === 'access_denied') {
+    if (result.error === 'access_denied' && !result.description) {
       throw new CliError('sign-in cancelled', EXIT_AUTH, cliUsage('login'));
     }
     throw new CliError(
-      `sign-in failed (${result.error}) — run \`${cliUsage('login')}\` again`,
+      result.description ?? `sign-in failed (${result.error}) — run \`${cliUsage('login')}\` again`,
       EXIT_AUTH,
       cliUsage('login'),
     );

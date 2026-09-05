@@ -119,18 +119,6 @@ function buildManagedBackendForVendor(
     log?.warn({ vendor }, 'anthropic managed agent requires a positive MANAGED_AGENT_MAX_LIST_COST_CENTS');
     return undefined;
   }
-  if (isCopilot && process.env.MANAGED_AGENT_COPILOT_MAX_CREDITS !== undefined) {
-    if (!Number.isFinite(maxCopilotCredits) || maxCopilotCredits <= 0) {
-      log?.warn({ vendor }, 'copilot managed agent credit ceiling must be positive');
-      return undefined;
-    }
-  }
-  if ((isGemini || isOpenAi) && process.env.MANAGED_AGENT_MAX_TOTAL_TOKENS !== undefined) {
-    if (!Number.isSafeInteger(maxTotalTokens) || maxTotalTokens <= 0) {
-      log?.warn({ vendor }, 'managed agent token ceiling must be a positive safe integer');
-      return undefined;
-    }
-  }
   // Every managed vendor dispatches over MCP; there is no other lane.
   const mcpUrl = process.env.MANAGED_AGENT_MCP_URL?.trim();
   if (!mcpUrl) {
@@ -140,6 +128,19 @@ function buildManagedBackendForVendor(
   // Without the scratch repo an MCP round has nowhere to dispatch.
   if (isCopilot && !process.env.MANAGED_AGENT_COPILOT_MCP_REPO?.trim()) {
     log?.warn({ vendor }, 'copilot managed agent requires MANAGED_AGENT_COPILOT_MCP_REPO');
+    return undefined;
+  }
+
+  // Wall clock bounds how long a round runs, never what it spends.
+  if (isCopilot && (!Number.isFinite(maxCopilotCredits) || maxCopilotCredits <= 0)) {
+    log?.warn(
+      { vendor },
+      'copilot managed agent requires a positive credit ceiling: MANAGED_AGENT_COPILOT_MAX_CREDITS',
+    );
+    return undefined;
+  }
+  if ((isGemini || isOpenAi) && (!Number.isSafeInteger(maxTotalTokens) || maxTotalTokens <= 0)) {
+    log?.warn({ vendor }, 'managed agent requires a positive token ceiling: MANAGED_AGENT_MAX_TOTAL_TOKENS');
     return undefined;
   }
 

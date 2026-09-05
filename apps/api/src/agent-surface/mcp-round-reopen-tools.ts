@@ -18,6 +18,7 @@ import { creatorOwnsSlug } from '../platform/slug-ownership.js';
 import { looksLikeAsAccessToken, verifyMcpAsAccessToken as verifyAsAccessToken } from '../platform/oauth-scopes.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
+import { quotaHeadroom } from './agent-quota-headroom.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { ContentChecker } from '../platform/moderation.js';
 import type { ManagedUnavailableReason } from './managed-availability.js';
@@ -85,6 +86,7 @@ export interface RoundReopenToolEntry {
 }
 
 // Reopens a round: post-publish improvement, or an unpublished draft.
+
 export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<string, RoundReopenToolEntry> {
   const {
     store,
@@ -230,6 +232,16 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
             alreadyOpen: true,
           });
         }
+
+        const noRoom = await quotaHeadroom(
+          store,
+          resolved.creatorUid,
+          at.slice(0, 10),
+          dailyImprovementQuota,
+          'improvements',
+          IMPROVEMENT_QUOTA_EXHAUSTED_REASON,
+        );
+        if (noRoom) return toolErr(noRoom);
 
         const moderation = await contentChecker.checkFields([feedbackRaw]);
         if (!moderation.allowed) {
@@ -429,6 +441,17 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           });
         }
 
+        const dateStr = new Date(now()).toISOString().slice(0, 10);
+        const noRoom = await quotaHeadroom(
+          store,
+          resolved.creatorUid,
+          dateStr,
+          dailyFeedbackQuota,
+          'feedback',
+          "today's feedback limit is used up — try again tomorrow, or from the Studio",
+        );
+        if (noRoom) return toolErr(noRoom);
+
         const moderation = await contentChecker.checkFields([feedbackRaw]);
         if (!moderation.allowed) {
           logModerationRejection(ctx.request.log, {
@@ -439,7 +462,6 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           return toolErr('content_rejected', { category: moderation.category ?? 'other' });
         }
 
-        const dateStr = new Date(now()).toISOString().slice(0, 10);
         const quota = await store.checkAndIncrementQuota(resolved.creatorUid, dateStr, dailyFeedbackQuota, 'feedback');
         if (!quota.allowed) {
           if (quota.tier === 'blocked') {

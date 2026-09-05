@@ -310,6 +310,66 @@ describe('submission routes authentication & quota', () => {
     await app.close();
   });
 
+  it('spends nothing on moderation once the improvement quota is exhausted', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const { backend } = createBackendStub();
+    const moderation = countingChecker();
+    const { app, store, authHeaders } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      dailyImprovementQuota: 1,
+      contentChecker: moderation.checker,
+    });
+
+    const published = await store.allocateJobId();
+    await store.createSubmission(published, 'g:test-user', 'Crashy');
+    await store.setSubmissionSlug(published, 'crashy');
+    await store.setSubmissionPublishedAt(published, '2026-07-01T00:00:00.000Z');
+    const url = `/api/submissions/${mintToken(published, secret)}/improve`;
+    const payload = { feedback: 'Players keep falling through the floor on level two.' };
+
+    const first = await app.inject({ method: 'POST', url, headers: authHeaders, payload });
+    expect(first.statusCode).toBe(200);
+    expect(moderation.calls).toBe(1);
+
+    const exceeded = await app.inject({ method: 'POST', url, headers: authHeaders, payload });
+    expect(exceeded.statusCode).toBe(429);
+    // The refusal is free; paying to earn a 429 is not.
+    expect(moderation.calls).toBe(1);
+
+    await app.close();
+  });
+
+  it('spends nothing on moderation once the feedback quota is exhausted', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const { backend } = createBackendStub();
+    const moderation = countingChecker();
+    const { app, store, authHeaders } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      dailyFeedbackQuota: 0,
+      contentChecker: moderation.checker,
+    });
+
+    const job = await store.allocateJobId();
+    await store.createSubmission(job, 'g:test-user', 'Crashy');
+    await store.setSubmissionSlug(job, 'crashy');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(job, secret)}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'The second level is impossible to finish.' },
+    });
+
+    expect(res.statusCode).toBe(429);
+    expect(moderation.calls).toBe(0);
+
+    await app.close();
+  });
+
   it('rejects blocked users with 403', async () => {
     const { githubClient } = createGithubClientStub({});
     const store = new InMemoryStore();
@@ -6825,6 +6885,30 @@ describe('seeded dispatch', () => {
 
     const record = await store.getSubmission(briefs[0].jobId);
     expect(record?.costs?.find((entry) => entry.kind === 'seed')).toBeUndefined();
+
+    await app.close();
+  });
+
+  it('skips the paid call once the daily seed allowance is spent', async () => {
+    const stub = createGithubClientStub({});
+    const { backend, briefs } = createBackendStub();
+    const seeded: string[] = [];
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:test-user' });
+    // On/off was a seed's only bound before this.
+    await store.setCreationLimits({ globalDailySeedCap: 0 }, 'g:boss');
+    const { app, response } = await submitOne('Comet Courier', {
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: seederStub({}, (slug) => seeded.push(slug)),
+      store,
+    });
+
+    expect(response.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
+    expect(seeded).toEqual([]);
+    expect(briefs[0].seed).toBeUndefined();
 
     await app.close();
   });

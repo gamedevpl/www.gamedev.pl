@@ -143,6 +143,10 @@ ACCOUNT_DELETION_SWEEP_AUDIENCE="${ACCOUNT_DELETION_SWEEP_AUDIENCE:-}"
 DISPATCH_REAPER_AUDIENCE="${DISPATCH_REAPER_AUDIENCE:-}"
 SEED_DISPATCH_AUDIENCE="${SEED_DISPATCH_AUDIENCE:-}"
 SEED_DISPATCH_SA="${SEED_DISPATCH_SA:-}"
+# Arms the alert-pulled spend brake; unset leaves the endpoint refusing everything.
+# Its own caller identity: the Pub/Sub push subscription, not the scheduler.
+SPEND_BRAKE_AUDIENCE="${SPEND_BRAKE_AUDIENCE:-}"
+SPEND_BRAKE_CALLER_SA="${SPEND_BRAKE_CALLER_SA:-}"
 HEALTH_SWEEP_BATCH="${HEALTH_SWEEP_BATCH:-}"
 # Web Push (docs/notifications-plan.md M2). Public key is public by design (env var);
 # the private key is a Secret Manager secret wired in below. Push is off without them.
@@ -463,6 +467,12 @@ if [ -n "$SEED_DISPATCH_AUDIENCE" ]; then
 fi
 if [ -n "$SEED_DISPATCH_SA" ]; then
   ENV_VARS="${ENV_VARS}|SEED_DISPATCH_SA=${SEED_DISPATCH_SA}"
+fi
+if [ -n "$SPEND_BRAKE_AUDIENCE" ]; then
+  ENV_VARS="${ENV_VARS}|SPEND_BRAKE_AUDIENCE=${SPEND_BRAKE_AUDIENCE}"
+fi
+if [ -n "$SPEND_BRAKE_CALLER_SA" ]; then
+  ENV_VARS="${ENV_VARS}|SPEND_BRAKE_CALLER_SA=${SPEND_BRAKE_CALLER_SA}"
 fi
 if [ -n "$VAPID_PUBLIC_KEY" ]; then
   ENV_VARS="${ENV_VARS}|VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}"

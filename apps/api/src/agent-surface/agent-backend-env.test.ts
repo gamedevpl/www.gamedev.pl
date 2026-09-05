@@ -69,6 +69,8 @@ describe('createAgentBackendRegistryFromEnv', () => {
       MANAGED_AGENT_MAX_SECONDS: '900',
       MANAGED_AGENT_MCP_URL: MCP_URL,
       MANAGED_AGENT_COPILOT_MCP_REPO: 'gamedevpl/scratchpad',
+      MANAGED_AGENT_COPILOT_MAX_CREDITS: '20',
+      MANAGED_AGENT_MAX_TOTAL_TOKENS: '2000000',
     });
     const warn = vi.fn();
     const registry = registryFromEnv({ info: vi.fn(), warn });
@@ -93,6 +95,8 @@ describe('createAgentBackendRegistryFromEnv', () => {
       MANAGED_AGENT_MAX_SECONDS: '900',
       MANAGED_AGENT_MCP_URL: MCP_URL,
       MANAGED_AGENT_COPILOT_MCP_REPO: 'gamedevpl/scratchpad',
+      MANAGED_AGENT_COPILOT_MAX_CREDITS: '20',
+      MANAGED_AGENT_MAX_TOTAL_TOKENS: '2000000',
     });
     const registry = registryFromEnv({ info: vi.fn(), warn: vi.fn() });
     expect(registry.defaultVendor).toBeUndefined();
@@ -133,6 +137,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
         MANAGED_AGENT_MAX_SECONDS: '120',
         MANAGED_AGENT_MAX_LIST_COST_CENTS: '100',
         MANAGED_AGENT_MCP_URL: MCP_URL,
+        MANAGED_AGENT_MAX_TOTAL_TOKENS: '2000000',
         GEMINI_API_KEY: `gemini-${randomUUID()}`,
         AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
       });
@@ -154,6 +159,8 @@ describe('createAgentBackendRegistryFromEnv', () => {
       MANAGED_AGENT_COPILOT_MAX_CREDITS: '25',
       MANAGED_AGENT_MCP_URL: MCP_URL,
       MANAGED_AGENT_COPILOT_MCP_REPO: 'gamedevpl/scratchpad',
+      MANAGED_AGENT_COPILOT_MAX_CREDITS: '20',
+      MANAGED_AGENT_MAX_TOTAL_TOKENS: '2000000',
       MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT: 'game-builder-mcp',
     });
     const info = vi.fn();
@@ -173,6 +180,8 @@ describe('createAgentBackendRegistryFromEnv', () => {
       AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
       MANAGED_AGENT_MAX_SECONDS: '900',
       MANAGED_AGENT_COPILOT_MCP_REPO: 'gamedevpl/scratchpad',
+      MANAGED_AGENT_COPILOT_MAX_CREDITS: '20',
+      MANAGED_AGENT_MAX_TOTAL_TOKENS: '2000000',
     });
     const warn = vi.fn();
     const registry = registryFromEnv({ info: vi.fn(), warn });
@@ -319,12 +328,39 @@ describe('createAgentBackendRegistryFromEnv', () => {
       OPENAI_API_KEY: `openai-${randomUUID()}`,
       MANAGED_AGENT_OPENAI_MODEL: 'gpt-openai-test',
       MANAGED_AGENT_MAX_SECONDS: '900',
+      MANAGED_AGENT_MAX_TOTAL_TOKENS: '2000000',
       MANAGED_AGENT_MCP_URL: MCP_URL,
     });
     const registry = registryFromEnv({ info: vi.fn(), warn: vi.fn() });
 
     expect(registry.platformByVendor.has('anthropic')).toBe(false);
     expect(registry.platformByVendor.get('openai')?.name).toBe('managed:openai');
+  });
+
+  // A wall clock bounds time, never spend.
+  it.each([
+    ['copilot', 'MANAGED_AGENT_COPILOT_MAX_CREDITS'],
+    ['gemini', 'MANAGED_AGENT_MAX_TOTAL_TOKENS'],
+    ['openai', 'MANAGED_AGENT_MAX_TOTAL_TOKENS'],
+  ])('fails closed when %s has no spend ceiling', (vendor, missingVar) => {
+    setEnv({
+      MANAGED_AGENT_VENDOR: vendor,
+      MANAGED_AGENT_API_KEY: randomBytes(32).toString('hex'),
+      MANAGED_AGENT_MODEL: 'model-test',
+      GEMINI_API_KEY: `gemini-${randomUUID()}`,
+      OPENAI_API_KEY: `openai-${randomUUID()}`,
+      MANAGED_AGENT_OPENAI_MODEL: 'gpt-openai-test',
+      AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
+      MANAGED_AGENT_COPILOT_MCP_REPO: 'gamedevpl/scratchpad',
+      MANAGED_AGENT_MAX_SECONDS: '900',
+      MANAGED_AGENT_MCP_URL: MCP_URL,
+      [missingVar]: undefined,
+    });
+    const warn = vi.fn();
+    const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn });
+
+    expect(registry.platformByVendor.has(vendor as never)).toBe(false);
+    expect(warn).toHaveBeenCalledWith(expect.objectContaining({ vendor }), expect.stringContaining('ceiling'));
   });
 
   // Every vendor: an unbilled one can run for hours unnoticed.
@@ -336,6 +372,8 @@ describe('createAgentBackendRegistryFromEnv', () => {
       MANAGED_AGENT_OPENAI_MODEL: vendor === 'openai' ? `model-${randomUUID()}` : undefined,
       MANAGED_AGENT_MCP_URL: MCP_URL,
       MANAGED_AGENT_COPILOT_MCP_REPO: 'gamedevpl/scratchpad',
+      MANAGED_AGENT_COPILOT_MAX_CREDITS: '20',
+      MANAGED_AGENT_MAX_TOTAL_TOKENS: '2000000',
       MANAGED_AGENT_MAX_SECONDS: undefined,
     });
     const warn = vi.fn();

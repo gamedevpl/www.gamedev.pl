@@ -17,7 +17,7 @@ import { settleSlugClaim } from '../platform/slug-ownership.js';
 import type { Store } from '../platform/store.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { mintToken } from '../platform/submission-token.js';
-import { peekQuota } from './quota-gate.js';
+import { peekQuota } from '../platform/quota-peek.js';
 import { CREATION_REFUSAL_CODES, type CreationGate } from './creation-limits.js';
 
 export type RemixSaveParams = Record<string, string | number | boolean>;

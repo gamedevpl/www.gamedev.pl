@@ -5,6 +5,7 @@ import { storeCreatorPlaytestShot, storeCreatorReferenceImages } from '../platfo
 import { formatPlaytestContextBlock } from '../platform/playtest-context.js';
 import { cliSurfaceEnabled } from '../platform/cli-surface.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
+import { peekQuota } from '../platform/quota-peek.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
 import type { ContentChecker } from '../platform/moderation.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
@@ -123,6 +124,31 @@ export async function handleCreatorFeedback(
     return reply.status(400).send({ error: parsed.error });
   }
 
+  const currentTime = now();
+  const dateStr = new Date(currentTime).toISOString().slice(0, 10);
+
+  // Per-IP limit and a free quota read, ahead of the classifier.
+  if (isRateLimited(feedbackByIp, request.ip, currentTime, maxFeedbackPerWindow, feedbackRateLimitWindowMs)) {
+    return reply.status(429).send({ error: 'too many feedback requests, please try again later' });
+  }
+
+  const feedbackUid = request.user?.uid;
+  if (store && feedbackUid) {
+    const headroom = await peekQuota(
+      store,
+      feedbackUid,
+      dateStr,
+      dailyFeedbackQuota,
+      'feedback',
+    );
+    if (!headroom.allowed) {
+      if (headroom.tier === 'blocked') {
+        return reply.status(403).send({ error: 'account is blocked' });
+      }
+      return reply.status(429).send({ error: 'daily feedback quota exceeded' });
+    }
+  }
+
   const moderation = await contentChecker.checkFields([parsed.data.feedback]);
   if (!moderation.allowed) {
     logModerationRejection(request.log, {
@@ -133,11 +159,6 @@ export async function handleCreatorFeedback(
     return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
   }
 
-  const currentTime = now();
-  if (isRateLimited(feedbackByIp, request.ip, currentTime, maxFeedbackPerWindow, feedbackRateLimitWindowMs)) {
-    return reply.status(429).send({ error: 'too many feedback requests, please try again later' });
-  }
-  const dateStr = new Date(currentTime).toISOString().slice(0, 10);
   const record = store ? await store.getSubmission(jobId) : null;
   if (record?.publishedAt) {
     return reply.status(409).send({ error: 'this game is already published; submit a new idea to make changes' });

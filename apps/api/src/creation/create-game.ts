@@ -17,7 +17,7 @@ import { normalizeLocale } from '../platform/translate.js';
 import type { BuilderKind } from './builder.js';
 import { CREATION_REFUSAL_CODES, type CreationGate } from './creation-limits.js';
 import { ReferenceImagesSchema, REFERENCE_IMAGES_BODY_LIMIT_BYTES } from './feedback-request.js';
-import { peekQuota } from './quota-gate.js';
+import { peekQuota } from '../platform/quota-peek.js';
 
 const TITLE_TOO_LONG_MSG = `title must be at most ${MAX_TITLE_LENGTH} characters`;
 

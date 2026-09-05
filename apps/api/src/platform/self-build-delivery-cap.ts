@@ -6,3 +6,11 @@ export function selfBuildDeliveryCap(): number {
   const parsed = Number(process.env.SELF_BUILD_DELIVERY_CAP ?? DEFAULT_SELF_BUILD_DELIVERY_CAP);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : DEFAULT_SELF_BUILD_DELIVERY_CAP;
 }
+
+// Whole-job ceiling: the per-round one resets on every cheap reopen.
+export const DEFAULT_SELF_BUILD_JOB_DELIVERY_CAP = 60;
+
+export function selfBuildJobDeliveryCap(): number {
+  const parsed = Number(process.env.SELF_BUILD_JOB_DELIVERY_CAP ?? DEFAULT_SELF_BUILD_JOB_DELIVERY_CAP);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : DEFAULT_SELF_BUILD_JOB_DELIVERY_CAP;
+}

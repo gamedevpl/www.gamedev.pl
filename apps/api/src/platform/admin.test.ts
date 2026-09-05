@@ -578,7 +578,12 @@ describe('/api/admin/creation-limits', () => {
       },
       tabCompletePaused: false,
       globalDailyTabCompleteTokenCap: 2_000_000,
+      searchPaused: false,
+      globalDailySearchEmbeddingCap: 20_000,
+      gatePaused: false,
+      globalDailyGateRunCap: 400,
       seedingMode: 'auto',
+      globalDailySeedCap: 300,
       seedProvider: {
         stored: null,
         effective: 'vertex',
@@ -622,7 +627,12 @@ describe('/api/admin/creation-limits', () => {
       },
       tabCompletePaused: false,
       globalDailyTabCompleteTokenCap: 2_000_000,
+      searchPaused: false,
+      globalDailySearchEmbeddingCap: 20_000,
+      gatePaused: false,
+      globalDailyGateRunCap: 400,
       seedingMode: 'auto',
+      globalDailySeedCap: 300,
       seedProvider: {
         stored: null,
         effective: 'vertex',
@@ -674,6 +684,7 @@ describe('/api/admin/creation-limits', () => {
     process.env.MANAGED_AGENT_MAX_SECONDS = '900';
     process.env.MANAGED_AGENT_MCP_URL = 'https://www.gamedev.pl/api/mcp';
     process.env.MANAGED_AGENT_COPILOT_MCP_REPO = 'gamedevpl/scratchpad';
+    process.env.MANAGED_AGENT_COPILOT_MAX_CREDITS = '20';
     delete process.env.GEMINI_API_KEY;
     delete process.env.MANAGED_AGENT_API_KEY;
 

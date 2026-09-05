@@ -545,6 +545,54 @@ describe('self builder (BY-02)', () => {
     });
   });
 
+  it('keeps the job-lifetime delivery cap across a round reopen', async () => {
+    // Reopening is cheap; the job cap bounds gate builds per game.
+    process.env.SELF_BUILD_DELIVERY_CAP = '2';
+    process.env.SELF_BUILD_JOB_DELIVERY_CAP = '3';
+    const { gamesStore } = stubGamesStore();
+    const created = await createApp({ gamesStore });
+    app = created.app;
+    const { store } = created;
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Reopen Game', concept: CONCEPT, builder: 'self' },
+    });
+    const slug = submit.json().slug as string;
+    let issueNumber = 0;
+    await vi.waitFor(async () => {
+      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.jobId;
+      expect((await store.getSubmission(issueNumber))?.builder).toBe('self');
+    });
+
+    const deliver = (roundGeneration = 1) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(issueNumber, roundGeneration),
+        payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
+      });
+
+    expect((await deliver()).json().accepted).toBe(true);
+    expect((await deliver()).json().accepted).toBe(true);
+
+    // A reopen clears the round budget.
+    const generation = (await store.bumpRoundGeneration(issueNumber))!;
+    expect((await store.getSubmission(issueNumber))?.roundDeliveryCount).toBe(0);
+    expect((await store.getSubmission(issueNumber))?.jobDeliveryCount).toBe(2);
+
+    expect((await deliver(generation)).json().accepted).toBe(true);
+    const refused = await deliver(generation);
+    expect(refused.json()).toMatchObject({
+      accepted: false,
+      rejected: 'job_delivery_cap',
+      deliveryCap: 3,
+      deliveriesUsed: 3,
+    });
+  });
+
   it('auto-abandons a self round with no agent connect after SELF_BUILD_CONNECT_DAYS', async () => {
     process.env.SELF_BUILD_CONNECT_DAYS = '14';
     const opened = Date.parse('2026-07-01T00:00:00Z');

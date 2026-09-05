@@ -551,7 +551,11 @@ type RejectionReason =
   | 'too_many_events'
   | 'too_many_shots'
   /** Self-round sources-delivery budget exhausted; machine-readable for agents. */
-  | 'delivery_cap';
+  | 'delivery_cap'
+  // Same budget over the job's whole life, across reopens.
+  | 'job_delivery_cap'
+  // The platform's daily gate-build allowance is spent; staged sources survive.
+  | 'gate_capacity';
 
 const KNOWLEDGE_SCOPES = new Set(['kit', 'editor', 'examples', 'docs']);
 
@@ -1940,12 +1944,15 @@ export async function registerAgentChannelRoutes(
           return reply.send({
             accepted: false,
             rejected: delivery.rejected,
-            ...(delivery.rejected === 'delivery_cap'
+            ...(delivery.rejected === 'delivery_cap' || delivery.rejected === 'job_delivery_cap'
               ? {
                   reason: 'self_build_delivery_cap',
                   deliveryCap: delivery.deliveryCap,
                   deliveriesUsed: delivery.deliveriesUsed,
                 }
+              : {}),
+            ...(delivery.rejected === 'gate_capacity'
+              ? { reason: 'gate_capacity', retry: 'your sources are staged — deliver again later' }
               : {}),
             ...(await channelState(jobId, (await store!.getSubmission(jobId)) ?? record)),
           });
