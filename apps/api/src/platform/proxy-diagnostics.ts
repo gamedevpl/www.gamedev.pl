@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { cameThroughEdge } from './client-address.js';
 
 // Headers a fronting proxy may set; nothing else is echoed.
 const FORWARDING_HEADERS = [
@@ -26,6 +27,8 @@ export interface ProxyDiagnosticsResponse {
   resolvedIp: string;
   // What the app actually buckets on; see client-address.ts.
   clientIp: string;
+  // Whether the appended peer is Google's own edge.
+  peerIsGoogleEdge: boolean;
   // Non-empty XFF entries, so a hop count can be chosen.
   forwardedForHops: number;
   headers: Record<string, string | null>;
@@ -50,6 +53,7 @@ export function registerProxyDiagnosticsRoutes(app: FastifyInstance): void {
     const response: ProxyDiagnosticsResponse = {
       resolvedIp: request.ip,
       clientIp: request.clientIp,
+      peerIsGoogleEdge: cameThroughEdge(request),
       forwardedForHops: countForwardedForHops(headers['x-forwarded-for']),
       headers,
     };

@@ -51,6 +51,9 @@ export interface DispatchStore {
   allocateJobId(): Promise<number>;
 
   claimDispatchReaperAttempt(jobId: number, at: string): Promise<boolean>;
+
+  // First-come claim of the first dispatch; false if taken.
+  claimInitialDispatch(jobId: number, at: string): Promise<boolean>;
 }
 
 export class InMemoryDispatchStore implements DispatchStore {
@@ -171,6 +174,15 @@ export class InMemoryDispatchStore implements DispatchStore {
     const sub = this.submissions.get(jobId);
     if (!sub?.dispatch) return;
     this.submissions.set(jobId, { ...sub, dispatch: { ...sub.dispatch, workspace } });
+  }
+
+  async claimInitialDispatch(jobId: number, at: string): Promise<boolean> {
+    const sub = this.submissions.get(jobId);
+    if (!sub || sub.state !== 'queued' || sub.initialDispatchClaimedAt || (sub.dispatch?.refs?.length ?? 0) > 0) {
+      return false;
+    }
+    this.submissions.set(jobId, { ...sub, initialDispatchClaimedAt: at });
+    return true;
   }
 
   async claimDispatchReaperAttempt(jobId: number, at: string): Promise<boolean> {
@@ -358,6 +370,20 @@ export class FirestoreDispatchStore implements DispatchStore {
       const dispatch = { ...existing };
       delete dispatch.seedWorkspace;
       tx.set(ref, { dispatch }, { merge: true });
+    });
+  }
+
+  async claimInitialDispatch(jobId: number, at: string): Promise<boolean> {
+    const ref = this.ref(jobId);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return false;
+      const current = snap.data() as SubmissionRecord;
+      if (current.state !== 'queued' || current.initialDispatchClaimedAt || (current.dispatch?.refs?.length ?? 0) > 0) {
+        return false;
+      }
+      tx.set(ref, { initialDispatchClaimedAt: at }, { merge: true });
+      return true;
     });
   }
 

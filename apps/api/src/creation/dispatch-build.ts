@@ -190,7 +190,8 @@ export function createDispatcher(deps: DispatcherDeps) {
 
       // Failures here are their own problem; the build is already out.
       if (draft?.compiles) {
-        void publishSeedPreview({
+        // Awaited: an esbuild pass, and this request holds the CPU.
+        await publishSeedPreview({
           jobId: input.jobId,
           slug: draft.slug,
           files: draft.files,
@@ -276,5 +277,33 @@ export function createDispatcher(deps: DispatcherDeps) {
     return { outcome: 'retried' };
   }
 
-  return { dispatchBuild, redispatchQueuedJob };
+  // First dispatch from stored state; claims nothing, fails nothing.
+  async function dispatchQueuedJob(input: {
+    jobId: number;
+    log: { error: (context: object, message: string) => void };
+  }): Promise<{ outcome: 'dispatched' | 'skipped'; reason?: string }> {
+    if (!store) return { outcome: 'skipped', reason: 'store_unavailable' };
+    const record = await store.getSubmission(input.jobId);
+    if (!record) return { outcome: 'skipped', reason: 'not_found' };
+    if (record.state !== 'queued' || (record.dispatch?.refs?.length ?? 0) > 0) {
+      return { outcome: 'skipped', reason: 'not_queued' };
+    }
+    // The sanitized brief from creation; reconstruction is the legacy fallback.
+    const spec = record.dispatchBrief ?? reconstructDispatchSpec(record);
+    if (!spec) return { outcome: 'skipped', reason: 'no_spec' };
+    // Atomic: a handoff and its inline fallback can both arrive here.
+    const claimed = await store.claimInitialDispatch(input.jobId, new Date(now()).toISOString());
+    if (!claimed) return { outcome: 'skipped', reason: 'already_claimed' };
+    const dispatched = await dispatchBuild({
+      jobId: input.jobId,
+      ...(record.slug ? { slug: record.slug } : {}),
+      spec,
+      locale: record.locale ?? 'en',
+      builder: builderOf(record),
+      log: input.log,
+    });
+    return dispatched ? { outcome: 'dispatched' } : { outcome: 'skipped', reason: 'declined' };
+  }
+
+  return { dispatchBuild, redispatchQueuedJob, dispatchQueuedJob };
 }

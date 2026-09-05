@@ -34,13 +34,32 @@ describe('client address', () => {
     expect(clientIp).toBe('198.51.100.2');
   });
 
-  it('reads the caller from the edge header once it is trusted', async () => {
+  it("reads the caller from the edge header behind Google's own edge", async () => {
     process.env.TRUST_EDGE_CLIENT_IP = 'true';
     const clientIp = await clientIpFor({
-      'x-forwarded-for': '203.0.113.7, 198.51.100.2',
+      'x-forwarded-for': '203.0.113.7, 66.102.8.69',
       'fastly-client-ip': '160.79.106.128',
     });
     expect(clientIp).toBe('160.79.106.128');
+  });
+
+  it('ignores the edge header when the appended peer is not Google', async () => {
+    process.env.TRUST_EDGE_CLIENT_IP = 'true';
+    // A forged header sent straight at the service.
+    const clientIp = await clientIpFor({
+      'x-forwarded-for': '203.0.113.7, 198.51.100.2',
+      'fastly-client-ip': '9.9.9.9',
+    });
+    expect(clientIp).toBe('198.51.100.2');
+  });
+
+  it('ignores the edge header from a customer VM inside a Google-owned parent range', async () => {
+    process.env.TRUST_EDGE_CLIENT_IP = 'true';
+    const clientIp = await clientIpFor({
+      'x-forwarded-for': '203.0.113.7, 34.90.1.1',
+      'fastly-client-ip': '9.9.9.9',
+    });
+    expect(clientIp).toBe('34.90.1.1');
   });
 
   it('still ignores a forged X-Forwarded-For prefix when trusting the edge', async () => {
@@ -52,18 +71,18 @@ describe('client address', () => {
   it('refuses a list in the edge header, which only an untrusted hop would write', async () => {
     process.env.TRUST_EDGE_CLIENT_IP = 'true';
     const clientIp = await clientIpFor({
-      'x-forwarded-for': '203.0.113.7, 198.51.100.2',
+      'x-forwarded-for': '203.0.113.7, 66.102.8.69',
       'fastly-client-ip': '9.9.9.9, 160.79.106.128',
     });
-    expect(clientIp).toBe('198.51.100.2');
+    expect(clientIp).toBe('66.102.8.69');
   });
 
   it('falls back when the edge header is absent or blank', async () => {
     process.env.TRUST_EDGE_CLIENT_IP = 'true';
     const clientIp = await clientIpFor({
-      'x-forwarded-for': '203.0.113.7, 198.51.100.2',
+      'x-forwarded-for': '203.0.113.7, 66.102.8.69',
       'fastly-client-ip': '   ',
     });
-    expect(clientIp).toBe('198.51.100.2');
+    expect(clientIp).toBe('66.102.8.69');
   });
 });
