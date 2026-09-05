@@ -109,12 +109,23 @@ describe('repl turn loop', () => {
     expect(posts).toBe(0);
   });
 
-  it('tells the user to run known non-REPL verbs as gamedevpl <verb>', async () => {
+  it('connects from /connect instead of printing a fake success', async () => {
     const lines: string[] = [];
     const api = createApi({
       origin: 'https://www.gamedev.pl',
       store: memoryStore({ accessToken: 'gdpl_oat_t', tokenType: 'Bearer', scope: 'creator' }),
-      fetch: async () => new Response('{}', { status: 404 }),
+      fetch: async (url) => {
+        if (String(url).includes('/api/me/studio?game=')) {
+          return new Response(JSON.stringify({ games: [{ slug: 'sky', token: 'tok-1' }] }), { status: 200 });
+        }
+        if (String(url).endsWith('/connect')) {
+          return new Response(
+            JSON.stringify({ slug: 'sky', mcpUrl: 'https://www.gamedev.pl/api/mcp', kickoffPrompt: 'Build sky' }),
+            { status: 200 },
+          );
+        }
+        return new Response('{}', { status: 404 });
+      },
     });
     const result = await handleReplLine({
       line: '/connect sky',
@@ -123,7 +134,8 @@ describe('repl turn loop', () => {
       write: (s) => lines.push(s),
     });
     expect(result.next).toBe('continue');
-    expect(lines.join('\n')).toBe('run it as gamedevpl connect');
+    expect(lines.join('\n')).toContain('https://www.gamedev.pl/api/mcp');
+    expect(lines.join('\n')).not.toBe('run it as gamedevpl connect');
   });
 
   it('prints the open session status from /status', async () => {

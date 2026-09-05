@@ -1,6 +1,8 @@
 import { cliUsage } from './bin-name.js';
+import { credentialExpired } from './errors.js';
 import { CliError, EXIT_AUTH, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import type { StoredTokens, TokenStore } from './keychain.js';
+import { refreshGrant } from './oauth.js';
 
 export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -17,12 +19,8 @@ export function bearerFrom(tokens: StoredTokens | null, env: NodeJS.ProcessEnv):
 }
 
 function throwForStatus(res: Response, errBody: { error?: string; message?: string }): never {
-  if (res.status === 401) {
-    throw new CliError(`credential expired or revoked — run \`${cliUsage('login')}\``, EXIT_AUTH, cliUsage('login'));
-  }
-  if (res.status === 404) {
-    throw new CliError('not found', EXIT_REFUSED);
-  }
+  if (res.status === 401) throw credentialExpired();
+  if (res.status === 404) throw new CliError('not found', EXIT_REFUSED);
   throw new CliError(errBody.message ?? errBody.error ?? `request failed (${res.status})`, EXIT_REFUSED);
 }
 
@@ -34,8 +32,9 @@ export function createApi(input: {
 }): ApiClient {
   const fetchImpl = input.fetch ?? fetch;
   const env = input.env ?? process.env;
+  let refreshWait: Promise<void> | null = null;
 
-  async function authorized(path: string, init: RequestInit): Promise<Response> {
+  async function send(path: string, init: RequestInit): Promise<Response> {
     const token = bearerFrom(await input.store.get(), env);
     if (!token) {
       throw new CliError(`not signed in — run \`${cliUsage('login')}\``, EXIT_AUTH, cliUsage('login'));
@@ -44,6 +43,34 @@ export function createApi(input: {
       ...init,
       headers: { authorization: `Bearer ${token}`, ...(init.headers ?? {}) },
     });
+  }
+
+  async function refreshOnce(): Promise<void> {
+    if (env.GAMEDEV_TOKEN?.trim()) return;
+    const tokens = await input.store.get();
+    if (!tokens?.refreshToken) return;
+    const next = await refreshGrant({ origin: input.origin, refreshToken: tokens.refreshToken, fetch: fetchImpl });
+    await input.store.set({
+      accessToken: next.accessToken,
+      refreshToken: next.refreshToken ?? tokens.refreshToken,
+      tokenType: next.tokenType,
+      scope: next.scope,
+    });
+  }
+
+  async function authorized(path: string, init: RequestInit): Promise<Response> {
+    const first = await send(path, init);
+    if (first.status !== 401) return first;
+    if (env.GAMEDEV_TOKEN?.trim()) return first;
+    const tokens = await input.store.get();
+    if (!tokens?.refreshToken) return first;
+    if (!refreshWait) {
+      refreshWait = refreshOnce().finally(() => {
+        refreshWait = null;
+      });
+    }
+    await refreshWait;
+    return send(path, init);
   }
 
   return {

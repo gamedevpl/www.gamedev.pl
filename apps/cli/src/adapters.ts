@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, delimiter } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import bundled from './adapters.json' with { type: 'json' };
 
@@ -54,4 +54,13 @@ export function detectAdapter(
   const spec = file.adapters.find((row) => row.name === name);
   if (!spec) return null;
   return which(spec.command) ? spec : null;
+}
+
+export function whichOnPath(cmd: string, env: NodeJS.ProcessEnv = process.env): string | null {
+  for (const dir of (env.PATH ?? '').split(delimiter)) {
+    if (!dir) continue;
+    const candidate = join(dir, cmd);
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
 }

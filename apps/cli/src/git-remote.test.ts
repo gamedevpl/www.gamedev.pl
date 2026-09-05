@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { fastImportScript, handleHelperLine, listRefs, refuseNonFastForward, shaForVersion } from './git-remote.js';
+import {
+  fastImportScript,
+  handleHelperLine,
+  listRefs,
+  refuseNonFastForward,
+  runRemoteHelper,
+  shaForVersion,
+} from './git-remote.js';
 import { remoteSlugFromArgv } from './git-remote-main.js';
 import { unreconciledMessage } from './checkout.js';
 
@@ -34,6 +41,21 @@ describe('git-remote-gamedevpl', () => {
 
   it('lists an unborn main ref when the remote has no versions', () => {
     expect(listRefs([])).toEqual(['@refs/heads/main HEAD', '? refs/heads/main', '']);
+  });
+
+  it('marks a successful push as delivered, not as a fake helper ok', async () => {
+    const written: string[] = [];
+    const lines = ['push refs/heads/main:refs/heads/main', ''];
+    await runRemoteHelper('ghost-roads', {
+      readLine: async () => lines.shift() ?? null,
+      write: (line) => written.push(line),
+      fetchVersions: async () => [],
+      fetchTree: async () => [],
+      importScript: async () => undefined,
+      pushReconcile: async () => ({ ok: true }),
+    });
+    expect(written.join('')).toContain('ok refs/heads/main');
+    expect(written.join('')).not.toMatch(/not a delivery path/);
   });
 
   it('resolves no slug when the remote URL and checkout file are missing', () => {

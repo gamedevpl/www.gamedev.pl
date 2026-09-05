@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { cliUsage } from './bin-name.js';
 import { unreconciledMessage } from './checkout.js';
 
 export const GIT_REMOTE_CAPS = ['import', 'push', 'option'] as const;
@@ -59,13 +58,15 @@ export function fastImportScript(input: {
   return chunks.join('\n');
 }
 
+export type PushResult = { ok: true } | { ok: false; message: string };
+
 export type HelperIo = {
   readLine: () => Promise<string | null>;
   write: (line: string) => void;
   fetchVersions: (slug: string) => Promise<VersionRef[]>;
   fetchTree: (slug: string, version: string) => Promise<TreeFile[]>;
   importScript: (script: string) => Promise<void>;
-  pushReconcile: () => Promise<'ok' | 'unreconciled'>;
+  pushReconcile: () => Promise<PushResult>;
 };
 
 export async function runRemoteHelper(slug: string, io: HelperIo): Promise<void> {
@@ -95,8 +96,8 @@ export async function runRemoteHelper(slug: string, io: HelperIo): Promise<void>
     else if (cmd === 'push') {
       const result = await io.pushReconcile();
       const dst = rest.join(' ').split(':')[1] ?? 'refs/heads/main';
-      if (result === 'unreconciled') io.write(`${refuseNonFastForward()}\n\n`);
-      else io.write(`error ${dst} git push is not a delivery path — use ${cliUsage('submit')}\n\n`);
+      if (!result.ok) io.write(`error ${result.message}\n\n`);
+      else io.write(`ok ${dst}\n\n`);
     } else io.write(`${handleHelperLine(trimmed, slug).join('\n')}\n`);
   }
 }

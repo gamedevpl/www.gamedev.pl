@@ -16,8 +16,9 @@ import { runLoopbackLogin } from './login.js';
 import { originFromEnv } from './oauth.js';
 import { CliError, EXIT_GREEN, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { describeError, pipeNeedsFlag } from './errors.js';
-import { checkoutGame, diffGame, pullGame, readCheckoutSlug, unreconciledMessage } from './checkout.js';
-import { runLadder, assertLadderGreen } from './verify.js';
+import { checkoutGame, diffGame, formatSyncLines, pullGame, readCheckoutSlug } from './checkout.js';
+import { connectGame } from './connect.js';
+import { formatSubmitLines, submitGame } from './submit.js';
 import { runGitRemoteHelper } from './git-remote-main.js';
 import { runStatusVerb } from './status-watch.js';
 import { dispatchReadVerb } from './verbs.js';
@@ -125,33 +126,54 @@ export async function runCli(
       const slug = args[0] ?? readCheckoutSlug(process.cwd());
       if (!slug) throw new CliError(cliUsage('pull', '<slug>'), EXIT_INPUT, '<slug>');
       const dest = args[1] ?? process.cwd();
-      const pulled = await pullGame({ api, slug, dest });
-      io.stdout.write(asJson ? `${JSON.stringify(pulled)}\n` : `pulled ${slug} @ ${pulled.version}\n`);
+      const pulled = await pullGame({ api, slug, dest, force: flags.force === true });
+      if (asJson) io.stdout.write(`${JSON.stringify(pulled)}\n`);
+      else {
+        const extra = pulled.kept.length ? `; kept local ${pulled.kept.join(', ')}` : '';
+        io.stdout.write(`pulled ${slug} @ ${pulled.version} (${pulled.sync.kind.replaceAll('_', ' ')})${extra}\n`);
+      }
       return EXIT_GREEN;
     }
     if (verb === 'diff') {
-      if (flags.force) return EXIT_GREEN;
       const slug = args[0] ?? readCheckoutSlug(process.cwd());
       if (!slug) throw new CliError(cliUsage('diff', '<slug>'), EXIT_INPUT, '<slug>');
       const dest = args[1] ?? process.cwd();
       const diff = await diffGame({ api, slug, dest });
       if (asJson) io.stdout.write(`${JSON.stringify(diff)}\n`);
-      if (diff.unreconciled) throw new CliError(unreconciledMessage(), EXIT_REFUSED, '--force');
+      else io.stdout.write(`${formatSyncLines(diff).join('\n')}\n`);
+      if (!flags.force && (diff.kind === 'conflict' || diff.kind === 'legacy')) {
+        throw new CliError(formatSyncLines(diff)[0] ?? diff.kind, EXIT_REFUSED, cliUsage('pull'));
+      }
       return EXIT_GREEN;
     }
     if (verb === 'submit') {
       const dest = args[0] ?? process.cwd();
       const slug = (typeof flags.slug === 'string' ? flags.slug : null) ?? readCheckoutSlug(dest);
-      if (!flags.force && slug) {
-        const diff = await diffGame({ api, slug, dest });
-        if (diff.unreconciled) throw new CliError(unreconciledMessage(), EXIT_REFUSED, '--force');
-      }
-      assertLadderGreen(runLadder({ cwd: dest, publish: flags.publish === true }));
-      io.stdout.write('static ladder green\n');
+      if (!slug) throw new CliError(cliUsage('submit', '[dir]'), EXIT_INPUT, '--slug');
+      const result = await submitGame({
+        api,
+        slug,
+        dest,
+        force: flags.force === true,
+        publish: flags.publish === true,
+      });
+      if (asJson) io.stdout.write(`${JSON.stringify(result)}\n`);
+      else io.stdout.write(`${formatSubmitLines(result, slug).join('\n')}\n`);
       return EXIT_GREEN;
     }
     if (verb === 'connect') {
-      io.stdout.write(`${cliUsage('connect', args[0] || '<slug>')}\n`);
+      const slug = args[0] ?? readCheckoutSlug(process.cwd());
+      if (!slug) throw new CliError(cliUsage('connect', '<slug>'), EXIT_INPUT, '<slug>');
+      const dest = args[1] ?? process.cwd();
+      await connectGame({
+        api,
+        slug,
+        dest,
+        env,
+        agent: typeof flags.agent === 'string' ? flags.agent : undefined,
+        handoff: flags.handoff === true,
+        write: (line) => io.stdout.write(`${line}\n`),
+      });
       return EXIT_GREEN;
     }
     const read = await dispatchReadVerb({ verb, args, flags, api, io });

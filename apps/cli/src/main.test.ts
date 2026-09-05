@@ -63,9 +63,11 @@ describe('runCli verbs', () => {
     expect(await runCli(['node', 'gamedevpl', 'whoami'], { HOME: '/tmp/gamedev-cli-empty' }, streams)).toBe(EXIT_AUTH);
   });
 
-  it('diff --force skips the platform read', async () => {
+  it('diff --force still needs a slug', async () => {
     const streams = io();
-    expect(await runCli(['node', 'gamedevpl', 'diff', '--force'], {}, streams)).toBe(EXIT_GREEN);
+    expect(await runCli(['node', 'gamedevpl', 'diff', '--force'], { HOME: '/tmp/gamedev-cli-empty' }, streams)).toBe(
+      EXIT_INPUT,
+    );
   });
 
   it('exits 4 when diff has no slug and no checkout', async () => {

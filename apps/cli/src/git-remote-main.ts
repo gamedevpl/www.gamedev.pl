@@ -4,7 +4,8 @@ import { stdin, stdout } from 'node:process';
 import { createApi } from './api.js';
 import { encryptedFileStore, memoryStore } from './keychain.js';
 import { originFromEnv } from './oauth.js';
-import { diffGame } from './checkout.js';
+import { describeError } from './errors.js';
+import { submitGame } from './submit.js';
 import { runRemoteHelper } from './git-remote.js';
 import { readFileSync, existsSync } from 'node:fs';
 import { GIT_REMOTE_SCHEME } from './bin-name.js';
@@ -66,8 +67,12 @@ export async function runGitRemoteHelper(argv: string[], env: NodeJS.ProcessEnv 
         stdout.write(script.endsWith('\n') ? script : `${script}\n`);
       },
       pushReconcile: async () => {
-        const diff = await diffGame({ api, slug, dest: process.cwd() });
-        return diff.unreconciled ? 'unreconciled' : 'ok';
+        try {
+          await submitGame({ api, slug, dest: process.cwd() });
+          return { ok: true };
+        } catch (error) {
+          return { ok: false, message: describeError(error).message };
+        }
       },
     });
     return 0;
