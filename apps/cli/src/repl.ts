@@ -1,4 +1,4 @@
-import { isPlayRequest, playGame } from './play.js';
+import { playGame } from './play.js';
 import { CLI_BIN, cliUsage } from './bin-name.js';
 import { glyphs, wantsColor } from './renderer.js';
 import { completeSlash, parseArgv, SLASH_VERBS, type SlashVerb } from './argv.js';
@@ -46,12 +46,12 @@ export async function handleReplLine(input: {
   const retry = input.line.trim() === '/retry' ? input.pendingExecution?.current : undefined;
   if (input.line.trim() === '/retry' && !retry) {
     input.write('no pending task to retry');
-    return { next: 'continue' };
+    return { next: 'continue', conversationId: input.conversationId };
   }
-  const trimmed = retry?.request ?? input.line.trim();
-  if (!trimmed) return { next: 'continue' };
+  let trimmed = retry?.request ?? input.line.trim();
+  if (!trimmed) return { next: 'continue', conversationId: input.conversationId };
   if (trimmed === '/quit' || trimmed === '/exit') return { next: 'quit' };
-  if (/^\/play(?:\s|$)/u.test(trimmed) || isPlayRequest(trimmed, input.workshop?.slug)) {
+  if (/^\/play(?:\s|$)/u.test(trimmed)) {
     try {
       const parsed = parseArgv([
         'node',
@@ -75,13 +75,13 @@ export async function handleReplLine(input: {
     } catch (error) {
       input.write(formatError(error));
     }
-    return { next: 'continue' };
+    return { next: 'continue', conversationId: input.conversationId };
   }
   if (trimmed.startsWith('/')) {
     const [cmd, ...rest] = trimmed.slice(1).split(/\s+/);
     if (cmd === 'help') {
       input.write(formatHelp(true));
-      return { next: 'continue' };
+      return { next: 'continue', conversationId: input.conversationId };
     }
     const ws = input.workshop;
     if (
@@ -90,13 +90,13 @@ export async function handleReplLine(input: {
     ) {
       if (cmd === 'builder' && rest[0] === 'platform' && input.pendingExecution) delete input.pendingExecution.current;
       await handleWorkshopVerb({ cmd, rest, api: input.api, ws, write: input.write });
-      return { next: 'continue' };
+      return { next: 'continue', conversationId: input.conversationId };
     }
     if (cmd === 'status') {
       const tok = rest[0] || input.token;
       if (!tok) {
         input.write(`run it as ${cliUsage('status')}`);
-        return { next: 'continue' };
+        return { next: 'continue', conversationId: input.conversationId };
       }
       try {
         const status = await getStatus(input.api, tok);
@@ -104,7 +104,7 @@ export async function handleReplLine(input: {
       } catch (error) {
         input.write(formatError(error));
       }
-      return { next: 'continue' };
+      return { next: 'continue', conversationId: input.conversationId };
     }
     if (cmd === 'submit') {
       try {
@@ -113,7 +113,7 @@ export async function handleReplLine(input: {
         const slug = (typeof parsed.flags.slug === 'string' ? parsed.flags.slug : null) ?? readCheckoutSlug(dest);
         if (!slug) {
           input.write(`run it as ${cliUsage('submit', '[dir]')}`);
-          return { next: 'continue' };
+          return { next: 'continue', conversationId: input.conversationId };
         }
         const result = await submitGame({
           api: input.api,
@@ -126,7 +126,7 @@ export async function handleReplLine(input: {
       } catch (error) {
         input.write(formatError(error));
       }
-      return { next: 'continue' };
+      return { next: 'continue', conversationId: input.conversationId };
     }
     if (cmd === 'connect' || cmd === 'checkout' || cmd === 'pull' || cmd === 'diff') {
       try {
@@ -135,7 +135,7 @@ export async function handleReplLine(input: {
         const slug = parsed.args[0] || (cmd === 'checkout' ? undefined : readCheckoutSlug(cwd));
         if (!slug) {
           input.write(`run it as ${cliUsage(cmd)}`);
-          return { next: 'continue' };
+          return { next: 'continue', conversationId: input.conversationId };
         }
         if (cmd === 'checkout') {
           const dest = parsed.args[1] ?? slug;
@@ -159,7 +159,8 @@ export async function handleReplLine(input: {
                 [...agents.map((row) => row.name), manual],
                 `Connect ${slug} — local agents use their own credentials and billing`,
               );
-              if (choice !== manual && !agents.some((row) => row.name === choice)) return { next: 'continue' };
+              if (choice !== manual && !agents.some((row) => row.name === choice))
+                return { next: 'continue', conversationId: input.conversationId };
               if (choice !== manual) agent = choice;
             }
           }
@@ -184,7 +185,7 @@ export async function handleReplLine(input: {
       } catch (error) {
         input.write(formatError(error));
       }
-      return { next: 'continue' };
+      return { next: 'continue', conversationId: input.conversationId };
     }
     if (cmd && (SLASH_VERBS as readonly string[]).includes(cmd)) {
       try {
@@ -201,22 +202,50 @@ export async function handleReplLine(input: {
         });
         if (code !== null) {
           input.write(chunks.join('').trimEnd() || `/${cmd}`);
-          return { next: 'continue' };
+          return { next: 'continue', conversationId: input.conversationId };
         }
         input.write(`run it as ${cliUsage(cmd)}`);
-        return { next: 'continue' };
+        return { next: 'continue', conversationId: input.conversationId };
       } catch (error) {
         input.write(formatError(error));
-        return { next: 'continue' };
+        return { next: 'continue', conversationId: input.conversationId };
       }
     }
     const matches = completeSlash(trimmed);
     if (matches.length) input.write(matches.map((verb) => `/${verb}`).join('  '));
-    return { next: 'continue' };
+    return { next: 'continue', conversationId: input.conversationId };
   }
-  if (!input.token) {
+  if (!retry) {
     try {
-      const result = await postCliChat(input.api, trimmed, input.conversationId, Boolean(input.pick));
+      const result = await postCliChat(input.api, trimmed, input.conversationId, Boolean(input.pick), {
+        ...(input.token ? { token: input.token } : {}),
+        ...(input.workshop ? { checkoutSlug: input.workshop.slug } : {}),
+        agents:
+          input.workshop?.adapters.map((agent) => agent.name) ??
+          discoverAgents(input.env)
+            .filter((agent) => agent.installed)
+            .map((agent) => agent.name),
+      });
+      input.conversationId = result.conversationId;
+      if (result.kind === 'action') {
+        if (result.action.name === 'play') {
+          await playGame({
+            cwd: input.workshop?.root ?? process.cwd(),
+            slug: result.action.slug,
+            origin: input.api.origin,
+            env: input.env,
+            write: input.write,
+            telemetry: input.telemetry,
+          });
+          return { next: 'continue', conversationId: result.conversationId };
+        }
+        if (!input.token) throw new Error('CLI assistant action requires an active game');
+        if (result.action.name === 'status') {
+          input.write(formatStatusLines(await getStatus(input.api, input.token), input.api.origin).join('\n'));
+          return { next: 'continue', conversationId: result.conversationId };
+        }
+        trimmed = result.action.request;
+      }
       if (result.kind === 'proposal') {
         if (!input.pick) return { next: 'continue', conversationId: result.conversationId };
         const env = input.env ?? process.env;
@@ -262,19 +291,22 @@ export async function handleReplLine(input: {
           conversationId: result.conversationId,
         };
       }
-      input.write(`◆ ${result.text}`);
-      return { next: 'continue', conversationId: result.conversationId };
+      if (result.kind === 'reply') {
+        input.write(`◆ ${result.text}`);
+        return { next: 'continue', conversationId: result.conversationId };
+      }
     } catch (error) {
       input.write(formatError(error));
       return { next: 'continue', conversationId: input.conversationId };
     }
   }
+  if (!input.token) return { next: 'continue', conversationId: input.conversationId };
   try {
     if (input.pick) {
       const prepared = retry ? { kind: 'proposal' as const } : await prepareTurn(input.api, input.token, trimmed);
       if (prepared.kind === 'reply') {
         input.write(`◆ ${prepared.text}`);
-        return { next: 'continue' };
+        return { next: 'continue', conversationId: input.conversationId };
       }
       if (prepared.kind === 'proposal') {
         const env = input.env ?? process.env;
@@ -286,12 +318,12 @@ export async function handleReplLine(input: {
             workshop: input.workshop,
             telemetry: input.telemetry,
           }));
-        if (!choice) return { next: 'continue' };
+        if (!choice) return { next: 'continue', conversationId: input.conversationId };
         const status = await getStatus(input.api, input.token);
         const slug = input.workshop?.slug ?? status.slug;
         if (!slug) {
           input.write('game slug is unavailable — /status to check the round');
-          return { next: 'continue' };
+          return { next: 'continue', conversationId: input.conversationId };
         }
         if (choice.builder !== (status.builder ?? 'platform')) {
           const outcome = await handoffBuilder(input.api, input.token, choice.builder, status.builder ?? 'platform');
@@ -303,7 +335,7 @@ export async function handleReplLine(input: {
           if (outcome.pending) {
             if (input.pendingExecution) input.pendingExecution.current = { choice, request: trimmed };
             input.write(`${handoffLine(outcome, slug)} — /retry resumes this task with the selected agent`);
-            return { next: 'continue' };
+            return { next: 'continue', conversationId: input.conversationId };
           }
         } else if (input.workshop) input.workshop.builder = choice.builder;
         if (input.pendingExecution) delete input.pendingExecution.current;
@@ -311,7 +343,7 @@ export async function handleReplLine(input: {
         const result = await postTurn(input.api, input.token, trimmed);
         if (result.kind === 'reply') {
           input.write(`◆ ${result.text}`);
-          return { next: 'continue' };
+          return { next: 'continue', conversationId: input.conversationId };
         }
         input.write(`▸ build ${result.roundId}${result.ack ? ` — ${result.ack}` : ''}`);
         const workshop = await executeChoice({
@@ -328,30 +360,30 @@ export async function handleReplLine(input: {
           telemetry: input.telemetry,
           onWorkshop: input.onWorkshop,
         });
-        return { next: 'continue', workshop };
+        return { next: 'continue', workshop, conversationId: input.conversationId };
       }
       input.write(
         'CLI server does not support builder selection before dispatch — update the server before delegating',
       );
-      return { next: 'continue' };
+      return { next: 'continue', conversationId: input.conversationId };
     }
     const result = await postTurn(input.api, input.token, trimmed);
     if (result.kind === 'reply') {
       input.write(`◆ ${result.text}`);
-      return { next: 'continue' };
+      return { next: 'continue', conversationId: input.conversationId };
     }
     input.write(`▸ build ${result.roundId}${result.ack ? ` — ${result.ack}` : ''}`);
     const ws = input.workshop;
-    if (!ws) return { next: 'continue' };
+    if (!ws) return { next: 'continue', conversationId: input.conversationId };
     if (ws.builder !== 'self') {
       input.write(`the platform builds this round — /pull when it lands, or /builder self to build here`);
-      return { next: 'continue' };
+      return { next: 'continue', conversationId: input.conversationId };
     }
     await workshopTurn({ api: input.api, ws, request: trimmed, ack: result.ack, write: input.write });
-    return { next: 'continue' };
+    return { next: 'continue', conversationId: input.conversationId };
   } catch (error) {
     input.write(formatError(error));
-    return { next: 'continue' };
+    return { next: 'continue', conversationId: input.conversationId };
   }
 }
 

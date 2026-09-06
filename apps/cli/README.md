@@ -154,7 +154,7 @@ CLI delegation starts this preview automatically and prints its URL.
 
 - `gamedevpl play [slug]` reuses the running preview for the matching checkout.
 - `--no-open` prints the URL without launching a browser; `--stop` stops it.
-- `/play` or “chcę zagrać w tę gierkę” / “I want to play this game” opens the active
+- `/play` opens the active
   game in the REPL without sending a build request. Mixed editing requests still
   go through the ordinary conversation.
 - Outside a matching checkout, `play <slug>` opens the remote `/play/<slug>` page.
@@ -172,3 +172,7 @@ The anonymous `play_requested` CLI event counts opens without game names or path
 
 Unattended `delegate` does not start a preview server. Preview startup honors
 cancellation, including waits for another process to finish setup.
+
+Natural-language requests go through the server-side assistant, including inside a checkout.
+It uses the active game and conversation context to choose play, status, editing or a new
+game, and asks for clarification when needed. `/play` remains a direct shortcut.

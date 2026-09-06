@@ -1,3 +1,4 @@
+import { mintToken } from '../platform/submission-token.js';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../platform/app.js';
@@ -89,6 +90,48 @@ describe('POST /api/cli/chat', () => {
     restore?.();
     restore = undefined;
     vi.restoreAllMocks();
+  });
+
+  it('resolves the active published game and returns play without creating a submission', async () => {
+    const decide = vi.fn(async () => ({ kind: 'action' as const, action: { name: 'play' as const, slug: 'airtime' } }));
+    const { app, store, authHeaders: headers } = await createApp({ intakeAgent: { decide } });
+    await store.createSubmission(1, 'g:test-user', 'Airtime');
+    await store.setSubmissionSlug(1, 'airtime');
+    await store.setSubmissionPublishedAt(1, '2026-09-01T00:00:00.000Z');
+    const token = mintToken(1, secret);
+    const response = await chat(app, headers, {
+      text: 'uruchom airtime',
+      session: { token, checkoutSlug: 'airtime', agents: ['claude'] },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ kind: 'action', action: { name: 'play', slug: 'airtime' } });
+    expect(decide).toHaveBeenCalledWith(
+      expect.objectContaining({
+        session: expect.objectContaining({ slug: 'airtime', state: 'published', checkout: true, agents: ['claude'] }),
+      }),
+    );
+    expect(JSON.stringify(decide.mock.calls)).not.toContain(token);
+    expect(await store.listSubmissionsByOwner('g:test-user')).toHaveLength(1);
+    await app.close();
+  });
+
+  it('rejects foreign active sessions before calling the model', async () => {
+    const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'ok' }));
+    const { app, store, authHeaders: headers } = await createApp({ intakeAgent: { decide } });
+    await store.createSubmission(1, 'another-user', 'Private');
+    const response = await chat(app, headers, { text: 'play', session: { token: mintToken(1, secret), agents: [] } });
+    expect(response.statusCode).toBe(403);
+    expect(decide).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('fails closed if an injected agent proposes an unknown target', async () => {
+    const { app, authHeaders: headers } = await createApp({
+      intakeAgent: new StubIntakeAgent({ kind: 'action', action: { name: 'play', slug: 'unknown' } }),
+    });
+    const response = await chat(app, headers, { text: 'go', session: { agents: [] } });
+    expect(response.json().kind).toBe('reply');
+    await app.close();
   });
 
   it('prepares a game without creating or dispatching until the builder is chosen', async () => {

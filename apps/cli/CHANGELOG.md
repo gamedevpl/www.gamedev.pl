@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- In a checkout, “uruchom airtime” and other explicit launch requests open the current game instead of sending an edit request (#1187).
+- The conversational assistant interprets play, status and edit requests using the active game context, including published checkouts (#1187).
 
 ### Internal
 

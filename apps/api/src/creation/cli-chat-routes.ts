@@ -1,3 +1,4 @@
+import { isCliAction } from '@gamedevpl/contract';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
@@ -8,7 +9,7 @@ import { logModerationRejection } from '../platform/moderation-metrics.js';
 import type { ContentChecker } from '../platform/moderation.js';
 import { peekQuota } from '../platform/quota-peek.js';
 import type { Store } from '../platform/store.js';
-import { mintToken } from '../platform/submission-token.js';
+import { mintToken, verifyToken } from '../platform/submission-token.js';
 import { MAX_REVISION_CHARS } from '../platform/submission-status.js';
 import { clipCliChatTurns, type CliChatRecord, type CliChatTurn } from '../store/slices/cli-chat.js';
 import { CREATION_REFUSAL_CODES, type ChatGate } from './creation-limits.js';
@@ -20,6 +21,25 @@ const ChatBodySchema = z.object({
   text: z.string().trim().min(1, 'text is required').max(MAX_REVISION_CHARS, 'text is too long'),
   conversationId: z.string().uuid().optional(),
   prepareOnly: z.boolean().optional(),
+  session: z
+    .object({
+      token: z.string().min(1).max(512).optional(),
+      checkoutSlug: z
+        .string()
+        .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+        .max(100)
+        .optional(),
+      agents: z
+        .array(
+          z
+            .string()
+            .regex(/^[a-z0-9-]+$/)
+            .max(40),
+        )
+        .max(20),
+    })
+    .strict()
+    .optional(),
 });
 
 export interface CliChatRoutesOptions {
@@ -75,6 +95,34 @@ export function registerCliChatRoutes(app: FastifyInstance, options: CliChatRout
 
       const uid = request.user!.uid;
       const text = parsed.data.text;
+      let session: import('./intake-agent.js').IntakeAgentRequest['session'];
+      if (parsed.data.session) {
+        const supplied = parsed.data.session;
+        session = { checkout: false, agents: supplied.agents };
+        if (supplied.token) {
+          if (!submissionTokenSecret) return reply.status(503).send({ error: 'submissions are not configured' });
+          let jobId;
+          try {
+            jobId = verifyToken(supplied.token, submissionTokenSecret);
+          } catch {
+            return reply.status(403).send({ error: 'invalid active game' });
+          }
+          const record = await store.getSubmission(jobId);
+          if (!record || record.ownerUid !== uid) return reply.status(403).send({ error: 'invalid active game' });
+          if (supplied.checkoutSlug && supplied.checkoutSlug !== record.slug) {
+            return reply.status(400).send({ error: 'checkout does not match active game' });
+          }
+          session = {
+            ...session,
+            slug: record.slug,
+            state: gameState(record),
+            builder: record.builder,
+            checkout: Boolean(supplied.checkoutSlug),
+          };
+        } else if (supplied.checkoutSlug) {
+          return reply.status(400).send({ error: 'checkout requires an active game token' });
+        }
+      }
       const currentTime = now();
       const dateStr = new Date(currentTime).toISOString().slice(0, 10);
 
@@ -127,12 +175,37 @@ export function registerCliChatRoutes(app: FastifyInstance, options: CliChatRout
 
       let decision;
       try {
-        decision = await intakeAgent.decide({ message: text, history, games, gamesTotal });
+        decision = await intakeAgent.decide({ message: text, history, games, gamesTotal, session });
       } catch (error) {
         request.log.warn({ err: error, cliChat: { outcome: 'fail_closed' } }, 'cli intake chat failed closed');
         const fallback = canned(text, conversationId);
         await saveTurns(store, uid, conversationId, history, text, fallback.text, now);
         return reply.send(fallback);
+      }
+
+      if (decision.kind === 'action') {
+        const action = decision.action;
+        if (
+          !session ||
+          !isCliAction(action) ||
+          (action.name !== 'play' && !session.slug) ||
+          (action.name === 'play' && action.slug !== session.slug && !games?.some((game) => game.slug === action.slug))
+        ) {
+          const fallback = canned(text, conversationId);
+          await saveTurns(store, uid, conversationId, history, text, fallback.text, now);
+          return reply.send(fallback);
+        }
+        request.log.info({ cliChat: { outcome: 'action', action: action.name } }, 'cli assistant');
+        await saveTurns(
+          store,
+          uid,
+          conversationId,
+          history,
+          text,
+          `Requested CLI action: ${action.name}${action.name === 'edit' ? ': ' + action.request : ''}`,
+          now,
+        );
+        return reply.send({ kind: 'action', action, conversationId });
       }
 
       if (decision.kind === 'reply') {
