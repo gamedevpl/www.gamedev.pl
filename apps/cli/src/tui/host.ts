@@ -1,3 +1,4 @@
+import { activityApi } from './activity.js';
 import type { PendingExecution } from '../execution.js';
 import { render } from 'ink';
 import { createElement } from 'react';
@@ -34,6 +35,11 @@ export async function runInkRepl(input: {
     session.close();
     host.instance?.unmount();
     process.exit(EXIT_GREEN);
+  });
+  const foregroundApi = activityApi(input.api, (activity) => {
+    const previous = session.get().activity;
+    session.setActivity(activity);
+    return () => session.setActivity(previous);
   });
   host.instance = render(createElement(ReplApp, { session, color }), {
     stdin: input.io.stdin,
@@ -89,7 +95,7 @@ export async function runInkRepl(input: {
       try {
         result = await handleReplLine({
           line,
-          api: input.api,
+          api: foregroundApi,
           token,
           conversationId,
           workshop,
@@ -101,6 +107,7 @@ export async function runInkRepl(input: {
           onWorkshop: (opened) => {
             workshop = opened;
           },
+          onActivity: (activity) => session.setActivity(activity),
           write: (text) => session.writeLine(text),
         });
       } catch (error) {
