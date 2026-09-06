@@ -155,6 +155,13 @@
   height: 100%;
 }
 
+/* Sound and How to play, pushed to the far end of the slot strip. */
+.party-play-controls {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
 /* The slot strip is above the game, so the frame takes what is left rather than a
    full 100% that would push itself off the bottom of the stage. */
 .is-playing-full-viewport .party-playing .game-frame {
@@ -165,6 +172,7 @@
 
 .party-slotstrip {
   display: flex;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
   padding: 6px 10px;
