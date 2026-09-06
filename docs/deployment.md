@@ -79,10 +79,61 @@ Run it yourself against anything: `E2E_BASE_URL=https://www.gamedev.pl npm run e
 
 ## Secrets & access (current live state)
 
-Secrets live only in GCP Secret Manager (never in the repo); the Cloud Run runtime service
-account (`<project-number>-compute@developer.gserviceaccount.com`) needs
-`roles/secretmanager.secretAccessor` on each. `deploy.yml` and `infra/deploy-api.sh` wire whichever exist into
-a single `--set-secrets` list.
+Secrets live only in GCP Secret Manager (never in the repo); each service's runtime service
+account (below) needs `roles/secretmanager.secretAccessor` on each secret it mounts —
+granted per secret by `infra/setup-runtime-sa.sh`, never project-wide. `deploy.yml` and
+`infra/deploy-api.sh` wire whichever exist into a single `--set-secrets` list.
+
+### Runtime identities
+
+Every Cloud Run service runs as its own service account, named after the service:
+
+| Service            | Runs as                                              | Holds                                                                                                                                                                                                                                                                     |
+| ------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gamedev-app`      | `gamedev-app@gamedevpl.iam.gserviceaccount.com`      | Firestore, Vertex, Discovery Engine (+ `serviceUsageConsumer` for the quota-project header), Cloud Build submit + `actAs` **gate-runner only**, `signBlob` on itself, store bucket read/create (+ staging mutate), snapshot bucket read, every secret in the env manifest |
+| `gamedev-world`    | `gamedev-world@gamedevpl.iam.gserviceaccount.com`    | Firestore (one document per zone), `session-secret`, `github-token`                                                                                                                                                                                                       |
+| `gamedev-mp-relay` | `gamedev-mp-relay@gamedevpl.iam.gserviceaccount.com` | `session-secret`. Nothing else                                                                                                                                                                                                                                            |
+
+None of them is the project's default compute account
+(`<project-number>-compute@developer.gserviceaccount.com`). That account was created
+holding project-wide `roles/editor` and every service ran as it until September 2026, which
+made every narrow grant above cosmetic — an identity that can already write any bucket and
+read any secret is not bounded by a bucket condition. The relay terminates untrusted
+websocket traffic and the app runs gate builds on creator-submitted code, so a compromise
+of either was project-wide write access.
+
+The identity is **pinned on every deploy**, in both paths: `deploy.yml` hard-codes the three
+emails and passes `--service-account` to the app deploy, the relay image update and the zone
+host update; `infra/deploy-api.sh`, `deploy-relay.sh` and `deploy-world.sh` derive the same
+email from the service name. A value set only on the service would be whatever the last
+deploy said. Two things enforce it: `infra/check-runtime-sa.mjs` (inside `npm run lint`)
+fails CI if any deploy command loses the flag, and the deploy workflow reads
+`serviceAccountName` back from every service and refuses to promote if one is the default
+compute account.
+
+Things that follow from the identity and are derived, not configured: `SEED_DISPATCH_SA` is
+the app's own account (the seed call is the service calling itself) and the relay's
+`MP_RELAY_CALLER_SA` is set to the app's account on every relay update. Neither is a repo
+variable any more.
+
+Rollout and rollback, owner-run (`infra/setup-runtime-sa.sh` prints the exact commands):
+
+1. `./infra/setup-runtime-sa.sh` creates the accounts and applies the resource-level grants;
+   run the project-level bindings it prints (or `APPLY_PROJECT_BINDINGS=1`).
+2. Merge the deploy change. Every service moves to its own account while the default one
+   still holds editor, so nothing can break at this step — the new grants are additive.
+3. Soak until one full cycle of every sweep has run on the new identity: the weekly digest
+   (Monday 09:00) is the longest. Watch the Cloud Run logs for `PERMISSION_DENIED`, `403`,
+   `iam.serviceAccounts.actAs` and `signBlob`, and each sweep for its normal log line.
+4. `PRUNE_DEFAULT_COMPUTE=1 ./infra/setup-runtime-sa.sh` removes the default account from
+   every secret, bucket and service-account policy, then prints the project-level removals
+   ending with `roles/editor`.
+
+Until step 4 is done the whole change is reversible with one line, which the script also
+prints: re-adding `roles/editor` to the default compute account. Never delete or disable
+that account (other Google services depend on its existence), and never touch
+`<project-number>@cloudservices.gserviceaccount.com`, the Google APIs service agent, which
+also holds editor and is meant to.
 
 ### The env manifest
 
@@ -318,9 +369,10 @@ both deploy paths; the value is never in the repo.
 # Create (first time):
 printf '%s' '<Resend API key: re_...>' \
   | gcloud secrets create resend-api-key --data-file=- --replication-policy=automatic --project gamedevpl
-# Let the Cloud Run runtime SA read it:
+# Let the app's runtime SA read it (or re-run infra/setup-runtime-sa.sh, which grants
+# every secret in the env manifest):
 gcloud secrets add-iam-policy-binding resend-api-key \
-  --member="serviceAccount:334141807880-compute@developer.gserviceaccount.com" \
+  --member="serviceAccount:gamedev-app@gamedevpl.iam.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor" --project gamedevpl
 # Rotate later (new version; takes effect on the next revision):
 printf '%s' '<new key>' | gcloud secrets versions add resend-api-key --data-file=- --project gamedevpl
@@ -586,7 +638,9 @@ Rollout, owner-run and in this order:
 
 Once `MP_RELAY_URL` is set, `deploy.yml` moves the relay onto each new image **before** promoting
 the app — server before client, since the promoted web bundle is the relay's websocket client.
-Only `--image` is updated, so a deploy cannot silently reconfigure the relay by omission.
+Only `--image`, the relay's own `--service-account` and `MP_RELAY_CALLER_SA` (the app's
+runtime account, see "Runtime identities") are updated, so a deploy cannot silently
+reconfigure the rest of the relay by omission.
 
 Security shape worth understanding before touching it: the relay is `--allow-unauthenticated`
 because a phone that scanned a QR has no Google identity and never will. What protects it is

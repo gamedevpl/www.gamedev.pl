@@ -66,7 +66,12 @@
 #                               what lets CPU be request-scoped -- see seed-dispatch.ts.
 #                               Unset, create-game seeds inline as before.)
 #   SEED_DISPATCH_SA=...       (the runtime service account the seed call arrives as;
-#                               defaults to the project's compute default SA.)
+#                               defaults to RUNTIME_SA below, because the caller IS this
+#                               service. Override only to test a different identity.)
+#   RUNTIME_SA=...             (the identity this service runs as; defaults to
+#                               <SERVICE>@<project>.iam.gserviceaccount.com, created by
+#                               infra/setup-runtime-sa.sh. Never the default compute
+#                               account — see that script for why.)
 #   HEALTH_SWEEP_BATCH=...     (how many health re-gates one sweep run may start;
 #                               defaults to 3. Each one is a Cloud Build run, so this is
 #                               the knob that decides what the loop costs per day. Set it
@@ -142,7 +147,14 @@ HEALTH_SWEEP_AUDIENCE="${HEALTH_SWEEP_AUDIENCE:-}"
 ACCOUNT_DELETION_SWEEP_AUDIENCE="${ACCOUNT_DELETION_SWEEP_AUDIENCE:-}"
 DISPATCH_REAPER_AUDIENCE="${DISPATCH_REAPER_AUDIENCE:-}"
 SEED_DISPATCH_AUDIENCE="${SEED_DISPATCH_AUDIENCE:-}"
-SEED_DISPATCH_SA="${SEED_DISPATCH_SA:-}"
+# The runtime identity, and the same value both deploy paths pin (deploy.yml derives it
+# from the service name identically). Set on every deploy rather than once on the
+# service: a --service-account left off a `gcloud run deploy` keeps the previous
+# revision's value today, but "keeps" is not "pins" — the day someone deploys from a
+# fresh service, or the flag is dropped, it falls back to the default compute account
+# and every narrow grant in infra/ becomes cosmetic again.
+RUNTIME_SA="${RUNTIME_SA:-${SERVICE}@${PROJECT_ID}.iam.gserviceaccount.com}"
+SEED_DISPATCH_SA="${SEED_DISPATCH_SA:-${RUNTIME_SA}}"
 # Arms the alert-pulled spend brake; unset leaves the endpoint refusing everything.
 # Its own caller identity: the Pub/Sub push subscription, not the scheduler.
 SPEND_BRAKE_AUDIENCE="${SPEND_BRAKE_AUDIENCE:-}"
@@ -533,6 +545,7 @@ gcloud run deploy "$SERVICE" \
   --cpu-throttling \
   --timeout 900 \
   --memory 1Gi \
+  --service-account "$RUNTIME_SA" \
   --port 8080 \
   --set-env-vars "${ENV_VARS}" \
   ${SECRET_FLAGS[@]+"${SECRET_FLAGS[@]}"}

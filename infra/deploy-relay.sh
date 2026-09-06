@@ -23,7 +23,7 @@
 # what lifts the app's instance pin — deliberately one switch, because lifting the pin
 # while the app still serves rooms in-process is the exact bug this whole change removes.
 #
-# Override via env: PROJECT_ID, REGION, SERVICE, APP_SERVICE, IMAGE, MAX_INSTANCES.
+# Override via env: PROJECT_ID, REGION, SERVICE, APP_SERVICE, IMAGE, MAX_INSTANCES, RUNTIME_SA.
 #
 # This script is idempotent — re-run it to move the relay onto a newer image.
 set -euo pipefail
@@ -57,19 +57,26 @@ if [ -z "$IMAGE" ]; then
 fi
 echo "    Image: ${IMAGE}"
 
-# The relay authenticates exactly one caller: the app service's runtime identity. Cloud Run
-# reports an empty serviceAccountName when a service uses the project's default compute
-# identity, which is what this project does — so resolve that rather than treating empty as
-# "no caller", which would leave the relay's create route deny-all and every lobby broken.
+# The relay authenticates exactly one caller: the app service's runtime identity, read from
+# the app service so the two cannot disagree. Cloud Run reports an empty serviceAccountName
+# for a service on the project's default compute identity; that used to be resolved to the
+# compute account here, and is now an error — every service runs as its own account
+# (infra/setup-runtime-sa.sh), and a relay that trusts the default compute identity would
+# trust the one account this project is moving away from.
 CALLER_SA="$(gcloud run services describe "$APP_SERVICE" --region "$REGION" --project "$PROJECT_ID" \
   --format 'value(spec.template.spec.serviceAccountName)' 2>/dev/null || true)"
-if [ -z "$CALLER_SA" ]; then
-  PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format 'value(projectNumber)')"
-  CALLER_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
-  echo "    Caller: ${CALLER_SA} (the app service runs as the default compute identity)"
-else
-  echo "    Caller: ${CALLER_SA}"
+if [ -z "$CALLER_SA" ] || [[ "$CALLER_SA" == *-compute@developer.gserviceaccount.com ]]; then
+  echo "Error: ${APP_SERVICE} runs as '${CALLER_SA:-the default compute account}'." >&2
+  echo "  Deploy the app on its own identity first (infra/deploy-api.sh or the deploy" >&2
+  echo "  workflow both pin --service-account); the relay only trusts that identity." >&2
+  exit 1
 fi
+echo "    Caller: ${CALLER_SA}"
+
+# This service's own identity. session-secret is the only thing it may read, and
+# infra/setup-runtime-sa.sh grants exactly that. Same derivation as deploy.yml.
+RUNTIME_SA="${RUNTIME_SA:-${SERVICE}@${PROJECT_ID}.iam.gserviceaccount.com}"
+echo "    Runs as: ${RUNTIME_SA}"
 
 echo "==> 2/6 Checking the room-signing secret"
 # Room tokens are HMAC'd from SESSION_SECRET (apps/api/src/mp.ts). The relay both mints and
@@ -127,6 +134,7 @@ gcloud run deploy "$SERVICE" \
   --max-instances "$MAX_INSTANCES" \
   --timeout 3600 \
   --port 8080 \
+  --service-account "$RUNTIME_SA" \
   --set-env-vars "^|^MP_RELAY_ONLY=1|PRIVATE_BETA=true|MP_RELAY_CALLER_SA=${CALLER_SA}" \
   --set-secrets "SESSION_SECRET=session-secret:latest"
 
