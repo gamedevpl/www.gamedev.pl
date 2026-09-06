@@ -40,7 +40,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Custom adapter names no longer block conversational requests; oversized optional agent metadata is omitted.
+- Custom adapter names no longer block conversational requests; oversized optional agent metadata is omitted (#1189).
 
 - The conversational assistant interprets play, status and edit requests using the active game context, including published checkouts (#1187).
 
