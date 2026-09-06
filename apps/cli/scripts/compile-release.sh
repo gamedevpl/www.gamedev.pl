@@ -7,6 +7,7 @@ version="${1:-$(node -p "require('$root/package.json').version")}"
 out="$root/dist/release"
 rm -rf "$out"
 mkdir -p "$out"
+npm run build --workspace @gamedevpl/contract --prefix "$root/../.."
 node "$root/scripts/build-binary.mjs"
 install -m 0755 "$root/dist/gamedevpl.mjs" "$out/gamedevpl"
 (cd "$out" && sha256sum gamedevpl > SHA256SUMS)

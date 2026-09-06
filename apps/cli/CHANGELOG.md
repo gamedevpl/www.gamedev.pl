@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Internal
+
+- Release packaging builds the shared contract before bundling the CLI.
+
 ## 0.4.0 — 2026-09-06
 
 ### Added

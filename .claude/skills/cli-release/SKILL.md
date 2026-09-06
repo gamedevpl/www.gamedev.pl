@@ -78,6 +78,10 @@ repo in the same session.
 
 ## Traps recorded so far
 
+- **Build the contract before bundling.** CLI telemetry imports runtime values from
+  `@gamedevpl/contract`. `compile-release.sh` builds that workspace so a fresh checkout
+  works; locally cached `packages/contract/dist` can otherwise hide a broken release.
+
 - **`--generate-notes` is never used.** On a first release it wrote the whole repository
   history and hit GitHub's 125 000-character body limit (release run 3, 2026-09-04).
   Notes come from the changelog section.
