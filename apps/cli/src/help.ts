@@ -8,8 +8,9 @@ const BLURB: Record<SlashVerb, string> = {
   share: 'play URL — share <slug>',
   profile: 'signed-in profile',
   handle: 'get or set handle',
-  builder: 'who is building — builder <slug>',
+  builder: 'who builds — builder <slug>, or self|platform here',
   connect: 'MCP handoff, or --agent',
+  delegate: 'local agent edits the checkout — delegate <task>',
   checkout: 'clone a game — checkout <slug>',
   quota: "today's submission budget",
   notifications: 'unread notifications',
@@ -27,7 +28,13 @@ export function formatHelp(slash = false): string {
   const prefix = slash ? '/' : '';
   const rows = SLASH_VERBS.map((verb) => `  ${(prefix + verb).padEnd(18)}${BLURB[verb]}`);
   const intro = slash
-    ? [`${CLI_BIN} ${CLI_VERSION}`, '', '  type to talk — a game starts when you ask · /quit to leave', '']
+    ? [
+        `${CLI_BIN} ${CLI_VERSION}`,
+        '',
+        '  type to talk — a game starts when you ask · /quit to leave',
+        '  in a checkout: say what to change; a local agent edits it, /submit delivers',
+        '',
+      ]
     : [
         `${CLI_BIN} ${CLI_VERSION} — Studio from a terminal`,
         '',

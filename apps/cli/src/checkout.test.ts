@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   checkoutGame,
   changedPaths,
+  findCheckout,
   inspectGame,
   localGameFiles,
   pullGame,
@@ -256,5 +257,32 @@ describe('checkout', () => {
   it('refuses a path that would leave the checkout', () => {
     const dest = mkdtempSync(join(tmpdir(), 'gdpl-esc2-'));
     expect(() => writeGameFiles(dest, 'ghost-roads', [{ path: '../outside.ts', content: 'nope' }])).toThrow(/outside/);
+  });
+});
+
+// Inside a checkout, that game opens; no guessing.
+describe('findCheckout', () => {
+  it('finds the slug in the directory itself', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gamedev-find-'));
+    writeFileSync(join(dir, '.gamedev-slug'), 'airtime\n');
+    expect(findCheckout(dir)).toEqual({ slug: 'airtime', root: dir });
+  });
+
+  it('walks up from a subdirectory, so games/<slug>/ works', () => {
+    const root = mkdtempSync(join(tmpdir(), 'gamedev-find-'));
+    writeFileSync(join(root, '.gamedev-slug'), 'airtime');
+    const deep = join(root, 'games', 'airtime', 'game');
+    mkdirSync(deep, { recursive: true });
+    expect(findCheckout(deep)?.slug).toBe('airtime');
+  });
+
+  it('returns null outside a checkout', () => {
+    expect(findCheckout(mkdtempSync(join(tmpdir(), 'gamedev-none-')))).toBeNull();
+  });
+
+  it('ignores an empty marker rather than opening a nameless game', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gamedev-empty-'));
+    writeFileSync(join(dir, '.gamedev-slug'), '   \n');
+    expect(findCheckout(dir)).toBeNull();
   });
 });

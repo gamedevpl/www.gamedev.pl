@@ -17,6 +17,7 @@ export async function getTurns(
 export type RoundStatus = {
   status: string;
   slug?: string;
+  builder?: string;
   phase?: string;
   gateProgress?: { stage: string; index: number; total: number };
   previewGate?: { green: boolean };

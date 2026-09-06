@@ -24,15 +24,54 @@ export function childEnv(parent: NodeJS.ProcessEnv, roundToken: string, mcp?: Ch
   return env;
 }
 
+type EventShape = {
+  text?: unknown;
+  message?: unknown;
+  type?: unknown;
+  result?: unknown;
+  item?: { type?: unknown; text?: unknown; command?: unknown };
+};
+
+const QUIET_EVENT_TYPES = /^(system|user|thread\.|turn\.|item\.started)/;
+
+function textOf(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
+// Claude, codex and vibe each wrap text differently; show the words.
+function contentText(message: unknown): string | null {
+  const content = (message as { content?: unknown } | undefined)?.content;
+  if (!Array.isArray(content)) return null;
+  const parts = (content as Array<{ type?: string; text?: string; name?: string }>).flatMap((block) => {
+    if (block.type === 'text' && block.text) return [block.text];
+    if (block.type === 'tool_use' && block.name) return [`⚙ ${block.name}`];
+    return [];
+  });
+  return parts.length ? parts.join(' ') : null;
+}
+
 export function parseEventLine(line: string): string | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
+  let parsed: EventShape;
   try {
-    const parsed = JSON.parse(trimmed) as { text?: string; message?: string; type?: string };
-    return parsed.text ?? parsed.message ?? parsed.type ?? trimmed;
+    parsed = JSON.parse(trimmed) as EventShape;
   } catch {
     return null;
   }
+  if (!parsed || typeof parsed !== 'object') return trimmed;
+  const direct =
+    textOf(parsed.text) ??
+    textOf(parsed.message) ??
+    contentText(parsed.message) ??
+    textOf(parsed.result) ??
+    textOf(parsed.item?.text);
+  if (direct) return direct;
+  const command = textOf(parsed.item?.command);
+  if (command) return `⚙ ${command}`;
+  const type = textOf(parsed.type);
+  if (!type) return trimmed;
+  return QUIET_EVENT_TYPES.test(type) ? null : type;
 }
 
 export function renderDelegateStream(adapter: string, lines: string[], verbose: boolean): string[] {

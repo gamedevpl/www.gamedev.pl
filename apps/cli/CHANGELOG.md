@@ -7,6 +7,13 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Started in a game checkout, `gamedevpl` opens that game instead of asking what to make
+- In a checkout, saying what to change runs `claude` / `codex` / `gemini` / `vibe` from your machine on the game,
+  verifies the tree and offers to deliver; `/delegate <task>` skips the chat, `/builder self|platform` picks who builds,
+  and `gamedevpl delegate "<task>" [--submit]` does the same non-interactively
+
 ### Fixed
 
 - `gamedevpl` prints the version it actually is; every release so far reported 0.1.0 in the banner, footer and `help`

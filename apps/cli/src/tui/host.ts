@@ -8,17 +8,25 @@ import type { ApiClient } from '../api.js';
 import { ReplApp } from './app.js';
 import { createRoundWatch } from './round-watch.js';
 import { createTuiSession, formatSessionIdentity } from './session.js';
+import { openWorkshop, settleBuilder, type Workshop } from '../workshop.js';
 
 export async function runInkRepl(input: {
   api: ApiClient;
   env: NodeJS.ProcessEnv;
   io: { stdin: NodeJS.ReadStream; stdout: NodeJS.WriteStream };
   token: string | null;
+  // Set when a checkout in the working directory opened this session.
+  checkout?: { slug: string; root: string };
 }): Promise<number> {
   const isTty = Boolean(input.io.stdout.isTTY);
   const color = wantsColor(input.env, isTty);
   const host: { instance?: ReturnType<typeof render> } = {};
+  const abort: Workshop['abort'] = { current: null };
   const session = createTuiSession(replBanner(isTty, input.env), () => {
+    if (abort.current) {
+      abort.current.abort();
+      return;
+    }
     session.close();
     host.instance?.unmount();
     process.exit(EXIT_GREEN);
@@ -32,8 +40,17 @@ export async function runInkRepl(input: {
   let token = input.token;
   let conversationId: string | undefined;
   let who = '';
-  let slug = '';
+  let slug = input.checkout?.slug ?? '';
   const paintIdentity = (): void => session.setIdentity(formatSessionIdentity(who, slug));
+  let workshop: Workshop | undefined;
+  if (input.checkout && token) {
+    paintIdentity();
+    const write = (line: string): void => session.writeLine(line);
+    const opened = await openWorkshop({ api: input.api, token, ...input.checkout, env: input.env, write });
+    workshop = { ...input.checkout, token, env: input.env, ...opened, pick: session.prompt, abort };
+    workshop.builder = await settleBuilder({ api: input.api, ws: workshop, status: opened.status, write });
+    session.writeLine('say what to change, or /help');
+  }
   const watch = createRoundWatch({
     getToken: () => token,
     api: input.api,
@@ -66,6 +83,7 @@ export async function runInkRepl(input: {
           api: input.api,
           token,
           conversationId,
+          workshop,
           write: (text) => session.writeLine(text),
         });
       } catch (error) {

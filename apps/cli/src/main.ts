@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { stdin, stdout, stderr } from 'node:process';
 import { parseArgv, jsonMode, SLASH_VERBS } from './argv.js';
 import { GIT_REMOTE_HELPER, GIT_REMOTE_SCHEME, cliUsage } from './bin-name.js';
-import { createApi, requireTtyFlag } from './api.js';
+import { createApi, requireTtyFlag, type ApiClient } from './api.js';
 import {
   encryptedFileStore,
   FILE_FALLBACK_WARNING,
@@ -14,15 +14,18 @@ import {
 } from './keychain.js';
 import { runLoopbackLogin } from './login.js';
 import { originFromEnv } from './oauth.js';
-import { CliError, EXIT_GREEN, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
+import { CliError, EXIT_GREEN, EXIT_INPUT, EXIT_RED, EXIT_REFUSED } from './exit-codes.js';
 import { describeError, pipeNeedsFlag } from './errors.js';
-import { checkoutGame, diffGame, formatSyncLines, pullGame, readCheckoutSlug } from './checkout.js';
+import { studioToken } from './studio.js';
+import { checkoutGame, diffGame, findCheckout, formatSyncLines, pullGame, readCheckoutSlug } from './checkout.js';
 import { connectGame } from './connect.js';
 import { formatSubmitLines, submitGame } from './submit.js';
 import { runGitRemoteHelper } from './git-remote-main.js';
 import { runStatusVerb } from './status-watch.js';
 import { dispatchReadVerb } from './verbs.js';
 import { formatHelp } from './help.js';
+import { detectLocalAdapters, handoffBuilder, workshopTurn } from './workshop.js';
+import { getStatus } from './turn.js';
 
 function storeFromEnv(env: NodeJS.ProcessEnv, warn: (line: string) => void): TokenStore {
   const token = env.GAMEDEV_TOKEN?.trim();
@@ -41,6 +44,71 @@ export function isGitRemoteHelper(argv: string[]): boolean {
   const first = argv[2];
   if (first && !first.startsWith('-') && (SLASH_VERBS as readonly string[]).includes(first)) return false;
   return true;
+}
+
+// A checkout here means working on that game, not a new one.
+export async function openCheckoutGame(
+  api: ApiClient,
+  cwd: string,
+): Promise<{ token: string; slug: string; root: string } | null> {
+  const found = findCheckout(cwd);
+  if (!found) return null;
+  try {
+    return { token: await studioToken(api, found.slug), ...found };
+  } catch {
+    return null;
+  }
+}
+
+// Non-interactive twin of the REPL turn: agent, ladder, optional delivery.
+async function runDelegateVerb(input: {
+  api: ApiClient;
+  args: string[];
+  flags: Record<string, string | boolean>;
+  env: NodeJS.ProcessEnv;
+  cwd: string;
+  write: (line: string) => void;
+}): Promise<number> {
+  const request = input.args.join(' ').trim();
+  if (!request) throw new CliError(cliUsage('delegate', '"<task>"'), EXIT_INPUT, '<task>');
+  const opened = await openCheckoutGame(input.api, input.cwd);
+  if (!opened) throw new CliError('not inside a game checkout', EXIT_INPUT, cliUsage('checkout', '<slug>'));
+  let builder = (await getStatus(input.api, opened.token)).builder ?? 'platform';
+  if (builder !== 'self' && input.flags.handoff === true) {
+    const outcome = await handoffBuilder(input.api, opened.token, 'self', builder);
+    if (outcome.pending) {
+      throw new CliError(
+        'handoff pending — the platform agent has not acknowledged yet',
+        EXIT_REFUSED,
+        'retry shortly',
+      );
+    }
+    builder = outcome.builder;
+  }
+  if (builder !== 'self') {
+    throw new CliError(
+      `builder is ${builder} — the platform owns this round`,
+      EXIT_REFUSED,
+      `${cliUsage('delegate', '--handoff')} takes it here`,
+    );
+  }
+  const ws = {
+    ...opened,
+    env: input.env,
+    adapters: detectLocalAdapters(input.env),
+    builder,
+    pick: async () => '',
+    abort: { current: null },
+    unattended: { deliver: input.flags.submit === true },
+  };
+  const ok = await workshopTurn({
+    api: input.api,
+    ws,
+    request,
+    agent: typeof input.flags.agent === 'string' ? input.flags.agent : undefined,
+    write: input.write,
+  });
+  return ok ? EXIT_GREEN : EXIT_RED;
 }
 
 export async function runCli(
@@ -176,16 +244,28 @@ export async function runCli(
       });
       return EXIT_GREEN;
     }
+    if (verb === 'delegate') {
+      return runDelegateVerb({
+        api,
+        args,
+        flags,
+        env,
+        cwd: process.cwd(),
+        write: (line) => io.stdout.write(`${line}\n`),
+      });
+    }
     const read = await dispatchReadVerb({ verb, args, flags, api, io });
     if (read !== null) return read;
     if (verb === 'repl') {
       if (!tty || !io.stdout.isTTY) throw pipeNeedsFlag(`a verb such as ${cliUsage('whoami')}`);
       const { runInkRepl } = await import('./tui/host.js');
+      const opened = typeof flags.token === 'string' ? null : await openCheckoutGame(api, process.cwd());
       return runInkRepl({
         api,
         env,
         io,
-        token: typeof flags.token === 'string' ? flags.token : null,
+        token: typeof flags.token === 'string' ? flags.token : (opened?.token ?? null),
+        ...(opened ? { checkout: { slug: opened.slug, root: opened.root } } : {}),
       });
     }
     io.stderr.write(`unknown verb ${verb} — ${cliUsage('help')}\n`);
