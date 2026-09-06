@@ -10,6 +10,8 @@ export const REPO_ROOT = path.resolve(here, '..');
 export const CHANGELOG_PATH = 'apps/cli/CHANGELOG.md';
 export const CLI_PACKAGE_JSON_PATH = 'apps/cli/package.json';
 export const CLI_INSTALLERS_PATH = 'apps/api/src/platform/cli-installers.ts';
+// The bundled constant the REPL, help and footer print, and update falls back to.
+export const CLI_UPDATE_PATH = 'apps/cli/src/update.ts';
 
 export const CATEGORIES = ['Breaking', 'Added', 'Fixed', 'Internal'];
 export const UNRELEASED = 'Unreleased';
@@ -218,20 +220,32 @@ export function bumpVersionStrings(version) {
   if (pkgNext === pkg) throw new Error(`no "version" field found in ${CLI_PACKAGE_JSON_PATH}`);
   writeRepoFile(CLI_PACKAGE_JSON_PATH, pkgNext);
 
-  const installers = readRepoFile(CLI_INSTALLERS_PATH);
-  const installersNext = installers.replace(
-    /export const CLI_VERSION = '\d+\.\d+\.\d+';/,
-    `export const CLI_VERSION = '${version}';`,
-  );
-  if (installersNext === installers) throw new Error(`no CLI_VERSION constant found in ${CLI_INSTALLERS_PATH}`);
-  writeRepoFile(CLI_INSTALLERS_PATH, installersNext);
+  for (const relative of [CLI_INSTALLERS_PATH, CLI_UPDATE_PATH]) {
+    const current = readRepoFile(relative);
+    const next = current.replace(
+      /export const CLI_VERSION = '\d+\.\d+\.\d+';/,
+      `export const CLI_VERSION = '${version}';`,
+    );
+    if (next === current) throw new Error(`no CLI_VERSION constant found in ${relative}`);
+    writeRepoFile(relative, next);
+  }
 }
 
 
-export function currentInstallerVersion() {
-  const match = /export const CLI_VERSION = '(\d+\.\d+\.\d+)';/.exec(readRepoFile(CLI_INSTALLERS_PATH));
-  if (!match) throw new Error(`no CLI_VERSION constant found in ${CLI_INSTALLERS_PATH}`);
+function versionConstantIn(relative) {
+  const match = /export const CLI_VERSION = '(\d+\.\d+\.\d+)';/.exec(readRepoFile(relative));
+  if (!match) throw new Error(`no CLI_VERSION constant found in ${relative}`);
   return match[1];
+}
+
+export function currentInstallerVersion() {
+  return versionConstantIn(CLI_INSTALLERS_PATH);
+}
+
+// What the running binary prints. Built from this constant, so a stale value means
+// every release reports the version it was first written with.
+export function currentBundledVersion() {
+  return versionConstantIn(CLI_UPDATE_PATH);
 }
 
 // The three places a version lives must agree, or the installer serves a version the
@@ -241,11 +255,13 @@ export function versionConsistency() {
   const changelog = parsed.errors.length > 0 ? null : latestReleasedVersion(parsed);
   const pkg = currentCliVersion();
   const installer = currentInstallerVersion();
+  const bundled = currentBundledVersion();
   return {
     parseErrors: parsed.errors,
     changelog,
     package: pkg,
     installer,
-    ok: parsed.errors.length === 0 && changelog === pkg && pkg === installer,
+    bundled,
+    ok: parsed.errors.length === 0 && changelog === pkg && pkg === installer && installer === bundled,
   };
 }

@@ -154,12 +154,17 @@ describe('the repository own changelog', () => {
     }
   });
 
-  it('agrees with package.json and the installer default', () => {
+  // Four copies, and the bundled one is what a creator actually sees: every release
+  // so far printed 0.1.0 because src/update.ts was never bumped (screenshot, 2026-09-06).
+  it('agrees across package.json, the installer default and the bundled constant', () => {
+    const version = latestReleasedVersion(parsed);
     const state = versionConsistency();
-    expect({ changelog: state.changelog, package: state.package, installer: state.installer }).toEqual({
-      changelog: latestReleasedVersion(parsed),
-      package: latestReleasedVersion(parsed),
-      installer: latestReleasedVersion(parsed),
-    });
+    expect({
+      changelog: state.changelog,
+      package: state.package,
+      installer: state.installer,
+      bundled: state.bundled,
+    }).toEqual({ changelog: version, package: version, installer: version, bundled: version });
+    expect(state.ok).toBe(true);
   });
 });
