@@ -185,6 +185,21 @@ export function releaseNotes(text, version) {
   return body.join('\n').trim();
 }
 
+// Newest released section, ignoring Unreleased. Null when nothing is released yet.
+export function latestReleasedVersion(parsed) {
+  const released = parsed.sections.filter((section) => section.version !== UNRELEASED);
+  return released.length > 0 ? released[0].version : null;
+}
+
+export function compareVersions(a, b) {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i += 1) {
+    if (pa[i] !== pb[i]) return pa[i] - pb[i];
+  }
+  return 0;
+}
+
 export function readRepoFile(relative) {
   return fs.readFileSync(path.join(REPO_ROOT, relative), 'utf8');
 }
@@ -210,4 +225,27 @@ export function bumpVersionStrings(version) {
   );
   if (installersNext === installers) throw new Error(`no CLI_VERSION constant found in ${CLI_INSTALLERS_PATH}`);
   writeRepoFile(CLI_INSTALLERS_PATH, installersNext);
+}
+
+
+export function currentInstallerVersion() {
+  const match = /export const CLI_VERSION = '(\d+\.\d+\.\d+)';/.exec(readRepoFile(CLI_INSTALLERS_PATH));
+  if (!match) throw new Error(`no CLI_VERSION constant found in ${CLI_INSTALLERS_PATH}`);
+  return match[1];
+}
+
+// The three places a version lives must agree, or the installer serves a version the
+// repo does not know about — which is how 0.1.0 kept being served while 0.3.0 existed.
+export function versionConsistency() {
+  const parsed = parseChangelog(readRepoFile(CHANGELOG_PATH));
+  const changelog = parsed.errors.length > 0 ? null : latestReleasedVersion(parsed);
+  const pkg = currentCliVersion();
+  const installer = currentInstallerVersion();
+  return {
+    parseErrors: parsed.errors,
+    changelog,
+    package: pkg,
+    installer,
+    ok: parsed.errors.length === 0 && changelog === pkg && pkg === installer,
+  };
 }

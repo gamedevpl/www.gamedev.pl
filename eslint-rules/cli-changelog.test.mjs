@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
   bumpKind,
+  CHANGELOG_PATH,
   cliSourceTouched,
+  compareVersions,
+  latestReleasedVersion,
   nextVersion,
   parseChangelog,
+  readRepoFile,
   releaseNotes,
   renderCut,
   unreleasedSection,
+  versionConsistency,
 } from './cli-changelog-lib.mjs';
 
 const sample = `# gamedevpl CLI changelog
@@ -123,5 +128,38 @@ describe('cliSourceTouched', () => {
     expect(cliSourceTouched(['apps/cli/scripts/build-binary.mjs'])).toBe(true);
     expect(cliSourceTouched(['apps/cli/src/main.test.ts'])).toBe(false);
     expect(cliSourceTouched(['apps/cli/README.md', 'apps/web/src/App.tsx'])).toBe(false);
+  });
+});
+
+// Against the real files, not a fixture: this is the drift that shipped 0.1.0 from the
+// installer while 0.3.0 was the newest release, found by hand on 2026-09-06.
+describe('the repository own changelog', () => {
+  const parsed = parseChangelog(readRepoFile(CHANGELOG_PATH));
+
+  it('parses with no structural errors', () => {
+    expect(parsed.errors).toEqual([]);
+  });
+
+  it('has exactly one Unreleased section, at the top', () => {
+    expect(parsed.sections[0].version).toBe('Unreleased');
+    expect(parsed.sections.filter((s) => s.version === 'Unreleased')).toHaveLength(1);
+  });
+
+  it('lists released versions newest first, each dated', () => {
+    const released = parsed.sections.filter((s) => s.version !== 'Unreleased');
+    expect(released.length).toBeGreaterThan(0);
+    for (const section of released) expect(section.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    for (let i = 1; i < released.length; i += 1) {
+      expect(compareVersions(released[i - 1].version, released[i].version)).toBeGreaterThan(0);
+    }
+  });
+
+  it('agrees with package.json and the installer default', () => {
+    const state = versionConsistency();
+    expect({ changelog: state.changelog, package: state.package, installer: state.installer }).toEqual({
+      changelog: latestReleasedVersion(parsed),
+      package: latestReleasedVersion(parsed),
+      installer: latestReleasedVersion(parsed),
+    });
   });
 });

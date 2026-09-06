@@ -58,6 +58,17 @@ npm run cli:release -- next       # the version the next cut would produce, or "
 npm run cli:release -- notes 0.1.0
 ```
 
+## The version lives in three places, and they must agree
+
+`apps/cli/CHANGELOG.md`'s newest released section, `apps/cli/package.json`, and
+`CLI_VERSION` in `apps/api/src/platform/cli-installers.ts`. The cut writes all three, so
+they only drift when someone releases by hand — which is exactly what happened: `0.2.0`
+and `0.3.0` were cut by `workflow_dispatch` with an explicit version, neither touched the
+repo, and `install.sh` kept serving `0.1.0` to every creator while `0.3.0` was the latest
+release. Two doors now catch it: `npm run lint` (the guard prints all three) and
+`npm run test:rules` (asserted against the real files). If you ever dispatch a release by
+hand, land the same version in the repo in the same session.
+
 ## Traps recorded so far
 
 - **`--generate-notes` is never used.** On a first release it wrote the whole repository

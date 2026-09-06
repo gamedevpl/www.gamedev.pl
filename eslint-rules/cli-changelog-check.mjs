@@ -6,7 +6,16 @@
 // Wired into `npm run lint`; without a base to diff against it validates structure only.
 
 import { execFileSync } from 'node:child_process';
-import { CHANGELOG_PATH, cliSourceTouched, parseChangelog, readRepoFile, REPO_ROOT } from './cli-changelog-lib.mjs';
+import {
+  CHANGELOG_PATH,
+  CLI_INSTALLERS_PATH,
+  CLI_PACKAGE_JSON_PATH,
+  cliSourceTouched,
+  parseChangelog,
+  readRepoFile,
+  REPO_ROOT,
+  versionConsistency,
+} from './cli-changelog-lib.mjs';
 
 function git(args) {
   return execFileSync('git', args, { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
@@ -39,6 +48,17 @@ function main() {
   if (parsed.errors.length > 0) {
     console.error(`${CHANGELOG_PATH} is malformed:`);
     for (const error of parsed.errors) console.error(`  ${error}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const versions = versionConsistency();
+  if (!versions.ok) {
+    console.error('CLI version drift — the changelog, the package and the installer disagree:');
+    console.error(`  ${CHANGELOG_PATH}: ${versions.changelog ?? 'no released section'}`);
+    console.error(`  ${CLI_PACKAGE_JSON_PATH}: ${versions.package}`);
+    console.error(`  ${CLI_INSTALLERS_PATH}: ${versions.installer}`);
+    console.error('  The installer serves its own default, so drift means creators get the wrong version.');
     process.exitCode = 1;
     return;
   }

@@ -7,10 +7,17 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.3.0 — 2026-09-05
+
 ### Added
 
 - Checkout, OAuth refresh and the delivery loop are closed end to end (#1173)
 - A device that signs in again reuses its OAuth grant instead of minting another (#1168)
+
+## 0.2.0 — 2026-09-04
+
+### Added
+
 - `gamedevpl help` describes every verb, and the REPL paints an idle mascot (#1164)
 
 ### Fixed
