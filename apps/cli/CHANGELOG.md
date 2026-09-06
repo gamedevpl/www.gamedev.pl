@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Custom adapter names no longer block conversational requests; oversized optional agent metadata is omitted (#1189).
+
 ## 0.6.0 — 2026-09-07
 
 ### Breaking
@@ -39,8 +43,6 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 ## 0.4.1 — 2026-09-06
 
 ### Fixed
-
-- Custom adapter names no longer block conversational requests; oversized optional agent metadata is omitted (#1189).
 
 - The conversational assistant interprets play, status and edit requests using the active game context, including published checkouts (#1187).
 
