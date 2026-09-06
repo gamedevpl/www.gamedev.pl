@@ -257,6 +257,7 @@ const FILE_BUCKET = {
   'seed-paths': 'creation',
   'session-crash': 'creation',
   scorecard: 'creation',
+  'scorecard-aggregate-log': 'creation',
   'knowledge-search': 'creation',
   // Collapses jobs to distinct games for the Studio shelf -- pure Store-record
   // grouping, no catalog dependency, only ever read by creator-studio.ts.

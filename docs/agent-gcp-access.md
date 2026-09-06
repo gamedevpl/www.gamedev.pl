@@ -106,6 +106,45 @@ node infra/gcp-read.mjs logs 'jsonPayload.event="mcp_unknown_session" OR jsonPay
 node infra/gcp-read.mjs logs 'resource.type="cloud_run_revision" AND httpRequest.requestUrl=~"/api/mcp" AND httpRequest.userAgent=~"openai|claude"' --since 6h --limit 50
 ```
 
+### Per-game aggregates — how an unattended run reads product health
+
+The nightly scorecard sweep writes one structured line per game it scores, so the numbers
+IL-3 reasons about are reachable with the `logging.viewer` this account already holds:
+
+```bash
+# Every game scored by last night's sweep
+node infra/gcp-read.mjs logs 'jsonPayload.event="scorecard_aggregate"' --since 36h --limit 500
+
+# One game over time — logs keep the history that scorecard/current does not
+node infra/gcp-read.mjs logs 'jsonPayload.event="scorecard_aggregate" AND jsonPayload.slug="brick-storm"' --since 30d --limit 60
+```
+
+**This is deliberately the whole access path, and no endpoint was built for it.** The
+alternative considered was an OIDC-gated `/api/internal/aggregates` on the pattern of the
+sweeps in `app.ts`. The log wins on three counts: it opens no new public URL, it needs no
+new credential or env var, it does not widen this account's role beyond infrastructure
+reads — and it yields a time series for free, where `games/{slug}/scorecard/current` keeps
+only the newest state.
+
+What the line carries is fixed by `toAggregateLog` in
+[`apps/api/src/creation/scorecard.ts`](../apps/api/src/creation/scorecard.ts): session and
+vote counts, health and depth rates, `feedbackCount`, and `feedbackThemeCount`.
+
+What it will not carry, and why it is a test rather than a convention:
+
+- **`feedbackThemes`** — distilled from players' own words, and `MIN_FEEDBACK_FOR_THEMES`
+  is 3, so a theme counted once across three notes is one person's sentence in an
+  aggregate's clothing. Small _n_ is the reason, not the privacy notice: a log is a copy
+  that outlives the row and that `erase-player-signals.ts` cannot reach. Read themes on
+  the operator page, where the rows behind them are still deletable.
+- **`errorSamples` and `progressLabels`** — game-supplied strings, quarantined under
+  `untrusted` on the scorecard exactly so they reach as few places as possible.
+
+Counts are safe by contrast: they describe a game rather than a person, and account
+deletion already flows into them without help from here — `clearVote` corrects the parent
+counters, and the next sweep recomputes `feedback.count` from the rows that remain. A
+logged line is a snapshot of what was true that night, which stays true afterwards.
+
 `raw` is the escape hatch: any runbook `gcloud` step has a REST equivalent, and the credential
 — not the wrapper — is what stops a mutation. Start with `whoami`; if a command 403s, that
 output tells you immediately whether it is a permission boundary or a real fault.
