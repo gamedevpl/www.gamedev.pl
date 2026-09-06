@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.4.1 — 2026-09-06
+
 ### Fixed
 
 - The conversational assistant interprets play, status and edit requests using the active game context, including published checkouts (#1187).
