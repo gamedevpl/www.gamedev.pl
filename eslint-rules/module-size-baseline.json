@@ -227,7 +227,7 @@
     "apps/api/src/creation/remix.test.ts": 1371,
     "apps/api/src/creation/remix.ts": 1377,
     "apps/api/src/creation/scorecard.test.ts": 343,
-    "apps/api/src/creation/scorecard.ts": 287,
+    "apps/api/src/creation/scorecard.ts": 291,
     "apps/api/src/creation/seed-availability.test.ts": 98,
     "apps/api/src/creation/seed-availability.ts": 100,
     "apps/api/src/creation/seed-bundle.test.ts": 77,

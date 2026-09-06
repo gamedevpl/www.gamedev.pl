@@ -15,6 +15,7 @@ import {
   type ThemeExtractor,
 } from '../platform/feedback-themes-contract.js';
 import type { Scorecard, Store, TelemetryEvent } from '../platform/store.js';
+import { toAggregateLog, type ScorecardAggregateLog } from './scorecard-aggregate-log.js';
 
 /**
  * The scorecard sweep (docs/improvement-loop-plan.md IL-2 "Distill").
@@ -74,6 +75,8 @@ export interface ScorecardSweepDeps {
   onError?: (slug: string, error: unknown) => void;
   /** Called when theme extraction failed for a game; the scorecard is still written without themes. */
   onThemeError?: (slug: string, error: unknown) => void;
+  // Called per scorecard written; the route owns the logger.
+  onAggregate?: (line: ScorecardAggregateLog) => void;
 }
 
 export interface ScorecardSweepResult {
@@ -208,11 +211,11 @@ export async function runScorecardSweep(deps: ScorecardSweepDeps): Promise<Score
         }
       }
 
-      await store.putScorecard(
-        health.slug,
-        buildScorecard(health, { votes, feedbackCount, feedbackThemes }, window, computedAt),
-      );
+      const card = buildScorecard(health, { votes, feedbackCount, feedbackThemes }, window, computedAt);
+      await store.putScorecard(health.slug, card);
       written += 1;
+      // After the write: a line for an absent scorecard lies.
+      deps.onAggregate?.(toAggregateLog(card));
     } catch (error) {
       // One unwritable game must not cost every later game its scorecard — the same
       // rule the notification sweep follows for one bad submission.
@@ -271,6 +274,8 @@ export async function registerScorecardRoutes(app: FastifyInstance, options: Sco
           // has been failing every night is invisible in the result, where a game with
           // nothing to summarize looks exactly the same.
           onThemeError: (slug, error) => request.log.warn({ err: error, slug }, 'feedback theme extraction failed'),
+          // Only path by which an unattended reader sees these.
+          onAggregate: (line) => request.log.info(line, 'scorecard aggregate'),
         });
         // Logged at error level when anything failed: a nightly job nobody watches is
         // exactly the kind that fails quietly for weeks, and `failed > 0` is the signal.
