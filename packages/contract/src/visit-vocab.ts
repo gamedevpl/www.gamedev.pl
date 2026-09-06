@@ -167,6 +167,7 @@ export const CLI_STEPS = [
   'build_requested',
   'delivered',
   'published',
+  'play_requested',
   'delegate_offered',
   'delegate_used',
   'verify_failed',

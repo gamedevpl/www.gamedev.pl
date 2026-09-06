@@ -1,5 +1,6 @@
 export const SLASH_VERBS = [
   'agents',
+  'play',
   'games',
   'status',
   'share',
@@ -28,6 +29,8 @@ export function completeSlash(prefix: string): SlashVerb[] {
   return SLASH_VERBS.filter((verb) => verb.startsWith(needle));
 }
 
+const BOOLEAN_FLAGS = new Set(['no-open', 'stop', 'force', 'publish', 'handoff', 'submit', 'json', 'help', 'platform']);
+
 export function parseArgv(argv: string[]): { verb: string; args: string[]; flags: Record<string, string | boolean> } {
   const rest = argv.slice(2);
   const verb = rest[0] && !rest[0].startsWith('-') ? rest[0] : 'repl';
@@ -40,8 +43,14 @@ export function parseArgv(argv: string[]): { verb: string; args: string[]; flags
       const body = token.slice(2);
       const eq = body.indexOf('=');
       if (eq >= 0) {
-        flags[body.slice(0, eq)] = body.slice(eq + 1);
+        const name = body.slice(0, eq),
+          value = body.slice(eq + 1);
+        flags[name] = BOOLEAN_FLAGS.has(name) && (value === 'true' || value === 'false') ? value === 'true' : value;
       } else {
+        if (BOOLEAN_FLAGS.has(body)) {
+          flags[body] = true;
+          continue;
+        }
         const next = tokens[i + 1];
         if (next && !next.startsWith('-')) {
           flags[body] = next;

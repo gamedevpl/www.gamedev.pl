@@ -1,12 +1,14 @@
+import type { CliStep } from '@gamedevpl/contract';
 import type { VisitFunnel } from './healthApi.js';
 
-const CLI_LABELS: Record<string, string> = {
+const CLI_LABELS: Record<CliStep, string> & Record<string, string> = {
   installed: 'installed the CLI',
   authorized: 'signed in',
   first_turn: 'first turn',
   build_requested: 'asked for a build',
   delivered: 'delivered',
   published: 'published',
+  play_requested: 'asked to play',
   delegate_offered: 'was offered local delegation',
   delegate_used: 'used a local adapter',
   verify_failed: 'failed the static ladder',

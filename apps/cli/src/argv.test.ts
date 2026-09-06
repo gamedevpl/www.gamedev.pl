@@ -30,3 +30,19 @@ describe('oauth authorize url', () => {
     expect(parsed.searchParams.get('code_challenge_method')).toBe('S256');
   });
 });
+
+it.each(['force', 'publish', 'handoff', 'submit', 'json', 'help', 'platform', 'no-open', 'stop'])(
+  'keeps positional arguments after --%s',
+  (flag) => {
+    expect(parseArgv(['node', 'cli', 'submit', '--' + flag, './my-game'])).toMatchObject({
+      args: ['./my-game'],
+      flags: { [flag]: true },
+    });
+  },
+);
+it('parses explicit boolean false and preserves valued flags', () => {
+  expect(parseArgv(['node', 'cli', 'submit', '--force=false', './game', '--agent', 'codex'])).toMatchObject({
+    args: ['./game'],
+    flags: { force: false, agent: 'codex' },
+  });
+});

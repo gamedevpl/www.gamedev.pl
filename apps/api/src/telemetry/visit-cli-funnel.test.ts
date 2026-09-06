@@ -36,6 +36,7 @@ describe('cli funnel', () => {
       { step: 'build_requested', visits: 1 },
       { step: 'delivered', visits: 1 },
       { step: 'published', visits: 0 },
+      { step: 'play_requested', visits: 0 },
       { step: 'delegate_offered', visits: 0 },
       { step: 'delegate_used', visits: 0 },
       { step: 'verify_failed', visits: 0 },
