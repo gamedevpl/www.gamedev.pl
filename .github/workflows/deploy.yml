@@ -42,6 +42,16 @@ jobs:
       GAMES_STORE_BUCKET: 'gamedevpl-games-store'
       WIF_PROVIDER: 'projects/334141807880/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
       WIF_SERVICE_ACCOUNT: 'github-actions-deployer@gamedevpl.iam.gserviceaccount.com'
+      # The identity each service RUNS as — its own account, named after the service and
+      # created by infra/setup-runtime-sa.sh. Hard-coded here rather than read from a repo
+      # variable so there is no lever that can be blanked, and pinned on every deploy
+      # rather than set once on the service, because a value that lives only on the
+      # service is whatever the last deploy said. The default compute account, which
+      # holds project-wide editor, is refused by the assertion step before promotion.
+      # infra/deploy-api.sh, deploy-relay.sh and deploy-world.sh derive the same values.
+      APP_RUNTIME_SA: 'gamedev-app@gamedevpl.iam.gserviceaccount.com'
+      RELAY_RUNTIME_SA: 'gamedev-mp-relay@gamedevpl.iam.gserviceaccount.com'
+      WORLD_RUNTIME_SA: 'gamedev-world@gamedevpl.iam.gserviceaccount.com'
       # workflow_run's github.sha is the default-branch tip at schedule time, not
       # necessarily the commit CI validated. Prefer the triggering run's head_sha.
       DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
@@ -105,7 +115,6 @@ jobs:
           GOOGLE_OAUTH_CLIENT_ID: ${{ vars.GOOGLE_OAUTH_CLIENT_ID }}
           HEALTH_SWEEP_AUDIENCE: ${{ vars.HEALTH_SWEEP_AUDIENCE }}
           SEED_DISPATCH_AUDIENCE: ${{ vars.SEED_DISPATCH_AUDIENCE }}
-          SEED_DISPATCH_SA: ${{ vars.SEED_DISPATCH_SA }}
           HEALTH_SWEEP_BATCH: ${{ vars.HEALTH_SWEEP_BATCH }}
           KNOWLEDGE_SEARCH_COLLECTION: ${{ vars.KNOWLEDGE_SEARCH_COLLECTION }}
           KNOWLEDGE_SEARCH_ENGINE_ID: ${{ vars.KNOWLEDGE_SEARCH_ENGINE_ID }}
@@ -285,6 +294,11 @@ jobs:
           # docs/p3-zone-host-infra.md).
           PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
           SWEEP_SA="notify-sweep@${PROJECT_ID}.iam.gserviceaccount.com"
+          # The seed call is the service calling itself, so the caller it must accept is
+          # the identity it runs as — derived, not a repo variable, so the two cannot
+          # disagree (they did: the variable still named the default compute account
+          # after the runtime moved off it, and every seed dispatch would have 401'd).
+          SEED_DISPATCH_SA="$APP_RUNTIME_SA"
           ACCOUNT_DELETION_SWEEP_URL="https://${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app/api/internal/account-deletion-sweep"
           ENV_VARS="^|^GAMES_REPO=${GAMES_REPO}|GAMES_SNAPSHOT_BUCKET=${GAMES_SNAPSHOT_BUCKET}|GAMES_STORE_BUCKET=${GAMES_STORE_BUCKET}|GATE_BUILD_PROJECT=${PROJECT_ID}|GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}|APPLE_CLIENT_IDS=${APPLE_CLIENT_IDS}|WEB_ORIGIN=https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl|CANONICAL_HOST=www.gamedev.pl|MCP_AUTHORIZATION_SERVERS=https://www.gamedev.pl|PRIVATE_BETA=true|PUBLIC_PLAY_SLUGS=${PUBLIC_PLAY_SLUGS_VAL}|EDITORKIT_V2=${EDITORKIT_V2_VAL}|BETA_ALLOWED_UIDS=${BETA_ALLOWED_UIDS}|BETA_ALLOWED_EMAILS=${BETA_ALLOWED_EMAILS}|ADMIN_UIDS=${ADMIN_UIDS}|REVIEWER_UIDS=${REVIEWER_UIDS}|NOTIFY_SWEEP_AUDIENCE=${NOTIFY_SWEEP_AUDIENCE}|NOTIFY_SWEEP_SA=${SWEEP_SA}|SCORECARD_SWEEP_AUDIENCE=${SCORECARD_SWEEP_AUDIENCE}|DIGEST_SWEEP_AUDIENCE=${DIGEST_SWEEP_AUDIENCE}|SUGGESTION_SWEEP_AUDIENCE=${SUGGESTION_SWEEP_AUDIENCE}|HEALTH_SWEEP_AUDIENCE=${HEALTH_SWEEP_AUDIENCE}|DISPATCH_REAPER_AUDIENCE=${DISPATCH_REAPER_AUDIENCE}|SPEND_BRAKE_AUDIENCE=${SPEND_BRAKE_AUDIENCE}|SPEND_BRAKE_CALLER_SA=${SPEND_BRAKE_CALLER_SA}|SEED_DISPATCH_AUDIENCE=${SEED_DISPATCH_AUDIENCE}|SEED_DISPATCH_SA=${SEED_DISPATCH_SA}|ACCOUNT_DELETION_SWEEP_AUDIENCE=${ACCOUNT_DELETION_SWEEP_URL}|VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}|VAPID_SUBJECT=${VAPID_SUBJECT}|OPENAI_APPS_CHALLENGE_TOKEN=${OPENAI_APPS_CHALLENGE_TOKEN}|TRUST_EDGE_CLIENT_IP=${TRUST_EDGE_CLIENT_IP:-false}"
           for MANAGED_VAR in MANAGED_AGENT_VENDOR MANAGED_AGENT_MODEL MANAGED_AGENT_GEMINI_MODEL MANAGED_AGENT_OPENAI_MODEL MANAGED_AGENT_ID MANAGED_AGENT_ENVIRONMENT_ID MANAGED_AGENT_MAX_SECONDS MANAGED_AGENT_MAX_LIST_COST_CENTS MANAGED_AGENT_COPILOT_MAX_CREDITS MANAGED_AGENT_MAX_TOTAL_TOKENS MANAGED_AGENT_VAULT_IDS MANAGED_AGENT_MCP_URL MANAGED_AGENT_DELIVERY_MODE MANAGED_AGENT_COPILOT_MCP_REPO MANAGED_AGENT_COPILOT_MCP_BASE_REF MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT; do
@@ -477,6 +491,7 @@ jobs:
             --cpu-throttling \
             --timeout 900 \
             --memory 1Gi \
+            --service-account "$APP_RUNTIME_SA" \
             --port 8080 \
             --set-env-vars "$ENV_VARS" \
             "${SECRET_FLAGS[@]}"
@@ -760,10 +775,18 @@ jobs:
             exit 1
           fi
           echo "Updating ${RELAY_SERVICE} to ${IMAGE}"
+          # An additive env update, never the whole-map flag: only the caller identity
+          # is touched, and it is the app's runtime account by construction — the
+          # relay's create route trusts exactly that email (internal-auth.ts), so it has
+          # to move with the app. --service-account pins the relay's own identity for
+          # the same reason the app's is pinned: a value set once on the service is one
+          # deploy from being lost.
           gcloud run services update "$RELAY_SERVICE" \
             --region "$REGION" \
             --project "$PROJECT_ID" \
-            --image "$IMAGE"
+            --image "$IMAGE" \
+            --service-account "$RELAY_RUNTIME_SA" \
+            --update-env-vars "MP_RELAY_CALLER_SA=${APP_RUNTIME_SA}"
 
           RELAY_URL=$(gcloud run services describe "$RELAY_SERVICE" --region "$REGION" \
             --project "$PROJECT_ID" --format 'value(status.url)')
@@ -874,7 +897,22 @@ jobs:
             gcloud run services update "$ZONE_SERVICE" \
               --region "$REGION" \
               --project "$PROJECT_ID" \
-              --image "$TARGET_IMAGE"
+              --image "$TARGET_IMAGE" \
+              --service-account "$WORLD_RUNTIME_SA"
+          else
+            # The image is left alone, but the identity is still reconciled: a host that
+            # is on the wrong account is the drift this step exists to catch, and it does
+            # not wait for a zone-core change to become worth fixing. A new revision
+            # drains live zones, so this fires only when the account actually differs.
+            CURRENT_SA=$(gcloud run services describe "$ZONE_SERVICE" --region "$REGION" \
+              --project "$PROJECT_ID" --format 'value(spec.template.spec.serviceAccountName)')
+            if [ "$CURRENT_SA" != "$WORLD_RUNTIME_SA" ]; then
+              echo "${ZONE_SERVICE} runs as '${CURRENT_SA}'; moving it to ${WORLD_RUNTIME_SA}"
+              gcloud run services update "$ZONE_SERVICE" \
+                --region "$REGION" \
+                --project "$PROJECT_ID" \
+                --service-account "$WORLD_RUNTIME_SA"
+            fi
           fi
 
           STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${ZONE_URL}/health" || echo 000)
@@ -889,6 +927,39 @@ jobs:
           else
             echo "Zone host healthy at ${ZONE_URL}"
           fi
+
+      - name: Assert no service runs as the default compute account
+        # The whole point of the dedicated identities is that the default compute account
+        # (project-wide editor) is never in the request path. Read back what Cloud Run
+        # will actually run rather than trusting the flags above: the candidate revision
+        # for the app, and the live template for the relay and the zone host when they
+        # are switched on. Before promotion, so a regression blocks the deploy instead of
+        # being discovered in the IAM policy months later.
+        run: |
+          fail=0
+          check() {
+            local svc="$1" want="$2"
+            local got
+            got=$(gcloud run services describe "$svc" --region "$REGION" --project "$PROJECT_ID" \
+              --format 'value(spec.template.spec.serviceAccountName)' 2>/dev/null || true)
+            if [ -z "$got" ] || [[ "$got" == *-compute@developer.gserviceaccount.com ]]; then
+              echo "::error::${svc} runs as '${got:-the default compute account}'"
+              fail=1
+            elif [ "$got" != "$want" ]; then
+              echo "::error::${svc} runs as '${got}', expected ${want}"
+              fail=1
+            else
+              echo "${svc}: ${got}"
+            fi
+          }
+          check "$SERVICE" "$APP_RUNTIME_SA"
+          if [ -n "${{ vars.MP_RELAY_URL }}" ]; then
+            check "${{ vars.MP_RELAY_SERVICE || 'gamedev-mp-relay' }}" "$RELAY_RUNTIME_SA"
+          fi
+          if [ -n "${{ vars.ZONE_HOST_URL }}" ]; then
+            check "${{ vars.ZONE_SERVICE || 'gamedev-world' }}" "$WORLD_RUNTIME_SA"
+          fi
+          exit "$fail"
 
       - name: Upload web assets to Firebase Hosting
         # Before promotion, so the assets are in place when the new index.html goes live.

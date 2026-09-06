@@ -18,7 +18,7 @@ is ours; candidate files are **data** materialized into our pinned harness only.
 
 | Surface                    | Before hardening                                                                                     | Intended after owner applies `setup-gcp.sh` + this config                                                                                                                           |
 | -------------------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Service account**        | Unspecified → project Cloud Build / Compute default (often broad: Editor-class or runtime SA powers) | `gate-runner@PROJECT.iam.gserviceaccount.com` only                                                                                                                                  |
+| **Service account**        | Unspecified → project Cloud Build / Compute default (often broad: Editor-class or runtime SA powers) | `gate-runner@PROJECT.iam.gserviceaccount.com` only; submitted by `gamedev-app@…`, which may `actAs` no other account                                                                |
 | **SA roles (intended)**    | n/a / ambient                                                                                        | Games-store `roles/storage.objectAdmin` **on that bucket only** (includes delete — see below); `secretmanager.secretAccessor` **on `github-token` only**; `roles/logging.logWriter` |
 | **Secrets in step env**    | `GAMES_REPO_TOKEN` (`github-token`, contents:read)                                                   | Same sole secret; runner unsets it and scrubs the harness `git` remote **before** `check:game`                                                                                      |
 | **Metadata server**        | GCE metadata credentials for the build SA                                                            | Same mechanism; blast radius limited by the gate SA’s IAM                                                                                                                           |
@@ -103,8 +103,11 @@ Add these to the post-merge owner list (not done by merging this PR):
 3. **Hard caps**: timeout `1800s`, `machineType: E2_HIGHCPU_8`, `diskSizeGb: 50`.
 4. **Sole secret** remains `github-token` → `GAMES_REPO_TOKEN`; no other `secretEnv`.
 5. **`setup-gcp.sh`** creates `gate-runner` and binds the least-privilege roles above;
-   grants the Cloud Run runtime SA `roles/iam.serviceAccountUser` **on that SA** so
-   delivery can `actAs` it when submitting builds.
+   grants the Cloud Run runtime SA (`gamedev-app@…`, see `setup-runtime-sa.sh`)
+   `roles/iam.serviceAccountUser` **on that SA** so delivery can `actAs` it when
+   submitting builds. That per-SA binding is the whole `actAs` boundary: the runtime
+   holds no project-wide `serviceAccountUser`, so it cannot start a build as anything
+   but `gate-runner`.
 6. **`run-gate.ts`**: after harness fetch/install, strip token from env and `git remote`
    so `check:game` (agent-authored tree) does not inherit the PAT.
 
@@ -129,9 +132,12 @@ These require project credentials. Re-run or perform after merging:
      matching the destinations above; or
    - VPC Service Controls perimeter around the project with appropriate egress rules.
      Until then, treat open egress as accepted residual risk bounded by the gate SA.
-5. **Optional: drop project-wide `roles/iam.serviceAccountUser` on the runtime SA** if it
-   was granted only so Cloud Build could run as arbitrary SAs — prefer the
-   per-SA binding `setup-gcp.sh` adds on `gate-runner` only.
+5. **Done (September 2026): the runtime no longer holds project-wide
+   `roles/iam.serviceAccountUser`.** The services moved off the default compute account
+   (project-wide editor + serviceAccountUser) onto per-service identities, and the only
+   `actAs` the app holds is the per-SA binding on `gate-runner`. `docs/deployment.md`
+   "Runtime identities" has the rollout; `PRUNE_DEFAULT_COMPUTE=1 ./infra/setup-runtime-sa.sh`
+   is the final step that strips the old account.
 6. **Bucket versioning / soft-delete / noncurrent prune** — applied by `setup-gcp.sh`
    (see store-bucket block). Confirm with
    `gcloud storage buckets describe gs://$GAMES_STORE_BUCKET --format='yaml(versioning_enabled,soft_delete_policy,lifecycle_config)'`

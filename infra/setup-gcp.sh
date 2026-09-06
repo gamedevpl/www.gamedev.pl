@@ -6,7 +6,8 @@
 # Usage:
 #   ./infra/setup-gcp.sh
 #
-# Override any of these via env if needed: PROJECT_ID, REGION, APP_REGION, SA_NAME.
+# Override any of these via env if needed: PROJECT_ID, REGION, APP_REGION, SA_NAME,
+# APP_SA_NAME, WORLD_SA_NAME.
 set -euo pipefail
 
 PROJECT_ID="${PROJECT_ID:-gamedevpl}"
@@ -39,9 +40,18 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --condition=None \
   >/dev/null
 
-echo "==> 4/10 Ensuring Cloud Run runtime SA has datastore.user and aiplatform.user roles"
-PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format="value(projectNumber)")
-RUN_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+echo "==> 4/10 Ensuring the Cloud Run runtime identities exist, with datastore.user and aiplatform.user"
+# The app runs as its own account, never the project's default compute one (which holds
+# project-wide editor and made every narrow grant below cosmetic). setup-runtime-sa.sh
+# creates all three service identities and applies their resource-level grants; the
+# project-level roles that script only prints are applied here, because this script is
+# already the owner's full bootstrap. RUN_SA is the app's account for everything below.
+APP_SA_NAME="${APP_SA_NAME:-gamedev-app}"
+# APPLY_PROJECT_BINDINGS: this script already binds project roles as the owner, so the
+# runtime script applies its own here instead of printing them for a second pass.
+PROJECT_ID="$PROJECT_ID" APP_SA_NAME="$APP_SA_NAME" APPLY_PROJECT_BINDINGS="${APPLY_PROJECT_BINDINGS:-1}" \
+  "$SCRIPT_DIR/setup-runtime-sa.sh"
+RUN_SA="${APP_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${RUN_SA}" \
   --role="roles/datastore.user" \
@@ -51,6 +61,22 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${RUN_SA}" \
   --role="roles/aiplatform.user" \
+  --condition=None \
+  >/dev/null
+
+# knowledge-search.ts sends X-Goog-User-Project, which needs serviceusage.services.use on
+# the quota project. Editor used to cover it silently.
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${RUN_SA}" \
+  --role="roles/serviceusage.serviceUsageConsumer" \
+  --condition=None \
+  >/dev/null
+
+# The zone host keeps one Firestore document per zone and needs nothing else.
+WORLD_SA="${WORLD_SA_NAME:-gamedev-world}@${PROJECT_ID}.iam.gserviceaccount.com"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${WORLD_SA}" \
+  --role="roles/datastore.user" \
   --condition=None \
   >/dev/null
 
