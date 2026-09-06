@@ -1,3 +1,4 @@
+import { startLocalPlay } from './play.js';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import type { ApiClient } from './api.js';
@@ -78,6 +79,7 @@ export function workshopBrief(slug: string, request: string, ack?: string): stri
     `Creator request: ${request}`,
     ack ? `Studio understood it as: ${ack}` : '',
     'Change only files in this directory. Do not run git, install packages, or publish — the creator delivers with `gamedevpl submit`.',
+    'If the creator wants to play, run `gamedevpl play` in this checkout; it opens a live preview without delivering or publishing. Use --no-open for a link only and --stop to close the server.',
     'When done, `npm run typecheck` and `npm run check:static` at the checkout root must pass.',
   ]
     .filter(Boolean)
@@ -243,6 +245,20 @@ export async function runLocalBuild(input: {
   try {
     if (!ws.runAdapter)
       await prepareWorkspace({ cwd: ws.root, env: ws.env, abort: controller.signal, write: input.write });
+    if (!ws.runAdapter) {
+      try {
+        const preview = await startLocalPlay({
+          root: ws.root,
+          slug: ws.slug,
+          env: ws.env,
+          write: input.write,
+          prepared: true,
+        });
+        if (preview) input.write(`live preview while ${spec.name} edits: ${preview.url}`);
+      } catch (error) {
+        input.write(formatError(error));
+      }
+    }
     ws.telemetry?.record('delegate_used', spec.name);
     result = await (ws.runAdapter ?? defaultAdapterRun)({
       spec,

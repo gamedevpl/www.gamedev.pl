@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { playGame } from './play.js';
 import { resolve as resolvePath } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { stdin, stdout, stderr } from 'node:process';
@@ -137,11 +138,26 @@ export async function runCli(
   const store = storeFromEnv(env, (line) => io.stderr.write(line));
   const api = createApi({ origin, store, env });
   const tty = Boolean(io.stdin.isTTY);
-  const telemetry = verb === 'connect' || verb === 'delegate' ? createCliTelemetry(origin) : undefined;
+  const telemetry =
+    verb === 'connect' || verb === 'delegate' || verb === 'play' ? createCliTelemetry(origin) : undefined;
 
   try {
     if (verb === 'help' || flags.help || flags.h) {
       io.stdout.write(`${formatHelp()}\n`);
+      return EXIT_GREEN;
+    }
+    if (verb === 'play') {
+      const played = await playGame({
+        cwd: process.cwd(),
+        slug: args[0],
+        origin,
+        env,
+        noOpen: flags['no-open'] === true || asJson,
+        stop: flags.stop === true,
+        telemetry,
+        write: (line) => (asJson ? io.stderr : io.stdout).write(`${line}\n`),
+      });
+      if (asJson) io.stdout.write(`${JSON.stringify(played)}\n`);
       return EXIT_GREEN;
     }
     if (verb === 'login') {

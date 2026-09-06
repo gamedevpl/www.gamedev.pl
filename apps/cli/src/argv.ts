@@ -1,5 +1,6 @@
 export const SLASH_VERBS = [
   'agents',
+  'play',
   'games',
   'status',
   'share',
@@ -42,6 +43,10 @@ export function parseArgv(argv: string[]): { verb: string; args: string[]; flags
       if (eq >= 0) {
         flags[body.slice(0, eq)] = body.slice(eq + 1);
       } else {
+        if (body === 'no-open' || body === 'stop') {
+          flags[body] = true;
+          continue;
+        }
         const next = tokens[i + 1];
         if (next && !next.startsWith('-')) {
           flags[body] = next;

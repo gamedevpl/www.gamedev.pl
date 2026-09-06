@@ -1,3 +1,4 @@
+import { isPlayRequest, playGame } from './play.js';
 import { CLI_BIN, cliUsage } from './bin-name.js';
 import { glyphs, wantsColor } from './renderer.js';
 import { completeSlash, parseArgv, SLASH_VERBS, type SlashVerb } from './argv.js';
@@ -50,6 +51,32 @@ export async function handleReplLine(input: {
   const trimmed = retry?.request ?? input.line.trim();
   if (!trimmed) return { next: 'continue' };
   if (trimmed === '/quit' || trimmed === '/exit') return { next: 'quit' };
+  if (/^\/play(?:\s|$)/u.test(trimmed) || isPlayRequest(trimmed)) {
+    try {
+      const parsed = parseArgv([
+        'node',
+        'cli',
+        ...(trimmed.startsWith('/') ? trimmed.slice(1).split(/\s+/u) : ['play']),
+      ]);
+      const slug =
+        parsed.args[0] ??
+        input.workshop?.slug ??
+        (input.token ? (await getStatus(input.api, input.token)).slug : undefined);
+      await playGame({
+        cwd: input.workshop?.root ?? process.cwd(),
+        slug,
+        origin: input.api.origin,
+        env: input.env,
+        noOpen: parsed.flags['no-open'] === true,
+        stop: parsed.flags.stop === true,
+        write: input.write,
+        telemetry: input.telemetry,
+      });
+    } catch (error) {
+      input.write(formatError(error));
+    }
+    return { next: 'continue' };
+  }
   if (trimmed.startsWith('/')) {
     const [cmd, ...rest] = trimmed.slice(1).split(/\s+/);
     if (cmd === 'help') {

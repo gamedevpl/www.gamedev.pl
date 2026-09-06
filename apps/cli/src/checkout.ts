@@ -137,6 +137,11 @@ export async function checkoutGame(input: {
     const local = localGameFiles(input.dest, input.slug);
     if (local.length) writeBase(input.dest, 'archive', local);
   }
+  const instructions = join(input.dest, 'AGENTS.md');
+  const note =
+    '\n## Playing this game\n\nWhen the creator asks to play, run `gamedevpl play` from this checkout. It opens a sandboxed local preview with automatic reload after successful builds. Repeating it reuses the server. `--no-open` prints the URL; `--stop` stops it. Errors preserve the last playable build. Playing never submits or publishes.\n';
+  const previous = existsSync(instructions) ? readFileSync(instructions, 'utf8') : '';
+  if (!previous.includes('## Playing this game')) writeFileSync(instructions, previous + note);
   return { dest: input.dest, remote: gitRemoteUrl(input.slug) };
 }
 

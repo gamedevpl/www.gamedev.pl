@@ -144,3 +144,28 @@ Adapter invocation references: [Cursor headless](https://docs.cursor.com/en/cli/
 [Gemini headless](https://geminicli.com/docs/cli/headless/), and
 [Copilot CLI](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference).
 Installed Claude, Codex, agy, Vibe, and Copilot flags were checked against `--help`.
+
+## Play while building
+
+`gamedevpl play` in a checkout opens a local game and reloads it after successful
+source changes. The pinned Creator Kit assembles the document; a separate preview
+process keeps watching while your agent edits or after its command exits. Local
+CLI delegation starts this preview automatically and prints its URL.
+
+- `gamedevpl play [slug]` reuses the running preview for the matching checkout.
+- `--no-open` prints the URL without launching a browser; `--stop` stops it.
+- `/play` or “chcę zagrać w tę gierkę” / “I want to play this game” opens the active
+  game in the REPL without sending a build request. Mixed editing requests still
+  go through the ordinary conversation.
+- Outside a matching checkout, `play <slug>` opens the remote `/play/<slug>` page.
+  The browser uses its existing gamedev.pl sign-in; no token goes into the link.
+- Compilation errors appear above the last successful game. Fixing the source
+  resumes reload automatically. “Pause reload” holds the current game until resumed.
+- Reload restarts the game; arbitrary runtime state is not migrated. The server
+  binds to loopback, keeps the iframe sandbox, and exits after 30 minutes without
+  browser activity. It does not submit, publish, or expose a public preview.
+
+Agents in downloaded checkouts receive `AGENTS.md` instructions for `play`.
+MCP/managed agents point to the existing round card or remote play link, without
+creating another round. A local CLI or browser opens the page on the creator's machine.
+The anonymous `play_requested` CLI event counts opens without game names or paths.

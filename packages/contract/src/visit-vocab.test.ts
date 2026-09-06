@@ -210,6 +210,7 @@ describe('visit vocab', () => {
       'build_requested',
       'delivered',
       'published',
+      'play_requested',
       'delegate_offered',
       'delegate_used',
       'verify_failed',
