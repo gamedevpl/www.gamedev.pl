@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Internal
 
-- Release packaging builds the shared contract before bundling the CLI.
+- Release packaging builds the shared contract before bundling the CLI (#1186).
 
 ## 0.4.0 — 2026-09-06
 
