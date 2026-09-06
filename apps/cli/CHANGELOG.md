@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- The TUI shows animated activity, elapsed time and current steps while working, with persistent controls in compact terminals (#1193).
+
 ## 0.4.1 — 2026-09-06
 
 ### Fixed
