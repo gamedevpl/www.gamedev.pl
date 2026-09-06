@@ -770,7 +770,7 @@
     "apps/web/src/surfaces/party/PartyDiagram.tsx": 227,
     "apps/web/src/surfaces/party/PartyPage.test.tsx": 144,
     "apps/web/src/surfaces/party/PartyPage.tsx": 117,
-    "apps/web/src/surfaces/party/PartyStage.tsx": 195,
+    "apps/web/src/surfaces/party/PartyStage.tsx": 197,
     "apps/web/src/surfaces/party/QrCode.tsx": 41,
     "apps/web/src/surfaces/party/roomClient.ts": 137,
     "apps/web/src/surfaces/party/voicePhrases.test.ts": 19,

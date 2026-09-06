@@ -143,6 +143,8 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
           frameRef={frameRef}
           slots={roster.filter((slot) => slot.connected).length}
           via={via}
+          // Hides the game's own chrome; its canvas then fills the stage.
+          embed
         />
       </div>
     );

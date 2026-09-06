@@ -149,7 +149,18 @@
 .party-playing {
   display: flex;
   flex-direction: column;
+  /* The stage container centers its children, so without a full width the column
+     shrinks to the game's intrinsic size and the shared screen keeps black bars. */
+  width: 100%;
   height: 100%;
+}
+
+/* The slot strip is above the game, so the frame takes what is left rather than a
+   full 100% that would push itself off the bottom of the stage. */
+.is-playing-full-viewport .party-playing .game-frame {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
 }
 
 .party-slotstrip {
