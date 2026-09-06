@@ -62,15 +62,18 @@ describe('scorecard aggregate log', () => {
   });
 
   it('carries no game-supplied strings either', async () => {
-    await seed(store, [
-      event({ type: 'game_error', slug: 'brick-storm', message: 'ReferenceError: <script>boom</script>' } as never),
-    ]);
+    await seed(store, [event({ type: 'error', slug: 'brick-storm', message: 'ReferenceError: boom' })]);
     const lines: ScorecardAggregateLog[] = [];
 
     await runScorecardSweep({ store, onAggregate: (line) => lines.push(line) });
 
+    // Assert the sample reached the scorecard, or the omission below proves nothing.
+    const card = await store.getScorecard('brick-storm');
+    expect(card?.untrusted.errorSamples).toContainEqual({ message: 'ReferenceError: boom', count: 1 });
+
     // `untrusted` contains these; a log would un-contain them.
     expect(JSON.stringify(lines)).not.toContain('boom');
+    expect(lines[0]?.errors).toBe(1);
   });
 
   it('stays silent for a game whose scorecard failed to persist', async () => {
