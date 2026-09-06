@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Started in a game checkout, `gamedevpl` opens that game instead of asking what to make
+
 ### Fixed
 
 - `gamedevpl` prints the version it actually is; every release so far reported 0.1.0 in the banner, footer and `help`

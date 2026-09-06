@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { stdin, stdout, stderr } from 'node:process';
 import { parseArgv, jsonMode, SLASH_VERBS } from './argv.js';
 import { GIT_REMOTE_HELPER, GIT_REMOTE_SCHEME, cliUsage } from './bin-name.js';
-import { createApi, requireTtyFlag } from './api.js';
+import { createApi, requireTtyFlag, type ApiClient } from './api.js';
 import {
   encryptedFileStore,
   FILE_FALLBACK_WARNING,
@@ -16,7 +16,8 @@ import { runLoopbackLogin } from './login.js';
 import { originFromEnv } from './oauth.js';
 import { CliError, EXIT_GREEN, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { describeError, pipeNeedsFlag } from './errors.js';
-import { checkoutGame, diffGame, formatSyncLines, pullGame, readCheckoutSlug } from './checkout.js';
+import { studioToken } from './studio.js';
+import { checkoutGame, diffGame, findCheckout, formatSyncLines, pullGame, readCheckoutSlug } from './checkout.js';
 import { connectGame } from './connect.js';
 import { formatSubmitLines, submitGame } from './submit.js';
 import { runGitRemoteHelper } from './git-remote-main.js';
@@ -41,6 +42,17 @@ export function isGitRemoteHelper(argv: string[]): boolean {
   const first = argv[2];
   if (first && !first.startsWith('-') && (SLASH_VERBS as readonly string[]).includes(first)) return false;
   return true;
+}
+
+// A checkout here means working on that game, not a new one.
+export async function openCheckoutGame(api: ApiClient, cwd: string): Promise<{ token: string; slug: string } | null> {
+  const found = findCheckout(cwd);
+  if (!found) return null;
+  try {
+    return { token: await studioToken(api, found.slug), slug: found.slug };
+  } catch {
+    return null;
+  }
 }
 
 export async function runCli(
@@ -181,11 +193,14 @@ export async function runCli(
     if (verb === 'repl') {
       if (!tty || !io.stdout.isTTY) throw pipeNeedsFlag(`a verb such as ${cliUsage('whoami')}`);
       const { runInkRepl } = await import('./tui/host.js');
+      const opened: { token: string; slug?: string } | null =
+        typeof flags.token === 'string' ? { token: flags.token } : await openCheckoutGame(api, process.cwd());
       return runInkRepl({
         api,
         env,
         io,
-        token: typeof flags.token === 'string' ? flags.token : null,
+        token: opened?.token ?? null,
+        ...(opened?.slug ? { slug: opened.slug } : {}),
       });
     }
     io.stderr.write(`unknown verb ${verb} — ${cliUsage('help')}\n`);

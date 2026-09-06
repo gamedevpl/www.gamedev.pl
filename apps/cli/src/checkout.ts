@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync, lstatSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cliUsage, gitRemoteUrl } from './bin-name.js';
 import type { ApiClient } from './api.js';
@@ -27,6 +27,19 @@ export type VersionRow = {
 export function readCheckoutSlug(cwd: string): string | null {
   const path = join(cwd, '.gamedev-slug');
   return existsSync(path) ? readFileSync(path, 'utf8').trim() || null : null;
+}
+
+// Walk up, so any subdirectory of a checkout finds it.
+export function findCheckout(cwd: string): { slug: string; root: string } | null {
+  let dir = resolve(cwd);
+  for (let depth = 0; depth < 40; depth += 1) {
+    const slug = readCheckoutSlug(dir);
+    if (slug) return { slug, root: dir };
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+  return null;
 }
 
 function defaultRun(cmd: string, args: string[], cwd: string): void {

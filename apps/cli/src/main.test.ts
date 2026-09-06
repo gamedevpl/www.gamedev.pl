@@ -1,7 +1,10 @@
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { PassThrough } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
-import { isLaunchedEntry, isGitRemoteHelper, runCli } from './main.js';
+import { isGitRemoteHelper, isLaunchedEntry, openCheckoutGame, runCli } from './main.js';
 import { EXIT_AUTH, EXIT_GREEN, EXIT_INPUT } from './exit-codes.js';
 
 function io() {
@@ -102,5 +105,48 @@ describe('runCli verbs', () => {
     expect(isGitRemoteHelper(['node', '/bin/gamedevpl', 'status', 'tok'])).toBe(false);
     expect(isGitRemoteHelper(['node', '/bin/gamedevpl', 'connect', 'gamedevpl://sky-dodge'])).toBe(false);
     expect(isGitRemoteHelper(['node', '/bin/git-remote-gamedevpl', 'origin', 'gamedevpl://sky-dodge'])).toBe(true);
+  });
+});
+
+describe('openCheckoutGame', () => {
+  function api(handler: (path: string) => unknown) {
+    return {
+      origin: 'https://example.test',
+      request: async <T>(_method: string, path: string): Promise<T> => handler(path) as T,
+      requestBytes: async () => Buffer.alloc(0),
+    };
+  }
+
+  it('opens the game whose checkout the shell is standing in', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gamedev-open-'));
+    writeFileSync(join(dir, '.gamedev-slug'), 'airtime');
+    const opened = await openCheckoutGame(
+      api(() => ({ games: [{ slug: 'airtime', token: 'tok-airtime' }] })),
+      dir,
+    );
+    expect(opened).toEqual({ token: 'tok-airtime', slug: 'airtime' });
+  });
+
+  it('opens nothing outside a checkout', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gamedev-open-none-'));
+    expect(
+      await openCheckoutGame(
+        api(() => ({ games: [] })),
+        dir,
+      ),
+    ).toBeNull();
+  });
+
+  // Someone else game, or no network, must not break the prompt.
+  it('falls back to a plain session when the game cannot be resolved', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gamedev-open-fail-'));
+    writeFileSync(join(dir, '.gamedev-slug'), 'not-mine');
+    const opened = await openCheckoutGame(
+      api(() => {
+        throw new Error('offline');
+      }),
+      dir,
+    );
+    expect(opened).toBeNull();
   });
 });

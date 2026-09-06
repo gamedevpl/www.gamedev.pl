@@ -14,6 +14,8 @@ export async function runInkRepl(input: {
   env: NodeJS.ProcessEnv;
   io: { stdin: NodeJS.ReadStream; stdout: NodeJS.WriteStream };
   token: string | null;
+  // Set when a checkout in the working directory opened this session.
+  slug?: string;
 }): Promise<number> {
   const isTty = Boolean(input.io.stdout.isTTY);
   const color = wantsColor(input.env, isTty);
@@ -32,8 +34,12 @@ export async function runInkRepl(input: {
   let token = input.token;
   let conversationId: string | undefined;
   let who = '';
-  let slug = '';
+  let slug = input.slug ?? '';
   const paintIdentity = (): void => session.setIdentity(formatSessionIdentity(who, slug));
+  if (input.slug) {
+    paintIdentity();
+    session.writeLine(`◆ ${input.slug} — from the checkout here. Say what to change, or /help.`);
+  }
   const watch = createRoundWatch({
     getToken: () => token,
     api: input.api,
