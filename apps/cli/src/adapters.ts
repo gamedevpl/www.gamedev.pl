@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { accessSync, constants, existsSync, readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, delimiter } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -60,7 +60,12 @@ export function whichOnPath(cmd: string, env: NodeJS.ProcessEnv = process.env): 
   for (const dir of (env.PATH ?? '').split(delimiter)) {
     if (!dir) continue;
     const candidate = join(dir, cmd);
-    if (existsSync(candidate)) return candidate;
+    try {
+      accessSync(candidate, constants.X_OK);
+      if (statSync(candidate).isFile()) return candidate;
+    } catch {
+      continue;
+    }
   }
   return null;
 }

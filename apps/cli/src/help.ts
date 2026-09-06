@@ -3,6 +3,7 @@ import { CLI_VERSION } from './update.js';
 import { SLASH_VERBS, type SlashVerb } from './argv.js';
 
 const BLURB: Record<SlashVerb, string> = {
+  agents: 'detect local agents and show supported modes',
   games: 'list your games',
   status: 'round status — status <token>',
   share: 'play URL — share <slug>',

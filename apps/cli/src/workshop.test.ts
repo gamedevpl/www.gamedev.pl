@@ -16,6 +16,7 @@ import {
   syncWarning,
   workshopBrief,
   workshopTurn,
+  chooseAdapter,
   type AdapterRun,
   type Workshop,
 } from './workshop.js';
@@ -355,6 +356,23 @@ describe('the REPL inside a checkout', () => {
 });
 
 describe('opening a checkout', () => {
+  it('offers every agent and carries the choice into only the first task', async () => {
+    const ws = workshop(checkout(), {
+      adapters: [claude, codex],
+      builder: 'platform',
+      pick: async (choices) => choices[1]!,
+    });
+    expect(await settleBuilder({ api: platform([]), ws, status: 'needs_changes', write: () => undefined })).toBe(
+      'self',
+    );
+    expect(ws.selectedAgent).toBe('codex');
+    ws.pick = async (choices) => choices[0]!;
+    expect((await chooseAdapter(ws)).name).toBe('codex');
+    expect((await chooseAdapter(ws)).name).toBe('claude');
+    ws.pick = async () => '/quit';
+    await expect(chooseAdapter(ws)).rejects.toThrow('selection cancelled');
+  });
+
   it('describes sync, local agents and the builder', async () => {
     const root = checkout();
     writeFileSync(join(root, 'games', SLUG, 'game.ts'), 'B');

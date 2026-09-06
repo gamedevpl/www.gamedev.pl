@@ -254,7 +254,7 @@ export async function runCli(
         write: (line) => io.stdout.write(`${line}\n`),
       });
     }
-    const read = await dispatchReadVerb({ verb, args, flags, api, io });
+    const read = await dispatchReadVerb({ verb, args, flags, api, io, env });
     if (read !== null) return read;
     if (verb === 'repl') {
       if (!tty || !io.stdout.isTTY) throw pipeNeedsFlag(`a verb such as ${cliUsage('whoami')}`);

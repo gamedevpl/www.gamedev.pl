@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
@@ -75,6 +75,8 @@ describe('connectGame', () => {
 
   it('spawns an adapter with MCP auth, not the submission-status token', async () => {
     const dest = mkdtempSync(join(tmpdir(), 'gdpl-connect-'));
+    writeFileSync(join(dest, '.gamedev-slug'), 'sky-dodge');
+    mkdirSync(join(dest, 'games', 'sky-dodge'), { recursive: true });
     const seenEnv: NodeJS.ProcessEnv[] = [];
     const seenSpecs: string[][] = [];
     const api = createApi({
@@ -155,9 +157,12 @@ describe('connectGame', () => {
       dest,
       agent: 'codex',
       which: (cmd) => (cmd === 'codex' ? '/usr/bin/codex' : null),
-      runAdapter: async ({ spec }) => {
+      runAdapter: async ({ spec, cwd }) => {
         headless = spec.headless;
         expect(spec.name).toBe('codex');
+        expect(existsSync(cwd)).toBe(true);
+        expect(cwd).not.toBe(dest);
+        expect(spec.headless).toContain('--skip-git-repo-check');
         return { code: 0, lines: [] };
       },
       write: () => undefined,

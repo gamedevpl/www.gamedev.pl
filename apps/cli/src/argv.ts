@@ -1,4 +1,5 @@
 export const SLASH_VERBS = [
+  'agents',
   'games',
   'status',
   'share',

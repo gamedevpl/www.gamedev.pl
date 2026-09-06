@@ -107,7 +107,13 @@ export function spawnAdapter(input: {
     }
   };
   const timer = setTimeout(kill, input.timeoutMs);
-  child.once('exit', () => clearTimeout(timer));
+  const cleanup = () => {
+    clearTimeout(timer);
+    input.abort?.removeEventListener('abort', kill);
+  };
+  child.once('close', cleanup);
+  child.once('error', cleanup);
   input.abort?.addEventListener('abort', kill, { once: true });
+  if (input.abort?.aborted) kill();
   return child;
 }

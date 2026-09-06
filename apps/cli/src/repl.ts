@@ -13,6 +13,8 @@ import { CLI_VERSION } from './update.js';
 import { formatError } from './errors.js';
 import { formatHelp } from './help.js';
 import { MASCOT_ASCII } from './tui/mascot.js';
+import { discoverAgents } from './agents.js';
+import type { PickChoice } from './workshop.js';
 import { handoffBuilder, handoffLine, refreshBuilder, workshopTurn, type Workshop } from './workshop.js';
 
 export type ReplLineResult = {
@@ -29,6 +31,9 @@ export async function handleReplLine(input: {
   conversationId?: string;
   // Set when the session opened from a game checkout.
   workshop?: Workshop;
+  env?: NodeJS.ProcessEnv;
+  pick?: PickChoice;
+  abort?: Workshop['abort'];
   write: (s: string) => void;
 }): Promise<ReplLineResult> {
   const trimmed = input.line.trim();
@@ -105,14 +110,35 @@ export async function handleReplLine(input: {
           const dest = parsed.args[1] ?? cwd;
           input.write(formatSyncLines(await diffGame({ api: input.api, slug, dest })).join('\n'));
         } else {
-          await connectGame({
-            api: input.api,
-            slug,
-            dest: cwd,
-            agent: typeof parsed.flags.agent === 'string' ? parsed.flags.agent : undefined,
-            handoff: parsed.flags.handoff === true,
-            write: input.write,
-          });
+          let agent = typeof parsed.flags.agent === 'string' ? parsed.flags.agent : undefined;
+          if (!agent && input.pick) {
+            const agents = discoverAgents(input.env).filter((row) => row.installed && row.mcp);
+            if (agents.length) {
+              const manual = 'show manual MCP setup';
+              const choice = await input.pick(
+                [...agents.map((row) => row.name), manual],
+                `Connect ${slug} — local agents use their own credentials and billing`,
+              );
+              if (choice !== manual && !agents.some((row) => row.name === choice)) return { next: 'continue' };
+              if (choice !== manual) agent = choice;
+            }
+          }
+          const controller = new AbortController();
+          if (input.abort) input.abort.current = controller;
+          try {
+            await connectGame({
+              api: input.api,
+              slug,
+              dest: cwd,
+              agent,
+              env: input.env,
+              handoff: parsed.flags.handoff === true,
+              write: input.write,
+              abort: controller.signal,
+            });
+          } finally {
+            if (input.abort) input.abort.current = null;
+          }
         }
       } catch (error) {
         input.write(formatError(error));
@@ -130,6 +156,7 @@ export async function handleReplLine(input: {
           flags: parsed.flags,
           api: input.api,
           io: { stdout },
+          env: input.env,
         });
         if (code !== null) {
           input.write(chunks.join('').trimEnd() || `/${cmd}`);

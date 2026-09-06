@@ -9,6 +9,7 @@ import { ReplApp } from './app.js';
 import { createRoundWatch } from './round-watch.js';
 import { createTuiSession, formatSessionIdentity } from './session.js';
 import { openWorkshop, settleBuilder, type Workshop } from '../workshop.js';
+import { agentHint, discoverAgents } from '../agents.js';
 
 export async function runInkRepl(input: {
   api: ApiClient;
@@ -43,6 +44,10 @@ export async function runInkRepl(input: {
   let slug = input.checkout?.slug ?? '';
   const paintIdentity = (): void => session.setIdentity(formatSessionIdentity(who, slug));
   let workshop: Workshop | undefined;
+  if (!input.checkout) {
+    const hint = agentHint(discoverAgents(input.env));
+    if (hint) session.writeLine(hint);
+  }
   if (input.checkout && token) {
     paintIdentity();
     const write = (line: string): void => session.writeLine(line);
@@ -84,6 +89,9 @@ export async function runInkRepl(input: {
           token,
           conversationId,
           workshop,
+          env: input.env,
+          pick: session.prompt,
+          abort,
           write: (text) => session.writeLine(text),
         });
       } catch (error) {
