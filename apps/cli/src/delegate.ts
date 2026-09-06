@@ -25,6 +25,10 @@ export function childEnv(parent: NodeJS.ProcessEnv, roundToken: string, mcp?: Ch
 }
 
 type EventShape = {
+  content?: unknown;
+  response?: unknown;
+  data?: { content?: unknown };
+  error?: { message?: unknown };
   text?: unknown;
   message?: unknown;
   type?: unknown;
@@ -57,7 +61,7 @@ export function parseEventLine(line: string): string | null {
   try {
     parsed = JSON.parse(trimmed) as EventShape;
   } catch {
-    return null;
+    return trimmed;
   }
   if (!parsed || typeof parsed !== 'object') return trimmed;
   const direct =
@@ -65,7 +69,11 @@ export function parseEventLine(line: string): string | null {
     textOf(parsed.message) ??
     contentText(parsed.message) ??
     textOf(parsed.result) ??
-    textOf(parsed.item?.text);
+    textOf(parsed.item?.text) ??
+    textOf(parsed.content) ??
+    textOf(parsed.response) ??
+    textOf(parsed.data?.content) ??
+    textOf(parsed.error?.message);
   if (direct) return direct;
   const command = textOf(parsed.item?.command);
   if (command) return `⚙ ${command}`;
@@ -92,22 +100,44 @@ export function spawnAdapter(input: {
   timeoutMs: number;
   abort?: AbortSignal;
 }): ChildProcess {
-  const args = [...input.spec.headless, input.prompt];
-  const child = spawn(input.spec.command, args, {
+  return spawnCommand({ ...input, command: input.spec.command, args: [...input.spec.headless, input.prompt] });
+}
+
+export function spawnCommand(input: {
+  command: string;
+  args: string[];
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  timeoutMs: number;
+  abort?: AbortSignal;
+}): ChildProcess {
+  const child = spawn(input.command, input.args, {
     cwd: input.cwd,
     env: input.env,
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: true,
   });
-  const kill = () => {
+  let escalation: ReturnType<typeof setTimeout> | undefined;
+  const signalGroup = (signal: NodeJS.Signals) => {
     try {
-      if (child.pid) process.kill(-child.pid, 'SIGTERM');
+      if (child.pid) process.kill(-child.pid, signal);
     } catch {
-      child.kill('SIGTERM');
+      child.kill(signal);
     }
   };
+  const kill = () => {
+    signalGroup('SIGTERM');
+    escalation ??= setTimeout(() => signalGroup('SIGKILL'), 2_000);
+  };
   const timer = setTimeout(kill, input.timeoutMs);
-  child.once('exit', () => clearTimeout(timer));
+  const cleanup = () => {
+    clearTimeout(timer);
+    clearTimeout(escalation);
+    input.abort?.removeEventListener('abort', kill);
+  };
+  child.once('close', cleanup);
+  child.once('error', cleanup);
   input.abort?.addEventListener('abort', kill, { once: true });
+  if (input.abort?.aborted) kill();
   return child;
 }

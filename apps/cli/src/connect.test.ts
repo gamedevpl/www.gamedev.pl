@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, statSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
@@ -13,6 +13,61 @@ function json(data: unknown, status = 200): Response {
 }
 
 describe('connectGame', () => {
+  it('cancels a deferred studio lookup before handoff or credentials', async () => {
+    const controller = new AbortController();
+    const seen: string[] = [];
+    const api = createApi({
+      origin: 'https://example.test',
+      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url) => {
+        seen.push(String(url));
+        controller.abort();
+        return json({ games: [{ slug: 'sky-dodge', token: 'tok' }] });
+      },
+    });
+    await expect(
+      connectGame({
+        api,
+        slug: 'sky-dodge',
+        dest: '/tmp',
+        handoff: true,
+        abort: controller.signal,
+        write: () => undefined,
+      }),
+    ).rejects.toThrow('cancelled');
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toContain('/api/me/studio');
+  });
+
+  it('cancels after handoff without fetching credentials or launching', async () => {
+    const controller = new AbortController();
+    const seen: string[] = [];
+    const api = createApi({
+      origin: 'https://example.test',
+      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url) => {
+        seen.push(String(url));
+        if (String(url).endsWith('/handoff')) {
+          controller.abort();
+          return json({ ok: true });
+        }
+        return json({ games: [{ slug: 'sky-dodge', token: 'tok' }] });
+      },
+    });
+    await expect(
+      connectGame({
+        api,
+        slug: 'sky-dodge',
+        dest: '/tmp',
+        handoff: true,
+        abort: controller.signal,
+        write: () => undefined,
+      }),
+    ).rejects.toThrow('cancelled');
+    expect(seen).toHaveLength(2);
+    expect(seen.some((url) => url.endsWith('/connect'))).toBe(false);
+  });
+
   it('prints a working MCP handoff from the connect route', async () => {
     const lines: string[] = [];
     const seen: string[] = [];
@@ -75,6 +130,8 @@ describe('connectGame', () => {
 
   it('spawns an adapter with MCP auth, not the submission-status token', async () => {
     const dest = mkdtempSync(join(tmpdir(), 'gdpl-connect-'));
+    writeFileSync(join(dest, '.gamedev-slug'), 'sky-dodge');
+    mkdirSync(join(dest, 'games', 'sky-dodge'), { recursive: true });
     const seenEnv: NodeJS.ProcessEnv[] = [];
     const seenSpecs: string[][] = [];
     const api = createApi({
@@ -155,9 +212,12 @@ describe('connectGame', () => {
       dest,
       agent: 'codex',
       which: (cmd) => (cmd === 'codex' ? '/usr/bin/codex' : null),
-      runAdapter: async ({ spec }) => {
+      runAdapter: async ({ spec, cwd }) => {
         headless = spec.headless;
         expect(spec.name).toBe('codex');
+        expect(existsSync(cwd)).toBe(true);
+        expect(cwd).not.toBe(dest);
+        expect(spec.headless).toContain('--skip-git-repo-check');
         return { code: 0, lines: [] };
       },
       write: () => undefined,
@@ -329,4 +389,44 @@ describe('connectGame', () => {
     ).rejects.toMatchObject({ message: expect.stringMatching(/not on PATH/) });
     expect(seen.some((row) => row.endsWith('/handoff'))).toBe(false);
   });
+});
+
+it('uses a private temporary Copilot MCP config and removes it on failure', async () => {
+  let configPath = '';
+  const api = createApi({
+    origin: 'https://example.test',
+    store: memoryStore({ accessToken: 'creator', tokenType: 'Bearer', scope: 'creator' }),
+    fetch: async (url) =>
+      String(url).includes('/api/me/studio')
+        ? json({ games: [{ slug: 'robots', token: 'tok' }] })
+        : json({
+            mcpUrl: 'https://example.test/api/mcp',
+            kickoffPrompt: 'Build it',
+            authorizationHeader: 'Authorization: Bearer gdpl_cak_secret',
+          }),
+  });
+  await expect(
+    connectGame({
+      api,
+      slug: 'robots',
+      dest: '/tmp',
+      agent: 'copilot',
+      which: () => '/bin/copilot',
+      write: () => undefined,
+      runAdapter: async ({ spec }) => {
+        configPath = spec.headless[spec.headless.indexOf('--additional-mcp-config') + 1]!.slice(1);
+        expect(statSync(configPath).mode & 0o777).toBe(0o600);
+        expect(JSON.parse(readFileSync(configPath, 'utf8')).mcpServers.gamedevpl).toMatchObject({
+          type: 'http',
+          url: 'https://example.test/api/mcp',
+          headers: { Authorization: 'Bearer gdpl_cak_secret' },
+          tools: ['*'],
+        });
+        expect(spec.headless).toContain('--allow-tool=gamedevpl');
+        throw new Error('agent failed');
+      },
+    }),
+  ).rejects.toThrow('agent failed');
+  expect(configPath).not.toBe('');
+  expect(existsSync(configPath)).toBe(false);
 });

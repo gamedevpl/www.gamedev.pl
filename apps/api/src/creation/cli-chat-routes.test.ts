@@ -91,6 +91,35 @@ describe('POST /api/cli/chat', () => {
     vi.restoreAllMocks();
   });
 
+  it('prepares a game without creating or dispatching until the builder is chosen', async () => {
+    const {
+      app,
+      store,
+      authHeaders: headers,
+    } = await createApp({
+      intakeAgent: new StubIntakeAgent({
+        kind: 'create',
+        title: 'Robot Garden',
+        concept: 'A garden full of robots that water plants.',
+      }),
+    });
+    const prepared = await chat(app, headers, { text: 'build my robot garden', prepareOnly: true });
+    expect(prepared.statusCode).toBe(200);
+    expect(prepared.json()).toMatchObject({ kind: 'proposal', title: 'Robot Garden' });
+    expect(await store.listSubmissionsByOwner('g:test-user')).toEqual([]);
+    const proposal = prepared.json();
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers,
+      payload: { title: proposal.title, concept: proposal.concept, builder: 'self' },
+    });
+    expect(created.statusCode).toBe(200);
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    expect(job.builder).toBe('self');
+    await app.close();
+  });
+
   it('404s when CLI_SURFACE is off', async () => {
     restore?.();
     restore = undefined;

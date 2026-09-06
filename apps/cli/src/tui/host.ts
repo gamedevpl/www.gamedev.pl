@@ -1,3 +1,4 @@
+import type { PendingExecution } from '../execution.js';
 import { render } from 'ink';
 import { createElement } from 'react';
 import { EXIT_GREEN } from '../exit-codes.js';
@@ -9,6 +10,8 @@ import { ReplApp } from './app.js';
 import { createRoundWatch } from './round-watch.js';
 import { createTuiSession, formatSessionIdentity } from './session.js';
 import { openWorkshop, settleBuilder, type Workshop } from '../workshop.js';
+import { agentHint, discoverAgents } from '../agents.js';
+import { createCliTelemetry } from '../telemetry.js';
 
 export async function runInkRepl(input: {
   api: ApiClient;
@@ -22,6 +25,7 @@ export async function runInkRepl(input: {
   const color = wantsColor(input.env, isTty);
   const host: { instance?: ReturnType<typeof render> } = {};
   const abort: Workshop['abort'] = { current: null };
+  const telemetry = createCliTelemetry(input.api.origin);
   const session = createTuiSession(replBanner(isTty, input.env), () => {
     if (abort.current) {
       abort.current.abort();
@@ -43,11 +47,16 @@ export async function runInkRepl(input: {
   let slug = input.checkout?.slug ?? '';
   const paintIdentity = (): void => session.setIdentity(formatSessionIdentity(who, slug));
   let workshop: Workshop | undefined;
+  const pendingExecution: PendingExecution = {};
+  if (!input.checkout) {
+    const hint = agentHint(discoverAgents(input.env));
+    if (hint) session.writeLine(hint);
+  }
   if (input.checkout && token) {
     paintIdentity();
     const write = (line: string): void => session.writeLine(line);
     const opened = await openWorkshop({ api: input.api, token, ...input.checkout, env: input.env, write });
-    workshop = { ...input.checkout, token, env: input.env, ...opened, pick: session.prompt, abort };
+    workshop = { ...input.checkout, token, env: input.env, ...opened, pick: session.prompt, abort, telemetry };
     workshop.builder = await settleBuilder({ api: input.api, ws: workshop, status: opened.status, write });
     session.writeLine('say what to change, or /help');
   }
@@ -84,6 +93,14 @@ export async function runInkRepl(input: {
           token,
           conversationId,
           workshop,
+          env: input.env,
+          pick: session.prompt,
+          abort,
+          telemetry,
+          pendingExecution,
+          onWorkshop: (opened) => {
+            workshop = opened;
+          },
           write: (text) => session.writeLine(text),
         });
       } catch (error) {
@@ -94,6 +111,7 @@ export async function runInkRepl(input: {
         token = result.token;
         watch.poke();
       }
+      if (result.workshop) workshop = result.workshop;
       if (result.slug) {
         slug = result.slug;
         paintIdentity();
@@ -105,6 +123,7 @@ export async function runInkRepl(input: {
     watch.stop();
     session.close();
     host.instance?.unmount();
+    await telemetry.flush();
   }
   return EXIT_GREEN;
 }

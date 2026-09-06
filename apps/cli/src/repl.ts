@@ -1,7 +1,7 @@
 import { CLI_BIN, cliUsage } from './bin-name.js';
 import { glyphs, wantsColor } from './renderer.js';
 import { completeSlash, parseArgv, SLASH_VERBS, type SlashVerb } from './argv.js';
-import { getStatus, postTurn } from './turn.js';
+import { getStatus, postTurn, prepareTurn } from './turn.js';
 import { formatStatusLines } from './status-watch.js';
 import type { ApiClient } from './api.js';
 import { checkoutGame, diffGame, formatSyncLines, pullGame, readCheckoutSlug } from './checkout.js';
@@ -13,13 +13,18 @@ import { CLI_VERSION } from './update.js';
 import { formatError } from './errors.js';
 import { formatHelp } from './help.js';
 import { MASCOT_ASCII } from './tui/mascot.js';
+import { discoverAgents } from './agents.js';
+import type { PickChoice } from './workshop.js';
 import { handoffBuilder, handoffLine, refreshBuilder, workshopTurn, type Workshop } from './workshop.js';
+import { chooseExecution, executeChoice, type PendingExecution } from './execution.js';
+import type { CliTelemetry } from './telemetry.js';
 
 export type ReplLineResult = {
   next: 'continue' | 'quit';
   token?: string | null;
   slug?: string;
   conversationId?: string;
+  workshop?: Workshop;
 };
 
 export async function handleReplLine(input: {
@@ -29,9 +34,20 @@ export async function handleReplLine(input: {
   conversationId?: string;
   // Set when the session opened from a game checkout.
   workshop?: Workshop;
+  env?: NodeJS.ProcessEnv;
+  pick?: PickChoice;
+  abort?: Workshop['abort'];
+  telemetry?: CliTelemetry;
+  pendingExecution?: PendingExecution;
+  onWorkshop?: (ws: Workshop) => void;
   write: (s: string) => void;
 }): Promise<ReplLineResult> {
-  const trimmed = input.line.trim();
+  const retry = input.line.trim() === '/retry' ? input.pendingExecution?.current : undefined;
+  if (input.line.trim() === '/retry' && !retry) {
+    input.write('no pending task to retry');
+    return { next: 'continue' };
+  }
+  const trimmed = retry?.request ?? input.line.trim();
   if (!trimmed) return { next: 'continue' };
   if (trimmed === '/quit' || trimmed === '/exit') return { next: 'quit' };
   if (trimmed.startsWith('/')) {
@@ -45,6 +61,7 @@ export async function handleReplLine(input: {
       ws &&
       (cmd === 'delegate' || (cmd === 'builder' && (!rest[0] || rest[0] === 'self' || rest[0] === 'platform')))
     ) {
+      if (cmd === 'builder' && rest[0] === 'platform' && input.pendingExecution) delete input.pendingExecution.current;
       await handleWorkshopVerb({ cmd, rest, api: input.api, ws, write: input.write });
       return { next: 'continue' };
     }
@@ -105,14 +122,37 @@ export async function handleReplLine(input: {
           const dest = parsed.args[1] ?? cwd;
           input.write(formatSyncLines(await diffGame({ api: input.api, slug, dest })).join('\n'));
         } else {
-          await connectGame({
-            api: input.api,
-            slug,
-            dest: cwd,
-            agent: typeof parsed.flags.agent === 'string' ? parsed.flags.agent : undefined,
-            handoff: parsed.flags.handoff === true,
-            write: input.write,
-          });
+          let agent = typeof parsed.flags.agent === 'string' ? parsed.flags.agent : undefined;
+          if (!agent && input.pick) {
+            const agents = discoverAgents(input.env).filter((row) => row.installed && row.mcp);
+            if (agents.length) {
+              for (const agent of agents) input.telemetry?.record('delegate_offered', agent.name);
+              const manual = 'show manual MCP setup';
+              const choice = await input.pick(
+                [...agents.map((row) => row.name), manual],
+                `Connect ${slug} — local agents use their own credentials and billing`,
+              );
+              if (choice !== manual && !agents.some((row) => row.name === choice)) return { next: 'continue' };
+              if (choice !== manual) agent = choice;
+            }
+          }
+          const controller = new AbortController();
+          if (input.abort) input.abort.current = controller;
+          try {
+            await connectGame({
+              api: input.api,
+              slug,
+              dest: cwd,
+              agent,
+              env: input.env,
+              handoff: parsed.flags.handoff === true,
+              write: input.write,
+              abort: controller.signal,
+              telemetry: input.telemetry,
+            });
+          } finally {
+            if (input.abort) input.abort.current = null;
+          }
         }
       } catch (error) {
         input.write(formatError(error));
@@ -130,6 +170,7 @@ export async function handleReplLine(input: {
           flags: parsed.flags,
           api: input.api,
           io: { stdout },
+          env: input.env,
         });
         if (code !== null) {
           input.write(chunks.join('').trimEnd() || `/${cmd}`);
@@ -148,7 +189,43 @@ export async function handleReplLine(input: {
   }
   if (!input.token) {
     try {
-      const result = await postCliChat(input.api, trimmed, input.conversationId);
+      const result = await postCliChat(input.api, trimmed, input.conversationId, Boolean(input.pick));
+      if (result.kind === 'proposal') {
+        if (!input.pick) return { next: 'continue', conversationId: result.conversationId };
+        const env = input.env ?? process.env;
+        const choice = await chooseExecution({ env, pick: input.pick, telemetry: input.telemetry });
+        if (!choice) return { next: 'continue', conversationId: result.conversationId };
+        input.telemetry?.record('build_requested');
+        const created = await input.api.request<{ token: string; slug: string }>('POST', '/api/submissions', {
+          title: result.title,
+          concept: result.concept,
+          builder: choice.builder,
+        });
+        input.write(`▸ opened ${created.slug}`);
+        const opened: ReplLineResult = {
+          next: 'continue',
+          token: created.token,
+          slug: created.slug,
+          conversationId: result.conversationId,
+        };
+        try {
+          opened.workshop = await executeChoice({
+            api: input.api,
+            choice,
+            ...created,
+            request: result.concept,
+            env,
+            pick: input.pick,
+            write: input.write,
+            abort: input.abort ?? { current: null },
+            telemetry: input.telemetry,
+            onWorkshop: input.onWorkshop,
+          });
+        } catch (error) {
+          input.write(formatError(error));
+        }
+        return opened;
+      }
       if (result.kind === 'create') {
         input.write(`▸ opened ${result.slug}${result.ack ? ` — ${result.ack}` : ''}`);
         return {
@@ -166,6 +243,71 @@ export async function handleReplLine(input: {
     }
   }
   try {
+    if (input.pick) {
+      const prepared = retry ? { kind: 'proposal' as const } : await prepareTurn(input.api, input.token, trimmed);
+      if (prepared.kind === 'reply') {
+        input.write(`◆ ${prepared.text}`);
+        return { next: 'continue' };
+      }
+      if (prepared.kind === 'proposal') {
+        const env = input.env ?? process.env;
+        const choice =
+          retry?.choice ??
+          (await chooseExecution({
+            env,
+            pick: input.pick,
+            workshop: input.workshop,
+            telemetry: input.telemetry,
+          }));
+        if (!choice) return { next: 'continue' };
+        const status = await getStatus(input.api, input.token);
+        const slug = input.workshop?.slug ?? status.slug;
+        if (!slug) {
+          input.write('game slug is unavailable — /status to check the round');
+          return { next: 'continue' };
+        }
+        if (choice.builder !== (status.builder ?? 'platform')) {
+          const outcome = await handoffBuilder(input.api, input.token, choice.builder, status.builder ?? 'platform');
+          if (input.workshop) {
+            input.workshop.builder = outcome.builder;
+            if (choice.builder === 'self') input.workshop.selectedAgent = choice.spec.name;
+            else delete input.workshop.selectedAgent;
+          }
+          if (outcome.pending) {
+            if (input.pendingExecution) input.pendingExecution.current = { choice, request: trimmed };
+            input.write(`${handoffLine(outcome, slug)} — /retry resumes this task with the selected agent`);
+            return { next: 'continue' };
+          }
+        } else if (input.workshop) input.workshop.builder = choice.builder;
+        if (input.pendingExecution) delete input.pendingExecution.current;
+        input.telemetry?.record('build_requested');
+        const result = await postTurn(input.api, input.token, trimmed);
+        if (result.kind === 'reply') {
+          input.write(`◆ ${result.text}`);
+          return { next: 'continue' };
+        }
+        input.write(`▸ build ${result.roundId}${result.ack ? ` — ${result.ack}` : ''}`);
+        const workshop = await executeChoice({
+          api: input.api,
+          choice,
+          slug,
+          token: input.token,
+          request: trimmed,
+          env,
+          pick: input.pick,
+          write: input.write,
+          workshop: input.workshop,
+          abort: input.abort ?? { current: null },
+          telemetry: input.telemetry,
+          onWorkshop: input.onWorkshop,
+        });
+        return { next: 'continue', workshop };
+      }
+      input.write(
+        'CLI server does not support builder selection before dispatch — update the server before delegating',
+      );
+      return { next: 'continue' };
+    }
     const result = await postTurn(input.api, input.token, trimmed);
     if (result.kind === 'reply') {
       input.write(`◆ ${result.text}`);
@@ -207,6 +349,7 @@ async function handleWorkshopVerb(input: {
         return;
       }
       const outcome = await handoffBuilder(input.api, ws.token, wanted, ws.builder);
+      if (wanted === 'platform') delete ws.selectedAgent;
       ws.builder = outcome.builder;
       input.write(handoffLine(outcome, ws.slug));
       return;

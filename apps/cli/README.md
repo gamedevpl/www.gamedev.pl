@@ -34,7 +34,7 @@ node apps/cli/dist/gamedevpl.mjs help
 
 ## Verbs
 
-`login` `logout` `whoami` `games` `status` `share` `profile` `handle` `builder`
+`login` `logout` `whoami` `agents` `games` `status` `share` `profile` `handle` `builder`
 `connect` `delegate` `checkout` `pull` `diff` `submit` `quota` `notifications` `update` `help`
 
 Exit codes: `0` gate green · `1` gate red · `2` refused · `3` auth · `4` input required.
@@ -43,6 +43,41 @@ Exit codes: `0` gate green · `1` gate red · `2` refused · `3` auth · `4` inp
 stays on this machine. No paste. CI still uses `GAMEDEV_TOKEN` from secrets.
 Never pass the creator OAuth token to a sub-agent.
 `git push` / `git pull` against a checkout use `git-remote-gamedevpl` (same script).
+
+## Local agents
+
+`gamedevpl agents` (or `/agents` in the REPL) checks executable files on `PATH` and
+lists the configured local-file and MCP modes. `--json` works without sign-in or a
+TTY. Discovery does not start a build. Launch checks the installed tool's help for
+required flags and refuses incompatible versions before a handoff. Provider login
+stays with the selected tool; its authentication errors are shown in the terminal.
+Runs use that tool's own credentials and billing.
+
+The bundled local adapters are `claude`, `codex`, `gemini`, `vibe`, `agy`, `cursor`,
+and `copilot`. Automatic MCP configuration is available for `claude`, `codex`, and
+`copilot`; the others use local files. Cursor runs `cursor-agent`, or `agent` only
+after its help identifies it as Cursor. The `cursor` editor launcher is listed
+separately and is never treated as a headless agent.
+Custom local adapters can be configured in `~/.config/gamedevpl/adapters.json` (or
+`GAMEDEV_ADAPTERS`); they remain unsupported and do not gain automatic MCP wiring.
+
+Inside a checkout, the builder picker lists every detected adapter and carries the
+selection into the first task. Subsequent tasks ask which agent when several exist.
+The conversation prepares a new game or revision before dispatch, then offers an
+agent or the platform builder. Without a checkout, agents use MCP when supported;
+otherwise the CLI downloads a checkout, installs its pinned kit and toolchain, and
+runs the local editing/verification/delivery flow. New games bootstrap from the brief
+and pinned Creator Kit without requiring a previous delivery. Pending handoffs retain
+the task and selected agent; `/retry` resumes them after ownership changes. `/connect <slug>` also offers
+installed MCP adapters or manual setup. Explicit `--agent` skips the picker. Cancelling a picker
+does not launch an agent or request a handoff. One-shot commands never prompt.
+
+Anonymous `delegate_offered` / `delegate_used` events measure the choice and launch;
+`verify_failed` and `delivered` cover the local result. They use the existing visit
+endpoint and a process-local random visit ID, with closed adapter/stage dimensions.
+No credentials, inventory, executable paths, game identifiers, or prompts are sent.
+The existing CLI funnel rollup measures offered-to-used conversion by adapter.
+Telemetry failures never block the task.
 
 ## Working copy
 
@@ -77,7 +112,7 @@ full local ladder and delivers `mode=publish`; an operator still publishes.
 ## In a checkout
 
 `gamedevpl` started inside a checkout (any subdirectory) opens that game. It shows the
-sync state, which of `claude` / `codex` / `gemini` / `vibe` are on PATH, and who builds.
+sync state, available local adapters, and who builds.
 If a local agent is found and the platform still builds, it asks once whether to hand the
 round to your machine (`/builder self`); `/builder platform` hands it back.
 
@@ -89,9 +124,14 @@ the agent, not the session. `/delegate <task>` skips the chat; `gamedevpl delega
 ladder fails).
 
 `gamedevpl connect <slug>` prints the MCP handoff (URL, kickoff, install snippet).
-`--agent claude` (or `codex` / `gemini` / `vibe`) spawns that vendor CLI with a
-round-scoped token only — never the OAuth grant or a PAT. After the adapter exits,
-`gamedevpl submit` is still the delivery command.
+`--agent claude` (or `codex` / `copilot`) launches the agent with temporary MCP configuration,
+never the creator OAuth grant or a PAT. The round must use builder `self`; explicit
+`--handoff` requests a switch and refuses execution while the switch is pending.
+In a matching checkout the agent works on that game's directory; review local changes
+before `gamedevpl submit`. Otherwise it uses a scratch directory and the MCP workflow;
+the CLI prints the directory and keeps any scratch files after exit. Check the delivery
+in Studio. Existing user MCP configuration is not overwritten.
+MCP progress appears while the agent runs; Ctrl+C in the REPL stops its process group.
 
 ## Releases
 
@@ -99,3 +139,8 @@ Versions come from [`CHANGELOG.md`](./CHANGELOG.md): add a line under `## Unrele
 the category that fits, and the `release(cli)` PR that opens on master is the cutoff —
 merging it publishes `cli-vX.Y.Z`. Rules, commands and traps:
 [`.claude/skills/cli-release/SKILL.md`](../../.claude/skills/cli-release/SKILL.md).
+
+Adapter invocation references: [Cursor headless](https://docs.cursor.com/en/cli/headless),
+[Gemini headless](https://geminicli.com/docs/cli/headless/), and
+[Copilot CLI](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference).
+Installed Claude, Codex, agy, Vibe, and Copilot flags were checked against `--help`.

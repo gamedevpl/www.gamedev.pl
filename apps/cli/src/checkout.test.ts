@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import {
   checkoutGame,
+  fetchLatestTree,
   changedPaths,
   findCheckout,
   inspectGame,
@@ -285,4 +286,13 @@ describe('findCheckout', () => {
     writeFileSync(join(dir, '.gamedev-slug'), '   \n');
     expect(findCheckout(dir)).toBeNull();
   });
+});
+
+it('uses an empty synchronization base for a game without deliveries', async () => {
+  const api = createApi({
+    origin: 'https://example.test',
+    store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+    fetch: async () => Response.json({ versions: [] }),
+  });
+  await expect(fetchLatestTree(api, 'fresh')).resolves.toEqual({ version: 'undelivered', files: [] });
 });

@@ -19,6 +19,7 @@ import { failClosedReply, IntakeChatAgent, type IntakeAgent } from './intake-age
 const ChatBodySchema = z.object({
   text: z.string().trim().min(1, 'text is required').max(MAX_REVISION_CHARS, 'text is too long'),
   conversationId: z.string().uuid().optional(),
+  prepareOnly: z.boolean().optional(),
 });
 
 export interface CliChatRoutesOptions {
@@ -138,6 +139,17 @@ export function registerCliChatRoutes(app: FastifyInstance, options: CliChatRout
         request.log.info({ cliChat: { outcome: 'reply' } }, 'cli intake chat');
         await saveTurns(store, uid, conversationId, history, text, decision.text, now);
         return reply.send({ kind: 'reply', text: decision.text, conversationId });
+      }
+
+      if (parsed.data.prepareOnly) {
+        await saveTurns(store, uid, conversationId, history, text, decision.ack ?? decision.title, now);
+        return reply.send({
+          kind: 'proposal',
+          title: decision.title,
+          concept: decision.concept,
+          ack: decision.ack,
+          conversationId,
+        });
       }
 
       const created = await createGame({

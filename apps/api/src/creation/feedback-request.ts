@@ -45,6 +45,7 @@ export const FeedbackRequestSchema = z.object({
 });
 
 export const TurnRequestSchema = z.object({
+  prepareOnly: z.boolean().optional(),
   text: z
     .string({ required_error: 'text is required', invalid_type_error: 'text is required' })
     .trim()

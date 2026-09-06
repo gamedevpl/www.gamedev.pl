@@ -25,6 +25,7 @@ export type CreatorScorecardsResponse = StudioScorecardsResponse;
 export type CreatorStudioGamesResponse = StudioGamesResponse;
 export type CreatorBuildsResponse = StudioBuildsResponse;
 import { composeWorkspaceArchive, WorkspaceCompositionError } from '../platform/workspace-archive.js';
+import { buildSpecStub } from './creator-code.js';
 import type { GamesStore, VersionManifest } from '../delivery/games-store.js';
 import type { Store, TelemetryEvent } from '../platform/store.js';
 import { normalizeLocale } from '../platform/translate.js';
@@ -408,27 +409,21 @@ export async function registerCreatorStudioRoutes(
         return reply.status(404).send({ error: 'no such game' });
       }
 
-      // Same preference order as the agent's own `get_sources`, and it has to be read off
-      // the *newest* round rather than the first owned record that happens to carry a
-      // version. An improvement round starts empty on a slug whose older job still points
-      // at the version it delivered before publication; scanning all records would hand
-      // back that older delivery, and a creator who edited it and delivered would overwrite
-      // newer published work with something derived from a superseded base. When the newest
-      // round has nothing of its own, the live publication is what they last played.
+      // Prefer the newest round, then the live publication.
       const tip = [...owned].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
       let version = tip.previewVersion ?? tip.deliveredVersion ?? null;
       if (!version) {
         const publication = await store.getPublication(slug);
         if (isPublished(publication)) version = publication.currentVersion;
       }
-      if (!version) {
+      if (!version && (request.query as { allowUndelivered?: string }).allowUndelivered !== 'true') {
         return reply.status(409).send({
           error: 'nothing_delivered',
           message: 'this game has no delivered version yet — let the first build finish, then check it out',
         });
       }
 
-      const manifest = await options.gamesStore.getManifest(slug, version);
+      const manifest = version ? await options.gamesStore.getManifest(slug, version) : { sourceFiles: [] };
       if (!manifest) {
         request.log.error({ slug, version }, 'workspace checkout: manifest missing for a version a job points at');
         return reply.status(502).send({ error: 'the delivered version could not be read back' });
@@ -437,9 +432,10 @@ export async function registerCreatorStudioRoutes(
       const sources = await Promise.all(
         manifest.sourceFiles.map(async (path) => ({
           path,
-          content: await options.gamesStore!.getSourceFile(slug, version, path),
+          content: await options.gamesStore!.getSourceFile(slug, version!, path),
         })),
       );
+      if (!version) sources.push({ path: 'SPEC.md', content: buildSpecStub(tip) });
       const missing = sources.filter((file) => file.content === null).map((file) => file.path);
       if (missing.length > 0) {
         request.log.error(

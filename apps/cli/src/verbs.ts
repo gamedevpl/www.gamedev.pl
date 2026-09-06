@@ -3,6 +3,7 @@ import { cliUsage } from './bin-name.js';
 import { jsonMode } from './argv.js';
 import { CliError, EXIT_GREEN, EXIT_INPUT } from './exit-codes.js';
 import { defaultInstallDest, updateCli } from './update.js';
+import { discoverAgents, formatAgents } from './agents.js';
 
 type Flags = Record<string, string | boolean>;
 type Io = { stdout: NodeJS.WriteStream };
@@ -24,9 +25,16 @@ export async function dispatchReadVerb(input: {
   flags: Flags;
   api: ApiClient;
   io: Io;
+  env?: NodeJS.ProcessEnv;
 }): Promise<number | null> {
   const asJson = jsonMode(input.flags);
   const { verb, args, api, io, flags } = input;
+
+  if (verb === 'agents') {
+    const agents = discoverAgents(input.env);
+    emit(io, asJson, { agents }, formatAgents(agents));
+    return EXIT_GREEN;
+  }
 
   if (verb === 'games') {
     const data = await api.request<{ submissions?: Array<{ slug?: string | null; title?: string }> }>(

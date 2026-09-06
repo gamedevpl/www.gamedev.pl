@@ -179,7 +179,7 @@ export type CliInstallChannel = (typeof CLI_INSTALL_CHANNELS)[number];
 export const CLI_PLATFORM_OS = ['linux', 'darwin', 'win32'] as const;
 export type CliPlatformOs = (typeof CLI_PLATFORM_OS)[number];
 
-export const CLI_ADAPTERS = ['claude', 'codex', 'gemini', 'vibe', 'custom'] as const;
+export const CLI_ADAPTERS = ['claude', 'codex', 'gemini', 'vibe', 'agy', 'cursor', 'copilot', 'custom'] as const;
 export type CliAdapter = (typeof CLI_ADAPTERS)[number];
 
 export const CLI_VERIFY_STAGES = ['typecheck', 'check_static', 'check_game'] as const;

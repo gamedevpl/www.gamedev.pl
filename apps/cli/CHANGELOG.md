@@ -9,6 +9,9 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
+- Choose an installed agent before creating a game or dispatching a revision; all seven bundled agents support local builds, with automatic checkout preparation when needed (#1181)
+- Copilot gains temporary MCP setup; launches validate required flags and report anonymous delegation funnel events (#1181)
+- `gamedevpl agents` lists installed tools and local-file/MCP support; the REPL offers every available checkout agent and an agent picker for `/connect` (#1181)
 - Started in a game checkout, `gamedevpl` opens that game instead of asking what to make
 - In a checkout, saying what to change runs `claude` / `codex` / `gemini` / `vibe` from your machine on the game,
   verifies the tree and offers to deliver; `/delegate <task>` skips the chat, `/builder self|platform` picks who builds,
@@ -16,6 +19,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
+- Cancelling connection stops before handoff; pending handoffs preserve the selected agent and task for `/retry` (#1181)
+- MCP agents run without a checkout in a scratch directory that remains available afterwards (#1181)
 - `gamedevpl` prints the version it actually is; every release so far reported 0.1.0 in the banner, footer and `help`
 
 ## 0.3.0 — 2026-09-05

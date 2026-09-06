@@ -1,11 +1,12 @@
 import { gunzipSync, gzipSync } from 'node:zlib';
+import { writeTarGz } from './platform/tar.js';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { buildApp } from './platform/app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './platform/auth.js';
 import type { GamesStore, VersionManifest } from './delivery/games-store.js';
-import type { GcsObjectStore } from './delivery/gcs-sign.js';
 import { InMemoryStore } from './platform/store.js';
-import { readTarEntries, writeTarGz, type TarEntry } from './platform/tar.js';
+import { objectsWithScaffold, createApp as createWorkspaceApp, entriesOf } from './creator-workspace-fixtures.js';
+const createApp = (store: InMemoryStore, objects: Map<string, Buffer>, gamesStore = stubGamesStore()) =>
+  createWorkspaceApp(store, objects, gamesStore);
 
 const sessionSecret = 'dev-session-secret-change-me';
 const ENGINE = 'deadbeef0123456789abcdef0123456789abcdef';
@@ -31,63 +32,6 @@ function stubGamesStore(sources = SOURCES): GamesStore {
       slug === SLUG && version === VERSION ? ({ sourceFiles: Object.keys(sources) } as VersionManifest) : null,
     getSourceFile: async (_slug: string, _version: string, path: string) => sources[path] ?? null,
   } as unknown as GamesStore;
-}
-
-function scaffoldTarball(): Buffer {
-  return gzipSync(
-    // Wrapped in a directory on purpose: the packer may or may not wrap, and the
-    // composer is supposed to tolerate both.
-    Buffer.from(
-      gunzipSync(
-        writeTarGz([
-          { path: 'workspace/README.md', content: '# your working copy\n' },
-          { path: 'workspace/setup.mjs', content: 'fetch the kit\n' },
-          { path: 'workspace/.gitignore', content: 'node_modules\n' },
-        ]),
-      ),
-    ),
-  );
-}
-
-function objectsWithScaffold(): Map<string, Buffer> {
-  return new Map<string, Buffer>([
-    [
-      'kits/current.json',
-      Buffer.from(JSON.stringify({ current: ENGINE, previous: null, updatedAt: '2026-08-01T00:00:00.000Z' })),
-    ],
-    ['kits/' + ENGINE + '.json', Buffer.from(JSON.stringify({ sha256: SHA, packedAt: '2026-08-01T00:00:00.000Z' }))],
-    ['kits/' + ENGINE + '.tgz', Buffer.from('fake-kit')],
-    ['workspaces/' + ENGINE + '.tgz', scaffoldTarball()],
-  ]);
-}
-
-function mockObjectStore(objects: Map<string, Buffer>): GcsObjectStore {
-  return {
-    readObject: async (name) => objects.get(name) ?? null,
-    objectExists: async (name) => objects.has(name),
-    signReadUrl: async (name) => `https://signed.example/${name}?sig=1`,
-  };
-}
-
-async function createApp(store: InMemoryStore, objects: Map<string, Buffer>, gamesStore = stubGamesStore()) {
-  return await buildApp({
-    store,
-    sessionSecret,
-    submissionRoutes: {
-      submissionTokenSecret: 'test-submission-secret',
-      agentChannel: { objectStore: mockObjectStore(objects), gamesStore },
-    },
-  });
-}
-
-async function entriesOf(archive: Buffer): Promise<TarEntry[]> {
-  const buffer = gunzipSync(archive);
-  async function* once(): AsyncGenerator<Uint8Array> {
-    yield buffer;
-  }
-  const entries: TarEntry[] = [];
-  for await (const item of readTarEntries(once())) entries.push(item);
-  return entries;
 }
 
 describe('GET /api/me/studio/games/:slug/workspace', () => {
@@ -190,6 +134,26 @@ describe('GET /api/me/studio/games/:slug/workspace', () => {
 
     expect(res.statusCode).toBe(409);
     expect(res.json().error).toBe('nothing_delivered');
+  });
+
+  it('can bootstrap an undelivered game with its brief and pinned kit', async () => {
+    const empty = new InMemoryStore();
+    await empty.upsertUser({ uid: 'g:creator' });
+    await empty.createSubmission(ISSUE, 'g:creator', 'Comet Courier');
+    await empty.setSubmissionSlug(ISSUE, SLUG);
+    const app = await createApp(empty, objectsWithScaffold());
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/me/studio/games/${SLUG}/workspace?allowUndelivered=true`,
+      headers: authHeaders('g:creator'),
+    });
+    expect(res.statusCode).toBe(200);
+    const entries = await entriesOf(res.rawPayload);
+    expect(Buffer.from(entries.find((row) => row.path === `games/${SLUG}/SPEC.md`)!.bytes).toString()).toContain(
+      'Comet Courier',
+    );
+    expect(Buffer.from(entries.find((row) => row.path === 'gamedev.lock')!.bytes).toString()).toContain(ENGINE);
+    await app.close();
   });
 
   it('checks out the live publication when the newest round has delivered nothing yet', async () => {
