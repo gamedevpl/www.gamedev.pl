@@ -7,7 +7,14 @@ import { joinUrl, type PartySession } from './mpApi.js';
 import { PartyPlaying } from './PartyPlaying.js';
 import { QrCode } from './QrCode.js';
 import { RoomClient, type RoomStatus } from './roomClient.js';
-import { BRIDGE_NAMESPACE, parseGameBridgeMessage, PROTOCOL_VERSION, type RosterSlot } from '../../mp/protocol.js';
+import {
+  BRIDGE_NAMESPACE,
+  parseGameBridgeMessage,
+  PROTOCOL_VERSION,
+  type PartyCommand,
+  type RoomPhase,
+  type RosterSlot,
+} from '../../mp/protocol.js';
 
 type PartyStageProps = {
   game: CatalogEntry;
@@ -31,6 +38,7 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
   const [status, setStatus] = useState<RoomStatus>('connecting');
   const [closedReason, setClosedReason] = useState<string | null>(null);
   const [started, setStarted] = useState(false);
+  const [phase, setPhase] = useState<RoomPhase>('lobby');
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const clientRef = useRef<RoomClient | null>(null);
   const rosterRef = useRef<RosterSlot[]>([]);
@@ -43,6 +51,14 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
     // target; the frame in turn only accepts messages from its parent.
     frameRef.current?.contentWindow?.postMessage({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload }, '*');
   }, []);
+
+  // Phones have no keyboard here; the host drives the shell.
+  const sendCommand = useCallback(
+    (cmd: PartyCommand) => {
+      postToGame({ t: 'command', cmd });
+    },
+    [postToGame],
+  );
 
   useEffect(() => {
     const client = new RoomClient({
@@ -88,10 +104,15 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
       if (!message) return;
       if (message.t === 'hello') {
         postToGame({ t: 'roster', slots: rosterRef.current });
+        // The lobby was the front door; skip the game's.
         postToGame({ t: 'phase', phase: 'playing' });
+        postToGame({ t: 'command', cmd: 'start' });
       }
-      if (message.t === 'phase' && message.phase === 'ended') {
-        clientRef.current?.setPhase('ended');
+      if (message.t === 'phase') {
+        setPhase(message.phase);
+        clientRef.current?.setPhase(message.phase);
+        // The room's front door is the lobby, not the game's.
+        if (message.phase === 'lobby') setStarted(false);
       }
     };
 
@@ -107,6 +128,7 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
 
   function handleStart() {
     clientRef.current?.setPhase('playing');
+    setPhase('playing');
     setStarted(true);
   }
 
@@ -123,7 +145,17 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
   }
 
   if (started) {
-    return <PartyPlaying game={game} roster={roster} frameRef={frameRef} via={via} />;
+    return (
+      <PartyPlaying
+        game={game}
+        roster={roster}
+        frameRef={frameRef}
+        via={via}
+        phase={phase}
+        onCommand={sendCommand}
+        onExit={onExit}
+      />
+    );
   }
 
   return (

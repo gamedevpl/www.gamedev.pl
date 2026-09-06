@@ -5,6 +5,7 @@ import {
   PROTOCOL_VERSION,
   roomSocketUrl,
   type InputKey,
+  type RoomPhase,
   type ServerFrame,
 } from '../../mp/protocol.js';
 
@@ -120,7 +121,7 @@ export class RoomClient {
     this.send({ t: 'input', k: key, d: value });
   }
 
-  setPhase(phase: 'lobby' | 'playing' | 'ended'): void {
+  setPhase(phase: RoomPhase): void {
     this.send({ t: 'phase', phase });
   }
 

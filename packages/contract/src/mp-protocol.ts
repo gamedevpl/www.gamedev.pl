@@ -2,10 +2,12 @@
 
 // Party-mode wire version, checked by both ends of the socket.
 export const MP_PROTOCOL_VERSION = 1;
-export const INPUT_KEYS = ['up', 'down', 'left', 'right', 'a'] as const;
+// `menu` is the phone's Start button.
+export const INPUT_KEYS = ['up', 'down', 'left', 'right', 'a', 'menu'] as const;
 
 export type InputKey = (typeof INPUT_KEYS)[number];
 
-export const ROOM_PHASES = ['lobby', 'playing', 'ended'] as const;
+// `paused`: a phone shows what the shared screen shows.
+export const ROOM_PHASES = ['lobby', 'playing', 'paused', 'ended'] as const;
 
 export type RoomPhase = (typeof ROOM_PHASES)[number];

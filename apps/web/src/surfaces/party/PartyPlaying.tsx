@@ -4,7 +4,7 @@ import type { CatalogEntry } from '../../catalog.js';
 import { useGamePlayer } from '../../gamePlayer.js';
 import { HowToPlayPanel } from '../../HowToPlayPanel.js';
 import { resolveControlRows } from '../../howToPlay.js';
-import type { RosterSlot } from '../../mp/protocol.js';
+import type { PartyCommand, RoomPhase, RosterSlot } from '../../mp/protocol.js';
 import { PixelIcon } from '../../PixelIcon.js';
 import { PublishedGameFrame } from '../../PublishedGameFrame.js';
 import type { PlayVia } from '../../visitTelemetry.js';
@@ -14,13 +14,18 @@ type PartyPlayingProps = {
   roster: RosterSlot[];
   frameRef: MutableRefObject<HTMLIFrameElement | null>;
   via?: PlayVia;
+  // The bar offers the opposite of what the game reports.
+  phase: RoomPhase;
+  onCommand: (cmd: PartyCommand) => void;
+  onExit: () => void;
 };
 
 // Party bar owns the title; this strip carries sound and controls.
-export function PartyPlaying({ game, roster, frameRef, via }: PartyPlayingProps) {
+export function PartyPlaying({ game, roster, frameRef, via, phase, onCommand, onExit }: PartyPlayingProps) {
   const { t } = useTranslation();
   const [howToOpen, setHowToOpen] = useState(false);
-  const player = useGamePlayer(frameRef, true);
+  // The last argument lands the game's own Quit Game row.
+  const player = useGamePlayer(frameRef, true, undefined, undefined, undefined, undefined, undefined, onExit);
 
   // What the game reports, else the catalog. Both land late.
   const controlRows = resolveControlRows(player.controls, game.controls ?? '');
@@ -34,6 +39,16 @@ export function PartyPlaying({ game, roster, frameRef, via }: PartyPlayingProps)
     setHowToOpen(false);
     returnFocus();
   }, [returnFocus]);
+
+  const command = useCallback(
+    (cmd: PartyCommand) => {
+      onCommand(cmd);
+      returnFocus();
+    },
+    [onCommand, returnFocus],
+  );
+
+  const paused = phase === 'paused';
 
   return (
     <div className="party-playing">
@@ -49,6 +64,22 @@ export function PartyPlaying({ game, roster, frameRef, via }: PartyPlayingProps)
           </span>
         ))}
         <div className="party-play-controls">
+          <button
+            type="button"
+            className="secondary-btn party-life-btn"
+            onClick={() => command(paused ? 'resume' : 'pause')}
+          >
+            <PixelIcon name={paused ? 'play' : 'pause'} size={13} />
+            <span className="btn-label">{paused ? t('party.resume') : t('party.pause')}</span>
+          </button>
+          <button type="button" className="secondary-btn party-life-btn" onClick={() => command('restart')}>
+            <PixelIcon name="undo" size={13} />
+            <span className="btn-label">{t('party.restart')}</span>
+          </button>
+          <button type="button" className="secondary-btn party-life-btn" onClick={() => command('lobby')}>
+            <PixelIcon name="phone" size={13} />
+            <span className="btn-label">{t('party.backToLobby')}</span>
+          </button>
           {hasControls && (
             <button
               type="button"

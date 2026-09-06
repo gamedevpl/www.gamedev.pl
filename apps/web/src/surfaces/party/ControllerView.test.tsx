@@ -145,3 +145,57 @@ describe('ControllerView Voice Cleanup', () => {
     expect(mockSendInput).toHaveBeenLastCalledWith('up', 0);
   });
 });
+
+describe('ControllerView shell menu seat', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    mockSendInput.mockClear();
+    lastOnStatus = undefined;
+    lastOnFrame = undefined;
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    document.body.removeChild(container);
+  });
+
+  function join() {
+    act(() => {
+      root.render(createElement(ControllerView, { code: 'TESTROOM', token: 'TOKEN123' }));
+    });
+    act(() => {
+      (container.querySelector('.controller-join-btn') as HTMLButtonElement).click();
+    });
+    act(() => {
+      lastOnStatus?.('connected');
+      lastOnFrame?.({ t: 'welcome', slot: 1, color: '#00e4ac', nick: 'Swift Fox', phase: 'playing' });
+    });
+  }
+
+  it('sends the menu key so a phone can pause the shared screen', () => {
+    join();
+    const menuBtn = container.querySelector('.controller-menu-btn') as HTMLButtonElement;
+    expect(menuBtn).not.toBeNull();
+    menuBtn.setPointerCapture = () => undefined;
+    act(() => {
+      menuBtn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1 }));
+    });
+    expect(mockSendInput).toHaveBeenLastCalledWith('menu', 1);
+    act(() => {
+      menuBtn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }));
+    });
+    expect(mockSendInput).toHaveBeenLastCalledWith('menu', 0);
+  });
+
+  it('shows the phase the shared screen is in', () => {
+    join();
+    act(() => lastOnFrame?.({ t: 'phase', phase: 'paused' }));
+    expect(container.querySelector('.controller-status')?.textContent).toContain('Paused');
+  });
+});

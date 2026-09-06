@@ -1367,8 +1367,6 @@
     "cancel": "Cancel",
     "statusReady": "Lobby is live — waiting for players",
     "statusConnecting": "Opening the lobby…",
-    "statusPlaying": "Playing",
-    "statusWaiting": "Waiting for the host",
     "statusReconnecting": "Reconnecting…",
     "joinTitle": "Join the game",
     "nickLabel": "Your name",
@@ -1400,6 +1398,17 @@
       "room_full_or_invalid": "The lobby is full.",
       "unreachable": "Lost connection to the lobby.",
       "rate_limited": "Too many inputs — connection closed."
+    },
+    "pause": "Pause",
+    "resume": "Resume",
+    "restart": "Restart round",
+    "backToLobby": "Back to lobby",
+    "menuButton": "Pause or resume the shared screen",
+    "phase": {
+      "lobby": "Waiting for the host",
+      "playing": "Playing",
+      "paused": "Paused — ☰ resumes",
+      "ended": "Round over — A plays again"
     }
   },
   "sensing": {
