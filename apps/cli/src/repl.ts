@@ -51,7 +51,7 @@ export async function handleReplLine(input: {
   const trimmed = retry?.request ?? input.line.trim();
   if (!trimmed) return { next: 'continue' };
   if (trimmed === '/quit' || trimmed === '/exit') return { next: 'quit' };
-  if (/^\/play(?:\s|$)/u.test(trimmed) || isPlayRequest(trimmed)) {
+  if (/^\/play(?:\s|$)/u.test(trimmed) || isPlayRequest(trimmed, input.workshop?.slug)) {
     try {
       const parsed = parseArgv([
         'node',

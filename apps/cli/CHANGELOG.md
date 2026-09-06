@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- In a checkout, “uruchom airtime” and other explicit launch requests open the current game instead of sending an edit request.
+
 ### Internal
 
 - Release packaging builds the shared contract before bundling the CLI (#1186).

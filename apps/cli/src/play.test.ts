@@ -24,13 +24,26 @@ describe('play', () => {
     'Chcę pograć',
     'I want to play this game',
     "let's play",
+    'uruchom grę',
+    'otwórz tę gierkę',
+    'launch this game',
   ])('recognizes an explicit play request: %s', (text) => expect(isPlayRequest(text)).toBe(true));
   it.each([
     'make a game I want to play',
     'chcę zagrać, ale najpierw dodaj bossa',
     'how do I play?',
     'build a platformer',
+    'uruchom testy',
+    'uruchom airtime i dodaj bossa',
   ])('does not swallow another intent: %s', (text) => expect(isPlayRequest(text)).toBe(false));
+  it.each(['uruchom airtime', 'Odpal AIRTIME!', 'otwórz airtime', 'play airtime', 'launch airtime', 'start airtime'])(
+    'recognizes the active checkout by name: %s',
+    (text) => expect(isPlayRequest(text, 'airtime')).toBe(true),
+  );
+  it.each(['uruchom testy', 'start server', 'uruchom airtime i dodaj bossa', 'uruchom robot'])(
+    'preserves non-play requests in a checkout: %s',
+    (text) => expect(isPlayRequest(text, 'airtime')).toBe(false),
+  );
   it('opens a remote game without API requests or local setup', async () => {
     const root = mkdtempSync(join(tmpdir(), 'gdpl-remote-'));
     try {
