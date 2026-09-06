@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- `gamedevpl play` and `/play` open a game with local live reload; “chcę zagrać” opens the current game without dispatching a build
+- `gamedevpl play` and `/play` open a game with local live reload; “chcę zagrać” opens the current game without dispatching a build (#1184)
 
 - Choose an installed agent before creating a game or dispatching a revision; all seven bundled agents support local builds, with automatic checkout preparation when needed (#1181)
 - Copilot gains temporary MCP setup; launches validate required flags and report anonymous delegation funnel events (#1181)
