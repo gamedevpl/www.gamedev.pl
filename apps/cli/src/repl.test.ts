@@ -16,7 +16,7 @@ describe('repl turn loop', () => {
       origin: 'https://www.gamedev.pl',
       store: memoryStore({ accessToken: 'gdpl_oat_t', tokenType: 'Bearer', scope: 'creator' }),
       fetch: async (url) => {
-        if (String(url).endsWith('/turn')) {
+        if (String(url).endsWith('/api/cli/chat')) {
           posts += 1;
           return new Response(JSON.stringify({ kind: 'reply', text: 'Still building.' }), {
             status: 200,

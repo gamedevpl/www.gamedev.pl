@@ -200,3 +200,57 @@ describe('the creator own games in the prompt', () => {
     expect(JSON.stringify(seen)).toContain('keep-me [published]');
   });
 });
+
+describe('CLI session tools', () => {
+  const session = { slug: 'airtime', state: 'published', builder: 'platform', checkout: true, agents: ['claude'] };
+  function actionResult(action: Record<string, unknown>): GenerationResult {
+    return { parts: [{ type: 'toolCall', toolCall: { name: 'cli_action', arguments: action } }] };
+  }
+  it.each([
+    { name: 'play', slug: 'airtime' },
+    { name: 'status' },
+    { name: 'edit', request: 'Make the jump floatier.' },
+  ])('validates a model-selected action: %j', async (action) => {
+    let captured: GenerationRequest | undefined;
+    const agent = new IntakeChatAgent({
+      client: stubClient(actionResult(action), (request) => {
+        captured = request;
+      }),
+    });
+    expect(await agent.decide({ message: 'try the changes', history: [], session })).toMatchObject({
+      kind: 'action',
+      action,
+    });
+    expect(
+      captured!.prompt
+        .filter((part) => part.type === 'user')
+        .map((part) => part.text)
+        .join('\n'),
+    ).toContain('"state":"published"');
+    expect(JSON.stringify(captured)).toContain('cli_action');
+  });
+  it.each([
+    { name: 'play', slug: 'unknown' },
+    { name: 'shell', command: 'ls' },
+    { name: 'play', slug: '../bad' },
+    { name: 'edit', command: 'ls' },
+  ])('rejects invalid model actions: %j', async (action) => {
+    const agent = new IntakeChatAgent({ client: stubClient(actionResult(action)) });
+    await expect(agent.decide({ message: 'go', history: [], session })).rejects.toThrow();
+  });
+  it('does not enable actions for legacy clients', async () => {
+    const agent = new IntakeChatAgent({ client: stubClient(actionResult({ name: 'play', slug: 'airtime' })) });
+    await expect(agent.decide({ message: 'go', history: [] })).rejects.toThrow('invalid CLI action');
+  });
+  it('clarifies rather than executing several actions', async () => {
+    const agent = new IntakeChatAgent({
+      client: stubClient({
+        parts: [
+          ...actionResult({ name: 'play', slug: 'airtime' }).parts,
+          ...actionResult({ name: 'edit', request: 'Make the jump floatier.' }).parts,
+        ],
+      }),
+    });
+    await expect(agent.decide({ message: 'go', history: [], session })).rejects.toThrow('ambiguous');
+  });
+});

@@ -55,6 +55,12 @@ function platform(seen: string[], extra?: (path: string, init?: RequestInit) => 
       if (path.endsWith('/sources')) return json({ files: [] });
       if (path.endsWith('/sources/stage')) return json({ accepted: true });
       if (path.endsWith('/sources/deliver')) return json({ accepted: true, version: 'v2', gateStarted: true });
+      if (path.endsWith('/api/cli/chat'))
+        return json({
+          kind: 'action',
+          action: { name: 'edit', request: JSON.parse(String(init?.body)).text },
+          conversationId: 'c',
+        });
       if (path.endsWith('/turn')) return json({ kind: 'build', roundId: 7, ack: 'Floatier jump.' });
       if (path.endsWith('/handoff')) return json({ accepted: true });
       return json({}, 404);
@@ -202,7 +208,7 @@ describe('the REPL inside a checkout', () => {
     const runAdapter: AdapterRun = async (input) => (prompts.push(input.prompt), { code: 0 });
     const ws = workshop(root, { runAdapter, pick: async (choices) => choices[1]! });
     const api = platform(seen, (path, init) =>
-      path.endsWith('/turn') && String(init?.body).includes('how big')
+      path.endsWith('/api/cli/chat') && String(init?.body).includes('how big')
         ? json({ kind: 'reply', text: 'About 40 files.' })
         : null,
     );

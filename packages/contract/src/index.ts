@@ -145,3 +145,4 @@ export {
   type ZoneEvent,
 } from './zone-contract.js';
 export { ZONE_PROTOCOL_VERSION } from './zone-protocol.js';
+export { isCliAction, type CliAction, type CliSessionContext } from './cli-assistant.js';

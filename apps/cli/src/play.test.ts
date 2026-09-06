@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from 'node
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { isPlayRequest, playGame, startLocalPlay } from './play.js';
+import { playGame, startLocalPlay } from './play.js';
 
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 async function eventually(
@@ -18,19 +18,6 @@ async function eventually(
 }
 
 describe('play', () => {
-  it.each([
-    'chcę zagrać w tę gierkę',
-    'chce zagrac w ta gierke!',
-    'Chcę pograć',
-    'I want to play this game',
-    "let's play",
-  ])('recognizes an explicit play request: %s', (text) => expect(isPlayRequest(text)).toBe(true));
-  it.each([
-    'make a game I want to play',
-    'chcę zagrać, ale najpierw dodaj bossa',
-    'how do I play?',
-    'build a platformer',
-  ])('does not swallow another intent: %s', (text) => expect(isPlayRequest(text)).toBe(false));
   it('opens a remote game without API requests or local setup', async () => {
     const root = mkdtempSync(join(tmpdir(), 'gdpl-remote-'));
     try {

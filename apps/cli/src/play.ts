@@ -15,17 +15,6 @@ import type { CliTelemetry } from './telemetry.js';
 type Session = { url: string; key: string };
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-export function isPlayRequest(text: string): boolean {
-  const normalized = text
-    .trim()
-    .toLowerCase()
-    .replace(/[.!?]+$/u, '')
-    .replace(/\s+/gu, ' ');
-  return /^(?:chc[eę] (?:zagra[cć]|pogra[cć])(?: w (?:t[eę]|ta|t[aą]) (?:gr[eę]|gierk[eę]))?|(?:zagrajmy|odpal (?:gr[eę]|gierk[eę]))|(?:i (?:want to|wanna) play(?: (?:this|the) game)?|let'?s play(?: (?:this|the) game)?|play (?:this|the) game))$/u.test(
-    normalized,
-  );
-}
-
 async function alive(path: string, key: string): Promise<Session | null> {
   const raw = readPlayState(path);
   if (!raw) return null;

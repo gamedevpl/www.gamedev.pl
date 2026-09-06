@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- The conversational assistant interprets play, status and edit requests using the active game context, including published checkouts (#1187).
+
 ### Internal
 
 - Release packaging builds the shared contract before bundling the CLI (#1186).

@@ -1,6 +1,8 @@
+import { isCliAction, type CliAction, type CliSessionContext } from '@gamedevpl/contract';
 import type { ApiClient } from './api.js';
 
 export type CliChatResult =
+  | { kind: 'action'; action: CliAction; conversationId: string }
   | { kind: 'reply'; text: string; conversationId: string }
   | { kind: 'proposal'; title: string; concept: string; ack?: string; conversationId: string }
   | { kind: 'create'; token: string; slug: string; ack?: string; conversationId: string };
@@ -10,10 +12,19 @@ export async function postCliChat(
   text: string,
   conversationId?: string,
   prepareOnly = false,
+  session?: CliSessionContext,
 ): Promise<CliChatResult> {
-  return api.request<CliChatResult>('POST', '/api/cli/chat', {
+  const result = await api.request<CliChatResult>('POST', '/api/cli/chat', {
     text,
+    ...(session ? { session } : {}),
     ...(conversationId ? { conversationId } : {}),
     ...(prepareOnly ? { prepareOnly: true } : {}),
   });
+  if (
+    !result ||
+    !['reply', 'proposal', 'create', 'action'].includes(result.kind) ||
+    (result.kind === 'action' && !isCliAction(result.action))
+  )
+    throw new Error('Invalid CLI assistant response');
+  return result;
 }

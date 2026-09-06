@@ -116,6 +116,8 @@ it('retains a pending MCP task without a checkout and retries without another pi
   const api = {
     origin: 'https://example.test',
     request: async (method: string, path: string, body?: unknown) => {
+      if (path === '/api/cli/chat')
+        return { kind: 'action', action: { name: 'edit', request: 'make robots blue' }, conversationId: 'c' };
       if (path.endsWith('/handoff')) return { pending: true, builder: 'platform' };
       if (method === 'GET') return { slug: 'robots', builder, status: 'building' };
       if ((body as { prepareOnly?: boolean })?.prepareOnly) return { kind: 'proposal' };

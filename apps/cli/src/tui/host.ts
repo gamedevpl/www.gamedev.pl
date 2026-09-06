@@ -108,6 +108,10 @@ export async function runInkRepl(input: {
         continue;
       }
       if (result.token !== undefined) {
+        if (result.token !== token) {
+          if (workshop?.token !== result.token) workshop = undefined;
+          delete pendingExecution.current;
+        }
         token = result.token;
         watch.poke();
       }
