@@ -1,7 +1,19 @@
-import { accessSync, constants, existsSync, readFileSync, statSync } from 'node:fs';
-import { homedir } from 'node:os';
+import {
+  accessSync,
+  closeSync,
+  constants,
+  existsSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  statSync,
+} from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join, delimiter } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
+import { CliError, EXIT_REFUSED } from './exit-codes.js';
 import bundled from './adapters.json' with { type: 'json' };
 
 export interface AdapterSpec {
@@ -53,7 +65,46 @@ export function detectAdapter(
 ): AdapterSpec | null {
   const spec = file.adapters.find((row) => row.name === name);
   if (!spec) return null;
-  return which(spec.command) ? spec : null;
+  if (which(spec.command)) return spec;
+  if (name === 'cursor') {
+    const alias = which('agent');
+    if (alias) {
+      const help = probeHelp(alias, ['--help'], process.env);
+      if (help && /cursor/i.test(help)) return { ...spec, command: alias };
+    }
+  }
+  return null;
+}
+
+export function preflightAdapter(spec: AdapterSpec, env: NodeJS.ProcessEnv): void {
+  const args = spec.name === 'codex' ? ['exec', '--help'] : ['--help'];
+  const help = probeHelp(spec.command, args, env);
+  if (help === null) {
+    throw new CliError(`cannot run ${spec.name} --help`, EXIT_REFUSED, `check ${spec.command} in your terminal`);
+  }
+  const flags = spec.headless.filter((arg) => arg.startsWith('-')).map((arg) => arg.split('=')[0]!);
+  const missing = flags.filter((flag) => !help.includes(flag));
+  if (missing.length)
+    throw new CliError(
+      `${spec.name} does not support ${missing.join(', ')}`,
+      EXIT_REFUSED,
+      `update ${spec.name} or choose another agent`,
+    );
+}
+
+function probeHelp(command: string, args: string[], env: NodeJS.ProcessEnv): string | null {
+  const dir = mkdtempSync(join(tmpdir(), 'gamedev-agent-help-'));
+  const path = join(dir, 'help.txt');
+  const fd = openSync(path, 'w', 0o600);
+  try {
+    // Some CLIs exit before pipe buffers flush; files preserve their help.
+    const result = spawnSync(command, args, { env, timeout: 10_000, stdio: ['ignore', fd, fd] });
+    if (result.error || result.status !== 0 || statSync(path).size > 1024 * 1024) return null;
+    return readFileSync(path, 'utf8');
+  } finally {
+    closeSync(fd);
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 export function whichOnPath(cmd: string, env: NodeJS.ProcessEnv = process.env): string | null {

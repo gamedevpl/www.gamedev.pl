@@ -39,10 +39,10 @@ describe('agent discovery', () => {
     const agents = discoverAgents({ HOME: directory() }, (cmd) => `/bin/${cmd}`);
     expect(agents.find((row) => row.name === 'claude')).toMatchObject({ installed: true, local: true, mcp: true });
     expect(agents.find((row) => row.name === 'vibe')).toMatchObject({ installed: true, local: true, mcp: false });
-    for (const name of ['agy', 'cursor', 'cursor-agent', 'copilot']) {
-      expect(agents.find((row) => row.name === name)).toMatchObject({ installed: true, local: false, mcp: false });
+    for (const name of ['agy', 'cursor']) {
+      expect(agents.find((row) => row.name === name)).toMatchObject({ installed: true, local: true, mcp: false });
     }
-    expect(formatAgents(agents)).toContain('login and version compatibility are not checked');
+    expect(formatAgents(agents)).toContain('launch verifies required CLI flags');
   });
 
   it('admits custom local adapters without inventing MCP wiring', () => {
@@ -107,6 +107,7 @@ describe('agent discovery', () => {
     writeFileSync(
       join(dir, 'claude'),
       `#!${process.execPath}
+if (process.argv.includes('--help')) { console.log('-p --verbose --permission-mode --output-format'); process.exit(0); }
 const fs = require('node:fs');
 const args = process.argv.slice(2);
 const config = args[args.indexOf('--mcp-config') + 1];
@@ -176,6 +177,8 @@ console.log(JSON.stringify({ text: JSON.stringify({ cwd: process.cwd(), config }
     writeFileSync(
       join(dir, 'claude'),
       `#!${process.execPath}
+if (process.argv.includes('--help')) { console.log('-p --verbose --permission-mode --output-format'); process.exit(0); }
+process.on('SIGTERM', () => {});
 console.log(JSON.stringify({ text: 'working' }));
 setInterval(() => {}, 1000);
 `,

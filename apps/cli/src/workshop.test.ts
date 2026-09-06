@@ -17,6 +17,7 @@ import {
   workshopBrief,
   workshopTurn,
   chooseAdapter,
+  refreshBuilder,
   type AdapterRun,
   type Workshop,
 } from './workshop.js';
@@ -72,6 +73,7 @@ function workshop(root: string, over: Partial<Workshop> = {}): Workshop {
     pick: async (choices) => choices[0]!,
     abort: { current: null },
     run: () => ({ status: 0, stderr: '' }),
+    runAdapter: async () => ({ code: 0 }),
     ...over,
   };
 }
@@ -356,6 +358,25 @@ describe('the REPL inside a checkout', () => {
 });
 
 describe('opening a checkout', () => {
+  it('retains the chosen agent while a handoff awaits acknowledgement', async () => {
+    const ws = workshop(checkout(), {
+      builder: 'platform',
+      adapters: [claude, codex],
+      pick: async (choices) => choices[1]!,
+    });
+    const api = platform([], (path) =>
+      path.endsWith('/handoff') ? json({ pending: true, builder: 'platform' }, 202) : null,
+    );
+    ws.builder = await settleBuilder({ api, ws, status: 'building', write: () => undefined });
+    expect(ws.builder).toBe('platform');
+    expect(ws.selectedAgent).toBe('codex');
+    await refreshBuilder(api, ws);
+    expect(ws.builder).toBe('self');
+    ws.pick = async () => {
+      throw new Error('must honor the existing choice');
+    };
+    expect((await chooseAdapter(ws)).name).toBe('codex');
+  });
   it('offers every agent and carries the choice into only the first task', async () => {
     const ws = workshop(checkout(), {
       adapters: [claude, codex],
@@ -460,7 +481,7 @@ describe('parseEventLine', () => {
     expect(parseEventLine('{"type":"system","subtype":"init"}')).toBeNull();
     expect(parseEventLine('{"type":"thread.started","thread_id":"t"}')).toBeNull();
     expect(parseEventLine('{"type":"user","message":{"content":[{"type":"tool_result"}]}}')).toBeNull();
-    expect(parseEventLine('not json')).toBeNull();
+    expect(parseEventLine('not json')).toBe('not json');
     expect(parseEventLine('')).toBeNull();
   });
 });

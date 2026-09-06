@@ -1,4 +1,4 @@
-import { loadAdapters, whichOnPath, type AdapterFile } from './adapters.js';
+import { detectAdapter, loadAdapters, whichOnPath, type AdapterFile } from './adapters.js';
 
 export type AgentAvailability = {
   name: string;
@@ -8,15 +8,10 @@ export type AgentAvailability = {
   mcp: boolean;
 };
 
-const DISCOVERY_ONLY = [
-  { name: 'agy', command: 'agy' },
-  { name: 'cursor', command: 'cursor' },
-  { name: 'cursor-agent', command: 'cursor-agent' },
-  { name: 'copilot', command: 'copilot' },
-];
+const DISCOVERY_ONLY = [{ name: 'cursor-editor', command: 'cursor' }];
 
 export function adapterMcpSupported(name: string): boolean {
-  return name === 'claude' || name === 'codex';
+  return name === 'claude' || name === 'codex' || name === 'copilot';
 }
 
 export function discoverAgents(
@@ -29,7 +24,9 @@ export function discoverAgents(
   return known.map(({ name, command }) => ({
     name,
     command,
-    installed: which(command) !== null,
+    installed: registered.some((spec) => spec.name === name)
+      ? detectAdapter(name, which, file) !== null
+      : which(command) !== null,
     local: registered.some((spec) => spec.name === name),
     mcp: registered.some((spec) => spec.name === name) && adapterMcpSupported(name),
   }));
@@ -43,7 +40,7 @@ export function formatAgents(agents: AgentAvailability[]): string {
   return [
     ...lines,
     '',
-    'Detection checks executable files only; provider login and version compatibility are not checked.',
+    'Discovery checks executable files; launch verifies required CLI flags. Provider login is managed by the agent.',
     'Local files: gamedevpl delegate "<task>" --agent <name> inside a checkout.',
     'MCP: gamedevpl connect <slug> --agent <name>. The round must use builder self.',
     'Agent runs use that tool’s own credentials and billing.',

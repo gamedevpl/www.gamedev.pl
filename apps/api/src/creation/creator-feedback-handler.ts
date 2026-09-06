@@ -58,11 +58,18 @@ function parseBody(mode: CreatorMessageMode, body: unknown) {
   if (mode === 'turn') {
     const parsed = TurnRequestSchema.safeParse(body);
     if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'invalid request' };
-    return { data: { feedback: parsed.data.text, builder: parsed.data.builder, context: parsed.data.context } };
+    return {
+      data: {
+        feedback: parsed.data.text,
+        builder: parsed.data.builder,
+        context: parsed.data.context,
+        prepareOnly: parsed.data.prepareOnly,
+      },
+    };
   }
   const parsed = FeedbackRequestSchema.safeParse(body);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'invalid request' };
-  return { data: parsed.data };
+  return { data: { ...parsed.data, prepareOnly: false } };
 }
 
 function sendFeedbackOk(reply: FastifyReply, shotId: string | undefined, extra: Record<string, unknown> = {}) {
@@ -134,13 +141,7 @@ export async function handleCreatorFeedback(
 
   const feedbackUid = request.user?.uid;
   if (store && feedbackUid) {
-    const headroom = await peekQuota(
-      store,
-      feedbackUid,
-      dateStr,
-      dailyFeedbackQuota,
-      'feedback',
-    );
+    const headroom = await peekQuota(store, feedbackUid, dateStr, dailyFeedbackQuota, 'feedback');
     if (!headroom.allowed) {
       if (headroom.tier === 'blocked') {
         return reply.status(403).send({ error: 'account is blocked' });
@@ -255,6 +256,10 @@ export async function handleCreatorFeedback(
       }
     }
     if (chatOutcome?.kind === 'build') studioAckText = chatOutcome.ackText;
+  }
+
+  if (mode === 'turn' && parsed.data.prepareOnly) {
+    return reply.send({ kind: 'proposal', ...(studioAckText ? { ack: studioAckText } : {}) });
   }
 
   if (store) {

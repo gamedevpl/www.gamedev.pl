@@ -82,7 +82,7 @@ export function changedPaths(local: TreeFile[], remote: TreeFile[]): string[] {
 export async function fetchLatestTree(api: ApiClient, slug: string): Promise<{ version: string; files: TreeFile[] }> {
   const listed = await api.request<{ versions: VersionRow[] }>('GET', `/api/me/studio/games/${slug}/versions`);
   const latest = listed.versions[0];
-  if (!latest) throw new CliError('this game has no delivered version yet', EXIT_REFUSED);
+  if (!latest) return { version: 'undelivered', files: [] };
   const tree = await api.request<{ version: string; files: TreeFile[] }>(
     'GET',
     `/api/me/studio/games/${slug}/versions/${latest.version}/tree`,
@@ -110,12 +110,15 @@ export async function checkoutGame(input: {
   dest: string;
   fetchBuffer?: (url: string) => Promise<Buffer>;
   run?: (cmd: string, args: string[], cwd: string) => void;
+  allowUndelivered?: boolean;
 }): Promise<{ dest: string; remote: string }> {
   const run = input.run ?? defaultRun;
   mkdirSync(input.dest, { recursive: true });
   const archive = input.fetchBuffer
     ? await input.fetchBuffer(`${input.api.origin}/api/me/studio/games/${input.slug}/workspace`)
-    : await input.api.requestBytes(`/api/me/studio/games/${input.slug}/workspace`);
+    : await input.api.requestBytes(
+        `/api/me/studio/games/${input.slug}/workspace${input.allowUndelivered ? '?allowUndelivered=true' : ''}`,
+      );
   const tgz = join(input.dest, '.gamedev-workspace.tgz');
   writeFileSync(tgz, archive);
   try {
@@ -128,7 +131,7 @@ export async function checkoutGame(input: {
   }
   try {
     const tree = await fetchLatestTree(input.api, input.slug);
-    writeGameFiles(input.dest, input.slug, tree.files);
+    if (tree.version !== 'undelivered') writeGameFiles(input.dest, input.slug, tree.files);
     writeBase(input.dest, tree.version, tree.files);
   } catch {
     const local = localGameFiles(input.dest, input.slug);

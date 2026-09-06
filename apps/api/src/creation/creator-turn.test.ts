@@ -150,6 +150,29 @@ describe('POST /api/submissions/:token/turn (CL-10, CL-11)', () => {
     await app.close();
   });
 
+  it('prepares a change without queueing it or starting another build', async () => {
+    const {
+      app,
+      store,
+      briefs,
+      authHeaders: headers,
+    } = await createApp({ chatAgent: { decide: async () => ({ kind: 'build', text: 'On it.' }) } });
+    const { token, jobId } = await openDraft(app, store, headers);
+    const before = briefs.length;
+    const messages = await store.listCreatorMessages(jobId);
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/turn`,
+      headers,
+      payload: { text: 'make the robots blue', prepareOnly: true },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ kind: 'proposal', ack: 'On it.' });
+    expect(briefs).toHaveLength(before);
+    expect(await store.listCreatorMessages(jobId)).toEqual(messages);
+    await app.close();
+  });
+
   it('accepts a one-character status question that feedback would reject', async () => {
     const decide = vi.fn(async () => ({ kind: 'reply' as const, text: '?' }));
     const { app, store, authHeaders: headers } = await createApp({ chatAgent: { decide } });

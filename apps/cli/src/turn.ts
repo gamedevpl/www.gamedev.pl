@@ -2,6 +2,11 @@ import { CliError, EXIT_REFUSED } from './exit-codes.js';
 import type { ApiClient } from './api.js';
 
 export type TurnResult = { kind: 'reply'; text: string } | { kind: 'build'; ack?: string; roundId: number };
+export type PreparedTurnResult = TurnResult | { kind: 'proposal'; ack?: string };
+
+export async function prepareTurn(api: ApiClient, token: string, text: string): Promise<PreparedTurnResult> {
+  return api.request('POST', `/api/submissions/${encodeURIComponent(token)}/turn`, { text, prepareOnly: true });
+}
 
 export async function postTurn(api: ApiClient, token: string, text: string): Promise<TurnResult> {
   return api.request<TurnResult>('POST', `/api/submissions/${encodeURIComponent(token)}/turn`, { text });

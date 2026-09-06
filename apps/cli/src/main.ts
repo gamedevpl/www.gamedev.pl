@@ -24,7 +24,9 @@ import { runGitRemoteHelper } from './git-remote-main.js';
 import { runStatusVerb } from './status-watch.js';
 import { dispatchReadVerb } from './verbs.js';
 import { formatHelp } from './help.js';
-import { detectLocalAdapters, handoffBuilder, workshopTurn } from './workshop.js';
+import { detectLocalAdapters, handoffBuilder, pickAdapter, workshopTurn } from './workshop.js';
+import { preflightAdapter } from './adapters.js';
+import { createCliTelemetry, type CliTelemetry } from './telemetry.js';
 import { getStatus } from './turn.js';
 
 function storeFromEnv(env: NodeJS.ProcessEnv, warn: (line: string) => void): TokenStore {
@@ -62,6 +64,7 @@ export async function openCheckoutGame(
 
 // Non-interactive twin of the REPL turn: agent, ladder, optional delivery.
 async function runDelegateVerb(input: {
+  telemetry?: CliTelemetry;
   api: ApiClient;
   args: string[];
   flags: Record<string, string | boolean>;
@@ -71,6 +74,10 @@ async function runDelegateVerb(input: {
 }): Promise<number> {
   const request = input.args.join(' ').trim();
   if (!request) throw new CliError(cliUsage('delegate', '"<task>"'), EXIT_INPUT, '<task>');
+  const adapters = detectLocalAdapters(input.env);
+  const agent = typeof input.flags.agent === 'string' ? input.flags.agent : undefined;
+  const spec = pickAdapter({ adapters, env: input.env }, agent);
+  preflightAdapter(spec, input.env);
   const opened = await openCheckoutGame(input.api, input.cwd);
   if (!opened) throw new CliError('not inside a game checkout', EXIT_INPUT, cliUsage('checkout', '<slug>'));
   let builder = (await getStatus(input.api, opened.token)).builder ?? 'platform';
@@ -95,7 +102,8 @@ async function runDelegateVerb(input: {
   const ws = {
     ...opened,
     env: input.env,
-    adapters: detectLocalAdapters(input.env),
+    adapters,
+    telemetry: input.telemetry,
     builder,
     pick: async () => '',
     abort: { current: null },
@@ -129,6 +137,7 @@ export async function runCli(
   const store = storeFromEnv(env, (line) => io.stderr.write(line));
   const api = createApi({ origin, store, env });
   const tty = Boolean(io.stdin.isTTY);
+  const telemetry = verb === 'connect' || verb === 'delegate' ? createCliTelemetry(origin) : undefined;
 
   try {
     if (verb === 'help' || flags.help || flags.h) {
@@ -241,6 +250,7 @@ export async function runCli(
         agent: typeof flags.agent === 'string' ? flags.agent : undefined,
         handoff: flags.handoff === true,
         write: (line) => io.stdout.write(`${line}\n`),
+        telemetry,
       });
       return EXIT_GREEN;
     }
@@ -252,6 +262,7 @@ export async function runCli(
         env,
         cwd: process.cwd(),
         write: (line) => io.stdout.write(`${line}\n`),
+        telemetry,
       });
     }
     const read = await dispatchReadVerb({ verb, args, flags, api, io, env });
@@ -274,6 +285,8 @@ export async function runCli(
     const shown = describeError(error);
     io.stderr.write(`${shown.message}${shown.next ? `\nnext: ${shown.next}` : ''}\n`);
     return shown.code;
+  } finally {
+    await telemetry?.flush();
   }
 }
 

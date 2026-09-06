@@ -1,6 +1,7 @@
 import { join } from 'node:path';
+import { createInterface } from 'node:readline';
 import type { ApiClient } from './api.js';
-import { detectAdapter, loadAdapters, whichOnPath, type AdapterSpec } from './adapters.js';
+import { detectAdapter, loadAdapters, preflightAdapter, whichOnPath, type AdapterSpec } from './adapters.js';
 import { cliUsage } from './bin-name.js';
 import { formatSyncLines, inspectGame, type SyncResult } from './checkout.js';
 import { childEnv, renderDelegateStream, spawnAdapter } from './delegate.js';
@@ -9,6 +10,8 @@ import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { formatSubmitLines, submitGame } from './submit.js';
 import { getStatus, isTerminalStatus } from './turn.js';
 import { runLadder } from './verify.js';
+import type { CliTelemetry } from './telemetry.js';
+import { prepareWorkspace } from './prepare-workspace.js';
 
 export type PickChoice = (choices: string[], question: string) => Promise<string>;
 
@@ -30,6 +33,7 @@ export type Workshop = {
   env: NodeJS.ProcessEnv;
   adapters: AdapterSpec[];
   selectedAgent?: string;
+  telemetry?: CliTelemetry;
   builder: string;
   pick: PickChoice;
   // Ctrl+C aborts the running child through this, not the REPL.
@@ -57,11 +61,9 @@ export function detectLocalAdapters(
 
 async function defaultAdapterRun(input: Parameters<AdapterRun>[0]): Promise<{ code: number | null }> {
   const child = spawnAdapter({ ...input, timeoutMs: ADAPTER_TIMEOUT_MS });
-  const feed = (chunk: Buffer): void => {
-    for (const line of String(chunk).split('\n')) if (line.trim()) input.onLine?.(line);
-  };
-  child.stdout?.on('data', feed);
-  child.stderr?.on('data', feed);
+  for (const stream of [child.stdout, child.stderr]) {
+    if (stream) createInterface({ input: stream }).on('line', (line: string) => input.onLine?.(line));
+  }
   return {
     code: await new Promise<number | null>((resolve, reject) => {
       child.once('error', reject);
@@ -161,13 +163,15 @@ export async function refreshBuilder(api: ApiClient, ws: Pick<Workshop, 'token' 
 // Asked once per session, only where a local agent could take over.
 export async function settleBuilder(input: {
   api: ApiClient;
-  ws: Pick<Workshop, 'token' | 'slug' | 'adapters' | 'builder' | 'pick' | 'selectedAgent'>;
+  ws: Pick<Workshop, 'token' | 'slug' | 'adapters' | 'builder' | 'pick' | 'selectedAgent' | 'telemetry'> &
+    Partial<Pick<Workshop, 'env' | 'runAdapter'>>;
   status: string;
   write: (line: string) => void;
 }): Promise<string> {
   const { ws } = input;
   if (!ws.adapters.length || ws.builder === 'self' || isTerminalStatus(input.status)) return ws.builder;
   const local = ws.adapters.map((spec) => `${spec.name} here — its own credentials and billing`);
+  for (const spec of ws.adapters) ws.telemetry?.record('delegate_offered', spec.name);
   const choice = await ws.pick(
     [...local, 'the platform — uses your gamedev.pl quota; /pull afterwards'],
     `Who builds ${ws.slug}?`,
@@ -175,8 +179,9 @@ export async function settleBuilder(input: {
   const selected = ws.adapters[local.indexOf(choice)];
   if (!selected) return ws.builder;
   try {
+    if (ws.env && !ws.runAdapter) preflightAdapter(selected, ws.env);
     const outcome = await handoffBuilder(input.api, ws.token, 'self', ws.builder);
-    if (!outcome.pending && outcome.builder === 'self') ws.selectedAgent = selected.name;
+    ws.selectedAgent = selected.name;
     input.write(handoffLine(outcome, ws.slug));
     return outcome.builder;
   } catch (error) {
@@ -196,7 +201,7 @@ export function pickAdapter(ws: Pick<Workshop, 'adapters' | 'env'>, name?: strin
   const spec = ws.adapters[0];
   if (!spec) {
     throw new CliError(
-      'no local agent on PATH — install claude, codex, gemini or vibe',
+      'no local agent on PATH — run gamedevpl agents to see supported tools',
       EXIT_REFUSED,
       '/builder platform lets the platform build instead',
     );
@@ -229,12 +234,16 @@ export async function runLocalBuild(input: {
   write: (line: string) => void;
 }): Promise<boolean> {
   const { ws, spec } = input;
+  if (!ws.runAdapter) preflightAdapter(spec, ws.env);
   const cwd = spec.cwd === 'game-dir' ? join(ws.root, 'games', ws.slug) : ws.root;
   const controller = new AbortController();
   ws.abort.current = controller;
   input.write(`▸ ${spec.name} is working in games/${ws.slug} — Ctrl+C stops it`);
   let result: { code: number | null };
   try {
+    if (!ws.runAdapter)
+      await prepareWorkspace({ cwd: ws.root, env: ws.env, abort: controller.signal, write: input.write });
+    ws.telemetry?.record('delegate_used', spec.name);
     result = await (ws.runAdapter ?? defaultAdapterRun)({
       spec,
       prompt: input.brief,
@@ -259,6 +268,7 @@ export async function runLocalBuild(input: {
   input.write('verifying — typecheck, check:static');
   const verify = runLadder({ cwd: ws.root, publish: false, run: ws.run });
   if (!verify.ok) {
+    ws.telemetry?.record('verify_failed', spec.name, verify.stage);
     const detail = verify.detail.split('\n').find((line) => line.trim()) ?? '';
     input.write(`verify failed at ${verify.stage}${detail ? `: ${detail}` : ''}\nfix by hand, or ask again`);
     return false;
@@ -285,6 +295,7 @@ export async function offerSubmit(input: {
   }
   try {
     const result = await submitGame({ api: input.api, slug: ws.slug, dest: ws.root, run: ws.run });
+    if (result.kind === 'delivered') ws.telemetry?.record('delivered');
     input.write(formatSubmitLines(result, ws.slug).join('\n'));
   } catch (error) {
     input.write(formatError(error));
