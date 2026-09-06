@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Published-game edits open an improvement round with the selected builder instead of targeting a closed round.
+- Published-game edits open an improvement round with the selected builder instead of targeting a closed round (#1190).
 
 ## 0.4.1 — 2026-09-06
 

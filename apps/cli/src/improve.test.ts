@@ -1,3 +1,4 @@
+import { improvePublished } from './improve.js';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { handleReplLine } from './repl.js';
 import { chooseExecution, executeChoice } from './execution.js';
@@ -77,4 +78,43 @@ describe('cancelled improvement', () => {
     expect(request).toHaveBeenCalledTimes(2);
     expect(executeChoice).not.toHaveBeenCalled();
   });
+});
+
+it('retains the new round when launching its agent fails', async () => {
+  const spec = loadAdapters({ GAMEDEV_ADAPTERS: '/nonexistent' }).adapters.find(
+    (adapter) => adapter.name === 'claude',
+  )!;
+  vi.mocked(chooseExecution).mockResolvedValue({ builder: 'self', spec, mode: 'local' });
+  vi.mocked(executeChoice).mockRejectedValueOnce(new Error('agent unavailable'));
+  const write = vi.fn();
+  const result = await improvePublished({
+    api: { request: vi.fn(async () => ({ ok: true, token: 'new', slug: 'airtime' })) } as unknown as ApiClient,
+    token: 'old',
+    request: 'Add realistic hair physics',
+    slug: 'airtime',
+    env: {},
+    pick: vi.fn(),
+    workshop: ws,
+    write,
+    abort: ws.abort,
+  });
+  expect(result).toMatchObject({ token: 'new', workshop: { token: 'new', builder: 'self' } });
+  expect(write).toHaveBeenCalledWith(expect.stringContaining('agent unavailable'));
+});
+
+it('does not launch an agent when improve only returns a conversational reply', async () => {
+  vi.mocked(chooseExecution).mockResolvedValue({ builder: 'platform' });
+  const result = await improvePublished({
+    api: { request: vi.fn(async () => ({ ok: true })) } as unknown as ApiClient,
+    token: 'old',
+    request: 'What would better hair look like?',
+    slug: 'airtime',
+    env: {},
+    pick: vi.fn(),
+    workshop: ws,
+    write: vi.fn(),
+    abort: ws.abort,
+  });
+  expect(result.token).toBeUndefined();
+  expect(executeChoice).not.toHaveBeenCalled();
 });
