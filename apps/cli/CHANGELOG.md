@@ -3,7 +3,7 @@
 One line per change, written for a creator reading `gamedevpl update`. The category
 decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.claude/skills/cli-release/SKILL.md):
 **Breaking** and **Added** bump minor (major once 1.0 exists), **Fixed** bumps patch,
-**Internal** never cuts a release. Merging the auto-opened `release(cli)` PR is the cutoff.
+**Internal** never cuts a release. Landing on `master` with unreleased entries cuts and publishes.
 
 ## Unreleased
 

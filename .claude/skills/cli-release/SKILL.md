@@ -1,13 +1,13 @@
 ---
 name: cli-release
-description: How gamedevpl (apps/cli) is versioned and released — the changelog is the source of truth, its categories decide semver, and merging the auto-opened release PR is the cutoff. Use whenever you change anything under apps/cli, need to cut or hold a CLI release, or the changelog guard fails in CI.
+description: How gamedevpl (apps/cli) is versioned and released — the changelog is the source of truth, its categories decide semver, and landing on master automatically cuts and publishes the release. Use whenever you change anything under apps/cli, need to cut or hold a CLI release, or the changelog guard fails in CI.
 ---
 
 # Releasing the gamedevpl CLI
 
 One file drives everything: [`apps/cli/CHANGELOG.md`](../../../apps/cli/CHANGELOG.md).
-You write a line; the machinery derives the version, opens the release PR, and publishes
-when a human (or auto-merge) merges it. There is no version to remember and no tag to push.
+You write a line; the machinery derives the version and publishes when your PR lands on master.
+There is no version to remember, no release PR to merge, and no tag to push.
 
 ## When you change the CLI
 
@@ -32,23 +32,17 @@ header by hand when the CLI is ready to promise stability.
 ## How a release happens
 
 1. Your PR merges to master with an `Unreleased` entry.
-2. `cli-release-pr.yml` runs `release.mjs cut` on branch `release/cli`: moves
-   `Unreleased` under `## X.Y.Z — date`, bumps `apps/cli/package.json` and the installer's
-   default `CLI_VERSION`, and opens (or refreshes) PR **`release(cli): vX.Y.Z`**. Every
-   later merge to master with more entries updates the same PR — that is batching.
-3. **Merging the release PR is the cutoff commit.** It lands the version on master.
-4. `cli-release.yml` sees `apps/cli/package.json` change, builds the bundle, attests
-   provenance, and publishes `cli-vX.Y.Z` with the changelog section as notes.
-5. `curl | bash` and `gamedevpl update` pick it up. The installer falls back to the
+2. `cli-release.yml` runs automatically on master:
+   - checks `release.mjs next` to derive the version from `Breaking`/`Added`/`Fixed`,
+   - executes `release.mjs cut` (moves `Unreleased` under `## X.Y.Z — date`, bumps `apps/cli/package.json` and installer `CLI_VERSION`),
+   - commits back to master with `[skip ci]` and pushes the `cli-vX.Y.Z` tag,
+   - bundles the CLI script, attests build provenance, and publishes the release on GitHub Releases.
+3. `curl | bash` and `gamedevpl update` pick it up immediately. The installer falls back to the
    latest release if its baked-in default is not published yet, so the site deploy and
    the release may land in either order.
 
-To **hold** a release, leave the release PR open. To **skip** a release for a change,
-file it under `### Internal`. To **cut by hand**: `npm run cli:release -- cut`, commit,
-open a PR — the publish step is the same.
-
-To make it **fully automatic**, set the repository variable `CLI_RELEASE_AUTOMERGE=true`:
-the release PR arms `gh pr merge --auto` and merges itself once checks pass.
+To **skip** a release for a change, file it under `### Internal`. To **cut by hand**: push a
+`cli-v*` tag or trigger `workflow_dispatch` on `cli-release.yml`.
 
 ## Local commands
 
@@ -84,10 +78,7 @@ repo in the same session.
 - **No third-party actions in the release workflows.** `softprops/action-gh-release`
   made the workflow fail at startup with zero jobs — every other workflow here uses only
   GitHub-owned actions, and that convention now holds for releases too. `gh` does the job.
-- **A PR pushed with `GITHUB_TOKEN` does not trigger CI.** If branch protection requires
-  checks on the release PR, set secret `CLI_RELEASE_TOKEN` (PAT: contents + pull-requests
-  write); the workflow prefers it when present.
-- **The tag is created at publish time**, at the merged cut commit. Do not pre-push
+- **The tag is created at publish time**, at the cut commit. Do not pre-push
   `cli-v*` tags — a stale tag pointing at an older commit is how `cli-v0.1.0` came to
   label an artifact built from a newer master.
 
@@ -99,6 +90,5 @@ repo in the same session.
 | Parse / bump / cut / notes           | `eslint-rules/cli-changelog-lib.mjs` (+ `.test.mjs`) |
 | PR guard (in `npm run lint` and CI)  | `eslint-rules/cli-changelog-check.mjs`               |
 | `next` / `cut` / `notes` commands    | `apps/cli/scripts/release.mjs`                       |
-| Release PR proposer                  | `.github/workflows/cli-release-pr.yml`               |
-| Publisher                            | `.github/workflows/cli-release.yml`                  |
+| Automated release workflow           | `.github/workflows/cli-release.yml`                  |
 | Installer default version + fallback | `apps/api/src/platform/cli-installers.ts`            |
