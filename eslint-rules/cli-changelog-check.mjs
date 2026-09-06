@@ -10,6 +10,7 @@ import {
   CHANGELOG_PATH,
   CLI_INSTALLERS_PATH,
   CLI_PACKAGE_JSON_PATH,
+  CLI_UPDATE_PATH,
   cliSourceTouched,
   parseChangelog,
   readRepoFile,
@@ -54,11 +55,14 @@ function main() {
 
   const versions = versionConsistency();
   if (!versions.ok) {
-    console.error('CLI version drift — the changelog, the package and the installer disagree:');
+    console.error('CLI version drift — the four copies of the version disagree:');
     console.error(`  ${CHANGELOG_PATH}: ${versions.changelog ?? 'no released section'}`);
     console.error(`  ${CLI_PACKAGE_JSON_PATH}: ${versions.package}`);
     console.error(`  ${CLI_INSTALLERS_PATH}: ${versions.installer}`);
-    console.error('  The installer serves its own default, so drift means creators get the wrong version.');
+    if (!versions.bundledDerived) {
+      console.error(`  ${CLI_UPDATE_PATH}: hardcodes a version — it must derive one from package.json`);
+    }
+    console.error('  Creators see the bundled one and download the installer one; both must match the changelog.');
     process.exitCode = 1;
     return;
   }

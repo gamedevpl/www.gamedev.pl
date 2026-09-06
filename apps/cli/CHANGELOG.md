@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- `gamedevpl` prints the version it actually is; every release so far reported 0.1.0 in the banner, footer and `help`
+
 ## 0.3.0 — 2026-09-05
 
 ### Added

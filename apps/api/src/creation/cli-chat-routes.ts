@@ -13,6 +13,7 @@ import { MAX_REVISION_CHARS } from '../platform/submission-status.js';
 import { clipCliChatTurns, type CliChatRecord, type CliChatTurn } from '../store/slices/cli-chat.js';
 import { CREATION_REFUSAL_CODES, type ChatGate } from './creation-limits.js';
 import type { CreateGameResult } from './create-game.js';
+import { collapseJobsToOwnerGames, MAX_OWNER_GAMES } from './owner-games.js';
 import { failClosedReply, IntakeChatAgent, type IntakeAgent } from './intake-agent.js';
 
 const ChatBodySchema = z.object({
@@ -44,6 +45,11 @@ function notFound(reply: FastifyReply) {
 
 function canned(message: string, conversationId: string) {
   return { kind: 'reply' as const, text: failClosedReply(message), conversationId };
+}
+
+function gameState(tip: { publishedAt?: string; state?: string }): string {
+  if (tip.publishedAt) return 'published';
+  return tip.state ?? 'draft';
 }
 
 export function registerCliChatRoutes(app: FastifyInstance, options: CliChatRoutesOptions): void {
@@ -104,9 +110,23 @@ export function registerCliChatRoutes(app: FastifyInstance, options: CliChatRout
       const conversationId = existing?.conversationId ?? randomUUID();
       const history = existing?.turns ?? [];
 
+      // Without this the agent guessed the shelf and wrongly said none.
+      let games;
+      let gamesTotal;
+      try {
+        const records = await store.listSubmissionsByOwner(uid);
+        const shelf = collapseJobsToOwnerGames(records, 'shelf');
+        gamesTotal = shelf.length;
+        games = shelf
+          .slice(0, MAX_OWNER_GAMES)
+          .flatMap((game) => (game.tip.slug ? [{ slug: game.tip.slug, state: gameState(game.tip) }] : []));
+      } catch (error) {
+        request.log.warn({ err: error, cliChat: { outcome: 'shelf_unread' } }, 'cli intake chat shelf unreadable');
+      }
+
       let decision;
       try {
-        decision = await intakeAgent.decide({ message: text, history });
+        decision = await intakeAgent.decide({ message: text, history, games, gamesTotal });
       } catch (error) {
         request.log.warn({ err: error, cliChat: { outcome: 'fail_closed' } }, 'cli intake chat failed closed');
         const fallback = canned(text, conversationId);

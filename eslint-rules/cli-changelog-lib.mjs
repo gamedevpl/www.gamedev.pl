@@ -10,6 +10,8 @@ export const REPO_ROOT = path.resolve(here, '..');
 export const CHANGELOG_PATH = 'apps/cli/CHANGELOG.md';
 export const CLI_PACKAGE_JSON_PATH = 'apps/cli/package.json';
 export const CLI_INSTALLERS_PATH = 'apps/api/src/platform/cli-installers.ts';
+// The module that exports the version the REPL, help and footer print.
+export const CLI_UPDATE_PATH = 'apps/cli/src/update.ts';
 
 export const CATEGORIES = ['Breaking', 'Added', 'Fixed', 'Internal'];
 export const UNRELEASED = 'Unreleased';
@@ -228,10 +230,20 @@ export function bumpVersionStrings(version) {
 }
 
 
-export function currentInstallerVersion() {
-  const match = /export const CLI_VERSION = '(\d+\.\d+\.\d+)';/.exec(readRepoFile(CLI_INSTALLERS_PATH));
-  if (!match) throw new Error(`no CLI_VERSION constant found in ${CLI_INSTALLERS_PATH}`);
+function versionConstantIn(relative) {
+  const match = /export const CLI_VERSION = '(\d+\.\d+\.\d+)';/.exec(readRepoFile(relative));
+  if (!match) throw new Error(`no CLI_VERSION constant found in ${relative}`);
   return match[1];
+}
+
+export function currentInstallerVersion() {
+  return versionConstantIn(CLI_INSTALLERS_PATH);
+}
+
+// The version a creator sees must be derived from package.json at build time, never
+// re-typed: a hand-kept copy is what made every release print 0.1.0.
+export function bundledVersionIsDerived() {
+  return !/export const CLI_VERSION\s*=\s*'[\d.]+'/.test(readRepoFile(CLI_UPDATE_PATH));
 }
 
 // The three places a version lives must agree, or the installer serves a version the
@@ -241,11 +253,13 @@ export function versionConsistency() {
   const changelog = parsed.errors.length > 0 ? null : latestReleasedVersion(parsed);
   const pkg = currentCliVersion();
   const installer = currentInstallerVersion();
+  const bundledDerived = bundledVersionIsDerived();
   return {
     parseErrors: parsed.errors,
     changelog,
     package: pkg,
     installer,
-    ok: parsed.errors.length === 0 && changelog === pkg && pkg === installer,
+    bundledDerived,
+    ok: parsed.errors.length === 0 && changelog === pkg && pkg === installer && bundledDerived,
   };
 }

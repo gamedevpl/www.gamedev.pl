@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   bumpKind,
+  bundledVersionIsDerived,
   CHANGELOG_PATH,
   cliSourceTouched,
   compareVersions,
@@ -155,11 +156,19 @@ describe('the repository own changelog', () => {
   });
 
   it('agrees with package.json and the installer default', () => {
+    const version = latestReleasedVersion(parsed);
     const state = versionConsistency();
     expect({ changelog: state.changelog, package: state.package, installer: state.installer }).toEqual({
-      changelog: latestReleasedVersion(parsed),
-      package: latestReleasedVersion(parsed),
-      installer: latestReleasedVersion(parsed),
+      changelog: version,
+      package: version,
+      installer: version,
     });
+    expect(state.ok).toBe(true);
+  });
+
+  // The version a creator sees came from a hand-kept constant, so every release printed
+  // 0.1.0 whatever it was (screenshot, 2026-09-06). It is derived at build time now.
+  it('does not let the CLI hardcode the version it prints', () => {
+    expect(bundledVersionIsDerived()).toBe(true);
   });
 });
