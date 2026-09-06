@@ -6,7 +6,7 @@ import type { GitHubClient } from '../catalog/github-client.js';
 import { InMemoryStore, type Store } from '../platform/store.js';
 import { enableCliSurface } from '../platform/oauth-cli-test-app.js';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
-import { StubIntakeAgent, type IntakeAgent } from './intake-agent.js';
+import { StubIntakeAgent, type IntakeAgent, type IntakeAgentRequest } from './intake-agent.js';
 
 const secret = 'submission-secret';
 const sessionSecret = 'dev-session-secret-change-me';
@@ -245,5 +245,70 @@ describe('POST /api/cli/chat', () => {
     expect(await store.getCliChat('g:test-user')).not.toBeNull();
     await store.deleteAccountIdentity('g:test-user', '2026-09-05T00:00:00Z');
     expect(await store.getCliChat('g:test-user')).toBeNull();
+  });
+});
+
+// The route hands the agent the real shelf, never a guess.
+describe('the shelf the CLI chat hands the agent', () => {
+  let restore: (() => void) | undefined;
+
+  beforeEach(() => {
+    restore = enableCliSurface();
+  });
+
+  afterEach(() => {
+    restore?.();
+    restore = undefined;
+  });
+
+  function capturingAgent() {
+    const seen: IntakeAgentRequest[] = [];
+    const agent: IntakeAgent = {
+      async decide(request) {
+        seen.push(request);
+        return { kind: 'reply', text: 'ok' };
+      },
+    };
+    return { agent, seen };
+  }
+
+  it('passes the creator own games, newest job per slug', async () => {
+    const store = new InMemoryStore();
+    const { agent, seen } = capturingAgent();
+    const { app, authHeaders: headers } = await createApp({ store, intakeAgent: agent });
+    await store.createSubmission(1, 'g:test-user', 'Wojna robakow');
+    await store.setSubmissionSlug(1, 'wojna-robakow');
+    await store.setSubmissionPublishedAt(1, '2026-09-01T00:00:00.000Z');
+    await store.createSubmission(2, 'g:test-user', 'TV Tycoon');
+    await store.setSubmissionSlug(2, 'tv-tycoon');
+
+    const res = await chat(app, headers, { text: 'what are my games?' });
+    expect(res.statusCode).toBe(200);
+    const games = (seen[0]?.games ?? []).map((game) => game.slug).sort();
+    expect(games).toEqual(['tv-tycoon', 'wojna-robakow']);
+    expect(seen[0]?.games?.find((game) => game.slug === 'wojna-robakow')?.state).toBe('published');
+    await app.close();
+  });
+
+  it('sends an empty list for a creator with no games, not a missing one', async () => {
+    const { agent, seen } = capturingAgent();
+    const { app, authHeaders: headers } = await createApp({ intakeAgent: agent });
+    const res = await chat(app, headers, { text: 'what are my games?' });
+    expect(res.statusCode).toBe(200);
+    expect(seen[0]?.games).toEqual([]);
+    await app.close();
+  });
+
+  it('omits the games rather than claiming none when the shelf cannot be read', async () => {
+    const store = new InMemoryStore();
+    store.listSubmissionsByOwner = async () => {
+      throw new Error('firestore is down');
+    };
+    const { agent, seen } = capturingAgent();
+    const { app, authHeaders: headers } = await createApp({ store, intakeAgent: agent });
+    const res = await chat(app, headers, { text: 'what are my games?' });
+    expect(res.statusCode).toBe(200);
+    expect(seen[0]?.games).toBeUndefined();
+    await app.close();
   });
 });

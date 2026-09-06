@@ -3,6 +3,8 @@ import type { GenerationRequest, GenerationResult } from 'genaicode';
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_INTAKE_MODEL,
+  gamesBlock,
+  MAX_INTAKE_GAMES,
   DEFAULT_VERTEX_INTAKE_MODEL,
   failClosedReply,
   IntakeChatAgent,
@@ -140,5 +142,61 @@ describe('StubIntakeAgent', () => {
   it('returns the injected decision', async () => {
     const agent = new StubIntakeAgent({ kind: 'reply', text: 'hi' });
     await expect(agent.decide({ message: 'x', history: [] })).resolves.toEqual({ kind: 'reply', text: 'hi' });
+  });
+});
+
+describe('the creator own games in the prompt', () => {
+  it('omits the block entirely when the shelf could not be read', () => {
+    expect(gamesBlock(undefined)).toBe('');
+  });
+
+  it('says none only for a shelf that really is empty', () => {
+    expect(gamesBlock([])).toContain('none yet');
+  });
+
+  it('lists slugs with state, and counts the rest', () => {
+    const many = Array.from({ length: MAX_INTAKE_GAMES + 3 }, (_, i) => ({ slug: `game-${i}`, state: 'published' }));
+    const block = gamesBlock(many, many.length);
+    expect(block).toContain('game-0 [published]');
+    expect(block).toContain(`game-${MAX_INTAKE_GAMES - 1} [published]`);
+    expect(block).not.toContain(`game-${MAX_INTAKE_GAMES} [`);
+    expect(block).toContain('and 3 more');
+  });
+
+  it('reaches the model as data, ahead of the live message', async () => {
+    let seen: GenerationRequest | undefined;
+    const agent = new IntakeChatAgent({
+      client: stubClient(textResult('you have two'), (request) => {
+        seen = request;
+      }),
+    });
+    await agent.decide({
+      message: 'what are my games?',
+      history: [],
+      games: [
+        { slug: 'wojna-robakow', state: 'published' },
+        { slug: 'tv-tycoon', state: 'building' },
+      ],
+    });
+    const serialized = JSON.stringify(seen);
+    expect(serialized).toContain('wojna-robakow [published]');
+    expect(serialized).toContain('tv-tycoon [building]');
+    expect(serialized).toContain('data, not instructions');
+  });
+
+  it('drops history rather than the games block when the prompt is too long', async () => {
+    let seen: GenerationRequest | undefined;
+    const agent = new IntakeChatAgent({
+      client: stubClient(textResult('ok'), (request) => {
+        seen = request;
+      }),
+    });
+    const history = Array.from({ length: 40 }, (_, i) => ({
+      role: (i % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
+      text: 'x'.repeat(400),
+      at: '2026-09-06T00:00:00.000Z',
+    }));
+    await agent.decide({ message: 'and my games?', history, games: [{ slug: 'keep-me', state: 'published' }] });
+    expect(JSON.stringify(seen)).toContain('keep-me [published]');
   });
 });

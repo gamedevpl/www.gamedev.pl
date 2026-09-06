@@ -58,16 +58,23 @@ npm run cli:release -- next       # the version the next cut would produce, or "
 npm run cli:release -- notes 0.1.0
 ```
 
-## The version lives in three places, and they must agree
+## Where the version lives
 
-`apps/cli/CHANGELOG.md`'s newest released section, `apps/cli/package.json`, and
-`CLI_VERSION` in `apps/api/src/platform/cli-installers.ts`. The cut writes all three, so
-they only drift when someone releases by hand — which is exactly what happened: `0.2.0`
-and `0.3.0` were cut by `workflow_dispatch` with an explicit version, neither touched the
-repo, and `install.sh` kept serving `0.1.0` to every creator while `0.3.0` was the latest
-release. Two doors now catch it: `npm run lint` (the guard prints all three) and
-`npm run test:rules` (asserted against the real files). If you ever dispatch a release by
-hand, land the same version in the repo in the same session.
+Two files carry it, and the cut writes both: `apps/cli/package.json` and `CLI_VERSION` in
+`apps/api/src/platform/cli-installers.ts` (the installer's default). The newest released
+section of the changelog must match them — `npm run lint` and `npm run test:rules` both
+check it.
+
+**The version the CLI prints is not a third copy.** `apps/cli/src/update.ts` derives it
+from `package.json`, injected by esbuild at bundle time. It used to be a hand-kept
+constant, and because nothing bumped it, _every_ release printed `0.1.0` — a creator on
+0.3.0 saw 0.1.0 in the banner, the footer and `help`. Do not reintroduce a literal there;
+the guard and a test both refuse one.
+
+Drift is still possible one way: releasing by hand with `workflow_dispatch` and an
+explicit version, which is how 0.2.0 and 0.3.0 shipped without touching the repo, leaving
+`install.sh` serving 0.1.0. If you ever dispatch by hand, land the same version in the
+repo in the same session.
 
 ## Traps recorded so far
 

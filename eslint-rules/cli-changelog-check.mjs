@@ -59,7 +59,9 @@ function main() {
     console.error(`  ${CHANGELOG_PATH}: ${versions.changelog ?? 'no released section'}`);
     console.error(`  ${CLI_PACKAGE_JSON_PATH}: ${versions.package}`);
     console.error(`  ${CLI_INSTALLERS_PATH}: ${versions.installer}`);
-    console.error(`  ${CLI_UPDATE_PATH}: ${versions.bundled}  (what the running CLI prints)`);
+    if (!versions.bundledDerived) {
+      console.error(`  ${CLI_UPDATE_PATH}: hardcodes a version — it must derive one from package.json`);
+    }
     console.error('  Creators see the bundled one and download the installer one; both must match the changelog.');
     process.exitCode = 1;
     return;

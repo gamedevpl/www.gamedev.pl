@@ -1,11 +1,23 @@
 import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { CLI_BIN, GIT_REMOTE_HELPER } from './bin-name.js';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 
-export const CLI_VERSION = '0.3.0';
+// Injected from package.json at bundle time; never hand-kept.
+declare const __CLI_VERSION__: string | undefined;
+
+function packageVersion(): string {
+  try {
+    return createRequire(import.meta.url)('../package.json').version as string;
+  } catch {
+    return '0.0.0-dev';
+  }
+}
+
+export const CLI_VERSION: string = typeof __CLI_VERSION__ === 'string' ? __CLI_VERSION__ : packageVersion();
 export const CLI_RELEASE_PREFIX = 'cli-v';
 export const CLI_ASSET = CLI_BIN;
 export const CLI_RELEASES_DOWNLOAD = 'https://github.com/gamedevpl/www.gamedev.pl/releases/download';
