@@ -13,7 +13,7 @@ import { CLI_VERSION } from './update.js';
 import { formatError } from './errors.js';
 import { formatHelp } from './help.js';
 import { MASCOT_ASCII } from './tui/mascot.js';
-import { handoffBuilder, workshopTurn, type Workshop } from './workshop.js';
+import { handoffBuilder, handoffLine, refreshBuilder, workshopTurn, type Workshop } from './workshop.js';
 
 export type ReplLineResult = {
   next: 'continue' | 'quit';
@@ -65,7 +65,7 @@ export async function handleReplLine(input: {
     if (cmd === 'submit') {
       try {
         const parsed = parseArgv(['node', 'cli', 'submit', ...rest]);
-        const dest = parsed.args[0] ?? process.cwd();
+        const dest = parsed.args[0] ?? input.workshop?.root ?? process.cwd();
         const slug = (typeof parsed.flags.slug === 'string' ? parsed.flags.slug : null) ?? readCheckoutSlug(dest);
         if (!slug) {
           input.write(`run it as ${cliUsage('submit', '[dir]')}`);
@@ -87,7 +87,7 @@ export async function handleReplLine(input: {
     if (cmd === 'connect' || cmd === 'checkout' || cmd === 'pull' || cmd === 'diff') {
       try {
         const parsed = parseArgv(['node', 'cli', cmd, ...rest]);
-        const cwd = process.cwd();
+        const cwd = input.workshop?.root ?? process.cwd();
         const slug = parsed.args[0] || (cmd === 'checkout' ? undefined : readCheckoutSlug(cwd));
         if (!slug) {
           input.write(`run it as ${cliUsage(cmd)}`);
@@ -198,6 +198,7 @@ async function handleWorkshopVerb(input: {
     if (input.cmd === 'builder') {
       const wanted = input.rest[0];
       if (wanted !== 'self' && wanted !== 'platform') {
+        await refreshBuilder(input.api, ws);
         input.write(`builder ${ws.builder} — /builder self or /builder platform to switch`);
         return;
       }
@@ -205,12 +206,9 @@ async function handleWorkshopVerb(input: {
         input.write(`builder is already ${wanted}`);
         return;
       }
-      ws.builder = await handoffBuilder(input.api, ws.token, wanted);
-      input.write(
-        wanted === 'self'
-          ? `builder self — your local agent edits games/${ws.slug}`
-          : `builder platform — say what to change and the platform builds; /pull when it lands`,
-      );
+      const outcome = await handoffBuilder(input.api, ws.token, wanted, ws.builder);
+      ws.builder = outcome.builder;
+      input.write(handoffLine(outcome, ws.slug));
       return;
     }
     const parsed = parseArgv(['node', 'cli', 'delegate', ...input.rest]);

@@ -35,7 +35,11 @@ export type Workshop = {
   abort: { current: AbortController | null };
   runAdapter?: AdapterRun;
   run?: VerifyRun;
+  // One-shot verb: no picks, first agent, deliver or not.
+  unattended?: { deliver: boolean };
 };
+
+export type HandoffOutcome = { builder: string; pending: boolean };
 
 export const ADAPTER_TIMEOUT_MS = 30 * 60_000;
 
@@ -117,12 +121,35 @@ export async function openWorkshop(input: {
   return { adapters, builder, status };
 }
 
-export async function handoffBuilder(api: ApiClient, token: string, builder: 'self' | 'platform'): Promise<string> {
-  await api.request('POST', `/api/submissions/${encodeURIComponent(token)}/handoff`, {
-    builder,
-    stopActivePlatformAgent: builder === 'self',
-  });
-  return builder;
+// 202: the old builder owns the round until its agent acks.
+export async function handoffBuilder(
+  api: ApiClient,
+  token: string,
+  builder: 'self' | 'platform',
+  current: string,
+): Promise<HandoffOutcome> {
+  const body = await api.request<{ pending?: boolean; builder?: string }>(
+    'POST',
+    `/api/submissions/${encodeURIComponent(token)}/handoff`,
+    { builder, stopActivePlatformAgent: builder === 'self' },
+  );
+  if (body?.pending) return { builder: body.builder ?? current, pending: true };
+  return { builder, pending: false };
+}
+
+export function handoffLine(outcome: HandoffOutcome, slug: string): string {
+  if (outcome.pending) {
+    return `handoff pending — builder stays ${outcome.builder} until its agent acknowledges; /builder re-checks`;
+  }
+  return outcome.builder === 'self'
+    ? `builder self — your local agent edits games/${slug}; /builder platform hands it back`
+    : `builder platform — say what to change and the platform builds; /pull when it lands`;
+}
+
+export async function refreshBuilder(api: ApiClient, ws: Pick<Workshop, 'token' | 'builder'>): Promise<string> {
+  const round = await getStatus(api, ws.token);
+  ws.builder = round.builder ?? ws.builder;
+  return ws.builder;
 }
 
 // Asked once per session, only where a local agent could take over.
@@ -138,9 +165,9 @@ export async function settleBuilder(input: {
   const choice = await ws.pick([local, 'the platform — I will /pull afterwards'], `Who builds ${ws.slug}?`);
   if (choice !== local) return ws.builder;
   try {
-    const builder = await handoffBuilder(input.api, ws.token, 'self');
-    input.write(`builder self — ${ws.adapters[0]!.name} edits games/${ws.slug}; /builder platform hands it back`);
-    return builder;
+    const outcome = await handoffBuilder(input.api, ws.token, 'self', ws.builder);
+    input.write(handoffLine(outcome, ws.slug));
+    return outcome.builder;
   } catch (error) {
     input.write(`${formatError(error)}\nthe platform keeps building — /builder self to retry`);
     return ws.builder;
@@ -167,10 +194,10 @@ export function pickAdapter(ws: Pick<Workshop, 'adapters' | 'env'>, name?: strin
 }
 
 export async function chooseAdapter(
-  ws: Pick<Workshop, 'adapters' | 'env' | 'pick'>,
+  ws: Pick<Workshop, 'adapters' | 'env' | 'pick' | 'unattended'>,
   name?: string,
 ): Promise<AdapterSpec> {
-  if (name || ws.adapters.length < 2) return pickAdapter(ws, name);
+  if (name || ws.adapters.length < 2 || ws.unattended) return pickAdapter(ws, name);
   const chosen = await ws.pick(
     ws.adapters.map((spec) => spec.name),
     'Which agent?',
@@ -230,7 +257,11 @@ export async function offerSubmit(input: {
 }): Promise<void> {
   const { ws } = input;
   const deliver = 'deliver a preview';
-  const choice = await ws.pick([deliver, 'not yet — keep editing'], `Deliver ${ws.slug}?`);
+  const choice = ws.unattended
+    ? ws.unattended.deliver
+      ? deliver
+      : ''
+    : await ws.pick([deliver, 'not yet — keep editing'], `Deliver ${ws.slug}?`);
   if (choice !== deliver) {
     input.write('kept locally — /submit when ready');
     return;
@@ -243,6 +274,31 @@ export async function offerSubmit(input: {
   }
 }
 
+// Only a self-owned, synchronized checkout may be edited locally.
+export async function readyToEdit(input: {
+  api: ApiClient;
+  ws: Workshop;
+  write: (line: string) => void;
+}): Promise<boolean> {
+  const { ws } = input;
+  if (ws.builder !== 'self') {
+    input.write(`builder is ${ws.builder} — /builder self takes the round here first`);
+    return false;
+  }
+  try {
+    const { sync } = await inspectGame({ api: input.api, slug: ws.slug, dest: ws.root });
+    const warning = syncWarning(sync);
+    if (warning) {
+      input.write(`! ${warning}`);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    input.write(`cannot check the checkout against the platform — ${formatError(error)}`);
+    return false;
+  }
+}
+
 // One creator request, end to end: agent, ladder, offer.
 export async function workshopTurn(input: {
   api: ApiClient;
@@ -252,6 +308,7 @@ export async function workshopTurn(input: {
   agent?: string;
   write: (line: string) => void;
 }): Promise<boolean> {
+  if (!(await readyToEdit(input))) return false;
   const spec = await chooseAdapter(input.ws, input.agent);
   const ok = await runLocalBuild({
     ws: input.ws,

@@ -218,6 +218,76 @@ describe('the REPL inside a checkout', () => {
     expect(lines.join('\n')).toContain('▸ build 7 — Floatier jump.');
   });
 
+  it('/delegate refuses while the platform owns the round', async () => {
+    const root = checkout();
+    const lines: string[] = [];
+    let spawned = 0;
+    const ws = workshop(root, { builder: 'platform', runAdapter: async () => ((spawned += 1), { code: 0 }) });
+    await handleReplLine({
+      line: '/delegate tweak',
+      api: platform([]),
+      token: 'tok',
+      workshop: ws,
+      write: (s) => lines.push(s),
+    });
+    expect(spawned).toBe(0);
+    expect(lines.join('\n')).toContain('/builder self');
+  });
+
+  it('does not spawn on a checkout the platform has moved past', async () => {
+    const root = checkout();
+    const lines: string[] = [];
+    let spawned = 0;
+    const api = platform([], (path) =>
+      path.includes('/tree') ? json({ version: 'v2', files: [{ path: 'game.ts', content: 'C' }] }) : null,
+    );
+    const ws = workshop(root, { runAdapter: async () => ((spawned += 1), { code: 0 }) });
+    await handleReplLine({ line: '/delegate tweak', api, token: 'tok', workshop: ws, write: (s) => lines.push(s) });
+    expect(spawned).toBe(0);
+    expect(lines.join('\n')).toContain('/pull first');
+  });
+
+  it('a pending handoff keeps the platform as builder', async () => {
+    const root = checkout();
+    const lines: string[] = [];
+    const api = platform([], (path) =>
+      path.endsWith('/handoff') ? json({ ok: true, pending: true, builder: 'platform', target: 'self' }, 202) : null,
+    );
+    const ws = workshop(root, { builder: 'platform' });
+    await handleReplLine({ line: '/builder self', api, token: 'tok', workshop: ws, write: (s) => lines.push(s) });
+    expect(ws.builder).toBe('platform');
+    expect(lines.join('\n')).toContain('handoff pending');
+  });
+
+  it('/builder alone re-reads who owns the round', async () => {
+    const root = checkout();
+    const lines: string[] = [];
+    const api = platform([], (path) =>
+      path.endsWith('/api/submissions/tok') ? json({ status: 'needs_changes', builder: 'platform' }) : null,
+    );
+    const ws = workshop(root);
+    await handleReplLine({ line: '/builder', api, token: 'tok', workshop: ws, write: (s) => lines.push(s) });
+    expect(ws.builder).toBe('platform');
+    expect(lines.join('\n')).toContain('builder platform');
+  });
+
+  it('unattended, several agents mean the first one whatever --submit says', async () => {
+    const root = checkout();
+    const names: string[] = [];
+    for (const deliver of [false, true]) {
+      const ws = workshop(root, {
+        adapters: [claude, codex],
+        unattended: { deliver },
+        pick: async () => {
+          throw new Error('no picks unattended');
+        },
+        runAdapter: async (input) => (names.push(input.spec.name), { code: 1 }),
+      });
+      await workshopTurn({ api: platform([]), ws, request: 'tweak', write: () => undefined });
+    }
+    expect(names).toEqual(['claude', 'claude']);
+  });
+
   it('leaves a platform-built round to the platform and says how to pull', async () => {
     const root = checkout();
     const lines: string[] = [];

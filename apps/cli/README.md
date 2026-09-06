@@ -85,7 +85,7 @@ With builder `self`, a plain message goes to the Studio chat first — questions
 answers; a change request runs the local agent in `games/<slug>` with a brief, then the
 static ladder, then offers to deliver. The agent never sees the OAuth grant. Ctrl+C stops
 the agent, not the session. `/delegate <task>` skips the chat; `gamedevpl delegate "<task>"
-[--agent codex] [--submit]` is the non-interactive form (exit `1` when the agent or the
+[--agent codex] [--handoff] [--submit]` is the non-interactive form (exit `1` when the agent or the
 ladder fails).
 
 `gamedevpl connect <slug>` prints the MCP handoff (URL, kickoff, install snippet).

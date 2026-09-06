@@ -24,7 +24,8 @@ import { runGitRemoteHelper } from './git-remote-main.js';
 import { runStatusVerb } from './status-watch.js';
 import { dispatchReadVerb } from './verbs.js';
 import { formatHelp } from './help.js';
-import { detectLocalAdapters, workshopTurn } from './workshop.js';
+import { detectLocalAdapters, handoffBuilder, workshopTurn } from './workshop.js';
+import { getStatus } from './turn.js';
 
 function storeFromEnv(env: NodeJS.ProcessEnv, warn: (line: string) => void): TokenStore {
   const token = env.GAMEDEV_TOKEN?.trim();
@@ -72,14 +73,33 @@ async function runDelegateVerb(input: {
   if (!request) throw new CliError(cliUsage('delegate', '"<task>"'), EXIT_INPUT, '<task>');
   const opened = await openCheckoutGame(input.api, input.cwd);
   if (!opened) throw new CliError('not inside a game checkout', EXIT_INPUT, cliUsage('checkout', '<slug>'));
-  const deliver = input.flags.submit === true;
+  let builder = (await getStatus(input.api, opened.token)).builder ?? 'platform';
+  if (builder !== 'self' && input.flags.handoff === true) {
+    const outcome = await handoffBuilder(input.api, opened.token, 'self', builder);
+    if (outcome.pending) {
+      throw new CliError(
+        'handoff pending — the platform agent has not acknowledged yet',
+        EXIT_REFUSED,
+        'retry shortly',
+      );
+    }
+    builder = outcome.builder;
+  }
+  if (builder !== 'self') {
+    throw new CliError(
+      `builder is ${builder} — the platform owns this round`,
+      EXIT_REFUSED,
+      `${cliUsage('delegate', '--handoff')} takes it here`,
+    );
+  }
   const ws = {
     ...opened,
     env: input.env,
     adapters: detectLocalAdapters(input.env),
-    builder: 'self',
-    pick: async (choices: string[]) => (deliver ? choices[0]! : (choices[1] ?? '')),
+    builder,
+    pick: async () => '',
     abort: { current: null },
+    unattended: { deliver: input.flags.submit === true },
   };
   const ok = await workshopTurn({
     api: input.api,
