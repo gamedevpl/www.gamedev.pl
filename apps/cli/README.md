@@ -35,7 +35,7 @@ node apps/cli/dist/gamedevpl.mjs help
 ## Verbs
 
 `login` `logout` `whoami` `games` `status` `share` `profile` `handle` `builder`
-`connect` `checkout` `pull` `diff` `submit` `quota` `notifications` `update` `help`
+`connect` `delegate` `checkout` `pull` `diff` `submit` `quota` `notifications` `update` `help`
 
 Exit codes: `0` gate green · `1` gate red · `2` refused · `3` auth · `4` input required.
 
@@ -73,6 +73,20 @@ gamedevpl status <token-or-slug>
 
 `submit` is preview-mode delivery. A green gate is not a publish. `--publish` runs the
 full local ladder and delivers `mode=publish`; an operator still publishes.
+
+## In a checkout
+
+`gamedevpl` started inside a checkout (any subdirectory) opens that game. It shows the
+sync state, which of `claude` / `codex` / `gemini` / `vibe` are on PATH, and who builds.
+If a local agent is found and the platform still builds, it asks once whether to hand the
+round to your machine (`/builder self`); `/builder platform` hands it back.
+
+With builder `self`, a plain message goes to the Studio chat first — questions get
+answers; a change request runs the local agent in `games/<slug>` with a brief, then the
+static ladder, then offers to deliver. The agent never sees the OAuth grant. Ctrl+C stops
+the agent, not the session. `/delegate <task>` skips the chat; `gamedevpl delegate "<task>"
+[--agent codex] [--submit]` is the non-interactive form (exit `1` when the agent or the
+ladder fails).
 
 `gamedevpl connect <slug>` prints the MCP handoff (URL, kickoff, install snippet).
 `--agent claude` (or `codex` / `gemini` / `vibe`) spawns that vendor CLI with a

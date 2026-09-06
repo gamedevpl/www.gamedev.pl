@@ -6,6 +6,7 @@ export const SLASH_VERBS = [
   'handle',
   'builder',
   'connect',
+  'delegate',
   'checkout',
   'quota',
   'notifications',

@@ -124,7 +124,7 @@ describe('openCheckoutGame', () => {
       api(() => ({ games: [{ slug: 'airtime', token: 'tok-airtime' }] })),
       dir,
     );
-    expect(opened).toEqual({ token: 'tok-airtime', slug: 'airtime' });
+    expect(opened).toEqual({ token: 'tok-airtime', slug: 'airtime', root: dir });
   });
 
   it('opens nothing outside a checkout', async () => {

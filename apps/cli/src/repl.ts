@@ -13,6 +13,7 @@ import { CLI_VERSION } from './update.js';
 import { formatError } from './errors.js';
 import { formatHelp } from './help.js';
 import { MASCOT_ASCII } from './tui/mascot.js';
+import { handoffBuilder, workshopTurn, type Workshop } from './workshop.js';
 
 export type ReplLineResult = {
   next: 'continue' | 'quit';
@@ -26,6 +27,8 @@ export async function handleReplLine(input: {
   api: ApiClient;
   token: string | null;
   conversationId?: string;
+  // Set when the session opened from a game checkout.
+  workshop?: Workshop;
   write: (s: string) => void;
 }): Promise<ReplLineResult> {
   const trimmed = input.line.trim();
@@ -35,6 +38,14 @@ export async function handleReplLine(input: {
     const [cmd, ...rest] = trimmed.slice(1).split(/\s+/);
     if (cmd === 'help') {
       input.write(formatHelp(true));
+      return { next: 'continue' };
+    }
+    const ws = input.workshop;
+    if (
+      ws &&
+      (cmd === 'delegate' || (cmd === 'builder' && (!rest[0] || rest[0] === 'self' || rest[0] === 'platform')))
+    ) {
+      await handleWorkshopVerb({ cmd, rest, api: input.api, ws, write: input.write });
       return { next: 'continue' };
     }
     if (cmd === 'status') {
@@ -156,12 +167,67 @@ export async function handleReplLine(input: {
   }
   try {
     const result = await postTurn(input.api, input.token, trimmed);
-    if (result.kind === 'reply') input.write(`◆ ${result.text}`);
-    else input.write(`▸ build ${result.roundId}${result.ack ? ` — ${result.ack}` : ''}`);
+    if (result.kind === 'reply') {
+      input.write(`◆ ${result.text}`);
+      return { next: 'continue' };
+    }
+    input.write(`▸ build ${result.roundId}${result.ack ? ` — ${result.ack}` : ''}`);
+    const ws = input.workshop;
+    if (!ws) return { next: 'continue' };
+    if (ws.builder !== 'self') {
+      input.write(`the platform builds this round — /pull when it lands, or /builder self to build here`);
+      return { next: 'continue' };
+    }
+    await workshopTurn({ api: input.api, ws, request: trimmed, ack: result.ack, write: input.write });
     return { next: 'continue' };
   } catch (error) {
     input.write(formatError(error));
     return { next: 'continue' };
+  }
+}
+
+async function handleWorkshopVerb(input: {
+  cmd: string;
+  rest: string[];
+  api: ApiClient;
+  ws: Workshop;
+  write: (s: string) => void;
+}): Promise<void> {
+  const { ws } = input;
+  try {
+    if (input.cmd === 'builder') {
+      const wanted = input.rest[0];
+      if (wanted !== 'self' && wanted !== 'platform') {
+        input.write(`builder ${ws.builder} — /builder self or /builder platform to switch`);
+        return;
+      }
+      if (wanted === ws.builder) {
+        input.write(`builder is already ${wanted}`);
+        return;
+      }
+      ws.builder = await handoffBuilder(input.api, ws.token, wanted);
+      input.write(
+        wanted === 'self'
+          ? `builder self — your local agent edits games/${ws.slug}`
+          : `builder platform — say what to change and the platform builds; /pull when it lands`,
+      );
+      return;
+    }
+    const parsed = parseArgv(['node', 'cli', 'delegate', ...input.rest]);
+    const request = parsed.args.join(' ');
+    if (!request) {
+      input.write(`say what to do: /delegate make the jump feel floatier`);
+      return;
+    }
+    await workshopTurn({
+      api: input.api,
+      ws,
+      request,
+      agent: typeof parsed.flags.agent === 'string' ? parsed.flags.agent : undefined,
+      write: input.write,
+    });
+  } catch (error) {
+    input.write(formatError(error));
   }
 }
 

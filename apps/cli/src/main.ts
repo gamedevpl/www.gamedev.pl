@@ -14,7 +14,7 @@ import {
 } from './keychain.js';
 import { runLoopbackLogin } from './login.js';
 import { originFromEnv } from './oauth.js';
-import { CliError, EXIT_GREEN, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
+import { CliError, EXIT_GREEN, EXIT_INPUT, EXIT_RED, EXIT_REFUSED } from './exit-codes.js';
 import { describeError, pipeNeedsFlag } from './errors.js';
 import { studioToken } from './studio.js';
 import { checkoutGame, diffGame, findCheckout, formatSyncLines, pullGame, readCheckoutSlug } from './checkout.js';
@@ -24,6 +24,7 @@ import { runGitRemoteHelper } from './git-remote-main.js';
 import { runStatusVerb } from './status-watch.js';
 import { dispatchReadVerb } from './verbs.js';
 import { formatHelp } from './help.js';
+import { detectLocalAdapters, workshopTurn } from './workshop.js';
 
 function storeFromEnv(env: NodeJS.ProcessEnv, warn: (line: string) => void): TokenStore {
   const token = env.GAMEDEV_TOKEN?.trim();
@@ -45,14 +46,49 @@ export function isGitRemoteHelper(argv: string[]): boolean {
 }
 
 // A checkout here means working on that game, not a new one.
-export async function openCheckoutGame(api: ApiClient, cwd: string): Promise<{ token: string; slug: string } | null> {
+export async function openCheckoutGame(
+  api: ApiClient,
+  cwd: string,
+): Promise<{ token: string; slug: string; root: string } | null> {
   const found = findCheckout(cwd);
   if (!found) return null;
   try {
-    return { token: await studioToken(api, found.slug), slug: found.slug };
+    return { token: await studioToken(api, found.slug), ...found };
   } catch {
     return null;
   }
+}
+
+// Non-interactive twin of the REPL turn: agent, ladder, optional delivery.
+async function runDelegateVerb(input: {
+  api: ApiClient;
+  args: string[];
+  flags: Record<string, string | boolean>;
+  env: NodeJS.ProcessEnv;
+  cwd: string;
+  write: (line: string) => void;
+}): Promise<number> {
+  const request = input.args.join(' ').trim();
+  if (!request) throw new CliError(cliUsage('delegate', '"<task>"'), EXIT_INPUT, '<task>');
+  const opened = await openCheckoutGame(input.api, input.cwd);
+  if (!opened) throw new CliError('not inside a game checkout', EXIT_INPUT, cliUsage('checkout', '<slug>'));
+  const deliver = input.flags.submit === true;
+  const ws = {
+    ...opened,
+    env: input.env,
+    adapters: detectLocalAdapters(input.env),
+    builder: 'self',
+    pick: async (choices: string[]) => (deliver ? choices[0]! : (choices[1] ?? '')),
+    abort: { current: null },
+  };
+  const ok = await workshopTurn({
+    api: input.api,
+    ws,
+    request,
+    agent: typeof input.flags.agent === 'string' ? input.flags.agent : undefined,
+    write: input.write,
+  });
+  return ok ? EXIT_GREEN : EXIT_RED;
 }
 
 export async function runCli(
@@ -188,19 +224,28 @@ export async function runCli(
       });
       return EXIT_GREEN;
     }
+    if (verb === 'delegate') {
+      return runDelegateVerb({
+        api,
+        args,
+        flags,
+        env,
+        cwd: process.cwd(),
+        write: (line) => io.stdout.write(`${line}\n`),
+      });
+    }
     const read = await dispatchReadVerb({ verb, args, flags, api, io });
     if (read !== null) return read;
     if (verb === 'repl') {
       if (!tty || !io.stdout.isTTY) throw pipeNeedsFlag(`a verb such as ${cliUsage('whoami')}`);
       const { runInkRepl } = await import('./tui/host.js');
-      const opened: { token: string; slug?: string } | null =
-        typeof flags.token === 'string' ? { token: flags.token } : await openCheckoutGame(api, process.cwd());
+      const opened = typeof flags.token === 'string' ? null : await openCheckoutGame(api, process.cwd());
       return runInkRepl({
         api,
         env,
         io,
-        token: opened?.token ?? null,
-        ...(opened?.slug ? { slug: opened.slug } : {}),
+        token: typeof flags.token === 'string' ? flags.token : (opened?.token ?? null),
+        ...(opened ? { checkout: { slug: opened.slug, root: opened.root } } : {}),
       });
     }
     io.stderr.write(`unknown verb ${verb} — ${cliUsage('help')}\n`);
