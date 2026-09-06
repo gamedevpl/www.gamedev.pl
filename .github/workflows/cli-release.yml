@@ -1,7 +1,17 @@
 name: CLI release
 
+# Publishes gamedevpl to GitHub Releases. Three doors, one job:
+#   - master push that changes apps/cli/package.json — the release PR was merged,
+#     so its version is the cutoff (see .claude/skills/cli-release/SKILL.md)
+#   - a cli-v* tag push, for a by-hand cut
+#   - workflow_dispatch with a version, for a re-run
+# A version that already has a release is skipped, so a dependency bump in
+# package.json does not republish.
 on:
   push:
+    branches: [master]
+    paths:
+      - 'apps/cli/package.json'
     tags:
       - 'cli-v*'
   workflow_dispatch:
@@ -15,6 +25,10 @@ permissions:
   id-token: write
   attestations: write
 
+concurrency:
+  group: cli-release
+  cancel-in-progress: false
+
 jobs:
   release:
     name: Bundle gamedevpl Node script
@@ -25,29 +39,59 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-      - run: npm ci
-      - name: Bundle the shebang script
-        run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            version="${{ github.event.inputs.version }}"
-          else
-            version="${GITHUB_REF_NAME#cli-v}"
-          fi
-          echo "VERSION=$version" >> "$GITHUB_ENV"
-          chmod +x apps/cli/scripts/compile-release.sh
-          apps/cli/scripts/compile-release.sh "$version"
-      - name: Attest provenance
-        uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: apps/cli/dist/release/*
-      - name: Publish GitHub Release
+      - name: Resolve the version
+        id: version
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          case "${{ github.event_name }}" in
+            workflow_dispatch) version="${{ github.event.inputs.version }}" ;;
+            push)
+              if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+                version="${GITHUB_REF_NAME#cli-v}"
+              else
+                version="$(node -p "require('./apps/cli/package.json').version")"
+              fi
+              ;;
+            *) echo "unexpected event ${{ github.event_name }}" >&2; exit 1 ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if gh release view "cli-v$version" >/dev/null 2>&1; then
+            echo "cli-v$version is already published; nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.version.outputs.skip != 'true'
+        run: npm ci
+      - name: Bundle the shebang script
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          chmod +x apps/cli/scripts/compile-release.sh
+          apps/cli/scripts/compile-release.sh "${{ steps.version.outputs.version }}"
+      - name: Attest provenance
+        if: steps.version.outputs.skip != 'true'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: apps/cli/dist/release/*
+      - name: Publish GitHub Release
+        if: steps.version.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Notes come from the changelog section; a hand-cut version without one
+          # falls back to the install line. Never --generate-notes: on a first release
+          # it wrote the whole history and blew GitHub's 125k-character body limit.
+          if ! node apps/cli/scripts/release.mjs notes "$VERSION" > /tmp/notes.md 2>/dev/null; then
+            printf 'Install: `curl -fsSL https://www.gamedev.pl/install.sh | bash`\n' > /tmp/notes.md
+          fi
           gh release create "cli-v$VERSION" \
             --title "gamedevpl CLI v$VERSION" \
             --target "$GITHUB_SHA" \
-            --notes "Install: \`curl -fsSL https://www.gamedev.pl/install.sh | bash\`" \
+            --latest \
+            --notes-file /tmp/notes.md \
             apps/cli/dist/release/*

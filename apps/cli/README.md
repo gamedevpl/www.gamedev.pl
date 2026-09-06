@@ -78,3 +78,10 @@ full local ladder and delivers `mode=publish`; an operator still publishes.
 `--agent claude` (or `codex` / `gemini` / `vibe`) spawns that vendor CLI with a
 round-scoped token only — never the OAuth grant or a PAT. After the adapter exits,
 `gamedevpl submit` is still the delivery command.
+
+## Releases
+
+Versions come from [`CHANGELOG.md`](./CHANGELOG.md): add a line under `## Unreleased` in
+the category that fits, and the `release(cli)` PR that opens on master is the cutoff —
+merging it publishes `cli-vX.Y.Z`. Rules, commands and traps:
+[`.claude/skills/cli-release/SKILL.md`](../../.claude/skills/cli-release/SKILL.md).
