@@ -3,12 +3,14 @@ name: CLI release
 # Publishes gamedevpl to GitHub Releases.
 # Runs automatically when master carries unreleased CLI changes:
 #   - reads apps/cli/CHANGELOG.md and derives the version from Breaking/Added/Fixed
-#   - cuts the release, commits back to master [skip ci], and pushes the cli-v* tag
-#   - bundles the CLI script, attests build provenance, and publishes GitHub Release
+#   - cuts the release and commits back to master with [skip ci]
+#   - bundles the CLI script and attests build provenance
+#   - pushes the cli-v* tag and publishes the GitHub Release
+#   - ensures deploy.yml runs so the updated installer is deployed to Cloud Run
 #
 # Also supports:
 #   - a cli-v* tag push (manual cut)
-#   - workflow_dispatch with a version (re-run or manual release)
+#   - workflow_dispatch with a version (manual cut or first-time publish of a specific version)
 on:
   push:
     branches: [master]
@@ -26,6 +28,7 @@ permissions:
   contents: write
   id-token: write
   attestations: write
+  actions: write
 
 concurrency:
   group: cli-release
@@ -39,7 +42,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ github.token }}
+          token: ${{ secrets.CLI_RELEASE_TOKEN || github.token }}
 
       - uses: actions/setup-node@v4
         with:
@@ -49,7 +52,7 @@ jobs:
       - name: Resolve version and cut
         id: version
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.CLI_RELEASE_TOKEN || github.token }}
         run: |
           set -euo pipefail
           cut_needed=false
@@ -80,6 +83,7 @@ jobs:
           esac
 
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "cut_needed=$cut_needed" >> "$GITHUB_OUTPUT"
 
           if gh release view "cli-v$version" >/dev/null 2>&1; then
             echo "cli-v$version is already published; nothing to do."
@@ -90,15 +94,18 @@ jobs:
 
           if [ "$cut_needed" = "true" ]; then
             echo "Cutting release cli-v$version..."
-            git checkout master || git checkout -B master
+            git checkout master
+            git pull --rebase origin master
             node apps/cli/scripts/release.mjs cut
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
             git add apps/cli/CHANGELOG.md apps/cli/package.json apps/api/src/platform/cli-installers.ts
             git commit -m "release(cli): v$version [skip ci]"
-            git push origin master
-            git tag "cli-v$version"
-            git push origin "cli-v$version"
+            if ! git push origin master; then
+              echo "::error::Failed to push release commit to master. Aborting release."
+              exit 1
+            fi
+            echo "cut_commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Install dependencies
@@ -121,22 +128,37 @@ jobs:
       - name: Publish GitHub Release
         if: steps.version.outputs.skip != 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.CLI_RELEASE_TOKEN || github.token }}
           VERSION: ${{ steps.version.outputs.version }}
+          CUT_COMMIT: ${{ steps.version.outputs.cut_commit }}
         run: |
           set -euo pipefail
-          # Notes come from the changelog section; a hand-cut version without one
-          # falls back to the install line.
+          # Create and push tag only after artifact bundling and attestation succeed
+          target_ref="${CUT_COMMIT:-$GITHUB_SHA}"
+          if git ls-remote --tags origin "refs/tags/cli-v$VERSION" | grep -q "cli-v$VERSION"; then
+            echo "Tag cli-v$VERSION already exists on origin."
+          else
+            echo "Tagging cli-v$VERSION at $target_ref..."
+            git tag "cli-v$VERSION" "$target_ref"
+            git push origin "cli-v$VERSION"
+          fi
+
+          # Notes come from the changelog section; fallback to install line
           if ! node apps/cli/scripts/release.mjs notes "$VERSION" > /tmp/notes.md 2>/dev/null; then
             printf 'Install: `curl -fsSL https://www.gamedev.pl/install.sh | bash`\n' > /tmp/notes.md
           fi
-          TARGET_FLAG=()
-          if ! git rev-parse "cli-v$VERSION" >/dev/null 2>&1; then
-            TARGET_FLAG=(--target "$GITHUB_SHA")
-          fi
           gh release create "cli-v$VERSION" \
-            "${TARGET_FLAG[@]}" \
             --title "gamedevpl CLI v$VERSION" \
             --latest \
             --notes-file /tmp/notes.md \
             apps/cli/dist/release/*
+
+      - name: Trigger deploy for installer version on master
+        if: steps.version.outputs.skip != 'true' && steps.version.outputs.cut_needed == 'true' && env.HAS_PAT != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HAS_PAT: ${{ secrets.CLI_RELEASE_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          echo "Cut commit was pushed using GITHUB_TOKEN; dispatching deploy workflow so the new installer version takes effect on Cloud Run."
+          gh workflow run deploy.yml --ref master || true

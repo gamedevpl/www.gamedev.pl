@@ -1,6 +1,6 @@
 ---
 name: cli-release
-description: How gamedevpl (apps/cli) is versioned and released — the changelog is the source of truth, its categories decide semver, and merging the auto-opened release PR is the cutoff. Use whenever you change anything under apps/cli, need to cut or hold a CLI release, or the changelog guard fails in CI.
+description: How gamedevpl (apps/cli) is versioned and released — the changelog is the source of truth, its categories decide semver, and landing on master automatically cuts and publishes the release. Use whenever you change anything under apps/cli, need to cut or hold a CLI release, or the changelog guard fails in CI.
 ---
 
 # Releasing the gamedevpl CLI
