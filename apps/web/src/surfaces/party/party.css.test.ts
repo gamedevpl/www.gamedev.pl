@@ -10,3 +10,26 @@ describe('party error margin', () => {
     expect(partyCss).not.toMatch(/^\.party-error \{/m);
   });
 });
+
+// Regression: the shared screen showed game chrome around a boxed canvas.
+describe('party stage fills the shared screen', () => {
+  const playingSource = readFileSync(new URL('./PartyPlaying.tsx', import.meta.url), 'utf8');
+
+  it('embeds the game so its own chrome is hidden', () => {
+    expect(playingSource).toMatch(/<PublishedGameFrame[\s\S]*?\n\s+embed\n[\s\S]*?\/>/);
+  });
+
+  // The embedded game stops drawing them; the party bar has only Exit.
+  it('rehosts sound and how-to-play beside the slots', () => {
+    expect(playingSource).toContain('player.toggleSound');
+    expect(playingSource).toMatch(/<HowToPlayPanel[\s\S]*?rows=\{controlRows\}/);
+  });
+
+  it('gives the playing column the full stage width', () => {
+    expect(partyCss).toMatch(/\.party-playing \{[\s\S]*?width: 100%;[\s\S]*?\}/);
+  });
+
+  it('lets the frame take the height left below the slot strip', () => {
+    expect(partyCss).toMatch(/\.is-playing-full-viewport \.party-playing \.game-frame \{[\s\S]*?flex: 1 1 auto;/);
+  });
+});
