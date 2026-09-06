@@ -12,14 +12,18 @@ and gives the model only that context. Local paths, tokens and credentials are n
 in the model prompt. A checkout slug that disagrees with the submission is rejected.
 
 The model can reply, ask a clarification, propose a new game through `create_game`, or
-request one `cli_action`:
+request one of three separate tools (`play_game`, `game_status`, `edit_game`). Each
+tool advertises only its own required arguments and maps to the existing CLI action
+format:
 
 - `play` with a known slug opens the local checkout with live reload when it matches;
   otherwise it opens the remote game. Published state does not prevent playing.
 - `status` reads the active submission and prints its current status.
 - `edit` carries the full agreed task (up to 2000 characters), resolving short confirmations
   from conversation history. It uses the existing revision flow, retaining
-  builder selection, handoff, verification and delivery controls.
+  builder selection, handoff, verification and delivery controls. For published games,
+  the CLI calls `/improve` with the chosen builder and follows the new round token; it
+  does not send edits to the closed published round.
 
 Both the API and CLI validate the closed action vocabulary. There is no shell-command,
 filesystem-path or arbitrary-URL action. Multiple tool calls, unknown targets, malformed
