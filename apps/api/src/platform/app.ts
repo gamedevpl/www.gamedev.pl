@@ -10,6 +10,7 @@ import Fastify, {
   type FastifyServerOptions,
 } from 'fastify';
 import { registerAccessTokenRoutes, type AccessTokenRoutesOptions } from './access-token-routes.js';
+import { registerApiCachePolicy } from './api-cache-policy.js';
 import { registerClientAddress } from './client-address.js';
 import { registerProxyDiagnosticsRoutes } from './proxy-diagnostics.js';
 import { registerJobAdminRoutes } from '../creation/job-admin-routes.js';
@@ -247,6 +248,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   registerClientAddress(app);
+  registerApiCachePolicy(app);
 
   // Fastify's default 500 echoes err.message; 4xx replies pass through.
   app.setErrorHandler((error: FastifyError, request, reply) => {
@@ -1095,13 +1097,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     });
   }
 
-  // Apex → www canonical-host redirect. Cloud Run domain mappings can't emit a
-  // 301, and both www.gamedev.pl and gamedev.pl terminate at this same service,
-  // so we canonicalize here. When CANONICAL_HOST=www.gamedev.pl, a request whose
-  // Host header is the bare apex (gamedev.pl) 301s to https://www.gamedev.pl +
-  // same path. Only the exact apex is redirected — the run.app URL, localhost,
-  // and the canonical host itself are untouched, so health probes, smoke tests,
-  // and dev keep working. Unset (dev/tests) → no-op.
+  // Apex → www redirect: Cloud Run domain mappings cannot 301, so the app does.
+  // With CANONICAL_HOST=www.gamedev.pl, a bare-apex Host 301s to https://www + path.
+  // Only the exact apex is redirected — run.app, localhost and the canonical host
+  // are untouched, so probes, smoke tests and dev keep working. Unset → no-op.
   const canonicalHost = process.env.CANONICAL_HOST?.trim();
   const apexHost = canonicalHost?.startsWith('www.') ? canonicalHost.slice(4) : undefined;
   if (canonicalHost && apexHost) {
