@@ -1,6 +1,7 @@
+import { privatePlayDirectory, readPlayState, lockAge } from './play-state.js';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { findCheckout } from './checkout.js';
@@ -26,8 +27,10 @@ export function isPlayRequest(text: string): boolean {
 }
 
 async function alive(path: string, key: string): Promise<Session | null> {
+  const raw = readPlayState(path);
+  if (!raw) return null;
   try {
-    const state = JSON.parse(readFileSync(path, 'utf8')) as Session;
+    const state = JSON.parse(raw) as Session;
     const url = new URL(state.url);
     if (
       state.key !== key ||
@@ -50,11 +53,16 @@ export async function startLocalPlay(input: {
   write: (line: string) => void;
   stop?: boolean;
   prepared?: boolean;
+  abort?: AbortSignal;
 }): Promise<Session | null> {
+  const checkAbort = () => {
+    if (input.abort?.aborted) throw new CliError('preview startup cancelled', EXIT_REFUSED);
+  };
+  checkAbort();
   const root = realpathSync(input.root);
   const key = createHash('sha256').update(`${root}\0${input.slug}`).digest('hex');
   const dir = join(tmpdir(), `gamedev-play-${process.getuid?.() ?? 'user'}`);
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  privatePlayDirectory(dir);
   const statePath = join(dir, `${key}.json`);
   const lock = join(dir, `${key}.lock`);
   const existing = await alive(statePath, key);
@@ -73,6 +81,7 @@ export async function startLocalPlay(input: {
   }
   if (existing) return existing;
   for (let attempt = 0; ; attempt++) {
+    checkAbort();
     try {
       mkdirSync(lock);
       writeFileSync(join(lock, 'owner'), String(process.pid));
@@ -81,7 +90,8 @@ export async function startLocalPlay(input: {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
       const running = await alive(statePath, key);
       if (running) return running;
-      const age = Date.now() - statSync(lock).mtimeMs;
+      const age = lockAge(lock);
+      if (age === null) continue;
       let abandoned = false;
       if (age > 2000) {
         try {
@@ -105,14 +115,17 @@ export async function startLocalPlay(input: {
   try {
     const raced = await alive(statePath, key);
     if (raced) return raced;
-    if (!input.prepared) await prepareWorkspace({ cwd: root, env: input.env, write: input.write });
-    const runtime = join(dir, `${key}.mjs`);
+    checkAbort();
+    if (!input.prepared) await prepareWorkspace({ cwd: root, env: input.env, write: input.write, abort: input.abort });
+    checkAbort();
+    const runtime = join(mkdtempSync(join(dir, 'runtime-')), 'server.mjs');
     writeFileSync(runtime, PLAY_RUNTIME, { mode: 0o600 });
     const child = spawn(process.execPath, [runtime, root, input.slug, statePath, key], {
       cwd: root,
       env: childEnv(input.env, ''),
       stdio: 'ignore',
       detached: true,
+      windowsHide: true,
     });
     let failed = false;
     child.once('error', () => {
@@ -120,8 +133,18 @@ export async function startLocalPlay(input: {
     });
     child.unref();
     for (let attempt = 0; attempt < 40 && !failed; attempt++) {
+      if (input.abort?.aborted) {
+        child.kill();
+        checkAbort();
+      }
       const ready = await alive(statePath, key);
-      if (ready) return ready;
+      if (ready) {
+        if (input.abort?.aborted) {
+          child.kill();
+          checkAbort();
+        }
+        return ready;
+      }
       await delay(100);
     }
     child.kill();

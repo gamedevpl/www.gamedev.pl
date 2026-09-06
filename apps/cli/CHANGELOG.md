@@ -21,6 +21,9 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
+- Live preview rejects unsafe session files, cancels startup, handles concurrent starts and large bundles, and stays off during unattended delegation (#1184)
+- Boolean flags preserve positional arguments; CLI play telemetry has an operator label (#1184)
+
 - Cancelling connection stops before handoff; pending handoffs preserve the selected agent and task for `/retry` (#1181)
 - MCP agents run without a checkout in a scratch directory that remains available afterwards (#1181)
 - `gamedevpl` prints the version it actually is; every release so far reported 0.1.0 in the banner, footer and `help`

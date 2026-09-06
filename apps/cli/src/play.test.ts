@@ -5,7 +5,10 @@ import { describe, expect, it } from 'vitest';
 import { isPlayRequest, playGame, startLocalPlay } from './play.js';
 
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-async function eventually(url: string, predicate: (state: { revision: string; error: string }) => boolean) {
+async function eventually(
+  url: string,
+  predicate: (state: { revision: string; error: string; busy?: boolean }) => boolean,
+) {
   for (let i = 0; i < 80; i++) {
     const state = await fetch(url + 'status').then((r) => r.json());
     if (predicate(state)) return state;
@@ -52,6 +55,8 @@ describe('play', () => {
     const root = mkdtempSync(join(tmpdir(), 'gdpl-play-'));
     mkdirSync(join(root, 'games/robot'), { recursive: true });
     mkdirSync(join(root, 'tools/lib'), { recursive: true });
+    mkdirSync(join(root, 'templates'));
+    writeFileSync(join(root, 'templates/title.txt'), '');
     symlinkSync(resolve('../../node_modules'), join(root, 'node_modules'), 'dir');
     writeFileSync(join(root, 'package.json'), '{"type":"module"}');
     writeFileSync(join(root, '.gamedev-slug'), 'robot');
@@ -59,7 +64,7 @@ describe('play', () => {
     writeFileSync(source, '<!doctype html><h1>First</h1>');
     writeFileSync(
       join(root, 'tools/lib/assemble.ts'),
-      `import {readFileSync} from 'node:fs'; export function assembleGame(slug) { const html=readFileSync('games/'+slug+'/game.html','utf8'); if(html==='broken') throw new Error('compile failed'); return {html}; }`,
+      `import {readFileSync} from 'node:fs'; export function assembleGame(slug) { const html=readFileSync('games/'+slug+'/game.html','utf8'); if(html==='broken') throw new Error('compile failed'); return {html: html + readFileSync('templates/title.txt', 'utf8')}; }`,
     );
     const input = { root, slug: 'robot', env: process.env, write: () => undefined };
     try {
@@ -79,6 +84,19 @@ describe('play', () => {
       expect(await fetch(first!.url + 'game').then((r) => r.text())).toContain('Second');
       writeFileSync(source, '<!doctype html><h1>Recovered</h1>');
       await eventually(first!.url, (state) => !state.error && state.revision !== b.revision);
+      const recovered = await eventually(first!.url, (state) => !state.error);
+      writeFileSync(join(root, 'templates/title.txt'), 'template changed');
+      await eventually(first!.url, (state) => state.revision !== recovered.revision && !state.error);
+      writeFileSync(source, '<html>' + 'x'.repeat(26_534_288) + '</html>');
+      await eventually(first!.url, (state) => !state.error && state.revision !== recovered.revision && !state.busy);
+      for (let i = 0; i < 60; i++) {
+        const response = await fetch(first!.url + 'game');
+        const bytes = Number(response.headers.get('content-length'));
+        await response.body?.cancel();
+        if (bytes > 26_534_288) break;
+        await pause(150);
+      }
+      expect((await fetch(first!.url + 'game').then((r) => r.text())).length).toBeGreaterThan(26_534_288);
       await startLocalPlay({ ...input, stop: true });
       await expect(fetch(first!.url + 'status')).rejects.toThrow();
     } finally {

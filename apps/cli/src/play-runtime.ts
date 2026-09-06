@@ -4,7 +4,7 @@ import { PLAY_PAGE } from './play-page.js';
 export const PLAY_RUNTIME = String.raw`
 import { createServer } from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
-import { readdirSync, lstatSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { existsSync, readdirSync, lstatSync, readFileSync, writeFileSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFile } from 'node:child_process';
@@ -27,7 +27,7 @@ function assemble() {
   busy = true;
   const source = 'import {assembleGame} from ' + JSON.stringify(pathToFileURL(join(root, 'tools/lib/assemble.ts')).href) + '; process.stdout.write(assembleGame(' + JSON.stringify(slug) + ').html);';
   currentBuild = execFile(process.execPath, ['--import', pathToFileURL(join(root, 'node_modules/tsx/dist/loader.mjs')).href, '--input-type=module', '-e', source],
-    { cwd: root, env: { ...process.env, GAMEDEV_REPO_ROOT: root }, timeout: 30000, maxBuffer: 16 * 1024 * 1024 }, (failure, stdout, stderr) => {
+    { cwd: root, env: { ...process.env, GAMEDEV_REPO_ROOT: root }, timeout: 30000, maxBuffer: 32 * 1024 * 1024 }, (failure, stdout, stderr) => {
       busy = false;
       if (failure) { error = (stderr || failure.message).slice(-4000); return; }
       if (!stdout.trim()) { error = 'The assembler returned an empty game.'; return; }
@@ -41,6 +41,7 @@ const server = createServer((req, res) => {
   res.setHeader('cache-control', 'no-store');
   res.setHeader('x-content-type-options', 'nosniff');
   res.setHeader('referrer-policy', 'no-referrer');
+  if (!origin) { res.writeHead(503); res.end(); return; }
   if (req.headers.host !== new URL(origin).host || (req.headers.origin && req.headers.origin !== origin)) { res.writeHead(403); res.end(); return; }
   const base = '/' + token + '/';
   const path = (req.url || '').split('?')[0];
@@ -65,12 +66,14 @@ function shutdown() {
 }
 server.listen(0, '127.0.0.1', () => {
   origin = 'http://127.0.0.1:' + server.address().port;
-  writeFileSync(statePath, JSON.stringify({ url: origin + '/' + token + '/', key }), { mode: 0o600 });
+  const pendingState = statePath + '.' + token;
+  writeFileSync(pendingState, JSON.stringify({ url: origin + '/' + token + '/', key }), { mode: 0o600, flag: 'wx' });
+  renameSync(pendingState, statePath);
 });
 server.on('error', () => process.exit(1));
 const timer = setInterval(() => {
   if (Date.now() - lastVisit > 30 * 60_000) return shutdown();
-  const next = [join(root, 'games', slug), join(root, 'shared'), join(root, 'starters'), join(root, 'tools')].map(treeStamp).join('|');
+  const next = [join(root, 'games', slug), join(root, 'shared'), join(root, 'starters'), join(root, 'templates'), join(root, 'tools')].filter(existsSync).map(treeStamp).join('|');
   if (next !== fingerprint) { fingerprint = next; dirtyAt = Date.now(); }
   if (dirtyAt && !busy && Date.now() - dirtyAt >= 500) { dirtyAt = 0; assemble(); }
 }, 500);

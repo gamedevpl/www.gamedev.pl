@@ -245,7 +245,7 @@ export async function runLocalBuild(input: {
   try {
     if (!ws.runAdapter)
       await prepareWorkspace({ cwd: ws.root, env: ws.env, abort: controller.signal, write: input.write });
-    if (!ws.runAdapter) {
+    if (!ws.runAdapter && !ws.unattended) {
       try {
         const preview = await startLocalPlay({
           root: ws.root,
@@ -253,12 +253,14 @@ export async function runLocalBuild(input: {
           env: ws.env,
           write: input.write,
           prepared: true,
+          abort: controller.signal,
         });
         if (preview) input.write(`live preview while ${spec.name} edits: ${preview.url}`);
       } catch (error) {
         input.write(formatError(error));
       }
     }
+    if (controller.signal.aborted) return false;
     ws.telemetry?.record('delegate_used', spec.name);
     result = await (ws.runAdapter ?? defaultAdapterRun)({
       spec,

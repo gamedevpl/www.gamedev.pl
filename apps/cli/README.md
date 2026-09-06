@@ -149,7 +149,7 @@ Installed Claude, Codex, agy, Vibe, and Copilot flags were checked against `--he
 
 `gamedevpl play` in a checkout opens a local game and reloads it after successful
 source changes. The pinned Creator Kit assembles the document; a separate preview
-process keeps watching while your agent edits or after its command exits. Local
+process keeps watching while your agent edits or after its command exits. Interactive local
 CLI delegation starts this preview automatically and prints its URL.
 
 - `gamedevpl play [slug]` reuses the running preview for the matching checkout.
@@ -169,3 +169,6 @@ Agents in downloaded checkouts receive `AGENTS.md` instructions for `play`.
 MCP/managed agents point to the existing round card or remote play link, without
 creating another round. A local CLI or browser opens the page on the creator's machine.
 The anonymous `play_requested` CLI event counts opens without game names or paths.
+
+Unattended `delegate` does not start a preview server. Preview startup honors
+cancellation, including waits for another process to finish setup.

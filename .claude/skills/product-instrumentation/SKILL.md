@@ -195,7 +195,7 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
     like the others.
   - **CLI (`gamedevpl`) funnel write-side shipped, operator panel unread (CL-01 / CL-39):**
     `cli_step` (`installed` → `authorized` → `first_turn` → `build_requested` →
-    `delivered` → `published`, plus `delegate_offered`/`delegate_used`/`verify_failed`
+    `delivered` → `published`, plus `play_requested`/`delegate_offered`/`delegate_used`/`verify_failed`
     beside the ladder) is on the visit stream with closed `channel` / `os` / `adapter` /
     `stage` dimensions. Never source text, prompts, file paths, or game titles.
     `summarizeVisitFunnel` already rolls it up as `cli`; the VisitFunnelPanel block is
@@ -306,3 +306,8 @@ is acceptable; a silent one is not.
 
 Self-improvement clause: if this skill is wrong, stale, or missing something that cost
 you time, update it in the same session.
+
+CLI vocabulary changes must also update the labels in `apps/web/src/CliFunnelBlock.tsx`.
+`play_requested` counts requests to open a local or remote game, not evidence that
+the game loaded or was played. Query `cli_step` grouped by `step` and visit ID;
+local play has no game identifier or per-game health events.
