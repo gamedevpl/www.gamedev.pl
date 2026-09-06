@@ -21,8 +21,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'CLI version without prefix (e.g. 0.1.0)'
-        required: true
+        description: 'CLI version without prefix (e.g. 0.1.0), or "auto" to cut from changelog'
+        required: false
+        default: 'auto'
 
 permissions:
   contents: write
@@ -59,7 +60,20 @@ jobs:
 
           case "${{ github.event_name }}" in
             workflow_dispatch)
-              version="${{ github.event.inputs.version }}"
+              input_version="${{ github.event.inputs.version }}"
+              if [ -z "$input_version" ] || [ "$input_version" = "auto" ]; then
+                next_version="$(node apps/cli/scripts/release.mjs next)"
+                if [ "$next_version" = "none" ]; then
+                  echo "No release needed: Unreleased has no Breaking/Added/Fixed entries."
+                  echo "skip=true" >> "$GITHUB_OUTPUT"
+                  exit 0
+                fi
+                version="$next_version"
+                cut_needed=true
+              else
+                version="$input_version"
+                cut_needed=false
+              fi
               ;;
             push)
               if [[ "$GITHUB_REF" == refs/tags/* ]]; then
