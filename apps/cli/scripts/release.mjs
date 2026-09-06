@@ -4,7 +4,7 @@
 //   node apps/cli/scripts/release.mjs cut [--date D]  move Unreleased under a version, bump versions
 //   node apps/cli/scripts/release.mjs notes 0.2.0     print that version's notes
 //
-// The auto-opened release PR runs `cut`; merging it is the cutoff commit.
+// Automatic release on master runs `cut`, commits, tags, and publishes.
 
 import {
   bumpKind,
