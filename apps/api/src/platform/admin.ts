@@ -168,6 +168,9 @@ export interface CreationLimitsResponse {
     // TA-01's own breaker (creator-code-tab-autocomplete-research.md).
     tabCompletePaused: boolean;
     globalDailyTabCompleteTokenCap: number;
+    // Brake-pulled lanes (CC-22); the console releases them.
+    editingPaused: boolean;
+    chatPaused: boolean;
     // Semantic catalog search — the one lane anonymous traffic can reach (CC-01).
     searchPaused: boolean;
     globalDailySearchEmbeddingCap: number;
@@ -510,6 +513,8 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
         tabCompletePaused: stored?.tabCompletePaused === true,
         globalDailyTabCompleteTokenCap:
           stored?.globalDailyTabCompleteTokenCap ?? resolveDefaultGlobalDailyTabCompleteTokenCap(),
+        editingPaused: stored?.editingPaused === true,
+        chatPaused: stored?.chatPaused === true,
         searchPaused: stored?.searchPaused === true,
         globalDailySearchEmbeddingCap:
           stored?.globalDailySearchEmbeddingCap ?? resolveDefaultGlobalDailySearchEmbeddingCap(),
