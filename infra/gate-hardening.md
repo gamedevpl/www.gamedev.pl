@@ -16,16 +16,16 @@ is ours; candidate files are **data** materialized into our pinned harness only.
 
 ## Inventory — what a run can reach
 
-| Surface                    | Before hardening                                                                                     | Intended after owner applies `setup-gcp.sh` + this config                                                                                                                           |
-| -------------------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Service account**        | Unspecified → project Cloud Build / Compute default (often broad: Editor-class or runtime SA powers) | `gate-runner@PROJECT.iam.gserviceaccount.com` only; submitted by `gamedev-app@…`, which may `actAs` no other account                                                                |
-| **SA roles (intended)**    | n/a / ambient                                                                                        | Games-store `roles/storage.objectAdmin` **on that bucket only** (includes delete — see below); `secretmanager.secretAccessor` **on `github-token` only**; `roles/logging.logWriter` |
-| **Secrets in step env**    | `GAMES_REPO_TOKEN` (`github-token`, contents:read)                                                   | Same sole secret; runner unsets it and scrubs the harness `git` remote **before** `check:game`                                                                                      |
-| **Metadata server**        | GCE metadata credentials for the build SA                                                            | Same mechanism; blast radius limited by the gate SA’s IAM                                                                                                                           |
-| **Network egress**         | Default Cloud Build pool: unrestricted egress                                                        | Still unrestricted until owner adds a private pool / VPC egress policy (below)                                                                                                      |
-| **Writable paths**         | `/workspace`, `/tmp`, container root FS                                                              | Unchanged (ephemeral VM); no durable write except via games-store API                                                                                                               |
-| **Source of build CONFIG** | This YAML + inline `gate-trigger` spec                                                               | Unchanged — slug/version are CLI data only                                                                                                                                          |
-| **Timeout / machine**      | `3600s`, `E2_HIGHCPU_8`, default disk                                                                | `1800s`, `E2_HIGHCPU_8`, `diskSizeGb: 50`                                                                                                                                           |
+| Surface                    | Before hardening                                                                                     | Intended after owner applies `setup-gcp.sh` + this config                                                                                                                                                      |
+| -------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service account**        | Unspecified → project Cloud Build / Compute default (often broad: Editor-class or runtime SA powers) | `gate-runner@PROJECT.iam.gserviceaccount.com` only; submitted by `gamedev-app@…`, which may `actAs` no other account                                                                                           |
+| **SA roles (intended)**    | n/a / ambient                                                                                        | Games-store `roles/storage.objectViewer` plus `objectAdmin` **conditioned to exclude every `manifest.json`** (see below); `secretmanager.secretAccessor` **on `github-token` only**; `roles/logging.logWriter` |
+| **Secrets in step env**    | `GAMES_REPO_TOKEN` (`github-token`, contents:read)                                                   | Same sole secret; runner unsets it and scrubs the harness `git` remote **before** `check:game`                                                                                                                 |
+| **Metadata server**        | GCE metadata credentials for the build SA                                                            | Same mechanism; blast radius limited by the gate SA’s IAM                                                                                                                                                      |
+| **Network egress**         | Default Cloud Build pool: unrestricted egress                                                        | Still unrestricted until owner adds a private pool / VPC egress policy (below)                                                                                                                                 |
+| **Writable paths**         | `/workspace`, `/tmp`, container root FS                                                              | Unchanged (ephemeral VM); no durable write except via games-store API                                                                                                                                          |
+| **Source of build CONFIG** | This YAML + inline `gate-trigger` spec                                                               | Unchanged — slug/version are CLI data only                                                                                                                                                                     |
+| **Timeout / machine**      | `3600s`, `E2_HIGHCPU_8`, default disk                                                                | `1800s`, `E2_HIGHCPU_8`, `diskSizeGb: 50`                                                                                                                                                                      |
 
 ### Egress the run actually needs
 
@@ -34,9 +34,10 @@ Allow-list target if/when a private worker pool or VPC-SC perimeter is applied:
 1. **GitHub** (`github.com`) — shallow clone of the platform repo (public) and the games-repo harness (PAT).
 2. **npm** (`registry.npmjs.org` and the registry’s CDN hosts) — `npm ci` for platform + harness.
 3. **Debian apt** mirrors used by `node:22` — `ffmpeg`, `chromium`, `git`, `ca-certificates`.
-4. **GCS JSON API** (`storage.googleapis.com`) — read candidate sources; write manifest / derived artifacts.
-5. **Secret Manager** — fetched by Cloud Build into `secretEnv` before steps (not by game code).
-6. **Container image pulls** — `gcr.io/cloud-builders/git`, `node:22` (Cloud Build infrastructure).
+4. **GCS JSON API** (`storage.googleapis.com`) — read candidate sources; write derived artifacts.
+5. **This service** (`CANONICAL_HOST`) — `POST /api/internal/gate-verdict`, where the verdict goes.
+6. **Secret Manager** — fetched by Cloud Build into `secretEnv` before steps (not by game code).
+7. **Container image pulls** — `gcr.io/cloud-builders/git`, `node:22` (Cloud Build infrastructure).
 
 No other Google APIs, no Firestore, no Cloud Run admin, no Artifact Registry push, no
 ability to start further builds should be granted to `gate-runner`.
@@ -44,28 +45,56 @@ ability to start further builds should be granted to `gate-runner`.
 ### Writable / durable paths
 
 - Ephemeral: `/workspace/platform`, harness under `$TMPDIR/gate-harness-*`, apt/npm caches.
-- Durable (via SA): objects under `gs://$GAMES_STORE_BUCKET/…` for the candidate version
-  (manifest gate/health fields, `bundle.html` / `preview.html`, capture media). The SA
-  role that enables those writes is `objectAdmin`, which also permits **delete/overwrite
-  of every object in the bucket** — see “Store IAM: why objectAdmin” below.
+- Durable (via SA): derived artifacts under `gs://$GAMES_STORE_BUCKET/…` for the candidate
+  version (`bundle.html` / `preview.html`, capture media). **Not** the manifest — see
+  below.
 
-## Store IAM: why `objectAdmin` (delete on every stored game)
+## Store IAM: the verdict does not travel with the credential
 
-The brief asks for “store write only.” The gate SA is granted
-`roles/storage.objectAdmin` on the games-store bucket instead. That role includes
-**delete** on every object in the bucket — including published games — and it is held by
-the identity that executes hostile candidate code by design. This is not sloppiness: it
-is forced by the current write pattern.
+The brief asks for “store write only.” Until 2026-09-08 the gate SA held
+`roles/storage.objectAdmin` on the whole bucket, which includes **delete on every object,
+published games included**, in the hands of the identity that runs hostile candidate code
+by design. That was not sloppiness; it was forced by the write pattern. `putGateResult` /
+`putHealthResult` update each version’s **manifest in place**, and GCS has no
+overwrite-without-delete role — a replace is a delete plus a create of the same name — so
+`objectCreator` + `objectViewer` could not record a verdict.
 
-`putGateResult` / `putHealthResult` update each candidate version’s **manifest in place**.
-GCS has no IAM role that permits overwrite-without-delete (a replace is implementationally
-a delete + create of the same name). `roles/storage.objectCreator` + `objectViewer` cannot
-perform that update, so the gate cannot record a verdict without `objectAdmin` (or an
-equally powerful custom role with `storage.objects.delete`).
+The write pattern is what changed. The gate now **POSTs its verdict** to
+`POST /api/internal/gate-verdict`, and the API — whose identity the candidate cannot
+reach — performs the manifest write. The gate's own bucket role is
+`objectAdmin` **conditioned on `!resource.name.endsWith('/manifest.json')`**, plus
+`objectViewer`. It can still rewrite its own derived artifacts, which a re-gate of the
+same version needs; it can no longer touch any game's record.
 
-Accepted residual risk until a compensating control lands: a compromised gate run can
-delete or overwrite any store object the SA can name, not merely “create namespaced
-immutable objects.”
+### What binds a verdict to one game
+
+An OIDC token would prove only _that gate-runner is calling_, which every gate run can
+claim — including one running hostile code for a different game. So the endpoint takes a
+**capability instead of an identity**: `gate-trigger.ts` mints an HMAC over
+`{slug, version, exp}` with `SUBMISSION_TOKEN_SECRET` (already on the service — no new
+secret, no new plumbing) and passes it in the build's step env. The endpoint verifies the
+signature and refuses any body naming a different slug or version.
+
+The capability is readable by candidate code, and that is fine: it is scoped to the game
+that code already belongs to. Six-hour expiry, so it outlives a queued build and not much
+else.
+
+### What this still does not close
+
+**A gate run can influence its own verdict.** The check runs inside the boundary it is
+judging, so hostile code that survives to the reporting step can report green for itself.
+Closing that means computing the verdict outside the run — a different architecture, not
+an IAM change.
+
+**A gate run can overwrite another version's artifacts.** The condition excludes
+manifests, not other games: `bundle.html` and media of a published game are still
+writable. Fixing it needs a per-slug scope, and IAM CEL cannot bind a runtime value. The
+design that would: the gate writes artifacts under a `gate-staging/<build-id>/` prefix it
+owns exclusively, and the API server-side-copies them into place when it accepts the
+verdict — no Cloud Run bandwidth, one more moving part. Not built.
+
+Versioning + soft-delete + the noncurrent-version prune on this bucket remain the
+recovery control for both.
 
 ### Cloud Run runtime: staging-prefix mutate (MCP file staging)
 

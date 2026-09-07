@@ -388,14 +388,34 @@ grant_gate_with_retry() {
   "$@" >/dev/null
 }
 
-# objectAdmin (includes delete) is forced by in-place manifest updates — see
-# infra/gate-hardening.md "Store IAM: why objectAdmin". Compensated above with
-# versioning + soft-delete + noncurrent prune on this bucket.
+# Read every object, overwrite everything EXCEPT a manifest. The gate needs overwrite
+# because a re-gate of the same version rewrites its own derived artifacts; it no longer
+# needs it on manifest.json, because the verdict now goes to the API instead
+# (gate-verdict-routes.ts). Bucket-wide objectAdmin until 2026-09-08 meant the identity
+# that executes hostile candidate code could delete or green-light any published game.
+#
+# What this does not fix: within the versions it can name, the gate can still overwrite
+# another game's *artifacts*. Closing that needs a per-slug scope IAM cannot express for
+# a runtime value — see infra/gate-hardening.md for the staging-prefix design that would.
+grant_gate_with_retry gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
+  --member="serviceAccount:${GATE_SA_EMAIL}" \
+  --role="roles/storage.objectViewer" \
+  --condition=None \
+  --project="$PROJECT_ID"
+
 grant_gate_with_retry gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
   --member="serviceAccount:${GATE_SA_EMAIL}" \
   --role="roles/storage.objectAdmin" \
-  --condition=None \
+  --condition="expression=resource.type == 'storage.googleapis.com/Object' && !resource.name.endsWith('/manifest.json'),title=gate-no-manifest-writes,description=Gate artifacts yes, any game's manifest no — the verdict goes through the API" \
   --project="$PROJECT_ID"
+
+# An older run of this script left the unconditional binding; reconcile it away.
+gcloud storage buckets remove-iam-policy-binding "gs://${STORE_BUCKET}" \
+  --member="serviceAccount:${GATE_SA_EMAIL}" \
+  --role="roles/storage.objectAdmin" \
+  --condition=None \
+  --project="$PROJECT_ID" \
+  >/dev/null 2>&1 && echo "    Removed gate-runner's bucket-wide objectAdmin." || true
 
 grant_gate_with_retry gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${GATE_SA_EMAIL}" \

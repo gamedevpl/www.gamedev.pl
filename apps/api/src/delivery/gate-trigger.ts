@@ -20,6 +20,9 @@
 // It is logged loudly because "quietly never verified" is the failure worth catching.
 
 import { GoogleAuth } from 'google-auth-library';
+import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
+import { GATE_VERDICT_PATH } from './gate-verdict-routes.js';
+import { mintGateVerdictToken } from './gate-verdict-token.js';
 
 export interface GateTriggerOptions {
   /** GCP project that runs the gate builds. */
@@ -86,6 +89,9 @@ function buildSpec(
   options: Required<Omit<GateTriggerOptions, 'fetchImpl' | 'getAccessToken'>>,
   input: GateTriggerInput,
 ) {
+  const verdictSecret = process.env.SUBMISSION_TOKEN_SECRET?.trim();
+  const verdictEndpoint = verdictSecret ? `${canonicalAppBaseUrl()}${GATE_VERDICT_PATH}` : '';
+  const verdictToken = verdictSecret ? mintGateVerdictToken(input.slug, input.version, verdictSecret) : '';
   return {
     steps: [
       {
@@ -110,6 +116,10 @@ function buildSpec(
           // meaningful setting (anything else means the default, on), and forwarding a
           // literal rather than arbitrary text keeps caller env out of the build config.
           ...(process.env.GATE_PREVIEW_STILLS === '0' ? ['GATE_PREVIEW_STILLS=0'] : []),
+          // Per-run capability: this slug and version only. See gate-hardening.md.
+          ...(verdictEndpoint && verdictToken
+            ? [`GATE_VERDICT_URL=${verdictEndpoint}`, `GATE_VERDICT_TOKEN=${verdictToken}`]
+            : []),
         ],
         args: [
           '-c',
