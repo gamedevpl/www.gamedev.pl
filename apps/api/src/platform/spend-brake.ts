@@ -6,15 +6,16 @@ import type { InternalAuthVerifier } from './internal-auth.js';
 
 // Pauses lanes only: never raises a cap, never resumes.
 
-// External input selects from this list, never names a field.
+// External input picks from this list; `seeding` kills round 0.
 const PAUSEABLE = {
-  creation: 'paused',
-  editing: 'editingPaused',
-  chat: 'chatPaused',
-  tabComplete: 'tabCompletePaused',
-  search: 'searchPaused',
-  gate: 'gatePaused',
-} as const satisfies Record<string, keyof CreationLimits>;
+  creation: { paused: true },
+  editing: { editingPaused: true },
+  chat: { chatPaused: true },
+  tabComplete: { tabCompletePaused: true },
+  search: { searchPaused: true },
+  gate: { gatePaused: true },
+  seeding: { seedingMode: 'off' },
+} as const satisfies Record<string, Partial<CreationLimits>>;
 
 export type PauseableLane = keyof typeof PAUSEABLE;
 
@@ -131,7 +132,7 @@ export async function registerSpendBrakeRoutes(app: FastifyInstance, options: Sp
       }
 
       const patch: Partial<CreationLimits> = {};
-      for (const lane of lanes) patch[PAUSEABLE[lane]] = true;
+      for (const lane of lanes) Object.assign(patch, PAUSEABLE[lane]);
       await store.setCreationLimits(patch, `alert:${incidentId ?? 'unknown'}`);
       request.log.error({ incidentId, policyName, lanes }, 'spend brake pulled by a monitoring alert');
       return reply.send({ paused: lanes });

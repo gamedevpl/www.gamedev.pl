@@ -53,8 +53,8 @@ BRAKE_URL="https://${HOST}/api/internal/spend-brake"
 # Lanes are lowercase because a GCP label value cannot hold a capital letter; the
 # brake matches them case-insensitively (`tabcomplete` pauses tabComplete).
 POLICIES=(
-  "A24 Vertex call volume abnormally high|creation,editing,chat,tabcomplete,search"
-  "A25 Vertex output token rate abnormally high|creation,editing,chat,tabcomplete,search"
+  "A24 Vertex call volume abnormally high|creation,editing,chat,tabcomplete,search,seeding"
+  "A25 Vertex output token rate abnormally high|creation,editing,chat,tabcomplete,search,seeding"
   "A26 knowledge_query daily volume abnormally high|creation"
 )
 
