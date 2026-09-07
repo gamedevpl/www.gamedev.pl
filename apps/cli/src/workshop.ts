@@ -1,3 +1,5 @@
+import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
+import { permissionBlocked } from './agent-events.js';
 import { startLocalPlay } from './play.js';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -23,6 +25,7 @@ export type AdapterRun = (input: {
   env: NodeJS.ProcessEnv;
   abort?: AbortSignal;
   onLine?: (line: string) => void;
+  authCheck?: Promise<void>;
 }) => Promise<{ code: number | null }>;
 
 type VerifyRun = NonNullable<Parameters<typeof runLadder>[0]['run']>;
@@ -34,6 +37,7 @@ export type Workshop = {
   env: NodeJS.ProcessEnv;
   adapters: AdapterSpec[];
   selectedAgent?: string;
+  onActivity?: (activity: string) => void;
   telemetry?: CliTelemetry;
   builder: string;
   pick: PickChoice;
@@ -61,7 +65,7 @@ export function detectLocalAdapters(
 }
 
 async function defaultAdapterRun(input: Parameters<AdapterRun>[0]): Promise<{ code: number | null }> {
-  const child = spawnAdapter({ ...input, timeoutMs: ADAPTER_TIMEOUT_MS });
+  const child = await spawnAdapter({ ...input, timeoutMs: ADAPTER_TIMEOUT_MS });
   for (const stream of [child.stdout, child.stderr]) {
     if (stream) createInterface({ input: stream }).on('line', (line: string) => input.onLine?.(line));
   }
@@ -80,7 +84,8 @@ export function workshopBrief(slug: string, request: string, ack?: string): stri
     ack ? `Studio understood it as: ${ack}` : '',
     'Change only files in this directory. Do not run git, install packages, or publish — the creator delivers with `gamedevpl submit`.',
     'If the creator wants to play, run `gamedevpl play` in this checkout; it opens a live preview without delivering or publishing. Use --no-open for a link only and --stop to close the server.',
-    'When done, `npm run typecheck` and `npm run check:static` at the checkout root must pass.',
+    'The CLI runs typecheck and check:static after you exit. Do not run these checks yourself.',
+    'This is a non-interactive task: do not wait for replies or approvals. If blocked, report the blocker and finish.',
   ]
     .filter(Boolean)
     .join('\n');
@@ -236,13 +241,26 @@ export async function runLocalBuild(input: {
   write: (line: string) => void;
 }): Promise<boolean> {
   const { ws, spec } = input;
+  ws.onActivity?.(`Preparing ${spec.name}`);
   if (!ws.runAdapter) preflightAdapter(spec, ws.env);
   const cwd = spec.cwd === 'game-dir' ? join(ws.root, 'games', ws.slug) : ws.root;
   const controller = new AbortController();
   ws.abort.current = controller;
-  input.write(`▸ ${spec.name} is working in games/${ws.slug} — Ctrl+C stops it`);
   let result: { code: number | null };
+  let blocked = false;
+  let authCheck: Promise<void> | undefined;
   try {
+    if (!ws.runAdapter && spec.name === 'claude') {
+      authCheck = requireClaudeSubscription({
+        command: spec.command,
+        cwd,
+        env: subscriptionEnv(childEnv(ws.env, '')),
+        args: spec.headless,
+        abort: controller.signal,
+      });
+      await authCheck;
+    }
+    input.write(`▸ Preparing ${spec.name} in games/${ws.slug} — Ctrl+C stops it`);
     if (!ws.runAdapter)
       await prepareWorkspace({ cwd: ws.root, env: ws.env, abort: controller.signal, write: input.write });
     if (!ws.runAdapter && !ws.unattended) {
@@ -261,19 +279,36 @@ export async function runLocalBuild(input: {
       }
     }
     if (controller.signal.aborted) return false;
+    ws.onActivity?.(`${spec.name} is editing locally — input returns when it finishes`);
+    input.write(`${spec.name} controls this local editing task; Ctrl+C stops it.`);
+    if (spec.name === 'claude')
+      input.write(
+        'Claude uses subscription login; API authentication is refused. This local task is not linked to Claude Desktop.',
+      );
     ws.telemetry?.record('delegate_used', spec.name);
     result = await (ws.runAdapter ?? defaultAdapterRun)({
       spec,
       prompt: input.brief,
+      authCheck,
       cwd,
       env: childEnv(ws.env, ''),
       abort: controller.signal,
       onLine: (line) => {
-        for (const shown of renderDelegateStream(spec.name, [line], false)) input.write(shown);
+        if (permissionBlocked(line)) blocked = true;
+        for (const shown of renderDelegateStream(spec.name, [line], false)) {
+          if (shown.includes('⚙ ')) ws.onActivity?.(`${spec.name} · ${shown.split('⚙ ')[1]!.slice(0, 90)}`);
+          input.write(shown);
+        }
       },
     });
   } finally {
     ws.abort.current = null;
+  }
+  if (blocked) {
+    input.write(
+      `${spec.name} could not obtain tool permissions in headless mode. No successful edit is confirmed; review its permissions for this game directory and retry.`,
+    );
+    return false;
   }
   if (controller.signal.aborted) {
     input.write(`${spec.name} stopped — the tree keeps whatever it wrote; /diff to see`);
@@ -283,11 +318,12 @@ export async function runLocalBuild(input: {
     input.write(`${spec.name} exited ${result.code ?? 'null'} — /diff to see what changed`);
     return false;
   }
+  ws.onActivity?.('Agent finished — verifying typecheck and static checks');
   input.write('verifying — typecheck, check:static');
   const verify = runLadder({ cwd: ws.root, publish: false, run: ws.run });
   if (!verify.ok) {
     ws.telemetry?.record('verify_failed', spec.name, verify.stage);
-    const detail = verify.detail.split('\n').find((line) => line.trim()) ?? '';
+    const detail = verify.detail.trim();
     input.write(`verify failed at ${verify.stage}${detail ? `: ${detail}` : ''}\nfix by hand, or ask again`);
     return false;
   }

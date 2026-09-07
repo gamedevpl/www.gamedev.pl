@@ -40,6 +40,7 @@ export function createRoundWatch(input: {
       if (token) {
         try {
           const status = await getStatus(input.api, token);
+          if (token !== input.getToken()) continue;
           lastStatus = status;
           if (status.slug) input.onSlug?.(status.slug);
           input.setLive(formatRoundLive(status, input.api.origin));
@@ -47,10 +48,18 @@ export function createRoundWatch(input: {
           if (shouldAnnounceStatus(status, lastKey, key)) input.announce(formatStatusEvent(status));
           lastKey = key;
           if (isTerminalStatus(status.status)) {
-            stopped = true;
-            break;
+            if (!stopped && token === input.getToken()) {
+              await new Promise<void>((resolve) => {
+                wake = resolve;
+              });
+              wake = null;
+            }
+            lastKey = '';
+            lastStatus = undefined;
+            continue;
           }
         } catch (error) {
+          if (token !== input.getToken()) continue;
           if (!(error instanceof CliError && error.message === 'not found')) {
             input.setLive([describeError(error).message]);
           }

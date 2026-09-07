@@ -1,3 +1,5 @@
+import { antigravityText } from './agent-events.js';
+import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { formatAdapterEvent, sanitizeEventPayload } from './ansi.js';
 import type { AdapterSpec } from './adapters.js';
@@ -32,6 +34,8 @@ type EventShape = {
   text?: unknown;
   message?: unknown;
   type?: unknown;
+  session_id?: unknown;
+  permission_denials?: unknown;
   result?: unknown;
   item?: { type?: unknown; text?: unknown; command?: unknown };
 };
@@ -54,7 +58,7 @@ function contentText(message: unknown): string | null {
   return parts.length ? parts.join(' ') : null;
 }
 
-export function parseEventLine(line: string): string | null {
+export function parseEventLine(line: string, adapter?: string): string | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
   let parsed: EventShape;
@@ -64,6 +68,17 @@ export function parseEventLine(line: string): string | null {
     return trimmed;
   }
   if (!parsed || typeof parsed !== 'object') return trimmed;
+  const agy = antigravityText(parsed);
+  if (agy !== undefined) return agy;
+  if (parsed.type === 'item.started') return null;
+  if (
+    adapter === 'claude' &&
+    parsed.type === 'system' &&
+    typeof parsed.session_id === 'string' &&
+    /^[a-f0-9-]{36}$/i.test(parsed.session_id)
+  ) {
+    return `Local session ${parsed.session_id} — after it finishes, resume with claude --resume ${parsed.session_id} in the game directory`;
+  }
   const direct =
     textOf(parsed.text) ??
     textOf(parsed.message) ??
@@ -74,11 +89,19 @@ export function parseEventLine(line: string): string | null {
     textOf(parsed.response) ??
     textOf(parsed.data?.content) ??
     textOf(parsed.error?.message);
+  if (
+    adapter === 'claude' &&
+    parsed.type === 'result' &&
+    Array.isArray(parsed.permission_denials) &&
+    parsed.permission_denials.length
+  )
+    return `Some tools were denied; this alone does not mean the task failed.${direct ? ` ${direct}` : ''}`;
   if (direct) return direct;
   const command = textOf(parsed.item?.command);
   if (command) return `⚙ ${command}`;
   const type = textOf(parsed.type);
   if (!type) return trimmed;
+  if (type === 'assistant') return null;
   return QUIET_EVENT_TYPES.test(type) ? null : type;
 }
 
@@ -86,21 +109,32 @@ export function renderDelegateStream(adapter: string, lines: string[], verbose: 
   const out: string[] = [];
   for (const line of lines) {
     if (verbose) out.push(`${adapter} raw ${sanitizeEventPayload(line)}`);
-    const payload = parseEventLine(line);
+    const payload = parseEventLine(line, adapter);
     if (payload) out.push(formatAdapterEvent(adapter, payload));
   }
   return out;
 }
 
-export function spawnAdapter(input: {
+export async function spawnAdapter(input: {
   spec: AdapterSpec;
   prompt: string;
   cwd: string;
   env: NodeJS.ProcessEnv;
   timeoutMs: number;
   abort?: AbortSignal;
-}): ChildProcess {
-  return spawnCommand({ ...input, command: input.spec.command, args: [...input.spec.headless, input.prompt] });
+  authCheck?: Promise<void>;
+}): Promise<ChildProcess> {
+  const env = input.spec.name === 'claude' ? subscriptionEnv(input.env) : input.env;
+  if (input.spec.name === 'claude')
+    await (input.authCheck ??
+      requireClaudeSubscription({
+        command: input.spec.command,
+        cwd: input.cwd,
+        env,
+        args: input.spec.headless,
+        abort: input.abort,
+      }));
+  return spawnCommand({ ...input, env, command: input.spec.command, args: [...input.spec.headless, input.prompt] });
 }
 
 export function spawnCommand(input: {

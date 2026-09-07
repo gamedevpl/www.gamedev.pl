@@ -310,6 +310,11 @@ Two concrete instances of that (observed 2026-07-23):
   well as the parser, and exercise each action on its real lifecycle state. Published
   edits need `/improve` and its new token, not the closed round's `/turn`.
 
+- **Exercise auth variants and partial agent failures.** CLI #1201 initially accepted only
+  `claude.ai`, rejecting subscription `oauth_token` logins, and treated any tool denial as
+  failure of the entire edit. Test each supported login source and an exit-zero run with
+  completed edits plus one denied tool. An agent's denial list is not a task verdict.
+
 ## Read the diff against the spec
 
 A passing test suite doesn't catch scope creep, subtle regressions, or malice.
