@@ -15,6 +15,8 @@ const PAUSEABLE = {
   search: { searchPaused: true },
   gate: { gatePaused: true },
   seeding: { seedingMode: 'off' },
+  // The platform's coding agent: the biggest line on the bill.
+  managed: { managedBuilderMode: 'off' },
 } as const satisfies Record<string, Partial<CreationLimits>>;
 
 export type PauseableLane = keyof typeof PAUSEABLE;
@@ -39,7 +41,7 @@ export function parseLanes(raw: unknown): PauseableLane[] {
 
 // `reason` says why nothing paused; the log answers instead of asking.
 export type BrakeSkipReason =
-  'no_incident' | 'closed' | 'no_lanes_label' | 'unrecognised_lanes' | 'budget_under_threshold';
+  'no_incident' | 'closed' | 'no_lanes_label' | 'unrecognised_lanes' | 'budget_under_threshold' | 'already_handled';
 
 export interface BrakeNotification {
   lanes: PauseableLane[];
@@ -52,7 +54,21 @@ export interface BrakeNotification {
   quiet?: boolean;
 }
 
-// Budgets tick every ~20 min; only 100% spent/forecast pulls all lanes.
+// Graded by how far over: the agent first, the pennies last.
+export function budgetLanes(spent: number, forecast: number): PauseableLane[] {
+  if (spent >= 1.5) return Object.keys(PAUSEABLE) as PauseableLane[];
+  if (spent >= 1) return ['managed', 'seeding', 'gate'];
+  if (forecast >= 1) return ['managed'];
+  return [];
+}
+
+// A per-service budget can name its lanes: "Cloud Build lanes=gate".
+function lanesNamedByBudget(displayName: string): PauseableLane[] | undefined {
+  const match = /\blanes=([A-Za-z_,]+)/.exec(displayName);
+  return match ? parseLanes(match[1]) : undefined;
+}
+
+// Budgets tick every ~20 min; the id carries the threshold.
 export function lanesFromBudget(body: unknown): BrakeNotification | undefined {
   const budget = body as Record<string, unknown> | undefined;
   if (!budget || typeof budget !== 'object' || typeof budget.budgetDisplayName !== 'string') return undefined;
@@ -60,13 +76,11 @@ export function lanesFromBudget(body: unknown): BrakeNotification | undefined {
   const ratio = (key: string) => (typeof budget[key] === 'number' ? (budget[key] as number) : 0);
   const spent = ratio('alertThresholdExceeded');
   const forecast = ratio('forecastThresholdExceeded');
-  if (spent < 1 && forecast < 1) return { lanes: [], policyName, reason: 'budget_under_threshold', quiet: true };
-  const basis = spent >= 1 ? 'spent' : 'forecast';
-  return {
-    lanes: Object.keys(PAUSEABLE) as PauseableLane[],
-    incidentId: `budget:${policyName}:${basis}:${Math.max(spent, forecast)}`,
-    policyName,
-  };
+  const named = lanesNamedByBudget(policyName);
+  const lanes = named ? (Math.max(spent, forecast) >= 1 ? named : []) : budgetLanes(spent, forecast);
+  if (lanes.length === 0) return { lanes, policyName, reason: 'budget_under_threshold', quiet: true };
+  const basis = spent >= 1 ? `spent:${spent}` : `forecast:${forecast}`;
+  return { lanes, incidentId: `budget:${policyName}:${basis}`, policyName };
 }
 
 // An unrecognised lane pauses nothing, which is right.
@@ -131,7 +145,14 @@ export async function registerSpendBrakeRoutes(app: FastifyInstance, options: Sp
         return reply.send({ paused: [], reason });
       }
 
-      const patch: Partial<CreationLimits> = {};
+      // Same alert again: a resume after it was a decision.
+      const stored = await store.getCreationLimits();
+      if (incidentId && stored?.lastBrakeIncidentId === incidentId) {
+        request.log.info({ incidentId, policyName }, 'spend brake already handled this alert');
+        return reply.send({ paused: [], reason: 'already_handled' });
+      }
+
+      const patch: Partial<CreationLimits> = incidentId ? { lastBrakeIncidentId: incidentId } : {};
       for (const lane of lanes) Object.assign(patch, PAUSEABLE[lane]);
       await store.setCreationLimits(patch, `alert:${incidentId ?? 'unknown'}`);
       request.log.error({ incidentId, policyName, lanes }, 'spend brake pulled by a monitoring alert');

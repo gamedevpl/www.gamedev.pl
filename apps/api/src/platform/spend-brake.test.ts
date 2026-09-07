@@ -35,21 +35,44 @@ describe('spend brake payload reading', () => {
     expect(parseLanes(undefined)).toEqual([]);
   });
 
-  it('pulls every lane once a billing budget is spent or forecast past 100%', () => {
+  it('graduates a budget by how far over it is, cheapest lanes last', () => {
     const budget = { budgetDisplayName: 'zł130 Monthly Budget Alert', costAmount: 140, budgetAmount: 130 };
-    // `seeding` too: round 0 is the main Vertex spender.
-    const all = ['creation', 'editing', 'chat', 'tabComplete', 'search', 'gate', 'seeding'];
-    expect(lanesFromNotification({ ...budget, alertThresholdExceeded: 1.0 })).toEqual({
-      lanes: all,
-      incidentId: 'budget:zł130 Monthly Budget Alert:spent:1',
-      policyName: 'zł130 Monthly Budget Alert',
-    });
-    // Forecast counts: the point is to stop before the money is gone.
+    // Forecast over: only the agent, the biggest line on the bill.
     expect(lanesFromNotification({ ...budget, forecastThresholdExceeded: 1.2 })).toEqual({
-      lanes: all,
+      lanes: ['managed'],
       incidentId: 'budget:zł130 Monthly Budget Alert:forecast:1.2',
       policyName: 'zł130 Monthly Budget Alert',
     });
+    // Spent over: plus round 0 (Vertex) and the gate (Cloud Build).
+    expect(lanesFromNotification({ ...budget, alertThresholdExceeded: 1.0 })).toEqual({
+      lanes: ['managed', 'seeding', 'gate'],
+      incidentId: 'budget:zł130 Monthly Budget Alert:spent:1',
+      policyName: 'zł130 Monthly Budget Alert',
+    });
+    // 150% spent: everything, including the lanes that cost pennies.
+    expect(lanesFromNotification({ ...budget, alertThresholdExceeded: 1.5 }).lanes).toEqual([
+      'creation',
+      'editing',
+      'chat',
+      'tabComplete',
+      'search',
+      'gate',
+      'seeding',
+      'managed',
+    ]);
+  });
+
+  it('lets a per-service budget name its own lanes instead of the ladder', () => {
+    const build = { budgetDisplayName: 'Cloud Build lanes=gate', alertThresholdExceeded: 1.0 };
+    expect(lanesFromNotification(build)).toEqual({
+      lanes: ['gate'],
+      incidentId: 'budget:Cloud Build lanes=gate:spent:1',
+      policyName: 'Cloud Build lanes=gate',
+    });
+    expect(lanesFromNotification({ ...build, alertThresholdExceeded: 0.9 }).lanes).toEqual([]);
+    expect(
+      lanesFromNotification({ budgetDisplayName: 'Vertex lanes=seeding_managed', forecastThresholdExceeded: 1 }).lanes,
+    ).toEqual(['seeding', 'managed']);
   });
 
   it('stays quiet on a routine budget tick under every threshold', () => {
@@ -154,33 +177,49 @@ describe('POST /api/internal/spend-brake', () => {
     await app.close();
   });
 
-  it('turns round-0 seeding off when the budget trips, not just the boolean lanes', async () => {
+  it('pauses the expensive lanes when the budget trips, and only once per alert', async () => {
     const store = new InMemoryStore();
     const app = await buildApp({
       store,
       sessionSecret,
       spendBrakeRoutes: { internalAuthVerifier: { verify: async () => true } },
     });
+    const tick = () =>
+      app.inject({
+        method: 'POST',
+        url: '/api/internal/spend-brake',
+        payload: pushBody({ budgetDisplayName: 'zł130 Monthly Budget Alert', alertThresholdExceeded: 1.0 }),
+      });
 
-    const res = await app.inject({
+    const first = await tick();
+    expect(first.statusCode).toBe(200);
+    expect(first.json().paused).toEqual(['managed', 'seeding', 'gate']);
+    const limits = await store.getCreationLimits();
+    // Agent, round 0 and gate stop; creation and cheap lanes stay open.
+    expect(limits).toMatchObject({
+      managedBuilderMode: 'off',
+      seedingMode: 'off',
+      gatePaused: true,
+      updatedBy: 'alert:budget:zł130 Monthly Budget Alert:spent:1',
+      lastBrakeIncidentId: 'budget:zł130 Monthly Budget Alert:spent:1',
+    });
+    expect(limits?.paused).not.toBe(true);
+    expect(limits?.searchPaused).not.toBe(true);
+
+    // Operator resumes; the same ~40-minute tick must not undo that.
+    await store.setCreationLimits({ managedBuilderMode: 'auto', seedingMode: 'auto', gatePaused: false }, 'g:boss');
+    const again = await tick();
+    expect(again.json()).toEqual({ paused: [], reason: 'already_handled' });
+    expect((await store.getCreationLimits())?.gatePaused).toBe(false);
+
+    // A new threshold is a new alert, and pulls again.
+    const worse = await app.inject({
       method: 'POST',
       url: '/api/internal/spend-brake',
-      payload: pushBody({ budgetDisplayName: 'zł130 Monthly Budget Alert', alertThresholdExceeded: 1.0 }),
+      payload: pushBody({ budgetDisplayName: 'zł130 Monthly Budget Alert', alertThresholdExceeded: 1.5 }),
     });
-
-    expect(res.statusCode).toBe(200);
-    const limits = await store.getCreationLimits();
-    // A seed regenerated after the brake would be another paid call.
-    expect(limits).toMatchObject({
-      paused: true,
-      editingPaused: true,
-      chatPaused: true,
-      tabCompletePaused: true,
-      searchPaused: true,
-      gatePaused: true,
-      seedingMode: 'off',
-      updatedBy: 'alert:budget:zł130 Monthly Budget Alert:spent:1',
-    });
+    expect(worse.json().paused).toContain('creation');
+    expect((await store.getCreationLimits())?.paused).toBe(true);
     await app.close();
   });
 

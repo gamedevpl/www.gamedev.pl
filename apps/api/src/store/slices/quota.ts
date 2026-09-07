@@ -167,6 +167,9 @@ export class InMemoryQuotaStore implements QuotaStore {
           ? patch.globalDailyTabCompleteTokenCap
           : (this.creationLimits?.globalDailyTabCompleteTokenCap ?? null),
       managedBuilderMode: patch.managedBuilderMode ?? this.creationLimits?.managedBuilderMode ?? 'auto',
+      ...((patch.lastBrakeIncidentId ?? this.creationLimits?.lastBrakeIncidentId)
+        ? { lastBrakeIncidentId: patch.lastBrakeIncidentId ?? this.creationLimits?.lastBrakeIncidentId }
+        : {}),
       managedAgentVendorOverride:
         patch.managedAgentVendorOverride !== undefined
           ? patch.managedAgentVendorOverride
@@ -314,6 +317,7 @@ export class FirestoreQuotaStore implements QuotaStore {
       seedingMode: data?.seedingMode === 'off' ? 'off' : 'auto',
       globalDailySeedCap: typeof data?.globalDailySeedCap === 'number' ? data.globalDailySeedCap : null,
       seedProviderOverride: typeof data?.seedProviderOverride === 'string' ? data.seedProviderOverride : null,
+      ...(typeof data?.lastBrakeIncidentId === 'string' ? { lastBrakeIncidentId: data.lastBrakeIncidentId } : {}),
       ...(data?.updatedAt ? { updatedAt: data.updatedAt } : {}),
       ...(data?.updatedBy ? { updatedBy: data.updatedBy } : {}),
     };
@@ -355,6 +359,9 @@ export class FirestoreQuotaStore implements QuotaStore {
             ? patch.globalDailyTabCompleteTokenCap
             : (existing.globalDailyTabCompleteTokenCap ?? null),
         managedBuilderMode: patch.managedBuilderMode ?? existing.managedBuilderMode ?? 'auto',
+        ...((patch.lastBrakeIncidentId ?? existing.lastBrakeIncidentId)
+          ? { lastBrakeIncidentId: patch.lastBrakeIncidentId ?? existing.lastBrakeIncidentId }
+          : {}),
         managedAgentVendorOverride:
           patch.managedAgentVendorOverride !== undefined
             ? patch.managedAgentVendorOverride
