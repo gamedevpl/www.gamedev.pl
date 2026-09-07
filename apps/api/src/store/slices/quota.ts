@@ -180,6 +180,11 @@ export class InMemoryQuotaStore implements QuotaStore {
         patch.managedDailyUserCap !== undefined
           ? patch.managedDailyUserCap
           : (this.creationLimits?.managedDailyUserCap ?? null),
+      partyPaused: patch.partyPaused ?? this.creationLimits?.partyPaused ?? false,
+      telemetrySampleRate:
+        patch.telemetrySampleRate !== undefined
+          ? patch.telemetrySampleRate
+          : (this.creationLimits?.telemetrySampleRate ?? null),
       seedingMode: patch.seedingMode ?? this.creationLimits?.seedingMode ?? 'auto',
       globalDailySeedCap:
         patch.globalDailySeedCap !== undefined
@@ -223,6 +228,11 @@ export class InMemoryQuotaStore implements QuotaStore {
     this.featuredPoolConfig = config;
     return { ...config, slugs: [...config.slugs] };
   }
+}
+
+// A hand-edited document must not blackhole telemetry: only 0..1 counts.
+function readSampleRate(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1 ? value : null;
 }
 
 export class FirestoreQuotaStore implements QuotaStore {
@@ -314,6 +324,8 @@ export class FirestoreQuotaStore implements QuotaStore {
           : null,
       managedDailyCap: typeof data?.managedDailyCap === 'number' ? data.managedDailyCap : null,
       managedDailyUserCap: typeof data?.managedDailyUserCap === 'number' ? data.managedDailyUserCap : null,
+      partyPaused: data?.partyPaused === true,
+      telemetrySampleRate: readSampleRate(data?.telemetrySampleRate),
       seedingMode: data?.seedingMode === 'off' ? 'off' : 'auto',
       globalDailySeedCap: typeof data?.globalDailySeedCap === 'number' ? data.globalDailySeedCap : null,
       seedProviderOverride: typeof data?.seedProviderOverride === 'string' ? data.seedProviderOverride : null,
@@ -372,6 +384,9 @@ export class FirestoreQuotaStore implements QuotaStore {
           patch.managedDailyCap !== undefined ? patch.managedDailyCap : (existing.managedDailyCap ?? null),
         managedDailyUserCap:
           patch.managedDailyUserCap !== undefined ? patch.managedDailyUserCap : (existing.managedDailyUserCap ?? null),
+        partyPaused: patch.partyPaused ?? existing.partyPaused ?? false,
+        telemetrySampleRate:
+          patch.telemetrySampleRate !== undefined ? patch.telemetrySampleRate : (existing.telemetrySampleRate ?? null),
         seedingMode: patch.seedingMode ?? existing.seedingMode ?? 'auto',
         globalDailySeedCap:
           patch.globalDailySeedCap !== undefined ? patch.globalDailySeedCap : (existing.globalDailySeedCap ?? null),
