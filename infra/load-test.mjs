@@ -44,7 +44,11 @@ function parseArgs(argv) {
   const args = { rate: 2, duration: 20, slugs: [], telemetry: false, allowProduction: false };
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index];
-    const next = () => argv[(index += 1)];
+    const next = () => {
+      const value = argv[(index += 1)];
+      if (value === undefined) throw new Error(`${flag} needs a value`);
+      return value;
+    };
     switch (flag) {
       case '--target':
         args.target = next();
@@ -84,8 +88,8 @@ function parseArgs(argv) {
 function validate(args) {
   if (!args.target) throw new Error('--target is required; there is no default on purpose');
   const url = new URL(args.target);
-  if (PRODUCTION_HOSTS.has(url.host) && !args.allowProduction) {
-    throw new Error(`${url.host} is production. Pass --allow-production if you mean it.`);
+  if (PRODUCTION_HOSTS.has(url.hostname) && !args.allowProduction) {
+    throw new Error(`${url.hostname} is production. Pass --allow-production if you mean it.`);
   }
   if (args.rate > RATE_NEEDING_CONSENT && !args.allowProduction) {
     throw new Error(`--rate above ${RATE_NEEDING_CONSENT}/s needs --allow-production`);

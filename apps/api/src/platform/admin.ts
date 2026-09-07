@@ -216,60 +216,42 @@ export interface FeaturedPoolResponse {
   slugs: string[];
 }
 
-const CreationLimitsPatchSchema = z
-  .object({
-    paused: z.boolean().optional(),
-    // null clears the ceiling, handing the decision to the deployed default.
-    globalDailySubmissionCap: z.number().int().min(0).max(100_000).nullable().optional(),
-    // The editing lanes' breaker rides the same document — one place to look.
-    editingPaused: z.boolean().optional(),
-    globalDailyEditCap: z.number().int().min(0).max(100_000).nullable().optional(),
-    chatPaused: z.boolean().optional(),
-    globalDailyChatCap: z.number().int().min(0).max(100_000).nullable().optional(),
-    // TA-01's own breaker, denominated in tokens rather than calls.
-    tabCompletePaused: z.boolean().optional(),
-    globalDailyTabCompleteTokenCap: z.number().int().min(0).max(50_000_000).nullable().optional(),
-    searchPaused: z.boolean().optional(),
-    globalDailySearchEmbeddingCap: z.number().int().min(0).max(10_000_000).nullable().optional(),
-    gatePaused: z.boolean().optional(),
-    globalDailyGateRunCap: z.number().int().min(0).max(100_000).nullable().optional(),
-    globalDailySeedCap: z.number().int().min(0).max(100_000).nullable().optional(),
-    // Load-shedding rungs 2 and 3; see docs/runbooks/launch-day.md.
-    telemetrySampleRate: z.number().min(0).max(1).nullable().optional(),
-    partyPaused: z.boolean().optional(),
-    // Same document: whether the platform builder is offered. See managed-availability.ts.
-    managedBuilderMode: z.enum(MANAGED_BUILDER_MODES).optional(),
-    // null clears the override, same as globalDailySubmissionCap above.
-    managedAgentVendorOverride: z.enum(MANAGED_AGENT_VENDORS).nullable().optional(),
-    managedDailyCap: z.number().int().min(0).max(100_000).nullable().optional(),
-    managedDailyUserCap: z.number().int().min(0).max(100_000).nullable().optional(),
-    seedingMode: z.enum(['auto', 'off']).optional(),
-    // Free-form, not an enum: providers self-register.
-    seedProviderOverride: z.string().min(1).max(64).nullable().optional(),
-  })
-  .refine(
-    (patch) =>
-      patch.paused !== undefined ||
-      patch.globalDailySubmissionCap !== undefined ||
-      patch.editingPaused !== undefined ||
-      patch.globalDailyEditCap !== undefined ||
-      patch.chatPaused !== undefined ||
-      patch.globalDailyChatCap !== undefined ||
-      patch.tabCompletePaused !== undefined ||
-      patch.globalDailyTabCompleteTokenCap !== undefined ||
-      patch.searchPaused !== undefined ||
-      patch.globalDailySearchEmbeddingCap !== undefined ||
-      patch.gatePaused !== undefined ||
-      patch.globalDailyGateRunCap !== undefined ||
-      patch.globalDailySeedCap !== undefined ||
-      patch.managedBuilderMode !== undefined ||
-      patch.managedAgentVendorOverride !== undefined ||
-      patch.managedDailyCap !== undefined ||
-      patch.managedDailyUserCap !== undefined ||
-      patch.seedingMode !== undefined ||
-      patch.seedProviderOverride !== undefined,
-    'nothing to change: send paused, globalDailySubmissionCap, editingPaused, globalDailyEditCap, chatPaused, globalDailyChatCap, tabCompletePaused, globalDailyTabCompleteTokenCap, searchPaused, globalDailySearchEmbeddingCap, gatePaused, globalDailyGateRunCap, globalDailySeedCap, managedBuilderMode, managedAgentVendorOverride, managedDailyCap, managedDailyUserCap, seedingMode and/or seedProviderOverride',
-  );
+const CreationLimitsPatchShape = z.object({
+  paused: z.boolean().optional(),
+  // null clears the ceiling, handing the decision to the deployed default.
+  globalDailySubmissionCap: z.number().int().min(0).max(100_000).nullable().optional(),
+  // The editing lanes' breaker rides the same document — one place to look.
+  editingPaused: z.boolean().optional(),
+  globalDailyEditCap: z.number().int().min(0).max(100_000).nullable().optional(),
+  chatPaused: z.boolean().optional(),
+  globalDailyChatCap: z.number().int().min(0).max(100_000).nullable().optional(),
+  // TA-01's own breaker, denominated in tokens rather than calls.
+  tabCompletePaused: z.boolean().optional(),
+  globalDailyTabCompleteTokenCap: z.number().int().min(0).max(50_000_000).nullable().optional(),
+  searchPaused: z.boolean().optional(),
+  globalDailySearchEmbeddingCap: z.number().int().min(0).max(10_000_000).nullable().optional(),
+  gatePaused: z.boolean().optional(),
+  globalDailyGateRunCap: z.number().int().min(0).max(100_000).nullable().optional(),
+  globalDailySeedCap: z.number().int().min(0).max(100_000).nullable().optional(),
+  // Load-shedding rungs 2 and 3; see docs/runbooks/launch-day.md.
+  telemetrySampleRate: z.number().min(0).max(1).nullable().optional(),
+  partyPaused: z.boolean().optional(),
+  // Same document: whether the platform builder is offered. See managed-availability.ts.
+  managedBuilderMode: z.enum(MANAGED_BUILDER_MODES).optional(),
+  // null clears the override, same as globalDailySubmissionCap above.
+  managedAgentVendorOverride: z.enum(MANAGED_AGENT_VENDORS).nullable().optional(),
+  managedDailyCap: z.number().int().min(0).max(100_000).nullable().optional(),
+  managedDailyUserCap: z.number().int().min(0).max(100_000).nullable().optional(),
+  seedingMode: z.enum(['auto', 'off']).optional(),
+  // Free-form, not an enum: providers self-register.
+  seedProviderOverride: z.string().min(1).max(64).nullable().optional(),
+});
+
+// Derived from the shape so a field added above can never be silently rejected.
+const CreationLimitsPatchSchema = CreationLimitsPatchShape.refine(
+  (patch) => Object.keys(patch).length > 0,
+  `nothing to change: send one or more of ${Object.keys(CreationLimitsPatchShape.shape).join(', ')}`,
+);
 
 const PublicPlayPatchSchema = z.object({
   slugs: z
