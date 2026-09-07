@@ -21,13 +21,13 @@ export async function improvePublished(input: {
   const choice = await chooseExecution(input);
   if (!choice) return { next: 'continue' };
   input.telemetry?.record('build_requested');
-  const created = await input.api.request<{ ok: boolean; token?: string; slug?: string }>(
+  const created = await input.api.request<{ ok: boolean; token?: string; slug?: string; reply?: string }>(
     'POST',
     `/api/submissions/${encodeURIComponent(input.token)}/improve`,
     { feedback: input.request, builder: choice.builder },
   );
   if (!created.token || !created.slug) {
-    input.write('The platform replied without opening an improvement round — /status to inspect it.');
+    input.write(created.reply?.trim() || 'No improvement round was opened. Please clarify what you want to change.');
     return { next: 'continue' };
   }
   input.write(`▸ opened improvement for ${created.slug}`);

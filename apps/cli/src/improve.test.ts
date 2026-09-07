@@ -102,19 +102,24 @@ it('retains the new round when launching its agent fails', async () => {
   expect(write).toHaveBeenCalledWith(expect.stringContaining('agent unavailable'));
 });
 
-it('does not launch an agent when improve only returns a conversational reply', async () => {
+it.each([
+  ['Which sounds would you like?', 'Which sounds would you like?'],
+  [undefined, 'No improvement round was opened. Please clarify what you want to change.'],
+])('shows the reply without launching an agent: %s', async (reply, expected) => {
+  const write = vi.fn();
   vi.mocked(chooseExecution).mockResolvedValue({ builder: 'platform' });
   const result = await improvePublished({
-    api: { request: vi.fn(async () => ({ ok: true })) } as unknown as ApiClient,
+    api: { request: vi.fn(async () => ({ ok: true, reply })) } as unknown as ApiClient,
     token: 'old',
     request: 'What would better hair look like?',
     slug: 'airtime',
     env: {},
     pick: vi.fn(),
     workshop: ws,
-    write: vi.fn(),
+    write,
     abort: ws.abort,
   });
+  expect(write).toHaveBeenCalledWith(expected);
   expect(result.token).toBeUndefined();
   expect(executeChoice).not.toHaveBeenCalled();
 });

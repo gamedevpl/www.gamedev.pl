@@ -111,7 +111,9 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
         throw error;
       }
 
-      const parsed = FeedbackRequestSchema.safeParse(request.body);
+      const parsed = FeedbackRequestSchema.extend({
+        feedback: z.string().trim().min(1).max(2000),
+      }).safeParse(request.body);
       if (!parsed.success) {
         return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
       }
@@ -204,7 +206,7 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
           await store.markCreatorMessagesDelivered(jobId, [creatorMessage.id]);
           orphanedChatMessageId = undefined;
           invalidateStatusCache(jobId);
-          return reply.send({ ok: true, ...(shotId ? { shotId } : {}) });
+          return reply.send({ ok: true, reply: chatOutcome.replyText, ...(shotId ? { shotId } : {}) });
         } catch (queueError) {
           // A failed write must not claim success — fail open instead.
           request.log.error({ err: queueError }, 'failed to record studio chat reply; failing open to the builder');

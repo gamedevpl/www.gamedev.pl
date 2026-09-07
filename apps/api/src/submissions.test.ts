@@ -4495,7 +4495,7 @@ describe('POST /api/submissions/:token/improve', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      expect(res.json()).toEqual({ ok: true });
+      expect(res.json()).toEqual({ ok: true, reply: 'You can tune difficulty from Settings.' });
       // No new job: the reply lives on the published job's thread.
       expect(briefs).toHaveLength(0);
       const all = await store.listCreatorMessages(123);
@@ -4506,35 +4506,38 @@ describe('POST /api/submissions/:token/improve', () => {
       await app.close();
     });
 
-    it('a build decision still opens a new improvement job as before', async () => {
-      const { githubClient } = createGithubClientStub({ jobId: 501 });
-      const store = new InMemoryStore();
-      const { backend, briefs } = createBackendStub();
-      const decide = vi.fn(async () => ({ kind: 'build' as const }));
-      const { app, authHeaders } = await createApp({
-        githubClient,
-        agentBackend: backend,
-        submissionTokenSecret: secret,
-        store,
-        chatAgent: { decide },
-      });
-      await store.createSubmission(123, 'g:test-user', 'Sky Dodge');
-      await store.setSubmissionSlug(123, 'sky-dodge');
-      await store.setSubmissionPublishedAt(123, '2026-07-20T00:00:00.000Z');
+    it.each(['Add SFX', 'Make level two less punishing and add a checkpoint.'])(
+      'opens an improvement for a valid instruction: %s',
+      async (feedback) => {
+        const { githubClient } = createGithubClientStub({ jobId: 501 });
+        const store = new InMemoryStore();
+        const { backend, briefs } = createBackendStub();
+        const decide = vi.fn(async () => ({ kind: 'build' as const }));
+        const { app, authHeaders } = await createApp({
+          githubClient,
+          agentBackend: backend,
+          submissionTokenSecret: secret,
+          store,
+          chatAgent: { decide },
+        });
+        await store.createSubmission(123, 'g:test-user', 'Sky Dodge');
+        await store.setSubmissionSlug(123, 'sky-dodge');
+        await store.setSubmissionPublishedAt(123, '2026-07-20T00:00:00.000Z');
 
-      const res = await app.inject({
-        method: 'POST',
-        url: `/api/submissions/${mintToken(123, secret)}/improve`,
-        headers: authHeaders,
-        payload: { feedback: 'Make level two less punishing and add a checkpoint.' },
-      });
+        const res = await app.inject({
+          method: 'POST',
+          url: `/api/submissions/${mintToken(123, secret)}/improve`,
+          headers: authHeaders,
+          payload: { feedback },
+        });
 
-      expect(res.statusCode).toBe(200);
-      expect(res.json()).toMatchObject({ ok: true, slug: 'sky-dodge' });
-      expect(briefs).toHaveLength(1);
-      expect(briefs.at(-1)!.feedback).toContain('Make level two less punishing');
-      await app.close();
-    });
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toMatchObject({ ok: true, slug: 'sky-dodge' });
+        expect(briefs).toHaveLength(1);
+        expect(briefs.at(-1)!.feedback).toContain(feedback);
+        await app.close();
+      },
+    );
 
     it('a conversational reply does not spend the daily improvement quota', async () => {
       const { githubClient } = createGithubClientStub({ jobId: 501 });
@@ -4568,7 +4571,7 @@ describe('POST /api/submissions/:token/improve', () => {
           payload: { feedback: `question ${i}, is it done yet?` },
         });
         expect(res.statusCode).toBe(200);
-        expect(res.json()).toEqual({ ok: true });
+        expect(res.json()).toEqual({ ok: true, reply: i === 0 ? 'first answer' : 'second answer' });
       }
 
       const build = await app.inject({
@@ -4607,7 +4610,7 @@ describe('POST /api/submissions/:token/improve', () => {
       });
       // Would 409 here if this ran the build-only availability check.
       expect(res.statusCode).toBe(200);
-      expect(res.json()).toEqual({ ok: true });
+      expect(res.json()).toEqual({ ok: true, reply: 'Still building.' });
       await app.close();
     });
 
