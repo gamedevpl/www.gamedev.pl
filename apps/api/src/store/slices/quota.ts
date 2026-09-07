@@ -167,8 +167,8 @@ export class InMemoryQuotaStore implements QuotaStore {
           ? patch.globalDailyTabCompleteTokenCap
           : (this.creationLimits?.globalDailyTabCompleteTokenCap ?? null),
       managedBuilderMode: patch.managedBuilderMode ?? this.creationLimits?.managedBuilderMode ?? 'auto',
-      ...((patch.lastBrakeIncidentId ?? this.creationLimits?.lastBrakeIncidentId)
-        ? { lastBrakeIncidentId: patch.lastBrakeIncidentId ?? this.creationLimits?.lastBrakeIncidentId }
+      ...((patch.handledBrakeIncidents ?? this.creationLimits?.handledBrakeIncidents)
+        ? { handledBrakeIncidents: patch.handledBrakeIncidents ?? this.creationLimits?.handledBrakeIncidents }
         : {}),
       managedAgentVendorOverride:
         patch.managedAgentVendorOverride !== undefined
@@ -317,7 +317,9 @@ export class FirestoreQuotaStore implements QuotaStore {
       seedingMode: data?.seedingMode === 'off' ? 'off' : 'auto',
       globalDailySeedCap: typeof data?.globalDailySeedCap === 'number' ? data.globalDailySeedCap : null,
       seedProviderOverride: typeof data?.seedProviderOverride === 'string' ? data.seedProviderOverride : null,
-      ...(typeof data?.lastBrakeIncidentId === 'string' ? { lastBrakeIncidentId: data.lastBrakeIncidentId } : {}),
+      ...(Array.isArray(data?.handledBrakeIncidents)
+        ? { handledBrakeIncidents: data.handledBrakeIncidents.filter((id): id is string => typeof id === 'string') }
+        : {}),
       ...(data?.updatedAt ? { updatedAt: data.updatedAt } : {}),
       ...(data?.updatedBy ? { updatedBy: data.updatedBy } : {}),
     };
@@ -359,8 +361,8 @@ export class FirestoreQuotaStore implements QuotaStore {
             ? patch.globalDailyTabCompleteTokenCap
             : (existing.globalDailyTabCompleteTokenCap ?? null),
         managedBuilderMode: patch.managedBuilderMode ?? existing.managedBuilderMode ?? 'auto',
-        ...((patch.lastBrakeIncidentId ?? existing.lastBrakeIncidentId)
-          ? { lastBrakeIncidentId: patch.lastBrakeIncidentId ?? existing.lastBrakeIncidentId }
+        ...((patch.handledBrakeIncidents ?? existing.handledBrakeIncidents)
+          ? { handledBrakeIncidents: patch.handledBrakeIncidents ?? existing.handledBrakeIncidents }
           : {}),
         managedAgentVendorOverride:
           patch.managedAgentVendorOverride !== undefined

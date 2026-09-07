@@ -68,8 +68,20 @@ describe('spend brake payload reading', () => {
       lanes: ['gate'],
       incidentId: 'budget:Cloud Build lanes=gate:spent:1',
       policyName: 'Cloud Build lanes=gate',
+      rawLanes: 'gate',
     });
     expect(lanesFromNotification({ ...build, alertThresholdExceeded: 0.9 }).lanes).toEqual([]);
+    // A typo is loud, not a quiet tick: the budget is exhausted and nothing paused.
+    expect(lanesFromNotification({ budgetDisplayName: 'Cloud Build lanes=gaet', alertThresholdExceeded: 1 })).toEqual({
+      lanes: [],
+      policyName: 'Cloud Build lanes=gaet',
+      rawLanes: 'gaet',
+      reason: 'unrecognised_lanes',
+    });
+    // Next month is a new alert: the billing interval is part of the identity.
+    expect(lanesFromNotification({ ...build, costIntervalStart: '2026-10-01T00:00:00Z' }).incidentId).toBe(
+      'budget:Cloud Build lanes=gate:2026-10-01T00:00:00Z:spent:1',
+    );
     expect(
       lanesFromNotification({ budgetDisplayName: 'Vertex lanes=seeding_managed', forecastThresholdExceeded: 1 }).lanes,
     ).toEqual(['seeding', 'managed']);
@@ -201,10 +213,18 @@ describe('POST /api/internal/spend-brake', () => {
       seedingMode: 'off',
       gatePaused: true,
       updatedBy: 'alert:budget:zł130 Monthly Budget Alert:spent:1',
-      lastBrakeIncidentId: 'budget:zł130 Monthly Budget Alert:spent:1',
+      handledBrakeIncidents: ['budget:zł130 Monthly Budget Alert:spent:1'],
     });
     expect(limits?.paused).not.toBe(true);
     expect(limits?.searchPaused).not.toBe(true);
+
+    // A second budget on the same topic must not make the first forget it was handled.
+    await app.inject({
+      method: 'POST',
+      url: '/api/internal/spend-brake',
+      payload: pushBody({ budgetDisplayName: 'Discovery Engine lanes=search', alertThresholdExceeded: 1.0 }),
+    });
+    expect((await store.getCreationLimits())?.searchPaused).toBe(true);
 
     // Operator resumes; the same ~40-minute tick must not undo that.
     await store.setCreationLimits({ managedBuilderMode: 'auto', seedingMode: 'auto', gatePaused: false }, 'g:boss');
