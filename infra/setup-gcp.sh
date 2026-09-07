@@ -33,12 +33,18 @@ else
   gcloud firestore databases create --location="$REGION" --type=firestore-native --project="$PROJECT_ID"
 fi
 
-echo "==> 3/10 Granting datastore.user role to Deployer SA (${DEPLOYER_SA})"
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+echo "==> 3/10 Ensuring the Deployer SA (${DEPLOYER_SA}) holds no Firestore role"
+# This step used to grant datastore.user, contradicting setup-wif.sh, which keeps the
+# nightly erasure proof on a separate account precisely because "the deployer
+# deliberately does not have" Firestore. No deploy step reads or writes Firestore — the
+# publish job writes GCS only — and Firestore IAM has no collection scope, so the grant
+# meant a leaked deploy credential could read every player record. Removed 2026-09-08;
+# this reconciles rather than skips, so a re-run on an older project takes it away too.
+gcloud projects remove-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${DEPLOYER_SA}" \
   --role="roles/datastore.user" \
   --condition=None \
-  >/dev/null
+  >/dev/null 2>&1 || echo "    (no datastore.user binding to remove)"
 
 echo "==> 4/10 Ensuring the Cloud Run runtime identities exist, with datastore.user and aiplatform.user"
 # The app runs as its own account, never the project's default compute one (which holds
@@ -198,9 +204,15 @@ else
   gcloud storage buckets create "gs://${SNAPSHOT_BUCKET}" \
     --location="$SNAPSHOT_BUCKET_REGION" \
     --uniform-bucket-level-access \
+    --public-access-prevention \
     --project="$PROJECT_ID"
   echo "    Created bucket in ${SNAPSHOT_BUCKET_REGION}."
 fi
+# Enforced on existing buckets too: the API reads with its own identity through the JSON
+# API and the web client never fetches this bucket directly, so nothing legitimate needs
+# an allUsers grant — and without this a single mis-click makes every game public at
+# the storage layer, bypassing the beta wall the bucket comment above relies on.
+gcloud storage buckets update "gs://${SNAPSHOT_BUCKET}" --public-access-prevention --project="$PROJECT_ID" >/dev/null
 
 # The publish job (github-actions-deployer via WIF) writes; Cloud Run only reads.
 # Splitting the two means a compromised runtime cannot rewrite what it serves.

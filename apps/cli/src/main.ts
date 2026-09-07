@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { offerKitUpdate, updateKit } from './kit-update.js';
 import { playGame } from './play.js';
 import { resolve as resolvePath } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -139,14 +140,51 @@ export async function runCli(
   const api = createApi({ origin, store, env });
   const tty = Boolean(io.stdin.isTTY);
   const telemetry =
-    verb === 'connect' || verb === 'delegate' || verb === 'play' ? createCliTelemetry(origin) : undefined;
+    verb === 'kit' || verb === 'connect' || verb === 'delegate' || verb === 'play'
+      ? createCliTelemetry(origin)
+      : undefined;
 
   try {
     if (verb === 'help' || flags.help || flags.h) {
       io.stdout.write(`${formatHelp()}\n`);
       return EXIT_GREEN;
     }
+    if (verb === 'kit') {
+      if (args[0] && args[0] !== 'update') throw new CliError('Use gamedevpl kit [update].', EXIT_INPUT);
+      const controller = new AbortController();
+      const cancel = () => controller.abort();
+      process.once('SIGINT', cancel);
+      try {
+        const options = {
+          api,
+          cwd: process.cwd(),
+          env,
+          telemetry,
+          abort: controller.signal,
+          write: (line: string) => io.stdout.write(`${line}\n`),
+        };
+        if (args[0] === 'update') await updateKit(options);
+        else await offerKitUpdate(options);
+      } finally {
+        process.removeListener('SIGINT', cancel);
+      }
+      return EXIT_GREEN;
+    }
     if (verb === 'play') {
+      if (!flags.stop && findCheckout(process.cwd())) {
+        try {
+          await offerKitUpdate({
+            api,
+            cwd: process.cwd(),
+            env,
+            telemetry,
+            write: (line) => io.stderr.write(`${line}\n`),
+          });
+        } catch {
+          // Update discovery must not prevent offline local play.
+        }
+      }
+
       const played = await playGame({
         cwd: process.cwd(),
         slug: args[0],

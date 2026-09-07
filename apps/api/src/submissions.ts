@@ -28,6 +28,7 @@ import { registerAdminGameRoutes } from './catalog/admin-game-routes.js';
 import { createSlugResolver } from './catalog/slug-resolver.js';
 import { registerSelfBuildConnectRoutes } from './agent-surface/self-build-connect-routes.js';
 import { registerDraftLifecycleRoutes } from './creation/draft-lifecycle-routes.js';
+import { closeJob } from './creation/close-job.js';
 import { registerCliChatRoutes } from './creation/cli-chat-routes.js';
 import { createGameCreator, registerCreateGameRoute } from './creation/create-game.js';
 import {
@@ -157,18 +158,16 @@ export interface SubmissionRoutesOptions {
   gamesRepo?: string;
   submissionTokenSecret?: string;
   /**
-   * Localizes an agent-relayed change request on the write that stores it. Used by the
-   * two relay paths and by nothing that serves a read — see the note on the instance.
-   * Defaults to createTranslatorFromEnv(); tests inject a stub.
+   * Localizes an agent-relayed change request on the write that stores it; nothing that
+   * serves a read uses it. Defaults to createTranslatorFromEnv(); tests inject a stub.
    */
   translator?: Translator;
   githubClient?: GitHubClient;
   fetchImpl?: typeof fetch;
   now?: () => number;
-  // The real need is SubmissionRoutesStore, defined above; kept as the full Store
-  // because forwarding to agent-channel/mcp-server/notify/the gate factories still
-  // wants the wide type -- narrowing those is Phase 3, not this file's edit.
+  // Kept wide for the factories it forwards to; narrowing is Phase 3.
   store?: Store;
+  playableWithoutSession?: (slug: string) => Promise<boolean>;
   dailySubmissionQuota?: number;
   /**
    * The global creation breaker (pause switch + shared daily ceiling). Built from the
@@ -1185,6 +1184,7 @@ export async function registerSubmissionRoutes(
     now,
     catalog: catalogRoutes,
     draftPreview: draftPreviewRoutes,
+    playableWithoutSession: options.playableWithoutSession,
     maxGamesPerWindow,
     gamesRateLimitWindowMs,
   });
@@ -1544,43 +1544,12 @@ export async function registerSubmissionRoutes(
     // whose job says it never happened — let it land or fail, then act on that.
     if (state && !canTransition(state, 'canceled')) return reply.status(409).send({ error: 'mid_publish', state });
 
-    const at = new Date(now()).toISOString();
-    // A record the job model never adopted has no state to transition from; recording
-    // the cancel adopts it directly as canceled, which is the fact the operator just
-    // established about it.
-    await store.recordJobTransition(jobId, { to: 'canceled', at, by: 'operator', reason: 'operator_canceled' });
-
-    // Best effort, and honest about what it did. The Copilot backend has no kill switch —
-    // cancellation there is the job being terminal: the channel's control block now says
-    // stop, a live session reads it on its next report, and anything it sends anyway is
-    // rejected. `stopEnforced: false` is the console's cue to say "told to stop" rather
-    // than "stopped".
-    let stopEnforced = false;
-    const refs = record.dispatch?.refs;
-    const cancelBackend = await backendFor(builderOf(record));
-    if (cancelBackend && refs?.length) {
-      try {
-        const ref = refs[refs.length - 1];
-        stopEnforced = (await cancelBackend.cancel(ref, record.dispatch?.credentialRefs?.[ref])).enforced;
-      } catch (cancelError) {
-        request.log.error({ err: cancelError, jobId }, 'agent cancel failed; job is canceled regardless');
-      }
-    }
-
-    // Same bookkeeping as a creator abandon. Without `abandonedAt` the job is terminal
-    // for the queue but still sits on the creator's studio shelf — a reject from this
-    // console left street-heist looking "Stopped" with Playtest still offered, because
-    // the shelf only filters on `abandonedAt`, not on job state.
-    const afterCancel = await store.getSubmission(jobId);
-    if (afterCancel?.dispatch?.workspace) {
-      await releaseWorkspace(jobId, afterCancel.dispatch.workspace, request.log, afterCancel.dispatch.backend);
-    }
-    if (afterCancel?.dispatch?.seedWorkspace) {
-      await releaseWorkspace(jobId, afterCancel.dispatch.seedWorkspace, request.log, afterCancel.dispatch.backend);
-      await store.clearDispatchSeedWorkspace(jobId);
-    }
-    await store.setSubmissionAbandoned(jobId, at);
-    invalidateStatusCache(jobId);
+    // `stopEnforced: false` is the console's cue to say "told to stop", not "stopped":
+    // Copilot has no kill switch, so there the terminal state is the cancellation.
+    const { stopEnforced } = await closeJob(
+      { store, now, backendFor, builderOf, releaseWorkspace, invalidateStatusCache },
+      { record, to: 'canceled', by: 'operator', reason: 'operator_canceled', log: request.log },
+    );
 
     return reply.send({ ok: true, state: 'canceled', stopEnforced });
   });
@@ -1690,6 +1659,8 @@ export async function registerSubmissionRoutes(
     now,
     builderOf,
     backendFor,
+    releaseWorkspace,
+    invalidateStatusCache,
     acknowledgeBuilderHandoff,
     recordDerivedJobState,
     reconcileNativeJob,

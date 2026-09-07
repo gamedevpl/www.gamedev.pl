@@ -29,14 +29,7 @@ const ChatBodySchema = z.object({
         .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
         .max(100)
         .optional(),
-      agents: z
-        .array(
-          z
-            .string()
-            .regex(/^[a-z0-9-]+$/)
-            .max(40),
-        )
-        .max(20),
+      agents: z.array(z.string().min(1).max(40)).max(20),
     })
     .strict()
     .optional(),

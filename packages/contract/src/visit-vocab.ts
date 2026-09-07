@@ -165,6 +165,23 @@ export type CodeCompletionKind = (typeof CODE_COMPLETION_KINDS)[number];
 export const CODE_COMPLETION_OUTCOMES = ['shown', 'empty', 'failed'] as const;
 export type CodeCompletionOutcome = (typeof CODE_COMPLETION_OUTCOMES)[number];
 
+// One rung per visit per route; `via` says which drove it.
+export const PARTY_STEPS = [
+  'lobby_opened',
+  'guest_joined',
+  'started',
+  'paused',
+  'resumed',
+  'restarted',
+  'returned_to_lobby',
+  'quit',
+] as const;
+export type PartyStep = (typeof PARTY_STEPS)[number];
+
+// `seat` is a phone or the host keyboard, told apart by neither.
+export const PARTY_VIAS = ['bar', 'seat'] as const;
+export type PartyVia = (typeof PARTY_VIAS)[number];
+
 export const CLI_STEPS = [
   'installed',
   'authorized',
@@ -173,6 +190,10 @@ export const CLI_STEPS = [
   'delivered',
   'published',
   'play_requested',
+  'kit_update_available',
+  'kit_update_started',
+  'kit_update_completed',
+  'kit_update_failed',
   'delegate_offered',
   'delegate_used',
   'verify_failed',

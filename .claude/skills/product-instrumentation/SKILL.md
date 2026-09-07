@@ -269,6 +269,17 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
     Partial progress from Creator Studio: the `/studio` route is a distinct visit kind
     (`studio`), so "did they open the control panel after publish" is measurable from the
     visit stream without joining to play events.
+- ~~Party mode's lifecycle unmeasured~~ — **closed 2026-09-07**: `party_step` on the visit
+  stream records `lobby_opened` → `guest_joined` → `started` → `paused` / `resumed` /
+  `restarted` / `returned_to_lobby` / `quit`, each with `via: 'bar' | 'seat'`.
+  `PARTY_STEPS` / `PARTY_VIAS` live in `packages/contract/src/visit-vocab.ts` like the
+  other vocabularies; `summarizeVisitFunnel` rolls them up as `party` and
+  `VisitFunnelPanel` renders the block. Two things it does not carry, deliberately: no
+  slug (the streams stay unjoinable) and no room code — a code identifies a gathering.
+  `seat` is honest rather than precise: the shared screen cannot tell a phone's menu
+  button from the host keyboard, so it does not claim to. Unlike the create funnel, a
+  rung dedupes per `step:via` and not per step — "the bar paused it" and "the room paused
+  it" are the question, and collapsing them would erase it.
 - **Build economics are duration-only** — submission→publish timestamps and build events
   exist; revision-cycle counts are derivable; keep it that way as builds evolve.
 - ~~Shared zones were unmeasured~~ — **closed 2026-07-31**: `zone_link`
@@ -315,3 +326,9 @@ CLI vocabulary changes must also update the labels in `apps/web/src/CliFunnelBlo
 `play_requested` counts requests to open a local or remote game, not evidence that
 the game loaded or was played. Query `cli_step` grouped by `step` and visit ID;
 local play has no game identifier or per-game health events.
+
+Creator Kit updates emit `kit_update_available`, `kit_update_started`,
+`kit_update_completed`, and `kit_update_failed` in the CLI visit stream (creator
+return / funnel questions 4–5). No signed URLs, checkout paths or source content
+are recorded. Completion means the staged toolchain was installed, not that the
+game has passed its publishing checks.

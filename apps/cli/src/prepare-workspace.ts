@@ -11,6 +11,8 @@ export async function prepareWorkspace(input: {
   abort?: AbortSignal;
   write: (line: string) => void;
 }): Promise<void> {
+  if (existsSync(join(input.cwd, '.gamedev/kit-update.json')) || existsSync(join(input.cwd, '.gamedev/kit-update.pid')))
+    throw new CliError('A Kit update is pending. Run gamedevpl kit update to finish or recover it.', EXIT_REFUSED);
   const run = async (command: string, args: string[]): Promise<void> => {
     if (input.abort?.aborted) throw new CliError('setup cancelled', EXIT_REFUSED);
     const child = spawnCommand({ ...input, command, args, env: childEnv(input.env, ''), timeoutMs: 5 * 60_000 });

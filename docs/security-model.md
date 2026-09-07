@@ -98,6 +98,28 @@ a headless-browser smoke test. The gate complements review; it does not replace 
 
 ## Browser hardening headers
 
+### Session write origins
+
+Before a cookie-authenticated POST/PUT/PATCH/DELETE reaches a handler, the auth hook
+checks its Origin (or Referer when Origin is absent). Only the exact request target,
+the canonical application origin, or an explicitly configured WEB_ORIGIN is accepted.
+A sibling subdomain or another port is not the same origin. Opaque `null` origins
+are refused. This applies to PAT-derived cookies too; adding a Bearer header does
+not bypass the check when the cookie authenticates first.
+
+Clients without Origin/Referer remain supported unless Fetch Metadata identifies a
+non-same-origin browser request. Bearer-only callers and GET/HEAD/OPTIONS retain their
+existing authentication rules. The PAT mint endpoint additionally requires
+application/json; OAuth's shared form parser must not admit token creation by forms.
+OAuth retains its own consent/nonce checks. SameSite cookies and CORS are additional
+controls, not substitutes for this check.
+
+The Vite development proxy preserves Host so its default origin works without extra
+configuration. The exact target origin also admits same-origin candidate revisions;
+X-Forwarded-Host is never used to authorize an origin.
+
+### Response policies
+
 One Cloud Run service serves the API and the web app, so response headers are set in one
 place: `apps/api/src/platform/security-headers.ts`, registered in `app.ts` right after the rate
 limiter, whose annotation its report sink relies on. Every response carries `X-Content-Type-Options: nosniff` and

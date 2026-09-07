@@ -58,6 +58,8 @@ export interface CreationLimits {
   globalDailyTabCompleteTokenCap?: number | null;
   // Switches the `platform` option; `auto` defers to whether a backend exists.
   managedBuilderMode?: ManagedBuilderMode;
+  // Alerts the brake acted on, bounded; any of them again pauses nothing.
+  handledBrakeIncidents?: string[];
   // Runtime override; unset defers to MANAGED_AGENT_VENDOR, the env-var default.
   managedAgentVendorOverride?: ManagedAgentVendorName | null;
   // Shared daily ceiling on platform rounds started. `null` = no cap.

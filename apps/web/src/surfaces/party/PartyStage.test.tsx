@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CatalogEntry } from '../../catalog.js';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION, type RoomPhase } from '../../mp/protocol.js';
+import { recordPartyStep } from '../../visitTelemetry.js';
 import { PartyStage } from './PartyStage.js';
 import type { PartySession } from './mpApi.js';
 
@@ -14,6 +15,11 @@ vi.mock('./roomClient.js', () => ({
     opts.onStatus?.('connected');
     return { connect: () => undefined, close: () => undefined, setPhase, kick: () => undefined };
   }),
+}));
+
+vi.mock('../../visitTelemetry.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../visitTelemetry.js')>()),
+  recordPartyStep: vi.fn(),
 }));
 
 // This stand-in only has to carry a contentWindow.
@@ -44,6 +50,7 @@ describe('PartyStage lifecycle', () => {
     document.body.appendChild(container);
     root = createRoot(container);
     setPhase.mockClear();
+    vi.mocked(recordPartyStep).mockClear();
   });
 
   afterEach(() => {
@@ -63,13 +70,29 @@ describe('PartyStage lifecycle', () => {
     vi.spyOn(frame.contentWindow as Window, 'postMessage').mockImplementation((message: unknown) => {
       posted.push(message as Record<string, unknown>);
     });
+    // The game boots, says hello, and answers the start with a round.
+    act(() => bridgeMessage(frame, { t: 'hello', slots: 4 }));
+    act(() => bridgeMessage(frame, { t: 'phase', phase: 'playing' }));
     return { frame, posted };
   }
 
   it('commands the game to start, so the lobby is the only front door', () => {
-    const { frame, posted } = startRound();
-    act(() => bridgeMessage(frame, { t: 'hello', slots: 4 }));
+    const { posted } = startRound();
     expect(posted).toContainEqual(expect.objectContaining({ t: 'command', cmd: 'start' }));
+  });
+
+  it('stays in the round when the booting game reports its own menu first', () => {
+    // The game says `lobby` before it has read the start command.
+    act(() => {
+      root.render(createElement(PartyStage, { game: GAME, session: SESSION, onExit: () => undefined }));
+    });
+    act(() => (container.querySelector('.party-actions .primary-btn') as HTMLButtonElement).click());
+    const frame = container.querySelector('iframe') as HTMLIFrameElement;
+    act(() => bridgeMessage(frame, { t: 'hello', slots: 4 }));
+    act(() => bridgeMessage(frame, { t: 'phase', phase: 'lobby' }));
+
+    expect(container.querySelector('.party-playing')).not.toBeNull();
+    expect(setPhase).not.toHaveBeenCalledWith('lobby');
   });
 
   it('relays every phase the game reports to the phones', () => {
@@ -90,6 +113,29 @@ describe('PartyStage lifecycle', () => {
       (container.querySelector('.party-play-controls .party-life-btn:nth-child(2)') as HTMLButtonElement).click();
     });
     expect(setPhase).toHaveBeenLastCalledWith('playing');
+  });
+
+  it('credits the bar for both commands when two are in flight at once', () => {
+    // Pause then restart before either echo lands.
+    const { frame } = startRound();
+    const buttons = container.querySelectorAll('.party-play-controls .party-life-btn');
+    act(() => (buttons[0] as HTMLButtonElement).click());
+    act(() => (buttons[1] as HTMLButtonElement).click());
+
+    act(() => bridgeMessage(frame, { t: 'phase', phase: 'paused' }));
+    act(() => bridgeMessage(frame, { t: 'phase', phase: 'playing' }));
+
+    const seatSteps = vi.mocked(recordPartyStep).mock.calls.filter(([, via]) => via === 'seat');
+    expect(seatSteps).toEqual([]);
+  });
+
+  it('reads a phase nobody commanded as a seat, even after a stale command', () => {
+    const { frame } = startRound();
+    // An unanswered command must not swallow a later seat phase.
+    act(() => (container.querySelectorAll('.party-play-controls .party-life-btn')[1] as HTMLButtonElement).click());
+    act(() => bridgeMessage(frame, { t: 'phase', phase: 'paused' }));
+
+    expect(vi.mocked(recordPartyStep)).toHaveBeenCalledWith('paused', 'seat');
   });
 
   it('returns the room to the QR lobby when the game leaves its round', () => {

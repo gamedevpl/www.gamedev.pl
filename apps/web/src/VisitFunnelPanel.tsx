@@ -32,6 +32,17 @@ const WAITLIST_LABELS: Record<string, string> = {
   joined: 'joined waitlist',
 };
 
+const PARTY_LABELS: Record<string, string> = {
+  lobby_opened: 'opened a party lobby',
+  guest_joined: 'a phone joined',
+  started: 'started the round',
+  paused: 'paused',
+  resumed: 'resumed',
+  restarted: 'restarted the round',
+  returned_to_lobby: 'went back to the lobby',
+  quit: 'quit from the game menu',
+};
+
 const INVITE_LABELS: Record<string, string> = {
   opened: 'opened an invite',
   accepted: 'accepted an invite',
@@ -277,6 +288,41 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
                     <td>{WAITLIST_LABELS[row.step] ?? row.step}</td>
                     <td className="num">{row.visits}</td>
                     <td className="num">{percent(row.visits, funnel.waitlist[0]?.visits ?? 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="funnel-block">
+          <h3>Party mode</h3>
+          {(funnel.party ?? []).every((row) => row.visits === 0) ? (
+            <p className="health-empty">No party lobby opened in this window.</p>
+          ) : (
+            <table className="health-table">
+              <thead>
+                <tr>
+                  <th scope="col">Step</th>
+                  <th scope="col" className="num">
+                    Visits
+                  </th>
+                  <th scope="col" className="num">
+                    Of lobbies
+                  </th>
+                  <th scope="col" className="num">
+                    From a seat
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {(funnel.party ?? []).map((row) => (
+                  <tr key={row.step}>
+                    <td>{PARTY_LABELS[row.step] ?? row.step}</td>
+                    <td className="num">{row.visits}</td>
+                    <td className="num">{percent(row.visits, funnel.party?.[0]?.visits ?? 0)}</td>
+                    {/* Absence of evidence renders as absence: a rung no route reports shows a dash. */}
+                    <td className="num">{row.barVisits + row.seatVisits === 0 ? '—' : row.seatVisits}</td>
                   </tr>
                 ))}
               </tbody>

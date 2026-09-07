@@ -19,6 +19,9 @@ export interface SubmissionQueryStore {
   // Submissions the sweep should still check -- not terminal and notified.
   listActiveSubmissions(): Promise<SubmissionRecord[]>;
 
+  // Every open round, notified or not -- what round hygiene closes.
+  listOpenRounds(): Promise<SubmissionRecord[]>;
+
   // Submissions a creator can see with no slug -- the backfill.
   listSubmissionsMissingSlug(): Promise<SubmissionRecord[]>;
 
@@ -68,6 +71,12 @@ export class InMemorySubmissionQueryStore implements SubmissionQueryStore {
   async listActiveSubmissions(): Promise<SubmissionRecord[]> {
     return Array.from(this.submissions.values())
       .filter(isSweepActive)
+      .map((s) => ({ ...s }));
+  }
+
+  async listOpenRounds(): Promise<SubmissionRecord[]> {
+    return Array.from(this.submissions.values())
+      .filter(isRoundOpen)
       .map((s) => ({ ...s }));
   }
 
@@ -170,6 +179,12 @@ export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
     // isSweepActive needs three fields, so it filters the narrowed set.
     const snap = await (await this.openRounds()).get();
     return snap.docs.map((d) => fromStoredSubmission(d.data())).filter(isSweepActive);
+  }
+
+  async listOpenRounds(): Promise<SubmissionRecord[]> {
+    // The flag is a superset; re-check so stale trues never leak.
+    const snap = await (await this.openRounds()).get();
+    return snap.docs.map((d) => fromStoredSubmission(d.data())).filter(isRoundOpen);
   }
 
   async listSubmissionsMissingSlug(): Promise<SubmissionRecord[]> {

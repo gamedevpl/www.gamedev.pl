@@ -462,6 +462,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     ...options.submissionRoutes,
     store,
     contentChecker,
+    // Mirrors the beta wall below: open beta, or a promotional slug, needs no session.
+    playableWithoutSession: async (slug) => !privateBeta || (await getPublicPlaySlugs()).has(slug),
     // Same allowlist the console is gated on: the people who can see the queue are the
     // people its alerts are addressed to. Two lists would drift, and the failure mode of
     // drift here is an alert nobody receives.
@@ -1079,7 +1081,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // token and it is configured — see openai-apps-challenge.ts.
   registerOpenAiAppsChallengeRoute(app);
 
-  const oauthSessionSecret = options.sessionSecret ?? process.env.SESSION_SECRET ?? 'dev-session-secret-change-me';
+  const configuredSessionSecret = options.sessionSecret ?? process.env.SESSION_SECRET;
+  // A forgeable session is an account takeover; refuse to serve rather than fall back.
+  if (!configuredSessionSecret && process.env.NODE_ENV === 'production') {
+    throw new Error('SESSION_SECRET is required to sign sessions in production');
+  }
+  const oauthSessionSecret = configuredSessionSecret ?? 'dev-session-secret-change-me';
   const oauthSessionSecretPrev = options.sessionSecretPrev ?? process.env.SESSION_SECRET_PREV;
   registerOAuthAuthorizationServerRoutes(app, {
     store,
