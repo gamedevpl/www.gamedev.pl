@@ -52,6 +52,14 @@ jobs:
       APP_RUNTIME_SA: 'gamedev-app@gamedevpl.iam.gserviceaccount.com'
       RELAY_RUNTIME_SA: 'gamedev-mp-relay@gamedevpl.iam.gserviceaccount.com'
       WORLD_RUNTIME_SA: 'gamedev-world@gamedevpl.iam.gserviceaccount.com'
+      # The account the app ran as before APP_RUNTIME_SA, kept trusted by the relay for
+      # the length of the move. The relay is reconfigured while the previous revision is
+      # still serving, so both identities have to be accepted at once or party mode
+      # breaks for the minutes between. A repo variable, not a literal here: this one is
+      # meant to be deleted, and deleting a variable is the clearest way to say the move
+      # is finished. Left set, it keeps the old account trusted — the thing the move
+      # exists to end — so unset it once every service serves on its own identity.
+      APP_RUNTIME_SA_PREVIOUS: ${{ vars.APP_RUNTIME_SA_PREVIOUS }}
       # workflow_run's github.sha is the default-branch tip at schedule time, not
       # necessarily the commit CI validated. Prefer the triggering run's head_sha.
       DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
@@ -741,15 +749,6 @@ jobs:
           echo "Chromium: $BIN"
           echo "E2E_CHROMIUM_PATH=$BIN" >> "$GITHUB_ENV"
 
-      - name: Browser gate against the candidate
-        env:
-          E2E_BASE_URL: ${{ env.CANDIDATE_URL }}
-          GAMEDEV_ACCESS_TOKEN: ${{ secrets.GAMEDEV_ACCESS_TOKEN }}
-          # Turns "cannot run" into a failed deploy instead of a silent skip
-          # (apps/e2e/src/gate-prerequisites.test.ts).
-          E2E_REQUIRED: '1'
-        run: npm run e2e
-
       - name: Move the party relay onto the same image
         # Only when the split is switched on. Both roles run one image, so the relay has to
         # be redeployed whenever the app is — otherwise the socket protocol the freshly
@@ -761,6 +760,14 @@ jobs:
         # any client speaking it exists. The relay's own env (MP_RELAY_ONLY, the audience,
         # the caller identity) is left untouched — `--image` alone, so this step cannot
         # reconfigure the relay by omission the way a --set-env-vars deploy would.
+        #
+        # And BEFORE the browser gate, which is what the ordering used to get wrong. The
+        # gate opens a party lobby, so it exercises exactly this call. With the relay
+        # updated afterwards, the first deploy to change the app's runtime identity ran the
+        # gate against a candidate the relay did not yet trust: room creation 401'd, the
+        # gate failed, nothing was promoted — and because the relay is only reconfigured on
+        # a deploy that gets this far, the next run repeated it. A wedge that cannot clear
+        # itself. Verified 2026-09-06: `RelayUnavailableError: relay responded 401`.
         if: ${{ vars.MP_RELAY_URL != '' }}
         run: |
           RELAY_SERVICE="${{ vars.MP_RELAY_SERVICE || 'gamedev-mp-relay' }}"
@@ -781,12 +788,23 @@ jobs:
           # to move with the app. --service-account pins the relay's own identity for
           # the same reason the app's is pinned: a value set once on the service is one
           # deploy from being lost.
+          #
+          # The list is what makes this step safe to run before promotion. At this point
+          # the *serving* app is still the previous revision, which may run as a different
+          # account than the candidate; naming only the candidate's would refuse every
+          # lobby in production for the length of the gate. internal-auth.ts accepts any
+          # email in the list, so both are honoured and neither end has to change in the
+          # same instant as the other.
+          CALLER_SAS="$APP_RUNTIME_SA"
+          if [ -n "$APP_RUNTIME_SA_PREVIOUS" ]; then
+            CALLER_SAS="${CALLER_SAS},${APP_RUNTIME_SA_PREVIOUS}"
+          fi
           gcloud run services update "$RELAY_SERVICE" \
             --region "$REGION" \
             --project "$PROJECT_ID" \
             --image "$IMAGE" \
             --service-account "$RELAY_RUNTIME_SA" \
-            --update-env-vars "MP_RELAY_CALLER_SA=${APP_RUNTIME_SA}"
+            --update-env-vars "^|^MP_RELAY_CALLER_SA=${CALLER_SAS}"
 
           RELAY_URL=$(gcloud run services describe "$RELAY_SERVICE" --region "$REGION" \
             --project "$PROJECT_ID" --format 'value(status.url)')
@@ -805,6 +823,15 @@ jobs:
             exit 1
           fi
           echo "Relay healthy at ${RELAY_URL}"
+
+      - name: Browser gate against the candidate
+        env:
+          E2E_BASE_URL: ${{ env.CANDIDATE_URL }}
+          GAMEDEV_ACCESS_TOKEN: ${{ secrets.GAMEDEV_ACCESS_TOKEN }}
+          # Turns "cannot run" into a failed deploy instead of a silent skip
+          # (apps/e2e/src/gate-prerequisites.test.ts).
+          E2E_REQUIRED: '1'
+        run: npm run e2e
 
       - name: Keep the zone host on the same source revision
         # gamedev-world was the one production service with no CI path at all: its image

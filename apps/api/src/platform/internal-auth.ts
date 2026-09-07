@@ -18,15 +18,18 @@ export interface InternalAuthVerifier {
 export interface OidcVerifierOptions {
   /** Audience the scheduler mints the token for — the sweep endpoint URL. */
   audience: string;
-  /** The scheduler service account email the token must belong to. */
-  serviceAccountEmail: string;
+  // A list, so a caller's runtime identity can move without both ends changing at once.
+  serviceAccountEmail: string | readonly string[];
   client?: OAuth2Client;
 }
 
 export class OidcInternalAuthVerifier implements InternalAuthVerifier {
   private readonly client: OAuth2Client;
+  private readonly allowed: ReadonlySet<string>;
   constructor(private readonly opts: OidcVerifierOptions) {
+    const { serviceAccountEmail: emails } = opts;
     this.client = opts.client ?? new OAuth2Client();
+    this.allowed = new Set(typeof emails === 'string' ? [emails] : emails);
   }
 
   async verify(header: string | undefined): Promise<boolean> {
@@ -35,7 +38,8 @@ export class OidcInternalAuthVerifier implements InternalAuthVerifier {
     try {
       const ticket = await this.client.verifyIdToken({ idToken: token, audience: this.opts.audience });
       const payload = ticket.getPayload();
-      return payload?.email === this.opts.serviceAccountEmail && payload?.email_verified === true;
+      if (payload?.email_verified !== true) return false;
+      return typeof payload.email === 'string' && this.allowed.has(payload.email);
     } catch {
       return false;
     }
@@ -102,10 +106,11 @@ export function createInternalAuthVerifierFromEnv(
 ): InternalAuthVerifier {
   const audience = env[AUDIENCE_ENV_VAR[sweep]]?.trim();
   // The relay and the brake have their own callers, opened by neither sweep.
-  const serviceAccountEmail = CALLER_SA_ENV_VAR[sweep]
-    ? env[CALLER_SA_ENV_VAR[sweep]]?.trim()
-    : env.NOTIFY_SWEEP_SA?.trim();
-  if (audience && serviceAccountEmail) {
+  const configured = CALLER_SA_ENV_VAR[sweep] ? env[CALLER_SA_ENV_VAR[sweep]] : env.NOTIFY_SWEEP_SA;
+  // Comma-separated; see the option.
+  const listed = (configured ?? '').split(',');
+  const serviceAccountEmail = listed.map((email) => email.trim()).filter(Boolean);
+  if (audience && serviceAccountEmail.length > 0) {
     return new OidcInternalAuthVerifier({ audience, serviceAccountEmail });
   }
   return new DenyAllInternalAuthVerifier();
