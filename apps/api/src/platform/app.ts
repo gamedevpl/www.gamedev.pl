@@ -11,8 +11,10 @@ import Fastify, {
 } from 'fastify';
 import { registerAccessTokenRoutes, type AccessTokenRoutesOptions } from './access-token-routes.js';
 import { registerApiCachePolicy } from './api-cache-policy.js';
+import { registerCanonicalHostRedirect } from './canonical-host.js';
 import { registerClientAddress } from './client-address.js';
 import { registerProxyDiagnosticsRoutes } from './proxy-diagnostics.js';
+import { registerSecurityHeaders, resolveCspReportOnly } from './security-headers.js';
 import { registerJobAdminRoutes } from '../creation/job-admin-routes.js';
 import { createGameSeederFromEnv } from '../creation/seed-provider-env.js';
 import { createGcsGamesStore } from '../delivery/games-store.js';
@@ -279,6 +281,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // before route plugins so annotated handlers are covered. Imported as
   // `fastify-rate-limit` so CodeQL's js/missing-rate-limiting model recognizes it.
   await registerRateLimit(app);
+  // After the rate limiter: its report sink is annotated for it.
+  registerSecurityHeaders(app, { cspReportOnly: resolveCspReportOnly(process.env) });
 
   // Private beta controls. When PRIVATE_BETA=true, all data routes require a session
   // and sign-in is restricted to uids/emails in the allowlist.
@@ -1097,19 +1101,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     });
   }
 
-  // Apex → www redirect: Cloud Run domain mappings cannot 301, so the app does.
-  // With CANONICAL_HOST=www.gamedev.pl, a bare-apex Host 301s to https://www + path.
-  // Only the exact apex is redirected — run.app, localhost and the canonical host
-  // are untouched, so probes, smoke tests and dev keep working. Unset → no-op.
-  const canonicalHost = process.env.CANONICAL_HOST?.trim();
-  const apexHost = canonicalHost?.startsWith('www.') ? canonicalHost.slice(4) : undefined;
-  if (canonicalHost && apexHost) {
-    app.addHook('onRequest', async (request, reply) => {
-      if (request.headers.host === apexHost) {
-        return reply.redirect(`https://${canonicalHost}${request.url}`, 301);
-      }
-    });
-  }
+  registerCanonicalHostRedirect(app, process.env.CANONICAL_HOST);
 
   // In private-beta mode all API data reads require a session so the app is usable only
   // after sign-in. IMPORTANT: the wall must gate only /api/* paths — the static SPA shell
@@ -1155,6 +1147,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // one funnel this stream exists to capture. It never reads request.user and
     // records no identifying data, so admitting it from the open internet is free.
     if (request.url.startsWith('/api/telemetry/visit')) return;
+    if (request.url === '/api/csp-report') return; // browser-posted, mostly before sign-in
     if (isPublicPlayRequest(request, await getPublicPlaySlugs())) return;
     if (!request.user) {
       return reply.status(401).send({ error: 'authentication required' });

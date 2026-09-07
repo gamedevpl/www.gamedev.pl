@@ -109,6 +109,7 @@ jobs:
         # and a variable value can no longer be spliced into the script as shell.
         env:
           ADMIN_UIDS: ${{ vars.ADMIN_UIDS }}
+          APP_CSP_REPORT_ONLY: ${{ vars.APP_CSP_REPORT_ONLY }}
           APPLE_CLIENT_IDS: ${{ vars.APPLE_CLIENT_IDS }}
           BETA_ALLOWED_EMAILS: ${{ vars.BETA_ALLOWED_EMAILS }}
           BETA_ALLOWED_UIDS: ${{ vars.BETA_ALLOWED_UIDS }}
@@ -389,6 +390,14 @@ jobs:
           MCP_UI_VAL="${MCP_UI}"
           if [ -n "$MCP_UI_VAL" ]; then
             ENV_VARS="${ENV_VARS}|MCP_UI=${MCP_UI_VAL}"
+          fi
+
+          # App-level CSP, report-only (apps/api/src/platform/security-headers.ts): unset or
+          # "true" is the built-in policy, "false"/"off" sends none, anything else is used
+          # verbatim as a draft policy. Never enforced by this flag.
+          APP_CSP_REPORT_ONLY_VAL="${APP_CSP_REPORT_ONLY}"
+          if [ -n "$APP_CSP_REPORT_ONLY_VAL" ]; then
+            ENV_VARS="${ENV_VARS}|APP_CSP_REPORT_ONLY=${APP_CSP_REPORT_ONLY_VAL}"
           fi
 
           # The remix code-lane trace: every step of a run, in the log and in the

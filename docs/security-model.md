@@ -96,6 +96,37 @@ Before publication, each game must pass the checks in
 consistency, size limit, credential scan, no remote dependencies, no frame-escape attempts, and
 a headless-browser smoke test. The gate complements review; it does not replace moderation.
 
+## Browser hardening headers
+
+One Cloud Run service serves the API and the web app, so response headers are set in one
+place: `apps/api/src/platform/security-headers.ts`, registered right after the cache policy in
+`app.ts`. Every response carries `X-Content-Type-Options: nosniff` and
+`Referrer-Policy: strict-origin-when-cross-origin`. HTML documents — the SPA shell, the OAuth
+consent and device pages, the CLI page — additionally carry:
+
+- `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY`. Nothing this
+  service serves as a top-level document is meant to be embedded by another site. Games are
+  not top-level documents here: the shell renders them itself from `blob:`/`srcdoc` in the
+  sandboxed iframe, which no response header reaches. The sandboxed build preview that the
+  studio frames by URL (`delivery/creator-media.ts`) writes its own policy and deliberately
+  omits `frame-ancestors`: the web app may live on a different origin than the API
+  (`VITE_API_BASE_URL`, and every dev setup), and the rule would block the studio from
+  framing its own preview there. A route that has written a CSP owns its embedding story and
+  the hook leaves it alone. MCP Apps views travel inside the MCP protocol, not as HTTP
+  documents, so they are unaffected and need no exemption.
+- `Permissions-Policy` switching off only what the product never uses (geolocation, payment,
+  USB, display capture). Microphone, camera and motion sensors are deliberately not named:
+  the shell owns the first two and delegates the sensors to the game frame via `allow=`, and
+  naming them in the header would change how that delegation resolves for the opaque origin.
+- `Content-Security-Policy-Report-Only`, the app-level policy, observed rather than enforced.
+  Violations are posted to `/api/csp-report` (public through the beta wall, IP-rate-limited)
+  and logged at warn level. `APP_CSP_REPORT_ONLY` turns it off or swaps in a draft policy.
+  Because `blob:`/`srcdoc` documents inherit the creating page's policy, the report-only
+  policy is also observed inside every game frame — inline script/style and `data:`/`blob:`
+  media are allowed there so a game exercising its own sandbox never reads as a violation of
+  ours, while a game reaching the network does. Enforcing this policy is a separate decision
+  to be taken on the reports, never by flipping the header name.
+
 ## Historical finding: self-hosted agent credentials
 
 The previous design placed an agent behind an auth proxy and short-lived job token. That work
@@ -110,6 +141,9 @@ credentials operated by gamedev.pl. Historical details are available in Git hist
 ## Non-negotiable invariants
 
 - Games render only in `sandbox="allow-scripts allow-pointer-lock"` without `allow-same-origin`.
+- HTML documents served by the app carry `frame-ancestors 'none'` / `X-Frame-Options: DENY`
+  unless the route wrote its own CSP; the game iframe's sandbox is never relaxed to make a
+  header fit, and the app-level CSP stays report-only until its reports say otherwise.
 - The game iframe's `allow=` delegation is pinned to exactly
   `accelerometer; gyroscope; magnetometer` (opt-in GameKit tilt) and never grows —
   asserted by `apps/web/src/GameFrame.sandbox.test.ts`. In particular it never includes
