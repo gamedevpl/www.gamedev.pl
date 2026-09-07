@@ -71,6 +71,39 @@ export function lanesFromNotification(body: unknown): BrakeNotification {
   return { lanes, ...context, rawLanes };
 }
 
+// A Billing budget publishes its state several times a day.
+export interface BudgetNotification {
+  name: string;
+  cost: number;
+  budget: number;
+  currency?: string;
+  thresholdExceeded?: number;
+  forecastExceeded?: number;
+}
+
+export function budgetFromNotification(body: unknown): BudgetNotification | undefined {
+  const b = body as Record<string, unknown> | undefined;
+  if (!b || typeof b !== 'object') return undefined;
+  if (typeof b.costAmount !== 'number' || typeof b.budgetAmount !== 'number') return undefined;
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+  return {
+    name: typeof b.budgetDisplayName === 'string' ? b.budgetDisplayName : 'budget',
+    cost: b.costAmount,
+    budget: b.budgetAmount,
+    ...(typeof b.currencyCode === 'string' ? { currency: b.currencyCode } : {}),
+    ...(num(b.alertThresholdExceeded) !== undefined ? { thresholdExceeded: num(b.alertThresholdExceeded) } : {}),
+    ...(num(b.forecastThresholdExceeded) !== undefined ? { forecastExceeded: num(b.forecastThresholdExceeded) } : {}),
+  };
+}
+
+// Real spend at or over the budget; a forecast alone never pauses.
+export const BUDGET_PAUSE_AT = 1.0;
+export const BUDGET_LANES: PauseableLane[] = ['creation', 'editing', 'chat', 'tabComplete', 'search'];
+
+export function lanesFromBudget(budget: BudgetNotification): PauseableLane[] {
+  return budget.thresholdExceeded !== undefined && budget.thresholdExceeded >= BUDGET_PAUSE_AT ? BUDGET_LANES : [];
+}
+
 // Pub/Sub push wraps the payload as base64.
 export function decodePushEnvelope(body: unknown): unknown {
   const data = (body as { message?: { data?: unknown } } | undefined)?.message?.data;
@@ -99,6 +132,19 @@ export async function registerSpendBrakeRoutes(app: FastifyInstance, options: Sp
       if (!store) return reply.status(503).send({ error: 'the spend brake is not configured' });
 
       const payload = decodePushEnvelope(request.body);
+      const budget = budgetFromNotification(payload);
+      if (budget) {
+        const budgetLanes = lanesFromBudget(budget);
+        if (budgetLanes.length === 0) {
+          request.log.info({ ...budget }, 'budget notification under its ceiling');
+          return reply.send({ paused: [], reason: 'budget_under_ceiling' });
+        }
+        const patch: Partial<CreationLimits> = {};
+        for (const lane of budgetLanes) patch[PAUSEABLE[lane]] = true;
+        await store.setCreationLimits(patch, `budget:${budget.name}`);
+        request.log.error({ ...budget, lanes: budgetLanes }, 'spend brake pulled by a billing budget');
+        return reply.send({ paused: budgetLanes });
+      }
       const { lanes, incidentId, policyName, state, rawLanes, reason } = lanesFromNotification(payload);
       if (lanes.length === 0) {
         // Acknowledged, not retried: a redelivery pauses nothing either.

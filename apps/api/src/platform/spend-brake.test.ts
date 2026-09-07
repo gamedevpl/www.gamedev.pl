@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { InMemoryStore } from './store.js';
-import { lanesFromNotification, parseLanes } from './spend-brake.js';
+import { budgetFromNotification, lanesFromBudget, lanesFromNotification, parseLanes } from './spend-brake.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 
@@ -11,6 +11,18 @@ function pushBody(payload: unknown) {
 
 function openIncident(lanes: string, extra: Record<string, unknown> = {}) {
   return { incident: { state: 'OPEN', incident_id: 'inc-1', policy_user_labels: { lanes }, ...extra } };
+}
+
+function budgetPush(extra: Record<string, unknown> = {}) {
+  return {
+    budgetDisplayName: 'zł130 Monthly Budget Alert',
+    costAmount: 61.4,
+    budgetAmount: 130,
+    budgetAmountType: 'SPECIFIED_AMOUNT',
+    currencyCode: 'PLN',
+    costIntervalStart: '2026-09-01T07:00:00Z',
+    ...extra,
+  };
 }
 
 describe('spend brake payload reading', () => {
@@ -84,7 +96,79 @@ describe('spend brake payload reading', () => {
   });
 });
 
+describe('budget payload reading', () => {
+  it('recognises a Billing budget by its amounts, not by an incident', () => {
+    expect(budgetFromNotification(budgetPush())).toEqual({
+      name: 'zł130 Monthly Budget Alert',
+      cost: 61.4,
+      budget: 130,
+      currency: 'PLN',
+    });
+    expect(budgetFromNotification(openIncident('search'))).toBeUndefined();
+    expect(budgetFromNotification(undefined)).toBeUndefined();
+    expect(budgetFromNotification({ costAmount: '61', budgetAmount: 130 })).toBeUndefined();
+  });
+
+  it('pauses only on real spend at or over the budget', () => {
+    expect(lanesFromBudget(budgetFromNotification(budgetPush())!)).toEqual([]);
+    expect(lanesFromBudget(budgetFromNotification(budgetPush({ alertThresholdExceeded: 0.9 }))!)).toEqual([]);
+    expect(lanesFromBudget(budgetFromNotification(budgetPush({ forecastThresholdExceeded: 1.0 }))!)).toEqual([]);
+    expect(lanesFromBudget(budgetFromNotification(budgetPush({ alertThresholdExceeded: 1.0 }))!)).toEqual([
+      'creation',
+      'editing',
+      'chat',
+      'tabComplete',
+      'search',
+    ]);
+    expect(lanesFromBudget(budgetFromNotification(budgetPush({ alertThresholdExceeded: 1.5 }))!)).toHaveLength(5);
+  });
+});
+
 describe('POST /api/internal/spend-brake', () => {
+  it('acks a budget notification under its ceiling without touching anything', async () => {
+    const store = new InMemoryStore();
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      spendBrakeRoutes: { internalAuthVerifier: { verify: async () => true } },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/internal/spend-brake',
+      payload: pushBody(budgetPush({ alertThresholdExceeded: 0.9 })),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ paused: [], reason: 'budget_under_ceiling' });
+    expect(await store.getCreationLimits()).toBeNull();
+    await app.close();
+  });
+
+  it('pauses the spend lanes when real spend passes the budget, and names the budget', async () => {
+    const store = new InMemoryStore();
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      spendBrakeRoutes: { internalAuthVerifier: { verify: async () => true } },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/internal/spend-brake',
+      payload: pushBody(budgetPush({ costAmount: 131.2, alertThresholdExceeded: 1.0 })),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().paused).toEqual(['creation', 'editing', 'chat', 'tabComplete', 'search']);
+    const limits = await store.getCreationLimits();
+    expect(limits?.paused).toBe(true);
+    expect(limits?.searchPaused).toBe(true);
+    expect(limits?.gatePaused).not.toBe(true);
+    expect(limits?.updatedBy).toBe('budget:zł130 Monthly Budget Alert');
+    await app.close();
+  });
+
   it('refuses an unverified caller — it can pause the product', async () => {
     const store = new InMemoryStore();
     const app = await buildApp({
