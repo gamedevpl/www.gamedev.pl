@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.6.0 — 2026-09-07
+
 ### Breaking
 
 - Claude delegation requires a verified Claude.ai subscription login; inherited API and cloud-provider credentials are no longer used (#1201).
