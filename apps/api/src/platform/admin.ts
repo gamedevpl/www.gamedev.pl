@@ -219,13 +219,11 @@ export interface FeaturedPoolResponse {
 const CreationLimitsPatchSchema = z
   .object({
     paused: z.boolean().optional(),
-    // null clears the stored ceiling and hands the decision back to the deployed
-    // default, which is a different intent from setting a number.
+    // null clears the ceiling, handing the decision to the deployed default.
     globalDailySubmissionCap: z.number().int().min(0).max(100_000).nullable().optional(),
     // The editing lanes' breaker rides the same document — one place to look.
     editingPaused: z.boolean().optional(),
     globalDailyEditCap: z.number().int().min(0).max(100_000).nullable().optional(),
-    // The studio chat breaker rides the same document too.
     chatPaused: z.boolean().optional(),
     globalDailyChatCap: z.number().int().min(0).max(100_000).nullable().optional(),
     // TA-01's own breaker, denominated in tokens rather than calls.
@@ -236,13 +234,15 @@ const CreationLimitsPatchSchema = z
     gatePaused: z.boolean().optional(),
     globalDailyGateRunCap: z.number().int().min(0).max(100_000).nullable().optional(),
     globalDailySeedCap: z.number().int().min(0).max(100_000).nullable().optional(),
+    // Load-shedding rungs 2 and 3; see docs/runbooks/launch-day.md.
+    telemetrySampleRate: z.number().min(0).max(1).nullable().optional(),
+    partyPaused: z.boolean().optional(),
     // Same document: whether the platform builder is offered. See managed-availability.ts.
     managedBuilderMode: z.enum(MANAGED_BUILDER_MODES).optional(),
     // null clears the override, same as globalDailySubmissionCap above.
     managedAgentVendorOverride: z.enum(MANAGED_AGENT_VENDORS).nullable().optional(),
     managedDailyCap: z.number().int().min(0).max(100_000).nullable().optional(),
     managedDailyUserCap: z.number().int().min(0).max(100_000).nullable().optional(),
-    // Round 0's kill switch, same document as everything above.
     seedingMode: z.enum(['auto', 'off']).optional(),
     // Free-form, not an enum: providers self-register.
     seedProviderOverride: z.string().min(1).max(64).nullable().optional(),
