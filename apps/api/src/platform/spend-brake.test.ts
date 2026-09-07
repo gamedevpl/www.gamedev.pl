@@ -43,7 +43,7 @@ describe('spend brake payload reading', () => {
       incidentId: 'budget:zł130 Monthly Budget Alert:forecast:1.2',
       policyName: 'zł130 Monthly Budget Alert',
     });
-    // Spent over: plus round 0 and concept art (Vertex) and the gate (Cloud Build).
+    // Spent over: plus round 0, concept art and the gate.
     expect(lanesFromNotification({ ...budget, alertThresholdExceeded: 1.0 })).toEqual({
       lanes: ['managed', 'seeding', 'dreams', 'gate'],
       incidentId: 'budget:zł130 Monthly Budget Alert:spent:1',
