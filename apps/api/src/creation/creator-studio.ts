@@ -409,6 +409,7 @@ export async function registerCreatorStudioRoutes(
         return reply.status(404).send({ error: 'no such game' });
       }
 
+      const kitOnly = (request.query as { kitOnly?: string }).kitOnly === 'true';
       // Prefer the newest round, then the live publication.
       const tip = [...owned].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
       let version = tip.previewVersion ?? tip.deliveredVersion ?? null;
@@ -416,14 +417,14 @@ export async function registerCreatorStudioRoutes(
         const publication = await store.getPublication(slug);
         if (isPublished(publication)) version = publication.currentVersion;
       }
-      if (!version && (request.query as { allowUndelivered?: string }).allowUndelivered !== 'true') {
+      if (!kitOnly && !version && (request.query as { allowUndelivered?: string }).allowUndelivered !== 'true') {
         return reply.status(409).send({
           error: 'nothing_delivered',
           message: 'this game has no delivered version yet — let the first build finish, then check it out',
         });
       }
 
-      const manifest = version ? await options.gamesStore.getManifest(slug, version) : { sourceFiles: [] };
+      const manifest = version && !kitOnly ? await options.gamesStore.getManifest(slug, version) : { sourceFiles: [] };
       if (!manifest) {
         request.log.error({ slug, version }, 'workspace checkout: manifest missing for a version a job points at');
         return reply.status(502).send({ error: 'the delivered version could not be read back' });
@@ -464,6 +465,15 @@ export async function registerCreatorStudioRoutes(
           });
         }
 
+        const lock = {
+          slug,
+          engineRef,
+          kitUrl: await options.objectStore.signReadUrl(`kits/${engineRef}.tgz`, DEFAULT_SIGNED_URL_TTL_SECONDS),
+          kitSha256: parseKitSidecar(sidecarBody.toString('utf8')).sha256,
+          issuedAt: new Date(now()).toISOString(),
+        };
+        if (kitOnly) return reply.header('cache-control', 'private, no-store').send(lock);
+
         // Bounded at the gunzip, not only after it: `readTarEntries`' cap is on what it
         // retains, so an over-large or corrupt scaffold would already have been inflated
         // in full by the time that applied. The scaffold is our own artifact rather than
@@ -491,16 +501,7 @@ export async function registerCreatorStudioRoutes(
 
         const archive = composeWorkspaceArchive({
           slug,
-          lock: {
-            slug,
-            engineRef,
-            // Short-lived by design. `setup.mjs` is meant to be re-run — that is also the
-            // re-baseline path when the pin falls outside the kit's N/N−1 window — so a URL
-            // that expires costs a fresh checkout link, not a broken workspace.
-            kitUrl: await options.objectStore.signReadUrl(`kits/${engineRef}.tgz`, DEFAULT_SIGNED_URL_TTL_SECONDS),
-            kitSha256: parseKitSidecar(sidecarBody.toString('utf8')).sha256,
-            issuedAt: new Date(now()).toISOString(),
-          },
+          lock,
           scaffold,
           sources: sources as Array<{ path: string; content: string }>,
         });

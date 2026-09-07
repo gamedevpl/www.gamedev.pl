@@ -74,3 +74,21 @@ describe('TUI feedback', () => {
     expect(frame.trimEnd().split('\n').length).toBeLessThanOrEqual(rows);
   });
 });
+
+it('shows the Kit choice, then installation activity instead of an idle textbox', async () => {
+  const view = screen(80, 24);
+  const choice = view.session.prompt(
+    ['Update Creator Kit now', 'Later'],
+    'Update the game tools? Your local game edits will be kept.',
+  );
+  await wait();
+  expect(view.frame()).toContain('Update Creator Kit now');
+  expect(view.frame()).toContain('Later');
+  view.session.submit();
+  expect(await choice).toBe('Update Creator Kit now');
+  view.session.setActivity('Downloading Creator Kit and installing dependencies');
+  await wait();
+  expect(view.frame()).toContain('Downloading Creator Kit');
+  expect(view.frame()).toContain('input paused');
+  expect(view.frame()).not.toContain('What would you like');
+});

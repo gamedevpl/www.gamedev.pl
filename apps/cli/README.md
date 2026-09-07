@@ -200,3 +200,25 @@ These are local `claude -p` tasks, not sessions created in Claude Desktop. When 
 emits its session ID, the CLI shows it with a resume command. Resume only after the
 current task finishes. The task panel names the active agent and reports tool activity;
 the CLI runs the checkout validation after the agent exits and retains error details.
+
+### Creator Kit updates
+
+Opening a game checkout in the TUI checks the currently published Creator Kit and
+asks whether to update now or later. `/kit` repeats the check and offer. In a shell,
+`gamedevpl kit` checks and `gamedevpl kit update` explicitly installs the update.
+`gamedevpl play` reports available updates without prompting; an offline update
+check does not prevent local play.
+
+The update downloads the Kit and installs its pinned dependencies in a private
+staging directory under `.gamedev/`. Only after setup succeeds does the CLI replace
+Kit-owned paths, dependencies and the pin. Game sources, Git history and custom
+workflows stay in place. New Kit paths that would overwrite unowned files are
+refused. Existing local changes inside Kit-owned tools are replaced, as with
+`setup.mjs`; keep game edits under `games/<slug>/`.
+
+Failed preparation leaves the installed Kit intact. A failed swap rolls back; an
+interrupted swap is recovered on the next `gamedevpl kit update` (also available
+through `/kit`). Other local preparation refuses to use a pending installation.
+Updates stop the old preview; `/play` starts it with the new tools. An updated Kit
+is not a passing game validation or a delivery: the regular play/build/submit checks
+still run on your game. No sources are pulled or published by a Kit update.
