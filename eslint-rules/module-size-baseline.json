@@ -369,7 +369,7 @@
     "apps/api/src/platform/image-variants.test.ts": 91,
     "apps/api/src/platform/image-variants.ts": 91,
     "apps/api/src/platform/internal-auth.test.ts": 130,
-    "apps/api/src/platform/internal-auth.ts": 112,
+    "apps/api/src/platform/internal-auth.ts": 117,
     "apps/api/src/platform/knowledge-metrics.test.ts": 60,
     "apps/api/src/platform/knowledge-metrics.ts": 23,
     "apps/api/src/platform/localize-intake.ts": 95,
