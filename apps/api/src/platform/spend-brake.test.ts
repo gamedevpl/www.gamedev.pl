@@ -19,6 +19,16 @@ describe('spend brake payload reading', () => {
     expect(parseLanes('search_gate')).toEqual(['search', 'gate']);
   });
 
+  it('reads a lowercased lane, since a GCP label cannot hold a capital', () => {
+    expect(parseLanes('creation_editing_chat_tabcomplete_search')).toEqual([
+      'creation',
+      'editing',
+      'chat',
+      'tabComplete',
+      'search',
+    ]);
+  });
+
   it('ignores names it does not know rather than guessing', () => {
     expect(parseLanes('search,everything,paused')).toEqual(['search']);
     expect(parseLanes('')).toEqual([]);
