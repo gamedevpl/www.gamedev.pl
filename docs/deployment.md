@@ -100,7 +100,21 @@ holding project-wide `roles/editor` and every service ran as it until September 
 made every narrow grant above cosmetic — an identity that can already write any bucket and
 read any secret is not bounded by a bucket condition. The relay terminates untrusted
 websocket traffic and the app runs gate builds on creator-submitted code, so a compromise
-of either was project-wide write access.
+of either was project-wide write access. It now holds no project role at all.
+
+CI has three identities on the same principle, created by `infra/setup-wif.sh`:
+
+| Identity                   | Used by                                          | Holds                                                                                                                                                             |
+| -------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `github-actions-deployer@` | this repo's `deploy.yml` and `publish-games.yml` | Cloud Run, Cloud Build, Artifact Registry, Secret Manager access, `storage.admin`, Firebase Hosting. Not Firestore                                                |
+| `erase-verifier@`          | this repo's `verify-erase.yml`                   | `datastore.user` and nothing else                                                                                                                                 |
+| `kit-publisher@`           | the **games repo's** three publish workflows     | `objectAdmin` on four object prefixes of the store bucket (`kits/`, `workspaces/`, `examples/`, `knowledge/`), plus Discovery Engine editor for the corpus import |
+
+The games repo used to publish as the deployer, which handed a content repository the
+whole deploy credential. Its account now cannot reach `versions/` or `games/` — every
+stored and published game — let alone Cloud Run. The provider's attribute condition also
+pins each repository to its own default branch, so a pull request cannot mint any of the
+three.
 
 The identity is **pinned on every deploy**, in both paths: `deploy.yml` hard-codes the three
 emails and passes `--service-account` to the app deploy, the relay image update and the zone

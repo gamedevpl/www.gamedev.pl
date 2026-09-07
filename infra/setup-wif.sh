@@ -21,7 +21,8 @@ PROVIDER_NAME="${PROVIDER_NAME:-github-provider}"
 REPO="${REPO:-gamedevpl/www.gamedev.pl}"
 # The games repo publishes the Creator Kit to the games-store bucket
 # (.github/workflows/publish-kit.yml there) and authenticates through this same pool and
-# provider, as the same deployer SA. It is NOT granted the erase-verifier account below.
+# provider — but as its own kit-publisher account since 2026-09-08, not the deployer. It
+# is NOT granted the erase-verifier account below either.
 GAMES_REPO="${GAMES_REPO:-gamedevpl/www.gamedev.pl-games}"
 SA_NAME="${SA_NAME:-github-actions-deployer}"
 SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
@@ -31,6 +32,12 @@ SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 # thing to leak, and this one can be revoked without stopping deploys.
 VERIFIER_SA_NAME="${VERIFIER_SA_NAME:-erase-verifier}"
 VERIFIER_SA_EMAIL="${VERIFIER_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+# The games repo publishes the Creator Kit, the workspace scaffold, the example games and
+# the knowledge corpus. That is four object prefixes in one bucket — not a deploy — so it
+# gets its own account rather than the deployer's. See step 5b.
+PUBLISHER_SA_NAME="${PUBLISHER_SA_NAME:-kit-publisher}"
+PUBLISHER_SA_EMAIL="${PUBLISHER_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+STORE_BUCKET="${GAMES_STORE_BUCKET:-${PROJECT_ID}-games-store}"
 
 echo "==> 1/8 Creating service account '${SA_NAME}'"
 gcloud iam service-accounts create "$SA_NAME" \
@@ -103,20 +110,81 @@ else
     --project="$PROJECT_ID"
 fi
 
-echo "==> 5/8 Binding repositories to ${SA_NAME}"
-# Both repositories deploy-or-publish as this account: www.gamedev.pl ships the service,
-# and the games repo writes the Creator Kit into the games-store bucket. Sharing one SA
-# means the kit publisher also holds the deploy roles granted in step 2 — the narrower
-# alternative is a second account with only the bucket, which is the tighten described in
-# the games repo's docs/kit-publish.md.
-for BOUND_REPO in "$REPO" "$GAMES_REPO"; do
-  echo "    - ${BOUND_REPO}"
-  gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
-    --role="roles/iam.workloadIdentityUser" \
-    --member="principalSet://iam.googleapis.com/${POOL_ID}/attribute.repository/${BOUND_REPO}" \
-    --project="$PROJECT_ID" \
-    >/dev/null
+echo "==> 5/8 Binding '${REPO}' to ${SA_NAME}, and taking '${GAMES_REPO}' off it"
+# ${REPO} only. The games repo used to share this account to publish the Creator Kit,
+# which meant the kit publisher also held run.admin, storage.admin, project-wide Secret
+# Manager and the rest of step 2 — the tighten the games repo's own docs/kit-publish.md
+# asked for. It now has ${PUBLISHER_SA_NAME} below, which can write four object prefixes
+# and nothing else.
+#
+# Ordering matters on an existing project: this step REMOVES the games repo's binding, so
+# re-run this script only after that repo's workflows already name the publisher account.
+# Run early, the next kit publish fails to authenticate; the fix is to re-run, not to put
+# the binding back.
+gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/${POOL_ID}/attribute.repository/${REPO}" \
+  --project="$PROJECT_ID" \
+  >/dev/null
+gcloud iam service-accounts remove-iam-policy-binding "$SA_EMAIL" \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/${POOL_ID}/attribute.repository/${GAMES_REPO}" \
+  --project="$PROJECT_ID" \
+  >/dev/null 2>&1 && echo "    - ${GAMES_REPO}: removed from the deployer" || true
+
+echo "==> 5b/8 Creating the kit publisher '${PUBLISHER_SA_NAME}' for ${GAMES_REPO}"
+gcloud iam service-accounts create "$PUBLISHER_SA_NAME" \
+  --display-name="Creator Kit Publisher" \
+  --description="Writes kits/, workspaces/, examples/ and knowledge/ in the games-store bucket. No deploy, no secrets, no Firestore." \
+  --project="$PROJECT_ID" \
+  || echo "    (already exists, continuing)"
+
+# One conditional binding per prefix the publishers actually write, rather than
+# bucket-wide objectAdmin. objectAdmin (not objectCreator) because two of these are
+# mutable by design: kits/current.json is the N/N-1 registry pointer, rewritten on every
+# engine-affecting merge, and a re-run of the same corpus sha rewrites knowledge/<sha>/.
+# GCS has no overwrite-without-delete role, so a mutable object needs delete.
+#
+# What the condition buys: versions/ and games/ — every stored and published game — are
+# outside it, so a compromised publish job cannot touch a single player-visible game.
+# IAM CEL on resource.name allows only startsWith/endsWith/extract, hence the disjunction.
+PUBLISH_PREFIX_EXPR=""
+for PREFIX in kits workspaces examples knowledge; do
+  [ -n "$PUBLISH_PREFIX_EXPR" ] && PUBLISH_PREFIX_EXPR="${PUBLISH_PREFIX_EXPR} || "
+  PUBLISH_PREFIX_EXPR="${PUBLISH_PREFIX_EXPR}resource.name.startsWith('projects/_/buckets/${STORE_BUCKET}/objects/${PREFIX}/')"
 done
+gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
+  --member="serviceAccount:${PUBLISHER_SA_EMAIL}" \
+  --role="roles/storage.objectAdmin" \
+  --condition="expression=resource.type == 'storage.googleapis.com/Object' && (${PUBLISH_PREFIX_EXPR}),title=games-store-kit-publish,description=Kit, workspace, example and knowledge prefixes only — never versions/ or games/" \
+  --project="$PROJECT_ID" \
+  >/dev/null
+
+# The publishers also list the bucket to resolve current.json, which is a bucket-level
+# permission a per-object condition cannot express.
+gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
+  --member="serviceAccount:${PUBLISHER_SA_EMAIL}" \
+  --role="roles/storage.legacyBucketReader" \
+  --condition=None \
+  --project="$PROJECT_ID" \
+  >/dev/null
+
+# The one grant that is not narrowed: documents:import for the knowledge_query corpus.
+# Discovery Engine's predefined roles are project-scoped, so this is editor on the
+# project's data stores. It is the same role the deployer already held, not a widening,
+# and it reaches no game data — the corpus is assembled from public repo files.
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${PUBLISHER_SA_EMAIL}" \
+  --role="roles/discoveryengine.editor" \
+  --condition=None \
+  >/dev/null
+
+echo "==> 5c/8 Binding '${GAMES_REPO}' to ${PUBLISHER_SA_NAME}"
+gcloud iam service-accounts add-iam-policy-binding "$PUBLISHER_SA_EMAIL" \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/${POOL_ID}/attribute.repository/${GAMES_REPO}" \
+  --project="$PROJECT_ID" \
+  >/dev/null
 
 echo "==> 6/8 Creating service account '${VERIFIER_SA_NAME}' (nightly erasure proof)"
 gcloud iam service-accounts create "$VERIFIER_SA_NAME" \
@@ -141,7 +209,7 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
 echo "==> 8/8 Binding repository '${REPO}' to ${VERIFIER_SA_NAME}"
 # ${REPO} only — deliberately NOT ${GAMES_REPO}. Since step 4 the games repo can mint a
 # token this provider accepts, so the sole thing keeping the kit publisher away from every
-# document in Firestore is the absence of a binding here. Do not add it to the step 5 loop.
+# document in Firestore is the absence of a binding here. Do not add it to step 5c.
 # Within this repository the grant is still workflow-wide: any workflow here can assume the
 # account, which is the pool's granularity rather than a decision made here — tightening it
 # means mapping a workflow attribute on the provider and re-binding both accounts.
@@ -160,3 +228,8 @@ echo "and verify-erase.yml as:"
 echo "    service_account: ${VERIFIER_SA_EMAIL}"
 echo ""
 echo "These already match the values hardcoded in .github/workflows/."
+echo ""
+echo "The games repo's publish-kit / publish-examples / publish-knowledge must name:"
+echo "    service_account: ${PUBLISHER_SA_EMAIL}"
+echo "Step 5 has already taken that repo off ${SA_NAME}, so a workflow there still"
+echo "naming the deployer will fail to authenticate until it is switched."
