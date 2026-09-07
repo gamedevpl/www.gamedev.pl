@@ -178,7 +178,7 @@ export async function settleBuilder(input: {
   const { ws } = input;
   if (!ws.adapters.length || ws.builder === 'self' || isTerminalStatus(input.status)) return ws.builder;
   const local = ws.adapters.map((spec) => `${spec.name} here — its own credentials and billing`);
-  for (const spec of ws.adapters) ws.telemetry?.record('delegate_offered', spec.name);
+  for (const spec of ws.adapters) ws.telemetry?.record('delegate_offered', { adapter: spec.name });
   const choice = await ws.pick(
     [...local, 'the platform — uses your gamedev.pl quota; /pull afterwards'],
     `Who builds ${ws.slug}?`,
@@ -285,7 +285,7 @@ export async function runLocalBuild(input: {
       input.write(
         'Claude uses subscription login; API authentication is refused. This local task is not linked to Claude Desktop.',
       );
-    ws.telemetry?.record('delegate_used', spec.name);
+    ws.telemetry?.record('delegate_used', { adapter: spec.name });
     result = await (ws.runAdapter ?? defaultAdapterRun)({
       spec,
       prompt: input.brief,
@@ -322,7 +322,7 @@ export async function runLocalBuild(input: {
   input.write('verifying — typecheck, check:static');
   const verify = runLadder({ cwd: ws.root, publish: false, run: ws.run });
   if (!verify.ok) {
-    ws.telemetry?.record('verify_failed', spec.name, verify.stage);
+    ws.telemetry?.record('verify_failed', { adapter: spec.name, stage: verify.stage });
     const detail = verify.detail.trim();
     input.write(`verify failed at ${verify.stage}${detail ? `: ${detail}` : ''}\nfix by hand, or ask again`);
     return false;
