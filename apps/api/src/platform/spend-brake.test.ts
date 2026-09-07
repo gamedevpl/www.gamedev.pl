@@ -71,14 +71,14 @@ describe('spend brake payload reading', () => {
       rawLanes: 'gate',
     });
     expect(lanesFromNotification({ ...build, alertThresholdExceeded: 0.9 }).lanes).toEqual([]);
-    // A typo is loud, not a quiet tick: the budget is exhausted and nothing paused.
+    // A typo is loud, not a quiet tick: exhausted, and nothing paused.
     expect(lanesFromNotification({ budgetDisplayName: 'Cloud Build lanes=gaet', alertThresholdExceeded: 1 })).toEqual({
       lanes: [],
       policyName: 'Cloud Build lanes=gaet',
       rawLanes: 'gaet',
       reason: 'unrecognised_lanes',
     });
-    // Next month is a new alert: the billing interval is part of the identity.
+    // Next month is a new alert: the billing interval joins the identity.
     expect(lanesFromNotification({ ...build, costIntervalStart: '2026-10-01T00:00:00Z' }).incidentId).toBe(
       'budget:Cloud Build lanes=gate:2026-10-01T00:00:00Z:spent:1',
     );
@@ -218,7 +218,7 @@ describe('POST /api/internal/spend-brake', () => {
     expect(limits?.paused).not.toBe(true);
     expect(limits?.searchPaused).not.toBe(true);
 
-    // A second budget on the same topic must not make the first forget it was handled.
+    // A second budget on the topic must not make the first forget.
     await app.inject({
       method: 'POST',
       url: '/api/internal/spend-brake',

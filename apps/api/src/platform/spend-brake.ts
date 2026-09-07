@@ -62,8 +62,7 @@ export function budgetLanes(spent: number, forecast: number): PauseableLane[] {
   return [];
 }
 
-// A per-service budget can name its lanes: "Cloud Build lanes=gate".
-// Budgets tick every ~20 min; the id carries the threshold.
+// Budgets tick every ~20 min; a name may carry `lanes=` (see script).
 export function lanesFromBudget(body: unknown): BrakeNotification | undefined {
   const budget = body as Record<string, unknown> | undefined;
   if (!budget || typeof budget !== 'object' || typeof budget.budgetDisplayName !== 'string') return undefined;
