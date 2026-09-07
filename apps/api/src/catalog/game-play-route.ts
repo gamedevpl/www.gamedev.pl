@@ -13,10 +13,10 @@ import type { GitHubClient } from './github-client.js';
 import type { CatalogRoutesHandle } from './catalog-routes.js';
 import type { DraftPreviewRoutesHandle } from '../delivery/draft-preview-routes.js';
 import type { Store } from '../platform/store.js';
-import { createAssembledGameCache, GAME_CACHE_TTL_MS, type CachedAssembledGame } from './assembled-game-cache.js';
+import { createAssembledGameCache, type CachedAssembledGame } from './assembled-game-cache.js';
 
-// Shared at the edge only when a session is not required.
-export const PUBLISHED_GAME_CACHE_CONTROL = `public, max-age=${GAME_CACHE_TTL_MS / 1000}`;
+// Bounded by the revocation window: the promotional list refreshes each minute.
+export const PUBLISHED_GAME_CACHE_CONTROL = 'public, max-age=60';
 
 export interface GamePlayRouteOptions {
   store?: Store;
