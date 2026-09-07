@@ -807,11 +807,30 @@ EOF
 # Firestore counter, so a runaway now shows up here before it shows up on the invoice --
 # and a hot document (one shard taking every write) shows up as latency at the same time.
 #
-# Threshold: the closed beta's steady state is a few writes a second at most. 25/s
-# sustained over ten minutes is roughly an order of magnitude above that, low enough to
-# catch a loop early and high enough that a normal creation burst does not page anybody.
-# Recalibrate against real numbers once there is a week of them -- see the note at the
-# bottom of this file for how A24/A25 were done.
+# Threshold: the closed beta's steady state is a fraction of a write per second. The
+# first draft used 25/s, guessed as "an order of magnitude above a few writes a second"
+# before anybody had measured. The real distribution is roughly forty times lower than
+# that guess, which made the policy decorative -- a runaway loop could have run for days
+# at fifty times normal volume without ever reaching it.
+#
+# CALIBRATION, measured rather than guessed (ALIGN_RATE/600s, REDUCE_SUM over all series,
+# the same shape this condition evaluates):
+#   Sep 5 20:06 - Sep 7 22:06 UTC, 301 windows:
+#     max 0.662/s (Sep 6 21:56 UTC), p95 0.448/s, median 0.113/s
+#   38,518 writes over the window, split by metric.op:
+#     CREATE 26,628 (peak 0.587/s), UPDATE 11,892 (peak 0.270/s)
+# Per-collection attribution is NOT available here: document/write_count carries only
+# module/version/op, no collection_id, and billable_write_units returns nothing on this
+# database. Naming the hot collection needs the application's own counters, not this
+# metric -- do not go looking for a group_by that does not exist.
+#
+# 3x the busiest real window is ~2/s, which is too tight to survive one unusual creation
+# burst, so this takes a floor of 10/s instead: ~15x the observed max, ~22x p95, and still
+# far enough below a runaway to catch one within ten minutes.
+#
+# The window was mostly a weekend (Sep 5 was a Saturday) and covers only two days.
+# Recheck after a full working week -- if weekday peaks land materially above 0.662/s,
+# the floor of 10 is what absorbs it, but the p95 line should be re-read.
 cat > "${POLICY_DIR}/a29.json" <<EOF
 {
   "displayName": "A29 Firestore write rate",
@@ -826,7 +845,7 @@ cat > "${POLICY_DIR}/a29.json" <<EOF
         "crossSeriesReducer": "REDUCE_SUM"
       }],
       "comparison": "COMPARISON_GT",
-      "thresholdValue": 25,
+      "thresholdValue": 10,
       "duration": "600s",
       "trigger": { "count": 1 }
     }
