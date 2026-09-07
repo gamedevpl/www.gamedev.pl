@@ -262,6 +262,17 @@ needed. `PUBLIC_PLAY_SLUGS` remains an optional deploy-time fallback for bootstr
 empty config. The API still requires each game to be published, and all other catalog,
 draft, and creation routes remain gated.
 
+### Which game bodies the Hosting edge may cache
+
+The play route (`/api/games/:slug`) decides its own `Cache-Control` from the same rule the
+beta wall applies: a published game that a sessionless visitor may play — every game once
+`PRIVATE_BETA=false`, and the promotional slugs while it is `true` — is sent as
+`public, max-age=300`, so Firebase Hosting serves repeat plays from its edge instead of
+Cloud Run. Everything else (walled games, drafts, refusals) keeps the API default of
+`private, no-store`. Nothing to flip: opening the beta widens the cacheable set on its own.
+The five minutes match the in-process game cache, so a re-publish is visible edge-wide
+within the same window it always was.
+
 ## The session cookie is named `__session`
 
 `apps/api/src/platform/session-cookie.ts` owns the name, and the name is a constraint

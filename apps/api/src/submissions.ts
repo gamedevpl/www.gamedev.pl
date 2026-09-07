@@ -152,18 +152,16 @@ export interface SubmissionRoutesOptions {
   gamesRepo?: string;
   submissionTokenSecret?: string;
   /**
-   * Localizes an agent-relayed change request on the write that stores it. Used by the
-   * two relay paths and by nothing that serves a read — see the note on the instance.
-   * Defaults to createTranslatorFromEnv(); tests inject a stub.
+   * Localizes an agent-relayed change request on the write that stores it; nothing that
+   * serves a read uses it. Defaults to createTranslatorFromEnv(); tests inject a stub.
    */
   translator?: Translator;
   githubClient?: GitHubClient;
   fetchImpl?: typeof fetch;
   now?: () => number;
-  // The real need is SubmissionRoutesStore, defined above; kept as the full Store
-  // because forwarding to agent-channel/mcp-server/notify/the gate factories still
-  // wants the wide type -- narrowing those is Phase 3, not this file's edit.
+  // Kept wide for the factories it forwards to; narrowing is Phase 3.
   store?: Store;
+  playableWithoutSession?: (slug: string) => Promise<boolean>;
   dailySubmissionQuota?: number;
   /**
    * The global creation breaker (pause switch + shared daily ceiling). Built from the
@@ -1174,6 +1172,7 @@ export async function registerSubmissionRoutes(
     now,
     catalog: catalogRoutes,
     draftPreview: draftPreviewRoutes,
+    playableWithoutSession: options.playableWithoutSession,
     maxGamesPerWindow,
     gamesRateLimitWindowMs,
   });
@@ -1685,7 +1684,9 @@ export async function registerSubmissionRoutes(
           ...options.stagedPreview,
           now,
           log: app.log,
-          ...(seedDispatch ? { handoff: (jobId: number) => seedDispatch.enqueue(jobId, { action: 'staged-preview' }) } : {}),
+          ...(seedDispatch
+            ? { handoff: (jobId: number) => seedDispatch.enqueue(jobId, { action: 'staged-preview' }) }
+            : {}),
           onPublished: (jobId) => {
             buildStatus.invalidateEvents(jobId);
             invalidateStatusCache(jobId);
