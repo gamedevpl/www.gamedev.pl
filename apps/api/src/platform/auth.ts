@@ -10,6 +10,7 @@ import { isReviewer, isReviewerSession } from '../community/review.js';
 import { resolveAppleAccount } from './apple-account.js';
 import { createAppleAuthVerifierFromEnv, parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { readBearerToken } from './bearer.js';
+import { sessionWriteAllowed } from './session-csrf.js';
 import {
   clearSessionCookies,
   handlerWroteSessionCookie,
@@ -389,7 +390,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
   app.decorateRequest('needsSessionRenewal', false);
   app.decorateRequest('authMethod', null);
 
-  app.addHook('onRequest', async (request) => {
+  app.addHook('onRequest', async (request, reply) => {
     if (!isAuthConfigured) return;
     const { user, needsRenewal, fromToken } = await getSessionUser(request);
     if (!user) {
@@ -402,6 +403,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
       return;
     }
 
+    if (!sessionWriteAllowed(request)) return reply.status(403).send({ error: 'untrusted request origin' });
     request.user = user;
     request.needsSessionRenewal = needsRenewal;
     // A cookie minted from a PAT still reports 'token': the credential behind this
@@ -409,15 +411,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     // the cookie it was traded for.
     request.authMethod = fromToken ? 'token' : 'session';
 
-    /**
-     * Record that this account was active today.
-     *
-     * `lastLoginAt` cannot stand in for this: sessions last weeks, so a creator who
-     * comes back every day still shows a single login and reads as never returning.
-     * `withActiveDay` returns null when today is already the newest entry, so the
-     * common case costs no write at all — and a failure here must never turn a
-     * working request into an error, hence the swallow.
-     */
+    // Sessions last weeks; record activity separately from sign-in, once per day.
     const today = new Date().toISOString().slice(0, 10);
     const activeDays = withActiveDay(user.activeDays, today);
     if (activeDays) {
