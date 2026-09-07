@@ -54,6 +54,21 @@ describe('connect entry points', () => {
     expect(await runCli(['node', 'cli', 'repl', 'sky'], env, streams())).toBe(0);
     expect(runInkRepl).toHaveBeenCalledWith(expect.objectContaining({ token: 'tok', slug: 'sky' }));
   });
+  it('explains how to create a game when the requested game does not exist', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ games: [] }))),
+    );
+    const io = streams();
+    let error = '';
+    io.stderr.on('data', (chunk) => {
+      error += String(chunk);
+    });
+    expect(await runCli(['node', 'cli', 'connect', 'new-idea'], env, io)).toBe(4);
+    expect(error).toContain('to create a new game, run gamedevpl and describe your idea');
+    expect(runInkRepl).not.toHaveBeenCalled();
+  });
+
   it.each([true, false])('keeps explicit manual setup noninteractive (tty=%s)', async (tty) => {
     backend();
     const io = streams(tty);

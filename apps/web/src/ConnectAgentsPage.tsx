@@ -81,19 +81,28 @@ export function ConnectAgentsPage({ onBack, onStudio }: { onBack: () => void; on
         {cliOn ? (
           <>
             <pre className="connect-snippet" tabIndex={0}>
-              {install}
+              {`${install}\ngamedevpl login`}
             </pre>
             <p className="connect-hint">{t('connectAgents.cli.installHint')}</p>
+            <p>{t('connectAgents.cli.login')}</p>
+            <h3>{t('connectAgents.cli.newTitle')}</h3>
+            <p>{t('connectAgents.cli.newHint')}</p>
+            <pre className="connect-snippet" tabIndex={0}>
+              gamedevpl
+            </pre>
+            <p>{t('connectAgents.cli.newPrompt')}</p>
+            <h3>{t('connectAgents.cli.existingTitle')}</h3>
+            <p>{t('connectAgents.cli.existingHint')}</p>
+            <pre className="connect-snippet" tabIndex={0}>
+              {'gamedevpl games\ngamedevpl connect <slug>'}
+            </pre>
+            <p>{t('connectAgents.cli.existingDraft')}</p>
+            <p>{t('connectAgents.cli.afterConnect')}</p>
+            <p>{t('connectAgents.cli.checkout')}</p>
           </>
         ) : (
           <p className="connect-hint">{t('connectAgents.cli.installPending')}</p>
         )}
-        <ul className="connect-list">
-          <li>{t('connectAgents.cli.login')}</li>
-          <li>{t('connectAgents.cli.repl')}</li>
-          <li>{t('connectAgents.cli.checkout')}</li>
-          <li>{t('connectAgents.cli.ci')}</li>
-        </ul>
       </section>
     </article>
   );

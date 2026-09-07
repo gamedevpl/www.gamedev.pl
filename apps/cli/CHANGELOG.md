@@ -14,6 +14,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
+- Missing-game errors explain how to start creating a new game (#1223).
+
 - `/checkout` opens the downloaded game in the current session and supports games before their first delivery (#1223).
 - Checkout refuses non-empty destinations to preserve existing files (#1223).
 

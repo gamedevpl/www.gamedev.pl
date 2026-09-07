@@ -242,3 +242,8 @@ how to enter the local interactive session. It refuses non-empty destinations;
 For manual MCP configuration use `gamedevpl connect <slug> --manual`. Redirected
 output also retains the manual setup behavior. `--agent <name>` explicitly starts
 an MCP agent. Automated agent launches do not print the manual credential snippet.
+
+If the game is only an idea and has not been created yet, run `gamedevpl` without
+arguments and describe it. `connect <slug>` opens an existing owned game; clicking
+Create in Studio establishes its submission even before an agent starts or delivers
+files. A missing game is not silently created by connect.
