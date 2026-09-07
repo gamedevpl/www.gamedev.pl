@@ -323,7 +323,7 @@
     "apps/api/src/platform/account-deletion.test.ts": 43,
     "apps/api/src/platform/account-deletion.ts": 74,
     "apps/api/src/platform/admin-session.ts": 10,
-    "apps/api/src/platform/admin.test.ts": 1230,
+    "apps/api/src/platform/admin.test.ts": 1234,
     "apps/api/src/platform/admin.ts": 1046,
     "apps/api/src/platform/agent-state.ts": 20,
     "apps/api/src/platform/agent-token.test.ts": 117,

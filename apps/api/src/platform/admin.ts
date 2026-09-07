@@ -187,6 +187,9 @@ export interface CreationLimitsResponse {
       configuredProviders: string[];
       defaultProvider: string | null;
     };
+    // Load-shedding rungs; the console reads its toggle state from these.
+    partyPaused: boolean;
+    telemetrySampleRate: number | null;
   };
   // What today cost, without opening the billing console.
   today: {
