@@ -239,6 +239,18 @@ export function ControllerView({ code, token }: ControllerViewProps) {
     );
   }
 
+  const buttonProps = (key: InputKey) => ({
+    onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      press(key, 1);
+    },
+    onPointerUp: () => press(key, 0),
+    onPointerCancel: () => press(key, 0),
+    onLostPointerCapture: () => press(key, 0),
+    onContextMenu: (event: React.MouseEvent) => event.preventDefault(),
+  });
+
   if (!joined) {
     return (
       <div className="controller-screen controller-join">
@@ -262,18 +274,6 @@ export function ControllerView({ code, token }: ControllerViewProps) {
     );
   }
 
-  const buttonProps = (key: InputKey) => ({
-    onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => {
-      event.preventDefault();
-      event.currentTarget.setPointerCapture(event.pointerId);
-      press(key, 1);
-    },
-    onPointerUp: () => press(key, 0),
-    onPointerCancel: () => press(key, 0),
-    onLostPointerCapture: () => press(key, 0),
-    onContextMenu: (event: React.MouseEvent) => event.preventDefault(),
-  });
-
   return (
     <div className="controller-screen" style={{ ['--slot-color' as string]: color }}>
       <header className="controller-header">
@@ -282,12 +282,16 @@ export function ControllerView({ code, token }: ControllerViewProps) {
         </span>
         <span className="controller-nick">{nick}</span>
         <span className={`controller-status controller-status-${status}`}>
-          {status === 'connected'
-            ? phase === 'playing'
-              ? t('party.statusPlaying')
-              : t('party.statusWaiting')
-            : t('party.statusReconnecting')}
+          {status === 'connected' ? t(`party.phase.${phase}`) : t('party.statusReconnecting')}
         </span>
+        <button
+          type="button"
+          className="controller-menu-btn"
+          aria-label={t('party.menuButton')}
+          {...buttonProps('menu')}
+        >
+          ☰
+        </button>
       </header>
 
       <div className="controller-voice-row">

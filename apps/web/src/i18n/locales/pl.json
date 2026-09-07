@@ -1381,8 +1381,6 @@
     "cancel": "Anuluj",
     "statusReady": "Pokój działa — czekamy na graczy",
     "statusConnecting": "Otwieram pokój…",
-    "statusPlaying": "Gramy",
-    "statusWaiting": "Czekaj na gospodarza",
     "statusReconnecting": "Ponowne łączenie…",
     "joinTitle": "Dołącz do gry",
     "nickLabel": "Twoja nazwa",
@@ -1414,6 +1412,17 @@
       "room_full_or_invalid": "Pokój jest pełny.",
       "unreachable": "Utracono połączenie z pokojem.",
       "rate_limited": "Zbyt wiele sygnałów — połączenie zamknięte."
+    },
+    "pause": "Pauza",
+    "resume": "Wznów",
+    "restart": "Od nowa",
+    "backToLobby": "Wróć do lobby",
+    "menuButton": "Wstrzymaj lub wznów wspólny ekran",
+    "phase": {
+      "lobby": "Czekamy na hosta",
+      "playing": "Gramy",
+      "paused": "Pauza — ☰ wznawia",
+      "ended": "Koniec rundy — A gra dalej"
     }
   },
   "sensing": {
