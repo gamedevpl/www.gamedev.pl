@@ -4506,38 +4506,35 @@ describe('POST /api/submissions/:token/improve', () => {
       await app.close();
     });
 
-    it.each(['Add SFX', 'Make level two less punishing and add a checkpoint.'])(
-      'opens an improvement for a valid instruction: %s',
-      async (feedback) => {
-        const { githubClient } = createGithubClientStub({ jobId: 501 });
-        const store = new InMemoryStore();
-        const { backend, briefs } = createBackendStub();
-        const decide = vi.fn(async () => ({ kind: 'build' as const }));
-        const { app, authHeaders } = await createApp({
-          githubClient,
-          agentBackend: backend,
-          submissionTokenSecret: secret,
-          store,
-          chatAgent: { decide },
-        });
-        await store.createSubmission(123, 'g:test-user', 'Sky Dodge');
-        await store.setSubmissionSlug(123, 'sky-dodge');
-        await store.setSubmissionPublishedAt(123, '2026-07-20T00:00:00.000Z');
+    it.each(['Add SFX', 'Add a checkpoint.'])('opens an improvement for %s', async (feedback) => {
+      const { githubClient } = createGithubClientStub({ jobId: 501 });
+      const store = new InMemoryStore();
+      const { backend, briefs } = createBackendStub();
+      const decide = vi.fn(async () => ({ kind: 'build' as const }));
+      const { app, authHeaders } = await createApp({
+        githubClient,
+        agentBackend: backend,
+        submissionTokenSecret: secret,
+        store,
+        chatAgent: { decide },
+      });
+      await store.createSubmission(123, 'g:test-user', 'Sky Dodge');
+      await store.setSubmissionSlug(123, 'sky-dodge');
+      await store.setSubmissionPublishedAt(123, '2026-07-20T00:00:00.000Z');
 
-        const res = await app.inject({
-          method: 'POST',
-          url: `/api/submissions/${mintToken(123, secret)}/improve`,
-          headers: authHeaders,
-          payload: { feedback },
-        });
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/submissions/${mintToken(123, secret)}/improve`,
+        headers: authHeaders,
+        payload: { feedback },
+      });
 
-        expect(res.statusCode).toBe(200);
-        expect(res.json()).toMatchObject({ ok: true, slug: 'sky-dodge' });
-        expect(briefs).toHaveLength(1);
-        expect(briefs.at(-1)!.feedback).toContain(feedback);
-        await app.close();
-      },
-    );
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: true, slug: 'sky-dodge' });
+      expect(briefs).toHaveLength(1);
+      expect(briefs.at(-1)!.feedback).toContain(feedback);
+      await app.close();
+    });
 
     it('a conversational reply does not spend the daily improvement quota', async () => {
       const { githubClient } = createGithubClientStub({ jobId: 501 });
