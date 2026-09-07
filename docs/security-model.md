@@ -99,8 +99,8 @@ a headless-browser smoke test. The gate complements review; it does not replace 
 ## Browser hardening headers
 
 One Cloud Run service serves the API and the web app, so response headers are set in one
-place: `apps/api/src/platform/security-headers.ts`, registered right after the cache policy in
-`app.ts`. Every response carries `X-Content-Type-Options: nosniff` and
+place: `apps/api/src/platform/security-headers.ts`, registered in `app.ts` right after the rate
+limiter, whose annotation its report sink relies on. Every response carries `X-Content-Type-Options: nosniff` and
 `Referrer-Policy: strict-origin-when-cross-origin`. HTML documents — the SPA shell, the OAuth
 consent and device pages, the CLI page — additionally carry:
 
