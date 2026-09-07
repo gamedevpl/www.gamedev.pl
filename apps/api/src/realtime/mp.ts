@@ -1,4 +1,4 @@
-import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import {
@@ -55,6 +55,8 @@ export { INPUT_KEYS, ROOM_PHASES, type InputKey, type RoomPhase };
 
 const ROOM_TTL_MS = 2 * 60 * 60 * 1000;
 const ROOM_IDLE_MS = 15 * 60 * 1000;
+// How long a dropped phone's seat waits for it.
+const SEAT_HOLD_MS = 30 * 1000;
 const JOIN_TOKEN_TTL_MS = ROOM_TTL_MS;
 /** Frames per second a single connection may send before it is disconnected. */
 const MAX_FRAMES_PER_SECOND = MAX_SOCKET_FRAMES_PER_SECOND;
@@ -73,6 +75,10 @@ interface Slot {
   nick: string | null;
   socket: RelaySocket | null;
   claimedAt: number;
+  // Until when this seat is kept for its phone.
+  heldUntil: number;
+  // What that phone shows to claim the seat back.
+  seat: string | null;
 }
 
 interface Room {
@@ -192,6 +198,8 @@ const HelloFrameSchema = z.object({
   code: z.string(),
   token: z.string(),
   nick: z.string().optional(),
+  // The seat this phone held, so it returns to it.
+  seat: z.string().optional(),
 });
 
 // The value field is `d`, not `v`: every frame carries `v` as the protocol
@@ -284,6 +292,8 @@ export class RoomRegistry {
         nick: null,
         socket: null,
         claimedAt: 0,
+        heldUntil: 0,
+        seat: null,
       })),
       host: null,
       phase: 'lobby',
@@ -335,7 +345,7 @@ export class RoomRegistry {
   }
 
   /** Seats a guest. Returns the assigned slot, or null when refused. */
-  attachGuest(code: string, token: string, nick: string, socket: RelaySocket): Slot | null {
+  attachGuest(code: string, token: string, nick: string, socket: RelaySocket, seat?: string): Slot | null {
     const room = this.rooms.get(code);
     if (!room || room.phase === 'ended') return null;
     try {
@@ -345,12 +355,19 @@ export class RoomRegistry {
       return null;
     }
 
-    const slot = room.slots.find((candidate) => candidate.socket === null);
+    // Its own seat for a returning phone, a free one otherwise.
+    const now = this.now();
+    this.expireHolds(room, now);
+    const free = room.slots.filter((candidate) => candidate.socket === null);
+    const own = seat ? free.find((candidate) => candidate.seat === seat) : undefined;
+    const slot = own ?? free.find((candidate) => candidate.heldUntil <= now) ?? free[0];
     if (!slot) return null;
+    slot.heldUntil = 0;
+    slot.seat = randomUUID();
 
     slot.socket = socket;
     slot.nick = sanitizeNick(nick) || `Player ${slot.slot}`;
-    slot.claimedAt = this.now();
+    slot.claimedAt = now;
     room.lastActivity = slot.claimedAt;
 
     this.sendTo(socket, {
@@ -359,6 +376,7 @@ export class RoomRegistry {
       color: slot.color,
       nick: slot.nick,
       phase: room.phase,
+      seat: slot.seat,
     });
     this.broadcastRoster(room);
     return slot;
@@ -392,6 +410,9 @@ export class RoomRegistry {
     const socket = target.socket;
     target.socket = null;
     target.nick = null;
+    // A kicked phone is not coming back to this seat.
+    target.heldUntil = 0;
+    target.seat = null;
     socket.send(JSON.stringify({ t: 'closed', reason }));
     socket.close(1000, reason);
     room.lastActivity = this.now();
@@ -412,7 +433,8 @@ export class RoomRegistry {
     const target = room.slots.find((candidate) => candidate.slot === slot);
     if (!target) return;
     target.socket = null;
-    target.nick = null;
+    // The name stays, so the room shows who returns.
+    target.heldUntil = this.now() + SEAT_HOLD_MS;
     room.lastActivity = this.now();
     this.broadcastRoster(room);
   }
@@ -449,12 +471,23 @@ export class RoomRegistry {
   rosterOf(code: string): Array<{ slot: number; color: string; nick: string | null; connected: boolean }> {
     const room = this.rooms.get(code);
     if (!room) return [];
+    this.expireHolds(room, this.now());
     return room.slots.map((slot) => ({
       slot: slot.slot,
       color: slot.color,
       nick: slot.nick,
       connected: slot.socket !== null,
     }));
+  }
+
+  // A lapsed hold is an empty seat again.
+  private expireHolds(room: Room, now: number): void {
+    for (const slot of room.slots) {
+      if (slot.socket || !slot.heldUntil || slot.heldUntil > now) continue;
+      slot.heldUntil = 0;
+      slot.nick = null;
+      slot.seat = null;
+    }
   }
 
   private broadcastRoster(room: Room): void {
@@ -749,7 +782,7 @@ export async function registerMultiplayerRoutes(
           return;
         }
 
-        const slot = registry.attachGuest(message.code, message.token, message.nick ?? '', socket);
+        const slot = registry.attachGuest(message.code, message.token, message.nick ?? '', socket, message.seat);
         if (!slot) {
           closeWith('room_full_or_invalid');
           return;

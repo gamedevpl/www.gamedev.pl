@@ -191,13 +191,67 @@ describe('RoomRegistry', () => {
     const room = registry.createRoom('arena-tag', 'g:host', 4);
     const host = fakeSocket();
     registry.attachHost(room.code, room.hostToken, host);
-    registry.attachGuest(room.code, room.joinToken, 'Ada', fakeSocket());
+    const phone = fakeSocket();
+    registry.attachGuest(room.code, room.joinToken, 'Ada', phone);
+    const seat = lastFrame(phone, 'welcome')?.seat as string;
 
     registry.detachGuest(room.code, 1);
     const slots = lastFrame(host, 'roster')?.slots as Array<Record<string, unknown>>;
-    expect(slots[0]).toMatchObject({ slot: 1, nick: null, connected: false });
+    // Held for a moment, so the room shows who is coming back.
+    expect(slots[0]).toMatchObject({ slot: 1, nick: 'Ada', connected: false });
 
-    // …and the freed slot can be reclaimed (a phone that woke up and reconnected).
+    // …and a woken phone shows its seat and gets it back.
+    expect(registry.attachGuest(room.code, room.joinToken, 'Ada', fakeSocket(), seat)?.slot).toBe(1);
+  });
+
+  it('keeps a dropped phone its seat while a new one takes an empty one', () => {
+    let now = 1_000_000;
+    const registry = new RoomRegistry({ secret: roomSecret, now: () => now });
+    const room = registry.createRoom('arena-tag', 'g:host', 2);
+    registry.attachHost(room.code, room.hostToken, fakeSocket());
+    registry.attachGuest(room.code, room.joinToken, 'Ada', fakeSocket());
+    registry.detachGuest(room.code, 1);
+
+    // A stranger arriving in the gap sits down somewhere else.
+    expect(registry.attachGuest(room.code, room.joinToken, 'Bo', fakeSocket())?.slot).toBe(2);
+    // The phone that dropped comes back to its own seat.
+    expect(registry.attachGuest(room.code, room.joinToken, 'Ada', fakeSocket())?.slot).toBe(1);
+
+    now += 31_000;
+    registry.detachGuest(room.code, 1);
+    now += 31_000;
+    // A hold that lapsed is an empty seat again, name and all.
+    const host = fakeSocket();
+    registry.attachHost(room.code, room.hostToken, host);
+    expect((lastFrame(host, 'roster')?.slots as Array<Record<string, unknown>>)[0]).toMatchObject({
+      nick: null,
+      connected: false,
+    });
+  });
+
+  it('stops honouring a seat claim once its hold has lapsed', () => {
+    let now = 1_000_000;
+    const registry = new RoomRegistry({ secret: roomSecret, now: () => now });
+    const room = registry.createRoom('arena-tag', 'g:host', 2);
+    const phone = fakeSocket();
+    registry.attachGuest(room.code, room.joinToken, 'Ada', phone);
+    const seat = lastFrame(phone, 'welcome')?.seat as string;
+    registry.detachGuest(room.code, 1);
+
+    now += 31_000;
+    registry.attachGuest(room.code, room.joinToken, 'Bo', fakeSocket());
+    // Bo took the unheld seat; Ada's old claim opens nothing.
+    expect(registry.attachGuest(room.code, room.joinToken, 'Ada', fakeSocket(), seat)?.slot).toBe(2);
+  });
+
+  it('seats a returning phone even when every other seat is taken', () => {
+    const registry = new RoomRegistry({ secret: roomSecret });
+    const room = registry.createRoom('arena-tag', 'g:host', 2);
+    registry.attachHost(room.code, room.hostToken, fakeSocket());
+    registry.attachGuest(room.code, room.joinToken, 'Ada', fakeSocket());
+    registry.attachGuest(room.code, room.joinToken, 'Bo', fakeSocket());
+    registry.detachGuest(room.code, 1);
+
     expect(registry.attachGuest(room.code, room.joinToken, 'Ada', fakeSocket())?.slot).toBe(1);
   });
 

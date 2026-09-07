@@ -29,7 +29,7 @@ export interface RosterSlot {
 
 export type ServerFrame =
   | { t: 'ready'; code: string; slug: string; phase: RoomPhase }
-  | { t: 'welcome'; slot: number; color: string; nick: string; phase: RoomPhase }
+  | { t: 'welcome'; slot: number; color: string; nick: string; phase: RoomPhase; seat?: string }
   | { t: 'roster'; slots: RosterSlot[] }
   | { t: 'input'; slot: number; k: InputKey; d: 0 | 1 }
   | { t: 'phase'; phase: RoomPhase }
@@ -79,6 +79,7 @@ export function parseServerFrame(raw: unknown): ServerFrame | null {
             color: raw.color,
             nick: typeof raw.nick === 'string' ? raw.nick : '',
             phase: raw.phase,
+            ...(typeof raw.seat === 'string' ? { seat: raw.seat } : {}),
           }
         : null;
     case 'roster': {

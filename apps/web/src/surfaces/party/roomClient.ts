@@ -54,6 +54,7 @@ export class RoomClient {
   // Long enough for a host to start the next round.
   private static readonly REJOIN_DELAYS_MS = [1_000, 2_000, 4_000];
 
+  private seat: string | null = null;
   private rejoinAttempts = 0;
   // A refusal we are still waiting out, not a plain drop.
   private rejoining = false;
@@ -77,6 +78,7 @@ export class RoomClient {
           code: this.options.code,
           token: this.options.token,
           ...(this.options.nick ? { nick: this.options.nick } : {}),
+          ...(this.seat ? { seat: this.seat } : {}),
         }),
       );
       this.options.onStatus('connected');
@@ -95,6 +97,8 @@ export class RoomClient {
       if (frame.t === 'welcome') {
         this.rejoinAttempts = 0;
         this.rejoining = false;
+        // Memory only: this tab's claim on this seat, nobody else's.
+        if (frame.seat) this.seat = frame.seat;
       }
       if (frame.t === 'closed') {
         if (RoomClient.FINAL_REASONS.has(frame.reason)) {
