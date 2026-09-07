@@ -81,8 +81,7 @@ describe('PartyStage lifecycle', () => {
   });
 
   it('leaves the ended phase with the restart, not a frame later', () => {
-    // The relay refuses guests while a room is ended, so a phone that dropped on the
-    // end screen could not come back for the round the host just restarted.
+    // A room stays ended, and the relay refuses guests there.
     const { frame } = startRound();
     act(() => bridgeMessage(frame, { t: 'phase', phase: 'ended' }));
     expect(setPhase).toHaveBeenLastCalledWith('ended');

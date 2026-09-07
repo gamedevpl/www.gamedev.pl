@@ -41,7 +41,7 @@ describe('gamepad normalization', () => {
     buttons[12] = button(true);
     const normalized = normalizeGamepad(gamepad({ axes: [-0.75, 0.8], buttons }), 1_000);
 
-    // Start is `menu`: a pad is a seat too, and the shell's pause answers to it.
+    // Start is `menu`: a pad is a seat too.
     expect(normalized.party).toEqual({ up: true, down: true, left: true, right: false, a: true, menu: true });
     expect(normalized.gamepad).toMatchObject({
       index: 0,

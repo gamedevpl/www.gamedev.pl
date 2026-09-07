@@ -73,7 +73,7 @@ function partyState(gamepad: Gamepad | null): GamepadPartyState {
   state.left = pressed(gamepad, 14) || horizontal <= -AXIS_THRESHOLD;
   state.right = pressed(gamepad, 15) || horizontal >= AXIS_THRESHOLD;
   state.a = pressed(gamepad, 0);
-  // Standard mapping button 9 is Start, which is what `menu` means on a phone.
+  // Standard button 9 is Start: the pad's own `menu`.
   state.menu = pressed(gamepad, 9);
   return state;
 }
