@@ -7,6 +7,11 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Short edit requests are accepted and conversational improvement replies appear directly in the CLI (#1190).
+- Published-game edits open an improvement round with the selected builder instead of targeting a closed round (#1190).
+
 ## 0.5.0 — 2026-09-06
 
 ### Added

@@ -1,3 +1,4 @@
+import { improvePublished } from './improve.js';
 import { playGame } from './play.js';
 import { CLI_BIN, cliUsage } from './bin-name.js';
 import { glyphs, wantsColor } from './renderer.js';
@@ -307,6 +308,25 @@ export async function handleReplLine(input: {
   if (!input.token) return { next: 'continue', conversationId: input.conversationId };
   try {
     if (input.pick) {
+      const status = await getStatus(input.api, input.token);
+      if (status.status === 'published') {
+        const slug = input.workshop?.slug ?? status.slug;
+        if (!slug) throw new Error('published game slug is unavailable');
+        const improved = await improvePublished({
+          api: input.api,
+          token: input.token,
+          slug,
+          request: trimmed,
+          env: input.env ?? process.env,
+          pick: input.pick,
+          workshop: input.workshop,
+          write: input.write,
+          abort: input.abort ?? { current: null },
+          telemetry: input.telemetry,
+          onWorkshop: input.onWorkshop,
+        });
+        return { ...improved, conversationId: input.conversationId };
+      }
       const prepared = retry ? { kind: 'proposal' as const } : await prepareTurn(input.api, input.token, trimmed);
       if (prepared.kind === 'reply') {
         input.write(`◆ ${prepared.text}`);
@@ -323,7 +343,6 @@ export async function handleReplLine(input: {
             telemetry: input.telemetry,
           }));
         if (!choice) return { next: 'continue', conversationId: input.conversationId };
-        const status = await getStatus(input.api, input.token);
         const slug = input.workshop?.slug ?? status.slug;
         if (!slug) {
           input.write('game slug is unavailable — /status to check the round');
