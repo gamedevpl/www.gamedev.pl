@@ -2,14 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import type { BuilderKind } from '../creation/builder.js';
 import { selfBuildConnectDays } from '../platform/self-build-connect-days.js';
-import { quietRoundDays } from '../platform/quiet-round-days.js';
+import { lastRoundActivityAt, quietRoundDays, shouldAutoAbandonQuietRound } from '../platform/quiet-round.js';
 import { closeJob, type CloseJobDeps } from '../creation/close-job.js';
-import {
-  lastRoundActivityAt,
-  shouldAutoAbandonQuietRound,
-  shouldAutoAbandonSelfRound,
-  type JobTransition,
-} from '../creation/job-state.js';
+import { shouldAutoAbandonSelfRound, type JobTransition } from '../creation/job-state.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { GitHubClient } from '../catalog/github-client.js';
 import type { InternalAuthVerifier } from '../platform/internal-auth.js';

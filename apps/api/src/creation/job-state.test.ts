@@ -9,8 +9,6 @@ import {
   planObservedStatusTransition,
   reconcileAgentObservation,
   shouldAutoAbandonSelfRound,
-  shouldAutoAbandonQuietRound,
-  lastRoundActivityAt,
   toSubmissionStatus,
   transitionClosesRound,
   type JobState,
@@ -380,53 +378,6 @@ describe('detectStall', () => {
     // Platform rounds keep the old not_dispatched / quiet vocabulary.
     expect(detectStall({ state: 'dispatched', stateSince: ago(HOUR), builder: 'platform', now: NOW })).toBe(
       'not_dispatched',
-    );
-  });
-});
-
-describe('shouldAutoAbandonQuietRound', () => {
-  const DAY = 24 * HOUR;
-
-  it('reads the newest stamp anyone left on the round', () => {
-    expect(lastRoundActivityAt({ createdAt: ago(20 * DAY), lastAgentSignalAt: ago(3 * DAY) })).toBe(
-      Date.parse(ago(3 * DAY)),
-    );
-    expect(
-      lastRoundActivityAt({
-        createdAt: ago(20 * DAY),
-        stateSince: ago(10 * DAY),
-        transitions: [{ to: 'needs_changes', at: ago(5 * DAY), by: 'gate' }],
-      }),
-    ).toBe(Date.parse(ago(5 * DAY)));
-    expect(lastRoundActivityAt({ createdAt: 'garbage' })).toBe(-Infinity);
-  });
-
-  it('closes a round quiet from every side for the window, whoever was last to speak', () => {
-    const quiet = { lastActivityAt: Date.parse(ago(15 * DAY)), now: NOW, quietDays: 14 };
-    expect(shouldAutoAbandonQuietRound({ state: 'needs_changes', ...quiet })).toBe(true);
-    expect(shouldAutoAbandonQuietRound({ state: 'building', ...quiet })).toBe(true);
-    expect(shouldAutoAbandonQuietRound({ state: 'queued', ...quiet })).toBe(true);
-    // A legacy record with no job state is judged by its timestamps alone.
-    expect(shouldAutoAbandonQuietRound({ ...quiet })).toBe(true);
-    expect(
-      shouldAutoAbandonQuietRound({
-        state: 'needs_changes',
-        lastActivityAt: Date.parse(ago(13 * DAY)),
-        now: NOW,
-        quietDays: 14,
-      }),
-    ).toBe(false);
-  });
-
-  it('never closes a round that is waiting on us, or one already closed', () => {
-    const quiet = { lastActivityAt: Date.parse(ago(30 * DAY)), now: NOW, quietDays: 14 };
-    // In review and mid-publish are our queue, not the creator's silence.
-    expect(shouldAutoAbandonQuietRound({ state: 'ready_for_review', ...quiet })).toBe(false);
-    expect(shouldAutoAbandonQuietRound({ state: 'publishing', ...quiet })).toBe(false);
-    expect(shouldAutoAbandonQuietRound({ state: 'published', ...quiet })).toBe(false);
-    expect(shouldAutoAbandonQuietRound({ state: 'building', abandonedAt: ago(DAY), ...quiet })).toBe(false);
-    expect(shouldAutoAbandonQuietRound({ state: 'building', lastActivityAt: NaN, now: NOW, quietDays: 14 })).toBe(
-      false,
     );
   });
 });

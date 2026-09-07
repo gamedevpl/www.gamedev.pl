@@ -514,51 +514,6 @@ export function shouldAutoAbandonSelfRound(input: {
   return input.now - opened >= windowMs;
 }
 
-// States a quiet round may be closed from; the rest are waiting on us.
-const QUIET_CLOSABLE: ReadonlySet<JobState> = new Set([
-  'queued',
-  'dispatched',
-  'building',
-  'submitted',
-  'needs_changes',
-]);
-
-// Newest timestamp anyone left on the round; -Infinity when there is none.
-// Creation stamps count only for a record the job model never adopted.
-export function lastRoundActivityAt(record: {
-  createdAt: string;
-  roundStartedAt?: string;
-  stateSince?: string;
-  lastAgentSignalAt?: string;
-  agentEndedAt?: string;
-  transitions?: JobTransition[];
-}): number {
-  const newest = (stamps: (string | undefined)[]) =>
-    Math.max(...stamps.map((stamp) => (stamp ? Date.parse(stamp) : NaN)).filter(Number.isFinite));
-  const lived = newest([
-    record.stateSince,
-    record.lastAgentSignalAt,
-    record.agentEndedAt,
-    record.transitions?.at(-1)?.at,
-  ]);
-  return Number.isFinite(lived) ? lived : newest([record.roundStartedAt, record.createdAt]);
-}
-
-// Quiet for the window from every side: the sweep would otherwise carry it forever.
-export function shouldAutoAbandonQuietRound(input: {
-  state?: JobState;
-  abandonedAt?: string;
-  lastActivityAt: number;
-  now: number;
-  quietDays: number;
-}): boolean {
-  if (input.abandonedAt) return false;
-  // A record the job model never adopted is judged by its timestamps alone.
-  if (input.state && !QUIET_CLOSABLE.has(input.state)) return false;
-  if (!Number.isFinite(input.lastActivityAt)) return false;
-  return input.now - input.lastActivityAt >= input.quietDays * 24 * 60 * 60 * 1000;
-}
-
 // Append-ordered, so the last entry is current; `at` is not ordered.
 export function gateCrashStall(record: { state?: JobState; transitions?: JobTransition[] }): JobStall | null {
   if (record.state !== 'needs_changes') return null;

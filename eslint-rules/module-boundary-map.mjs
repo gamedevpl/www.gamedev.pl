@@ -125,7 +125,7 @@ const FILE_BUCKET = {
   // handoff-authorization logic.
   'self-build-delivery-cap': 'platform',
   'self-build-connect-days': 'platform',
-  'quiet-round-days': 'platform',
+  'quiet-round': 'platform',
   // Shared build/serve contract read by delivery, creation, and community alike --
   // pure schema, HTML assembly, or directory/archive-parsing plumbing, not domain
   // business logic of any one bucket.

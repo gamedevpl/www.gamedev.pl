@@ -440,7 +440,7 @@
     "apps/api/src/realtime/zones.ts": 112,
     "apps/api/src/remix-debug-flag.test.ts": 35,
     "apps/api/src/runtime-image.test.ts": 37,
-    "apps/api/src/self-build.test.ts": 1701,
+    "apps/api/src/self-build.test.ts": 1759,
     "apps/api/src/static-serving.test.ts": 95,
     "apps/api/src/store-firestore.test.ts": 732,
     "apps/api/src/store/firestore.ts": 1412,
