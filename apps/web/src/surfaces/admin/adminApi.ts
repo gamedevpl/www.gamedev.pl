@@ -88,6 +88,10 @@ export interface CreationLimits {
     managedDailyUserCap?: number | null;
     tabCompletePaused?: boolean;
     globalDailyTabCompleteTokenCap?: number | null;
+    editingPaused?: boolean;
+    chatPaused?: boolean;
+    searchPaused?: boolean;
+    gatePaused?: boolean;
     // Round 0's kill switch and provider picker.
     seedingMode?: SeedingMode;
     seedProviderOverride?: string | null;
@@ -111,6 +115,11 @@ export interface CreationLimits {
     // TA-01's breaker — off/on and the shared daily token ceiling.
     tabCompletePaused: boolean;
     globalDailyTabCompleteTokenCap: number;
+    // Lanes the spend brake can pull; optional so older fixtures still typecheck.
+    editingPaused?: boolean;
+    chatPaused?: boolean;
+    searchPaused?: boolean;
+    gatePaused?: boolean;
     seedingMode: SeedingMode;
     seedProvider: {
       stored: string | null;
@@ -147,6 +156,10 @@ export async function setCreationLimits(patch: {
   managedDailyUserCap?: number | null;
   tabCompletePaused?: boolean;
   globalDailyTabCompleteTokenCap?: number | null;
+  editingPaused?: boolean;
+  chatPaused?: boolean;
+  searchPaused?: boolean;
+  gatePaused?: boolean;
   seedingMode?: SeedingMode;
   seedProviderOverride?: string | null;
 }): Promise<CreationLimits | { error: string }> {

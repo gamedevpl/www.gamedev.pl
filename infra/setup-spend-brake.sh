@@ -48,11 +48,14 @@ BRAKE_URL="https://${HOST}/api/internal/spend-brake"
 # spending — A26 is Discovery Engine, reached from the agent channel and the seeder, so
 # pausing creation there would stop far more than the thing that is leaking.
 #
-#   policy display name | lanes (comma-separated, matching PAUSEABLE in spend-brake.ts)
+#   policy display name (exact, as setup-monitoring.sh names it) | lanes
+#
+# Lanes are lowercase because a GCP label value cannot hold a capital letter; the
+# brake matches them case-insensitively (`tabcomplete` pauses tabComplete).
 POLICIES=(
-  "A24 Vertex call volume|creation,editing,chat,tabComplete,search"
-  "A25 Vertex output token rate|creation,editing,chat,tabComplete,search"
-  "A26 knowledge_query daily volume|creation"
+  "A24 Vertex call volume abnormally high|creation,editing,chat,tabcomplete,search"
+  "A25 Vertex output token rate abnormally high|creation,editing,chat,tabcomplete,search"
+  "A26 knowledge_query daily volume abnormally high|creation"
 )
 
 echo "==> 1/4 Pub/Sub topic ${TOPIC}"
@@ -60,8 +63,11 @@ gcloud pubsub topics describe "$TOPIC" --project "$PROJECT_ID" >/dev/null 2>&1 |
   gcloud pubsub topics create "$TOPIC" --project "$PROJECT_ID"
 
 # Monitoring publishes as its own service agent; without this the channel is created
-# and then silently never delivers.
-MONITORING_SA="service-$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')@gcp-sa-monitoring-notification.iam.gserviceaccount.com"
+# and then silently never delivers. The agent does not exist until something asks for
+# it, and the binding below fails on a missing member — so ask first (idempotent).
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
+MONITORING_SA="service-${PROJECT_NUMBER}@gcp-sa-monitoring-notification.iam.gserviceaccount.com"
+gcloud beta services identity create --service=monitoring.googleapis.com --project "$PROJECT_ID" >/dev/null
 gcloud pubsub topics add-iam-policy-binding "$TOPIC" \
   --project "$PROJECT_ID" \
   --member="serviceAccount:${MONITORING_SA}" \
@@ -70,7 +76,7 @@ gcloud pubsub topics add-iam-policy-binding "$TOPIC" \
 echo "==> 2/4 Notification channel"
 CHANNEL_ID="$(gcloud beta monitoring channels list \
   --project "$PROJECT_ID" \
-  --filter="displayName='${CHANNEL_NAME}'" \
+  --filter="displayName=\"${CHANNEL_NAME}\"" \
   --format='value(name)' | head -n1)"
 if [[ -z "$CHANNEL_ID" ]]; then
   CHANNEL_ID="$(gcloud beta monitoring channels create \
@@ -92,6 +98,13 @@ if [[ "$INVOKER_SA" == *"@${PROJECT_ID}.iam.gserviceaccount.com" ]]; then
       --project "$PROJECT_ID" \
       --display-name="Spend brake push caller"
 fi
+# Pub/Sub mints the push token as its own service agent, which needs leave to act as
+# the caller. Without this the subscription is created and every push fails quietly.
+# Granted on this one account, not the project.
+gcloud iam service-accounts add-iam-policy-binding "$INVOKER_SA" \
+  --project "$PROJECT_ID" \
+  --member="serviceAccount:service-${PROJECT_NUMBER}@gcp-sa-pubsub.iam.gserviceaccount.com" \
+  --role='roles/iam.serviceAccountTokenCreator' >/dev/null
 # The audience is the endpoint's own URL, so a token minted for this subscription
 # cannot be replayed against any other internal route.
 if gcloud pubsub subscriptions describe "$SUBSCRIPTION" --project "$PROJECT_ID" >/dev/null 2>&1; then
@@ -118,7 +131,7 @@ for entry in "${POLICIES[@]}"; do
   lanes="${entry##*|}"
   policy="$(gcloud alpha monitoring policies list \
     --project "$PROJECT_ID" \
-    --filter="displayName='${display}'" \
+    --filter="displayName=\"${display}\"" \
     --format='value(name)' | head -n1)"
   if [[ -z "$policy" ]]; then
     echo "    SKIP ${display} — not found. Run infra/setup-monitoring.sh first."
@@ -126,9 +139,11 @@ for entry in "${POLICIES[@]}"; do
   fi
   # The lanes ride as a user label so the brake reads intent from the policy rather
   # than parsing its display name. Changing what a policy pauses is an edit here.
+  # Added, never set: these policies also email the operator, and the brake is a
+  # second listener, not a replacement for the human one.
   gcloud alpha monitoring policies update "$policy" \
     --project "$PROJECT_ID" \
-    --set-notification-channels="$CHANNEL_ID" \
+    --add-notification-channels="$CHANNEL_ID" \
     --update-user-labels="lanes=${lanes//,/_}" >/dev/null
   echo "    ${display} -> ${lanes}"
 done

@@ -22,13 +22,16 @@ export function isPauseableLane(value: unknown): value is PauseableLane {
   return typeof value === 'string' && Object.prototype.hasOwnProperty.call(PAUSEABLE, value);
 }
 
+// GCP labels are lowercase-only, so `tabcomplete` must still name tabComplete.
+const LANE_BY_LOWER = new Map(Object.keys(PAUSEABLE).map((lane) => [lane.toLowerCase(), lane as PauseableLane]));
+
 // Both separators: a GCP label cannot hold a comma.
 export function parseLanes(raw: unknown): PauseableLane[] {
   if (typeof raw !== 'string') return [];
   const seen = new Set<PauseableLane>();
   for (const part of raw.split(/[,_]/)) {
-    const lane = part.trim();
-    if (isPauseableLane(lane)) seen.add(lane);
+    const lane = LANE_BY_LOWER.get(part.trim().toLowerCase());
+    if (lane) seen.add(lane);
   }
   return [...seen];
 }

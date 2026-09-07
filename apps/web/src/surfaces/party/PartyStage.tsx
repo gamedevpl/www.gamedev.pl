@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import './party.css';
 import type { CatalogEntry } from '../../catalog.js';
-import { PublishedGameFrame } from '../../PublishedGameFrame.js';
 import type { PlayVia } from '../../visitTelemetry.js';
 import { joinUrl, type PartySession } from './mpApi.js';
+import { PartyPlaying } from './PartyPlaying.js';
 import { QrCode } from './QrCode.js';
 import { RoomClient, type RoomStatus } from './roomClient.js';
 import { BRIDGE_NAMESPACE, parseGameBridgeMessage, PROTOCOL_VERSION, type RosterSlot } from '../../mp/protocol.js';
@@ -123,29 +123,7 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
   }
 
   if (started) {
-    return (
-      <div className="party-playing">
-        <div className="party-slotstrip">
-          {roster.map((slot) => (
-            <span
-              key={slot.slot}
-              className={`party-chip ${slot.connected ? 'is-connected' : ''}`}
-              style={{ borderColor: slot.color, color: slot.color }}
-            >
-              <span className="party-dot" style={{ background: slot.color }} />
-              {slot.nick ?? t('party.keyboardSlot', { slot: slot.slot })}
-            </span>
-          ))}
-        </div>
-        <PublishedGameFrame
-          slug={game.slug}
-          title={game.title}
-          frameRef={frameRef}
-          slots={roster.filter((slot) => slot.connected).length}
-          via={via}
-        />
-      </div>
-    );
+    return <PartyPlaying game={game} roster={roster} frameRef={frameRef} via={via} />;
   }
 
   return (

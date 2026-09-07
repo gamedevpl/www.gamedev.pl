@@ -19,6 +19,8 @@
 #
 # Then run:
 #   PROJECT_ID=my-proj ./infra/deploy-world.sh
+#
+# Override via env: REGION, SERVICE, REPO, GAMES_REPO, RUNTIME_SA.
 set -euo pipefail
 
 : "${PROJECT_ID:?set PROJECT_ID to your GCP project id}"
@@ -26,6 +28,11 @@ REGION="${REGION:-europe-west1}"
 SERVICE="${SERVICE:-gamedev-world}"
 REPO="${REPO:-gamedev}"
 GAMES_REPO="${GAMES_REPO:-gamedevpl/www.gamedev.pl-games}"
+# The host's own identity: Firestore for zone snapshots plus the two secrets above, and
+# nothing else (infra/setup-runtime-sa.sh). deploy.yml pins the same value when it
+# advances the image, so neither path can drop the host back onto the default compute
+# account.
+RUNTIME_SA="${RUNTIME_SA:-${SERVICE}@${PROJECT_ID}.iam.gserviceaccount.com}"
 
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/world:$(date +%Y%m%d-%H%M%S)"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -87,6 +94,7 @@ gcloud run deploy "$SERVICE" \
   --memory 512Mi \
   --timeout 3600 \
   --port 8081 \
+  --service-account "$RUNTIME_SA" \
   --set-env-vars "GAMES_REPO=${GAMES_REPO}" \
   --set-secrets "$joined"
 

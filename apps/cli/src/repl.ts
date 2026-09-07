@@ -43,6 +43,7 @@ export async function handleReplLine(input: {
   pendingExecution?: PendingExecution;
   onWorkshop?: (ws: Workshop) => void;
   write: (s: string) => void;
+  onActivity?: (activity: string) => void;
 }): Promise<ReplLineResult> {
   const retry = input.line.trim() === '/retry' ? input.pendingExecution?.current : undefined;
   if (input.line.trim() === '/retry' && !retry) {
@@ -63,6 +64,7 @@ export async function handleReplLine(input: {
         parsed.args[0] ??
         input.workshop?.slug ??
         (input.token ? (await getStatus(input.api, input.token)).slug : undefined);
+      input.onActivity?.('Starting game preview');
       await playGame({
         cwd: input.workshop?.root ?? process.cwd(),
         slug,
@@ -230,6 +232,7 @@ export async function handleReplLine(input: {
       input.conversationId = result.conversationId;
       if (result.kind === 'action') {
         if (result.action.name === 'play') {
+          input.onActivity?.('Starting game preview');
           await playGame({
             cwd: input.workshop?.root ?? process.cwd(),
             slug: result.action.slug,
@@ -266,6 +269,7 @@ export async function handleReplLine(input: {
           conversationId: result.conversationId,
         };
         try {
+          input.onActivity?.('Running the selected builder');
           opened.workshop = await executeChoice({
             api: input.api,
             choice,
@@ -365,6 +369,7 @@ export async function handleReplLine(input: {
           return { next: 'continue', conversationId: input.conversationId };
         }
         input.write(`▸ build ${result.roundId}${result.ack ? ` — ${result.ack}` : ''}`);
+        input.onActivity?.('Running the selected builder');
         const workshop = await executeChoice({
           api: input.api,
           choice,
@@ -398,6 +403,7 @@ export async function handleReplLine(input: {
       input.write(`the platform builds this round — /pull when it lands, or /builder self to build here`);
       return { next: 'continue', conversationId: input.conversationId };
     }
+    input.onActivity?.('Running the local builder');
     await workshopTurn({ api: input.api, ws, request: trimmed, ack: result.ack, write: input.write });
     return { next: 'continue', conversationId: input.conversationId };
   } catch (error) {

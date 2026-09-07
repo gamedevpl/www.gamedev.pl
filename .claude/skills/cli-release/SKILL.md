@@ -78,6 +78,10 @@ repo in the same session.
 
 ## Traps recorded so far
 
+- **Check the workspace version in `package-lock.json`.** The release cut currently
+  updates the two version sources but leaves the CLI workspace lock entry stale.
+  Run `npm install` and include that version-only lockfile change in the release PR.
+
 - **Build the contract before bundling.** CLI telemetry imports runtime values from
   `@gamedevpl/contract`. `compile-release.sh` builds that workspace so a fresh checkout
   works; locally cached `packages/contract/dist` can otherwise hide a broken release.

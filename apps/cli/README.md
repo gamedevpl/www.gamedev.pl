@@ -176,3 +176,8 @@ cancellation, including waits for another process to finish setup.
 Natural-language requests go through the server-side assistant, including inside a checkout.
 It uses the active game and conversation context to choose play, status, editing or a new
 game, and asks for clarification when needed. `/play` remains a direct shortcut.
+
+While a command runs, the TUI replaces the editor with an animated activity panel,
+current step and elapsed time. Background round updates stay separate from foreground
+work. Ctrl+C interrupts an active agent or exits when no cancellable agent is running.
+The editor returns when work completes; arrow keys recall prompts or navigate choices.

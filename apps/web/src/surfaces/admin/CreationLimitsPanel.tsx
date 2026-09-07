@@ -9,6 +9,7 @@ import {
   type SeedingMode,
 } from './adminApi.js';
 import { FeaturedPoolPanel } from './FeaturedPoolPanel.js';
+import { IncidentLanesPanel, type IncidentLanePatch } from './IncidentLanesPanel.js';
 import { PublicPlayPanel } from './PublicPlayPanel.js';
 
 /**
@@ -65,18 +66,20 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
   }, [load]);
 
   const apply = useCallback(
-    async (patch: {
-      paused?: boolean;
-      globalDailySubmissionCap?: number | null;
-      managedBuilderMode?: ManagedBuilderMode;
-      managedAgentVendorOverride?: ManagedAgentVendor | null;
-      managedDailyCap?: number | null;
-      managedDailyUserCap?: number | null;
-      tabCompletePaused?: boolean;
-      globalDailyTabCompleteTokenCap?: number | null;
-      seedingMode?: SeedingMode;
-      seedProviderOverride?: string | null;
-    }) => {
+    async (
+      patch: IncidentLanePatch & {
+        paused?: boolean;
+        globalDailySubmissionCap?: number | null;
+        managedBuilderMode?: ManagedBuilderMode;
+        managedAgentVendorOverride?: ManagedAgentVendor | null;
+        managedDailyCap?: number | null;
+        managedDailyUserCap?: number | null;
+        tabCompletePaused?: boolean;
+        globalDailyTabCompleteTokenCap?: number | null;
+        seedingMode?: SeedingMode;
+        seedProviderOverride?: string | null;
+      },
+    ) => {
       setBusy(true);
       setMessage(null);
       try {
@@ -155,7 +158,6 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
       : storedSeedProvider === effectiveSeedProvider
         ? `Overridden to ${effectiveSeedProvider} (no redeploy needed).`
         : `Overridden to ${storedSeedProvider}, but that provider has no credentials in this environment — falling back to ${effectiveSeedProvider}.`;
-
   return (
     <>
       <section className="admin-limits">
@@ -405,6 +407,14 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
           Also requires the `TAB_COMPLETE` deploy flag. Reaches every instance within {relative(limits.propagationMs)}.
         </p>
       </section>
+
+      <IncidentLanesPanel
+        effective={effective}
+        busy={busy}
+        message={message}
+        propagation={relative(limits.propagationMs)}
+        onToggle={(patch) => void apply(patch)}
+      />
       <PublicPlayPanel onChanged={onChanged} />
       <FeaturedPoolPanel onChanged={onChanged} />
     </>
