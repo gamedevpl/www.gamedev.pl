@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.6.1 — 2026-09-07
+
 ### Fixed
 
 - Custom adapter names no longer block conversational requests; oversized optional agent metadata is omitted (#1189).
