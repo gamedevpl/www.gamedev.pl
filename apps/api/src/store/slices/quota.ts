@@ -230,6 +230,11 @@ export class InMemoryQuotaStore implements QuotaStore {
   }
 }
 
+// A hand-edited document must not blackhole telemetry: only 0..1 counts.
+function readSampleRate(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1 ? value : null;
+}
+
 export class FirestoreQuotaStore implements QuotaStore {
   constructor(private db: Firestore) {}
 
@@ -297,12 +302,6 @@ export class FirestoreQuotaStore implements QuotaStore {
         typeof data?.globalDailySubmissionCap === 'number' ? data.globalDailySubmissionCap : null,
       editingPaused: data?.editingPaused === true,
       remixTracePaused: data?.remixTracePaused === true,
-      // Both load-shedding rungs; omitting them made the ladder inert in production.
-      partyPaused: data?.partyPaused === true,
-      telemetrySampleRate:
-        typeof data?.telemetrySampleRate === 'number' && Number.isFinite(data.telemetrySampleRate)
-          ? Math.min(1, Math.max(0, data.telemetrySampleRate))
-          : null,
       globalDailyEditCap: typeof data?.globalDailyEditCap === 'number' ? data.globalDailyEditCap : null,
       chatPaused: data?.chatPaused === true,
       globalDailyChatCap: typeof data?.globalDailyChatCap === 'number' ? data.globalDailyChatCap : null,
@@ -325,6 +324,8 @@ export class FirestoreQuotaStore implements QuotaStore {
           : null,
       managedDailyCap: typeof data?.managedDailyCap === 'number' ? data.managedDailyCap : null,
       managedDailyUserCap: typeof data?.managedDailyUserCap === 'number' ? data.managedDailyUserCap : null,
+      partyPaused: data?.partyPaused === true,
+      telemetrySampleRate: readSampleRate(data?.telemetrySampleRate),
       seedingMode: data?.seedingMode === 'off' ? 'off' : 'auto',
       globalDailySeedCap: typeof data?.globalDailySeedCap === 'number' ? data.globalDailySeedCap : null,
       seedProviderOverride: typeof data?.seedProviderOverride === 'string' ? data.seedProviderOverride : null,

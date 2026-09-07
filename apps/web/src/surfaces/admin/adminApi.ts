@@ -1,9 +1,8 @@
 // Client for the operator console's own reads and writes — the queue lives in
 // adminJobsApi, the telemetry in healthApi, and this covers the rest.
 //
-// Same posture as both of those: 404 means "not an admin" and comes back as `null`
-// rather than as an error, because the operator surface does not confirm its own
-// existence to someone who is not one.
+// Same posture as both: 404 means "not an admin" and comes back as `null` rather
+// than an error, because the surface does not confirm its own existence.
 
 import type {
   BetaInviteStatus,
@@ -119,6 +118,7 @@ export interface CreationLimits {
     searchPaused?: boolean;
     gatePaused?: boolean;
     partyPaused?: boolean;
+    telemetrySampleRate?: number | null;
     seedingMode: SeedingMode;
     seedProvider: {
       stored: string | null;

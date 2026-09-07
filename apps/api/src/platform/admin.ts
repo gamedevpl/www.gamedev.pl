@@ -177,6 +177,8 @@ export interface CreationLimitsResponse {
     // Each gate run is a 30-minute E2_HIGHCPU_8 build.
     gatePaused: boolean;
     globalDailyGateRunCap: number;
+    partyPaused: boolean;
+    telemetrySampleRate: number | null;
     // Round 0's kill switch, ceiling and provider picker.
     seedingMode: 'auto' | 'off';
     globalDailySeedCap: number;
@@ -187,9 +189,6 @@ export interface CreationLimitsResponse {
       configuredProviders: string[];
       defaultProvider: string | null;
     };
-    // Load-shedding rungs; the console reads its toggle state from these.
-    partyPaused: boolean;
-    telemetrySampleRate: number | null;
   };
   // What today cost, without opening the billing console.
   today: {
@@ -505,6 +504,8 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
           stored?.globalDailySearchEmbeddingCap ?? resolveDefaultGlobalDailySearchEmbeddingCap(),
         gatePaused: stored?.gatePaused === true,
         globalDailyGateRunCap: stored?.globalDailyGateRunCap ?? resolveDefaultGlobalDailyGateRunCap(),
+        partyPaused: stored?.partyPaused === true,
+        telemetrySampleRate: stored?.telemetrySampleRate ?? null,
         seedingMode: stored?.seedingMode ?? 'auto',
         globalDailySeedCap: stored?.globalDailySeedCap ?? resolveDefaultGlobalDailySeedCap(),
         seedProvider: {
@@ -514,9 +515,6 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
           configuredProviders: [...configuredSeedProviders],
           defaultProvider: defaultSeedProvider,
         },
-        // The console reads its toggle state from here.
-        partyPaused: stored?.partyPaused === true,
-        telemetrySampleRate: stored?.telemetrySampleRate ?? null,
       },
       today: {
         dateStr,

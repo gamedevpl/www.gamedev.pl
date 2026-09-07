@@ -16,6 +16,39 @@ function describeStoreContract(sliceName: string, spec: (makeStore: () => Store)
   });
 }
 
+// Both stores hand-list these fields, so one side drops them easily.
+describeStoreContract('creation limits', (makeStore) => {
+  it('round-trips the load-shedding rungs, one field at a time', async () => {
+    const store = makeStore();
+    expect(await store.getCreationLimits()).toBeNull();
+
+    await store.setCreationLimits({ partyPaused: true }, 'operator');
+    expect(await store.getCreationLimits()).toMatchObject({ partyPaused: true });
+
+    await store.setCreationLimits({ telemetrySampleRate: 0.25 }, 'operator');
+    const both = await store.getCreationLimits();
+    expect(both).toMatchObject({ partyPaused: true, telemetrySampleRate: 0.25 });
+  });
+
+  it('reads back every field a patch can set', async () => {
+    const store = makeStore();
+    const patch = {
+      paused: true,
+      globalDailySubmissionCap: 7,
+      editingPaused: true,
+      chatPaused: true,
+      searchPaused: true,
+      gatePaused: true,
+      tabCompletePaused: true,
+      partyPaused: true,
+      telemetrySampleRate: 0.5,
+      seedingMode: 'off' as const,
+    };
+    await store.setCreationLimits(patch, 'operator');
+    expect(await store.getCreationLimits()).toMatchObject(patch);
+  });
+});
+
 describeStoreContract('oauth', (makeStore) => {
   it('round-trips a client through create/get, and returns null for a missing one', async () => {
     const store = makeStore();
