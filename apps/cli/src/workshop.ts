@@ -34,6 +34,7 @@ export type Workshop = {
   env: NodeJS.ProcessEnv;
   adapters: AdapterSpec[];
   selectedAgent?: string;
+  onActivity?: (activity: string) => void;
   telemetry?: CliTelemetry;
   builder: string;
   pick: PickChoice;
@@ -80,7 +81,8 @@ export function workshopBrief(slug: string, request: string, ack?: string): stri
     ack ? `Studio understood it as: ${ack}` : '',
     'Change only files in this directory. Do not run git, install packages, or publish — the creator delivers with `gamedevpl submit`.',
     'If the creator wants to play, run `gamedevpl play` in this checkout; it opens a live preview without delivering or publishing. Use --no-open for a link only and --stop to close the server.',
-    'When done, `npm run typecheck` and `npm run check:static` at the checkout root must pass.',
+    'The CLI runs typecheck and check:static after you exit. Do not run these checks yourself.',
+    'This is a non-interactive task: do not wait for replies or approvals. If blocked, report the blocker and finish.',
   ]
     .filter(Boolean)
     .join('\n');
@@ -236,6 +238,7 @@ export async function runLocalBuild(input: {
   write: (line: string) => void;
 }): Promise<boolean> {
   const { ws, spec } = input;
+  ws.onActivity?.(`Preparing ${spec.name}`);
   if (!ws.runAdapter) preflightAdapter(spec, ws.env);
   const cwd = spec.cwd === 'game-dir' ? join(ws.root, 'games', ws.slug) : ws.root;
   const controller = new AbortController();
@@ -261,6 +264,12 @@ export async function runLocalBuild(input: {
       }
     }
     if (controller.signal.aborted) return false;
+    ws.onActivity?.(`${spec.name} is editing locally — input returns when it finishes`);
+    input.write(`${spec.name} controls this local editing task; Ctrl+C stops it.`);
+    if (spec.name === 'claude')
+      input.write(
+        'Claude uses subscription login; API authentication is refused. This local task is not linked to Claude Desktop.',
+      );
     ws.telemetry?.record('delegate_used', spec.name);
     result = await (ws.runAdapter ?? defaultAdapterRun)({
       spec,
@@ -269,7 +278,10 @@ export async function runLocalBuild(input: {
       env: childEnv(ws.env, ''),
       abort: controller.signal,
       onLine: (line) => {
-        for (const shown of renderDelegateStream(spec.name, [line], false)) input.write(shown);
+        for (const shown of renderDelegateStream(spec.name, [line], false)) {
+          if (shown.includes('⚙ ')) ws.onActivity?.(`${spec.name} · ${shown.split('⚙ ')[1]!.slice(0, 90)}`);
+          input.write(shown);
+        }
       },
     });
   } finally {
@@ -283,11 +295,12 @@ export async function runLocalBuild(input: {
     input.write(`${spec.name} exited ${result.code ?? 'null'} — /diff to see what changed`);
     return false;
   }
+  ws.onActivity?.('Agent finished — verifying typecheck and static checks');
   input.write('verifying — typecheck, check:static');
   const verify = runLadder({ cwd: ws.root, publish: false, run: ws.run });
   if (!verify.ok) {
     ws.telemetry?.record('verify_failed', spec.name, verify.stage);
-    const detail = verify.detail.split('\n').find((line) => line.trim()) ?? '';
+    const detail = verify.detail.trim();
     input.write(`verify failed at ${verify.stage}${detail ? `: ${detail}` : ''}\nfix by hand, or ask again`);
     return false;
   }

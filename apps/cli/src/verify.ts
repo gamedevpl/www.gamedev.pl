@@ -3,7 +3,11 @@ import { CliError, EXIT_RED } from './exit-codes.js';
 
 export type VerifyStage = 'typecheck' | 'check_static' | 'check_game';
 
-type VerifyRun = (cmd: string, args: string[], cwd: string) => { status: number | null; stderr: string };
+type VerifyRun = (
+  cmd: string,
+  args: string[],
+  cwd: string,
+) => { status: number | null; stderr: string; stdout?: string };
 
 export function runLadder(input: {
   cwd: string;
@@ -19,7 +23,11 @@ export function runLadder(input: {
   for (const step of steps) {
     const result = run('npm', step.args, input.cwd);
     if ((result.status ?? 1) !== 0) {
-      return { ok: false, stage: step.stage, detail: result.stderr.slice(0, 500) };
+      return {
+        ok: false,
+        stage: step.stage,
+        detail: [result.stderr, result.stdout].filter(Boolean).join('\n').slice(0, 4000),
+      };
     }
   }
   return { ok: true };

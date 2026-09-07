@@ -1,3 +1,4 @@
+import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { formatAdapterEvent, sanitizeEventPayload } from './ansi.js';
 import type { AdapterSpec } from './adapters.js';
@@ -32,6 +33,7 @@ type EventShape = {
   text?: unknown;
   message?: unknown;
   type?: unknown;
+  session_id?: unknown;
   result?: unknown;
   item?: { type?: unknown; text?: unknown; command?: unknown };
 };
@@ -64,6 +66,9 @@ export function parseEventLine(line: string): string | null {
     return trimmed;
   }
   if (!parsed || typeof parsed !== 'object') return trimmed;
+  if (parsed.type === 'system' && typeof parsed.session_id === 'string' && /^[a-f0-9-]{36}$/i.test(parsed.session_id)) {
+    return `Local session ${parsed.session_id} — after it finishes, resume with claude --resume ${parsed.session_id} in the game directory`;
+  }
   const direct =
     textOf(parsed.text) ??
     textOf(parsed.message) ??
@@ -79,6 +84,7 @@ export function parseEventLine(line: string): string | null {
   if (command) return `⚙ ${command}`;
   const type = textOf(parsed.type);
   if (!type) return trimmed;
+  if (type === 'assistant') return null;
   return QUIET_EVENT_TYPES.test(type) ? null : type;
 }
 
@@ -100,7 +106,10 @@ export function spawnAdapter(input: {
   timeoutMs: number;
   abort?: AbortSignal;
 }): ChildProcess {
-  return spawnCommand({ ...input, command: input.spec.command, args: [...input.spec.headless, input.prompt] });
+  const env = input.spec.name === 'claude' ? subscriptionEnv(input.env) : input.env;
+  if (input.spec.name === 'claude')
+    requireClaudeSubscription({ command: input.spec.command, cwd: input.cwd, env, args: input.spec.headless });
+  return spawnCommand({ ...input, env, command: input.spec.command, args: [...input.spec.headless, input.prompt] });
 }
 
 export function spawnCommand(input: {

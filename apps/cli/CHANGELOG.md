@@ -7,6 +7,14 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Breaking
+
+- Claude delegation requires a verified Claude.ai subscription login; inherited API and cloud-provider credentials are no longer used.
+
+### Fixed
+
+- Claude tasks verify subscription authentication and refuse API billing; local agent choices survive failed requests, live status follows new rounds, and verification errors retain their details.
+
 ## 0.5.1 — 2026-09-07
 
 ### Fixed

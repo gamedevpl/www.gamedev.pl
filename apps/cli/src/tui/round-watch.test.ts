@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createApi } from '../api.js';
 import { memoryStore } from '../keychain.js';
 import { createRoundWatch } from './round-watch.js';
@@ -59,6 +59,8 @@ describe('round watch', () => {
         throw new Error('should not sleep after published');
       },
     });
+    await vi.waitFor(() => expect(announced).toEqual(['published']));
+    watch.stop();
     await watch.run;
     expect(polls).toBe(1);
     expect(announced).toEqual(['published']);
@@ -105,4 +107,25 @@ describe('round watch', () => {
     await miss.current.run;
     expect(ignored).toEqual([]);
   });
+});
+
+it('wakes for a new round after publication instead of keeping the old live strip', async () => {
+  let token = 'old';
+  const live: string[][] = [];
+  const request = vi.fn(async () => ({ status: token === 'old' ? 'published' : 'building' }));
+  const watch = createRoundWatch({
+    getToken: () => token,
+    api: { origin: 'https://example.test', request } as unknown as import('../api.js').ApiClient,
+    setLive: (lines) => live.push(lines),
+    announce: () => undefined,
+    sleep: () => new Promise(() => undefined),
+  });
+  await vi.waitFor(() => expect(live.at(-1)?.[0]).toBe('published'));
+  expect(request).toHaveBeenCalledTimes(1);
+  token = 'new';
+  watch.poke();
+  await vi.waitFor(() => expect(live.at(-1)?.[0]).toBe('building'));
+  expect(request).toHaveBeenLastCalledWith('GET', '/api/submissions/new');
+  watch.stop();
+  await watch.run;
 });

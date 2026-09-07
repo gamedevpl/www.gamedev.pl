@@ -1,5 +1,5 @@
 import { cliUsage } from './bin-name.js';
-import { credentialExpired } from './errors.js';
+import { credentialExpired, moderationRefusal } from './errors.js';
 import { CliError, EXIT_AUTH, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import type { StoredTokens, TokenStore } from './keychain.js';
 import { refreshGrant } from './oauth.js';
@@ -19,6 +19,7 @@ export function bearerFrom(tokens: StoredTokens | null, env: NodeJS.ProcessEnv):
 }
 
 function throwForStatus(res: Response, errBody: { error?: string; message?: string }): never {
+  if (res.status === 422 && errBody.error === 'content_rejected') throw moderationRefusal();
   if (res.status === 401) throw credentialExpired();
   if (res.status === 404) throw new CliError('not found', EXIT_REFUSED);
   throw new CliError(errBody.message ?? errBody.error ?? `request failed (${res.status})`, EXIT_REFUSED);

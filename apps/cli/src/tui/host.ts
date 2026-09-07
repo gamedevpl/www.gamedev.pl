@@ -62,7 +62,16 @@ export async function runInkRepl(input: {
     paintIdentity();
     const write = (line: string): void => session.writeLine(line);
     const opened = await openWorkshop({ api: input.api, token, ...input.checkout, env: input.env, write });
-    workshop = { ...input.checkout, token, env: input.env, ...opened, pick: session.prompt, abort, telemetry };
+    workshop = {
+      ...input.checkout,
+      token,
+      env: input.env,
+      ...opened,
+      pick: session.prompt,
+      abort,
+      telemetry,
+      onActivity: session.setActivity,
+    };
     workshop.builder = await settleBuilder({ api: input.api, ws: workshop, status: opened.status, write });
     session.writeLine('say what to change, or /help');
   }
@@ -106,6 +115,12 @@ export async function runInkRepl(input: {
           pendingExecution,
           onWorkshop: (opened) => {
             workshop = opened;
+            opened.onActivity = session.setActivity;
+            if (token !== opened.token) {
+              token = opened.token;
+              session.setLive([]);
+              watch.poke();
+            }
           },
           onActivity: (activity) => session.setActivity(activity),
           write: (text) => session.writeLine(text),

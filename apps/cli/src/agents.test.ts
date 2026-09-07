@@ -107,6 +107,7 @@ describe('agent discovery', () => {
     writeFileSync(
       join(dir, 'claude'),
       `#!${process.execPath}
+if (process.argv.includes('auth')) { console.log(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai', apiProvider: 'firstParty' })); process.exit(0); }
 if (process.argv.includes('--help')) { console.log('-p --verbose --permission-mode --output-format'); process.exit(0); }
 const fs = require('node:fs');
 const args = process.argv.slice(2);
@@ -177,6 +178,7 @@ console.log(JSON.stringify({ text: JSON.stringify({ cwd: process.cwd(), config }
     writeFileSync(
       join(dir, 'claude'),
       `#!${process.execPath}
+if (process.argv.includes('auth')) { console.log(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai', apiProvider: 'firstParty' })); process.exit(0); }
 if (process.argv.includes('--help')) { console.log('-p --verbose --permission-mode --output-format'); process.exit(0); }
 process.on('SIGTERM', () => {});
 console.log(JSON.stringify({ text: 'working' }));
