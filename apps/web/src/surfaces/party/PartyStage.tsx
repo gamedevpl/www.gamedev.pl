@@ -56,6 +56,12 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
   const sendCommand = useCallback(
     (cmd: PartyCommand) => {
       postToGame({ t: 'command', cmd });
+      // The relay refuses guests while a room is `ended`, so leave that phase with the
+      // command rather than a frame later, when the game gets round to reporting it.
+      const next: RoomPhase | null = cmd === 'restart' ? 'playing' : cmd === 'lobby' ? 'lobby' : null;
+      if (!next) return;
+      setPhase(next);
+      clientRef.current?.setPhase(next);
     },
     [postToGame],
   );

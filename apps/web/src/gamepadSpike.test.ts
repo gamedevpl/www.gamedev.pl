@@ -37,10 +37,12 @@ describe('gamepad normalization', () => {
   it('maps standard buttons and stick axes to the party vocabulary', () => {
     const buttons = Array.from({ length: 16 }, () => button(false));
     buttons[0] = button(true);
+    buttons[9] = button(true);
     buttons[12] = button(true);
     const normalized = normalizeGamepad(gamepad({ axes: [-0.75, 0.8], buttons }), 1_000);
 
-    expect(normalized.party).toEqual({ up: true, down: true, left: true, right: false, a: true });
+    // Start is `menu`: a pad is a seat too, and the shell's pause answers to it.
+    expect(normalized.party).toEqual({ up: true, down: true, left: true, right: false, a: true, menu: true });
     expect(normalized.gamepad).toMatchObject({
       index: 0,
       mapping: 'standard',
@@ -51,7 +53,7 @@ describe('gamepad normalization', () => {
 
   it('clamps malformed values and represents a disconnected state', () => {
     expect(normalizeGamepad(null, 0)).toEqual({
-      party: { up: false, down: false, left: false, right: false, a: false },
+      party: { up: false, down: false, left: false, right: false, a: false, menu: false },
       gamepad: null,
     });
 

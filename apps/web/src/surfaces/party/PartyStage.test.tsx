@@ -80,6 +80,19 @@ describe('PartyStage lifecycle', () => {
     }
   });
 
+  it('leaves the ended phase with the restart, not a frame later', () => {
+    // The relay refuses guests while a room is ended, so a phone that dropped on the
+    // end screen could not come back for the round the host just restarted.
+    const { frame } = startRound();
+    act(() => bridgeMessage(frame, { t: 'phase', phase: 'ended' }));
+    expect(setPhase).toHaveBeenLastCalledWith('ended');
+
+    act(() => {
+      (container.querySelector('.party-play-controls .party-life-btn:nth-child(2)') as HTMLButtonElement).click();
+    });
+    expect(setPhase).toHaveBeenLastCalledWith('playing');
+  });
+
   it('returns the room to the QR lobby when the game leaves its round', () => {
     const { frame } = startRound();
     expect(container.querySelector('.party-playing')).not.toBeNull();
