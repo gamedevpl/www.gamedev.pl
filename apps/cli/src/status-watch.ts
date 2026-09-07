@@ -3,6 +3,7 @@ import { EXIT_GREEN, EXIT_RED } from './exit-codes.js';
 import { createLiveScreen } from './live.js';
 import { getStatus, isTerminalStatus, previewUrl, type RoundStatus } from './turn.js';
 import type { ApiClient } from './api.js';
+import type { CliTelemetry } from './telemetry.js';
 
 export function statusWatchDelayMs(status: Pick<RoundStatus, 'status' | 'phase' | 'stall'>): number {
   const active =
@@ -100,12 +101,16 @@ export async function runStatusVerb(input: {
   asJson: boolean;
   live: boolean;
   stdout: NodeJS.WriteStream;
+  telemetry?: CliTelemetry;
   sleep?: (ms: number) => Promise<void>;
 }): Promise<number> {
   const sleep = input.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
   const screen = input.live ? createLiveScreen(input.stdout) : null;
   let status = await getStatus(input.api, input.token);
+  let watched = '';
   for (let i = 1; i <= input.maxPolls; i += 1) {
+    if (isPublishTransition(watched, status.status)) input.telemetry?.record('published');
+    watched = status.status;
     if (input.asJson) input.stdout.write(`${JSON.stringify(status)}\n`);
     else if (screen) screen.paint(formatStatusLines(status, input.api.origin));
     else {

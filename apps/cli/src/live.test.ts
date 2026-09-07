@@ -182,3 +182,42 @@ describe('publish transitions', () => {
     expect(isPublishTransition('building', 'needs_changes')).toBe(false);
   });
 });
+
+describe('status --watch telemetry', () => {
+  function watcher(statuses: string[], recorded: string[]) {
+    let calls = 0;
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_pat_x', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async () => {
+        const status = statuses[Math.min(calls, statuses.length - 1)];
+        calls += 1;
+        return new Response(JSON.stringify({ status }), { status: 200 });
+      },
+    });
+    const stdout = { write: () => true } as unknown as NodeJS.WriteStream;
+    return runStatusVerb({
+      api,
+      token: 'tok',
+      maxPolls: 5,
+      asJson: false,
+      live: false,
+      stdout,
+      telemetry: { record: (step: string) => recorded.push(step), flush: async () => undefined },
+      sleep: async () => undefined,
+    });
+  }
+
+  it('records a publish the watcher saw happen', async () => {
+    const recorded: string[] = [];
+    await watcher(['building', 'published'], recorded);
+    expect(recorded).toEqual(['published']);
+  });
+
+  // Checking an already-live game is not this session finishing one.
+  it('records nothing when the first poll is already published', async () => {
+    const recorded: string[] = [];
+    await watcher(['published'], recorded);
+    expect(recorded).toEqual([]);
+  });
+});

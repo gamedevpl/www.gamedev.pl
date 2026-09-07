@@ -46,6 +46,23 @@ describe('install reporting', () => {
     expect(JSON.parse(readFileSync(installMarkPath(other), 'utf8'))).toEqual({ reported: '0.6.0' });
   });
 
+  // An install that cannot be marked would report again on every run.
+  it('reports nothing when the mark cannot be written', () => {
+    const blocked = join(mkdtempSync(join(tmpdir(), 'gdpl-install-')), 'home');
+    writeFileSync(blocked, '');
+    const env = { HOME: blocked };
+    expect(takeInstallReport({ env, isTty: true, version: '0.6.0', platform: 'linux' })).toBeNull();
+    expect(takeInstallReport({ env, isTty: true, version: '0.6.0', platform: 'linux' })).toBeNull();
+  });
+
+  // A rejected event loses the install for good.
+  it('drops a channel the shared enum does not name', () => {
+    const env = home();
+    mkdirSync(join(env.HOME!, '.config', 'gamedevpl'), { recursive: true });
+    writeFileSync(installMarkPath(env), JSON.stringify({ channel: '/home/private/curl', reported: 7 }));
+    expect(takeInstallReport({ env, isTty: true, version: '0.6.0', platform: 'linux' })).toEqual({ os: 'linux' });
+  });
+
   it('keeps nothing that could identify the machine', () => {
     const env = home();
     noteInstallChannel(env, 'curl');
