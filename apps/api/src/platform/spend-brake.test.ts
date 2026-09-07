@@ -48,6 +48,40 @@ describe('spend brake payload reading', () => {
     expect(lanesFromNotification({ incident: null }).lanes).toEqual([]);
     expect(lanesFromNotification({ incident: { state: 'OPEN' } }).lanes).toEqual([]);
   });
+
+  it('says why it paused nothing, with the policy that sent it', () => {
+    expect(lanesFromNotification(undefined).reason).toBe('no_incident');
+    expect(lanesFromNotification({ incident: null }).reason).toBe('no_incident');
+    expect(
+      lanesFromNotification({
+        incident: {
+          state: 'CLOSED',
+          incident_id: 'inc-9',
+          policy_name: 'A24',
+          policy_user_labels: { lanes: 'search' },
+        },
+      }),
+    ).toEqual({ lanes: [], incidentId: 'inc-9', policyName: 'A24', state: 'CLOSED', reason: 'closed' });
+    expect(lanesFromNotification({ incident: { state: 'OPEN', policy_name: 'A1 uptime' } })).toEqual({
+      lanes: [],
+      policyName: 'A1 uptime',
+      state: 'OPEN',
+      reason: 'no_lanes_label',
+    });
+    expect(lanesFromNotification(openIncident('everything'))).toEqual({
+      lanes: [],
+      incidentId: 'inc-1',
+      state: 'OPEN',
+      rawLanes: 'everything',
+      reason: 'unrecognised_lanes',
+    });
+    expect(lanesFromNotification(openIncident('search'))).toEqual({
+      lanes: ['search'],
+      incidentId: 'inc-1',
+      state: 'OPEN',
+      rawLanes: 'search',
+    });
+  });
 });
 
 describe('POST /api/internal/spend-brake', () => {
