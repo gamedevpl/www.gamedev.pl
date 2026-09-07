@@ -89,6 +89,7 @@ describe('workshopTurn', () => {
     const root = checkout();
     const seen: string[] = [];
     const lines: string[] = [];
+    const activities: string[] = [];
     const calls: Parameters<AdapterRun>[0][] = [];
     const runAdapter: AdapterRun = async (input) => {
       calls.push(input);
@@ -98,12 +99,15 @@ describe('workshopTurn', () => {
     };
     const ok = await workshopTurn({
       api: platform(seen),
-      ws: workshop(root, { runAdapter }),
+      ws: workshop(root, { runAdapter, onActivity: (stage) => activities.push(stage) }),
       request: 'make the jump floatier',
       ack: 'Floatier jump.',
       write: (line) => lines.push(line),
     });
     expect(ok).toBe(true);
+    expect(activities).toContain('claude is editing locally — input returns when it finishes');
+    expect(activities).toContain('Agent finished — verifying typecheck and static checks');
+    expect(calls[0]!.prompt).toContain('Do not run these checks yourself');
     expect(calls).toHaveLength(1);
     expect(calls[0]!.cwd).toBe(join(root, 'games', SLUG));
     expect(calls[0]!.spec.name).toBe('claude');

@@ -35,6 +35,30 @@ describe('spend brake payload reading', () => {
     expect(parseLanes(undefined)).toEqual([]);
   });
 
+  it('pulls every lane once a billing budget is spent or forecast past 100%', () => {
+    const budget = { budgetDisplayName: 'zł130 Monthly Budget Alert', costAmount: 140, budgetAmount: 130 };
+    // `seeding` too: round 0 is the main Vertex spender.
+    const all = ['creation', 'editing', 'chat', 'tabComplete', 'search', 'gate', 'seeding', 'dreams'];
+    expect(lanesFromNotification({ ...budget, alertThresholdExceeded: 1.0 })).toEqual({
+      lanes: all,
+      incidentId: 'budget:zł130 Monthly Budget Alert:spent:1',
+      policyName: 'zł130 Monthly Budget Alert',
+    });
+    // Forecast counts: the point is to stop before the money is gone.
+    expect(lanesFromNotification({ ...budget, forecastThresholdExceeded: 1.2 })).toEqual({
+      lanes: all,
+      incidentId: 'budget:zł130 Monthly Budget Alert:forecast:1.2',
+      policyName: 'zł130 Monthly Budget Alert',
+    });
+  });
+
+  it('stays quiet on a routine budget tick under every threshold', () => {
+    // Budgets publish every ~20 minutes whether or not anything crossed.
+    const tick = { lanes: [], policyName: 'x', reason: 'budget_under_threshold', quiet: true };
+    expect(lanesFromNotification({ budgetDisplayName: 'x', costAmount: 3, budgetAmount: 130 })).toEqual(tick);
+    expect(lanesFromNotification({ budgetDisplayName: 'x', alertThresholdExceeded: 0.9 })).toEqual(tick);
+  });
+
   it('never pauses on a closing notification', () => {
     expect(lanesFromNotification(openIncident('search')).lanes).toEqual(['search']);
     expect(
@@ -47,6 +71,40 @@ describe('spend brake payload reading', () => {
     expect(lanesFromNotification({}).lanes).toEqual([]);
     expect(lanesFromNotification({ incident: null }).lanes).toEqual([]);
     expect(lanesFromNotification({ incident: { state: 'OPEN' } }).lanes).toEqual([]);
+  });
+
+  it('says why it paused nothing, with the policy that sent it', () => {
+    expect(lanesFromNotification(undefined).reason).toBe('no_incident');
+    expect(lanesFromNotification({ incident: null }).reason).toBe('no_incident');
+    expect(
+      lanesFromNotification({
+        incident: {
+          state: 'CLOSED',
+          incident_id: 'inc-9',
+          policy_name: 'A24',
+          policy_user_labels: { lanes: 'search' },
+        },
+      }),
+    ).toEqual({ lanes: [], incidentId: 'inc-9', policyName: 'A24', state: 'CLOSED', reason: 'closed' });
+    expect(lanesFromNotification({ incident: { state: 'OPEN', policy_name: 'A1 uptime' } })).toEqual({
+      lanes: [],
+      policyName: 'A1 uptime',
+      state: 'OPEN',
+      reason: 'no_lanes_label',
+    });
+    expect(lanesFromNotification(openIncident('everything'))).toEqual({
+      lanes: [],
+      incidentId: 'inc-1',
+      state: 'OPEN',
+      rawLanes: 'everything',
+      reason: 'unrecognised_lanes',
+    });
+    expect(lanesFromNotification(openIncident('search'))).toEqual({
+      lanes: ['search'],
+      incidentId: 'inc-1',
+      state: 'OPEN',
+      rawLanes: 'search',
+    });
   });
 });
 
@@ -93,6 +151,36 @@ describe('POST /api/internal/spend-brake', () => {
     expect(limits?.updatedBy).toBe('alert:inc-1');
     // Untouched: a brake pauses what the alert named and nothing else.
     expect(limits?.paused).toBe(false);
+    await app.close();
+  });
+
+  it('turns round-0 seeding off when the budget trips, not just the boolean lanes', async () => {
+    const store = new InMemoryStore();
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      spendBrakeRoutes: { internalAuthVerifier: { verify: async () => true } },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/internal/spend-brake',
+      payload: pushBody({ budgetDisplayName: 'zł130 Monthly Budget Alert', alertThresholdExceeded: 1.0 }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const limits = await store.getCreationLimits();
+    // A seed regenerated after the brake would be another paid call.
+    expect(limits).toMatchObject({
+      paused: true,
+      editingPaused: true,
+      chatPaused: true,
+      tabCompletePaused: true,
+      searchPaused: true,
+      gatePaused: true,
+      seedingMode: 'off',
+      updatedBy: 'alert:budget:zł130 Monthly Budget Alert:spent:1',
+    });
     await app.close();
   });
 

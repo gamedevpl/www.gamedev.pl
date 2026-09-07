@@ -107,7 +107,9 @@ describe('agent discovery', () => {
     writeFileSync(
       join(dir, 'claude'),
       `#!${process.execPath}
+if (process.argv.includes('auth')) { console.log(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai', apiProvider: 'firstParty' })); process.exit(0); }
 if (process.argv.includes('--help')) { console.log('-p --verbose --permission-mode --output-format'); process.exit(0); }
+if (process.env.ANTHROPIC_API_KEY) process.exit(90);
 const fs = require('node:fs');
 const args = process.argv.slice(2);
 const config = args[args.indexOf('--mcp-config') + 1];
@@ -133,7 +135,7 @@ console.log(JSON.stringify({ text: JSON.stringify({ cwd: process.cwd(), config }
       slug: 'sky-dodge',
       dest: dir,
       agent: 'claude',
-      env: { PATH: dir, HOME: dir },
+      env: { PATH: dir, HOME: dir, ANTHROPIC_API_KEY: 'must-not-reach-child' },
       write: (line) => lines.push(line),
     });
     const report = JSON.parse(lines.find((line) => line.startsWith('claude ▸ {'))!.split(' ▸ ')[1]!) as {
@@ -177,6 +179,7 @@ console.log(JSON.stringify({ text: JSON.stringify({ cwd: process.cwd(), config }
     writeFileSync(
       join(dir, 'claude'),
       `#!${process.execPath}
+if (process.argv.includes('auth')) { console.log(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai', apiProvider: 'firstParty' })); process.exit(0); }
 if (process.argv.includes('--help')) { console.log('-p --verbose --permission-mode --output-format'); process.exit(0); }
 process.on('SIGTERM', () => {});
 console.log(JSON.stringify({ text: 'working' }));

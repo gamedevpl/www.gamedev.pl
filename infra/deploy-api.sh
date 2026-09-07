@@ -32,6 +32,9 @@
 #                               /api/mcp — SEP-1865. Inert for any client that does not
 #                               negotiate the extension; any other value keeps the
 #                               pre-views contract)
+#   APP_CSP_REPORT_ONLY=...    (app-level CSP, report-only: unset/"true" built-in policy,
+#                               "false"/"off" none, anything else a verbatim draft policy;
+#                               apps/api/src/platform/security-headers.ts)
 #   BETA_ALLOWED_UIDS=...      (comma-separated g:<sub> values)
 #   ADMIN_UIDS=...             (comma-separated g:<sub> values; operator telemetry view)
 #   REVIEWER_UIDS=...          (comma-separated g:<sub> values; /review desk; admins count too)
@@ -359,7 +362,7 @@ done
 #
 # The rule this file already states for REMIX_DEBUG applies to every one of them: both
 # supported paths carry a flag, or neither should.
-for FLAG_VAR in CODE_LANE EDITOR_ASSIST MCP_AUTHORIZATION_SERVERS MCP_UI CODE_SURFACE TAB_COMPLETE CLI_SURFACE; do
+for FLAG_VAR in CODE_LANE EDITOR_ASSIST MCP_AUTHORIZATION_SERVERS MCP_UI CODE_SURFACE TAB_COMPLETE CLI_SURFACE APP_CSP_REPORT_ONLY; do
   eval "FLAG_VAL=\${${FLAG_VAR}:-}"
   if [ -n "${FLAG_VAL}" ]; then
     ENV_VARS="${ENV_VARS}|${FLAG_VAR}=${FLAG_VAL}"
