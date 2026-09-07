@@ -294,6 +294,12 @@ export class FirestoreQuotaStore implements QuotaStore {
         typeof data?.globalDailySubmissionCap === 'number' ? data.globalDailySubmissionCap : null,
       editingPaused: data?.editingPaused === true,
       remixTracePaused: data?.remixTracePaused === true,
+      // Both load-shedding rungs; omitting them made the ladder inert in production.
+      partyPaused: data?.partyPaused === true,
+      telemetrySampleRate:
+        typeof data?.telemetrySampleRate === 'number' && Number.isFinite(data.telemetrySampleRate)
+          ? Math.min(1, Math.max(0, data.telemetrySampleRate))
+          : null,
       globalDailyEditCap: typeof data?.globalDailyEditCap === 'number' ? data.globalDailyEditCap : null,
       chatPaused: data?.chatPaused === true,
       globalDailyChatCap: typeof data?.globalDailyChatCap === 'number' ? data.globalDailyChatCap : null,

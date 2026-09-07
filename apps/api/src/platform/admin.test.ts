@@ -593,6 +593,8 @@ describe('/api/admin/creation-limits', () => {
         configuredProviders: [],
         defaultProvider: 'vertex',
       },
+      partyPaused: false,
+      telemetrySampleRate: null,
     });
     // A pause left on by accident is this feature's own failure mode, so the record of
     // who set it is part of the deliverable.
@@ -644,6 +646,8 @@ describe('/api/admin/creation-limits', () => {
         configuredProviders: [],
         defaultProvider: 'vertex',
       },
+      partyPaused: false,
+      telemetrySampleRate: null,
     });
     await app.close();
   });

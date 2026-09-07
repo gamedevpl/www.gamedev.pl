@@ -213,3 +213,33 @@ describeStoreContract('telemetry', (makeStore) => {
     expect(withoutStarted[0]?.type).toBe('route_viewed');
   });
 });
+
+describeStoreContract('creation limits', (makeStore) => {
+  // The Firestore read once dropped fields the write had persisted.
+  it('reads back every field a patch persisted', async () => {
+    const store = makeStore();
+    await store.setCreationLimits({ partyPaused: true, telemetrySampleRate: 0.1 }, 'g:boss');
+
+    const limits = await store.getCreationLimits();
+    expect(limits?.partyPaused).toBe(true);
+    expect(limits?.telemetrySampleRate).toBe(0.1);
+  });
+
+  it('reads a lane back off again', async () => {
+    const store = makeStore();
+    await store.setCreationLimits({ partyPaused: true }, 'g:boss');
+    await store.setCreationLimits({ partyPaused: false }, 'g:boss');
+
+    expect((await store.getCreationLimits())?.partyPaused).toBe(false);
+  });
+
+  it('leaves the other lane alone on a partial patch', async () => {
+    const store = makeStore();
+    await store.setCreationLimits({ partyPaused: true, telemetrySampleRate: 0.25 }, 'g:boss');
+    await store.setCreationLimits({ telemetrySampleRate: null }, 'g:boss');
+
+    const limits = await store.getCreationLimits();
+    expect(limits?.partyPaused).toBe(true);
+    expect(limits?.telemetrySampleRate).toBeNull();
+  });
+});

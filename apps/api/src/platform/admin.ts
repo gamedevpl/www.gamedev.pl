@@ -511,6 +511,9 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
           configuredProviders: [...configuredSeedProviders],
           defaultProvider: defaultSeedProvider,
         },
+        // The console reads its toggle state from here.
+        partyPaused: stored?.partyPaused === true,
+        telemetrySampleRate: stored?.telemetrySampleRate ?? null,
       },
       today: {
         dateStr,

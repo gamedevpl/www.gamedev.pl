@@ -37,7 +37,24 @@ const HELP = `Usage: node infra/load-test.mjs --target <base-url> [options]
   --help                This.
 `;
 
-const PRODUCTION_HOSTS = new Set(['www.gamedev.pl', 'gamedev.pl', 'gamedevpl.web.app']);
+// apps/api/src/catalog/game-play-route.ts, maxGamesPerWindow.
+const PLAY_LIMIT_PER_IP_PER_MINUTE = 60;
+
+// Every hostname production answers on, not only the pretty ones. Naming just the
+// custom domain leaves the guard bypassable by pasting the URL gcloud prints.
+const PRODUCTION_HOSTS = new Set([
+  'www.gamedev.pl',
+  'gamedev.pl',
+  'gamedevpl.web.app',
+  'gamedevpl.firebaseapp.com',
+  'gamedev-app-334141807880.europe-west1.run.app',
+  'gamedev-app-ll6xk4myya-ew.a.run.app',
+]);
+
+function isProductionHost(hostname) {
+  return PRODUCTION_HOSTS.has(hostname);
+}
+
 const RATE_NEEDING_CONSENT = 50;
 
 function parseArgs(argv) {
@@ -88,7 +105,7 @@ function parseArgs(argv) {
 function validate(args) {
   if (!args.target) throw new Error('--target is required; there is no default on purpose');
   const url = new URL(args.target);
-  if (PRODUCTION_HOSTS.has(url.hostname) && !args.allowProduction) {
+  if (isProductionHost(url.hostname) && !args.allowProduction) {
     throw new Error(`${url.hostname} is production. Pass --allow-production if you mean it.`);
   }
   if (args.rate > RATE_NEEDING_CONSENT && !args.allowProduction) {
@@ -227,6 +244,19 @@ async function main() {
       `${slugs.length ? ` over ${slugs.length} slug(s)` : ' with no play step'}` +
       `${args.telemetry ? ', telemetry ON (writes)' : ''}\n`,
   );
+
+  // One process is one client IP, and the play route allows PLAY_LIMIT per IP per minute.
+  // Above that the play column stops being a latency measurement and becomes a count of
+  // 429s — which reads like a slow origin unless you were told. Real launch traffic is
+  // spread over many addresses and never meets this; the tool cannot be, so it says so.
+  if (slugs.length && args.rate * 60 > PLAY_LIMIT_PER_IP_PER_MINUTE) {
+    const seconds = (PLAY_LIMIT_PER_IP_PER_MINUTE / args.rate).toFixed(1);
+    process.stderr.write(
+      `NOTE: ${args.rate}/s exceeds the play route's ${PLAY_LIMIT_PER_IP_PER_MINUTE}/min per-IP limit.\n` +
+        `      Expect play to be mostly 429 after ~${seconds}s. Read the land and catalog\n` +
+        `      columns for latency, or run from several hosts to measure play under load.\n`,
+    );
+  }
 
   const inFlight = new Set();
   const startedAt = performance.now();
