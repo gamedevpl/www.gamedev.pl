@@ -1079,7 +1079,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // token and it is configured — see openai-apps-challenge.ts.
   registerOpenAiAppsChallengeRoute(app);
 
-  const oauthSessionSecret = options.sessionSecret ?? process.env.SESSION_SECRET ?? 'dev-session-secret-change-me';
+  const configuredSessionSecret = options.sessionSecret ?? process.env.SESSION_SECRET;
+  // A forgeable session is an account takeover; refuse to serve rather than fall back.
+  if (!configuredSessionSecret && process.env.NODE_ENV === 'production') {
+    throw new Error('SESSION_SECRET is required to sign sessions in production');
+  }
+  const oauthSessionSecret = configuredSessionSecret ?? 'dev-session-secret-change-me';
   const oauthSessionSecretPrev = options.sessionSecretPrev ?? process.env.SESSION_SECRET_PREV;
   registerOAuthAuthorizationServerRoutes(app, {
     store,

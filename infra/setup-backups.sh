@@ -116,9 +116,13 @@ else
   gcloud storage buckets create "gs://${BACKUP_BUCKET}" \
     --location="$FIRESTORE_REGION" \
     --uniform-bucket-level-access \
+    --public-access-prevention \
     --project="$PROJECT_ID"
   echo "    Created in ${FIRESTORE_REGION} (must match the database's location)."
 fi
+# "NOT public by any path" above was a comment until 2026-09-08; this makes it a property
+# the platform enforces, on buckets that already existed as well as new ones.
+gcloud storage buckets update "gs://${BACKUP_BUCKET}" --public-access-prevention --project="$PROJECT_ID" >/dev/null
 
 # Retention costs pennies at this data volume, and the window is what decides whether a
 # corruption discovered late is recoverable. 30 days is well past the point where anyone

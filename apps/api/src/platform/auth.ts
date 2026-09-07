@@ -333,6 +333,10 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
   const googleClientId = options.googleClientId ?? process.env.GOOGLE_OAUTH_CLIENT_ID ?? '';
   const isAuthConfigured = Boolean(sessionSecret && (googleClientId || options.googleAuthVerifier)) || !isProd;
 
+  // Same rule as the zones and room registries: no fallback secret in production.
+  if (!sessionSecret && isProd) {
+    throw new Error('SESSION_SECRET is required to sign sessions in production');
+  }
   const effectiveSessionSecret = sessionSecret ?? 'dev-session-secret-change-me';
   const adminUids = options.adminUids;
   const reviewerUids = options.reviewerUids;
