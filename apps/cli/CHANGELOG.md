@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- Game checkouts offer Creator Kit updates at startup; `/kit` installs the new tools and dependencies while preserving local game edits.
+- Game checkouts offer Creator Kit updates at startup; `/kit` installs the new tools and dependencies while preserving local game edits (#1213).
 
 ## 0.6.1 — 2026-09-07
 
