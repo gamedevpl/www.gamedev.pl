@@ -462,6 +462,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     ...options.submissionRoutes,
     store,
     contentChecker,
+    // Mirrors the beta wall below: open beta, or a promotional slug, needs no session.
+    playableWithoutSession: async (slug) => !privateBeta || (await getPublicPlaySlugs()).has(slug),
     // Same allowlist the console is gated on: the people who can see the queue are the
     // people its alerts are addressed to. Two lists would drift, and the failure mode of
     // drift here is an alert nobody receives.
