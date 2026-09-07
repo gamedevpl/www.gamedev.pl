@@ -269,7 +269,6 @@
     "apps/api/src/platform/openai-apps-challenge.ts": 181,
     "apps/api/src/platform/quiet-round-days.ts": 15,
     "apps/api/src/platform/quiet-round.test.ts": 44,
-    "apps/api/src/platform/quiet-round.ts": 41,
     "apps/api/src/platform/quota-peek.ts": 223,
     "apps/api/src/platform/rate-limit.ts": 59,
     "apps/api/src/platform/seal-preview.ts": 58,
