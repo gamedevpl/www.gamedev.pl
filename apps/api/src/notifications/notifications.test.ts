@@ -161,7 +161,7 @@ describe('notification preferences', () => {
     const res = await app.inject({ method: 'GET', url: '/api/me/notification-preferences', headers: auth('g:me') });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ digest: true, email: true });
+    expect(res.json()).toEqual({ digest: true, email: true, proposals: true });
     await app.close();
   });
 
@@ -178,7 +178,7 @@ describe('notification preferences', () => {
       headers: auth('g:me'),
       payload: { digest: false },
     });
-    expect(off.json()).toEqual({ digest: false, email: true });
+    expect(off.json()).toEqual({ digest: false, email: true, proposals: true });
     expect((await store.getUser('g:me'))?.digestOptOutAt).toBeTruthy();
 
     const on = await app.inject({
@@ -187,7 +187,7 @@ describe('notification preferences', () => {
       headers: auth('g:me'),
       payload: { digest: true },
     });
-    expect(on.json()).toEqual({ digest: true, email: true });
+    expect(on.json()).toEqual({ digest: true, email: true, proposals: true });
     expect((await store.getUser('g:me'))?.digestOptOutAt).toBeNull();
     await app.close();
   });
@@ -205,7 +205,7 @@ describe('notification preferences', () => {
       payload: { email: true },
     });
 
-    expect(res.json()).toEqual({ digest: true, email: true });
+    expect(res.json()).toEqual({ digest: true, email: true, proposals: true });
     await app.close();
   });
 

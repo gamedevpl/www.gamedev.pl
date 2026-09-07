@@ -14,6 +14,7 @@ const PAUSEABLE = {
   tabComplete: 'tabCompletePaused',
   search: 'searchPaused',
   gate: 'gatePaused',
+  dreams: 'dreamsPaused',
 } as const satisfies Record<string, keyof CreationLimits>;
 
 export type PauseableLane = keyof typeof PAUSEABLE;

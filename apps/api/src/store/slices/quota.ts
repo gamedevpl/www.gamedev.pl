@@ -182,6 +182,11 @@ export class InMemoryQuotaStore implements QuotaStore {
         patch.globalDailySeedCap !== undefined
           ? patch.globalDailySeedCap
           : (this.creationLimits?.globalDailySeedCap ?? null),
+      dreamsPaused: patch.dreamsPaused ?? this.creationLimits?.dreamsPaused ?? false,
+      globalDailyDreamCap:
+        patch.globalDailyDreamCap !== undefined
+          ? patch.globalDailyDreamCap
+          : (this.creationLimits?.globalDailyDreamCap ?? null),
       seedProviderOverride:
         patch.seedProviderOverride !== undefined
           ? patch.seedProviderOverride
@@ -313,6 +318,8 @@ export class FirestoreQuotaStore implements QuotaStore {
       managedDailyUserCap: typeof data?.managedDailyUserCap === 'number' ? data.managedDailyUserCap : null,
       seedingMode: data?.seedingMode === 'off' ? 'off' : 'auto',
       globalDailySeedCap: typeof data?.globalDailySeedCap === 'number' ? data.globalDailySeedCap : null,
+      dreamsPaused: data?.dreamsPaused === true,
+      globalDailyDreamCap: typeof data?.globalDailyDreamCap === 'number' ? data.globalDailyDreamCap : null,
       seedProviderOverride: typeof data?.seedProviderOverride === 'string' ? data.seedProviderOverride : null,
       ...(data?.updatedAt ? { updatedAt: data.updatedAt } : {}),
       ...(data?.updatedBy ? { updatedBy: data.updatedBy } : {}),
@@ -366,6 +373,9 @@ export class FirestoreQuotaStore implements QuotaStore {
         seedingMode: patch.seedingMode ?? existing.seedingMode ?? 'auto',
         globalDailySeedCap:
           patch.globalDailySeedCap !== undefined ? patch.globalDailySeedCap : (existing.globalDailySeedCap ?? null),
+        dreamsPaused: patch.dreamsPaused ?? existing.dreamsPaused ?? false,
+        globalDailyDreamCap:
+          patch.globalDailyDreamCap !== undefined ? patch.globalDailyDreamCap : (existing.globalDailyDreamCap ?? null),
         seedProviderOverride:
           patch.seedProviderOverride !== undefined
             ? patch.seedProviderOverride

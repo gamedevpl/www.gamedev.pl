@@ -584,6 +584,8 @@ describe('/api/admin/creation-limits', () => {
       globalDailySearchEmbeddingCap: 20_000,
       gatePaused: false,
       globalDailyGateRunCap: 400,
+      dreamsPaused: false,
+      globalDailyDreamCap: 200,
       seedingMode: 'auto',
       globalDailySeedCap: 300,
       seedProvider: {
@@ -635,6 +637,8 @@ describe('/api/admin/creation-limits', () => {
       globalDailySearchEmbeddingCap: 20_000,
       gatePaused: false,
       globalDailyGateRunCap: 400,
+      dreamsPaused: false,
+      globalDailyDreamCap: 200,
       seedingMode: 'auto',
       globalDailySeedCap: 300,
       seedProvider: {

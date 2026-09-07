@@ -6,6 +6,7 @@ import { defaultBuilderFor, isBuilderKind, type BuilderKind } from '../../builde
 import { GameTheater } from '../../GameTheater.js';
 import { PixelIcon, type PixelIconName } from '../../PixelIcon.js';
 import {
+  buildMediaUrl,
   getChannelPlayable,
   getSubmissionPreview,
   handoffToPlatform,
@@ -25,6 +26,9 @@ import '../../build-progress.css';
 import './status-header.css';
 import './status-timeline.css';
 import './status-play-card.css';
+import { updateNotificationPreferences } from '../../notificationsApi.js';
+import type { ComposerDraft } from './FeedbackPanel.js';
+import type { ProposalHandlers } from './ProposalCard.js';
 import './status-thread.css';
 import { FeedbackPanel } from './FeedbackPanel.js';
 import { BuildProgressPanel } from './BuildProgressPanel.js';
@@ -293,6 +297,27 @@ export function SubmissionStatusView({
   // the player bridge — same sandbox as framing by URL, with working Escape/sound.
   const [channelHtml, setChannelHtml] = useState<string | null>(null);
   const [channelLoading, setChannelLoading] = useState(false);
+  // A picked concept: text plus the frame, seeded into the composer below.
+  const [proposalDraft, setProposalDraft] = useState<ComposerDraft | null>(null);
+  const [proposalsMuted, setProposalsMuted] = useState(false);
+  const consumeDraft = () => {
+    setProposalDraft(null);
+    onDraftConsumed?.();
+  };
+  const proposalHandlers: ProposalHandlers = {
+    builder: status?.builder === 'self' ? 'self' : 'platform',
+    muted: proposalsMuted,
+    onPick: (pick) =>
+      setProposalDraft({
+        text: pick.text,
+        seq: Date.now(),
+        attachment: { name: t('statusView.proposal.aiLabel'), url: buildMediaUrl(token, pick.frame) },
+      }),
+    onMute: () => {
+      setProposalsMuted(true);
+      void updateNotificationPreferences({ proposals: false }).catch(() => {});
+    },
+  };
 
   // Which game (if any) is open in the full-viewport theater. HTML is snapshotted at
   // launch (`launchedHtml`) so a background refresh doesn't reload the game out from
@@ -766,6 +791,7 @@ export function SubmissionStatusView({
                 emptyLabel={stateDescription}
                 priorRounds={status.slug && status.priorRounds?.length ? status.priorRounds : undefined}
                 priorSlug={status.slug}
+                proposals={proposalHandlers}
                 stickNonce={(isAwaitingOwnAgent(status) ? pendingRevisions.length + 1 : 0) + (agentWorking ? 1 : 0)}
                 working={
                   agentWorking
@@ -890,8 +916,8 @@ export function SubmissionStatusView({
                     phase={status.phase}
                     handoffPending={status.builderHandoff?.target}
                     agentWorking={agentWorking}
-                    draft={draft}
-                    onDraftConsumed={onDraftConsumed}
+                    draft={draft ?? proposalDraft}
+                    onDraftConsumed={consumeDraft}
                     onSwitchToPlatform={
                       status.builder === 'self' && (agentWorking || status.builderHandoff?.target === 'platform')
                         ? handoffToPlatformFromUi
@@ -1116,6 +1142,8 @@ export function SubmissionStatusView({
                 failureReason={status.failure?.reason}
                 phase={status.phase}
                 handoffPending={status.builderHandoff?.target}
+                draft={draft ?? proposalDraft}
+                onDraftConsumed={consumeDraft}
                 onSwitchToPlatform={
                   status.builder === 'self' &&
                   (isAgentWorkActive(status) || status.builderHandoff?.target === 'platform')

@@ -44,6 +44,9 @@ export interface IdentityStore {
 
   // Sets/clears the weekly-digest opt-out timestamp (null clears).
   setDigestOptOut(uid: string, at: string | null): Promise<void>;
+
+  // Null turns concept proposals back on.
+  setProposalsMuted(uid: string, at: string | null): Promise<void>;
 }
 
 export class InMemoryIdentityStore implements IdentityStore {
@@ -162,6 +165,7 @@ export class InMemoryIdentityStore implements IdentityStore {
       locale: userData.locale ?? existing?.locale,
       emailUnsubscribedAt: existing?.emailUnsubscribedAt ?? null,
       digestOptOutAt: existing?.digestOptOutAt ?? null,
+      proposalsMutedAt: existing?.proposalsMutedAt ?? null,
       // Carried explicitly -- omitting it silently dropped every activity-hook write.
       activeDays: userData.activeDays ?? existing?.activeDays,
       // Profile fields are never set by sign-in, only claim/update routes.
@@ -187,6 +191,11 @@ export class InMemoryIdentityStore implements IdentityStore {
   async setDigestOptOut(uid: string, at: string | null): Promise<void> {
     const existing = this.users.get(uid);
     if (existing) this.users.set(uid, { ...existing, digestOptOutAt: at });
+  }
+
+  async setProposalsMuted(uid: string, at: string | null): Promise<void> {
+    const existing = this.users.get(uid);
+    if (existing) this.users.set(uid, { ...existing, proposalsMutedAt: at });
   }
 }
 
@@ -377,5 +386,9 @@ export class FirestoreIdentityStore implements IdentityStore {
 
   async setDigestOptOut(uid: string, at: string | null): Promise<void> {
     await this.db.collection('users').doc(uid).set({ digestOptOutAt: at }, { merge: true });
+  }
+
+  async setProposalsMuted(uid: string, at: string | null): Promise<void> {
+    await this.db.collection('users').doc(uid).set({ proposalsMutedAt: at }, { merge: true });
   }
 }

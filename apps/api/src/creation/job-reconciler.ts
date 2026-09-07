@@ -69,6 +69,8 @@ export interface JobReconcilerDeps {
     version: string;
     screenshotPath: string;
   }) => Promise<{ id: string } | null>;
+  // Fired on every read of a green preview; receiver dedupes per version.
+  onPreviewGateGreen?: (input: { record: SubmissionRecord; version: string; screenshotPath?: string }) => void;
 }
 
 export interface JobReconciler {
@@ -94,6 +96,7 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
     acknowledgeBuilderHandoff,
     probeGateCrash,
     postGateScreenshot,
+    onPreviewGateGreen,
   } = deps;
 
   // Asks the backend what happened to a job whose agent went quiet.
@@ -368,7 +371,14 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
         status: derivePreviewGateStatus(preview),
         ...(preview.green ? {} : { failedStage: failedStageFromProgress(manifest?.gateProgress?.stage) }),
       });
-      if (preview.green) return null;
+      if (preview.green) {
+        onPreviewGateGreen?.({
+          record,
+          version,
+          ...(preview.screenshot ? { screenshotPath: preview.screenshot } : {}),
+        });
+        return null;
+      }
       const to = 'needs_changes' as const;
       if (!canTransition(state, to)) return null;
       const transition: JobTransition = {

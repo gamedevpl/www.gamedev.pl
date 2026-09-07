@@ -10,10 +10,13 @@ import { SwitchToPlatformControl, SwitchToSelfControl } from './StudioConnectCar
 import { submitImprovement } from '../../studioApi.js';
 import { recordStudioStep } from '../../visitTelemetry.js';
 import { toBase64PngList } from '../../attachmentImages.js';
-import { useComposerAttachments } from './composerAttachments.js';
+import { fetchImageAsDataUrl, useComposerAttachments } from './composerAttachments.js';
 import { CompactFeedbackComposer } from './CompactFeedbackComposer.js';
 import './status-feedback.css';
 import './status-composer.css';
+
+// Text seeded into the composer; a picked frame rides along.
+export type ComposerDraft = { text: string; seq: number; attachment?: { name: string; url: string } };
 
 export type BuilderHandoffHandler = () => Promise<void | { pending?: boolean }> | void | { pending?: boolean };
 
@@ -74,7 +77,7 @@ export function FeedbackPanel({
 
   // Only fires when published; a draft revision stays on this thread.
   onPublishedImprove?: (token: string) => void;
-  draft?: { text: string; seq: number } | null;
+  draft?: ComposerDraft | null;
   onDraftConsumed?: () => void;
 }) {
   const { t } = useTranslation();
@@ -100,8 +103,14 @@ export function FeedbackPanel({
   useEffect(() => {
     if (!draft) return;
     setText(draft.text);
+    const attachment = draft.attachment;
     onDraftConsumed?.();
     inputRef.current?.focus();
+    if (attachment) {
+      void fetchImageAsDataUrl(attachment.url).then((dataUrl) => {
+        if (dataUrl) attachmentsApi.addAttachment(attachment.name, dataUrl);
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft?.seq]);
 

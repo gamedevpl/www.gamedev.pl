@@ -41,7 +41,9 @@
     },
     "prefs": {
       "digestOn": "Weekly summary on",
-      "digestOff": "Weekly summary off"
+      "digestOff": "Weekly summary off",
+      "proposalsOn": "Concept proposals on",
+      "proposalsOff": "Concept proposals off"
     },
     "operator": {
       "review_ready": {
@@ -941,6 +943,19 @@
     "previewError": "We couldn't load the preview right now. Please try again in a moment.",
     "previewGateFailed": "The preview checks failed, so this version cannot be played yet. Send feedback to start a fix round.",
     "previewGateDetails": "Show the check report",
+    "proposal": {
+      "kicker": "Concept art",
+      "aiLabel": "AI concept",
+      "open": "See both ideas",
+      "title": "Two directions for the next round",
+      "intro": "Concept images an AI made from your latest capture — not screenshots of the game. Pick one and the request lands in your composer with the picture attached.",
+      "current": "Your game now",
+      "pick": "Build this",
+      "notNow": "Not now",
+      "askLess": "Don't suggest these",
+      "muted": "Okay — no more concept proposals. You can turn them back on in notification settings.",
+      "close": "Close"
+    },
     "gallery": {
       "alt": "The game as it looks right now",
       "caption": "How your game looks right now",

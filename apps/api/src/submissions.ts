@@ -39,6 +39,11 @@ import type { IntakeAgent } from './creation/intake-agent.js';
 import { createDispatcher } from './creation/dispatch-build.js';
 import { createResumeBuild, type ResumeOutcome } from './creation/resume-build.js';
 import { createJobReconciler } from './creation/job-reconciler.js';
+import type { DreamJob, DreamRunInput } from './creation/dream-job.js';
+import { createDreamJobFromEnv } from './creation/dream-job-env.js';
+import type { DreamAvailabilityGate } from './creation/dream-availability.js';
+import type { DreamFrameGenerator } from './creation/dream-frames.js';
+import type { NextIdeaGenerator } from './creation/next-ideas.js';
 import { registerHandoffSealRoutes } from './creation/handoff-seal-routes.js';
 import { registerFeedbackRoutes } from './creation/feedback-routes.js';
 import { registerImproveRoutes } from './creation/improve-routes.js';
@@ -222,6 +227,12 @@ export interface SubmissionRoutesOptions {
   seedProviders?: { providers: string[]; defaultProvider: string };
   // Test seam for the availability gate.
   seedAvailabilityGate?: SeedAvailabilityGate;
+  // Concept proposals after a green preview (dream-job.ts); null disables.
+  dreamJob?: DreamJob | null;
+  // Seams for the default dream job; unused when `dreamJob` is given.
+  dreamFrameGenerator?: DreamFrameGenerator;
+  nextIdeaGenerator?: NextIdeaGenerator;
+  dreamAvailabilityGate?: DreamAvailabilityGate;
   agentChannel?: Pick<
     AgentChannelOptions,
     | 'maxEventsPerBuild'
@@ -1258,9 +1269,12 @@ export async function registerSubmissionRoutes(
    */
   const maxDeliveryNudges = options.maxDeliveryNudges ?? 1;
 
+  const dreamJob = resolveDreamJob();
   const { reconcileNativeJob, reconcileGateVerdict } = createJobReconciler({
     store,
     gamesStore: options.agentChannel?.gamesStore,
+    // runForVersion never throws; it logs and returns an outcome.
+    ...(dreamJob ? { onPreviewGateGreen: (input: DreamRunInput) => void dreamJob.runForVersion(input) } : {}),
     log: app.log,
     now,
     observeQuietMs,
@@ -1273,6 +1287,21 @@ export async function registerSubmissionRoutes(
     probeGateCrash,
     postGateScreenshot: postGateScreenshotToThread,
   });
+
+  function resolveDreamJob(): DreamJob | null {
+    if (options.dreamJob !== undefined) return options.dreamJob;
+    return createDreamJobFromEnv({
+      store,
+      gamesStore: options.agentChannel?.gamesStore,
+      log: app.log,
+      now,
+      creationLimitsTtlMs: options.creationLimitsTtlMs,
+      dreamAvailabilityGate: options.dreamAvailabilityGate,
+      nextIdeaGenerator: options.nextIdeaGenerator,
+      dreamFrameGenerator: options.dreamFrameGenerator,
+      onPosted: invalidateStatusCache,
+    });
+  }
 
   const { createGame } = createGameCreator({
     store,
@@ -1685,7 +1714,9 @@ export async function registerSubmissionRoutes(
           ...options.stagedPreview,
           now,
           log: app.log,
-          ...(seedDispatch ? { handoff: (jobId: number) => seedDispatch.enqueue(jobId, { action: 'staged-preview' }) } : {}),
+          ...(seedDispatch
+            ? { handoff: (jobId: number) => seedDispatch.enqueue(jobId, { action: 'staged-preview' }) }
+            : {}),
           onPublished: (jobId) => {
             buildStatus.invalidateEvents(jobId);
             invalidateStatusCache(jobId);

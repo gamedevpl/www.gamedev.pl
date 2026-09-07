@@ -22,6 +22,9 @@ export interface RoundBudgetStore {
 
   // Records that a gate metric was logged for this version/status key.
   setRoundLastGateMetricKey(jobId: number, key: string): Promise<void>;
+
+  // First caller per version wins; one dream run per version.
+  claimDreamRun(jobId: number, version: string, at: string): Promise<boolean>;
 }
 
 export class InMemoryRoundBudgetStore implements RoundBudgetStore {
@@ -89,6 +92,13 @@ export class InMemoryRoundBudgetStore implements RoundBudgetStore {
     const sub = this.submissions.get(jobId);
     if (!sub) return;
     this.submissions.set(jobId, { ...sub, roundLastGateMetricKey: key });
+  }
+
+  async claimDreamRun(jobId: number, version: string, at: string): Promise<boolean> {
+    const sub = this.submissions.get(jobId);
+    if (!sub || sub.dreamRun?.version === version) return false;
+    this.submissions.set(jobId, { ...sub, dreamRun: { version, claimedAt: at } });
+    return true;
   }
 }
 
@@ -176,5 +186,17 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
 
   async setRoundLastGateMetricKey(jobId: number, key: string): Promise<void> {
     await this.ref(jobId).set({ roundLastGateMetricKey: key }, { merge: true });
+  }
+
+  async claimDreamRun(jobId: number, version: string, at: string): Promise<boolean> {
+    const ref = this.ref(jobId);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return false;
+      const current = snap.data() as SubmissionRecord;
+      if (current.dreamRun?.version === version) return false;
+      tx.set(ref, { dreamRun: { version, claimedAt: at } }, { merge: true });
+      return true;
+    });
   }
 }

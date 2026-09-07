@@ -57,6 +57,8 @@ export type NotificationPreferences = {
   digest: boolean;
   /** Notification email in general; `false` is the one-click unsubscribe. */
   email: boolean;
+  // Concept proposals in the studio thread; `false` is "ask me less".
+  proposals?: boolean;
 };
 
 export async function fetchNotificationPreferences(): Promise<NotificationPreferences> {

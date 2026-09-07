@@ -23,6 +23,8 @@ export interface User {
    * is how a notification system trains people to turn everything off.
    */
   digestOptOutAt?: string | null;
+  // Set when the creator asked for no more concept proposals (NP-1v).
+  proposalsMutedAt?: string | null;
   /**
    * Recent days (`yyyy-mm-dd`) on which this account made an authenticated request,
    * newest first and capped at `ACTIVE_DAYS_KEPT`.

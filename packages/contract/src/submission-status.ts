@@ -12,6 +12,24 @@ export interface ChecklistItem {
   checked: boolean;
 }
 
+// One direction the studio proposes, with the frame it dreamt for it.
+export interface CreatorProposalOption {
+  id: string;
+  label: { en: string; pl: string };
+  // The sentence a pick drafts into the composer — never sent by itself.
+  prompt: { en: string; pl: string };
+  // Stored shot id of the AI-edited frame; served by /shot/:id.
+  frameRef: string;
+}
+
+// A studio-voice decision proposal grounded in this game's own screenshot.
+export interface CreatorProposal {
+  // Shot id of the real gate capture the frames were edited from.
+  sourceRef: string;
+  version: string;
+  options: CreatorProposalOption[];
+}
+
 // A change request the creator sent from the status page.
 export interface CreatorRevision {
   text: string;
@@ -20,6 +38,8 @@ export interface CreatorRevision {
   origin?: 'agent' | 'studio';
   // Set once the running agent collected this from the inbox.
   delivered?: boolean;
+  // Present on a studio row that carries a visual proposal (NP-1v).
+  proposal?: CreatorProposal;
 }
 
 // Stored form; the translation pair is stripped before the wire.

@@ -67,6 +67,7 @@ import { FirestoreOAuthStore } from './slices/oauth.js';
 import { FirestorePlayerDataStore } from './slices/player-data.js';
 import { FirestorePublicationStore } from './slices/publication.js';
 import { FirestoreGlobalQuotaStore } from './slices/quota-global.js';
+import { FirestoreDreamQuotaStore } from './slices/quota-dreams.js';
 import { FirestoreQuotaStore } from './slices/quota.js';
 import { FirestoreReviewSweepStore } from './slices/review-sweeps.js';
 import { FirestoreReviewStore } from './slices/review.js';
@@ -95,6 +96,7 @@ export class FirestoreStore implements Store {
   private identityStore: FirestoreIdentityStore;
   private quotaStore: FirestoreQuotaStore;
   private globalQuotaStore: FirestoreGlobalQuotaStore;
+  private dreamQuotaStore: FirestoreDreamQuotaStore;
   private socialStore: FirestoreSocialStore;
   private contributionStore: FirestoreContributionStore;
   private publicationStore: FirestorePublicationStore;
@@ -123,6 +125,7 @@ export class FirestoreStore implements Store {
     this.identityStore = new FirestoreIdentityStore(this.db);
     this.quotaStore = new FirestoreQuotaStore(this.db);
     this.globalQuotaStore = new FirestoreGlobalQuotaStore(this.db);
+    this.dreamQuotaStore = new FirestoreDreamQuotaStore(this.db);
     this.socialStore = new FirestoreSocialStore(this.db);
     this.contributionStore = new FirestoreContributionStore(this.db);
     this.publicationStore = new FirestorePublicationStore(this.db);
@@ -321,6 +324,10 @@ export class FirestoreStore implements Store {
     return this.identityStore.setDigestOptOut(uid, at);
   }
 
+  async setProposalsMuted(uid: string, at: string | null): Promise<void> {
+    return this.identityStore.setProposalsMuted(uid, at);
+  }
+
   async createSubmission(jobId: number, ownerUid: string, title: string): Promise<SubmissionRecord> {
     return this.submissionStore.createSubmission(jobId, ownerUid, title);
   }
@@ -420,6 +427,10 @@ export class FirestoreStore implements Store {
 
   async setRoundLastGateMetricKey(jobId: number, key: string): Promise<void> {
     return this.roundBudgetStore.setRoundLastGateMetricKey(jobId, key);
+  }
+
+  async claimDreamRun(jobId: number, version: string, at: string): Promise<boolean> {
+    return this.roundBudgetStore.claimDreamRun(jobId, version, at);
   }
 
   async allocateJobId(): Promise<number> {
@@ -813,6 +824,14 @@ export class FirestoreStore implements Store {
 
   async checkAndIncrementGlobalSeeds(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
     return this.globalQuotaStore.checkAndIncrementGlobalSeeds(dateStr, limit);
+  }
+
+  async getGlobalDreamCount(dateStr: string): Promise<number> {
+    return this.dreamQuotaStore.getGlobalDreamCount(dateStr);
+  }
+
+  async checkAndIncrementGlobalDreams(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
+    return this.dreamQuotaStore.checkAndIncrementGlobalDreams(dateStr, limit);
   }
 
   async getGlobalBotCallCount(dateStr: string): Promise<number> {

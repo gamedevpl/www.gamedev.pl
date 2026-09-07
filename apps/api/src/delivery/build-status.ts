@@ -1,3 +1,4 @@
+import { isDreamShotLabel } from '../platform/dream-shots.js';
 import type { BuilderKind } from '@gamedevpl/contract';
 import { stripPlaytestContext } from '../platform/playtest-context.js';
 import { detectStall, toSubmissionStatus } from '../creation/job-state.js';
@@ -103,16 +104,18 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
   // Pictures of this build: the screenshots the agent pushed over the channel.
   async function buildMedia(jobId: number, locale: string): Promise<BuildMediaItem[]> {
     return [
-      ...(await loadBuildShots(jobId)).map((shot): BuildMediaItem => {
-        // Reader's own language when the agent sent one, else English.
-        const caption = shot.locale === locale && shot.labelLocalized ? shot.labelLocalized : shot.label;
-        return {
-          source: 'channel',
-          ref: shot.id,
-          ...(caption ? { label: caption } : {}),
-          createdAt: shot.createdAt,
-        };
-      }),
+      ...(await loadBuildShots(jobId))
+        .filter((shot) => !isDreamShotLabel(shot.label))
+        .map((shot): BuildMediaItem => {
+          // Reader's own language when the agent sent one, else English.
+          const caption = shot.locale === locale && shot.labelLocalized ? shot.labelLocalized : shot.label;
+          return {
+            source: 'channel',
+            ref: shot.id,
+            ...(caption ? { label: caption } : {}),
+            createdAt: shot.createdAt,
+          };
+        }),
     ];
   }
 

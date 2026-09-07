@@ -139,7 +139,7 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
   async listBuildShots(jobId: number, opts?: { limit?: number }): Promise<BuildShotSummary[]> {
     // `select()` keeps bytes off the polled status response.
     const snap = await this.shotsCollection(jobId)
-      .select('id', 'label', 'labelLocalized', 'locale', 'createdAt')
+      .select('id', 'label', 'labelLocalized', 'locale', 'mediaType', 'createdAt')
       .orderBy('createdAt', 'desc')
       .limit(opts?.limit ?? 12)
       .get();

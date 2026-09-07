@@ -1,5 +1,6 @@
 import { FieldValue, type Firestore } from '@google-cloud/firestore';
 import { randomUUID } from 'node:crypto';
+import type { CreatorProposal } from '@gamedevpl/contract';
 import type { BuildEvent } from '../../platform/submission-status.js';
 import type { CreatorMessage, CreatorMessageOrigin } from '../records/build-log.js';
 import { isStudioOrigin } from '../records/build-log.js';
@@ -40,7 +41,13 @@ export interface BuildLogStore {
   appendCreatorMessage(
     jobId: number,
     text: string,
-    opts?: { origin?: CreatorMessageOrigin; delivered?: boolean; textLocalized?: string; locale?: string },
+    opts?: {
+      origin?: CreatorMessageOrigin;
+      delivered?: boolean;
+      textLocalized?: string;
+      locale?: string;
+      proposal?: CreatorProposal;
+    },
   ): Promise<CreatorMessage>;
 
   // Undelivered messages, oldest first -- the agent's inbox. Never a 'studio' row.
@@ -128,7 +135,13 @@ export class InMemoryBuildLogStore implements BuildLogStore {
   async appendCreatorMessage(
     jobId: number,
     text: string,
-    opts?: { origin?: CreatorMessageOrigin; delivered?: boolean; textLocalized?: string; locale?: string },
+    opts?: {
+      origin?: CreatorMessageOrigin;
+      delivered?: boolean;
+      textLocalized?: string;
+      locale?: string;
+      proposal?: CreatorProposal;
+    },
   ): Promise<CreatorMessage> {
     const now = new Date().toISOString();
     const record: CreatorMessage = {
@@ -138,6 +151,7 @@ export class InMemoryBuildLogStore implements BuildLogStore {
       deliveredAt: opts?.delivered ? now : null,
       ...(opts?.origin === 'agent' || isStudioOrigin(opts?.origin) ? { origin: opts?.origin } : {}),
       ...(opts?.textLocalized && opts?.locale ? { textLocalized: opts.textLocalized, locale: opts.locale } : {}),
+      ...(opts?.proposal ? { proposal: opts.proposal } : {}),
     };
     const existing = this.creatorMessages.get(jobId) ?? [];
     existing.push(record);
@@ -253,7 +267,13 @@ export class FirestoreBuildLogStore implements BuildLogStore {
   async appendCreatorMessage(
     jobId: number,
     text: string,
-    opts?: { origin?: CreatorMessageOrigin; delivered?: boolean; textLocalized?: string; locale?: string },
+    opts?: {
+      origin?: CreatorMessageOrigin;
+      delivered?: boolean;
+      textLocalized?: string;
+      locale?: string;
+      proposal?: CreatorProposal;
+    },
   ): Promise<CreatorMessage> {
     // Spread in only for agent/studio — Firestore rejects an explicit undefined.
     const now = new Date().toISOString();
@@ -264,6 +284,7 @@ export class FirestoreBuildLogStore implements BuildLogStore {
       deliveredAt: opts?.delivered ? now : null,
       ...(opts?.origin === 'agent' || isStudioOrigin(opts?.origin) ? { origin: opts?.origin } : {}),
       ...(opts?.textLocalized && opts?.locale ? { textLocalized: opts.textLocalized, locale: opts.locale } : {}),
+      ...(opts?.proposal ? { proposal: opts.proposal } : {}),
     };
     await this.messagesCollection(jobId).doc(record.id).set(record);
     return record;

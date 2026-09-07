@@ -167,6 +167,10 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
     The Join CTA is visible before sign-in; the drop between click and join _is_ the
     sign-in wall, so there is no separate `signin_required` rung (that name already means
     the creation wall).
+  - NP-1v concept proposals (2026-09): `studio_step` records `proposal_shown` →
+    `proposal_picked` | `proposal_postponed` | `proposal_muted`, with the round's `builder`
+    dimension. One `proposal_shown` per tab session (the step key dedupes), so the ratio
+    is decisions per exposure, not per poll.
   - ~~BYOCA / self-build funnel unmeasured~~ — **closed 2026-08-01 (BY-08)**: `studio_step`
     on the visit stream records `builder_chosen` → `connect_copied` (also `connect_deeplink`,
     `connect_dismissed`, `connect_restored`) → `agent_signaled` →

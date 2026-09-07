@@ -1,3 +1,5 @@
+import type { CreatorProposal } from '@gamedevpl/contract';
+
 /**
  * A change request from the creator, queued for the agent to collect over the build
  * channel (docs/agent-live-channel-plan.md §4). The PR comment remains the durable
@@ -31,6 +33,8 @@ export interface CreatorMessage {
   textLocalized?: string;
   /** Which language `textLocalized` is in. Without it the field cannot be matched. */
   locale?: string;
+  // A studio row carrying a visual proposal (NP-1v); frames are shots.
+  proposal?: CreatorProposal;
 }
 
 /** @see CreatorMessage.origin */
@@ -54,6 +58,8 @@ export interface BuildShot {
   id: string;
   /** base64-encoded PNG. */
   data: string;
+  // Absent means PNG — the only type the channel ever accepted.
+  mediaType?: 'image/png' | 'image/jpeg';
   /** Agent-authored caption in English, already sanitized. */
   label?: string;
   /** The same caption in `locale`, authored rather than machine translated. */

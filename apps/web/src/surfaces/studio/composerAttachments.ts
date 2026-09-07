@@ -60,6 +60,12 @@ export function useComposerAttachments(sending: boolean) {
     });
   };
 
+  const addAttachment = (name: string, dataUrl: string) => {
+    setAttachments((prev) =>
+      prev.length >= MAX_COMPOSER_ATTACHMENTS ? prev : [...prev, { id: `${name}-${Date.now()}`, name, dataUrl }],
+    );
+  };
+
   const handleSaveSketch = (dataUrl: string) => {
     setAttachments((prev) =>
       prev.length >= MAX_COMPOSER_ATTACHMENTS
@@ -85,6 +91,7 @@ export function useComposerAttachments(sending: boolean) {
     attachMenuRef,
     attachPanelRef,
     handleAttachFiles,
+    addAttachment,
     handleSaveSketch,
     removeAttachment,
     resetAttachments,
@@ -92,3 +99,20 @@ export function useComposerAttachments(sending: boolean) {
 }
 
 export type ComposerAttachmentsApi = ReturnType<typeof useComposerAttachments>;
+
+// Pulls a same-origin image into a data URL for the composer.
+export async function fetchImageAsDataUrl(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url, { credentials: 'include' });
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    return await new Promise<string | null>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}

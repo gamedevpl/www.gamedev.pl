@@ -21,6 +21,8 @@ const PreferencesSchema = z.object({
   digest: z.boolean().optional(),
   /** Notification email in general. Turning this on undoes a one-click unsubscribe. */
   email: z.boolean().optional(),
+  // Concept proposals in the studio thread; off is "ask me less".
+  proposals: z.boolean().optional(),
 });
 
 export interface NotificationRoutesOptions {
@@ -86,6 +88,7 @@ export async function registerNotificationRoutes(
       // to know that off is stored as a date and on as null.
       digest: !user?.digestOptOutAt,
       email: !user?.emailUnsubscribedAt,
+      proposals: !user?.proposalsMutedAt,
     });
   });
 
@@ -108,8 +111,15 @@ export async function registerNotificationRoutes(
     if (parsed.data.email !== undefined) {
       await store.setEmailUnsubscribed(uid, parsed.data.email ? null : now);
     }
+    if (parsed.data.proposals !== undefined) {
+      await store.setProposalsMuted(uid, parsed.data.proposals ? null : now);
+    }
 
     const user = await store.getUser(uid);
-    return reply.send({ digest: !user?.digestOptOutAt, email: !user?.emailUnsubscribedAt });
+    return reply.send({
+      digest: !user?.digestOptOutAt,
+      email: !user?.emailUnsubscribedAt,
+      proposals: !user?.proposalsMutedAt,
+    });
   });
 }

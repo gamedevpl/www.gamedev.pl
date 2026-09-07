@@ -100,6 +100,10 @@ describe('visit vocab', () => {
       'gate_verdict',
       'round_opened',
       'workspace_checkout',
+      'proposal_shown',
+      'proposal_picked',
+      'proposal_postponed',
+      'proposal_muted',
     ]);
   });
 

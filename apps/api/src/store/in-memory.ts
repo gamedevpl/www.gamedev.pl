@@ -67,6 +67,7 @@ import { InMemoryOAuthStore } from './slices/oauth.js';
 import { InMemoryPlayerDataStore } from './slices/player-data.js';
 import { InMemoryPublicationStore } from './slices/publication.js';
 import { InMemoryGlobalQuotaStore } from './slices/quota-global.js';
+import { InMemoryDreamQuotaStore } from './slices/quota-dreams.js';
 import { InMemoryQuotaStore } from './slices/quota.js';
 import { InMemoryReviewSweepStore } from './slices/review-sweeps.js';
 import { InMemoryReviewStore } from './slices/review.js';
@@ -93,6 +94,7 @@ export class InMemoryStore implements Store {
   private catalogEnrichmentStore = new InMemoryCatalogEnrichmentStore();
   private quotaStore = new InMemoryQuotaStore((uid) => this.identityStore.getUser(uid));
   private globalQuotaStore = new InMemoryGlobalQuotaStore();
+  private dreamQuotaStore = new InMemoryDreamQuotaStore();
   private accessStore = new InMemoryAccessStore();
   private telemetryStore = new InMemoryTelemetryStore();
   private notificationsStore = new InMemoryNotificationsStore();
@@ -243,6 +245,10 @@ export class InMemoryStore implements Store {
     return this.identityStore.setDigestOptOut(uid, at);
   }
 
+  async setProposalsMuted(uid: string, at: string | null): Promise<void> {
+    return this.identityStore.setProposalsMuted(uid, at);
+  }
+
   async createSubmission(jobId: number, ownerUid: string, title: string): Promise<SubmissionRecord> {
     return this.submissionStore.createSubmission(jobId, ownerUid, title);
   }
@@ -342,6 +348,10 @@ export class InMemoryStore implements Store {
 
   async setRoundLastGateMetricKey(jobId: number, key: string): Promise<void> {
     return this.roundBudgetStore.setRoundLastGateMetricKey(jobId, key);
+  }
+
+  async claimDreamRun(jobId: number, version: string, at: string): Promise<boolean> {
+    return this.roundBudgetStore.claimDreamRun(jobId, version, at);
   }
 
   async allocateJobId(): Promise<number> {
@@ -735,6 +745,14 @@ export class InMemoryStore implements Store {
 
   async checkAndIncrementGlobalSeeds(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
     return this.globalQuotaStore.checkAndIncrementGlobalSeeds(dateStr, limit);
+  }
+
+  async getGlobalDreamCount(dateStr: string): Promise<number> {
+    return this.dreamQuotaStore.getGlobalDreamCount(dateStr);
+  }
+
+  async checkAndIncrementGlobalDreams(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
+    return this.dreamQuotaStore.checkAndIncrementGlobalDreams(dateStr, limit);
   }
 
   async getGlobalBotCallCount(dateStr: string): Promise<number> {
