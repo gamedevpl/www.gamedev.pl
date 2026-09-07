@@ -48,6 +48,11 @@ export function isRepairableNeedsChanges(status: RoundStatus): boolean {
   return status.previewGate?.green === false;
 }
 
+// A publish watched happen here, not a game already live.
+export function isPublishTransition(previous: string, next: string): boolean {
+  return next === 'published' && previous !== '' && previous !== 'published';
+}
+
 export function isRoundBoundary(status: RoundStatus): boolean {
   if (isTerminalStatus(status.status)) return true;
   return status.status === 'needs_changes' && !isRepairableNeedsChanges(status);

@@ -3,6 +3,7 @@ import { createLiveScreen, renderLive } from './live.js';
 import {
   formatStatusLines,
   formatStatusEvent,
+  isPublishTransition,
   formatRoundLive,
   runStatusVerb,
   shouldAnnounceStatus,
@@ -168,5 +169,16 @@ describe('status watch', () => {
         stdout: { write: () => true } as unknown as NodeJS.WriteStream,
       }),
     ).toBe(EXIT_RED);
+  });
+});
+
+describe('publish transitions', () => {
+  // Opening a live game must not add to the publish count.
+  it('counts a publish the session watched, never a game that was already live', () => {
+    expect(isPublishTransition('building', 'published')).toBe(true);
+    expect(isPublishTransition('needs_changes', 'published')).toBe(true);
+    expect(isPublishTransition('', 'published')).toBe(false);
+    expect(isPublishTransition('published', 'published')).toBe(false);
+    expect(isPublishTransition('building', 'needs_changes')).toBe(false);
   });
 });

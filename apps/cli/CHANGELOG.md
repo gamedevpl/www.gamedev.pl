@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- The pilot funnel records signing in, a first turn, a publish it watched happen, and one install per machine — the operator page reads them (#1222).
+
 ## 0.7.0 — 2026-09-07
 
 ### Added

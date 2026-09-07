@@ -285,7 +285,7 @@ export async function connectGame(input: {
           })
         : undefined;
     await authCheck;
-    input.telemetry?.record('delegate_used', spec.name);
+    input.telemetry?.record('delegate_used', { adapter: spec.name });
     const result = await (input.runAdapter ?? defaultAdapterRun)({
       spec: wired.spec,
       prompt:
