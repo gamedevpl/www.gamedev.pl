@@ -1,4 +1,5 @@
 import type { Store } from '../platform/store.js';
+import type { TransitionGuard } from './slices/dispatch.js';
 import type { SeedFiles } from '../agent-surface/agent-backend.js';
 import type { ProposalState } from '../community/proposal-state.js';
 import type { AgentTaskState } from '../platform/agent-state.js';
@@ -337,8 +338,8 @@ export class FirestoreStore implements Store {
     return this.submissionStore.setSubmissionLastStatus(jobId, status);
   }
 
-  async recordJobTransition(jobId: number, transition: JobTransition): Promise<boolean> {
-    return this.dispatchStore.recordJobTransition(jobId, transition);
+  async recordJobTransition(jobId: number, transition: JobTransition, guard?: TransitionGuard): Promise<boolean> {
+    return this.dispatchStore.recordJobTransition(jobId, transition, guard);
   }
 
   async bumpRoundGeneration(jobId: number): Promise<number | null> {
@@ -680,6 +681,10 @@ export class FirestoreStore implements Store {
 
   async listActiveSubmissions(): Promise<SubmissionRecord[]> {
     return this.submissionQueryStore.listActiveSubmissions();
+  }
+
+  async listOpenRounds(): Promise<SubmissionRecord[]> {
+    return this.submissionQueryStore.listOpenRounds();
   }
 
   async listSubmissionsMissingSlug(): Promise<SubmissionRecord[]> {

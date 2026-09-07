@@ -70,13 +70,29 @@ describe('PartyStage lifecycle', () => {
     vi.spyOn(frame.contentWindow as Window, 'postMessage').mockImplementation((message: unknown) => {
       posted.push(message as Record<string, unknown>);
     });
+    // The game boots, says hello, and answers the start with a round.
+    act(() => bridgeMessage(frame, { t: 'hello', slots: 4 }));
+    act(() => bridgeMessage(frame, { t: 'phase', phase: 'playing' }));
     return { frame, posted };
   }
 
   it('commands the game to start, so the lobby is the only front door', () => {
-    const { frame, posted } = startRound();
-    act(() => bridgeMessage(frame, { t: 'hello', slots: 4 }));
+    const { posted } = startRound();
     expect(posted).toContainEqual(expect.objectContaining({ t: 'command', cmd: 'start' }));
+  });
+
+  it('stays in the round when the booting game reports its own menu first', () => {
+    // The game says `lobby` before it has read the start command.
+    act(() => {
+      root.render(createElement(PartyStage, { game: GAME, session: SESSION, onExit: () => undefined }));
+    });
+    act(() => (container.querySelector('.party-actions .primary-btn') as HTMLButtonElement).click());
+    const frame = container.querySelector('iframe') as HTMLIFrameElement;
+    act(() => bridgeMessage(frame, { t: 'hello', slots: 4 }));
+    act(() => bridgeMessage(frame, { t: 'phase', phase: 'lobby' }));
+
+    expect(container.querySelector('.party-playing')).not.toBeNull();
+    expect(setPhase).not.toHaveBeenCalledWith('lobby');
   });
 
   it('relays every phase the game reports to the phones', () => {

@@ -1,3 +1,4 @@
+import { offerKitUpdate } from '../kit-update.js';
 import { activityApi } from './activity.js';
 import type { PendingExecution } from '../execution.js';
 import { render } from 'ink';
@@ -74,6 +75,27 @@ export async function runInkRepl(input: {
     };
     workshop.builder = await settleBuilder({ api: input.api, ws: workshop, status: opened.status, write });
     session.writeLine('say what to change, or /help');
+  }
+  if (input.checkout) {
+    const controller = new AbortController();
+    abort.current = controller;
+    try {
+      session.setActivity('Checking Creator Kit updates');
+      await offerKitUpdate({
+        api: input.api,
+        cwd: input.checkout.root,
+        env: input.env,
+        write: (line: string) => session.writeLine(line),
+        pick: session.prompt,
+        abort: controller.signal,
+        telemetry,
+        activity: session.setActivity,
+      });
+    } catch (error) {
+      session.writeLine(`Kit update check: ${formatError(error)}. You can retry with /kit.`);
+    } finally {
+      abort.current = null;
+    }
   }
   const watch = createRoundWatch({
     getToken: () => token,
