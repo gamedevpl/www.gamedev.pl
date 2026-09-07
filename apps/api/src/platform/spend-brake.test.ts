@@ -35,6 +35,32 @@ describe('spend brake payload reading', () => {
     expect(parseLanes(undefined)).toEqual([]);
   });
 
+  it('pulls every lane once a billing budget is spent or forecast past 100%', () => {
+    const budget = { budgetDisplayName: 'zł130 Monthly Budget Alert', costAmount: 140, budgetAmount: 130 };
+    const all = ['creation', 'editing', 'chat', 'tabComplete', 'search', 'gate'];
+    expect(lanesFromNotification({ ...budget, alertThresholdExceeded: 1.0 })).toEqual({
+      lanes: all,
+      incidentId: 'budget:zł130 Monthly Budget Alert:spent:1',
+    });
+    // Forecast counts: the point is to stop before the money is gone.
+    expect(lanesFromNotification({ ...budget, forecastThresholdExceeded: 1.2 })).toEqual({
+      lanes: all,
+      incidentId: 'budget:zł130 Monthly Budget Alert:forecast:1.2',
+    });
+  });
+
+  it('stays quiet on a routine budget tick under every threshold', () => {
+    // Budgets publish every ~20 minutes whether or not anything crossed.
+    expect(lanesFromNotification({ budgetDisplayName: 'x', costAmount: 3, budgetAmount: 130 })).toEqual({
+      lanes: [],
+      quiet: true,
+    });
+    expect(lanesFromNotification({ budgetDisplayName: 'x', alertThresholdExceeded: 0.9 })).toEqual({
+      lanes: [],
+      quiet: true,
+    });
+  });
+
   it('never pauses on a closing notification', () => {
     expect(lanesFromNotification(openIncident('search')).lanes).toEqual(['search']);
     expect(

@@ -73,6 +73,13 @@ gcloud pubsub topics add-iam-policy-binding "$TOPIC" \
   --member="serviceAccount:${MONITORING_SA}" \
   --role='roles/pubsub.publisher' >/dev/null
 
+# Billing budgets publish as one global agent. With this the monthly budget can name
+# the same topic, and a 100% threshold — spent or forecast — pulls every lane.
+gcloud pubsub topics add-iam-policy-binding "$TOPIC" \
+  --project "$PROJECT_ID" \
+  --member='serviceAccount:billing-budget-alert@system.gserviceaccount.com' \
+  --role='roles/pubsub.publisher' >/dev/null
+
 echo "==> 2/4 Notification channel"
 CHANNEL_ID="$(gcloud beta monitoring channels list \
   --project "$PROJECT_ID" \
@@ -163,4 +170,13 @@ after the next deploy. Verify by publishing a test notification:
 
 then check searchPaused in the admin console and clear it there. Note the label
 separator: gcloud user labels cannot hold commas, so the brake accepts '_' as well.
+
+The monthly billing budget is the second publisher. Point it at the topic once
+(billing is account-scoped, so this is not done here):
+
+  gcloud billing budgets update BUDGET_ID --billing-account ACCOUNT_ID \\
+    --notifications-rule-pubsub-topic=projects/${PROJECT_ID}/topics/${TOPIC}
+
+Any threshold at 100% — spent or forecast — then pauses every lane; ticks under
+that are acknowledged silently.
 EOF
