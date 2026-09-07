@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.5.1 — 2026-09-07
+
 ### Fixed
 
 - Short edit requests are accepted and conversational improvement replies appear directly in the CLI (#1190).
