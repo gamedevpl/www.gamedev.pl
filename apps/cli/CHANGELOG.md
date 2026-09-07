@@ -10,6 +10,12 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 ### Added
 
 - The pilot funnel records signing in, a first turn, a publish it watched happen, and one install per machine — the operator page reads them (#1222).
+- Connect opens an interactive game session with local checkout, chat and agent choices; `--manual` prints MCP setup.
+
+### Fixed
+
+- `/checkout` opens the downloaded game in the current session and supports games before their first delivery.
+- Checkout refuses non-empty destinations to preserve existing files.
 
 ## 0.7.0 — 2026-09-07
 

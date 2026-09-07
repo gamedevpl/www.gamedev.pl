@@ -12,9 +12,9 @@ const BLURB: Record<SlashVerb, string> = {
   profile: 'signed-in profile',
   handle: 'get or set handle',
   builder: 'who builds — builder <slug>, or self|platform here',
-  connect: 'MCP handoff, or --agent',
+  connect: 'open a game session — connect <slug>; --manual for MCP setup',
   delegate: 'local agent edits the checkout — delegate <task>',
-  checkout: 'clone a game — checkout <slug>',
+  checkout: 'download and open local files — checkout [slug]',
   quota: "today's submission budget",
   notifications: 'unread notifications',
   help: 'this list',
@@ -42,8 +42,9 @@ export function formatHelp(slash = false): string {
     : [
         `${CLI_BIN} ${CLI_VERSION} — Studio from a terminal`,
         '',
-        `  ${CLI_BIN.padEnd(18)}interactive REPL`,
-        `  ${`${CLI_BIN} <verb>`.padEnd(18)}one-shot command`,
+        `  ${CLI_BIN.padEnd(24)}interactive conversation`,
+        `  ${`${CLI_BIN} repl <slug>`.padEnd(24)}interactive session for an existing game`,
+        `  ${`${CLI_BIN} <verb>`.padEnd(24)}one-shot command`,
         '',
       ];
   return [...intro, ...rows].join('\n');

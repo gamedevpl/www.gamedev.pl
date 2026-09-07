@@ -7,8 +7,8 @@ import { completeSlash, parseArgv, SLASH_VERBS, type SlashVerb } from './argv.js
 import { getStatus, postTurn, prepareTurn } from './turn.js';
 import { formatStatusLines } from './status-watch.js';
 import type { ApiClient } from './api.js';
-import { checkoutGame, diffGame, formatSyncLines, pullGame, readCheckoutSlug } from './checkout.js';
-import { connectGame } from './connect.js';
+import { diffGame, formatSyncLines, pullGame, readCheckoutSlug } from './checkout.js';
+import { connectSession, checkoutSession } from './connect-flow.js';
 import { formatSubmitLines, submitGame } from './submit.js';
 import { dispatchReadVerb } from './verbs.js';
 import { postCliChat } from './chat.js';
@@ -157,55 +157,40 @@ export async function handleReplLine(input: {
       try {
         const parsed = parseArgv(['node', 'cli', cmd, ...rest]);
         const cwd = input.workshop?.root ?? process.cwd();
-        const slug = parsed.args[0] || (cmd === 'checkout' ? undefined : readCheckoutSlug(cwd));
+        const sessionSlug =
+          (cmd === 'connect' || cmd === 'checkout') && !parsed.args[0] && !input.workshop && input.token
+            ? (await getStatus(input.api, input.token)).slug
+            : undefined;
+        const slug = parsed.args[0] ?? input.workshop?.slug ?? sessionSlug ?? readCheckoutSlug(cwd);
         if (!slug) {
-          input.write(`run it as ${cliUsage(cmd)}`);
+          input.write(`Choose a game: /${cmd} <slug>. /games lists your games.`);
           return { next: 'continue', conversationId: input.conversationId };
         }
-        if (cmd === 'checkout') {
-          const dest = parsed.args[1] ?? slug;
-          const result = await checkoutGame({ api: input.api, slug, dest });
-          input.write(`checked out ${slug} → ${result.dest}`);
-        } else if (cmd === 'pull') {
-          const dest = parsed.args[1] ?? cwd;
+        if (cmd === 'connect' || cmd === 'checkout') {
+          const options = {
+            ...input,
+            slug,
+            dest: parsed.args[1],
+            env: input.env ?? process.env,
+            abort: input.abort ?? { current: null },
+          };
+          const opened =
+            cmd === 'checkout'
+              ? await checkoutSession(options)
+              : await connectSession({
+                  ...options,
+                  agent: typeof parsed.flags.agent === 'string' ? parsed.flags.agent : undefined,
+                  handoff: parsed.flags.handoff === true,
+                  manual: parsed.flags.manual === true,
+                });
+          return { next: 'continue', ...(opened ?? {}) };
+        }
+        const dest = parsed.args[1] ?? cwd;
+        if (cmd === 'pull') {
           const pulled = await pullGame({ api: input.api, slug, dest, force: parsed.flags.force === true });
           input.write(`pulled ${slug} @ ${pulled.version}`);
-        } else if (cmd === 'diff') {
-          const dest = parsed.args[1] ?? cwd;
-          input.write(formatSyncLines(await diffGame({ api: input.api, slug, dest })).join('\n'));
         } else {
-          let agent = typeof parsed.flags.agent === 'string' ? parsed.flags.agent : undefined;
-          if (!agent && input.pick) {
-            const agents = discoverAgents(input.env).filter((row) => row.installed && row.mcp);
-            if (agents.length) {
-              for (const agent of agents) input.telemetry?.record('delegate_offered', { adapter: agent.name });
-              const manual = 'show manual MCP setup';
-              const choice = await input.pick(
-                [...agents.map((row) => row.name), manual],
-                `Connect ${slug} — local agents use their own credentials and billing`,
-              );
-              if (choice !== manual && !agents.some((row) => row.name === choice))
-                return { next: 'continue', conversationId: input.conversationId };
-              if (choice !== manual) agent = choice;
-            }
-          }
-          const controller = new AbortController();
-          if (input.abort) input.abort.current = controller;
-          try {
-            await connectGame({
-              api: input.api,
-              slug,
-              dest: cwd,
-              agent,
-              env: input.env,
-              handoff: parsed.flags.handoff === true,
-              write: input.write,
-              abort: controller.signal,
-              telemetry: input.telemetry,
-            });
-          } finally {
-            if (input.abort) input.abort.current = null;
-          }
+          input.write(formatSyncLines(await diffGame({ api: input.api, slug, dest })).join('\n'));
         }
       } catch (error) {
         input.write(formatError(error));

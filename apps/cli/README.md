@@ -222,3 +222,23 @@ through `/kit`). Other local preparation refuses to use a pending installation.
 Updates stop the old preview; `/play` starts it with the new tools. An updated Kit
 is not a passing game validation or a delivery: the regular play/build/submit checks
 still run on your game. No sources are pulled or published by a Kit update.
+
+### Open an existing game
+
+Run `gamedevpl connect <slug>` in a terminal to enter an interactive session. Choose
+**Open a local checkout** to download the game (or reuse its checkout in the current
+directory), **Continue chatting** to work without local files, or an installed MCP
+agent to start that agent. The session stays open after the agent finishes.
+
+`gamedevpl repl <slug>` opens the same guided session. Inside it, `/checkout` uses
+the current game and switches subsequent edits, `/play` and `/submit` to its local
+files. Games without a delivery can be checked out too: they start with the brief,
+so an agent must build the game before it can be played.
+
+`gamedevpl checkout <slug> [directory]` downloads files from the shell and prints
+how to enter the local interactive session. It refuses non-empty destinations;
+`/checkout` can reuse an existing checkout of the same game without overwriting it.
+
+For manual MCP configuration use `gamedevpl connect <slug> --manual`. Redirected
+output also retains the manual setup behavior. `--agent <name>` explicitly starts
+an MCP agent. Automated agent launches do not print the manual credential snippet.
