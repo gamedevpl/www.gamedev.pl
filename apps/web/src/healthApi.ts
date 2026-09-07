@@ -52,6 +52,8 @@ export interface VisitFunnel {
   /** Closed-beta waitlist funnel in step order, every step present even at zero. */
   waitlist: Array<{ step: string; visits: number }>;
   invites?: Array<{ step: string; visits: number }>;
+  // Party lifecycle in step order; seatVisits means a seat drove it.
+  party?: Array<{ step: string; visits: number; barVisits: number; seatVisits: number }>;
   betaWelcome?: Array<{ step: string; visits: number }>;
   /** EditorKit revision funnel in step order, every step present even at zero. */
   editing: Array<{ step: string; visits: number }>;

@@ -8,6 +8,8 @@ import {
   EDITOR_STEPS,
   HOW_TO_PLAY_VIAS,
   INVITE_STEPS,
+  PARTY_STEPS,
+  PARTY_VIAS,
   PLAY_VIAS,
   REMIX_CONTROLS,
   REMIX_PAINTED_VIAS,
@@ -60,6 +62,8 @@ const RouteKindSchema = z.enum(VISIT_ROUTE_KINDS);
 const CreateStepSchema = z.enum(CREATE_STEPS);
 const WaitlistStepSchema = z.enum(WAITLIST_STEPS);
 const InviteStepSchema = z.enum(INVITE_STEPS);
+const PartyStepSchema = z.enum(PARTY_STEPS);
+const PartyViaSchema = z.enum(PARTY_VIAS);
 const BetaWelcomeStepSchema = z.enum(BETA_WELCOME_STEPS);
 const StudioStepSchema = z.enum(STUDIO_STEPS);
 /** Platform vs creator's own agent. Optional on create_step; required on studio_step. */
@@ -120,6 +124,12 @@ const EventSchema = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('waitlist_step'), step: WaitlistStepSchema, ...offsetField }),
   z.object({ type: z.literal('invite_step'), step: InviteStepSchema, ...offsetField }),
+  z.object({
+    type: z.literal('party_step'),
+    step: PartyStepSchema,
+    via: PartyViaSchema.optional(),
+    ...offsetField,
+  }),
   z.object({ type: z.literal('beta_welcome_step'), step: BetaWelcomeStepSchema, ...offsetField }),
   z.object({
     type: z.literal('studio_step'),
@@ -255,6 +265,13 @@ export async function registerVisitTelemetryRoutes(
           return { ...base, type: event.type, step: event.step };
         case 'invite_step':
           return { ...base, type: event.type, step: event.step };
+        case 'party_step':
+          return {
+            ...base,
+            type: event.type,
+            step: event.step,
+            ...(event.via === undefined ? {} : { via: event.via }),
+          };
         case 'beta_welcome_step':
           return { ...base, type: event.type, step: event.step };
         case 'studio_step':

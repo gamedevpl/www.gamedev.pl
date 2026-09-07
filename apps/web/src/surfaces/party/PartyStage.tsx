@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import './party.css';
 import type { CatalogEntry } from '../../catalog.js';
-import type { PlayVia } from '../../visitTelemetry.js';
+import { recordPartyStep, type PlayVia } from '../../visitTelemetry.js';
 import { joinUrl, type PartySession } from './mpApi.js';
 import { PartyPlaying } from './PartyPlaying.js';
 import { QrCode } from './QrCode.js';
@@ -15,6 +15,9 @@ import {
   type RoomPhase,
   type RosterSlot,
 } from '../../mp/protocol.js';
+
+// How long a command may wait for the game's echo.
+const ECHO_WINDOW_MS = 5_000;
 
 type PartyStageProps = {
   game: CatalogEntry;
@@ -52,10 +55,45 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
     frameRef.current?.contentWindow?.postMessage({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload }, '*');
   }, []);
 
+  // Commands the bar sent that the game has not echoed back yet.
+  const pendingPhasesRef = useRef<Array<{ phase: RoomPhase; at: number }>>([]);
+  const phaseRef = useRef<RoomPhase>('lobby');
+  phaseRef.current = phase;
+
+  function expectEcho(phaseCommanded: RoomPhase) {
+    pendingPhasesRef.current.push({ phase: phaseCommanded, at: Date.now() });
+  }
+
+  // A phase the bar did not command came from a seat.
+  const recordSeatPhase = useCallback((next: RoomPhase) => {
+    const previous = phaseRef.current;
+    const fresh = pendingPhasesRef.current.filter((entry) => Date.now() - entry.at < ECHO_WINDOW_MS);
+    const match = fresh.findIndex((entry) => entry.phase === next);
+    // A command the game answered with no phase change is never echoed.
+    pendingPhasesRef.current = match === -1 ? fresh : fresh.slice(match + 1);
+    if (match !== -1) return;
+    if (next === 'paused') recordPartyStep('paused', 'seat');
+    else if (next === 'lobby') recordPartyStep('returned_to_lobby', 'seat');
+    else if (next === 'playing') recordPartyStep(previous === 'paused' ? 'resumed' : 'started', 'seat');
+  }, []);
+
   // Phones have no keyboard here; the host drives the shell.
   const sendCommand = useCallback(
     (cmd: PartyCommand) => {
       postToGame({ t: 'command', cmd });
+      if (cmd === 'pause') recordPartyStep('paused', 'bar');
+      else if (cmd === 'resume') recordPartyStep('resumed', 'bar');
+      else if (cmd === 'restart') recordPartyStep('restarted', 'bar');
+      else if (cmd === 'lobby') recordPartyStep('returned_to_lobby', 'bar');
+      const echoed: RoomPhase | null =
+        cmd === 'pause'
+          ? 'paused'
+          : cmd === 'resume' || cmd === 'restart'
+            ? 'playing'
+            : cmd === 'lobby'
+              ? 'lobby'
+              : null;
+      if (echoed) expectEcho(echoed);
       // The relay refuses guests in an `ended` room; leave it now.
       const next: RoomPhase | null = cmd === 'restart' ? 'playing' : cmd === 'lobby' ? 'lobby' : null;
       if (!next) return;
@@ -64,6 +102,11 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
     },
     [postToGame],
   );
+
+  // The rung every later one is measured against.
+  useEffect(() => {
+    recordPartyStep('lobby_opened');
+  }, []);
 
   useEffect(() => {
     const client = new RoomClient({
@@ -75,6 +118,7 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
       },
       onFrame: (frame) => {
         if (frame.t === 'roster') {
+          if (frame.slots.some((slot) => slot.connected)) recordPartyStep('guest_joined');
           rosterRef.current = frame.slots;
           setRoster(frame.slots);
           postToGame({ t: 'roster', slots: frame.slots });
@@ -114,6 +158,7 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
         postToGame({ t: 'command', cmd: 'start' });
       }
       if (message.t === 'phase') {
+        recordSeatPhase(message.phase);
         setPhase(message.phase);
         clientRef.current?.setPhase(message.phase);
         // The room's front door is the lobby, not the game's.
@@ -123,7 +168,7 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
 
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [postToGame]);
+  }, [postToGame, recordSeatPhase]);
 
   const joined = roster.filter((slot) => slot.connected).length;
   const minPlayers = game.multiplayer?.minPlayers ?? 2;
@@ -135,6 +180,9 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
     clientRef.current?.setPhase('playing');
     setPhase('playing');
     setStarted(true);
+    recordPartyStep('started', 'bar');
+    // The host's own start; its echo is not a seat.
+    expectEcho('playing');
   }
 
   if (closedReason) {

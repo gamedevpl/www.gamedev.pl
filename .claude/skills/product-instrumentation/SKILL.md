@@ -265,6 +265,17 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
     Partial progress from Creator Studio: the `/studio` route is a distinct visit kind
     (`studio`), so "did they open the control panel after publish" is measurable from the
     visit stream without joining to play events.
+- ~~Party mode's lifecycle unmeasured~~ — **closed 2026-09-07**: `party_step` on the visit
+  stream records `lobby_opened` → `guest_joined` → `started` → `paused` / `resumed` /
+  `restarted` / `returned_to_lobby` / `quit`, each with `via: 'bar' | 'seat'`.
+  `PARTY_STEPS` / `PARTY_VIAS` live in `packages/contract/src/visit-vocab.ts` like the
+  other vocabularies; `summarizeVisitFunnel` rolls them up as `party` and
+  `VisitFunnelPanel` renders the block. Two things it does not carry, deliberately: no
+  slug (the streams stay unjoinable) and no room code — a code identifies a gathering.
+  `seat` is honest rather than precise: the shared screen cannot tell a phone's menu
+  button from the host keyboard, so it does not claim to. Unlike the create funnel, a
+  rung dedupes per `step:via` and not per step — "the bar paused it" and "the room paused
+  it" are the question, and collapsing them would erase it.
 - **Build economics are duration-only** — submission→publish timestamps and build events
   exist; revision-cycle counts are derivable; keep it that way as builds evolve.
 - ~~Shared zones were unmeasured~~ — **closed 2026-07-31**: `zone_link`
