@@ -55,6 +55,8 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
     frameRef.current?.contentWindow?.postMessage({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload }, '*');
   }, []);
 
+  // False until the game answers our start command with a round.
+  const startedRef = useRef(false);
   // Commands the bar sent that the game has not echoed back yet.
   const pendingPhasesRef = useRef<Array<{ phase: RoomPhase; at: number }>>([]);
   const phaseRef = useRef<RoomPhase>('lobby');
@@ -152,12 +154,18 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
       const message = parseGameBridgeMessage(event.data);
       if (!message) return;
       if (message.t === 'hello') {
+        startedRef.current = false;
         postToGame({ t: 'roster', slots: rosterRef.current });
         // The lobby was the front door; skip the game's.
         postToGame({ t: 'phase', phase: 'playing' });
         postToGame({ t: 'command', cmd: 'start' });
       }
       if (message.t === 'phase') {
+        // A booting game reports its own menu before reading our start.
+        if (!startedRef.current) {
+          if (message.phase !== 'playing') return;
+          startedRef.current = true;
+        }
         recordSeatPhase(message.phase);
         setPhase(message.phase);
         clientRef.current?.setPhase(message.phase);
