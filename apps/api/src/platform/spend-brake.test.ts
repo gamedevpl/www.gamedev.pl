@@ -41,24 +41,21 @@ describe('spend brake payload reading', () => {
     expect(lanesFromNotification({ ...budget, alertThresholdExceeded: 1.0 })).toEqual({
       lanes: all,
       incidentId: 'budget:zł130 Monthly Budget Alert:spent:1',
+      policyName: 'zł130 Monthly Budget Alert',
     });
     // Forecast counts: the point is to stop before the money is gone.
     expect(lanesFromNotification({ ...budget, forecastThresholdExceeded: 1.2 })).toEqual({
       lanes: all,
       incidentId: 'budget:zł130 Monthly Budget Alert:forecast:1.2',
+      policyName: 'zł130 Monthly Budget Alert',
     });
   });
 
   it('stays quiet on a routine budget tick under every threshold', () => {
     // Budgets publish every ~20 minutes whether or not anything crossed.
-    expect(lanesFromNotification({ budgetDisplayName: 'x', costAmount: 3, budgetAmount: 130 })).toEqual({
-      lanes: [],
-      quiet: true,
-    });
-    expect(lanesFromNotification({ budgetDisplayName: 'x', alertThresholdExceeded: 0.9 })).toEqual({
-      lanes: [],
-      quiet: true,
-    });
+    const tick = { lanes: [], policyName: 'x', reason: 'budget_under_threshold', quiet: true };
+    expect(lanesFromNotification({ budgetDisplayName: 'x', costAmount: 3, budgetAmount: 130 })).toEqual(tick);
+    expect(lanesFromNotification({ budgetDisplayName: 'x', alertThresholdExceeded: 0.9 })).toEqual(tick);
   });
 
   it('never pauses on a closing notification', () => {
@@ -73,6 +70,40 @@ describe('spend brake payload reading', () => {
     expect(lanesFromNotification({}).lanes).toEqual([]);
     expect(lanesFromNotification({ incident: null }).lanes).toEqual([]);
     expect(lanesFromNotification({ incident: { state: 'OPEN' } }).lanes).toEqual([]);
+  });
+
+  it('says why it paused nothing, with the policy that sent it', () => {
+    expect(lanesFromNotification(undefined).reason).toBe('no_incident');
+    expect(lanesFromNotification({ incident: null }).reason).toBe('no_incident');
+    expect(
+      lanesFromNotification({
+        incident: {
+          state: 'CLOSED',
+          incident_id: 'inc-9',
+          policy_name: 'A24',
+          policy_user_labels: { lanes: 'search' },
+        },
+      }),
+    ).toEqual({ lanes: [], incidentId: 'inc-9', policyName: 'A24', state: 'CLOSED', reason: 'closed' });
+    expect(lanesFromNotification({ incident: { state: 'OPEN', policy_name: 'A1 uptime' } })).toEqual({
+      lanes: [],
+      policyName: 'A1 uptime',
+      state: 'OPEN',
+      reason: 'no_lanes_label',
+    });
+    expect(lanesFromNotification(openIncident('everything'))).toEqual({
+      lanes: [],
+      incidentId: 'inc-1',
+      state: 'OPEN',
+      rawLanes: 'everything',
+      reason: 'unrecognised_lanes',
+    });
+    expect(lanesFromNotification(openIncident('search'))).toEqual({
+      lanes: ['search'],
+      incidentId: 'inc-1',
+      state: 'OPEN',
+      rawLanes: 'search',
+    });
   });
 });
 

@@ -4495,7 +4495,7 @@ describe('POST /api/submissions/:token/improve', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      expect(res.json()).toEqual({ ok: true });
+      expect(res.json()).toEqual({ ok: true, reply: 'You can tune difficulty from Settings.' });
       // No new job: the reply lives on the published job's thread.
       expect(briefs).toHaveLength(0);
       const all = await store.listCreatorMessages(123);
@@ -4506,7 +4506,7 @@ describe('POST /api/submissions/:token/improve', () => {
       await app.close();
     });
 
-    it('a build decision still opens a new improvement job as before', async () => {
+    it.each(['Add SFX', 'Add a checkpoint.'])('opens an improvement for %s', async (feedback) => {
       const { githubClient } = createGithubClientStub({ jobId: 501 });
       const store = new InMemoryStore();
       const { backend, briefs } = createBackendStub();
@@ -4526,13 +4526,13 @@ describe('POST /api/submissions/:token/improve', () => {
         method: 'POST',
         url: `/api/submissions/${mintToken(123, secret)}/improve`,
         headers: authHeaders,
-        payload: { feedback: 'Make level two less punishing and add a checkpoint.' },
+        payload: { feedback },
       });
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toMatchObject({ ok: true, slug: 'sky-dodge' });
       expect(briefs).toHaveLength(1);
-      expect(briefs.at(-1)!.feedback).toContain('Make level two less punishing');
+      expect(briefs.at(-1)!.feedback).toContain(feedback);
       await app.close();
     });
 
@@ -4568,7 +4568,7 @@ describe('POST /api/submissions/:token/improve', () => {
           payload: { feedback: `question ${i}, is it done yet?` },
         });
         expect(res.statusCode).toBe(200);
-        expect(res.json()).toEqual({ ok: true });
+        expect(res.json()).toEqual({ ok: true, reply: i === 0 ? 'first answer' : 'second answer' });
       }
 
       const build = await app.inject({
@@ -4607,7 +4607,7 @@ describe('POST /api/submissions/:token/improve', () => {
       });
       // Would 409 here if this ran the build-only availability check.
       expect(res.statusCode).toBe(200);
-      expect(res.json()).toEqual({ ok: true });
+      expect(res.json()).toEqual({ ok: true, reply: 'Still building.' });
       await app.close();
     });
 

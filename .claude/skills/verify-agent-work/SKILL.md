@@ -117,7 +117,7 @@ Two concrete instances of that (observed 2026-07-23):
   `:predict` URL and `{ instances: [{ content }] }` body. Google dropped `:predict` for
   that family (`400 FAILED_PRECONDITION`); live `embedText` swallows the error to `[]`,
   so the vector index stays empty and every search returns `{ match: null, score: 0 }`.
-  The suite stayed green because it mocked the *old* prediction shape and never asserted
+  The suite stayed green because it mocked the _old_ prediction shape and never asserted
   the request URL. When a model id changes, grep the RPC (`:predict` vs `:embedContent`
   vs `:generateContent`), the request body, and the response parse path — and add a test
   that the constructed URL contains the verb the new model actually serves.
@@ -134,7 +134,7 @@ Two concrete instances of that (observed 2026-07-23):
   `author` / `autumn leaves` → `carjack-city` (`includes('aut')`), `chess` / `szachy` →
   `checker-champ`. The added test only mounted the happy-path prompt. When a matcher
   grows `includes` / alias tables, run the same function on the pre-change branch and
-  require a control query that must *not* match.
+  require a control query that must _not_ match.
 - **A games-repo PR that adds a GameKit module can 502 play/draft even when its own
   gate is green.** Observed (www.gamedev.pl-games#690, 2026-08-12): `platformer` was
   inserted into `GAME_KIT_MODULES` / `shared/assemble-contract.json` with no paired
@@ -302,6 +302,18 @@ Two concrete instances of that (observed 2026-07-23):
   `node tools/gate-attest.mjs expected` (or the Actions log's `Required command:`) for
   the SHA you are opening; do not "correct" a static attest down to `check:game` just
   because a `games/<slug>/` path is in the diff. `check:pr` remains an accepted alias.
+
+- **Mocked tool calls can hide a schema/parser mismatch.** Observed in CLI chat
+  (#1187): one model tool advertised optional `slug` and `request` fields together,
+  while the runtime accepted only one per action. Play passed; real edit requests
+  failed with `invalid CLI action`. Check the tool schema sent to the provider as
+  well as the parser, and exercise each action on its real lifecycle state. Published
+  edits need `/improve` and its new token, not the closed round's `/turn`.
+
+- **Exercise auth variants and partial agent failures.** CLI #1201 initially accepted only
+  `claude.ai`, rejecting subscription `oauth_token` logins, and treated any tool denial as
+  failure of the entire edit. Test each supported login source and an exit-zero run with
+  completed edits plus one denied tool. An agent's denial list is not a task verdict.
 
 ## Read the diff against the spec
 

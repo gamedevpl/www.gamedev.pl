@@ -7,6 +7,27 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Breaking
+
+- Claude delegation requires a verified Claude.ai subscription login; inherited API and cloud-provider credentials are no longer used (#1201).
+
+### Fixed
+
+- Claude subscription checks accept setup-token logins, stay responsive and explain incompatible CLI versions (#1201).
+- Local agent choices survive failed requests (#1201).
+- Live status follows new rounds and reports the active agent and tool (#1201).
+- Verification errors retain filenames and full diagnostic details (#1201).
+- Antigravity events are readable and an empty run with denied permissions cannot claim success (#1201).
+- Partial Claude tool refusals do not prevent verification of completed edits (#1201).
+- Session resume instructions identify the correct agent (#1201).
+
+## 0.5.1 — 2026-09-07
+
+### Fixed
+
+- Short edit requests are accepted and conversational improvement replies appear directly in the CLI (#1190).
+- Published-game edits open an improvement round with the selected builder instead of targeting a closed round (#1190).
+
 ## 0.5.0 — 2026-09-06
 
 ### Added

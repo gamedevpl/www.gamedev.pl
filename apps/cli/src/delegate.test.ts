@@ -76,3 +76,27 @@ describe('delegation event rendering', () => {
     }
   });
 });
+
+it('renders Antigravity tools without exposing transport JSON', () => {
+  const rows = [
+    { event: 'init', init: { cwd: '/private/path' } },
+    { event: 'step_update', step_update: { step_type: 'tool', tool_name: 'read_file', state: 'ACTIVE' } },
+    { event: 'step_update', step_update: { step_type: 'tool', tool_name: 'read_file', state: 'ERROR' } },
+    { event: 'result', result: { status: 'SUCCESS', response: '' } },
+  ];
+  const output = renderDelegateStream(
+    'agy',
+    rows.map((row) => JSON.stringify(row)),
+    false,
+  ).join('\n');
+  expect(output).toContain('⚙ read_file');
+  expect(output).toContain('Tool failed: read_file');
+  expect(output).not.toContain('SUCCESS');
+  expect(output).not.toContain('/private/path');
+});
+
+it('shows Claude resume instructions only for the Claude adapter', () => {
+  const event = JSON.stringify({ type: 'system', session_id: '12345678-1234-1234-1234-123456789abc' });
+  expect(renderDelegateStream('claude', [event], false).join('')).toContain('claude --resume');
+  expect(renderDelegateStream('cursor', [event], false).join('')).not.toContain('claude');
+});

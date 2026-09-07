@@ -204,7 +204,10 @@ describe('the creator own games in the prompt', () => {
 describe('CLI session tools', () => {
   const session = { slug: 'airtime', state: 'published', builder: 'platform', checkout: true, agents: ['claude'] };
   function actionResult(action: Record<string, unknown>): GenerationResult {
-    return { parts: [{ type: 'toolCall', toolCall: { name: 'cli_action', arguments: action } }] };
+    const { name, ...args } = action;
+    const tool =
+      name === 'play' ? 'play_game' : name === 'status' ? 'game_status' : name === 'edit' ? 'edit_game' : String(name);
+    return { parts: [{ type: 'toolCall', toolCall: { name: tool, arguments: args } }] };
   }
   it.each([
     { name: 'play', slug: 'airtime' },
@@ -227,7 +230,7 @@ describe('CLI session tools', () => {
         .map((part) => part.text)
         .join('\n'),
     ).toContain('"state":"published"');
-    expect(JSON.stringify(captured)).toContain('cli_action');
+    expect(JSON.stringify(captured)).toContain('edit_game');
   });
   it.each([
     { name: 'play', slug: 'unknown' },
@@ -238,6 +241,41 @@ describe('CLI session tools', () => {
     const agent = new IntakeChatAgent({ client: stubClient(actionResult(action)) });
     await expect(agent.decide({ message: 'go', history: [], session })).rejects.toThrow();
   });
+  it('advertises separate parameter shapes matching the CLI action contract', async () => {
+    let captured: GenerationRequest | undefined;
+    const agent = new IntakeChatAgent({
+      client: stubClient(textResult('Which change?'), (request) => {
+        captured = request;
+      }),
+    });
+    await agent.decide({ message: 'ask claude to add hair with realistic physics', history: [], session });
+    expect(captured!.tools).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'play_game',
+          parameters: expect.objectContaining({
+            properties: { slug: expect.any(Object) },
+            required: ['slug'],
+            additionalProperties: false,
+          }),
+        }),
+        expect.objectContaining({
+          name: 'game_status',
+          parameters: expect.objectContaining({ properties: {}, additionalProperties: false }),
+        }),
+        expect.objectContaining({
+          name: 'edit_game',
+          parameters: expect.objectContaining({
+            properties: { request: expect.any(Object) },
+            required: ['request'],
+            additionalProperties: false,
+          }),
+        }),
+      ]),
+    );
+    expect(captured!.tools?.some((tool) => tool.name === 'cli_action')).toBe(false);
+  });
+
   it('does not enable actions for legacy clients', async () => {
     const agent = new IntakeChatAgent({ client: stubClient(actionResult({ name: 'play', slug: 'airtime' })) });
     await expect(agent.decide({ message: 'go', history: [] })).rejects.toThrow('invalid CLI action');

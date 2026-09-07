@@ -116,6 +116,18 @@ the app's own account (the seed call is the service calling itself) and the rela
 `MP_RELAY_CALLER_SA` is set to the app's account on every relay update. Neither is a repo
 variable any more.
 
+`MP_RELAY_CALLER_SA` accepts a **comma-separated list**, and the deploy sends two entries
+while the repo variable `APP_RUNTIME_SA_PREVIOUS` holds the account the app is moving off.
+That is not decoration. The relay is reconfigured before the candidate is promoted, so for
+the length of the browser gate the serving app and the candidate run as _different_
+accounts; naming only one of them refuses every lobby on one side or the other.
+
+**Delete the variable once every service serves on its own identity.** Left set, it keeps
+the old account trusted, which is the thing the move exists to end. It is a repo variable
+rather than a literal in `deploy.yml` for exactly that reason — and because
+`infra/check-runtime-sa.mjs` refuses to let the default compute account be named in the
+workflow at all.
+
 Rollout and rollback, owner-run (`infra/setup-runtime-sa.sh` prints the exact commands):
 
 1. `./infra/setup-runtime-sa.sh` creates the accounts and applies the resource-level grants;
@@ -637,7 +649,12 @@ Rollout, owner-run and in this order:
    that; a relay can health-check green while the QR code goes nowhere.
 
 Once `MP_RELAY_URL` is set, `deploy.yml` moves the relay onto each new image **before** promoting
-the app — server before client, since the promoted web bundle is the relay's websocket client.
+the app — server before client, since the promoted web bundle is the relay's websocket client —
+and **before the browser gate**, which opens a lobby and therefore calls the relay itself. That
+second ordering was learned the hard way: with the relay updated after the gate, the first deploy
+to change the app's runtime identity failed its own gate on `relay responded 401`, and since the
+relay is only reconfigured past that point, every later deploy failed the same way. A wedge that
+cannot clear itself.
 Only `--image`, the relay's own `--service-account` and `MP_RELAY_CALLER_SA` (the app's
 runtime account, see "Runtime identities") are updated, so a deploy cannot silently
 reconfigure the rest of the relay by omission.

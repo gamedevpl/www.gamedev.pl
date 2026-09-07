@@ -137,3 +137,14 @@ it('retains a pending MCP task without a checkout and retries without another pi
   expect(connectGame).toHaveBeenCalledWith(expect.objectContaining({ agent: 'claude' }));
   expect(pendingExecution.current).toBeUndefined();
 });
+
+it('remembers an explicit local choice before any round API request can fail', async () => {
+  const env = environment();
+  const { detectLocalAdapters } = await import('./workshop.js');
+  const workshop = { adapters: detectLocalAdapters(env), env } as import('./workshop.js').Workshop;
+  const pick = vi.fn(async (choices: string[]) => choices[0]!);
+  const first = await chooseExecution({ env, workshop, pick });
+  expect(workshop.selectedAgent).toBe('claude');
+  expect(await chooseExecution({ env, workshop, pick })).toEqual(first);
+  expect(pick).toHaveBeenCalledTimes(1);
+});

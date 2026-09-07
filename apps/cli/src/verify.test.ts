@@ -25,3 +25,12 @@ describe('verification ladder', () => {
     expect(result).toEqual({ ok: false, stage: 'check_static', detail: 'static failed' });
   });
 });
+
+it('retains filenames and stdout in a failed verification', () => {
+  const result = runLadder({
+    cwd: '/checkout',
+    publish: false,
+    run: () => ({ status: 1, stderr: 'Forbidden JavaScript:\n  - setup.mjs', stdout: 'Compiler detail' }),
+  });
+  expect(result).toMatchObject({ ok: false, detail: 'Forbidden JavaScript:\n  - setup.mjs\nCompiler detail' });
+});

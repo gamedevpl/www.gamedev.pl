@@ -41,6 +41,7 @@ export async function chooseExecution(input: {
   const choice = local.find((row) => row.label === chosen)?.choice;
   if (!choice) return null;
   if (!input.workshop?.runAdapter) preflightAdapter(choice.spec, input.env);
+  if (input.workshop) input.workshop.selectedAgent = choice.spec.name;
   return choice;
 }
 
