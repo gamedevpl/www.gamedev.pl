@@ -35,7 +35,8 @@ export function requireClaudeSubscription(input: {
   });
   let status: { loggedIn?: boolean; authMethod?: string; apiProvider?: string } = {};
   try {
-    status = JSON.parse(result.stdout ?? '') as typeof status;
+    const parsed: unknown = JSON.parse(result.stdout ?? '');
+    if (parsed && typeof parsed === 'object') status = parsed as typeof status;
   } catch {
     // Unknown auth must never fall back to API billing.
   }

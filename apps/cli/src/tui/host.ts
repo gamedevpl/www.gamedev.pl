@@ -118,6 +118,7 @@ export async function runInkRepl(input: {
             opened.onActivity = session.setActivity;
             if (token !== opened.token) {
               token = opened.token;
+              delete pendingExecution.current;
               session.setLive([]);
               watch.poke();
             }
