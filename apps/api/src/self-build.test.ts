@@ -631,6 +631,64 @@ describe('self builder (BY-02)', () => {
     expect(abandoned?.transitions?.at(-1)?.reason).toBe('no_connect');
   });
 
+  it('closes a round quiet past QUIET_ROUND_DAYS, and releases what it held', async () => {
+    // Connect window wider than the quiet window, so the quiet rule is the one that fires.
+    process.env.SELF_BUILD_CONNECT_DAYS = '30';
+    process.env.QUIET_ROUND_DAYS = '14';
+    const opened = Date.parse('2026-07-01T00:00:00Z');
+    let clock = opened;
+    const created = await createApp({
+      now: () => clock,
+      internalAuthVerifier: { verify: async () => true },
+    });
+    app = created.app;
+    const { store } = created;
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Gone Quiet', concept: CONCEPT, builder: 'self' },
+    });
+    expect(submit.statusCode).toBe(200);
+    let jobId = 0;
+    await vi.waitFor(async () => {
+      const record = (await store.listSubmissionsByOwner('g:creator'))[0];
+      expect(record?.state).toBe('dispatched');
+      jobId = record!.jobId;
+    });
+
+    clock = opened + 13 * 24 * 60 * 60 * 1000;
+    const early = await app.inject({
+      method: 'POST',
+      url: '/api/internal/notify-sweep',
+      headers: { authorization: 'Bearer internal' },
+    });
+    expect(early.json().closed).toBe(0);
+    expect((await store.getSubmission(jobId))?.abandonedAt).toBeUndefined();
+
+    clock = opened + 15 * 24 * 60 * 60 * 1000;
+    const sweep = await app.inject({
+      method: 'POST',
+      url: '/api/internal/notify-sweep',
+      headers: { authorization: 'Bearer internal' },
+    });
+    expect(sweep.statusCode).toBe(200);
+    expect(sweep.json().closed).toBe(1);
+    const closed = await store.getSubmission(jobId);
+    expect(closed?.state).toBe('abandoned');
+    expect(closed?.abandonedAt).toBeTruthy();
+    expect(closed?.transitions?.at(-1)).toMatchObject({ to: 'abandoned', by: 'system', reason: 'quiet' });
+    // Closed once: the next sweep no longer scans it.
+    const again = await app.inject({
+      method: 'POST',
+      url: '/api/internal/notify-sweep',
+      headers: { authorization: 'Bearer internal' },
+    });
+    expect(again.json().closed).toBe(0);
+    delete process.env.QUIET_ROUND_DAYS;
+  });
+
   it('switches builder both directions only at a round boundary', async () => {
     const { backend, briefs } = platformStub();
     const { gamesStore } = stubGamesStore();

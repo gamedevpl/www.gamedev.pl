@@ -2,7 +2,14 @@ import type { FastifyInstance } from 'fastify';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import type { BuilderKind } from '../creation/builder.js';
 import { selfBuildConnectDays } from '../platform/self-build-connect-days.js';
-import { shouldAutoAbandonSelfRound, type JobTransition } from '../creation/job-state.js';
+import { quietRoundDays } from '../platform/quiet-round-days.js';
+import { closeJob, type CloseJobDeps } from '../creation/close-job.js';
+import {
+  lastRoundActivityAt,
+  shouldAutoAbandonQuietRound,
+  shouldAutoAbandonSelfRound,
+  type JobTransition,
+} from '../creation/job-state.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { GitHubClient } from '../catalog/github-client.js';
 import type { InternalAuthVerifier } from '../platform/internal-auth.js';
@@ -25,6 +32,8 @@ export interface NotifySweepRoutesDeps {
   now: () => number;
   builderOf: (record: SubmissionRecord | null | undefined) => BuilderKind;
   backendFor: (builder: BuilderKind | undefined) => Promise<AgentBackend | undefined>;
+  releaseWorkspace: CloseJobDeps['releaseWorkspace'];
+  invalidateStatusCache: (jobId: number) => void;
   acknowledgeBuilderHandoff: (input: {
     jobId: number;
     acknowledgedAt: string;
@@ -48,6 +57,8 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
     now,
     builderOf,
     backendFor,
+    releaseWorkspace,
+    invalidateStatusCache,
     acknowledgeBuilderHandoff,
     recordDerivedJobState,
     reconcileNativeJob,
@@ -73,7 +84,9 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
       }
 
       const active = await store.listActiveSubmissions();
+      const closeDeps: CloseJobDeps = { store, now, backendFor, builderOf, releaseWorkspace, invalidateStatusCache };
       let emitted = 0;
+      let closed = 0;
       const stalledIssues: number[] = [];
       // Oldest uncollected change request per job, so the alert pass rereads nothing.
       const pendingFeedback = new Map<number, string>();
@@ -91,23 +104,30 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
               connectDays: selfBuildConnectDays(),
             })
           ) {
-            const at = new Date(now()).toISOString();
-            const cancelBackend = await backendFor(builderOf(record));
-            const ref = record.dispatch?.refs.at(-1);
-            if (cancelBackend && ref) {
-              try {
-                await cancelBackend.cancel(ref, record.dispatch?.credentialRefs?.[ref]);
-              } catch (cancelError) {
-                request.log.error({ err: cancelError, jobId: record.jobId }, 'self no-connect cancel failed');
-              }
-            }
-            await store.recordJobTransition(record.jobId, {
+            await closeJob(closeDeps, {
+              record,
               to: 'abandoned',
-              at,
               by: 'system',
               reason: 'no_connect',
+              log: request.log,
             });
-            await store.setSubmissionAbandoned(record.jobId, at);
+            closed += 1;
+            continue;
+          }
+
+          // Quiet from every side for the window: close it, or the sweep carries it forever.
+          if (
+            shouldAutoAbandonQuietRound({
+              state: record.state,
+              abandonedAt: record.abandonedAt,
+              lastActivityAt: lastRoundActivityAt(record),
+              now: now(),
+              quietDays: quietRoundDays(),
+            })
+          ) {
+            await closeJob(closeDeps, { record, to: 'abandoned', by: 'system', reason: 'quiet', log: request.log });
+            request.log.warn({ jobId: record.jobId, state: record.state }, 'quiet round closed by the sweep');
+            closed += 1;
             continue;
           }
 
@@ -245,6 +265,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
       sweepLog(
         {
           scanned: active.length,
+          closed,
           emitted,
           alerts: alerts.length,
           alerted,
@@ -259,6 +280,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
       );
       return reply.send({
         scanned: active.length,
+        closed,
         emitted,
         alerts: alerts.length,
         alerted,
