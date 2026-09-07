@@ -60,10 +60,20 @@ POOL_ID=$(gcloud iam workload-identity-pools describe "$POOL_NAME" \
   --format="value(name)" \
   --project="$PROJECT_ID")
 
-# Which repositories may mint a token against this provider at all. Everything downstream
-# is a subset of this list: passing the condition only gets a workflow to the point where
-# a per-account principalSet binding decides what, if anything, it may impersonate.
-ATTR_CONDITION="assertion.repository in ['${REPO}', '${GAMES_REPO}']"
+# Which repositories may mint a token against this provider at all, and from which ref.
+# Everything downstream is a subset of this list: passing the condition only gets a
+# workflow to the point where a per-account principalSet binding decides what, if
+# anything, it may impersonate.
+#
+# The ref half is what keeps a pull request — from a fork or from a branch anyone with
+# write access can push — from minting deployer credentials. Every workflow that uses
+# this provider runs off the default branch: deploy.yml and publish-games.yml on
+# workflow_run / schedule / dispatch (the token's ref is the default branch for all
+# three), verify-erase.yml on schedule, and the games repo's three publish workflows on
+# push to main. Nothing authenticates from a pull_request event, so no PR workflow loses
+# anything here. Each repo is pinned to its own default branch rather than allowing either
+# name for both, because the website has no `main` and the games repo has no `master`.
+ATTR_CONDITION="(assertion.repository == '${REPO}' && assertion.ref == 'refs/heads/master') || (assertion.repository == '${GAMES_REPO}' && assertion.ref == 'refs/heads/main')"
 
 echo "==> 4/8 Reconciling Workload Identity Provider '${PROVIDER_NAME}' (repos: ${REPO}, ${GAMES_REPO})"
 # create-oidc on an existing provider fails with "already exists" and changes nothing — so a

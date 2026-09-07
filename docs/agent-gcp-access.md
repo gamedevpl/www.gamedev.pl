@@ -33,7 +33,9 @@ state rather than user data.
 `logging.viewer`, `monitoring.viewer`, `run.viewer`, `cloudbuild.builds.viewer`,
 `artifactregistry.reader`, `errorreporting.viewer`, `cloudscheduler.viewer`,
 `workflows.viewer`, `secretmanager.viewer`, `serviceusage.serviceUsageViewer`, plus
-`storage.objectViewer` on `gamedevpl-games-snapshots` and `gamedevpl-games-store` only.
+`storage.objectViewer` on `gamedevpl-games-snapshots` only. The store bucket was dropped
+from that grant on 2026-09-08: it holds creator sources and unpublished work under
+public-access prevention, so "already served publicly" was never true of it.
 
 That covers most of [`site-down-triage.md`](./runbooks/site-down-triage.md): revision
 history, service config, error logs, latency metrics, build history, and the published

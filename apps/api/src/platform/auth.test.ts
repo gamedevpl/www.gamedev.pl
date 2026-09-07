@@ -497,7 +497,7 @@ describe('Auth API Routes', () => {
     process.env.NODE_ENV = 'production';
     const store = new InMemoryStore();
     const app = Fastify();
-    await registerAuthPlugin(app, { store });
+    await registerAuthPlugin(app, { store, sessionSecret: 'test-secret-key' });
 
     const res = await app.inject({
       method: 'POST',
