@@ -56,3 +56,35 @@ it.each([true, false])('starts a preview only in interactive delegation: unatten
   if (!unattended)
     expect(startLocalPlay).toHaveBeenCalledWith(expect.objectContaining({ abort: expect.any(AbortSignal) }));
 });
+
+it('refuses an exit-zero task with denied permissions before running verification', async () => {
+  const run = vi.fn(() => ({ status: 0, stderr: '' }));
+  const write = vi.fn();
+  const spec = {
+    name: 'agy',
+    command: 'agy',
+    headless: [],
+    versionFlag: '--help',
+    events: { flag: '', dialect: 'ndjson' as const },
+    cwd: 'game-dir' as const,
+    exit: { success: [0], failure: [1] },
+  };
+  const ws: Workshop = {
+    root: '/checkout',
+    slug: 'robot',
+    token: 'tok',
+    env: {},
+    adapters: [spec],
+    builder: 'self',
+    pick: async () => '',
+    abort: { current: null },
+    run,
+    runAdapter: async (input) => {
+      input.onLine?.('jetski: no output produced — headless mode cannot prompt, so it was auto-denied.');
+      return { code: 0 };
+    },
+  };
+  expect(await runLocalBuild({ ws, spec, brief: 'Fix hair', write })).toBe(false);
+  expect(run).not.toHaveBeenCalled();
+  expect(write).toHaveBeenCalledWith(expect.stringContaining('No successful edit is confirmed'));
+});

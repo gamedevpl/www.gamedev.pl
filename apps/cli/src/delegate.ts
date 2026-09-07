@@ -1,3 +1,4 @@
+import { antigravityText } from './agent-events.js';
 import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { formatAdapterEvent, sanitizeEventPayload } from './ansi.js';
@@ -66,6 +67,9 @@ export function parseEventLine(line: string): string | null {
     return trimmed;
   }
   if (!parsed || typeof parsed !== 'object') return trimmed;
+  const agy = antigravityText(parsed);
+  if (agy !== undefined) return agy;
+  if (parsed.type === 'item.started') return null;
   if (parsed.type === 'system' && typeof parsed.session_id === 'string' && /^[a-f0-9-]{36}$/i.test(parsed.session_id)) {
     return `Local session ${parsed.session_id} — after it finishes, resume with claude --resume ${parsed.session_id} in the game directory`;
   }

@@ -1,3 +1,4 @@
+import { permissionBlocked } from './agent-events.js';
 import { startLocalPlay } from './play.js';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -245,6 +246,7 @@ export async function runLocalBuild(input: {
   ws.abort.current = controller;
   input.write(`▸ ${spec.name} is working in games/${ws.slug} — Ctrl+C stops it`);
   let result: { code: number | null };
+  let blocked = false;
   try {
     if (!ws.runAdapter)
       await prepareWorkspace({ cwd: ws.root, env: ws.env, abort: controller.signal, write: input.write });
@@ -278,6 +280,7 @@ export async function runLocalBuild(input: {
       env: childEnv(ws.env, ''),
       abort: controller.signal,
       onLine: (line) => {
+        if (permissionBlocked(line)) blocked = true;
         for (const shown of renderDelegateStream(spec.name, [line], false)) {
           if (shown.includes('⚙ ')) ws.onActivity?.(`${spec.name} · ${shown.split('⚙ ')[1]!.slice(0, 90)}`);
           input.write(shown);
@@ -286,6 +289,12 @@ export async function runLocalBuild(input: {
     });
   } finally {
     ws.abort.current = null;
+  }
+  if (blocked) {
+    input.write(
+      `${spec.name} could not obtain tool permissions in headless mode. No successful edit is confirmed; review its permissions for this game directory and retry.`,
+    );
+    return false;
   }
   if (controller.signal.aborted) {
     input.write(`${spec.name} stopped — the tree keeps whatever it wrote; /diff to see`);

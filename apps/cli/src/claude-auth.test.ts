@@ -36,3 +36,21 @@ it('accepts a verified subscription in the same cwd and environment as the task'
     expect.objectContaining({ cwd: input.cwd, env: input.env }),
   );
 });
+
+it('checks the same settings overrides as the launched adapter', () => {
+  vi.mocked(spawnSync).mockReturnValue({
+    status: 0,
+    stdout: JSON.stringify({ loggedIn: true, authMethod: 'api_key', apiProvider: 'firstParty' }),
+  } as ReturnType<typeof spawnSync>);
+  expect(() =>
+    requireClaudeSubscription({
+      ...input,
+      args: ['-p', '--settings', '/custom.json', '--setting-sources=user', '--bare'],
+    }),
+  ).toThrow('no agent was started');
+  expect(spawnSync).toHaveBeenCalledWith(
+    'claude',
+    ['--settings', '/custom.json', '--setting-sources=user', '--bare', 'auth', 'status', '--json'],
+    expect.anything(),
+  );
+});
