@@ -43,6 +43,8 @@ export async function registerCreatorPatRoutes(app: FastifyInstance, options: Cr
 
   app.post('/api/me/access-tokens', async (request, reply) => {
     if (!sessionOnly(request)) return reply.status(404).send({ error: 'not found' });
+    const contentType = request.headers['content-type']?.split(';')[0]?.trim().toLowerCase();
+    if (contentType !== 'application/json') return reply.status(415).send({ error: 'application/json required' });
     const parsed = MintSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
       return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
