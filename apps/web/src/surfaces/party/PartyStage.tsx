@@ -16,6 +16,9 @@ import {
   type RosterSlot,
 } from '../../mp/protocol.js';
 
+// How long a command may wait for the game's echo.
+const ECHO_WINDOW_MS = 5_000;
+
 type PartyStageProps = {
   game: CatalogEntry;
   session: PartySession;
@@ -52,10 +55,27 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
     frameRef.current?.contentWindow?.postMessage({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload }, '*');
   }, []);
 
-  // The bar's own command; its echo is not a seat.
-  const commandedPhaseRef = useRef<RoomPhase | null>(null);
+  // Commands the bar sent that the game has not echoed back yet.
+  const pendingPhasesRef = useRef<Array<{ phase: RoomPhase; at: number }>>([]);
   const phaseRef = useRef<RoomPhase>('lobby');
   phaseRef.current = phase;
+
+  function expectEcho(phaseCommanded: RoomPhase) {
+    pendingPhasesRef.current.push({ phase: phaseCommanded, at: Date.now() });
+  }
+
+  // A phase the bar did not command came from a seat.
+  const recordSeatPhase = useCallback((next: RoomPhase) => {
+    const previous = phaseRef.current;
+    const fresh = pendingPhasesRef.current.filter((entry) => Date.now() - entry.at < ECHO_WINDOW_MS);
+    const match = fresh.findIndex((entry) => entry.phase === next);
+    // A command the game answered with no phase change is never echoed.
+    pendingPhasesRef.current = match === -1 ? fresh : fresh.slice(match + 1);
+    if (match !== -1) return;
+    if (next === 'paused') recordPartyStep('paused', 'seat');
+    else if (next === 'lobby') recordPartyStep('returned_to_lobby', 'seat');
+    else if (next === 'playing') recordPartyStep(previous === 'paused' ? 'resumed' : 'started', 'seat');
+  }, []);
 
   // Phones have no keyboard here; the host drives the shell.
   const sendCommand = useCallback(
@@ -65,7 +85,7 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
       else if (cmd === 'resume') recordPartyStep('resumed', 'bar');
       else if (cmd === 'restart') recordPartyStep('restarted', 'bar');
       else if (cmd === 'lobby') recordPartyStep('returned_to_lobby', 'bar');
-      commandedPhaseRef.current =
+      const echoed: RoomPhase | null =
         cmd === 'pause'
           ? 'paused'
           : cmd === 'resume' || cmd === 'restart'
@@ -73,6 +93,7 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
             : cmd === 'lobby'
               ? 'lobby'
               : null;
+      if (echoed) expectEcho(echoed);
       // The relay refuses guests in an `ended` room; leave it now.
       const next: RoomPhase | null = cmd === 'restart' ? 'playing' : cmd === 'lobby' ? 'lobby' : null;
       if (!next) return;
@@ -147,7 +168,7 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
 
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [postToGame]);
+  }, [postToGame, recordSeatPhase]);
 
   const joined = roster.filter((slot) => slot.connected).length;
   const minPlayers = game.multiplayer?.minPlayers ?? 2;
@@ -155,25 +176,13 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
   // dead end — but the button copy should still nudge people to scan.
   const canStart = status === 'connected';
 
-  // A phase the bar did not command came from a seat.
-  function recordSeatPhase(next: RoomPhase) {
-    const previous = phaseRef.current;
-    if (commandedPhaseRef.current === next) {
-      commandedPhaseRef.current = null;
-      return;
-    }
-    if (next === 'paused') recordPartyStep('paused', 'seat');
-    else if (next === 'lobby') recordPartyStep('returned_to_lobby', 'seat');
-    else if (next === 'playing') recordPartyStep(previous === 'paused' ? 'resumed' : 'started', 'seat');
-  }
-
   function handleStart() {
     clientRef.current?.setPhase('playing');
     setPhase('playing');
     setStarted(true);
     recordPartyStep('started', 'bar');
     // The host's own start; its echo is not a seat.
-    commandedPhaseRef.current = 'playing';
+    expectEcho('playing');
   }
 
   if (closedReason) {
