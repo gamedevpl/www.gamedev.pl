@@ -73,12 +73,12 @@ export function lanesFromBudget(body: unknown): BrakeNotification | undefined {
   const over = Math.max(spent, forecast) >= 1;
   const rawLanes = /\blanes=([A-Za-z_,]+)/.exec(policyName)?.[1];
   const named = rawLanes === undefined ? undefined : parseLanes(rawLanes);
-  // A typo in a named budget must be loud, not a quiet tick.
+  // A typo in a named budget is loud, never a quiet tick.
   if (named && named.length === 0 && over) return { lanes: [], policyName, rawLanes, reason: 'unrecognised_lanes' };
   const lanes = named ? (over ? named : []) : budgetLanes(spent, forecast);
   if (lanes.length === 0) return { lanes, policyName, reason: 'budget_under_threshold', quiet: true };
   const basis = spent >= 1 ? `spent:${spent}` : `forecast:${forecast}`;
-  // The interval keeps next month's first 100% distinct from this month's.
+  // The interval keeps next month's first trip distinct from this one.
   const interval = typeof budget.costIntervalStart === 'string' ? `:${budget.costIntervalStart}` : '';
   return {
     lanes,
@@ -160,7 +160,7 @@ export async function registerSpendBrakeRoutes(app: FastifyInstance, options: Sp
         return reply.send({ paused: [], reason: 'already_handled' });
       }
 
-      // Kept per alert, bounded: one budget's tick must not forget another's.
+      // Kept per alert, bounded: one budget must not forget another.
       const patch: Partial<CreationLimits> = incidentId
         ? { handledBrakeIncidents: [...handled.slice(-(HANDLED_INCIDENTS_KEPT - 1)), incidentId] }
         : {};
