@@ -313,7 +313,7 @@
     "apps/api/src/realtime/zones.ts": 547,
     "apps/api/src/remix-debug-flag.test.ts": 155,
     "apps/api/src/runtime-image.test.ts": 145,
-    "apps/api/src/self-build.test.ts": 358,
+    "apps/api/src/self-build.test.ts": 342,
     "apps/api/src/static-serving.test.ts": 70,
     "apps/api/src/store-firestore.test.ts": 566,
     "apps/api/src/store/fake-firestore.ts": 328,

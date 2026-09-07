@@ -19,7 +19,7 @@ const QUIET_CLOSABLE: ReadonlySet<JobState> = new Set([
   'needs_changes',
 ]);
 
-// Newest stamp anyone left; creation stamps only for a never-adopted record.
+// Newest stamp anyone left; createdAt only for a never-adopted record.
 export function lastRoundActivityAt(record: {
   createdAt: string;
   roundStartedAt?: string;
@@ -30,13 +30,15 @@ export function lastRoundActivityAt(record: {
 }): number {
   const newest = (stamps: (string | undefined)[]) =>
     Math.max(...stamps.map((stamp) => (stamp ? Date.parse(stamp) : NaN)).filter(Number.isFinite));
+  // A resume stamps roundStartedAt before dispatch; a failed one leaves only it.
   const lived = newest([
+    record.roundStartedAt,
     record.stateSince,
     record.lastAgentSignalAt,
     record.agentEndedAt,
     record.transitions?.at(-1)?.at,
   ]);
-  return Number.isFinite(lived) ? lived : newest([record.roundStartedAt, record.createdAt]);
+  return Number.isFinite(lived) ? lived : newest([record.createdAt]);
 }
 
 // Quiet from every side for the window: close, or carry forever.

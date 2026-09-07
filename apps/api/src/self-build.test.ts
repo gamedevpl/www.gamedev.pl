@@ -632,10 +632,11 @@ describe('self builder (BY-02)', () => {
   });
 
   it('closes a round quiet past QUIET_ROUND_DAYS, and releases what it held', async () => {
-    // Connect window wider than the quiet window, so the quiet rule is the one that fires.
+    // Connect window wider than the quiet window, so the quiet rule fires.
     process.env.SELF_BUILD_CONNECT_DAYS = '30';
     process.env.QUIET_ROUND_DAYS = '14';
-    const opened = Date.parse('2026-07-01T00:00:00Z');
+    // Real time as base: the store stamps roundStartedAt from the wall clock.
+    const opened = Date.now();
     let clock = opened;
     const created = await createApp({
       now: () => clock,

@@ -36,14 +36,14 @@ describe('lastRoundActivityAt', () => {
     ).toBe(Date.parse(ago(5 * DAY)));
   });
 
-  it('falls back to creation stamps only when the job never lived', () => {
-    // The store stamps createdAt with the wall clock; a lived round must not read newer than its state.
-    expect(lastRoundActivityAt({ createdAt: ago(0), roundStartedAt: ago(0), stateSince: ago(15 * DAY) })).toBe(
-      Date.parse(ago(15 * DAY)),
+  it('counts a fresh round start, and falls back to createdAt only when nothing else exists', () => {
+    // resumeBuild stamps roundStartedAt before dispatch; a failed dispatch leaves only it.
+    expect(lastRoundActivityAt({ createdAt: ago(20 * DAY), stateSince: ago(15 * DAY), roundStartedAt: ago(DAY) })).toBe(
+      Date.parse(ago(DAY)),
     );
-    expect(lastRoundActivityAt({ createdAt: ago(9 * DAY), roundStartedAt: ago(8 * DAY) })).toBe(
-      Date.parse(ago(8 * DAY)),
-    );
+    // createdAt is the wall clock at submit; a lived round never reads newer than its stamps.
+    expect(lastRoundActivityAt({ createdAt: ago(0), stateSince: ago(15 * DAY) })).toBe(Date.parse(ago(15 * DAY)));
+    expect(lastRoundActivityAt({ createdAt: ago(9 * DAY) })).toBe(Date.parse(ago(9 * DAY)));
     expect(lastRoundActivityAt({ createdAt: 'garbage' })).toBe(-Infinity);
   });
 });

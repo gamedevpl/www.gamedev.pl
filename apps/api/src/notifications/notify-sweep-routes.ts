@@ -78,54 +78,58 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
         return reply.status(503).send({ error: 'submissions are not configured' });
       }
 
-      const active = await store.listActiveSubmissions();
       const closeDeps: CloseJobDeps = { store, now, backendFor, builderOf, releaseWorkspace, invalidateStatusCache };
-      let emitted = 0;
       let closed = 0;
+      const closedIds = new Set<number>();
+      // Every open round, notified or not: told-about drafts are the lingering ones.
+      for (const record of await store.listOpenRounds()) {
+        const activityAt = lastRoundActivityAt(record);
+        const reason = shouldAutoAbandonSelfRound({
+          builder: builderOf(record),
+          lastAgentSignalAt: record.lastAgentSignalAt,
+          abandonedAt: record.abandonedAt,
+          state: record.state,
+          roundOpenedAt: record.stateSince ?? record.createdAt,
+          now: now(),
+          connectDays: selfBuildConnectDays(),
+        })
+          ? 'no_connect'
+          : shouldAutoAbandonQuietRound({
+                state: record.state,
+                abandonedAt: record.abandonedAt,
+                lastActivityAt: activityAt,
+                now: now(),
+                quietDays: quietRoundDays(),
+              })
+            ? 'quiet'
+            : null;
+        if (!reason) continue;
+        try {
+          // A claim, not a write: refused if the round moved meanwhile.
+          const result = await closeJob(closeDeps, {
+            record,
+            to: 'abandoned',
+            by: 'system',
+            reason,
+            log: request.log,
+            guard: { activityAt },
+          });
+          if (!result.closed) continue;
+          closed += 1;
+          closedIds.add(record.jobId);
+          request.log.warn({ jobId: record.jobId, state: record.state, reason }, 'open round closed by the sweep');
+        } catch (closeError) {
+          request.log.error({ err: closeError, jobId: record.jobId, reason }, 'round close failed');
+        }
+      }
+
+      const active = (await store.listActiveSubmissions()).filter((record) => !closedIds.has(record.jobId));
+      let emitted = 0;
       const stalledIssues: number[] = [];
       // Oldest uncollected change request per job, so the alert pass rereads nothing.
       const pendingFeedback = new Map<number, string>();
       for (const record of active) {
         try {
-          // Self round with no agent signal ever: abandon after the connect window.
-          if (
-            shouldAutoAbandonSelfRound({
-              builder: builderOf(record),
-              lastAgentSignalAt: record.lastAgentSignalAt,
-              abandonedAt: record.abandonedAt,
-              state: record.state,
-              roundOpenedAt: record.stateSince ?? record.createdAt,
-              now: now(),
-              connectDays: selfBuildConnectDays(),
-            })
-          ) {
-            await closeJob(closeDeps, {
-              record,
-              to: 'abandoned',
-              by: 'system',
-              reason: 'no_connect',
-              log: request.log,
-            });
-            closed += 1;
-            continue;
-          }
-
-          // Quiet from every side for the window: close it, or carry it forever.
-          if (
-            shouldAutoAbandonQuietRound({
-              state: record.state,
-              abandonedAt: record.abandonedAt,
-              lastActivityAt: lastRoundActivityAt(record),
-              now: now(),
-              quietDays: quietRoundDays(),
-            })
-          ) {
-            await closeJob(closeDeps, { record, to: 'abandoned', by: 'system', reason: 'quiet', log: request.log });
-            request.log.warn({ jobId: record.jobId, state: record.state }, 'quiet round closed by the sweep');
-            closed += 1;
-            continue;
-          }
-
           // Stale handoff ack: outgoing agent may be gone.
           if (
             record.builderHandoff &&

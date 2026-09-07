@@ -1,4 +1,5 @@
 import type { Firestore } from '@google-cloud/firestore';
+import { lastRoundActivityAt } from '../../platform/quiet-round.js';
 import {
   nextRoundGeneration,
   transitionClosesRound,
@@ -16,9 +17,14 @@ import {
 import type { SubmissionRecord } from '../records/submission.js';
 import { clearRoundSignals } from './rounds.js';
 
+// Refused unless the round's newest activity stamp still equals `activityAt`.
+export interface TransitionGuard {
+  activityAt: number;
+}
+
 export interface DispatchStore {
   // Moves a job to transition.to, stamping stateSince and appending to history.
-  recordJobTransition(jobId: number, transition: JobTransition): Promise<boolean>;
+  recordJobTransition(jobId: number, transition: JobTransition, guard?: TransitionGuard): Promise<boolean>;
 
   // Appends a dispatch ref -- which backend is building this job, and where.
   recordDispatch(
@@ -61,9 +67,10 @@ export class InMemoryDispatchStore implements DispatchStore {
 
   constructor(private submissions: Map<number, SubmissionRecord>) {}
 
-  async recordJobTransition(jobId: number, transition: JobTransition): Promise<boolean> {
+  async recordJobTransition(jobId: number, transition: JobTransition, guard?: TransitionGuard): Promise<boolean> {
     const sub = this.submissions.get(jobId);
     if (!sub) return false;
+    if (guard && lastRoundActivityAt(sub) !== guard.activityAt) return false;
     // Idempotent for identical arrivals; a new reason wins only for the operator.
     if (sub.state === transition.to) {
       const last = sub.transitions?.at(-1);
@@ -202,13 +209,15 @@ export class FirestoreDispatchStore implements DispatchStore {
     return this.db.collection('submissions').doc(String(jobId));
   }
 
-  async recordJobTransition(jobId: number, transition: JobTransition): Promise<boolean> {
+  async recordJobTransition(jobId: number, transition: JobTransition, guard?: TransitionGuard): Promise<boolean> {
     const ref = this.ref(jobId);
     // Transactional -- a concurrent poll and sweep could otherwise drop one write.
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) return false;
       const current = snap.data() as SubmissionRecord;
+      // Compared inside the transaction: the claim is what makes a close safe.
+      if (guard && lastRoundActivityAt(current) !== guard.activityAt) return false;
       // Same race as InMemoryDispatchStore -- a new reason wins only for the operator.
       if (current.state === transition.to) {
         const last = current.transitions?.at(-1);

@@ -1,5 +1,5 @@
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
-import type { Store, SubmissionRecord } from '../platform/store.js';
+import type { Store, SubmissionRecord, TransitionGuard } from '../platform/store.js';
 import type { BuilderKind } from './builder.js';
 import type { JobState, TransitionActor } from './job-state.js';
 
@@ -20,13 +20,23 @@ export interface CloseJobInput {
   by: TransitionActor;
   reason: string;
   log: Log;
+  // Sweep only: a claim, refused if the round moved since the read.
+  guard?: TransitionGuard;
 }
 
-// One exit for creator, operator and sweep: cancel, record, release, mark.
-export async function closeJob(deps: CloseJobDeps, input: CloseJobInput): Promise<{ stopEnforced: boolean }> {
+// One exit for creator, operator and sweep: claim, cancel, release, mark.
+export async function closeJob(
+  deps: CloseJobDeps,
+  input: CloseJobInput,
+): Promise<{ closed: boolean; stopEnforced: boolean }> {
   const { record, log } = input;
   const jobId = record.jobId;
   const at = new Date(deps.now()).toISOString();
+
+  // Transition first: with a guard it is the claim everything rests on.
+  const transition = { to: input.to, at, by: input.by, reason: input.reason };
+  const recorded = await deps.store.recordJobTransition(jobId, transition, input.guard);
+  if (input.guard && !recorded) return { closed: false, stopEnforced: false };
 
   let stopEnforced = false;
   const ref = record.dispatch?.refs.at(-1);
@@ -38,8 +48,6 @@ export async function closeJob(deps: CloseJobDeps, input: CloseJobInput): Promis
       log.error({ err: cancelError, jobId, reason: input.reason }, 'agent cancel failed; job closes regardless');
     }
   }
-
-  await deps.store.recordJobTransition(jobId, { to: input.to, at, by: input.by, reason: input.reason });
 
   // Re-read: the cancel may have moved workspace fields under us.
   const after = (await deps.store.getSubmission(jobId)) ?? record;
@@ -54,5 +62,5 @@ export async function closeJob(deps: CloseJobDeps, input: CloseJobInput): Promis
 
   await deps.store.setSubmissionAbandoned(jobId, at);
   deps.invalidateStatusCache?.(jobId);
-  return { stopEnforced };
+  return { closed: true, stopEnforced };
 }

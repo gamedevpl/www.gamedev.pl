@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { FirestoreStore } from './platform/store.js';
+import { FirestoreStore, InMemoryStore } from './platform/store.js';
+import { lastRoundActivityAt } from './platform/quiet-round.js';
 import { fakeFirestore } from './store/fake-firestore.js';
 
 /**
@@ -728,5 +729,44 @@ describe('sharded spend counters', () => {
     await store.incrementGlobalModerationCalls('2026-08-30', 3);
     await store.incrementGlobalModerationCalls('2026-08-30', 2);
     expect(await store.getGlobalModerationCount('2026-08-30')).toBe(5);
+  });
+});
+
+describe.each([
+  ['InMemoryStore', () => new InMemoryStore()],
+  ['FirestoreStore', () => new FirestoreStore(fakeFirestore().db)],
+])('%s.recordJobTransition guard', (_name, make) => {
+  it('refuses the close when the round moved since the sweep read it', async () => {
+    const store = make();
+    // Stamps run forward from the wall clock: createSubmission stamps roundStartedAt with it.
+    const HOUR = 60 * 60 * 1000;
+    const base = Date.now();
+    const at = (ms: number) => new Date(base + ms).toISOString();
+    await store.createSubmission(9, 'g:owner', 'Racing');
+    await store.recordJobTransition(9, { to: 'building', at: at(HOUR), by: 'system' });
+    const seen = lastRoundActivityAt((await store.getSubmission(9))!);
+    // Something happened after the read: the agent delivered.
+    await store.recordJobTransition(9, { to: 'submitted', at: at(2 * HOUR), by: 'agent' });
+
+    const stale = { to: 'abandoned' as const, at: at(15 * 24 * HOUR), by: 'system' as const, reason: 'quiet' };
+    expect(await store.recordJobTransition(9, stale, { activityAt: seen })).toBe(false);
+    expect((await store.getSubmission(9))?.state).toBe('submitted');
+
+    // The claim with the current stamp goes through.
+    const fresh = lastRoundActivityAt((await store.getSubmission(9))!);
+    expect(fresh).toBeGreaterThan(seen);
+    expect(await store.recordJobTransition(9, stale, { activityAt: fresh })).toBe(true);
+    expect((await store.getSubmission(9))?.state).toBe('abandoned');
+  });
+
+  it('lists a notified change-request round as open, which the sweep filter does not', async () => {
+    const store = make();
+    await store.createSubmission(10, 'g:owner', 'Told');
+    await store.recordJobTransition(10, { to: 'needs_changes', at: '2026-07-01T00:00:00.000Z', by: 'gate' });
+    await store.setSubmissionNotifiedStatus(10, 'needs_changes');
+    expect((await store.listActiveSubmissions()).map((r) => r.jobId)).toEqual([]);
+    expect((await store.listOpenRounds()).map((r) => r.jobId)).toEqual([10]);
+    await store.setSubmissionAbandoned(10, '2026-07-16T00:00:00.000Z');
+    expect(await store.listOpenRounds()).toEqual([]);
   });
 });
