@@ -13,7 +13,13 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Claude tasks verify subscription authentication and refuse API billing; local agent choices survive failed requests, live status follows new rounds, and verification errors retain their details (#1201).
+- Claude subscription checks accept setup-token logins, stay responsive and explain incompatible CLI versions (#1201).
+- Local agent choices survive failed requests (#1201).
+- Live status follows new rounds and reports the active agent and tool (#1201).
+- Verification errors retain filenames and full diagnostic details (#1201).
+- Antigravity events are readable and an empty run with denied permissions cannot claim success (#1201).
+- Partial Claude tool refusals do not prevent verification of completed edits (#1201).
+- Session resume instructions identify the correct agent (#1201).
 
 ## 0.5.1 — 2026-09-07
 

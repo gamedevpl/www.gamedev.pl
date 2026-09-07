@@ -185,10 +185,14 @@ The editor returns when work completes; arrow keys recall prompts or navigate ch
 ### Claude authentication and local sessions
 
 Claude delegation requires Claude.ai subscription authentication. The CLI removes inherited
-Anthropic API/provider environment settings only from the child process and checks
+Anthropic credentials, authentication headers and provider-routing environment settings only from the child process and checks
 `claude auth status --json` in the task directory before launching. An API login, a
 settings-level API override, or an unverifiable login stops the task instead of falling
-back to API billing. Sign in with `claude auth login` using your subscription to continue.
+back to API billing. Both Claude.ai login and `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token`
+are accepted. Older versions without `auth status` require a Claude Code update.
+The check is asynchronous and cancellable; local preparation and delegation telemetry wait
+for it. Its result is reused for that launch, then checked afresh for the next task so
+account or settings changes cannot reuse a stale approval. Model-selection settings remain intact.
 Your parent shell and stored credentials are not modified. Subscription limits and any
 extra-usage settings remain controlled by Claude; this check is not a promise of unlimited usage.
 

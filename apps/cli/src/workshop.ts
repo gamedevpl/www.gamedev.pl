@@ -1,3 +1,4 @@
+import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { permissionBlocked } from './agent-events.js';
 import { startLocalPlay } from './play.js';
 import { join } from 'node:path';
@@ -24,6 +25,7 @@ export type AdapterRun = (input: {
   env: NodeJS.ProcessEnv;
   abort?: AbortSignal;
   onLine?: (line: string) => void;
+  authCheck?: Promise<void>;
 }) => Promise<{ code: number | null }>;
 
 type VerifyRun = NonNullable<Parameters<typeof runLadder>[0]['run']>;
@@ -63,7 +65,7 @@ export function detectLocalAdapters(
 }
 
 async function defaultAdapterRun(input: Parameters<AdapterRun>[0]): Promise<{ code: number | null }> {
-  const child = spawnAdapter({ ...input, timeoutMs: ADAPTER_TIMEOUT_MS });
+  const child = await spawnAdapter({ ...input, timeoutMs: ADAPTER_TIMEOUT_MS });
   for (const stream of [child.stdout, child.stderr]) {
     if (stream) createInterface({ input: stream }).on('line', (line: string) => input.onLine?.(line));
   }
@@ -244,10 +246,21 @@ export async function runLocalBuild(input: {
   const cwd = spec.cwd === 'game-dir' ? join(ws.root, 'games', ws.slug) : ws.root;
   const controller = new AbortController();
   ws.abort.current = controller;
-  input.write(`▸ ${spec.name} is working in games/${ws.slug} — Ctrl+C stops it`);
   let result: { code: number | null };
   let blocked = false;
+  let authCheck: Promise<void> | undefined;
   try {
+    if (!ws.runAdapter && spec.name === 'claude') {
+      authCheck = requireClaudeSubscription({
+        command: spec.command,
+        cwd,
+        env: subscriptionEnv(childEnv(ws.env, '')),
+        args: spec.headless,
+        abort: controller.signal,
+      });
+      await authCheck;
+    }
+    input.write(`▸ Preparing ${spec.name} in games/${ws.slug} — Ctrl+C stops it`);
     if (!ws.runAdapter)
       await prepareWorkspace({ cwd: ws.root, env: ws.env, abort: controller.signal, write: input.write });
     if (!ws.runAdapter && !ws.unattended) {
@@ -276,6 +289,7 @@ export async function runLocalBuild(input: {
     result = await (ws.runAdapter ?? defaultAdapterRun)({
       spec,
       prompt: input.brief,
+      authCheck,
       cwd,
       env: childEnv(ws.env, ''),
       abort: controller.signal,

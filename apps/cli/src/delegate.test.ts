@@ -94,3 +94,9 @@ it('renders Antigravity tools without exposing transport JSON', () => {
   expect(output).not.toContain('SUCCESS');
   expect(output).not.toContain('/private/path');
 });
+
+it('shows Claude resume instructions only for the Claude adapter', () => {
+  const event = JSON.stringify({ type: 'system', session_id: '12345678-1234-1234-1234-123456789abc' });
+  expect(renderDelegateStream('claude', [event], false).join('')).toContain('claude --resume');
+  expect(renderDelegateStream('cursor', [event], false).join('')).not.toContain('claude');
+});

@@ -24,11 +24,11 @@ export function antigravityText(value: unknown): string | null | undefined {
 }
 
 export function permissionBlocked(line: string): boolean {
-  if (line.includes('headless mode cannot prompt') && line.includes('auto-denied')) return true;
-  try {
-    const event = JSON.parse(line) as Event;
-    return event?.type === 'result' && Array.isArray(event.permission_denials) && event.permission_denials.length > 0;
-  } catch {
-    return false;
-  }
+  if (
+    line.includes('no output produced') &&
+    line.includes('headless mode cannot prompt') &&
+    line.includes('auto-denied')
+  )
+    return true;
+  return false;
 }

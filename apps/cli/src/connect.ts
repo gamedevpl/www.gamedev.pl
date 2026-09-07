@@ -1,3 +1,4 @@
+import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -29,10 +30,11 @@ export type AdapterRun = (input: {
   env: NodeJS.ProcessEnv;
   abort?: AbortSignal;
   onLine?: (line: string) => void;
+  authCheck?: Promise<void>;
 }) => Promise<{ code: number | null; lines: string[] }>;
 
 async function defaultAdapterRun(input: Parameters<AdapterRun>[0]): Promise<{ code: number | null; lines: string[] }> {
-  const child = spawnAdapter({ ...input, timeoutMs: 10 * 60_000 });
+  const child = await spawnAdapter({ ...input, timeoutMs: 10 * 60_000 });
   const lines: string[] = [];
   for (const stream of [child.stdout, child.stderr]) {
     if (stream)
@@ -271,13 +273,26 @@ export async function connectGame(input: {
     if (!local) {
       input.write(`MCP workspace: ${cwd} — scratch files are kept here after the agent exits`);
     }
+    const envForAgent = childEnv(env, '', { url: payload.mcpUrl, authorization: payload.authorizationHeader });
+    const authCheck =
+      spec.name === 'claude' && !input.runAdapter
+        ? requireClaudeSubscription({
+            command: wired.spec.command,
+            args: wired.spec.headless,
+            cwd,
+            env: subscriptionEnv(envForAgent),
+            abort: input.abort,
+          })
+        : undefined;
+    await authCheck;
     input.telemetry?.record('delegate_used', spec.name);
     const result = await (input.runAdapter ?? defaultAdapterRun)({
       spec: wired.spec,
       prompt:
         payload.kickoffPrompt ?? `Edit ${input.slug} in this checkout. The creator will deliver with gamedevpl submit.`,
       cwd,
-      env: childEnv(env, '', { url: payload.mcpUrl, authorization: payload.authorizationHeader }),
+      env: envForAgent,
+      authCheck,
       abort: input.abort,
       onLine: (line) => {
         for (const shown of renderDelegateStream(spec.name, [line], false)) input.write(shown);
