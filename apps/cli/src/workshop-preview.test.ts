@@ -69,8 +69,8 @@ it.each([true, false])('distinguishes empty Antigravity runs from partial Claude
   const run = vi.fn(() => ({ status: 0, stderr: '' }));
   const write = vi.fn();
   const spec = {
-    name: 'agy',
-    command: 'agy',
+    name: empty ? 'agy' : 'claude',
+    command: empty ? 'agy' : 'claude',
     headless: [],
     versionFlag: '--help',
     events: { flag: '', dialect: 'ndjson' as const },
@@ -103,6 +103,7 @@ it.each([true, false])('distinguishes empty Antigravity runs from partial Claude
   } else {
     expect(run).toHaveBeenCalled();
     expect(write).toHaveBeenCalledWith('✓ static ladder green');
+    expect(write).toHaveBeenCalledWith(expect.stringContaining('Some tools were denied'));
   }
 });
 
