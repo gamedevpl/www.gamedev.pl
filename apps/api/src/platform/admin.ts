@@ -177,6 +177,8 @@ export interface CreationLimitsResponse {
     // Each gate run is a 30-minute E2_HIGHCPU_8 build.
     gatePaused: boolean;
     globalDailyGateRunCap: number;
+    partyPaused: boolean;
+    telemetrySampleRate: number | null;
     // Round 0's kill switch, ceiling and provider picker.
     seedingMode: 'auto' | 'off';
     globalDailySeedCap: number;
@@ -502,6 +504,8 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
           stored?.globalDailySearchEmbeddingCap ?? resolveDefaultGlobalDailySearchEmbeddingCap(),
         gatePaused: stored?.gatePaused === true,
         globalDailyGateRunCap: stored?.globalDailyGateRunCap ?? resolveDefaultGlobalDailyGateRunCap(),
+        partyPaused: stored?.partyPaused === true,
+        telemetrySampleRate: stored?.telemetrySampleRate ?? null,
         seedingMode: stored?.seedingMode ?? 'auto',
         globalDailySeedCap: stored?.globalDailySeedCap ?? resolveDefaultGlobalDailySeedCap(),
         seedProvider: {

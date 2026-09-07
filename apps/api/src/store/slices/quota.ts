@@ -227,6 +227,11 @@ export class InMemoryQuotaStore implements QuotaStore {
   }
 }
 
+// A hand-edited document must not blackhole telemetry: only 0..1 counts.
+function readSampleRate(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1 ? value : null;
+}
+
 export class FirestoreQuotaStore implements QuotaStore {
   constructor(private db: Firestore) {}
 
@@ -316,6 +321,8 @@ export class FirestoreQuotaStore implements QuotaStore {
           : null,
       managedDailyCap: typeof data?.managedDailyCap === 'number' ? data.managedDailyCap : null,
       managedDailyUserCap: typeof data?.managedDailyUserCap === 'number' ? data.managedDailyUserCap : null,
+      partyPaused: data?.partyPaused === true,
+      telemetrySampleRate: readSampleRate(data?.telemetrySampleRate),
       seedingMode: data?.seedingMode === 'off' ? 'off' : 'auto',
       globalDailySeedCap: typeof data?.globalDailySeedCap === 'number' ? data.globalDailySeedCap : null,
       seedProviderOverride: typeof data?.seedProviderOverride === 'string' ? data.seedProviderOverride : null,

@@ -39,6 +39,18 @@ const HELP = `Usage: node infra/load-test.mjs --target <base-url> [options]
 
 const PRODUCTION_HOSTS = new Set(['www.gamedev.pl', 'gamedev.pl', 'gamedevpl.web.app']);
 const RATE_NEEDING_CONSENT = 50;
+/** The play route's per-IP budget. One process is one bucket, however many visits it starts. */
+const PLAY_REQUESTS_PER_IP_PER_MINUTE = 60;
+
+/**
+ * A Cloud Run *service* URL is the live service; a candidate revision is addressed by its
+ * tag, which puts `---` in the hostname (the deploy tags candidates exactly so). So an
+ * untagged run.app host is production too, even though it is nobody's custom domain.
+ */
+function isProduction(hostname) {
+  if (PRODUCTION_HOSTS.has(hostname)) return true;
+  return hostname.endsWith('.run.app') && !hostname.includes('---');
+}
 
 function parseArgs(argv) {
   const args = { rate: 2, duration: 20, slugs: [], telemetry: false, allowProduction: false };
@@ -88,8 +100,8 @@ function parseArgs(argv) {
 function validate(args) {
   if (!args.target) throw new Error('--target is required; there is no default on purpose');
   const url = new URL(args.target);
-  if (PRODUCTION_HOSTS.has(url.hostname) && !args.allowProduction) {
-    throw new Error(`${url.hostname} is production. Pass --allow-production if you mean it.`);
+  if (isProduction(url.hostname) && !args.allowProduction) {
+    throw new Error(`${url.hostname} is production. Deploy a tagged candidate revision, or pass --allow-production.`);
   }
   if (args.rate > RATE_NEEDING_CONSENT && !args.allowProduction) {
     throw new Error(`--rate above ${RATE_NEEDING_CONSENT}/s needs --allow-production`);
@@ -97,6 +109,11 @@ function validate(args) {
   if (!Number.isFinite(args.rate) || args.rate <= 0) throw new Error('--rate must be positive');
   if (!Number.isFinite(args.duration) || args.duration <= 0) throw new Error('--duration must be positive');
   return url;
+}
+
+/** True when the configured rate will spend the play route's per-IP budget. */
+function playBudgetExceeded(args) {
+  return args.rate * 60 > PLAY_REQUESTS_PER_IP_PER_MINUTE;
 }
 
 /** One measurement per request, kept raw so percentiles are exact rather than binned. */
@@ -209,6 +226,17 @@ function report(args, base, elapsedSeconds, started) {
     '',
     'Read it against the objectives in `docs/runbooks/launch-day.md`: catalog p95 under',
     '1.5s warm, and no step failing outside its own rate limiter.',
+    ...(playBudgetExceeded(args)
+      ? [
+          '',
+          `**The play row measures the rate limiter, not the play path.** Every request here`,
+          `shares one client IP, and the play route allows ${PLAY_REQUESTS_PER_IP_PER_MINUTE} per IP per minute, so a`,
+          `rate of ${args.rate}/s exhausts the bucket in about`,
+          `${(PLAY_REQUESTS_PER_IP_PER_MINUTE / (args.rate * 60)).toFixed(1)} minutes' worth of visits and 429s after that.`,
+          'Real launch traffic is spread over thousands of addresses. To measure the play path',
+          "itself, raise the route's per-IP budget on the candidate, or drive it from several hosts.",
+        ]
+      : []),
   ];
   return lines.join('\n');
 }
@@ -221,6 +249,13 @@ async function main() {
   }
   const base = validate(args);
   const slugs = await playableSlugs(args, base);
+
+  if (slugs.length && playBudgetExceeded(args)) {
+    process.stderr.write(
+      `WARNING: ${args.rate} visits/s sends more than ${PLAY_REQUESTS_PER_IP_PER_MINUTE} play requests per minute ` +
+        'from one address, so the play row will mostly measure 429s. See the note in the report.\n',
+    );
+  }
 
   process.stderr.write(
     `Driving ${base.origin} at ${args.rate} visits/s for ${args.duration}s` +
