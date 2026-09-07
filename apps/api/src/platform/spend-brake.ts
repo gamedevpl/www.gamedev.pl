@@ -6,15 +6,16 @@ import type { InternalAuthVerifier } from './internal-auth.js';
 
 // Pauses lanes only: never raises a cap, never resumes.
 
-// External input selects from this list, never names a field.
+// External input picks from this list; `seeding` kills round 0.
 const PAUSEABLE = {
-  creation: 'paused',
-  editing: 'editingPaused',
-  chat: 'chatPaused',
-  tabComplete: 'tabCompletePaused',
-  search: 'searchPaused',
-  gate: 'gatePaused',
-} as const satisfies Record<string, keyof CreationLimits>;
+  creation: { paused: true },
+  editing: { editingPaused: true },
+  chat: { chatPaused: true },
+  tabComplete: { tabCompletePaused: true },
+  search: { searchPaused: true },
+  gate: { gatePaused: true },
+  seeding: { seedingMode: 'off' },
+} as const satisfies Record<string, Partial<CreationLimits>>;
 
 export type PauseableLane = keyof typeof PAUSEABLE;
 
@@ -36,10 +37,9 @@ export function parseLanes(raw: unknown): PauseableLane[] {
   return [...seen];
 }
 
-// An unrecognised lane pauses nothing, which is right.
-
 // `reason` says why nothing paused; the log answers instead of asking.
-export type BrakeSkipReason = 'no_incident' | 'closed' | 'no_lanes_label' | 'unrecognised_lanes';
+export type BrakeSkipReason =
+  'no_incident' | 'closed' | 'no_lanes_label' | 'unrecognised_lanes' | 'budget_under_threshold';
 
 export interface BrakeNotification {
   lanes: PauseableLane[];
@@ -48,9 +48,31 @@ export interface BrakeNotification {
   state?: string;
   rawLanes?: string;
   reason?: BrakeSkipReason;
+  // A routine budget tick under every threshold: expected, not worth a warning.
+  quiet?: boolean;
 }
 
+// Budgets tick every ~20 min; only 100% spent/forecast pulls all lanes.
+export function lanesFromBudget(body: unknown): BrakeNotification | undefined {
+  const budget = body as Record<string, unknown> | undefined;
+  if (!budget || typeof budget !== 'object' || typeof budget.budgetDisplayName !== 'string') return undefined;
+  const policyName = budget.budgetDisplayName;
+  const ratio = (key: string) => (typeof budget[key] === 'number' ? (budget[key] as number) : 0);
+  const spent = ratio('alertThresholdExceeded');
+  const forecast = ratio('forecastThresholdExceeded');
+  if (spent < 1 && forecast < 1) return { lanes: [], policyName, reason: 'budget_under_threshold', quiet: true };
+  const basis = spent >= 1 ? 'spent' : 'forecast';
+  return {
+    lanes: Object.keys(PAUSEABLE) as PauseableLane[],
+    incidentId: `budget:${policyName}:${basis}:${Math.max(spent, forecast)}`,
+    policyName,
+  };
+}
+
+// An unrecognised lane pauses nothing, which is right.
 export function lanesFromNotification(body: unknown): BrakeNotification {
+  const fromBudget = lanesFromBudget(body);
+  if (fromBudget) return fromBudget;
   const incident = (body as { incident?: Record<string, unknown> } | undefined)?.incident;
   if (!incident || typeof incident !== 'object') return { lanes: [], reason: 'no_incident' };
   const state = typeof incident.state === 'string' ? incident.state : undefined;
@@ -99,18 +121,18 @@ export async function registerSpendBrakeRoutes(app: FastifyInstance, options: Sp
       if (!store) return reply.status(503).send({ error: 'the spend brake is not configured' });
 
       const payload = decodePushEnvelope(request.body);
-      const { lanes, incidentId, policyName, state, rawLanes, reason } = lanesFromNotification(payload);
+      const { lanes, incidentId, policyName, state, rawLanes, reason, quiet } = lanesFromNotification(payload);
       if (lanes.length === 0) {
         // Acknowledged, not retried: a redelivery pauses nothing either.
-        request.log.warn(
+        request.log[quiet ? 'info' : 'warn'](
           { incidentId, policyName, state, rawLanes, reason, decoded: payload !== undefined },
-          'spend brake fired with no recognised lane',
+          quiet ? 'spend brake heard a budget tick under threshold' : 'spend brake fired with no recognised lane',
         );
         return reply.send({ paused: [], reason });
       }
 
       const patch: Partial<CreationLimits> = {};
-      for (const lane of lanes) patch[PAUSEABLE[lane]] = true;
+      for (const lane of lanes) Object.assign(patch, PAUSEABLE[lane]);
       await store.setCreationLimits(patch, `alert:${incidentId ?? 'unknown'}`);
       request.log.error({ incidentId, policyName, lanes }, 'spend brake pulled by a monitoring alert');
       return reply.send({ paused: lanes });
