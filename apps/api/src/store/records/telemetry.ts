@@ -95,6 +95,7 @@ export interface VisitEvent {
     | 'create_step'
     | 'waitlist_step'
     | 'invite_step'
+    | 'party_step'
     | 'beta_welcome_step'
     | 'studio_step'
     | 'editor_step'
@@ -135,6 +136,7 @@ export interface VisitEvent {
    * (`redirect` | `menu`). Absent on events recorded before the field existed;
    * never a game identity.
    */
+  // party_step: bar is the host's party chrome, seat is the game.
   via?: string;
   /**
    * `remix_step` with `step: 'offered'` or `'opened'`: which control it was —

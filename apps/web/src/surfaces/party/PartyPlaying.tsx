@@ -7,7 +7,7 @@ import { resolveControlRows } from '../../howToPlay.js';
 import type { PartyCommand, RoomPhase, RosterSlot } from '../../mp/protocol.js';
 import { PixelIcon } from '../../PixelIcon.js';
 import { PublishedGameFrame } from '../../PublishedGameFrame.js';
-import type { PlayVia } from '../../visitTelemetry.js';
+import { recordPartyStep, type PlayVia } from '../../visitTelemetry.js';
 
 type PartyPlayingProps = {
   game: CatalogEntry;
@@ -24,8 +24,12 @@ type PartyPlayingProps = {
 export function PartyPlaying({ game, roster, frameRef, via, phase, onCommand, onExit }: PartyPlayingProps) {
   const { t } = useTranslation();
   const [howToOpen, setHowToOpen] = useState(false);
-  // The last argument lands the game's own Quit Game row.
-  const player = useGamePlayer(frameRef, true, undefined, undefined, undefined, undefined, undefined, onExit);
+  // Quit is the game's own row, so always a seat.
+  const quit = useCallback(() => {
+    recordPartyStep('quit', 'seat');
+    onExit();
+  }, [onExit]);
+  const player = useGamePlayer(frameRef, true, undefined, undefined, undefined, undefined, undefined, quit);
 
   // What the game reports, else the catalog. Both land late.
   const controlRows = resolveControlRows(player.controls, game.controls ?? '');

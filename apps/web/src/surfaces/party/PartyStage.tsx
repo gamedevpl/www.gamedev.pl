@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import './party.css';
 import type { CatalogEntry } from '../../catalog.js';
-import type { PlayVia } from '../../visitTelemetry.js';
+import { recordPartyStep, type PlayVia } from '../../visitTelemetry.js';
 import { joinUrl, type PartySession } from './mpApi.js';
 import { PartyPlaying } from './PartyPlaying.js';
 import { QrCode } from './QrCode.js';
@@ -52,10 +52,27 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
     frameRef.current?.contentWindow?.postMessage({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload }, '*');
   }, []);
 
+  // The bar's own command; its echo is not a seat.
+  const commandedPhaseRef = useRef<RoomPhase | null>(null);
+  const phaseRef = useRef<RoomPhase>('lobby');
+  phaseRef.current = phase;
+
   // Phones have no keyboard here; the host drives the shell.
   const sendCommand = useCallback(
     (cmd: PartyCommand) => {
       postToGame({ t: 'command', cmd });
+      if (cmd === 'pause') recordPartyStep('paused', 'bar');
+      else if (cmd === 'resume') recordPartyStep('resumed', 'bar');
+      else if (cmd === 'restart') recordPartyStep('restarted', 'bar');
+      else if (cmd === 'lobby') recordPartyStep('returned_to_lobby', 'bar');
+      commandedPhaseRef.current =
+        cmd === 'pause'
+          ? 'paused'
+          : cmd === 'resume' || cmd === 'restart'
+            ? 'playing'
+            : cmd === 'lobby'
+              ? 'lobby'
+              : null;
       // The relay refuses guests in an `ended` room; leave it now.
       const next: RoomPhase | null = cmd === 'restart' ? 'playing' : cmd === 'lobby' ? 'lobby' : null;
       if (!next) return;
@@ -64,6 +81,11 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
     },
     [postToGame],
   );
+
+  // The rung every later one is measured against.
+  useEffect(() => {
+    recordPartyStep('lobby_opened');
+  }, []);
 
   useEffect(() => {
     const client = new RoomClient({
@@ -75,6 +97,7 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
       },
       onFrame: (frame) => {
         if (frame.t === 'roster') {
+          if (frame.slots.some((slot) => slot.connected)) recordPartyStep('guest_joined');
           rosterRef.current = frame.slots;
           setRoster(frame.slots);
           postToGame({ t: 'roster', slots: frame.slots });
@@ -114,6 +137,7 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
         postToGame({ t: 'command', cmd: 'start' });
       }
       if (message.t === 'phase') {
+        recordSeatPhase(message.phase);
         setPhase(message.phase);
         clientRef.current?.setPhase(message.phase);
         // The room's front door is the lobby, not the game's.
@@ -131,10 +155,25 @@ export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
   // dead end — but the button copy should still nudge people to scan.
   const canStart = status === 'connected';
 
+  // A phase the bar did not command came from a seat.
+  function recordSeatPhase(next: RoomPhase) {
+    const previous = phaseRef.current;
+    if (commandedPhaseRef.current === next) {
+      commandedPhaseRef.current = null;
+      return;
+    }
+    if (next === 'paused') recordPartyStep('paused', 'seat');
+    else if (next === 'lobby') recordPartyStep('returned_to_lobby', 'seat');
+    else if (next === 'playing') recordPartyStep(previous === 'paused' ? 'resumed' : 'started', 'seat');
+  }
+
   function handleStart() {
     clientRef.current?.setPhase('playing');
     setPhase('playing');
     setStarted(true);
+    recordPartyStep('started', 'bar');
+    // The host's own start; its echo is not a seat.
+    commandedPhaseRef.current = 'playing';
   }
 
   if (closedReason) {
