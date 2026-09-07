@@ -1,3 +1,4 @@
+import { offerKitUpdate, updateKit } from './kit-update.js';
 import { improvePublished } from './improve.js';
 import { playGame } from './play.js';
 import { CLI_BIN, cliUsage } from './bin-name.js';
@@ -53,6 +54,27 @@ export async function handleReplLine(input: {
   let trimmed = retry?.request ?? input.line.trim();
   if (!trimmed) return { next: 'continue', conversationId: input.conversationId };
   if (trimmed === '/quit' || trimmed === '/exit') return { next: 'quit' };
+  if (trimmed === '/kit' || trimmed === '/kit update') {
+    const controller = new AbortController();
+    if (input.abort) input.abort.current = controller;
+    try {
+      await (trimmed === '/kit update' ? updateKit : offerKitUpdate)({
+        api: input.api,
+        cwd: input.workshop?.root ?? process.cwd(),
+        env: input.env ?? process.env,
+        pick: input.pick,
+        write: input.write,
+        abort: controller.signal,
+        telemetry: input.telemetry,
+        activity: input.onActivity,
+      });
+    } catch (error) {
+      input.write(formatError(error));
+    } finally {
+      if (input.abort) input.abort.current = null;
+    }
+    return { next: 'continue', conversationId: input.conversationId };
+  }
   if (/^\/play(?:\s|$)/u.test(trimmed)) {
     try {
       const parsed = parseArgv([

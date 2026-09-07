@@ -322,3 +322,9 @@ CLI vocabulary changes must also update the labels in `apps/web/src/CliFunnelBlo
 `play_requested` counts requests to open a local or remote game, not evidence that
 the game loaded or was played. Query `cli_step` grouped by `step` and visit ID;
 local play has no game identifier or per-game health events.
+
+Creator Kit updates emit `kit_update_available`, `kit_update_started`,
+`kit_update_completed`, and `kit_update_failed` in the CLI visit stream (creator
+return / funnel questions 4–5). No signed URLs, checkout paths or source content
+are recorded. Completion means the staged toolchain was installed, not that the
+game has passed its publishing checks.

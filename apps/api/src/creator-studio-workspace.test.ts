@@ -45,6 +45,33 @@ describe('GET /api/me/studio/games/:slug/workspace', () => {
     await store.setSubmissionDeliveredVersion(ISSUE, VERSION);
   });
 
+  it('returns a private fresh kit pin without reading game sources', async () => {
+    const games = stubGamesStore();
+    games.getManifest = async () => {
+      throw new Error('must not read a game manifest');
+    };
+    const app = await createApp(store, objectsWithScaffold(), games);
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/me/studio/games/${SLUG}/workspace?kitOnly=true`,
+      headers: authHeaders('g:creator'),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['cache-control']).toBe('private, no-store');
+    expect(res.json()).toMatchObject({ slug: SLUG, engineRef: ENGINE, kitSha256: SHA });
+    expect(res.json().kitUrl).toBeTruthy();
+    await app.close();
+  });
+
+  it('keeps kit pin requests authenticated and owned', async () => {
+    await store.upsertUser({ uid: 'g:other' });
+    const app = await createApp(store, objectsWithScaffold());
+    const url = `/api/me/studio/games/${SLUG}/workspace?kitOnly=true`;
+    expect((await app.inject({ method: 'GET', url })).statusCode).toBe(401);
+    expect((await app.inject({ method: 'GET', url, headers: authHeaders('g:other') })).statusCode).toBe(404);
+    await app.close();
+  });
+
   it('hands back a working copy: scaffold at the root, sources under games/<slug>/', async () => {
     const app = await createApp(store, objectsWithScaffold());
 
