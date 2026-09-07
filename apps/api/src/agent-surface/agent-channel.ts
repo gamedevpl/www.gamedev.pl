@@ -25,6 +25,7 @@ import {
   type UploadTokenClaims,
 } from './agent-upload-token.js';
 import { isRasterSourcePath } from '../platform/raster-source.js';
+import { DREAM_SHOT_LABELS } from '../platform/dream-shots.js';
 import { MAX_BUILD_PREVIEW_BYTES } from '../platform/build-preview-limits.js';
 import type { TranscriptPage, TranscriptWindow } from '../delivery/build-transcript.js';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
@@ -1111,7 +1112,8 @@ export async function registerAgentChannelRoutes(
       if (isRateLimited(shotsByBuild, jobId, now(), maxShotsPerWindow)) {
         return reject('rate_limited');
       }
-      if ((await store!.countBuildShots(jobId)) >= maxShotsPerBuild) {
+      // Proposal frames are the platform's, never the agent's quota.
+      if ((await store!.countBuildShots(jobId, { excludeLabels: DREAM_SHOT_LABELS })) >= maxShotsPerBuild) {
         return reject('too_many_shots');
       }
 

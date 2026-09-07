@@ -3,7 +3,7 @@ import { createDreamJob, type DreamJobDeps, type DreamOutcome } from './dream-jo
 import { createDreamAvailabilityGate } from './dream-availability.js';
 import { StubDreamFrameGenerator, type DreamFrame } from './dream-frames.js';
 import { StubNextIdeaGenerator, type NextIdea } from './next-ideas.js';
-import { DREAM_FRAME_SHOT_LABEL, DREAM_SOURCE_SHOT_LABEL } from '../platform/dream-shots.js';
+import { DREAM_FRAME_SHOT_LABEL, DREAM_SHOT_LABELS, DREAM_SOURCE_SHOT_LABEL } from '../platform/dream-shots.js';
 import { InMemoryStore } from '../platform/store.js';
 import { jpegHeader, pngHeader } from '../platform/image-size.test.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
@@ -102,6 +102,10 @@ describe('createDreamJob', () => {
     }
     expect(posted).toEqual([7]);
     expect(await store.getGlobalDreamCount('2026-09-07')).toBe(2);
+    // Media strip and agent quota never see proposal shots.
+    expect(await store.listBuildShots(7, { limit: 12, excludeLabels: DREAM_SHOT_LABELS })).toEqual([]);
+    expect(await store.countBuildShots(7, { excludeLabels: DREAM_SHOT_LABELS })).toBe(0);
+    expect(await store.countBuildShots(7)).toBe(3);
   });
 
   it('runs once per version, even when the first run produced nothing', async () => {

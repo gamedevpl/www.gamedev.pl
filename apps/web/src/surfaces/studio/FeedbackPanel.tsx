@@ -10,7 +10,7 @@ import { SwitchToPlatformControl, SwitchToSelfControl } from './StudioConnectCar
 import { submitImprovement } from '../../studioApi.js';
 import { recordStudioStep } from '../../visitTelemetry.js';
 import { toBase64PngList } from '../../attachmentImages.js';
-import { fetchImageAsDataUrl, useComposerAttachments } from './composerAttachments.js';
+import { useComposerAttachments } from './composerAttachments.js';
 import { CompactFeedbackComposer } from './CompactFeedbackComposer.js';
 import './status-feedback.css';
 import './status-composer.css';
@@ -106,11 +106,7 @@ export function FeedbackPanel({
     const attachment = draft.attachment;
     onDraftConsumed?.();
     inputRef.current?.focus();
-    if (attachment) {
-      void fetchImageAsDataUrl(attachment.url).then((dataUrl) => {
-        if (dataUrl) attachmentsApi.addAttachment(attachment.name, dataUrl);
-      });
-    }
+    if (attachment) attachmentsApi.addAttachmentFromUrl(attachment.name, attachment.url);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft?.seq]);
 

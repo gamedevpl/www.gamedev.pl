@@ -6,7 +6,10 @@ export const DREAM_SOURCE_SHOT_LABEL = 'Dream source';
 // An AI-edited concept frame; the studio must always say so.
 export const DREAM_FRAME_SHOT_LABEL = 'AI concept';
 
+// Both reserved captions, for store reads that must skip proposal shots.
+export const DREAM_SHOT_LABELS: readonly string[] = [DREAM_SOURCE_SHOT_LABEL, DREAM_FRAME_SHOT_LABEL];
+
 // True for shots that belong to a proposal, not the media strip.
 export function isDreamShotLabel(label: string | undefined): boolean {
-  return label === DREAM_SOURCE_SHOT_LABEL || label === DREAM_FRAME_SHOT_LABEL;
+  return DREAM_SHOT_LABELS.includes(label ?? '');
 }

@@ -56,7 +56,11 @@ import { FirestoreAccessTokensStore } from './slices/access-tokens.js';
 import { FirestoreAccessStore } from './slices/access.js';
 import { FirestoreAgentKeysStore } from './slices/agent-keys.js';
 import { FirestoreBuildLogStore } from './slices/build-log.js';
-import { FirestoreBuildMediaStore } from './slices/build-media.js';
+import {
+  FirestoreBuildMediaStore,
+  type BuildShotCountOptions,
+  type BuildShotListOptions,
+} from './slices/build-media.js';
 import { FirestoreCatalogEnrichmentStore } from './slices/catalog-enrichment.js';
 import { FirestoreCliChatStore, type CliChatRecord } from './slices/cli-chat.js';
 import { FirestoreContributionStore } from './slices/contribution.js';
@@ -595,7 +599,7 @@ export class FirestoreStore implements Store {
     return this.buildMediaStore.appendBuildShot(jobId, shot);
   }
 
-  async listBuildShots(jobId: number, opts?: { limit?: number }): Promise<BuildShotSummary[]> {
+  async listBuildShots(jobId: number, opts?: BuildShotListOptions): Promise<BuildShotSummary[]> {
     return this.buildMediaStore.listBuildShots(jobId, opts);
   }
 
@@ -603,8 +607,8 @@ export class FirestoreStore implements Store {
     return this.buildMediaStore.getBuildShot(jobId, id);
   }
 
-  async countBuildShots(jobId: number): Promise<number> {
-    return this.buildMediaStore.countBuildShots(jobId);
+  async countBuildShots(jobId: number, opts?: BuildShotCountOptions): Promise<number> {
+    return this.buildMediaStore.countBuildShots(jobId, opts);
   }
 
   async appendBuildPreview(

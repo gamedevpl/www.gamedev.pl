@@ -66,6 +66,16 @@ export function useComposerAttachments(sending: boolean) {
     );
   };
 
+  // Send waits for this like a file read.
+  const addAttachmentFromUrl = (name: string, url: string) => {
+    setPendingAttachmentReads((count) => count + 1);
+    void fetchImageAsDataUrl(url)
+      .then((dataUrl) => {
+        if (dataUrl) addAttachment(name, dataUrl);
+      })
+      .finally(() => setPendingAttachmentReads((count) => count - 1));
+  };
+
   const handleSaveSketch = (dataUrl: string) => {
     setAttachments((prev) =>
       prev.length >= MAX_COMPOSER_ATTACHMENTS
@@ -91,7 +101,7 @@ export function useComposerAttachments(sending: boolean) {
     attachMenuRef,
     attachPanelRef,
     handleAttachFiles,
-    addAttachment,
+    addAttachmentFromUrl,
     handleSaveSketch,
     removeAttachment,
     resetAttachments,

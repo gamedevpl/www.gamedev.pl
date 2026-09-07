@@ -26,7 +26,7 @@ import '../../build-progress.css';
 import './status-header.css';
 import './status-timeline.css';
 import './status-play-card.css';
-import { updateNotificationPreferences } from '../../notificationsApi.js';
+import { fetchNotificationPreferences, updateNotificationPreferences } from '../../notificationsApi.js';
 import type { ComposerDraft } from './FeedbackPanel.js';
 import type { ProposalHandlers } from './ProposalCard.js';
 import './status-thread.css';
@@ -299,14 +299,15 @@ export function SubmissionStatusView({
   const [channelLoading, setChannelLoading] = useState(false);
   // A picked concept: text plus the frame, seeded into the composer below.
   const [proposalDraft, setProposalDraft] = useState<ComposerDraft | null>(null);
-  const [proposalsMuted, setProposalsMuted] = useState(false);
+  // Null until the account preference is known; cards wait for it.
+  const [proposalsMuted, setProposalsMuted] = useState<boolean | null>(null);
   const consumeDraft = () => {
     setProposalDraft(null);
     onDraftConsumed?.();
   };
   const proposalHandlers: ProposalHandlers = {
     builder: status?.builder === 'self' ? 'self' : 'platform',
-    muted: proposalsMuted,
+    muted: proposalsMuted === true,
     onPick: (pick) =>
       setProposalDraft({
         text: pick.text,
@@ -720,6 +721,25 @@ export function SubmissionStatusView({
   const onActivityCountRef = useRef(onActivityCount);
   onActivityCountRef.current = onActivityCount;
 
+  // Read the persisted mute once, and only when a proposal is actually on screen.
+  const proposalPrefsRequested = useRef(false);
+  const proposalOnScreen = activity.some((entry) => entry.proposal);
+  useEffect(() => {
+    if (proposalsMuted !== null || proposalPrefsRequested.current || !proposalOnScreen) return;
+    proposalPrefsRequested.current = true;
+    let cancelled = false;
+    fetchNotificationPreferences()
+      .then((prefs) => {
+        if (!cancelled) setProposalsMuted(prefs.proposals === false);
+      })
+      .catch(() => {
+        if (!cancelled) setProposalsMuted(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [proposalOnScreen, proposalsMuted]);
+
   /**
    * Inside Creator Studio this is a thread, not a page.
    *
@@ -791,7 +811,7 @@ export function SubmissionStatusView({
                 emptyLabel={stateDescription}
                 priorRounds={status.slug && status.priorRounds?.length ? status.priorRounds : undefined}
                 priorSlug={status.slug}
-                proposals={proposalHandlers}
+                proposals={proposalsMuted === null ? undefined : proposalHandlers}
                 stickNonce={(isAwaitingOwnAgent(status) ? pendingRevisions.length + 1 : 0) + (agentWorking ? 1 : 0)}
                 working={
                   agentWorking
