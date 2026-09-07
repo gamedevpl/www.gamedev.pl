@@ -37,16 +37,38 @@ export function parseLanes(raw: unknown): PauseableLane[] {
 }
 
 // An unrecognised lane pauses nothing, which is right.
-export function lanesFromNotification(body: unknown): { lanes: PauseableLane[]; incidentId?: string } {
+
+// `reason` says why nothing paused; the log answers instead of asking.
+export type BrakeSkipReason = 'no_incident' | 'closed' | 'no_lanes_label' | 'unrecognised_lanes';
+
+export interface BrakeNotification {
+  lanes: PauseableLane[];
+  incidentId?: string;
+  policyName?: string;
+  state?: string;
+  rawLanes?: string;
+  reason?: BrakeSkipReason;
+}
+
+export function lanesFromNotification(body: unknown): BrakeNotification {
   const incident = (body as { incident?: Record<string, unknown> } | undefined)?.incident;
-  if (!incident || typeof incident !== 'object') return { lanes: [] };
-  const state = incident.state;
-  // A closing notification must never pause anything.
-  if (state !== undefined && state !== 'OPEN' && state !== 'open') return { lanes: [] };
-  const labels = incident.policy_user_labels ?? incident.policyUserLabels;
-  const lanes = parseLanes((labels as Record<string, unknown> | undefined)?.lanes);
+  if (!incident || typeof incident !== 'object') return { lanes: [], reason: 'no_incident' };
+  const state = typeof incident.state === 'string' ? incident.state : undefined;
+  const policyName = typeof incident.policy_name === 'string' ? incident.policy_name : undefined;
   const incidentId = typeof incident.incident_id === 'string' ? incident.incident_id : undefined;
-  return { lanes, ...(incidentId ? { incidentId } : {}) };
+  const context = {
+    ...(incidentId ? { incidentId } : {}),
+    ...(policyName ? { policyName } : {}),
+    ...(state ? { state } : {}),
+  };
+  // A closing notification must never pause anything.
+  if (state !== undefined && state !== 'OPEN' && state !== 'open') return { lanes: [], ...context, reason: 'closed' };
+  const labels = incident.policy_user_labels ?? incident.policyUserLabels;
+  const rawLanes = (labels as Record<string, unknown> | undefined)?.lanes;
+  if (typeof rawLanes !== 'string') return { lanes: [], ...context, reason: 'no_lanes_label' };
+  const lanes = parseLanes(rawLanes);
+  if (lanes.length === 0) return { lanes: [], ...context, rawLanes, reason: 'unrecognised_lanes' };
+  return { lanes, ...context, rawLanes };
 }
 
 // Pub/Sub push wraps the payload as base64.
@@ -77,17 +99,20 @@ export async function registerSpendBrakeRoutes(app: FastifyInstance, options: Sp
       if (!store) return reply.status(503).send({ error: 'the spend brake is not configured' });
 
       const payload = decodePushEnvelope(request.body);
-      const { lanes, incidentId } = lanesFromNotification(payload);
+      const { lanes, incidentId, policyName, state, rawLanes, reason } = lanesFromNotification(payload);
       if (lanes.length === 0) {
         // Acknowledged, not retried: a redelivery pauses nothing either.
-        request.log.warn({ incidentId }, 'spend brake fired with no recognised lane');
-        return reply.send({ paused: [] });
+        request.log.warn(
+          { incidentId, policyName, state, rawLanes, reason, decoded: payload !== undefined },
+          'spend brake fired with no recognised lane',
+        );
+        return reply.send({ paused: [], reason });
       }
 
       const patch: Partial<CreationLimits> = {};
       for (const lane of lanes) patch[PAUSEABLE[lane]] = true;
       await store.setCreationLimits(patch, `alert:${incidentId ?? 'unknown'}`);
-      request.log.error({ incidentId, lanes }, 'spend brake pulled by a monitoring alert');
+      request.log.error({ incidentId, policyName, lanes }, 'spend brake pulled by a monitoring alert');
       return reply.send({ paused: lanes });
     },
   );
