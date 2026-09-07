@@ -23,7 +23,6 @@ export interface CloseJobInput {
 }
 
 // One exit for creator, operator and sweep: cancel, record, release, mark.
-// `stopEnforced` is false where the backend has no kill switch (Copilot).
 export async function closeJob(deps: CloseJobDeps, input: CloseJobInput): Promise<{ stopEnforced: boolean }> {
   const { record, log } = input;
   const jobId = record.jobId;

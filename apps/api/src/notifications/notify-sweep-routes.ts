@@ -115,7 +115,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
             continue;
           }
 
-          // Quiet from every side for the window: close it, or the sweep carries it forever.
+          // Quiet from every side for the window: close it, or carry it forever.
           if (
             shouldAutoAbandonQuietRound({
               state: record.state,
