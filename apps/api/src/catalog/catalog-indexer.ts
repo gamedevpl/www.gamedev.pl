@@ -87,12 +87,19 @@ export class CatalogIndexer {
       const indexed: IndexedGameVector[] = [];
       const needEmbedding: CatalogGameEntry[] = [];
 
+      const currentModel = this.embeddingService.modelName;
+
       for (const entry of enriched) {
         const docText = computeCatalogDocText(entry);
         const docHash = hashCatalogDocText(docText);
         const cached = storedMap.get(entry.slug);
 
-        if (cached?.embedding && cached.embedding.length > 0 && cached.embeddingDocTextHash === docHash) {
+        if (
+          cached?.embedding &&
+          cached.embedding.length > 0 &&
+          cached.embeddingDocTextHash === docHash &&
+          cached.embeddingModel === currentModel
+        ) {
           indexed.push({
             slug: entry.slug,
             title: entry.title,
@@ -133,6 +140,7 @@ export class CatalogIndexer {
                       ...existing,
                       embedding: vec,
                       embeddingDocTextHash: docHash,
+                      embeddingModel: currentModel,
                       updatedAt: new Date().toISOString(),
                     });
                   }
@@ -207,6 +215,7 @@ export class CatalogIndexer {
                     ...enrichedRecord,
                     embedding: vec,
                     embeddingDocTextHash: docHash,
+                    embeddingModel: this.embeddingService.modelName,
                     updatedAt: new Date().toISOString(),
                   });
                 } catch {

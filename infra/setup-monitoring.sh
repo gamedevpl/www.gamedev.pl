@@ -627,7 +627,7 @@ cat > "${POLICY_DIR}/a24.json" <<EOF
   "conditions": [{
     "displayName": "model invocations sustained over 10 minutes",
     "conditionThreshold": {
-      "filter": "metric.type=\"aiplatform.googleapis.com/publisher/online_serving/model_invocation_count\" AND resource.type=\"aiplatform.googleapis.com/PublisherModel\" AND metric.label.method=\"GenerateContent\"",
+      "filter": "metric.type=\"aiplatform.googleapis.com/publisher/online_serving/model_invocation_count\" AND resource.type=\"aiplatform.googleapis.com/PublisherModel\" AND metric.label.method != \"EmbedContent\"",
       "aggregations": [{
         "alignmentPeriod": "600s",
         "perSeriesAligner": "ALIGN_RATE",

@@ -44,6 +44,7 @@ describe('CatalogIndexer', () => {
     vectorIndex = new CatalogVectorIndex();
 
     mockEmbeddingService = {
+      modelName: 'gemini-embedding-2',
       embedText: vi.fn().mockResolvedValue([0.5, 0.5]),
       embedQuery: vi.fn().mockResolvedValue([0.5, 0.5]),
       embedDocument: vi.fn().mockResolvedValue([0.5, 0.5]),
@@ -250,6 +251,7 @@ describe('CatalogIndexer', () => {
           searchKeywords: entry.searchKeywords,
           embedding: [0.9, 0.1],
           embeddingDocTextHash: docHash,
+          embeddingModel: 'gemini-embedding-2',
           updatedAt: new Date().toISOString(),
         },
       ]),
@@ -273,6 +275,47 @@ describe('CatalogIndexer', () => {
     const match = vectorIndex.search([0.9, 0.1], 1)[0];
     expect(match?.game.slug).toBe('mexico-86');
     expect(match?.game.embedding).toEqual([0.9, 0.1]);
+  });
+
+  it('re-embeds games when stored embeddingModel differs from service model', async () => {
+    const entry = mockEntries[0]!;
+    const docText = computeCatalogDocText(entry);
+    const docHash = hashCatalogDocText(docText);
+
+    const storeOlderModel = {
+      listCatalogEnrichments: vi.fn().mockResolvedValue([
+        {
+          slug: 'mexico-86',
+          contentHash: 'hash1',
+          tagline: entry.tagline,
+          shortControls: { en: 'Arrows', pl: 'Strzałki' },
+          searchKeywords: entry.searchKeywords,
+          embedding: [0.9, 0.1],
+          embeddingDocTextHash: docHash,
+          embeddingModel: 'older-embedding-model',
+          updatedAt: new Date().toISOString(),
+        },
+      ]),
+      getCatalogEnrichment: vi.fn().mockResolvedValue(null),
+      setCatalogEnrichment: vi.fn().mockResolvedValue(undefined),
+    } as unknown as Store;
+
+    mockEmbeddingService.embedDocument = vi.fn().mockResolvedValue([0.3, 0.7]);
+
+    const indexer = new CatalogIndexer({
+      store: storeOlderModel,
+      githubClient: mockGithubClient,
+      publishedRef: 'main',
+      getCatalogEntries: async () => [entry],
+      embeddingService: mockEmbeddingService,
+      vectorIndex,
+    });
+
+    await indexer.buildIndex();
+
+    expect(mockEmbeddingService.embedDocument).toHaveBeenCalledTimes(1);
+    const match = vectorIndex.search([0.3, 0.7], 1)[0];
+    expect(match?.game.embedding).toEqual([0.3, 0.7]);
   });
 
   it('computes missing embeddings and persists them to store', async () => {
@@ -313,6 +356,7 @@ describe('CatalogIndexer', () => {
         slug: 'mexico-86',
         embedding: [0.4, 0.6],
         embeddingDocTextHash: expect.any(String),
+        embeddingModel: 'gemini-embedding-2',
       }),
     );
   });
