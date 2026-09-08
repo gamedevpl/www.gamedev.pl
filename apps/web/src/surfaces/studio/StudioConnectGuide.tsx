@@ -1,3 +1,4 @@
+import { LocalActivityStatus } from './LocalActivityStatus.js';
 import { readGuideState, saveGuideState } from './connectGuideState.js';
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -133,6 +134,7 @@ function ConnectGuide({
           : 'setup';
   return (
     <section className={`connect-guide${panel ? ' connect-guide-panel' : ''}`} aria-labelledby="connect-guide-title">
+      <LocalActivityStatus token={token} />
       <div className="connect-guide-nav">
         {route && (
           <button type="button" className="studio-connect-skip" onClick={back}>

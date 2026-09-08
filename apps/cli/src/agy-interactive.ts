@@ -1,3 +1,4 @@
+import { terminalRecording } from './terminal-recording.js';
 import { spawn } from 'node:child_process';
 import type { AdapterSpec } from './adapters.js';
 
@@ -7,6 +8,7 @@ export type InteractiveRun = (input: {
   env: NodeJS.ProcessEnv;
   prompt: string;
   conversation?: string;
+  logPath?: string;
   abort: AbortSignal;
 }) => Promise<{ code: number | null }>;
 
@@ -45,7 +47,8 @@ export function interactiveArgs(input: Parameters<InteractiveRun>[0]): string[] 
 
 export const runInteractive: InteractiveRun = async (input) => {
   if (input.abort.aborted) return { code: null };
-  const child = spawn(input.spec.command, interactiveArgs(input), {
+  const recording = terminalRecording(input.spec.command, interactiveArgs(input), input.logPath);
+  const child = spawn(recording.command, recording.args, {
     cwd: input.cwd,
     env: input.env,
     stdio: 'inherit',
@@ -66,5 +69,6 @@ export const runInteractive: InteractiveRun = async (input) => {
   } finally {
     process.off('SIGINT', interrupt);
     input.abort.removeEventListener('abort', stop);
+    recording.finish();
   }
 };

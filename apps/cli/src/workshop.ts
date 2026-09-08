@@ -1,3 +1,4 @@
+import { localActivity } from './local-activity.js';
 import { agyConversation, type InteractiveRun } from './agy-interactive.js';
 import { taskOutput } from './task-output.js';
 import { configureAdapter, selectionLabel } from './agent-settings.js';
@@ -44,6 +45,7 @@ export type Workshop = {
   selectedAgent?: string;
   onActivity?: (activity: string) => void;
   lastLog?: string;
+  activityApi?: ApiClient;
   interactiveRun?: InteractiveRun;
   onLocalTask?: (agent: string) => void;
   telemetry?: CliTelemetry;
@@ -119,7 +121,7 @@ export async function openWorkshop(input: {
   env: NodeJS.ProcessEnv;
   which?: (cmd: string) => string | null;
   write: (line: string) => void;
-}): Promise<{ adapters: AdapterSpec[]; builder: string; status: string }> {
+}): Promise<{ adapters: AdapterSpec[]; builder: string; status: string; activityApi: ApiClient }> {
   const adapters = detectLocalAdapters(input.env, input.which);
   input.write(`◆ ${input.slug} — the checkout at ${input.root}`);
   try {
@@ -141,7 +143,7 @@ export async function openWorkshop(input: {
   } catch (error) {
     input.write(formatError(error));
   }
-  return { adapters, builder, status };
+  return { adapters, builder, status, activityApi: input.api };
 }
 
 // 202: the old builder owns the round until its agent acks.
@@ -261,6 +263,8 @@ export async function runLocalBuild(input: {
   const cwd = spec.cwd === 'game-dir' ? join(ws.root, 'games', ws.slug) : ws.root;
   const controller = new AbortController();
   ws.abort.current = controller;
+  const presence = localActivity(ws.activityApi, ws.token, spec.name);
+  let success = false;
   ws.onLocalTask?.(spec.name);
   let authCheck: Promise<void> | undefined;
   try {
@@ -307,14 +311,18 @@ export async function runLocalBuild(input: {
         'Claude uses subscription login; API authentication is refused. This local task is not linked to Claude Desktop.',
       );
     ws.telemetry?.record('delegate_used', { adapter: spec.name });
-    return await repairLoop({
+    success = await repairLoop({
       brief: input.brief,
       abort: controller.signal,
       activity: (text) => ws.onActivity?.(text),
       write: input.write,
       failed: (stage) => ws.telemetry?.record('verify_failed', { adapter: spec.name, stage }),
-      verify: () => runLadderAsync({ cwd: ws.root, run: ws.run, abort: controller.signal }),
+      verify: () => {
+        presence.phase('verifying');
+        return runLadderAsync({ cwd: ws.root, run: ws.run, abort: controller.signal });
+      },
       run: async (prompt) => {
+        presence.phase('editing');
         const stream = createDelegateStream(spec.name);
         const failure = trackAgentFailure(spec.name);
         let blocked = false;
@@ -338,6 +346,7 @@ export async function runLocalBuild(input: {
         });
         if (controller.signal.aborted) return false;
         if (blocked && spec.name === 'agy' && ws.interactiveRun && !ws.unattended) {
+          presence.phase('permission');
           const choice = await ws.pick(
             ['Open Antigravity interactively', 'Keep edits and return'],
             'Antigravity needs permission. Open its permission prompts in this terminal?',
@@ -346,12 +355,14 @@ export async function runLocalBuild(input: {
           input.write(
             'Antigravity now owns the terminal. Answer its permission prompts, then exit Antigravity to return here for verification.',
           );
+          presence.phase('interactive');
           const resumed = await ws.interactiveRun({
             spec,
             cwd,
             env: childEnv(ws.env, ''),
             prompt,
             conversation,
+            logPath: ws.lastLog,
             abort: controller.signal,
           });
           input.write('Returned to gamedevpl.');
@@ -378,7 +389,9 @@ export async function runLocalBuild(input: {
         return true;
       },
     });
+    return success;
   } finally {
+    await presence.finish(controller.signal.aborted ? 'stopped' : success ? 'ready' : 'failed');
     if (controller.signal.aborted) input.write(`${spec.name} stopped — the tree keeps whatever it wrote; /diff to see`);
     ws.abort.current = null;
     ws.onLocalTask?.('');

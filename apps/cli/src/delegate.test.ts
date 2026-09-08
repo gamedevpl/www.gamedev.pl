@@ -119,3 +119,12 @@ it('announces each Claude session once without swallowing later system messages 
     event({ type: 'system', subtype: 'init', session_id: 'abcdefab-1234-1234-1234-123456789abc' }).join(''),
   ).toContain('claude --resume');
 });
+
+it('keeps one Claude answer without rate-limit bookkeeping', () => {
+  const render = createDelegateStream('claude');
+  expect(
+    render(JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'OK' }] } })),
+  ).toHaveLength(1);
+  expect(render(JSON.stringify({ type: 'rate_limit_event', rate_limit_info: { status: 'allowed' } }))).toEqual([]);
+  expect(render(JSON.stringify({ type: 'result', result: 'OK' }))).toEqual([]);
+});

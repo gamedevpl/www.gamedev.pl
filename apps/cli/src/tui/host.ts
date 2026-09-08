@@ -172,6 +172,7 @@ export async function runInkRepl(input: {
             opened.onActivity = session.setActivity;
             opened.onLocalTask = session.setLocalTask;
             opened.interactiveRun = interactiveRun;
+            opened.activityApi = input.api;
             if (token !== opened.token) {
               token = opened.token;
               delete pendingExecution.current;
@@ -199,6 +200,7 @@ export async function runInkRepl(input: {
         workshop.onActivity = session.setActivity;
         workshop.onLocalTask = session.setLocalTask;
         workshop.interactiveRun = interactiveRun;
+        workshop.activityApi = input.api;
       }
       if (result.slug) {
         slug = result.slug;

@@ -38,8 +38,7 @@ describe('StudioConnectWizard', () => {
     await i18n.changeLanguage('en');
     container = document.createElement('div');
     document.body.appendChild(container);
-    localStorage.clear();
-    sessionStorage.clear();
+    for (const storage of [localStorage, sessionStorage]) storage.clear();
     getStatus.mockResolvedValue({
       status: 'queued',
       builder: 'self',

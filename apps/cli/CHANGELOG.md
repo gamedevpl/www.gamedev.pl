@@ -9,6 +9,9 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
+- Show local agent activity and lost CLI contact in the Studio connection guide (#1243).
+- Keep interactive Antigravity terminal output in /logs on macOS and Linux (#1243).
+
 - Resume blocked Antigravity tasks interactively in the terminal to answer permission prompts, then return to verification (#1243).
 
 - Choose and remember delegated agent model and reasoning effort with `/model` or `gamedevpl model` (#1243).

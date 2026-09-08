@@ -1,4 +1,17 @@
 {
+  "localActivity": {
+    "interactive": "The interactive agent owns the terminal. Respond to permission prompts there.",
+    "title": "Local agent: {{agent}}",
+    "preparing": "Preparing the local workspace.",
+    "editing": "The agent is editing locally.",
+    "permission": "Waiting for permissions in the terminal.",
+    "verifying": "Checking the local changes.",
+    "ready": "Local checks passed. Ready to send with /submit.",
+    "failed": "The local task did not pass. Check the terminal for details.",
+    "stopped": "The local task was stopped.",
+    "offline": "Contact with the CLI was lost. Check the terminal; the agent may still be running.",
+    "localOnly": "Game files remain on your computer until you submit them."
+  },
   "app": {
     "loadingSurface": "Loading…",
     "surfaceLoadFailed": "This page didn't load — a newer version of the site is available.",
@@ -2008,7 +2021,7 @@
     "platformBody": "The gamedev.pl agent will continue this round using your platform quota. You can follow its progress in Studio.",
     "cliStart": "Run these commands in your terminal, then choose your installed agent or a local checkout. Your agent uses its own account and billing. gamedevpl CLI connects it to this game; clicking Continue here does not start a managed agent.",
     "agentStart": "Paste this message into your agent’s chat. It identifies this game and asks the agent to start the current round.",
-    "localWaiting": "Local work is shown in your terminal and live preview. Studio cannot see local edits until you send them with /submit after validation passes. This page tracks the last delivery to the platform, not your local agent’s activity.",
+    "localWaiting": "Local work is shown in your terminal and live preview. Studio cannot see local edits until you send them with /submit after validation passes.",
     "waiting": "Connection is not confirmed yet. This screen will update when your agent checks in. You can also open Studio below.",
     "cliSetup": "Run these commands in your terminal. You need Node.js 20.19 or newer. Sign in with the same account you use here.",
     "toolSetup": "Set up gamedev.pl in {{tool}}, then continue to the starting message.",

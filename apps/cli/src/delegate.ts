@@ -42,7 +42,7 @@ type EventShape = {
   item?: { type?: unknown; text?: unknown; command?: unknown };
 };
 
-const QUIET_EVENT_TYPES = /^(system|user|thread\.|turn\.|item\.started)/;
+const QUIET_EVENT_TYPES = /^(system|user|rate_limit_event|thread\.|turn\.|item\.started)/;
 
 function textOf(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null;
@@ -187,12 +187,23 @@ export function spawnCommand(input: {
 export function createDelegateStream(adapter: string): (line: string) => string[] {
   const muse = adapter === 'muse' ? createMuseStream() : null;
   const sessions = new Set<string>();
+  let lastText: string | null = null;
   return (line) => {
     const museText = muse?.(line);
     const text = museText === undefined ? parseEventLine(line, adapter) : museText;
     if (adapter === 'claude' && text?.startsWith('Local session ')) {
       if (sessions.has(text)) return [];
       sessions.add(text);
+    }
+    if (adapter === 'claude' && text) {
+      let result = false;
+      try {
+        result = JSON.parse(line)?.type === 'result';
+      } catch {
+        // Plain text.
+      }
+      if (result && text === lastText) return [];
+      lastText = text;
     }
     return text ? [formatAdapterEvent(adapter, text)] : [];
   };
