@@ -32,7 +32,7 @@ function screen(columns: number, rows: number) {
     input.end();
     output.end();
   });
-  return { session, frame: () => frames.filter((frame) => frame.includes('gamedevpl')).at(-1) ?? '' };
+  return { session, input, frame: () => frames.filter((frame) => frame.includes('gamedevpl')).at(-1) ?? '' };
 }
 
 describe('TUI feedback', () => {
@@ -114,4 +114,79 @@ it('shows the Kit choice, then installation activity instead of an idle textbox'
   expect(view.frame()).toContain('Downloading Creator Kit');
   expect(view.frame()).toContain('input paused');
   expect(view.frame()).not.toContain('What would you like');
+});
+
+describe('command completion keyboard', () => {
+  it('completes /pu with Tab without submitting, then sends on Enter', async () => {
+    const view = screen(80, 24);
+    const pending = view.session.prompt();
+    await wait();
+    view.input.write('/pu');
+    await wait();
+    expect(view.frame()).toContain('/pull — update a checkout');
+    view.input.write('\t');
+    await wait();
+    expect(view.session.get().draft).toBe('/pull ');
+    expect(view.session.get().mode).toBe('prompt');
+    view.input.write('\r');
+    expect(await pending).toBe('/pull ');
+  });
+
+  it('selects matches with arrows and fills a partial command with Enter', async () => {
+    const view = screen(80, 24);
+    void view.session.prompt();
+    await wait();
+    view.input.write('/p');
+    await wait();
+    expect(view.frame()).toContain('▸ /play');
+    view.input.write('\x1b[B');
+    await wait();
+    expect(view.frame()).toContain('▸ /profile');
+    view.input.write('\r');
+    await wait();
+    expect(view.session.get().draft).toBe('/profile ');
+    expect(view.session.get().mode).toBe('prompt');
+  });
+
+  it('dismisses suggestions without clearing text, preserves history and ignores Tab in prose', async () => {
+    const view = screen(80, 24);
+    void view.session.prompt();
+    view.session.setDraft('previous request');
+    view.session.submit();
+    void view.session.prompt();
+    await wait();
+    view.input.write('/p');
+    await wait();
+    view.input.write('\x1b');
+    await wait();
+    expect(view.session.get().draft).toBe('/p');
+    expect(view.frame()).not.toContain('▸ /play');
+    view.input.write('\x1b[A');
+    await wait();
+    expect(view.session.get().draft).toBe('previous request');
+    view.input.write('\t');
+    await wait();
+    expect(view.session.get().draft).toBe('previous request');
+    view.input.write('\x1b[B');
+    await wait();
+    expect(view.session.get().draft).toBe('/p');
+  });
+
+  it.each([
+    [40, 12],
+    [80, 24],
+    [120, 40],
+  ])('scrolls all commands within %i × %i alongside status', async (columns, rows) => {
+    const view = screen(columns, rows);
+    view.session.setLive(['building', 'gate_not_started', 'live preview', 'czekamy na zakończenie']);
+    void view.session.prompt();
+    await wait();
+    view.input.write('/');
+    await wait();
+    view.input.write('\x1b[A');
+    await wait();
+    expect(view.frame()).toContain('▸ /whoami');
+    expect(view.frame().trimEnd().split('\n').length).toBeLessThanOrEqual(rows);
+    expect(view.frame()).toContain('Tab fill');
+  });
 });

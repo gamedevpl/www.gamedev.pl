@@ -1,3 +1,4 @@
+import { CommandSuggestions, useCommandCompletion } from './completion.js';
 import { BusyPanel } from './busy.js';
 import { useEffect, useState } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
@@ -9,6 +10,7 @@ import type { TuiSession, TuiState } from './session.js';
 
 export function ReplApp({ session, color }: { session: TuiSession; color: boolean }) {
   const [state, setState] = useState<TuiState>(session.get);
+  const completion = useCommandCompletion(state, session);
   const { stdout } = useStdout();
   const [rows, setRows] = useState(stdout.rows || 24);
   useEffect(() => session.subscribe(setState), [session]);
@@ -24,6 +26,8 @@ export function ReplApp({ session, color }: { session: TuiSession; color: boolea
       if (key.ctrl && input === 'c') session.cancel();
       return;
     }
+    if ((key.escape || (!key.ctrl && !key.meta)) && completion.handleKey(key)) return;
+    if (key.tab) return;
     if (key.escape || (key.ctrl && input === 'c')) {
       session.cancel();
       return;
@@ -68,7 +72,8 @@ export function ReplApp({ session, color }: { session: TuiSession; color: boolea
     0,
     Math.min(state.pickIndex - Math.floor(choiceCount / 2), state.choices.length - choiceCount),
   );
-  const panelRows = state.mode === 'pick' ? choiceCount + 3 : state.mode === 'busy' ? 2 : 3;
+  const suggestionRows = Math.min(completion.suggestions.length, 5, Math.max(0, rows - 9));
+  const panelRows = suggestionRows + (state.mode === 'pick' ? choiceCount + 3 : state.mode === 'busy' ? 2 : 3);
   const liveRows = Math.min(state.live.length, Math.max(0, rows - panelRows - 4));
   const body = Math.max(1, rows - panelRows - liveRows - 2);
   const shown = state.lines.slice(-body);
@@ -119,11 +124,21 @@ export function ReplApp({ session, color }: { session: TuiSession; color: boolea
           )}
         </Box>
       )}
+      {suggestionRows > 0 && (
+        <CommandSuggestions
+          suggestions={completion.suggestions}
+          selected={completion.selected}
+          count={suggestionRows}
+          color={color}
+        />
+      )}
       <Text dimColor wrap="truncate-end">
         {state.mode === 'pick'
           ? `↑↓ select · Enter · Esc · ${state.pickIndex + 1}/${state.choices.length}`
           : state.mode === 'prompt'
-            ? 'Enter send · ↑↓ history · Esc/Ctrl+C'
+            ? completion.suggestions.length
+              ? `↑↓ select · Tab fill · Enter ${completion.suggestions[completion.selected]?.command === state.draft ? 'send' : 'fill'} · Esc hide · ${completion.selected + 1}/${completion.suggestions.length}`
+              : 'Enter send · / commands · Tab fill · ↑↓ history'
             : 'Working — input paused'}
       </Text>
       <Text dimColor wrap="truncate-end">
