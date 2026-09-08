@@ -90,6 +90,9 @@ it('offers terminal commands separately, including Windows and a game without so
   expect(host.textContent).toContain('install.ps1');
   expect(host.textContent).toContain('gamedevpl connect sky');
   expect(host.textContent).toContain('your own agent (BYOCA)');
+  expect(host.textContent).toContain('Studio cannot see local edits');
+  expect(host.textContent).toContain('/submit');
+  expect(host.textContent).not.toContain('not confirmed');
   await click('Copy');
   expect(clipboard).toHaveBeenCalledWith(expect.stringContaining('install.ps1'));
 });
@@ -138,7 +141,8 @@ it('keeps unavailable managed builders out of the panel and uses panel-specific 
   expect(host.querySelector('.connect-guide-panel')).not.toBeNull();
   await act(async () => (host.querySelector('.connect-guide-option') as HTMLButtonElement).click());
   await click('Setup done — continue');
-  expect(host.textContent).toContain('close this panel');
+  expect(host.textContent).toContain('Studio cannot see local edits');
+  expect(host.textContent).not.toContain('not confirmed');
 });
 
 it('shows an empty-state explanation when the round cannot accept an agent', async () => {

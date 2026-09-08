@@ -184,7 +184,7 @@ export function StudioConnectGuide({
             </>
           )}
           <p className="connect-guide-wait" role="status">
-            {t(panel ? 'connectGuide.panelWaiting' : 'connectGuide.waiting')}
+            {t(local ? 'connectGuide.localWaiting' : panel ? 'connectGuide.panelWaiting' : 'connectGuide.waiting')}
           </p>
         </>
       ) : (

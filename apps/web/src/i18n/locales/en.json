@@ -2008,6 +2008,7 @@
     "platformBody": "The gamedev.pl agent will continue this round using your platform quota. You can follow its progress in Studio.",
     "cliStart": "Run these commands in your terminal, then choose your installed agent or a local checkout. Your agent uses its own account and billing. gamedevpl CLI connects it to this game; clicking Continue here does not start a managed agent.",
     "agentStart": "Paste this message into your agent’s chat. It identifies this game and asks the agent to start the current round.",
+    "localWaiting": "Local work is shown in your terminal and live preview. Studio cannot see local edits until you send them with /submit after validation passes. This page tracks the last delivery to the platform, not your local agent’s activity.",
     "waiting": "Connection is not confirmed yet. This screen will update when your agent checks in. You can also open Studio below.",
     "cliSetup": "Run these commands in your terminal. You need Node.js 20.19 or newer. Sign in with the same account you use here.",
     "toolSetup": "Set up gamedev.pl in {{tool}}, then continue to the starting message.",
