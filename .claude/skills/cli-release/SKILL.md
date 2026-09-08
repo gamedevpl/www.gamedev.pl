@@ -78,6 +78,12 @@ repo in the same session.
 
 ## Traps recorded so far
 
+- **Rebase can put unreleased entries below an already-published header.** Before a
+  cut, compare the release tag with the feature merge. If `next` says `none` but the
+  published artifact predates the feature, move that feature's entries back to
+  Unreleased, preserving the released section from its tag, then cut a new version.
+  Never republish the existing tag. Observed with #1223 after cli-v0.8.0.
+
 - **Check the workspace version in `package-lock.json`.** The release cut currently
   updates the two version sources but leaves the CLI workspace lock entry stale.
   Run `npm install` and include that version-only lockfile change in the release PR.

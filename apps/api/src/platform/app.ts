@@ -19,6 +19,7 @@ import { registerSecurityHeaders, resolveCspReportOnly } from './security-header
 import { registerJobAdminRoutes } from '../creation/job-admin-routes.js';
 import { createGameSeederFromEnv } from '../creation/seed-provider-env.js';
 import { createGcsGamesStore } from '../delivery/games-store.js';
+import { registerGateVerdictRoutes } from '../delivery/gate-verdict-routes.js';
 import { createGcsObjectStore } from '../delivery/gcs-sign.js';
 import { createQueryKnowledgeFromEnv } from '../creation/knowledge-search.js';
 import { createCloudBuildGateTrigger, gateTriggerOptionsFromEnv } from '../delivery/gate-trigger.js';
@@ -379,6 +380,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const gamesStore =
     options.submissionRoutes?.agentChannel?.gamesStore ??
     (gamesStoreBucket ? createGcsGamesStore({ bucket: gamesStoreBucket }) : undefined);
+  // The gate records its verdict here rather than writing the manifest itself; see
+  // gate-verdict-routes.ts and infra/gate-hardening.md.
+  if (gamesStore) registerGateVerdictRoutes(app, { store: gamesStore });
   // Same bucket as deliveries: kits/ and examples/ live next to games/<slug>/versions/.
   const objectStore =
     options.submissionRoutes?.agentChannel?.objectStore ??
@@ -582,6 +586,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await registerTelemetryRoutes(app, {
     store,
     publishedSlugs: envPublishedSlugs,
+    // Rung 2 sheds both streams or the runbook's promise is only half true.
+    keepsSession: (id) => loadShed.keepsVisitTelemetry(id),
     ...options.telemetryRoutes,
   });
 

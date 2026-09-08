@@ -59,7 +59,7 @@ on:
         default: 'main'
 
 concurrency:
-  group: games-catalog-gate
+  group: ${{ github.workflow == 'Games catalog gate' && format('games-catalog-gate-manual-{0}', inputs.ref || 'main') || 'games-catalog-gate' }}
   cancel-in-progress: true
 
 permissions:
@@ -157,7 +157,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Check out games repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: ${{ env.GAMES_REPO }}
           ref: ${{ steps.resolve.outputs.games_ref }}
@@ -184,7 +184,7 @@ jobs:
           fi
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
           cache: 'npm'
@@ -195,7 +195,7 @@ jobs:
         run: npm ci
 
       - name: Install Chrome
-        uses: browser-actions/setup-chrome@v1
+        uses: browser-actions/setup-chrome@c785b87e244131f27c9f19c1a33e2ead956ab7ce # v1
         id: chrome
         with:
           chrome-version: stable
@@ -207,20 +207,7 @@ jobs:
           GAME_CAPTURE_CHROME: ${{ steps.chrome.outputs.chrome-path }}
         run: |
           set -euo pipefail
-          npm run check:no-js
-          npm run check:gfx
-          npm run check:ios
-          npm run audio:check
-          npm run audio:plan-check
-          npm run typecheck
-          npm run test
-          npm run validate
-          npm run smoke
-          npm run trace
-          npm run build
-          npm run check:webgl
-          npm run accept
-          npm run agency -- --all --strict -j 4
+          npm run check:pr
           if [ "${{ steps.resolve.outputs.catalog_agent_play }}" = 1 ]; then
             npm run agent-play
           fi
@@ -311,7 +298,7 @@ jobs:
       GAMES_REPO: 'gamedevpl/www.gamedev.pl-games'
     steps:
       - name: Check out games repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: ${{ env.GAMES_REPO }}
           ref: ${{ needs.catalog-gate.outputs.games_sha }}
@@ -320,7 +307,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
           cache: 'npm'

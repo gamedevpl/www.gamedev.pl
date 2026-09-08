@@ -807,11 +807,30 @@ EOF
 # Firestore counter, so a runaway now shows up here before it shows up on the invoice --
 # and a hot document (one shard taking every write) shows up as latency at the same time.
 #
-# Threshold: the closed beta's steady state is a few writes a second at most. 25/s
-# sustained over ten minutes is roughly an order of magnitude above that, low enough to
-# catch a loop early and high enough that a normal creation burst does not page anybody.
-# Recalibrate against real numbers once there is a week of them -- see the note at the
-# bottom of this file for how A24/A25 were done.
+# Threshold: the closed beta's steady state is a fraction of a write per second. The
+# first draft used 25/s, guessed as "an order of magnitude above a few writes a second"
+# before anybody had measured. The real distribution is roughly forty times lower than
+# that guess, which made the policy decorative -- a runaway loop could have run for days
+# at fifty times normal volume without ever reaching it.
+#
+# CALIBRATION, measured rather than guessed (ALIGN_RATE/600s, REDUCE_SUM over all series,
+# the same shape this condition evaluates):
+#   Sep 5 20:06 - Sep 7 22:06 UTC, 301 windows:
+#     max 0.662/s (Sep 6 21:56 UTC), p95 0.448/s, median 0.113/s
+#   38,518 writes over the window, split by metric.op:
+#     CREATE 26,628 (peak 0.587/s), UPDATE 11,892 (peak 0.270/s)
+# Per-collection attribution is NOT available here: document/write_count carries only
+# module/version/op, no collection_id, and billable_write_units returns nothing on this
+# database. Naming the hot collection needs the application's own counters, not this
+# metric -- do not go looking for a group_by that does not exist.
+#
+# 3x the busiest real window is ~2/s, which is too tight to survive one unusual creation
+# burst, so this takes a floor of 10/s instead: ~15x the observed max, ~22x p95, and still
+# far enough below a runaway to catch one within ten minutes.
+#
+# The window was mostly a weekend (Sep 5 was a Saturday) and covers only two days.
+# Recheck after a full working week -- if weekday peaks land materially above 0.662/s,
+# the floor of 10 is what absorbs it, but the p95 line should be re-read.
 cat > "${POLICY_DIR}/a29.json" <<EOF
 {
   "displayName": "A29 Firestore write rate",
@@ -826,7 +845,7 @@ cat > "${POLICY_DIR}/a29.json" <<EOF
         "crossSeriesReducer": "REDUCE_SUM"
       }],
       "comparison": "COMPARISON_GT",
-      "thresholdValue": 25,
+      "thresholdValue": 10,
       "duration": "600s",
       "trigger": { "count": 1 }
     }
@@ -834,7 +853,47 @@ cat > "${POLICY_DIR}/a29.json" <<EOF
   "notificationChannels": ["${CHANNEL_NAME}"],
   "alertStrategy": { "autoClose": "86400s" },
   "documentation": {
-    "content": "Firestore is taking far more writes than the closed beta's steady state, sustained for ten minutes. Firestore bills per operation, so this is a cost signal as much as a load one, and it is the only one the database has -- there is no per-document budget and no equivalent of the Vertex token alarm. Likely causes, in the order they have actually happened: a client polling a route that writes on read; a sweep or reaper looping over a growing collection without a batch ceiling; one of the global spend counters in apps/api/src/store/slices/quota-global.ts becoming a hot document under a traffic burst (searchEmbeddings and moderationCalls are sharded across ten documents each for exactly this reason -- if a single shard is taking every write, the shard key is broken, not the traffic). Triage: Metrics Explorer, group firestore.googleapis.com/document/write_count by collection_id to find which collection is growing, then Logs Explorer on the app service for the route driving it. The creation, editing, chat, search and gate lanes can each be paused from the admin console's Limits tab within a minute, which stops their counters writing as a side effect.",
+    "content": "Firestore is taking far more writes than the closed beta's steady state, sustained for ten minutes. Firestore bills per operation, so this is a cost signal as much as a load one, and it is the only one the database has -- there is no per-document budget and no equivalent of the Vertex token alarm. Likely causes, in the order they have actually happened: a client polling a route that writes on read; a sweep or reaper looping over a growing collection without a batch ceiling; one of the global spend counters in apps/api/src/store/slices/quota-global.ts becoming a hot document under a traffic burst (searchEmbeddings and moderationCalls are sharded across ten documents each for exactly this reason -- if a single shard is taking every write, the shard key is broken, not the traffic). Triage, and read this before opening Metrics Explorer: there is no per-collection attribution to be had from this metric. document/write_count carries only module, version and op, and no other firestore.googleapis.com metric in this project exposes a collection_id either, so grouping by collection is not an option no matter how the query is written. The one useful group_by is metric.op, which separates CREATE from UPDATE: a flood of CREATE is a collection growing (a sweep, a reaper, a log-like write path), while a flood of UPDATE on a flat document count is a hot document being rewritten, which is the shard-key failure above. From there the attribution is the application's own, not Google's: the admin console's Limits tab carries today's per-lane counters (submissions, managed builds, tab-complete tokens, search embeddings, gate runs, seeds, moderation calls, bot calls), and the lane whose counter is climbing against a flat clock is the writer. Confirm it in Logs Explorer on the app service, then pause that lane -- creation, editing, chat, tab-complete, search, gate and seeding each have a breaker on the same tab, effective within a minute, and pausing one stops its counter writing as a side effect.",
+    "mimeType": "text/markdown"
+  }
+}
+EOF
+
+# A30 -- Firestore read rate. A29 watches writes; reads had no signal at all, and they
+# are where the 2026-09 bill actually was: ~800K reads a day against a 50K free tier,
+# with the platform writing a few hundred. The shape was not a loop -- it was one public
+# route (/api/catalog, the home page) doing one document read per game per request,
+# uncached, plus a two-minute sweep scanning the games collection every run. A crawler
+# hitting that route at 10 rps would have been 100M reads a day. Reads bill at a third
+# of writes, so the money is smaller; the shape is the same and so is the fix.
+#
+# CALIBRATION: before the caches landed the daily average was ~9/s; the expected
+# steady state after them is well under 1/s. 5/s sustained over ten minutes is a pace
+# of ~430K/day -- half of the incident, an order of magnitude above the intended state.
+# Recheck against a week of post-fix numbers and lower it if the real p95 allows.
+cat > "${POLICY_DIR}/a30.json" <<EOF
+{
+  "displayName": "A30 Firestore read rate",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "sustained document reads well above steady state",
+    "conditionThreshold": {
+      "filter": "metric.type=\"firestore.googleapis.com/document/read_count\" AND resource.type=\"firestore_instance\"",
+      "aggregations": [{
+        "alignmentPeriod": "600s",
+        "perSeriesAligner": "ALIGN_RATE",
+        "crossSeriesReducer": "REDUCE_SUM"
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 5,
+      "duration": "600s",
+      "trigger": { "count": 1 }
+    }
+  }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
+  "alertStrategy": { "autoClose": "86400s" },
+  "documentation": {
+    "content": "Firestore is taking far more document reads than the closed beta's steady state, sustained for ten minutes. Reads bill per operation like writes (at a third of the price), and a public route that fans out one read per catalog entry is the shape that produced ~800K reads a day in 2026-09 with almost no traffic. Triage: this metric carries no collection label; group it by metric.label.type -- LOOKUP is per-document gets (a request path fanning out over entries), QUERY is collection scans (a sweep or a list on every run). Then Logs Explorer on the app service, requests grouped by route, to find which one scales with it. The per-request caches in catalog-routes.ts, catalog-enricher.ts and notify-sweep-routes.ts are the reference for the fix: read a collection once per window, never per request.",
     "mimeType": "text/markdown"
   }
 }

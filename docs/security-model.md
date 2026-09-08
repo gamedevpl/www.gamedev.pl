@@ -46,7 +46,8 @@ result.
 - Require PR review and passing validation before merge; never auto-merge agent work.
 - Run untrusted PR checks without deployment secrets.
 - Do not use `pull_request_target` to execute PR-controlled code.
-- Give workflows explicit least-privilege permissions and pin third-party actions to commits.
+- Give workflows explicit least-privilege permissions and pin third-party actions to commits
+  (enforced by `infra/check-action-pins.mjs`, in the lint chain).
 - Publish only from the protected default branch through a protected environment.
 - Use OIDC/workload identity for hosting access instead of long-lived cloud keys.
 - Keep submission credentials server-side and scope them to issue creation where possible.
@@ -176,6 +177,11 @@ credentials operated by gamedev.pl. Historical details are available in Git hist
   keeps crossing the postMessage bridge as data. Camera pixels and microphone loudness
   stay shell-owned, and party input / shell-read sensors reach games only as clamped,
   structured postMessage data.
+- Every third-party GitHub Action is pinned to a commit SHA, never a tag. A tag is a moving
+  pointer the action's owner can repoint, and the deploy job holds `id-token: write`, the
+  Workload Identity credential that deploys Cloud Run, and a production access token —
+  a step running before the auth step can still mint the OIDC token, because the permission
+  belongs to the job. Asserted by `infra/check-action-pins.mjs`.
 - Games are served from a separate cookieless origin in production.
 - Public specs and issue text are data, never agent instructions.
 - Agent-authored changes require review and validation; they are never auto-merged.

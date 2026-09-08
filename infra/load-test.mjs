@@ -37,7 +37,14 @@ const HELP = `Usage: node infra/load-test.mjs --target <base-url> [options]
   --help                This.
 `;
 
-const PRODUCTION_HOSTS = new Set(['www.gamedev.pl', 'gamedev.pl', 'gamedevpl.web.app']);
+// Hosting answers on both of a site's default domains, so naming one leaves the other
+// a way past the guard. `.firebaseapp.com` is the pair of `.web.app` for site gamedevpl.
+const PRODUCTION_HOSTS = new Set([
+  'www.gamedev.pl',
+  'gamedev.pl',
+  'gamedevpl.web.app',
+  'gamedevpl.firebaseapp.com',
+]);
 const RATE_NEEDING_CONSENT = 50;
 /** The play route's per-IP budget. One process is one bucket, however many visits it starts. */
 const PLAY_REQUESTS_PER_IP_PER_MINUTE = 60;
@@ -132,6 +139,11 @@ async function timed(step, run) {
   const startedAt = performance.now();
   try {
     const response = await run();
+    // fetch() resolves on headers. A server that flushes headers and takes two seconds
+    // over the body would report a 4ms p95 here, and the runbook compares that number
+    // against a 1.5s objective — so the body is part of the measurement, and a stream
+    // that fails midway is a failure rather than a fast success.
+    await response.arrayBuffer();
     record(step, performance.now() - startedAt, response.ok, String(response.status));
     return response;
   } catch (error) {

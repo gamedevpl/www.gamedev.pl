@@ -247,3 +247,5 @@ If the game is only an idea and has not been created yet, run `gamedevpl` withou
 arguments and describe it. `connect <slug>` opens an existing owned game; clicking
 Create in Studio establishes its submission even before an agent starts or delivers
 files. A missing game is not silently created by connect.
+
+In the interactive prompt, type `/` to browse commands or `/pu` to find `/pull`. Use ↑/↓ to select, Tab to fill, and Enter to send. Enter on a partial command fills it first. Esc hides suggestions and keeps your text; outside the suggestion list, ↑/↓ browses history. Suggestions run locally and make no model requests.

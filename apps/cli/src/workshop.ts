@@ -1,3 +1,4 @@
+import { trackAgentFailure } from './agent-failure.js';
 import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { permissionBlocked } from './agent-events.js';
 import { startLocalPlay } from './play.js';
@@ -248,6 +249,7 @@ export async function runLocalBuild(input: {
   ws.abort.current = controller;
   let result: { code: number | null };
   let blocked = false;
+  const failure = trackAgentFailure(spec.name);
   let authCheck: Promise<void> | undefined;
   try {
     if (!ws.runAdapter && spec.name === 'claude') {
@@ -294,6 +296,7 @@ export async function runLocalBuild(input: {
       env: childEnv(ws.env, ''),
       abort: controller.signal,
       onLine: (line) => {
+        failure.observe(line);
         if (permissionBlocked(line)) blocked = true;
         for (const shown of renderDelegateStream(spec.name, [line], false)) {
           if (shown.includes('⚙ ')) ws.onActivity?.(`${spec.name} · ${shown.split('⚙ ')[1]!.slice(0, 90)}`);
@@ -315,7 +318,9 @@ export async function runLocalBuild(input: {
     return false;
   }
   if ((result.code ?? 1) !== 0) {
-    input.write(`${spec.name} exited ${result.code ?? 'null'} — /diff to see what changed`);
+    input.write(
+      formatError(failure.error(result.code, '/diff to review partial edits, then repeat your request when ready')),
+    );
     return false;
   }
   ws.onActivity?.('Agent finished — verifying typecheck and static checks');
