@@ -9,6 +9,7 @@ export type TuiState = {
   activity: string;
   busySince: number;
   draft: string;
+  draftFromHistory: boolean;
   choices: string[];
   pickIndex: number;
 };
@@ -45,6 +46,7 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
     activity: 'Starting gamedevpl',
     busySince: Date.now(),
     draft: '',
+    draftFromHistory: false,
     choices: [],
     pickIndex: 0,
   };
@@ -92,13 +94,15 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
         const code = ch.charCodeAt(0);
         if (code >= 32 && code !== 127 && (code < 0x80 || code > 0x9f)) next += ch;
       }
-      state = { ...state, draft: next };
+      histIndex = history.length;
+      state = { ...state, draft: next, draftFromHistory: false };
       emit();
     },
     deleteLast() {
       const chars = [...state.draft];
       chars.pop();
-      state = { ...state, draft: chars.join('') };
+      histIndex = history.length;
+      state = { ...state, draft: chars.join(''), draftFromHistory: false };
       emit();
     },
     movePick(delta) {
@@ -111,13 +115,17 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
       if (state.mode !== 'prompt' || !history.length || histIndex === 0) return;
       if (histIndex === history.length) stash = state.draft;
       histIndex -= 1;
-      state = { ...state, draft: history[histIndex] ?? '' };
+      state = { ...state, draft: history[histIndex] ?? '', draftFromHistory: true };
       emit();
     },
     historyNext() {
       if (state.mode !== 'prompt' || histIndex >= history.length) return;
       histIndex += 1;
-      state = { ...state, draft: histIndex === history.length ? stash : (history[histIndex] ?? '') };
+      state = {
+        ...state,
+        draft: histIndex === history.length ? stash : (history[histIndex] ?? ''),
+        draftFromHistory: true,
+      };
       emit();
     },
     prompt(choices, question) {
@@ -137,6 +145,7 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
           question: question ?? '',
           pickIndex: 0,
           draft: '',
+          draftFromHistory: false,
         };
         emit();
       });

@@ -40,7 +40,7 @@ type EventShape = {
   item?: { type?: unknown; text?: unknown; command?: unknown };
 };
 
-const QUIET_EVENT_TYPES = /^(system|user|thread\.|turn\.|item\.started)/;
+const QUIET_EVENT_TYPES = /^(system|user|thread\.|turn\.|item\.)/;
 
 function textOf(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null;

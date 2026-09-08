@@ -7,6 +7,11 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Recalling slash commands keeps arrow keys available for history and restores your unfinished input.
+- Agent output hides empty Codex item lifecycle events instead of printing `item.completed`.
+
 ## 0.10.0 — 2026-09-08
 
 ### Added
