@@ -1,7 +1,7 @@
 import { genaicode } from 'genaicode';
 import type { GenerationRequest, ModelProvider } from 'genaicode';
 import { describe, expect, it } from 'vitest';
-import { moderateFields, moderateText, VertexChecker } from './moderation.js';
+import { DEFAULT_MODERATION_TIMEOUT_MS, moderateFields, moderateText, VertexChecker } from './moderation.js';
 
 // Stub provider: exercises the real genaicode request/response path (prompt
 // assembly, JSON parsing, schema validation) with no GCP calls.
@@ -279,13 +279,13 @@ describe('VertexChecker over a genaicode client', () => {
   });
 
   it('coerces an unknown reject category to "other"', async () => {
-    const checker = new VertexChecker({
-      client: genaicode(stubProvider('{"allowed": false, "category": "wobble"}')),
-    });
+    const checker = new VertexChecker({ client: genaicode(stubProvider('{"allowed": false, "category": "wobble"}')) });
+    expect(await checker.check('A completely clean game concept')).toEqual({ allowed: false, category: 'other' });
+  });
 
-    expect(await checker.check('A completely clean game concept')).toEqual({
-      allowed: false,
-      category: 'other',
-    });
+  it('defaults to 10s timeout and allows custom timeout', () => {
+    expect(DEFAULT_MODERATION_TIMEOUT_MS).toBe(10_000);
+    const custom = new VertexChecker({ timeoutMs: 15_000 });
+    expect((custom as unknown as { timeoutMs: number }).timeoutMs).toBe(15_000);
   });
 });
