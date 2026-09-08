@@ -91,13 +91,18 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
   const targetedCache = new Map<string, Windowed<ReviewQueueItem[]>>();
   let openSweepCache: Windowed<ReviewSweep | null> | null = null;
 
+  // Bumped by each invalidation, so a read cannot seal in staleness.
+  let generation = 0;
+
   function invalidateOpenSweep(): void {
     openSweepCache = null;
+    generation += 1;
   }
 
   function invalidateReviewer(reviewerUid: string): void {
     assessedCache.delete(reviewerUid);
     targetedCache.delete(reviewerUid);
+    generation += 1;
   }
 
   // Once per window, not per request, and never per targeted slug.
@@ -117,7 +122,10 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
 
   async function openReviewSweep(opts?: { fresh?: boolean }): Promise<ReviewSweep | null> {
     if (!opts?.fresh && fresh(openSweepCache ?? undefined)) return openSweepCache!.value;
+    const at = generation;
     const value = await store.getOpenReviewSweep();
+    // A write landed mid-read, so this answer is already stale.
+    if (generation !== at) return value;
     openSweepCache = { value, expiresAt: now() + BADGE_WINDOW_MS };
     return value;
   }
@@ -125,8 +133,10 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
   async function assessedSlugsFor(reviewerUid: string): Promise<Set<string>> {
     const hit = assessedCache.get(reviewerUid);
     if (fresh(hit)) return hit.value;
+    const at = generation;
     const rows = await store.listGameAssessmentsByReviewer(reviewerUid);
     const slugs = new Set(rows.map((row) => row.slug));
+    if (generation !== at) return slugs;
     rememberBounded(
       assessedCache,
       reviewerUid,
@@ -223,6 +233,7 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
   }
 
   async function loadTargetedQueueItems(reviewerUid: string): Promise<ReviewQueueItem[]> {
+    const at = generation;
     const requests = await store.listOpenReReviewRequestsForReviewer(reviewerUid);
     const items: ReviewQueueItem[] = [];
     if (requests.length > 0) {
@@ -236,6 +247,7 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
         });
       }
     }
+    if (generation !== at) return items;
     rememberBounded(
       targetedCache,
       reviewerUid,

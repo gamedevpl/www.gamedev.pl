@@ -16,13 +16,19 @@ interface Entry {
   rows: StoredNotification[];
 }
 
-// Keyed by store as well as uid, like the catalog enrichment cache.
-const caches = new WeakMap<object, Map<string, Entry>>();
+interface StoreCache {
+  entries: Map<string, Entry>;
+  // Bumped by each invalidation, so a read cannot seal in staleness.
+  generation: number;
+}
 
-function cacheFor(store: Store): Map<string, Entry> {
+// Keyed by store as well as uid, like the catalog enrichment cache.
+const caches = new WeakMap<object, StoreCache>();
+
+function cacheFor(store: Store): StoreCache {
   const existing = caches.get(store);
   if (existing) return existing;
-  const created = new Map<string, Entry>();
+  const created: StoreCache = { entries: new Map<string, Entry>(), generation: 0 };
   caches.set(store, created);
   return created;
 }
@@ -35,15 +41,22 @@ export async function readNotificationsCached(
   now: () => number = Date.now,
 ): Promise<StoredNotification[]> {
   const cache = cacheFor(store);
-  const hit = cache.get(uid);
+  const hit = cache.entries.get(uid);
   // A wider request than the window holds cannot be sliced from it.
   if (hit && hit.expiresAt > now() && hit.limit >= limit) return hit.rows.slice(0, limit);
+  const generation = cache.generation;
   const rows = await store.listNotifications(uid, { limit });
-  rememberBounded(cache, uid, { expiresAt: now() + NOTIFICATION_WINDOW_MS, limit, rows }, MAX_CACHED_USERS);
+  // A write landed mid-read, so these rows are already stale.
+  if (cache.generation === generation) {
+    rememberBounded(cache.entries, uid, { expiresAt: now() + NOTIFICATION_WINDOW_MS, limit, rows }, MAX_CACHED_USERS);
+  }
   return rows;
 }
 
 // Drops this user's window: their next read goes to Firestore.
 export function invalidateNotificationCache(store: Store, uid: string): void {
-  caches.get(store)?.delete(uid);
+  const cache = caches.get(store);
+  if (!cache) return;
+  cache.entries.delete(uid);
+  cache.generation += 1;
 }

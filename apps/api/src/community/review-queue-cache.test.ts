@@ -211,6 +211,38 @@ describe('reviewer badge read windows', () => {
     expect((await poll(app, reviewer)).remaining).toBe(2);
   });
 
+  it('never lets an in-flight read restore a window a write dropped', async () => {
+    const { app, store } = await makeApp();
+    const reviewer = await cookie(app, 'reviewer');
+    const boss = await cookie(app, 'boss');
+
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const real = store.getOpenReviewSweep.bind(store);
+    const spy = vi.spyOn(store, 'getOpenReviewSweep').mockImplementation(async () => {
+      const sweep = await real();
+      await gate;
+      return sweep;
+    });
+
+    // The poll reads the active sweep; the operator pauses it mid-read.
+    const inflight = app.inject({ method: 'GET', url: '/api/review/status', headers: { cookie: reviewer } });
+    const paused = await app.inject({
+      method: 'POST',
+      url: '/api/admin/review-sweeps/swp-1',
+      headers: { cookie: boss },
+      payload: { status: 'paused' },
+    });
+    expect(paused.statusCode).toBe(200);
+    release();
+    await inflight;
+    spy.mockRestore();
+
+    expect((await poll(app, reviewer)).remaining).toBe(0);
+  });
+
   it('shows an operator sweep change inside the window', async () => {
     const { app } = await makeApp();
     const reviewer = await cookie(app, 'reviewer');

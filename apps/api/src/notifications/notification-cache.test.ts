@@ -94,6 +94,33 @@ describe('notification read window', () => {
     expect(await readNotificationsCached(store, 'g:1', 20, clock)).toHaveLength(2);
   });
 
+  it('never lets an in-flight read restore a window a write dropped', async () => {
+    const store = new InMemoryStore();
+    await seed(store, 'u1', 'n1');
+    const clock = () => 1_700_000_000_000;
+
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const real = store.listNotifications.bind(store);
+    const spy = vi.spyOn(store, 'listNotifications').mockImplementation(async (uid, opts) => {
+      const rows = await real(uid, opts);
+      await gate;
+      return rows;
+    });
+
+    // The poll reads the old list; a write lands before it settles.
+    const inflight = readNotificationsCached(store, 'u1', 20, clock);
+    await seed(store, 'u1', 'n2');
+    invalidateNotificationCache(store, 'u1');
+    release();
+    await inflight;
+    spy.mockRestore();
+
+    expect((await readNotificationsCached(store, 'u1', 20, clock)).map((r) => r.id).sort()).toEqual(['n1', 'n2']);
+  });
+
   it('goes back to the store when the window holds fewer rows than asked for', async () => {
     const store = new InMemoryStore();
     await seed(store, 'u1', 'n1');
