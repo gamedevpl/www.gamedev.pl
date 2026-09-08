@@ -45,6 +45,12 @@ export function registerGateVerdictRoutes(app: FastifyInstance, options: GateVer
       throw error;
     }
 
+    // Lane is signed, not sent. See infra/gate-hardening.md.
+    if (kind !== 'progress' && kind !== claims.kind) {
+      request.log.warn({ allowed: claims.kind, asked: kind }, 'gate verdict lane');
+      return reply.status(403).send({ error: 'gate capability does not cover this verdict' });
+    }
+
     // A run talking about another version is what this refuses.
     if (claims.slug !== slug || claims.version !== version) {
       request.log.warn(

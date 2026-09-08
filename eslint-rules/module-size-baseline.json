@@ -270,7 +270,7 @@
     "apps/api/src/delivery/gate-screenshot.test.ts": 61,
     "apps/api/src/delivery/gate-screenshot.ts": 52,
     "apps/api/src/delivery/gate-trigger.test.ts": 201,
-    "apps/api/src/delivery/gate-trigger.ts": 291,
+    "apps/api/src/delivery/gate-trigger.ts": 295,
     "apps/api/src/delivery/gcs-sign.test.ts": 62,
     "apps/api/src/delivery/gcs-sign.ts": 193,
     "apps/api/src/delivery/recent-builds.ts": 50,

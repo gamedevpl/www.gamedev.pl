@@ -43,13 +43,13 @@ describe('gate verdict capability', () => {
   });
 
   it('refuses a token past its expiry', () => {
-    const token = mintGateVerdictToken('comet-courier', 'v1', secret, 1000);
+    const token = mintGateVerdictToken('comet-courier', 'v1', secret, 'gate', 1000);
     expect(() => readGateVerdictToken(token, secret, 1000 + GATE_VERDICT_TOKEN_TTL_SECONDS + 1)).toThrow(/expired/);
   });
 
   it('refuses a payload edited after signing', () => {
     const token = mintGateVerdictToken('comet-courier', 'v1', secret);
-    const forged = `${Buffer.from(JSON.stringify({ slug: 'other', version: 'v1', exp: 9e9 })).toString('base64url')}.${token.split('.')[1]}`;
+    const forged = `${Buffer.from(JSON.stringify({ slug: 'other', version: 'v1', kind: 'gate', exp: 9e9 })).toString('base64url')}.${token.split('.')[1]}`;
     expect(() => readGateVerdictToken(forged, secret)).toThrow(/signature/);
   });
 });
@@ -112,6 +112,35 @@ describe('POST /api/internal/gate-verdict', () => {
     expect(calls).toEqual([]);
   });
 
+  it('refuses a health run trying to record an acceptance verdict', async () => {
+    const { store, calls } = recordingStore();
+    const app = await serve(store);
+    const res = await post(app, mintGateVerdictToken('comet-courier', 'v1', secret, 'health'), {
+      slug: 'comet-courier',
+      version: 'v1',
+      kind: 'gate',
+      result: { green: true },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(calls).toEqual([]);
+  });
+
+  it('lets every lane report progress', async () => {
+    const { store, calls } = recordingStore();
+    const app = await serve(store);
+    for (const lane of ['gate', 'preview', 'health'] as const) {
+      const res = await post(app, mintGateVerdictToken('comet-courier', 'v1', secret, lane), {
+        slug: 'comet-courier',
+        version: 'v1',
+        kind: 'progress',
+        result: { lane },
+      });
+      expect(res.statusCode, lane).toBe(204);
+    }
+    expect(calls).toHaveLength(3);
+  });
+
   it('refuses an unsigned request', async () => {
     const { store, calls } = recordingStore();
     const res = await post(await serve(store), null, {
@@ -129,10 +158,11 @@ describe('POST /api/internal/gate-verdict', () => {
     const app = await serve(store);
     apps.push(app);
     for (const kind of ['gate', 'preview', 'health', 'progress'] as const) {
+      const lane = kind === 'progress' ? 'gate' : kind;
       const res = await app.inject({
         method: 'POST',
         url: GATE_VERDICT_PATH,
-        headers: { authorization: `Bearer ${mintGateVerdictToken('comet-courier', 'v1', secret)}` },
+        headers: { authorization: `Bearer ${mintGateVerdictToken('comet-courier', 'v1', secret, lane)}` },
         payload: { slug: 'comet-courier', version: 'v1', kind, result: { green: true } },
       });
       expect(res.statusCode, kind).toBe(204);

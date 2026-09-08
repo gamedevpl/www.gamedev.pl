@@ -1,9 +1,13 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-// One version per capability.
+// The verdict a lane may record; progress is open to all.
+export type GateVerdictKind = 'gate' | 'preview' | 'health';
+
+// One version and one lane per capability.
 export interface GateVerdictClaims {
   slug: string;
   version: string;
+  kind: GateVerdictKind;
   exp: number;
 }
 
@@ -25,9 +29,10 @@ export function mintGateVerdictToken(
   slug: string,
   version: string,
   secret: string,
+  kind: GateVerdictKind = 'gate',
   nowSeconds = Math.floor(Date.now() / 1000),
 ): string {
-  const claims: GateVerdictClaims = { slug, version, exp: nowSeconds + GATE_VERDICT_TOKEN_TTL_SECONDS };
+  const claims: GateVerdictClaims = { slug, version, kind, exp: nowSeconds + GATE_VERDICT_TOKEN_TTL_SECONDS };
   const payload = Buffer.from(JSON.stringify(claims)).toString('base64url');
   return `${payload}.${sign(payload, secret)}`;
 }
@@ -57,6 +62,9 @@ export function readGateVerdictToken(
   }
   if (typeof claims.slug !== 'string' || !claims.slug) throw new InvalidGateVerdictTokenError('no slug');
   if (typeof claims.version !== 'string' || !claims.version) throw new InvalidGateVerdictTokenError('no version');
+  if (claims.kind !== 'gate' && claims.kind !== 'preview' && claims.kind !== 'health') {
+    throw new InvalidGateVerdictTokenError('no lane');
+  }
   if (typeof claims.exp !== 'number' || claims.exp <= nowSeconds) throw new InvalidGateVerdictTokenError('expired');
   return claims;
 }

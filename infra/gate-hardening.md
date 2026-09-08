@@ -82,8 +82,14 @@ claim — including one running hostile code for a different game. So the endpoi
 secret, no new plumbing) and passes it in the build's step env. The endpoint verifies the
 signature and refuses any body naming a different slug or version.
 
+The capability names a **lane** as well as a version. A health re-gate's capability
+records health and progress and nothing else, so candidate code cannot post
+`kind: "gate"` and overwrite the acceptance verdict — which is provenance, and is
+supposed to survive a red re-run. Progress is open to every lane; the three terminal
+verdicts are not.
+
 The capability is readable by candidate code, and that is fine: it is scoped to the game
-that code already belongs to. Six-hour expiry, so it outlives a queued build and not much
+that code already belongs to, and now to the one verdict its run is entitled to write. Six-hour expiry, so it outlives a queued build and not much
 else.
 
 ### Running the gate by hand

@@ -91,7 +91,9 @@ function buildSpec(
 ) {
   const verdictSecret = process.env.SUBMISSION_TOKEN_SECRET?.trim();
   const verdictEndpoint = verdictSecret ? `${canonicalAppBaseUrl()}${GATE_VERDICT_PATH}` : '';
-  const verdictToken = verdictSecret ? mintGateVerdictToken(input.slug, input.version, verdictSecret) : '';
+  // Proposal records a gate verdict, like a delivery.
+  const verdictKind = input.mode === 'health' ? 'health' : input.mode === 'preview' ? 'preview' : 'gate';
+  const verdictToken = verdictSecret ? mintGateVerdictToken(input.slug, input.version, verdictSecret, verdictKind) : '';
   return {
     steps: [
       {
