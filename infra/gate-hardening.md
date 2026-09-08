@@ -92,6 +92,24 @@ The capability is readable by candidate code, and that is fine: it is scoped to 
 that code already belongs to, and now to the one verdict its run is entitled to write. Six-hour expiry, so it outlives a queued build and not much
 else.
 
+### Applying the IAM change without stranding a build
+
+A build carries the capability in its own immutable spec, so a run submitted by the
+pre-change API has none and falls back to the direct writer. Revoke the gate's manifest
+write while one of those is queued or running and it finishes its checks against a 403,
+leaving a delivery unverified with no verdict and no error the agent can act on.
+Deploying the new trigger does not retrofit a build already submitted.
+
+So the revocation goes last, after the new code is serving and the queue is empty:
+
+```bash
+gcloud builds list --ongoing --project gamedevpl --filter='tags:gate' --format='value(id,createTime)'
+```
+
+Empty, or every entry started after the deploy, means nothing is stranded. `setup-gcp.sh`
+is safe to re-run at any point before that — it only adds the narrow bindings; the
+removal of the broad one is the step that needs the drain.
+
 ### Running the gate by hand
 
 `infra/cloudbuild-gate.yaml` is still the hand-runnable path, and it needs the same
