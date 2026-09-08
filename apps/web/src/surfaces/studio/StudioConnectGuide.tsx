@@ -7,8 +7,8 @@ import { recordStudioStep } from '../../visitTelemetry.js';
 import './studio-connect-guide.css';
 
 type Route = 'cli' | 'agent' | 'platform';
-type Tool = Exclude<ConnectClient, 'cli'> | 'vscode' | 'other';
-const TOOLS: Tool[] = ['cursor', 'vscode', 'claudeCode', 'codex', 'kimi', 'other'];
+type Tool = Exclude<ConnectClient, 'cli'> | 'vscode' | 'other' | 'muse';
+const TOOLS: Tool[] = ['cursor', 'vscode', 'claudeCode', 'codex', 'kimi', 'muse', 'other'];
 
 export function StudioConnectGuide({
   token,
@@ -81,10 +81,11 @@ export function StudioConnectGuide({
       </div>
     );
   if (!payload) return <p role="status">{t('connect.loading')}</p>;
+  const local = route === 'cli' || tool === 'muse';
   const cliSnippet = windows
     ? `irm ${window.location.origin}/install.ps1 | iex\ngamedevpl login\ngamedevpl connect ${payload.slug}`
     : `curl -fsSL ${window.location.origin}/install.sh | bash\ngamedevpl login\ngamedevpl connect ${payload.slug}`;
-  const keyClient = tool && tool !== 'vscode' && tool !== 'other' ? tool : 'cursor';
+  const keyClient = tool && tool !== 'vscode' && tool !== 'other' && tool !== 'muse' ? tool : 'cursor';
   const masked =
     tool === 'vscode' || tool === 'other'
       ? `URL: ${payload.mcpUrl}\n${payload.authorizationHeaderMasked}`
@@ -94,7 +95,7 @@ export function StudioConnectGuide({
     .join(payload.authorizationHeader)
     .split(payload.authorizationHeaderMasked.replace(/^Authorization:\s*/i, ''))
     .join(payload.authorizationHeader.replace(/^Authorization:\s*/i, ''));
-  const oauth = tool === 'cursor' || tool === 'vscode' || tool === 'other';
+  const oauth = tool !== 'kimi' && tool !== 'muse';
   const step = !route ? 1 : route === 'agent' && !tool ? 2 : stage === 'start' ? 4 : 3;
   const title = !route
     ? 'choose'
@@ -150,8 +151,12 @@ export function StudioConnectGuide({
         </div>
       ) : stage === 'start' ? (
         <>
-          <p>{t(route === 'cli' ? 'connectGuide.cliStart' : 'connectGuide.agentStart')}</p>
-          {route === 'agent' && (
+          <p>
+            {t(
+              tool === 'muse' ? 'connectGuide.museStart' : local ? 'connectGuide.cliStart' : 'connectGuide.agentStart',
+            )}
+          </p>
+          {!local && (
             <>
               <pre className="studio-connect-snippet" tabIndex={0}>
                 {payload.kickoffPrompt}
@@ -166,11 +171,11 @@ export function StudioConnectGuide({
       ) : (
         <>
           <p>
-            {route === 'cli'
+            {local
               ? t('connectGuide.cliSetup')
               : t('connectGuide.toolSetup', { tool: t(`connectGuide.tools.${tool}`) })}
           </p>
-          {route === 'cli' ? (
+          {local ? (
             <>
               <div className="connect-guide-tools">
                 <button className="btn btn-secondary" aria-pressed={!windows} onClick={() => setWindows(false)}>

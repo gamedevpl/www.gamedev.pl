@@ -39,7 +39,7 @@ describe('agent discovery', () => {
     const agents = discoverAgents({ HOME: directory() }, (cmd) => `/bin/${cmd}`);
     expect(agents.find((row) => row.name === 'claude')).toMatchObject({ installed: true, local: true, mcp: true });
     expect(agents.find((row) => row.name === 'vibe')).toMatchObject({ installed: true, local: true, mcp: false });
-    for (const name of ['agy', 'cursor']) {
+    for (const name of ['agy', 'cursor', 'muse']) {
       expect(agents.find((row) => row.name === name)).toMatchObject({ installed: true, local: true, mcp: false });
     }
     expect(formatAgents(agents)).toContain('launch verifies required CLI flags');

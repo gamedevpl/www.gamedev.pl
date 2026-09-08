@@ -112,6 +112,24 @@
         "success": [0],
         "failure": [1]
       }
+    },
+    {
+      "name": "muse",
+      "command": "muse",
+      "versionFlag": "--version",
+      "headless": ["exec", "--trust-workspace"],
+      "events": {
+        "flag": "",
+        "dialect": "ndjson"
+      },
+      "budget": {
+        "turns": "--max-model-steps"
+      },
+      "cwd": "game-dir",
+      "exit": {
+        "success": [0],
+        "failure": [1]
+      }
     }
   ]
 }

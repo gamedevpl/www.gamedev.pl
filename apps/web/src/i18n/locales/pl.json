@@ -2053,7 +2053,9 @@
       "claudeCode": "Claude Code",
       "codex": "Codex",
       "kimi": "Kimi",
-      "other": "Inne narzędzie MCP"
-    }
+      "other": "Inne narzędzie MCP",
+      "muse": "Muse Code (Meta)"
+    },
+    "museStart": "W terminalu wybierz „Open a local checkout”, a następnie Muse. Muse pracuje na lokalnych plikach; ta ścieżka nie konfiguruje MCP. Jeśli nie masz jeszcze Muse Code, zainstaluj je z dev.meta.ai."
   }
 }
