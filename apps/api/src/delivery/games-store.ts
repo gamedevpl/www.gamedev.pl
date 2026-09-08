@@ -755,10 +755,15 @@ export interface GcsGamesStoreOptions {
  * can collide makes them silently not: the loser's sources vanish under the winner's,
  * and the manifest that survives describes a mixture of both. The suffix costs nothing
  * and the timestamp still sorts.
+ *
+ * Six bytes rather than three: at three, 200 ids drawn from one instant collide about
+ * once in 850 draws, which is rare enough to look like a passing test and common enough
+ * to fail CI on an unrelated branch. The suffix is fixed-width either way, so listing
+ * order is unchanged.
  */
 export function defaultVersionId(at: Date): string {
   const stamp = at.toISOString().replace(/[-:.]/g, '');
-  return `v${stamp}-${randomBytes(3).toString('hex')}`;
+  return `v${stamp}-${randomBytes(6).toString('hex')}`;
 }
 
 function assertSlug(slug: string): void {
