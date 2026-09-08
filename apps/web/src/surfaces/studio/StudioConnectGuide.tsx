@@ -1,6 +1,8 @@
+import { LocalActivityStatus } from './LocalActivityStatus.js';
+import { readGuideState, saveGuideState } from './connectGuideState.js';
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getConnectPayload, type ConnectClient, type ConnectPayload } from './connectApi.js';
+import { getConnectPayload, type ConnectClient, type ConnectPayload, type ConnectApiError } from './connectApi.js';
 import { SwitchToPlatformControl } from './StudioConnectCard.js';
 import { useCliSurfaceEnabled } from '../../useCliSurfaceEnabled.js';
 import { recordStudioStep } from '../../visitTelemetry.js';
@@ -10,36 +12,59 @@ type Route = 'cli' | 'agent' | 'platform';
 type Tool = Exclude<ConnectClient, 'cli'> | 'vscode' | 'other' | 'muse';
 const TOOLS: Tool[] = ['cursor', 'vscode', 'claudeCode', 'codex', 'kimi', 'muse', 'other'];
 
-export function StudioConnectGuide({
+export function StudioConnectGuide(props: ComponentProps<typeof ConnectGuide>) {
+  return <ConnectGuide key={props.token} {...props} />;
+}
+
+function ConnectGuide({
   token,
   onSwitchToPlatform,
   pending,
+  panel = false,
+  unavailableLabel,
 }: {
   token: string;
   onSwitchToPlatform: ComponentProps<typeof SwitchToPlatformControl>['onSwitchToPlatform'];
   pending: boolean;
+  panel?: boolean;
+  unavailableLabel?: string;
 }) {
   const { t } = useTranslation();
   const cliEnabled = useCliSurfaceEnabled();
   const [payload, setPayload] = useState<ConnectPayload | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  const [route, setRoute] = useState<Route | null>(null);
-  const [tool, setTool] = useState<Tool | null>(null);
-  const [stage, setStage] = useState<'setup' | 'start'>('setup');
-  const [manual, setManual] = useState(false);
-  const [windows, setWindows] = useState(false);
+  const [saved] = useState(() => readGuideState(token));
+  const [route, setRoute] = useState<Route | null>(saved.route);
+  const [tool, setTool] = useState<Tool | null>(saved.tool);
+  const [stage, setStage] = useState<'setup' | 'start'>(saved.stage);
+  const [manual, setManual] = useState(saved.manual);
+  const [windows, setWindows] = useState(saved.windows);
   const [copied, setCopied] = useState('');
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
+    saveGuideState(token, { route, tool, stage, manual, windows });
+  }, [token, route, tool, stage, manual, windows]);
+  useEffect(() => {
+    if (payload && ((route === 'platform' && !payload.canSwitchToPlatform) || (route === 'cli' && !cliEnabled))) {
+      setRoute(null);
+      setStage('setup');
+    }
+  }, [payload, route, cliEnabled]);
+  useEffect(() => {
     let cancelled = false;
     setError(false);
+    setUnavailable(false);
     void getConnectPayload(token)
       .then((value) => {
         if (!cancelled) setPayload(value);
       })
-      .catch(() => {
-        if (!cancelled) setError(true);
+      .catch((failure: ConnectApiError) => {
+        if (cancelled) return;
+        if (failure.status === 409 && ['not_self_round', 'inactive_round'].includes(failure.reason ?? ''))
+          setUnavailable(true);
+        else setError(true);
       });
     return () => {
       cancelled = true;
@@ -71,7 +96,8 @@ export function StudioConnectGuide({
       setManual(false);
     } else setRoute(null);
   };
-  if (error)
+  if (unavailable && unavailableLabel) return <p className="studio-rail-empty">{unavailableLabel}</p>;
+  if (error || unavailable)
     return (
       <div role="alert">
         <p>{t('connectWizard.loadError')}</p>
@@ -107,7 +133,8 @@ export function StudioConnectGuide({
           ? 'start'
           : 'setup';
   return (
-    <section className="connect-guide" aria-labelledby="connect-guide-title">
+    <section className={`connect-guide${panel ? ' connect-guide-panel' : ''}`} aria-labelledby="connect-guide-title">
+      <LocalActivityStatus token={token} />
       <div className="connect-guide-nav">
         {route && (
           <button type="button" className="studio-connect-skip" onClick={back}>
@@ -124,6 +151,7 @@ export function StudioConnectGuide({
       <h3 id="connect-guide-title" ref={heading} tabIndex={-1}>
         {t(`connectGuide.${title}`)}
       </h3>
+      {route && route !== 'platform' && <p className="connect-guide-mode">{t('connectGuide.selfMode')}</p>}
       {!route ? (
         <div className="connect-guide-options">
           {(['cli', 'agent', 'platform'] as const)
@@ -156,6 +184,14 @@ export function StudioConnectGuide({
               tool === 'muse' ? 'connectGuide.museStart' : local ? 'connectGuide.cliStart' : 'connectGuide.agentStart',
             )}
           </p>
+          {local && (
+            <>
+              <pre className="studio-connect-snippet" tabIndex={0}>
+                {cliSnippet}
+              </pre>
+              {copyButton(cliSnippet, 'cli')}
+            </>
+          )}
           {!local && (
             <>
               <pre className="studio-connect-snippet" tabIndex={0}>
@@ -165,7 +201,7 @@ export function StudioConnectGuide({
             </>
           )}
           <p className="connect-guide-wait" role="status">
-            {t('connectGuide.waiting')}
+            {t(local ? 'connectGuide.localWaiting' : panel ? 'connectGuide.panelWaiting' : 'connectGuide.waiting')}
           </p>
         </>
       ) : (

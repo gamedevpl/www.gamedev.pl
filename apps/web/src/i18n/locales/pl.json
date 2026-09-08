@@ -1,4 +1,17 @@
 {
+  "localActivity": {
+    "interactive": "Interaktywny agent steruje terminalem. Odpowiadaj tam na pytania o zgodę.",
+    "title": "Lokalny agent: {{agent}}",
+    "preparing": "Przygotowywanie lokalnego katalogu.",
+    "editing": "Agent edytuje grę lokalnie.",
+    "permission": "Oczekiwanie na zgodę w terminalu.",
+    "verifying": "Sprawdzanie lokalnych zmian.",
+    "ready": "Lokalne testy przeszły. Możesz wysłać zmiany przez /submit.",
+    "failed": "Lokalne zadanie nie przeszło weryfikacji. Szczegóły w terminalu.",
+    "stopped": "Lokalne zadanie zostało zatrzymane.",
+    "offline": "Utracono kontakt z CLI. Sprawdź terminal — agent może nadal pracować.",
+    "localOnly": "Pliki gry pozostają na Twoim komputerze do momentu wysłania."
+  },
   "app": {
     "loadingSurface": "Wczytywanie…",
     "surfaceLoadFailed": "Ta strona się nie wczytała — dostępna jest nowsza wersja serwisu.",
@@ -2020,8 +2033,9 @@
     "copy": "Kopiuj",
     "retry": "Spróbuj ponownie",
     "platformBody": "Agent gamedev.pl będzie kontynuował tę rundę, korzystając z Twojego limitu na platformie. Postęp zobaczysz w Studio.",
-    "cliStart": "W terminalu wybierz lokalne pliki, rozmowę lub agenta. Opisz, co zbudować. Do Studio możesz wrócić w każdej chwili.",
+    "cliStart": "Uruchom te polecenia w terminalu, a potem wybierz swojego zainstalowanego agenta lub lokalny checkout. Agent korzysta ze swojego konta i rozliczeń. gamedevpl CLI łączy go z tą grą; kliknięcie „Gotowe” tutaj nie uruchamia agenta managed.",
     "agentStart": "Wklej tę wiadomość w rozmowie ze swoim agentem. Wskaże mu tę grę i poprosi o rozpoczęcie bieżącej rundy.",
+    "localWaiting": "Postęp lokalnej pracy zobaczysz w terminalu i podglądzie gry. Studio nie widzi lokalnych zmian, dopóki nie wyślesz ich przez /submit po pomyślnej weryfikacji.",
     "waiting": "Połączenie nie jest jeszcze potwierdzone. Ten ekran zaktualizuje się, gdy agent się odezwie. Możesz też otworzyć Studio poniżej.",
     "cliSetup": "Uruchom te polecenia w terminalu. Potrzebujesz Node.js 20.19 lub nowszego. Zaloguj się na to samo konto co tutaj.",
     "toolSetup": "Dodaj gamedev.pl w {{tool}}, a potem przejdź do wiadomości rozpoczynającej pracę.",
@@ -2056,6 +2070,8 @@
       "other": "Inne narzędzie MCP",
       "muse": "Muse Code (Meta)"
     },
-    "museStart": "W terminalu wybierz „Open a local checkout”, a następnie Muse. Muse pracuje na lokalnych plikach; ta ścieżka nie konfiguruje MCP. Jeśli nie masz jeszcze Muse Code, zainstaluj je z dev.meta.ai."
+    "museStart": "W terminalu wybierz „Open a local checkout”, a następnie Muse. Muse pracuje na lokalnych plikach; ta ścieżka nie konfiguruje MCP. Jeśli nie masz jeszcze Muse Code, zainstaluj je z dev.meta.ai.",
+    "panelWaiting": "Czekamy, aż Twój agent się połączy. Możesz zamknąć ten panel i śledzić postęp w rozmowie.",
+    "selfMode": "Ta runda: Twój agent (BYOCA)"
   }
 }

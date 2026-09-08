@@ -1,3 +1,4 @@
+import { registerLocalActivityRoutes } from '../creation/local-activity-routes.js';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
@@ -856,21 +857,20 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     options.submissionRoutes?.submissionTokenSecret ??
     process.env.SUBMISSION_TOKEN_SECRET ??
     (localGames ? 'local-development-submission-secret' : undefined);
+  if (submissionTokenSecret) await registerLocalActivityRoutes(app, store, submissionTokenSecret);
   await registerCreatorStudioRoutes(app, {
     store,
     gamesStore,
     mintStatusToken: submissionTokenSecret ? (jobId) => mintToken(jobId, submissionTokenSecret) : undefined,
     objectStore,
-    // N1: the two cross-bucket reads the build rail needs, wired here rather
-    // than imported from creation/.
+    // N1: inject cross-bucket build-rail reads.
     isPresenceEventText: isMcpPresenceEventText,
     toRecentBuilds,
   });
   await registerCreatorVersionRoutes(app, { store, gamesStore });
   await registerCreatorPatRoutes(app, { store });
 
-  // The Code surface (creator-code-editing-execution-plan.md): owner reads and
-  // owner-authored staging writes over the same games store and staging buffer the
+  // Code surface: owner reads and staging share the games store with the
   // agent channel uses. `invalidateStatusCache` / `scheduleStagedPreview` are the two
   // seams `registerSubmissionRoutes` exposes so an owner write busts the same cache and
   // arms the same staged-preview assembly an agent write does (CE-12).

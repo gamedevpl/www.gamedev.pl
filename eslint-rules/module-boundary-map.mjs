@@ -307,6 +307,7 @@ const FILE_BUCKET = {
   'agent-backend-env': 'agent-surface',
   'managed-agent': 'agent-surface',
   'managed-availability': 'agent-surface',
+  'managed-bot-availability': 'agent-surface',
   'managed-backend': 'agent-surface',
   'managed-provider-anthropic': 'agent-surface',
   'managed-provider-copilot': 'agent-surface',

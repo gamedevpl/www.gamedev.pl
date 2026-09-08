@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { modelCommand } from './model-command.js';
 import { offerKitUpdate, updateKit } from './kit-update.js';
 import { playGame } from './play.js';
 import { resolve as resolvePath } from 'node:path';
@@ -155,6 +156,10 @@ export async function runCli(
   try {
     if (verb === 'help' || flags.help || flags.h) {
       io.stdout.write(`${formatHelp()}\n`);
+      return EXIT_GREEN;
+    }
+    if (verb === 'model') {
+      await modelCommand({ args, flags, env, write: (line) => io.stdout.write(`${line}\n`) });
       return EXIT_GREEN;
     }
     if (verb === 'kit') {

@@ -3,11 +3,13 @@ export type TuiMode = 'prompt' | 'pick' | 'busy';
 export type TuiState = {
   lines: string[];
   live: string[];
+  localTask: string;
   identity: string;
   question: string;
   mode: TuiMode;
   activity: string;
   busySince: number;
+  lastOutputAt: number;
   draft: string;
   choices: string[];
   pickIndex: number;
@@ -18,6 +20,7 @@ export type TuiSession = {
   subscribe: (fn: (state: TuiState) => void) => () => void;
   writeLine: (text: string) => void;
   setLive: (live: string[]) => void;
+  setLocalTask: (agent: string) => void;
   setIdentity: (identity: string) => void;
   setActivity: (activity: string) => void;
   setDraft: (draft: string) => void;
@@ -39,11 +42,13 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
   let state: TuiState = {
     lines: banner ? banner.split('\n') : [],
     live: [],
+    localTask: '',
     identity: '',
     question: '',
     mode: 'busy',
     activity: 'Starting gamedevpl',
     busySince: Date.now(),
+    lastOutputAt: Date.now(),
     draft: '',
     choices: [],
     pickIndex: 0,
@@ -70,7 +75,11 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
       };
     },
     writeLine(text) {
-      state = { ...state, lines: [...state.lines, ...text.split('\n')] };
+      state = { ...state, lines: [...state.lines, ...text.split('\n')], lastOutputAt: Date.now() };
+      emit();
+    },
+    setLocalTask(localTask) {
+      state = { ...state, localTask };
       emit();
     },
     setLive(live) {
@@ -159,6 +168,7 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
         mode: 'busy',
         activity: state.mode === 'pick' ? 'Continuing' : 'Working on your request',
         busySince: Date.now(),
+        lastOutputAt: Date.now(),
         draft: '',
         choices: [],
         question: '',

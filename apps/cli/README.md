@@ -249,3 +249,30 @@ Create in Studio establishes its submission even before an agent starts or deliv
 files. A missing game is not silently created by connect.
 
 In the interactive prompt, type `/` to browse commands or `/pu` to find `/pull`. Use ↑/↓ to select, Tab to fill, and Enter to send. Enter on a partial command fills it first. Esc hides suggestions and keeps your text; outside the suggestion list, ↑/↓ browses history. Suggestions run locally and make no model requests.
+
+### Delegated model and reasoning effort
+
+Use `/model` in the interactive session to choose an agent, model and reasoning
+effort. Choices are saved per agent for future local and MCP delegations. Codex
+choices come from its local model cache when available; other model IDs can be
+entered directly. A model still needs to be available to your agent's account.
+
+You can also configure this from a terminal:
+
+```sh
+gamedevpl model codex --model YOUR_MODEL_ID --effort high
+gamedevpl model muse --model YOUR_MODEL_ID --effort medium
+gamedevpl model codex --reset
+```
+
+Without overrides, the agent keeps its own configuration. The task header says
+“tool default (not reported)” rather than guessing its effective model or effort.
+Vibe model selection uses `VIBE_ACTIVE_MODEL`; tools without an effort override
+keep their own reasoning settings. Unsupported installed CLI flags fail preflight.
+
+The main local-task view groups progress and abbreviates shell operations. `/logs`
+shows the full sanitized transcript of the latest task in the current interactive
+checkout. Logs are private local temporary files; one-shot delegation prints the
+log path. Logs are not sent to gamedev.pl and may contain local source text.
+
+When Antigravity cannot ask for a permission in headless mode, the interactive CLI offers to hand it the terminal and resume that conversation. Answer permissions in Antigravity, then exit it to return to CLI verification. Sandbox settings stay enabled; permissions are not automatically approved. One-shot/unattended runs do not open an interactive session. On macOS and Linux, native interactive output is recorded in `/logs` using the system terminal recorder. On Windows it remains in terminal scrollback. Studio shows local task activity separately from delivery status; game files are sent only by submission.

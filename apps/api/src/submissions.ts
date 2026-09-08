@@ -170,7 +170,6 @@ export interface SubmissionRoutesOptions {
    * pre-breaker behaviour pass.
    */
   creationGate?: CreationGate | null;
-  // Whether `platform` can be offered right now; null means always available.
   managedAvailabilityGate?: ManagedAvailabilityGate | null;
   /** Global ceiling used when the Firestore config doc sets none. See creation-limits.ts. */
   globalDailySubmissionCap?: number;
@@ -1200,6 +1199,7 @@ export async function registerSubmissionRoutes(
     confirmSlugClaim,
   });
   await registerSelfBuildConnectRoutes(app, {
+    managedAvailabilityGate,
     store,
     now,
     submissionTokenSecret,

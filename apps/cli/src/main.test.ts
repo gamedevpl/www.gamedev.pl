@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -29,6 +29,23 @@ function io() {
 }
 
 describe('runCli verbs', () => {
+  it.each([
+    ['model', '--help'],
+    ['model', 'codex', '--help'],
+    ['model', 'codex', '-h'],
+  ])('prints help without changing model settings: %j', async (...args) => {
+    const config = mkdtempSync(join(tmpdir(), 'model-help-'));
+    mkdirSync(join(config, 'gamedevpl'));
+    const settings = join(config, 'gamedevpl', 'agent-settings.json');
+    const saved = '{"codex":{"model":"example"}}';
+    writeFileSync(settings, saved);
+    const streams = io();
+    const code = await runCli(['node', 'gamedevpl', ...args], { XDG_CONFIG_HOME: config }, streams);
+    expect(code).toBe(EXIT_GREEN);
+    expect(streams.read().out).toContain('open a browser and sign in');
+    expect(readFileSync(settings, 'utf8')).toBe(saved);
+  });
+
   it('writes the file-store warning to injected stderr', async () => {
     const streams = io();
     expect(

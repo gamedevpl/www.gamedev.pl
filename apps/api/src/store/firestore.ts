@@ -1,3 +1,4 @@
+import { SubmissionFacade } from './submission-facade.js';
 import type { Store } from '../platform/store.js';
 import type { TransitionGuard } from './slices/dispatch.js';
 import type { SeedFiles } from '../agent-surface/agent-backend.js';
@@ -81,7 +82,7 @@ import { FirestoreWorldEntriesStore } from './slices/world-entries.js';
 import type { AssessmentSource, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
 import { FieldValue, Firestore } from '@google-cloud/firestore';
 
-export class FirestoreStore implements Store {
+export class FirestoreStore extends SubmissionFacade implements Store {
   private db: Firestore;
   private telemetryStore: FirestoreTelemetryStore;
   private oauthStore: FirestoreOAuthStore;
@@ -102,7 +103,7 @@ export class FirestoreStore implements Store {
   private roundsStore: FirestoreRoundsStore;
   private roundBudgetStore: FirestoreRoundBudgetStore;
   private dispatchStore: FirestoreDispatchStore;
-  private submissionStore: FirestoreSubmissionStore;
+  protected submissionStore: FirestoreSubmissionStore;
   private submissionQueryStore: FirestoreSubmissionQueryStore;
   private buildLogStore: FirestoreBuildLogStore;
   private buildMediaStore: FirestoreBuildMediaStore;
@@ -110,6 +111,7 @@ export class FirestoreStore implements Store {
   private cliChatStore: FirestoreCliChatStore;
 
   constructor(db?: Firestore) {
+    super();
     this.db = db ?? new Firestore();
     this.telemetryStore = new FirestoreTelemetryStore(this.db);
     this.oauthStore = new FirestoreOAuthStore(this.db);
@@ -496,22 +498,6 @@ export class FirestoreStore implements Store {
 
   async listCatalogEnrichments(): Promise<CatalogEnrichmentRecord[]> {
     return this.catalogEnrichmentStore.listCatalogEnrichments();
-  }
-
-  async setSubmissionSlug(jobId: number, slug: string): Promise<void> {
-    return this.submissionStore.setSubmissionSlug(jobId, slug);
-  }
-
-  async setSubmissionTitle(jobId: number, title: string): Promise<void> {
-    return this.submissionStore.setSubmissionTitle(jobId, title);
-  }
-
-  async setSubmissionDeliveredVersion(jobId: number, version: string): Promise<void> {
-    return this.submissionStore.setSubmissionDeliveredVersion(jobId, version);
-  }
-
-  async setSubmissionPreviewVersion(jobId: number, version: string): Promise<void> {
-    return this.submissionStore.setSubmissionPreviewVersion(jobId, version);
   }
 
   async recordDeliveryNudge(jobId: number): Promise<number> {

@@ -5,6 +5,8 @@ import { SLASH_VERBS, type SlashVerb } from './argv.js';
 export const BLURB: Record<SlashVerb, string> = {
   play: 'open the game; live reload in a checkout — play [slug] [--no-open|--stop]',
   kit: 'check or update this checkout’s Creator Kit — kit [update]',
+  logs: 'show the full transcript of the last local task (interactive session)',
+  model: 'view or choose delegated model and effort — model [agent]',
   agents: 'detect local agents and show supported modes',
   games: 'list your games',
   status: 'round status — status <token>',

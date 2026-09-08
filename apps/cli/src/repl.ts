@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { modelCommand } from './model-command.js';
 import { offerKitUpdate, updateKit } from './kit-update.js';
 import { improvePublished } from './improve.js';
 import { playGame } from './play.js';
@@ -53,6 +55,15 @@ export async function handleReplLine(input: {
   }
   let trimmed = retry?.request ?? input.line.trim();
   if (!trimmed) return { next: 'continue', conversationId: input.conversationId };
+  if (trimmed === '/logs') {
+    input.write(input.workshop?.lastLog ? readFileSync(input.workshop.lastLog, 'utf8') : 'No local task log yet.');
+    return { next: 'continue' };
+  }
+  if (trimmed === '/model' || trimmed.startsWith('/model ')) {
+    const parsed = parseArgv(['node', 'cli', ...trimmed.slice(1).split(/\s+/)]);
+    await modelCommand({ ...parsed, env: input.env ?? process.env, pick: input.pick, write: input.write });
+    return { next: 'continue' };
+  }
   if (trimmed === '/quit' || trimmed === '/exit') return { next: 'quit' };
   if (trimmed === '/kit' || trimmed === '/kit update') {
     const controller = new AbortController();

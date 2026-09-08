@@ -1,14 +1,23 @@
 import { CommandSuggestions, useCommandCompletion } from './completion.js';
 import { BusyPanel } from './busy.js';
 import { useEffect, useState } from 'react';
-import { Box, Text, useInput, useStdout } from 'ink';
+import { Box, Static, Text, useInput, useStdout } from 'ink';
+import { linkifyTerminalText } from './links.js';
 import { CLI_BIN } from '../bin-name.js';
 import { glyphs } from '../renderer.js';
 import { CLI_VERSION } from '../update.js';
 import { isMascotLine, MASCOT_COLOR } from './mascot.js';
 import type { TuiSession, TuiState } from './session.js';
 
-export function ReplApp({ session, color }: { session: TuiSession; color: boolean }) {
+export function ReplApp({
+  session,
+  color,
+  historyOffset = 0,
+}: {
+  session: TuiSession;
+  color: boolean;
+  historyOffset?: number;
+}) {
   const [state, setState] = useState<TuiState>(session.get);
   const completion = useCommandCompletion(state, session);
   const { stdout } = useStdout();
@@ -74,28 +83,31 @@ export function ReplApp({ session, color }: { session: TuiSession; color: boolea
   );
   const suggestionRows = Math.min(completion.suggestions.length, 5, Math.max(0, rows - 9));
   const panelRows = suggestionRows + (state.mode === 'pick' ? choiceCount + 3 : state.mode === 'busy' ? 2 : 3);
-  const liveRows = Math.min(state.live.length, Math.max(0, rows - panelRows - 4));
-  const body = Math.max(1, rows - panelRows - liveRows - 2);
-  const shown = state.lines.slice(-body);
+  const live = state.localTask
+    ? [`Local task: ${state.localTask}`, 'Studio receives your changes after /submit']
+    : state.live;
+  const liveRows = Math.min(live.length, Math.max(0, rows - panelRows - 4));
   const footer = `${state.identity || CLI_BIN} · ${CLI_VERSION}`;
   return (
-    <Box flexDirection="column" height={rows}>
-      <Box flexDirection="column" height={body} flexShrink={0} overflow="hidden" justifyContent="flex-end">
-        {shown.map((line, index) => (
-          <Text key={`${index}:${line.slice(0, 32)}`} color={color && isMascotLine(line) ? MASCOT_COLOR : undefined}>
-            {line}
-          </Text>
-        ))}
-      </Box>
+    <Box flexDirection="column">
+      <Static items={state.lines.slice(historyOffset)}>
+        {(line, index) => (
+          <Box key={index} width={Math.min(stdout.columns || 80, 100)}>
+            <Text bold={line.startsWith('──')} color={color && isMascotLine(line) ? MASCOT_COLOR : undefined}>
+              {linkifyTerminalText(line)}
+            </Text>
+          </Box>
+        )}
+      </Static>
       <Box flexDirection="column" height={liveRows} flexShrink={0}>
-        {state.live.slice(0, liveRows).map((line, index) => (
+        {live.slice(0, liveRows).map((line, index) => (
           <Text key={`live:${index}:${line.slice(0, 32)}`} dimColor wrap="truncate-end">
             {line}
           </Text>
         ))}
       </Box>
       {state.mode === 'busy' ? (
-        <BusyPanel activity={state.activity} since={state.busySince} color={color} />
+        <BusyPanel activity={state.activity} since={state.busySince} lastOutputAt={state.lastOutputAt} color={color} />
       ) : (
         <Box flexDirection="column" flexShrink={0} borderStyle={border} borderColor={accent} paddingX={1}>
           {state.mode === 'pick' ? (
