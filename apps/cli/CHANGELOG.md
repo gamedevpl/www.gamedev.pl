@@ -9,6 +9,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
+- Resume blocked Antigravity tasks interactively in the terminal to answer permission prompts, then return to verification (#1243).
+
 - Choose and remember delegated agent model and reasoning effort with `/model` or `gamedevpl model` (#1243).
 - Open the full local task transcript with `/logs` while the main view shows concise progress (#1243).
 

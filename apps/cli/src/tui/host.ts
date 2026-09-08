@@ -1,3 +1,4 @@
+import { runInteractive, type InteractiveRun } from '../agy-interactive.js';
 import { offerKitUpdate } from '../kit-update.js';
 import { activityApi } from './activity.js';
 import type { PendingExecution } from '../execution.js';
@@ -49,12 +50,24 @@ export async function runInkRepl(input: {
     session.setActivity(activity);
     return () => session.setActivity(previous);
   });
-  host.instance = render(createElement(ReplApp, { session, color }), {
-    stdin: input.io.stdin,
-    stdout: input.io.stdout,
-    exitOnCtrlC: false,
-    patchConsole: false,
-  });
+  const mount = (historyOffset = 0) => {
+    host.instance = render(createElement(ReplApp, { session, color, historyOffset }), {
+      stdin: input.io.stdin,
+      stdout: input.io.stdout,
+      exitOnCtrlC: false,
+      patchConsole: false,
+    });
+  };
+  mount();
+  const interactiveRun: InteractiveRun = async (request) => {
+    const offset = session.get().lines.length;
+    host.instance?.unmount();
+    try {
+      return await runInteractive(request);
+    } finally {
+      mount(offset);
+    }
+  };
   let token = input.token;
   let conversationId: string | undefined;
   let who = '';
@@ -81,6 +94,7 @@ export async function runInkRepl(input: {
       telemetry,
       onActivity: session.setActivity,
       onLocalTask: session.setLocalTask,
+      interactiveRun,
     };
     workshop.builder = await settleBuilder({ api: input.api, ws: workshop, status: opened.status, write });
     session.writeLine('say what to change, or /help');
@@ -157,6 +171,7 @@ export async function runInkRepl(input: {
             workshop = opened;
             opened.onActivity = session.setActivity;
             opened.onLocalTask = session.setLocalTask;
+            opened.interactiveRun = interactiveRun;
             if (token !== opened.token) {
               token = opened.token;
               delete pendingExecution.current;
@@ -183,6 +198,7 @@ export async function runInkRepl(input: {
         workshop = result.workshop;
         workshop.onActivity = session.setActivity;
         workshop.onLocalTask = session.setLocalTask;
+        workshop.interactiveRun = interactiveRun;
       }
       if (result.slug) {
         slug = result.slug;

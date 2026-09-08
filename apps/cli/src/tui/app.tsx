@@ -9,7 +9,15 @@ import { CLI_VERSION } from '../update.js';
 import { isMascotLine, MASCOT_COLOR } from './mascot.js';
 import type { TuiSession, TuiState } from './session.js';
 
-export function ReplApp({ session, color }: { session: TuiSession; color: boolean }) {
+export function ReplApp({
+  session,
+  color,
+  historyOffset = 0,
+}: {
+  session: TuiSession;
+  color: boolean;
+  historyOffset?: number;
+}) {
   const [state, setState] = useState<TuiState>(session.get);
   const completion = useCommandCompletion(state, session);
   const { stdout } = useStdout();
@@ -82,7 +90,7 @@ export function ReplApp({ session, color }: { session: TuiSession; color: boolea
   const footer = `${state.identity || CLI_BIN} · ${CLI_VERSION}`;
   return (
     <Box flexDirection="column">
-      <Static items={state.lines}>
+      <Static items={state.lines.slice(historyOffset)}>
         {(line, index) => (
           <Box key={index} width={Math.min(stdout.columns || 80, 100)}>
             <Text bold={line.startsWith('──')} color={color && isMascotLine(line) ? MASCOT_COLOR : undefined}>

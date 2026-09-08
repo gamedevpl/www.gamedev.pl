@@ -274,3 +274,5 @@ The main local-task view groups progress and abbreviates shell operations. `/log
 shows the full sanitized transcript of the latest task in the current interactive
 checkout. Logs are private local temporary files; one-shot delegation prints the
 log path. Logs are not sent to gamedev.pl and may contain local source text.
+
+When Antigravity cannot ask for a permission in headless mode, the interactive CLI offers to hand it the terminal and resume that conversation. Answer permissions in Antigravity, then exit it to return to CLI verification. Sandbox settings stay enabled; permissions are not automatically approved. One-shot/unattended runs do not open an interactive session. Native interactive output stays in terminal scrollback and is not captured by `/logs`.

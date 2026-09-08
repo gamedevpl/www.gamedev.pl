@@ -40,3 +40,48 @@ it.each([40, 120])('writes preview hyperlinks once while status animates at widt
     stdout.end();
   }
 });
+
+it('restores input after a terminal handoff without replaying old transcript lines', async () => {
+  const session = createTuiSession('before handoff');
+  const raw: boolean[] = [];
+  const stdin = Object.assign(new PassThrough(), {
+    isTTY: true,
+    setRawMode(value: boolean) {
+      raw.push(value);
+    },
+    ref() {},
+    unref() {},
+  });
+  const stdout = Object.assign(new PassThrough(), { columns: 80, rows: 24, isTTY: true });
+  let output = '';
+  stdout.on('data', (chunk) => {
+    output += String(chunk);
+  });
+  const options = {
+    stdin: stdin as unknown as NodeJS.ReadStream,
+    stdout: stdout as unknown as NodeJS.WriteStream,
+    exitOnCtrlC: false,
+    patchConsole: false,
+  };
+  let app = render(createElement(ReplApp, { session, color: false }), options);
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    app.unmount();
+    expect(raw.at(-1)).toBe(false);
+    output = '';
+    app = render(createElement(ReplApp, { session, color: false, historyOffset: session.get().lines.length }), options);
+    const answer = session.prompt();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    stdin.write('hello');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    stdin.write('\r');
+    expect(await answer).toBe('hello');
+    expect(raw.at(-1)).toBe(true);
+    expect(output).not.toContain('before handoff');
+  } finally {
+    app.unmount();
+    session.close();
+    stdin.end();
+    stdout.end();
+  }
+});

@@ -1,3 +1,4 @@
+import { agyConversation, type InteractiveRun } from './agy-interactive.js';
 import { taskOutput } from './task-output.js';
 import { configureAdapter, selectionLabel } from './agent-settings.js';
 import { trackAgentFailure } from './agent-failure.js';
@@ -43,6 +44,7 @@ export type Workshop = {
   selectedAgent?: string;
   onActivity?: (activity: string) => void;
   lastLog?: string;
+  interactiveRun?: InteractiveRun;
   onLocalTask?: (agent: string) => void;
   telemetry?: CliTelemetry;
   builder: string;
@@ -316,6 +318,7 @@ export async function runLocalBuild(input: {
         const stream = createDelegateStream(spec.name);
         const failure = trackAgentFailure(spec.name);
         let blocked = false;
+        let conversation: string | undefined;
         const result = await (ws.runAdapter ?? defaultAdapterRun)({
           spec,
           prompt,
@@ -325,6 +328,7 @@ export async function runLocalBuild(input: {
           abort: controller.signal,
           onLine: (line) => {
             failure.observe(line);
+            conversation = agyConversation(line) ?? conversation;
             if (permissionBlocked(line)) blocked = true;
             for (const shown of stream(line)) {
               if (shown.includes('⚙ ')) ws.onActivity?.(`${spec.name} · running a tool — /logs after completion`);
@@ -333,6 +337,30 @@ export async function runLocalBuild(input: {
           },
         });
         if (controller.signal.aborted) return false;
+        if (blocked && spec.name === 'agy' && ws.interactiveRun && !ws.unattended) {
+          const choice = await ws.pick(
+            ['Open Antigravity interactively', 'Keep edits and return'],
+            'Antigravity needs permission. Open its permission prompts in this terminal?',
+          );
+          if (choice !== 'Open Antigravity interactively' || controller.signal.aborted) return false;
+          input.write(
+            'Antigravity now owns the terminal. Answer its permission prompts, then exit Antigravity to return here for verification.',
+          );
+          const resumed = await ws.interactiveRun({
+            spec,
+            cwd,
+            env: childEnv(ws.env, ''),
+            prompt,
+            conversation,
+            abort: controller.signal,
+          });
+          input.write('Returned to gamedevpl.');
+          if (resumed.code !== 0) {
+            input.write('Interactive Antigravity stopped without success. Edits remain local; /diff to inspect.');
+            return false;
+          }
+          return true;
+        }
         if (blocked) {
           input.write(
             `${spec.name} could not obtain tool permissions in headless mode. No successful edit is confirmed; review its permissions for this game directory and retry.`,
