@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.11.0 — 2026-09-08
+
 ### Added
 
 - Detect Muse Code and delegate local checkout tasks with `--agent muse` (#1234)
