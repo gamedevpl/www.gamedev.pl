@@ -431,8 +431,26 @@ gcloud storage buckets remove-iam-policy-binding "gs://${STORE_BUCKET}" \
   --condition=None \
   --project="$PROJECT_ID" \
   >/dev/null 2>&1 || true
-if gcloud storage buckets get-iam-policy "gs://${STORE_BUCKET}" --project="$PROJECT_ID" --format=json \
-  | python3 -c "import json,sys; p=json.load(sys.stdin); sys.exit(0 if any(b['role']=='roles/storage.objectAdmin' and 'condition' not in b and 'serviceAccount:${GATE_SA_EMAIL}' in b.get('members',[]) for b in p.get('bindings',[])) else 1)"; then
+# The read is checked on its own before anything inspects it. Piping straight into a
+# test conflates "the policy says no such binding" with "the policy could not be read" —
+# expired credentials, a permission gap, a transient API error — and the second must
+# never print "verified" over a grant that is still in force.
+if ! GATE_POLICY="$(gcloud storage buckets get-iam-policy "gs://${STORE_BUCKET}" \
+  --project="$PROJECT_ID" --format=json)"; then
+  echo "Error: could not read the IAM policy of gs://${STORE_BUCKET} to confirm the removal." >&2
+  echo "The narrow binding may be in place, but the broad one is unverified. Re-run." >&2
+  exit 1
+fi
+if printf '%s' "$GATE_POLICY" | python3 -c "
+import json, sys
+policy = json.load(sys.stdin)
+member = 'serviceAccount:${GATE_SA_EMAIL}'
+broad = any(
+    b.get('role') == 'roles/storage.objectAdmin' and 'condition' not in b and member in b.get('members', [])
+    for b in policy.get('bindings', [])
+)
+sys.exit(0 if broad else 1)
+"; then
   echo "Error: gate-runner still holds unconditional objectAdmin on gs://${STORE_BUCKET}." >&2
   echo "The narrow binding was added but the broad one remains — the gate is NOT hardened." >&2
   exit 1
