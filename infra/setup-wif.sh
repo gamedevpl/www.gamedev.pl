@@ -134,8 +134,16 @@ gcloud iam service-accounts remove-iam-policy-binding "$SA_EMAIL" \
   --member="principalSet://iam.googleapis.com/${POOL_ID}/attribute.repository/${GAMES_REPO}" \
   --project="$PROJECT_ID" \
   >/dev/null 2>&1 || true
-if gcloud iam service-accounts get-iam-policy "$SA_EMAIL" --project="$PROJECT_ID" --format=json \
-  | grep -q "attribute.repository/${GAMES_REPO}"; then
+# Read first, check second: piping into grep would make an unreadable policy — expired
+# credentials, a permission gap, a transient error — look exactly like "the binding is
+# gone", which is the one answer that must be earned rather than assumed.
+if ! DEPLOYER_POLICY="$(gcloud iam service-accounts get-iam-policy "$SA_EMAIL" \
+  --project="$PROJECT_ID" --format=json)"; then
+  echo "Error: could not read ${SA_NAME}'s IAM policy to confirm the removal." >&2
+  echo "Re-run once IAM is reachable; do not treat this as done." >&2
+  exit 1
+fi
+if printf '%s' "$DEPLOYER_POLICY" | grep -q "attribute.repository/${GAMES_REPO}"; then
   echo "Error: ${GAMES_REPO} can still assume ${SA_NAME}." >&2
   echo "The removal did not take effect. Re-run once IAM is reachable; do not treat this as done." >&2
   exit 1
