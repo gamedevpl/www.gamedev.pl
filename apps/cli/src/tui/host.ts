@@ -179,7 +179,11 @@ export async function runInkRepl(input: {
         token = result.token;
         watch.poke();
       }
-      if (result.workshop) workshop = result.workshop;
+      if (result.workshop) {
+        workshop = result.workshop;
+        workshop.onActivity = session.setActivity;
+        workshop.onLocalTask = session.setLocalTask;
+      }
       if (result.slug) {
         slug = result.slug;
         paintIdentity();
