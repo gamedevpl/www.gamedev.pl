@@ -1,0 +1,18 @@
+# www.gamedev.pl
+
+User-agent: *
+
+# Capability URLs: the token in the path IS the credential. There is nothing to
+# index behind them, and a crawled one is a shared secret sitting in a log.
+Disallow: /status/
+Disallow: /draft/
+Disallow: /invite/
+Disallow: /join/
+
+# Per-account surfaces. A crawler only ever gets the signed-out shell.
+Disallow: /studio
+Disallow: /admin
+
+# Everything else is public and meant to be crawled -- including the /api/ reads
+# the renderer needs to see a game page at all, so no blanket /api/ rule here.
+Allow: /
