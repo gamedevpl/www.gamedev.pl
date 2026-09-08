@@ -40,6 +40,7 @@ async function click(text: string) {
   });
 }
 beforeEach(async () => {
+  sessionStorage.clear();
   await i18n.changeLanguage('en');
   vi.mocked(getConnectPayload).mockResolvedValue(payload);
   Object.defineProperty(navigator, 'clipboard', { value: { writeText: clipboard }, configurable: true });
@@ -165,4 +166,35 @@ it('shows an empty-state explanation when the round cannot accept an agent', asy
   );
   expect(host.textContent).toBe('No agent setup for this round');
   expect(host.querySelector('button')).toBeNull();
+});
+
+it('restores the CLI step and OS after remount without carrying them to another round', async () => {
+  await act(async () => (host.querySelector('.connect-guide-option') as HTMLButtonElement).click());
+  await click('Windows');
+  await click('Setup done — continue');
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await act(async () =>
+    root.render(createElement(StudioConnectGuide, { token: 'tok', pending: false, onSwitchToPlatform: vi.fn() })),
+  );
+  expect(host.textContent).toContain('Step 3 of 3');
+  expect(host.textContent).toContain('install.ps1');
+  await act(async () =>
+    root.render(
+      createElement(StudioConnectGuide, { token: 'different-round', pending: false, onSwitchToPlatform: vi.fn() }),
+    ),
+  );
+  expect(host.textContent).toContain('Step 1 of 4');
+  expect(host.querySelector('pre')).toBeNull();
+});
+it('drops a saved managed choice when that builder becomes unavailable', async () => {
+  await act(async () => (host.querySelectorAll('.connect-guide-option')[2] as HTMLButtonElement).click());
+  await act(async () => root.unmount());
+  vi.mocked(getConnectPayload).mockResolvedValue({ ...payload, canSwitchToPlatform: false });
+  root = createRoot(host);
+  await act(async () =>
+    root.render(createElement(StudioConnectGuide, { token: 'tok', pending: false, onSwitchToPlatform: vi.fn() })),
+  );
+  expect(host.textContent).toContain('Step 1 of 4');
+  expect(host.textContent).not.toContain('Let gamedev.pl take over');
 });

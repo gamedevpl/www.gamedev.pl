@@ -1,3 +1,4 @@
+import { readGuideState, saveGuideState } from './connectGuideState.js';
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getConnectPayload, type ConnectClient, type ConnectPayload, type ConnectApiError } from './connectApi.js';
@@ -10,7 +11,11 @@ type Route = 'cli' | 'agent' | 'platform';
 type Tool = Exclude<ConnectClient, 'cli'> | 'vscode' | 'other' | 'muse';
 const TOOLS: Tool[] = ['cursor', 'vscode', 'claudeCode', 'codex', 'kimi', 'muse', 'other'];
 
-export function StudioConnectGuide({
+export function StudioConnectGuide(props: ComponentProps<typeof ConnectGuide>) {
+  return <ConnectGuide key={props.token} {...props} />;
+}
+
+function ConnectGuide({
   token,
   onSwitchToPlatform,
   pending,
@@ -29,13 +34,23 @@ export function StudioConnectGuide({
   const [unavailable, setUnavailable] = useState(false);
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  const [route, setRoute] = useState<Route | null>(null);
-  const [tool, setTool] = useState<Tool | null>(null);
-  const [stage, setStage] = useState<'setup' | 'start'>('setup');
-  const [manual, setManual] = useState(false);
-  const [windows, setWindows] = useState(false);
+  const [saved] = useState(() => readGuideState(token));
+  const [route, setRoute] = useState<Route | null>(saved.route);
+  const [tool, setTool] = useState<Tool | null>(saved.tool);
+  const [stage, setStage] = useState<'setup' | 'start'>(saved.stage);
+  const [manual, setManual] = useState(saved.manual);
+  const [windows, setWindows] = useState(saved.windows);
   const [copied, setCopied] = useState('');
   const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    saveGuideState(token, { route, tool, stage, manual, windows });
+  }, [token, route, tool, stage, manual, windows]);
+  useEffect(() => {
+    if (payload && ((route === 'platform' && !payload.canSwitchToPlatform) || (route === 'cli' && !cliEnabled))) {
+      setRoute(null);
+      setStage('setup');
+    }
+  }, [payload, route, cliEnabled]);
   useEffect(() => {
     let cancelled = false;
     setError(false);

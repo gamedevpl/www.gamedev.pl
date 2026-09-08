@@ -39,6 +39,7 @@ describe('StudioConnectWizard', () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     localStorage.clear();
+    sessionStorage.clear();
     getStatus.mockResolvedValue({
       status: 'queued',
       builder: 'self',
