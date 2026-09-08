@@ -106,9 +106,18 @@ CI has three identities on the same principle, created by `infra/setup-wif.sh`:
 
 | Identity                   | Used by                                          | Holds                                                                                                                                                                                                                                                                                                                                                                                    |
 | -------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `github-actions-deployer@` | this repo's `deploy.yml` and `publish-games.yml` | Cloud Run, Cloud Build, Artifact Registry, Secret Manager access, `storage.admin`, Firebase Hosting. Not Firestore                                                                                                                                                                                                                                                                       |
+| `github-actions-deployer@` | this repo's `deploy.yml` and `publish-games.yml` | Cloud Run, Cloud Build, Artifact Registry, Secret Manager access, `storage.admin`, Firebase Hosting. No Firestore role of its own — but see the transitive reach below, which is not the same thing                                                                                                                                                                                       |
 | `erase-verifier@`          | this repo's `verify-erase.yml`                   | `datastore.user` and nothing else                                                                                                                                                                                                                                                                                                                                                        |
 | `kit-publisher@`           | the **games repo's** three publish workflows     | **Conditional:** `storage.objectAdmin` on the store bucket, only under `kits/`, `workspaces/`, `examples/`, `knowledge/`. **Unconditional:** `storage.legacyBucketReader` on that bucket (listing, which a per-object condition cannot express), and at project level `discoveryengine.editor` plus `serviceusage.serviceUsageConsumer` (the corpus import and its quota-project header) |
+
+**The deployer's Firestore row says "no role of its own", and that is a narrower claim
+than "cannot reach Firestore".** It holds `run.admin` together with project-wide
+`iam.serviceAccountUser`, so a compromised deploy run can deploy a Cloud Run workload
+*as* `gamedev-app@` or `erase-verifier@` and execute with those accounts' Firestore
+access. Removing `datastore.user` from the deployer closed the direct path and is worth
+having; it did not make the data unreachable. Scoping the act-as grant to the three
+runtime identities a deploy actually needs is the fix, tracked in the ops IAM plan — it
+touches the deploy path, so it wants its own change and a verified deploy behind it.
 
 The games repo used to publish as the deployer, which handed a content repository the
 whole deploy credential. Its account can no longer read the contents of, or modify,
