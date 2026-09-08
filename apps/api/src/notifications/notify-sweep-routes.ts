@@ -9,6 +9,7 @@ import type { GamesStore } from '../delivery/games-store.js';
 import type { GitHubClient } from '../catalog/github-client.js';
 import type { InternalAuthVerifier } from '../platform/internal-auth.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
+import type { PublicationRecord } from '../delivery/games-store.js';
 import type { SubmissionStatus, SubmissionStatusResponse } from '../platform/submission-status.js';
 import { mintToken } from '../platform/submission-token.js';
 import { emitOperatorAlert, emitSubmissionNotification, notifyOnTransition, type EmitDeps } from './notify.js';
@@ -61,6 +62,17 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
     nativeJobStatus,
     buildNotifyDeps,
   } = deps;
+
+  // Scanning games every two minutes was most of the day's reads.
+  const publicationsTtlMs = 10 * 60_000;
+  let publicationsCache: { expiresAt: number; value: PublicationRecord[] } | null = null;
+  async function publicationsForHealth(): Promise<PublicationRecord[]> {
+    if (!store) return [];
+    if (publicationsCache && publicationsCache.expiresAt > now()) return publicationsCache.value;
+    const value = await store.listPublications().catch(() => []);
+    publicationsCache = { expiresAt: now() + publicationsTtlMs, value };
+    return value;
+  }
 
   // Closed-tab backstop: Cloud Scheduler POSTs an OIDC token here.
 
@@ -202,11 +214,14 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
       let unhealthy = 0;
       const healthGamesStore = gamesStore;
       if (healthGamesStore) {
-        const publications = await store.listPublications().catch(() => []);
-        for (const publication of publications) {
-          const check = publication.healthCheck;
-          if (!check || check.verdictAt) continue;
+        const publications = await publicationsForHealth();
+        for (const candidate of publications) {
+          if (!candidate.healthCheck || candidate.healthCheck.verdictAt) continue;
           try {
+            // The cached list nominates; the record decides. One read per pending check.
+            const publication = (await store.getPublication(candidate.slug)) ?? candidate;
+            const check = publication.healthCheck;
+            if (!check || check.verdictAt) continue;
             const manifest = await healthGamesStore.getManifest(publication.slug, check.version);
             const health = manifest?.health;
             // A verdict older than the request is the previous run's answer.
@@ -216,6 +231,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
             const resolved = { ...check, green: health.green, verdictAt: health.ranAt };
             if (health.green) {
               await store.setPublicationHealthCheck(publication.slug, resolved);
+              publicationsCache = null;
               continue;
             }
 
@@ -251,9 +267,10 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
               ...resolved,
               notifiedAt: new Date(now()).toISOString(),
             });
+            publicationsCache = null;
           } catch (healthError) {
             // One unreadable manifest must not abort the sweep — same rule as above.
-            request.log.error({ err: healthError, slug: publication.slug }, 'health check read failed');
+            request.log.error({ err: healthError, slug: candidate.slug }, 'health check read failed');
           }
         }
       }
