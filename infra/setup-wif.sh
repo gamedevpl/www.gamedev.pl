@@ -126,11 +126,21 @@ gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
   --member="principalSet://iam.googleapis.com/${POOL_ID}/attribute.repository/${REPO}" \
   --project="$PROJECT_ID" \
   >/dev/null
+# Not `|| true`: a transient IAM failure here would leave the games repo able to assume
+# the deployer — the whole point of this change — while the script reported success. So
+# the removal may fail, and then the *absence* is verified; only that answer is accepted.
 gcloud iam service-accounts remove-iam-policy-binding "$SA_EMAIL" \
   --role="roles/iam.workloadIdentityUser" \
   --member="principalSet://iam.googleapis.com/${POOL_ID}/attribute.repository/${GAMES_REPO}" \
   --project="$PROJECT_ID" \
-  >/dev/null 2>&1 && echo "    - ${GAMES_REPO}: removed from the deployer" || true
+  >/dev/null 2>&1 || true
+if gcloud iam service-accounts get-iam-policy "$SA_EMAIL" --project="$PROJECT_ID" --format=json \
+  | grep -q "attribute.repository/${GAMES_REPO}"; then
+  echo "Error: ${GAMES_REPO} can still assume ${SA_NAME}." >&2
+  echo "The removal did not take effect. Re-run once IAM is reachable; do not treat this as done." >&2
+  exit 1
+fi
+echo "    - ${GAMES_REPO}: not bound to the deployer (verified)"
 
 echo "==> 5b/8 Creating the kit publisher '${PUBLISHER_SA_NAME}' for ${GAMES_REPO}"
 gcloud iam service-accounts create "$PUBLISHER_SA_NAME" \
@@ -156,7 +166,7 @@ done
 gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
   --member="serviceAccount:${PUBLISHER_SA_EMAIL}" \
   --role="roles/storage.objectAdmin" \
-  --condition="expression=resource.type == 'storage.googleapis.com/Object' && (${PUBLISH_PREFIX_EXPR}),title=games-store-kit-publish,description=Kit, workspace, example and knowledge prefixes only — never versions/ or games/" \
+  --condition="expression=resource.type == 'storage.googleapis.com/Object' && (${PUBLISH_PREFIX_EXPR}),title=games-store-kit-publish,description=Only the kit workspace example and knowledge prefixes — never versions/ or games/" \
   --project="$PROJECT_ID" \
   >/dev/null
 
