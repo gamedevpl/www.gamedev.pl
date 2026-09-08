@@ -211,6 +211,49 @@ describe('reviewer badge read windows', () => {
     expect((await poll(app, reviewer)).remaining).toBe(2);
   });
 
+  it('does not leave a resolved re-review targeted by a poll between the two writes', async () => {
+    const { app, store } = await makeApp();
+    const reviewer = await cookie(app, 'reviewer');
+    const boss = await cookie(app, 'boss');
+    const requeue = await app.inject({
+      method: 'POST',
+      url: '/api/admin/review-requeue',
+      headers: { cookie: boss },
+      payload: { slugs: ['sky-dodge'], reviewerUids: ['dev:reviewer'], notify: false },
+    });
+    expect(requeue.statusCode).toBe(200);
+
+    let release = () => {};
+    let reached = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const arrived = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    const real = store.resolveReReviewRequest.bind(store);
+    // Verdict written, request not yet resolved: a poll lands here.
+    const spy = vi.spyOn(store, 'resolveReReviewRequest').mockImplementation(async (slug, uid) => {
+      reached();
+      await gate;
+      return real(slug, uid);
+    });
+
+    const posted = app.inject({
+      method: 'POST',
+      url: '/api/review/assessments',
+      headers: { cookie: reviewer },
+      payload: { slug: 'sky-dodge', source: 'catalog', verdict: 'keep', note: 'plays well', checklist },
+    });
+    await arrived;
+    await poll(app, reviewer);
+    release();
+    expect((await posted).statusCode).toBe(200);
+    spy.mockRestore();
+
+    expect((await poll(app, reviewer)).remaining).toBe(1);
+  });
+
   it('never lets an in-flight read restore a window a write dropped', async () => {
     const { app, store } = await makeApp();
     const reviewer = await cookie(app, 'reviewer');

@@ -35,9 +35,15 @@ Per-user surfaces — the reviewer badge and the bell — key their windows by u
 bell keys by store as well, so one person's queue can never answer another's poll. That
 is a correctness property with tests, not a performance detail.
 
-What each window costs in freshness is one thing: an action taken by **someone else**, on
-**another Cloud Run instance**, can trail the surface by up to one window. Your own
-actions never do, because they drop the window they would have made wrong.
+What each window costs in freshness is bounded, but the bound is **one window for any
+action, including your own**. The caches are process-local, and the API deploys with
+`--max-instances 4` whenever `MP_RELAY_URL` is set (`.github/workflows/deploy.yml`), so a
+write handled by one instance drops only that instance's window: your next poll can land
+on another and get the old answer. On a single instance, and for whichever instance
+served the write, an own action is reflected immediately — but do not design a surface
+that needs that, and do not write it down as a guarantee. Making own-write freshness true
+across instances needs shared invalidation (a durable version key both instances read),
+which is not what a badge is worth.
 
 ## Measuring
 

@@ -371,6 +371,8 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
 
     if (targeted) {
       await store.resolveReReviewRequest(body.data.slug, reviewerUid);
+      // Again: a poll between the writes would cache the open request.
+      invalidateReviewer(reviewerUid);
     }
 
     return { assessment };
