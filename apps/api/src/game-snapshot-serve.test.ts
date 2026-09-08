@@ -184,8 +184,8 @@ describe('playing a published game', () => {
 });
 
 describe('the catalog', () => {
-  it('asks Firestore about erased owners once per window, not per request', async () => {
-    // The home page is public: a crawler multiplies every per-request read.
+  it('asks Firestore about erased owners on every request, so an erasure never waits', async () => {
+    // One query per request; caching it would hide a deletion for a window.
     const { githubClient } = createGithubStub([catalogEntry('from-github')]);
     const store = new InMemoryStore();
     const erased = vi.spyOn(store, 'listSubmissionsByOwner');
@@ -194,7 +194,7 @@ describe('the catalog', () => {
     await app.inject({ method: 'GET', url: '/api/catalog' });
     await app.inject({ method: 'GET', url: '/api/catalog' });
 
-    expect(erased).toHaveBeenCalledTimes(1);
+    expect(erased).toHaveBeenCalledTimes(2);
     await app.close();
   });
 
