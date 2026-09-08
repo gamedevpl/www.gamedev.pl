@@ -15,6 +15,9 @@
 # GAMES_REPO, SA_NAME.
 set -euo pipefail
 
+# An old copy of this script does not fail; it reverts what a newer copy fixed.
+source "$(dirname "${BASH_SOURCE[0]}")/require-current-checkout.sh"
+
 PROJECT_ID="${PROJECT_ID:-gamedevpl}"
 POOL_NAME="${POOL_NAME:-github-pool}"
 PROVIDER_NAME="${PROVIDER_NAME:-github-provider}"

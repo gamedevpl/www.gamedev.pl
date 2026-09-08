@@ -10,6 +10,9 @@
 # APP_SA_NAME, WORLD_SA_NAME.
 set -euo pipefail
 
+# An old copy of this script does not fail; it reverts what a newer copy fixed.
+source "$(dirname "${BASH_SOURCE[0]}")/require-current-checkout.sh"
+
 PROJECT_ID="${PROJECT_ID:-gamedevpl}"
 REGION="${REGION:-europe-central2}"
 APP_REGION="${APP_REGION:-europe-west1}"

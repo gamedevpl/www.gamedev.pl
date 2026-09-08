@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../platform/app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from '../platform/auth.js';
 import { InMemoryStore } from '../platform/store.js';
@@ -51,6 +51,41 @@ describe('notification routes', () => {
     const app = await buildApp({ store, sessionSecret });
     const res = await app.inject({ method: 'GET', url: '/api/notifications', headers: authHeaders('g:me') });
     expect(res.json().notifications).toEqual([]);
+    await app.close();
+  });
+
+  it('serves the bell from one read per window, and drops it on a write', async () => {
+    await seed(store, 'g:me');
+    const app = await buildApp({ store, sessionSecret });
+    const spy = vi.spyOn(store, 'listNotifications');
+
+    for (let i = 0; i < 3; i += 1) {
+      const res = await app.inject({ method: 'GET', url: '/api/notifications', headers: authHeaders('g:me') });
+      expect(res.json().notifications).toHaveLength(1);
+    }
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    // Marking read changes what the bell shows, so the window closes.
+    await app.inject({
+      method: 'POST',
+      url: '/api/notifications/read',
+      headers: authHeaders('g:me'),
+      payload: { all: true },
+    });
+    const after = await app.inject({ method: 'GET', url: '/api/notifications', headers: authHeaders('g:me') });
+    expect(after.json().notifications[0].readAt).not.toBeNull();
+    expect(spy).toHaveBeenCalledTimes(2);
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/notifications/clear',
+      headers: authHeaders('g:me'),
+      payload: { all: true },
+    });
+    const cleared = await app.inject({ method: 'GET', url: '/api/notifications', headers: authHeaders('g:me') });
+    expect(cleared.json().notifications).toEqual([]);
+
+    spy.mockRestore();
     await app.close();
   });
 

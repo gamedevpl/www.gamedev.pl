@@ -6,6 +6,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Store } from '../platform/store.js';
+import { invalidateNotificationCache, readNotificationsCached } from './notification-cache.js';
 
 const MarkReadSchema = z
   .object({
@@ -27,6 +28,7 @@ const PreferencesSchema = z.object({
 
 export interface NotificationRoutesOptions {
   store: Store;
+  now?: () => number;
 }
 
 export async function registerNotificationRoutes(
@@ -34,12 +36,13 @@ export async function registerNotificationRoutes(
   options: NotificationRoutesOptions,
 ): Promise<void> {
   const { store } = options;
+  const nowMs = options.now ?? Date.now;
 
   app.get('/api/notifications', async (request, reply) => {
     if (!request.user) {
       return reply.status(401).send({ error: 'authentication required' });
     }
-    const notifications = await store.listNotifications(request.user.uid, { limit: 20 });
+    const notifications = await readNotificationsCached(store, request.user.uid, 20, nowMs);
     return reply.send({ notifications });
   });
 
@@ -52,6 +55,7 @@ export async function registerNotificationRoutes(
       return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
     }
     await store.markNotificationsRead(request.user.uid, parsed.data.all ? 'all' : parsed.data.ids!);
+    invalidateNotificationCache(store, request.user.uid);
     return reply.send({ ok: true });
   });
 
@@ -66,6 +70,7 @@ export async function registerNotificationRoutes(
       return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
     }
     await store.deleteNotifications(request.user.uid, parsed.data.all ? 'all' : parsed.data.ids!);
+    invalidateNotificationCache(store, request.user.uid);
     return reply.send({ ok: true });
   });
 

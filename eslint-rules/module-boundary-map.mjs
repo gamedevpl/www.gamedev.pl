@@ -413,6 +413,7 @@ const FILE_BUCKET = {
   'assessment-resolution': 'community',
   review: 'community',
   'review-checklist': 'community',
+  'review-queue-cache': 'community',
   'review-sweep': 'community',
   'proposal-apply-bot': 'community',
   'proposal-base': 'community',
@@ -456,6 +457,7 @@ const FILE_BUCKET = {
   'creator-metrics': 'telemetry',
 
   // notifications
+  'notification-cache': 'notifications',
   notify: 'notifications',
   notifications: 'notifications',
   'game-follow-notify': 'notifications',

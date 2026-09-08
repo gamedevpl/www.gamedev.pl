@@ -230,7 +230,7 @@ describe('visit vocab', () => {
   it('lists cli dimension vocabularies', () => {
     expect(CLI_INSTALL_CHANNELS).toEqual(['curl', 'ps1', 'update']);
     expect(CLI_PLATFORM_OS).toEqual(['linux', 'darwin', 'win32']);
-    expect(CLI_ADAPTERS).toEqual(['claude', 'codex', 'gemini', 'vibe', 'agy', 'cursor', 'copilot', 'custom']);
+    expect(CLI_ADAPTERS).toEqual(['claude', 'codex', 'gemini', 'vibe', 'agy', 'cursor', 'copilot', 'muse', 'custom']);
     expect(CLI_VERIFY_STAGES).toEqual(['typecheck', 'check_static', 'check_game']);
   });
 });

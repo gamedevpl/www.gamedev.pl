@@ -14,6 +14,9 @@
 # Override via env: PROJECT_ID, SA_NAME, POOL_NAME, REPO, KEY_OUT.
 set -euo pipefail
 
+# An old copy of this script does not fail; it reverts what a newer copy fixed.
+source "$(dirname "${BASH_SOURCE[0]}")/require-current-checkout.sh"
+
 PROJECT_ID="${PROJECT_ID:-gamedevpl}"
 SA_NAME="${SA_NAME:-agent-investigator}"
 SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
