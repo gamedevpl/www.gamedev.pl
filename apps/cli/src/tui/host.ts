@@ -22,6 +22,8 @@ export async function runInkRepl(input: {
   env: NodeJS.ProcessEnv;
   io: { stdin: NodeJS.ReadStream; stdout: NodeJS.WriteStream };
   token: string | null;
+  slug?: string;
+  initialLine?: string;
   // Set when a checkout in the working directory opened this session.
   checkout?: { slug: string; root: string };
 }): Promise<number> {
@@ -56,7 +58,8 @@ export async function runInkRepl(input: {
   let token = input.token;
   let conversationId: string | undefined;
   let who = '';
-  let slug = input.checkout?.slug ?? '';
+  let slug = input.checkout?.slug ?? input.slug ?? '';
+  let initialLine = input.initialLine;
   const paintIdentity = (): void => session.setIdentity(formatSessionIdentity(who, slug));
   let workshop: Workshop | undefined;
   const pendingExecution: PendingExecution = {};
@@ -130,7 +133,8 @@ export async function runInkRepl(input: {
   );
   try {
     for (;;) {
-      const line = await session.prompt();
+      const line = initialLine ?? (await session.prompt());
+      initialLine = undefined;
       if (!spoke && line.trim() && !line.trim().startsWith('/')) {
         spoke = true;
         telemetry.record('first_turn');

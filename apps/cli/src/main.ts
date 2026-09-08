@@ -259,8 +259,11 @@ export async function runCli(
       const slug = args[0];
       if (!slug) throw new CliError(cliUsage('checkout', '<slug>'), EXIT_INPUT, '<slug>');
       const dest = args[1] ?? slug;
-      const result = await checkoutGame({ api, slug, dest });
+      const result = await checkoutGame({ api, slug, dest, allowUndelivered: true });
       io.stdout.write(`checked out ${slug} → ${result.dest} (origin ${result.remote})\n`);
+      io.stdout.write(
+        `Next: cd ${JSON.stringify(resolvePath(result.dest))} and run gamedevpl to edit interactively.\n`,
+      );
       return EXIT_GREEN;
     }
     if (verb === 'pull') {
@@ -305,6 +308,17 @@ export async function runCli(
     if (verb === 'connect') {
       const slug = args[0] ?? readCheckoutSlug(process.cwd());
       if (!slug) throw new CliError(cliUsage('connect', '<slug>'), EXIT_INPUT, '<slug>');
+      if (tty && io.stdout.isTTY && !asJson && !flags.agent && !flags.manual && !args[1]) {
+        const { runInkRepl } = await import('./tui/host.js');
+        return runInkRepl({
+          api,
+          env,
+          io,
+          token: await studioToken(api, slug),
+          slug,
+          initialLine: `/connect ${slug}${flags.handoff ? ' --handoff' : ''}`,
+        });
+      }
       const dest = args[1] ?? process.cwd();
       await connectGame({
         api,
@@ -334,12 +348,25 @@ export async function runCli(
     if (verb === 'repl') {
       if (!tty || !io.stdout.isTTY) throw pipeNeedsFlag(`a verb such as ${cliUsage('whoami')}`);
       const { runInkRepl } = await import('./tui/host.js');
-      const opened = typeof flags.token === 'string' ? null : await openCheckoutGame(api, process.cwd());
+      const requestedSlug = args[0];
+      const local = findCheckout(process.cwd());
+      const opened =
+        typeof flags.token === 'string' || (requestedSlug && local?.slug !== requestedSlug)
+          ? null
+          : await openCheckoutGame(api, process.cwd());
+      const token =
+        typeof flags.token === 'string'
+          ? flags.token
+          : requestedSlug
+            ? await studioToken(api, requestedSlug)
+            : (opened?.token ?? null);
       return runInkRepl({
         api,
         env,
         io,
-        token: typeof flags.token === 'string' ? flags.token : (opened?.token ?? null),
+        token,
+        slug: requestedSlug,
+        initialLine: requestedSlug && !opened ? `/connect ${requestedSlug}` : undefined,
         ...(opened ? { checkout: { slug: opened.slug, root: opened.root } } : {}),
       });
     }

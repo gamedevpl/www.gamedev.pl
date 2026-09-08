@@ -1250,7 +1250,7 @@
   },
   "connectAgents": {
     "title": "Connect an agent",
-    "intro": "Two doors, same games. Point a coding agent at gamedev.pl over MCP, or talk in a terminal with the gamedevpl CLI. Neither has a model of its own — coding happens on the platform or in a tool you already installed.",
+    "intro": "Create games in a conversation with gamedevpl CLI, or connect your own agent through MCP. Follow the steps below for a new idea or a game you already have in Studio.",
     "back": "Back to the site",
     "jump": "On this page",
     "beta": "Creating games is in closed beta. The connection loads for anyone; the calls need an approved creator account.",
@@ -1267,13 +1267,20 @@
     "cli": {
       "nav": "gamedevpl CLI",
       "title": "gamedevpl CLI — a terminal",
-      "lead": "A conversational front door. Talk first; a game starts when you ask for one. Checkout uses your editor; git push is not a delivery path.",
-      "installHint": "Needs Node 20+ — same as a game checkout. Windows: irm https://www.gamedev.pl/install.ps1 | iex. The script checksum-verifies before it writes ~/.local/bin.",
+      "lead": "Start with an idea or open a game from your Studio. The CLI guides the conversation and helps you choose an agent to build it.",
+      "installHint": "Requires Node 20.19 or newer. Already installed? Run gamedevpl update. On Windows, install with PowerShell: irm https://www.gamedev.pl/install.ps1 | iex.",
       "installPending": "Installers are not public yet. The client lives in this repo at apps/cli; bundle it locally with npm run bundle -w @gamedevpl/cli.",
-      "login": "gamedevpl login opens your browser. Approve once — no token to copy.",
+      "login": "gamedevpl login opens your browser. Sign in with the same account as Studio — no copying tokens.",
       "repl": "gamedevpl with no verb opens a REPL: talk first, then start a game when you are ready.",
-      "checkout": "gamedevpl checkout <slug> for your own editor. Deliver with gamedevpl submit.",
-      "ci": "CI: GAMEDEV_TOKEN from secrets. Never pass the creator OAuth token to a sub-agent."
+      "checkout": "In the session, choose a local checkout or type /checkout. Before the first build you get the brief to start from; after building, /play opens the preview and /submit delivers your changes.",
+      "ci": "CI: GAMEDEV_TOKEN from secrets. Never pass the creator OAuth token to a sub-agent.",
+      "newTitle": "I have an idea for a new game",
+      "newHint": "You do not need a game in Studio or a game identifier yet. Start a conversation:",
+      "newPrompt": "For example: “I want to create a game about an acrobat jumping between rooftops.” The CLI gathers your idea and offers a choice of builder.",
+      "existingTitle": "I already have a game in Studio",
+      "existingHint": "List your games, then replace <slug> with the identifier of the game you want:",
+      "existingDraft": "The game can still be waiting for its first build. It only needs to have been created in Studio — publication and finished game files are not required.",
+      "afterConnect": "Connect opens an interactive session. Choose a local checkout, a conversation about the game, or an available agent. No manual MCP setup is needed."
     }
   },
   "contact": {
@@ -1684,7 +1691,9 @@
     },
     "gamedevCli": {
       "title": "gamedevpl CLI",
-      "hint": "Needs Node 20. Run gamedevpl login (browser opens), then connect this game. Same round as MCP."
+      "hint": "Install or update the CLI, sign in with the same account as Studio, then open this game. Requires Node 20.19 or newer.",
+      "next": "Choose “Open a local checkout” to work on files, or choose chat or an agent. The session stays open; /checkout downloads this game and /help shows available actions.",
+      "draft": "You do not need to wait for the first build. If there is no game code yet, the checkout contains the brief. Tell the agent what to build; /play works once the game has been built."
     },
     "rotate": {
       "start": "Rotate key",
