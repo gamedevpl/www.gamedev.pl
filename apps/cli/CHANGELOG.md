@@ -7,6 +7,11 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Keep terminal history stable while the activity spinner updates, so preview URLs can be selected and copied (#1243).
+- Render preview URLs as clickable hyperlinks in terminals that support them (#1243).
+
 ## 0.11.0 — 2026-09-08
 
 ### Added

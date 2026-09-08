@@ -94,7 +94,7 @@ describe('TUI feedback', () => {
     const frame = view.frame();
     expect(frame).toContain('20. Agent 20');
     expect(frame).toContain('gamedevpl');
-    expect(frame.trimEnd().split('\n').length).toBeLessThanOrEqual(rows);
+    expect(frame.slice(frame.lastIndexOf('published')).trimEnd().split('\n').length).toBeLessThanOrEqual(rows);
   });
 });
 
