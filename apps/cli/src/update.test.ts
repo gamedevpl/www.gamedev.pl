@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { assetName, expectedHash, helperDest, updateCli } from './update.js';
+import { assetName, compareSemver, expectedHash, helperDest, resolveUpdateVersion, updateCli } from './update.js';
 import { CliError } from './exit-codes.js';
 
 describe('updateCli', () => {
@@ -76,5 +76,27 @@ describe('updateCli', () => {
         },
       }),
     ).rejects.toBeInstanceOf(CliError);
+  });
+
+  it('compares semver numerically across segments', () => {
+    expect(compareSemver('0.9.0', '0.10.0')).toBeLessThan(0);
+    expect(compareSemver('0.10.0', '0.9.0')).toBeGreaterThan(0);
+    expect(compareSemver('0.10.0', '0.10.0')).toBe(0);
+    expect(compareSemver('0.10.1', '0.10.0')).toBeGreaterThan(0);
+    expect(compareSemver('1.0.0', '0.10.0')).toBeGreaterThan(0);
+  });
+
+  it('resolves the newest semver release even when GitHub returns tags out of semver order', async () => {
+    const mockReleases = [
+      { tag_name: 'cli-v0.9.0' },
+      { tag_name: 'cli-v0.8.0' },
+      { tag_name: 'cli-v0.10.0' },
+      { tag_name: 'cli-v0.7.0' },
+      { tag_name: 'untagged-build' },
+    ];
+    const version = await resolveUpdateVersion({
+      fetchImpl: async () => new Response(JSON.stringify(mockReleases), { status: 200 }),
+    });
+    expect(version).toBe('0.10.0');
   });
 });
