@@ -16,6 +16,39 @@ function describeStoreContract(sliceName: string, spec: (makeStore: () => Store)
   });
 }
 
+// Both stores hand-list these fields, so one side drops them easily.
+describeStoreContract('creation limits', (makeStore) => {
+  it('round-trips the load-shedding rungs, one field at a time', async () => {
+    const store = makeStore();
+    expect(await store.getCreationLimits()).toBeNull();
+
+    await store.setCreationLimits({ partyPaused: true }, 'operator');
+    expect(await store.getCreationLimits()).toMatchObject({ partyPaused: true });
+
+    await store.setCreationLimits({ telemetrySampleRate: 0.25 }, 'operator');
+    const both = await store.getCreationLimits();
+    expect(both).toMatchObject({ partyPaused: true, telemetrySampleRate: 0.25 });
+  });
+
+  it('reads back every field a patch can set', async () => {
+    const store = makeStore();
+    const patch = {
+      paused: true,
+      globalDailySubmissionCap: 7,
+      editingPaused: true,
+      chatPaused: true,
+      searchPaused: true,
+      gatePaused: true,
+      tabCompletePaused: true,
+      partyPaused: true,
+      telemetrySampleRate: 0.5,
+      seedingMode: 'off' as const,
+    };
+    await store.setCreationLimits(patch, 'operator');
+    expect(await store.getCreationLimits()).toMatchObject(patch);
+  });
+});
+
 describeStoreContract('oauth', (makeStore) => {
   it('round-trips a client through create/get, and returns null for a missing one', async () => {
     const store = makeStore();
@@ -211,5 +244,35 @@ describeStoreContract('telemetry', (makeStore) => {
     const withoutStarted = await store.listVisitEvents('2026-08-22', { excludeType: 'visit_started' });
     expect(withoutStarted).toHaveLength(1);
     expect(withoutStarted[0]?.type).toBe('route_viewed');
+  });
+});
+
+describeStoreContract('creation limits', (makeStore) => {
+  // The Firestore read once dropped fields the write had persisted.
+  it('reads back every field a patch persisted', async () => {
+    const store = makeStore();
+    await store.setCreationLimits({ partyPaused: true, telemetrySampleRate: 0.1 }, 'g:boss');
+
+    const limits = await store.getCreationLimits();
+    expect(limits?.partyPaused).toBe(true);
+    expect(limits?.telemetrySampleRate).toBe(0.1);
+  });
+
+  it('reads a lane back off again', async () => {
+    const store = makeStore();
+    await store.setCreationLimits({ partyPaused: true }, 'g:boss');
+    await store.setCreationLimits({ partyPaused: false }, 'g:boss');
+
+    expect((await store.getCreationLimits())?.partyPaused).toBe(false);
+  });
+
+  it('leaves the other lane alone on a partial patch', async () => {
+    const store = makeStore();
+    await store.setCreationLimits({ partyPaused: true, telemetrySampleRate: 0.25 }, 'g:boss');
+    await store.setCreationLimits({ telemetrySampleRate: null }, 'g:boss');
+
+    const limits = await store.getCreationLimits();
+    expect(limits?.partyPaused).toBe(true);
+    expect(limits?.telemetrySampleRate).toBeNull();
   });
 });

@@ -167,6 +167,9 @@ export class InMemoryQuotaStore implements QuotaStore {
           ? patch.globalDailyTabCompleteTokenCap
           : (this.creationLimits?.globalDailyTabCompleteTokenCap ?? null),
       managedBuilderMode: patch.managedBuilderMode ?? this.creationLimits?.managedBuilderMode ?? 'auto',
+      ...((patch.handledBrakeIncidents ?? this.creationLimits?.handledBrakeIncidents)
+        ? { handledBrakeIncidents: patch.handledBrakeIncidents ?? this.creationLimits?.handledBrakeIncidents }
+        : {}),
       managedAgentVendorOverride:
         patch.managedAgentVendorOverride !== undefined
           ? patch.managedAgentVendorOverride
@@ -177,6 +180,11 @@ export class InMemoryQuotaStore implements QuotaStore {
         patch.managedDailyUserCap !== undefined
           ? patch.managedDailyUserCap
           : (this.creationLimits?.managedDailyUserCap ?? null),
+      partyPaused: patch.partyPaused ?? this.creationLimits?.partyPaused ?? false,
+      telemetrySampleRate:
+        patch.telemetrySampleRate !== undefined
+          ? patch.telemetrySampleRate
+          : (this.creationLimits?.telemetrySampleRate ?? null),
       seedingMode: patch.seedingMode ?? this.creationLimits?.seedingMode ?? 'auto',
       globalDailySeedCap:
         patch.globalDailySeedCap !== undefined
@@ -220,6 +228,11 @@ export class InMemoryQuotaStore implements QuotaStore {
     this.featuredPoolConfig = config;
     return { ...config, slugs: [...config.slugs] };
   }
+}
+
+// A hand-edited document must not blackhole telemetry: only 0..1 counts.
+function readSampleRate(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1 ? value : null;
 }
 
 export class FirestoreQuotaStore implements QuotaStore {
@@ -311,9 +324,14 @@ export class FirestoreQuotaStore implements QuotaStore {
           : null,
       managedDailyCap: typeof data?.managedDailyCap === 'number' ? data.managedDailyCap : null,
       managedDailyUserCap: typeof data?.managedDailyUserCap === 'number' ? data.managedDailyUserCap : null,
+      partyPaused: data?.partyPaused === true,
+      telemetrySampleRate: readSampleRate(data?.telemetrySampleRate),
       seedingMode: data?.seedingMode === 'off' ? 'off' : 'auto',
       globalDailySeedCap: typeof data?.globalDailySeedCap === 'number' ? data.globalDailySeedCap : null,
       seedProviderOverride: typeof data?.seedProviderOverride === 'string' ? data.seedProviderOverride : null,
+      ...(Array.isArray(data?.handledBrakeIncidents)
+        ? { handledBrakeIncidents: data.handledBrakeIncidents.filter((id): id is string => typeof id === 'string') }
+        : {}),
       ...(data?.updatedAt ? { updatedAt: data.updatedAt } : {}),
       ...(data?.updatedBy ? { updatedBy: data.updatedBy } : {}),
     };
@@ -355,6 +373,9 @@ export class FirestoreQuotaStore implements QuotaStore {
             ? patch.globalDailyTabCompleteTokenCap
             : (existing.globalDailyTabCompleteTokenCap ?? null),
         managedBuilderMode: patch.managedBuilderMode ?? existing.managedBuilderMode ?? 'auto',
+        ...((patch.handledBrakeIncidents ?? existing.handledBrakeIncidents)
+          ? { handledBrakeIncidents: patch.handledBrakeIncidents ?? existing.handledBrakeIncidents }
+          : {}),
         managedAgentVendorOverride:
           patch.managedAgentVendorOverride !== undefined
             ? patch.managedAgentVendorOverride
@@ -363,6 +384,9 @@ export class FirestoreQuotaStore implements QuotaStore {
           patch.managedDailyCap !== undefined ? patch.managedDailyCap : (existing.managedDailyCap ?? null),
         managedDailyUserCap:
           patch.managedDailyUserCap !== undefined ? patch.managedDailyUserCap : (existing.managedDailyUserCap ?? null),
+        partyPaused: patch.partyPaused ?? existing.partyPaused ?? false,
+        telemetrySampleRate:
+          patch.telemetrySampleRate !== undefined ? patch.telemetrySampleRate : (existing.telemetrySampleRate ?? null),
         seedingMode: patch.seedingMode ?? existing.seedingMode ?? 'auto',
         globalDailySeedCap:
           patch.globalDailySeedCap !== undefined ? patch.globalDailySeedCap : (existing.globalDailySeedCap ?? null),

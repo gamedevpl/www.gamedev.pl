@@ -8,7 +8,12 @@ export async function studioToken(api: ApiClient, slug: string): Promise<string>
     `/api/me/studio?game=${encodeURIComponent(slug)}`,
   );
   const row = (studio.games ?? []).find((game) => game.slug === slug);
-  if (!row?.token) throw new CliError(`no owned game ${slug}`, EXIT_INPUT, cliUsage('games'));
+  if (!row?.token)
+    throw new CliError(
+      `no owned game ${slug}`,
+      EXIT_INPUT,
+      `${cliUsage('games')} lists existing games; to create a new game, run gamedevpl and describe your idea`,
+    );
   return row.token;
 }
 

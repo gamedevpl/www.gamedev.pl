@@ -57,7 +57,6 @@ describe('CatalogIndexer', () => {
     mockStore = {
       getCatalogEnrichment: vi.fn().mockResolvedValue(null),
       listCatalogEnrichments: vi.fn().mockResolvedValue([]),
-      getCatalogEnrichments: vi.fn().mockResolvedValue(new Map()),
       setCatalogEnrichment: vi.fn().mockResolvedValue(undefined),
     } as unknown as Store;
   });
@@ -111,17 +110,16 @@ describe('CatalogIndexer', () => {
   });
 
   it('filters out games with store enrichments from background SPEC fetch', async () => {
+    const carjack = {
+      slug: 'carjack-city',
+      tagline: { en: 'Top-down driving.', pl: 'Jazda samochodem.' },
+      searchKeywords: ['driving', 'car'],
+    };
     const storeWithEnrichments = {
-      getCatalogEnrichment: vi.fn().mockImplementation(async (slug: string) => {
-        if (slug === 'carjack-city') {
-          return {
-            slug: 'carjack-city',
-            tagline: { en: 'Top-down driving.', pl: 'Jazda samochodem.' },
-            searchKeywords: ['driving', 'car'],
-          };
-        }
-        return null;
-      }),
+      listCatalogEnrichments: vi.fn().mockResolvedValue([carjack]),
+      getCatalogEnrichment: vi
+        .fn()
+        .mockImplementation(async (slug: string) => (slug === 'carjack-city' ? carjack : null)),
       setCatalogEnrichment: vi.fn().mockResolvedValue(undefined),
     } as unknown as Store;
 

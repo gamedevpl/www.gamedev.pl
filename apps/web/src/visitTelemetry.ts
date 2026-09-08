@@ -14,6 +14,8 @@ import {
   type EditorStep,
   type HowToPlayVia,
   type InviteStep,
+  type PartyStep,
+  type PartyVia,
   type PlayVia,
   type RemixControl,
   type RemixPaintedVia,
@@ -111,6 +113,13 @@ export type VisitEvent =
   /** A step of the closed-beta waitlist funnel. Carries no identity, ever. */
   | { type: 'waitlist_step'; step: WaitlistStep }
   | { type: 'invite_step'; step: InviteStep }
+  /**
+   * Party mode's lifecycle on the shared screen. No slug and no room code — the visit
+   * stream stays unjoinable with the play stream, and a code identifies a gathering.
+   * `via` is the only dimension: `bar` for the host's chrome, `seat` for anything the
+   * game itself reported, which is a phone's menu button or the host keyboard.
+   */
+  | { type: 'party_step'; step: PartyStep; via?: PartyVia }
   | { type: 'beta_welcome_step'; step: BetaWelcomeStep }
   /**
    * Studio / self-build funnel facts on the same visit stream as `create_step`.
@@ -386,6 +395,20 @@ export function recordWaitlistStep(step: WaitlistStep): void {
   currentSession.record({ type: 'waitlist_step', step });
 }
 
+let recordedPartySteps = new Set<string>();
+
+/**
+ * Deduped per route, not just per step: a room that paused from the bar and from a
+ * phone is the answer to "does anyone use the phone paths", so collapsing the two
+ * would erase the question.
+ */
+export function recordPartyStep(step: PartyStep, via?: PartyVia): void {
+  const key = `${step}:${via ?? ''}`;
+  if (!currentSession || recordedPartySteps.has(key)) return;
+  recordedPartySteps.add(key);
+  currentSession.record({ type: 'party_step', step, ...(via ? { via } : {}) });
+}
+
 let recordedBetaInviteSteps = new Set<InviteStep>();
 
 export function recordBetaInviteStep(step: InviteStep): void {
@@ -558,6 +581,7 @@ export function setVisitSessionForTesting(session: VisitSession | null): void {
   // Otherwise one test's steps would silence the next test's identical steps.
   recordedSteps = new Set();
   recordedWaitlistSteps = new Set();
+  recordedPartySteps = new Set();
   recordedBetaInviteSteps = new Set();
   recordedBetaWelcomeSteps = new Set();
   recordedStudioSteps = new Set();
@@ -599,6 +623,7 @@ export function startVisitTracking(options: StartVisitTrackingOptions = {}): () 
   // stop deduping across it if these were not cleared with the session that owns them.
   recordedSteps = new Set();
   recordedWaitlistSteps = new Set();
+  recordedPartySteps = new Set();
   recordedBetaInviteSteps = new Set();
   recordedBetaWelcomeSteps = new Set();
   recordedStudioSteps = new Set();

@@ -52,6 +52,8 @@ export interface VisitFunnel {
   /** Closed-beta waitlist funnel in step order, every step present even at zero. */
   waitlist: Array<{ step: string; visits: number }>;
   invites?: Array<{ step: string; visits: number }>;
+  // Party lifecycle in step order; seatVisits means a seat drove it.
+  party?: Array<{ step: string; visits: number; barVisits: number; seatVisits: number }>;
   betaWelcome?: Array<{ step: string; visits: number }>;
   /** EditorKit revision funnel in step order, every step present even at zero. */
   editing: Array<{ step: string; visits: number }>;
@@ -62,6 +64,16 @@ export interface VisitFunnel {
   assisting?: Array<{ step: string; visits: number }>;
   coding?: Array<{ step: string; visits: number }>;
   cli?: Array<{ step: string; visits: number }>;
+  // The CLI pilot read (CL-39); optional like its neighbours.
+  cliPilot?: {
+    sessions: number;
+    delivered: number;
+    published: number;
+    adapters: Array<{ adapter: string; offered: number; used: number }>;
+    verifyFailures: Array<{ stage: string; sessions: number }>;
+    installs: Array<{ channel: string; sessions: number }>;
+    platforms: Array<{ os: string; sessions: number }>;
+  };
   completion?: {
     requests: number;
     shown: number;

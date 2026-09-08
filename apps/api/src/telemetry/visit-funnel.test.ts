@@ -158,6 +158,49 @@ describe('summarizeVisitFunnel', () => {
     ]);
   });
 
+  it('splits party rungs by whether the bar or a seat drove them', () => {
+    // A seat rung is evidence phones drive the room.
+    const funnel = summarizeVisitFunnel([
+      { visitId: 'v1', type: 'party_step', at: '2026-09-07T10:00:00.000Z', msSinceStart: 0, step: 'lobby_opened' },
+      {
+        visitId: 'v1',
+        type: 'party_step',
+        at: '2026-09-07T10:00:00.000Z',
+        msSinceStart: 1,
+        step: 'started',
+        via: 'bar',
+      },
+      {
+        visitId: 'v1',
+        type: 'party_step',
+        at: '2026-09-07T10:00:00.000Z',
+        msSinceStart: 2,
+        step: 'paused',
+        via: 'seat',
+      },
+      { visitId: 'v2', type: 'party_step', at: '2026-09-07T10:00:00.000Z', msSinceStart: 0, step: 'lobby_opened' },
+      {
+        visitId: 'v2',
+        type: 'party_step',
+        at: '2026-09-07T10:00:00.000Z',
+        msSinceStart: 1,
+        step: 'paused',
+        via: 'bar',
+      },
+    ] as VisitEvent[]);
+
+    expect(funnel.party).toEqual([
+      { step: 'lobby_opened', visits: 2, barVisits: 0, seatVisits: 0 },
+      { step: 'guest_joined', visits: 0, barVisits: 0, seatVisits: 0 },
+      { step: 'started', visits: 1, barVisits: 1, seatVisits: 0 },
+      { step: 'paused', visits: 2, barVisits: 1, seatVisits: 1 },
+      { step: 'resumed', visits: 0, barVisits: 0, seatVisits: 0 },
+      { step: 'restarted', visits: 0, barVisits: 0, seatVisits: 0 },
+      { step: 'returned_to_lobby', visits: 0, barVisits: 0, seatVisits: 0 },
+      { step: 'quit', visits: 0, barVisits: 0, seatVisits: 0 },
+    ]);
+  });
+
   it('keeps waitlist and create steps from colliding', () => {
     // Both event types share the `step` field on the wire; a shared Set would make a
     // waitlist click look like a create step if the names ever overlapped.

@@ -5285,6 +5285,28 @@ describe('games published from the store rather than the repo', () => {
     await app.close();
   });
 
+  it('deattributes an owner erased after the catalog was already warmed', async () => {
+    const { app, store } = await appWithPublication(publishedGamesStore(undefined, 'Ada Lovelace'));
+    await store.createSubmission(123, 'g:test-user', 'Comet Courier');
+    await store.setSubmissionSlug(123, 'comet-courier');
+    await store.setSubmissionPublishedAt(123, '2026-07-30T12:00:00Z');
+
+    // Warms every catalog cache while the creator still exists.
+    expect((await app.inject({ method: 'GET', url: '/api/catalog' })).statusCode).toBe(200);
+    await store.deleteAccountIdentity('g:test-user', '2026-08-04T00:00:00Z');
+
+    const response = await app.inject({ method: 'GET', url: '/api/catalog' });
+
+    expect(response.statusCode).toBe(200);
+    // An erasure shows on the next request, not the next cache window.
+    expect(response.json().find((item: CatalogGameEntry) => item.slug === 'comet-courier')).toMatchObject({
+      submittedBy: 'gamedev-platform',
+      creatorHandle: null,
+    });
+
+    await app.close();
+  });
+
   it('serves store-published gallery media from the published version’s derived artifacts', async () => {
     const { app } = await appWithPublication(publishedGamesStore());
 

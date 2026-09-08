@@ -13,11 +13,13 @@ import { registerAccessTokenRoutes, type AccessTokenRoutesOptions } from './acce
 import { registerApiCachePolicy } from './api-cache-policy.js';
 import { registerCanonicalHostRedirect } from './canonical-host.js';
 import { registerClientAddress } from './client-address.js';
+import { createLoadShedControls } from './load-shedding.js';
 import { registerProxyDiagnosticsRoutes } from './proxy-diagnostics.js';
 import { registerSecurityHeaders, resolveCspReportOnly } from './security-headers.js';
 import { registerJobAdminRoutes } from '../creation/job-admin-routes.js';
 import { createGameSeederFromEnv } from '../creation/seed-provider-env.js';
 import { createGcsGamesStore } from '../delivery/games-store.js';
+import { registerGateVerdictRoutes } from '../delivery/gate-verdict-routes.js';
 import { createGcsObjectStore } from '../delivery/gcs-sign.js';
 import { createQueryKnowledgeFromEnv } from '../creation/knowledge-search.js';
 import { createCloudBuildGateTrigger, gateTriggerOptionsFromEnv } from '../delivery/gate-trigger.js';
@@ -304,6 +306,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean),
   );
+  const loadShed = createLoadShedControls({ store, logWarn: (p, m) => app.log.warn(p, m) });
   const publicPlayFallbackSlugs = new Set(
     parsePublicPlaySlugs(options.publicPlaySlugs ?? process.env.PUBLIC_PLAY_SLUGS),
   );
@@ -377,6 +380,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const gamesStore =
     options.submissionRoutes?.agentChannel?.gamesStore ??
     (gamesStoreBucket ? createGcsGamesStore({ bucket: gamesStoreBucket }) : undefined);
+  // The gate records its verdict here rather than writing the manifest itself; see
+  // gate-verdict-routes.ts and infra/gate-hardening.md.
+  if (gamesStore) registerGateVerdictRoutes(app, { store: gamesStore });
   // Same bucket as deliveries: kits/ and examples/ live next to games/<slug>/versions/.
   const objectStore =
     options.submissionRoutes?.agentChannel?.objectStore ??
@@ -462,6 +468,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     ...options.submissionRoutes,
     store,
     contentChecker,
+    // Mirrors the beta wall below: open beta, or a promotional slug, needs no session.
+    playableWithoutSession: async (slug) => !privateBeta || (await getPublicPlaySlugs()).has(slug),
     // Same allowlist the console is gated on: the people who can see the queue are the
     // people its alerts are addressed to. Two lists would drift, and the failure mode of
     // drift here is an alert nobody receives.
@@ -531,13 +539,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Multiplayer room relay (docs/multiplayer-plan.md). Registered after the auth
   // plugin so /api/mp/sessions sees request.user, and before the beta wall hook
   // so the wall's /api/mp/ws exemption applies to a route that actually exists.
-  //
-  // One image runs both roles (store-launch-plan.md T0, private www.gamedev.pl-ops repo): with MP_RELAY_URL set this
-  // process forwards room creation and stops serving the socket; with MP_RELAY_ONLY set it
-  // IS the relay. Neither set is the single-process default that local dev and the tests
-  // use, so explicit options here always win over env.
+  // One image runs both roles: with MP_RELAY_URL set this process forwards room
+  // creation and stops serving the socket; with MP_RELAY_ONLY set it IS the relay.
+  // Neither set is the single-process default, so options here always win over env.
   await app.register(fastifyWebsocket, { options: { maxPayload: 4 * 1024 } });
   await registerMultiplayerRoutes(app, {
+    refusesNewRooms: () => loadShed.refusesNewRooms(),
     relayClient: createRelayClientFromEnv(),
     relayOnly: isRelayOnly(),
     internalAuth: isRelayOnly() ? createInternalAuthVerifierFromEnv(process.env, 'mpRelay') : undefined,
@@ -579,11 +586,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await registerTelemetryRoutes(app, {
     store,
     publishedSlugs: envPublishedSlugs,
+    // Rung 2 sheds both streams or the runbook's promise is only half true.
+    keepsSession: (id) => loadShed.keepsVisitTelemetry(id),
     ...options.telemetryRoutes,
   });
 
-  // Visit telemetry is exempt from the private-beta wall: first-minute arrivals.
-  await registerVisitTelemetryRoutes(app, { store });
+  // Exempt from the beta wall: first-minute arrivals. keepsVisit is ladder rung 2.
+  await registerVisitTelemetryRoutes(app, { store, keepsVisit: (id) => loadShed.keepsVisitTelemetry(id) });
   await registerCliSurfaceRoutes(app);
   // Thumbs up/down (docs/improvement-loop-plan.md, signal source #2). Casting or
   // clearing a vote needs a session (request.user), same as push subscriptions; the
@@ -1079,7 +1088,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // token and it is configured — see openai-apps-challenge.ts.
   registerOpenAiAppsChallengeRoute(app);
 
-  const oauthSessionSecret = options.sessionSecret ?? process.env.SESSION_SECRET ?? 'dev-session-secret-change-me';
+  const configuredSessionSecret = options.sessionSecret ?? process.env.SESSION_SECRET;
+  // A forgeable session is an account takeover; refuse to serve rather than fall back.
+  if (!configuredSessionSecret && process.env.NODE_ENV === 'production') {
+    throw new Error('SESSION_SECRET is required to sign sessions in production');
+  }
+  const oauthSessionSecret = configuredSessionSecret ?? 'dev-session-secret-change-me';
   const oauthSessionSecretPrev = options.sessionSecretPrev ?? process.env.SESSION_SECRET_PREV;
   registerOAuthAuthorizationServerRoutes(app, {
     store,

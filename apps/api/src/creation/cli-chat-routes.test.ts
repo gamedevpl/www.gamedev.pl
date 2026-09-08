@@ -134,6 +134,16 @@ describe('POST /api/cli/chat', () => {
     await app.close();
   });
 
+  it('accepts custom adapter display names as bounded context data', async () => {
+    const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'ok' }));
+    const { app, authHeaders: headers } = await createApp({ intakeAgent: { decide } });
+    const agents = ['Claude_Custom', 'My Agent (local)', 'Żółw.dev'];
+    const response = await chat(app, headers, { text: 'hello', session: { agents } });
+    expect(response.statusCode).toBe(200);
+    expect(decide).toHaveBeenCalledWith(expect.objectContaining({ session: expect.objectContaining({ agents }) }));
+    await app.close();
+  });
+
   it('prepares a game without creating or dispatching until the builder is chosen', async () => {
     const {
       app,

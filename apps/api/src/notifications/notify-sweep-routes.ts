@@ -2,11 +2,14 @@ import type { FastifyInstance } from 'fastify';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import type { BuilderKind } from '../creation/builder.js';
 import { selfBuildConnectDays } from '../platform/self-build-connect-days.js';
+import { lastRoundActivityAt, quietRoundDays, shouldAutoAbandonQuietRound } from '../platform/quiet-round.js';
+import { closeJob, type CloseJobDeps } from '../creation/close-job.js';
 import { shouldAutoAbandonSelfRound, type JobTransition } from '../creation/job-state.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { GitHubClient } from '../catalog/github-client.js';
 import type { InternalAuthVerifier } from '../platform/internal-auth.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
+import type { PublicationRecord } from '../delivery/games-store.js';
 import type { SubmissionStatus, SubmissionStatusResponse } from '../platform/submission-status.js';
 import { mintToken } from '../platform/submission-token.js';
 import { emitOperatorAlert, emitSubmissionNotification, notifyOnTransition, type EmitDeps } from './notify.js';
@@ -25,6 +28,8 @@ export interface NotifySweepRoutesDeps {
   now: () => number;
   builderOf: (record: SubmissionRecord | null | undefined) => BuilderKind;
   backendFor: (builder: BuilderKind | undefined) => Promise<AgentBackend | undefined>;
+  releaseWorkspace: CloseJobDeps['releaseWorkspace'];
+  invalidateStatusCache: (jobId: number) => void;
   acknowledgeBuilderHandoff: (input: {
     jobId: number;
     acknowledgedAt: string;
@@ -48,6 +53,8 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
     now,
     builderOf,
     backendFor,
+    releaseWorkspace,
+    invalidateStatusCache,
     acknowledgeBuilderHandoff,
     recordDerivedJobState,
     reconcileNativeJob,
@@ -55,6 +62,17 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
     nativeJobStatus,
     buildNotifyDeps,
   } = deps;
+
+  // Scanning games every two minutes was most of the day's reads.
+  const publicationsTtlMs = 10 * 60_000;
+  let publicationsCache: { expiresAt: number; value: PublicationRecord[] } | null = null;
+  async function publicationsForHealth(): Promise<PublicationRecord[]> {
+    if (!store) return [];
+    if (publicationsCache && publicationsCache.expiresAt > now()) return publicationsCache.value;
+    const value = await store.listPublications().catch(() => []);
+    publicationsCache = { expiresAt: now() + publicationsTtlMs, value };
+    return value;
+  }
 
   // Closed-tab backstop: Cloud Scheduler POSTs an OIDC token here.
 
@@ -72,45 +90,58 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
         return reply.status(503).send({ error: 'submissions are not configured' });
       }
 
-      const active = await store.listActiveSubmissions();
+      const closeDeps: CloseJobDeps = { store, now, backendFor, builderOf, releaseWorkspace, invalidateStatusCache };
+      let closed = 0;
+      const closedIds = new Set<number>();
+      // Every open round, notified or not: told-about drafts are the lingering ones.
+      for (const record of await store.listOpenRounds()) {
+        const activityAt = lastRoundActivityAt(record);
+        const reason = shouldAutoAbandonSelfRound({
+          builder: builderOf(record),
+          lastAgentSignalAt: record.lastAgentSignalAt,
+          abandonedAt: record.abandonedAt,
+          state: record.state,
+          roundOpenedAt: record.stateSince ?? record.createdAt,
+          now: now(),
+          connectDays: selfBuildConnectDays(),
+        })
+          ? 'no_connect'
+          : shouldAutoAbandonQuietRound({
+                state: record.state,
+                abandonedAt: record.abandonedAt,
+                lastActivityAt: activityAt,
+                now: now(),
+                quietDays: quietRoundDays(),
+              })
+            ? 'quiet'
+            : null;
+        if (!reason) continue;
+        try {
+          // A claim, not a write: refused if the round moved meanwhile.
+          const result = await closeJob(closeDeps, {
+            record,
+            to: 'abandoned',
+            by: 'system',
+            reason,
+            log: request.log,
+            guard: { activityAt },
+          });
+          if (!result.closed) continue;
+          closed += 1;
+          closedIds.add(record.jobId);
+          request.log.warn({ jobId: record.jobId, state: record.state, reason }, 'open round closed by the sweep');
+        } catch (closeError) {
+          request.log.error({ err: closeError, jobId: record.jobId, reason }, 'round close failed');
+        }
+      }
+
+      const active = (await store.listActiveSubmissions()).filter((record) => !closedIds.has(record.jobId));
       let emitted = 0;
       const stalledIssues: number[] = [];
       // Oldest uncollected change request per job, so the alert pass rereads nothing.
       const pendingFeedback = new Map<number, string>();
       for (const record of active) {
         try {
-          // Self round with no agent signal ever: abandon after the connect window.
-          if (
-            shouldAutoAbandonSelfRound({
-              builder: builderOf(record),
-              lastAgentSignalAt: record.lastAgentSignalAt,
-              abandonedAt: record.abandonedAt,
-              state: record.state,
-              roundOpenedAt: record.stateSince ?? record.createdAt,
-              now: now(),
-              connectDays: selfBuildConnectDays(),
-            })
-          ) {
-            const at = new Date(now()).toISOString();
-            const cancelBackend = await backendFor(builderOf(record));
-            const ref = record.dispatch?.refs.at(-1);
-            if (cancelBackend && ref) {
-              try {
-                await cancelBackend.cancel(ref, record.dispatch?.credentialRefs?.[ref]);
-              } catch (cancelError) {
-                request.log.error({ err: cancelError, jobId: record.jobId }, 'self no-connect cancel failed');
-              }
-            }
-            await store.recordJobTransition(record.jobId, {
-              to: 'abandoned',
-              at,
-              by: 'system',
-              reason: 'no_connect',
-            });
-            await store.setSubmissionAbandoned(record.jobId, at);
-            continue;
-          }
-
           // Stale handoff ack: outgoing agent may be gone.
           if (
             record.builderHandoff &&
@@ -183,11 +214,14 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
       let unhealthy = 0;
       const healthGamesStore = gamesStore;
       if (healthGamesStore) {
-        const publications = await store.listPublications().catch(() => []);
-        for (const publication of publications) {
-          const check = publication.healthCheck;
-          if (!check || check.verdictAt) continue;
+        const publications = await publicationsForHealth();
+        for (const candidate of publications) {
+          if (!candidate.healthCheck || candidate.healthCheck.verdictAt) continue;
           try {
+            // The cached list nominates; the record decides. One read per pending check.
+            const publication = (await store.getPublication(candidate.slug)) ?? candidate;
+            const check = publication.healthCheck;
+            if (!check || check.verdictAt) continue;
             const manifest = await healthGamesStore.getManifest(publication.slug, check.version);
             const health = manifest?.health;
             // A verdict older than the request is the previous run's answer.
@@ -197,6 +231,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
             const resolved = { ...check, green: health.green, verdictAt: health.ranAt };
             if (health.green) {
               await store.setPublicationHealthCheck(publication.slug, resolved);
+              publicationsCache = null;
               continue;
             }
 
@@ -232,9 +267,10 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
               ...resolved,
               notifiedAt: new Date(now()).toISOString(),
             });
+            publicationsCache = null;
           } catch (healthError) {
             // One unreadable manifest must not abort the sweep — same rule as above.
-            request.log.error({ err: healthError, slug: publication.slug }, 'health check read failed');
+            request.log.error({ err: healthError, slug: candidate.slug }, 'health check read failed');
           }
         }
       }
@@ -245,6 +281,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
       sweepLog(
         {
           scanned: active.length,
+          closed,
           emitted,
           alerts: alerts.length,
           alerted,
@@ -259,6 +296,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
       );
       return reply.send({
         scanned: active.length,
+        closed,
         emitted,
         alerts: alerts.length,
         alerted,

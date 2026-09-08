@@ -7,6 +7,7 @@ import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { BuilderKind } from './builder.js';
 import { isPublished } from '../platform/publication-state.js';
+import { closeJob } from './close-job.js';
 
 export interface DraftLifecycleRoutesOptions {
   store?: Store;
@@ -128,35 +129,10 @@ export async function registerDraftLifecycleRoutes(
         return reply.send({ ok: true, alreadyAbandoned: true });
       }
 
-      // Cancellation asked of the backend; Copilot has no cancel endpoint.
-      const ref = record.dispatch?.refs.at(-1);
-      const cancelBackend = await backendFor(builderOf(record));
-      if (cancelBackend && ref) {
-        try {
-          await cancelBackend.cancel(ref, record.dispatch?.credentialRefs?.[ref]);
-        } catch (cancelError) {
-          request.log.error({ err: cancelError, jobId }, 'agent cancel failed');
-        }
-      }
-      await store.recordJobTransition(jobId, {
-        to: 'canceled',
-        at: new Date(now()).toISOString(),
-        by: 'creator',
-        reason: 'abandoned',
-      });
-      // Workspace deleted after the transition, since nothing will resume it.
-      if (record.dispatch?.workspace) {
-        await releaseWorkspace(jobId, record.dispatch.workspace, request.log, record.dispatch.backend);
-      }
-      // Seed branch released the same way — it outlives the dispatch.
-      if (record.dispatch?.seedWorkspace) {
-        await releaseWorkspace(jobId, record.dispatch.seedWorkspace, request.log, record.dispatch.backend);
-        // Forgotten too, so a later cleanup won't retry a deleted ref.
-        await store.clearDispatchSeedWorkspace(jobId);
-      }
-
-      await store.setSubmissionAbandoned(jobId, new Date(now()).toISOString());
-      invalidateStatusCache(jobId);
+      await closeJob(
+        { store, now, backendFor, builderOf, releaseWorkspace, invalidateStatusCache },
+        { record, to: 'canceled', by: 'creator', reason: 'abandoned', log: request.log },
+      );
 
       return reply.send({ ok: true });
     },

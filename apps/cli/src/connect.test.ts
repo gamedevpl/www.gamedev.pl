@@ -430,3 +430,47 @@ it('uses a private temporary Copilot MCP config and removes it on failure', asyn
   expect(configPath).not.toBe('');
   expect(existsSync(configPath)).toBe(false);
 });
+
+it.each(['streamed', 'buffered', 'unknown'] as const)(
+  'offers reconnection instead of submit after %s failure',
+  async (mode) => {
+    const calls: string[] = [];
+    const output: string[] = [];
+    const api = createApi({
+      origin: 'https://example.test',
+      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url, init) => {
+        calls.push(`${init?.method ?? 'GET'} ${url}`);
+        if (String(url).includes('/api/me/studio')) return json({ games: [{ slug: 'sky', token: 'tok' }] });
+        return json({ mcpUrl: 'https://example.test/api/mcp', authorizationHeader: 'Bearer gdpl_cak_test' });
+      },
+    });
+    const message = JSON.stringify({
+      type: 'turn.failed',
+      error: { message: 'Selected model is at capacity. Please try a different model.' },
+    });
+    const attempt = () =>
+      connectGame({
+        api,
+        slug: 'sky',
+        dest: '/tmp',
+        env: { PATH: '/usr/bin' },
+        agent: 'codex',
+        which: () => '/usr/bin/codex',
+        runAdapter: async ({ onLine }) => {
+          if (mode === 'streamed') onLine?.(message);
+          return { code: 1, lines: mode === 'buffered' ? [message] : [] };
+        },
+        write: (line) => output.push(line),
+      });
+    for (let i = 0; i < 2; i++) {
+      await expect(attempt()).rejects.toMatchObject({
+        message: expect.stringContaining(mode === 'unknown' ? 'exit 1' : 'selected model is at capacity'),
+        next: expect.stringContaining('/connect sky --agent codex'),
+      });
+    }
+    expect(calls.every((call) => call.startsWith('GET '))).toBe(true);
+    expect(output.join('\n')).not.toContain('adapter finished');
+    await expect(attempt()).rejects.not.toMatchObject({ next: expect.stringContaining('submit') });
+  },
+);

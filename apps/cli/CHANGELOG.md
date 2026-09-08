@@ -7,6 +7,54 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.10.1 — 2026-09-08
+
+### Fixed
+
+- `gamedevpl update` sorts release versions by semver instead of tag list order (#1238).
+
+## 0.10.0 — 2026-09-08
+
+### Added
+
+- Interactive slash-command suggestions filter as you type; arrows select and Tab completes without running the command (#1231).
+
+### Fixed
+
+- Agent failures explain model capacity errors and offer reconnection to the existing MCP round instead of suggesting submit (#1231).
+
+## 0.9.0 — 2026-09-08
+
+### Added
+
+- Connect opens an interactive game session with local checkout, chat and agent choices; `--manual` prints MCP setup (#1223).
+
+### Fixed
+
+- Missing-game errors explain how to start creating a new game (#1223).
+- `/checkout` opens the downloaded game in the current session and supports games before their first delivery (#1223).
+- Checkout refuses non-empty destinations to preserve existing files (#1223).
+
+## 0.8.0 — 2026-09-07
+
+### Added
+
+- The pilot funnel records signing in, a first turn, a publish it watched happen, and one install per machine — the operator page reads them (#1222).
+
+## 0.7.0 — 2026-09-07
+
+### Added
+
+- Game checkouts offer Creator Kit updates at startup; `/kit` installs the new tools and dependencies while preserving local game edits (#1213).
+
+## 0.6.1 — 2026-09-07
+
+### Fixed
+
+- Custom adapter names no longer block conversational requests; oversized optional agent metadata is omitted (#1189).
+
+## 0.6.0 — 2026-09-07
+
 ### Breaking
 
 - Claude delegation requires a verified Claude.ai subscription login; inherited API and cloud-provider credentials are no longer used (#1201).

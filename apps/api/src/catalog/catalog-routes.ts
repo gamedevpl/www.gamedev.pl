@@ -232,6 +232,7 @@ export async function registerCatalogRoutes(
     }
   }
 
+  // Uncached: an erasure shows on the next request, not the next window.
   async function deattributeDeletedOwners(entries: CatalogGameEntry[]): Promise<CatalogGameEntry[]> {
     if (!store) return entries;
     const erased = await store.listSubmissionsByOwner(DELETED_ACCOUNT_UID);
@@ -259,7 +260,7 @@ export async function registerCatalogRoutes(
       const published = entries.filter(isPublishedEntry);
       const combined = [...published, ...(await storeCatalogEntries(published.map((entry) => entry.slug)))];
       const deattributed = await deattributeDeletedOwners(combined);
-      return reply.send(await attachCatalogEnrichments(deattributed, store));
+      return reply.send(await attachCatalogEnrichments(deattributed, store, now()));
     } catch (error) {
       if (error instanceof SnapshotUnavailableError) {
         request.log.error({ err: error }, 'snapshot catalog unavailable');

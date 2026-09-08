@@ -28,6 +28,8 @@ project, which agent tooling can read but not write.
 | `deploy-world.sh`           | Zone host: image **and** its env/secrets                                                              | For env or secret changes. CI advances the image alone when the world's inputs change                            |
 | `check-env-manifest.mjs`    | Asserts both deploy paths thread the same service env map                                             | Never by hand — runs inside `npm run lint`                                                                       |
 | `check-runtime-sa.mjs`      | Asserts every Cloud Run deploy pins its dedicated service account                                     | Never by hand — runs inside `npm run lint`                                                                       |
+| `check-action-pins.mjs`     | Asserts every third-party GitHub Action is pinned to a commit SHA, not a movable tag                  | Never by hand — runs inside `npm run lint`                                                                       |
+| `load-test.mjs`             | Drives the anonymous funnel (land, catalog, play, telemetry) and reports p50/p95/p99                  | Before a launch spike, against a **candidate revision**. Refuses production without `--allow-production`         |
 
 Backups and alerting exist because neither Cloud Run nor Firestore provides them by
 default: without `setup-backups.sh` a wrong delete is unrecoverable, and without

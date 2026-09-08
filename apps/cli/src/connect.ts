@@ -1,3 +1,4 @@
+import { trackAgentFailure } from './agent-failure.js';
 import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -8,7 +9,7 @@ import type { ApiClient } from './api.js';
 import { detectAdapter, loadAdapters, preflightAdapter, whichOnPath, type AdapterSpec } from './adapters.js';
 import { cliUsage } from './bin-name.js';
 import { CREATOR_TOKEN_PATTERN, childEnv, renderDelegateStream, spawnAdapter } from './delegate.js';
-import { CliError, EXIT_AUTH, EXIT_INPUT, EXIT_RED, EXIT_REFUSED } from './exit-codes.js';
+import { CliError, EXIT_AUTH, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { studioToken } from './studio.js';
 import { adapterMcpSupported } from './agents.js';
 import { findCheckout } from './checkout.js';
@@ -237,7 +238,7 @@ export async function connectGame(input: {
   }
   checkCancelled();
 
-  if (payload?.mcpUrl) {
+  if (payload?.mcpUrl && !input.agent) {
     for (const line of formatHandoff(payload, input.slug)) input.write(line);
   }
 
@@ -249,6 +250,8 @@ export async function connectGame(input: {
         `${cliUsage('connect', input.slug)} --handoff`,
       );
     }
+    input.write(`No agent has been started. Open an interactive session: ${cliUsage('repl', input.slug)}`);
+    input.write(`Or download local files: ${cliUsage('checkout', input.slug)}`);
     return { spawned: false, mcp: true };
   }
   if (!spec) {
@@ -285,7 +288,8 @@ export async function connectGame(input: {
           })
         : undefined;
     await authCheck;
-    input.telemetry?.record('delegate_used', spec.name);
+    input.telemetry?.record('delegate_used', { adapter: spec.name });
+    const failure = trackAgentFailure(spec.name);
     const result = await (input.runAdapter ?? defaultAdapterRun)({
       spec: wired.spec,
       prompt:
@@ -295,9 +299,11 @@ export async function connectGame(input: {
       authCheck,
       abort: input.abort,
       onLine: (line) => {
+        failure.observe(line);
         for (const shown of renderDelegateStream(spec.name, [line], false)) input.write(shown);
       },
     });
+    for (const line of result.lines) failure.observe(line);
     for (const line of renderDelegateStream(spec.name, result.lines, false)) input.write(line);
     if (input.abort?.aborted) {
       throw new CliError(
@@ -307,7 +313,10 @@ export async function connectGame(input: {
       );
     }
     if ((result.code ?? 1) !== 0) {
-      throw new CliError(`${spec.name} exited ${result.code ?? 'null'}`, EXIT_RED, cliUsage('submit'));
+      throw failure.error(
+        result.code,
+        `Reconnect to this round with /connect ${input.slug} --agent ${spec.name} (in the shell: ${cliUsage('connect', `${input.slug} --agent ${spec.name}`)})`,
+      );
     }
     input.write(
       local

@@ -45,9 +45,18 @@ export class RoomClient {
     'expired',
     'replaced',
     'room_not_found',
-    'room_full_or_invalid',
     'bye',
   ]);
+
+  // Refusals that may stop being true; bounded, an invalid room never changes.
+  private static readonly REJOINABLE_REASONS = new Set(['room_full_or_invalid']);
+
+  // Long enough for a host to start the next round.
+  private static readonly REJOIN_DELAYS_MS = [1_000, 2_000, 4_000];
+
+  private rejoinAttempts = 0;
+  // A refusal we are still waiting out, not a plain drop.
+  private rejoining = false;
 
   constructor(options: RoomClientOptions) {
     this.options = options;
@@ -82,8 +91,24 @@ export class RoomClient {
       }
       const frame = parseServerFrame(payload);
       if (!frame) return;
-      if (frame.t === 'closed' && RoomClient.FINAL_REASONS.has(frame.reason)) {
-        this.disposed = true;
+      // A seat that answered exists: start the refusal budget fresh.
+      if (frame.t === 'welcome') {
+        this.rejoinAttempts = 0;
+        this.rejoining = false;
+      }
+      if (frame.t === 'closed') {
+        if (RoomClient.FINAL_REASONS.has(frame.reason)) {
+          this.disposed = true;
+        } else if (RoomClient.REJOINABLE_REASONS.has(frame.reason)) {
+          if (this.rejoinAttempts < RoomClient.REJOIN_DELAYS_MS.length) {
+            // Swallowed: a `closed` frame reaching the caller means it is over.
+            this.rejoining = true;
+            this.options.onStatus('reconnecting');
+            return;
+          }
+          // Budget spent: the refusal was the answer after all.
+          this.disposed = true;
+        }
       }
       this.options.onFrame(frame);
     };
@@ -103,6 +128,13 @@ export class RoomClient {
 
   private scheduleRetry(): void {
     if (this.disposed) return;
+    if (this.rejoining) {
+      // Its own curve: the socket opens each attempt, resetting the shared backoff.
+      const wait = RoomClient.REJOIN_DELAYS_MS[this.rejoinAttempts];
+      this.rejoinAttempts += 1;
+      this.retryTimer = window.setTimeout(() => this.connect(), wait);
+      return;
+    }
     const delay = this.backoff.nextDelayMs();
     if (delay === null) {
       this.options.onStatus('closed', 'unreachable');

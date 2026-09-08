@@ -193,13 +193,27 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
     `coding` to `VisitFunnel` (`visit-funnel.ts`), rendered as a Code surface block on
     `VisitFunnelPanel` beside Editing. `CODE_STEPS` lives in the shared vocabulary module
     like the others.
-  - **CLI (`gamedevpl`) funnel write-side shipped, operator panel unread (CL-01 / CL-39):**
-    `cli_step` (`installed` → `authorized` → `first_turn` → `build_requested` →
-    `delivered` → `published`, plus `play_requested`/`delegate_offered`/`delegate_used`/`verify_failed`
-    beside the ladder) is on the visit stream with closed `channel` / `os` / `adapter` /
-    `stage` dimensions. Never source text, prompts, file paths, or game titles.
-    `summarizeVisitFunnel` already rolls it up as `cli`; the VisitFunnelPanel block is
-    CL-39. `bot:` exclusion is unchanged — visit events are unattributed.
+  - ~~CLI (`gamedevpl`) funnel unread~~ — **closed 2026-09-07 (CL-39)**: `cli_step`
+    (`installed` → `authorized` → `first_turn` → `build_requested` → `delivered` →
+    `published`, plus `play_requested`/`delegate_offered`/`delegate_used`/`verify_failed`
+    beside the ladder) rolls up as `cli` (rungs) and `cliPilot` (dimensions:
+    adapter, verify stage, install channel, platform) and renders as the gamedevpl CLI
+    block on `VisitFunnelPanel`, leading with the question Wave F waits on — "does anyone
+    finish a game this way", answered by sessions that watched a game publish. Never
+    source text, prompts, file paths, or game titles. Three rules came out of it:
+    - **A CLI run is its own session.** The process mints a visit id and drops it on
+      exit, so rungs are session counts and there is no install-to-publish journey to
+      read. The block says so rather than letting the percentages imply one; a durable
+      machine id would be the CLI's cookie and is not an option.
+    - **`published` counts a transition, never a state.** Opening a checkout of an
+      already-live game must not add to the number the public half is gated on
+      (`isPublishTransition` in `apps/cli/src/status-watch.ts`).
+    - **Installs are counted once per install, and only from a terminal.** A local
+      `install.json` marker under `~/.config/gamedevpl` spends the report; CI is a fresh
+      HOME per job, so non-interactive runs report nothing and would otherwise bury the
+      cohort under our own automation. `curl` vs `ps1` stays unmeasured — the installers
+      do not phone home — so the channel reads `unknown` unless `gamedevpl update`
+      wrote it.
   - ~~Managed delivery preflight / gate effectiveness unmeasured~~ — **closed (MR-07)**:
     server log metrics in `delivery-metrics.ts` (`delivery preflight refused`,
     `delivery accepted`, `delivery gate verdict`) answer whether audio/symbols/typecheck
@@ -265,6 +279,17 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
     Partial progress from Creator Studio: the `/studio` route is a distinct visit kind
     (`studio`), so "did they open the control panel after publish" is measurable from the
     visit stream without joining to play events.
+- ~~Party mode's lifecycle unmeasured~~ — **closed 2026-09-07**: `party_step` on the visit
+  stream records `lobby_opened` → `guest_joined` → `started` → `paused` / `resumed` /
+  `restarted` / `returned_to_lobby` / `quit`, each with `via: 'bar' | 'seat'`.
+  `PARTY_STEPS` / `PARTY_VIAS` live in `packages/contract/src/visit-vocab.ts` like the
+  other vocabularies; `summarizeVisitFunnel` rolls them up as `party` and
+  `VisitFunnelPanel` renders the block. Two things it does not carry, deliberately: no
+  slug (the streams stay unjoinable) and no room code — a code identifies a gathering.
+  `seat` is honest rather than precise: the shared screen cannot tell a phone's menu
+  button from the host keyboard, so it does not claim to. Unlike the create funnel, a
+  rung dedupes per `step:via` and not per step — "the bar paused it" and "the room paused
+  it" are the question, and collapsing them would erase it.
 - **Build economics are duration-only** — submission→publish timestamps and build events
   exist; revision-cycle counts are derivable; keep it that way as builds evolve.
 - ~~Shared zones were unmeasured~~ — **closed 2026-07-31**: `zone_link`
@@ -307,7 +332,21 @@ is acceptable; a silent one is not.
 Self-improvement clause: if this skill is wrong, stale, or missing something that cost
 you time, update it in the same session.
 
-CLI vocabulary changes must also update the labels in `apps/web/src/CliFunnelBlock.tsx`.
+CLI vocabulary changes must also update the labels in `apps/web/src/CliFunnelBlock.tsx`
+(step, channel, OS and verify-stage maps) and, for a new dimension, `summarizeCliPilot`
+in `apps/api/src/telemetry/visit-cli-pilot.ts` — a dimension the read side drops is
+captured for nothing, which is how adapter, stage, channel and OS sat unread until CL-39.
 `play_requested` counts requests to open a local or remote game, not evidence that
 the game loaded or was played. Query `cli_step` grouped by `step` and visit ID;
 local play has no game identifier or per-game health events.
+
+Creator Kit updates emit `kit_update_available`, `kit_update_started`,
+`kit_update_completed`, and `kit_update_failed` in the CLI visit stream (creator
+return / funnel questions 4–5). No signed URLs, checkout paths or source content
+are recorded. Completion means the staged toolchain was installed, not that the
+game has passed its publishing checks.
+
+CLI connection onboarding records `connect_opened` when the interactive choices open,
+and `checkout_opened` after downloading or reusing a checkout. Neither event carries
+slugs, paths, credentials or prompts. Existing adapter offer/use events still describe
+agent launches; opening a session does not count as a build.

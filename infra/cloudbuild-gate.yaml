@@ -46,6 +46,16 @@ substitutions:
   _VERSION: ''
   _GAMES_STORE_BUCKET: 'gamedevpl-games-store'
   _GAMES_REPO: 'gamedevpl/www.gamedev.pl-games'
+  # Where the verdict goes, and the capability that says which version it may cover.
+  # The gate SA cannot write a manifest (setup-gcp.sh conditions its objectAdmin to
+  # exclude every manifest.json), so a hand run without these finishes its checks and
+  # then 403s with nothing recorded. Mint one and pass both:
+  #
+  #   npm run gate:capability -w @gamedevpl/api -- --slug <slug> --version <version>
+  #
+  # The trigger path (gate-trigger.ts) mints its own and needs neither substitution.
+  _GATE_VERDICT_URL: ''
+  _GATE_VERDICT_TOKEN: ''
   # The platform repo, cloned for the gate runner itself. The *harness* (the games repo at
   # the version's pinned engine ref) is fetched by the runner, not here — it has to be the
   # ref the candidate was built against, which only the manifest knows.
@@ -73,6 +83,10 @@ steps:
       # the capture harness expects a browser on PATH, and one apt install beats a fetch
       # inside every gate run.
       - 'PUPPETEER_SKIP_DOWNLOAD=1'
+      # Empty is a supported shape: run-gate falls back to writing the manifest itself,
+      # which is what a local run against a bucket you own wants.
+      - 'GATE_VERDICT_URL=${_GATE_VERDICT_URL}'
+      - 'GATE_VERDICT_TOKEN=${_GATE_VERDICT_TOKEN}'
     args:
       - -c
       - |

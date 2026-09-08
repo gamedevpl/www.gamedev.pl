@@ -43,6 +43,7 @@ import type { GameProject } from '@gamedevpl/contract';
 import { gateProgressFor, type GateProgressLane, type GateProgressStage } from '../src/delivery/gate-progress.js';
 import { runGate } from '../src/delivery/gate-runner.js';
 import { createGcsGamesStore } from '../src/delivery/games-store.js';
+import { withRemoteVerdicts } from '../src/delivery/gate-verdict-client.js';
 import { createLocalGamesClient } from '../src/catalog/local-games-repo.js';
 import { assembleGameHtml } from '../src/platform/assemble.js';
 
@@ -118,7 +119,19 @@ async function main(): Promise<void> {
   }
 
   const repo = process.env.GAMES_REPO?.trim() ?? 'gamedevpl/www.gamedev.pl-games';
-  const store = createGcsGamesStore({ bucket });
+  // Verdicts to the API, artifacts direct; unset keeps the old write.
+  const verdictUrl = process.env.GATE_VERDICT_URL?.trim();
+  const verdictToken = process.env.GATE_VERDICT_TOKEN?.trim();
+  const gcsStore = createGcsGamesStore({ bucket });
+  const store =
+    verdictUrl && verdictToken ? withRemoteVerdicts(gcsStore, { endpoint: verdictUrl, token: verdictToken }) : gcsStore;
+  // Said before the checks, not after.
+  if (!verdictUrl || !verdictToken) {
+    console.warn(
+      'GATE_VERDICT_URL/TOKEN unset — writing the manifest directly. Against the shared\n' +
+        'bucket that is refused; mint one with `npm run gate:capability -w @gamedevpl/api`.',
+    );
+  }
   const harnesses: string[] = [];
   const health = process.argv.includes('--health');
   const preview = process.argv.includes('--preview');

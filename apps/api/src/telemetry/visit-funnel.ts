@@ -7,6 +7,7 @@ import {
   EDITOR_STEPS,
   HOW_TO_PLAY_VIAS,
   INVITE_STEPS,
+  PARTY_STEPS,
   PLAY_VIAS,
   REMIX_CONTROLS,
   REMIX_PAINTED_VIAS,
@@ -20,6 +21,7 @@ import {
   type EditorStep,
   type HowToPlayVia,
   type InviteStep,
+  type PartyStep,
   type PlayVia,
   type RemixControl,
   type RemixPaintedVia,
@@ -28,6 +30,7 @@ import {
 } from '@gamedevpl/contract';
 import type { VisitEvent } from '../platform/store.js';
 import { summarizeCliFunnel } from './visit-cli-funnel.js';
+import { summarizeCliPilot, type CliPilotRead } from './visit-cli-pilot.js';
 /**
  * Aggregates raw visit events into the funnel — the Stage 0 metrics of gtm-plan.md in the private www.gamedev.pl-ops repo.
  *
@@ -96,6 +99,8 @@ export interface VisitFunnel {
    */
   waitlist: Array<{ step: WaitlistStep; visits: number }>;
   invites: Array<{ step: InviteStep; visits: number }>;
+  // Party lifecycle in order, zeroes included; seatVisits is evidence phones drive it.
+  party: Array<{ step: PartyStep; visits: number; barVisits: number; seatVisits: number }>;
   betaWelcome: Array<{ step: BetaWelcomeStep; visits: number }>;
   /**
    * EditorKit's revision funnel — opened → saved a draft → played it → published.
@@ -109,6 +114,8 @@ export interface VisitFunnel {
   editing: Array<{ step: EditorStep; visits: number }>;
   coding: Array<{ step: CodeStep; visits: number }>;
   cli: ReturnType<typeof summarizeCliFunnel>;
+  // CL-39 pilot read: agents, stages, channels, and publishes watched happen.
+  cliPilot: CliPilotRead;
   completion: CodeCompletionFunnel;
   /**
    * The NL tuning lane, against `asked` as its denominator: of the sittings that
@@ -211,6 +218,8 @@ interface VisitRollup {
   /** Waitlist steps this visit reached. Separate from create so the two funnels cannot collide. */
   waitlistSteps: Set<string>;
   inviteSteps: Set<string>;
+  // Party rungs reached, keyed step and step:via so routes stay apart.
+  partySteps: Set<string>;
   betaWelcomeSteps: Set<string>;
   /** Editor steps this visit reached. Separate again, for the same reason. */
   editorSteps: Set<string>;
@@ -273,6 +282,7 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       steps: new Set<string>(),
       waitlistSteps: new Set<string>(),
       inviteSteps: new Set<string>(),
+      partySteps: new Set<string>(),
       betaWelcomeSteps: new Set<string>(),
       editorSteps: new Set<string>(),
       assistSteps: new Set<string>(),
@@ -298,6 +308,11 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       if (event.step) rollup.waitlistSteps.add(event.step);
     } else if (event.type === 'invite_step') {
       if (event.step) rollup.inviteSteps.add(event.step);
+    } else if (event.type === 'party_step') {
+      if (event.step) {
+        rollup.partySteps.add(event.step);
+        if (event.via) rollup.partySteps.add(`${event.step}:${event.via}`);
+      }
     } else if (event.type === 'beta_welcome_step') {
       if (event.step) rollup.betaWelcomeSteps.add(event.step);
     } else if (event.type === 'editor_step') {
@@ -517,6 +532,12 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       step,
       visits: rollups.filter((rollup) => rollup.inviteSteps.has(step)).length,
     })),
+    party: PARTY_STEPS.map((step) => ({
+      step,
+      visits: rollups.filter((rollup) => rollup.partySteps.has(step)).length,
+      barVisits: rollups.filter((rollup) => rollup.partySteps.has(`${step}:bar`)).length,
+      seatVisits: rollups.filter((rollup) => rollup.partySteps.has(`${step}:seat`)).length,
+    })),
     betaWelcome: BETA_WELCOME_STEPS.map((step) => ({
       step,
       visits: rollups.filter((rollup) => rollup.betaWelcomeSteps.has(step)).length,
@@ -530,6 +551,7 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       visits: rollups.filter((rollup) => rollup.codeSteps.has(step)).length,
     })),
     cli: summarizeCliFunnel(events),
+    cliPilot: summarizeCliPilot(events),
     completion: {
       requests: completionRows.reduce((total, row) => total + row.requests, 0),
       shown: completionRows.reduce((total, row) => total + row.shown, 0),
