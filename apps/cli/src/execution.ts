@@ -34,7 +34,7 @@ export async function chooseExecution(input: {
       label: `${spec.name} — ${where}; its own credentials and billing`,
     };
   });
-  for (const spec of adapters) input.telemetry?.record('delegate_offered', spec.name);
+  for (const spec of adapters) input.telemetry?.record('delegate_offered', { adapter: spec.name });
   const platform = 'gamedev.pl builder — uses platform quota';
   const chosen = await input.pick([...local.map((row) => row.label), platform], 'Who should build this task?');
   if (chosen === platform) return { builder: 'platform' };

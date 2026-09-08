@@ -1,3 +1,4 @@
+import { trackAgentFailure } from './agent-failure.js';
 import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { permissionBlocked } from './agent-events.js';
 import { startLocalPlay } from './play.js';
@@ -178,7 +179,7 @@ export async function settleBuilder(input: {
   const { ws } = input;
   if (!ws.adapters.length || ws.builder === 'self' || isTerminalStatus(input.status)) return ws.builder;
   const local = ws.adapters.map((spec) => `${spec.name} here — its own credentials and billing`);
-  for (const spec of ws.adapters) ws.telemetry?.record('delegate_offered', spec.name);
+  for (const spec of ws.adapters) ws.telemetry?.record('delegate_offered', { adapter: spec.name });
   const choice = await ws.pick(
     [...local, 'the platform — uses your gamedev.pl quota; /pull afterwards'],
     `Who builds ${ws.slug}?`,
@@ -248,6 +249,7 @@ export async function runLocalBuild(input: {
   ws.abort.current = controller;
   let result: { code: number | null };
   let blocked = false;
+  const failure = trackAgentFailure(spec.name);
   let authCheck: Promise<void> | undefined;
   try {
     if (!ws.runAdapter && spec.name === 'claude') {
@@ -285,7 +287,7 @@ export async function runLocalBuild(input: {
       input.write(
         'Claude uses subscription login; API authentication is refused. This local task is not linked to Claude Desktop.',
       );
-    ws.telemetry?.record('delegate_used', spec.name);
+    ws.telemetry?.record('delegate_used', { adapter: spec.name });
     result = await (ws.runAdapter ?? defaultAdapterRun)({
       spec,
       prompt: input.brief,
@@ -294,6 +296,7 @@ export async function runLocalBuild(input: {
       env: childEnv(ws.env, ''),
       abort: controller.signal,
       onLine: (line) => {
+        failure.observe(line);
         if (permissionBlocked(line)) blocked = true;
         for (const shown of renderDelegateStream(spec.name, [line], false)) {
           if (shown.includes('⚙ ')) ws.onActivity?.(`${spec.name} · ${shown.split('⚙ ')[1]!.slice(0, 90)}`);
@@ -315,14 +318,16 @@ export async function runLocalBuild(input: {
     return false;
   }
   if ((result.code ?? 1) !== 0) {
-    input.write(`${spec.name} exited ${result.code ?? 'null'} — /diff to see what changed`);
+    input.write(
+      formatError(failure.error(result.code, '/diff to review partial edits, then repeat your request when ready')),
+    );
     return false;
   }
   ws.onActivity?.('Agent finished — verifying typecheck and static checks');
   input.write('verifying — typecheck, check:static');
   const verify = runLadder({ cwd: ws.root, publish: false, run: ws.run });
   if (!verify.ok) {
-    ws.telemetry?.record('verify_failed', spec.name, verify.stage);
+    ws.telemetry?.record('verify_failed', { adapter: spec.name, stage: verify.stage });
     const detail = verify.detail.trim();
     input.write(`verify failed at ${verify.stage}${detail ? `: ${detail}` : ''}\nfix by hand, or ask again`);
     return false;

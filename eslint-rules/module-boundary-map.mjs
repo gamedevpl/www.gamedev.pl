@@ -125,6 +125,7 @@ const FILE_BUCKET = {
   // handoff-authorization logic.
   'self-build-delivery-cap': 'platform',
   'self-build-connect-days': 'platform',
+  'quiet-round': 'platform',
   // Shared build/serve contract read by delivery, creation, and community alike --
   // pure schema, HTML assembly, or directory/archive-parsing plumbing, not domain
   // business logic of any one bucket.
@@ -198,6 +199,7 @@ const FILE_BUCKET = {
 
   // creation: jobs, rounds, dispatch, seed, refine
   'draft-lifecycle-routes': 'creation',
+  'close-job': 'platform',
   'handoff-seal-routes': 'creation',
   'feedback-request': 'creation',
   'feedback-routes': 'creation',
@@ -438,6 +440,7 @@ const FILE_BUCKET = {
   'visit-telemetry': 'telemetry',
   'visit-cli-event': 'telemetry',
   'visit-cli-funnel': 'telemetry',
+  'visit-cli-pilot': 'telemetry',
   'visit-telemetry-limit': 'telemetry',
   'creator-metrics': 'telemetry',
 

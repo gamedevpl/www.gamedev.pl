@@ -252,6 +252,9 @@ it means the snapshot did not refresh.
 
 **Opening the site to everyone** is a config change, not a code change: set `PRIVATE_BETA=false`
 on the service (and clear the allowlists if you want). Nothing needs redeploying from source.
+Do it before the traffic rather than during it — it takes a new revision, which drops every
+live party room — and follow [`runbooks/launch-day.md`](./runbooks/launch-day.md), which
+carries the service-level objectives and the load-shedding ladder.
 
 ### Promotional game links during closed beta
 
@@ -262,33 +265,40 @@ needed. `PUBLIC_PLAY_SLUGS` remains an optional deploy-time fallback for bootstr
 empty config. The API still requires each game to be published, and all other catalog,
 draft, and creation routes remain gated.
 
+### Which game bodies the Hosting edge may cache
+
+The play route (`/api/games/:slug`) decides its own `Cache-Control` from the same rule the
+beta wall applies: a published game that a sessionless visitor may play — every game once
+`PRIVATE_BETA=false`, and the promotional slugs while it is `true` — is sent as
+`public, max-age=60`, so Firebase Hosting serves repeat plays from its edge instead of
+Cloud Run. Everything else (walled games, drafts, refusals) keeps the API default of
+`private, no-store`. Nothing to flip: opening the beta widens the cacheable set on its own.
+The minute is the revocation window: Hosting cannot be purged per URL, so a promotional
+slug removed in the console stops being served anonymously within the same minute the
+instances stop honouring it. One origin fetch per game per edge location per minute is
+the price.
+
 ## The session cookie is named `__session`
 
 `apps/api/src/platform/session-cookie.ts` owns the name, and the name is a constraint
-rather than a style choice. Firebase Hosting drops every cookie except one called exactly
-`__session` before a request reaches a Cloud Run backend, so if Hosting is ever put in
-front of this service any other name becomes invisible to the app and every browser
-session silently stops authenticating. Do not "tidy" it back to something descriptive.
+rather than a style choice: `__session` is the one cookie name Firebase Hosting documents
+as guaranteed to reach a backend. Measured on the live site on 2026-09-06, Hosting does in
+fact forward other cookies to a Cloud Run rewrite too — the token-login CSRF cookie
+round-trips through it — but that is observed behaviour, not a documented promise, and the
+session is the one cookie that must never depend on an undocumented one. Do not "tidy" it
+back to something descriptive.
 
-**`gamedev_session` is the pre-rename name, still read and never written.** Sessions last
-30 days, so flipping the name outright would sign out every live account the moment the
-deploy promoted. Instead a request carrying only the old cookie is authenticated from it
-and re-minted under the current name on the same response, so an account migrates on its
-next request rather than whenever its session neared expiry.
-
-That fallback only helps **before** a DNS cutover to Hosting: afterwards the old cookie is
-stripped at the edge and never arrives, so anyone who has not visited since the rename
-shipped is signed out then. The longer the gap between the rename and any cutover, the
-fewer people that happens to. Delete the constant and the branches reading it once a
-cutover is done and the last 30-day session minted under the old name has expired — or
-once it is decided that Hosting is not coming, in which case the fallback is simply dead
-weight.
+The pre-rename name `gamedev_session` was read as a fallback from 2026-09-02 until it was
+removed on 2026-09-08, after the cutover to Hosting and once every active account had
+been re-minted under the new name. A browser that still carries only the old cookie is
+simply anonymous now, and the API never writes or clears that name. If a sign-out storm
+ever coincides with a cookie rename again, the shape to reach for is the same dual-read
+window with a re-mint on the response, not a flag day.
 
 **One invariant holds the whole thing together:** session renewal runs on `onSend`, after
 the handler, and mints for whoever the request _arrived_ as. A response that already wrote
 the session cookie has decided who the browser is — signing in as someone else, or signing
-out — so renewal must never overwrite it, and the old name must be retired by whichever
-half wrote the replacement. Three separate defects came from breaking one half of that
+out — so renewal must never overwrite it. Three separate defects came from breaking one half of that
 (logout re-minting the session it cleared; a sign-in leaving the previous identity's
 cookie last; a replacement leaving the 30-day old cookie standing beside a 12-hour new
 one). The tests in `auth.test.ts` and `access-token-routes.test.ts` pin each case.

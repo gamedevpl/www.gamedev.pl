@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { offerKitUpdate, updateKit } from './kit-update.js';
 import { playGame } from './play.js';
 import { resolve as resolvePath } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -28,6 +29,7 @@ import { formatHelp } from './help.js';
 import { detectLocalAdapters, handoffBuilder, pickAdapter, workshopTurn } from './workshop.js';
 import { preflightAdapter } from './adapters.js';
 import { createCliTelemetry, type CliTelemetry } from './telemetry.js';
+import { takeInstallReport } from './install-mark.js';
 import { getStatus } from './turn.js';
 
 function storeFromEnv(env: NodeJS.ProcessEnv, warn: (line: string) => void): TokenStore {
@@ -120,6 +122,15 @@ async function runDelegateVerb(input: {
   return ok ? EXIT_GREEN : EXIT_RED;
 }
 
+// Verbs that already speak to the platform; the rest stay silent.
+const TELEMETRY_VERBS = new Set(['kit', 'connect', 'delegate', 'play', 'login', 'update', 'status']);
+
+// One rung per install, so `installed` counts installs not runs.
+export function reportInstall(telemetry: CliTelemetry, env: NodeJS.ProcessEnv, isTty: boolean): void {
+  const report = takeInstallReport({ env, isTty });
+  if (report) telemetry.record('installed', report);
+}
+
 export async function runCli(
   argv: string[],
   env: NodeJS.ProcessEnv,
@@ -138,15 +149,50 @@ export async function runCli(
   const store = storeFromEnv(env, (line) => io.stderr.write(line));
   const api = createApi({ origin, store, env });
   const tty = Boolean(io.stdin.isTTY);
-  const telemetry =
-    verb === 'connect' || verb === 'delegate' || verb === 'play' ? createCliTelemetry(origin) : undefined;
+  const telemetry = TELEMETRY_VERBS.has(verb) ? createCliTelemetry(origin) : undefined;
+  if (telemetry) reportInstall(telemetry, env, tty);
 
   try {
     if (verb === 'help' || flags.help || flags.h) {
       io.stdout.write(`${formatHelp()}\n`);
       return EXIT_GREEN;
     }
+    if (verb === 'kit') {
+      if (args[0] && args[0] !== 'update') throw new CliError('Use gamedevpl kit [update].', EXIT_INPUT);
+      const controller = new AbortController();
+      const cancel = () => controller.abort();
+      process.once('SIGINT', cancel);
+      try {
+        const options = {
+          api,
+          cwd: process.cwd(),
+          env,
+          telemetry,
+          abort: controller.signal,
+          write: (line: string) => io.stdout.write(`${line}\n`),
+        };
+        if (args[0] === 'update') await updateKit(options);
+        else await offerKitUpdate(options);
+      } finally {
+        process.removeListener('SIGINT', cancel);
+      }
+      return EXIT_GREEN;
+    }
     if (verb === 'play') {
+      if (!flags.stop && findCheckout(process.cwd())) {
+        try {
+          await offerKitUpdate({
+            api,
+            cwd: process.cwd(),
+            env,
+            telemetry,
+            write: (line) => io.stderr.write(`${line}\n`),
+          });
+        } catch {
+          // Update discovery must not prevent offline local play.
+        }
+      }
+
       const played = await playGame({
         cwd: process.cwd(),
         slug: args[0],
@@ -182,6 +228,7 @@ export async function runCli(
         env,
         isTty: Boolean(io.stdout.isTTY),
       });
+      telemetry?.record('authorized');
       return EXIT_GREEN;
     }
     if (verb === 'logout') {
@@ -205,14 +252,18 @@ export async function runCli(
         asJson,
         live: Boolean(io.stdout.isTTY) && Boolean(flags.watch) && !asJson,
         stdout: io.stdout,
+        ...(telemetry ? { telemetry } : {}),
       });
     }
     if (verb === 'checkout') {
       const slug = args[0];
       if (!slug) throw new CliError(cliUsage('checkout', '<slug>'), EXIT_INPUT, '<slug>');
       const dest = args[1] ?? slug;
-      const result = await checkoutGame({ api, slug, dest });
+      const result = await checkoutGame({ api, slug, dest, allowUndelivered: true });
       io.stdout.write(`checked out ${slug} → ${result.dest} (origin ${result.remote})\n`);
+      io.stdout.write(
+        `Next: cd ${JSON.stringify(resolvePath(result.dest))} and run gamedevpl to edit interactively.\n`,
+      );
       return EXIT_GREEN;
     }
     if (verb === 'pull') {
@@ -257,6 +308,17 @@ export async function runCli(
     if (verb === 'connect') {
       const slug = args[0] ?? readCheckoutSlug(process.cwd());
       if (!slug) throw new CliError(cliUsage('connect', '<slug>'), EXIT_INPUT, '<slug>');
+      if (tty && io.stdout.isTTY && !asJson && !flags.agent && !flags.manual && !args[1]) {
+        const { runInkRepl } = await import('./tui/host.js');
+        return runInkRepl({
+          api,
+          env,
+          io,
+          token: await studioToken(api, slug),
+          slug,
+          initialLine: `/connect ${slug}${flags.handoff ? ' --handoff' : ''}`,
+        });
+      }
       const dest = args[1] ?? process.cwd();
       await connectGame({
         api,
@@ -286,12 +348,25 @@ export async function runCli(
     if (verb === 'repl') {
       if (!tty || !io.stdout.isTTY) throw pipeNeedsFlag(`a verb such as ${cliUsage('whoami')}`);
       const { runInkRepl } = await import('./tui/host.js');
-      const opened = typeof flags.token === 'string' ? null : await openCheckoutGame(api, process.cwd());
+      const requestedSlug = args[0];
+      const local = findCheckout(process.cwd());
+      const opened =
+        typeof flags.token === 'string' || (requestedSlug && local?.slug !== requestedSlug)
+          ? null
+          : await openCheckoutGame(api, process.cwd());
+      const token =
+        typeof flags.token === 'string'
+          ? flags.token
+          : requestedSlug
+            ? await studioToken(api, requestedSlug)
+            : (opened?.token ?? null);
       return runInkRepl({
         api,
         env,
         io,
-        token: typeof flags.token === 'string' ? flags.token : (opened?.token ?? null),
+        token,
+        slug: requestedSlug,
+        initialLine: requestedSlug && !opened ? `/connect ${requestedSlug}` : undefined,
         ...(opened ? { checkout: { slug: opened.slug, root: opened.root } } : {}),
       });
     }

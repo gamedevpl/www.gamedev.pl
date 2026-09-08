@@ -200,3 +200,52 @@ These are local `claude -p` tasks, not sessions created in Claude Desktop. When 
 emits its session ID, the CLI shows it with a resume command. Resume only after the
 current task finishes. The task panel names the active agent and reports tool activity;
 the CLI runs the checkout validation after the agent exits and retains error details.
+
+### Creator Kit updates
+
+Opening a game checkout in the TUI checks the currently published Creator Kit and
+asks whether to update now or later. `/kit` repeats the check and offer. In a shell,
+`gamedevpl kit` checks and `gamedevpl kit update` explicitly installs the update.
+`gamedevpl play` reports available updates without prompting; an offline update
+check does not prevent local play.
+
+The update downloads the Kit and installs its pinned dependencies in a private
+staging directory under `.gamedev/`. Only after setup succeeds does the CLI replace
+Kit-owned paths, dependencies and the pin. Game sources, Git history and custom
+workflows stay in place. New Kit paths that would overwrite unowned files are
+refused. Existing local changes inside Kit-owned tools are replaced, as with
+`setup.mjs`; keep game edits under `games/<slug>/`.
+
+Failed preparation leaves the installed Kit intact. A failed swap rolls back; an
+interrupted swap is recovered on the next `gamedevpl kit update` (also available
+through `/kit`). Other local preparation refuses to use a pending installation.
+Updates stop the old preview; `/play` starts it with the new tools. An updated Kit
+is not a passing game validation or a delivery: the regular play/build/submit checks
+still run on your game. No sources are pulled or published by a Kit update.
+
+### Open an existing game
+
+Run `gamedevpl connect <slug>` in a terminal to enter an interactive session. Choose
+**Open a local checkout** to download the game (or reuse its checkout in the current
+directory), **Continue chatting** to work without local files, or an installed MCP
+agent to start that agent. The session stays open after the agent finishes.
+
+`gamedevpl repl <slug>` opens the same guided session. Inside it, `/checkout` uses
+the current game and switches subsequent edits, `/play` and `/submit` to its local
+files. Games without a delivery can be checked out too: they start with the brief,
+so an agent must build the game before it can be played.
+
+`gamedevpl checkout <slug> [directory]` downloads files from the shell and prints
+how to enter the local interactive session. It refuses non-empty destinations;
+`/checkout` can reuse an existing checkout of the same game without overwriting it.
+
+For manual MCP configuration use `gamedevpl connect <slug> --manual`. Redirected
+output also retains the manual setup behavior. `--agent <name>` explicitly starts
+an MCP agent. Automated agent launches do not print the manual credential snippet.
+
+If the game is only an idea and has not been created yet, run `gamedevpl` without
+arguments and describe it. `connect <slug>` opens an existing owned game; clicking
+Create in Studio establishes its submission even before an agent starts or delivers
+files. A missing game is not silently created by connect.
+
+In the interactive prompt, type `/` to browse commands or `/pu` to find `/pull`. Use ↑/↓ to select, Tab to fill, and Enter to send. Enter on a partial command fills it first. Esc hides suggestions and keeps your text; outside the suggestion list, ↑/↓ browses history. Suggestions run locally and make no model requests.

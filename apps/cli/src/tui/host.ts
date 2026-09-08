@@ -1,3 +1,4 @@
+import { offerKitUpdate } from '../kit-update.js';
 import { activityApi } from './activity.js';
 import type { PendingExecution } from '../execution.js';
 import { render } from 'ink';
@@ -9,16 +10,20 @@ import { wantsColor } from '../renderer.js';
 import type { ApiClient } from '../api.js';
 import { ReplApp } from './app.js';
 import { createRoundWatch } from './round-watch.js';
+import { isPublishTransition } from '../status-watch.js';
 import { createTuiSession, formatSessionIdentity } from './session.js';
 import { openWorkshop, settleBuilder, type Workshop } from '../workshop.js';
 import { agentHint, discoverAgents } from '../agents.js';
 import { createCliTelemetry } from '../telemetry.js';
+import { reportInstall } from '../main.js';
 
 export async function runInkRepl(input: {
   api: ApiClient;
   env: NodeJS.ProcessEnv;
   io: { stdin: NodeJS.ReadStream; stdout: NodeJS.WriteStream };
   token: string | null;
+  slug?: string;
+  initialLine?: string;
   // Set when a checkout in the working directory opened this session.
   checkout?: { slug: string; root: string };
 }): Promise<number> {
@@ -27,6 +32,9 @@ export async function runInkRepl(input: {
   const host: { instance?: ReturnType<typeof render> } = {};
   const abort: Workshop['abort'] = { current: null };
   const telemetry = createCliTelemetry(input.api.origin);
+  reportInstall(telemetry, input.env, isTty);
+  let watched = '';
+  let spoke = false;
   const session = createTuiSession(replBanner(isTty, input.env), () => {
     if (abort.current) {
       abort.current.abort();
@@ -50,7 +58,8 @@ export async function runInkRepl(input: {
   let token = input.token;
   let conversationId: string | undefined;
   let who = '';
-  let slug = input.checkout?.slug ?? '';
+  let slug = input.checkout?.slug ?? input.slug ?? '';
+  let initialLine = input.initialLine;
   const paintIdentity = (): void => session.setIdentity(formatSessionIdentity(who, slug));
   let workshop: Workshop | undefined;
   const pendingExecution: PendingExecution = {};
@@ -75,11 +84,36 @@ export async function runInkRepl(input: {
     workshop.builder = await settleBuilder({ api: input.api, ws: workshop, status: opened.status, write });
     session.writeLine('say what to change, or /help');
   }
+  if (input.checkout) {
+    const controller = new AbortController();
+    abort.current = controller;
+    try {
+      session.setActivity('Checking Creator Kit updates');
+      await offerKitUpdate({
+        api: input.api,
+        cwd: input.checkout.root,
+        env: input.env,
+        write: (line: string) => session.writeLine(line),
+        pick: session.prompt,
+        abort: controller.signal,
+        telemetry,
+        activity: session.setActivity,
+      });
+    } catch (error) {
+      session.writeLine(`Kit update check: ${formatError(error)}. You can retry with /kit.`);
+    } finally {
+      abort.current = null;
+    }
+  }
   const watch = createRoundWatch({
     getToken: () => token,
     api: input.api,
     setLive: (live) => session.setLive(live),
     announce: (text) => session.writeLine(text),
+    onStatus: (status) => {
+      if (isPublishTransition(watched, status.status)) telemetry.record('published');
+      watched = status.status;
+    },
     onSlug: (next) => {
       slug = next;
       paintIdentity();
@@ -99,7 +133,12 @@ export async function runInkRepl(input: {
   );
   try {
     for (;;) {
-      const line = await session.prompt();
+      const line = initialLine ?? (await session.prompt());
+      initialLine = undefined;
+      if (!spoke && line.trim() && !line.trim().startsWith('/')) {
+        spoke = true;
+        telemetry.record('first_turn');
+      }
       let result;
       try {
         result = await handleReplLine({

@@ -320,7 +320,11 @@ fi
 if [ -n "${REMIX_DEBUG:-}" ]; then
   ENV_VARS="${ENV_VARS}|REMIX_DEBUG=${REMIX_DEBUG}"
 fi
-ENV_VARS="${ENV_VARS}|TRUST_EDGE_CLIENT_IP=${TRUST_EDGE_CLIENT_IP:-false}"
+# Default true since www moved behind Firebase Hosting (2026-09-06). Off, every per-IP
+# limiter collapses onto Google's frontend addresses; the peer check in client-address.ts
+# keeps the flag inert on the run.app URL, so true is safe on both deploy paths. Until
+# this line, a hand deploy that forgot to export it switched the limiter off in silence.
+ENV_VARS="${ENV_VARS}|TRUST_EDGE_CLIENT_IP=${TRUST_EDGE_CLIENT_IP:-true}"
 
 if [ -n "${CANONICAL_HOST:-}" ]; then
   ENV_VARS="${ENV_VARS}|CANONICAL_HOST=${CANONICAL_HOST}"

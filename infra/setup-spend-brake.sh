@@ -53,8 +53,8 @@ BRAKE_URL="https://${HOST}/api/internal/spend-brake"
 # Lanes are lowercase because a GCP label value cannot hold a capital letter; the
 # brake matches them case-insensitively (`tabcomplete` pauses tabComplete).
 POLICIES=(
-  "A24 Vertex call volume abnormally high|creation,editing,chat,tabcomplete,search"
-  "A25 Vertex output token rate abnormally high|creation,editing,chat,tabcomplete,search"
+  "A24 Vertex call volume abnormally high|creation,editing,chat,tabcomplete,search,seeding"
+  "A25 Vertex output token rate abnormally high|creation,editing,chat,tabcomplete,search,seeding"
   "A26 knowledge_query daily volume abnormally high|creation"
 )
 
@@ -71,6 +71,13 @@ gcloud beta services identity create --service=monitoring.googleapis.com --proje
 gcloud pubsub topics add-iam-policy-binding "$TOPIC" \
   --project "$PROJECT_ID" \
   --member="serviceAccount:${MONITORING_SA}" \
+  --role='roles/pubsub.publisher' >/dev/null
+
+# Billing budgets publish as one global agent. With this the monthly budget can name
+# the same topic, and a 100% threshold — spent or forecast — pulls every lane.
+gcloud pubsub topics add-iam-policy-binding "$TOPIC" \
+  --project "$PROJECT_ID" \
+  --member='serviceAccount:billing-budget-alert@system.gserviceaccount.com' \
   --role='roles/pubsub.publisher' >/dev/null
 
 echo "==> 2/4 Notification channel"
@@ -163,4 +170,19 @@ after the next deploy. Verify by publishing a test notification:
 
 then check searchPaused in the admin console and clear it there. Note the label
 separator: gcloud user labels cannot hold commas, so the brake accepts '_' as well.
+
+The monthly billing budget is the second publisher. Point it at the topic once
+(billing is account-scoped, so this is not done here):
+
+  gcloud billing budgets update BUDGET_ID --billing-account ACCOUNT_ID \\
+    --notifications-rule-pubsub-topic=projects/${PROJECT_ID}/topics/${TOPIC}
+
+The brake grades a budget by how far over it is: forecast past 100% stops the
+platform agent (managed); spent past 100% also stops round-0 seeding and the gate;
+spent past 150% stops everything. Ticks under threshold are acknowledged silently,
+and the same threshold is acted on once — a resume after it stands.
+
+Per-service budgets can name their own lanes in the display name instead, e.g.
+"Cloud Build lanes=gate" or "Vertex AI lanes=seeding_managed": over 100% pulls
+those lanes and nothing else. Every budget can share this one topic.
 EOF

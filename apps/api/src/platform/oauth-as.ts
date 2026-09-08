@@ -99,7 +99,7 @@ function noteDcrHit(ip: string, nowMs: number): void {
 }
 
 function readUidFromSession(request: FastifyRequest, sessionSecret: string, sessionSecretPrev?: string): string | null {
-  const { token: cookie } = readSessionCookie(request.cookies);
+  const cookie = readSessionCookie(request.cookies);
   if (!cookie) return null;
   try {
     const payload = readSessionToken(cookie, sessionSecret, sessionSecretPrev);

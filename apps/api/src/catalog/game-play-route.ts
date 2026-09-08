@@ -13,7 +13,10 @@ import type { GitHubClient } from './github-client.js';
 import type { CatalogRoutesHandle } from './catalog-routes.js';
 import type { DraftPreviewRoutesHandle } from '../delivery/draft-preview-routes.js';
 import type { Store } from '../platform/store.js';
-import { createAssembledGameCache } from './assembled-game-cache.js';
+import { createAssembledGameCache, type CachedAssembledGame } from './assembled-game-cache.js';
+
+// Bounded by the revocation window: the promotional list refreshes each minute.
+export const PUBLISHED_GAME_CACHE_CONTROL = 'public, max-age=60';
 
 export interface GamePlayRouteOptions {
   store?: Store;
@@ -23,6 +26,8 @@ export interface GamePlayRouteOptions {
   now: () => number;
   catalog: Pick<CatalogRoutesHandle, 'storePublishedGame' | 'isSlugPublished' | 'readSnapshotGame'>;
   draftPreview: Pick<DraftPreviewRoutesHandle, 'canPlayDraft' | 'replyWithDraft'>;
+  // True when the beta wall admits sessionless play of this slug.
+  playableWithoutSession?: (slug: string) => Promise<boolean>;
   maxGamesPerWindow?: number;
   gamesRateLimitWindowMs?: number;
 }
@@ -37,12 +42,19 @@ export async function registerGamePlayRoute(
   options: GamePlayRouteOptions,
 ): Promise<GamePlayRouteHandle> {
   const { store, githubClient, snapshotReader, publishedRef, now, catalog, draftPreview } = options;
+  const playableWithoutSession = options.playableWithoutSession ?? (async () => false);
   const maxGamesPerWindow = options.maxGamesPerWindow ?? 60;
   const gamesRateLimitWindowMs = options.gamesRateLimitWindowMs ?? 60 * 1000;
 
   // Byte+entry LRU so 24 MiB documents cannot fill RAM.
   const gameCache = createAssembledGameCache();
   const gamesByIp = new Map<string, number[]>();
+
+  // Drafts never pass here; only published games get widened.
+  async function sendPublished(reply: FastifyReply, value: CachedAssembledGame) {
+    if (await playableWithoutSession(value.slug)) reply.header('cache-control', PUBLISHED_GAME_CACHE_CONTROL);
+    return reply.send(value);
+  }
 
   // Snapshot baked build preferred; falls back to assembling GitHub sources.
 
@@ -60,7 +72,7 @@ export async function registerGamePlayRoute(
 
     const cached = gameCache.get(slug, currentTime);
     if (cached) {
-      return reply.send(cached);
+      return sendPublished(reply, cached);
     }
 
     try {
@@ -68,7 +80,7 @@ export async function registerGamePlayRoute(
       const stored = await catalog.storePublishedGame(slug);
       if (stored) {
         gameCache.set(slug, stored, currentTime);
-        return reply.send(stored);
+        return sendPublished(reply, stored);
       }
 
       if (!(await catalog.isSlugPublished(slug))) {
@@ -89,7 +101,7 @@ export async function registerGamePlayRoute(
           throw new SnapshotIncompleteError(`published game "${slug}" is missing from the snapshot`);
         }
         gameCache.set(slug, snapshotGame, currentTime);
-        return reply.send(snapshotGame);
+        return sendPublished(reply, snapshotGame);
       }
 
       const sources = await githubClient.getGameSources(publishedRef, slug);
@@ -109,7 +121,7 @@ export async function registerGamePlayRoute(
       const html = assembleGameHtml(project, { restrictNetwork: true });
       const value = { slug, title: project.title, html };
       gameCache.set(slug, value, currentTime);
-      return reply.send(value);
+      return sendPublished(reply, value);
     } catch (error) {
       if (error instanceof SnapshotUnavailableError) {
         request.log.error({ err: error, slug }, 'snapshot game unavailable');

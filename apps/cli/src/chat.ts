@@ -16,7 +16,16 @@ export async function postCliChat(
 ): Promise<CliChatResult> {
   const result = await api.request<CliChatResult>('POST', '/api/cli/chat', {
     text,
-    ...(session ? { session } : {}),
+    ...(session
+      ? {
+          session: {
+            ...session,
+            agents: session.agents
+              .filter((name) => typeof name === 'string' && name.length > 0 && name.length <= 40)
+              .slice(0, 20),
+          },
+        }
+      : {}),
     ...(conversationId ? { conversationId } : {}),
     ...(prepareOnly ? { prepareOnly: true } : {}),
   });

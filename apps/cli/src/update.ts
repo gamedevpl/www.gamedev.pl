@@ -51,6 +51,16 @@ export function helperDest(binPath: string): string {
   return join(dirname(binPath), `${GIT_REMOTE_HELPER}${ext}`);
 }
 
+export function compareSemver(a: string, b: string): number {
+  const pa = a.split('.').map((x) => Number.parseInt(x, 10) || 0);
+  const pb = b.split('.').map((x) => Number.parseInt(x, 10) || 0);
+  for (let i = 0; i < 3; i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
 export async function resolveUpdateVersion(input: { version?: string; fetchImpl: FetchLike }): Promise<string> {
   if (input.version) return input.version.replace(/^cli-v/, '');
   const res = await input.fetchImpl(CLI_RELEASES_API, {
@@ -58,8 +68,12 @@ export async function resolveUpdateVersion(input: { version?: string; fetchImpl:
   });
   if (!res.ok) return CLI_VERSION;
   const rows = (await res.json()) as Array<{ tag_name?: string }>;
-  const tags = rows.map((row) => row.tag_name ?? '').filter((tag) => tag.startsWith(CLI_RELEASE_PREFIX));
-  const newest = tags[0]?.slice(CLI_RELEASE_PREFIX.length);
+  const versions = rows
+    .map((row) => row.tag_name ?? '')
+    .filter((tag) => tag.startsWith(CLI_RELEASE_PREFIX))
+    .map((tag) => tag.slice(CLI_RELEASE_PREFIX.length))
+    .sort(compareSemver);
+  const newest = versions[versions.length - 1];
   return newest || CLI_VERSION;
 }
 

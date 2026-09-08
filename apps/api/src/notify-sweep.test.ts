@@ -82,6 +82,46 @@ async function buildSweepApp(
 const HOUR_MS = 60 * 60 * 1000;
 
 describe('POST /api/internal/notify-sweep', () => {
+  it('closes a change-request draft the creator walked away from, once it is quiet long enough', async () => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const opened = Date.now();
+    let clock = opened;
+    const store = new InMemoryStore();
+    await store.createSubmission(77, 'g:owner', 'Left Behind');
+    await store.setSubmissionSlug(77, 'left-behind');
+    await store.recordJobTransition(77, {
+      to: 'needs_changes',
+      at: new Date(opened).toISOString(),
+      by: 'gate',
+      reason: 'gate_red',
+    });
+    // Already told: isSweepActive drops it, so hygiene must not use that filter.
+    await store.setSubmissionNotifiedStatus(77, 'needs_changes');
+    expect(await store.listActiveSubmissions()).toHaveLength(0);
+    const app = await buildSweepApp(store, acceptAll, { now: () => clock });
+
+    clock = opened + 13 * DAY;
+    const early = await app.inject({
+      method: 'POST',
+      url: '/api/internal/notify-sweep',
+      headers: { authorization: 'Bearer scheduler-token' },
+    });
+    expect(early.json().closed).toBe(0);
+
+    clock = opened + 15 * DAY;
+    const late = await app.inject({
+      method: 'POST',
+      url: '/api/internal/notify-sweep',
+      headers: { authorization: 'Bearer scheduler-token' },
+    });
+    expect(late.json().closed).toBe(1);
+    const record = await store.getSubmission(77);
+    expect(record?.state).toBe('abandoned');
+    expect(record?.abandonedAt).toBeTruthy();
+    expect(record?.transitions?.at(-1)).toMatchObject({ to: 'abandoned', by: 'system', reason: 'quiet' });
+    expect(await store.listOpenRounds()).toHaveLength(0);
+  });
+
   it('rejects callers that fail OIDC verification with 401', async () => {
     const store = new InMemoryStore();
     const app = await buildSweepApp(store, { verify: async () => false });
@@ -113,6 +153,7 @@ describe('POST /api/internal/notify-sweep', () => {
     expect(first.statusCode).toBe(200);
     expect(first.json()).toEqual({
       scanned: 1,
+      closed: 0,
       emitted: 1,
       alerts: 0,
       alerted: 0,
@@ -135,6 +176,7 @@ describe('POST /api/internal/notify-sweep', () => {
     });
     expect(second.json()).toEqual({
       scanned: 0,
+      closed: 0,
       emitted: 0,
       alerts: 0,
       alerted: 0,

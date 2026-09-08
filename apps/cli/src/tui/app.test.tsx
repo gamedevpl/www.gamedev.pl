@@ -3,6 +3,8 @@ import { stripVTControlCharacters } from 'node:util';
 import { createElement } from 'react';
 import { render } from 'ink';
 import { afterEach, describe, expect, it } from 'vitest';
+import { connectSession } from '../connect-flow.js';
+import type { ApiClient } from '../api.js';
 import { ReplApp } from './app.js';
 import { createTuiSession } from './session.js';
 
@@ -30,10 +32,31 @@ function screen(columns: number, rows: number) {
     input.end();
     output.end();
   });
-  return { session, frame: () => frames.filter((frame) => frame.includes('gamedevpl')).at(-1) ?? '' };
+  return { session, input, frame: () => frames.filter((frame) => frame.includes('gamedevpl')).at(-1) ?? '' };
 }
 
 describe('TUI feedback', () => {
+  it('shows connection choices and returns to chat for the selected game', async () => {
+    const view = screen(80, 24);
+    const opened = connectSession({
+      api: { request: async () => ({ games: [{ slug: 'sky', token: 'tok' }] }) } as unknown as ApiClient,
+      slug: 'sky',
+      env: { PATH: '' },
+      pick: view.session.prompt,
+      abort: { current: null },
+      write: view.session.writeLine,
+    });
+    await wait();
+    expect(view.frame()).toContain('how would you like to work?');
+    expect(view.frame()).toContain('Open a local checkout');
+    view.session.movePick(1);
+    view.session.submit();
+    expect(await opened).toMatchObject({ slug: 'sky', token: 'tok' });
+    void view.session.prompt();
+    await wait();
+    expect(view.frame()).toContain('What would you like to do?');
+    expect(view.frame()).toContain('/checkout');
+  });
   it('immediately replaces input with an animated activity and returns to a ready prompt', async () => {
     const view = screen(80, 24);
     const pending = view.session.prompt();
@@ -72,5 +95,98 @@ describe('TUI feedback', () => {
     expect(frame).toContain('20. Agent 20');
     expect(frame).toContain('gamedevpl');
     expect(frame.trimEnd().split('\n').length).toBeLessThanOrEqual(rows);
+  });
+});
+
+it('shows the Kit choice, then installation activity instead of an idle textbox', async () => {
+  const view = screen(80, 24);
+  const choice = view.session.prompt(
+    ['Update Creator Kit now', 'Later'],
+    'Update the game tools? Your local game edits will be kept.',
+  );
+  await wait();
+  expect(view.frame()).toContain('Update Creator Kit now');
+  expect(view.frame()).toContain('Later');
+  view.session.submit();
+  expect(await choice).toBe('Update Creator Kit now');
+  view.session.setActivity('Downloading Creator Kit and installing dependencies');
+  await wait();
+  expect(view.frame()).toContain('Downloading Creator Kit');
+  expect(view.frame()).toContain('input paused');
+  expect(view.frame()).not.toContain('What would you like');
+});
+
+describe('command completion keyboard', () => {
+  it('completes /pu with Tab without submitting, then sends on Enter', async () => {
+    const view = screen(80, 24);
+    const pending = view.session.prompt();
+    await wait();
+    view.input.write('/pu');
+    await wait();
+    expect(view.frame()).toContain('/pull — update a checkout');
+    view.input.write('\t');
+    await wait();
+    expect(view.session.get().draft).toBe('/pull ');
+    expect(view.session.get().mode).toBe('prompt');
+    view.input.write('\r');
+    expect(await pending).toBe('/pull ');
+  });
+
+  it('selects matches with arrows and fills a partial command with Enter', async () => {
+    const view = screen(80, 24);
+    void view.session.prompt();
+    await wait();
+    view.input.write('/p');
+    await wait();
+    expect(view.frame()).toContain('▸ /play');
+    view.input.write('\x1b[B');
+    await wait();
+    expect(view.frame()).toContain('▸ /profile');
+    view.input.write('\r');
+    await wait();
+    expect(view.session.get().draft).toBe('/profile ');
+    expect(view.session.get().mode).toBe('prompt');
+  });
+
+  it('dismisses suggestions without clearing text, preserves history and ignores Tab in prose', async () => {
+    const view = screen(80, 24);
+    void view.session.prompt();
+    view.session.setDraft('previous request');
+    view.session.submit();
+    void view.session.prompt();
+    await wait();
+    view.input.write('/p');
+    await wait();
+    view.input.write('\x1b');
+    await wait();
+    expect(view.session.get().draft).toBe('/p');
+    expect(view.frame()).not.toContain('▸ /play');
+    view.input.write('\x1b[A');
+    await wait();
+    expect(view.session.get().draft).toBe('previous request');
+    view.input.write('\t');
+    await wait();
+    expect(view.session.get().draft).toBe('previous request');
+    view.input.write('\x1b[B');
+    await wait();
+    expect(view.session.get().draft).toBe('/p');
+  });
+
+  it.each([
+    [40, 12],
+    [80, 24],
+    [120, 40],
+  ])('scrolls all commands within %i × %i alongside status', async (columns, rows) => {
+    const view = screen(columns, rows);
+    view.session.setLive(['building', 'gate_not_started', 'live preview', 'czekamy na zakończenie']);
+    void view.session.prompt();
+    await wait();
+    view.input.write('/');
+    await wait();
+    view.input.write('\x1b[A');
+    await wait();
+    expect(view.frame()).toContain('▸ /whoami');
+    expect(view.frame().trimEnd().split('\n').length).toBeLessThanOrEqual(rows);
+    expect(view.frame()).toContain('Tab fill');
   });
 });

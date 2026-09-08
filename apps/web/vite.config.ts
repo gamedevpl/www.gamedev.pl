@@ -127,7 +127,8 @@ export default defineConfig({
     proxy: Object.fromEntries(
       ['/api', '/oauth', '/device', '/cli', '/install.sh', '/install.ps1', '/.well-known'].map((p) => [
         p,
-        { target: apiTarget, changeOrigin: true },
+        // Preserve the browser's target origin for the API's session CSRF check.
+        { target: apiTarget, changeOrigin: false },
       ]),
     ),
   },
