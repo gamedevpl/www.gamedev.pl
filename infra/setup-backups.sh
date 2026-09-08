@@ -30,6 +30,9 @@
 # This script is idempotent — safe to re-run after changing any of the knobs above.
 set -euo pipefail
 
+# An old copy of this script does not fail; it reverts what a newer copy fixed.
+source "$(dirname "${BASH_SOURCE[0]}")/require-current-checkout.sh"
+
 # Every gcloud call here is GA, so none should prompt — but the existence checks below
 # discard both streams, so any prompt that did appear would be invisible and the script
 # would wait on stdin forever. setup-monitoring.sh hung exactly that way. Prompts off.
