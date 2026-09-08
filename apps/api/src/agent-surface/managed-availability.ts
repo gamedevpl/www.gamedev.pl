@@ -3,7 +3,7 @@
 // Reuses the creation-limits document and TTL cache; see creation-limits.ts.
 
 import { BOT_UID_PREFIX, type CreationLimits, type Store } from '../platform/store.js';
-import { resolveDefaultGlobalDailyBotCallCap } from '../platform/bot-allowance.js';
+import { botAllowanceAvailable } from './managed-bot-availability.js';
 
 import type { BuilderUnavailableReason } from '@gamedevpl/contract';
 
@@ -87,13 +87,7 @@ export function createManagedAvailabilityGate(options: ManagedAvailabilityOption
     if (bypassesBreaker(uid)) {
       if (!store) return { available: true };
       try {
-        const cap = resolveDefaultGlobalDailyBotCallCap();
-        const allowed =
-          cap <= 0 ||
-          (spend
-            ? (await store.checkAndIncrementGlobalBotCalls(dateStr, cap)).allowed
-            : (await store.getGlobalBotCallCount(dateStr)) < cap);
-        if (!allowed) {
+        if (!(await botAllowanceAvailable(store, dateStr, spend))) {
           return { available: false, reason: 'global_limit' };
         }
       } catch (error) {

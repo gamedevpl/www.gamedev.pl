@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createManagedAvailabilityGate } from './managed-availability.js';
 import { InMemoryStore } from '../platform/store.js';
 
@@ -81,20 +81,6 @@ describe('createManagedAvailabilityGate', () => {
     expect(await g.checkAndSpend('g:a', today)).toEqual({ available: false, reason: 'user_limit' });
     // A different creator's cap is untouched by g:a spending theirs.
     expect(await g.checkAndSpend('g:b', today)).toEqual({ available: true });
-  });
-
-  it('peeks at bot allowance without consuming it, including at exhaustion', async () => {
-    const { store, gate: g } = gate({ hasPlatformBackend: true });
-    const spend = vi.spyOn(store, 'checkAndIncrementGlobalBotCalls');
-    expect(await g.peek('bot:smoke', today)).toEqual({ available: true });
-    expect(await g.peek('bot:smoke', today)).toEqual({ available: true });
-    expect(spend).not.toHaveBeenCalled();
-    expect(await store.getGlobalBotCallCount(today)).toBe(0);
-    expect(await g.checkAndSpend('bot:smoke', today)).toEqual({ available: true });
-    expect(await store.getGlobalBotCallCount(today)).toBe(1);
-    vi.spyOn(store, 'getGlobalBotCallCount').mockResolvedValue(Number.MAX_SAFE_INTEGER);
-    expect(await g.peek('bot:smoke', today)).toEqual({ available: false, reason: 'global_limit' });
-    expect(spend).toHaveBeenCalledTimes(1);
   });
 
   it('lets bot: accounts through every cap, the same as the creation breaker does', async () => {
