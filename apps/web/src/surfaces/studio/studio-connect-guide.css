@@ -83,10 +83,50 @@
   outline-offset: 3px;
 }
 
+.connect-guide .btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 11px 18px;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-decoration: none;
+  white-space: normal;
+  cursor: pointer;
+}
+
 .connect-guide > .btn {
   align-self: flex-start;
-  white-space: normal;
-  min-height: 44px;
+}
+
+.connect-guide .btn:hover {
+  border-color: var(--turquoise);
+}
+
+.connect-guide .btn-primary {
+  background: var(--turquoise);
+  border-color: var(--turquoise);
+  color: #08251e;
+}
+
+.connect-guide .btn[aria-pressed='true'] {
+  background: rgba(0, 228, 172, 0.12);
+  border-color: var(--turquoise);
+  color: var(--turquoise);
+}
+
+.connect-guide .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .connect-guide .studio-connect-snippet {
