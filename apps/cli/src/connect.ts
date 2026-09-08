@@ -1,3 +1,4 @@
+import { configureAdapter, selectionLabel } from './agent-settings.js';
 import { trackAgentFailure } from './agent-failure.js';
 import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -186,7 +187,7 @@ export async function connectGame(input: {
   const env = input.env ?? process.env;
   const token = await studioToken(input.api, input.slug);
   checkCancelled();
-  const spec = input.agent
+  let spec = input.agent
     ? detectAdapter(input.agent, input.which ?? ((cmd) => whichOnPath(cmd, env)), loadAdapters(env))
     : null;
   if (input.agent && !spec) {
@@ -202,6 +203,10 @@ export async function connectGame(input: {
       EXIT_INPUT,
       cliUsage('connect'),
     );
+  }
+  if (spec) {
+    spec = configureAdapter(spec, env);
+    input.write(selectionLabel(spec.name, spec.selection ?? {}));
   }
   if (spec && !input.runAdapter) preflightAdapter(spec, env);
   checkCancelled();

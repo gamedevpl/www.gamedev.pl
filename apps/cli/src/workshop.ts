@@ -1,3 +1,5 @@
+import { taskOutput } from './task-output.js';
+import { configureAdapter, selectionLabel } from './agent-settings.js';
 import { trackAgentFailure } from './agent-failure.js';
 import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { permissionBlocked } from './agent-events.js';
@@ -40,6 +42,7 @@ export type Workshop = {
   adapters: AdapterSpec[];
   selectedAgent?: string;
   onActivity?: (activity: string) => void;
+  lastLog?: string;
   onLocalTask?: (agent: string) => void;
   telemetry?: CliTelemetry;
   builder: string;
@@ -243,7 +246,14 @@ export async function runLocalBuild(input: {
   brief: string;
   write: (line: string) => void;
 }): Promise<boolean> {
-  const { ws, spec } = input;
+  const { ws } = input;
+  const spec = configureAdapter(input.spec, ws.env);
+  const output = taskOutput(input.write);
+  ws.lastLog = output.path;
+  input = { ...input, write: output.write };
+  input.write(`\n── ${ws.slug} · local task ──`);
+  input.write(selectionLabel(spec.name, spec.selection ?? {}));
+  input.write(ws.unattended ? `Full transcript: ${output.path}` : 'Settings: /model · full transcript: /logs');
   ws.onActivity?.(`Preparing ${spec.name}`);
   if (!ws.runAdapter) preflightAdapter(spec, ws.env);
   const cwd = spec.cwd === 'game-dir' ? join(ws.root, 'games', ws.slug) : ws.root;
@@ -263,8 +273,15 @@ export async function runLocalBuild(input: {
       await authCheck;
     }
     input.write(`▸ Preparing ${spec.name} in games/${ws.slug} — Ctrl+C stops it`);
-    if (!ws.runAdapter)
-      await prepareWorkspace({ cwd: ws.root, env: ws.env, abort: controller.signal, write: input.write });
+    if (!ws.runAdapter) {
+      input.write('Preparing Creator Kit and dependencies…');
+      output.preparing(true);
+      try {
+        await prepareWorkspace({ cwd: ws.root, env: ws.env, abort: controller.signal, write: input.write });
+      } finally {
+        output.preparing(false);
+      }
+    }
     if (!ws.runAdapter && !ws.unattended) {
       try {
         const preview = await startLocalPlay({
@@ -310,7 +327,7 @@ export async function runLocalBuild(input: {
             failure.observe(line);
             if (permissionBlocked(line)) blocked = true;
             for (const shown of stream(line)) {
-              if (shown.includes('⚙ ')) ws.onActivity?.(`${spec.name} · ${shown.split('⚙ ')[1]!.slice(0, 90)}`);
+              if (shown.includes('⚙ ')) ws.onActivity?.(`${spec.name} · running a tool — /logs after completion`);
               input.write(shown);
             }
           },

@@ -84,9 +84,11 @@ export function ReplApp({ session, color }: { session: TuiSession; color: boolea
     <Box flexDirection="column">
       <Static items={state.lines}>
         {(line, index) => (
-          <Text key={index} color={color && isMascotLine(line) ? MASCOT_COLOR : undefined}>
-            {linkifyTerminalText(line)}
-          </Text>
+          <Box key={index} width={Math.min(stdout.columns || 80, 100)}>
+            <Text bold={line.startsWith('──')} color={color && isMascotLine(line) ? MASCOT_COLOR : undefined}>
+              {linkifyTerminalText(line)}
+            </Text>
+          </Box>
         )}
       </Static>
       <Box flexDirection="column" height={liveRows} flexShrink={0}>

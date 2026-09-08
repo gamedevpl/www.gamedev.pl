@@ -129,7 +129,8 @@ export async function spawnAdapter(input: {
   abort?: AbortSignal;
   authCheck?: Promise<void>;
 }): Promise<ChildProcess> {
-  const env = input.spec.name === 'claude' ? subscriptionEnv(input.env) : input.env;
+  const env = input.spec.name === 'claude' ? subscriptionEnv(input.env) : { ...input.env };
+  if (input.spec.name === 'vibe' && input.spec.selection?.model) env.VIBE_ACTIVE_MODEL = input.spec.selection.model;
   if (input.spec.name === 'claude')
     await (input.authCheck ??
       requireClaudeSubscription({

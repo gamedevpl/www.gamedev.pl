@@ -23,7 +23,7 @@ it('repairs editor validation in the same workspace and keeps ownership through 
   const ws = workshop({
     onLocalTask: (agent) => local.push(agent),
     runAdapter: async (input) => {
-      expect(input.spec).toBe(spec);
+      expect(input.spec).toMatchObject(spec);
       expect(input.cwd).toBe('/checkout/games/game');
       prompts.push(input.prompt);
       return { code: 0 };

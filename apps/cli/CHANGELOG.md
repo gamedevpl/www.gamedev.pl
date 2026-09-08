@@ -7,7 +7,14 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Choose and remember delegated agent model and reasoning effort with `/model` or `gamedevpl model` (#1243).
+- Open the full local task transcript with `/logs` while the main view shows concise progress (#1243).
+
 ### Fixed
+
+- Group local task output and reduce setup and shell-command noise in the terminal (#1243).
 
 - Return local validation errors to the selected agent for up to two automatic repairs before offering delivery (#1243).
 - Keep Ctrl+C responsive while local validation runs (#1243).
