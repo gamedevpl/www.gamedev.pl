@@ -111,10 +111,13 @@ CI has three identities on the same principle, created by `infra/setup-wif.sh`:
 | `kit-publisher@`           | the **games repo's** three publish workflows     | **Conditional:** `storage.objectAdmin` on the store bucket, only under `kits/`, `workspaces/`, `examples/`, `knowledge/`. **Unconditional:** `storage.legacyBucketReader` on that bucket (listing, which a per-object condition cannot express), and at project level `discoveryengine.editor` plus `serviceusage.serviceUsageConsumer` (the corpus import and its quota-project header) |
 
 The games repo used to publish as the deployer, which handed a content repository the
-whole deploy credential. Its account now cannot reach `versions/` or `games/` — every
-stored and published game — let alone Cloud Run. The provider's attribute condition also
-pins each repository to its own default branch, so a pull request cannot mint any of the
-three.
+whole deploy credential. Its account can no longer read the contents of, or modify,
+anything under `versions/` or `games/` — every stored and published game — let alone
+reach Cloud Run. Be precise about what remains: `legacyBucketReader` is bucket-wide, so
+the publisher can still **list** object names and metadata across the whole bucket. That
+is the cost of a listing permission GCS cannot scope per prefix, and it discloses slugs
+and version ids rather than game content. The provider's attribute condition also pins
+each repository to its own default branch, so a pull request cannot mint any of the three.
 
 The identity is **pinned on every deploy**, in both paths: `deploy.yml` hard-codes the three
 emails and passes `--service-account` to the app deploy, the relay image update and the zone
