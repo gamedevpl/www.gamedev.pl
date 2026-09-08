@@ -1,9 +1,20 @@
 import { PassThrough } from 'node:stream';
 import { createElement } from 'react';
 import { render } from 'ink';
-import { expect, it } from 'vitest';
+import { afterAll, expect, it, vi } from 'vitest';
 import { ReplApp } from './app.js';
 import { createTuiSession } from './session.js';
+
+// Exercise interactive redraws even when the test runner is CI.
+const originalCI = vi.hoisted(() => {
+  const value = process.env.CI;
+  process.env.CI = 'false';
+  return value;
+});
+afterAll(() => {
+  if (originalCI === undefined) delete process.env.CI;
+  else process.env.CI = originalCI;
+});
 
 it.each([40, 120])('writes preview hyperlinks once while status animates at width %i', async (columns) => {
   const session = createTuiSession('');

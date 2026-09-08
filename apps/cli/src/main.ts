@@ -154,12 +154,12 @@ export async function runCli(
   if (telemetry) reportInstall(telemetry, env, tty);
 
   try {
-    if (verb === 'model') {
-      await modelCommand({ args, flags, env, write: (line) => io.stdout.write(`${line}\n`) });
-      return EXIT_GREEN;
-    }
     if (verb === 'help' || flags.help || flags.h) {
       io.stdout.write(`${formatHelp()}\n`);
+      return EXIT_GREEN;
+    }
+    if (verb === 'model') {
+      await modelCommand({ args, flags, env, write: (line) => io.stdout.write(`${line}\n`) });
       return EXIT_GREEN;
     }
     if (verb === 'kit') {

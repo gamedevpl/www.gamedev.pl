@@ -19,6 +19,9 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
+- Wait for the final local task status before exiting the CLI (#1243).
+- Show model command help without changing saved settings (#1243).
+
 - Show Claude session resume instructions once instead of repeating them on every system event (#1243).
 
 - Group local task output and reduce setup and shell-command noise in the terminal (#1243).

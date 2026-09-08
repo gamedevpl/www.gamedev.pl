@@ -88,7 +88,12 @@ export function createManagedAvailabilityGate(options: ManagedAvailabilityOption
       if (!store) return { available: true };
       try {
         const cap = resolveDefaultGlobalDailyBotCallCap();
-        if (cap > 0 && !(await store.checkAndIncrementGlobalBotCalls(dateStr, cap)).allowed) {
+        const allowed =
+          cap <= 0 ||
+          (spend
+            ? (await store.checkAndIncrementGlobalBotCalls(dateStr, cap)).allowed
+            : (await store.getGlobalBotCallCount(dateStr)) < cap);
+        if (!allowed) {
           return { available: false, reason: 'global_limit' };
         }
       } catch (error) {
