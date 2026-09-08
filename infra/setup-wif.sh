@@ -214,7 +214,7 @@ publisher_with_retry gcloud iam service-accounts add-iam-policy-binding "$PUBLIS
   --project="$PROJECT_ID" \
   >/dev/null
 
-echo "==> 5d/8 Taking '${GAMES_REPO}' off ${SA_NAME}"
+echo "==> 5d/8 Taking '${GAMES_REPO}' and Discovery Engine off ${SA_NAME}"
 # LAST, on purpose: everything above must already work, because this is the step that
 # takes the old path away. A failure before this point leaves the games repo publishing
 # as the deployer — degraded but working — instead of unable to authenticate at all.
@@ -242,6 +242,31 @@ if printf '%s' "$DEPLOYER_POLICY" | grep -q "attribute.repository/${GAMES_REPO}"
   exit 1
 fi
 echo "    - ${GAMES_REPO}: not bound to the deployer (verified)"
+
+# Same step, same reason: the deployer held discoveryengine.editor only because the
+# corpus import ran as it. The publisher does that import now — granted above — so this
+# is the moment the old permission stops being needed. It lives here rather than in
+# setup-gcp.sh because that script can run on a project where this one has not, and
+# removing it there would break the import before its replacement exists.
+gcloud projects remove-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/discoveryengine.editor" \
+  --condition=None \
+  >/dev/null 2>&1 || true
+if ! DEPLOYER_ROLES="$(gcloud projects get-iam-policy "$PROJECT_ID" \
+  --flatten="bindings[].members" \
+  --filter="bindings.members:${SA_EMAIL}" \
+  --format="value(bindings.role)")"; then
+  echo "Error: could not read the project policy to confirm the deployer's roles." >&2
+  echo "discoveryengine.editor is unverified, not absent. Re-run." >&2
+  exit 1
+fi
+if printf '%s\n' "$DEPLOYER_ROLES" | grep -qx "roles/discoveryengine.editor"; then
+  echo "Error: ${SA_NAME} still holds roles/discoveryengine.editor." >&2
+  echo "It can still mutate every Discovery Engine data store. Re-run once IAM is reachable." >&2
+  exit 1
+fi
+echo "    - discoveryengine.editor: not held by ${SA_NAME} (verified)"
 
 
 echo "==> 6/8 Creating service account '${VERIFIER_SA_NAME}' (nightly erasure proof)"

@@ -561,29 +561,11 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
 # kit-publisher@ (setup-wif.sh step 5b), and no workflow in *this* repo touches Discovery
 # Engine, so the grant is obsolete write access to every data store in the project.
 # Reconciled away rather than skipped, so a re-run on an older project takes it too.
-echo "    Ensuring the CI deployer (${DEPLOYER_SA}) holds no Discovery Engine role"
-gcloud projects remove-iam-policy-binding "$PROJECT_ID" \
-  --member="serviceAccount:${DEPLOYER_SA}" \
-  --role="roles/discoveryengine.editor" \
-  --condition=None \
-  >/dev/null 2>&1 || true
-# Suppressing the removal's exit code makes "already absent" and "IAM was unreachable"
-# the same answer, and only one of them is safe to print. So the policy is read back and
-# the absence is what is checked.
-if ! DEPLOYER_ROLES="$(gcloud projects get-iam-policy "$PROJECT_ID" \
-  --flatten="bindings[].members" \
-  --filter="bindings.members:${DEPLOYER_SA}" \
-  --format="value(bindings.role)")"; then
-  echo "Error: could not read the project policy to confirm the deployer's roles." >&2
-  echo "discoveryengine.editor is unverified, not absent. Re-run." >&2
-  exit 1
-fi
-if printf '%s\n' "$DEPLOYER_ROLES" | grep -qx "roles/discoveryengine.editor"; then
-  echo "Error: ${DEPLOYER_SA} still holds roles/discoveryengine.editor." >&2
-  echo "It can still mutate every Discovery Engine data store. Re-run once IAM is reachable." >&2
-  exit 1
-fi
-echo "    deployer: no discoveryengine.editor (verified)." 
+# The deployer's discoveryengine.editor is NOT revoked here. This script can run on a
+# project where setup-wif.sh has not, and the games repo would then still be importing
+# the corpus as the deployer — removing it here would break that import before its
+# replacement exists. The revocation belongs to the cutover, and lives in setup-wif.sh
+# step 5d, after the publisher has been granted.
 
 echo ""
 echo "==> Done. Firestore database, storage, IAM, deletion sweep, session secret, telemetry TTL, indexes, gate-runner, and the knowledge_query Discovery Engine data store configured for project ${PROJECT_ID}."
