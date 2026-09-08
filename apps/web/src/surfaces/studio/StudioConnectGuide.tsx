@@ -134,6 +134,7 @@ export function StudioConnectGuide({
       <h3 id="connect-guide-title" ref={heading} tabIndex={-1}>
         {t(`connectGuide.${title}`)}
       </h3>
+      {route && route !== 'platform' && <p className="connect-guide-mode">{t('connectGuide.selfMode')}</p>}
       {!route ? (
         <div className="connect-guide-options">
           {(['cli', 'agent', 'platform'] as const)
@@ -166,6 +167,14 @@ export function StudioConnectGuide({
               tool === 'muse' ? 'connectGuide.museStart' : local ? 'connectGuide.cliStart' : 'connectGuide.agentStart',
             )}
           </p>
+          {local && (
+            <>
+              <pre className="studio-connect-snippet" tabIndex={0}>
+                {cliSnippet}
+              </pre>
+              {copyButton(cliSnippet, 'cli')}
+            </>
+          )}
           {!local && (
             <>
               <pre className="studio-connect-snippet" tabIndex={0}>

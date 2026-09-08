@@ -2020,7 +2020,7 @@
     "copy": "Kopiuj",
     "retry": "Spróbuj ponownie",
     "platformBody": "Agent gamedev.pl będzie kontynuował tę rundę, korzystając z Twojego limitu na platformie. Postęp zobaczysz w Studio.",
-    "cliStart": "W terminalu wybierz lokalne pliki, rozmowę lub agenta. Opisz, co zbudować. Do Studio możesz wrócić w każdej chwili.",
+    "cliStart": "Uruchom te polecenia w terminalu, a potem wybierz swojego zainstalowanego agenta lub lokalny checkout. Agent korzysta ze swojego konta i rozliczeń. gamedevpl CLI łączy go z tą grą; kliknięcie „Gotowe” tutaj nie uruchamia agenta managed.",
     "agentStart": "Wklej tę wiadomość w rozmowie ze swoim agentem. Wskaże mu tę grę i poprosi o rozpoczęcie bieżącej rundy.",
     "waiting": "Połączenie nie jest jeszcze potwierdzone. Ten ekran zaktualizuje się, gdy agent się odezwie. Możesz też otworzyć Studio poniżej.",
     "cliSetup": "Uruchom te polecenia w terminalu. Potrzebujesz Node.js 20.19 lub nowszego. Zaloguj się na to samo konto co tutaj.",
@@ -2057,6 +2057,7 @@
       "muse": "Muse Code (Meta)"
     },
     "museStart": "W terminalu wybierz „Open a local checkout”, a następnie Muse. Muse pracuje na lokalnych plikach; ta ścieżka nie konfiguruje MCP. Jeśli nie masz jeszcze Muse Code, zainstaluj je z dev.meta.ai.",
-    "panelWaiting": "Czekamy, aż Twój agent się połączy. Możesz zamknąć ten panel i śledzić postęp w rozmowie."
+    "panelWaiting": "Czekamy, aż Twój agent się połączy. Możesz zamknąć ten panel i śledzić postęp w rozmowie.",
+    "selfMode": "Ta runda: Twój agent (BYOCA)"
   }
 }

@@ -86,6 +86,12 @@ it('offers terminal commands separately, including Windows and a game without so
   await click('Windows');
   expect(host.textContent).toContain('install.ps1');
   expect(host.textContent).not.toContain('install.sh');
+  await click('Setup done — continue');
+  expect(host.textContent).toContain('install.ps1');
+  expect(host.textContent).toContain('gamedevpl connect sky');
+  expect(host.textContent).toContain('your own agent (BYOCA)');
+  await click('Copy');
+  expect(clipboard).toHaveBeenCalledWith(expect.stringContaining('install.ps1'));
 });
 it('keeps generic manual credentials masked and copies the real header only on request', async () => {
   await act(async () => {
