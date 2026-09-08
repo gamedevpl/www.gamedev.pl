@@ -418,16 +418,26 @@ grant_gate_with_retry gcloud storage buckets add-iam-policy-binding "gs://${STOR
 grant_gate_with_retry gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
   --member="serviceAccount:${GATE_SA_EMAIL}" \
   --role="roles/storage.objectAdmin" \
-  --condition="expression=resource.type == 'storage.googleapis.com/Object' && !resource.name.endsWith('/manifest.json'),title=gate-no-manifest-writes,description=Gate artifacts yes, any game's manifest no — the verdict goes through the API" \
+  --condition="expression=resource.type == 'storage.googleapis.com/Object' && !resource.name.endsWith('/manifest.json'),title=gate-no-manifest-writes,description=Gate artifacts yes but no game's manifest — the verdict goes through the API" \
   --project="$PROJECT_ID"
 
 # An older run of this script left the unconditional binding; reconcile it away.
+# Not `|| true`: if this removal fails, the old unconditional objectAdmin stays in force
+# beside the narrow one, hostile gate code keeps bucket-wide delete, and the hardening
+# only looks applied. So the removal may fail, and then the absence is verified.
 gcloud storage buckets remove-iam-policy-binding "gs://${STORE_BUCKET}" \
   --member="serviceAccount:${GATE_SA_EMAIL}" \
   --role="roles/storage.objectAdmin" \
   --condition=None \
   --project="$PROJECT_ID" \
-  >/dev/null 2>&1 && echo "    Removed gate-runner's bucket-wide objectAdmin." || true
+  >/dev/null 2>&1 || true
+if gcloud storage buckets get-iam-policy "gs://${STORE_BUCKET}" --project="$PROJECT_ID" --format=json \
+  | python3 -c "import json,sys; p=json.load(sys.stdin); sys.exit(0 if any(b['role']=='roles/storage.objectAdmin' and 'condition' not in b and 'serviceAccount:${GATE_SA_EMAIL}' in b.get('members',[]) for b in p.get('bindings',[])) else 1)"; then
+  echo "Error: gate-runner still holds unconditional objectAdmin on gs://${STORE_BUCKET}." >&2
+  echo "The narrow binding was added but the broad one remains — the gate is NOT hardened." >&2
+  exit 1
+fi
+echo "    gate-runner: no unconditional objectAdmin (verified)." 
 
 grant_gate_with_retry gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${GATE_SA_EMAIL}" \
