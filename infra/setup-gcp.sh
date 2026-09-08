@@ -556,15 +556,17 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --condition=None \
   >/dev/null
 
-# UNVERIFIED role name: not confirmed against `gcloud iam roles describe` from this
-# environment. If it 404s, list `roles/discoveryengine.*` and pick the editor-level one —
-# CI needs write access for `documents:import`, not full admin.
-echo "    Granting roles/discoveryengine.editor to CI deployer (${DEPLOYER_SA}, for documents:import)"
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+# The deployer used to hold discoveryengine.editor because the corpus import ran as it —
+# the games repo published as this account. Since 2026-09-08 that import runs as
+# kit-publisher@ (setup-wif.sh step 5b), and no workflow in *this* repo touches Discovery
+# Engine, so the grant is obsolete write access to every data store in the project.
+# Reconciled away rather than skipped, so a re-run on an older project takes it too.
+echo "    Ensuring the CI deployer (${DEPLOYER_SA}) holds no Discovery Engine role"
+gcloud projects remove-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${DEPLOYER_SA}" \
   --role="roles/discoveryengine.editor" \
   --condition=None \
-  >/dev/null
+  >/dev/null 2>&1 || echo "    (no discoveryengine.editor binding to remove)"
 
 echo ""
 echo "==> Done. Firestore database, storage, IAM, deletion sweep, session secret, telemetry TTL, indexes, gate-runner, and the knowledge_query Discovery Engine data store configured for project ${PROJECT_ID}."
