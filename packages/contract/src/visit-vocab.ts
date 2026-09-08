@@ -185,6 +185,8 @@ export const CLI_STEPS = [
   'delivered',
   'published',
   'play_requested',
+  'connect_opened',
+  'checkout_opened',
   'kit_update_available',
   'kit_update_started',
   'kit_update_completed',

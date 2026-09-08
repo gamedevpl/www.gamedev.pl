@@ -98,7 +98,13 @@ describe('agent discovery', () => {
       pick,
       write: () => undefined,
     });
-    expect(pick.mock.calls[0]?.[0]).toEqual(['claude', 'codex', 'show manual MCP setup']);
+    expect(pick.mock.calls[0]?.[0]).toEqual([
+      'Open a local checkout — edit and play here',
+      'Continue chatting about this game',
+      'claude',
+      'codex',
+      'Show manual MCP setup',
+    ]);
     expect(request).not.toHaveBeenCalled();
   });
 

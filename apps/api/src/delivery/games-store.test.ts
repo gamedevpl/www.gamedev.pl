@@ -541,7 +541,7 @@ describe('defaultVersionId', () => {
     // sorts identically with no shared state to contend for.
     const first = defaultVersionId(new Date('2026-07-30T10:00:00.000Z'));
     const second = defaultVersionId(new Date('2026-07-30T10:00:01.000Z'));
-    expect(first).toMatch(/^v20260730T100000000Z-[0-9a-f]{6}$/);
+    expect(first).toMatch(/^v20260730T100000000Z-[0-9a-f]{12}$/);
     expect([second, first].sort()).toEqual([first, second]);
   });
 

@@ -22,6 +22,7 @@ export function createRoundWatch(input: {
   setLive: (lines: string[]) => void;
   announce: (text: string) => void;
   onSlug?: (slug: string) => void;
+  onStatus?: (status: RoundStatus) => void;
   sleep?: (ms: number) => Promise<void>;
 }): RoundWatch {
   let stopped = false;
@@ -42,6 +43,7 @@ export function createRoundWatch(input: {
           const status = await getStatus(input.api, token);
           if (token !== input.getToken()) continue;
           lastStatus = status;
+          input.onStatus?.(status);
           if (status.slug) input.onSlug?.(status.slug);
           input.setLive(formatRoundLive(status, input.api.origin));
           const key = statusFingerprint(status);
