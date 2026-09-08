@@ -79,6 +79,23 @@ The capability is readable by candidate code, and that is fine: it is scoped to 
 that code already belongs to. Six-hour expiry, so it outlives a queued build and not much
 else.
 
+### Running the gate by hand
+
+`infra/cloudbuild-gate.yaml` is still the hand-runnable path, and it needs the same
+capability the trigger mints for itself — without one it runs every check and then 403s
+on the manifest, having recorded nothing:
+
+```bash
+SUBMISSION_TOKEN_SECRET=... npm run gate:capability -w @gamedevpl/api -- --slug <slug> --version <version>
+```
+
+It prints `_GATE_VERDICT_URL` and `_GATE_VERDICT_TOKEN` and the `gcloud builds submit`
+line to paste them into. Read the secret in-process rather than through `$(...)`: the
+stored value keeps a trailing newline that command substitution strips, and the token
+then verifies nowhere. Leaving both substitutions empty is supported and means "write
+the manifest directly", which is what a local run against your own bucket wants; the
+runner says so on stderr before it starts.
+
 ### What this still does not close
 
 **A gate run can influence its own verdict.** The check runs inside the boundary it is

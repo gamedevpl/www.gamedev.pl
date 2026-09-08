@@ -125,6 +125,13 @@ async function main(): Promise<void> {
   const gcsStore = createGcsGamesStore({ bucket });
   const store =
     verdictUrl && verdictToken ? withRemoteVerdicts(gcsStore, { endpoint: verdictUrl, token: verdictToken }) : gcsStore;
+  // Said before the checks, not after.
+  if (!verdictUrl || !verdictToken) {
+    console.warn(
+      'GATE_VERDICT_URL/TOKEN unset — writing the manifest directly. Against the shared\n' +
+        'bucket that is refused; mint one with `npm run gate:capability -w @gamedevpl/api`.',
+    );
+  }
   const harnesses: string[] = [];
   const health = process.argv.includes('--health');
   const preview = process.argv.includes('--preview');
