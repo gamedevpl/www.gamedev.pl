@@ -61,7 +61,7 @@ permissions:
 
 jobs:
   validate-games:
-    uses: ./.github/workflows/games-catalog-gate.yml
+    uses: ./.github/workflows/validate-games.yml
     with:
       ref: ${{ github.event.client_payload.ref || github.event.inputs.ref || 'main' }}
       sha: ${{ github.event.client_payload.sha || '' }}

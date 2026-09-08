@@ -1,11 +1,12 @@
-name: Games catalog gate
+name: Validate games
 
-# Runs the games repository's real post-merge gate on public Actions minutes.
-# publish-games.yml calls this workflow before advancing the snapshot pointer.
-# mode=full on merge/dispatch/daily 04:23 UTC: playtest --suite default, no
-# catalog agent-play. Those two are the Sunday 06:17 UTC seal (cron
-# '17 6 * * 0'); scoped still playtests touched slugs. The daily snapshot is a
-# cheap rebuild, not a second full-catalog seal.
+# Runs the games repository's real validation and gate on public Actions minutes.
+# Free standard Linux runners (public repo) save private org minutes.
+#
+# Triggers:
+#  - workflow_call: invoked by publish-games.yml before advancing snapshot
+#  - workflow_dispatch: manual run on any games-repo branch/ref, mode, or slug
+#  - repository_dispatch: types [games-validate, validate-games]
 
 on:
   workflow_call:
@@ -44,22 +45,63 @@ on:
         type: string
         required: false
         default: '0'
+      post_status:
+        description: 'Post validate commit status back to games repo'
+        type: boolean
+        required: false
+        default: false
     outputs:
       games_sha:
         description: 'Commit SHA checked by every gate job'
         value: ${{ jobs.catalog-gate.outputs.games_sha }}
     secrets:
       GAMES_REPO_TOKEN:
-        required: true
+        required: false
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Games-repo ref to run the full gate against'
+        description: 'Games-repo ref/branch to validate'
         required: false
         default: 'main'
+      sha:
+        description: 'Exact games-repo commit SHA (optional)'
+        required: false
+        default: ''
+      mode:
+        description: 'Gate mode: full, static, or scoped'
+        type: choice
+        options:
+          - full
+          - static
+          - scoped
+        default: 'full'
+      slugs:
+        description: 'Game slugs (required for scoped, optional for static)'
+        required: false
+        default: ''
+      need_webkit:
+        description: 'Run WebKit check (1 or 0)'
+        type: choice
+        options:
+          - '1'
+          - '0'
+        default: '1'
+      catalog_playtest:
+        description: 'Playtest suite for full gate'
+        type: choice
+        options:
+          - default
+          - all
+        default: 'default'
+      post_status:
+        description: 'Report commit status (validate) to games repo'
+        type: boolean
+        default: true
+  repository_dispatch:
+    types: [games-validate, validate-games]
 
 concurrency:
-  group: ${{ github.workflow == 'Games catalog gate' && format('games-catalog-gate-manual-{0}', inputs.ref || 'main') || 'games-catalog-gate' }}
+  group: validate-games-${{ github.event.client_payload.ref || inputs.ref || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -81,12 +123,12 @@ jobs:
       - name: Resolve games gate inputs
         id: resolve
         env:
-          INPUT_REF: ${{ inputs.ref }}
-          INPUT_SHA: ${{ inputs.sha }}
-          INPUT_MODE: ${{ inputs.mode }}
-          INPUT_SLUGS: ${{ inputs.slugs }}
-          INPUT_NEED_WEBKIT: ${{ inputs.need_webkit }}
-          INPUT_NARROW_CONFORMANCE: ${{ inputs.narrow_conformance }}
+          INPUT_REF: ${{ github.event.client_payload.ref || inputs.ref }}
+          INPUT_SHA: ${{ github.event.client_payload.sha || inputs.sha }}
+          INPUT_MODE: ${{ github.event.client_payload.mode || inputs.mode }}
+          INPUT_SLUGS: ${{ github.event.client_payload.slugs || inputs.slugs }}
+          INPUT_NEED_WEBKIT: ${{ github.event.client_payload.need_webkit || inputs.need_webkit }}
+          INPUT_NARROW_CONFORMANCE: ${{ github.event.client_payload.narrow_conformance || inputs.narrow_conformance }}
           INPUT_CATALOG_PLAYTEST: ${{ inputs.catalog_playtest }}
           INPUT_CATALOG_AGENT_PLAY: ${{ inputs.catalog_agent_play }}
         run: |
@@ -329,3 +371,38 @@ jobs:
           else
             npm run check:webkit -- $SLUGS
           fi
+
+  report-status:
+    needs: [catalog-gate, webkit]
+    if: always() && inputs.post_status != false && needs.catalog-gate.outputs.games_sha != ''
+    runs-on: ubuntu-latest
+    env:
+      GAMES_REPO: 'gamedevpl/www.gamedev.pl-games'
+      TOKEN: ${{ secrets.GAMES_REPO_TOKEN }}
+      SHA: ${{ needs.catalog-gate.outputs.games_sha }}
+      GATE_RESULT: ${{ needs.catalog-gate.result }}
+      WEBKIT_RESULT: ${{ needs.webkit.result }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Post commit status to games repo
+        run: |
+          set -euo pipefail
+          if [ -z "$TOKEN" ]; then
+            echo "No GAMES_REPO_TOKEN available, skipping status report"
+            exit 0
+          fi
+          STATE="failure"
+          if [ "$GATE_RESULT" = "success" ] && ( [ "$WEBKIT_RESULT" = "success" ] || [ "$WEBKIT_RESULT" = "skipped" ] ); then
+            STATE="success"
+          fi
+          STATUS_PAYLOAD=$(jq -nc \
+            --arg state "$STATE" \
+            --arg target_url "$RUN_URL" \
+            --arg desc "Gate ${STATE} on public website runner" \
+            '{state: $state, target_url: $target_url, description: $desc, context: "validate"}')
+          curl -sS -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GAMES_REPO}/statuses/${SHA}" \
+            -d "$STATUS_PAYLOAD" || true
