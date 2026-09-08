@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 export const X_CONTENT_TYPE_OPTIONS = 'nosniff';
 export const REFERRER_POLICY = 'strict-origin-when-cross-origin';
+export const STRICT_TRANSPORT_SECURITY = 'max-age=31536000';
 export const FRAME_ANCESTORS_NONE = "frame-ancestors 'none'";
 export const X_FRAME_OPTIONS = 'DENY';
 // Never name mic/camera/motion: the game frame delegates them.
@@ -107,6 +108,7 @@ export function registerSecurityHeaders(app: FastifyInstance, options: SecurityH
   app.addHook('onSend', async (_request, reply, payload) => {
     setIfAbsent(reply, 'x-content-type-options', X_CONTENT_TYPE_OPTIONS);
     setIfAbsent(reply, 'referrer-policy', REFERRER_POLICY);
+    setIfAbsent(reply, 'strict-transport-security', STRICT_TRANSPORT_SECURITY);
     if (!isHtmlDocument(reply)) return payload;
     // A route that wrote its own CSP owns its embedding story.
     if (!reply.hasHeader('content-security-policy')) {
