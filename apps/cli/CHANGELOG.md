@@ -7,6 +7,14 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Interactive slash-command suggestions filter as you type; arrows select and Tab completes without running the command (#1231).
+
+### Fixed
+
+- Agent failures explain model capacity errors and offer reconnection to the existing MCP round instead of suggesting submit (#1231).
+
 ## 0.9.0 — 2026-09-08
 
 ### Added
