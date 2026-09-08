@@ -206,3 +206,19 @@ it('reports silence without claiming progress and clears it on new output', asyn
     clock.mockRestore();
   }
 });
+
+it('shows local ownership instead of a stale remote no-agent status', async () => {
+  const view = screen(80, 24);
+  view.session.setLive(['Studio: queued (no_agent_yet)']);
+  view.session.setLocalTask('muse');
+  await wait();
+  expect(view.frame()).toContain('Local task: muse');
+  expect(view.frame()).toContain('after /submit');
+  expect(view.frame()).not.toContain('no_agent_yet');
+  view.session.setLive(['Studio: queued (no_agent_yet)']);
+  await wait();
+  expect(view.frame()).not.toContain('no_agent_yet');
+  view.session.setLocalTask('');
+  await wait();
+  expect(view.frame()).toContain('Studio: queued');
+});

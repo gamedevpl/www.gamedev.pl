@@ -80,6 +80,7 @@ export async function runInkRepl(input: {
       abort,
       telemetry,
       onActivity: session.setActivity,
+      onLocalTask: session.setLocalTask,
     };
     workshop.builder = await settleBuilder({ api: input.api, ws: workshop, status: opened.status, write });
     session.writeLine('say what to change, or /help');
@@ -108,7 +109,7 @@ export async function runInkRepl(input: {
   const watch = createRoundWatch({
     getToken: () => token,
     api: input.api,
-    setLive: (live) => session.setLive(live),
+    setLive: (live) => session.setLive(live.map((line, index) => (index === 0 ? `Studio: ${line}` : line))),
     announce: (text) => session.writeLine(text),
     onStatus: (status) => {
       if (isPublishTransition(watched, status.status)) telemetry.record('published');
@@ -155,6 +156,7 @@ export async function runInkRepl(input: {
           onWorkshop: (opened) => {
             workshop = opened;
             opened.onActivity = session.setActivity;
+            opened.onLocalTask = session.setLocalTask;
             if (token !== opened.token) {
               token = opened.token;
               delete pendingExecution.current;

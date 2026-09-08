@@ -9,6 +9,11 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
+- Return local validation errors to the selected agent for up to two automatic repairs before offering delivery (#1243).
+- Keep Ctrl+C responsive while local validation runs (#1243).
+- Show local agent ownership separately from Studio status while editing and verifying (#1243).
+- Preserve complete agent responses instead of truncating them to 240 characters (#1243).
+
 - Stream Muse responses and tool activity instead of waiting silently for its final answer (#1243).
 - Show time since the last output when a running task stops reporting progress (#1243).
 

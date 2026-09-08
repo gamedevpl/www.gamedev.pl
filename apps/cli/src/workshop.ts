@@ -13,7 +13,8 @@ import { formatError } from './errors.js';
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { formatSubmitLines, submitGame } from './submit.js';
 import { getStatus, isTerminalStatus } from './turn.js';
-import { runLadder } from './verify.js';
+import { repairLoop } from './repair-loop.js';
+import { runLadder, runLadderAsync } from './verify.js';
 import type { CliTelemetry } from './telemetry.js';
 import { prepareWorkspace } from './prepare-workspace.js';
 
@@ -39,6 +40,7 @@ export type Workshop = {
   adapters: AdapterSpec[];
   selectedAgent?: string;
   onActivity?: (activity: string) => void;
+  onLocalTask?: (agent: string) => void;
   telemetry?: CliTelemetry;
   builder: string;
   pick: PickChoice;
@@ -247,9 +249,7 @@ export async function runLocalBuild(input: {
   const cwd = spec.cwd === 'game-dir' ? join(ws.root, 'games', ws.slug) : ws.root;
   const controller = new AbortController();
   ws.abort.current = controller;
-  let result: { code: number | null };
-  let blocked = false;
-  const failure = trackAgentFailure(spec.name);
+  ws.onLocalTask?.(spec.name);
   let authCheck: Promise<void> | undefined;
   try {
     if (!ws.runAdapter && spec.name === 'claude') {
@@ -288,53 +288,56 @@ export async function runLocalBuild(input: {
         'Claude uses subscription login; API authentication is refused. This local task is not linked to Claude Desktop.',
       );
     ws.telemetry?.record('delegate_used', { adapter: spec.name });
-    const stream = createDelegateStream(spec.name);
-    result = await (ws.runAdapter ?? defaultAdapterRun)({
-      spec,
-      prompt: input.brief,
-      authCheck,
-      cwd,
-      env: childEnv(ws.env, ''),
+    return await repairLoop({
+      brief: input.brief,
       abort: controller.signal,
-      onLine: (line) => {
-        failure.observe(line);
-        if (permissionBlocked(line)) blocked = true;
-        for (const shown of stream(line)) {
-          if (shown.includes('⚙ ')) ws.onActivity?.(`${spec.name} · ${shown.split('⚙ ')[1]!.slice(0, 90)}`);
-          input.write(shown);
+      activity: (text) => ws.onActivity?.(text),
+      write: input.write,
+      failed: (stage) => ws.telemetry?.record('verify_failed', { adapter: spec.name, stage }),
+      verify: () => runLadderAsync({ cwd: ws.root, run: ws.run, abort: controller.signal }),
+      run: async (prompt) => {
+        const stream = createDelegateStream(spec.name);
+        const failure = trackAgentFailure(spec.name);
+        let blocked = false;
+        const result = await (ws.runAdapter ?? defaultAdapterRun)({
+          spec,
+          prompt,
+          authCheck,
+          cwd,
+          env: childEnv(ws.env, ''),
+          abort: controller.signal,
+          onLine: (line) => {
+            failure.observe(line);
+            if (permissionBlocked(line)) blocked = true;
+            for (const shown of stream(line)) {
+              if (shown.includes('⚙ ')) ws.onActivity?.(`${spec.name} · ${shown.split('⚙ ')[1]!.slice(0, 90)}`);
+              input.write(shown);
+            }
+          },
+        });
+        if (controller.signal.aborted) return false;
+        if (blocked) {
+          input.write(
+            `${spec.name} could not obtain tool permissions in headless mode. No successful edit is confirmed; review its permissions for this game directory and retry.`,
+          );
+          return false;
         }
+        if ((result.code ?? 1) !== 0) {
+          input.write(
+            formatError(
+              failure.error(result.code, '/diff to review partial edits, then repeat your request when ready'),
+            ),
+          );
+          return false;
+        }
+        return true;
       },
     });
   } finally {
+    if (controller.signal.aborted) input.write(`${spec.name} stopped — the tree keeps whatever it wrote; /diff to see`);
     ws.abort.current = null;
+    ws.onLocalTask?.('');
   }
-  if (blocked) {
-    input.write(
-      `${spec.name} could not obtain tool permissions in headless mode. No successful edit is confirmed; review its permissions for this game directory and retry.`,
-    );
-    return false;
-  }
-  if (controller.signal.aborted) {
-    input.write(`${spec.name} stopped — the tree keeps whatever it wrote; /diff to see`);
-    return false;
-  }
-  if ((result.code ?? 1) !== 0) {
-    input.write(
-      formatError(failure.error(result.code, '/diff to review partial edits, then repeat your request when ready')),
-    );
-    return false;
-  }
-  ws.onActivity?.('Agent finished — verifying typecheck and static checks');
-  input.write('verifying — typecheck, check:static');
-  const verify = runLadder({ cwd: ws.root, publish: false, run: ws.run });
-  if (!verify.ok) {
-    ws.telemetry?.record('verify_failed', { adapter: spec.name, stage: verify.stage });
-    const detail = verify.detail.trim();
-    input.write(`verify failed at ${verify.stage}${detail ? `: ${detail}` : ''}\nfix by hand, or ask again`);
-    return false;
-  }
-  input.write('✓ static ladder green');
-  return true;
 }
 
 export async function offerSubmit(input: {

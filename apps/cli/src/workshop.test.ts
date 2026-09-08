@@ -495,3 +495,59 @@ describe('parseEventLine', () => {
     expect(parseEventLine('')).toBeNull();
   });
 });
+
+it('repairs editor validation with the same agent before offering delivery', async () => {
+  const root = checkout();
+  const prompts: string[] = [];
+  const local: string[] = [];
+  const seen: string[] = [];
+  let picks = 0;
+  const ws = workshop(root, {
+    onLocalTask: (agent) => local.push(agent),
+    runAdapter: async (input) => {
+      prompts.push(input.prompt);
+      expect(input.spec.name).toBe('claude');
+      expect(picks).toBe(0);
+      writeFileSync(join(input.cwd, 'game.ts'), 'B');
+      return { code: 0 };
+    },
+    run: (_cmd, args) =>
+      args[1] === 'check:static' && prompts.length === 1
+        ? { status: 1, stderr: 'EDITOR.json stale; declare editor in SPEC.md' }
+        : { status: 0, stderr: '' },
+    pick: async (choices) => {
+      picks += 1;
+      return choices[1]!;
+    },
+  });
+  expect(await workshopTurn({ api: platform(seen), ws, request: 'build the game', write: () => {} })).toBe(true);
+  expect(prompts).toHaveLength(2);
+  expect(prompts[1]).toContain('EDITOR.json stale; declare editor in SPEC.md');
+  expect(prompts[1]).toContain('build the game');
+  expect(picks).toBe(1);
+  expect(local).toEqual(['claude', '']);
+  expect(ws.abort.current).toBeNull();
+});
+
+it('stops repair attempts on cancellation without offering delivery', async () => {
+  const root = checkout();
+  let calls = 0;
+  let picks = 0;
+  const ws = workshop(root, {
+    runAdapter: async (input) => {
+      calls += 1;
+      if (calls === 2) ws.abort.current?.abort();
+      expect(input.abort).toBe(ws.abort.current?.signal);
+      return { code: 0 };
+    },
+    run: () => ({ status: 1, stderr: 'bad metadata' }),
+    pick: async (choices) => {
+      picks += 1;
+      return choices[0]!;
+    },
+  });
+  expect(await workshopTurn({ api: platform([]), ws, request: 'build', write: () => {} })).toBe(false);
+  expect(calls).toBe(2);
+  expect(picks).toBe(0);
+  expect(ws.abort.current).toBeNull();
+});

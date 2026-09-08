@@ -75,7 +75,10 @@ export function ReplApp({ session, color }: { session: TuiSession; color: boolea
   );
   const suggestionRows = Math.min(completion.suggestions.length, 5, Math.max(0, rows - 9));
   const panelRows = suggestionRows + (state.mode === 'pick' ? choiceCount + 3 : state.mode === 'busy' ? 2 : 3);
-  const liveRows = Math.min(state.live.length, Math.max(0, rows - panelRows - 4));
+  const live = state.localTask
+    ? [`Local task: ${state.localTask}`, 'Studio receives your changes after /submit']
+    : state.live;
+  const liveRows = Math.min(live.length, Math.max(0, rows - panelRows - 4));
   const footer = `${state.identity || CLI_BIN} · ${CLI_VERSION}`;
   return (
     <Box flexDirection="column">
@@ -87,7 +90,7 @@ export function ReplApp({ session, color }: { session: TuiSession; color: boolea
         )}
       </Static>
       <Box flexDirection="column" height={liveRows} flexShrink={0}>
-        {state.live.slice(0, liveRows).map((line, index) => (
+        {live.slice(0, liveRows).map((line, index) => (
           <Text key={`live:${index}:${line.slice(0, 32)}`} dimColor wrap="truncate-end">
             {line}
           </Text>

@@ -3,6 +3,7 @@ export type TuiMode = 'prompt' | 'pick' | 'busy';
 export type TuiState = {
   lines: string[];
   live: string[];
+  localTask: string;
   identity: string;
   question: string;
   mode: TuiMode;
@@ -19,6 +20,7 @@ export type TuiSession = {
   subscribe: (fn: (state: TuiState) => void) => () => void;
   writeLine: (text: string) => void;
   setLive: (live: string[]) => void;
+  setLocalTask: (agent: string) => void;
   setIdentity: (identity: string) => void;
   setActivity: (activity: string) => void;
   setDraft: (draft: string) => void;
@@ -40,6 +42,7 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
   let state: TuiState = {
     lines: banner ? banner.split('\n') : [],
     live: [],
+    localTask: '',
     identity: '',
     question: '',
     mode: 'busy',
@@ -73,6 +76,10 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
     },
     writeLine(text) {
       state = { ...state, lines: [...state.lines, ...text.split('\n')], lastOutputAt: Date.now() };
+      emit();
+    },
+    setLocalTask(localTask) {
+      state = { ...state, localTask };
       emit();
     },
     setLive(live) {
