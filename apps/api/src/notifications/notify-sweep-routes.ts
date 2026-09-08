@@ -215,10 +215,13 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
       const healthGamesStore = gamesStore;
       if (healthGamesStore) {
         const publications = await publicationsForHealth();
-        for (const publication of publications) {
-          const check = publication.healthCheck;
-          if (!check || check.verdictAt) continue;
+        for (const candidate of publications) {
+          if (!candidate.healthCheck || candidate.healthCheck.verdictAt) continue;
           try {
+            // The cached list nominates; the record decides. One read per pending check.
+            const publication = (await store.getPublication(candidate.slug)) ?? candidate;
+            const check = publication.healthCheck;
+            if (!check || check.verdictAt) continue;
             const manifest = await healthGamesStore.getManifest(publication.slug, check.version);
             const health = manifest?.health;
             // A verdict older than the request is the previous run's answer.
@@ -267,7 +270,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
             publicationsCache = null;
           } catch (healthError) {
             // One unreadable manifest must not abort the sweep — same rule as above.
-            request.log.error({ err: healthError, slug: publication.slug }, 'health check read failed');
+            request.log.error({ err: healthError, slug: candidate.slug }, 'health check read failed');
           }
         }
       }

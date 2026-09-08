@@ -170,4 +170,24 @@ describe('catalog-enricher', () => {
     expect(attached[0]?.tagline?.en).toContain("Mexico '86 Arcade Football");
     expect(list).not.toHaveBeenCalled();
   });
+
+  it('runs one scan for a burst, not one per request', async () => {
+    // Twenty requests on a cold cache used to be twenty full scans.
+    const store = new InMemoryStore();
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const list = vi.spyOn(store, 'listCatalogEnrichments').mockImplementation(async () => {
+      await gate;
+      return [];
+    });
+
+    const burst = Array.from({ length: 20 }, () => attachCatalogEnrichments([MOCK_ENTRY], store, 1_000_000));
+    await Promise.resolve();
+    release();
+    await Promise.all(burst);
+
+    expect(list).toHaveBeenCalledTimes(1);
+  });
 });

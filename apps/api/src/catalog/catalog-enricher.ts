@@ -13,19 +13,30 @@ export const CATALOG_ENRICHMENT_CACHE_TTL_MS = 10 * 60_000;
 
 type EnrichmentCache = { expiresAt: number; bySlug: Map<string, CatalogEnrichmentRecord> };
 const enrichmentCaches = new WeakMap<object, EnrichmentCache>();
+// One scan per burst, not one per in-flight request.
+const enrichmentRefreshes = new WeakMap<object, Promise<Map<string, CatalogEnrichmentRecord>>>();
 
 // Loads the whole collection once; stale on failure beats unenriched.
 async function enrichmentMap(store: Store, now: number): Promise<Map<string, CatalogEnrichmentRecord>> {
   const cached = enrichmentCaches.get(store);
   if (cached && cached.expiresAt > now) return cached.bySlug;
-  try {
-    const records = await store.listCatalogEnrichments();
-    const bySlug = new Map(records.map((record) => [record.slug, record]));
-    enrichmentCaches.set(store, { expiresAt: now + CATALOG_ENRICHMENT_CACHE_TTL_MS, bySlug });
-    return bySlug;
-  } catch {
-    return cached?.bySlug ?? new Map();
-  }
+
+  const inFlight = enrichmentRefreshes.get(store);
+  if (inFlight) return inFlight;
+
+  const refresh = store
+    .listCatalogEnrichments()
+    .then((records) => {
+      const bySlug = new Map(records.map((record) => [record.slug, record]));
+      enrichmentCaches.set(store, { expiresAt: now + CATALOG_ENRICHMENT_CACHE_TTL_MS, bySlug });
+      return bySlug;
+    })
+    .catch(() => cached?.bySlug ?? new Map<string, CatalogEnrichmentRecord>())
+    .finally(() => {
+      enrichmentRefreshes.delete(store);
+    });
+  enrichmentRefreshes.set(store, refresh);
+  return refresh;
 }
 
 export interface CatalogEnricherOptions {

@@ -232,19 +232,11 @@ export async function registerCatalogRoutes(
     }
   }
 
-  // Erasures are rare; one query per window, not per public request.
-  let erasedSlugsCache: { expiresAt: number; slugs: Set<string> } | null = null;
-  async function erasedSlugs(): Promise<Set<string>> {
-    if (erasedSlugsCache && erasedSlugsCache.expiresAt > now()) return erasedSlugsCache.slugs;
-    const erased = await store!.listSubmissionsByOwner(DELETED_ACCOUNT_UID);
-    const slugs = new Set(erased.flatMap((submission) => (submission.slug ? [submission.slug] : [])));
-    erasedSlugsCache = { expiresAt: now() + catalogTtlMs, slugs };
-    return slugs;
-  }
-
+  // Uncached: an erasure shows on the next request, not the next window.
   async function deattributeDeletedOwners(entries: CatalogGameEntry[]): Promise<CatalogGameEntry[]> {
     if (!store) return entries;
-    const slugs = await erasedSlugs();
+    const erased = await store.listSubmissionsByOwner(DELETED_ACCOUNT_UID);
+    const slugs = new Set(erased.flatMap((submission) => (submission.slug ? [submission.slug] : [])));
     if (slugs.size === 0) return entries;
     return entries.map((entry) =>
       slugs.has(entry.slug) ? { ...entry, submittedBy: 'gamedev-platform', creatorHandle: null } : entry,
