@@ -13,6 +13,7 @@ import { registerAccessTokenRoutes, type AccessTokenRoutesOptions } from './acce
 import { registerApiCachePolicy } from './api-cache-policy.js';
 import { registerCanonicalHostRedirect } from './canonical-host.js';
 import { registerClientAddress } from './client-address.js';
+import { createLoadShedControls } from './load-shedding.js';
 import { registerProxyDiagnosticsRoutes } from './proxy-diagnostics.js';
 import { registerSecurityHeaders, resolveCspReportOnly } from './security-headers.js';
 import { registerJobAdminRoutes } from '../creation/job-admin-routes.js';
@@ -305,6 +306,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean),
   );
+  const loadShed = createLoadShedControls({ store, logWarn: (p, m) => app.log.warn(p, m) });
   const publicPlayFallbackSlugs = new Set(
     parsePublicPlaySlugs(options.publicPlaySlugs ?? process.env.PUBLIC_PLAY_SLUGS),
   );
@@ -537,13 +539,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Multiplayer room relay (docs/multiplayer-plan.md). Registered after the auth
   // plugin so /api/mp/sessions sees request.user, and before the beta wall hook
   // so the wall's /api/mp/ws exemption applies to a route that actually exists.
-  //
-  // One image runs both roles (store-launch-plan.md T0, private www.gamedev.pl-ops repo): with MP_RELAY_URL set this
-  // process forwards room creation and stops serving the socket; with MP_RELAY_ONLY set it
-  // IS the relay. Neither set is the single-process default that local dev and the tests
-  // use, so explicit options here always win over env.
+  // One image runs both roles: with MP_RELAY_URL set this process forwards room
+  // creation and stops serving the socket; with MP_RELAY_ONLY set it IS the relay.
+  // Neither set is the single-process default, so options here always win over env.
   await app.register(fastifyWebsocket, { options: { maxPayload: 4 * 1024 } });
   await registerMultiplayerRoutes(app, {
+    refusesNewRooms: () => loadShed.refusesNewRooms(),
     relayClient: createRelayClientFromEnv(),
     relayOnly: isRelayOnly(),
     internalAuth: isRelayOnly() ? createInternalAuthVerifierFromEnv(process.env, 'mpRelay') : undefined,
@@ -588,8 +589,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     ...options.telemetryRoutes,
   });
 
-  // Visit telemetry is exempt from the private-beta wall: first-minute arrivals.
-  await registerVisitTelemetryRoutes(app, { store });
+  // Exempt from the beta wall: first-minute arrivals. keepsVisit is ladder rung 2.
+  await registerVisitTelemetryRoutes(app, { store, keepsVisit: (id) => loadShed.keepsVisitTelemetry(id) });
   await registerCliSurfaceRoutes(app);
   // Thumbs up/down (docs/improvement-loop-plan.md, signal source #2). Casting or
   // clearing a vote needs a session (request.user), same as push subscriptions; the

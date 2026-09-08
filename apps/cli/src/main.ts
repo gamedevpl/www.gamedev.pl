@@ -29,6 +29,7 @@ import { formatHelp } from './help.js';
 import { detectLocalAdapters, handoffBuilder, pickAdapter, workshopTurn } from './workshop.js';
 import { preflightAdapter } from './adapters.js';
 import { createCliTelemetry, type CliTelemetry } from './telemetry.js';
+import { takeInstallReport } from './install-mark.js';
 import { getStatus } from './turn.js';
 
 function storeFromEnv(env: NodeJS.ProcessEnv, warn: (line: string) => void): TokenStore {
@@ -121,6 +122,15 @@ async function runDelegateVerb(input: {
   return ok ? EXIT_GREEN : EXIT_RED;
 }
 
+// Verbs that already speak to the platform; the rest stay silent.
+const TELEMETRY_VERBS = new Set(['kit', 'connect', 'delegate', 'play', 'login', 'update', 'status']);
+
+// One rung per install, so `installed` counts installs not runs.
+export function reportInstall(telemetry: CliTelemetry, env: NodeJS.ProcessEnv, isTty: boolean): void {
+  const report = takeInstallReport({ env, isTty });
+  if (report) telemetry.record('installed', report);
+}
+
 export async function runCli(
   argv: string[],
   env: NodeJS.ProcessEnv,
@@ -139,10 +149,8 @@ export async function runCli(
   const store = storeFromEnv(env, (line) => io.stderr.write(line));
   const api = createApi({ origin, store, env });
   const tty = Boolean(io.stdin.isTTY);
-  const telemetry =
-    verb === 'kit' || verb === 'connect' || verb === 'delegate' || verb === 'play'
-      ? createCliTelemetry(origin)
-      : undefined;
+  const telemetry = TELEMETRY_VERBS.has(verb) ? createCliTelemetry(origin) : undefined;
+  if (telemetry) reportInstall(telemetry, env, tty);
 
   try {
     if (verb === 'help' || flags.help || flags.h) {
@@ -220,6 +228,7 @@ export async function runCli(
         env,
         isTty: Boolean(io.stdout.isTTY),
       });
+      telemetry?.record('authorized');
       return EXIT_GREEN;
     }
     if (verb === 'logout') {
@@ -243,6 +252,7 @@ export async function runCli(
         asJson,
         live: Boolean(io.stdout.isTTY) && Boolean(flags.watch) && !asJson,
         stdout: io.stdout,
+        ...(telemetry ? { telemetry } : {}),
       });
     }
     if (verb === 'checkout') {

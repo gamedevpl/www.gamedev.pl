@@ -64,6 +64,16 @@ export interface VisitFunnel {
   assisting?: Array<{ step: string; visits: number }>;
   coding?: Array<{ step: string; visits: number }>;
   cli?: Array<{ step: string; visits: number }>;
+  // The CLI pilot read (CL-39); optional like its neighbours.
+  cliPilot?: {
+    sessions: number;
+    delivered: number;
+    published: number;
+    adapters: Array<{ adapter: string; offered: number; used: number }>;
+    verifyFailures: Array<{ stage: string; sessions: number }>;
+    installs: Array<{ channel: string; sessions: number }>;
+    platforms: Array<{ os: string; sessions: number }>;
+  };
   completion?: {
     requests: number;
     shown: number;

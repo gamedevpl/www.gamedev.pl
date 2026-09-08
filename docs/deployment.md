@@ -252,6 +252,9 @@ it means the snapshot did not refresh.
 
 **Opening the site to everyone** is a config change, not a code change: set `PRIVATE_BETA=false`
 on the service (and clear the allowlists if you want). Nothing needs redeploying from source.
+Do it before the traffic rather than during it — it takes a new revision, which drops every
+live party room — and follow [`runbooks/launch-day.md`](./runbooks/launch-day.md), which
+carries the service-level objectives and the load-shedding ladder.
 
 ### Promotional game links during closed beta
 

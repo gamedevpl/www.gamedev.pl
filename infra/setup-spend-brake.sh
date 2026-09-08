@@ -177,6 +177,12 @@ The monthly billing budget is the second publisher. Point it at the topic once
   gcloud billing budgets update BUDGET_ID --billing-account ACCOUNT_ID \\
     --notifications-rule-pubsub-topic=projects/${PROJECT_ID}/topics/${TOPIC}
 
-Any threshold at 100% — spent or forecast — then pauses every lane; ticks under
-that are acknowledged silently.
+The brake grades a budget by how far over it is: forecast past 100% stops the
+platform agent (managed); spent past 100% also stops round-0 seeding and the gate;
+spent past 150% stops everything. Ticks under threshold are acknowledged silently,
+and the same threshold is acted on once — a resume after it stands.
+
+Per-service budgets can name their own lanes in the display name instead, e.g.
+"Cloud Build lanes=gate" or "Vertex AI lanes=seeding_managed": over 100% pulls
+those lanes and nothing else. Every budget can share this one topic.
 EOF

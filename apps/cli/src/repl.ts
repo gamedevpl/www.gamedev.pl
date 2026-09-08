@@ -178,7 +178,7 @@ export async function handleReplLine(input: {
           if (!agent && input.pick) {
             const agents = discoverAgents(input.env).filter((row) => row.installed && row.mcp);
             if (agents.length) {
-              for (const agent of agents) input.telemetry?.record('delegate_offered', agent.name);
+              for (const agent of agents) input.telemetry?.record('delegate_offered', { adapter: agent.name });
               const manual = 'show manual MCP setup';
               const choice = await input.pick(
                 [...agents.map((row) => row.name), manual],
