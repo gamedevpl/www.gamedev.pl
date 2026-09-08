@@ -110,7 +110,7 @@ else
     --project="$PROJECT_ID"
 fi
 
-echo "==> 5/8 Binding '${REPO}' to ${SA_NAME}, and taking '${GAMES_REPO}' off it"
+echo "==> 5/8 Binding '${REPO}' to ${SA_NAME}"
 # ${REPO} only. The games repo used to share this account to publish the Creator Kit,
 # which meant the kit publisher also held run.admin, storage.admin, project-wide Secret
 # Manager and the rest of step 2 — the tighten the games repo's own docs/kit-publish.md
@@ -126,6 +126,99 @@ gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
   --member="principalSet://iam.googleapis.com/${POOL_ID}/attribute.repository/${REPO}" \
   --project="$PROJECT_ID" \
   >/dev/null
+# The same race setup-runtime-sa.sh documents: a brand-new account is not immediately
+# bindable, and under `set -e` a lagging grant would abort the run. Retrying here is what
+# lets the revocation below be the last thing that happens.
+publisher_with_retry() {
+  local attempt
+  for attempt in 1 2 3 4; do
+    if "$@" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep $((attempt * 3))
+  done
+  "$@" >/dev/null
+}
+
+echo "==> 5b/8 Creating the kit publisher '${PUBLISHER_SA_NAME}' for ${GAMES_REPO}"
+gcloud iam service-accounts create "$PUBLISHER_SA_NAME" \
+  --display-name="Creator Kit Publisher" \
+  --description="Writes kits/, workspaces/, examples/ and knowledge/ in the games-store bucket. No deploy, no secrets, no Firestore." \
+  --project="$PROJECT_ID" \
+  || echo "    (already exists, continuing)"
+
+printf '    Waiting for the identity to propagate'
+for _ in $(seq 1 30); do
+  if gcloud iam service-accounts describe "$PUBLISHER_SA_EMAIL" --project="$PROJECT_ID" >/dev/null 2>&1; then
+    break
+  fi
+  printf '.'
+  sleep 2
+done
+printf '\n'
+
+# One conditional binding per prefix the publishers actually write, rather than
+# bucket-wide objectAdmin. objectAdmin (not objectCreator) because two of these are
+# mutable by design: kits/current.json is the N/N-1 registry pointer, rewritten on every
+# engine-affecting merge, and a re-run of the same corpus sha rewrites knowledge/<sha>/.
+# GCS has no overwrite-without-delete role, so a mutable object needs delete.
+#
+# What the condition buys: versions/ and games/ — every stored and published game — are
+# outside it, so a compromised publish job cannot touch a single player-visible game.
+# IAM CEL on resource.name allows only startsWith/endsWith/extract, hence the disjunction.
+PUBLISH_PREFIX_EXPR=""
+for PREFIX in kits workspaces examples knowledge; do
+  [ -n "$PUBLISH_PREFIX_EXPR" ] && PUBLISH_PREFIX_EXPR="${PUBLISH_PREFIX_EXPR} || "
+  PUBLISH_PREFIX_EXPR="${PUBLISH_PREFIX_EXPR}resource.name.startsWith('projects/_/buckets/${STORE_BUCKET}/objects/${PREFIX}/')"
+done
+publisher_with_retry gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
+  --member="serviceAccount:${PUBLISHER_SA_EMAIL}" \
+  --role="roles/storage.objectAdmin" \
+  --condition="expression=resource.type == 'storage.googleapis.com/Object' && (${PUBLISH_PREFIX_EXPR}),title=games-store-kit-publish,description=Only the kit workspace example and knowledge prefixes — never versions/ or games/" \
+  --project="$PROJECT_ID" \
+  >/dev/null
+
+# The publishers also list the bucket to resolve current.json, which is a bucket-level
+# permission a per-object condition cannot express.
+publisher_with_retry gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
+  --member="serviceAccount:${PUBLISHER_SA_EMAIL}" \
+  --role="roles/storage.legacyBucketReader" \
+  --condition=None \
+  --project="$PROJECT_ID" \
+  >/dev/null
+
+# The one grant that is not narrowed: documents:import for the knowledge_query corpus.
+# Discovery Engine's predefined roles are project-scoped, so this is editor on the
+# project's data stores. It is the same role the deployer already held, not a widening,
+# and it reaches no game data — the corpus is assembled from public repo files.
+publisher_with_retry gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${PUBLISHER_SA_EMAIL}" \
+  --role="roles/discoveryengine.editor" \
+  --condition=None \
+  >/dev/null
+
+# documents:import sends X-Goog-User-Project, and a quota-project request needs
+# serviceusage.services.use on top of the API's own role — the same pairing setup-gcp.sh
+# documents for the runtime. Without it the import 403s the moment the workflows switch
+# identities, and the corpus silently stops being rebuilt.
+publisher_with_retry gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${PUBLISHER_SA_EMAIL}" \
+  --role="roles/serviceusage.serviceUsageConsumer" \
+  --condition=None \
+  >/dev/null
+
+echo "==> 5c/8 Binding '${GAMES_REPO}' to ${PUBLISHER_SA_NAME}"
+publisher_with_retry gcloud iam service-accounts add-iam-policy-binding "$PUBLISHER_SA_EMAIL" \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/${POOL_ID}/attribute.repository/${GAMES_REPO}" \
+  --project="$PROJECT_ID" \
+  >/dev/null
+
+echo "==> 5d/8 Taking '${GAMES_REPO}' off ${SA_NAME}"
+# LAST, on purpose: everything above must already work, because this is the step that
+# takes the old path away. A failure before this point leaves the games repo publishing
+# as the deployer — degraded but working — instead of unable to authenticate at all.
+#
 # Not `|| true`: a transient IAM failure here would leave the games repo able to assume
 # the deployer — the whole point of this change — while the script reported success. So
 # the removal may fail, and then the *absence* is verified; only that answer is accepted.
@@ -150,69 +243,6 @@ if printf '%s' "$DEPLOYER_POLICY" | grep -q "attribute.repository/${GAMES_REPO}"
 fi
 echo "    - ${GAMES_REPO}: not bound to the deployer (verified)"
 
-echo "==> 5b/8 Creating the kit publisher '${PUBLISHER_SA_NAME}' for ${GAMES_REPO}"
-gcloud iam service-accounts create "$PUBLISHER_SA_NAME" \
-  --display-name="Creator Kit Publisher" \
-  --description="Writes kits/, workspaces/, examples/ and knowledge/ in the games-store bucket. No deploy, no secrets, no Firestore." \
-  --project="$PROJECT_ID" \
-  || echo "    (already exists, continuing)"
-
-# One conditional binding per prefix the publishers actually write, rather than
-# bucket-wide objectAdmin. objectAdmin (not objectCreator) because two of these are
-# mutable by design: kits/current.json is the N/N-1 registry pointer, rewritten on every
-# engine-affecting merge, and a re-run of the same corpus sha rewrites knowledge/<sha>/.
-# GCS has no overwrite-without-delete role, so a mutable object needs delete.
-#
-# What the condition buys: versions/ and games/ — every stored and published game — are
-# outside it, so a compromised publish job cannot touch a single player-visible game.
-# IAM CEL on resource.name allows only startsWith/endsWith/extract, hence the disjunction.
-PUBLISH_PREFIX_EXPR=""
-for PREFIX in kits workspaces examples knowledge; do
-  [ -n "$PUBLISH_PREFIX_EXPR" ] && PUBLISH_PREFIX_EXPR="${PUBLISH_PREFIX_EXPR} || "
-  PUBLISH_PREFIX_EXPR="${PUBLISH_PREFIX_EXPR}resource.name.startsWith('projects/_/buckets/${STORE_BUCKET}/objects/${PREFIX}/')"
-done
-gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
-  --member="serviceAccount:${PUBLISHER_SA_EMAIL}" \
-  --role="roles/storage.objectAdmin" \
-  --condition="expression=resource.type == 'storage.googleapis.com/Object' && (${PUBLISH_PREFIX_EXPR}),title=games-store-kit-publish,description=Only the kit workspace example and knowledge prefixes — never versions/ or games/" \
-  --project="$PROJECT_ID" \
-  >/dev/null
-
-# The publishers also list the bucket to resolve current.json, which is a bucket-level
-# permission a per-object condition cannot express.
-gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
-  --member="serviceAccount:${PUBLISHER_SA_EMAIL}" \
-  --role="roles/storage.legacyBucketReader" \
-  --condition=None \
-  --project="$PROJECT_ID" \
-  >/dev/null
-
-# The one grant that is not narrowed: documents:import for the knowledge_query corpus.
-# Discovery Engine's predefined roles are project-scoped, so this is editor on the
-# project's data stores. It is the same role the deployer already held, not a widening,
-# and it reaches no game data — the corpus is assembled from public repo files.
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-  --member="serviceAccount:${PUBLISHER_SA_EMAIL}" \
-  --role="roles/discoveryengine.editor" \
-  --condition=None \
-  >/dev/null
-
-# documents:import sends X-Goog-User-Project, and a quota-project request needs
-# serviceusage.services.use on top of the API's own role — the same pairing setup-gcp.sh
-# documents for the runtime. Without it the import 403s the moment the workflows switch
-# identities, and the corpus silently stops being rebuilt.
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-  --member="serviceAccount:${PUBLISHER_SA_EMAIL}" \
-  --role="roles/serviceusage.serviceUsageConsumer" \
-  --condition=None \
-  >/dev/null
-
-echo "==> 5c/8 Binding '${GAMES_REPO}' to ${PUBLISHER_SA_NAME}"
-gcloud iam service-accounts add-iam-policy-binding "$PUBLISHER_SA_EMAIL" \
-  --role="roles/iam.workloadIdentityUser" \
-  --member="principalSet://iam.googleapis.com/${POOL_ID}/attribute.repository/${GAMES_REPO}" \
-  --project="$PROJECT_ID" \
-  >/dev/null
 
 echo "==> 6/8 Creating service account '${VERIFIER_SA_NAME}' (nightly erasure proof)"
 gcloud iam service-accounts create "$VERIFIER_SA_NAME" \

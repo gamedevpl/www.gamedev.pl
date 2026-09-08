@@ -566,7 +566,24 @@ gcloud projects remove-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${DEPLOYER_SA}" \
   --role="roles/discoveryengine.editor" \
   --condition=None \
-  >/dev/null 2>&1 || echo "    (no discoveryengine.editor binding to remove)"
+  >/dev/null 2>&1 || true
+# Suppressing the removal's exit code makes "already absent" and "IAM was unreachable"
+# the same answer, and only one of them is safe to print. So the policy is read back and
+# the absence is what is checked.
+if ! DEPLOYER_ROLES="$(gcloud projects get-iam-policy "$PROJECT_ID" \
+  --flatten="bindings[].members" \
+  --filter="bindings.members:${DEPLOYER_SA}" \
+  --format="value(bindings.role)")"; then
+  echo "Error: could not read the project policy to confirm the deployer's roles." >&2
+  echo "discoveryengine.editor is unverified, not absent. Re-run." >&2
+  exit 1
+fi
+if printf '%s\n' "$DEPLOYER_ROLES" | grep -qx "roles/discoveryengine.editor"; then
+  echo "Error: ${DEPLOYER_SA} still holds roles/discoveryengine.editor." >&2
+  echo "It can still mutate every Discovery Engine data store. Re-run once IAM is reachable." >&2
+  exit 1
+fi
+echo "    deployer: no discoveryengine.editor (verified)." 
 
 echo ""
 echo "==> Done. Firestore database, storage, IAM, deletion sweep, session secret, telemetry TTL, indexes, gate-runner, and the knowledge_query Discovery Engine data store configured for project ${PROJECT_ID}."
