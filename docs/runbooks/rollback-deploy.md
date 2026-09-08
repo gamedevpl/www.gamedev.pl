@@ -57,9 +57,17 @@ gcloud storage buckets add-iam-policy-binding gs://gamedevpl-games-store \
   --role="roles/storage.objectAdmin" --condition=None --project=gamedevpl
 ```
 
-Take it away again once you are forward of that revision — `infra/setup-gcp.sh` does,
-and verifies it. Deliveries gated while it was restored are fine; nothing about the
-verdict changes, only which identity wrote it.
+Take it away again once you are forward of that revision, **and drain first** — the
+gates the rolled-back revision submitted are still queued with no capability in their
+immutable specs, and moving traffic forward does not retrofit or finish them:
+
+```bash
+gcloud builds list --ongoing --project gamedevpl --filter='tags:gate' --format='value(id,createTime)'
+```
+
+Empty, or every entry started after you moved forward, means nothing is stranded; then
+`infra/setup-gcp.sh` revokes and verifies. Deliveries gated while the write was restored
+are fine — nothing about the verdict changes, only which identity wrote it.
 
 ## 3. Then stop the pipeline from re-deploying the bad commit
 
