@@ -115,3 +115,44 @@ it('routes Muse through a local CLI checkout instead of claiming MCP support', a
   expect(host.textContent).toContain('Open a local checkout');
   expect(host.textContent).toContain('does not configure MCP');
 });
+
+it('keeps unavailable managed builders out of the panel and uses panel-specific continuation copy', async () => {
+  vi.mocked(getConnectPayload).mockResolvedValue({ ...payload, canSwitchToPlatform: false });
+  await act(async () =>
+    root.render(
+      createElement(StudioConnectGuide, {
+        token: 'panel',
+        panel: true,
+        pending: false,
+        onSwitchToPlatform: vi.fn(),
+      }),
+    ),
+  );
+  expect(host.textContent).not.toContain('Not sure? Build it for me');
+  expect(host.querySelector('.connect-guide-panel')).not.toBeNull();
+  await act(async () => (host.querySelector('.connect-guide-option') as HTMLButtonElement).click());
+  await click('Setup done — continue');
+  expect(host.textContent).toContain('close this panel');
+});
+
+it('shows an empty-state explanation when the round cannot accept an agent', async () => {
+  vi.mocked(getConnectPayload).mockRejectedValue(
+    Object.assign(new Error('unavailable'), {
+      status: 409,
+      reason: 'not_self_round',
+    }),
+  );
+  await act(async () =>
+    root.render(
+      createElement(StudioConnectGuide, {
+        token: 'closed',
+        panel: true,
+        pending: false,
+        unavailableLabel: 'No agent setup for this round',
+        onSwitchToPlatform: vi.fn(),
+      }),
+    ),
+  );
+  expect(host.textContent).toBe('No agent setup for this round');
+  expect(host.querySelector('button')).toBeNull();
+});

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getConnectPayload, type ConnectClient, type ConnectPayload } from './connectApi.js';
+import { getConnectPayload, type ConnectClient, type ConnectPayload, type ConnectApiError } from './connectApi.js';
 import { SwitchToPlatformControl } from './StudioConnectCard.js';
 import { useCliSurfaceEnabled } from '../../useCliSurfaceEnabled.js';
 import { recordStudioStep } from '../../visitTelemetry.js';
@@ -14,14 +14,19 @@ export function StudioConnectGuide({
   token,
   onSwitchToPlatform,
   pending,
+  panel = false,
+  unavailableLabel,
 }: {
   token: string;
   onSwitchToPlatform: ComponentProps<typeof SwitchToPlatformControl>['onSwitchToPlatform'];
   pending: boolean;
+  panel?: boolean;
+  unavailableLabel?: string;
 }) {
   const { t } = useTranslation();
   const cliEnabled = useCliSurfaceEnabled();
   const [payload, setPayload] = useState<ConnectPayload | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [route, setRoute] = useState<Route | null>(null);
@@ -34,12 +39,16 @@ export function StudioConnectGuide({
   useEffect(() => {
     let cancelled = false;
     setError(false);
+    setUnavailable(false);
     void getConnectPayload(token)
       .then((value) => {
         if (!cancelled) setPayload(value);
       })
-      .catch(() => {
-        if (!cancelled) setError(true);
+      .catch((failure: ConnectApiError) => {
+        if (cancelled) return;
+        if (failure.status === 409 && ['not_self_round', 'inactive_round'].includes(failure.reason ?? ''))
+          setUnavailable(true);
+        else setError(true);
       });
     return () => {
       cancelled = true;
@@ -71,7 +80,8 @@ export function StudioConnectGuide({
       setManual(false);
     } else setRoute(null);
   };
-  if (error)
+  if (unavailable && unavailableLabel) return <p className="studio-rail-empty">{unavailableLabel}</p>;
+  if (error || unavailable)
     return (
       <div role="alert">
         <p>{t('connectWizard.loadError')}</p>
@@ -107,7 +117,7 @@ export function StudioConnectGuide({
           ? 'start'
           : 'setup';
   return (
-    <section className="connect-guide" aria-labelledby="connect-guide-title">
+    <section className={`connect-guide${panel ? ' connect-guide-panel' : ''}`} aria-labelledby="connect-guide-title">
       <div className="connect-guide-nav">
         {route && (
           <button type="button" className="studio-connect-skip" onClick={back}>
@@ -165,7 +175,7 @@ export function StudioConnectGuide({
             </>
           )}
           <p className="connect-guide-wait" role="status">
-            {t('connectGuide.waiting')}
+            {t(panel ? 'connectGuide.panelWaiting' : 'connectGuide.waiting')}
           </p>
         </>
       ) : (

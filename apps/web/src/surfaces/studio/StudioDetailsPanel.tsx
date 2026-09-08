@@ -10,7 +10,7 @@ import { ContributionsSetting } from '../../ContributionsSetting.js';
 import { ProposalReviewPanel } from '../review/ProposalReviewPanel.js';
 import { DraftShareControl } from './DraftShareControl.js';
 import { StatsSection } from './StudioStatsSection.js';
-import { StudioConnectCard } from './StudioConnectCard.js';
+import { StudioConnectGuide } from './StudioConnectGuide.js';
 import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
 import { StudioDetailsBuildProgress } from './StudioDetailsBuildProgress.js';
 import { StudioDetailsMedia } from './StudioDetailsMedia.js';
@@ -244,12 +244,12 @@ export function DetailsPanel({
 
         {activePane === 'connect' ? (
           showConnect ? (
-            <StudioConnectCard
+            <StudioConnectGuide
               token={game.token}
-              collapsible={false}
-              hideIfUnavailable
+              key={game.token}
+              pending={false}
               unavailableLabel={t('studioPanel.rail.connectEmpty')}
-              density="panel"
+              panel
               onSwitchToPlatform={onSwitchToPlatform}
             />
           ) : (

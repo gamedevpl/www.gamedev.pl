@@ -2042,6 +2042,7 @@
       "other": "Another MCP tool",
       "muse": "Muse Code (Meta)"
     },
-    "museStart": "In the terminal, choose “Open a local checkout”, then Muse. Muse works on local files; this path does not configure MCP. Install Muse Code from dev.meta.ai if it is not available yet."
+    "museStart": "In the terminal, choose “Open a local checkout”, then Muse. Muse works on local files; this path does not configure MCP. Install Muse Code from dev.meta.ai if it is not available yet.",
+    "panelWaiting": "Waiting for your agent to connect. You can close this panel and follow progress in the conversation."
   }
 }

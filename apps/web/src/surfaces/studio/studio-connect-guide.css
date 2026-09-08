@@ -146,3 +146,15 @@
     padding: 16px;
   }
 }
+
+.connect-guide-panel {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  margin: 0;
+  gap: 16px;
+}
+
+.connect-guide-panel .connect-guide-option {
+  padding: 14px 30px 14px 14px;
+}
