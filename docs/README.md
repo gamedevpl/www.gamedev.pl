@@ -58,6 +58,7 @@ survives only in this repo's early history.
 | [`agent-adapters.md`](./agent-adapters.md)                         | Common repository contract for Claude Code / Codex / agy / Copilot                                      |
 | [`managed-agent-backend.md`](./managed-agent-backend.md)           | Vendor-neutral seam for running the platform builder on a hosted agent platform                         |
 | [`deployment.md`](./deployment.md)                                 | Minimal delivery shape for the app, games origin, and submission API                                    |
+| [`firestore-read-cost.md`](./firestore-read-cost.md)               | Why reads, not writes, exhaust the free tier — the read windows behind every polled route and A30       |
 | [`container-orchestration.md`](./container-orchestration.md)       | **Archived** design for the removed self-hosted generation direction                                    |
 | [`remix-to-pr.md`](./remix-to-pr.md)                               | Spec for the player-remix → pull-request feature                                                        |
 | [`own-ide-checkout.md`](./own-ide-checkout.md)                     | 🚧 A working copy for creators who prefer their own IDE — checkout, deliver back, one delivery contract |

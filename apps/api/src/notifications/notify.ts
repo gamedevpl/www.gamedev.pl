@@ -20,6 +20,7 @@ import {
   type OperatorEmailParams,
 } from './email-templates.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
+import { invalidateNotificationCache } from './notification-cache.js';
 import type { JobAlert } from './operator-alerts.js';
 import { createPusherFromEnv, type Pusher } from './pusher.js';
 import type {
@@ -100,6 +101,17 @@ export interface EmitDeps {
   unsubscribeSecret?: string;
   /** Optional logger for best-effort email failures (they're retried next sweep). */
   logError?: (err: unknown, msg: string) => void;
+}
+
+// One write path, so a new row drops the bell's window.
+async function createNotification(
+  deps: EmitDeps,
+  uid: string,
+  notification: Parameters<Store['createNotification']>[1],
+): ReturnType<Store['createNotification']> {
+  const result = await deps.store.createNotification(uid, notification);
+  if (result.created) invalidateNotificationCache(deps.store, uid);
+  return result;
 }
 
 /**
@@ -259,7 +271,7 @@ export async function emitOperatorAlert(
   let created = 0;
 
   for (const uid of deps.adminUids) {
-    const result = await deps.store.createNotification(uid, {
+    const result = await createNotification(deps, uid, {
       id: alert.id,
       type,
       createdAt,
@@ -304,7 +316,7 @@ export async function emitWaitlistJoined(
   let created = 0;
 
   for (const uid of deps.adminUids) {
-    const result = await deps.store.createNotification(uid, {
+    const result = await createNotification(deps, uid, {
       id,
       type,
       createdAt,
@@ -346,7 +358,7 @@ export async function emitReviewSweep(
   let created = 0;
 
   for (const uid of deps.reviewerUids) {
-    const result = await deps.store.createNotification(uid, {
+    const result = await createNotification(deps, uid, {
       id: event.notificationId,
       type,
       createdAt,
@@ -435,7 +447,7 @@ export async function emitFollowedGameNotification(
   deps: EmitDeps,
   event: FollowedGameNotificationEvent,
 ): Promise<{ created: boolean }> {
-  const { created, notification } = await deps.store.createNotification(event.uid, {
+  const { created, notification } = await createNotification(deps, event.uid, {
     id: `follow-${event.slug}-${event.version}`,
     type: 'game.new_version',
     createdAt: new Date(deps.now?.() ?? Date.now()).toISOString(),
@@ -473,7 +485,7 @@ export async function emitDigestNotification(
   deps: EmitDeps,
   event: DigestNotificationEvent,
 ): Promise<{ created: boolean }> {
-  const { created, notification } = await deps.store.createNotification(event.uid, {
+  const { created, notification } = await createNotification(deps, event.uid, {
     id: event.id,
     type: 'creator.digest',
     createdAt: event.createdAt,
@@ -511,7 +523,7 @@ export async function emitSubmissionNotification(
         ? '/studio'
         : `/status/${event.statusToken}`;
 
-  const { created, notification } = await deps.store.createNotification(event.uid, {
+  const { created, notification } = await createNotification(deps, event.uid, {
     id,
     type: event.type,
     createdAt: now,
@@ -565,7 +577,7 @@ export async function emitProposalNotification(
   const shortType = event.type.slice('proposal.'.length);
   const link = event.type === 'proposal.awaiting_review' ? '/studio' : '/proposals';
 
-  const { created, notification } = await deps.store.createNotification(event.uid, {
+  const { created, notification } = await createNotification(deps, event.uid, {
     id: `prop-${event.proposalId}-${shortType}`,
     type: event.type,
     createdAt: now,

@@ -896,6 +896,17 @@ EOF
 #
 # The window is one weekday afternoon and it does not include a morning peak. Re-read both
 # thresholds against a full working week -- the same 2026-09-15 checkpoint as A29.
+#
+# THAT BADGE-POLLING FLOOR IS NOW FIXED (see docs/firestore-read-cost.md): /api/review/status
+# and /api/notifications read once per window instead of once per poll, which by the read
+# counts each route was issuing should take the QUERY component down by roughly an order of
+# magnitude and the total well under 1/s. Both thresholds here are therefore calibrated
+# against a floor that no longer exists, and both are now much too high to catch a
+# regression the size of the one they were written for. Do not lower them on that estimate:
+# the last time this policy was set from a prediction rather than a measurement it was wrong
+# by four times and fired on normal traffic. At the 2026-09-15 recheck, measure a full
+# working week of post-fix reads first, then re-derive spike and drift from that floor the
+# same way -- roughly 3x the measured max for the spike, ~2x the steady state for the drift.
 cat > "${POLICY_DIR}/a30.json" <<EOF
 {
   "displayName": "A30 Firestore read rate",
