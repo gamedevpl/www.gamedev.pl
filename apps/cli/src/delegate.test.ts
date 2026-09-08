@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { childEnv, renderDelegateStream } from './delegate.js';
+import { childEnv, createDelegateStream, renderDelegateStream } from './delegate.js';
 
 const fixture = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'hostile-delegate.ndjson'),
@@ -99,4 +99,23 @@ it('shows Claude resume instructions only for the Claude adapter', () => {
   const event = JSON.stringify({ type: 'system', session_id: '12345678-1234-1234-1234-123456789abc' });
   expect(renderDelegateStream('claude', [event], false).join('')).toContain('claude --resume');
   expect(renderDelegateStream('cursor', [event], false).join('')).not.toContain('claude');
+});
+
+it('announces each Claude session once without swallowing later system messages or tool activity', () => {
+  const render = createDelegateStream('claude');
+  const session_id = '12345678-1234-1234-1234-123456789abc';
+  const event = (data: object) => render(JSON.stringify({ session_id, ...data }));
+  expect(event({ type: 'system', subtype: 'init' }).join('')).toContain('claude --resume');
+  expect(event({ type: 'system', subtype: 'init' })).toEqual([]);
+  expect(event({ type: 'system', subtype: 'status' })).toEqual([]);
+  expect(event({ type: 'system', subtype: 'status', message: 'Compacting context' }).join('')).toContain(
+    'Compacting context',
+  );
+  expect(event({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash' }] } }).join('')).toContain(
+    'Bash',
+  );
+  expect(event({ type: 'system' })).toEqual([]);
+  expect(
+    event({ type: 'system', subtype: 'init', session_id: 'abcdefab-1234-1234-1234-123456789abc' }).join(''),
+  ).toContain('claude --resume');
 });

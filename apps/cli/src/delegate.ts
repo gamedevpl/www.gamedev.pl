@@ -36,6 +36,7 @@ type EventShape = {
   message?: unknown;
   type?: unknown;
   session_id?: unknown;
+  subtype?: unknown;
   permission_denials?: unknown;
   result?: unknown;
   item?: { type?: unknown; text?: unknown; command?: unknown };
@@ -79,6 +80,7 @@ export function parseEventLine(line: string, adapter?: string): string | null {
   if (
     adapter === 'claude' &&
     parsed.type === 'system' &&
+    (parsed.subtype === 'init' || parsed.subtype === undefined) &&
     typeof parsed.session_id === 'string' &&
     /^[a-f0-9-]{36}$/i.test(parsed.session_id)
   ) {
@@ -112,10 +114,10 @@ export function parseEventLine(line: string, adapter?: string): string | null {
 
 export function renderDelegateStream(adapter: string, lines: string[], verbose: boolean): string[] {
   const out: string[] = [];
+  const render = createDelegateStream(adapter);
   for (const line of lines) {
     if (verbose) out.push(`${adapter} raw ${sanitizeEventPayload(line)}`);
-    const payload = parseEventLine(line, adapter);
-    if (payload) out.push(formatAdapterEvent(adapter, payload));
+    out.push(...render(line));
   }
   return out;
 }
@@ -184,9 +186,14 @@ export function spawnCommand(input: {
 
 export function createDelegateStream(adapter: string): (line: string) => string[] {
   const muse = adapter === 'muse' ? createMuseStream() : null;
+  const sessions = new Set<string>();
   return (line) => {
-    const text = muse?.(line);
-    if (text === undefined) return renderDelegateStream(adapter, [line], false);
+    const museText = muse?.(line);
+    const text = museText === undefined ? parseEventLine(line, adapter) : museText;
+    if (adapter === 'claude' && text?.startsWith('Local session ')) {
+      if (sessions.has(text)) return [];
+      sessions.add(text);
+    }
     return text ? [formatAdapterEvent(adapter, text)] : [];
   };
 }

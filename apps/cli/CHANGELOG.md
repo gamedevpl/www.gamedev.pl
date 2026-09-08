@@ -14,6 +14,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
+- Show Claude session resume instructions once instead of repeating them on every system event (#1243).
+
 - Group local task output and reduce setup and shell-command noise in the terminal (#1243).
 
 - Return local validation errors to the selected agent for up to two automatic repairs before offering delivery (#1243).
