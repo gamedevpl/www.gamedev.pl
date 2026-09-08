@@ -105,4 +105,51 @@ describe('load-shedding controls', () => {
     expect(await controls.refusesNewRooms()).toBe(false);
     expect(await controls.keepsVisitTelemetry(A_VISIT)).toBe(true);
   });
+
+  // A failed refresh costs one read per TTL, not one per request.
+  it('retries at most once per TTL after a failed refresh', async () => {
+    let reads = 0;
+    let clock = 0;
+    const controls = createLoadShedControls({
+      now: () => clock,
+      ttlMs: 1_000,
+      store: {
+        async getCreationLimits(): Promise<CreationLimits | null> {
+          reads += 1;
+          throw new Error('firestore is down');
+        },
+      },
+    });
+
+    for (let i = 0; i < 5; i += 1) await controls.refusesNewRooms();
+    expect(reads).toBe(1);
+
+    clock += 1_001;
+    await controls.refusesNewRooms();
+    expect(reads).toBe(2);
+  });
+
+  it('keeps serving the last good value without re-reading every request', async () => {
+    let reads = 0;
+    let clock = 0;
+    let fail = false;
+    const controls = createLoadShedControls({
+      now: () => clock,
+      ttlMs: 1_000,
+      store: {
+        async getCreationLimits(): Promise<CreationLimits | null> {
+          reads += 1;
+          if (fail) throw new Error('firestore is down');
+          return { partyPaused: true } as CreationLimits;
+        },
+      },
+    });
+
+    expect(await controls.refusesNewRooms()).toBe(true);
+    fail = true;
+    clock += 1_001;
+    for (let i = 0; i < 4; i += 1) expect(await controls.refusesNewRooms()).toBe(true);
+    // One retry at the expiry, then the deadline moved.
+    expect(reads).toBe(2);
+  });
 });

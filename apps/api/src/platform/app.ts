@@ -582,6 +582,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await registerTelemetryRoutes(app, {
     store,
     publishedSlugs: envPublishedSlugs,
+    // Rung 2 sheds both streams or the runbook's promise is only half true.
+    keepsSession: (id) => loadShed.keepsVisitTelemetry(id),
     ...options.telemetryRoutes,
   });
 

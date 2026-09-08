@@ -135,6 +135,8 @@ export interface TelemetryRoutesOptions {
    */
   publishedSlugs?: PublishedSlugGate | null;
   now?: () => number;
+  // Ladder rung 2. Absent keeps every session.
+  keepsSession?: (sessionId: string) => Promise<boolean>;
 }
 
 /**
@@ -277,6 +279,11 @@ export async function registerTelemetryRoutes(app: FastifyInstance, options: Tel
       if (bucket) bucket.push(event);
       else byDate.set(dateStr, [event]);
     });
+
+    // Whole sessions. Accepted, so no client retries into it.
+    if (options.keepsSession && !(await options.keepsSession(parsed.data.sessionId))) {
+      return reply.status(202).send({ accepted: 0 });
+    }
 
     try {
       for (const [dateStr, dateEvents] of byDate) {

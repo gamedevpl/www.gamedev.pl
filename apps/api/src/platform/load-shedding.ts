@@ -55,12 +55,16 @@ export function createLoadShedControls(options: LoadShedOptions): LoadShedContro
       cache = { ...value, expiresAt: now() + ttlMs };
       return value;
     } catch (error) {
+      // Serve stale, move the deadline; else every request retries.
       if (cache) {
+        cache.expiresAt = now() + ttlMs;
         logWarn({ err: error }, 'load-shedding config unreadable; using the last known values');
         return cache;
       }
+      const fallback = { sampleRate: null, partyPaused: false };
+      cache = { ...fallback, expiresAt: now() + ttlMs };
       logWarn({ err: error }, 'load-shedding config unreadable and never read; shedding nothing');
-      return { sampleRate: null, partyPaused: false };
+      return fallback;
     }
   }
 
