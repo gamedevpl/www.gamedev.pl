@@ -441,7 +441,10 @@ if ! GATE_POLICY="$(gcloud storage buckets get-iam-policy "gs://${STORE_BUCKET}"
   echo "The narrow binding may be in place, but the broad one is unverified. Re-run." >&2
   exit 1
 fi
-if printf '%s' "$GATE_POLICY" | python3 -c "
+# Three outcomes, not two. A checker that answers by exit status alone cannot separate
+# "no such binding" from "python is missing" or "that JSON did not parse", and the second
+# pair would print "verified" over a grant still in force. So it answers in words.
+if ! GATE_BROAD="$(printf '%s' "$GATE_POLICY" | python3 -c "
 import json, sys
 policy = json.load(sys.stdin)
 member = 'serviceAccount:${GATE_SA_EMAIL}'
@@ -449,12 +452,24 @@ broad = any(
     b.get('role') == 'roles/storage.objectAdmin' and 'condition' not in b and member in b.get('members', [])
     for b in policy.get('bindings', [])
 )
-sys.exit(0 if broad else 1)
-"; then
-  echo "Error: gate-runner still holds unconditional objectAdmin on gs://${STORE_BUCKET}." >&2
-  echo "The narrow binding was added but the broad one remains — the gate is NOT hardened." >&2
+print('BROAD' if broad else 'CLEAN')
+")"; then
+  echo "Error: could not evaluate the IAM policy of gs://${STORE_BUCKET}." >&2
+  echo "The broad binding is unverified, not absent. Re-run once python3 is available." >&2
   exit 1
 fi
+case "$GATE_BROAD" in
+  CLEAN) ;;
+  BROAD)
+    echo "Error: gate-runner still holds unconditional objectAdmin on gs://${STORE_BUCKET}." >&2
+    echo "The narrow binding was added but the broad one remains — the gate is NOT hardened." >&2
+    exit 1
+    ;;
+  *)
+    echo "Error: the policy checker answered '${GATE_BROAD}', which is neither CLEAN nor BROAD." >&2
+    exit 1
+    ;;
+esac
 echo "    gate-runner: no unconditional objectAdmin (verified)." 
 
 grant_gate_with_retry gcloud projects add-iam-policy-binding "$PROJECT_ID" \
