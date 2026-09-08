@@ -45,6 +45,22 @@ gcloud run services describe "$SERVICE" --region "$REGION" --project "$PROJECT_I
 per-instance memory. Nothing to do about it; just know that "the party broke" reports
 after a rollback are expected and self-resolving (guests rejoin with the same code).
 
+**Rolling back past the gate-verdict change also needs one IAM command.** Revisions from
+before it submit gate builds with no verdict capability, so their runs write the manifest
+directly — which `gate-runner` is no longer allowed to do. Symptom: new deliveries pass
+their checks and end 403 with no verdict recorded, during the incident that made you roll
+back. Restore the write for as long as that revision is serving:
+
+```bash
+gcloud storage buckets add-iam-policy-binding gs://gamedevpl-games-store \
+  --member="serviceAccount:gate-runner@gamedevpl.iam.gserviceaccount.com" \
+  --role="roles/storage.objectAdmin" --condition=None --project=gamedevpl
+```
+
+Take it away again once you are forward of that revision — `infra/setup-gcp.sh` does,
+and verifies it. Deliveries gated while it was restored are fine; nothing about the
+verdict changes, only which identity wrote it.
+
 ## 3. Then stop the pipeline from re-deploying the bad commit
 
 Traffic is now on the old revision, but `master` still contains whatever broke it. The

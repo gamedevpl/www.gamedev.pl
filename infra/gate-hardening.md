@@ -110,6 +110,11 @@ Empty, or every entry started after the deploy, means nothing is stranded. `setu
 is safe to re-run at any point before that — it only adds the narrow bindings; the
 removal of the broad one is the step that needs the drain.
 
+The same asymmetry applies in reverse. A **rollback** to a revision from before this
+change puts the old trigger back, and its builds carry no capability, so they need the
+direct write this revocation removed. `docs/runbooks/rollback-deploy.md` carries the one
+command that restores it and the note to take it away again afterwards.
+
 ### Running the gate by hand
 
 `infra/cloudbuild-gate.yaml` is still the hand-runnable path, and it needs the same
