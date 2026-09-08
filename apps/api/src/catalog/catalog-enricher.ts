@@ -178,6 +178,26 @@ export async function attachCatalogEnrichments(
   store: Store | null | undefined,
 ): Promise<CatalogGameEntry[]> {
   if (!store) return entries;
+  try {
+    const list = await store.listCatalogEnrichments();
+    if (list && list.length > 0) {
+      const map = new Map(list.map((rec) => [rec.slug, rec]));
+      return entries.map((entry) => {
+        const enrichment = map.get(entry.slug);
+        if (enrichment) {
+          return {
+            ...entry,
+            tagline: enrichment.tagline,
+            shortControls: enrichment.shortControls,
+            searchKeywords: enrichment.searchKeywords,
+          };
+        }
+        return entry;
+      });
+    }
+  } catch {
+    // Non-blocking fallback to individual lookups
+  }
   return Promise.all(
     entries.map(async (entry) => {
       try {

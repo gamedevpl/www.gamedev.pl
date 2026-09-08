@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { CatalogIndexer } from './catalog-indexer.js';
+import { CatalogIndexer, computeCatalogDocText, hashCatalogDocText } from './catalog-indexer.js';
 import { CatalogVectorIndex } from './catalog-vector-index.js';
 import type { VertexEmbeddingService } from './embedding-service.js';
 import type { CatalogGameEntry, GitHubClient } from './github-client.js';
@@ -54,6 +54,8 @@ describe('CatalogIndexer', () => {
     } as unknown as GitHubClient;
 
     mockStore = {
+      getCatalogEnrichment: vi.fn().mockResolvedValue(null),
+      listCatalogEnrichments: vi.fn().mockResolvedValue([]),
       getCatalogEnrichments: vi.fn().mockResolvedValue(new Map()),
       setCatalogEnrichment: vi.fn().mockResolvedValue(undefined),
     } as unknown as Store;
@@ -231,5 +233,87 @@ describe('CatalogIndexer', () => {
     // Finish the in-flight enrichment
     getFileResolve('## SPEC\nCar game');
     await new Promise((resolve) => setTimeout(resolve, 50));
+  });
+
+  it('reuses cached embeddings from store without calling embedDocument', async () => {
+    const entry = mockEntries[0]!;
+    const docText = computeCatalogDocText(entry);
+    const docHash = hashCatalogDocText(docText);
+
+    const storeWithEmbedding = {
+      listCatalogEnrichments: vi.fn().mockResolvedValue([
+        {
+          slug: 'mexico-86',
+          contentHash: 'hash1',
+          tagline: entry.tagline,
+          shortControls: { en: 'Arrows', pl: 'Strzałki' },
+          searchKeywords: entry.searchKeywords,
+          embedding: [0.9, 0.1],
+          embeddingDocTextHash: docHash,
+          updatedAt: new Date().toISOString(),
+        },
+      ]),
+      getCatalogEnrichment: vi.fn().mockResolvedValue(null),
+      setCatalogEnrichment: vi.fn().mockResolvedValue(undefined),
+    } as unknown as Store;
+
+    const indexer = new CatalogIndexer({
+      store: storeWithEmbedding,
+      githubClient: mockGithubClient,
+      publishedRef: 'main',
+      getCatalogEntries: async () => [entry],
+      embeddingService: mockEmbeddingService,
+      vectorIndex,
+    });
+
+    await indexer.buildIndex();
+
+    expect(vectorIndex.size()).toBe(1);
+    expect(mockEmbeddingService.embedDocument).not.toHaveBeenCalled();
+    const match = vectorIndex.search([0.9, 0.1], 1)[0];
+    expect(match?.game.slug).toBe('mexico-86');
+    expect(match?.game.embedding).toEqual([0.9, 0.1]);
+  });
+
+  it('computes missing embeddings and persists them to store', async () => {
+    const entry = mockEntries[0]!;
+    const setSpy = vi.fn().mockResolvedValue(undefined);
+    const storeMissingEmbedding = {
+      listCatalogEnrichments: vi.fn().mockResolvedValue([
+        {
+          slug: 'mexico-86',
+          contentHash: 'hash1',
+          tagline: entry.tagline,
+          shortControls: { en: 'Arrows', pl: 'Strzałki' },
+          searchKeywords: entry.searchKeywords,
+          updatedAt: new Date().toISOString(),
+        },
+      ]),
+      getCatalogEnrichment: vi.fn().mockResolvedValue(null),
+      setCatalogEnrichment: setSpy,
+    } as unknown as Store;
+
+    mockEmbeddingService.embedDocument = vi.fn().mockResolvedValue([0.4, 0.6]);
+
+    const indexer = new CatalogIndexer({
+      store: storeMissingEmbedding,
+      githubClient: mockGithubClient,
+      publishedRef: 'main',
+      getCatalogEntries: async () => [entry],
+      embeddingService: mockEmbeddingService,
+      vectorIndex,
+    });
+
+    await indexer.buildIndex();
+
+    expect(vectorIndex.size()).toBe(1);
+    expect(mockEmbeddingService.embedDocument).toHaveBeenCalledTimes(1);
+    expect(setSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        slug: 'mexico-86',
+        embedding: [0.4, 0.6],
+        embeddingDocTextHash: expect.any(String),
+      }),
+    );
   });
 });
