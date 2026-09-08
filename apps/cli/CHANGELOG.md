@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.10.0 — 2026-09-08
+
 ### Added
 
 - Interactive slash-command suggestions filter as you type; arrows select and Tab completes without running the command (#1231).
