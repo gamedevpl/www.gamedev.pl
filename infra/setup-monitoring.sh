@@ -840,6 +840,46 @@ cat > "${POLICY_DIR}/a29.json" <<EOF
 }
 EOF
 
+# A30 -- Firestore read rate. A29 watches writes; reads had no signal at all, and they
+# are where the 2026-09 bill actually was: ~800K reads a day against a 50K free tier,
+# with the platform writing a few hundred. The shape was not a loop -- it was one public
+# route (/api/catalog, the home page) doing one document read per game per request,
+# uncached, plus a two-minute sweep scanning the games collection every run. A crawler
+# hitting that route at 10 rps would have been 100M reads a day. Reads bill at a third
+# of writes, so the money is smaller; the shape is the same and so is the fix.
+#
+# CALIBRATION: before the caches landed the daily average was ~9/s; the expected
+# steady state after them is well under 1/s. 5/s sustained over ten minutes is a pace
+# of ~430K/day -- half of the incident, an order of magnitude above the intended state.
+# Recheck against a week of post-fix numbers and lower it if the real p95 allows.
+cat > "${POLICY_DIR}/a30.json" <<EOF
+{
+  "displayName": "A30 Firestore read rate",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "sustained document reads well above steady state",
+    "conditionThreshold": {
+      "filter": "metric.type=\"firestore.googleapis.com/document/read_count\" AND resource.type=\"firestore_instance\"",
+      "aggregations": [{
+        "alignmentPeriod": "600s",
+        "perSeriesAligner": "ALIGN_RATE",
+        "crossSeriesReducer": "REDUCE_SUM"
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 5,
+      "duration": "600s",
+      "trigger": { "count": 1 }
+    }
+  }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
+  "alertStrategy": { "autoClose": "86400s" },
+  "documentation": {
+    "content": "Firestore is taking far more document reads than the closed beta's steady state, sustained for ten minutes. Reads bill per operation like writes (at a third of the price), and a public route that fans out one read per catalog entry is the shape that produced ~800K reads a day in 2026-09 with almost no traffic. Triage: this metric carries no collection label; split it by metric.type -- LOOKUP is per-document gets (a request path fanning out over entries), QUERY is collection scans (a sweep or a list on every run). Then Logs Explorer on the app service, requests grouped by route, to find which one scales with it. The per-request caches in catalog-routes.ts, catalog-enricher.ts and notify-sweep-routes.ts are the reference for the fix: read a collection once per window, never per request.",
+    "mimeType": "text/markdown"
+  }
+}
+EOF
+
 fi
 
 for FILE in "${POLICY_DIR}"/*.json; do

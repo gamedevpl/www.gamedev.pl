@@ -85,8 +85,9 @@ function createSnapshotStub(params: {
 async function createApp(params: {
   githubClient: GitHubClient;
   snapshotReader?: GameSnapshotReader | null;
+  store?: InMemoryStore;
 }): Promise<FastifyInstance> {
-  const store = new InMemoryStore();
+  const store = params.store ?? new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
   return buildApp({
     store,
@@ -183,6 +184,20 @@ describe('playing a published game', () => {
 });
 
 describe('the catalog', () => {
+  it('asks Firestore about erased owners once per window, not per request', async () => {
+    // The home page is public: a crawler multiplies every per-request read.
+    const { githubClient } = createGithubStub([catalogEntry('from-github')]);
+    const store = new InMemoryStore();
+    const erased = vi.spyOn(store, 'listSubmissionsByOwner');
+    const app = await createApp({ githubClient, store });
+
+    await app.inject({ method: 'GET', url: '/api/catalog' });
+    await app.inject({ method: 'GET', url: '/api/catalog' });
+
+    expect(erased).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
   it('comes from the snapshot when one is published', async () => {
     const { githubClient, getCatalog } = createGithubStub([catalogEntry('from-github')]);
     const snapshot = createSnapshotStub({ catalog: [catalogEntry('from-snapshot')] });

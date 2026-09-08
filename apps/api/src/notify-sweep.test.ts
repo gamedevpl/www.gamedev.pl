@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { buildApp } from './platform/app.js';
 import type { GamesStore } from './delivery/games-store.js';
 import type { CatalogGameEntry, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
@@ -422,6 +422,26 @@ describe('health re-gate verdicts on the notify sweep', () => {
     });
     return { app, store };
   }
+
+  it('scans the games collection once per window, not on every two-minute run', async () => {
+    // Every run listed every publication; at 120 games that was most of the day's reads.
+    const { app, store } = await appWithPendingCheck(null);
+    const list = vi.spyOn(store, 'listPublications');
+    await sweep(app);
+    await sweep(app);
+    expect(list).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
+  it('forgets the cached scan the moment a verdict is recorded', async () => {
+    const { app, store } = await appWithPendingCheck({ green: true, ranAt: RAN_AT });
+    const list = vi.spyOn(store, 'listPublications');
+    expect(await sweep(app)).toMatchObject({ healthResolved: 1 });
+    // A stale list would re-resolve — and re-notify — the same check next run.
+    expect(await sweep(app)).toMatchObject({ healthResolved: 0 });
+    expect(list).toHaveBeenCalledTimes(2);
+    await app.close();
+  });
 
   it('nudges the creator and copies the operator when a live game goes red', async () => {
     const { app, store } = await appWithPendingCheck({ green: false, ranAt: RAN_AT });

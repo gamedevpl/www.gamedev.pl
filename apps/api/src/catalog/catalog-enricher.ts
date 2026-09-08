@@ -8,6 +8,26 @@ import { createVertexClient } from '../platform/genai.js';
 
 export const GEMINI_ENRICHMENT_MODEL = 'gemini-3.5-flash-lite';
 
+// One collection read per window, not one document per entry per request.
+export const CATALOG_ENRICHMENT_CACHE_TTL_MS = 10 * 60_000;
+
+type EnrichmentCache = { expiresAt: number; bySlug: Map<string, CatalogEnrichmentRecord> };
+const enrichmentCaches = new WeakMap<object, EnrichmentCache>();
+
+// Loads the whole collection once; stale on failure beats unenriched.
+async function enrichmentMap(store: Store, now: number): Promise<Map<string, CatalogEnrichmentRecord>> {
+  const cached = enrichmentCaches.get(store);
+  if (cached && cached.expiresAt > now) return cached.bySlug;
+  try {
+    const records = await store.listCatalogEnrichments();
+    const bySlug = new Map(records.map((record) => [record.slug, record]));
+    enrichmentCaches.set(store, { expiresAt: now + CATALOG_ENRICHMENT_CACHE_TTL_MS, bySlug });
+    return bySlug;
+  } catch {
+    return cached?.bySlug ?? new Map();
+  }
+}
+
 export interface CatalogEnricherOptions {
   store: Store;
   genAIClient?: GenAIClient | null;
@@ -140,6 +160,8 @@ Respond with STRICT JSON only, matching this schema:
 
   try {
     await store.setCatalogEnrichment(record);
+    // Visible to the catalog at once rather than after the window turns.
+    enrichmentCaches.get(store)?.bySlug.set(record.slug, record);
   } catch (err) {
     log?.(`Could not persist catalog enrichment for ${entry.slug}: ${String(err)}`);
   }
@@ -176,26 +198,20 @@ export async function enrichCatalogEntries(
 export async function attachCatalogEnrichments(
   entries: CatalogGameEntry[],
   store: Store | null | undefined,
+  now: number = Date.now(),
 ): Promise<CatalogGameEntry[]> {
   if (!store) return entries;
-  return Promise.all(
-    entries.map(async (entry) => {
-      try {
-        const enrichment = await store.getCatalogEnrichment(entry.slug);
-        if (enrichment) {
-          return {
-            ...entry,
-            tagline: enrichment.tagline,
-            shortControls: enrichment.shortControls,
-            searchKeywords: enrichment.searchKeywords,
-          };
-        }
-      } catch {
-        // Non-blocking fallback
-      }
-      return entry;
-    }),
-  );
+  const bySlug = await enrichmentMap(store, now);
+  return entries.map((entry) => {
+    const enrichment = bySlug.get(entry.slug);
+    if (!enrichment) return entry;
+    return {
+      ...entry,
+      tagline: enrichment.tagline,
+      shortControls: enrichment.shortControls,
+      searchKeywords: enrichment.searchKeywords,
+    };
+  });
 }
 
 // Creates default Vertex AI client for enrichment.

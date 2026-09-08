@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
+  attachCatalogEnrichments,
+  CATALOG_ENRICHMENT_CACHE_TTL_MS,
   extractShortControls,
   extractFallbackKeywords,
   getOrEnrichCatalogGame,
@@ -128,5 +130,44 @@ describe('catalog-enricher', () => {
     expect(enriched[0].tagline?.en).toContain("Mexico '86 Arcade Football");
     expect(enriched[0].shortControls?.en).toBe('Arrows / Enter / Tap');
     expect(enriched[0].searchKeywords).toContain('football');
+  });
+
+  it('reads the enrichment collection once per window, not once per entry per request', async () => {
+    // The home page did this per request: 119 games, 119 reads.
+    const store = new InMemoryStore();
+    await store.setCatalogEnrichment({
+      slug: 'mexico-86',
+      contentHash: 'h',
+      tagline: { en: 'Retro football.', pl: 'Retro piłka.' },
+      shortControls: { en: 'Arrows', pl: 'Strzałki' },
+      searchKeywords: ['football'],
+      updatedAt: '2026-09-01T00:00:00.000Z',
+    });
+    const list = vi.spyOn(store, 'listCatalogEnrichments');
+    const get = vi.spyOn(store, 'getCatalogEnrichment');
+    const entries = [MOCK_ENTRY, { ...MOCK_ENTRY, slug: 'other' }, { ...MOCK_ENTRY, slug: 'third' }];
+    const t0 = 1_000_000;
+
+    const first = await attachCatalogEnrichments(entries, store, t0);
+    const second = await attachCatalogEnrichments(entries, store, t0 + 1_000);
+    expect(first[0]?.tagline?.en).toBe('Retro football.');
+    expect(second[1]?.tagline).toBeUndefined();
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(get).not.toHaveBeenCalled();
+
+    await attachCatalogEnrichments(entries, store, t0 + CATALOG_ENRICHMENT_CACHE_TTL_MS);
+    expect(list).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows a fresh enrichment before the window turns', async () => {
+    const store = new InMemoryStore();
+    const t0 = 1_000_000;
+    expect((await attachCatalogEnrichments([MOCK_ENTRY], store, t0))[0]?.tagline).toBeUndefined();
+
+    await getOrEnrichCatalogGame(MOCK_ENTRY, MOCK_SPEC, { store, genAIClient: null });
+    const list = vi.spyOn(store, 'listCatalogEnrichments');
+    const attached = await attachCatalogEnrichments([MOCK_ENTRY], store, t0 + 1_000);
+    expect(attached[0]?.tagline?.en).toContain("Mexico '86 Arcade Football");
+    expect(list).not.toHaveBeenCalled();
   });
 });
