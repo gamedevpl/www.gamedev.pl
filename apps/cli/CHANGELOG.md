@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- `gamedevpl update` sorts release versions by semver instead of tag list order (#1238).
+
 ## 0.10.0 — 2026-09-08
 
 ### Added
