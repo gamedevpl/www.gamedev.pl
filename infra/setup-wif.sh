@@ -197,6 +197,16 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --condition=None \
   >/dev/null
 
+# documents:import sends X-Goog-User-Project, and a quota-project request needs
+# serviceusage.services.use on top of the API's own role — the same pairing setup-gcp.sh
+# documents for the runtime. Without it the import 403s the moment the workflows switch
+# identities, and the corpus silently stops being rebuilt.
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${PUBLISHER_SA_EMAIL}" \
+  --role="roles/serviceusage.serviceUsageConsumer" \
+  --condition=None \
+  >/dev/null
+
 echo "==> 5c/8 Binding '${GAMES_REPO}' to ${PUBLISHER_SA_NAME}"
 gcloud iam service-accounts add-iam-policy-binding "$PUBLISHER_SA_EMAIL" \
   --role="roles/iam.workloadIdentityUser" \
