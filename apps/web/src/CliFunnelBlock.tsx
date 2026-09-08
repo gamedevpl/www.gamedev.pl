@@ -8,6 +8,8 @@ const CLI_LABELS: Record<CliStep, string> & Record<string, string> = {
   build_requested: 'asked for a build',
   delivered: 'delivered',
   published: 'published',
+  connect_opened: 'opened connection choices',
+  checkout_opened: 'opened local checkout',
   kit_update_available: 'kit update available',
   kit_update_started: 'started kit update',
   kit_update_completed: 'updated kit',

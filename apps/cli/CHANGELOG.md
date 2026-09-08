@@ -7,6 +7,18 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.9.0 — 2026-09-08
+
+### Added
+
+- Connect opens an interactive game session with local checkout, chat and agent choices; `--manual` prints MCP setup (#1223).
+
+### Fixed
+
+- Missing-game errors explain how to start creating a new game (#1223).
+- `/checkout` opens the downloaded game in the current session and supports games before their first delivery (#1223).
+- Checkout refuses non-empty destinations to preserve existing files (#1223).
+
 ## 0.8.0 — 2026-09-07
 
 ### Added

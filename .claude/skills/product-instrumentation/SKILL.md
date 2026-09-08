@@ -345,3 +345,8 @@ Creator Kit updates emit `kit_update_available`, `kit_update_started`,
 return / funnel questions 4–5). No signed URLs, checkout paths or source content
 are recorded. Completion means the staged toolchain was installed, not that the
 game has passed its publishing checks.
+
+CLI connection onboarding records `connect_opened` when the interactive choices open,
+and `checkout_opened` after downloading or reusing a checkout. Neither event carries
+slugs, paths, credentials or prompts. Existing adapter offer/use events still describe
+agent launches; opening a session does not count as a build.

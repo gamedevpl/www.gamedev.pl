@@ -237,7 +237,7 @@ export async function connectGame(input: {
   }
   checkCancelled();
 
-  if (payload?.mcpUrl) {
+  if (payload?.mcpUrl && !input.agent) {
     for (const line of formatHandoff(payload, input.slug)) input.write(line);
   }
 
@@ -249,6 +249,8 @@ export async function connectGame(input: {
         `${cliUsage('connect', input.slug)} --handoff`,
       );
     }
+    input.write(`No agent has been started. Open an interactive session: ${cliUsage('repl', input.slug)}`);
+    input.write(`Or download local files: ${cliUsage('checkout', input.slug)}`);
     return { spawned: false, mcp: true };
   }
   if (!spec) {
