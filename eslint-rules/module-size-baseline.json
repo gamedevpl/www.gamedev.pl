@@ -867,7 +867,7 @@
     "apps/web/src/surfaces/studio/studioChatSheet.ts": 30,
     "apps/web/src/surfaces/studio/StudioConnectCard.test.tsx": 827,
     "apps/web/src/surfaces/studio/StudioConnectCard.tsx": 812,
-    "apps/web/src/surfaces/studio/StudioConnectWizard.test.tsx": 311,
+    "apps/web/src/surfaces/studio/StudioConnectWizard.test.tsx": 305,
     "apps/web/src/surfaces/studio/StudioConnectWizard.tsx": 335,
     "apps/web/src/surfaces/studio/StudioCreatorAgentKeyPanel.test.tsx": 105,
     "apps/web/src/surfaces/studio/StudioCreatorAgentKeyPanel.tsx": 267,
