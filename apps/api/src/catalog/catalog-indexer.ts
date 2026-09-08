@@ -1,9 +1,26 @@
+import { createHash } from 'node:crypto';
 import type { CatalogGameEntry, GitHubClient } from './github-client.js';
 import { attachCatalogEnrichments, createDefaultEnricherClient, getOrEnrichCatalogGame } from './catalog-enricher.js';
 import { VertexEmbeddingService } from './embedding-service.js';
 import { CatalogVectorIndex, type IndexedGameVector } from './catalog-vector-index.js';
 import type { Store } from '../platform/store.js';
+import type { CatalogEnrichmentRecord } from '../store/records/catalog-enrichment.js';
 import { isPublishedEntry } from '@gamedevpl/contract';
+
+// Derives searchable document text from game metadata fields.
+export function computeCatalogDocText(entry: {
+  title: string;
+  genre?: string | null;
+  tagline?: { en?: string | null; pl?: string | null } | null;
+  searchKeywords?: string[] | null;
+}): string {
+  return `${entry.title}. ${entry.genre || ''}. ${entry.tagline?.en || ''} ${entry.tagline?.pl || ''} ${(entry.searchKeywords || []).join(', ')}`;
+}
+
+// Computes sha256 hash of document text to detect changes.
+export function hashCatalogDocText(docText: string): string {
+  return createHash('sha256').update(docText.trim()).digest('hex');
+}
 
 export interface CatalogIndexerOptions {
   store?: Store;
@@ -12,6 +29,7 @@ export interface CatalogIndexerOptions {
   getCatalogEntries: () => Promise<CatalogGameEntry[]>;
   embeddingService: VertexEmbeddingService;
   vectorIndex: CatalogVectorIndex;
+  indexTtlMs?: number;
   log?: (message: string) => void;
 }
 
@@ -31,6 +49,7 @@ export class CatalogIndexer {
   private enrichmentAttempted = new Set<string>();
   private lastIndexBuildAttemptTime = 0;
   private lastIndexBuildSuccessTime = 0;
+  private indexTtlMs: number;
   private static readonly INDEX_TTL_MS = 10 * 60 * 1000;
   private static readonly RETRY_BACKOFF_MS = 60 * 1000;
   private static readonly CHUNK_SIZE = 10;
@@ -42,6 +61,7 @@ export class CatalogIndexer {
     this.getCatalogEntries = options.getCatalogEntries;
     this.embeddingService = options.embeddingService;
     this.vectorIndex = options.vectorIndex;
+    this.indexTtlMs = options.indexTtlMs ?? CatalogIndexer.INDEX_TTL_MS;
     this.log = options.log;
   }
 
@@ -54,13 +74,52 @@ export class CatalogIndexer {
       const published = entries.filter(isPublishedEntry);
       const enriched = await attachCatalogEnrichments(published, this.store);
 
-      const indexed: IndexedGameVector[] = [];
+      let storedMap = new Map<string, CatalogEnrichmentRecord>();
+      if (this.store) {
+        try {
+          const list = await this.store.listCatalogEnrichments();
+          storedMap = new Map(list.map((rec) => [rec.slug, rec]));
+        } catch {
+          // Non-blocking fallback to individual lookups or on-demand embeds
+        }
+      }
 
-      for (let i = 0; i < enriched.length; i += CatalogIndexer.CHUNK_SIZE) {
-        const chunk = enriched.slice(i, i + CatalogIndexer.CHUNK_SIZE);
+      const indexed: IndexedGameVector[] = [];
+      const needEmbedding: CatalogGameEntry[] = [];
+
+      const currentModel = this.embeddingService.modelName;
+
+      for (const entry of enriched) {
+        const docText = computeCatalogDocText(entry);
+        const docHash = hashCatalogDocText(docText);
+        const cached = storedMap.get(entry.slug);
+
+        if (
+          cached?.embedding &&
+          cached.embedding.length > 0 &&
+          cached.embeddingDocTextHash === docHash &&
+          cached.embeddingModel === currentModel
+        ) {
+          indexed.push({
+            slug: entry.slug,
+            title: entry.title,
+            genre: entry.genre,
+            tagline: entry.tagline,
+            shortControls: entry.shortControls,
+            searchKeywords: entry.searchKeywords,
+            embedding: cached.embedding,
+          });
+        } else {
+          needEmbedding.push(entry);
+        }
+      }
+
+      for (let i = 0; i < needEmbedding.length; i += CatalogIndexer.CHUNK_SIZE) {
+        const chunk = needEmbedding.slice(i, i + CatalogIndexer.CHUNK_SIZE);
         await Promise.all(
           chunk.map(async (entry) => {
-            const docText = `${entry.title}. ${entry.genre || ''}. ${entry.tagline?.en || ''} ${entry.tagline?.pl || ''} ${(entry.searchKeywords || []).join(', ')}`;
+            const docText = computeCatalogDocText(entry);
+            const docHash = hashCatalogDocText(docText);
             const vec = await this.embeddingService.embedDocument(docText, entry.title);
             if (vec.length > 0) {
               indexed.push({
@@ -72,6 +131,23 @@ export class CatalogIndexer {
                 searchKeywords: entry.searchKeywords,
                 embedding: vec,
               });
+
+              if (this.store) {
+                try {
+                  const existing = storedMap.get(entry.slug) ?? (await this.store.getCatalogEnrichment(entry.slug));
+                  if (existing) {
+                    await this.store.setCatalogEnrichment({
+                      ...existing,
+                      embedding: vec,
+                      embeddingDocTextHash: docHash,
+                      embeddingModel: currentModel,
+                      updatedAt: new Date().toISOString(),
+                    });
+                  }
+                } catch {
+                  // Non-blocking persistence failure
+                }
+              }
             }
           }),
         );
@@ -116,7 +192,13 @@ export class CatalogIndexer {
                 genAIClient: enricherClient,
                 log: this.log,
               });
-              const docText = `${entry.title}. ${entry.genre || ''}. ${enrichedRecord.tagline?.en || ''} ${enrichedRecord.tagline?.pl || ''} ${(enrichedRecord.searchKeywords || []).join(', ')}`;
+              const docText = computeCatalogDocText({
+                title: entry.title,
+                genre: entry.genre,
+                tagline: enrichedRecord.tagline,
+                searchKeywords: enrichedRecord.searchKeywords,
+              });
+              const docHash = hashCatalogDocText(docText);
               const vec = await this.embeddingService.embedDocument(docText, entry.title);
               if (vec.length > 0) {
                 this.vectorIndex.upsert({
@@ -128,6 +210,17 @@ export class CatalogIndexer {
                   searchKeywords: enrichedRecord.searchKeywords,
                   embedding: vec,
                 });
+                try {
+                  await store.setCatalogEnrichment({
+                    ...enrichedRecord,
+                    embedding: vec,
+                    embeddingDocTextHash: docHash,
+                    embeddingModel: this.embeddingService.modelName,
+                    updatedAt: new Date().toISOString(),
+                  });
+                } catch {
+                  // Non-blocking
+                }
               }
             }
           } catch {
@@ -142,7 +235,7 @@ export class CatalogIndexer {
 
   // Ensure index is ready, building if empty or stale.
   ensureIndex(): Promise<void> {
-    const isStale = Date.now() - this.lastIndexBuildSuccessTime > CatalogIndexer.INDEX_TTL_MS;
+    const isStale = Date.now() - this.lastIndexBuildSuccessTime > this.indexTtlMs;
     const isRecentAttempt = Date.now() - this.lastIndexBuildAttemptTime < CatalogIndexer.RETRY_BACKOFF_MS;
     const isFresh = this.vectorIndex.size() > 0 && !isStale;
     // Backoff covers a stale non-empty index, not just an empty one.
