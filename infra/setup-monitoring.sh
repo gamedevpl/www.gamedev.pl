@@ -952,6 +952,61 @@ cat > "${POLICY_DIR}/a30.json" <<EOF
 }
 EOF
 
+# A31 -- Firestore reads, daily total. A30 watches the rate in two windows: ten minutes for
+# a spike and three hours for drift. Both are still rate thresholds, and a rate threshold is
+# blind to the one shape that has actually cost money here -- a leak small enough never to
+# hold any window above its bar, running all day, every day. A regression that adds a steady
+# 5/s on top of the floor never trips A30's 8/s drift condition for three unbroken hours if
+# nights and quiet hours pull the average down, yet it bills ~430K extra reads a day and
+# nobody sees it until the invoice. The free tier is 50K reads/day; the 2026-09 incident was
+# ~800K/day and ran for weeks before anyone read the graph.
+#
+# So this condition sums instead of averaging: ALIGN_DELTA over 86400s with REDUCE_SUM is
+# the actual count of document reads in the trailing day, evaluated on a sliding window, and
+# it crosses only if the day as a whole was expensive -- however the reads were spread.
+#
+# THRESHOLD 600000/day. Derivation, from the same measurement A30 is calibrated on: Sep 8
+# daytime ran ~4.2/s median, ~5.7/s p95, which is a pace of ~364K/day if it held around the
+# clock, and it does not -- nights are quieter, so the real day is lower. 600K is ~1.6x that
+# pace ceiling, comfortably above any ordinary day including a busy one, and well under the
+# ~800K/day the incident was actually billing. It is deliberately a slow signal: duration 0
+# on a daily sum still means the leak has to have been running most of a day before the
+# policy fires, which is the point -- this is the detector for what the fast ones miss, not
+# a second copy of them.
+#
+# Like A30, this number is calibrated against a floor that the badge-polling fix removes
+# (see docs/firestore-read-cost.md). At the 2026-09-15 recheck, take the post-fix daily
+# totals for a full working week and re-derive: roughly 2x the busiest measured day, floored
+# at something that still leaves the 50K/day free tier visible as a target rather than a
+# rounding error. Do not lower it from an estimate -- measure first, the way A30 had to be.
+cat > "${POLICY_DIR}/a31.json" <<EOF
+{
+  "displayName": "A31 Firestore reads daily total",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "document reads over the last day above the daily budget",
+    "conditionThreshold": {
+      "filter": "metric.type=\"firestore.googleapis.com/document/read_count\" AND resource.type=\"firestore_instance\"",
+      "aggregations": [{
+        "alignmentPeriod": "86400s",
+        "perSeriesAligner": "ALIGN_DELTA",
+        "crossSeriesReducer": "REDUCE_SUM"
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 600000,
+      "duration": "0s",
+      "trigger": { "count": 1 }
+    }
+  }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
+  "alertStrategy": { "autoClose": "86400s" },
+  "documentation": {
+    "content": "Firestore served more than 600K document reads in the last 24 hours. This is the slow-leak detector, and it is deliberately the slowest signal in the file: A30 watches the read *rate* over ten minutes and over three hours, which catches a crawler or a loop but is blind to a regression that adds a couple of reads a second and simply never stops. Summed over a day that leak is the whole bill -- the 2026-09 incident was ~800K reads/day against a 50K/day free tier, and it ran for weeks unnoticed. If this fires while A30 stayed quiet, do not look for a spike: look for something that got permanently more expensive per request. Triage: group document/read_count by metric.label.type (LOOKUP is per-document fan-out on a request path, QUERY is a collection scan) and compare the day against the previous week to find when the step change happened; then match that time to a deploy. Reference steady state as of 2026-09-08 is a pace of ~364K/day and falling as the per-window caches land, so a sustained 600K day means something regressed, not that traffic grew. The fix is always the same shape: read a collection once per window, never per request (catalog-routes.ts, catalog-enricher.ts, notify-sweep-routes.ts, and the badge routes in docs/firestore-read-cost.md).",
+    "mimeType": "text/markdown"
+  }
+}
+EOF
+
 fi
 
 for FILE in "${POLICY_DIR}"/*.json; do
