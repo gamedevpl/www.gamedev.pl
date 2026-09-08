@@ -38,6 +38,9 @@
 # service-agnostic name ("A1 site down …") would have done.
 set -euo pipefail
 
+# An old copy of this script does not fail; it reverts what a newer copy fixed.
+source "$(dirname "${BASH_SOURCE[0]}")/require-current-checkout.sh"
+
 # gcloud asks for confirmation on stderr — including "you do not have this command group
 # installed, continue?" for alpha/beta. A script that redirects stderr then waits on stdin
 # forever, showing nothing: this script hung on step 2 for exactly that reason. Prompts off
