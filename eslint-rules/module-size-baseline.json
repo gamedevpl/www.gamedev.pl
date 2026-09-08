@@ -329,7 +329,7 @@
     "apps/api/src/platform/agent-token.test.ts": 117,
     "apps/api/src/platform/agent-token.ts": 313,
     "apps/api/src/platform/app.test.ts": 344,
-    "apps/api/src/platform/app.ts": 1208,
+    "apps/api/src/platform/app.ts": 1209,
     "apps/api/src/platform/apple-account.test.ts": 137,
     "apps/api/src/platform/apple-account.ts": 81,
     "apps/api/src/platform/apple-auth.test.ts": 203,
