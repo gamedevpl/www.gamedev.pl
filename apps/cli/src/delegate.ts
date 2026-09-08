@@ -1,3 +1,4 @@
+import { createMuseStream, museEventText } from './muse-events.js';
 import { antigravityText } from './agent-events.js';
 import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -68,6 +69,10 @@ export function parseEventLine(line: string, adapter?: string): string | null {
     return trimmed;
   }
   if (!parsed || typeof parsed !== 'object') return trimmed;
+  if (adapter === 'muse') {
+    const text = museEventText(parsed);
+    if (text !== undefined) return text;
+  }
   const agy = antigravityText(parsed);
   if (agy !== undefined) return agy;
   if (parsed.type === 'item.started') return null;
@@ -174,4 +179,13 @@ export function spawnCommand(input: {
   input.abort?.addEventListener('abort', kill, { once: true });
   if (input.abort?.aborted) kill();
   return child;
+}
+
+export function createDelegateStream(adapter: string): (line: string) => string[] {
+  const muse = adapter === 'muse' ? createMuseStream() : null;
+  return (line) => {
+    const text = muse?.(line);
+    if (text === undefined) return renderDelegateStream(adapter, [line], false);
+    return text ? [formatAdapterEvent(adapter, text)] : [];
+  };
 }

@@ -9,6 +9,9 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
+- Stream Muse responses and tool activity instead of waiting silently for its final answer (#1243).
+- Show time since the last output when a running task stops reporting progress (#1243).
+
 - Keep terminal history stable while the activity spinner updates, so preview URLs can be selected and copied (#1243).
 - Render preview URLs as clickable hyperlinks in terminals that support them (#1243).
 

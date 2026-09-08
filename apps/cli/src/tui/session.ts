@@ -8,6 +8,7 @@ export type TuiState = {
   mode: TuiMode;
   activity: string;
   busySince: number;
+  lastOutputAt: number;
   draft: string;
   choices: string[];
   pickIndex: number;
@@ -44,6 +45,7 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
     mode: 'busy',
     activity: 'Starting gamedevpl',
     busySince: Date.now(),
+    lastOutputAt: Date.now(),
     draft: '',
     choices: [],
     pickIndex: 0,
@@ -70,7 +72,7 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
       };
     },
     writeLine(text) {
-      state = { ...state, lines: [...state.lines, ...text.split('\n')] };
+      state = { ...state, lines: [...state.lines, ...text.split('\n')], lastOutputAt: Date.now() };
       emit();
     },
     setLive(live) {
@@ -159,6 +161,7 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
         mode: 'busy',
         activity: state.mode === 'pick' ? 'Continuing' : 'Working on your request',
         busySince: Date.now(),
+        lastOutputAt: Date.now(),
         draft: '',
         choices: [],
         question: '',

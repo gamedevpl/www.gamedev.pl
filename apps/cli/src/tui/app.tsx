@@ -94,7 +94,7 @@ export function ReplApp({ session, color }: { session: TuiSession; color: boolea
         ))}
       </Box>
       {state.mode === 'busy' ? (
-        <BusyPanel activity={state.activity} since={state.busySince} color={color} />
+        <BusyPanel activity={state.activity} since={state.busySince} lastOutputAt={state.lastOutputAt} color={color} />
       ) : (
         <Box flexDirection="column" flexShrink={0} borderStyle={border} borderColor={accent} paddingX={1}>
           {state.mode === 'pick' ? (

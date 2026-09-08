@@ -8,7 +8,7 @@ import type { ApiClient } from './api.js';
 import { detectAdapter, loadAdapters, preflightAdapter, whichOnPath, type AdapterSpec } from './adapters.js';
 import { cliUsage } from './bin-name.js';
 import { formatSyncLines, inspectGame, type SyncResult } from './checkout.js';
-import { childEnv, renderDelegateStream, spawnAdapter } from './delegate.js';
+import { childEnv, createDelegateStream, spawnAdapter } from './delegate.js';
 import { formatError } from './errors.js';
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import { formatSubmitLines, submitGame } from './submit.js';
@@ -288,6 +288,7 @@ export async function runLocalBuild(input: {
         'Claude uses subscription login; API authentication is refused. This local task is not linked to Claude Desktop.',
       );
     ws.telemetry?.record('delegate_used', { adapter: spec.name });
+    const stream = createDelegateStream(spec.name);
     result = await (ws.runAdapter ?? defaultAdapterRun)({
       spec,
       prompt: input.brief,
@@ -298,7 +299,7 @@ export async function runLocalBuild(input: {
       onLine: (line) => {
         failure.observe(line);
         if (permissionBlocked(line)) blocked = true;
-        for (const shown of renderDelegateStream(spec.name, [line], false)) {
+        for (const shown of stream(line)) {
           if (shown.includes('⚙ ')) ws.onActivity?.(`${spec.name} · ${shown.split('⚙ ')[1]!.slice(0, 90)}`);
           input.write(shown);
         }

@@ -2,7 +2,7 @@ import { PassThrough } from 'node:stream';
 import { stripVTControlCharacters } from 'node:util';
 import { createElement } from 'react';
 import { render } from 'ink';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { connectSession } from '../connect-flow.js';
 import type { ApiClient } from '../api.js';
 import { ReplApp } from './app.js';
@@ -189,4 +189,20 @@ describe('command completion keyboard', () => {
     expect(view.frame().trimEnd().split('\n').length).toBeLessThanOrEqual(rows);
     expect(view.frame()).toContain('Tab fill');
   });
+});
+
+it('reports silence without claiming progress and clears it on new output', async () => {
+  let now = 100_000;
+  const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+  try {
+    const view = screen(80, 24);
+    now += 45_000;
+    await wait(150);
+    expect(view.frame()).toContain('No new output for 45s');
+    view.session.writeLine('Muse is reading game.ts');
+    await wait();
+    expect(view.frame()).not.toContain('No new output');
+  } finally {
+    clock.mockRestore();
+  }
 });
