@@ -124,7 +124,9 @@ X-Forwarded-Host is never used to authorize an origin.
 One Cloud Run service serves the API and the web app, so response headers are set in one
 place: `apps/api/src/platform/security-headers.ts`, registered in `app.ts` right after the rate
 limiter, whose annotation its report sink relies on. Every response carries `X-Content-Type-Options: nosniff` and
-`Referrer-Policy: strict-origin-when-cross-origin`. HTML documents — the SPA shell, the OAuth
+`Referrer-Policy: strict-origin-when-cross-origin`. Every response also carries
+`Strict-Transport-Security: max-age=31536000`, rather than relying on an edge layer to add it
+only to some response classes. HTML documents — the SPA shell, the OAuth
 consent and device pages, the CLI page — additionally carry:
 
 - `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY`. Nothing this

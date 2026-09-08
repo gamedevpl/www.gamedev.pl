@@ -12,6 +12,7 @@ import {
   PERMISSIONS_POLICY,
   REFERRER_POLICY,
   resolveCspReportOnly,
+  STRICT_TRANSPORT_SECURITY,
   summarizeCspReport,
   X_FRAME_OPTIONS,
 } from './security-headers.js';
@@ -53,11 +54,12 @@ describe('security headers', () => {
     expect(res.headers['x-frame-options']).toBe(X_FRAME_OPTIONS);
   });
 
-  it('puts nosniff and a referrer policy on every response, JSON included', async () => {
+  it('puts baseline hardening headers on every response, JSON included', async () => {
     for (const url of ['/api/health', '/api/auth/me', '/']) {
       const res = await app.inject({ method: 'GET', url });
       expect(res.headers['x-content-type-options'], url).toBe('nosniff');
       expect(res.headers['referrer-policy'], url).toBe(REFERRER_POLICY);
+      expect(res.headers['strict-transport-security'], url).toBe(STRICT_TRANSPORT_SECURITY);
     }
   });
 
