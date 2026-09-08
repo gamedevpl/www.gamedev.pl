@@ -100,7 +100,33 @@ holding project-wide `roles/editor` and every service ran as it until September 
 made every narrow grant above cosmetic — an identity that can already write any bucket and
 read any secret is not bounded by a bucket condition. The relay terminates untrusted
 websocket traffic and the app runs gate builds on creator-submitted code, so a compromise
-of either was project-wide write access.
+of either was project-wide write access. It now holds no project role at all.
+
+CI has three identities on the same principle, created by `infra/setup-wif.sh`:
+
+| Identity                   | Used by                                          | Holds                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `github-actions-deployer@` | this repo's `deploy.yml` and `publish-games.yml` | Cloud Run, Cloud Build, Artifact Registry, Secret Manager access, `storage.admin`, Firebase Hosting. No Firestore or Discovery Engine role of its own — but see the transitive reach below, which is not the same thing                                                                                                                                                                                       |
+| `erase-verifier@`          | this repo's `verify-erase.yml`                   | `datastore.user` and nothing else                                                                                                                                                                                                                                                                                                                                                        |
+| `kit-publisher@`           | the **games repo's** three publish workflows     | **Conditional:** `storage.objectAdmin` on the store bucket, only under `kits/`, `workspaces/`, `examples/`, `knowledge/`. **Unconditional:** `storage.legacyBucketReader` on that bucket (listing, which a per-object condition cannot express), and at project level `discoveryengine.editor` plus `serviceusage.serviceUsageConsumer` (the corpus import and its quota-project header) |
+
+**The deployer's Firestore row says "no role of its own", and that is a narrower claim
+than "cannot reach Firestore".** It holds `run.admin` together with project-wide
+`iam.serviceAccountUser`, so a compromised deploy run can deploy a Cloud Run workload
+*as* `gamedev-app@` or `erase-verifier@` and execute with those accounts' Firestore
+access. Removing `datastore.user` from the deployer closed the direct path and is worth
+having; it did not make the data unreachable. Scoping the act-as grant to the three
+runtime identities a deploy actually needs is the fix, tracked in the ops IAM plan — it
+touches the deploy path, so it wants its own change and a verified deploy behind it.
+
+The games repo used to publish as the deployer, which handed a content repository the
+whole deploy credential. Its account can no longer read the contents of, or modify,
+anything under `versions/` or `games/` — every stored and published game — let alone
+reach Cloud Run. Be precise about what remains: `legacyBucketReader` is bucket-wide, so
+the publisher can still **list** object names and metadata across the whole bucket. That
+is the cost of a listing permission GCS cannot scope per prefix, and it discloses slugs
+and version ids rather than game content. The provider's attribute condition also pins
+each repository to its own default branch, so a pull request cannot mint any of the three.
 
 The identity is **pinned on every deploy**, in both paths: `deploy.yml` hard-codes the three
 emails and passes `--service-account` to the app deploy, the relay image update and the zone
