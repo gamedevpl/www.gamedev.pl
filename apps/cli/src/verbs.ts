@@ -3,6 +3,7 @@ import { cliUsage } from './bin-name.js';
 import { jsonMode } from './argv.js';
 import { CliError, EXIT_GREEN, EXIT_INPUT } from './exit-codes.js';
 import { defaultInstallDest, updateCli } from './update.js';
+import { noteInstallChannel } from './install-mark.js';
 import { discoverAgents, formatAgents } from './agents.js';
 
 type Flags = Record<string, string | boolean>;
@@ -95,6 +96,7 @@ export async function dispatchReadVerb(input: {
     const dest = typeof flags.dest === 'string' ? flags.dest : defaultInstallDest();
     const version = typeof flags.version === 'string' ? flags.version : undefined;
     const result = await updateCli({ dest, version });
+    if (input.env) noteInstallChannel(input.env, 'update');
     emit(io, asJson, result, `updated ${result.asset} to ${result.version}`);
     return EXIT_GREEN;
   }

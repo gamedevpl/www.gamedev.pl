@@ -1,9 +1,8 @@
 // Client for the operator console's own reads and writes — the queue lives in
 // adminJobsApi, the telemetry in healthApi, and this covers the rest.
 //
-// Same posture as both of those: 404 means "not an admin" and comes back as `null`
-// rather than as an error, because the operator surface does not confirm its own
-// existence to someone who is not one.
+// Same posture as both: 404 means "not an admin" and comes back as `null` rather
+// than an error, because the surface does not confirm its own existence.
 
 import type {
   BetaInviteStatus,
@@ -94,6 +93,7 @@ export interface CreationLimits {
     gatePaused?: boolean;
     dreamsPaused?: boolean;
     // Round 0's kill switch and provider picker.
+    partyPaused?: boolean;
     seedingMode?: SeedingMode;
     seedProviderOverride?: string | null;
     updatedAt?: string;
@@ -113,15 +113,15 @@ export interface CreationLimits {
       configuredVendors: ManagedAgentVendor[];
       defaultVendor: ManagedAgentVendor | null;
     };
-    // TA-01's breaker — off/on and the shared daily token ceiling.
     tabCompletePaused: boolean;
     globalDailyTabCompleteTokenCap: number;
-    // Lanes the spend brake can pull; optional so older fixtures still typecheck.
     editingPaused?: boolean;
     chatPaused?: boolean;
     searchPaused?: boolean;
     gatePaused?: boolean;
     dreamsPaused?: boolean;
+    partyPaused?: boolean;
+    telemetrySampleRate?: number | null;
     seedingMode: SeedingMode;
     seedProvider: {
       stored: string | null;
@@ -163,6 +163,7 @@ export async function setCreationLimits(patch: {
   searchPaused?: boolean;
   gatePaused?: boolean;
   dreamsPaused?: boolean;
+  partyPaused?: boolean;
   seedingMode?: SeedingMode;
   seedProviderOverride?: string | null;
 }): Promise<CreationLimits | { error: string }> {

@@ -169,6 +169,8 @@ const RequestSchema = z.object({
 export interface VisitTelemetryRoutesOptions {
   store: Store;
   now?: () => number;
+  // Rung 2: drops a sampled-out visit's writes before they reach Firestore.
+  keepsVisit?: (visitId: string) => Promise<boolean>;
 }
 
 export async function registerVisitTelemetryRoutes(
@@ -177,6 +179,7 @@ export async function registerVisitTelemetryRoutes(
 ): Promise<void> {
   const { store } = options;
   const now = options.now ?? Date.now;
+  const keepsVisit = options.keepsVisit ?? (async () => true);
 
   const requestsByIp = new Map<string, number[]>();
   /** visitId -> lane counts. Capped and LRU-evicted — see bounded-map.ts. */
@@ -194,6 +197,7 @@ export async function registerVisitTelemetryRoutes(
       return reply.status(429).send({ error: 'too many telemetry requests' });
     }
 
+    if (!(await keepsVisit(parsed.data.visitId))) return reply.status(202).send({ accepted: 0 });
     const visit =
       visitCounts.get(parsed.data.visitId) ??
       ({ coreCount: 0, completionCount: 0, lastSeen: currentTime } satisfies {
@@ -206,11 +210,7 @@ export async function registerVisitTelemetryRoutes(
       return reply.status(202).send({ accepted: 0 });
     }
 
-    /**
-     * Same anchoring as play telemetry: the flush's arrival is a real instant we
-     * measured, and each event's age within the visit is a duration, so subtracting
-     * dates the event without trusting the client's wall clock for anything.
-     */
+    // Anchored like play telemetry: arrival is measured, each age is a duration.
     const flushOffset = parsed.data.flushMsSinceStart;
     function eventTimeIso(msSinceStart: number): string {
       const backdateMs = Math.min(MAX_BACKDATE_MS, Math.max(0, flushOffset - msSinceStart));

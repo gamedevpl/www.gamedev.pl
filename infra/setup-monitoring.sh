@@ -872,11 +872,38 @@ for FILE in "${POLICY_DIR}"/*.json; do
   # to be in the file — including notificationChannels. Omitting it there would leave the
   # policies present and visibly "enabled" while silently emailing nobody, which is the
   # one failure mode worse than having no alerting at all.
+  #
+  # Wholesale also means this script erases decoration it does not know about. On
+  # 2026-09-07 a re-run stripped the Spend brake channel and the `lanes` user labels that
+  # setup-spend-brake.sh had attached to A24/A25/A26, leaving the alerts emailing an
+  # operator while pausing nothing — the brake's Monitoring half was dead for an hour and
+  # nothing said so. So the live policy's channels and labels are merged in below: this
+  # script stays authoritative for the policy body, and anything another script added to
+  # the same policy survives.
   if [ -n "$EXISTING" ]; then
+    LIVE="$(mktemp)"
+    MERGED="$(mktemp)"
+    gcloud alpha monitoring policies describe "$EXISTING" --project "$PROJECT_ID" --format=json >"$LIVE"
+    python3 - "$FILE" "$LIVE" >"$MERGED" <<'MERGE_POLICY'
+import json, sys
+
+want = json.load(open(sys.argv[1]))
+live = json.load(open(sys.argv[2]))
+# Ours first, so the email channel keeps its place; dict.fromkeys dedupes in order.
+channels = list(dict.fromkeys(want.get('notificationChannels', []) + live.get('notificationChannels', [])))
+if channels:
+    want['notificationChannels'] = channels
+# The file wins on a key it sets; everything else another script wrote is kept.
+labels = {**live.get('userLabels', {}), **want.get('userLabels', {})}
+if labels:
+    want['userLabels'] = labels
+json.dump(want, sys.stdout)
+MERGE_POLICY
     gcloud alpha monitoring policies update "$EXISTING" \
       --project "$PROJECT_ID" \
-      --policy-from-file="$FILE" \
+      --policy-from-file="$MERGED" \
       >/dev/null
+    rm -f "$LIVE" "$MERGED"
     echo "    Updated: ${DISPLAY}"
   else
     gcloud alpha monitoring policies create \

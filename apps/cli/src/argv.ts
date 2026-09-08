@@ -30,7 +30,18 @@ export function completeSlash(prefix: string): SlashVerb[] {
   return SLASH_VERBS.filter((verb) => verb.startsWith(needle));
 }
 
-const BOOLEAN_FLAGS = new Set(['no-open', 'stop', 'force', 'publish', 'handoff', 'submit', 'json', 'help', 'platform']);
+const BOOLEAN_FLAGS = new Set([
+  'manual',
+  'no-open',
+  'stop',
+  'force',
+  'publish',
+  'handoff',
+  'submit',
+  'json',
+  'help',
+  'platform',
+]);
 
 export function parseArgv(argv: string[]): { verb: string; args: string[]; flags: Record<string, string | boolean> } {
   const rest = argv.slice(2);

@@ -500,6 +500,8 @@ export interface MultiplayerRoutesOptions {
   relayOnly?: boolean;
   /** Verifies the app service's OIDC token on the internal create route. */
   internalAuth?: InternalAuthVerifier;
+  // Rung 3: an operator has closed hosting during a spike.
+  refusesNewRooms?: () => Promise<boolean>;
 }
 
 /**
@@ -592,6 +594,11 @@ export async function registerMultiplayerRoutes(
 
       if (isRateLimited(roomsByIp, request.clientIp, Date.now(), maxRoomsPerWindow, 60 * 60 * 1000)) {
         return reply.status(429).send({ error: 'too many rooms' });
+      }
+
+      // Refused here, on the cookie-bearing origin, like every host check.
+      if (options.refusesNewRooms && (await options.refusesNewRooms())) {
+        return reply.status(503).send({ error: 'party mode is paused' });
       }
 
       const ownerUid = request.user?.uid ?? 'unknown';

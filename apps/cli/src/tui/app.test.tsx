@@ -3,6 +3,8 @@ import { stripVTControlCharacters } from 'node:util';
 import { createElement } from 'react';
 import { render } from 'ink';
 import { afterEach, describe, expect, it } from 'vitest';
+import { connectSession } from '../connect-flow.js';
+import type { ApiClient } from '../api.js';
 import { ReplApp } from './app.js';
 import { createTuiSession } from './session.js';
 
@@ -34,6 +36,27 @@ function screen(columns: number, rows: number) {
 }
 
 describe('TUI feedback', () => {
+  it('shows connection choices and returns to chat for the selected game', async () => {
+    const view = screen(80, 24);
+    const opened = connectSession({
+      api: { request: async () => ({ games: [{ slug: 'sky', token: 'tok' }] }) } as unknown as ApiClient,
+      slug: 'sky',
+      env: { PATH: '' },
+      pick: view.session.prompt,
+      abort: { current: null },
+      write: view.session.writeLine,
+    });
+    await wait();
+    expect(view.frame()).toContain('how would you like to work?');
+    expect(view.frame()).toContain('Open a local checkout');
+    view.session.movePick(1);
+    view.session.submit();
+    expect(await opened).toMatchObject({ slug: 'sky', token: 'tok' });
+    void view.session.prompt();
+    await wait();
+    expect(view.frame()).toContain('What would you like to do?');
+    expect(view.frame()).toContain('/checkout');
+  });
   it('immediately replaces input with an animated activity and returns to a ready prompt', async () => {
     const view = screen(80, 24);
     const pending = view.session.prompt();

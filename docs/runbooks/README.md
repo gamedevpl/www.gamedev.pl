@@ -12,17 +12,18 @@ hour, possibly on a phone.
 3. **Fix them when they turn out to be wrong** — same self-improvement clause as the
    agent playbooks. A runbook that lies during an incident is worse than no runbook.
 
-| Runbook                                          | When                                                                                                |
-| ------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| [`site-down-triage.md`](./site-down-triage.md)   | Alert A1 or A2 fired, or the site is unreachable. **Start here**                                    |
-| [`zones-down-triage.md`](./zones-down-triage.md) | Alert A6 or A7 fired — shared worlds are failing while the site looks fine                          |
-| [`rollback-deploy.md`](./rollback-deploy.md)     | A deploy broke production                                                                           |
-| [`restore-firestore.md`](./restore-firestore.md) | Data was lost, corrupted, or wrongly deleted                                                        |
-| [`rotate-secrets.md`](./rotate-secrets.md)       | Routine rotation, an expiring PAT, or a suspected leak. The expiry ledger itself is in the ops repo |
-| [`moderation-burst.md`](./moderation-burst.md)   | Alert A14 fired, or a player reported a published game                                              |
+| Runbook                                          | When                                                                                                 |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| [`site-down-triage.md`](./site-down-triage.md)   | Alert A1 or A2 fired, or the site is unreachable. **Start here**                                     |
+| [`zones-down-triage.md`](./zones-down-triage.md) | Alert A6 or A7 fired — shared worlds are failing while the site looks fine                           |
+| [`rollback-deploy.md`](./rollback-deploy.md)     | A deploy broke production                                                                            |
+| [`restore-firestore.md`](./restore-firestore.md) | Data was lost, corrupted, or wrongly deleted                                                         |
+| [`rotate-secrets.md`](./rotate-secrets.md)       | Routine rotation, an expiring PAT, or a suspected leak. The expiry ledger itself is in the ops repo  |
+| [`moderation-burst.md`](./moderation-burst.md)   | Alert A14 fired, or a player reported a published game                                               |
+| [`launch-day.md`](./launch-day.md)               | A planned spike, or the day `PRIVATE_BETA` goes to `false`. Carries the SLOs and the shedding ladder |
 
-Planned, not yet written: `event-mode.md` (pre-warm before a meetup or launch spike) and
-`launch-day.md` (the spike procedure). Both are Gate O2/O3 items.
+Planned, not yet written: `event-mode.md` (pre-warm before a meetup or launch spike) —
+its pre-warm step lives in `launch-day.md` for now.
 
 ## Alerts and where they land
 

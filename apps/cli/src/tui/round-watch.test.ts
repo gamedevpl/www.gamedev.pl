@@ -129,3 +129,30 @@ it('wakes for a new round after publication instead of keeping the old live stri
   watch.stop();
   await watch.run;
 });
+
+it('hands every poll to onStatus, so a session can tell a publish it watched from one it found', async () => {
+  const seen: string[] = [];
+  let polls = 0;
+  const holder: { current?: ReturnType<typeof createRoundWatch> } = {};
+  const api = createApi({
+    origin: 'https://www.gamedev.pl',
+    store: memoryStore({ accessToken: 'gdpl_oat_t', tokenType: 'Bearer', scope: 'creator' }),
+    fetch: async () => {
+      polls += 1;
+      const body = polls === 1 ? { status: 'building' } : { status: 'published', slug: 'airtime' };
+      return new Response(JSON.stringify(body), { status: 200 });
+    },
+  });
+  holder.current = createRoundWatch({
+    getToken: () => 'tok',
+    api,
+    setLive: () => undefined,
+    announce: () => undefined,
+    onStatus: (status) => seen.push(status.status),
+    sleep: async () => undefined,
+  });
+  await vi.waitFor(() => expect(seen).toEqual(['building', 'published']));
+  holder.current.stop();
+  await holder.current.run;
+  expect(polls).toBe(2);
+});

@@ -30,6 +30,7 @@ import {
 } from '@gamedevpl/contract';
 import type { VisitEvent } from '../platform/store.js';
 import { summarizeCliFunnel } from './visit-cli-funnel.js';
+import { summarizeCliPilot, type CliPilotRead } from './visit-cli-pilot.js';
 /**
  * Aggregates raw visit events into the funnel — the Stage 0 metrics of gtm-plan.md in the private www.gamedev.pl-ops repo.
  *
@@ -113,6 +114,8 @@ export interface VisitFunnel {
   editing: Array<{ step: EditorStep; visits: number }>;
   coding: Array<{ step: CodeStep; visits: number }>;
   cli: ReturnType<typeof summarizeCliFunnel>;
+  // CL-39 pilot read: agents, stages, channels, and publishes watched happen.
+  cliPilot: CliPilotRead;
   completion: CodeCompletionFunnel;
   /**
    * The NL tuning lane, against `asked` as its denominator: of the sittings that
@@ -548,6 +551,7 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       visits: rollups.filter((rollup) => rollup.codeSteps.has(step)).length,
     })),
     cli: summarizeCliFunnel(events),
+    cliPilot: summarizeCliPilot(events),
     completion: {
       requests: completionRows.reduce((total, row) => total + row.requests, 0),
       shown: completionRows.reduce((total, row) => total + row.shown, 0),

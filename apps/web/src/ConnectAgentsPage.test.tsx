@@ -81,6 +81,21 @@ describe('ConnectAgentsPage', () => {
     expect(container.textContent).toMatch(/login opens your browser/i);
   });
 
+  it.each(['en', 'pl'])('separates a new idea from an existing game in %s', async (language) => {
+    await i18n.changeLanguage(language);
+    await draw(true);
+    const headings = Array.from(container.querySelectorAll('#cli h3'));
+    expect(headings.map((node) => node.textContent)).toEqual([
+      i18n.t('connectAgents.cli.newTitle'),
+      i18n.t('connectAgents.cli.existingTitle'),
+    ]);
+    const snippets = Array.from(container.querySelectorAll('#cli pre')).map((node) => node.textContent);
+    expect(snippets[0]).toContain('gamedevpl login');
+    expect(snippets[1]).toBe('gamedevpl');
+    expect(snippets[2]).toBe('gamedevpl games\ngamedevpl connect <slug>');
+    expect(container.textContent).toContain(i18n.t('connectAgents.cli.existingDraft'));
+  });
+
   it('scrolls the hashed section into view on mount', async () => {
     if (!Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView')) {
       Object.defineProperty(Element.prototype, 'scrollIntoView', {

@@ -482,6 +482,47 @@ describe('GET /api/admin/suggestions', () => {
  * The operator's half of the creation breaker. Session-only, like every operator write —
  * a leaked access token must not be able to pause the product.
  */
+// The whole effective object, so an accidental shape change fails loudly.
+function effectiveLimits(overrides: Partial<CreationLimitsResponse['effective']> = {}) {
+  return {
+    paused: true,
+    globalDailySubmissionCap: 25,
+    managedBuilderMode: 'auto',
+    managedDailyCap: null,
+    managedDailyUserCap: null,
+    hasPlatformBackend: false,
+    managedAgentVendor: {
+      stored: null,
+      effective: null,
+      available: false,
+      configuredVendors: [],
+      defaultVendor: null,
+    },
+    tabCompletePaused: false,
+    globalDailyTabCompleteTokenCap: 2_000_000,
+    editingPaused: false,
+    chatPaused: false,
+    searchPaused: false,
+    globalDailySearchEmbeddingCap: 20_000,
+    gatePaused: false,
+    globalDailyGateRunCap: 400,
+    dreamsPaused: false,
+    globalDailyDreamCap: 200,
+    partyPaused: false,
+    telemetrySampleRate: null,
+    seedingMode: 'auto',
+    globalDailySeedCap: 300,
+    seedProvider: {
+      stored: null,
+      effective: 'vertex',
+      available: false,
+      configuredProviders: [],
+      defaultProvider: 'vertex',
+    },
+    ...overrides,
+  };
+}
+
 describe('/api/admin/creation-limits', () => {
   let store: InMemoryStore;
 
@@ -562,40 +603,7 @@ describe('/api/admin/creation-limits', () => {
 
     expect(res.statusCode).toBe(200);
     const body = res.json() as CreationLimitsResponse;
-    expect(body.effective).toEqual({
-      paused: true,
-      globalDailySubmissionCap: 25,
-      managedBuilderMode: 'auto',
-      managedDailyCap: null,
-      managedDailyUserCap: null,
-      hasPlatformBackend: false,
-      managedAgentVendor: {
-        stored: null,
-        effective: null,
-        available: false,
-        configuredVendors: [],
-        defaultVendor: null,
-      },
-      tabCompletePaused: false,
-      globalDailyTabCompleteTokenCap: 2_000_000,
-      editingPaused: false,
-      chatPaused: false,
-      searchPaused: false,
-      globalDailySearchEmbeddingCap: 20_000,
-      gatePaused: false,
-      globalDailyGateRunCap: 400,
-      dreamsPaused: false,
-      globalDailyDreamCap: 200,
-      seedingMode: 'auto',
-      globalDailySeedCap: 300,
-      seedProvider: {
-        stored: null,
-        effective: 'vertex',
-        available: false,
-        configuredProviders: [],
-        defaultProvider: 'vertex',
-      },
-    });
+    expect(body.effective).toEqual(effectiveLimits({ paused: true }));
     // A pause left on by accident is this feature's own failure mode, so the record of
     // who set it is part of the deliverable.
     expect(body.stored).toMatchObject({ paused: true, updatedBy: 'g:boss' });
@@ -615,40 +623,7 @@ describe('/api/admin/creation-limits', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect((res.json() as CreationLimitsResponse).effective).toEqual({
-      paused: false,
-      globalDailySubmissionCap: 25,
-      managedBuilderMode: 'auto',
-      managedDailyCap: null,
-      managedDailyUserCap: null,
-      hasPlatformBackend: false,
-      managedAgentVendor: {
-        stored: null,
-        effective: null,
-        available: false,
-        configuredVendors: [],
-        defaultVendor: null,
-      },
-      tabCompletePaused: false,
-      globalDailyTabCompleteTokenCap: 2_000_000,
-      editingPaused: false,
-      chatPaused: false,
-      searchPaused: false,
-      globalDailySearchEmbeddingCap: 20_000,
-      gatePaused: false,
-      globalDailyGateRunCap: 400,
-      dreamsPaused: false,
-      globalDailyDreamCap: 200,
-      seedingMode: 'auto',
-      globalDailySeedCap: 300,
-      seedProvider: {
-        stored: null,
-        effective: 'vertex',
-        available: false,
-        configuredProviders: [],
-        defaultProvider: 'vertex',
-      },
-    });
+    expect((res.json() as CreationLimitsResponse).effective).toEqual(effectiveLimits({ paused: false }));
     await app.close();
   });
 

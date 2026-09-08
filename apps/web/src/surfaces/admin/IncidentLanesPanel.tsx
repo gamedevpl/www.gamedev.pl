@@ -7,6 +7,7 @@ const LANES = [
   { key: 'searchPaused', label: 'search' },
   { key: 'gatePaused', label: 'gate runs' },
   { key: 'dreamsPaused', label: 'concept art' },
+  { key: 'partyPaused', label: 'party hosting' },
 ] as const;
 
 export type IncidentLanePatch = { [K in (typeof LANES)[number]['key']]?: boolean };
