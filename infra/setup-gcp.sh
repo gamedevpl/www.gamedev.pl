@@ -313,6 +313,18 @@ gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
   --project="$PROJECT_ID" \
   >/dev/null
 
+# The mirror image of the gate's condition below: the gate may write anything EXCEPT a
+# manifest, and the API may write manifests. Both halves are needed — moving the verdict
+# write to /api/internal/gate-verdict only helps if the identity behind that route can
+# perform it, and the runtime's bucket-wide grant is create-and-read. Without this every
+# gate would report progress against a 500 and finish with no verdict recorded.
+gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
+  --member="serviceAccount:${RUN_SA}" \
+  --role="roles/storage.objectAdmin" \
+  --condition="expression=resource.type == 'storage.googleapis.com/Object' && resource.name.startsWith('projects/_/buckets/${STORE_BUCKET}/objects/games/') && resource.name.endsWith('/manifest.json'),title=games-store-manifest-write,description=Replace a version manifest — the gate verdict path. Nothing else under games/" \
+  --project="$PROJECT_ID" \
+  >/dev/null
+
 # Live objects are never aged out — these are the originals, not a rebuildable
 # projection. Object versioning + soft-delete are the BY-11 compensating controls
 # for gate-runner's objectAdmin (overwrite/delete recovery); the lifecycle rule

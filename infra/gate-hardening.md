@@ -66,6 +66,13 @@ reach — performs the manifest write. The gate's own bucket role is
 `objectViewer`. It can still rewrite its own derived artifacts, which a re-gate of the
 same version needs; it can no longer touch any game's record.
 
+Both halves are needed, and the second is easy to forget: the API's own runtime holds
+`objectCreator` + `objectViewer` bucket-wide, which cannot replace an existing object
+either. `setup-gcp.sh` therefore also grants it `objectAdmin` conditioned to
+`games/**/manifest.json` — the exact mirror of the gate's condition. Move the write
+without that grant and every gate reports progress against a 500 and finishes with no
+verdict recorded.
+
 ### What binds a verdict to one game
 
 An OIDC token would prove only _that gate-runner is calling_, which every gate run can
