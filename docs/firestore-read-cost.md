@@ -64,3 +64,15 @@ twin of A29 for writes. It is a ceiling over the floor the caches leave, calibra
 sit well above the intended state and well below an incident. **Recalibrate it whenever
 this table changes** — an alert calibrated against an old floor is an alert that no longer
 fires for a regression the size of the one it was written for.
+
+Rate alone is not enough. A30 evaluates a rate in two windows (ten minutes for a spike,
+three hours for drift), and both are blind to the shape that actually produced the 2026-09
+bill: a regression that adds a couple of reads a second, never peaks, and never stops. So
+`setup-monitoring.sh` also defines **A31**, the *daily total* — `ALIGN_DELTA` over 86400s
+with `REDUCE_SUM`, firing above **600K reads in the trailing day**, roughly 1.6× the
+~364K/day pace measured on 2026-09-08 and well under the ~800K/day the incident billed. It
+is the slowest signal in the file on purpose: if it fires while A30 stayed quiet, nothing
+spiked — something got permanently more expensive per request, so compare the day against
+the previous week to find the step change and match it to a deploy. Both thresholds are
+calibrated against a floor the badge fix above removes; **re-derive them together** from a
+full working week of post-fix numbers rather than from an estimate.
