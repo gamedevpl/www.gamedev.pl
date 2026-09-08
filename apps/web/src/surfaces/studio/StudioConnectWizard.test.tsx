@@ -86,8 +86,6 @@ describe('StudioConnectWizard', () => {
     await act(async () => {
       createRoot(container).render(createElement(StudioConnectWizard, { game: 'bastion-wave', onOpenStudio }));
       await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
     });
 
     const dialog = document.querySelector('.studio-connect-wizard');
@@ -118,8 +116,6 @@ describe('StudioConnectWizard', () => {
     await act(async () => {
       createRoot(container).render(createElement(StudioConnectWizard, { game: 'bastion-wave', onOpenStudio }));
       await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
     });
 
     const dialog = document.querySelector('.studio-connect-wizard');
@@ -137,10 +133,15 @@ describe('StudioConnectWizard', () => {
     await act(async () => {
       createRoot(container).render(createElement(StudioConnectWizard, { game: 'bastion-wave', onOpenStudio }));
       await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
     });
 
+    await act(async () => {
+      (
+        Array.from(document.querySelectorAll('button')).find((button) =>
+          button.textContent?.includes('Build it for me'),
+        ) as HTMLButtonElement
+      ).click();
+    });
     const control = document.querySelector('[data-testid="connect-switch-builder"]');
     expect(control).toBeTruthy();
     const start = control?.querySelector('button') as HTMLButtonElement;
@@ -165,10 +166,15 @@ describe('StudioConnectWizard', () => {
     await act(async () => {
       createRoot(container).render(createElement(StudioConnectWizard, { game: 'bastion-wave', onOpenStudio }));
       await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
     });
 
+    await act(async () => {
+      (
+        Array.from(document.querySelectorAll('button')).find((button) =>
+          button.textContent?.includes('Build it for me'),
+        ) as HTMLButtonElement
+      ).click();
+    });
     const control = document.querySelector('[data-testid="connect-switch-builder"]');
     await act(async () => {
       (control?.querySelector('button') as HTMLButtonElement).click();
@@ -204,8 +210,6 @@ describe('StudioConnectWizard', () => {
     await act(async () => {
       createRoot(container).render(createElement(StudioConnectWizard, { game: 'bastion-wave', onOpenStudio: vi.fn() }));
       await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
     });
 
     const feed = document.querySelector('[data-testid="connect-wizard-feed"]');
@@ -225,8 +229,6 @@ describe('StudioConnectWizard', () => {
 
     await act(async () => {
       createRoot(container).render(createElement(StudioConnectWizard, { game: 'bastion-wave', onOpenStudio: vi.fn() }));
-      await Promise.resolve();
-      await Promise.resolve();
       await Promise.resolve();
     });
 
@@ -248,8 +250,6 @@ describe('StudioConnectWizard', () => {
     await act(async () => {
       createRoot(container).render(createElement(StudioConnectWizard, { game: 'bastion-wave', onOpenStudio }));
       await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
     });
 
     expect(onOpenStudio).toHaveBeenCalledWith('/studio/bastion-wave?from=handoff', { replace: true });
@@ -268,8 +268,6 @@ describe('StudioConnectWizard', () => {
     await act(async () => {
       createRoot(container).render(createElement(StudioConnectWizard, { game: 'bastion-wave', onOpenStudio }));
       await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
     });
 
     expect(onOpenStudio).toHaveBeenCalledWith('/studio/bastion-wave?from=handoff', { replace: true });
@@ -281,8 +279,6 @@ describe('StudioConnectWizard', () => {
 
     await act(async () => {
       createRoot(container).render(createElement(StudioConnectWizard, { game: 'bastion-wave', onOpenStudio }));
-      await Promise.resolve();
-      await Promise.resolve();
       await Promise.resolve();
     });
 
@@ -300,8 +296,6 @@ describe('StudioConnectWizard', () => {
 
     await act(async () => {
       createRoot(container).render(createElement(StudioConnectWizard, { game: 'bastion-wave', onOpenStudio: vi.fn() }));
-      await Promise.resolve();
-      await Promise.resolve();
       await Promise.resolve();
     });
 

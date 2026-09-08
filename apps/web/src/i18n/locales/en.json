@@ -879,7 +879,7 @@
     "dialogLabel": "Connect your coding agent",
     "stepLabel": "Connect",
     "eyebrow": "Your agent",
-    "lede": "This round waits for your coding agent. Add gamedev.pl, then paste the build prompt — stay here until it checks in, or open Studio anytime.",
+    "lede": "Choose how you want to work. We’ll guide you through the next steps.",
     "ledeConnected": "Your agent checked in. Open Studio to watch progress and steer the build.",
     "preparing": "Preparing your connect steps…",
     "loadError": "We couldn't refresh status just now. Retrying…",
@@ -1994,5 +1994,54 @@
     "diffTruncated": "This file's diff is long — showing the first part.",
     "diffOmitted": "{{count}} more changed files not shown.",
     "diffUnavailable": "Couldn't load the changes. You can still play it and read the description."
+  },
+  "connectGuide": {
+    "choose": "How would you like to build?",
+    "platformTitle": "Let gamedev.pl take over",
+    "tool": "Which tool do you use?",
+    "start": "Start working on your game",
+    "setup": "Connect your tool",
+    "back": "← Change choice",
+    "progress": "Step {{step}} of {{total}}",
+    "copy": "Copy",
+    "retry": "Try again",
+    "platformBody": "The gamedev.pl agent will continue this round using your platform quota. You can follow its progress in Studio.",
+    "cliStart": "Choose a local checkout, a conversation, or an agent in the terminal. Describe what to build. You can return to Studio at any time.",
+    "agentStart": "Paste this message into your agent’s chat. It identifies this game and asks the agent to start the current round.",
+    "waiting": "Connection is not confirmed yet. This screen will update when your agent checks in. You can also open Studio below.",
+    "cliSetup": "Run these commands in your terminal. You need Node.js 20.19 or newer. Sign in with the same account you use here.",
+    "toolSetup": "Set up gamedev.pl in {{tool}}, then continue to the starting message.",
+    "cliDraft": "No code yet? That’s fine — the checkout starts with your game brief.",
+    "signin": "Finish signing in when your tool opens the browser. The install link contains no credentials.",
+    "manual": "Sign-in did not work / manual setup",
+    "oauth": "Back to browser sign-in",
+    "configHint": "Add this configuration to your tool. The secret is hidden here; Copy includes the actual credential. Keep it private.",
+    "add": "Add to {{tool}}",
+    "next": "Setup done — continue",
+    "copyError": "Could not copy. Allow clipboard access and try again.",
+    "routes": {
+      "cli": {
+        "title": "gamedevpl CLI",
+        "body": "Create from your terminal. Choose an agent or work on local files."
+      },
+      "agent": {
+        "title": "I have my own agent",
+        "body": "Connect Cursor, VS Code, Claude Code, Codex or another tool."
+      },
+      "platform": {
+        "title": "Not sure? Build it for me",
+        "body": "Use the gamedev.pl agent. No tools to install."
+      }
+    },
+    "tools": {
+      "cursor": "Cursor",
+      "vscode": "VS Code / Copilot",
+      "claudeCode": "Claude Code",
+      "codex": "Codex",
+      "kimi": "Kimi",
+      "other": "Another MCP tool",
+      "muse": "Muse Code (Meta)"
+    },
+    "museStart": "In the terminal, choose “Open a local checkout”, then Muse. Muse works on local files; this path does not configure MCP. Install Muse Code from dev.meta.ai if it is not available yet."
   }
 }
