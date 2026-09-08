@@ -867,16 +867,41 @@ EOF
 # hitting that route at 10 rps would have been 100M reads a day. Reads bill at a third
 # of writes, so the money is smaller; the shape is the same and so is the fix.
 #
-# CALIBRATION: before the caches landed the daily average was ~9/s; the expected
-# steady state after them is well under 1/s. 5/s sustained over ten minutes is a pace
-# of ~430K/day -- half of the incident, an order of magnitude above the intended state.
-# Recheck against a week of post-fix numbers and lower it if the real p95 allows.
+# CALIBRATION, measured after the caches shipped rather than predicted before them. The
+# first draft of this policy expected a post-fix steady state "well under 1/s" and set a
+# single 5/s threshold on that expectation. Measured, the expectation was wrong by four
+# times, and 5/s sat below the ordinary daytime p95 -- the policy fired on normal traffic
+# within hours of being created, which is the one failure mode this file refuses to ship.
+#
+# Sep 8 10:00-19:00 UTC, 53 windows, ALIGN_RATE/600s and REDUCE_SUM, the same shape both
+# conditions evaluate:
+#   median 4.21/s, p95 5.65/s, max 5.98/s -- a pace of ~364K reads/day
+# Split by metric.label.type over the same window:
+#   QUERY 3.66/s mean (flat to within 0.2/s all day), LOOKUP 0.59/s, NOT_FOUND 0.03/s
+# The flat QUERY floor is not a sweep: per-minute counts show no scheduler cadence, and
+# the request log for the same hour is ~700 requests of which /api/review/status and
+# /api/notifications are 270 -- authenticated badge polling from open tabs, each poll
+# running collection queries. That floor is the next reads fix, not something a threshold
+# should be bent around, and it is why the numbers above are a ceiling to live under
+# rather than the intended steady state.
+#
+# Two conditions, because reads fail in two shapes and one threshold cannot see both:
+#   spike -- 20/s over ten minutes, ~3.3x the measured max, a pace of ~1.7M/day. This is
+#   the crawler or the runaway loop, and it is what a ten-minute window is good at.
+#   drift -- 8/s over three hours, a pace of ~690K/day. The 2026-09 incident averaged
+#   ~9.3/s across whole days and would never have tripped any ten-minute spike threshold
+#   set high enough not to false-alarm; it needs a lower bar held for longer. Steady state
+#   has ~2x headroom under it, and the pre-fix mornings that would have tripped it were
+#   the bug it is meant to catch.
+#
+# The window is one weekday afternoon and it does not include a morning peak. Re-read both
+# thresholds against a full working week -- the same 2026-09-15 checkpoint as A29.
 cat > "${POLICY_DIR}/a30.json" <<EOF
 {
   "displayName": "A30 Firestore read rate",
   "combiner": "OR",
   "conditions": [{
-    "displayName": "sustained document reads well above steady state",
+    "displayName": "document reads spiking far above steady state",
     "conditionThreshold": {
       "filter": "metric.type=\"firestore.googleapis.com/document/read_count\" AND resource.type=\"firestore_instance\"",
       "aggregations": [{
@@ -885,15 +910,29 @@ cat > "${POLICY_DIR}/a30.json" <<EOF
         "crossSeriesReducer": "REDUCE_SUM"
       }],
       "comparison": "COMPARISON_GT",
-      "thresholdValue": 5,
+      "thresholdValue": 20,
       "duration": "600s",
+      "trigger": { "count": 1 }
+    }
+  }, {
+    "displayName": "document reads elevated for hours on end",
+    "conditionThreshold": {
+      "filter": "metric.type=\"firestore.googleapis.com/document/read_count\" AND resource.type=\"firestore_instance\"",
+      "aggregations": [{
+        "alignmentPeriod": "600s",
+        "perSeriesAligner": "ALIGN_RATE",
+        "crossSeriesReducer": "REDUCE_SUM"
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 8,
+      "duration": "10800s",
       "trigger": { "count": 1 }
     }
   }],
   "notificationChannels": ["${CHANNEL_NAME}"],
   "alertStrategy": { "autoClose": "86400s" },
   "documentation": {
-    "content": "Firestore is taking far more document reads than the closed beta's steady state, sustained for ten minutes. Reads bill per operation like writes (at a third of the price), and a public route that fans out one read per catalog entry is the shape that produced ~800K reads a day in 2026-09 with almost no traffic. Triage: this metric carries no collection label; group it by metric.label.type -- LOOKUP is per-document gets (a request path fanning out over entries), QUERY is collection scans (a sweep or a list on every run). Then Logs Explorer on the app service, requests grouped by route, to find which one scales with it. The per-request caches in catalog-routes.ts, catalog-enricher.ts and notify-sweep-routes.ts are the reference for the fix: read a collection once per window, never per request.",
+    "content": "Firestore is taking far more document reads than the closed beta's steady state. Two conditions fire this policy and they mean different things: the ten-minute one at 20/s is a spike -- a crawler or a loop -- while the three-hour one at 8/s is drift, the shape of the 2026-09 incident, which averaged ~9.3/s for whole days and would never trip a spike threshold. Reads bill per operation like writes, at a third of the price, and a public route that fans out one read per catalog entry is what produced ~800K reads a day in 2026-09 with almost no traffic. Triage: this metric carries no collection label; group it by metric.label.type -- LOOKUP is per-document gets (a request path fanning out over entries), QUERY is collection scans (a sweep, or a list running on every request). Then Logs Explorer on the app service, requests grouped by route, to find which one scales with it; check the per-minute counts first, because a scheduler job shows a cadence and request-driven reads do not. Measured steady state as of 2026-09-08 is ~4.2/s median and ~5.7/s p95, most of it a flat QUERY floor from authenticated badge polling on /api/review/status and /api/notifications -- so a reading a little above 5/s is normal and neither condition should see it. The per-request caches in catalog-routes.ts, catalog-enricher.ts and notify-sweep-routes.ts are the reference for the fix: read a collection once per window, never per request.",
     "mimeType": "text/markdown"
   }
 }
