@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- Interactive slash-command suggestions filter as you type; arrows select and Tab completes without running the command.
+- Interactive slash-command suggestions filter as you type; arrows select and Tab completes without running the command (#1231).
 
 ## 0.9.0 — 2026-09-08
 
