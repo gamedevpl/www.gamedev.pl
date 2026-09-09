@@ -2,6 +2,7 @@ import { MAX_SHOT_BYTES, type CreatorProposal, type CreatorProposalOption } from
 import { DREAM_FRAME_SHOT_LABEL, DREAM_SOURCE_SHOT_LABEL } from '../platform/dream-shots.js';
 import { imageSize, isPng, sameAspectRatio, type ImageSize } from '../platform/image-size.js';
 import type { Store } from '../platform/store.js';
+import { dreamClaimHolds } from '../store/slices/round-budget.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
 import type { DreamAvailabilityGate } from './dream-availability.js';
 import type { DreamFrame, DreamFrameGenerator } from './dream-frames.js';
@@ -114,8 +115,8 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
   async function run(input: DreamRunInput): Promise<DreamOutcome> {
     const { record, version, screenshotPath } = input;
     const jobId = record.jobId;
-    // Cheap read before the transaction; only a posted claim is final.
-    if (record.dreamRun?.version === version && record.dreamRun.postedAt) return 'already_ran';
+    // The same predicate the claim uses; two spellings would drift apart.
+    if (dreamClaimHolds(record.dreamRun, version, new Date(now()).toISOString())) return 'already_ran';
     if (!(await store.claimDreamRun(jobId, version, new Date(now()).toISOString()))) return 'already_ran';
     if (!(await availability.dreamingEnabled())) return 'paused';
     if ((await store.getUser(record.ownerUid))?.proposalsMutedAt) return 'muted';

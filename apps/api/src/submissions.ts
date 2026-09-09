@@ -121,6 +121,7 @@ import {
 import { InvalidTokenError, verifyToken } from './platform/submission-token.js';
 import { normalizeLocale, type Translator } from './platform/translate.js';
 import { isRateLimited } from './platform/ip-rate-limit.js';
+import { dreamClaimHolds } from './store/slices/round-budget.js';
 
 /**
  * The store slices `registerSubmissionRoutes` actually reaches into — every domain this
@@ -1310,7 +1311,9 @@ export async function registerSubmissionRoutes(
     // The seam fires on every poll while the preview stays green, and the worker only
     // dedupes once it has started -- so without this the round would spend the seed
     // route's shared hourly allowance re-handing off work that is already done.
-    if (record.dreamRun?.version === version) return;
+
+    // The same predicate the claim uses, so a stale claim still reaches the retake.
+    if (dreamClaimHolds(record.dreamRun, version, new Date().toISOString())) return;
     if (!seedDispatch) {
       await job.runForVersion(input);
       return;

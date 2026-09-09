@@ -2210,12 +2210,68 @@ describe('submission routes', () => {
       by: 'gate',
       reason: 'sources_delivered',
     });
-    await store.claimDreamRun(job.jobId, 'v1', '2026-08-24T10:31:00.000Z');
+    await store.claimDreamRun(job.jobId, 'v1', new Date().toISOString());
 
     const token = mintToken(job.jobId, secret);
     await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
 
     expect(handed.filter((entry) => entry.work?.action === 'dream')).toEqual([]);
+
+    await app.close();
+  });
+
+  it('hands off again once a claim went stale, so a dead worker is recoverable', async () => {
+    const { githubClient } = createGithubClientStub({ jobId: 507 });
+    const { backend } = createBackendStub();
+    const gamesStore = {
+      getManifest: async () => ({
+        slug: 'space-parcels',
+        version: 'v1',
+        roundGeneration: 1,
+        sourceFiles: ['SPEC.md', 'game.ts', 'GAME.json'],
+        previewGate: { green: true, ranAt: '2026-08-24T10:30:00.000Z', screenshot: 'media/opening.png' },
+      }),
+    } as unknown as GamesStore;
+    const handed: Array<{ jobId: number; work?: SeedWork }> = [];
+    const seedDispatch: SeedDispatchClient = {
+      enqueue: async (jobId, work) => {
+        handed.push({ jobId, ...(work ? { work } : {}) });
+        return true;
+      },
+    };
+    const dreamJob: DreamJob = { runForVersion: async () => 'posted' };
+
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+      dreamJob,
+      seedDispatch,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionSlug(job.jobId, 'space-parcels');
+    await store.setSubmissionPreviewVersion(job.jobId, 'v1');
+    await store.recordJobTransition(job.jobId, {
+      to: 'submitted',
+      at: new Date().toISOString(),
+      by: 'gate',
+      reason: 'sources_delivered',
+    });
+    // Claimed an hour ago with no card: that worker never came back.
+    await store.claimDreamRun(job.jobId, 'v1', new Date(Date.now() - 60 * 60_000).toISOString());
+
+    const token = mintToken(job.jobId, secret);
+    await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+
+    expect(handed.filter((entry) => entry.work?.action === 'dream')).toHaveLength(1);
 
     await app.close();
   });
