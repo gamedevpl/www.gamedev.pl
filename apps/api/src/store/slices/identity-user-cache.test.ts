@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { FirestoreStore } from '../../platform/store.js';
 import { fakeFirestore } from '../fake-firestore.js';
 import { FirestoreIdentityStore } from './identity.js';
 
@@ -96,5 +97,48 @@ describe('FirestoreIdentityStore user cache', () => {
     await seed();
 
     expect((await store.getUser('u1'))?.uid).toBe('u1');
+  });
+
+  // A read in flight must not restore what a write removed.
+  it('does not repopulate from a read that started before the write', async () => {
+    const { db } = fakeFirestore();
+    await db.collection('users').doc('u1').set({ uid: 'u1', tier: 'standard' });
+
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const users = db.collection('users');
+    const slow = {
+      ...db,
+      collection: (name: string) =>
+        name === 'users'
+          ? {
+              ...users,
+              doc: (id: string) => ({ ...users.doc(id), get: async () => (await held, users.doc(id).get()) }),
+            }
+          : db.collection(name),
+    } as unknown as typeof db;
+    const slowStore = new FirestoreIdentityStore(slow);
+
+    const inFlight = slowStore.getUser('u1');
+    slowStore.forgetUser('u1');
+    release();
+    await inFlight;
+
+    await db.collection('users').doc('u1').set({ uid: 'u1', tier: 'blocked' });
+    expect((await slowStore.getUser('u1'))?.tier).toBe('blocked');
+  });
+
+  // Erasure reads the user first, seeding the window it outlives.
+  it('forgets an erased account instead of authenticating it for another window', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    await db.collection('users').doc('u1').set({ uid: 'u1', tier: 'standard' });
+    expect((await store.getUser('u1'))?.uid).toBe('u1');
+
+    await store.deleteAccountIdentity('u1', '2026-09-09T10:00:00Z');
+
+    expect(await store.getUser('u1')).toBeNull();
   });
 });
