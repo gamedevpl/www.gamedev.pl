@@ -1276,7 +1276,7 @@ export async function registerSubmissionRoutes(
   const { reconcileNativeJob, reconcileGateVerdict } = createJobReconciler({
     store,
     gamesStore: options.agentChannel?.gamesStore,
-    ...(dreamJob ? { onPreviewGateGreen: (input: DreamRunInput) => void handOffDream(input) } : {}),
+    ...(dreamJob ? { onPreviewGateGreen: (input: DreamRunInput) => handOffDream(input) } : {}),
     log: app.log,
     now,
     observeQuietMs,
@@ -1299,6 +1299,10 @@ export async function registerSubmissionRoutes(
    * exactly this reason. With no dispatcher configured (local, tests) there is no
    * throttling to dodge, so run it here; when one is configured but refuses, skip and let
    * the next poll try again rather than start work that cannot finish.
+   *
+   * The reconciler awaits this. Handing off is itself asynchronous -- an identity token,
+   * then the callee's 202 headers -- and a status response that finished first would
+   * suspend the hand-off before the worker request existed.
    */
   async function handOffDream(input: DreamRunInput): Promise<void> {
     const job = dreamJob;

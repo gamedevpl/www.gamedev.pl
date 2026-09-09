@@ -26,7 +26,11 @@ import '../../build-progress.css';
 import './status-header.css';
 import './status-timeline.css';
 import './status-play-card.css';
-import { fetchNotificationPreferences, updateNotificationPreferences } from '../../notificationsApi.js';
+import {
+  fetchNotificationPreferences,
+  onNotificationPreferencesChanged,
+  updateNotificationPreferences,
+} from '../../notificationsApi.js';
 import type { ComposerDraft } from './FeedbackPanel.js';
 import type { ProposalHandlers } from './ProposalCard.js';
 import './status-thread.css';
@@ -739,6 +743,15 @@ export function SubmissionStatusView({
       cancelled = true;
     };
   }, [proposalOnScreen, proposalsMuted]);
+
+  // The bell carries the same switch; without this its toggle would not reach the card.
+  useEffect(
+    () =>
+      onNotificationPreferencesChanged((prefs) => {
+        if (prefs.proposals !== undefined) setProposalsMuted(prefs.proposals === false);
+      }),
+    [],
+  );
 
   /**
    * Inside Creator Studio this is a thread, not a page.

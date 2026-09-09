@@ -41,9 +41,19 @@
 .studio-proposal-figure img {
   display: block;
   width: 100%;
+  background: #000;
+}
+
+/* Thumbnails crop to a common square so a row of them lines up. */
+.studio-proposal-thumb img {
   aspect-ratio: 1 / 1;
   object-fit: cover;
-  background: #000;
+}
+
+/* The dialog is the comparison: cropping there hides HUD and the change itself. */
+.studio-proposal-figure img {
+  height: auto;
+  object-fit: contain;
 }
 
 .studio-proposal-ai {
