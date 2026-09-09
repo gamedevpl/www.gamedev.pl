@@ -236,7 +236,12 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
       if (dreamClaimHolds(current.dreamRun, version, at)) return false;
       // Read and claim together, or a late claim overwrites.
       if ((current.previewVersion ?? current.deliveredVersion) !== version) return false;
-      tx.set(ref, { dreamRun: { version, claimedAt: at } }, { merge: true });
+      // A merged map keeps what it omits; start clean.
+      tx.set(
+        ref,
+        { dreamRun: { version, claimedAt: at, postedAt: FieldValue.delete(), endedAt: FieldValue.delete() } },
+        { merge: true },
+      );
       return true;
     });
   }

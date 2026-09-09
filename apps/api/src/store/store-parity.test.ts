@@ -316,6 +316,19 @@ describeStoreContract('proposal posting', (makeStore) => {
     expect(await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z')).toBe(false);
   });
 
+  it("starts a new version from a clean claim, not the last one's leftovers", async () => {
+    const store = makeStore();
+    await claimed(store);
+    await store.appendProposalMessage(11, claim, 'Two directions.', { proposal });
+    await store.setSubmissionPreviewVersion(11, 'v2');
+
+    expect(await store.claimDreamRun(11, 'v2', '2026-09-07T13:00:00.000Z')).toBe(true);
+    // A kept `postedAt` from v1 would refuse v2's own card.
+    const v2 = { version: 'v2', claimedAt: '2026-09-07T13:00:00.000Z' };
+    expect(await store.appendProposalMessage(11, v2, 'Two more.', { proposal })).not.toBeNull();
+    expect((await store.getSubmission(11))?.dreamRun?.endedAt).toBeUndefined();
+  });
+
   it('ignores a worker whose lease already expired', async () => {
     const store = makeStore();
     await claimed(store);
