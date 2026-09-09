@@ -8,6 +8,9 @@ export interface BuildShotCountOptions {
   excludeLabels?: readonly string[];
 }
 
+// Enough pages to fill a strip past a crowd of proposal shots.
+const MAX_SHOT_PAGES = 4;
+
 export interface BuildShotListOptions extends BuildShotCountOptions {
   limit?: number;
 }
@@ -152,19 +155,22 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
 
   async listBuildShots(jobId: number, opts?: BuildShotListOptions): Promise<BuildShotSummary[]> {
     const limit = opts?.limit ?? 12;
-    // Over-fetch by the excluded count; the window keeps `limit` shots.
-    const excluded = await this.countLabeled(jobId, opts?.excludeLabels);
-    // `select()` keeps bytes off the polled status response.
-    const snap = await this.shotsCollection(jobId)
-      .select('id', 'label', 'labelLocalized', 'locale', 'mediaType', 'createdAt')
-      .orderBy('createdAt', 'desc')
-      .limit(limit + excluded)
-      .get();
-    return snap.docs
-      .map((doc) => doc.data() as BuildShotSummary)
-      .filter(keeps(opts?.excludeLabels))
-      .sort(byNewestFirst)
-      .slice(0, limit);
+    const kept: BuildShotSummary[] = [];
+    let after: { id: string } | undefined;
+    // Page until `limit` survive the filter; a count read cannot promise it.
+    for (let page = 0; page < MAX_SHOT_PAGES && kept.length < limit; page += 1) {
+      // `select()` keeps bytes off the polled status response.
+      const base = this.shotsCollection(jobId)
+        .select('id', 'label', 'labelLocalized', 'locale', 'mediaType', 'createdAt')
+        .orderBy('createdAt', 'desc')
+        .limit(limit);
+      const snap = await (after ? base.startAfter(after) : base).get();
+      if (snap.empty) break;
+      after = snap.docs[snap.docs.length - 1];
+      kept.push(...snap.docs.map((doc) => doc.data() as BuildShotSummary).filter(keeps(opts?.excludeLabels)));
+      if (snap.docs.length < limit) break;
+    }
+    return kept.sort(byNewestFirst).slice(0, limit);
   }
 
   // `in` matches only labelled documents; unlabelled shots stay out.
