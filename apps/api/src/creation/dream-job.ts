@@ -138,7 +138,8 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       ...(record.locale ? { locale: record.locale } : {}),
     });
     const candidates = generated.slice(0, DREAM_OPTIONS);
-    if (candidates.length === 0) return 'no_ideas';
+    // A slot and an image call for a card that cannot post.
+    if (candidates.length < DREAM_OPTIONS) return 'no_ideas';
 
     const sourcePng = source.toString('base64');
     const styleNote = styleNoteFor(record);

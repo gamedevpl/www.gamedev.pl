@@ -27,6 +27,8 @@ async function harness(params: {
   const store = new InMemoryStore();
   if (params.limits) await store.setCreationLimits(params.limits, 'g:boss');
   const created = await store.createSubmission(7, 'g:owner', 'Parcel Run');
+  // The claim needs the version to be current.
+  await store.setSubmissionPreviewVersion(7, 'v1');
   const record: SubmissionRecord = {
     ...created,
     slug: 'parcel-run',
@@ -114,6 +116,7 @@ describe('createDreamJob', () => {
     expect(await run()).toBe('already_ran');
     const refreshed = await store.getSubmission(7);
     expect(refreshed?.dreamRun?.version).toBe('v1');
+    await store.setSubmissionPreviewVersion(7, 'v2');
     expect(await run({ version: 'v2' })).toBe('no_hud');
   });
 
@@ -159,6 +162,28 @@ describe('createDreamJob', () => {
   it('has nothing to say without a concept or ideas', async () => {
     expect(await (await harness({ hud: [], record: { spec: '' } })).run()).toBe('no_ideas');
     expect(await (await harness({ hud: [], ideas: [] })).run()).toBe('no_ideas');
+  });
+
+  it('refuses a claim for a delivery that is no longer current', async () => {
+    // A worker can start after the round moved on.
+    const { store } = await harness({ hud: [] });
+    await store.setSubmissionPreviewVersion(7, 'v2');
+
+    expect(await store.claimDreamRun(7, 'v1', '2026-09-09T00:00:00.000Z')).toBe(false);
+    expect(await store.claimDreamRun(7, 'v2', '2026-09-09T00:00:00.000Z')).toBe(true);
+  });
+
+  it('spends nothing when the model returns a single idea', async () => {
+    // A slot and an image call for a card that cannot post.
+    const { store, run } = await harness({
+      hud: [],
+      ideas: [
+        { id: 'idea_0', label: { en: 'Night', pl: 'Noc' }, prompt: { en: 'Make it night.', pl: 'Niech będzie noc.' } },
+      ],
+    });
+
+    expect(await run()).toBe('no_ideas');
+    expect(await store.listBuildShots(7)).toEqual([]);
   });
 
   it('posts nothing when only one frame survives', async () => {

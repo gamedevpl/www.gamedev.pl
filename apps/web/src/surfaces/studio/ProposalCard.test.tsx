@@ -66,6 +66,35 @@ describe('ProposalCard', () => {
     recordStudioStep.mockReset();
   });
 
+  it('counts the exposure when the card comes into view, not when it mounts', async () => {
+    // A long thread mounts old cards off-screen.
+    let notify: ((entries: Array<{ isIntersecting: boolean }>) => void) | null = null;
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(callback: (entries: Array<{ isIntersecting: boolean }>) => void) {
+          notify = callback;
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+
+    await mount();
+    expect(recordStudioStep).not.toHaveBeenCalled();
+
+    await act(async () => {
+      notify?.([{ isIntersecting: true }]);
+    });
+    expect(recordStudioStep).toHaveBeenCalledWith('proposal_shown', 'platform');
+
+    await act(async () => {
+      notify?.([{ isIntersecting: true }]);
+    });
+    expect(recordStudioStep).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
   it('counts no exposure for a creator who muted proposals', async () => {
     // Exposure feeds decisions-per-exposure; a placeholder is not a proposal.
     const { container } = await mount({ muted: true });

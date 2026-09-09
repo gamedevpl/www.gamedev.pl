@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CreatorProposal, CreatorProposalOption } from '@gamedevpl/contract';
 import { buildMediaUrl, type BuildMediaItem } from '../../submissionApi.js';
@@ -36,35 +36,52 @@ export function ProposalCard({
   const lang = pickLanguage(i18n.language);
   const [open, setOpen] = useState(false);
   const [decided, setDecided] = useState(false);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  // The builder at first render; a handoff must not re-attribute.
+  const builderRef = useRef(handlers.builder);
+  const exposed = useRef(false);
 
   useEffect(() => {
-    // A muted creator sees the placeholder, so nothing was exposed.
-    if (handlers.muted) return;
-    recordStudioStep('proposal_shown', handlers.builder);
-  }, [handlers.builder, handlers.muted]);
+    // Mounting is not seeing; an off-screen card is no exposure.
+    if (handlers.muted || exposed.current) return;
+    const node = cardRef.current;
+    if (!node || typeof IntersectionObserver !== 'function') {
+      exposed.current = true;
+      recordStudioStep('proposal_shown', builderRef.current);
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting) || exposed.current) return;
+      exposed.current = true;
+      recordStudioStep('proposal_shown', builderRef.current);
+      observer.disconnect();
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [handlers.muted]);
 
   if (handlers.muted) {
     return <p className="studio-proposal-muted">{t('statusView.proposal.muted')}</p>;
   }
 
   const pick = (option: CreatorProposalOption) => {
-    recordStudioStep('proposal_picked', handlers.builder);
+    recordStudioStep('proposal_picked', builderRef.current);
     setOpen(false);
     setDecided(true);
     handlers.onPick({ option, frame: frameItem(option.frameRef), text: option.prompt[lang] });
   };
   const postpone = () => {
-    recordStudioStep('proposal_postponed', handlers.builder);
+    recordStudioStep('proposal_postponed', builderRef.current);
     setOpen(false);
   };
   const mute = () => {
-    recordStudioStep('proposal_muted', handlers.builder);
+    recordStudioStep('proposal_muted', builderRef.current);
     setOpen(false);
     handlers.onMute();
   };
 
   return (
-    <div className="studio-proposal">
+    <div className="studio-proposal" ref={cardRef}>
       <div className="studio-proposal-thumbs">
         {proposal.options.map((option) => (
           <button
