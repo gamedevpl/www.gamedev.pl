@@ -123,15 +123,20 @@ the agent, not the session. `/delegate <task>` skips the chat; `gamedevpl delega
 [--agent codex] [--handoff] [--submit]` is the non-interactive form (exit `1` when the agent or the
 ladder fails).
 
-`gamedevpl connect <slug>` prints the MCP handoff (URL, kickoff, install snippet).
-`--agent claude` (or `codex` / `copilot`) launches the agent with temporary MCP configuration,
-never the creator OAuth grant or a PAT. The round must use builder `self`; explicit
-`--handoff` requests a switch and refuses execution while the switch is pending.
-In a matching checkout the agent works on that game's directory; review local changes
-before `gamedevpl submit`. Otherwise it uses a scratch directory and the MCP workflow;
-the CLI prints the directory and keeps any scratch files after exit. Check the delivery
-in Studio. Existing user MCP configuration is not overwritten.
-MCP progress appears while the agent runs; Ctrl+C in the REPL stops its process group.
+`gamedevpl connect <slug>` opens a work-mode picker in an interactive terminal.
+It detects a matching checkout in the current directory or its `<slug>` child.
+When found, the local choices reuse its files, including unsent changes; selecting
+an agent remembers it for the next editing request. `/play` then previews locally.
+The picker labels MCP choices as using platform sources when no checkout exists.
+`--manual` prints the MCP handoff without launching an agent.
+
+Codex MCP runs in its native interactive terminal with workspace-write isolation and
+on-request user approvals. Answer network/tool permission requests there, then exit
+to return to gamedevpl. It refuses an unattended MCP launch instead of starting a
+session that cannot ask for permissions. Native tool policies still apply.
+Claude and Copilot keep their existing temporary MCP configuration. Scratch files
+remain available after an MCP run; process exit alone does not confirm delivery.
+Existing user MCP configuration is not overwritten.
 
 ## Releases
 

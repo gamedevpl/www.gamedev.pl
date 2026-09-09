@@ -101,8 +101,8 @@ describe('agent discovery', () => {
     expect(pick.mock.calls[0]?.[0]).toEqual([
       'Open a local checkout — edit and play here',
       'Continue chatting about this game',
-      'claude',
-      'codex',
+      'claude — MCP; platform sources',
+      'codex — MCP; platform sources',
       'Show manual MCP setup',
     ]);
     expect(request).not.toHaveBeenCalled();
