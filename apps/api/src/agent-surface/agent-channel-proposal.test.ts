@@ -79,6 +79,7 @@ async function storeConceptFrame(store: InMemoryStore): Promise<string> {
     data: pngHeader(900, 900).toString('base64'),
     label: DREAM_FRAME_SHOT_LABEL,
     roundGeneration: 1,
+    deliveryVersion: VERSION,
   });
   return shot.id;
 }
@@ -241,6 +242,20 @@ describe('agent-written concept proposals', () => {
 
     // The proposal route refuses anything larger, so promising more would mislead.
     expect(minted.json().maxBytes).toBe(600 * 1024);
+  });
+
+  it('refuses a frame drawn for an earlier delivery in the same round', async () => {
+    // A round delivers several previews without advancing its generation.
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    app = await createApp(store, stubGamesStore());
+
+    const frames = [await uploadConceptFrame(app), await uploadConceptFrame(app)];
+    await store.setSubmissionPreviewVersion(ISSUE, 'v8');
+    const response = await propose(app, frames);
+
+    expect(response.json().rejected).toBe('frame_stale');
   });
 
   it('refuses a concept frame that changed the frame shape', async () => {

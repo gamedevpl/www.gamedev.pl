@@ -821,9 +821,10 @@ because the tool is the only way in:
 - **The reserved captions are not claimable.** `screenshot_upload_url` now refuses a label
   that matches one, so `AI concept` means AI concept everywhere.
 
-- **Frames belong to the round they were drawn for.** The PUT stamps the upload token's
-  `roundGeneration` on the shot and the proposal route checks it, so an id kept from an
-  earlier round cannot dress a new card up as freshly drawn.
+- **Frames belong to the delivery they were drawn for.** The PUT stamps both the upload
+  token's `roundGeneration` and the job's current version on the shot, and the proposal
+  route checks both. A round delivers several previews without advancing its generation,
+  so the round alone would let v1 frames ride on v2's capture.
 - **The agent's frames spend the agent's allowance.** `maxShotsPerBuild` is counted by
   ownership, not caption: shots carry `platformDrawn` and only those are exempt, so a
   reserved caption cannot become an unbounded store an agent writes to forever.

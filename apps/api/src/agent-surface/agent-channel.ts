@@ -1160,11 +1160,14 @@ export async function registerAgentChannelRoutes(
       const label = upload.label
         ? sanitizeCreatorText(upload.label, { singleLine: true }).slice(0, MAX_SHOT_LABEL)
         : '';
+      // A round delivers several previews; note which one.
+      const conceptVersion = record.previewVersion ?? record.deliveredVersion;
 
       const stored = await store!.appendBuildShot(jobId, {
         data: bytes.toString('base64'),
         ...(label ? { label } : {}),
         ...(concept ? { roundGeneration: upload.roundGeneration } : {}),
+        ...(concept && conceptVersion ? { deliveryVersion: conceptVersion } : {}),
       });
       options.onEvent?.(jobId);
 

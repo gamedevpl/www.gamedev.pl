@@ -139,8 +139,10 @@ export function registerAgentChannelProposalRoutes(app: FastifyInstance, deps: A
       for (const frame of frames) {
         // Only an uploaded concept frame counts; we set the caption.
         if (!frame || frame.label !== DREAM_FRAME_SHOT_LABEL) return reject('frame_missing');
-        // Shots are scoped by job, so an old id still reads.
-        if (frame.roundGeneration !== roundGeneration) return reject('frame_stale');
+        // A round delivers several previews; pin the frame to one.
+        if (frame.roundGeneration !== roundGeneration || frame.deliveryVersion !== version) {
+          return reject('frame_stale');
+        }
         const bytes = Buffer.from(frame.data, 'base64');
         if (bytes.length === 0 || bytes.length > MAX_PROPOSAL_FRAME_BYTES) return reject('frame_missing');
         const frameSize = imageSize(bytes);
@@ -148,6 +150,9 @@ export function registerAgentChannelProposalRoutes(app: FastifyInstance, deps: A
         if (!frameSize || !sameAspectRatio(frameSize, size)) return reject('frame_shape');
       }
 
+      // A late claim would overwrite a newer one; refuse instead.
+      const current = await store.getSubmission(jobId);
+      if ((current?.previewVersion ?? current?.deliveredVersion) !== version) return reject('already_proposed');
       const claimedAt = new Date().toISOString();
       if (!(await store.claimDreamRun(jobId, version, claimedAt))) return reject('already_proposed');
 
