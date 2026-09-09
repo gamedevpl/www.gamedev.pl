@@ -617,6 +617,14 @@ export class FirestoreStore implements Store {
     return this.buildMediaStore.countDeliveryShots(jobId, query);
   }
 
+  async appendDeliveryShot(
+    jobId: number,
+    query: DeliveryShotQuery & { max: number },
+    shot: Omit<BuildShot, 'id' | 'createdAt'>,
+  ): Promise<BuildShot | null> {
+    return this.buildMediaStore.appendDeliveryShot(jobId, query, shot);
+  }
+
   async appendBuildPreview(
     jobId: number,
     preview: Omit<BuildPreview, 'id' | 'createdAt'> & { createdAt?: string },

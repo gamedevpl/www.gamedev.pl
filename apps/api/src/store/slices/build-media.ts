@@ -52,6 +52,13 @@ export interface BuildMediaStore {
   // Frames a delivery already holds; their room is already spent.
   countDeliveryShots(jobId: number, query: DeliveryShotQuery): Promise<number>;
 
+  // Stores a frame under `max`, counting and writing as one.
+  appendDeliveryShot(
+    jobId: number,
+    query: DeliveryShotQuery & { max: number },
+    shot: Omit<BuildShot, 'id' | 'createdAt'>,
+  ): Promise<BuildShot | null>;
+
   appendBuildPreview(
     jobId: number,
     preview: Omit<BuildPreview, 'id' | 'createdAt'> & { createdAt?: string },
@@ -103,6 +110,20 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
 
   async countDeliveryShots(jobId: number, query: DeliveryShotQuery): Promise<number> {
     return (this.buildShots.get(jobId) ?? []).filter(matchesDelivery(query)).length;
+  }
+
+  async appendDeliveryShot(
+    jobId: number,
+    query: DeliveryShotQuery & { max: number },
+    shot: Omit<BuildShot, 'id' | 'createdAt'>,
+  ): Promise<BuildShot | null> {
+    // Counted and pushed without awaiting in between, which is the whole point.
+    const existing = this.buildShots.get(jobId) ?? [];
+    if (existing.filter(matchesDelivery(query)).length >= query.max) return null;
+    const record: BuildShot = { ...shot, id: randomUUID(), createdAt: new Date().toISOString() };
+    existing.push(record);
+    this.buildShots.set(jobId, existing);
+    return { ...record };
   }
 
   async appendBuildPreview(
@@ -227,6 +248,27 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
       .select('deliveryVersion', 'label', 'roundGeneration', 'platformDrawn')
       .get();
     return snap.docs.map((doc) => doc.data() as BuildShotSummary).filter(matchesDelivery(query)).length;
+  }
+
+  async appendDeliveryShot(
+    jobId: number,
+    query: DeliveryShotQuery & { max: number },
+    shot: Omit<BuildShot, 'id' | 'createdAt'>,
+  ): Promise<BuildShot | null> {
+    const record: BuildShot = { ...shot, id: randomUUID(), createdAt: new Date().toISOString() };
+    const document = Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
+    return await this.db.runTransaction(async (transaction) => {
+      // Count and write together, or every PUT sees room.
+      const snap = await transaction.get(
+        this.shotsCollection(jobId)
+          .where('deliveryVersion', '==', query.deliveryVersion)
+          .select('deliveryVersion', 'label', 'roundGeneration', 'platformDrawn'),
+      );
+      const held = snap.docs.map((doc) => doc.data() as BuildShotSummary).filter(matchesDelivery(query)).length;
+      if (held >= query.max) return null;
+      transaction.set(this.shotsCollection(jobId).doc(record.id), document);
+      return record;
+    });
   }
 
   async appendBuildPreview(

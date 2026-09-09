@@ -1100,7 +1100,11 @@ export async function registerAgentChannelRoutes(
           deliveryVersion: conceptVersion,
           roundGeneration: record.roundGeneration ?? 1,
         });
-        const needed = Math.max(PROPOSAL_OPTIONS - drawn, 1);
+        // Past the pair, a URL only invites a wasted frame.
+        if (drawn >= PROPOSAL_OPTIONS) {
+          return reply.send({ accepted: false, rejected: 'too_many_shots', ...(await channelState(jobId, record)) });
+        }
+        const needed = PROPOSAL_OPTIONS - drawn;
         if ((await store!.countBuildShots(jobId, { excludePlatformDrawn: true })) + needed > maxShotsPerBuild) {
           return reply.send({ accepted: false, rejected: 'too_many_shots', ...(await channelState(jobId, record)) });
         }
@@ -1196,25 +1200,32 @@ export async function registerAgentChannelRoutes(
         return reject('stale_delivery');
       }
       if (concept) {
-        // A minted URL promises a slot; a delivery holds only the pair.
-        const held = await store!.countDeliveryShots(jobId, {
-          label: DREAM_FRAME_SHOT_LABEL,
-          deliveryVersion: conceptVersion ?? '',
-          roundGeneration: upload.roundGeneration,
-        });
-        if (held >= PROPOSAL_OPTIONS) return reject('too_many_shots');
         // A reshaped frame repainted the HUD, and a stored one still spends a slot.
         const capture = await conceptCapture(record);
         const frameSize = imageSize(bytes);
         if (!capture || !frameSize || !sameAspectRatio(frameSize, capture)) return reject('frame_shape');
       }
 
-      const stored = await store!.appendBuildShot(jobId, {
-        data: bytes.toString('base64'),
-        ...(label ? { label } : {}),
-        ...(concept ? { roundGeneration: upload.roundGeneration } : {}),
-        ...(concept && conceptVersion ? { deliveryVersion: conceptVersion } : {}),
-      });
+      const body64 = bytes.toString('base64');
+      // A minted URL promises a slot; the write is the cap.
+      const stored = concept
+        ? await store!.appendDeliveryShot(
+            jobId,
+            {
+              label: DREAM_FRAME_SHOT_LABEL,
+              deliveryVersion: conceptVersion ?? '',
+              roundGeneration: upload.roundGeneration,
+              max: PROPOSAL_OPTIONS,
+            },
+            {
+              data: body64,
+              label: DREAM_FRAME_SHOT_LABEL,
+              roundGeneration: upload.roundGeneration,
+              deliveryVersion: conceptVersion ?? '',
+            },
+          )
+        : await store!.appendBuildShot(jobId, { data: body64, ...(label ? { label } : {}) });
+      if (!stored) return reject('too_many_shots');
       options.onEvent?.(jobId);
 
       return reply.send({

@@ -404,17 +404,38 @@ describe('agent-written concept proposals', () => {
     expect((await propose(app, [first, second])).json().accepted).toBe(true);
   });
 
-  it('stores no more than the pair of concept frames for one delivery', async () => {
+  it('refuses a third concept URL once the delivery holds its pair', async () => {
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    app = await createApp(store, stubGamesStore());
+    await uploadConceptFrame(app);
+    await uploadConceptFrame(app);
+
+    const minted = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/shot/upload-url',
+      headers: agentHeaders(),
+      payload: { purpose: 'concept' },
+    });
+
+    // Otherwise every URL invites a paid frame the upload would refuse.
+    expect(minted.json().rejected).toBe('too_many_shots');
+  });
+
+  it('refuses a replayed concept URL rather than storing a third frame', async () => {
     vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
     const store = new InMemoryStore();
     await seed(store);
     app = await createApp(store, stubGamesStore());
 
-    await uploadConceptFrame(app);
-    await uploadConceptFrame(app);
-    const third = await uploadConceptFrameRaw(app, pngHeader(900, 900));
+    const urls = [await mintConceptUrl(app), await mintConceptUrl(app)];
+    await putConceptFrame(app, urls[0]!, pngHeader(900, 900));
+    await putConceptFrame(app, urls[1]!, pngHeader(900, 900));
+    const replay = await putConceptFrame(app, urls[0]!, pngHeader(900, 900));
 
-    expect(third.json().rejected).toBe('too_many_shots');
+    expect(replay.json().rejected).toBe('too_many_shots');
+    expect(await store.countBuildShots(ISSUE)).toBe(2);
   });
 
   it('refuses a direction whose text is nothing but markup', async () => {

@@ -299,3 +299,30 @@ describeStoreContract('delivery-scoped shot counts', (makeStore) => {
     expect(await store.countDeliveryShots(9, query)).toBe(0);
   });
 });
+
+// The cap is the write itself, not a check before it.
+describeStoreContract('delivery-scoped shot appends', (makeStore) => {
+  const frame = { data: 'AAA=', mediaType: 'image/png' as const, label: 'AI concept' };
+  const slot = { label: 'AI concept', deliveryVersion: 'v2', roundGeneration: 3, max: 2 };
+  const shot = { ...frame, deliveryVersion: 'v2', roundGeneration: 3 };
+
+  it('stores up to the cap and refuses past it', async () => {
+    const store = makeStore();
+
+    expect(await store.appendDeliveryShot(9, slot, shot)).not.toBeNull();
+    expect(await store.appendDeliveryShot(9, slot, shot)).not.toBeNull();
+    expect(await store.appendDeliveryShot(9, slot, shot)).toBeNull();
+    expect(await store.countDeliveryShots(9, slot)).toBe(2);
+  });
+
+  it("counts only this delivery's own frames against the cap", async () => {
+    const store = makeStore();
+    await store.appendBuildShot(9, { ...frame, deliveryVersion: 'v1', roundGeneration: 3 });
+    await store.appendBuildShot(9, { ...frame, deliveryVersion: 'v2', roundGeneration: 2 });
+    await store.appendBuildShot(9, { ...shot, platformDrawn: true });
+
+    expect(await store.appendDeliveryShot(9, slot, shot)).not.toBeNull();
+    expect(await store.appendDeliveryShot(9, slot, shot)).not.toBeNull();
+    expect(await store.appendDeliveryShot(9, slot, shot)).toBeNull();
+  });
+});

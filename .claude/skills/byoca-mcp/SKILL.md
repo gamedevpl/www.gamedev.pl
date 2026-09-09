@@ -832,8 +832,9 @@ because the tool is the only way in:
   reserved caption cannot become an unbounded store an agent writes to forever. The
   concept PUT is the one exception, and a narrow one: a minted URL is a promise of a
   slot, so a frame drawn against it is stored even if an ordinary screenshot filled the
-  build meanwhile. `countDeliveryShots` caps a delivery at `PROPOSAL_OPTIONS` frames,
-  and one delivery carries one claim, so the overrun is bounded by the pair.
+  build meanwhile. The bound is `appendDeliveryShot`, which counts and writes in one
+  transaction — a check before the write would let concurrent PUTs, or one replayed
+  URL, each see room and all take it. The mint refuses too, once the pair exists.
 - **Text that sanitizes to nothing is refused before the claim.** A label or prompt of
   pure markup passes the schema and empties in `sanitizeCreatorText`; posting it would
   spend the delivery's one claim on a blank direction.
