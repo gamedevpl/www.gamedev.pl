@@ -207,7 +207,7 @@ describe('repl turn loop', () => {
     expect(lines.join('\n')).toContain('gamedevpl login');
   });
 
-  it('treats /submit dest like the one-shot verb, not as a slug', async () => {
+  it.each(['submit', 'push'])('treats /%s dest like the one-shot verb, not as a slug', async (verb) => {
     const dest = mkdtempSync(join(tmpdir(), 'gdpl-repl-sub-'));
     writeGameFiles(dest, 'ghost-roads', [{ path: 'game.ts', content: 'A' }]);
     writeBase(dest, 'v1', [{ path: 'game.ts', content: 'A' }]);
@@ -235,7 +235,7 @@ describe('repl turn loop', () => {
       },
     });
     const delivered = await handleReplLine({
-      line: `/submit --slug ghost-roads ${dest}`,
+      line: `/${verb} --slug ghost-roads ${dest}`,
       api,
       token: 'tok',
       write: (s) => lines.push(s),
@@ -246,13 +246,13 @@ describe('repl turn loop', () => {
 
     lines.length = 0;
     const missing = await handleReplLine({
-      line: '/submit not-a-checkout',
+      line: `/${verb} not-a-checkout`,
       api,
       token: 'tok',
       write: (s) => lines.push(s),
     });
     expect(missing.next).toBe('continue');
-    expect(lines.join('\n')).toContain('gamedevpl submit [dir]');
+    expect(lines.join('\n')).toContain(`gamedevpl ${verb} [dir]`);
     expect(seen.some((path) => path.includes('/studio/games/not-a-checkout/'))).toBe(false);
   });
 

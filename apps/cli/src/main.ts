@@ -295,10 +295,10 @@ export async function runCli(
       }
       return EXIT_GREEN;
     }
-    if (verb === 'submit') {
+    if (verb === 'submit' || verb === 'push') {
       const dest = args[0] ?? process.cwd();
       const slug = (typeof flags.slug === 'string' ? flags.slug : null) ?? readCheckoutSlug(dest);
-      if (!slug) throw new CliError(cliUsage('submit', '[dir]'), EXIT_INPUT, '--slug');
+      if (!slug) throw new CliError(cliUsage(verb, '[dir]'), EXIT_INPUT, '--slug');
       const result = await submitGame({
         api,
         slug,

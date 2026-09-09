@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Use `/push` or `gamedevpl push` to deliver local changes as a preview; `/submit` remains supported (#TBD).
+
 ### Fixed
 
 - Make terminal conversations easier to scan with colored roles, checks, links and clearer spacing (#1259).

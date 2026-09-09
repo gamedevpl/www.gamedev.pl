@@ -23,7 +23,8 @@ export const BLURB: Record<SlashVerb, string> = {
   login: 'open a browser and sign in',
   logout: 'forget the stored grant',
   whoami: 'print the signed-in identity',
-  submit: 'deliver sources after the local ladder',
+  submit: 'alias for push — deliver a preview from local files',
+  push: 'send local changes as a preview after checks — push [dir] [--publish]',
   pull: 'update a checkout from the platform',
   diff: 'three-way sync against the checkout base',
   update: 'install a newer CLI',
@@ -37,7 +38,7 @@ export function formatHelp(slash = false): string {
         `${CLI_BIN} ${CLI_VERSION}`,
         '',
         '  type to talk — a game starts when you ask · /quit to leave',
-        '  in a checkout: say what to change; a local agent edits it, /submit delivers',
+        '  in a checkout: say what to change; a local agent edits it, /push delivers a preview',
         '  /retry resumes a task waiting for builder handoff',
         '',
       ]
