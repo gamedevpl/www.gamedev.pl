@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- Use `/push` or `gamedevpl push` to deliver local changes as a preview; `/submit` remains supported (#TBD).
+- Use `/push` or `gamedevpl push` to deliver local changes as a preview; `/submit` remains supported (#1255).
 
 ### Fixed
 
