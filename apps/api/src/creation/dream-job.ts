@@ -154,6 +154,8 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       if (result) dreamed.push(result);
     }
     if (dreamed.length === 0) return refused === candidates.length ? 'no_capacity' : 'no_frames';
+    // The copy promises two directions; one is not a choice.
+    if (dreamed.length < DREAM_OPTIONS) return 'no_frames';
 
     const sourceShot = await store.appendBuildShot(jobId, {
       data: sourcePng,

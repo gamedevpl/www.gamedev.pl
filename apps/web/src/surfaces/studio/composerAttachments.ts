@@ -1,9 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import { useClampToViewport } from '../../useClampToViewport.js';
 
-export type ComposerAttachment = { id: string; name: string; dataUrl: string };
+// `replacedBy` groups attachments a later pick supersedes.
+export type ComposerAttachment = { id: string; name: string; dataUrl: string; replacedBy?: string };
 
 export const MAX_COMPOSER_ATTACHMENTS = 4;
+
+// Adds one attachment, replacing whatever it supersedes.
+export function withAttachment(
+  prev: ComposerAttachment[],
+  entry: ComposerAttachment,
+  options?: { replaces?: string },
+): ComposerAttachment[] {
+  const kept = options?.replaces ? prev.filter((item) => item.replacedBy !== options.replaces) : prev;
+  if (kept.length >= MAX_COMPOSER_ATTACHMENTS) return kept;
+  return [...kept, options?.replaces ? { ...entry, replacedBy: options.replaces } : entry];
+}
 
 // Attachment state: uploads and sketches, capped at MAX_COMPOSER_ATTACHMENTS.
 export function useComposerAttachments(sending: boolean) {
@@ -60,18 +72,16 @@ export function useComposerAttachments(sending: boolean) {
     });
   };
 
-  const addAttachment = (name: string, dataUrl: string) => {
-    setAttachments((prev) =>
-      prev.length >= MAX_COMPOSER_ATTACHMENTS ? prev : [...prev, { id: `${name}-${Date.now()}`, name, dataUrl }],
-    );
+  const addAttachment = (name: string, dataUrl: string, options?: { replaces?: string }) => {
+    setAttachments((prev) => withAttachment(prev, { id: `${name}-${Date.now()}`, name, dataUrl }, options));
   };
 
   // Send waits for this like a file read.
-  const addAttachmentFromUrl = (name: string, url: string) => {
+  const addAttachmentFromUrl = (name: string, url: string, options?: { replaces?: string }) => {
     setPendingAttachmentReads((count) => count + 1);
     void fetchImageAsDataUrl(url)
       .then((dataUrl) => {
-        if (dataUrl) addAttachment(name, dataUrl);
+        if (dataUrl) addAttachment(name, dataUrl, options);
       })
       .finally(() => setPendingAttachmentReads((count) => count - 1));
   };

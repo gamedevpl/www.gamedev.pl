@@ -161,7 +161,8 @@ describe('createDreamJob', () => {
     expect(await (await harness({ hud: [], ideas: [] })).run()).toBe('no_ideas');
   });
 
-  it('drops frames that changed shape and posts what survived', async () => {
+  it('posts nothing when only one frame survives', async () => {
+    // The copy promises two directions; one is not a choice.
     const { store, run } = await harness({
       hud: [],
       frame: (request) =>
@@ -169,9 +170,8 @@ describe('createDreamJob', () => {
           ? { data: jpegHeader(1024, 768).toString('base64'), mediaType: 'image/jpeg' }
           : { data: jpegHeader(512, 512).toString('base64'), mediaType: 'image/jpeg' },
     });
-    expect(await run()).toBe('posted');
-    const [message] = await store.listCreatorMessages(7);
-    expect(message?.proposal?.options.map((option) => option.id)).toEqual(['idea_1']);
+    expect(await run()).toBe('no_frames');
+    expect(await store.listCreatorMessages(7)).toEqual([]);
   });
 
   it('posts nothing when no frame survives', async () => {
