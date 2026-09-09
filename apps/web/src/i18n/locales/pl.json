@@ -1154,6 +1154,9 @@
       "sending": "Wysyłam…",
       "sent": "Wysłano do publikacji — trwa pełny sprawdzian.",
       "error": "Nie udało się wysłać do publikacji. Spróbuj za chwilę."
+    },
+    "composer": {
+      "attachmentFull": "Kompozytor jest pełny — usuń obrazek, żeby dołączyć „{{name}}\"."
     }
   },
   "suggestions": {

@@ -55,6 +55,7 @@ export function CompactFeedbackComposer({
   const { t } = useTranslation();
   const {
     attachments,
+    blockedAttachment,
     pendingAttachmentReads,
     attachMenuOpen,
     setAttachMenuOpen,
@@ -140,6 +141,11 @@ export function CompactFeedbackComposer({
             </div>
           ))}
         </div>
+      )}
+      {blockedAttachment && (
+        <p className="status-composer-attachment-blocked" role="status">
+          {t('statusView.composer.attachmentFull', { name: blockedAttachment })}
+        </p>
       )}
       <div className="status-composer-toolbar">
         <div className="status-composer-toolbar-left">

@@ -6,6 +6,12 @@ export type ComposerAttachment = { id: string; name: string; dataUrl: string; re
 
 export const MAX_COMPOSER_ATTACHMENTS = 4;
 
+// True when one more attachment fits, once the superseded ones drop out.
+export function fitsAttachment(prev: ComposerAttachment[], options?: { replaces?: string }): boolean {
+  const kept = options?.replaces ? prev.filter((item) => item.replacedBy !== options.replaces) : prev;
+  return kept.length < MAX_COMPOSER_ATTACHMENTS;
+}
+
 // Adds one attachment, replacing whatever it supersedes.
 export function withAttachment(
   prev: ComposerAttachment[],
@@ -25,7 +31,11 @@ export function useComposerAttachments(sending: boolean) {
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [isSketchOpen, setIsSketchOpen] = useState(false);
   // Newest read per group; a slower one cannot land on it.
-  const latestRead = useRef(new Map<string, symbol>());
+  const latestRead = useRef(new Map<string, { token: symbol; abort: AbortController }>());
+  // What a pick could not attach, so the composer can say so.
+  const [blockedAttachment, setBlockedAttachment] = useState<string | null>(null);
+  const attachmentsRef = useRef<ComposerAttachment[]>([]);
+  attachmentsRef.current = attachments;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const attachMenuRef = useRef<HTMLDivElement | null>(null);
   const attachPanelRef = useClampToViewport<HTMLDivElement>(attachMenuOpen);
@@ -80,15 +90,26 @@ export function useComposerAttachments(sending: boolean) {
 
   // Send waits for this like a file read.
   const addAttachmentFromUrl = (name: string, url: string, options?: { replaces?: string }) => {
-    setPendingAttachmentReads((count) => count + 1);
     const group = options?.replaces;
     const token = Symbol('read');
-    if (group) latestRead.current.set(group, token);
-    void fetchImageAsDataUrl(url)
+    const abort = new AbortController();
+    if (group) {
+      // A superseded read must free Send, not hold it.
+      latestRead.current.get(group)?.abort.abort();
+      latestRead.current.set(group, { token, abort });
+    }
+    setPendingAttachmentReads((count) => count + 1);
+    void fetchImageAsDataUrl(url, abort.signal)
       .then((dataUrl) => {
         if (!dataUrl) return;
         // A later pick won; this frame answers an old prompt.
-        if (group && latestRead.current.get(group) !== token) return;
+        if (group && latestRead.current.get(group)?.token !== token) return;
+        // The pick took over the text; a missing frame misleads.
+        if (!fitsAttachment(attachmentsRef.current, options)) {
+          setBlockedAttachment(name);
+          return;
+        }
+        setBlockedAttachment(null);
         addAttachment(name, dataUrl, options);
       })
       .finally(() => setPendingAttachmentReads((count) => count - 1));
@@ -103,14 +124,19 @@ export function useComposerAttachments(sending: boolean) {
   };
 
   const removeAttachment = (id: string) => {
+    setBlockedAttachment(null);
     setAttachments((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const resetAttachments = () => setAttachments([]);
+  const resetAttachments = () => {
+    setBlockedAttachment(null);
+    setAttachments([]);
+  };
 
   return {
     attachments,
     pendingAttachmentReads,
+    blockedAttachment,
     attachMenuOpen,
     setAttachMenuOpen,
     isSketchOpen,
@@ -129,9 +155,9 @@ export function useComposerAttachments(sending: boolean) {
 export type ComposerAttachmentsApi = ReturnType<typeof useComposerAttachments>;
 
 // Pulls a same-origin image into a data URL for the composer.
-export async function fetchImageAsDataUrl(url: string): Promise<string | null> {
+export async function fetchImageAsDataUrl(url: string, signal?: AbortSignal): Promise<string | null> {
   try {
-    const response = await fetch(url, { credentials: 'include' });
+    const response = await fetch(url, { credentials: 'include', ...(signal ? { signal } : {}) });
     if (!response.ok) return null;
     const blob = await response.blob();
     return await new Promise<string | null>((resolve) => {
