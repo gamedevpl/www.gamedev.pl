@@ -83,7 +83,7 @@ import { InMemorySubmissionQueryStore } from './slices/submission-queries.js';
 import { InMemorySubmissionStore } from './slices/submission.js';
 import { InMemoryTelemetryStore } from './slices/telemetry.js';
 import { InMemoryWorldEntriesStore } from './slices/world-entries.js';
-import type { AssessmentSource, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
+import type { AssessmentSource, CreatorProposal, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
 
 export class InMemoryStore implements Store {
   private identityStore = new InMemoryIdentityStore();
@@ -574,6 +574,15 @@ export class InMemoryStore implements Store {
     opts?: { origin?: CreatorMessageOrigin; delivered?: boolean; textLocalized?: string; locale?: string },
   ): Promise<CreatorMessage> {
     return this.buildLogStore.appendCreatorMessage(jobId, text, opts);
+  }
+
+  async appendProposalMessage(
+    jobId: number,
+    version: string,
+    text: string,
+    opts: { textLocalized?: string; locale?: string; proposal: CreatorProposal },
+  ): Promise<CreatorMessage | null> {
+    return this.buildLogStore.appendProposalMessage(jobId, version, text, opts);
   }
 
   async listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {

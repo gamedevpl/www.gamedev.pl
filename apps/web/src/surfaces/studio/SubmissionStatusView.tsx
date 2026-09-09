@@ -26,13 +26,9 @@ import '../../build-progress.css';
 import './status-header.css';
 import './status-timeline.css';
 import './status-play-card.css';
-import {
-  fetchNotificationPreferences,
-  onNotificationPreferencesChanged,
-  updateNotificationPreferences,
-} from '../../notificationsApi.js';
 import type { ComposerDraft } from './FeedbackPanel.js';
 import type { ProposalHandlers } from './ProposalCard.js';
+import { useProposalsMuted } from './useProposalsMuted.js';
 import './status-thread.css';
 import { FeedbackPanel } from './FeedbackPanel.js';
 import { BuildProgressPanel } from './BuildProgressPanel.js';
@@ -303,29 +299,10 @@ export function SubmissionStatusView({
   const [channelLoading, setChannelLoading] = useState(false);
   // A picked concept: text plus the frame, seeded into the composer below.
   const [proposalDraft, setProposalDraft] = useState<ComposerDraft | null>(null);
-  // Null until the account preference is known; cards wait for it.
-  const [proposalsMuted, setProposalsMuted] = useState<boolean | null>(null);
   const consumeDraft = () => {
     setProposalDraft(null);
     onDraftConsumed?.();
   };
-  const proposalHandlers: ProposalHandlers = {
-    builder: status?.builder === 'self' ? 'self' : 'platform',
-    muted: proposalsMuted === true,
-    onPick: (pick) =>
-      setProposalDraft({
-        text: pick.text,
-        seq: Date.now(),
-        attachment: { name: t('statusView.proposal.aiLabel'), url: buildMediaUrl(token, pick.frame) },
-      }),
-    onMute: () => {
-      setProposalsMuted(true);
-      // Roll back a failed write: a card that says muted while the server still sends
-      // proposals turns an explicit opt-out into a lie the creator cannot see.
-      void updateNotificationPreferences({ proposals: false }).catch(() => setProposalsMuted(false));
-    },
-  };
-
   // Which game (if any) is open in the full-viewport theater. HTML is snapshotted at
   // launch (`launchedHtml`) so a background refresh doesn't reload the game out from
   // under the player mid-session — reopening picks up the latest. Channel builds use
@@ -727,35 +704,18 @@ export function SubmissionStatusView({
   const onActivityCountRef = useRef(onActivityCount);
   onActivityCountRef.current = onActivityCount;
 
-  // Read the persisted mute once, and only when a proposal is actually on screen.
-  const proposalPrefsRequested = useRef(false);
-  const proposalOnScreen = activity.some((entry) => entry.proposal);
-  useEffect(() => {
-    if (proposalsMuted !== null || proposalPrefsRequested.current || !proposalOnScreen) return;
-    proposalPrefsRequested.current = true;
-    let cancelled = false;
-    fetchNotificationPreferences()
-      .then((prefs) => {
-        if (!cancelled) setProposalsMuted(prefs.proposals === false);
-      })
-      .catch(() => {
-        // Unknown, not unmuted: showing cards to someone who opted out is the worse miss,
-        // so leave them hidden and let the next render try again.
-        if (!cancelled) proposalPrefsRequested.current = false;
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [proposalOnScreen, proposalsMuted]);
-
-  // The bell carries the same switch; without this its toggle would not reach the card.
-  useEffect(
-    () =>
-      onNotificationPreferencesChanged((prefs) => {
-        if (prefs.proposals !== undefined) setProposalsMuted(prefs.proposals === false);
+  const proposalPrefs = useProposalsMuted(activity.some((entry) => entry.proposal));
+  const proposalHandlers: ProposalHandlers = {
+    builder: status?.builder === 'self' ? 'self' : 'platform',
+    muted: proposalPrefs.muted === true,
+    onPick: (pick) =>
+      setProposalDraft({
+        text: pick.text,
+        seq: Date.now(),
+        attachment: { name: t('statusView.proposal.aiLabel'), url: buildMediaUrl(token, pick.frame) },
       }),
-    [],
-  );
+    onMute: proposalPrefs.mute,
+  };
 
   /**
    * Inside Creator Studio this is a thread, not a page.
@@ -828,7 +788,7 @@ export function SubmissionStatusView({
                 emptyLabel={stateDescription}
                 priorRounds={status.slug && status.priorRounds?.length ? status.priorRounds : undefined}
                 priorSlug={status.slug}
-                proposals={proposalsMuted === null ? undefined : proposalHandlers}
+                proposals={proposalPrefs.muted === null ? undefined : proposalHandlers}
                 stickNonce={(isAwaitingOwnAgent(status) ? pendingRevisions.length + 1 : 0) + (agentWorking ? 1 : 0)}
                 working={
                   agentWorking

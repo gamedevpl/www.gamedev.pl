@@ -276,3 +276,32 @@ describeStoreContract('creation limits', (makeStore) => {
     expect(limits?.telemetrySampleRate).toBeNull();
   });
 });
+
+// The claim is checked where the row is written.
+describeStoreContract('proposal posting', (makeStore) => {
+  const proposal = { sourceRef: 'shot-a', version: 'v1', options: [] };
+
+  async function claimed(store: Store): Promise<void> {
+    await store.createSubmission(11, 'g:owner', 'Parcel Run');
+    await store.setSubmissionPreviewVersion(11, 'v1');
+    await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:00.000Z');
+  }
+
+  it('posts while the claim still names the version', async () => {
+    const store = makeStore();
+    await claimed(store);
+
+    expect(await store.appendProposalMessage(11, 'v1', 'Two directions.', { proposal })).not.toBeNull();
+    expect(await store.listCreatorMessages(11)).toHaveLength(1);
+  });
+
+  it('refuses once a newer delivery took the claim', async () => {
+    const store = makeStore();
+    await claimed(store);
+    await store.setSubmissionPreviewVersion(11, 'v2');
+    await store.claimDreamRun(11, 'v2', '2026-09-07T12:01:00.000Z');
+
+    expect(await store.appendProposalMessage(11, 'v1', 'Two directions.', { proposal })).toBeNull();
+    expect(await store.listCreatorMessages(11)).toEqual([]);
+  });
+});

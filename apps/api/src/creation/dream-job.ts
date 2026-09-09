@@ -157,7 +157,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     // The copy promises two directions; one is not a choice.
     if (dreamed.length < DREAM_OPTIONS) return 'no_frames';
 
-    // Generation takes minutes; a newer preview makes this card wrong.
+    // Cheap check before three writes; the post settles the race.
     const current = await store.getSubmission(jobId);
     if ((current?.previewVersion ?? current?.deliveredVersion) !== version) return 'superseded';
     if (current?.dreamRun?.version !== version) return 'superseded';
@@ -182,13 +182,13 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       options,
       builder: record.builder === 'self' ? 'self' : 'platform',
     };
-    await store.appendCreatorMessage(jobId, PROPOSAL_TEXT_EN, {
-      origin: 'studio',
-      delivered: true,
+    // Posted only if the claim still holds, in one transaction.
+    const posted = await store.appendProposalMessage(jobId, version, PROPOSAL_TEXT_EN, {
       textLocalized: PROPOSAL_TEXT_PL,
       locale: 'pl',
       proposal,
     });
+    if (!posted) return 'superseded';
     deps.onPosted?.(jobId);
     return 'posted';
   }

@@ -50,6 +50,14 @@ export interface BuildLogStore {
     },
   ): Promise<CreatorMessage>;
 
+  // Posts a proposal only while the dream claim still names `version`.
+  appendProposalMessage(
+    jobId: number,
+    version: string,
+    text: string,
+    opts: { textLocalized?: string; locale?: string; proposal: CreatorProposal },
+  ): Promise<CreatorMessage | null>;
+
   // Undelivered messages, oldest first -- the agent's inbox. Never a 'studio' row.
   listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
 
@@ -58,6 +66,16 @@ export interface BuildLogStore {
 
   // Marks messages collected, so the agent isn't handed them twice.
   markCreatorMessagesDelivered(jobId: number, ids: string[]): Promise<void>;
+}
+
+// Claim and delivery both still name this version.
+function holdsDreamClaim(
+  record: Pick<SubmissionRecord, 'dreamRun' | 'previewVersion' | 'deliveredVersion'> | undefined,
+  version: string,
+): boolean {
+  if (!record) return false;
+  if (record.dreamRun?.version !== version) return false;
+  return (record.previewVersion ?? record.deliveredVersion) === version;
 }
 
 export class InMemoryBuildLogStore implements BuildLogStore {
@@ -157,6 +175,16 @@ export class InMemoryBuildLogStore implements BuildLogStore {
     existing.push(record);
     this.creatorMessages.set(jobId, existing);
     return { ...record };
+  }
+
+  async appendProposalMessage(
+    jobId: number,
+    version: string,
+    text: string,
+    opts: { textLocalized?: string; locale?: string; proposal: CreatorProposal },
+  ): Promise<CreatorMessage | null> {
+    if (!holdsDreamClaim(this.submissions.get(jobId), version)) return null;
+    return await this.appendCreatorMessage(jobId, text, { ...opts, origin: 'studio', delivered: true });
   }
 
   async listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
@@ -288,6 +316,31 @@ export class FirestoreBuildLogStore implements BuildLogStore {
     };
     await this.messagesCollection(jobId).doc(record.id).set(record);
     return record;
+  }
+
+  async appendProposalMessage(
+    jobId: number,
+    version: string,
+    text: string,
+    opts: { textLocalized?: string; locale?: string; proposal: CreatorProposal },
+  ): Promise<CreatorMessage | null> {
+    const now = new Date().toISOString();
+    const record: CreatorMessage = {
+      id: randomUUID(),
+      text,
+      createdAt: now,
+      deliveredAt: now,
+      origin: 'studio',
+      ...(opts.textLocalized && opts.locale ? { textLocalized: opts.textLocalized, locale: opts.locale } : {}),
+      proposal: opts.proposal,
+    };
+    return await this.db.runTransaction(async (transaction) => {
+      // Read and post together, or a newer delivery wins the gap.
+      const snap = await transaction.get(this.submissionRef(jobId));
+      if (!snap.exists || !holdsDreamClaim(snap.data() as SubmissionRecord, version)) return null;
+      transaction.set(this.messagesCollection(jobId).doc(record.id), record);
+      return record;
+    });
   }
 
   async listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {

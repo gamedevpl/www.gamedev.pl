@@ -173,6 +173,25 @@ describe('createDreamJob', () => {
     expect(await store.listBuildShots(7)).toEqual([]);
   });
 
+  it('refuses to post once a newer delivery claims the job mid-write', async () => {
+    const { store, run } = await harness({ hud: [] });
+    const append = store.appendBuildShot.bind(store);
+    let moved = false;
+    // The frames are written first; the delivery can move in between.
+    store.appendBuildShot = async (jobId, shot) => {
+      const stored = await append(jobId, shot);
+      if (!moved) {
+        moved = true;
+        await store.setSubmissionPreviewVersion(7, 'v2');
+        await store.claimDreamRun(7, 'v2', '2026-09-07T12:00:01.000Z');
+      }
+      return stored;
+    };
+
+    expect(await run()).toBe('superseded');
+    expect(await store.listCreatorMessages(7)).toEqual([]);
+  });
+
   it('tells the idea model whether the game is already live', async () => {
     const draft = await harness({ hud: [] });
     expect(await draft.run()).toBe('posted');
