@@ -26,7 +26,12 @@ import {
   type UploadTokenClaims,
 } from './agent-upload-token.js';
 import { isRasterSourcePath } from '../platform/raster-source.js';
-import { DREAM_FRAME_SHOT_LABEL, DREAM_SHOT_LABELS, isDreamShotLabel } from '../platform/dream-shots.js';
+import {
+  DREAM_FRAME_SHOT_LABEL,
+  DREAM_SHOT_LABELS,
+  isDreamShotLabel,
+  MAX_PROPOSAL_FRAME_BYTES,
+} from '../platform/dream-shots.js';
 import { MAX_BUILD_PREVIEW_BYTES } from '../platform/build-preview-limits.js';
 import type { TranscriptPage, TranscriptWindow } from '../delivery/build-transcript.js';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
@@ -1094,7 +1099,7 @@ export async function registerAgentChannelRoutes(
         expiresAt,
         expiresInSeconds: ttlSeconds,
         upload: uploadCurlCommand(url, 'shot.png', 'image/png'),
-        maxBytes: MAX_AGENT_SHOT_BYTES,
+        maxBytes: parsed.data.purpose === 'concept' ? MAX_PROPOSAL_FRAME_BYTES : MAX_AGENT_SHOT_BYTES,
         ...(await channelState(jobId, record)),
       });
     },
@@ -1121,8 +1126,12 @@ export async function registerAgentChannelRoutes(
       if (isRateLimited(shotsByBuild, jobId, now(), maxShotsPerWindow)) {
         return reject('rate_limited');
       }
-      // Proposal frames are the platform's, never the agent's quota.
-      if ((await store!.countBuildShots(jobId, { excludeLabels: DREAM_SHOT_LABELS })) >= maxShotsPerBuild) {
+      // A frame the agent uploaded is the agent's, not the platform's.
+      const concept = upload.label === DREAM_FRAME_SHOT_LABEL;
+      const shotCount = concept
+        ? await store!.countBuildShots(jobId)
+        : await store!.countBuildShots(jobId, { excludeLabels: DREAM_SHOT_LABELS });
+      if (shotCount >= maxShotsPerBuild) {
         return reject('too_many_shots');
       }
 
@@ -1137,8 +1146,9 @@ export async function registerAgentChannelRoutes(
       if (!bytes || bytes.length === 0) {
         return reply.status(400).send({ error: 'png body is required' });
       }
-      if (bytes.length > MAX_AGENT_SHOT_BYTES) {
-        return reply.status(413).send({ error: 'screenshot is too large' });
+      const maxBytes = concept ? MAX_PROPOSAL_FRAME_BYTES : MAX_AGENT_SHOT_BYTES;
+      if (bytes.length > maxBytes) {
+        return reply.status(413).send({ error: concept ? 'concept frame is too large' : 'screenshot is too large' });
       }
       if (!bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
         return reply.status(400).send({ error: 'not a PNG' });
@@ -1151,6 +1161,7 @@ export async function registerAgentChannelRoutes(
       const stored = await store!.appendBuildShot(jobId, {
         data: bytes.toString('base64'),
         ...(label ? { label } : {}),
+        ...(concept ? { roundGeneration: upload.roundGeneration } : {}),
       });
       options.onEvent?.(jobId);
 

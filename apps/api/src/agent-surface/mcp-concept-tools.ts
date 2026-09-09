@@ -21,6 +21,14 @@ const WRITES = {
   openWorldHint: false,
 } as const;
 
+// Posts a creator-visible card and spends the version's one proposal.
+const CONSUMES = {
+  readOnlyHint: false,
+  destructiveHint: true,
+  idempotentHint: false,
+  openWorldHint: false,
+} as const;
+
 export interface ConceptToolsDeps {
   resolveAuth: (ctx: ToolContext, args: Record<string, unknown>) => Promise<{ channelToken: string } | ToolResult>;
   injectChannel: (
@@ -47,6 +55,7 @@ const REFUSALS: Record<string, string> = {
   already_proposed: 'this delivery already carries a proposal',
   no_screenshot: 'no green gate capture to compare against — deliver and pass the gate first',
   frame_missing: 'a frameId is not a concept frame uploaded on this round',
+  frame_stale: 'a concept frame came from an earlier round; draw this round its own',
   frame_shape: 'a concept frame has a different aspect ratio than the gate capture',
 };
 
@@ -121,7 +130,7 @@ export function createConceptTools(deps: ConceptToolsDeps): Record<string, Conce
     },
 
     suggest_next_round: {
-      annotations: { title: 'Offer two concept directions', ...WRITES },
+      annotations: { title: 'Offer two concept directions', ...CONSUMES },
       outputSchema: {
         type: 'object',
         properties: {

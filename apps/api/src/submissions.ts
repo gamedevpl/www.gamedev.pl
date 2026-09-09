@@ -41,7 +41,7 @@ import { createDispatcher } from './creation/dispatch-build.js';
 import { createResumeBuild, type ResumeOutcome } from './creation/resume-build.js';
 import { createJobReconciler } from './creation/job-reconciler.js';
 import type { DreamJob, DreamRunInput } from './creation/dream-job.js';
-import { createDreamingEnabledFromEnv, createDreamJobFromEnv } from './creation/dream-job-env.js';
+import { createAgentProposalsEnabledFromEnv, createDreamJobFromEnv } from './creation/dream-job-env.js';
 import type { DreamAvailabilityGate } from './creation/dream-availability.js';
 import type { DreamFrameGenerator } from './creation/dream-frames.js';
 import type { NextIdeaGenerator } from './creation/next-ideas.js';
@@ -1776,7 +1776,7 @@ export async function registerSubmissionRoutes(
       onBuilderHandoffAcknowledged: (input) => acknowledgeBuilderHandoff(input),
       ...(stagedPreviews ? { onSourcesStaged: ({ jobId }: { jobId: number }) => stagedPreviews.schedule(jobId) } : {}),
       onRegenerateSeed: regenerateSeed,
-      dreamingEnabled: createDreamingEnabledFromEnv({
+      dreamingEnabled: createAgentProposalsEnabledFromEnv({
         store,
         log: app.log,
         now,

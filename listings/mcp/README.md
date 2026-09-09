@@ -84,7 +84,7 @@ build round; the authoritative list is whatever `tools/list` returns, and
 | `report_progress`          | Report progress                         | destructive |
 | `screenshot_upload_url`    | Get a screenshot upload URL             | write       |
 | `concept_frame_upload_url` | Get a concept frame upload URL          | write       |
-| `suggest_next_round`       | Offer two concept directions            | write       |
+| `suggest_next_round`       | Offer two concept directions            | destructive |
 | `show_round`               | Show the creator a live round card      | read        |
 | `show_media`               | Show the creator the gate's screenshots | read        |
 | `read_inbox`               | Read creator messages                   | read        |

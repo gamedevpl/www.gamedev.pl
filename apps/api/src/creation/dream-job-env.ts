@@ -55,11 +55,11 @@ export interface DreamingEnabledEnvOptions {
   env?: NodeJS.ProcessEnv;
 }
 
-// The same switch, for a proposal an agent drew itself.
-export function createDreamingEnabledFromEnv(options: DreamingEnabledEnvOptions): () => Promise<boolean> {
+// Its own flag; the platform job would claim the version first.
+export function createAgentProposalsEnabledFromEnv(options: DreamingEnabledEnvOptions): () => Promise<boolean> {
   const env = options.env ?? process.env;
   const { store } = options;
-  if (!store || env.DREAMS_ENABLED?.trim() !== 'true') return async () => false;
+  if (!store || env.AGENT_PROPOSALS_ENABLED?.trim() !== 'true') return async () => false;
   const gate =
     options.dreamAvailabilityGate ??
     createDreamAvailabilityGate({

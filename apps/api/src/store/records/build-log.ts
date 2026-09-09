@@ -65,6 +65,8 @@ export interface BuildShot {
   /** The same caption in `locale`, authored rather than machine translated. */
   labelLocalized?: string;
   locale?: string;
+  // Round the upload token was minted for; set on agent concept frames.
+  roundGeneration?: number;
   createdAt: string;
 }
 

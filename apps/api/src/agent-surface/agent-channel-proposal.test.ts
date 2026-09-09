@@ -12,8 +12,8 @@ const ISSUE = 42;
 const VERSION = 'v7';
 const SOURCE = pngHeader(900, 900);
 
-function agentHeaders(jobId = ISSUE) {
-  return { authorization: `Bearer ${mintAgentToken(jobId, secret, { roundGeneration: 1 })}` };
+function agentHeaders(jobId = ISSUE, roundGeneration = 1) {
+  return { authorization: `Bearer ${mintAgentToken(jobId, secret, { roundGeneration })}` };
 }
 
 function stubGamesStore(screenshot: string | null = 'opening.png'): GamesStore {
@@ -56,11 +56,11 @@ async function seed(store: InMemoryStore) {
   await store.setSubmissionPreviewVersion(ISSUE, VERSION);
 }
 
-async function uploadConceptFrame(app: FastifyInstance, png: Buffer = pngHeader(900, 900)): Promise<string> {
+async function uploadConceptFrame(app: FastifyInstance, png: Buffer = pngHeader(900, 900), round = 1): Promise<string> {
   const minted = await app.inject({
     method: 'POST',
     url: '/api/agent/build/shot/upload-url',
-    headers: agentHeaders(),
+    headers: agentHeaders(ISSUE, round),
     payload: { purpose: 'concept' },
   });
   const token = new URL(minted.json().url).searchParams.get('token');
@@ -83,11 +83,11 @@ function options(frameIds: string[]) {
   };
 }
 
-async function propose(app: FastifyInstance, frameIds: string[]) {
+async function propose(app: FastifyInstance, frameIds: string[], round = 1) {
   return await app.inject({
     method: 'POST',
     url: '/api/agent/build/proposal',
-    headers: agentHeaders(),
+    headers: agentHeaders(ISSUE, round),
     payload: options(frameIds),
   });
 }
@@ -102,7 +102,7 @@ describe('agent-written concept proposals', () => {
   });
 
   it('posts a studio proposal grounded in the gate capture', async () => {
-    vi.stubEnv('DREAMS_ENABLED', 'true');
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
     const store = new InMemoryStore();
     await seed(store);
     app = await createApp(store, stubGamesStore());
@@ -122,7 +122,7 @@ describe('agent-written concept proposals', () => {
   });
 
   it('offers one proposal per delivered version', async () => {
-    vi.stubEnv('DREAMS_ENABLED', 'true');
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
     const store = new InMemoryStore();
     await seed(store);
     app = await createApp(store, stubGamesStore());
@@ -134,7 +134,7 @@ describe('agent-written concept proposals', () => {
   });
 
   it('stays quiet for a creator who asked not to see proposals', async () => {
-    vi.stubEnv('DREAMS_ENABLED', 'true');
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
     const store = new InMemoryStore();
     await seed(store);
     app = await createApp(store, stubGamesStore());
@@ -155,7 +155,7 @@ describe('agent-written concept proposals', () => {
   });
 
   it('refuses a plain screenshot passed off as a concept frame', async () => {
-    vi.stubEnv('DREAMS_ENABLED', 'true');
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
     const store = new InMemoryStore();
     await seed(store);
     app = await createApp(store, stubGamesStore());
@@ -167,8 +167,38 @@ describe('agent-written concept proposals', () => {
     expect(response.json().rejected).toBe('frame_missing');
   });
 
+  it('refuses a concept frame drawn for an earlier round', async () => {
+    // Shots are scoped by job, so a kept id still reads.
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    app = await createApp(store, stubGamesStore());
+
+    const stale = [await uploadConceptFrame(app), await uploadConceptFrame(app)];
+    await store.bumpRoundGeneration(ISSUE);
+    const response = await propose(app, stale, 2);
+
+    expect(response.json().rejected).toBe('frame_stale');
+  });
+
+  it('advertises the concept frame cap, not the screenshot one', async () => {
+    const store = new InMemoryStore();
+    await seed(store);
+    app = await createApp(store, stubGamesStore());
+
+    const minted = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/shot/upload-url',
+      headers: agentHeaders(),
+      payload: { purpose: 'concept' },
+    });
+
+    // The proposal route refuses anything larger, so promising more would mislead.
+    expect(minted.json().maxBytes).toBe(600 * 1024);
+  });
+
   it('refuses a concept frame that changed the frame shape', async () => {
-    vi.stubEnv('DREAMS_ENABLED', 'true');
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
     const store = new InMemoryStore();
     await seed(store);
     app = await createApp(store, stubGamesStore());
@@ -180,7 +210,7 @@ describe('agent-written concept proposals', () => {
   });
 
   it('refuses to propose before a green gate capture exists', async () => {
-    vi.stubEnv('DREAMS_ENABLED', 'true');
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
     const store = new InMemoryStore();
     await seed(store);
     app = await createApp(store, stubGamesStore(null));

@@ -821,9 +821,21 @@ because the tool is the only way in:
 - **The reserved captions are not claimable.** `screenshot_upload_url` now refuses a label
   that matches one, so `AI concept` means AI concept everywhere.
 
-`DREAMS_ENABLED` gates both writers. The agent path costs us no model spend, but the
-proposal card, the retained frames and the AI labelling are one product surface and roll
-out together.
+- **Frames belong to the round they were drawn for.** The PUT stamps the upload token's
+  `roundGeneration` on the shot and the proposal route checks it, so an id kept from an
+  earlier round cannot dress a new card up as freshly drawn.
+- **The agent's frames spend the agent's allowance.** Platform-drawn proposal shots stay
+  out of `maxShotsPerBuild`; uploaded ones count against it, or a reserved caption would
+  be an unbounded store an agent could write to forever.
+- **One byte cap, stated once.** `concept_frame_upload_url` advertises the proposal's own
+  600 KiB and the PUT enforces it, rather than promising the screenshot route's 700 KiB
+  and refusing later at `suggest_next_round`.
+
+`AGENT_PROPOSALS_ENABLED` turns the agent writer on; `DREAMS_ENABLED` turns the platform's
+own job on. Two flags, deliberately: both writers share `claimDreamRun`, and the platform
+job runs from a status poll the moment a preview goes green, so wherever it is enabled it
+takes the version first and the agent gets `already_proposed`. One flag would leave no
+configuration in which an agent could actually post. `dreamsPaused` still stops both.
 
 ### `end` is required after submit (not optional etiquette)
 

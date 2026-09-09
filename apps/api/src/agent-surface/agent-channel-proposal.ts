@@ -4,6 +4,7 @@ import { AGENT_CHANNEL_ROUTES, MAX_SHOT_BYTES, type CreatorProposalOption } from
 import {
   DREAM_FRAME_SHOT_LABEL,
   DREAM_SOURCE_SHOT_LABEL,
+  MAX_PROPOSAL_FRAME_BYTES,
   PROPOSAL_TEXT_EN,
   PROPOSAL_TEXT_PL,
 } from '../platform/dream-shots.js';
@@ -17,11 +18,15 @@ export const PROPOSAL_OPTIONS = 2;
 export const MAX_PROPOSAL_LABEL = 60;
 export const MAX_PROPOSAL_PROMPT = 400;
 
-// One concept frame; Firestore holds it base64 in one document.
-export const MAX_PROPOSAL_FRAME_BYTES = 600 * 1024;
-
 export type ProposalRefusal =
-  'stopped' | 'paused' | 'muted' | 'already_proposed' | 'no_screenshot' | 'frame_missing' | 'frame_shape';
+  | 'stopped'
+  | 'paused'
+  | 'muted'
+  | 'already_proposed'
+  | 'no_screenshot'
+  | 'frame_missing'
+  | 'frame_stale'
+  | 'frame_shape';
 
 const OptionSchema = z.object({
   label: z
@@ -129,10 +134,13 @@ export function registerAgentChannelProposalRoutes(app: FastifyInstance, deps: A
 
       const frameIds = parsed.data.options.map((option) => option.frameId);
       if (new Set(frameIds).size !== frameIds.length) return reject('frame_missing');
+      const roundGeneration = record.roundGeneration ?? 1;
       const frames = await Promise.all(frameIds.map((id) => store.getBuildShot(jobId, id)));
       for (const frame of frames) {
         // Only an uploaded concept frame counts; we set the caption.
         if (!frame || frame.label !== DREAM_FRAME_SHOT_LABEL) return reject('frame_missing');
+        // Shots are scoped by job, so an old id still reads.
+        if (frame.roundGeneration !== roundGeneration) return reject('frame_stale');
         const bytes = Buffer.from(frame.data, 'base64');
         if (bytes.length === 0 || bytes.length > MAX_PROPOSAL_FRAME_BYTES) return reject('frame_missing');
         const frameSize = imageSize(bytes);
