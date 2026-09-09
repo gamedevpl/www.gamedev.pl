@@ -73,6 +73,13 @@ async function uploadConceptFrame(app: FastifyInstance, png: Buffer = pngHeader(
   return put.json().shot.id as string;
 }
 
+// Ordinary agent screenshots, to push the build up against its quota.
+async function fillShots(store: InMemoryStore, count: number): Promise<void> {
+  for (let index = 0; index < count; index += 1) {
+    await store.appendBuildShot(ISSUE, { data: pngHeader(4, 4).toString('base64'), label: `Shot ${index + 1}` });
+  }
+}
+
 // Stores a frame the way a completed upload would.
 async function storeConceptFrame(store: InMemoryStore): Promise<string> {
   const shot = await store.appendBuildShot(ISSUE, {
@@ -260,6 +267,38 @@ describe('agent-written concept proposals', () => {
     });
 
     expect(minted.json().rejected).toBe('already_proposed');
+  });
+
+  it('refuses the first concept URL when only one frame would fit', async () => {
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    await fillShots(store, 23);
+    app = await createApp(store, stubGamesStore());
+
+    const minted = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/shot/upload-url',
+      headers: agentHeaders(),
+      payload: { purpose: 'concept' },
+    });
+
+    // Room for one frame buys a frame no card can ever use.
+    expect(minted.json().rejected).toBe('too_many_shots');
+  });
+
+  it('mints the second concept URL once the first frame took its room', async () => {
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    await fillShots(store, 22);
+    app = await createApp(store, stubGamesStore());
+
+    const frames = [await uploadConceptFrame(app), await uploadConceptFrame(app)];
+
+    // Both frames stored, and the card they were drawn for posts.
+    expect(new Set(frames).size).toBe(2);
+    expect((await propose(app, frames)).json().accepted).toBe(true);
   });
 
   it('refuses the upload URL before a green capture exists', async () => {

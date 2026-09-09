@@ -830,7 +830,10 @@ because the tool is the only way in:
   reserved caption cannot become an unbounded store an agent writes to forever.
 - **Refusals come before the model call.** `concept_frame_upload_url` checks everything
   that makes a card impossible: the switch, the creator's mute, a green capture to draw
-  on, a delivery not already claimed, and a free image slot. Learning any of that at
+  on, a delivery not already claimed, and room for the frames the card still needs.
+  Room for one is not room: the mint reserves both required frames, minus any this
+  delivery already holds, so a build at 23 of 24 shots is refused the first URL instead
+  of paying for a frame whose partner can never be stored. Learning any of that at
   `suggest_next_round` would mean the agent had already paid for two frames and we had
   already stored them.
 - **One byte cap, stated once.** `concept_frame_upload_url` advertises the proposal's own

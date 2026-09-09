@@ -14,6 +14,21 @@ export interface BuildShotListOptions extends BuildShotCountOptions {
   limit?: number;
 }
 
+// Narrows a count to one delivery's frames in one round.
+export interface DeliveryShotQuery {
+  label: string;
+  deliveryVersion: string;
+  roundGeneration: number;
+}
+
+function matchesDelivery(query: DeliveryShotQuery) {
+  return (shot: { label?: string; deliveryVersion?: string; roundGeneration?: number; platformDrawn?: true }) =>
+    !shot.platformDrawn &&
+    shot.label === query.label &&
+    shot.deliveryVersion === query.deliveryVersion &&
+    shot.roundGeneration === query.roundGeneration;
+}
+
 function keeps(excludeLabels: readonly string[] | undefined) {
   return (shot: { label?: string }) => !excludeLabels?.includes(shot.label ?? '');
 }
@@ -33,6 +48,9 @@ export interface BuildMediaStore {
 
   // How many screenshots a build has pushed -- bounds a runaway agent.
   countBuildShots(jobId: number, opts?: BuildShotCountOptions): Promise<number>;
+
+  // Frames a delivery already holds; their room is already spent.
+  countDeliveryShots(jobId: number, query: DeliveryShotQuery): Promise<number>;
 
   appendBuildPreview(
     jobId: number,
@@ -81,6 +99,10 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
     return (this.buildShots.get(jobId) ?? [])
       .filter(keeps(opts?.excludeLabels))
       .filter((shot) => !(opts?.excludePlatformDrawn && shot.platformDrawn)).length;
+  }
+
+  async countDeliveryShots(jobId: number, query: DeliveryShotQuery): Promise<number> {
+    return (this.buildShots.get(jobId) ?? []).filter(matchesDelivery(query)).length;
   }
 
   async appendBuildPreview(
@@ -195,6 +217,15 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
     const snap = await this.shotsCollection(jobId).count().get();
     const drawn = opts?.excludePlatformDrawn ? await this.countPlatformDrawn(jobId) : 0;
     return snap.data().count - (await this.countLabeled(jobId, opts?.excludeLabels)) - drawn;
+  }
+
+  async countDeliveryShots(jobId: number, query: DeliveryShotQuery): Promise<number> {
+    // One equality field, so no composite index is needed.
+    const snap = await this.shotsCollection(jobId)
+      .where('deliveryVersion', '==', query.deliveryVersion)
+      .select('label', 'roundGeneration', 'platformDrawn')
+      .get();
+    return snap.docs.map((doc) => doc.data() as BuildShotSummary).filter(matchesDelivery(query)).length;
   }
 
   async appendBuildPreview(

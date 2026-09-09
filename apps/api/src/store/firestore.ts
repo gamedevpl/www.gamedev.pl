@@ -60,6 +60,7 @@ import { FirestoreBuildLogStore } from './slices/build-log.js';
 import {
   FirestoreBuildMediaStore,
   type BuildShotCountOptions,
+  type DeliveryShotQuery,
   type BuildShotListOptions,
 } from './slices/build-media.js';
 import { FirestoreCatalogEnrichmentStore } from './slices/catalog-enrichment.js';
@@ -610,6 +611,10 @@ export class FirestoreStore implements Store {
 
   async countBuildShots(jobId: number, opts?: BuildShotCountOptions): Promise<number> {
     return this.buildMediaStore.countBuildShots(jobId, opts);
+  }
+
+  async countDeliveryShots(jobId: number, query: DeliveryShotQuery): Promise<number> {
+    return this.buildMediaStore.countDeliveryShots(jobId, query);
   }
 
   async appendBuildPreview(

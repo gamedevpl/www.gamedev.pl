@@ -4,7 +4,7 @@ import { AGENT_CHANNEL_ROUTES, MAX_AGENT_SHOT_BYTES } from '@gamedevpl/contract'
 import { createExampleFileStore } from './example-files.js';
 import { registerAgentChannelExamplesRoutes } from './agent-channel-examples.js';
 import { registerAgentChannelBriefRoutes } from './agent-channel-brief.js';
-import { gateFrameOf, registerAgentChannelProposalRoutes } from './agent-channel-proposal.js';
+import { gateFrameOf, PROPOSAL_OPTIONS, registerAgentChannelProposalRoutes } from './agent-channel-proposal.js';
 import { registerAgentChannelSeedRoutes } from './agent-channel-seed.js';
 import { registerAgentChannelKitRoutes } from './agent-channel-kit.js';
 import { registerAgentChannelGateMediaRoutes } from './agent-channel-gate-media.js';
@@ -1075,10 +1075,11 @@ export async function registerAgentChannelRoutes(
 
       // Refuse here, not at suggest_next_round: by then the agent has already paid for
       // two image-model frames and we have stored them for a card nobody will see.
+      const conceptVersion = record.previewVersion ?? record.deliveredVersion;
       if (parsed.data.purpose === 'concept') {
         // Without a green capture the card can never post, and the agent would learn that
         // only after paying for two frames.
-        if (!(await conceptCaptureReady(record))) {
+        if (!conceptVersion || !(await conceptCaptureReady(record))) {
           return reply.send({ accepted: false, rejected: 'no_capture', ...(await channelState(jobId, record)) });
         }
         if (!(await (options.dreamingEnabled ?? (async () => false))())) {
@@ -1087,10 +1088,17 @@ export async function registerAgentChannelRoutes(
         if ((await store!.getUser(record.ownerUid))?.proposalsMutedAt) {
           return reply.send({ accepted: false, rejected: 'proposals_muted', ...(await channelState(jobId, record)) });
         }
-        if (record.dreamRun?.version === (record.previewVersion ?? record.deliveredVersion)) {
+        if (record.dreamRun?.version === conceptVersion) {
           return reply.send({ accepted: false, rejected: 'already_proposed', ...(await channelState(jobId, record)) });
         }
-        if ((await store!.countBuildShots(jobId, { excludePlatformDrawn: true })) >= maxShotsPerBuild) {
+        // A card needs both frames; room for one buys nothing.
+        const drawn = await store!.countDeliveryShots(jobId, {
+          label: DREAM_FRAME_SHOT_LABEL,
+          deliveryVersion: conceptVersion,
+          roundGeneration: record.roundGeneration ?? 1,
+        });
+        const needed = Math.max(PROPOSAL_OPTIONS - drawn, 1);
+        if ((await store!.countBuildShots(jobId, { excludePlatformDrawn: true })) + needed > maxShotsPerBuild) {
           return reply.send({ accepted: false, rejected: 'too_many_shots', ...(await channelState(jobId, record)) });
         }
       }
@@ -1103,8 +1111,7 @@ export async function registerAgentChannelRoutes(
       }
       const label = parsed.data.purpose === 'concept' ? DREAM_FRAME_SHOT_LABEL : asked;
       const generation = record.roundGeneration ?? 1;
-      const mintedFor =
-        parsed.data.purpose === 'concept' ? (record.previewVersion ?? record.deliveredVersion) : undefined;
+      const mintedFor = parsed.data.purpose === 'concept' ? conceptVersion : undefined;
       const ttlSeconds = DEFAULT_UPLOAD_URL_TTL_SECONDS;
       // One clock read: advertised expiresAt must match the signed exp.
       const issuedAt = now();

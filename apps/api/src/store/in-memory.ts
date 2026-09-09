@@ -60,6 +60,7 @@ import { InMemoryBuildLogStore } from './slices/build-log.js';
 import {
   InMemoryBuildMediaStore,
   type BuildShotCountOptions,
+  type DeliveryShotQuery,
   type BuildShotListOptions,
 } from './slices/build-media.js';
 import { InMemoryCatalogEnrichmentStore } from './slices/catalog-enrichment.js';
@@ -543,6 +544,10 @@ export class InMemoryStore implements Store {
 
   async countBuildShots(jobId: number, opts?: BuildShotCountOptions): Promise<number> {
     return this.buildMediaStore.countBuildShots(jobId, opts);
+  }
+
+  async countDeliveryShots(jobId: number, query: DeliveryShotQuery): Promise<number> {
+    return this.buildMediaStore.countDeliveryShots(jobId, query);
   }
 
   async appendBuildPreview(
