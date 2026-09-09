@@ -22,13 +22,16 @@ export interface DeliveryShotQuery {
   roundGeneration: number;
 }
 
-// A frame is worth storing only while its delivery is current.
-function currentDelivery(
-  record: Pick<SubmissionRecord, 'previewVersion' | 'deliveredVersion'> | undefined,
-  version: string,
-): boolean {
-  return Boolean(record) && (record!.previewVersion ?? record!.deliveredVersion) === version;
+// A frame belongs to one delivery of one round.
+function currentRound(record: SubmissionRecord | undefined, query: DeliveryShotQuery): boolean {
+  if (!record) return false;
+  if ((record.roundGeneration ?? 1) !== query.roundGeneration) return false;
+  return (record.previewVersion ?? record.deliveredVersion) === query.deliveryVersion;
 }
+
+// Refusals the caller must tell apart; only one is retryable.
+export type DeliveryShotOutcome =
+  { ok: true; shot: BuildShot } | { ok: false; refused: 'stale_delivery' | 'too_many_shots' };
 
 function matchesDelivery(query: DeliveryShotQuery) {
   return (shot: { label?: string; deliveryVersion?: string; roundGeneration?: number; platformDrawn?: true }) =>
@@ -66,7 +69,7 @@ export interface BuildMediaStore {
     jobId: number,
     query: DeliveryShotQuery & { max: number; id?: string },
     shot: Omit<BuildShot, 'id' | 'createdAt'>,
-  ): Promise<BuildShot | null>;
+  ): Promise<DeliveryShotOutcome>;
 
   appendBuildPreview(
     jobId: number,
@@ -127,12 +130,14 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
     jobId: number,
     query: DeliveryShotQuery & { max: number; id?: string },
     shot: Omit<BuildShot, 'id' | 'createdAt'>,
-  ): Promise<BuildShot | null> {
-    if (!currentDelivery(this.submissions?.get(jobId), query.deliveryVersion)) return null;
+  ): Promise<DeliveryShotOutcome> {
+    if (!currentRound(this.submissions?.get(jobId), query)) return { ok: false, refused: 'stale_delivery' };
     // Counted and pushed without awaiting in between, which is the whole point.
     const existing = this.buildShots.get(jobId) ?? [];
     const at = query.id ? existing.findIndex((item) => item.id === query.id) : -1;
-    if (at < 0 && existing.filter(matchesDelivery(query)).length >= query.max) return null;
+    if (at < 0 && existing.filter(matchesDelivery(query)).length >= query.max) {
+      return { ok: false, refused: 'too_many_shots' };
+    }
     const record: BuildShot = {
       ...shot,
       id: query.id ?? randomUUID(),
@@ -141,7 +146,7 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
     if (at < 0) existing.push(record);
     else existing[at] = record;
     this.buildShots.set(jobId, existing);
-    return { ...record };
+    return { ok: true, shot: { ...record } };
   }
 
   async appendBuildPreview(
@@ -272,12 +277,14 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
     jobId: number,
     query: DeliveryShotQuery & { max: number; id?: string },
     shot: Omit<BuildShot, 'id' | 'createdAt'>,
-  ): Promise<BuildShot | null> {
+  ): Promise<DeliveryShotOutcome> {
     const ref = query.id ? this.shotsCollection(jobId).doc(query.id) : this.shotsCollection(jobId).doc();
-    return await this.db.runTransaction(async (transaction) => {
+    return await this.db.runTransaction<DeliveryShotOutcome>(async (transaction) => {
       // Count and write together, or every PUT sees room.
       const job = await transaction.get(this.db.collection('submissions').doc(String(jobId)));
-      if (!currentDelivery(job.data() as SubmissionRecord | undefined, query.deliveryVersion)) return null;
+      if (!currentRound(job.data() as SubmissionRecord | undefined, query)) {
+        return { ok: false, refused: 'stale_delivery' };
+      }
       const snap = await transaction.get(
         this.shotsCollection(jobId)
           .where('deliveryVersion', '==', query.deliveryVersion)
@@ -286,10 +293,10 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
       const mine = snap.docs.find((doc) => doc.id === ref.id);
       const held = snap.docs.map((doc) => doc.data() as BuildShotSummary).filter(matchesDelivery(query)).length;
       // A replayed URL rewrites its own document, not a new one.
-      if (!mine && held >= query.max) return null;
+      if (!mine && held >= query.max) return { ok: false, refused: 'too_many_shots' };
       const record: BuildShot = { ...shot, id: ref.id, createdAt: new Date().toISOString() };
       transaction.set(ref, Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined)));
-      return record;
+      return { ok: true, shot: record };
     });
   }
 

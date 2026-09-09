@@ -60,6 +60,7 @@ import { FirestoreBuildLogStore } from './slices/build-log.js';
 import {
   FirestoreBuildMediaStore,
   type BuildShotCountOptions,
+  type DeliveryShotOutcome,
   type DeliveryShotQuery,
   type BuildShotListOptions,
 } from './slices/build-media.js';
@@ -621,7 +622,7 @@ export class FirestoreStore implements Store {
     jobId: number,
     query: DeliveryShotQuery & { max: number; id?: string },
     shot: Omit<BuildShot, 'id' | 'createdAt'>,
-  ): Promise<BuildShot | null> {
+  ): Promise<DeliveryShotOutcome> {
     return this.buildMediaStore.appendDeliveryShot(jobId, query, shot);
   }
 

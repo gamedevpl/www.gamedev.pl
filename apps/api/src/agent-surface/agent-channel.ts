@@ -25,6 +25,7 @@ import {
   type UploadKind,
   type UploadTokenClaims,
 } from './agent-upload-token.js';
+import type { BuildShot } from '../store/records/build-log.js';
 import { isRasterSourcePath } from '../platform/raster-source.js';
 import { imageSize, isPng, sameAspectRatio, type ImageSize } from '../platform/image-size.js';
 import { DREAM_FRAME_SHOT_LABEL, isDreamShotLabel, MAX_PROPOSAL_FRAME_BYTES } from '../platform/dream-shots.js';
@@ -1207,27 +1208,32 @@ export async function registerAgentChannelRoutes(
       }
 
       const body64 = bytes.toString('base64');
-      // A minted URL promises a slot; the write is the cap.
-      const stored = concept
-        ? await store!.appendDeliveryShot(
-            jobId,
-            {
-              label: DREAM_FRAME_SHOT_LABEL,
-              deliveryVersion: conceptVersion ?? '',
-              roundGeneration: upload.roundGeneration,
-              max: PROPOSAL_OPTIONS,
-              // One URL, one document; a retry rewrites its own frame.
-              id: `concept-${upload.nonce}`,
-            },
-            {
-              data: body64,
-              label: DREAM_FRAME_SHOT_LABEL,
-              roundGeneration: upload.roundGeneration,
-              deliveryVersion: conceptVersion ?? '',
-            },
-          )
-        : await store!.appendBuildShot(jobId, { data: body64, ...(label ? { label } : {}) });
-      if (!stored) return reject('too_many_shots');
+      let stored: BuildShot;
+      if (concept) {
+        // A minted URL promises a slot; the write is the cap.
+        const outcome = await store!.appendDeliveryShot(
+          jobId,
+          {
+            label: DREAM_FRAME_SHOT_LABEL,
+            deliveryVersion: conceptVersion ?? '',
+            roundGeneration: upload.roundGeneration,
+            max: PROPOSAL_OPTIONS,
+            // One URL, one document; a retry rewrites its own frame.
+            id: `concept-${upload.nonce}`,
+          },
+          {
+            data: body64,
+            label: DREAM_FRAME_SHOT_LABEL,
+            roundGeneration: upload.roundGeneration,
+            deliveryVersion: conceptVersion ?? '',
+          },
+        );
+        // Two answers, not one: ask for a new URL, or stop asking.
+        if (!outcome.ok) return reject(outcome.refused);
+        stored = outcome.shot;
+      } else {
+        stored = await store!.appendBuildShot(jobId, { data: body64, ...(label ? { label } : {}) });
+      }
       options.onEvent?.(jobId);
 
       return reply.send({

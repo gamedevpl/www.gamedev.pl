@@ -291,7 +291,7 @@ describeStoreContract('delivery-scoped shot counts', (makeStore) => {
 
   it('leaves out other deliveries, other rounds, other captions and our own frames', async () => {
     const store = makeStore();
-    await store.appendBuildShot(9, { ...frame, deliveryVersion: 'v1', roundGeneration: 3 });
+    await store.appendBuildShot(9, { ...frame, deliveryVersion: 'v1', roundGeneration: 1 });
     await store.appendBuildShot(9, { ...frame, deliveryVersion: 'v2', roundGeneration: 2 });
     await store.appendBuildShot(9, { ...frame, label: 'Opening', deliveryVersion: 'v2', roundGeneration: 3 });
     await store.appendBuildShot(9, { ...frame, deliveryVersion: 'v2', roundGeneration: 3, platformDrawn: true });
@@ -303,8 +303,8 @@ describeStoreContract('delivery-scoped shot counts', (makeStore) => {
 // The cap is the write itself, not a check before it.
 describeStoreContract('delivery-scoped shot appends', (makeStore) => {
   const frame = { data: 'AAA=', mediaType: 'image/png' as const, label: 'AI concept' };
-  const slot = { label: 'AI concept', deliveryVersion: 'v2', roundGeneration: 3, max: 2 };
-  const shot = { ...frame, deliveryVersion: 'v2', roundGeneration: 3 };
+  const slot = { label: 'AI concept', deliveryVersion: 'v2', roundGeneration: 1, max: 2 };
+  const shot = { ...frame, deliveryVersion: 'v2', roundGeneration: 1 };
 
   // The append also refuses a delivery the job moved past.
   async function delivering(store: Store): Promise<Store> {
@@ -316,28 +316,28 @@ describeStoreContract('delivery-scoped shot appends', (makeStore) => {
   it('stores up to the cap and refuses past it', async () => {
     const store = await delivering(makeStore());
 
-    expect(await store.appendDeliveryShot(9, slot, shot)).not.toBeNull();
-    expect(await store.appendDeliveryShot(9, slot, shot)).not.toBeNull();
-    expect(await store.appendDeliveryShot(9, slot, shot)).toBeNull();
+    expect((await store.appendDeliveryShot(9, slot, shot)).ok).toBe(true);
+    expect((await store.appendDeliveryShot(9, slot, shot)).ok).toBe(true);
+    expect(await store.appendDeliveryShot(9, slot, shot)).toEqual({ ok: false, refused: 'too_many_shots' });
     expect(await store.countDeliveryShots(9, slot)).toBe(2);
   });
 
   it("counts only this delivery's own frames against the cap", async () => {
     const store = await delivering(makeStore());
-    await store.appendBuildShot(9, { ...frame, deliveryVersion: 'v1', roundGeneration: 3 });
+    await store.appendBuildShot(9, { ...frame, deliveryVersion: 'v1', roundGeneration: 1 });
     await store.appendBuildShot(9, { ...frame, deliveryVersion: 'v2', roundGeneration: 2 });
     await store.appendBuildShot(9, { ...shot, platformDrawn: true });
 
-    expect(await store.appendDeliveryShot(9, slot, shot)).not.toBeNull();
-    expect(await store.appendDeliveryShot(9, slot, shot)).not.toBeNull();
-    expect(await store.appendDeliveryShot(9, slot, shot)).toBeNull();
+    expect((await store.appendDeliveryShot(9, slot, shot)).ok).toBe(true);
+    expect((await store.appendDeliveryShot(9, slot, shot)).ok).toBe(true);
+    expect(await store.appendDeliveryShot(9, slot, shot)).toEqual({ ok: false, refused: 'too_many_shots' });
   });
 });
 
 // A retried PUT rewrites its own frame, not the other slot.
 describeStoreContract('delivery-scoped shot idempotence', (makeStore) => {
-  const slot = { label: 'AI concept', deliveryVersion: 'v2', roundGeneration: 3, max: 2 };
-  const shot = { data: 'AAA=', label: 'AI concept', deliveryVersion: 'v2', roundGeneration: 3 };
+  const slot = { label: 'AI concept', deliveryVersion: 'v2', roundGeneration: 1, max: 2 };
+  const shot = { data: 'AAA=', label: 'AI concept', deliveryVersion: 'v2', roundGeneration: 1 };
 
   async function delivering(store: Store): Promise<Store> {
     await store.createSubmission(9, 'g:owner', 'Parcel Run');
@@ -351,15 +351,29 @@ describeStoreContract('delivery-scoped shot idempotence', (makeStore) => {
     const first = await store.appendDeliveryShot(9, { ...slot, id: 'concept-abc' }, shot);
     const retry = await store.appendDeliveryShot(9, { ...slot, id: 'concept-abc' }, shot);
 
-    expect(retry?.id).toBe(first?.id);
+    expect(retry.ok && first.ok && retry.shot.id === first.shot.id).toBe(true);
     expect(await store.countDeliveryShots(9, slot)).toBe(1);
+  });
+
+  it('refuses a frame whose round was reopened under it', async () => {
+    const store = await delivering(makeStore());
+    await store.bumpRoundGeneration(9);
+
+    // A reopen leaves the delivery pointers alone.
+    expect(await store.appendDeliveryShot(9, { ...slot, id: 'concept-abc' }, shot)).toEqual({
+      ok: false,
+      refused: 'stale_delivery',
+    });
   });
 
   it('refuses a frame whose delivery is no longer current', async () => {
     const store = await delivering(makeStore());
     await store.setSubmissionPreviewVersion(9, 'v3');
 
-    expect(await store.appendDeliveryShot(9, { ...slot, id: 'concept-abc' }, shot)).toBeNull();
+    expect(await store.appendDeliveryShot(9, { ...slot, id: 'concept-abc' }, shot)).toEqual({
+      ok: false,
+      refused: 'stale_delivery',
+    });
     expect(await store.countDeliveryShots(9, slot)).toBe(0);
   });
 });

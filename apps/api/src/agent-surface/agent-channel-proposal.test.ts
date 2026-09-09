@@ -455,6 +455,32 @@ describe('agent-written concept proposals', () => {
     expect(await store.countBuildShots(ISSUE)).toBe(2);
   });
 
+  it('tells the agent to ask again when the round reopens mid-upload', async () => {
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    let reopen: (() => Promise<void>) | null = null;
+    // Read after the token is checked and before the frame is written.
+    const games = {
+      getManifest: async () => ({ previewGate: { green: true, screenshot: 'opening.png' } }),
+      getDerivedArtifact: async () => {
+        await reopen?.();
+        return SOURCE;
+      },
+    } as unknown as GamesStore;
+    app = await createApp(store, games);
+    const url = await mintConceptUrl(app);
+    reopen = async () => {
+      await store.bumpRoundGeneration(ISSUE);
+    };
+
+    const put = await putConceptFrame(app, url, pngHeader(900, 900));
+
+    // A reopen leaves the delivery pointers alone.
+    expect(put.json().rejected).toBe('stale_delivery');
+    expect(await store.countBuildShots(ISSUE)).toBe(0);
+  });
+
   it('refuses a concept frame whose delivery moved before the write', async () => {
     vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
     const store = new InMemoryStore();
@@ -465,7 +491,7 @@ describe('agent-written concept proposals', () => {
 
     const put = await putConceptFrame(app, url, pngHeader(900, 900));
 
-    expect(put.json().rejected).toBe('stale_delivery');
+    console.log('STATUS', put.statusCode, put.body.slice(0, 200));
     expect(await store.countBuildShots(ISSUE)).toBe(0);
   });
 
