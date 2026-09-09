@@ -398,6 +398,8 @@ export interface SubmissionRoutesHandle {
   // The seed route's other jobs: regenerate a seed, assemble a preview.
   regenerateSeedNow: SeedPipeline['runSeedRegeneration'];
   publishStagedPreviewNow: ((jobId: number) => Promise<unknown>) | null;
+  // Same route, same reason: concept frames need a request's CPU.
+  runDreamNow: (input: { jobId: number; version: string; screenshotPath?: string }) => Promise<string>;
 }
 
 /**
@@ -1273,8 +1275,7 @@ export async function registerSubmissionRoutes(
   const { reconcileNativeJob, reconcileGateVerdict } = createJobReconciler({
     store,
     gamesStore: options.agentChannel?.gamesStore,
-    // runForVersion never throws; it logs and returns an outcome.
-    ...(dreamJob ? { onPreviewGateGreen: (input: DreamRunInput) => void dreamJob.runForVersion(input) } : {}),
+    ...(dreamJob ? { onPreviewGateGreen: (input: DreamRunInput) => void handOffDream(input) } : {}),
     log: app.log,
     now,
     observeQuietMs,
@@ -1287,6 +1288,47 @@ export async function registerSubmissionRoutes(
     probeGateCrash,
     postGateScreenshot: postGateScreenshotToThread,
   });
+
+  /**
+   * Concept frames take minutes of model calls, and this seam is reached from a status
+   * poll. Cloud Run runs with `--cpu-throttling` (see infra/deploy-api.sh), so work left
+   * running after the response is served can be suspended mid-flight -- and the job claims
+   * the version before it generates, so a suspended attempt would lose that version's
+   * proposal for good. Hand it to the seed route instead, which holds a request open for
+   * exactly this reason. With no dispatcher configured (local, tests) there is no
+   * throttling to dodge, so run it here; when one is configured but refuses, skip and let
+   * the next poll try again rather than start work that cannot finish.
+   */
+  async function handOffDream(input: DreamRunInput): Promise<void> {
+    const job = dreamJob;
+    if (!job) return;
+    const { record, version, screenshotPath } = input;
+    if (!seedDispatch) {
+      await job.runForVersion(input);
+      return;
+    }
+    const handed = await seedDispatch.enqueue(record.jobId, {
+      action: 'dream',
+      version,
+      ...(screenshotPath ? { screenshotPath } : {}),
+    });
+    if (!handed) {
+      app.log.warn({ jobId: record.jobId, version }, 'dream handoff refused; leaving it for the next poll');
+    }
+  }
+
+  // The seed route's worker for a handed-off dream; never throws.
+  async function runDreamNow(input: { jobId: number; version: string; screenshotPath?: string }): Promise<string> {
+    const job = dreamJob;
+    if (!job) return 'unavailable';
+    const record = await store?.getSubmission(input.jobId);
+    if (!record) return 'no_job';
+    return await job.runForVersion({
+      record,
+      version: input.version,
+      ...(input.screenshotPath ? { screenshotPath: input.screenshotPath } : {}),
+    });
+  }
 
   function resolveDreamJob(): DreamJob | null {
     if (options.dreamJob !== undefined) return options.dreamJob;
@@ -1762,6 +1804,7 @@ export async function registerSubmissionRoutes(
     redispatchQueuedJob,
     dispatchQueuedJob,
     regenerateSeedNow: seedPipeline.runSeedRegeneration,
+    runDreamNow,
     publishStagedPreviewNow: stagedPreviews ? (jobId: number) => stagedPreviews.publishNow(jobId) : null,
   };
 }

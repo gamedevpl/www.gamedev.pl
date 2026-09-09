@@ -38,8 +38,10 @@ export function ProposalCard({
   const [decided, setDecided] = useState(false);
 
   useEffect(() => {
+    // A muted creator sees the placeholder, so nothing was exposed.
+    if (handlers.muted) return;
     recordStudioStep('proposal_shown', handlers.builder);
-  }, [handlers.builder]);
+  }, [handlers.builder, handlers.muted]);
 
   if (handlers.muted) {
     return <p className="studio-proposal-muted">{t('statusView.proposal.muted')}</p>;

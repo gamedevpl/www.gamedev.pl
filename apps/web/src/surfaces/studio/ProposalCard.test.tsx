@@ -66,6 +66,14 @@ describe('ProposalCard', () => {
     recordStudioStep.mockReset();
   });
 
+  it('counts no exposure for a creator who muted proposals', async () => {
+    // Exposure feeds decisions-per-exposure; a placeholder is not a proposal.
+    const { container } = await mount({ muted: true });
+
+    expect(container.querySelector('.studio-proposal-thumbs')).toBeNull();
+    expect(recordStudioStep).not.toHaveBeenCalled();
+  });
+
   it('shows both concept frames labelled as AI, and records the exposure once', async () => {
     const { container } = await mount();
     const thumbs = container.querySelectorAll('.studio-proposal-thumb');

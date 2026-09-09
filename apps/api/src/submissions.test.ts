@@ -2096,6 +2096,72 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('hands the dream to the seed route rather than running it after the response', async () => {
+    // Cloud Run throttles CPU once a response is served, and the job claims the
+    // version before generating: a suspended run would lose that proposal for good.
+    const { githubClient } = createGithubClientStub({ jobId: 505 });
+    const { backend } = createBackendStub();
+    const gamesStore = {
+      getManifest: async () => ({
+        slug: 'space-parcels',
+        version: 'v1',
+        roundGeneration: 1,
+        sourceFiles: ['SPEC.md', 'game.ts', 'GAME.json'],
+        previewGate: { green: true, ranAt: '2026-08-24T10:30:00.000Z', screenshot: 'media/opening.png' },
+      }),
+    } as unknown as GamesStore;
+    const runs: DreamRunInput[] = [];
+    const dreamJob: DreamJob = {
+      runForVersion: async (input) => {
+        runs.push(input);
+        return 'posted';
+      },
+    };
+    const handed: Array<{ jobId: number; work?: SeedWork }> = [];
+    const seedDispatch: SeedDispatchClient = {
+      enqueue: async (jobId, work) => {
+        handed.push({ jobId, ...(work ? { work } : {}) });
+        return true;
+      },
+    };
+
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+      dreamJob,
+      seedDispatch,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionSlug(job.jobId, 'space-parcels');
+    await store.setSubmissionPreviewVersion(job.jobId, 'v1');
+    await store.recordJobTransition(job.jobId, {
+      to: 'submitted',
+      at: new Date().toISOString(),
+      by: 'gate',
+      reason: 'sources_delivered',
+    });
+
+    const token = mintToken(job.jobId, secret);
+    const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    expect(status.statusCode).toBe(200);
+    // The round's own seed handoff shares this client, so look for the dream one.
+    expect(handed.filter((entry) => entry.work?.action === 'dream')).toEqual([
+      { jobId: job.jobId, work: { action: 'dream', version: 'v1', screenshotPath: 'media/opening.png' } },
+    ]);
+    expect(runs).toHaveLength(0);
+
+    await app.close();
+  });
+
   it('claims a seal atomically — two concurrent requests spend only one gate run', async () => {
     const { githubClient } = createGithubClientStub({ jobId: 503 });
     const { backend } = createBackendStub();
