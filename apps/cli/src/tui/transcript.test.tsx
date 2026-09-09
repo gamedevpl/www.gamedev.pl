@@ -1,6 +1,7 @@
 import { PassThrough } from 'node:stream';
 import { createElement } from 'react';
 import { render } from 'ink';
+import stripAnsi from 'strip-ansi';
 import { afterAll, expect, it, vi } from 'vitest';
 import { ReplApp } from './app.js';
 import { createTuiSession } from './session.js';
@@ -34,7 +35,8 @@ it.each([40, 120])('writes preview hyperlinks once while status animates at widt
     const url = 'http://127.0.0.1:50600/957d84cdc71250b428511a7d2c85639363cbbe3fba57a9cd/';
     session.writeLine(`live preview: ${url}`);
     await new Promise((resolve) => setTimeout(resolve, 200));
-    expect(output).toContain(`\u001b]8;;${url}\u001b\\`);
+    expect(output).toContain(`\u001b]8;;${url}\u0007`);
+    for (const line of stripAnsi(output).split('\n')) expect(line.length).toBeLessThanOrEqual(columns);
     output = '';
     session.setActivity('Muse is editing');
     session.setLive(['queued']);

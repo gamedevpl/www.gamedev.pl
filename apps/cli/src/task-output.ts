@@ -19,8 +19,16 @@ export function taskOutput(write: (text: string) => void) {
   const path = join(mkdtempSync(join(tmpdir(), 'gamedev-task-')), 'transcript.txt');
   writeFileSync(path, '', { mode: 0o600 });
   let preparing = false;
+  let lastTool = '';
+  let repeats = 0;
+  const flush = (): void => {
+    if (repeats) write(`${lastTool.split(' · ')[0]} · +${repeats} more tool operations — /logs`);
+    repeats = 0;
+    lastTool = '';
+  };
   return {
     path,
+    flush,
     preparing(value: boolean) {
       preparing = value;
     },
@@ -32,6 +40,13 @@ export function taskOutput(write: (text: string) => void) {
       appendFileSync(path, safe + '\n');
       if (preparing && !/error|failed|refused|cannot/i.test(safe)) return;
       const shown = compactTaskLine(safe);
+      const tool = /^[\w-]+ · (?:Running a shell command|Tool:)/.test(shown);
+      if (tool && shown === lastTool) {
+        repeats += 1;
+        return;
+      }
+      flush();
+      if (tool) lastTool = shown;
       if (shown) write(shown);
     },
   };
