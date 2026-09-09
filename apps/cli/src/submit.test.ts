@@ -24,8 +24,11 @@ function checkout(files: Array<{ path: string; content: string }>, version = 'v1
 }
 
 describe('submitGame', () => {
-  it('stages local-only edits and delivers without --force', async () => {
-    const dest = checkout([{ path: 'game.ts', content: 'A' }]);
+  it.each([false, true])('delivers local edits with takeover=%s', async (takeover) => {
+    const dest = checkout([
+      { path: 'game.ts', content: 'A' },
+      { path: 'SPEC.md', content: 'brief' },
+    ]);
     writeFileSync(join(dest, 'games', SLUG, 'game.ts'), 'B');
     const seen: string[] = [];
     const api = createApi({
@@ -37,11 +40,32 @@ describe('submitGame', () => {
         if (path.endsWith('/versions') && !path.includes('/tree')) {
           return json({ versions: [{ version: 'v1', createdAt: '2026-09-01', sourceFiles: ['game.ts'] }] });
         }
-        if (path.includes('/tree')) return json({ version: 'v1', files: [{ path: 'game.ts', content: 'A' }] });
-        if (path.endsWith('/sources')) return json({ files: [{ path: 'game.ts', content: 'A' }] });
+        if (path.includes('/tree'))
+          return json({
+            version: 'v1',
+            files: [
+              { path: 'game.ts', content: 'A' },
+              { path: 'SPEC.md', content: 'brief' },
+            ],
+          });
+        if (path.endsWith('/sources/session'))
+          return json(
+            init?.method === 'POST'
+              ? { accepted: true }
+              : { locked: takeover, canTakeOver: true, jobId: 10, generation: 1 },
+          );
+        if (path.endsWith('/sources'))
+          return json({
+            files: [
+              { path: 'game.ts', content: 'A' },
+              { path: 'SPEC.md', content: 'brief' },
+            ],
+          });
         if (path.endsWith('/sources/stage') && init?.method === 'PUT') {
           const body = JSON.parse(String(init?.body ?? '{}')) as { path: string; content: string };
-          expect(body).toEqual({ path: 'game.ts', content: 'B' });
+          expect(body).toEqual(
+            body.path === 'game.ts' ? { path: 'game.ts', content: 'B' } : { path: 'SPEC.md', content: 'brief' },
+          );
           return json({ accepted: true });
         }
         if (path.endsWith('/sources/deliver')) {
@@ -56,12 +80,13 @@ describe('submitGame', () => {
       api,
       slug: SLUG,
       dest,
+      takeover,
       run: () => ({ status: 0, stderr: '' }),
     });
     expect(result.kind).toBe('delivered');
     if (result.kind === 'delivered') {
       expect(result.gateStarted).toBe(true);
-      expect(result.staged).toEqual(['game.ts']);
+      expect(result.staged).toEqual(takeover ? ['SPEC.md', 'game.ts'] : ['game.ts']);
       expect(result.mode).toBe('preview');
     }
     expect(seen.some((row) => row.startsWith('PUT ') && row.endsWith('/sources/stage'))).toBe(true);

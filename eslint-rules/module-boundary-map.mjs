@@ -238,6 +238,7 @@ const FILE_BUCKET = {
   'chat-turns': 'creation',
   'chat-turns-history': 'creation',
   'creator-feedback-handler': 'creation',
+  'creator-takeover': 'creation',
   'creator-code': 'creation',
   'creator-studio': 'creation',
   'creator-versions': 'creation',

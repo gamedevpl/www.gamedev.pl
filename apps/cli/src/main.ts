@@ -305,6 +305,7 @@ export async function runCli(
         dest,
         force: flags.force === true,
         publish: flags.publish === true,
+        takeover: flags.takeover === true,
       });
       if (asJson) io.stdout.write(`${JSON.stringify(result)}\n`);
       else io.stdout.write(`${formatSubmitLines(result, slug).join('\n')}\n`);

@@ -40,6 +40,7 @@ const BOOLEAN_FLAGS = new Set([
   'force',
   'publish',
   'handoff',
+  'takeover',
   'submit',
   'json',
   'help',

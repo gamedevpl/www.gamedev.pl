@@ -15,6 +15,7 @@ import { formatSyncLines, inspectGame, type SyncResult } from './checkout.js';
 import { childEnv, createDelegateStream, spawnAdapter } from './delegate.js';
 import { formatError } from './errors.js';
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
+import { deliverySession } from './submit-session.js';
 import { formatSubmitLines, submitGame } from './submit.js';
 import { getStatus, isTerminalStatus } from './turn.js';
 import { repairLoop } from './repair-loop.js';
@@ -404,7 +405,19 @@ export async function offerSubmit(input: {
   write: (line: string) => void;
 }): Promise<void> {
   const { ws } = input;
-  const deliver = 'deliver a preview';
+  const session = await deliverySession(input.api, ws.slug);
+  const takeover = Boolean(session?.locked && session.canTakeOver);
+  if (session?.locked && (!takeover || ws.unattended)) {
+    input.write(
+      takeover
+        ? 'Delivery blocked; use /submit --takeover to explicitly disconnect your agent.'
+        : 'Delivery blocked; finish the platform agent or pending handoff in Studio, then retry.',
+    );
+    return;
+  }
+  if (takeover)
+    input.write('Delivery uses the full local checkout. The previous server draft stays in the retired session.');
+  const deliver = takeover ? 'disconnect the old agent and deliver this local checkout' : 'deliver a preview';
   const choice = ws.unattended
     ? ws.unattended.deliver
       ? deliver
@@ -415,7 +428,14 @@ export async function offerSubmit(input: {
     return;
   }
   try {
-    const result = await submitGame({ api: input.api, slug: ws.slug, dest: ws.root, run: ws.run });
+    const result = await submitGame({
+      api: input.api,
+      slug: ws.slug,
+      dest: ws.root,
+      run: ws.run,
+      takeover,
+      expectedSession: session ?? undefined,
+    });
     if (result.kind === 'delivered') ws.telemetry?.record('delivered');
     input.write(formatSubmitLines(result, ws.slug).join('\n'));
   } catch (error) {
