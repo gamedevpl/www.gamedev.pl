@@ -973,7 +973,7 @@
     "apps/world/src/sim-source.ts": 203,
     "apps/world/src/snapshot-store.ts": 92,
     "packages/contract/src/agent-channel-routes.test.ts": 20,
-    "packages/contract/src/agent-channel-routes.ts": 39,
+    "packages/contract/src/agent-channel-routes.ts": 40,
     "packages/contract/src/assessment-checklist.test.ts": 8,
     "packages/contract/src/assessment-checklist.ts": 4,
     "packages/contract/src/assist-lane.test.ts": 8,
