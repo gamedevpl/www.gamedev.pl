@@ -9,9 +9,9 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Continue existing local checkouts from connect instead of silently using platform sources.
-- Show meaningful Codex MCP and file activity instead of item.completed.
-- Open Codex MCP interactively so permission requests can be answered.
+- Continue existing local checkouts from connect instead of silently using platform sources (#1252).
+- Show meaningful Codex MCP and file activity instead of item.completed (#1252).
+- Open Codex MCP interactively so permission requests can be answered (#1252).
 
 ## 0.12.0 — 2026-09-08
 
