@@ -108,7 +108,7 @@ export async function submitGame(input: {
 
   const takenOver = await prepareDeliverySession(input.api, input.slug, input.takeover, input.expectedSession);
   const paths = takenOver
-    ? [...new Set([...localGameFiles(input.dest, input.slug), ...latest.tree.files].map((file) => file.path))]
+    ? [...new Set([...localGameFiles(input.dest, input.slug), ...latest.tree.files].map((file) => file.path))].sort()
     : input.force
       ? changedPathsForced(localGameFiles(input.dest, input.slug), latest.tree.files)
       : latest.sync.local;

@@ -25,6 +25,7 @@ export function registerCreatorTakeover(
     if (!resolved) return reply;
     const { record } = resolved;
     const locked = isLiveAgentRound(record);
+    const state = resolveJobState(record);
     return {
       locked,
       jobId: record.jobId,
@@ -33,8 +34,8 @@ export function registerCreatorTakeover(
         locked &&
         (record.builder ?? record.defaultBuilder) === 'self' &&
         !record.builderHandoff &&
-        resolveJobState(record) !== 'submitted' &&
-        resolveJobState(record) !== 'publishing',
+        state !== 'submitted' &&
+        state !== 'publishing',
     };
   });
   app.post<{ Params: { slug: string } }>(route, config, async (request, reply) => {
