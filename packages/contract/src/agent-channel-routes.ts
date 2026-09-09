@@ -19,6 +19,7 @@ export const AGENT_CHANNEL_ROUTES = {
   KNOWLEDGE_QUERY: '/api/agent/build/knowledge/query',
   MEDIA: '/api/agent/build/media',
   PREVIEW: '/api/agent/build/preview',
+  PROPOSAL: '/api/agent/build/proposal',
   PROGRESS: '/api/agent/build/progress',
   REFERENCE_IMAGES: '/api/agent/build/reference-images',
   SEED: '/api/agent/build/seed',

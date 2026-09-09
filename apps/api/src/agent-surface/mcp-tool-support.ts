@@ -107,6 +107,8 @@ export const MCP_VISIBLE_TOOLS = new Set([
   'get_gate_media',
   'get_round_media',
   'get_reference_images',
+  'concept_frame_upload_url',
+  'suggest_next_round',
   'read_inbox',
   'ack_inbox',
   'get_transcript',

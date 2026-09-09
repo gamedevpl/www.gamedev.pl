@@ -4,6 +4,7 @@ import { AGENT_CHANNEL_ROUTES, MAX_AGENT_SHOT_BYTES } from '@gamedevpl/contract'
 import { createExampleFileStore } from './example-files.js';
 import { registerAgentChannelExamplesRoutes } from './agent-channel-examples.js';
 import { registerAgentChannelBriefRoutes } from './agent-channel-brief.js';
+import { registerAgentChannelProposalRoutes } from './agent-channel-proposal.js';
 import { registerAgentChannelSeedRoutes } from './agent-channel-seed.js';
 import { registerAgentChannelKitRoutes } from './agent-channel-kit.js';
 import { registerAgentChannelGateMediaRoutes } from './agent-channel-gate-media.js';
@@ -25,7 +26,7 @@ import {
   type UploadTokenClaims,
 } from './agent-upload-token.js';
 import { isRasterSourcePath } from '../platform/raster-source.js';
-import { DREAM_SHOT_LABELS } from '../platform/dream-shots.js';
+import { DREAM_FRAME_SHOT_LABEL, DREAM_SHOT_LABELS, isDreamShotLabel } from '../platform/dream-shots.js';
 import { MAX_BUILD_PREVIEW_BYTES } from '../platform/build-preview-limits.js';
 import type { TranscriptPage, TranscriptWindow } from '../delivery/build-transcript.js';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
@@ -121,6 +122,7 @@ const MAX_SHOT_LABEL = 120;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 const ShotUploadUrlInputSchema = z.object({
+  purpose: z.enum(['screenshot', 'concept']).optional(),
   label: z
     .string()
     .trim()
@@ -454,6 +456,8 @@ export interface AgentChannelOptions {
    * and the creator's next poll shows the update rather than a stale snapshot.
    */
   onEvent?: (jobId: number) => void;
+  // Operator switch for concept proposals; absent means off.
+  dreamingEnabled?: () => Promise<boolean>;
   onBuilderHandoffAcknowledged?: (input: {
     jobId: number;
     acknowledgedAt: string;
@@ -1064,7 +1068,12 @@ export async function registerAgentChannelRoutes(
       }
 
       const labelRaw = parsed.data.label ?? parsed.data.caption;
-      const label = labelRaw ? sanitizeCreatorText(labelRaw, { singleLine: true }).slice(0, MAX_SHOT_LABEL) : '';
+      const asked = labelRaw ? sanitizeCreatorText(labelRaw, { singleLine: true }).slice(0, MAX_SHOT_LABEL) : '';
+      // Proposal captions are the platform's vocabulary; purpose earns them, a label cannot.
+      if (parsed.data.purpose !== 'concept' && isDreamShotLabel(asked)) {
+        return reply.status(400).send({ error: `"${asked}" is a reserved caption` });
+      }
+      const label = parsed.data.purpose === 'concept' ? DREAM_FRAME_SHOT_LABEL : asked;
       const generation = record.roundGeneration ?? 1;
       const ttlSeconds = DEFAULT_UPLOAD_URL_TTL_SECONDS;
       // One clock read: advertised expiresAt must match the signed exp.
@@ -2232,6 +2241,16 @@ export async function registerAgentChannelRoutes(
   );
 
   registerAgentChannelBriefRoutes(app, { resolveBuild, store });
+
+  registerAgentChannelProposalRoutes(app, {
+    resolveBuild,
+    store,
+    gamesStore: options.gamesStore,
+    dreamingEnabled: options.dreamingEnabled ?? (async () => false),
+    stopReason,
+    channelState,
+    ...(options.onEvent ? { onPosted: options.onEvent } : {}),
+  });
 
   registerAgentChannelSeedRoutes(app, {
     resolveBuild,

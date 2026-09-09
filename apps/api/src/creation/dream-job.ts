@@ -1,5 +1,10 @@
 import { MAX_SHOT_BYTES, type CreatorProposal, type CreatorProposalOption } from '@gamedevpl/contract';
-import { DREAM_FRAME_SHOT_LABEL, DREAM_SOURCE_SHOT_LABEL } from '../platform/dream-shots.js';
+import {
+  DREAM_FRAME_SHOT_LABEL,
+  DREAM_SOURCE_SHOT_LABEL,
+  PROPOSAL_TEXT_EN,
+  PROPOSAL_TEXT_PL,
+} from '../platform/dream-shots.js';
 import { imageSize, isPng, sameAspectRatio, type ImageSize } from '../platform/image-size.js';
 import type { Store } from '../platform/store.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
@@ -55,9 +60,6 @@ export interface DreamRunInput {
 export interface DreamJob {
   runForVersion(input: DreamRunInput): Promise<DreamOutcome>;
 }
-
-export const PROPOSAL_TEXT_EN = 'I sketched two directions for the next round. Tap one to see it.';
-export const PROPOSAL_TEXT_PL = 'Naszkicowałem dwa kierunki na następną rundę. Kliknij, żeby zobaczyć.';
 
 function styleNoteFor(record: SubmissionRecord): string {
   const concept = (record.spec ?? '').replace(/\s+/g, ' ').trim().slice(0, 160);

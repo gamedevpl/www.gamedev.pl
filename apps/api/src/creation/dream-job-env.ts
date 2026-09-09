@@ -45,3 +45,28 @@ export function createDreamJobFromEnv(options: DreamJobEnvOptions): DreamJob | n
     onPosted: options.onPosted,
   });
 }
+
+export interface DreamingEnabledEnvOptions {
+  store?: Store;
+  log: DreamLog;
+  now: () => number;
+  creationLimitsTtlMs?: number;
+  dreamAvailabilityGate?: DreamAvailabilityGate;
+  env?: NodeJS.ProcessEnv;
+}
+
+// The same switch, for a proposal an agent drew itself.
+export function createDreamingEnabledFromEnv(options: DreamingEnabledEnvOptions): () => Promise<boolean> {
+  const env = options.env ?? process.env;
+  const { store } = options;
+  if (!store || env.DREAMS_ENABLED?.trim() !== 'true') return async () => false;
+  const gate =
+    options.dreamAvailabilityGate ??
+    createDreamAvailabilityGate({
+      store,
+      now: options.now,
+      ttlMs: options.creationLimitsTtlMs,
+      logWarn: (payload, message) => options.log.warn(payload, message),
+    });
+  return () => gate.dreamingEnabled();
+}

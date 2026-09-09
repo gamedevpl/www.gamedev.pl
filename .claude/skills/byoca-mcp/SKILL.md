@@ -794,6 +794,37 @@ Nothing about the proposal itself is builder-specific: it hangs off the preview-
 verdict (`onPreviewGateGreen`), which a BYOCA `mode=preview` delivery reaches the same way
 a managed one does, and the HUD rectangles come from the delivered `CAPTURE.json`.
 
+### An agent can draw the proposal itself (`suggest_next_round`)
+
+The platform's own dream job spends our image model, so it only runs where we pay for it.
+An external agent brings its own, and the write side is open to it:
+
+1. `concept_frame_upload_url` mints a signed PUT for one frame, exactly like
+   `screenshot_upload_url`. It takes no caption — the route forces
+   `DREAM_FRAME_SHOT_LABEL`, and the PUT answers with the stored frame id.
+2. `suggest_next_round` posts the studio card: two options, each a label, the sentence a
+   pick drafts into the composer, and one uploaded `frameId`.
+
+The rules the platform enforces on itself hold here too, in `agent-channel-proposal.ts`,
+because the tool is the only way in:
+
+- **The source frame is ours.** The card's "real" frame is read from the delivered
+  version's own green gate capture, never supplied by the caller — a creator comparing
+  concepts against a picture the agent chose would be comparing against nothing.
+- **`claimDreamRun` is the only gate on repetition**, shared with the platform's job, so
+  one version carries one proposal whoever drew it.
+- **`dreamsPaused` and `proposalsMutedAt` are checked here**, not in the caller. A muted
+  creator or a paused platform answers `posted: false` with a reason; both are final for
+  the round, and the tool description says so rather than inviting a retry.
+- **A frame that changed aspect ratio is refused**, the same spike rule the dream job
+  applies — a reshaped frame repainted the HUD it was meant to keep.
+- **The reserved captions are not claimable.** `screenshot_upload_url` now refuses a label
+  that matches one, so `AI concept` means AI concept everywhere.
+
+`DREAMS_ENABLED` gates both writers. The agent path costs us no model spend, but the
+proposal card, the retained frames and the AI labelling are one product surface and roll
+out together.
+
 ### `end` is required after submit (not optional etiquette)
 
 ChatGPT-class agents usually **submit and stop**. Soft `call_end` alone was not

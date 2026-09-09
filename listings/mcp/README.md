@@ -52,42 +52,44 @@ Every tool advertised to a connecting client, grouped by where it falls in a
 build round; the authoritative list is whatever `tools/list` returns, and
 `plugin-manifests.test.ts` fails if this table drifts from it.
 
-| Tool                     | What it does                            |             |
-| ------------------------ | --------------------------------------- | ----------- |
-| `create_game`            | Create a game                           | write       |
-| `start`                  | Start or rejoin a build round           | write       |
-| `open_round`             | Open an improvement round               | write       |
-| `continue_draft`         | Continue an unpublished draft           | write       |
-| `get_brief`              | Read the build brief                    | read        |
-| `get_seed`               | Fetch the seed draft                    | read        |
-| `regenerate_seed`        | Regenerate the seed draft               | destructive |
-| `get_sources`            | Fetch existing game sources             | read        |
-| `get_kit`                | Fetch the Creator Kit                   | read        |
-| `get_kit_api`            | Fetch the Creator Kit's API reference   | read        |
-| `list_kit_files`         | List Creator Kit files                  | read        |
-| `search_kit_files`       | Search Creator Kit files                | read        |
-| `read_kit_file`          | Read one Creator Kit file               | read        |
-| `read_kit_files`         | Read several Creator Kit files          | read        |
-| `read_kit_file_fragment` | Read a Creator Kit file fragment        | read        |
-| `knowledge_query`        | Ask GameKit/EditorKit/docs a question   | read        |
-| `stage_source_file`      | Stage one source file                   | destructive |
-| `patch_source_file`      | Edit one or more staged source files    | destructive |
-| `delete_source_file`     | Delete one staged source file           | destructive |
-| `clear_staged_sources`   | Clear staged source files               | destructive |
-| `list_staged_sources`    | List staged source files                | read        |
-| `stage_upload_url`       | Get stage upload URL(s)                 | write       |
-| `submit_sources`         | Deliver sources to the gate             | destructive |
-| `end`                    | End (commit) this round                 | destructive |
-| `get_gate_verdict`       | Check the gate once                     | read        |
-| `get_gate_media`         | Fetch the gate's screenshots and video  | read        |
-| `get_reference_images`   | Fetch creator-attached reference images | read        |
-| `report_progress`        | Report progress                         | destructive |
-| `screenshot_upload_url`  | Get a screenshot upload URL             | write       |
-| `show_round`             | Show the creator a live round card      | read        |
-| `show_media`             | Show the creator the gate's screenshots | read        |
-| `read_inbox`             | Read creator messages                   | read        |
-| `ack_inbox`              | Acknowledge creator messages            | destructive |
-| `get_transcript`         | Read the creator conversation           | read        |
+| Tool                       | What it does                            |             |
+| -------------------------- | --------------------------------------- | ----------- |
+| `create_game`              | Create a game                           | write       |
+| `start`                    | Start or rejoin a build round           | write       |
+| `open_round`               | Open an improvement round               | write       |
+| `continue_draft`           | Continue an unpublished draft           | write       |
+| `get_brief`                | Read the build brief                    | read        |
+| `get_seed`                 | Fetch the seed draft                    | read        |
+| `regenerate_seed`          | Regenerate the seed draft               | destructive |
+| `get_sources`              | Fetch existing game sources             | read        |
+| `get_kit`                  | Fetch the Creator Kit                   | read        |
+| `get_kit_api`              | Fetch the Creator Kit's API reference   | read        |
+| `list_kit_files`           | List Creator Kit files                  | read        |
+| `search_kit_files`         | Search Creator Kit files                | read        |
+| `read_kit_file`            | Read one Creator Kit file               | read        |
+| `read_kit_files`           | Read several Creator Kit files          | read        |
+| `read_kit_file_fragment`   | Read a Creator Kit file fragment        | read        |
+| `knowledge_query`          | Ask GameKit/EditorKit/docs a question   | read        |
+| `stage_source_file`        | Stage one source file                   | destructive |
+| `patch_source_file`        | Edit one or more staged source files    | destructive |
+| `delete_source_file`       | Delete one staged source file           | destructive |
+| `clear_staged_sources`     | Clear staged source files               | destructive |
+| `list_staged_sources`      | List staged source files                | read        |
+| `stage_upload_url`         | Get stage upload URL(s)                 | write       |
+| `submit_sources`           | Deliver sources to the gate             | destructive |
+| `end`                      | End (commit) this round                 | destructive |
+| `get_gate_verdict`         | Check the gate once                     | read        |
+| `get_gate_media`           | Fetch the gate's screenshots and video  | read        |
+| `get_reference_images`     | Fetch creator-attached reference images | read        |
+| `report_progress`          | Report progress                         | destructive |
+| `screenshot_upload_url`    | Get a screenshot upload URL             | write       |
+| `concept_frame_upload_url` | Get a concept frame upload URL          | write       |
+| `suggest_next_round`       | Offer two concept directions            | write       |
+| `show_round`               | Show the creator a live round card      | read        |
+| `show_media`               | Show the creator the gate's screenshots | read        |
+| `read_inbox`               | Read creator messages                   | read        |
+| `ack_inbox`                | Acknowledge creator messages            | destructive |
+| `get_transcript`           | Read the creator conversation           | read        |
 
 The third column is the tool's own `annotations`, not a summary written here: `read` is
 `readOnlyHint`, `destructive` is `destructiveHint`. Nine tools are destructive, and the
