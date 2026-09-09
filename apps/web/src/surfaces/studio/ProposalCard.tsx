@@ -37,8 +37,8 @@ export function ProposalCard({
   const [open, setOpen] = useState(false);
   const [decided, setDecided] = useState(false);
   const cardRef = useRef<HTMLDivElement | null>(null);
-  // The builder at first render; a handoff must not re-attribute.
-  const builderRef = useRef(handlers.builder);
+  // The builder that drew the card, not the current one.
+  const builderRef = useRef(proposal.builder ?? handlers.builder);
   const exposed = useRef(false);
 
   useEffect(() => {

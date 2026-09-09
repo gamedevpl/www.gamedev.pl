@@ -4,6 +4,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n/index.js';
+import type { CreatorProposal } from '@gamedevpl/contract';
 import { ProposalCard, type ProposalPick } from './ProposalCard.js';
 
 const recordStudioStep = vi.fn();
@@ -40,7 +41,10 @@ function button(container: HTMLElement, text: string): HTMLButtonElement {
   return match;
 }
 
-async function mount(handlers: Partial<Parameters<typeof ProposalCard>[0]['handlers']> = {}) {
+async function mount(
+  handlers: Partial<Parameters<typeof ProposalCard>[0]['handlers']> = {},
+  overrides: Partial<CreatorProposal> = {},
+) {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   await i18n.changeLanguage('pl');
   const container = document.createElement('div');
@@ -52,7 +56,7 @@ async function mount(handlers: Partial<Parameters<typeof ProposalCard>[0]['handl
     root.render(
       <ProposalCard
         token="tok"
-        proposal={proposal}
+        proposal={{ ...proposal, ...overrides }}
         handlers={{ builder: 'platform', muted: false, onPick: (pick) => picks.push(pick), onMute, ...handlers }}
       />,
     );
@@ -93,6 +97,13 @@ describe('ProposalCard', () => {
     });
     expect(recordStudioStep).toHaveBeenCalledTimes(1);
     vi.unstubAllGlobals();
+  });
+
+  it('attributes a card to the builder that drew it, not the current one', async () => {
+    // A handoff after the card was posted must not move its telemetry.
+    await mount({ builder: 'platform' }, { builder: 'self' });
+
+    expect(recordStudioStep).toHaveBeenCalledWith('proposal_shown', 'self');
   });
 
   it('counts no exposure for a creator who muted proposals', async () => {

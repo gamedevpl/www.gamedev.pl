@@ -25,6 +25,7 @@ export type DreamOutcome =
   | 'pure_ui'
   | 'no_ideas'
   | 'no_frames'
+  | 'superseded'
   | 'failed';
 
 export interface DreamLog {
@@ -130,11 +131,13 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     if (hudCoverage(hudRegions, size.width, size.height) >= PURE_UI_COVERAGE) return 'pure_ui';
 
     if (!record.spec?.trim()) return 'no_ideas';
+    // An improvement round runs on a live game.
+    const published = Boolean(record.publishedAt) || Boolean(await store.getPublishedSubmissionBySlug(record.slug));
     const generated = await ideas.generate({
       spec: record.spec,
       ...(record.qa?.length ? { qa: record.qa } : {}),
       title: record.title,
-      published: false,
+      published,
       ...(record.locale ? { locale: record.locale } : {}),
     });
     const candidates = generated.slice(0, DREAM_OPTIONS);
@@ -145,18 +148,19 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     const styleNote = styleNoteFor(record);
     const dreamed: { frame: DreamFrame; idea: NextIdea }[] = [];
     const dateStr = new Date(now()).toISOString().slice(0, 10);
-    let refused = 0;
+    // Both frames or neither; one buys nothing.
+    if (!(await availability.spendFrameSlots(dateStr, DREAM_OPTIONS))) return 'no_capacity';
     for (const idea of candidates) {
-      if (!(await availability.spendFrameSlot(dateStr))) {
-        refused += 1;
-        continue;
-      }
       const result = await dreamFrame({ idea, sourcePng, size, styleNote, hudRegions, jobId });
       if (result) dreamed.push(result);
     }
-    if (dreamed.length === 0) return refused === candidates.length ? 'no_capacity' : 'no_frames';
     // The copy promises two directions; one is not a choice.
     if (dreamed.length < DREAM_OPTIONS) return 'no_frames';
+
+    // Generation takes minutes; a newer preview makes this card wrong.
+    const current = await store.getSubmission(jobId);
+    if ((current?.previewVersion ?? current?.deliveredVersion) !== version) return 'superseded';
+    if (current?.dreamRun?.version !== version) return 'superseded';
 
     const sourceShot = await store.appendBuildShot(jobId, {
       data: sourcePng,
@@ -172,7 +176,12 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       });
       options.push({ id: idea.id, label: idea.label, prompt: idea.prompt, frameRef: shot.id });
     }
-    const proposal: CreatorProposal = { sourceRef: sourceShot.id, version, options };
+    const proposal: CreatorProposal = {
+      sourceRef: sourceShot.id,
+      version,
+      options,
+      builder: record.builder === 'self' ? 'self' : 'platform',
+    };
     await store.appendCreatorMessage(jobId, PROPOSAL_TEXT_EN, {
       origin: 'studio',
       delivered: true,

@@ -170,7 +170,8 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
   - NP-1v concept proposals (2026-09): `studio_step` records `proposal_shown` →
     `proposal_picked` | `proposal_postponed` | `proposal_muted`, with the round's `builder`
     dimension. One `proposal_shown` per tab session (the step key dedupes), so the ratio
-    is decisions per exposure, not per poll.
+    is decisions per exposure, not per poll. The dimension is the builder that drew the
+    card, persisted on the proposal — a later handoff must not re-attribute old cards.
   - ~~BYOCA / self-build funnel unmeasured~~ — **closed 2026-08-01 (BY-08)**: `studio_step`
     on the visit stream records `builder_chosen` → `connect_copied` (also `connect_deeplink`,
     `connect_dismissed`, `connect_restored`) → `agent_signaled` →

@@ -760,8 +760,12 @@ export class InMemoryStore implements Store {
     return this.dreamQuotaStore.getGlobalDreamCount(dateStr);
   }
 
-  async checkAndIncrementGlobalDreams(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
-    return this.dreamQuotaStore.checkAndIncrementGlobalDreams(dateStr, limit);
+  async checkAndIncrementGlobalDreams(
+    dateStr: string,
+    limit: number,
+    count?: number,
+  ): Promise<{ allowed: boolean; current: number }> {
+    return this.dreamQuotaStore.checkAndIncrementGlobalDreams(dateStr, limit, count);
   }
 
   async getGlobalBotCallCount(dateStr: string): Promise<number> {

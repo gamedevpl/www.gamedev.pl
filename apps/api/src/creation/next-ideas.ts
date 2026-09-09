@@ -160,9 +160,12 @@ ${params.qa?.length ? `\nClarifications the creator already gave:\n${params.qa.m
 }
 
 export class StubNextIdeaGenerator implements NextIdeaGenerator {
+  public readonly requests: NextIdeasParams[] = [];
+
   constructor(private ideas: NextIdea[] = []) {}
 
-  async generate(): Promise<NextIdea[]> {
+  async generate(params: NextIdeasParams): Promise<NextIdea[]> {
+    this.requests.push(params);
     return this.ideas;
   }
 }

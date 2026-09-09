@@ -18,7 +18,7 @@ const log = { error: () => {}, warn: () => {}, info: () => {} };
 
 async function harness(params: {
   artifacts?: Record<string, Buffer | null>;
-  frame?: DreamFrame | null | ((request: { direction: string }) => DreamFrame | null);
+  frame?: DreamFrame | null | ((request: { direction: string }) => DreamFrame | null | Promise<DreamFrame | null>);
   ideas?: NextIdea[];
   hud?: unknown;
   record?: Partial<SubmissionRecord>;
@@ -42,6 +42,7 @@ async function harness(params: {
     'media/metadata.json': Buffer.from(JSON.stringify(metadata)),
     ...params.artifacts,
   };
+  const ideaGenerator = new StubNextIdeaGenerator(params.ideas ?? ideas);
   const frames = new StubDreamFrameGenerator(
     params.frame === undefined
       ? { data: jpegHeader(1024, 1024).toString('base64'), mediaType: 'image/jpeg' }
@@ -52,7 +53,7 @@ async function harness(params: {
     store,
     gamesStore: { getDerivedArtifact: async (_slug, _version, name) => artifacts[name] ?? null },
     availability: createDreamAvailabilityGate({ store, ttlMs: 0 }),
-    ideas: new StubNextIdeaGenerator(params.ideas ?? ideas),
+    ideas: ideaGenerator,
     frames,
     readHudRegions: async ({ slug, version, width, height }) => {
       const body = artifacts['media/metadata.json'];
@@ -73,7 +74,7 @@ async function harness(params: {
   const job = createDreamJob(deps);
   const run = (overrides: Partial<{ version: string; screenshotPath?: string }> = {}): Promise<DreamOutcome> =>
     job.runForVersion({ record, version: 'v1', screenshotPath: 'media/opening.png', ...overrides });
-  return { store, record, frames, posted, run };
+  return { store, record, frames, ideas: ideaGenerator, posted, run };
 }
 
 describe('createDreamJob', () => {
@@ -144,6 +145,48 @@ describe('createDreamJob', () => {
     const { store, run } = await harness({ hud: [], limits: { globalDailyDreamCap: 0 } });
     expect(await run()).toBe('no_capacity');
     expect(await store.listCreatorMessages(7)).toEqual([]);
+  });
+
+  it('refuses when only one of the two frames would fit the cap', async () => {
+    const { store, run } = await harness({ hud: [], limits: { globalDailyDreamCap: 1 } });
+    expect(await run()).toBe('no_capacity');
+    // Nothing spent: a lone frame is a paid call for nothing.
+    expect(await store.getGlobalDreamCount('2026-09-07')).toBe(0);
+    expect(await store.listCreatorMessages(7)).toEqual([]);
+  });
+
+  it('drops a proposal whose delivery moved while it was drawing', async () => {
+    let deliverNewer: (() => Promise<void>) | null = null;
+    const { store, run } = await harness({
+      hud: [],
+      frame: async () => {
+        await deliverNewer?.();
+        return { data: jpegHeader(1024, 1024).toString('base64'), mediaType: 'image/jpeg' };
+      },
+    });
+    deliverNewer = async () => {
+      await store.setSubmissionPreviewVersion(7, 'v2');
+    };
+
+    expect(await run()).toBe('superseded');
+    expect(await store.listCreatorMessages(7)).toEqual([]);
+    expect(await store.listBuildShots(7)).toEqual([]);
+  });
+
+  it('tells the idea model whether the game is already live', async () => {
+    const draft = await harness({ hud: [] });
+    expect(await draft.run()).toBe('posted');
+    expect(draft.ideas.requests[0]?.published).toBe(false);
+
+    const live = await harness({ hud: [], record: { publishedAt: '2026-08-01T00:00:00.000Z' } });
+    expect(await live.run()).toBe('posted');
+    expect(live.ideas.requests[0]?.published).toBe(true);
+  });
+
+  it('records the builder the card was drawn under', async () => {
+    const { store, run } = await harness({ hud: [], record: { builder: 'self' } });
+    expect(await run()).toBe('posted');
+    expect((await store.listCreatorMessages(7))[0]?.proposal?.builder).toBe('self');
   });
 
   it('needs a real PNG capture to start from', async () => {

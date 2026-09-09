@@ -105,10 +105,12 @@ export class VertexDreamFrameGenerator implements DreamFrameGenerator {
 export class StubDreamFrameGenerator implements DreamFrameGenerator {
   public readonly requests: DreamFrameRequest[] = [];
 
-  constructor(private frame: DreamFrame | null | ((request: DreamFrameRequest) => DreamFrame | null)) {}
+  constructor(
+    private frame: DreamFrame | null | ((request: DreamFrameRequest) => DreamFrame | null | Promise<DreamFrame | null>),
+  ) {}
 
   async generate(request: DreamFrameRequest): Promise<DreamFrame | null> {
     this.requests.push(request);
-    return typeof this.frame === 'function' ? this.frame(request) : this.frame;
+    return typeof this.frame === 'function' ? await this.frame(request) : this.frame;
   }
 }

@@ -24,8 +24,8 @@ export interface DreamAvailabilityOptions {
 export interface DreamAvailabilityGate {
   // False means: do not dream. The operator's kill switch.
   dreamingEnabled(): Promise<boolean>;
-  // Spends one frame from the day's shared allowance, or refuses.
-  spendFrameSlot(dateStr: string): Promise<boolean>;
+  // Spends `count` frames from the day's shared allowance, all or none.
+  spendFrameSlots(dateStr: string, count: number): Promise<boolean>;
 }
 
 // Same chassis as seed availability: a platform job, not a request.
@@ -59,15 +59,18 @@ export function createDreamAvailabilityGate(options: DreamAvailabilityOptions): 
     return stored?.dreamsPaused !== true;
   }
 
-  async function spendFrameSlot(dateStr: string): Promise<boolean> {
+  async function spendFrameSlots(dateStr: string, count: number): Promise<boolean> {
     if (!store) return true;
     const stored = await config();
     const cap = stored?.globalDailyDreamCap ?? resolveDefaultGlobalDailyDreamCap();
     if (cap <= 0) return false;
     try {
-      const spent = await store.checkAndIncrementGlobalDreams(dateStr, cap);
+      const spent = await store.checkAndIncrementGlobalDreams(dateStr, cap, count);
       if (!spent.allowed) {
-        logWarn({ dateStr, cap, current: spent.current }, 'global daily dream cap reached; refusing concept frames');
+        logWarn(
+          { dateStr, cap, count, current: spent.current },
+          'global daily dream cap reached; refusing concept frames',
+        );
         return false;
       }
       if (spent.current >= Math.ceil(cap * 0.8)) {
@@ -76,10 +79,10 @@ export function createDreamAvailabilityGate(options: DreamAvailabilityOptions): 
       return true;
     } catch (error) {
       // A blip means no frame, not a free one.
-      logWarn({ err: error, dateStr }, 'global dream counter unreachable; skipping the frame');
+      logWarn({ err: error, dateStr }, 'global dream counter unreachable; skipping the frames');
       return false;
     }
   }
 
-  return { dreamingEnabled, spendFrameSlot };
+  return { dreamingEnabled, spendFrameSlots };
 }

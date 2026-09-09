@@ -5,8 +5,12 @@ export interface DreamQuotaStore {
   // Concept frames everyone together has dreamt on `dateStr`.
   getGlobalDreamCount(dateStr: string): Promise<number>;
 
-  // Spends one frame when under `limit`; returns the count either way.
-  checkAndIncrementGlobalDreams(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
+  // Spends `count` frames when they all fit under `limit`, or none.
+  checkAndIncrementGlobalDreams(
+    dateStr: string,
+    limit: number,
+    count?: number,
+  ): Promise<{ allowed: boolean; current: number }>;
 }
 
 export class InMemoryDreamQuotaStore implements DreamQuotaStore {
@@ -16,11 +20,15 @@ export class InMemoryDreamQuotaStore implements DreamQuotaStore {
     return this.globalDreams.get(dateStr) ?? 0;
   }
 
-  async checkAndIncrementGlobalDreams(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
+  async checkAndIncrementGlobalDreams(
+    dateStr: string,
+    limit: number,
+    count = 1,
+  ): Promise<{ allowed: boolean; current: number }> {
     const current = this.globalDreams.get(dateStr) ?? 0;
-    if (current >= limit) return { allowed: false, current };
-    this.globalDreams.set(dateStr, current + 1);
-    return { allowed: true, current: current + 1 };
+    if (current + count > limit) return { allowed: false, current };
+    this.globalDreams.set(dateStr, current + count);
+    return { allowed: true, current: current + count };
   }
 }
 
@@ -38,15 +46,20 @@ export class FirestoreDreamQuotaStore implements DreamQuotaStore {
     return typeof value === 'number' ? value : 0;
   }
 
-  async checkAndIncrementGlobalDreams(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
+  async checkAndIncrementGlobalDreams(
+    dateStr: string,
+    limit: number,
+    count = 1,
+  ): Promise<{ allowed: boolean; current: number }> {
     const ref = this.globalUsageRef(dateStr);
     return await this.db.runTransaction(async (transaction) => {
       const snap = await transaction.get(ref);
       const value = snap.data()?.dreams;
       const current = typeof value === 'number' ? value : 0;
-      if (current >= limit) return { allowed: false, current };
-      transaction.set(ref, { dreams: current + 1 }, { merge: true });
-      return { allowed: true, current: current + 1 };
+      // All or none: half a proposal is spend for nothing.
+      if (current + count > limit) return { allowed: false, current };
+      transaction.set(ref, { dreams: current + count }, { merge: true });
+      return { allowed: true, current: current + count };
     });
   }
 }
