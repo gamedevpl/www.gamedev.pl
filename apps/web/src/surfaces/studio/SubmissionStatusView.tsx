@@ -320,7 +320,9 @@ export function SubmissionStatusView({
       }),
     onMute: () => {
       setProposalsMuted(true);
-      void updateNotificationPreferences({ proposals: false }).catch(() => {});
+      // Roll back a failed write: a card that says muted while the server still sends
+      // proposals turns an explicit opt-out into a lie the creator cannot see.
+      void updateNotificationPreferences({ proposals: false }).catch(() => setProposalsMuted(false));
     },
   };
 
