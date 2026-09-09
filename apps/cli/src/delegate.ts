@@ -1,3 +1,4 @@
+import { codexEventText } from './codex-events.js';
 import { createMuseStream, museEventText } from './muse-events.js';
 import { antigravityText } from './agent-events.js';
 import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
@@ -74,6 +75,8 @@ export function parseEventLine(line: string, adapter?: string): string | null {
     const text = museEventText(parsed);
     if (text !== undefined) return text;
   }
+  const codex = codexEventText(parsed);
+  if (codex !== undefined) return codex;
   const agy = antigravityText(parsed);
   if (agy !== undefined) return agy;
   if (parsed.type === 'item.started') return null;

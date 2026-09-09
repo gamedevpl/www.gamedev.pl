@@ -1,3 +1,4 @@
+import type { InteractiveRun } from './agy-interactive.js';
 import { readFileSync } from 'node:fs';
 import { modelCommand } from './model-command.js';
 import { offerKitUpdate, updateKit } from './kit-update.js';
@@ -44,6 +45,7 @@ export async function handleReplLine(input: {
   abort?: Workshop['abort'];
   telemetry?: CliTelemetry;
   pendingExecution?: PendingExecution;
+  interactiveRun?: InteractiveRun;
   onWorkshop?: (ws: Workshop) => void;
   write: (s: string) => void;
   onActivity?: (activity: string) => void;

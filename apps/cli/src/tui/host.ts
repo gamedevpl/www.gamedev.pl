@@ -167,6 +167,7 @@ export async function runInkRepl(input: {
           abort,
           telemetry,
           pendingExecution,
+          interactiveRun,
           onWorkshop: (opened) => {
             workshop = opened;
             opened.onActivity = session.setActivity;

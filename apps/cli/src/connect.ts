@@ -1,3 +1,4 @@
+import type { InteractiveRun } from './agy-interactive.js';
 import { configureAdapter, selectionLabel } from './agent-settings.js';
 import { trackAgentFailure } from './agent-failure.js';
 import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
@@ -176,6 +177,7 @@ export async function connectGame(input: {
   handoff?: boolean;
   which?: (cmd: string) => string | null;
   runAdapter?: AdapterRun;
+  interactiveRun?: InteractiveRun;
   abort?: AbortSignal;
   write: (line: string) => void;
   telemetry?: CliTelemetry;
@@ -204,6 +206,12 @@ export async function connectGame(input: {
       cliUsage('connect'),
     );
   }
+  if (spec?.name === 'codex' && !input.interactiveRun && !input.runAdapter)
+    throw new CliError(
+      'Codex MCP needs an interactive terminal for permissions.',
+      EXIT_INPUT,
+      'Run gamedevpl connect in a terminal, or use a local checkout and delegate.',
+    );
   if (spec) {
     spec = configureAdapter(spec, env);
     input.write(selectionLabel(spec.name, spec.selection ?? {}));
@@ -296,6 +304,26 @@ export async function connectGame(input: {
     input.telemetry?.record('delegate_used', { adapter: spec.name });
     const failure = trackAgentFailure(spec.name);
     const render = createDelegateStream(spec.name);
+    const prompt =
+      payload.kickoffPrompt ?? `Edit ${input.slug} in this checkout. The creator will deliver with gamedevpl submit.`;
+    if (spec.name === 'codex' && input.interactiveRun) {
+      input.write(
+        'Codex now controls the terminal. Answer permission prompts there; exit Codex to return to gamedevpl.',
+      );
+      const result = await input.interactiveRun({
+        spec: wired.spec,
+        prompt,
+        cwd,
+        env: envForAgent,
+        abort: input.abort ?? new AbortController().signal,
+      });
+      input.write(
+        `Returned from Codex (${result.code ?? 'stopped'}). This does not confirm delivery; check Studio. Files remain at ${cwd}`,
+      );
+      if (result.code !== 0)
+        throw new CliError('Codex stopped before confirming completion.', EXIT_INPUT, `Files remain at ${cwd}`);
+      return { spawned: true, mcp: true };
+    }
     const result = await (input.runAdapter ?? defaultAdapterRun)({
       spec: wired.spec,
       prompt:

@@ -313,7 +313,7 @@ export async function runCli(
     if (verb === 'connect') {
       const slug = args[0] ?? readCheckoutSlug(process.cwd());
       if (!slug) throw new CliError(cliUsage('connect', '<slug>'), EXIT_INPUT, '<slug>');
-      if (tty && io.stdout.isTTY && !asJson && !flags.agent && !flags.manual && !args[1]) {
+      if (tty && io.stdout.isTTY && !asJson && !flags.manual && !args[1]) {
         const { runInkRepl } = await import('./tui/host.js');
         return runInkRepl({
           api,
@@ -321,7 +321,7 @@ export async function runCli(
           io,
           token: await studioToken(api, slug),
           slug,
-          initialLine: `/connect ${slug}${flags.handoff ? ' --handoff' : ''}`,
+          initialLine: `/connect ${slug}${flags.handoff ? ' --handoff' : ''}${typeof flags.agent === 'string' ? ` --agent ${flags.agent}` : ''}`,
         });
       }
       const dest = args[1] ?? process.cwd();
@@ -330,6 +330,7 @@ export async function runCli(
         slug,
         dest,
         env,
+        interactiveRun: tty && io.stdout.isTTY ? (await import('./agy-interactive.js')).runInteractive : undefined,
         agent: typeof flags.agent === 'string' ? flags.agent : undefined,
         handoff: flags.handoff === true,
         write: (line) => io.stdout.write(`${line}\n`),
