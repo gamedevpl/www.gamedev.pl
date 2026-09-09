@@ -9,7 +9,9 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Make terminal conversations easier to scan with colored roles, checks, links and compact repeated tool activity (#TBD).
+- Make terminal conversations easier to scan with colored roles, checks, links and clearer spacing (#1259).
+- Summarize repeated tool activity while preserving every operation in `/logs` (#1259).
+- Wrap clickable preview links within narrow terminals (#1259).
 
 - Recover preview delivery from an open own-agent session with explicit takeover confirmation (#1256).
 
