@@ -155,6 +155,7 @@ export function registerAgentChannelProposalRoutes(app: FastifyInstance, deps: A
         data: source.toString('base64'),
         mediaType: 'image/png',
         label: DREAM_SOURCE_SHOT_LABEL,
+        platformDrawn: true,
       });
       const options: CreatorProposalOption[] = parsed.data.options.map((option, index) => ({
         id: `agent-${index + 1}`,

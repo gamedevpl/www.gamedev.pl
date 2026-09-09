@@ -56,6 +56,8 @@ const REFUSALS: Record<string, string> = {
   no_screenshot: 'no green gate capture to compare against — deliver and pass the gate first',
   frame_missing: 'a frameId is not a concept frame uploaded on this round',
   frame_stale: 'a concept frame came from an earlier round; draw this round its own',
+  proposals_off: 'concept proposals are switched off right now',
+  proposals_muted: 'this creator asked not to be shown concept proposals',
   frame_shape: 'a concept frame has a different aspect ratio than the gate capture',
 };
 
@@ -105,7 +107,10 @@ export function createConceptTools(deps: ConceptToolsDeps): Record<string, Conce
           pending?: Array<{ id: string; text: string; createdAt: string }>;
         };
         if (res.statusCode !== 200) return toolErr(body.error ?? `concept frame upload URL failed (${res.statusCode})`);
-        if (body.rejected) return toolErr(`concept frame upload URL was not issued (${body.rejected})`);
+        if (body.rejected) {
+          // Final for the round, and said before any model call.
+          return toolErr(`concept frame upload URL was not issued (${REFUSALS[body.rejected] ?? body.rejected})`);
+        }
         // Never invent an expiry or cap the channel did not state.
         if (
           typeof body.url !== 'string' ||
@@ -125,6 +130,7 @@ export function createConceptTools(deps: ConceptToolsDeps): Record<string, Conce
           upload: body.upload,
           maxBytes: body.maxBytes,
           ...channelControlFields(body),
+          pendingMessages: pendingMessagesFromChannel(body),
         });
       },
     },

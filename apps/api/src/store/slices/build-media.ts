@@ -6,6 +6,8 @@ import { byNewestFirst } from './build-log.js';
 export interface BuildShotCountOptions {
   // Platform-written captions to leave out of agent-facing counts.
   excludeLabels?: readonly string[];
+  // Leaves out what the platform drew, whatever caption it carries.
+  excludePlatformDrawn?: boolean;
 }
 
 export interface BuildShotListOptions extends BuildShotCountOptions {
@@ -76,7 +78,9 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
   }
 
   async countBuildShots(jobId: number, opts?: BuildShotCountOptions): Promise<number> {
-    return (this.buildShots.get(jobId) ?? []).filter(keeps(opts?.excludeLabels)).length;
+    return (this.buildShots.get(jobId) ?? [])
+      .filter(keeps(opts?.excludeLabels))
+      .filter((shot) => !(opts?.excludePlatformDrawn && shot.platformDrawn)).length;
   }
 
   async appendBuildPreview(
@@ -182,9 +186,15 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
     return doc.exists ? (doc.data() as BuildShot) : null;
   }
 
+  private async countPlatformDrawn(jobId: number): Promise<number> {
+    const snap = await this.shotsCollection(jobId).where('platformDrawn', '==', true).count().get();
+    return snap.data().count;
+  }
+
   async countBuildShots(jobId: number, opts?: BuildShotCountOptions): Promise<number> {
     const snap = await this.shotsCollection(jobId).count().get();
-    return snap.data().count - (await this.countLabeled(jobId, opts?.excludeLabels));
+    const drawn = opts?.excludePlatformDrawn ? await this.countPlatformDrawn(jobId) : 0;
+    return snap.data().count - (await this.countLabeled(jobId, opts?.excludeLabels)) - drawn;
   }
 
   async appendBuildPreview(

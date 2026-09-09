@@ -67,6 +67,8 @@ export interface BuildShot {
   locale?: string;
   // Round the upload token was minted for; set on agent concept frames.
   roundGeneration?: number;
+  // True for a frame the platform drew, so counts can tell whose it is.
+  platformDrawn?: true;
   createdAt: string;
 }
 

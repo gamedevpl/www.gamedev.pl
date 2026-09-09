@@ -26,12 +26,7 @@ import {
   type UploadTokenClaims,
 } from './agent-upload-token.js';
 import { isRasterSourcePath } from '../platform/raster-source.js';
-import {
-  DREAM_FRAME_SHOT_LABEL,
-  DREAM_SHOT_LABELS,
-  isDreamShotLabel,
-  MAX_PROPOSAL_FRAME_BYTES,
-} from '../platform/dream-shots.js';
+import { DREAM_FRAME_SHOT_LABEL, isDreamShotLabel, MAX_PROPOSAL_FRAME_BYTES } from '../platform/dream-shots.js';
 import { MAX_BUILD_PREVIEW_BYTES } from '../platform/build-preview-limits.js';
 import type { TranscriptPage, TranscriptWindow } from '../delivery/build-transcript.js';
 import { canonicalAppBaseUrl } from '../platform/canonical-app-url.js';
@@ -1072,6 +1067,17 @@ export async function registerAgentChannelRoutes(
         });
       }
 
+      // Refuse here, not at suggest_next_round: by then the agent has already paid for
+      // two image-model frames and we have stored them for a card nobody will see.
+      if (parsed.data.purpose === 'concept') {
+        if (!(await (options.dreamingEnabled ?? (async () => false))())) {
+          return reply.send({ accepted: false, rejected: 'proposals_off', ...(await channelState(jobId, record)) });
+        }
+        if ((await store!.getUser(record.ownerUid))?.proposalsMutedAt) {
+          return reply.send({ accepted: false, rejected: 'proposals_muted', ...(await channelState(jobId, record)) });
+        }
+      }
+
       const labelRaw = parsed.data.label ?? parsed.data.caption;
       const asked = labelRaw ? sanitizeCreatorText(labelRaw, { singleLine: true }).slice(0, MAX_SHOT_LABEL) : '';
       // Proposal captions are the platform's vocabulary; purpose earns them, a label cannot.
@@ -1126,12 +1132,9 @@ export async function registerAgentChannelRoutes(
       if (isRateLimited(shotsByBuild, jobId, now(), maxShotsPerWindow)) {
         return reject('rate_limited');
       }
-      // A frame the agent uploaded is the agent's, not the platform's.
       const concept = upload.label === DREAM_FRAME_SHOT_LABEL;
-      const shotCount = concept
-        ? await store!.countBuildShots(jobId)
-        : await store!.countBuildShots(jobId, { excludeLabels: DREAM_SHOT_LABELS });
-      if (shotCount >= maxShotsPerBuild) {
+      // Ownership, not caption: every upload is the agent's, only drawn frames are ours.
+      if ((await store!.countBuildShots(jobId, { excludePlatformDrawn: true })) >= maxShotsPerBuild) {
         return reject('too_many_shots');
       }
 

@@ -161,6 +161,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       data: sourcePng,
       mediaType: 'image/png',
       label: DREAM_SOURCE_SHOT_LABEL,
+      platformDrawn: true,
     });
     const options: CreatorProposalOption[] = [];
     for (const { frame, idea } of dreamed) {
@@ -168,6 +169,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
         data: frame.data,
         mediaType: frame.mediaType,
         label: DREAM_FRAME_SHOT_LABEL,
+        platformDrawn: true,
       });
       options.push({ id: idea.id, label: idea.label, prompt: idea.prompt, frameRef: shot.id });
     }

@@ -73,6 +73,16 @@ async function uploadConceptFrame(app: FastifyInstance, png: Buffer = pngHeader(
   return put.json().shot.id as string;
 }
 
+// Stores a frame the way a completed upload would.
+async function storeConceptFrame(store: InMemoryStore): Promise<string> {
+  const shot = await store.appendBuildShot(ISSUE, {
+    data: pngHeader(900, 900).toString('base64'),
+    label: DREAM_FRAME_SHOT_LABEL,
+    roundGeneration: 1,
+  });
+  return shot.id;
+}
+
 function options(frameIds: string[]) {
   return {
     options: frameIds.map((frameId, index) => ({
@@ -138,9 +148,10 @@ describe('agent-written concept proposals', () => {
     const store = new InMemoryStore();
     await seed(store);
     app = await createApp(store, stubGamesStore());
+    const frames = [await storeConceptFrame(store), await storeConceptFrame(store)];
     await store.setProposalsMuted('g:owner', '2026-09-01T00:00:00.000Z');
 
-    const response = await propose(app, [await uploadConceptFrame(app), await uploadConceptFrame(app)]);
+    const response = await propose(app, frames);
     expect(response.json().rejected).toBe('muted');
     expect(await store.listCreatorMessages(ISSUE)).toHaveLength(0);
   });
@@ -150,7 +161,8 @@ describe('agent-written concept proposals', () => {
     await seed(store);
     app = await createApp(store, stubGamesStore());
 
-    const response = await propose(app, [await uploadConceptFrame(app), await uploadConceptFrame(app)]);
+    // Frames can predate the switch being thrown.
+    const response = await propose(app, [await storeConceptFrame(store), await storeConceptFrame(store)]);
     expect(response.json().rejected).toBe('paused');
   });
 
@@ -165,6 +177,39 @@ describe('agent-written concept proposals', () => {
     const response = await propose(app, [concept, shot.id]);
 
     expect(response.json().rejected).toBe('frame_missing');
+  });
+
+  it('refuses the upload URL while proposals are off, before any frame is drawn', async () => {
+    // By suggest_next_round the agent has already paid for two image-model frames.
+    const store = new InMemoryStore();
+    await seed(store);
+    app = await createApp(store, stubGamesStore());
+
+    const minted = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/shot/upload-url',
+      headers: agentHeaders(),
+      payload: { purpose: 'concept' },
+    });
+
+    expect(minted.json().rejected).toBe('proposals_off');
+  });
+
+  it('refuses the upload URL for a creator who muted proposals', async () => {
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    app = await createApp(store, stubGamesStore());
+    await store.setProposalsMuted('g:owner', '2026-09-01T00:00:00.000Z');
+
+    const minted = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/shot/upload-url',
+      headers: agentHeaders(),
+      payload: { purpose: 'concept' },
+    });
+
+    expect(minted.json().rejected).toBe('proposals_muted');
   });
 
   it('refuses a concept frame drawn for an earlier round', async () => {
@@ -182,6 +227,7 @@ describe('agent-written concept proposals', () => {
   });
 
   it('advertises the concept frame cap, not the screenshot one', async () => {
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
     const store = new InMemoryStore();
     await seed(store);
     app = await createApp(store, stubGamesStore());
