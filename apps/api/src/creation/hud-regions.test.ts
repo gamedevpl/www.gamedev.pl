@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { createHudRegionsReader, hudCoverage, MAX_HUD_REGIONS, parseHudRegions } from './hud-regions.js';
+import {
+  createHudRegionsReader,
+  hudCoverage,
+  MAX_HUD_REGIONS,
+  parseHudRegions,
+  PURE_UI_COVERAGE,
+} from './hud-regions.js';
 
 describe('parseHudRegions', () => {
   it('returns null when nothing was declared', () => {
@@ -49,6 +55,23 @@ describe('hudCoverage', () => {
         900,
       ),
     ).toBe(1);
+  });
+
+  it('counts overlapped pixels once, so a panel and its labels are one area', () => {
+    // Each covers 40%; summed they would read 80% and refuse.
+    const panel = { x: 0, y: 0, w: 360, h: 900 };
+    const labelsInside = { x: 0, y: 0, w: 360, h: 900 };
+
+    expect(hudCoverage([panel, labelsInside], 900, 900)).toBeCloseTo(0.4);
+    expect(hudCoverage([panel, labelsInside], 900, 900)).toBeLessThan(PURE_UI_COVERAGE);
+  });
+
+  it('adds the parts of an overlapping rectangle that stick out', () => {
+    const left = { x: 0, y: 0, w: 450, h: 900 };
+    const straddling = { x: 300, y: 0, w: 300, h: 900 };
+
+    // Union is x in [0, 600) of a 900-wide frame.
+    expect(hudCoverage([left, straddling], 900, 900)).toBeCloseTo(600 / 900);
   });
 });
 
