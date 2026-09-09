@@ -96,7 +96,7 @@ export class InMemoryStore implements Store {
   private submissionStore = new InMemorySubmissionStore(this.submissions);
   private submissionQueryStore = new InMemorySubmissionQueryStore(this.submissions);
   private buildLogStore = new InMemoryBuildLogStore(this.submissions);
-  private buildMediaStore = new InMemoryBuildMediaStore();
+  private buildMediaStore = new InMemoryBuildMediaStore(this.submissions);
   private catalogEnrichmentStore = new InMemoryCatalogEnrichmentStore();
   private quotaStore = new InMemoryQuotaStore((uid) => this.identityStore.getUser(uid));
   private globalQuotaStore = new InMemoryGlobalQuotaStore();
@@ -552,7 +552,7 @@ export class InMemoryStore implements Store {
 
   async appendDeliveryShot(
     jobId: number,
-    query: DeliveryShotQuery & { max: number },
+    query: DeliveryShotQuery & { max: number; id?: string },
     shot: Omit<BuildShot, 'id' | 'createdAt'>,
   ): Promise<BuildShot | null> {
     return this.buildMediaStore.appendDeliveryShot(jobId, query, shot);

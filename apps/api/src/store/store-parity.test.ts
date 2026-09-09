@@ -306,8 +306,15 @@ describeStoreContract('delivery-scoped shot appends', (makeStore) => {
   const slot = { label: 'AI concept', deliveryVersion: 'v2', roundGeneration: 3, max: 2 };
   const shot = { ...frame, deliveryVersion: 'v2', roundGeneration: 3 };
 
+  // The append also refuses a delivery the job moved past.
+  async function delivering(store: Store): Promise<Store> {
+    await store.createSubmission(9, 'g:owner', 'Parcel Run');
+    await store.setSubmissionPreviewVersion(9, 'v2');
+    return store;
+  }
+
   it('stores up to the cap and refuses past it', async () => {
-    const store = makeStore();
+    const store = await delivering(makeStore());
 
     expect(await store.appendDeliveryShot(9, slot, shot)).not.toBeNull();
     expect(await store.appendDeliveryShot(9, slot, shot)).not.toBeNull();
@@ -316,7 +323,7 @@ describeStoreContract('delivery-scoped shot appends', (makeStore) => {
   });
 
   it("counts only this delivery's own frames against the cap", async () => {
-    const store = makeStore();
+    const store = await delivering(makeStore());
     await store.appendBuildShot(9, { ...frame, deliveryVersion: 'v1', roundGeneration: 3 });
     await store.appendBuildShot(9, { ...frame, deliveryVersion: 'v2', roundGeneration: 2 });
     await store.appendBuildShot(9, { ...shot, platformDrawn: true });
@@ -324,5 +331,35 @@ describeStoreContract('delivery-scoped shot appends', (makeStore) => {
     expect(await store.appendDeliveryShot(9, slot, shot)).not.toBeNull();
     expect(await store.appendDeliveryShot(9, slot, shot)).not.toBeNull();
     expect(await store.appendDeliveryShot(9, slot, shot)).toBeNull();
+  });
+});
+
+// A retried PUT rewrites its own frame, not the other slot.
+describeStoreContract('delivery-scoped shot idempotence', (makeStore) => {
+  const slot = { label: 'AI concept', deliveryVersion: 'v2', roundGeneration: 3, max: 2 };
+  const shot = { data: 'AAA=', label: 'AI concept', deliveryVersion: 'v2', roundGeneration: 3 };
+
+  async function delivering(store: Store): Promise<Store> {
+    await store.createSubmission(9, 'g:owner', 'Parcel Run');
+    await store.setSubmissionPreviewVersion(9, 'v2');
+    return store;
+  }
+
+  it('keeps one document per id, however often it is written', async () => {
+    const store = await delivering(makeStore());
+
+    const first = await store.appendDeliveryShot(9, { ...slot, id: 'concept-abc' }, shot);
+    const retry = await store.appendDeliveryShot(9, { ...slot, id: 'concept-abc' }, shot);
+
+    expect(retry?.id).toBe(first?.id);
+    expect(await store.countDeliveryShots(9, slot)).toBe(1);
+  });
+
+  it('refuses a frame whose delivery is no longer current', async () => {
+    const store = await delivering(makeStore());
+    await store.setSubmissionPreviewVersion(9, 'v3');
+
+    expect(await store.appendDeliveryShot(9, { ...slot, id: 'concept-abc' }, shot)).toBeNull();
+    expect(await store.countDeliveryShots(9, slot)).toBe(0);
   });
 });

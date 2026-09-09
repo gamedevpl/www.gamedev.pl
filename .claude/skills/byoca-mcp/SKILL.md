@@ -835,6 +835,10 @@ because the tool is the only way in:
   build meanwhile. The bound is `appendDeliveryShot`, which counts and writes in one
   transaction — a check before the write would let concurrent PUTs, or one replayed
   URL, each see room and all take it. The mint refuses too, once the pair exists.
+  That transaction also re-reads the delivery, so a frame drawn for a version the job
+  has since moved past is never stored, and the shot's document id comes from the
+  upload token's nonce: one URL, one document, so a retried PUT after a lost response
+  rewrites its own frame instead of taking the delivery's other slot.
 - **Text that sanitizes to nothing is refused before the claim.** A label or prompt of
   pure markup passes the schema and empties in `sanitizeCreatorText`; posting it would
   spend the delivery's one claim on a blank direction.

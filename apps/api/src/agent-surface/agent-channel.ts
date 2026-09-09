@@ -1216,6 +1216,8 @@ export async function registerAgentChannelRoutes(
               deliveryVersion: conceptVersion ?? '',
               roundGeneration: upload.roundGeneration,
               max: PROPOSAL_OPTIONS,
+              // One URL, one document; a retry rewrites its own frame.
+              id: `concept-${upload.nonce}`,
             },
             {
               data: body64,

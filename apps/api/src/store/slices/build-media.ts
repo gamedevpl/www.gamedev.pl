@@ -1,6 +1,7 @@
 import type { Firestore } from '@google-cloud/firestore';
 import { randomUUID } from 'node:crypto';
 import type { BuildShot, BuildShotSummary, BuildPreview, BuildPreviewSummary } from '../records/build-log.js';
+import type { SubmissionRecord } from '../records/submission.js';
 import { byNewestFirst } from './build-log.js';
 
 export interface BuildShotCountOptions {
@@ -19,6 +20,14 @@ export interface DeliveryShotQuery {
   label: string;
   deliveryVersion: string;
   roundGeneration: number;
+}
+
+// A frame is worth storing only while its delivery is current.
+function currentDelivery(
+  record: Pick<SubmissionRecord, 'previewVersion' | 'deliveredVersion'> | undefined,
+  version: string,
+): boolean {
+  return Boolean(record) && (record!.previewVersion ?? record!.deliveredVersion) === version;
 }
 
 function matchesDelivery(query: DeliveryShotQuery) {
@@ -52,10 +61,10 @@ export interface BuildMediaStore {
   // Frames a delivery already holds; their room is already spent.
   countDeliveryShots(jobId: number, query: DeliveryShotQuery): Promise<number>;
 
-  // Stores a frame under `max`, counting and writing as one.
+  // Stores a frame under `max` in one write; `id` makes retries idempotent.
   appendDeliveryShot(
     jobId: number,
-    query: DeliveryShotQuery & { max: number },
+    query: DeliveryShotQuery & { max: number; id?: string },
     shot: Omit<BuildShot, 'id' | 'createdAt'>,
   ): Promise<BuildShot | null>;
 
@@ -77,6 +86,8 @@ export interface BuildMediaStore {
 export class InMemoryBuildMediaStore implements BuildMediaStore {
   private buildShots = new Map<number, BuildShot[]>();
   private buildPreviews = new Map<number, BuildPreview[]>();
+
+  constructor(private submissions?: Map<number, SubmissionRecord>) {}
 
   async appendBuildShot(
     jobId: number,
@@ -114,14 +125,21 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
 
   async appendDeliveryShot(
     jobId: number,
-    query: DeliveryShotQuery & { max: number },
+    query: DeliveryShotQuery & { max: number; id?: string },
     shot: Omit<BuildShot, 'id' | 'createdAt'>,
   ): Promise<BuildShot | null> {
+    if (!currentDelivery(this.submissions?.get(jobId), query.deliveryVersion)) return null;
     // Counted and pushed without awaiting in between, which is the whole point.
     const existing = this.buildShots.get(jobId) ?? [];
-    if (existing.filter(matchesDelivery(query)).length >= query.max) return null;
-    const record: BuildShot = { ...shot, id: randomUUID(), createdAt: new Date().toISOString() };
-    existing.push(record);
+    const at = query.id ? existing.findIndex((item) => item.id === query.id) : -1;
+    if (at < 0 && existing.filter(matchesDelivery(query)).length >= query.max) return null;
+    const record: BuildShot = {
+      ...shot,
+      id: query.id ?? randomUUID(),
+      createdAt: at < 0 ? new Date().toISOString() : existing[at]!.createdAt,
+    };
+    if (at < 0) existing.push(record);
+    else existing[at] = record;
     this.buildShots.set(jobId, existing);
     return { ...record };
   }
@@ -252,21 +270,25 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
 
   async appendDeliveryShot(
     jobId: number,
-    query: DeliveryShotQuery & { max: number },
+    query: DeliveryShotQuery & { max: number; id?: string },
     shot: Omit<BuildShot, 'id' | 'createdAt'>,
   ): Promise<BuildShot | null> {
-    const record: BuildShot = { ...shot, id: randomUUID(), createdAt: new Date().toISOString() };
-    const document = Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
+    const ref = query.id ? this.shotsCollection(jobId).doc(query.id) : this.shotsCollection(jobId).doc();
     return await this.db.runTransaction(async (transaction) => {
       // Count and write together, or every PUT sees room.
+      const job = await transaction.get(this.db.collection('submissions').doc(String(jobId)));
+      if (!currentDelivery(job.data() as SubmissionRecord | undefined, query.deliveryVersion)) return null;
       const snap = await transaction.get(
         this.shotsCollection(jobId)
           .where('deliveryVersion', '==', query.deliveryVersion)
           .select('deliveryVersion', 'label', 'roundGeneration', 'platformDrawn'),
       );
+      const mine = snap.docs.find((doc) => doc.id === ref.id);
       const held = snap.docs.map((doc) => doc.data() as BuildShotSummary).filter(matchesDelivery(query)).length;
-      if (held >= query.max) return null;
-      transaction.set(this.shotsCollection(jobId).doc(record.id), document);
+      // A replayed URL rewrites its own document, not a new one.
+      if (!mine && held >= query.max) return null;
+      const record: BuildShot = { ...shot, id: ref.id, createdAt: new Date().toISOString() };
+      transaction.set(ref, Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined)));
       return record;
     });
   }

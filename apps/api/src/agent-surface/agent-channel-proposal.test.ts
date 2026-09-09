@@ -423,19 +423,50 @@ describe('agent-written concept proposals', () => {
     expect(minted.json().rejected).toBe('too_many_shots');
   });
 
-  it('refuses a replayed concept URL rather than storing a third frame', async () => {
+  it('gives a replayed concept URL back its own frame, not a second slot', async () => {
     vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
     const store = new InMemoryStore();
     await seed(store);
     app = await createApp(store, stubGamesStore());
 
     const urls = [await mintConceptUrl(app), await mintConceptUrl(app)];
-    await putConceptFrame(app, urls[0]!, pngHeader(900, 900));
-    await putConceptFrame(app, urls[1]!, pngHeader(900, 900));
-    const replay = await putConceptFrame(app, urls[0]!, pngHeader(900, 900));
+    const first = await putConceptFrame(app, urls[0]!, pngHeader(900, 900));
+    // A lost response is ordinary; retrying must not burn the other slot.
+    const retry = await putConceptFrame(app, urls[0]!, pngHeader(900, 900));
+    const second = await putConceptFrame(app, urls[1]!, pngHeader(900, 900));
 
-    expect(replay.json().rejected).toBe('too_many_shots');
+    expect(retry.json().shot.id).toBe(first.json().shot.id);
     expect(await store.countBuildShots(ISSUE)).toBe(2);
+    expect((await propose(app, [first.json().shot.id, second.json().shot.id])).json().accepted).toBe(true);
+  });
+
+  it('refuses a third concept URL minted before either frame landed', async () => {
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    app = await createApp(store, stubGamesStore());
+
+    // Nothing is stored yet, so all three mints see room.
+    const urls = [await mintConceptUrl(app), await mintConceptUrl(app), await mintConceptUrl(app)];
+    for (const url of urls.slice(0, 2)) await putConceptFrame(app, url, pngHeader(900, 900));
+    const third = await putConceptFrame(app, urls[2]!, pngHeader(900, 900));
+
+    expect(third.json().rejected).toBe('too_many_shots');
+    expect(await store.countBuildShots(ISSUE)).toBe(2);
+  });
+
+  it('refuses a concept frame whose delivery moved before the write', async () => {
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    app = await createApp(store, stubGamesStore());
+    const url = await mintConceptUrl(app);
+    await store.setSubmissionPreviewVersion(ISSUE, 'v8');
+
+    const put = await putConceptFrame(app, url, pngHeader(900, 900));
+
+    expect(put.json().rejected).toBe('stale_delivery');
+    expect(await store.countBuildShots(ISSUE)).toBe(0);
   });
 
   it('refuses a direction whose text is nothing but markup', async () => {

@@ -619,7 +619,7 @@ export class FirestoreStore implements Store {
 
   async appendDeliveryShot(
     jobId: number,
-    query: DeliveryShotQuery & { max: number },
+    query: DeliveryShotQuery & { max: number; id?: string },
     shot: Omit<BuildShot, 'id' | 'createdAt'>,
   ): Promise<BuildShot | null> {
     return this.buildMediaStore.appendDeliveryShot(jobId, query, shot);
