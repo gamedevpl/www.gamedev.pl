@@ -2120,6 +2120,8 @@ describe('submission routes', () => {
     const handed: Array<{ jobId: number; work?: SeedWork }> = [];
     const seedDispatch: SeedDispatchClient = {
       enqueue: async (jobId, work) => {
+        // A real handoff mints a token and waits for 202, so it outlives a tick.
+        await new Promise((resolve) => setTimeout(resolve, 0));
         handed.push({ jobId, ...(work ? { work } : {}) });
         return true;
       },
@@ -2153,7 +2155,7 @@ describe('submission routes', () => {
     const token = mintToken(job.jobId, secret);
     const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
     expect(status.statusCode).toBe(200);
-    // The round's own seed handoff shares this client, so look for the dream one.
+    // Recorded by the time the response returns: the request waited for the handoff.
     expect(handed.filter((entry) => entry.work?.action === 'dream')).toEqual([
       { jobId: job.jobId, work: { action: 'dream', version: 'v1', screenshotPath: 'media/opening.png' } },
     ]);

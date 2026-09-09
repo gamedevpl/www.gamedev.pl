@@ -67,6 +67,22 @@ export async function fetchNotificationPreferences(): Promise<NotificationPrefer
   return (await response.json()) as NotificationPreferences;
 }
 
+type PreferencesListener = (prefs: NotificationPreferences) => void;
+
+const preferencesListeners = new Set<PreferencesListener>();
+
+/**
+ * Two surfaces carry the same switches -- the bell and the studio's proposal card -- and
+ * each held its own copy, so toggling one left the other showing yesterday's answer until
+ * a reload. Anything that reads a preference subscribes; every write tells them.
+ */
+export function onNotificationPreferencesChanged(listener: PreferencesListener): () => void {
+  preferencesListeners.add(listener);
+  return () => {
+    preferencesListeners.delete(listener);
+  };
+}
+
 /**
  * Updates only the switches named. Omitting one leaves it as it is, so this client cannot
  * reset a preference it does not know about.
@@ -81,5 +97,7 @@ export async function updateNotificationPreferences(
     body: JSON.stringify(changes),
   });
   if (!response.ok) throw new Error(`Request failed (${response.status})`);
-  return (await response.json()) as NotificationPreferences;
+  const prefs = (await response.json()) as NotificationPreferences;
+  for (const listener of preferencesListeners) listener(prefs);
+  return prefs;
 }

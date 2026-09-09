@@ -69,8 +69,12 @@ export interface JobReconcilerDeps {
     version: string;
     screenshotPath: string;
   }) => Promise<{ id: string } | null>;
-  // Fired on every read of a green preview; receiver dedupes per version.
-  onPreviewGateGreen?: (input: { record: SubmissionRecord; version: string; screenshotPath?: string }) => void;
+  // Awaited on every read of a green preview; receiver dedupes.
+  onPreviewGateGreen?: (input: {
+    record: SubmissionRecord;
+    version: string;
+    screenshotPath?: string;
+  }) => Promise<void> | void;
 }
 
 export interface JobReconciler {
@@ -372,7 +376,7 @@ export function createJobReconciler(deps: JobReconcilerDeps): JobReconciler {
         ...(preview.green ? {} : { failedStage: failedStageFromProgress(manifest?.gateProgress?.stage) }),
       });
       if (preview.green) {
-        onPreviewGateGreen?.({
+        await onPreviewGateGreen?.({
           record,
           version,
           ...(preview.screenshot ? { screenshotPath: preview.screenshot } : {}),
