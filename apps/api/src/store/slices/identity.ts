@@ -190,14 +190,35 @@ export class InMemoryIdentityStore implements IdentityStore {
   }
 }
 
+// Every authenticated request reads this user; it is the floor.
+const USER_CACHE_TTL_MS = 30_000;
+
+// A long-lived instance would otherwise hold every uid it ever served.
+const USER_CACHE_MAX = 2_000;
+
 export class FirestoreIdentityStore implements IdentityStore {
+  private userCache = new Map<string, { user: User; at: number }>();
+
   constructor(private db: Firestore) {}
 
+  // Tier and blocks live here, so every write drops it.
+  private dropUser(uid: string): void {
+    this.userCache.delete(uid);
+  }
+
   async getUser(uid: string): Promise<User | null> {
+    const hit = this.userCache.get(uid);
+    if (hit && Date.now() - hit.at < USER_CACHE_TTL_MS) return { ...hit.user };
     const docRef = this.db.collection('users').doc(uid);
     const snap = await docRef.get();
-    if (!snap.exists) return null;
-    return snap.data() as User;
+    if (!snap.exists) {
+      this.dropUser(uid);
+      return null;
+    }
+    const user = snap.data() as User;
+    if (this.userCache.size >= USER_CACHE_MAX) this.userCache.clear();
+    this.userCache.set(uid, { user, at: Date.now() });
+    return { ...user };
   }
 
   async getUserByHandle(handle: string): Promise<User | null> {
@@ -219,7 +240,9 @@ export class FirestoreIdentityStore implements IdentityStore {
   }
 
   async claimHandle(uid: string, handle: string, at: string): Promise<ClaimHandleResult> {
-    return claimHandleFirestore(this.db, uid, handle, at);
+    const result = await claimHandleFirestore(this.db, uid, handle, at);
+    this.dropUser(uid);
+    return result;
   }
 
   async updateCreatorProfile(
@@ -235,6 +258,7 @@ export class FirestoreIdentityStore implements IdentityStore {
       ...(patch.avatarMode !== undefined ? { avatarMode: patch.avatarMode } : {}),
     };
     await this.db.collection('users').doc(uid).set(stripUndefined(updated), { merge: true });
+    this.dropUser(uid);
     return updated;
   }
 
@@ -269,6 +293,7 @@ export class FirestoreIdentityStore implements IdentityStore {
     }
     if (released.size > 0 || user?.handle) {
       await batch.commit();
+      this.dropUser(uid);
     }
     void at;
     return [...released].sort();
@@ -285,6 +310,7 @@ export class FirestoreIdentityStore implements IdentityStore {
         deletionScheduledFor: scheduledFor,
       };
       transaction.set(ref, { deletionRequestedAt: requestedAt, deletionScheduledFor: scheduledFor }, { merge: true });
+      this.dropUser(uid);
       return updated;
     });
   }
@@ -299,6 +325,7 @@ export class FirestoreIdentityStore implements IdentityStore {
         { deletionRequestedAt: FieldValue.delete(), deletionScheduledFor: FieldValue.delete() },
         { merge: true },
       );
+      this.dropUser(uid);
       return true;
     });
   }
@@ -367,15 +394,18 @@ export class FirestoreIdentityStore implements IdentityStore {
       }
 
       transaction.set(docRef, stripUndefined(user), { merge: true });
+      this.dropUser(userData.uid);
       return user;
     });
   }
 
   async setEmailUnsubscribed(uid: string, at: string | null): Promise<void> {
     await this.db.collection('users').doc(uid).set({ emailUnsubscribedAt: at }, { merge: true });
+    this.dropUser(uid);
   }
 
   async setDigestOptOut(uid: string, at: string | null): Promise<void> {
     await this.db.collection('users').doc(uid).set({ digestOptOutAt: at }, { merge: true });
+    this.dropUser(uid);
   }
 }
