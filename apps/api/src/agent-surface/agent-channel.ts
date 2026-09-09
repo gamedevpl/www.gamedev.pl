@@ -1080,7 +1080,7 @@ export async function registerAgentChannelRoutes(
 
       const labelRaw = parsed.data.label ?? parsed.data.caption;
       const asked = labelRaw ? sanitizeCreatorText(labelRaw, { singleLine: true }).slice(0, MAX_SHOT_LABEL) : '';
-      // Proposal captions are the platform's vocabulary; purpose earns them, a label cannot.
+      // Reserved captions leave the media strip and the shot count; purpose earns one.
       if (parsed.data.purpose !== 'concept' && isDreamShotLabel(asked)) {
         return reply.status(400).send({ error: `"${asked}" is a reserved caption` });
       }

@@ -995,6 +995,23 @@ describe('agent build channel', () => {
   // A 1x1 PNG — the smallest payload that still carries a real PNG signature.
   const TINY_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
+  it('refuses a reserved proposal caption on an agent upload', async () => {
+    // Those captions are excluded from the shot count and the media strip, so an agent
+    // that could set one would have an unbounded, invisible store.
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    app = await createApp(store);
+
+    const minted = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/shot/upload-url',
+      headers: agentHeaders(),
+      payload: { label: DREAM_FRAME_SHOT_LABEL },
+    });
+
+    expect(minted.statusCode).toBe(400);
+  });
+
   it('stores a screenshot via signed PUT, lists it on status, and serves the bytes', async () => {
     const store = new InMemoryStore();
     await seedSubmission(store);
