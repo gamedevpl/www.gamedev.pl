@@ -4,7 +4,7 @@ import { AGENT_CHANNEL_ROUTES, MAX_AGENT_SHOT_BYTES } from '@gamedevpl/contract'
 import { createExampleFileStore } from './example-files.js';
 import { registerAgentChannelExamplesRoutes } from './agent-channel-examples.js';
 import { registerAgentChannelBriefRoutes } from './agent-channel-brief.js';
-import { registerAgentChannelProposalRoutes } from './agent-channel-proposal.js';
+import { gateFrameOf, registerAgentChannelProposalRoutes } from './agent-channel-proposal.js';
 import { registerAgentChannelSeedRoutes } from './agent-channel-seed.js';
 import { registerAgentChannelKitRoutes } from './agent-channel-kit.js';
 import { registerAgentChannelGateMediaRoutes } from './agent-channel-gate-media.js';
@@ -560,7 +560,11 @@ type RejectionReason =
   // Same budget over the job's whole life, across reopens.
   | 'job_delivery_cap'
   // The platform's daily gate-build allowance is spent; staged sources survive.
-  | 'gate_capacity';
+  | 'gate_capacity'
+  // A concept frame outlived the delivery its URL was issued for.
+  | 'stale_delivery'
+  // No green capture yet, so a proposal drawn now could not be posted.
+  | 'no_capture';
 
 const KNOWLEDGE_SCOPES = new Set(['kit', 'editor', 'examples', 'docs']);
 
@@ -1070,6 +1074,11 @@ export async function registerAgentChannelRoutes(
       // Refuse here, not at suggest_next_round: by then the agent has already paid for
       // two image-model frames and we have stored them for a card nobody will see.
       if (parsed.data.purpose === 'concept') {
+        // Without a green capture the card can never post, and the agent would learn that
+        // only after paying for two frames.
+        if (!(await conceptCaptureReady(record))) {
+          return reply.send({ accepted: false, rejected: 'no_capture', ...(await channelState(jobId, record)) });
+        }
         if (!(await (options.dreamingEnabled ?? (async () => false))())) {
           return reply.send({ accepted: false, rejected: 'proposals_off', ...(await channelState(jobId, record)) });
         }
@@ -1086,6 +1095,8 @@ export async function registerAgentChannelRoutes(
       }
       const label = parsed.data.purpose === 'concept' ? DREAM_FRAME_SHOT_LABEL : asked;
       const generation = record.roundGeneration ?? 1;
+      const mintedFor =
+        parsed.data.purpose === 'concept' ? (record.previewVersion ?? record.deliveredVersion) : undefined;
       const ttlSeconds = DEFAULT_UPLOAD_URL_TTL_SECONDS;
       // One clock read: advertised expiresAt must match the signed exp.
       const issuedAt = now();
@@ -1094,6 +1105,7 @@ export async function registerAgentChannelRoutes(
         roundGeneration: generation,
         kind: 'screenshot',
         ...(label ? { label } : {}),
+        ...(mintedFor ? { version: mintedFor } : {}),
         now: issuedAt,
         ttlSeconds,
       });
@@ -1160,8 +1172,11 @@ export async function registerAgentChannelRoutes(
       const label = upload.label
         ? sanitizeCreatorText(upload.label, { singleLine: true }).slice(0, MAX_SHOT_LABEL)
         : '';
-      // A round delivers several previews; note which one.
-      const conceptVersion = record.previewVersion ?? record.deliveredVersion;
+      // Generation takes minutes; the delivery it was drawn on must still be current.
+      const conceptVersion = upload.version;
+      if (concept && conceptVersion !== (record.previewVersion ?? record.deliveredVersion)) {
+        return reject('stale_delivery');
+      }
 
       const stored = await store!.appendBuildShot(jobId, {
         data: bytes.toString('base64'),
@@ -2256,6 +2271,14 @@ export async function registerAgentChannelRoutes(
       });
     },
   );
+
+  // A concept URL is only worth issuing once there is a green frame to draw on.
+  async function conceptCaptureReady(record: SubmissionRecord): Promise<boolean> {
+    const version = record.previewVersion ?? record.deliveredVersion;
+    if (!record.slug || !version || !options.gamesStore) return false;
+    const manifest = await options.gamesStore.getManifest(record.slug, version).catch(() => null);
+    return Boolean(gateFrameOf(manifest));
+  }
 
   registerAgentChannelBriefRoutes(app, { resolveBuild, store });
 

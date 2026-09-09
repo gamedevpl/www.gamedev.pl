@@ -97,6 +97,7 @@ export class InMemoryRoundBudgetStore implements RoundBudgetStore {
   async claimDreamRun(jobId: number, version: string, at: string): Promise<boolean> {
     const sub = this.submissions.get(jobId);
     if (!sub || sub.dreamRun?.version === version) return false;
+    if ((sub.previewVersion ?? sub.deliveredVersion) !== version) return false;
     this.submissions.set(jobId, { ...sub, dreamRun: { version, claimedAt: at } });
     return true;
   }
@@ -195,6 +196,8 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
       if (!snap.exists) return false;
       const current = snap.data() as SubmissionRecord;
       if (current.dreamRun?.version === version) return false;
+      // Read and claim together, or a late claim overwrites.
+      if ((current.previewVersion ?? current.deliveredVersion) !== version) return false;
       tx.set(ref, { dreamRun: { version, claimedAt: at } }, { merge: true });
       return true;
     });

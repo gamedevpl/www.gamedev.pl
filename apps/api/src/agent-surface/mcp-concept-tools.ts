@@ -58,6 +58,8 @@ const REFUSALS: Record<string, string> = {
   frame_stale: 'a concept frame came from an earlier round; draw this round its own',
   proposals_off: 'concept proposals are switched off right now',
   proposals_muted: 'this creator asked not to be shown concept proposals',
+  no_capture: 'no green gate capture to draw on yet — deliver and pass the gate first',
+  stale_delivery: 'this URL was issued for an earlier delivery; ask for a new one',
   frame_shape: 'a concept frame has a different aspect ratio than the gate capture',
 };
 
@@ -76,9 +78,11 @@ export function createConceptTools(deps: ConceptToolsDeps): Record<string, Conce
           expiresInSeconds: { type: 'number' },
           upload: { type: 'string' },
           maxBytes: { type: 'number' },
+          issued: { type: 'boolean' },
+          refused: { type: 'string' },
           ...REPLY_CONTROL,
         },
-        required: ['url', 'expiresAt', 'expiresInSeconds', 'upload', 'maxBytes'],
+        required: [],
       },
       description:
         'Upload one image-model frame for a concept proposal. Same shape as screenshot_upload_url — a ' +
@@ -108,8 +112,13 @@ export function createConceptTools(deps: ConceptToolsDeps): Record<string, Conce
         };
         if (res.statusCode !== 200) return toolErr(body.error ?? `concept frame upload URL failed (${res.statusCode})`);
         if (body.rejected) {
-          // Final for the round, and said before any model call.
-          return toolErr(`concept frame upload URL was not issued (${REFUSALS[body.rejected] ?? body.rejected})`);
+          // An answer, not an error: errors drop stop and inbox.
+          return toolOk({
+            issued: false,
+            refused: REFUSALS[body.rejected] ?? body.rejected,
+            ...channelControlFields(body),
+            pendingMessages: pendingMessagesFromChannel(body),
+          });
         }
         // Never invent an expiry or cap the channel did not state.
         if (

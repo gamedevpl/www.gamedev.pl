@@ -27,6 +27,8 @@ async function harness(params: {
   const store = new InMemoryStore();
   if (params.limits) await store.setCreationLimits(params.limits, 'g:boss');
   const created = await store.createSubmission(7, 'g:owner', 'Parcel Run');
+  // The claim needs the version to be current.
+  await store.setSubmissionPreviewVersion(7, 'v1');
   const record: SubmissionRecord = {
     ...created,
     slug: 'parcel-run',
@@ -114,6 +116,7 @@ describe('createDreamJob', () => {
     expect(await run()).toBe('already_ran');
     const refreshed = await store.getSubmission(7);
     expect(refreshed?.dreamRun?.version).toBe('v1');
+    await store.setSubmissionPreviewVersion(7, 'v2');
     expect(await run({ version: 'v2' })).toBe('no_hud');
   });
 

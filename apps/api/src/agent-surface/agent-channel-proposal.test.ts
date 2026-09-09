@@ -244,6 +244,48 @@ describe('agent-written concept proposals', () => {
     expect(minted.json().maxBytes).toBe(600 * 1024);
   });
 
+  it('refuses the upload URL before a green capture exists', async () => {
+    // Otherwise two paid frames buy an answer of no.
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    app = await createApp(store, stubGamesStore(null));
+
+    const minted = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/shot/upload-url',
+      headers: agentHeaders(),
+      payload: { purpose: 'concept' },
+    });
+
+    expect(minted.json().rejected).toBe('no_capture');
+  });
+
+  it('refuses an upload whose delivery moved while the frame was drawn', async () => {
+    // Minting, generating and uploading spans minutes; a delivery can land inside it.
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    app = await createApp(store, stubGamesStore());
+
+    const minted = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/shot/upload-url',
+      headers: agentHeaders(),
+      payload: { purpose: 'concept' },
+    });
+    const token = new URL(minted.json().url).searchParams.get('token');
+    await store.setSubmissionPreviewVersion(ISSUE, 'v8');
+    const put = await app.inject({
+      method: 'PUT',
+      url: `/api/agent/build/shot/upload?token=${encodeURIComponent(token ?? '')}`,
+      headers: { 'content-type': 'image/png' },
+      payload: pngHeader(900, 900),
+    });
+
+    expect(put.json().rejected).toBe('stale_delivery');
+  });
+
   it('refuses a frame drawn for an earlier delivery in the same round', async () => {
     // A round delivers several previews without advancing its generation.
     vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
@@ -276,7 +318,8 @@ describe('agent-written concept proposals', () => {
     await seed(store);
     app = await createApp(store, stubGamesStore(null));
 
-    const response = await propose(app, [await uploadConceptFrame(app), await uploadConceptFrame(app)]);
+    // The mint refuses first now, so seed the frames.
+    const response = await propose(app, [await storeConceptFrame(store), await storeConceptFrame(store)]);
     expect(response.json().rejected).toBe('no_screenshot');
   });
 

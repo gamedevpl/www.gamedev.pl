@@ -56,7 +56,7 @@ const ProposalInputSchema = z.object({
   options: z.array(OptionSchema).length(PROPOSAL_OPTIONS),
 });
 
-interface ProposalManifest {
+export interface ProposalManifest {
   gate?: { green?: boolean; screenshot?: string };
   previewGate?: { green?: boolean; screenshot?: string };
 }
@@ -88,7 +88,7 @@ function pair(text: string, localized: string | undefined, locale: string | unde
 }
 
 // The frame compared against is ours, never the agent's.
-function gateFrameOf(manifest: ProposalManifest | null): string | null {
+export function gateFrameOf(manifest: ProposalManifest | null): string | null {
   if (manifest?.gate?.green && manifest.gate.screenshot) return manifest.gate.screenshot;
   if (manifest?.previewGate?.green && manifest.previewGate.screenshot) return manifest.previewGate.screenshot;
   return null;
@@ -150,9 +150,7 @@ export function registerAgentChannelProposalRoutes(app: FastifyInstance, deps: A
         if (!frameSize || !sameAspectRatio(frameSize, size)) return reject('frame_shape');
       }
 
-      // A late claim would overwrite a newer one; refuse instead.
-      const current = await store.getSubmission(jobId);
-      if ((current?.previewVersion ?? current?.deliveredVersion) !== version) return reject('already_proposed');
+      // The claim refuses unless this delivery is still current, in one transaction.
       const claimedAt = new Date().toISOString();
       if (!(await store.claimDreamRun(jobId, version, claimedAt))) return reject('already_proposed');
 
