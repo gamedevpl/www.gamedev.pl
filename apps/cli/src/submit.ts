@@ -1,9 +1,9 @@
+import { prepareDeliverySession, type DeliverySession } from './submit-session.js';
 import type { ApiClient } from './api.js';
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { inspectGame, localGameFiles, writeBase, fetchLatestTree } from './checkout.js';
 import { hashesOf, hashContent, pathInside, syncRefuse, type SyncResult, type TreeFile } from './checkout-sync.js';
-import { otherBuilder } from './errors.js';
 import { CliError, EXIT_RED, EXIT_REFUSED } from './exit-codes.js';
 import { assertLadderGreen, runLadder } from './verify.js';
 
@@ -54,7 +54,12 @@ async function deletePath(api: ApiClient, slug: string, path: string): Promise<v
 
 function mapHttpError(error: unknown): never {
   const message = error instanceof Error ? error.message : String(error);
-  if (/agent_round|actively building/.test(message)) throw otherBuilder('an agent');
+  if (/agent_round|actively building/.test(message))
+    throw new CliError(
+      'Delivery is blocked by an open agent session. Local files are unchanged.',
+      EXIT_REFUSED,
+      'Use /submit --takeover to disconnect your own agent, or finish the active platform agent in Studio.',
+    );
   if (/no_active_round|no round open/.test(message)) {
     throw new CliError('no round is open to deliver into — start one from Studio or the REPL', EXIT_REFUSED);
   }
@@ -67,10 +72,12 @@ export async function submitGame(input: {
   dest: string;
   force?: boolean;
   publish?: boolean;
+  takeover?: boolean;
+  expectedSession?: DeliverySession;
   run?: Parameters<typeof runLadder>[0]['run'];
 }): Promise<SubmitResult> {
   const first = await inspectGame(input);
-  if (first.sync.kind === 'clean' && !input.publish && !input.force) {
+  if (first.sync.kind === 'clean' && !input.publish && !input.force && !input.takeover) {
     return { kind: 'nothing', sync: first.sync };
   }
   if (
@@ -91,7 +98,7 @@ export async function submitGame(input: {
     const refused = syncRefuse(latest.sync, 'submit');
     throw new CliError(`platform changed during verify — ${refused.message}`, EXIT_REFUSED, refused.next);
   }
-  if (latest.sync.kind === 'clean' && !input.publish && !input.force) {
+  if (latest.sync.kind === 'clean' && !input.publish && !input.force && !input.takeover) {
     return { kind: 'nothing', sync: latest.sync };
   }
   if (!input.force && latest.sync.kind === 'platform_only') {
@@ -99,9 +106,12 @@ export async function submitGame(input: {
     throw new CliError(refused.message, EXIT_REFUSED, refused.next);
   }
 
-  const paths = input.force
-    ? changedPathsForced(localGameFiles(input.dest, input.slug), latest.tree.files)
-    : latest.sync.local;
+  const takenOver = await prepareDeliverySession(input.api, input.slug, input.takeover, input.expectedSession);
+  const paths = takenOver
+    ? [...new Set([...localGameFiles(input.dest, input.slug), ...latest.tree.files].map((file) => file.path))].sort()
+    : input.force
+      ? changedPathsForced(localGameFiles(input.dest, input.slug), latest.tree.files)
+      : latest.sync.local;
   let extra: string[] = [];
   try {
     extra = await extraStagedPaths(input.api, input.slug, paths);

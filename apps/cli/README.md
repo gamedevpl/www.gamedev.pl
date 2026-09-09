@@ -281,3 +281,7 @@ checkout. Logs are private local temporary files; one-shot delegation prints the
 log path. Logs are not sent to gamedev.pl and may contain local source text.
 
 When Antigravity cannot ask for a permission in headless mode, the interactive CLI offers to hand it the terminal and resume that conversation. Answer permissions in Antigravity, then exit it to return to CLI verification. Sandbox settings stay enabled; permissions are not automatically approved. One-shot/unattended runs do not open an interactive session. On macOS and Linux, native interactive output is recorded in `/logs` using the system terminal recorder. On Windows it remains in terminal scrollback. Studio shows local task activity separately from delivery status; game files are sent only by submission.
+
+### Recover an open agent session
+
+If a previous MCP agent stopped without ending its session, preview delivery can remain locked. The interactive delivery prompt offers to disconnect that session and deliver the local checkout. For an explicit retry, use `/submit --takeover` or `gamedevpl submit --takeover [dir]`. This revokes the previous session key and sends the full local file snapshot after checks pass. It does not stop the local agent process, so stop that process first if it is still editing your checkout. Old server staging stays in the previous generation; it is not mixed into your local delivery. Managed agents and pending handoffs must finish through Studio. `--force` alone never takes over an agent session.

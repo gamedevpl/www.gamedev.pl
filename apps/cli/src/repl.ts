@@ -159,6 +159,7 @@ export async function handleReplLine(input: {
           dest,
           force: parsed.flags.force === true,
           publish: parsed.flags.publish === true,
+          takeover: parsed.flags.takeover === true,
         });
         input.write(formatSubmitLines(result, slug).join('\n'));
       } catch (error) {

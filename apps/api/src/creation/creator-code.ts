@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { registerCreatorTakeover } from './creator-takeover.js';
 import {
   assembleGameHtml,
   CredentialLeakError,
@@ -239,6 +240,8 @@ export async function registerCreatorCodeRoutes(
     }
     return { record, slug };
   }
+
+  registerCreatorTakeover(app, { store, resolveForSlug, invalidate: options.invalidateStatusCache, now: options.now });
 
   /**
    * GET /api/me/studio/games/:slug/sources (CE-03).

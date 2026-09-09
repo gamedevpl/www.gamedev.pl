@@ -346,6 +346,10 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.dispatchStore.recordJobTransition(jobId, transition, guard);
   }
 
+  async takeOverAgentRound(jobId: number, uid: string, generation: number, at: string): Promise<boolean> {
+    return this.roundsStore.takeOverAgentRound(jobId, uid, generation, at);
+  }
+
   async bumpRoundGeneration(jobId: number): Promise<number | null> {
     return this.roundsStore.bumpRoundGeneration(jobId);
   }
