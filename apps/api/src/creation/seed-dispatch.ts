@@ -13,7 +13,12 @@ import type { InternalAuthVerifier } from '../platform/internal-auth.js';
 
 // Unconfigured or refused, create-game seeds inline as before.
 
-export type SeedWork = { action: 'dispatch' | 'regenerate' | 'staged-preview'; steer?: string };
+export type SeedWork = {
+  action: 'dispatch' | 'regenerate' | 'staged-preview' | 'dream';
+  steer?: string;
+  version?: string;
+  screenshotPath?: string;
+};
 
 export interface SeedDispatchClient {
   // True once the callee has started; false means do the work here.
@@ -101,20 +106,39 @@ export interface SeedDispatchRouteOptions {
   dispatchQueuedJob: DispatchQueuedJob;
   regenerateSeedNow?: ((input: { jobId: number; steer?: string; log: DispatchLog }) => Promise<void>) | null;
   publishStagedPreviewNow?: ((jobId: number) => Promise<unknown>) | null;
+  // Concept frames need the CPU a request holds.
+  runDreamNow?: ((input: { jobId: number; version: string; screenshotPath?: string }) => Promise<string>) | null;
   internalAuthVerifier: InternalAuthVerifier;
 }
 
 const BodySchema = z.object({
   jobId: z.number().int().positive(),
-  action: z.enum(['dispatch', 'regenerate', 'staged-preview']).default('dispatch'),
+  action: z.enum(['dispatch', 'regenerate', 'staged-preview', 'dream']).default('dispatch'),
   steer: z.string().max(4000).optional(),
+  version: z.string().max(200).optional(),
+  screenshotPath: z.string().max(400).optional(),
 });
 
 function workFor(
   options: SeedDispatchRouteOptions,
-  input: { jobId: number; action: SeedWork['action']; steer?: string; log: DispatchLog },
+  input: {
+    jobId: number;
+    action: SeedWork['action'];
+    steer?: string;
+    version?: string;
+    screenshotPath?: string;
+    log: DispatchLog;
+  },
 ): (() => Promise<{ outcome: string; reason?: string }>) | null {
   const { jobId, steer, log } = input;
+  if (input.action === 'dream') {
+    const run = options.runDreamNow;
+    const version = input.version;
+    if (!run || !version) return null;
+    const screenshotPath = input.screenshotPath;
+    return () =>
+      run({ jobId, version, ...(screenshotPath ? { screenshotPath } : {}) }).then((outcome) => ({ outcome }));
+  }
   if (input.action === 'regenerate') {
     const run = options.regenerateSeedNow;
     return run ? () => run({ jobId, ...(steer ? { steer } : {}), log }).then(() => ({ outcome: 'regenerated' })) : null;
@@ -126,7 +150,10 @@ function workFor(
   return () => options.dispatchQueuedJob({ jobId, log });
 }
 
-export async function registerSeedDispatchRoute(app: FastifyInstance, options: SeedDispatchRouteOptions): Promise<void> {
+export async function registerSeedDispatchRoute(
+  app: FastifyInstance,
+  options: SeedDispatchRouteOptions,
+): Promise<void> {
   app.post(
     '/api/internal/seed',
     { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
@@ -136,8 +163,8 @@ export async function registerSeedDispatchRoute(app: FastifyInstance, options: S
       }
       const body = BodySchema.safeParse(request.body);
       if (!body.success) return reply.status(400).send({ error: 'invalid job id' });
-      const { jobId, action, steer } = body.data;
-      const work = workFor(options, { jobId, action, steer, log: request.log });
+      const { jobId, action, steer, version, screenshotPath } = body.data;
+      const work = workFor(options, { jobId, action, steer, version, screenshotPath, log: request.log });
       // Refused before headers, so the caller falls back to doing it inline.
       if (!work) return reply.status(503).send({ error: `${action} is not handled here` });
 
