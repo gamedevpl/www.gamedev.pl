@@ -26,7 +26,9 @@ export type ProposalRefusal =
   | 'no_screenshot'
   | 'frame_missing'
   | 'frame_stale'
-  | 'frame_shape';
+  | 'frame_shape'
+  // A label or prompt that is nothing but markup once sanitized.
+  | 'empty_text';
 
 const OptionSchema = z.object({
   label: z
@@ -132,6 +134,13 @@ export function registerAgentChannelProposalRoutes(app: FastifyInstance, deps: A
       const size = imageSize(source);
       if (!size) return reject('no_screenshot');
 
+      // Markup sanitizes away; a blank direction would spend the claim.
+      const texts = parsed.data.options.map((option) => ({
+        label: pair(option.label, option.labelLocalized, record.locale, MAX_PROPOSAL_LABEL),
+        prompt: pair(option.prompt, option.promptLocalized, record.locale, MAX_PROPOSAL_PROMPT),
+      }));
+      if (texts.some(({ label, prompt }) => !label.en || !prompt.en)) return reject('empty_text');
+
       const frameIds = parsed.data.options.map((option) => option.frameId);
       if (new Set(frameIds).size !== frameIds.length) return reject('frame_missing');
       const roundGeneration = record.roundGeneration ?? 1;
@@ -162,8 +171,7 @@ export function registerAgentChannelProposalRoutes(app: FastifyInstance, deps: A
       });
       const options: CreatorProposalOption[] = parsed.data.options.map((option, index) => ({
         id: `agent-${index + 1}`,
-        label: pair(option.label, option.labelLocalized, record.locale, MAX_PROPOSAL_LABEL),
-        prompt: pair(option.prompt, option.promptLocalized, record.locale, MAX_PROPOSAL_PROMPT),
+        ...texts[index]!,
         frameRef: option.frameId,
       }));
       await store.appendCreatorMessage(jobId, PROPOSAL_TEXT_EN, {

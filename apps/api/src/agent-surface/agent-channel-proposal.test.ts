@@ -57,20 +57,28 @@ async function seed(store: InMemoryStore) {
   await store.setSubmissionPreviewVersion(ISSUE, VERSION);
 }
 
-async function uploadConceptFrameRaw(app: FastifyInstance, png: Buffer, round = 1) {
+async function mintConceptUrl(app: FastifyInstance, round = 1): Promise<string> {
   const minted = await app.inject({
     method: 'POST',
     url: '/api/agent/build/shot/upload-url',
     headers: agentHeaders(ISSUE, round),
     payload: { purpose: 'concept' },
   });
-  const token = new URL(minted.json().url).searchParams.get('token');
+  return minted.json().url as string;
+}
+
+async function putConceptFrame(app: FastifyInstance, url: string, png: Buffer) {
+  const token = new URL(url).searchParams.get('token');
   return await app.inject({
     method: 'PUT',
     url: `/api/agent/build/shot/upload?token=${encodeURIComponent(token ?? '')}`,
     headers: { 'content-type': 'image/png' },
     payload: png,
   });
+}
+
+async function uploadConceptFrameRaw(app: FastifyInstance, png: Buffer, round = 1) {
+  return await putConceptFrame(app, await mintConceptUrl(app, round), png);
 }
 
 async function uploadConceptFrame(app: FastifyInstance, png: Buffer = pngHeader(900, 900), round = 1): Promise<string> {
@@ -376,6 +384,61 @@ describe('agent-written concept proposals', () => {
     const response = await propose(app, frames);
 
     expect(response.json().rejected).toBe('frame_stale');
+  });
+
+  it('honours a minted concept URL even when an ordinary shot filled the build', async () => {
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    await fillShots(store, 22);
+    app = await createApp(store, stubGamesStore());
+
+    // The agent mints both URLs, then draws each frame.
+    const urls = [await mintConceptUrl(app), await mintConceptUrl(app)];
+    const first = (await putConceptFrame(app, urls[0]!, pngHeader(900, 900))).json().shot.id as string;
+    // That window is long enough for one more ordinary screenshot to land.
+    await fillShots(store, 1);
+    const second = (await putConceptFrame(app, urls[1]!, pngHeader(900, 900))).json().shot.id as string;
+
+    expect(new Set([first, second]).size).toBe(2);
+    expect((await propose(app, [first, second])).json().accepted).toBe(true);
+  });
+
+  it('stores no more than the pair of concept frames for one delivery', async () => {
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    app = await createApp(store, stubGamesStore());
+
+    await uploadConceptFrame(app);
+    await uploadConceptFrame(app);
+    const third = await uploadConceptFrameRaw(app, pngHeader(900, 900));
+
+    expect(third.json().rejected).toBe('too_many_shots');
+  });
+
+  it('refuses a direction whose text is nothing but markup', async () => {
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    app = await createApp(store, stubGamesStore());
+
+    const frames = [await storeConceptFrame(store), await storeConceptFrame(store)];
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/proposal',
+      headers: agentHeaders(),
+      payload: {
+        options: [
+          { label: '###', prompt: 'Make the world colder.', frameId: frames[0] },
+          { label: 'Warmer', prompt: 'Make the world warmer.', frameId: frames[1] },
+        ],
+      },
+    });
+
+    expect(response.json().rejected).toBe('empty_text');
+    // The claim is untouched, so a corrected call can still post.
+    expect((await store.getSubmission(ISSUE))?.dreamRun).toBeUndefined();
   });
 
   it('refuses a reshaped concept frame at the upload, before it spends a slot', async () => {

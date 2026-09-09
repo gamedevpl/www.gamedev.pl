@@ -829,7 +829,14 @@ because the tool is the only way in:
   so the round alone would let v1 frames ride on v2's capture.
 - **The agent's frames spend the agent's allowance.** `maxShotsPerBuild` is counted by
   ownership, not caption: shots carry `platformDrawn` and only those are exempt, so a
-  reserved caption cannot become an unbounded store an agent writes to forever.
+  reserved caption cannot become an unbounded store an agent writes to forever. The
+  concept PUT is the one exception, and a narrow one: a minted URL is a promise of a
+  slot, so a frame drawn against it is stored even if an ordinary screenshot filled the
+  build meanwhile. `countDeliveryShots` caps a delivery at `PROPOSAL_OPTIONS` frames,
+  and one delivery carries one claim, so the overrun is bounded by the pair.
+- **Text that sanitizes to nothing is refused before the claim.** A label or prompt of
+  pure markup passes the schema and empties in `sanitizeCreatorText`; posting it would
+  spend the delivery's one claim on a blank direction.
 - **Refusals come before the model call.** `concept_frame_upload_url` checks everything
   that makes a card impossible: the switch, the creator's mute, a green capture the
   proposal will actually accept, a delivery not already claimed, and room for the frames

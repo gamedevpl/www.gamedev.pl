@@ -1164,7 +1164,7 @@ export async function registerAgentChannelRoutes(
       }
       const concept = upload.label === DREAM_FRAME_SHOT_LABEL;
       // Ownership, not caption: every upload is the agent's, only drawn frames are ours.
-      if ((await store!.countBuildShots(jobId, { excludePlatformDrawn: true })) >= maxShotsPerBuild) {
+      if (!concept && (await store!.countBuildShots(jobId, { excludePlatformDrawn: true })) >= maxShotsPerBuild) {
         return reject('too_many_shots');
       }
 
@@ -1196,6 +1196,13 @@ export async function registerAgentChannelRoutes(
         return reject('stale_delivery');
       }
       if (concept) {
+        // A minted URL promises a slot; a delivery holds only the pair.
+        const held = await store!.countDeliveryShots(jobId, {
+          label: DREAM_FRAME_SHOT_LABEL,
+          deliveryVersion: conceptVersion ?? '',
+          roundGeneration: upload.roundGeneration,
+        });
+        if (held >= PROPOSAL_OPTIONS) return reject('too_many_shots');
         // A reshaped frame repainted the HUD, and a stored one still spends a slot.
         const capture = await conceptCapture(record);
         const frameSize = imageSize(bytes);

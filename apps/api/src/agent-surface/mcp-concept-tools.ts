@@ -62,6 +62,7 @@ const REFUSALS: Record<string, string> = {
   stale_delivery: 'this URL was issued for an earlier delivery; ask for a new one',
   too_many_shots: 'this build has no image slots left',
   frame_shape: 'a concept frame has a different aspect ratio than the gate capture',
+  empty_text: 'a label or prompt is empty once markup is stripped; write plain text',
 };
 
 // Concept proposals an external agent draws with its own model.
