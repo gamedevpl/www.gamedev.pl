@@ -139,7 +139,8 @@ describe('agent-written concept proposals', () => {
     app = await createApp(store, stubGamesStore());
 
     await propose(app, [await uploadConceptFrame(app), await uploadConceptFrame(app)]);
-    const second = await propose(app, [await uploadConceptFrame(app), await uploadConceptFrame(app)]);
+    // The mint refuses a claimed version, so seed these.
+    const second = await propose(app, [await storeConceptFrame(store), await storeConceptFrame(store)]);
 
     expect(second.json().rejected).toBe('already_proposed');
   });
@@ -242,6 +243,23 @@ describe('agent-written concept proposals', () => {
 
     // The proposal route refuses anything larger, so promising more would mislead.
     expect(minted.json().maxBytes).toBe(600 * 1024);
+  });
+
+  it('refuses the upload URL once this delivery already carries a proposal', async () => {
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    app = await createApp(store, stubGamesStore());
+    await store.claimDreamRun(ISSUE, VERSION, '2026-09-09T00:00:00.000Z');
+
+    const minted = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/shot/upload-url',
+      headers: agentHeaders(),
+      payload: { purpose: 'concept' },
+    });
+
+    expect(minted.json().rejected).toBe('already_proposed');
   });
 
   it('refuses the upload URL before a green capture exists', async () => {

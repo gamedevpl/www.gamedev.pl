@@ -564,7 +564,9 @@ type RejectionReason =
   // A concept frame outlived the delivery its URL was issued for.
   | 'stale_delivery'
   // No green capture yet, so a proposal drawn now could not be posted.
-  | 'no_capture';
+  | 'no_capture'
+  // This delivery already carries a proposal, whoever drew it.
+  | 'already_proposed';
 
 const KNOWLEDGE_SCOPES = new Set(['kit', 'editor', 'examples', 'docs']);
 
@@ -1084,6 +1086,12 @@ export async function registerAgentChannelRoutes(
         }
         if ((await store!.getUser(record.ownerUid))?.proposalsMutedAt) {
           return reply.send({ accepted: false, rejected: 'proposals_muted', ...(await channelState(jobId, record)) });
+        }
+        if (record.dreamRun?.version === (record.previewVersion ?? record.deliveredVersion)) {
+          return reply.send({ accepted: false, rejected: 'already_proposed', ...(await channelState(jobId, record)) });
+        }
+        if ((await store!.countBuildShots(jobId, { excludePlatformDrawn: true })) >= maxShotsPerBuild) {
+          return reply.send({ accepted: false, rejected: 'too_many_shots', ...(await channelState(jobId, record)) });
         }
       }
 

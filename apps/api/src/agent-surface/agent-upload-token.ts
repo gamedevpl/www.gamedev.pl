@@ -66,6 +66,22 @@ function sign(
     .digest('hex');
 }
 
+// The encoding before the version; a deploy leaves these in flight.
+function signWithoutVersion(
+  jobId: number,
+  roundGeneration: number,
+  kind: UploadKind,
+  path: string | undefined,
+  label: string | undefined,
+  exp: number,
+  nonce: string,
+  secret: string,
+): string {
+  return createHmac('sha256', secret)
+    .update(`${SCOPE}:${jobId}:${roundGeneration}:${kind}:${path ?? ''}:${label ?? ''}:${exp}:${nonce}`)
+    .digest('hex');
+}
+
 function safeEqualHex(actual: string, expected: string): boolean {
   const actualBuffer = Buffer.from(actual, 'utf8');
   const expectedBuffer = Buffer.from(expected, 'utf8');
@@ -111,10 +127,12 @@ export function mintUploadToken(secret: string, options: MintUploadTokenOptions)
 
 export function verifyUploadToken(token: string, secret: string): UploadTokenClaims {
   try {
-    const parts = Buffer.from(token, 'base64url').toString('utf8').split('.');
-    if (parts.length !== 9) {
+    const raw = Buffer.from(token, 'base64url').toString('utf8').split('.');
+    if (raw.length !== 9 && raw.length !== 8) {
       throw new InvalidAgentTokenError();
     }
+    const legacy = raw.length === 8;
+    const parts = legacy ? [...raw.slice(0, 5), '', ...raw.slice(5)] : raw;
     const [jobIdRaw, generationRaw, kindRaw, pathRaw, labelRaw, versionRaw, expRaw, nonce, signature] = parts;
     if (
       !jobIdRaw ||
@@ -152,7 +170,10 @@ export function verifyUploadToken(token: string, secret: string): UploadTokenCla
     ) {
       throw new InvalidAgentTokenError();
     }
-    if (!safeEqualHex(signature, sign(jobId, roundGeneration, kind, path, label, version, exp, nonce, secret))) {
+    const expected = legacy
+      ? signWithoutVersion(jobId, roundGeneration, kind, path, label, exp, nonce, secret)
+      : sign(jobId, roundGeneration, kind, path, label, version, exp, nonce, secret);
+    if (!safeEqualHex(signature, expected)) {
       throw new InvalidAgentTokenError();
     }
     return {

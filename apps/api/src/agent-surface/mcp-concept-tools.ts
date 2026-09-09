@@ -60,6 +60,7 @@ const REFUSALS: Record<string, string> = {
   proposals_muted: 'this creator asked not to be shown concept proposals',
   no_capture: 'no green gate capture to draw on yet — deliver and pass the gate first',
   stale_delivery: 'this URL was issued for an earlier delivery; ask for a new one',
+  too_many_shots: 'this build has no image slots left',
   frame_shape: 'a concept frame has a different aspect ratio than the gate capture',
 };
 

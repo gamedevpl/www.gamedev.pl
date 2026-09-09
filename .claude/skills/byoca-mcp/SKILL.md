@@ -828,9 +828,11 @@ because the tool is the only way in:
 - **The agent's frames spend the agent's allowance.** `maxShotsPerBuild` is counted by
   ownership, not caption: shots carry `platformDrawn` and only those are exempt, so a
   reserved caption cannot become an unbounded store an agent writes to forever.
-- **Refusals come before the model call.** `concept_frame_upload_url` checks the switch and
-  the creator's mute itself. Learning at `suggest_next_round` that proposals are off would
-  mean the agent had already paid for two frames and we had already stored them.
+- **Refusals come before the model call.** `concept_frame_upload_url` checks everything
+  that makes a card impossible: the switch, the creator's mute, a green capture to draw
+  on, a delivery not already claimed, and a free image slot. Learning any of that at
+  `suggest_next_round` would mean the agent had already paid for two frames and we had
+  already stored them.
 - **One byte cap, stated once.** `concept_frame_upload_url` advertises the proposal's own
   600 KiB and the PUT enforces it, rather than promising the screenshot route's 700 KiB
   and refusing later at `suggest_next_round`.

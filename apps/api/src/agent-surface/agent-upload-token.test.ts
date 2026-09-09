@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { InvalidAgentTokenError } from '../platform/agent-token.js';
 import {
@@ -29,6 +30,34 @@ describe('agent-upload-token', () => {
     });
     expect(claims.nonce).toMatch(/^[a-f0-9]+$/);
     assertUploadTokenUnexpired(claims, 1_700_000_000_000 + 60_000);
+  });
+
+  it('still accepts a URL the previous revision minted', () => {
+    // A deploy leaves URLs in flight; 401 breaks live sessions.
+    const exp = 1_700_000_000 + 900;
+    const nonce = 'abc123';
+    const signature = createHmac('sha256', secret)
+      .update(`agent-upload-v1:55:1:screenshot:::${exp}:${nonce}`)
+      .digest('hex');
+    const legacy = Buffer.from(`55.1.screenshot...${exp}.${nonce}.${signature}`, 'utf8').toString('base64url');
+
+    const claims = verifyUploadToken(legacy, secret);
+
+    expect(claims).toMatchObject({ jobId: 55, roundGeneration: 1, kind: 'screenshot' });
+    expect(claims.version).toBeUndefined();
+  });
+
+  it('round-trips the delivery a concept URL was issued for', () => {
+    const token = mintUploadToken(secret, {
+      jobId: 55,
+      roundGeneration: 2,
+      kind: 'screenshot',
+      version: 'v7',
+      now: 1_700_000_000_000,
+      ttlSeconds: 900,
+    });
+
+    expect(verifyUploadToken(token, secret)).toMatchObject({ version: 'v7' });
   });
 
   it('binds stage path into the signature', () => {
