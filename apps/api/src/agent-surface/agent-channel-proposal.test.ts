@@ -432,11 +432,13 @@ describe('agent-written concept proposals', () => {
     const urls = [await mintConceptUrl(app), await mintConceptUrl(app)];
     const first = await putConceptFrame(app, urls[0]!, pngHeader(900, 900));
     // A lost response is ordinary; retrying must not burn the other slot.
-    const retry = await putConceptFrame(app, urls[0]!, pngHeader(900, 900));
+    const retry = await putConceptFrame(app, urls[0]!, pngHeader(800, 800));
     const second = await putConceptFrame(app, urls[1]!, pngHeader(900, 900));
 
     expect(retry.json().shot.id).toBe(first.json().shot.id);
     expect(await store.countBuildShots(ISSUE)).toBe(2);
+    // The id a card names must keep pointing at that frame.
+    expect((await store.getBuildShot(ISSUE, first.json().shot.id))?.data).toBe(pngHeader(900, 900).toString('base64'));
     expect((await propose(app, [first.json().shot.id, second.json().shot.id])).json().accepted).toBe(true);
   });
 

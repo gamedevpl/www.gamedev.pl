@@ -135,16 +135,13 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
     // Counted and pushed without awaiting in between, which is the whole point.
     const existing = this.buildShots.get(jobId) ?? [];
     const at = query.id ? existing.findIndex((item) => item.id === query.id) : -1;
-    if (at < 0 && existing.filter(matchesDelivery(query)).length >= query.max) {
+    // First write wins; a posted card keeps the frame it named.
+    if (at >= 0) return { ok: true, shot: { ...existing[at]! } };
+    if (existing.filter(matchesDelivery(query)).length >= query.max) {
       return { ok: false, refused: 'too_many_shots' };
     }
-    const record: BuildShot = {
-      ...shot,
-      id: query.id ?? randomUUID(),
-      createdAt: at < 0 ? new Date().toISOString() : existing[at]!.createdAt,
-    };
-    if (at < 0) existing.push(record);
-    else existing[at] = record;
+    const record: BuildShot = { ...shot, id: query.id ?? randomUUID(), createdAt: new Date().toISOString() };
+    existing.push(record);
     this.buildShots.set(jobId, existing);
     return { ok: true, shot: { ...record } };
   }
@@ -285,15 +282,16 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
       if (!currentRound(job.data() as SubmissionRecord | undefined, query)) {
         return { ok: false, refused: 'stale_delivery' };
       }
+      const mine = await transaction.get(ref);
+      // First write wins; a posted card keeps the frame it named.
+      if (mine.exists) return { ok: true, shot: mine.data() as BuildShot };
       const snap = await transaction.get(
         this.shotsCollection(jobId)
           .where('deliveryVersion', '==', query.deliveryVersion)
           .select('deliveryVersion', 'label', 'roundGeneration', 'platformDrawn'),
       );
-      const mine = snap.docs.find((doc) => doc.id === ref.id);
       const held = snap.docs.map((doc) => doc.data() as BuildShotSummary).filter(matchesDelivery(query)).length;
-      // A replayed URL rewrites its own document, not a new one.
-      if (!mine && held >= query.max) return { ok: false, refused: 'too_many_shots' };
+      if (held >= query.max) return { ok: false, refused: 'too_many_shots' };
       const record: BuildShot = { ...shot, id: ref.id, createdAt: new Date().toISOString() };
       transaction.set(ref, Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined)));
       return { ok: true, shot: record };

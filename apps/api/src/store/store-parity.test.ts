@@ -355,6 +355,16 @@ describeStoreContract('delivery-scoped shot idempotence', (makeStore) => {
     expect(await store.countDeliveryShots(9, slot)).toBe(1);
   });
 
+  it("keeps the first frame's bytes, so a posted card cannot be repainted", async () => {
+    const store = await delivering(makeStore());
+    await store.appendDeliveryShot(9, { ...slot, id: 'concept-abc' }, shot);
+
+    const retry = await store.appendDeliveryShot(9, { ...slot, id: 'concept-abc' }, { ...shot, data: 'ZZZ=' });
+
+    expect(retry.ok && retry.shot.data).toBe('AAA=');
+    expect((await store.getBuildShot(9, 'concept-abc'))?.data).toBe('AAA=');
+  });
+
   it('refuses a frame whose round was reopened under it', async () => {
     const store = await delivering(makeStore());
     await store.bumpRoundGeneration(9);

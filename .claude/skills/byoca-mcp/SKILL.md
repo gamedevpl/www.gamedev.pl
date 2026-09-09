@@ -838,9 +838,10 @@ because the tool is the only way in:
   That transaction also re-reads the delivery _and_ the round generation — a reopen
   leaves the delivery pointers alone, so the version by itself would not catch it — and
   the shot's document id comes from the upload token's nonce: one URL, one document, so
-  a retried PUT after a lost response rewrites its own frame instead of taking the
-  delivery's other slot. The two refusals stay distinct: `stale_delivery` means ask for
-  a fresh URL, `too_many_shots` means stop asking.
+  a retried PUT after a lost response gets its own frame back instead of taking the
+  delivery's other slot. The first write wins there: a card names a frame by id, and a
+  replay must not repaint what a creator is already looking at. The two refusals stay
+  distinct: `stale_delivery` means ask for a fresh URL, `too_many_shots` means stop.
 - **Text that sanitizes to nothing is refused before the claim.** A label or prompt of
   pure markup passes the schema and empties in `sanitizeCreatorText`; posting it would
   spend the delivery's one claim on a blank direction.
