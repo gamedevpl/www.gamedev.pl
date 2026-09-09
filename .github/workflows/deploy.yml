@@ -1047,3 +1047,12 @@ jobs:
             --project "$PROJECT_ID" \
             --to-latest \
             --remove-tags candidate
+
+      - name: Prune old Firebase Hosting versions
+        # Last, and after promotion: Hosting keeps every version ever deployed and bills
+        # storage over the free tier, but nothing here is worth delaying a release for.
+        # The script never deletes the live version, and keeps the newest KEEP besides it
+        # so a rollback still has somewhere to roll back to.
+        env:
+          KEEP: '10'
+        run: ./infra/prune-hosting-versions.sh
