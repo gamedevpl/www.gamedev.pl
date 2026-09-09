@@ -292,6 +292,8 @@ export class FirestoreStore extends SubmissionFacade implements Store {
       for (const write of writes.slice(start, start + BATCH_SIZE)) write(batch);
       await batch.commit();
     }
+    // The read above seeded the session window; an erased account must not survive it.
+    this.identityStore.forgetUser(uid);
 
     return { publishedSlugs, unpublishedSlugs };
   }
