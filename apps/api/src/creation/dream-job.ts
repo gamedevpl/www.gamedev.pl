@@ -197,9 +197,16 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
   return {
     async runForVersion(input) {
       const startedAt = now();
+      // Any answer ends the claim; the TTL is for silence.
+      const finish = async () => {
+        await store
+          .finishDreamRun(input.record.jobId, input.version, new Date(now()).toISOString())
+          .catch((error: unknown) => log.warn({ err: error, jobId: input.record.jobId }, 'dream claim not closed'));
+      };
       try {
         const outcome = await run(input);
         if (outcome !== 'already_ran') {
+          await finish();
           log.info(
             { jobId: input.record.jobId, version: input.version, outcome, durationMs: now() - startedAt },
             'dream job finished',
@@ -208,6 +215,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
         return outcome;
       } catch (error) {
         log.error({ err: error, jobId: input.record.jobId, version: input.version }, 'dream job failed');
+        await finish();
         return 'failed';
       }
     },

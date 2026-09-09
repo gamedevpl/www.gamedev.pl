@@ -305,6 +305,15 @@ describeStoreContract('proposal posting', (makeStore) => {
     expect(await store.appendProposalMessage(11, 'v1', 'Again.', { proposal })).toBeNull();
   });
 
+  it('leaves a finished run finished, however it ended', async () => {
+    const store = makeStore();
+    await claimed(store);
+    await store.finishDreamRun(11, 'v1', '2026-09-07T12:00:10.000Z');
+
+    // A run that answered `no_frames` must not be paid twice.
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z')).toBe(false);
+  });
+
   it('lets a claim that never posted be retaken once its worker is gone', async () => {
     const store = makeStore();
     await claimed(store);

@@ -359,6 +359,10 @@ export class InMemoryStore implements Store {
     return this.roundBudgetStore.claimDreamRun(jobId, version, at);
   }
 
+  async finishDreamRun(jobId: number, version: string, at: string): Promise<void> {
+    return this.roundBudgetStore.finishDreamRun(jobId, version, at);
+  }
+
   async allocateJobId(): Promise<number> {
     return this.dispatchStore.allocateJobId();
   }

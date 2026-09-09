@@ -134,6 +134,15 @@ describe('createDreamJob', () => {
     expect(await run()).toBe('already_ran');
   });
 
+  it('marks a run finished even when it posted nothing, so it is not paid for twice', async () => {
+    const { store, run, frames } = await harness({ hud: [], frame: null });
+
+    expect(await run()).toBe('no_frames');
+    expect(frames.requests).toHaveLength(2);
+    // Without this the TTL would treat it as abandoned.
+    expect((await store.getSubmission(7))?.dreamRun?.endedAt).toBeTruthy();
+  });
+
   it('retakes a claim that never posted, so a failed write is not permanent', async () => {
     const { store, run } = await harness({ hud: [] });
     // Claimed an hour ago and no card: that worker is gone.

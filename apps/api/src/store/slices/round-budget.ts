@@ -25,19 +25,22 @@ export interface RoundBudgetStore {
 
   // First caller per version wins; one dream run per version.
   claimDreamRun(jobId: number, version: string, at: string): Promise<boolean>;
+
+  // Marks a run finished, posted or not; the TTL is for silence.
+  finishDreamRun(jobId: number, version: string, at: string): Promise<void>;
 }
 
 // Long enough for the slowest live worker; generation runs about two minutes.
 export const DREAM_CLAIM_TTL_MS = 10 * 60_000;
 
-// A claim blocks while posted, or while its worker could still run.
+// A claim blocks while the run posted, ended, or may run.
 export function dreamClaimHolds(
-  claim: { version: string; claimedAt: string; postedAt?: string } | undefined,
+  claim: { version: string; claimedAt: string; postedAt?: string; endedAt?: string } | undefined,
   version: string,
   at: string,
 ): boolean {
   if (claim?.version !== version) return false;
-  if (claim.postedAt) return true;
+  if (claim.postedAt || claim.endedAt) return true;
   return Date.parse(at) - Date.parse(claim.claimedAt) < DREAM_CLAIM_TTL_MS;
 }
 
@@ -114,6 +117,12 @@ export class InMemoryRoundBudgetStore implements RoundBudgetStore {
     if ((sub.previewVersion ?? sub.deliveredVersion) !== version) return false;
     this.submissions.set(jobId, { ...sub, dreamRun: { version, claimedAt: at } });
     return true;
+  }
+
+  async finishDreamRun(jobId: number, version: string, at: string): Promise<void> {
+    const sub = this.submissions.get(jobId);
+    if (sub?.dreamRun?.version !== version) return;
+    this.submissions.set(jobId, { ...sub, dreamRun: { ...sub.dreamRun, endedAt: at } });
   }
 }
 
@@ -214,6 +223,16 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
       if ((current.previewVersion ?? current.deliveredVersion) !== version) return false;
       tx.set(ref, { dreamRun: { version, claimedAt: at } }, { merge: true });
       return true;
+    });
+  }
+
+  async finishDreamRun(jobId: number, version: string, at: string): Promise<void> {
+    const ref = this.ref(jobId);
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const claim = (snap.data() as SubmissionRecord | undefined)?.dreamRun;
+      if (claim?.version !== version) return;
+      tx.set(ref, { dreamRun: { ...claim, endedAt: at } }, { merge: true });
     });
   }
 }
