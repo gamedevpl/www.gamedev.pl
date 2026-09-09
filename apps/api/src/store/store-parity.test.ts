@@ -281,37 +281,52 @@ describeStoreContract('creation limits', (makeStore) => {
 describeStoreContract('proposal posting', (makeStore) => {
   const proposal = { sourceRef: 'shot-a', version: 'v1', options: [] };
 
+  const claim = { version: 'v1', claimedAt: '2026-09-07T12:00:00.000Z' };
+
   async function claimed(store: Store): Promise<void> {
     await store.createSubmission(11, 'g:owner', 'Parcel Run');
     await store.setSubmissionPreviewVersion(11, 'v1');
-    await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:00.000Z');
+    await store.claimDreamRun(11, claim.version, claim.claimedAt);
   }
 
   it('posts while the claim still names the version', async () => {
     const store = makeStore();
     await claimed(store);
 
-    expect(await store.appendProposalMessage(11, 'v1', 'Two directions.', { proposal })).not.toBeNull();
+    expect(await store.appendProposalMessage(11, claim, 'Two directions.', { proposal })).not.toBeNull();
     expect(await store.listCreatorMessages(11)).toHaveLength(1);
   });
 
   it('marks the claim posted, so it can never be retaken', async () => {
     const store = makeStore();
     await claimed(store);
-    await store.appendProposalMessage(11, 'v1', 'Two directions.', { proposal });
+    await store.appendProposalMessage(11, claim, 'Two directions.', { proposal });
 
     // A card is on the thread, so the delivery is finished.
     expect(await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z')).toBe(false);
-    expect(await store.appendProposalMessage(11, 'v1', 'Again.', { proposal })).toBeNull();
+    expect(await store.appendProposalMessage(11, claim, 'Again.', { proposal })).toBeNull();
   });
 
   it('leaves a finished run finished, however it ended', async () => {
     const store = makeStore();
     await claimed(store);
-    await store.finishDreamRun(11, 'v1', '2026-09-07T12:00:10.000Z');
+    await store.finishDreamRun(11, claim, '2026-09-07T12:00:10.000Z');
 
     // A run that answered `no_frames` must not be paid twice.
     expect(await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z')).toBe(false);
+  });
+
+  it('ignores a worker whose lease already expired', async () => {
+    const store = makeStore();
+    await claimed(store);
+    // The replacement takes the version an hour later.
+    await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z');
+
+    await store.finishDreamRun(11, claim, '2026-09-07T13:00:05.000Z');
+    expect(await store.appendProposalMessage(11, claim, 'Late.', { proposal })).toBeNull();
+
+    // The replacement is still recoverable, and still the one that may post.
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T14:00:00.000Z')).toBe(true);
   });
 
   it('lets a claim that never posted be retaken once its worker is gone', async () => {
@@ -328,7 +343,7 @@ describeStoreContract('proposal posting', (makeStore) => {
     await store.setSubmissionPreviewVersion(11, 'v2');
     await store.claimDreamRun(11, 'v2', '2026-09-07T12:01:00.000Z');
 
-    expect(await store.appendProposalMessage(11, 'v1', 'Two directions.', { proposal })).toBeNull();
+    expect(await store.appendProposalMessage(11, claim, 'Two directions.', { proposal })).toBeNull();
     expect(await store.listCreatorMessages(11)).toEqual([]);
   });
 });

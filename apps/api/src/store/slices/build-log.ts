@@ -6,6 +6,7 @@ import type { CreatorMessage, CreatorMessageOrigin } from '../records/build-log.
 import { isStudioOrigin } from '../records/build-log.js';
 import type { AgentEndedBy } from '../records/rounds.js';
 import type { SubmissionRecord } from '../records/submission.js';
+import { ownsDreamClaim, type DreamClaimRef } from './round-budget.js';
 
 // Newest first, id as a tie-break for same-millisecond events.
 export function byNewestFirst(a: { createdAt: string; id: string }, b: { createdAt: string; id: string }): number {
@@ -50,10 +51,10 @@ export interface BuildLogStore {
     },
   ): Promise<CreatorMessage>;
 
-  // Posts a proposal only while the dream claim still names `version`.
+  // Posts a proposal only while this attempt still holds the claim.
   appendProposalMessage(
     jobId: number,
-    version: string,
+    claim: DreamClaimRef,
     text: string,
     opts: { textLocalized?: string; locale?: string; proposal: CreatorProposal },
   ): Promise<CreatorMessage | null>;
@@ -68,14 +69,14 @@ export interface BuildLogStore {
   markCreatorMessagesDelivered(jobId: number, ids: string[]): Promise<void>;
 }
 
-// Claim and delivery name this version, and nothing posted yet.
+// This attempt holds the claim, nothing posted, delivery unchanged.
 function holdsDreamClaim(
   record: Pick<SubmissionRecord, 'dreamRun' | 'previewVersion' | 'deliveredVersion'> | undefined,
-  version: string,
+  claim: DreamClaimRef,
 ): boolean {
-  if (!record) return false;
-  if (record.dreamRun?.version !== version || record.dreamRun.postedAt) return false;
-  return (record.previewVersion ?? record.deliveredVersion) === version;
+  if (!record || !ownsDreamClaim(record.dreamRun, claim)) return false;
+  if (record.dreamRun?.postedAt) return false;
+  return (record.previewVersion ?? record.deliveredVersion) === claim.version;
 }
 
 export class InMemoryBuildLogStore implements BuildLogStore {
@@ -179,12 +180,12 @@ export class InMemoryBuildLogStore implements BuildLogStore {
 
   async appendProposalMessage(
     jobId: number,
-    version: string,
+    claim: DreamClaimRef,
     text: string,
     opts: { textLocalized?: string; locale?: string; proposal: CreatorProposal },
   ): Promise<CreatorMessage | null> {
     const record = this.submissions.get(jobId);
-    if (!holdsDreamClaim(record, version)) return null;
+    if (!holdsDreamClaim(record, claim)) return null;
     const posted = await this.appendCreatorMessage(jobId, text, { ...opts, origin: 'studio', delivered: true });
     // Stamped with the card: only a posted claim is final.
     this.submissions.set(jobId, { ...record!, dreamRun: { ...record!.dreamRun!, postedAt: posted.createdAt } });
@@ -324,7 +325,7 @@ export class FirestoreBuildLogStore implements BuildLogStore {
 
   async appendProposalMessage(
     jobId: number,
-    version: string,
+    claim: DreamClaimRef,
     text: string,
     opts: { textLocalized?: string; locale?: string; proposal: CreatorProposal },
   ): Promise<CreatorMessage | null> {
@@ -342,7 +343,7 @@ export class FirestoreBuildLogStore implements BuildLogStore {
       // Read and post together, or a newer delivery wins the gap.
       const snap = await transaction.get(this.submissionRef(jobId));
       const job = snap.data() as SubmissionRecord | undefined;
-      if (!snap.exists || !holdsDreamClaim(job, version)) return null;
+      if (!snap.exists || !holdsDreamClaim(job, claim)) return null;
       transaction.set(this.messagesCollection(jobId).doc(record.id), record);
       // Stamped with the card: only a posted claim is final.
       transaction.set(this.submissionRef(jobId), { dreamRun: { ...job!.dreamRun!, postedAt: now } }, { merge: true });

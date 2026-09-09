@@ -76,7 +76,7 @@ import { FirestoreDreamQuotaStore } from './slices/quota-dreams.js';
 import { FirestoreQuotaStore } from './slices/quota.js';
 import { FirestoreReviewSweepStore } from './slices/review-sweeps.js';
 import { FirestoreReviewStore } from './slices/review.js';
-import { FirestoreRoundBudgetStore } from './slices/round-budget.js';
+import { FirestoreRoundBudgetStore, type DreamClaimRef } from './slices/round-budget.js';
 import { FirestoreRoundsStore } from './slices/rounds.js';
 import { FirestoreSocialStore } from './slices/social.js';
 import { FirestoreSubmissionQueryStore } from './slices/submission-queries.js';
@@ -438,8 +438,8 @@ export class FirestoreStore implements Store {
     return this.roundBudgetStore.claimDreamRun(jobId, version, at);
   }
 
-  async finishDreamRun(jobId: number, version: string, at: string): Promise<void> {
-    return this.roundBudgetStore.finishDreamRun(jobId, version, at);
+  async finishDreamRun(jobId: number, claim: DreamClaimRef, at: string): Promise<void> {
+    return this.roundBudgetStore.finishDreamRun(jobId, claim, at);
   }
 
   async allocateJobId(): Promise<number> {
@@ -649,11 +649,11 @@ export class FirestoreStore implements Store {
 
   async appendProposalMessage(
     jobId: number,
-    version: string,
+    claim: DreamClaimRef,
     text: string,
     opts: { textLocalized?: string; locale?: string; proposal: CreatorProposal },
   ): Promise<CreatorMessage | null> {
-    return this.buildLogStore.appendProposalMessage(jobId, version, text, opts);
+    return this.buildLogStore.appendProposalMessage(jobId, claim, text, opts);
   }
 
   async listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {

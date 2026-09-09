@@ -112,12 +112,12 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     }
   }
 
-  async function run(input: DreamRunInput): Promise<DreamOutcome> {
+  async function run(input: DreamRunInput, claimedAt: string): Promise<DreamOutcome> {
     const { record, version, screenshotPath } = input;
     const jobId = record.jobId;
     // The same predicate the claim uses; two spellings would drift apart.
     if (dreamClaimHolds(record.dreamRun, version, new Date(now()).toISOString())) return 'already_ran';
-    if (!(await store.claimDreamRun(jobId, version, new Date(now()).toISOString()))) return 'already_ran';
+    if (!(await store.claimDreamRun(jobId, version, claimedAt))) return 'already_ran';
     if (!(await availability.dreamingEnabled())) return 'paused';
     if ((await store.getUser(record.ownerUid))?.proposalsMutedAt) return 'muted';
     if (!record.slug || !screenshotPath) return 'no_screenshot';
@@ -184,7 +184,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       builder: record.builder === 'self' ? 'self' : 'platform',
     };
     // Posted only if the claim still holds, in one transaction.
-    const posted = await store.appendProposalMessage(jobId, version, PROPOSAL_TEXT_EN, {
+    const posted = await store.appendProposalMessage(jobId, { version, claimedAt }, PROPOSAL_TEXT_EN, {
       textLocalized: PROPOSAL_TEXT_PL,
       locale: 'pl',
       proposal,
@@ -197,14 +197,15 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
   return {
     async runForVersion(input) {
       const startedAt = now();
+      const claimedAt = new Date(now()).toISOString();
       // Any answer ends the claim; the TTL is for silence.
       const finish = async () => {
         await store
-          .finishDreamRun(input.record.jobId, input.version, new Date(now()).toISOString())
+          .finishDreamRun(input.record.jobId, { version: input.version, claimedAt }, new Date(now()).toISOString())
           .catch((error: unknown) => log.warn({ err: error, jobId: input.record.jobId }, 'dream claim not closed'));
       };
       try {
-        const outcome = await run(input);
+        const outcome = await run(input, claimedAt);
         if (outcome !== 'already_ran') {
           await finish();
           log.info(

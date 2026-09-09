@@ -27,11 +27,25 @@ export interface RoundBudgetStore {
   claimDreamRun(jobId: number, version: string, at: string): Promise<boolean>;
 
   // Marks a run finished, posted or not; the TTL is for silence.
-  finishDreamRun(jobId: number, version: string, at: string): Promise<void>;
+  finishDreamRun(jobId: number, claim: DreamClaimRef, at: string): Promise<void>;
 }
 
 // Long enough for the slowest live worker; generation runs about two minutes.
 export const DREAM_CLAIM_TTL_MS = 10 * 60_000;
+
+// Which attempt is speaking: `claimedAt` is unique per retake.
+export interface DreamClaimRef {
+  version: string;
+  claimedAt: string;
+}
+
+// True when this attempt still owns the claim it is reporting on.
+export function ownsDreamClaim(
+  held: { version: string; claimedAt: string } | undefined,
+  claim: DreamClaimRef,
+): boolean {
+  return held?.version === claim.version && held.claimedAt === claim.claimedAt;
+}
 
 // A claim blocks while the run posted, ended, or may run.
 export function dreamClaimHolds(
@@ -119,10 +133,11 @@ export class InMemoryRoundBudgetStore implements RoundBudgetStore {
     return true;
   }
 
-  async finishDreamRun(jobId: number, version: string, at: string): Promise<void> {
+  async finishDreamRun(jobId: number, claim: DreamClaimRef, at: string): Promise<void> {
     const sub = this.submissions.get(jobId);
-    if (sub?.dreamRun?.version !== version) return;
-    this.submissions.set(jobId, { ...sub, dreamRun: { ...sub.dreamRun, endedAt: at } });
+    // An expired worker must not close the attempt that replaced it.
+    if (!sub || !ownsDreamClaim(sub.dreamRun, claim)) return;
+    this.submissions.set(jobId, { ...sub, dreamRun: { ...sub.dreamRun!, endedAt: at } });
   }
 }
 
@@ -226,13 +241,14 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
     });
   }
 
-  async finishDreamRun(jobId: number, version: string, at: string): Promise<void> {
+  async finishDreamRun(jobId: number, claim: DreamClaimRef, at: string): Promise<void> {
     const ref = this.ref(jobId);
     await this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
-      const claim = (snap.data() as SubmissionRecord | undefined)?.dreamRun;
-      if (claim?.version !== version) return;
-      tx.set(ref, { dreamRun: { ...claim, endedAt: at } }, { merge: true });
+      const held = (snap.data() as SubmissionRecord | undefined)?.dreamRun;
+      // An expired worker must not close the attempt that replaced it.
+      if (!ownsDreamClaim(held, claim)) return;
+      tx.set(ref, { dreamRun: { ...held!, endedAt: at } }, { merge: true });
     });
   }
 }

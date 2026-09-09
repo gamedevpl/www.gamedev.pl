@@ -76,7 +76,7 @@ import { InMemoryDreamQuotaStore } from './slices/quota-dreams.js';
 import { InMemoryQuotaStore } from './slices/quota.js';
 import { InMemoryReviewSweepStore } from './slices/review-sweeps.js';
 import { InMemoryReviewStore } from './slices/review.js';
-import { InMemoryRoundBudgetStore } from './slices/round-budget.js';
+import { InMemoryRoundBudgetStore, type DreamClaimRef } from './slices/round-budget.js';
 import { InMemoryRoundsStore } from './slices/rounds.js';
 import { InMemorySocialStore } from './slices/social.js';
 import { InMemorySubmissionQueryStore } from './slices/submission-queries.js';
@@ -359,8 +359,8 @@ export class InMemoryStore implements Store {
     return this.roundBudgetStore.claimDreamRun(jobId, version, at);
   }
 
-  async finishDreamRun(jobId: number, version: string, at: string): Promise<void> {
-    return this.roundBudgetStore.finishDreamRun(jobId, version, at);
+  async finishDreamRun(jobId: number, claim: DreamClaimRef, at: string): Promise<void> {
+    return this.roundBudgetStore.finishDreamRun(jobId, claim, at);
   }
 
   async allocateJobId(): Promise<number> {
@@ -582,11 +582,11 @@ export class InMemoryStore implements Store {
 
   async appendProposalMessage(
     jobId: number,
-    version: string,
+    claim: DreamClaimRef,
     text: string,
     opts: { textLocalized?: string; locale?: string; proposal: CreatorProposal },
   ): Promise<CreatorMessage | null> {
-    return this.buildLogStore.appendProposalMessage(jobId, version, text, opts);
+    return this.buildLogStore.appendProposalMessage(jobId, claim, text, opts);
   }
 
   async listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
