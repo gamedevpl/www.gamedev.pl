@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
-- Recover preview delivery from an open own-agent session with explicit takeover confirmation (#TBD).
+- Recover preview delivery from an open own-agent session with explicit takeover confirmation (#1256).
 
 - Continue existing local checkouts from connect instead of silently using platform sources (#1252).
 - Show meaningful Codex MCP and file activity instead of item.completed (#1252).

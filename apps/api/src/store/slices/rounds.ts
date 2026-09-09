@@ -2,7 +2,12 @@ import type { Firestore } from '@google-cloud/firestore';
 import type { AgentTaskState } from '../../platform/agent-state.js';
 import type { SeedFiles } from '../../agent-surface/agent-backend.js';
 import type { BuilderKind } from '../../creation/builder.js';
-import { isActiveBuildRound, nextRoundGeneration, type JobTransition } from '../../creation/job-state.js';
+import {
+  isActiveBuildRound,
+  nextRoundGeneration,
+  resolveJobState,
+  type JobTransition,
+} from '../../creation/job-state.js';
 import { MAX_JOB_TRANSITIONS } from '../records/dispatch.js';
 import type { BuilderHandoff } from '../records/rounds.js';
 import type { SubmissionRecord } from '../records/submission.js';
@@ -26,14 +31,15 @@ export function takeoverRecord(
   generation: number,
   at: string,
 ): SubmissionRecord | null {
+  const state = resolveJobState(sub) ?? 'queued';
   if (
     sub.ownerUid !== uid ||
     (sub.roundGeneration ?? 1) !== generation ||
     sub.abandonedAt ||
     (sub.builder ?? sub.defaultBuilder ?? 'platform') !== 'self' ||
-    !isActiveBuildRound({ state: sub.state ?? 'queued', transitions: sub.transitions }) ||
-    sub.state === 'submitted' ||
-    sub.state === 'publishing' ||
+    !isActiveBuildRound({ state, transitions: sub.transitions }) ||
+    state === 'submitted' ||
+    state === 'publishing' ||
     sub.builderHandoff ||
     sub.agentEndedAt ||
     !sub.dispatch?.refs?.length

@@ -405,7 +405,13 @@ export async function offerSubmit(input: {
   write: (line: string) => void;
 }): Promise<void> {
   const { ws } = input;
-  const session = await deliverySession(input.api, ws.slug);
+  let session: Awaited<ReturnType<typeof deliverySession>>;
+  try {
+    session = await deliverySession(input.api, ws.slug);
+  } catch (error) {
+    input.write(formatError(error));
+    return;
+  }
   const takeover = Boolean(session?.locked && session.canTakeOver);
   if (session?.locked && (!takeover || ws.unattended)) {
     input.write(

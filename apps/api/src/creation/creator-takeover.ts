@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { resolveJobState } from './job-state.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { codeSurfaceEnabled, isLiveAgentRound } from './code-surface.js';
 
@@ -32,8 +33,8 @@ export function registerCreatorTakeover(
         locked &&
         (record.builder ?? record.defaultBuilder) === 'self' &&
         !record.builderHandoff &&
-        record.state !== 'submitted' &&
-        record.state !== 'publishing',
+        resolveJobState(record) !== 'submitted' &&
+        resolveJobState(record) !== 'publishing',
     };
   });
   app.post<{ Params: { slug: string } }>(route, config, async (request, reply) => {
