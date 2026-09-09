@@ -360,3 +360,25 @@ describeStoreContract('proposal posting', (makeStore) => {
     expect(await store.listCreatorMessages(11)).toEqual([]);
   });
 });
+
+// The strip filters after the read; a crowd must not empty it.
+describeStoreContract('media strip paging', (makeStore) => {
+  // Explicit timestamps; same-millisecond appends would not order.
+  const shot = (label: string, minute: number) => ({
+    data: 'AAA=',
+    mediaType: 'image/png' as const,
+    label,
+    createdAt: new Date(Date.UTC(2026, 8, 7, 12, minute)).toISOString(),
+  });
+
+  it('reaches past two deliveries of proposal shots to the real one', async () => {
+    const store = makeStore();
+    await store.appendBuildShot(12, shot('Opening', 0));
+    // Two deliveries of proposal shots, all newer than the real one.
+    for (let index = 0; index < 6; index += 1) await store.appendBuildShot(12, shot('AI concept', index + 1));
+
+    const strip = await store.listBuildShots(12, { limit: 1, excludeLabels: ['AI concept'] });
+
+    expect(strip.map((item) => item.label)).toEqual(['Opening']);
+  });
+});

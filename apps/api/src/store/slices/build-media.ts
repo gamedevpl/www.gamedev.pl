@@ -8,8 +8,8 @@ export interface BuildShotCountOptions {
   excludeLabels?: readonly string[];
 }
 
-// Enough pages to fill a strip past a crowd of proposal shots.
-const MAX_SHOT_PAGES = 4;
+// One read covers the common case; a crowd costs another.
+const SHOT_PAGE_SIZE = 24;
 
 export interface BuildShotListOptions extends BuildShotCountOptions {
   limit?: number;
@@ -155,20 +155,21 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
 
   async listBuildShots(jobId: number, opts?: BuildShotListOptions): Promise<BuildShotSummary[]> {
     const limit = opts?.limit ?? 12;
+    const page = Math.max(limit, SHOT_PAGE_SIZE);
     const kept: BuildShotSummary[] = [];
     let after: { id: string } | undefined;
-    // Page until `limit` survive the filter; a count read cannot promise it.
-    for (let page = 0; page < MAX_SHOT_PAGES && kept.length < limit; page += 1) {
+    // Until `limit` survive the filter, or the collection runs out.
+    while (kept.length < limit) {
       // `select()` keeps bytes off the polled status response.
       const base = this.shotsCollection(jobId)
         .select('id', 'label', 'labelLocalized', 'locale', 'mediaType', 'createdAt')
         .orderBy('createdAt', 'desc')
-        .limit(limit);
+        .limit(page);
       const snap = await (after ? base.startAfter(after) : base).get();
       if (snap.empty) break;
       after = snap.docs[snap.docs.length - 1];
       kept.push(...snap.docs.map((doc) => doc.data() as BuildShotSummary).filter(keeps(opts?.excludeLabels)));
-      if (snap.docs.length < limit) break;
+      if (snap.docs.length < page) break;
     }
     return kept.sort(byNewestFirst).slice(0, limit);
   }
