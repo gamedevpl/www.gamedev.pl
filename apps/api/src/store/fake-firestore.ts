@@ -297,7 +297,13 @@ export function fakeFirestore() {
       // Matched by id -- unique within any single flat collection queried here.
       startAfter: (cursor: { id: string }) => makeQuery(paths, filter, { ...opts, afterId: cursor.id }),
       limit: (n: number) => makeQuery(paths, filter, { ...opts, max: n }),
-      count: () => ({ get: async () => ({ data: () => ({ count: rows().length }) }) }),
+      count: () => ({
+        get: async () => {
+          // Materialised at `get()`, as the real client does.
+          const total = rows().length;
+          return { data: () => ({ count: total }) };
+        },
+      }),
       get: async () => {
         const found = rows();
         return {
