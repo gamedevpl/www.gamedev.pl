@@ -89,12 +89,12 @@ describe('useComposerAttachments', () => {
     });
     await settle();
 
-    expect(api.blockedAttachment).toBe('AI concept');
+    expect(api.blockedAttachment?.name).toBe('AI concept');
     expect(api.attachments).toHaveLength(MAX_COMPOSER_ATTACHMENTS);
     expect(api.attachments.some((item) => item.name === 'AI concept')).toBe(false);
   });
 
-  it('clears the notice once the creator makes room', async () => {
+  it('attaches the waiting frame once the creator makes room', async () => {
     vi.mocked(fetch).mockResolvedValue(pngResponse());
     await mount();
     await act(async () => {
@@ -106,12 +106,35 @@ describe('useComposerAttachments', () => {
       api.addAttachmentFromUrl('AI concept', '/shot/a', { replaces: 'proposal' });
     });
     await settle();
-    expect(api.blockedAttachment).toBe('AI concept');
+    expect(api.blockedAttachment?.name).toBe('AI concept');
 
     await act(async () => {
       api.removeAttachment(api.attachments[0]!.id);
     });
 
+    // The notice asked for room; making it must attach the frame.
     expect(api.blockedAttachment).toBeNull();
+    expect(api.attachments.some((item) => item.name === 'AI concept')).toBe(true);
+  });
+
+  it('leaves no stale frame behind when a repick fails to load', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(pngResponse())
+      .mockResolvedValue({ ok: false } as Response);
+    await mount();
+    await act(async () => {
+      api.addAttachmentFromUrl('A', '/shot/a', { replaces: 'proposal' });
+    });
+    await settle();
+    expect(api.attachments.map((item) => item.name)).toEqual(['A']);
+
+    await act(async () => {
+      api.addAttachmentFromUrl('B', '/shot/b', { replaces: 'proposal' });
+    });
+    await settle();
+
+    // B's prompt is in the composer; A's frame answers another.
+    expect(api.attachments).toEqual([]);
+    expect(api.blockedAttachment).toEqual({ name: 'B', dataUrl: null });
   });
 });

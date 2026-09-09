@@ -6,6 +6,9 @@ export type ComposerAttachment = { id: string; name: string; dataUrl: string; re
 
 export const MAX_COMPOSER_ATTACHMENTS = 4;
 
+// A frame a pick could not attach; bytes mean it awaits room.
+export type BlockedAttachment = { name: string; dataUrl: string | null; options?: { replaces?: string } };
+
 // True when one more attachment fits, once the superseded ones drop out.
 export function fitsAttachment(prev: ComposerAttachment[], options?: { replaces?: string }): boolean {
   const kept = options?.replaces ? prev.filter((item) => item.replacedBy !== options.replaces) : prev;
@@ -32,8 +35,8 @@ export function useComposerAttachments(sending: boolean) {
   const [isSketchOpen, setIsSketchOpen] = useState(false);
   // Newest read per group; a slower one cannot land on it.
   const latestRead = useRef(new Map<string, { token: symbol; abort: AbortController }>());
-  // What a pick could not attach, so the composer can say so.
-  const [blockedAttachment, setBlockedAttachment] = useState<string | null>(null);
+  // What a pick could not attach; null `dataUrl` means it failed.
+  const [blockedAttachment, setBlockedAttachment] = useState<BlockedAttachment | null>(null);
   const attachmentsRef = useRef<ComposerAttachment[]>([]);
   attachmentsRef.current = attachments;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -97,19 +100,24 @@ export function useComposerAttachments(sending: boolean) {
       // A superseded read must free Send, not hold it.
       latestRead.current.get(group)?.abort.abort();
       latestRead.current.set(group, { token, abort });
+      // Dropped now, not on success; a failed pick leaves none.
+      setAttachments((prev) => prev.filter((item) => item.replacedBy !== group));
     }
+    setBlockedAttachment(null);
     setPendingAttachmentReads((count) => count + 1);
     void fetchImageAsDataUrl(url, abort.signal)
       .then((dataUrl) => {
-        if (!dataUrl) return;
         // A later pick won; this frame answers an old prompt.
         if (group && latestRead.current.get(group)?.token !== token) return;
-        // The pick took over the text; a missing frame misleads.
-        if (!fitsAttachment(attachmentsRef.current, options)) {
-          setBlockedAttachment(name);
+        // The text is already the new one; say which frame is missing.
+        if (!dataUrl) {
+          setBlockedAttachment({ name, dataUrl: null });
           return;
         }
-        setBlockedAttachment(null);
+        if (!fitsAttachment(attachmentsRef.current, options)) {
+          setBlockedAttachment({ name, dataUrl, ...(options ? { options } : {}) });
+          return;
+        }
         addAttachment(name, dataUrl, options);
       })
       .finally(() => setPendingAttachmentReads((count) => count - 1));
@@ -124,8 +132,20 @@ export function useComposerAttachments(sending: boolean) {
   };
 
   const removeAttachment = (id: string) => {
-    setBlockedAttachment(null);
-    setAttachments((prev) => prev.filter((item) => item.id !== id));
+    const next = attachmentsRef.current.filter((item) => item.id !== id);
+    setAttachments(next);
+    const waiting = blockedAttachment;
+    // Making room is what the notice asked for; honour it.
+    if (waiting?.dataUrl && fitsAttachment(next, waiting.options)) {
+      setBlockedAttachment(null);
+      setAttachments(
+        withAttachment(
+          next,
+          { id: `${waiting.name}-${Date.now()}`, name: waiting.name, dataUrl: waiting.dataUrl },
+          waiting.options,
+        ),
+      );
+    }
   };
 
   const resetAttachments = () => {

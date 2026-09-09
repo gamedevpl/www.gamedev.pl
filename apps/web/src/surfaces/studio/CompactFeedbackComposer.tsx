@@ -144,7 +144,12 @@ export function CompactFeedbackComposer({
       )}
       {blockedAttachment && (
         <p className="status-composer-attachment-blocked" role="status">
-          {t('statusView.composer.attachmentFull', { name: blockedAttachment })}
+          {t(
+            blockedAttachment.dataUrl ? 'statusView.composer.attachmentFull' : 'statusView.composer.attachmentFailed',
+            {
+              name: blockedAttachment.name,
+            },
+          )}
         </p>
       )}
       <div className="status-composer-toolbar">
