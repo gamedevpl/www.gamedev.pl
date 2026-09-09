@@ -816,8 +816,10 @@ because the tool is the only way in:
 - **`dreamsPaused` and `proposalsMutedAt` are checked here**, not in the caller. A muted
   creator or a paused platform answers `posted: false` with a reason; both are final for
   the round, and the tool description says so rather than inviting a retry.
-- **A frame that changed aspect ratio is refused**, the same spike rule the dream job
-  applies — a reshaped frame repainted the HUD it was meant to keep.
+- **A frame that changed aspect ratio is refused at the upload**, the same spike rule the
+  dream job applies — a reshaped frame repainted the HUD it was meant to keep. The
+  proposal route still checks it, but refusing at the PUT is what keeps a useless frame
+  from holding a shot slot its replacement then cannot find.
 - **The reserved captions are not claimable.** `screenshot_upload_url` now refuses a label
   that matches one, so `AI concept` means AI concept everywhere.
 
@@ -829,8 +831,11 @@ because the tool is the only way in:
   ownership, not caption: shots carry `platformDrawn` and only those are exempt, so a
   reserved caption cannot become an unbounded store an agent writes to forever.
 - **Refusals come before the model call.** `concept_frame_upload_url` checks everything
-  that makes a card impossible: the switch, the creator's mute, a green capture to draw
-  on, a delivery not already claimed, and room for the frames the card still needs.
+  that makes a card impossible: the switch, the creator's mute, a green capture the
+  proposal will actually accept, a delivery not already claimed, and room for the frames
+  the card still needs. The capture is read whole, not trusted from the manifest — a
+  capture inside `get_gate_media`'s limit but past the proposal's would otherwise be
+  refused only after two frames were paid for.
   Room for one is not room: the mint reserves both required frames, minus any this
   delivery already holds, so a build at 23 of 24 shots is refused the first URL instead
   of paying for a frame whose partner can never be stored. Learning any of that at

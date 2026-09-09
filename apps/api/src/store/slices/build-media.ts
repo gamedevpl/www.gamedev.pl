@@ -223,7 +223,8 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
     // One equality field, so no composite index is needed.
     const snap = await this.shotsCollection(jobId)
       .where('deliveryVersion', '==', query.deliveryVersion)
-      .select('label', 'roundGeneration', 'platformDrawn')
+      // Every field the predicate reads: an unselected one comes back undefined.
+      .select('deliveryVersion', 'label', 'roundGeneration', 'platformDrawn')
       .get();
     return snap.docs.map((doc) => doc.data() as BuildShotSummary).filter(matchesDelivery(query)).length;
   }

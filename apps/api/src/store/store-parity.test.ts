@@ -276,3 +276,26 @@ describeStoreContract('creation limits', (makeStore) => {
     expect(limits?.telemetrySampleRate).toBeNull();
   });
 });
+
+// Firestore projects fields; one left out of `select` reads absent.
+describeStoreContract('delivery-scoped shot counts', (makeStore) => {
+  const frame = { data: 'AAA=', mediaType: 'image/png' as const, label: 'AI concept' };
+  const query = { label: 'AI concept', deliveryVersion: 'v2', roundGeneration: 3 };
+
+  it('counts the agent frames one delivery of one round already holds', async () => {
+    const store = makeStore();
+    await store.appendBuildShot(9, { ...frame, deliveryVersion: 'v2', roundGeneration: 3 });
+
+    expect(await store.countDeliveryShots(9, query)).toBe(1);
+  });
+
+  it('leaves out other deliveries, other rounds, other captions and our own frames', async () => {
+    const store = makeStore();
+    await store.appendBuildShot(9, { ...frame, deliveryVersion: 'v1', roundGeneration: 3 });
+    await store.appendBuildShot(9, { ...frame, deliveryVersion: 'v2', roundGeneration: 2 });
+    await store.appendBuildShot(9, { ...frame, label: 'Opening', deliveryVersion: 'v2', roundGeneration: 3 });
+    await store.appendBuildShot(9, { ...frame, deliveryVersion: 'v2', roundGeneration: 3, platformDrawn: true });
+
+    expect(await store.countDeliveryShots(9, query)).toBe(0);
+  });
+});

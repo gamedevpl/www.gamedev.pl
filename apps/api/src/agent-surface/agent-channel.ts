@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { AGENT_CHANNEL_ROUTES, MAX_AGENT_SHOT_BYTES } from '@gamedevpl/contract';
+import { AGENT_CHANNEL_ROUTES, MAX_AGENT_SHOT_BYTES, MAX_SHOT_BYTES } from '@gamedevpl/contract';
 import { createExampleFileStore } from './example-files.js';
 import { registerAgentChannelExamplesRoutes } from './agent-channel-examples.js';
 import { registerAgentChannelBriefRoutes } from './agent-channel-brief.js';
@@ -26,6 +26,7 @@ import {
   type UploadTokenClaims,
 } from './agent-upload-token.js';
 import { isRasterSourcePath } from '../platform/raster-source.js';
+import { imageSize, isPng, sameAspectRatio, type ImageSize } from '../platform/image-size.js';
 import { DREAM_FRAME_SHOT_LABEL, isDreamShotLabel, MAX_PROPOSAL_FRAME_BYTES } from '../platform/dream-shots.js';
 import { MAX_BUILD_PREVIEW_BYTES } from '../platform/build-preview-limits.js';
 import type { TranscriptPage, TranscriptWindow } from '../delivery/build-transcript.js';
@@ -566,7 +567,9 @@ type RejectionReason =
   // No green capture yet, so a proposal drawn now could not be posted.
   | 'no_capture'
   // This delivery already carries a proposal, whoever drew it.
-  | 'already_proposed';
+  | 'already_proposed'
+  // A concept frame whose aspect ratio does not match the gate capture.
+  | 'frame_shape';
 
 const KNOWLEDGE_SCOPES = new Set(['kit', 'editor', 'examples', 'docs']);
 
@@ -1079,7 +1082,7 @@ export async function registerAgentChannelRoutes(
       if (parsed.data.purpose === 'concept') {
         // Without a green capture the card can never post, and the agent would learn that
         // only after paying for two frames.
-        if (!conceptVersion || !(await conceptCaptureReady(record))) {
+        if (!conceptVersion || !(await conceptCapture(record))) {
           return reply.send({ accepted: false, rejected: 'no_capture', ...(await channelState(jobId, record)) });
         }
         if (!(await (options.dreamingEnabled ?? (async () => false))())) {
@@ -1191,6 +1194,12 @@ export async function registerAgentChannelRoutes(
       const conceptVersion = upload.version;
       if (concept && conceptVersion !== (record.previewVersion ?? record.deliveredVersion)) {
         return reject('stale_delivery');
+      }
+      if (concept) {
+        // A reshaped frame repainted the HUD, and a stored one still spends a slot.
+        const capture = await conceptCapture(record);
+        const frameSize = imageSize(bytes);
+        if (!capture || !frameSize || !sameAspectRatio(frameSize, capture)) return reject('frame_shape');
       }
 
       const stored = await store!.appendBuildShot(jobId, {
@@ -2287,12 +2296,16 @@ export async function registerAgentChannelRoutes(
     },
   );
 
-  // A concept URL is only worth issuing once there is a green frame to draw on.
-  async function conceptCaptureReady(record: SubmissionRecord): Promise<boolean> {
+  // The gate capture, read whole: the proposal refuses one the manifest allows.
+  async function conceptCapture(record: SubmissionRecord): Promise<ImageSize | null> {
     const version = record.previewVersion ?? record.deliveredVersion;
-    if (!record.slug || !version || !options.gamesStore) return false;
+    if (!record.slug || !version || !options.gamesStore) return null;
     const manifest = await options.gamesStore.getManifest(record.slug, version).catch(() => null);
-    return Boolean(gateFrameOf(manifest));
+    const path = gateFrameOf(manifest);
+    if (!path) return null;
+    const source = await options.gamesStore.getDerivedArtifact(record.slug, version, path).catch(() => null);
+    if (!source || source.length === 0 || source.length > MAX_SHOT_BYTES || !isPng(source)) return null;
+    return imageSize(source);
   }
 
   registerAgentChannelBriefRoutes(app, { resolveBuild, store });

@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { MAX_SHOT_BYTES } from '@gamedevpl/contract';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mintAgentToken } from '../platform/agent-token.js';
 import { buildApp } from '../platform/app.js';
@@ -16,10 +17,10 @@ function agentHeaders(jobId = ISSUE, roundGeneration = 1) {
   return { authorization: `Bearer ${mintAgentToken(jobId, secret, { roundGeneration })}` };
 }
 
-function stubGamesStore(screenshot: string | null = 'opening.png'): GamesStore {
+function stubGamesStore(screenshot: string | null = 'opening.png', source: Buffer | null = SOURCE): GamesStore {
   return {
     getManifest: async () => (screenshot ? { previewGate: { green: true, screenshot } } : {}),
-    getDerivedArtifact: async () => SOURCE,
+    getDerivedArtifact: async () => source,
   } as unknown as GamesStore;
 }
 
@@ -56,7 +57,7 @@ async function seed(store: InMemoryStore) {
   await store.setSubmissionPreviewVersion(ISSUE, VERSION);
 }
 
-async function uploadConceptFrame(app: FastifyInstance, png: Buffer = pngHeader(900, 900), round = 1): Promise<string> {
+async function uploadConceptFrameRaw(app: FastifyInstance, png: Buffer, round = 1) {
   const minted = await app.inject({
     method: 'POST',
     url: '/api/agent/build/shot/upload-url',
@@ -64,13 +65,16 @@ async function uploadConceptFrame(app: FastifyInstance, png: Buffer = pngHeader(
     payload: { purpose: 'concept' },
   });
   const token = new URL(minted.json().url).searchParams.get('token');
-  const put = await app.inject({
+  return await app.inject({
     method: 'PUT',
     url: `/api/agent/build/shot/upload?token=${encodeURIComponent(token ?? '')}`,
     headers: { 'content-type': 'image/png' },
     payload: png,
   });
-  return put.json().shot.id as string;
+}
+
+async function uploadConceptFrame(app: FastifyInstance, png: Buffer = pngHeader(900, 900), round = 1): Promise<string> {
+  return (await uploadConceptFrameRaw(app, png, round)).json().shot.id as string;
 }
 
 // Ordinary agent screenshots, to push the build up against its quota.
@@ -81,9 +85,9 @@ async function fillShots(store: InMemoryStore, count: number): Promise<void> {
 }
 
 // Stores a frame the way a completed upload would.
-async function storeConceptFrame(store: InMemoryStore): Promise<string> {
+async function storeConceptFrame(store: InMemoryStore, png: Buffer = pngHeader(900, 900)): Promise<string> {
   const shot = await store.appendBuildShot(ISSUE, {
-    data: pngHeader(900, 900).toString('base64'),
+    data: png.toString('base64'),
     label: DREAM_FRAME_SHOT_LABEL,
     roundGeneration: 1,
     deliveryVersion: VERSION,
@@ -301,6 +305,23 @@ describe('agent-written concept proposals', () => {
     expect((await propose(app, frames)).json().accepted).toBe(true);
   });
 
+  it('refuses the upload URL when the capture is one the proposal cannot use', async () => {
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    // Green in the manifest, but too many bytes for the proposal.
+    app = await createApp(store, stubGamesStore('opening.png', Buffer.concat([SOURCE, Buffer.alloc(MAX_SHOT_BYTES)])));
+
+    const minted = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/shot/upload-url',
+      headers: agentHeaders(),
+      payload: { purpose: 'concept' },
+    });
+
+    expect(minted.json().rejected).toBe('no_capture');
+  });
+
   it('refuses the upload URL before a green capture exists', async () => {
     // Otherwise two paid frames buy an answer of no.
     vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
@@ -357,13 +378,26 @@ describe('agent-written concept proposals', () => {
     expect(response.json().rejected).toBe('frame_stale');
   });
 
-  it('refuses a concept frame that changed the frame shape', async () => {
+  it('refuses a reshaped concept frame at the upload, before it spends a slot', async () => {
     vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
     const store = new InMemoryStore();
     await seed(store);
     app = await createApp(store, stubGamesStore());
 
-    const frames = [await uploadConceptFrame(app), await uploadConceptFrame(app, pngHeader(1600, 900))];
+    const put = await uploadConceptFrameRaw(app, pngHeader(1600, 900));
+
+    expect(put.json().rejected).toBe('frame_shape');
+    // A stored frame would hold a slot the replacement then cannot find.
+    expect(await store.countBuildShots(ISSUE)).toBe(0);
+  });
+
+  it('still refuses a reshaped frame at the proposal, for one stored before the check', async () => {
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    app = await createApp(store, stubGamesStore());
+
+    const frames = [await storeConceptFrame(store), await storeConceptFrame(store, pngHeader(1600, 900))];
     const response = await propose(app, frames);
 
     expect(response.json().rejected).toBe('frame_shape');
