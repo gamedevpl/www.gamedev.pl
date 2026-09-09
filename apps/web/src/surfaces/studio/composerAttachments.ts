@@ -24,6 +24,8 @@ export function useComposerAttachments(sending: boolean) {
   const [pendingAttachmentReads, setPendingAttachmentReads] = useState(0);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [isSketchOpen, setIsSketchOpen] = useState(false);
+  // Newest read per group; a slower one cannot land on it.
+  const latestRead = useRef(new Map<string, symbol>());
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const attachMenuRef = useRef<HTMLDivElement | null>(null);
   const attachPanelRef = useClampToViewport<HTMLDivElement>(attachMenuOpen);
@@ -79,9 +81,15 @@ export function useComposerAttachments(sending: boolean) {
   // Send waits for this like a file read.
   const addAttachmentFromUrl = (name: string, url: string, options?: { replaces?: string }) => {
     setPendingAttachmentReads((count) => count + 1);
+    const group = options?.replaces;
+    const token = Symbol('read');
+    if (group) latestRead.current.set(group, token);
     void fetchImageAsDataUrl(url)
       .then((dataUrl) => {
-        if (dataUrl) addAttachment(name, dataUrl, options);
+        if (!dataUrl) return;
+        // A later pick won; this frame answers an old prompt.
+        if (group && latestRead.current.get(group) !== token) return;
+        addAttachment(name, dataUrl, options);
       })
       .finally(() => setPendingAttachmentReads((count) => count - 1));
   };

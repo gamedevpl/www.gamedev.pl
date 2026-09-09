@@ -5,6 +5,7 @@ import {
   clearNotifications,
   fetchNotifications,
   fetchNotificationPreferences,
+  onNotificationPreferencesChanged,
   markNotificationsRead,
   updateNotificationPreferences,
   type AppNotification,
@@ -148,6 +149,9 @@ export function NotificationBell() {
       setPrefsBusy(false);
     }
   }, [prefs]);
+
+  // A card can mute proposals; the bell must hear it.
+  useEffect(() => onNotificationPreferencesChanged((next) => setPrefs(next)), []);
 
   const toggleProposals = useCallback(async () => {
     if (!prefs) return;

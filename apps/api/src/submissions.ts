@@ -1307,6 +1307,10 @@ export async function registerSubmissionRoutes(
     const job = dreamJob;
     if (!job) return;
     const { record, version, screenshotPath } = input;
+    // The seam fires on every poll while the preview stays green, and the worker only
+    // dedupes once it has started -- so without this the round would spend the seed
+    // route's shared hourly allowance re-handing off work that is already done.
+    if (record.dreamRun?.version === version) return;
     if (!seedDispatch) {
       await job.runForVersion(input);
       return;

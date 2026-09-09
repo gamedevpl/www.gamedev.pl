@@ -739,7 +739,9 @@ export function SubmissionStatusView({
         if (!cancelled) setProposalsMuted(prefs.proposals === false);
       })
       .catch(() => {
-        if (!cancelled) setProposalsMuted(false);
+        // Unknown, not unmuted: showing cards to someone who opted out is the worse miss,
+        // so leave them hidden and let the next render try again.
+        if (!cancelled) proposalPrefsRequested.current = false;
       });
     return () => {
       cancelled = true;
