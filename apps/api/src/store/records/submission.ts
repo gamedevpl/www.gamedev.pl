@@ -256,8 +256,8 @@ export interface SubmissionRecord {
   roundPreflightRefusalsSymbols?: number;
   // Last `${version}:${status}` already logged for gate metrics.
   roundLastGateMetricKey?: string;
-  // Dream job's claim; one run per delivered version.
-  dreamRun?: { version: string; claimedAt: string };
+  // Dream job's claim; `postedAt` is what makes it final.
+  dreamRun?: { version: string; claimedAt: string; postedAt?: string };
   /**
    * Creator concept text (sanitized), without the QA clarifications block.
    *

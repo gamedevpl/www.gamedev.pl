@@ -295,6 +295,24 @@ describeStoreContract('proposal posting', (makeStore) => {
     expect(await store.listCreatorMessages(11)).toHaveLength(1);
   });
 
+  it('marks the claim posted, so it can never be retaken', async () => {
+    const store = makeStore();
+    await claimed(store);
+    await store.appendProposalMessage(11, 'v1', 'Two directions.', { proposal });
+
+    // A card is on the thread, so the delivery is finished.
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z')).toBe(false);
+    expect(await store.appendProposalMessage(11, 'v1', 'Again.', { proposal })).toBeNull();
+  });
+
+  it('lets a claim that never posted be retaken once its worker is gone', async () => {
+    const store = makeStore();
+    await claimed(store);
+
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:30.000Z')).toBe(false);
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z')).toBe(true);
+  });
+
   it('refuses once a newer delivery took the claim', async () => {
     const store = makeStore();
     await claimed(store);

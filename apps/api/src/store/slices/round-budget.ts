@@ -27,6 +27,20 @@ export interface RoundBudgetStore {
   claimDreamRun(jobId: number, version: string, at: string): Promise<boolean>;
 }
 
+// Long enough for the slowest live worker; generation runs about two minutes.
+export const DREAM_CLAIM_TTL_MS = 10 * 60_000;
+
+// A claim blocks while posted, or while its worker could still run.
+export function dreamClaimHolds(
+  claim: { version: string; claimedAt: string; postedAt?: string } | undefined,
+  version: string,
+  at: string,
+): boolean {
+  if (claim?.version !== version) return false;
+  if (claim.postedAt) return true;
+  return Date.parse(at) - Date.parse(claim.claimedAt) < DREAM_CLAIM_TTL_MS;
+}
+
 export class InMemoryRoundBudgetStore implements RoundBudgetStore {
   constructor(private submissions: Map<number, SubmissionRecord>) {}
 
@@ -96,7 +110,7 @@ export class InMemoryRoundBudgetStore implements RoundBudgetStore {
 
   async claimDreamRun(jobId: number, version: string, at: string): Promise<boolean> {
     const sub = this.submissions.get(jobId);
-    if (!sub || sub.dreamRun?.version === version) return false;
+    if (!sub || dreamClaimHolds(sub.dreamRun, version, at)) return false;
     if ((sub.previewVersion ?? sub.deliveredVersion) !== version) return false;
     this.submissions.set(jobId, { ...sub, dreamRun: { version, claimedAt: at } });
     return true;
@@ -195,7 +209,7 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
       const snap = await tx.get(ref);
       if (!snap.exists) return false;
       const current = snap.data() as SubmissionRecord;
-      if (current.dreamRun?.version === version) return false;
+      if (dreamClaimHolds(current.dreamRun, version, at)) return false;
       // Read and claim together, or a late claim overwrites.
       if ((current.previewVersion ?? current.deliveredVersion) !== version) return false;
       tx.set(ref, { dreamRun: { version, claimedAt: at } }, { merge: true });

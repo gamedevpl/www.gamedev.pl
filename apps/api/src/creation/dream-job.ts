@@ -114,8 +114,8 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
   async function run(input: DreamRunInput): Promise<DreamOutcome> {
     const { record, version, screenshotPath } = input;
     const jobId = record.jobId;
-    // Cheap read before the transaction: every status poll comes through here.
-    if (record.dreamRun?.version === version) return 'already_ran';
+    // Cheap read before the transaction; only a posted claim is final.
+    if (record.dreamRun?.version === version && record.dreamRun.postedAt) return 'already_ran';
     if (!(await store.claimDreamRun(jobId, version, new Date(now()).toISOString()))) return 'already_ran';
     if (!(await availability.dreamingEnabled())) return 'paused';
     if ((await store.getUser(record.ownerUid))?.proposalsMutedAt) return 'muted';

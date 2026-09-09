@@ -121,10 +121,26 @@ describe('createDreamJob', () => {
     expect(await run({ version: 'v2' })).toBe('no_hud');
   });
 
-  it('skips a record that already carries the claim without touching the store', async () => {
+  it('skips a delivery whose card was already posted, without touching the store', async () => {
     const { run, record } = await harness({});
-    record.dreamRun = { version: 'v1', claimedAt: '2026-09-07T11:00:00.000Z' };
+    record.dreamRun = { version: 'v1', claimedAt: '2026-09-07T11:00:00.000Z', postedAt: '2026-09-07T11:01:00.000Z' };
     expect(await run()).toBe('already_ran');
+  });
+
+  it('leaves a claim alone while its worker could still be running', async () => {
+    const { store, run } = await harness({ hud: [] });
+    await store.claimDreamRun(7, 'v1', '2026-09-07T11:59:00.000Z');
+
+    expect(await run()).toBe('already_ran');
+  });
+
+  it('retakes a claim that never posted, so a failed write is not permanent', async () => {
+    const { store, run } = await harness({ hud: [] });
+    // Claimed an hour ago and no card: that worker is gone.
+    await store.claimDreamRun(7, 'v1', '2026-09-07T11:00:00.000Z');
+
+    expect(await run()).toBe('posted');
+    expect(await store.listCreatorMessages(7)).toHaveLength(1);
   });
 
   it('is paused by the operator switch', async () => {

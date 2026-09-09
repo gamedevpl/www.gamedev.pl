@@ -68,13 +68,13 @@ export interface BuildLogStore {
   markCreatorMessagesDelivered(jobId: number, ids: string[]): Promise<void>;
 }
 
-// Claim and delivery both still name this version.
+// Claim and delivery name this version, and nothing posted yet.
 function holdsDreamClaim(
   record: Pick<SubmissionRecord, 'dreamRun' | 'previewVersion' | 'deliveredVersion'> | undefined,
   version: string,
 ): boolean {
   if (!record) return false;
-  if (record.dreamRun?.version !== version) return false;
+  if (record.dreamRun?.version !== version || record.dreamRun.postedAt) return false;
   return (record.previewVersion ?? record.deliveredVersion) === version;
 }
 
@@ -183,8 +183,12 @@ export class InMemoryBuildLogStore implements BuildLogStore {
     text: string,
     opts: { textLocalized?: string; locale?: string; proposal: CreatorProposal },
   ): Promise<CreatorMessage | null> {
-    if (!holdsDreamClaim(this.submissions.get(jobId), version)) return null;
-    return await this.appendCreatorMessage(jobId, text, { ...opts, origin: 'studio', delivered: true });
+    const record = this.submissions.get(jobId);
+    if (!holdsDreamClaim(record, version)) return null;
+    const posted = await this.appendCreatorMessage(jobId, text, { ...opts, origin: 'studio', delivered: true });
+    // Stamped with the card: only a posted claim is final.
+    this.submissions.set(jobId, { ...record!, dreamRun: { ...record!.dreamRun!, postedAt: posted.createdAt } });
+    return posted;
   }
 
   async listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
@@ -337,8 +341,11 @@ export class FirestoreBuildLogStore implements BuildLogStore {
     return await this.db.runTransaction(async (transaction) => {
       // Read and post together, or a newer delivery wins the gap.
       const snap = await transaction.get(this.submissionRef(jobId));
-      if (!snap.exists || !holdsDreamClaim(snap.data() as SubmissionRecord, version)) return null;
+      const job = snap.data() as SubmissionRecord | undefined;
+      if (!snap.exists || !holdsDreamClaim(job, version)) return null;
       transaction.set(this.messagesCollection(jobId).doc(record.id), record);
+      // Stamped with the card: only a posted claim is final.
+      transaction.set(this.submissionRef(jobId), { dreamRun: { ...job!.dreamRun!, postedAt: now } }, { merge: true });
       return record;
     });
   }
