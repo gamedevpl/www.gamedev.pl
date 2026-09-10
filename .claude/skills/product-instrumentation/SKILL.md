@@ -172,6 +172,21 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
     dimension. One `proposal_shown` per tab session (the step key dedupes), so the ratio
     is decisions per exposure, not per poll. The dimension is the builder that drew the
     card, persisted on the proposal — a later handoff must not re-attribute old cards.
+    ~~Written but unread~~ — **closed in the same PR, after review caught it**: the four
+    rungs shipped with no aggregate at all. `summarizeVisitFunnel` ignored `studio_step`
+    outright and the trends rollup matched only the BYOCA rungs, so every proposal event
+    was write-only and the documented decisions-per-exposure ratio was unanswerable.
+    `summarizeProposals` ([visit-proposals.ts](../../../apps/api/src/telemetry/visit-proposals.ts))
+    now rolls up as `proposals` on `GET /api/admin/telemetry/visits`, rendered by
+    `ProposalFunnelBlock`. Two rules it inherits: a decision is counted only inside the
+    exposed set, so a lost `proposal_shown` batch cannot push a ratio past 100%; and a
+    missing `builder` reads `unknown` rather than being folded into `self` — the trends
+    rollup beside it defaults to `self`, which is fine for a lane that only exists for
+    self rounds but would silently misattribute a platform-drawn card here.
+    **The lesson is the one this list keeps re-teaching**: `code_step` and `cli_step` both
+    sat unread for months, and this entry described the write side in enough detail to
+    look finished while nothing could read it. Writing the vocabulary entry is not the
+    instrumentation; the aggregate is.
   - ~~BYOCA / self-build funnel unmeasured~~ — **closed 2026-08-01 (BY-08)**: `studio_step`
     on the visit stream records `builder_chosen` → `connect_copied` (also `connect_deeplink`,
     `connect_dismissed`, `connect_restored`) → `agent_signaled` →

@@ -74,6 +74,14 @@ export interface VisitFunnel {
     installs: Array<{ channel: string; sessions: number }>;
     platforms: Array<{ os: string; sessions: number }>;
   };
+  // NP-1v concept proposals; optional like its neighbours.
+  proposals?: {
+    exposed: number;
+    picked: number;
+    postponed: number;
+    muted: number;
+    byBuilder: Array<{ builder: string; exposed: number; picked: number; postponed: number; muted: number }>;
+  };
   completion?: {
     requests: number;
     shown: number;
