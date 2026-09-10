@@ -26,6 +26,7 @@ import {
   type UploadTokenClaims,
 } from './agent-upload-token.js';
 import type { BuildShot } from '../store/records/build-log.js';
+import { dreamClaimHolds } from '../store/slices/round-budget.js';
 import { isRasterSourcePath } from '../platform/raster-source.js';
 import { imageSize, isPng, sameAspectRatio, type ImageSize } from '../platform/image-size.js';
 import { DREAM_FRAME_SHOT_LABEL, isDreamShotLabel, MAX_PROPOSAL_FRAME_BYTES } from '../platform/dream-shots.js';
@@ -1092,7 +1093,8 @@ export async function registerAgentChannelRoutes(
         if ((await store!.getUser(record.ownerUid))?.proposalsMutedAt) {
           return reply.send({ accepted: false, rejected: 'proposals_muted', ...(await channelState(jobId, record)) });
         }
-        if (record.dreamRun?.version === conceptVersion) {
+        // The shared predicate: a lapsed claim is reclaimable, so mint again.
+        if (dreamClaimHolds(record.dreamRun, conceptVersion, new Date().toISOString())) {
           return reply.send({ accepted: false, rejected: 'already_proposed', ...(await channelState(jobId, record)) });
         }
         // A card needs both frames; room for one buys nothing.

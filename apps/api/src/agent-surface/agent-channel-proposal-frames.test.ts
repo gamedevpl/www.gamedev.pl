@@ -93,7 +93,25 @@ describe('agent concept frame slots', () => {
     expect(minted.json().maxBytes).toBe(600 * 1024);
   });
 
-  it('refuses the upload URL once this delivery already carries a proposal', async () => {
+  it('refuses the upload URL while a run still holds this delivery', async () => {
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    app = await createApp(store, stubGamesStore());
+    await store.claimDreamRun(ISSUE, VERSION, new Date().toISOString());
+
+    const minted = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/shot/upload-url',
+      headers: agentHeaders(),
+      payload: { purpose: 'concept' },
+    });
+
+    expect(minted.json().rejected).toBe('already_proposed');
+  });
+
+  it('mints again once an abandoned claim has lapsed', async () => {
+    // A crashed run leaves a claim the TTL releases.
     vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
     const store = new InMemoryStore();
     await seed(store);
@@ -107,6 +125,25 @@ describe('agent concept frame slots', () => {
       payload: { purpose: 'concept' },
     });
 
+    expect(minted.json().rejected).toBeUndefined();
+    expect(minted.json().url).toBeTruthy();
+  });
+
+  it('refuses the upload URL once this delivery already carries a proposal', async () => {
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    app = await createApp(store, stubGamesStore());
+    await propose(app, [await uploadConceptFrame(app), await uploadConceptFrame(app)]);
+
+    const minted = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/shot/upload-url',
+      headers: agentHeaders(),
+      payload: { purpose: 'concept' },
+    });
+
+    // A posted claim is final, however long ago it was taken.
     expect(minted.json().rejected).toBe('already_proposed');
   });
 
