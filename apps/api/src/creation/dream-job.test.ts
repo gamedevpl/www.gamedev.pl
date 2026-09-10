@@ -145,7 +145,7 @@ describe('createDreamJob', () => {
 
   it('leaves a claim alone while its worker could still be running', async () => {
     const { store, run } = await harness({ hud: [] });
-    await store.claimDreamRun(7, 'v1', '2026-09-07T11:59:00.000Z');
+    await store.claimDreamRun(7, 'v1', '2026-09-07T11:59:00.000Z', 1);
 
     expect(await run()).toBe('already_ran');
   });
@@ -162,7 +162,7 @@ describe('createDreamJob', () => {
   it('retakes a claim that never posted, so a failed write is not permanent', async () => {
     const { store, run } = await harness({ hud: [] });
     // Claimed an hour ago and no card: that worker is gone.
-    await store.claimDreamRun(7, 'v1', '2026-09-07T11:00:00.000Z');
+    await store.claimDreamRun(7, 'v1', '2026-09-07T11:00:00.000Z', 1);
 
     expect(await run()).toBe('posted');
     expect(await store.listCreatorMessages(7)).toHaveLength(1);
@@ -297,7 +297,7 @@ describe('createDreamJob', () => {
       if (!moved) {
         moved = true;
         await store.setSubmissionPreviewVersion(7, 'v2');
-        await store.claimDreamRun(7, 'v2', '2026-09-07T12:00:01.000Z');
+        await store.claimDreamRun(7, 'v2', '2026-09-07T12:00:01.000Z', 1);
       }
       return stored;
     };
@@ -345,8 +345,8 @@ describe('createDreamJob', () => {
     const { store } = await harness({ hud: [] });
     await store.setSubmissionPreviewVersion(7, 'v2');
 
-    expect(await store.claimDreamRun(7, 'v1', '2026-09-09T00:00:00.000Z')).toBe(false);
-    expect(await store.claimDreamRun(7, 'v2', '2026-09-09T00:00:00.000Z')).toBe(true);
+    expect(await store.claimDreamRun(7, 'v1', '2026-09-09T00:00:00.000Z', 1)).toBe(false);
+    expect(await store.claimDreamRun(7, 'v2', '2026-09-09T00:00:00.000Z', 1)).toBe(true);
   });
 
   it('spends nothing when the model returns a single idea', async () => {

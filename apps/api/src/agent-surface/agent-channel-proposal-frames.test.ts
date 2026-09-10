@@ -98,7 +98,7 @@ describe('agent concept frame slots', () => {
     const store = new InMemoryStore();
     await seed(store);
     app = await createApp(store, stubGamesStore());
-    await store.claimDreamRun(ISSUE, VERSION, new Date().toISOString());
+    await store.claimDreamRun(ISSUE, VERSION, new Date().toISOString(), 1);
 
     const minted = await app.inject({
       method: 'POST',
@@ -116,7 +116,7 @@ describe('agent concept frame slots', () => {
     const store = new InMemoryStore();
     await seed(store);
     app = await createApp(store, stubGamesStore());
-    await store.claimDreamRun(ISSUE, VERSION, '2026-09-09T00:00:00.000Z');
+    await store.claimDreamRun(ISSUE, VERSION, '2026-09-09T00:00:00.000Z', 1);
 
     const minted = await app.inject({
       method: 'POST',

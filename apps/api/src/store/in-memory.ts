@@ -357,8 +357,8 @@ export class InMemoryStore implements Store {
     return this.roundBudgetStore.setRoundLastGateMetricKey(jobId, key);
   }
 
-  async claimDreamRun(jobId: number, version: string, at: string): Promise<boolean> {
-    return this.roundBudgetStore.claimDreamRun(jobId, version, at);
+  async claimDreamRun(jobId: number, version: string, at: string, roundGeneration: number): Promise<boolean> {
+    return this.roundBudgetStore.claimDreamRun(jobId, version, at, roundGeneration);
   }
 
   async finishDreamRun(jobId: number, claim: DreamClaimRef, at: string): Promise<void> {

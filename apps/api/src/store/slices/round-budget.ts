@@ -23,8 +23,8 @@ export interface RoundBudgetStore {
   // Records that a gate metric was logged for this version/status key.
   setRoundLastGateMetricKey(jobId: number, key: string): Promise<void>;
 
-  // First caller per version wins; one dream run per version.
-  claimDreamRun(jobId: number, version: string, at: string): Promise<boolean>;
+  // First caller per version and round wins; a stale caller takes nothing.
+  claimDreamRun(jobId: number, version: string, at: string, roundGeneration: number): Promise<boolean>;
 
   // Marks a run finished, posted or not; the TTL is for silence.
   finishDreamRun(jobId: number, claim: DreamClaimRef, at: string): Promise<void>;
@@ -129,10 +129,10 @@ export class InMemoryRoundBudgetStore implements RoundBudgetStore {
     this.submissions.set(jobId, { ...sub, roundLastGateMetricKey: key });
   }
 
-  async claimDreamRun(jobId: number, version: string, at: string): Promise<boolean> {
+  async claimDreamRun(jobId: number, version: string, at: string, roundGeneration: number): Promise<boolean> {
     const sub = this.submissions.get(jobId);
-    const roundGeneration = sub?.roundGeneration ?? 1;
-    if (!sub || dreamClaimHolds(sub.dreamRun, version, at, roundGeneration)) return false;
+    if (!sub || (sub.roundGeneration ?? 1) !== roundGeneration) return false;
+    if (dreamClaimHolds(sub.dreamRun, version, at, roundGeneration)) return false;
     if ((sub.previewVersion ?? sub.deliveredVersion) !== version) return false;
     this.submissions.set(jobId, { ...sub, dreamRun: { version, claimedAt: at, roundGeneration } });
     return true;
@@ -232,13 +232,14 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
     await this.ref(jobId).set({ roundLastGateMetricKey: key }, { merge: true });
   }
 
-  async claimDreamRun(jobId: number, version: string, at: string): Promise<boolean> {
+  async claimDreamRun(jobId: number, version: string, at: string, roundGeneration: number): Promise<boolean> {
     const ref = this.ref(jobId);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       if (!snap.exists) return false;
       const current = snap.data() as SubmissionRecord;
-      const roundGeneration = current.roundGeneration ?? 1;
+      // A caller whose round moved takes nothing on its way out.
+      if ((current.roundGeneration ?? 1) !== roundGeneration) return false;
       if (dreamClaimHolds(current.dreamRun, version, at, roundGeneration)) return false;
       // Read and claim together, or a late claim overwrites.
       if ((current.previewVersion ?? current.deliveredVersion) !== version) return false;

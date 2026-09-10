@@ -120,7 +120,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     // The same predicate the claim uses; two spellings would drift apart.
     if (dreamClaimHolds(record.dreamRun, version, new Date(now()).toISOString(), record.roundGeneration ?? 1))
       return 'already_ran';
-    if (!(await store.claimDreamRun(jobId, version, claimedAt))) return 'already_ran';
+    if (!(await store.claimDreamRun(jobId, version, claimedAt, record.roundGeneration ?? 1))) return 'already_ran';
     // The switch and the creator's mute; either ends the run.
     const stopped = async (): Promise<DreamOutcome | null> => {
       if (!(await availability.dreamingEnabled())) return 'paused';

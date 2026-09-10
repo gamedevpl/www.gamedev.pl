@@ -2210,7 +2210,7 @@ describe('submission routes', () => {
       by: 'gate',
       reason: 'sources_delivered',
     });
-    await store.claimDreamRun(job.jobId, 'v1', new Date().toISOString());
+    await store.claimDreamRun(job.jobId, 'v1', new Date().toISOString(), 1);
 
     const token = mintToken(job.jobId, secret);
     await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
@@ -2266,7 +2266,7 @@ describe('submission routes', () => {
       reason: 'sources_delivered',
     });
     // Claimed an hour ago with no card: that worker never came back.
-    await store.claimDreamRun(job.jobId, 'v1', new Date(Date.now() - 60 * 60_000).toISOString());
+    await store.claimDreamRun(job.jobId, 'v1', new Date(Date.now() - 60 * 60_000).toISOString(), 1);
 
     const token = mintToken(job.jobId, secret);
     await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
