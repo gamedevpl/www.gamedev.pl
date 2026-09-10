@@ -38,13 +38,24 @@ describe('createDreamAvailabilityGate', () => {
   });
 
   it('refuses the frames when the pause landed after the run began', async () => {
-    // The last check before the paid call; the gate opened earlier.
+    // A live TTL: a cached read would never see the new pause.
     const store = new InMemoryStore();
-    const gate = createDreamAvailabilityGate({ store, ttlMs: 0 });
+    const gate = createDreamAvailabilityGate({ store, ttlMs: 60_000 });
     expect(await gate.dreamingEnabled()).toBe(true);
     await store.setCreationLimits({ dreamsPaused: true }, 'g:boss');
     expect(await gate.spendFrameSlots('2026-09-07', 2)).toBe(false);
     expect(await store.getGlobalDreamCount('2026-09-07')).toBe(0);
+  });
+
+  it('falls back to the last known values when the fresh look fails', async () => {
+    const store = new InMemoryStore();
+    await store.setCreationLimits({ globalDailyDreamCap: 5 }, 'g:boss');
+    const gate = createDreamAvailabilityGate({ store, ttlMs: 60_000 });
+    expect(await gate.dreamingEnabled()).toBe(true);
+    store.getCreationLimits = async () => {
+      throw new Error('firestore down');
+    };
+    expect(await gate.spendFrameSlots('2026-09-07', 1)).toBe(true);
   });
 
   it('dreams with no store at all, as local runs do', async () => {

@@ -40,9 +40,10 @@ export function createDreamAvailabilityGate(options: DreamAvailabilityOptions): 
   // Unknown is not unset: only one of the two may dream.
   type ConfigRead = { known: true; value: CreationLimits | null } | { known: false };
 
-  async function config(): Promise<ConfigRead> {
+  // `fresh` skips the cached value; a failed read still falls back.
+  async function config(fresh = false): Promise<ConfigRead> {
     if (!store) return { known: true, value: null };
-    if (cache && cache.expiresAt > now()) return { known: true, value: cache.value };
+    if (!fresh && cache && cache.expiresAt > now()) return { known: true, value: cache.value };
     try {
       const stored = await store.getCreationLimits();
       cache = { value: stored, expiresAt: now() + ttlMs };
@@ -66,8 +67,8 @@ export function createDreamAvailabilityGate(options: DreamAvailabilityOptions): 
 
   async function spendFrameSlots(dateStr: string, count: number): Promise<boolean> {
     if (!store) return true;
-    const read = await config();
-    // The last look before the paid call; the pause may have landed.
+    // A cached switch cannot see a pause set since; look again.
+    const read = await config(true);
     if (!read.known || read.value?.dreamsPaused === true) return false;
     const cap = read.value?.globalDailyDreamCap ?? resolveDefaultGlobalDailyDreamCap();
     if (cap <= 0) return false;
