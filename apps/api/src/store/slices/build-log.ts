@@ -51,12 +51,18 @@ export interface BuildLogStore {
     },
   ): Promise<CreatorMessage>;
 
-  // Posts only while the claim holds and the owner has not muted.
+  // Posts only into the round and claim it was drawn for.
   appendProposalMessage(
     jobId: number,
     claim: DreamClaimRef,
     text: string,
-    opts: { textLocalized?: string; locale?: string; proposal: CreatorProposal; ownerUid: string },
+    opts: {
+      textLocalized?: string;
+      locale?: string;
+      proposal: CreatorProposal;
+      ownerUid: string;
+      roundGeneration: number;
+    },
   ): Promise<CreatorMessage | null>;
 
   // Undelivered messages, oldest first -- the agent's inbox. Never a 'studio' row.
@@ -185,10 +191,17 @@ export class InMemoryBuildLogStore implements BuildLogStore {
     jobId: number,
     claim: DreamClaimRef,
     text: string,
-    opts: { textLocalized?: string; locale?: string; proposal: CreatorProposal; ownerUid: string },
+    opts: {
+      textLocalized?: string;
+      locale?: string;
+      proposal: CreatorProposal;
+      ownerUid: string;
+      roundGeneration: number;
+    },
   ): Promise<CreatorMessage | null> {
     const record = this.submissions.get(jobId);
     if (!holdsDreamClaim(record, claim)) return null;
+    if ((record?.roundGeneration ?? 1) !== opts.roundGeneration) return null;
     if (this.users.get(opts.ownerUid)?.proposalsMutedAt) return null;
     const posted = await this.appendCreatorMessage(jobId, text, { ...opts, origin: 'studio', delivered: true });
     // Stamped with the card: only a posted claim is final.
@@ -331,7 +344,13 @@ export class FirestoreBuildLogStore implements BuildLogStore {
     jobId: number,
     claim: DreamClaimRef,
     text: string,
-    opts: { textLocalized?: string; locale?: string; proposal: CreatorProposal; ownerUid: string },
+    opts: {
+      textLocalized?: string;
+      locale?: string;
+      proposal: CreatorProposal;
+      ownerUid: string;
+      roundGeneration: number;
+    },
   ): Promise<CreatorMessage | null> {
     const now = new Date().toISOString();
     const record: CreatorMessage = {
@@ -350,6 +369,8 @@ export class FirestoreBuildLogStore implements BuildLogStore {
       const owner = await transaction.get(this.db.collection('users').doc(opts.ownerUid));
       const job = snap.data() as SubmissionRecord | undefined;
       if (!snap.exists || !holdsDreamClaim(job, claim)) return null;
+      // A reopen bumps the generation and leaves the version alone.
+      if ((job?.roundGeneration ?? 1) !== opts.roundGeneration) return null;
       if ((owner.data() as { proposalsMutedAt?: string | null } | undefined)?.proposalsMutedAt) return null;
       transaction.set(this.messagesCollection(jobId).doc(record.id), record);
       // Stamped with the card: only a posted claim is final.

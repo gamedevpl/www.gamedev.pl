@@ -180,8 +180,12 @@ export function registerAgentChannelProposalRoutes(app: FastifyInstance, deps: A
         locale: 'pl',
         proposal: { sourceRef: sourceShot.id, version, options, builder: 'self' },
         ownerUid: record.ownerUid,
+        roundGeneration,
       });
       if (!posted) {
+        // Three ways the transaction refuses; say which, rather than guess.
+        const live = await store.getSubmission(jobId);
+        if ((live?.roundGeneration ?? 1) !== roundGeneration) return reject('frame_stale');
         return reject((await store.getUser(record.ownerUid))?.proposalsMutedAt ? 'muted' : 'already_proposed');
       }
       deps.onPosted?.(jobId);

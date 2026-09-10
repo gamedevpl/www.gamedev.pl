@@ -237,6 +237,24 @@ describe('createDreamJob', () => {
     expect(await store.listCreatorMessages(7)).toEqual([]);
   });
 
+  it('posts no card when the round is reopened while the frames are drawn', async () => {
+    let reopen: (() => Promise<void>) | null = null;
+    const { store, run } = await harness({
+      hud: [],
+      frame: async () => {
+        await reopen?.();
+        return { data: jpegHeader(1024, 1024).toString('base64'), mediaType: 'image/jpeg' };
+      },
+    });
+    reopen = async () => {
+      reopen = null;
+      await store.bumpRoundGeneration(7);
+    };
+
+    expect(await run()).toBe('superseded');
+    expect(await store.listCreatorMessages(7)).toEqual([]);
+  });
+
   it('refuses when the shared daily cap is spent', async () => {
     const { store, run } = await harness({ hud: [], limits: { globalDailyDreamCap: 0 } });
     expect(await run()).toBe('no_capacity');

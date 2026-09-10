@@ -208,6 +208,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       locale: 'pl',
       proposal,
       ownerUid: record.ownerUid,
+      roundGeneration: record.roundGeneration ?? 1,
     });
     // The transaction refuses on a mute too; name the real reason.
     if (!posted) return (await stopped()) ?? 'superseded';

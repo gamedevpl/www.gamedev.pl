@@ -176,6 +176,24 @@ describe('agent-written concept proposals', () => {
     expect(await store.listCreatorMessages(ISSUE)).toHaveLength(0);
   });
 
+  it('posts no card when the round is reopened while the source shot is written', async () => {
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    app = await createApp(store, stubGamesStore());
+    const frames = [await storeConceptFrame(store), await storeConceptFrame(store)];
+    const real = store.appendBuildShot.bind(store);
+    store.appendBuildShot = async (jobId, shot) => {
+      // A reopen leaves the version alone; only the round says so.
+      await store.bumpRoundGeneration(ISSUE);
+      return await real(jobId, shot);
+    };
+
+    const response = await propose(app, frames);
+    expect(response.json().rejected).toBe('frame_stale');
+    expect(await store.listCreatorMessages(ISSUE)).toHaveLength(0);
+  });
+
   it('offers one proposal per delivered version', async () => {
     vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
     const store = new InMemoryStore();
