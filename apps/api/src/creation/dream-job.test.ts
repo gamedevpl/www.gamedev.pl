@@ -199,7 +199,7 @@ describe('createDreamJob', () => {
 
   it('posts no card when the creator mutes while the frames are drawn', async () => {
     let muteNow: (() => Promise<void>) | null = null;
-    const { store, run } = await harness({
+    const { store, frames, run } = await harness({
       hud: [],
       frame: async () => {
         await muteNow?.();
@@ -213,8 +213,28 @@ describe('createDreamJob', () => {
     };
 
     expect(await run()).toBe('muted');
+    // The opt-out landed during the first image; skip the second.
+    expect(frames.requests).toHaveLength(1);
     expect(await store.listCreatorMessages(7)).toEqual([]);
     expect(await store.listBuildShots(7)).toEqual([]);
+  });
+
+  it('posts no card when the mute lands while the shots are written', async () => {
+    const { store, run } = await harness({ hud: [] });
+    await store.upsertUser({ uid: 'g:owner' });
+    const real = store.appendBuildShot.bind(store);
+    let first = true;
+    store.appendBuildShot = async (jobId, shot) => {
+      // Past every checkpoint: only the posting transaction can still refuse.
+      if (first) {
+        first = false;
+        await store.setProposalsMuted('g:owner', '2026-09-07T12:00:00.000Z');
+      }
+      return await real(jobId, shot);
+    };
+
+    expect(await run()).toBe('muted');
+    expect(await store.listCreatorMessages(7)).toEqual([]);
   });
 
   it('refuses when the shared daily cap is spent', async () => {

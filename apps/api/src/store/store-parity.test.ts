@@ -293,18 +293,33 @@ describeStoreContract('proposal posting', (makeStore) => {
     const store = makeStore();
     await claimed(store);
 
-    expect(await store.appendProposalMessage(11, claim, 'Two directions.', { proposal })).not.toBeNull();
+    expect(
+      await store.appendProposalMessage(11, claim, 'Two directions.', { proposal, ownerUid: 'g:owner' }),
+    ).not.toBeNull();
     expect(await store.listCreatorMessages(11)).toHaveLength(1);
+  });
+
+  it('refuses a muted owner inside the posting transaction', async () => {
+    // The mute can land while the shots are written.
+    const store = makeStore();
+    await claimed(store);
+    await store.upsertUser({ uid: 'g:owner' });
+    await store.setProposalsMuted('g:owner', '2026-09-07T12:30:00.000Z');
+
+    expect(
+      await store.appendProposalMessage(11, claim, 'Two directions.', { proposal, ownerUid: 'g:owner' }),
+    ).toBeNull();
+    expect(await store.listCreatorMessages(11)).toEqual([]);
   });
 
   it('marks the claim posted, so it can never be retaken', async () => {
     const store = makeStore();
     await claimed(store);
-    await store.appendProposalMessage(11, claim, 'Two directions.', { proposal });
+    await store.appendProposalMessage(11, claim, 'Two directions.', { proposal, ownerUid: 'g:owner' });
 
     // A card is on the thread, so the delivery is finished.
     expect(await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z')).toBe(false);
-    expect(await store.appendProposalMessage(11, claim, 'Again.', { proposal })).toBeNull();
+    expect(await store.appendProposalMessage(11, claim, 'Again.', { proposal, ownerUid: 'g:owner' })).toBeNull();
   });
 
   it('leaves a finished run finished, however it ended', async () => {
@@ -319,13 +334,13 @@ describeStoreContract('proposal posting', (makeStore) => {
   it("starts a new version from a clean claim, not the last one's leftovers", async () => {
     const store = makeStore();
     await claimed(store);
-    await store.appendProposalMessage(11, claim, 'Two directions.', { proposal });
+    await store.appendProposalMessage(11, claim, 'Two directions.', { proposal, ownerUid: 'g:owner' });
     await store.setSubmissionPreviewVersion(11, 'v2');
 
     expect(await store.claimDreamRun(11, 'v2', '2026-09-07T13:00:00.000Z')).toBe(true);
     // A kept `postedAt` from v1 would refuse v2's own card.
     const v2 = { version: 'v2', claimedAt: '2026-09-07T13:00:00.000Z' };
-    expect(await store.appendProposalMessage(11, v2, 'Two more.', { proposal })).not.toBeNull();
+    expect(await store.appendProposalMessage(11, v2, 'Two more.', { proposal, ownerUid: 'g:owner' })).not.toBeNull();
     expect((await store.getSubmission(11))?.dreamRun?.endedAt).toBeUndefined();
   });
 
@@ -336,7 +351,7 @@ describeStoreContract('proposal posting', (makeStore) => {
     await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z');
 
     await store.finishDreamRun(11, claim, '2026-09-07T13:00:05.000Z');
-    expect(await store.appendProposalMessage(11, claim, 'Late.', { proposal })).toBeNull();
+    expect(await store.appendProposalMessage(11, claim, 'Late.', { proposal, ownerUid: 'g:owner' })).toBeNull();
 
     // The replacement is still recoverable, and still the one that may post.
     expect(await store.claimDreamRun(11, 'v1', '2026-09-07T14:00:00.000Z')).toBe(true);
@@ -356,7 +371,9 @@ describeStoreContract('proposal posting', (makeStore) => {
     await store.setSubmissionPreviewVersion(11, 'v2');
     await store.claimDreamRun(11, 'v2', '2026-09-07T12:01:00.000Z');
 
-    expect(await store.appendProposalMessage(11, claim, 'Two directions.', { proposal })).toBeNull();
+    expect(
+      await store.appendProposalMessage(11, claim, 'Two directions.', { proposal, ownerUid: 'g:owner' }),
+    ).toBeNull();
     expect(await store.listCreatorMessages(11)).toEqual([]);
   });
 });

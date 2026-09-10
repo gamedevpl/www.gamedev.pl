@@ -651,7 +651,7 @@ export class FirestoreStore implements Store {
     jobId: number,
     claim: DreamClaimRef,
     text: string,
-    opts: { textLocalized?: string; locale?: string; proposal: CreatorProposal },
+    opts: { textLocalized?: string; locale?: string; proposal: CreatorProposal; ownerUid: string },
   ): Promise<CreatorMessage | null> {
     return this.buildLogStore.appendProposalMessage(jobId, claim, text, opts);
   }

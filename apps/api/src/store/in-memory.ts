@@ -94,7 +94,7 @@ export class InMemoryStore implements Store {
   private dispatchStore = new InMemoryDispatchStore(this.submissions);
   private submissionStore = new InMemorySubmissionStore(this.submissions);
   private submissionQueryStore = new InMemorySubmissionQueryStore(this.submissions);
-  private buildLogStore = new InMemoryBuildLogStore(this.submissions);
+  private buildLogStore = new InMemoryBuildLogStore(this.submissions, this.identityStore.users);
   private buildMediaStore = new InMemoryBuildMediaStore();
   private catalogEnrichmentStore = new InMemoryCatalogEnrichmentStore();
   private quotaStore = new InMemoryQuotaStore((uid) => this.identityStore.getUser(uid));
@@ -584,7 +584,7 @@ export class InMemoryStore implements Store {
     jobId: number,
     claim: DreamClaimRef,
     text: string,
-    opts: { textLocalized?: string; locale?: string; proposal: CreatorProposal },
+    opts: { textLocalized?: string; locale?: string; proposal: CreatorProposal; ownerUid: string },
   ): Promise<CreatorMessage | null> {
     return this.buildLogStore.appendProposalMessage(jobId, claim, text, opts);
   }

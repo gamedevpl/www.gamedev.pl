@@ -161,6 +161,9 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     // Both frames or neither; one buys nothing.
     if (!(await availability.spendFrameSlots(dateStr, DREAM_OPTIONS))) return 'no_capacity';
     for (const idea of candidates) {
+      // An opt-out during one image call cancels the next.
+      halt = await stopped();
+      if (halt) return halt;
       const result = await dreamFrame({ idea, sourcePng, size, styleNote, hudRegions, jobId });
       if (result) dreamed.push(result);
     }
@@ -200,8 +203,10 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       textLocalized: PROPOSAL_TEXT_PL,
       locale: 'pl',
       proposal,
+      ownerUid: record.ownerUid,
     });
-    if (!posted) return 'superseded';
+    // The transaction refuses on a mute too; name the real reason.
+    if (!posted) return (await stopped()) ?? 'superseded';
     deps.onPosted?.(jobId);
     return 'posted';
   }
