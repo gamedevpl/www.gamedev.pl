@@ -118,8 +118,14 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     // The same predicate the claim uses; two spellings would drift apart.
     if (dreamClaimHolds(record.dreamRun, version, new Date(now()).toISOString())) return 'already_ran';
     if (!(await store.claimDreamRun(jobId, version, claimedAt))) return 'already_ran';
-    if (!(await availability.dreamingEnabled())) return 'paused';
-    if ((await store.getUser(record.ownerUid))?.proposalsMutedAt) return 'muted';
+    // The switch and the creator's mute; either ends the run.
+    const stopped = async (): Promise<DreamOutcome | null> => {
+      if (!(await availability.dreamingEnabled())) return 'paused';
+      if ((await store.getUser(record.ownerUid))?.proposalsMutedAt) return 'muted';
+      return null;
+    };
+    let halt = await stopped();
+    if (halt) return halt;
     if (!record.slug || !screenshotPath) return 'no_screenshot';
 
     const source = await gamesStore.getDerivedArtifact(record.slug, version, screenshotPath);
@@ -134,8 +140,9 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     if (!record.spec?.trim()) return 'no_ideas';
     // An improvement round runs on a live game.
     const published = Boolean(record.publishedAt) || Boolean(await store.getPublishedSubmissionBySlug(record.slug));
-    // The reads above take real time; the switch may have moved since.
-    if (!(await availability.dreamingEnabled())) return 'paused';
+    // The reads above take real time; either flag may have moved since.
+    halt = await stopped();
+    if (halt) return halt;
     const generated = await ideas.generate({
       spec: record.spec,
       ...(record.qa?.length ? { qa: record.qa } : {}),
@@ -160,6 +167,9 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     // The copy promises two directions; one is not a choice.
     if (dreamed.length < DREAM_OPTIONS) return 'no_frames';
 
+    // Minutes of paid calls have passed; ask both again before writing.
+    halt = await stopped();
+    if (halt) return halt;
     // Cheap check before three writes; the post settles the race.
     const current = await store.getSubmission(jobId);
     if ((current?.previewVersion ?? current?.deliveredVersion) !== version) return 'superseded';

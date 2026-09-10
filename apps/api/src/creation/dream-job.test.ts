@@ -182,6 +182,41 @@ describe('createDreamJob', () => {
     expect(await store.listCreatorMessages(7)).toEqual([]);
   });
 
+  it('refuses the idea call when the creator mutes mid-run', async () => {
+    const { store, ideas: generator, run } = await harness({ hud: [] });
+    await store.upsertUser({ uid: 'g:owner' });
+    const real = store.getPublishedSubmissionBySlug.bind(store);
+    store.getPublishedSubmissionBySlug = async (slug: string) => {
+      // The creator opts out while the run reads the HUD.
+      await store.setProposalsMuted('g:owner', '2026-09-07T12:00:00.000Z');
+      return await real(slug);
+    };
+
+    expect(await run()).toBe('muted');
+    expect(generator.requests).toEqual([]);
+    expect(await store.listCreatorMessages(7)).toEqual([]);
+  });
+
+  it('posts no card when the creator mutes while the frames are drawn', async () => {
+    let muteNow: (() => Promise<void>) | null = null;
+    const { store, run } = await harness({
+      hud: [],
+      frame: async () => {
+        await muteNow?.();
+        return { data: jpegHeader(1024, 1024).toString('base64'), mediaType: 'image/jpeg' };
+      },
+    });
+    await store.upsertUser({ uid: 'g:owner' });
+    muteNow = async () => {
+      muteNow = null;
+      await store.setProposalsMuted('g:owner', '2026-09-07T12:00:00.000Z');
+    };
+
+    expect(await run()).toBe('muted');
+    expect(await store.listCreatorMessages(7)).toEqual([]);
+    expect(await store.listBuildShots(7)).toEqual([]);
+  });
+
   it('refuses when the shared daily cap is spent', async () => {
     const { store, run } = await harness({ hud: [], limits: { globalDailyDreamCap: 0 } });
     expect(await run()).toBe('no_capacity');
