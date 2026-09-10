@@ -771,6 +771,32 @@ describe.each([
   });
 });
 
+// Runs `onFirstRead` once the first query resolves, whatever the chain.
+function racingAfterFirstRead<T extends object>(target: T, onFirstRead: () => void): T {
+  let fired = false;
+  const wrap = (value: unknown): unknown => {
+    if (!value || (typeof value !== 'object' && typeof value !== 'function')) return value;
+    return new Proxy(value as object, {
+      get(object, property, receiver) {
+        const inner = Reflect.get(object, property, receiver) as unknown;
+        if (typeof inner !== 'function') return inner;
+        if (property === 'get') {
+          return async (...args: unknown[]) => {
+            const result: unknown = await (inner as (...a: unknown[]) => unknown).apply(object, args);
+            if (!fired) {
+              fired = true;
+              onFirstRead();
+            }
+            return result;
+          };
+        }
+        return (...args: unknown[]) => wrap((inner as (...a: unknown[]) => unknown).apply(object, args));
+      },
+    }) as unknown;
+  };
+  return wrap(target) as T;
+}
+
 /**
  * The strip filters proposal shots out after the read, so the read pages until enough
  * survive. Counting them first and over-fetching by that many is two reads with nothing
@@ -778,38 +804,12 @@ describe.each([
  * window under-fetched. At `limit: 1`, the round card's read, the strip came back empty.
  */
 describe('FirestoreStore.listBuildShots', () => {
-  // Runs `onFirstRead` once the first query resolves, whatever the chain.
-  function racing<T extends object>(target: T, onFirstRead: () => void): T {
-    let fired = false;
-    const wrap = (value: unknown): unknown => {
-      if (!value || (typeof value !== 'object' && typeof value !== 'function')) return value;
-      return new Proxy(value as object, {
-        get(object, property, receiver) {
-          const inner = Reflect.get(object, property, receiver) as unknown;
-          if (typeof inner !== 'function') return inner;
-          if (property === 'get') {
-            return async (...args: unknown[]) => {
-              const result: unknown = await (inner as (...a: unknown[]) => unknown).apply(object, args);
-              if (!fired) {
-                fired = true;
-                onFirstRead();
-              }
-              return result;
-            };
-          }
-          return (...args: unknown[]) => wrap((inner as (...a: unknown[]) => unknown).apply(object, args));
-        },
-      }) as unknown;
-    };
-    return wrap(target) as T;
-  }
-
   it('still fills the page when a proposal lands between reads', async () => {
     const { db, docs, key } = fakeFirestore();
     await new FirestoreStore(db).appendBuildShot(31, { data: 'AAA=', mediaType: 'image/png', label: 'Opening' });
 
     const store = new FirestoreStore(
-      racing(db, () => {
+      racingAfterFirstRead(db, () => {
         docs.set(key('submissions/31/shots', 'late'), {
           id: 'late',
           label: 'AI concept',
@@ -822,5 +822,37 @@ describe('FirestoreStore.listBuildShots', () => {
     const strip = await store.listBuildShots(31, { limit: 1, excludeLabels: ['AI concept'] });
 
     expect(strip.map((item) => item.label)).toEqual(['Opening']);
+  });
+});
+
+/**
+ * The quota is one number, so it comes from one snapshot. It used to be a total
+ * aggregate minus a labelled one: proposals landing between them left a stale total and
+ * a fresh excluded count, and the difference told the upload route it had room it did
+ * not have.
+ */
+describe('FirestoreStore.countBuildShots', () => {
+  it('does not undercount when proposals land between reads', async () => {
+    const { db, docs, key } = fakeFirestore();
+    const seed = new FirestoreStore(db);
+    for (let index = 0; index < 4; index += 1) {
+      await seed.appendBuildShot(41, { data: 'AAA=', mediaType: 'image/png', label: `Shot ${index}` });
+    }
+
+    const store = new FirestoreStore(
+      racingAfterFirstRead(db, () => {
+        for (let index = 0; index < 3; index += 1) {
+          docs.set(key('submissions/41/shots', `proposal-${index}`), {
+            id: `proposal-${index}`,
+            label: 'AI concept',
+            mediaType: 'image/png',
+            createdAt: new Date().toISOString(),
+          });
+        }
+      }),
+    );
+
+    // Four agent shots exist; three proposals appear mid-count and must not subtract.
+    expect(await store.countBuildShots(41, { excludeLabels: ['AI concept'] })).toBe(4);
   });
 });

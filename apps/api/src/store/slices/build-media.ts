@@ -174,24 +174,15 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
     return kept.sort(byNewestFirst).slice(0, limit);
   }
 
-  // `in` matches only labelled documents; unlabelled shots stay out.
-  private async countLabeled(jobId: number, labels: readonly string[] | undefined): Promise<number> {
-    if (!labels || labels.length === 0) return 0;
-    const snap = await this.shotsCollection(jobId)
-      .where('label', 'in', [...labels])
-      .count()
-      .get();
-    return snap.data().count;
-  }
-
   async getBuildShot(jobId: number, id: string): Promise<BuildShot | null> {
     const doc = await this.shotsCollection(jobId).doc(id).get();
     return doc.exists ? (doc.data() as BuildShot) : null;
   }
 
   async countBuildShots(jobId: number, opts?: BuildShotCountOptions): Promise<number> {
-    const snap = await this.shotsCollection(jobId).count().get();
-    return snap.data().count - (await this.countLabeled(jobId, opts?.excludeLabels));
+    // One snapshot: two aggregates can straddle a proposal write and disagree.
+    const snap = await this.shotsCollection(jobId).select('label').get();
+    return snap.docs.map((doc) => doc.data() as { label?: string }).filter(keeps(opts?.excludeLabels)).length;
   }
 
   async appendBuildPreview(
