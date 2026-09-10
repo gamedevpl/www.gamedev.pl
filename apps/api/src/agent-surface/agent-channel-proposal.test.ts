@@ -192,6 +192,16 @@ describe('agent-written concept proposals', () => {
     const response = await propose(app, frames);
     expect(response.json().rejected).toBe('frame_stale');
     expect(await store.listCreatorMessages(ISSUE)).toHaveLength(0);
+
+    // `frame_stale` says ask again, so the reopened round must be able to.
+    const minted = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/shot/upload-url',
+      headers: agentHeaders(ISSUE, 2),
+      payload: { purpose: 'concept' },
+    });
+    expect(minted.json().rejected).toBeUndefined();
+    expect(minted.json().url).toBeTruthy();
   });
 
   it('offers one proposal per delivered version', async () => {

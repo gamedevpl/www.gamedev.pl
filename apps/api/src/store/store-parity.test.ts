@@ -388,6 +388,42 @@ describeStoreContract('delivery-scoped shot idempotence', (makeStore) => {
   });
 });
 
+// A claim belongs to the round it was taken in.
+describeStoreContract('dream claim generations', (makeStore) => {
+  async function delivering(store: Store): Promise<Store> {
+    await store.createSubmission(11, 'g:owner', 'Parcel Run');
+    await store.setSubmissionPreviewVersion(11, 'v1');
+    return store;
+  }
+
+  it('refuses a second claim inside the same round', async () => {
+    const store = await delivering(makeStore());
+
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:00.000Z')).toBe(true);
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:30.000Z')).toBe(false);
+  });
+
+  it('lets the reopened round claim the same delivery again', async () => {
+    // A reopen leaves the version alone, so only the generation frees it.
+    const store = await delivering(makeStore());
+    await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:00.000Z');
+    await store.bumpRoundGeneration(11);
+
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:30.000Z')).toBe(true);
+  });
+
+  it('frees a delivery whose finished claim belongs to the round before', async () => {
+    // `endedAt` is final for its own round, not for the next one.
+    const store = await delivering(makeStore());
+    const claim = { version: 'v1', claimedAt: '2026-09-07T12:00:00.000Z' };
+    await store.claimDreamRun(11, claim.version, claim.claimedAt);
+    await store.finishDreamRun(11, claim, '2026-09-07T12:01:00.000Z');
+    await store.bumpRoundGeneration(11);
+
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T12:02:00.000Z')).toBe(true);
+  });
+});
+
 // The claim is checked where the row is written.
 describeStoreContract('proposal posting', (makeStore) => {
   const proposal = { sourceRef: 'shot-a', version: 'v1', options: [] };

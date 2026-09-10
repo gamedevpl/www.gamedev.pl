@@ -49,11 +49,15 @@ export function ownsDreamClaim(
 
 // A claim blocks while the run posted, ended, or may run.
 export function dreamClaimHolds(
-  claim: { version: string; claimedAt: string; postedAt?: string; endedAt?: string } | undefined,
+  claim:
+    { version: string; claimedAt: string; roundGeneration?: number; postedAt?: string; endedAt?: string } | undefined,
   version: string,
   at: string,
+  roundGeneration: number,
 ): boolean {
   if (claim?.version !== version) return false;
+  // A reopen leaves the version alone; the round frees it.
+  if ((claim.roundGeneration ?? roundGeneration) !== roundGeneration) return false;
   if (claim.postedAt || claim.endedAt) return true;
   return Date.parse(at) - Date.parse(claim.claimedAt) < DREAM_CLAIM_TTL_MS;
 }
@@ -127,9 +131,10 @@ export class InMemoryRoundBudgetStore implements RoundBudgetStore {
 
   async claimDreamRun(jobId: number, version: string, at: string): Promise<boolean> {
     const sub = this.submissions.get(jobId);
-    if (!sub || dreamClaimHolds(sub.dreamRun, version, at)) return false;
+    const roundGeneration = sub?.roundGeneration ?? 1;
+    if (!sub || dreamClaimHolds(sub.dreamRun, version, at, roundGeneration)) return false;
     if ((sub.previewVersion ?? sub.deliveredVersion) !== version) return false;
-    this.submissions.set(jobId, { ...sub, dreamRun: { version, claimedAt: at } });
+    this.submissions.set(jobId, { ...sub, dreamRun: { version, claimedAt: at, roundGeneration } });
     return true;
   }
 
@@ -233,13 +238,22 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
       const snap = await tx.get(ref);
       if (!snap.exists) return false;
       const current = snap.data() as SubmissionRecord;
-      if (dreamClaimHolds(current.dreamRun, version, at)) return false;
+      const roundGeneration = current.roundGeneration ?? 1;
+      if (dreamClaimHolds(current.dreamRun, version, at, roundGeneration)) return false;
       // Read and claim together, or a late claim overwrites.
       if ((current.previewVersion ?? current.deliveredVersion) !== version) return false;
       // A merged map keeps what it omits; start clean.
       tx.set(
         ref,
-        { dreamRun: { version, claimedAt: at, postedAt: FieldValue.delete(), endedAt: FieldValue.delete() } },
+        {
+          dreamRun: {
+            version,
+            claimedAt: at,
+            roundGeneration,
+            postedAt: FieldValue.delete(),
+            endedAt: FieldValue.delete(),
+          },
+        },
         { merge: true },
       );
       return true;

@@ -1094,7 +1094,7 @@ export async function registerAgentChannelRoutes(
           return reply.send({ accepted: false, rejected: 'proposals_muted', ...(await channelState(jobId, record)) });
         }
         // The shared predicate: a lapsed claim is reclaimable, so mint again.
-        if (dreamClaimHolds(record.dreamRun, conceptVersion, new Date().toISOString())) {
+        if (dreamClaimHolds(record.dreamRun, conceptVersion, new Date().toISOString(), record.roundGeneration ?? 1)) {
           return reply.send({ accepted: false, rejected: 'already_proposed', ...(await channelState(jobId, record)) });
         }
         // A card needs both frames; room for one buys nothing.

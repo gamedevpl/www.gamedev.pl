@@ -118,7 +118,8 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     const { record, version, screenshotPath } = input;
     const jobId = record.jobId;
     // The same predicate the claim uses; two spellings would drift apart.
-    if (dreamClaimHolds(record.dreamRun, version, new Date(now()).toISOString())) return 'already_ran';
+    if (dreamClaimHolds(record.dreamRun, version, new Date(now()).toISOString(), record.roundGeneration ?? 1))
+      return 'already_ran';
     if (!(await store.claimDreamRun(jobId, version, claimedAt))) return 'already_ran';
     // The switch and the creator's mute; either ends the run.
     const stopped = async (): Promise<DreamOutcome | null> => {

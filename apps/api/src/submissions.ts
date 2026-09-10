@@ -1314,7 +1314,7 @@ export async function registerSubmissionRoutes(
     // route's shared hourly allowance re-handing off work that is already done.
 
     // The same predicate the claim uses, so a stale claim still reaches the retake.
-    if (dreamClaimHolds(record.dreamRun, version, new Date().toISOString())) return;
+    if (dreamClaimHolds(record.dreamRun, version, new Date().toISOString(), record.roundGeneration ?? 1)) return;
     if (!seedDispatch) {
       await job.runForVersion(input);
       return;

@@ -257,7 +257,7 @@ export interface SubmissionRecord {
   // Last `${version}:${status}` already logged for gate metrics.
   roundLastGateMetricKey?: string;
   // Dream job's claim; `postedAt` is what makes it final.
-  dreamRun?: { version: string; claimedAt: string; postedAt?: string; endedAt?: string };
+  dreamRun?: { version: string; claimedAt: string; roundGeneration?: number; postedAt?: string; endedAt?: string };
   /**
    * Creator concept text (sanitized), without the QA clarifications block.
    *
