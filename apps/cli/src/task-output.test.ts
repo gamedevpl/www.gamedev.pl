@@ -30,3 +30,31 @@ it('keeps full details privately while showing readable tools and setup errors',
     rmSync(dirname(output.path), { recursive: true, force: true });
   }
 });
+
+it('groups repeated tools without losing diagnostics or the full transcript', () => {
+  const shown: string[] = [];
+  const output = taskOutput((line) => shown.push(line));
+  try {
+    output.write('codex ▸ ⚙ /bin/zsh -lc "cat game.ts"');
+    output.write('codex ▸ ⚙ /bin/zsh -lc "cat model.ts"');
+    output.write('codex ▸ ⚙ /bin/zsh -lc "cat runtime.ts"');
+    output.write('error: command failed');
+    output.write('codex ▸ ⚙ /bin/zsh -lc "pwd"');
+    output.write('codex ▸ ⚙ /bin/zsh -lc "ls"');
+    output.flush();
+    output.flush();
+    expect(shown).toEqual([
+      'codex · Running a shell command',
+      'codex · +2 more tool operations — /logs',
+      'error: command failed',
+      'codex · Running a shell command',
+      'codex · +1 more tool operations — /logs',
+    ]);
+    const log = readFileSync(output.path, 'utf8');
+    expect(log.match(/\/bin\/zsh/g)).toHaveLength(5);
+    expect(log).toContain('cat model.ts');
+    expect(log).toContain('error: command failed');
+  } finally {
+    rmSync(dirname(output.path), { recursive: true, force: true });
+  }
+});

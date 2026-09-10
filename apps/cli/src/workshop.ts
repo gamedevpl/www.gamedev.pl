@@ -392,6 +392,7 @@ export async function runLocalBuild(input: {
     });
     return success;
   } finally {
+    output.flush();
     await presence.finish(controller.signal.aborted ? 'stopped' : success ? 'ready' : 'failed');
     if (controller.signal.aborted) input.write(`${spec.name} stopped — the tree keeps whatever it wrote; /diff to see`);
     ws.abort.current = null;

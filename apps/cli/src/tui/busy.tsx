@@ -25,15 +25,15 @@ export function BusyPanel({
   return (
     <Box flexDirection="column" paddingX={1}>
       <Box>
-        <Text color={color ? 'cyan' : undefined}>{color ? FRAMES[tick % FRAMES.length] : '|/-\\'[tick % 4]} </Text>
+        <Text color={color ? 'yellow' : undefined}>{color ? FRAMES[tick % FRAMES.length] : '|/-\\'[tick % 4]} </Text>
         <Box flexGrow={1} flexShrink={1}>
           <Text bold wrap="truncate-end">
             {activity}
           </Text>
         </Box>
-        <Text dimColor> {duration}</Text>
+        <Text color={color ? 'yellow' : undefined}> {duration}</Text>
       </Box>
-      <Text dimColor wrap="truncate-end">
+      <Text dimColor={silent < 30} color={color && silent >= 30 ? 'yellow' : undefined} wrap="truncate-end">
         {silent >= 30 ? `No new output for ${silent}s — Ctrl+C to stop` : 'Ctrl+C to stop / exit'}
       </Text>
     </Box>

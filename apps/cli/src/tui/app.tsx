@@ -2,11 +2,10 @@ import { CommandSuggestions, useCommandCompletion } from './completion.js';
 import { BusyPanel } from './busy.js';
 import { useEffect, useState } from 'react';
 import { Box, Static, Text, useInput, useStdout } from 'ink';
-import { linkifyTerminalText } from './links.js';
+import { TranscriptLine, RichText } from './transcript.js';
 import { CLI_BIN } from '../bin-name.js';
 import { glyphs } from '../renderer.js';
 import { CLI_VERSION } from '../update.js';
-import { isMascotLine, MASCOT_COLOR } from './mascot.js';
 import type { TuiSession, TuiState } from './session.js';
 
 export function ReplApp({
@@ -89,19 +88,15 @@ export function ReplApp({
   const liveRows = Math.min(live.length, Math.max(0, rows - panelRows - 4));
   const footer = `${state.identity || CLI_BIN} · ${CLI_VERSION}`;
   return (
-    <Box flexDirection="column">
-      <Static items={state.lines.slice(historyOffset)}>
+    <Box flexDirection="column" width={Math.min(stdout.columns || 80, 110)}>
+      <Static items={state.lines.slice(historyOffset)} style={{ width: Math.min(stdout.columns || 80, 110) }}>
         {(line, index) => (
-          <Box key={index} width={Math.min(stdout.columns || 80, 100)}>
-            <Text bold={line.startsWith('──')} color={color && isMascotLine(line) ? MASCOT_COLOR : undefined}>
-              {linkifyTerminalText(line)}
-            </Text>
-          </Box>
+          <TranscriptLine key={index} line={line} previous={state.lines[historyOffset + index - 1]} color={color} />
         )}
       </Static>
       <Box flexDirection="column" height={liveRows} flexShrink={0}>
         {live.slice(0, liveRows).map((line, index) => (
-          <Text key={`live:${index}:${line.slice(0, 32)}`} dimColor wrap="truncate-end">
+          <Text key={`live:${index}:${line.slice(0, 32)}`} color={color ? 'blue' : undefined} wrap="truncate-end">
             {line}
           </Text>
         ))}
@@ -112,7 +107,7 @@ export function ReplApp({
         <Box flexDirection="column" flexShrink={0} borderStyle={border} borderColor={accent} paddingX={1}>
           {state.mode === 'pick' ? (
             <>
-              <Text bold wrap="truncate-end">
+              <Text bold color={accent} wrap="truncate-end">
                 {state.question || 'Choose an option'}
               </Text>
               {state.choices.slice(choiceStart, choiceStart + choiceCount).map((choice, offset) => {
@@ -120,6 +115,7 @@ export function ReplApp({
                 return (
                   <Text
                     wrap="truncate-end"
+                    bold={index === state.pickIndex}
                     key={`pick:${index}:${choice}`}
                     color={index === state.pickIndex ? accent : undefined}
                   >
@@ -131,7 +127,10 @@ export function ReplApp({
             </>
           ) : (
             <Text wrap="truncate-start">
-              {prompt} {state.draft ? `${state.draft}█` : <Text dimColor>What would you like to do? /help</Text>}
+              <Text color={accent} bold>
+                {prompt}
+              </Text>{' '}
+              {state.draft ? `${state.draft}█` : <Text dimColor>What would you like to do? /help</Text>}
             </Text>
           )}
         </Box>
@@ -154,7 +153,7 @@ export function ReplApp({
             : 'Working — input paused'}
       </Text>
       <Text dimColor wrap="truncate-end">
-        {footer}
+        <RichText text={footer} color={color} />
       </Text>
     </Box>
   );
