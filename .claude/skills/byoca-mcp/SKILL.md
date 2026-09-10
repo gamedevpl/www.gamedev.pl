@@ -784,11 +784,15 @@ whatever a caller actually wanted. Every read that is not about proposals theref
 - **The agent's screenshot quota** (`countBuildShots` in `agent-channel.ts`) — proposal
   frames are the platform's, and must not spend the agent's `maxShotsPerBuild` allowance.
 
-`listBuildShots` / `countBuildShots` take `excludeLabels`; the Firestore side counts the
-labelled documents with an `in` aggregate and over-fetches by that many, so the window
-still yields a full page of kept shots. When adding a reader of this collection, decide
-which side of that line it is on — a plain `listBuildShots(jobId)` now means "including
-concept art", which is almost never what a caller wants.
+`listBuildShots` / `countBuildShots` take `excludeLabels`, and both filter **after** the
+read, so both have to be self-correcting. `listBuildShots` pages with a cursor until
+`limit` shots survive the filter or the collection is exhausted; `countBuildShots` reads
+one projected snapshot and counts in memory. Neither uses a count read to size a second
+query, and that is deliberate: two aggregates with a proposal write between them
+disagree, which used to shorten the media strip and — subtracting a fresher excluded
+count from a staler total — let a build past `maxShotsPerBuild`. When adding a reader of
+this collection, decide which side of that line it is on: a plain `listBuildShots(jobId)`
+means "including concept art", which is almost never what a caller wants.
 
 Nothing about the proposal itself is builder-specific: it hangs off the preview-gate
 verdict (`onPreviewGateGreen`), which a BYOCA `mode=preview` delivery reaches the same way

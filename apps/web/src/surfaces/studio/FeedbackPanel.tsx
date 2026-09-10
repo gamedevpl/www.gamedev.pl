@@ -106,7 +106,7 @@ export function FeedbackPanel({
     const attachment = draft.attachment;
     onDraftConsumed?.();
     inputRef.current?.focus();
-    if (attachment) attachmentsApi.addAttachmentFromUrl(attachment.name, attachment.url);
+    if (attachment) attachmentsApi.addAttachmentFromUrl(attachment.name, attachment.url, { replaces: 'proposal' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft?.seq]);
 

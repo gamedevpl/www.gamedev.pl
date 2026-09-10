@@ -25,6 +25,37 @@ export interface RoundBudgetStore {
 
   // First caller per version wins; one dream run per version.
   claimDreamRun(jobId: number, version: string, at: string): Promise<boolean>;
+
+  // Marks a run finished, posted or not; the TTL is for silence.
+  finishDreamRun(jobId: number, claim: DreamClaimRef, at: string): Promise<void>;
+}
+
+// Long enough for the slowest live worker; generation runs about two minutes.
+export const DREAM_CLAIM_TTL_MS = 10 * 60_000;
+
+// Which attempt is speaking: `claimedAt` is unique per retake.
+export interface DreamClaimRef {
+  version: string;
+  claimedAt: string;
+}
+
+// True when this attempt still owns the claim it is reporting on.
+export function ownsDreamClaim(
+  held: { version: string; claimedAt: string } | undefined,
+  claim: DreamClaimRef,
+): boolean {
+  return held?.version === claim.version && held.claimedAt === claim.claimedAt;
+}
+
+// A claim blocks while the run posted, ended, or may run.
+export function dreamClaimHolds(
+  claim: { version: string; claimedAt: string; postedAt?: string; endedAt?: string } | undefined,
+  version: string,
+  at: string,
+): boolean {
+  if (claim?.version !== version) return false;
+  if (claim.postedAt || claim.endedAt) return true;
+  return Date.parse(at) - Date.parse(claim.claimedAt) < DREAM_CLAIM_TTL_MS;
 }
 
 export class InMemoryRoundBudgetStore implements RoundBudgetStore {
@@ -96,10 +127,17 @@ export class InMemoryRoundBudgetStore implements RoundBudgetStore {
 
   async claimDreamRun(jobId: number, version: string, at: string): Promise<boolean> {
     const sub = this.submissions.get(jobId);
-    if (!sub || sub.dreamRun?.version === version) return false;
+    if (!sub || dreamClaimHolds(sub.dreamRun, version, at)) return false;
     if ((sub.previewVersion ?? sub.deliveredVersion) !== version) return false;
     this.submissions.set(jobId, { ...sub, dreamRun: { version, claimedAt: at } });
     return true;
+  }
+
+  async finishDreamRun(jobId: number, claim: DreamClaimRef, at: string): Promise<void> {
+    const sub = this.submissions.get(jobId);
+    // An expired worker must not close the attempt that replaced it.
+    if (!sub || !ownsDreamClaim(sub.dreamRun, claim)) return;
+    this.submissions.set(jobId, { ...sub, dreamRun: { ...sub.dreamRun!, endedAt: at } });
   }
 }
 
@@ -195,11 +233,27 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
       const snap = await tx.get(ref);
       if (!snap.exists) return false;
       const current = snap.data() as SubmissionRecord;
-      if (current.dreamRun?.version === version) return false;
+      if (dreamClaimHolds(current.dreamRun, version, at)) return false;
       // Read and claim together, or a late claim overwrites.
       if ((current.previewVersion ?? current.deliveredVersion) !== version) return false;
-      tx.set(ref, { dreamRun: { version, claimedAt: at } }, { merge: true });
+      // A merged map keeps what it omits; start clean.
+      tx.set(
+        ref,
+        { dreamRun: { version, claimedAt: at, postedAt: FieldValue.delete(), endedAt: FieldValue.delete() } },
+        { merge: true },
+      );
       return true;
+    });
+  }
+
+  async finishDreamRun(jobId: number, claim: DreamClaimRef, at: string): Promise<void> {
+    const ref = this.ref(jobId);
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const held = (snap.data() as SubmissionRecord | undefined)?.dreamRun;
+      // An expired worker must not close the attempt that replaced it.
+      if (!ownsDreamClaim(held, claim)) return;
+      tx.set(ref, { dreamRun: { ...held!, endedAt: at } }, { merge: true });
     });
   }
 }

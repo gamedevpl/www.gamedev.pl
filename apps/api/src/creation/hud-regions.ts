@@ -36,11 +36,27 @@ export function parseHudRegions(raw: unknown, width: number, height: number): Hu
   return regions;
 }
 
-// Share of the frame under HUD; overlaps count twice.
+// Share of the frame under HUD, counting overlapped pixels once.
 export function hudCoverage(regions: readonly HudRegion[], width: number, height: number): number {
   const total = width * height;
-  if (total <= 0) return 0;
-  const covered = regions.reduce((sum, region) => sum + region.w * region.h, 0);
+  if (total <= 0 || regions.length === 0) return 0;
+  // A panel and the labels inside it are one area, not two.
+  const xs = [...new Set(regions.flatMap((region) => [region.x, region.x + region.w]))].sort((a, b) => a - b);
+  const ys = [...new Set(regions.flatMap((region) => [region.y, region.y + region.h]))].sort((a, b) => a - b);
+  let covered = 0;
+  for (let column = 0; column + 1 < xs.length; column += 1) {
+    const left = xs[column]!;
+    const right = xs[column + 1]!;
+    for (let row = 0; row + 1 < ys.length; row += 1) {
+      const top = ys[row]!;
+      const bottom = ys[row + 1]!;
+      const inside = regions.some(
+        (region) =>
+          region.x <= left && right <= region.x + region.w && region.y <= top && bottom <= region.y + region.h,
+      );
+      if (inside) covered += (right - left) * (bottom - top);
+    }
+  }
   return Math.min(1, covered / total);
 }
 

@@ -11,6 +11,9 @@ export interface BuildShotCountOptions {
   excludePlatformDrawn?: boolean;
 }
 
+// One read covers the common case; a crowd costs another.
+const SHOT_PAGE_SIZE = 24;
+
 export interface BuildShotListOptions extends BuildShotCountOptions {
   limit?: number;
 }
@@ -219,29 +222,23 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
 
   async listBuildShots(jobId: number, opts?: BuildShotListOptions): Promise<BuildShotSummary[]> {
     const limit = opts?.limit ?? 12;
-    // Over-fetch by the excluded count; the window keeps `limit` shots.
-    const excluded = await this.countLabeled(jobId, opts?.excludeLabels);
-    // `select()` keeps bytes off the polled status response.
-    const snap = await this.shotsCollection(jobId)
-      .select('id', 'label', 'labelLocalized', 'locale', 'mediaType', 'createdAt')
-      .orderBy('createdAt', 'desc')
-      .limit(limit + excluded)
-      .get();
-    return snap.docs
-      .map((doc) => doc.data() as BuildShotSummary)
-      .filter(keeps(opts?.excludeLabels))
-      .sort(byNewestFirst)
-      .slice(0, limit);
-  }
-
-  // `in` matches only labelled documents; unlabelled shots stay out.
-  private async countLabeled(jobId: number, labels: readonly string[] | undefined): Promise<number> {
-    if (!labels || labels.length === 0) return 0;
-    const snap = await this.shotsCollection(jobId)
-      .where('label', 'in', [...labels])
-      .count()
-      .get();
-    return snap.data().count;
+    const page = Math.max(limit, SHOT_PAGE_SIZE);
+    const kept: BuildShotSummary[] = [];
+    let after: { id: string } | undefined;
+    // Until `limit` survive the filter, or the collection runs out.
+    while (kept.length < limit) {
+      // `select()` keeps bytes off the polled status response.
+      const base = this.shotsCollection(jobId)
+        .select('id', 'label', 'labelLocalized', 'locale', 'mediaType', 'createdAt')
+        .orderBy('createdAt', 'desc')
+        .limit(page);
+      const snap = await (after ? base.startAfter(after) : base).get();
+      if (snap.empty) break;
+      after = snap.docs[snap.docs.length - 1];
+      kept.push(...snap.docs.map((doc) => doc.data() as BuildShotSummary).filter(keeps(opts?.excludeLabels)));
+      if (snap.docs.length < page) break;
+    }
+    return kept.sort(byNewestFirst).slice(0, limit);
   }
 
   async getBuildShot(jobId: number, id: string): Promise<BuildShot | null> {
@@ -249,15 +246,13 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
     return doc.exists ? (doc.data() as BuildShot) : null;
   }
 
-  private async countPlatformDrawn(jobId: number): Promise<number> {
-    const snap = await this.shotsCollection(jobId).where('platformDrawn', '==', true).count().get();
-    return snap.data().count;
-  }
-
   async countBuildShots(jobId: number, opts?: BuildShotCountOptions): Promise<number> {
-    const snap = await this.shotsCollection(jobId).count().get();
-    const drawn = opts?.excludePlatformDrawn ? await this.countPlatformDrawn(jobId) : 0;
-    return snap.data().count - (await this.countLabeled(jobId, opts?.excludeLabels)) - drawn;
+    // One snapshot: two aggregates can straddle a proposal write and disagree.
+    const snap = await this.shotsCollection(jobId).select('label', 'platformDrawn').get();
+    return snap.docs
+      .map((doc) => doc.data() as { label?: string; platformDrawn?: true })
+      .filter(keeps(opts?.excludeLabels))
+      .filter((shot) => !(opts?.excludePlatformDrawn && shot.platformDrawn)).length;
   }
 
   async countDeliveryShots(jobId: number, query: DeliveryShotQuery): Promise<number> {

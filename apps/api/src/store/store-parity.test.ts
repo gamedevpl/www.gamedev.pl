@@ -387,3 +387,126 @@ describeStoreContract('delivery-scoped shot idempotence', (makeStore) => {
     expect(await store.countDeliveryShots(9, slot)).toBe(0);
   });
 });
+
+// The claim is checked where the row is written.
+describeStoreContract('proposal posting', (makeStore) => {
+  const proposal = { sourceRef: 'shot-a', version: 'v1', options: [] };
+
+  const claim = { version: 'v1', claimedAt: '2026-09-07T12:00:00.000Z' };
+
+  async function claimed(store: Store): Promise<void> {
+    await store.createSubmission(11, 'g:owner', 'Parcel Run');
+    await store.setSubmissionPreviewVersion(11, 'v1');
+    await store.claimDreamRun(11, claim.version, claim.claimedAt);
+  }
+
+  it('posts while the claim still names the version', async () => {
+    const store = makeStore();
+    await claimed(store);
+
+    expect(
+      await store.appendProposalMessage(11, claim, 'Two directions.', { proposal, ownerUid: 'g:owner' }),
+    ).not.toBeNull();
+    expect(await store.listCreatorMessages(11)).toHaveLength(1);
+  });
+
+  it('refuses a muted owner inside the posting transaction', async () => {
+    // The mute can land while the shots are written.
+    const store = makeStore();
+    await claimed(store);
+    await store.upsertUser({ uid: 'g:owner' });
+    await store.setProposalsMuted('g:owner', '2026-09-07T12:30:00.000Z');
+
+    expect(
+      await store.appendProposalMessage(11, claim, 'Two directions.', { proposal, ownerUid: 'g:owner' }),
+    ).toBeNull();
+    expect(await store.listCreatorMessages(11)).toEqual([]);
+  });
+
+  it('marks the claim posted, so it can never be retaken', async () => {
+    const store = makeStore();
+    await claimed(store);
+    await store.appendProposalMessage(11, claim, 'Two directions.', { proposal, ownerUid: 'g:owner' });
+
+    // A card is on the thread, so the delivery is finished.
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z')).toBe(false);
+    expect(await store.appendProposalMessage(11, claim, 'Again.', { proposal, ownerUid: 'g:owner' })).toBeNull();
+  });
+
+  it('leaves a finished run finished, however it ended', async () => {
+    const store = makeStore();
+    await claimed(store);
+    await store.finishDreamRun(11, claim, '2026-09-07T12:00:10.000Z');
+
+    // A run that answered `no_frames` must not be paid twice.
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z')).toBe(false);
+  });
+
+  it("starts a new version from a clean claim, not the last one's leftovers", async () => {
+    const store = makeStore();
+    await claimed(store);
+    await store.appendProposalMessage(11, claim, 'Two directions.', { proposal, ownerUid: 'g:owner' });
+    await store.setSubmissionPreviewVersion(11, 'v2');
+
+    expect(await store.claimDreamRun(11, 'v2', '2026-09-07T13:00:00.000Z')).toBe(true);
+    // A kept `postedAt` from v1 would refuse v2's own card.
+    const v2 = { version: 'v2', claimedAt: '2026-09-07T13:00:00.000Z' };
+    expect(await store.appendProposalMessage(11, v2, 'Two more.', { proposal, ownerUid: 'g:owner' })).not.toBeNull();
+    expect((await store.getSubmission(11))?.dreamRun?.endedAt).toBeUndefined();
+  });
+
+  it('ignores a worker whose lease already expired', async () => {
+    const store = makeStore();
+    await claimed(store);
+    // The replacement takes the version an hour later.
+    await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z');
+
+    await store.finishDreamRun(11, claim, '2026-09-07T13:00:05.000Z');
+    expect(await store.appendProposalMessage(11, claim, 'Late.', { proposal, ownerUid: 'g:owner' })).toBeNull();
+
+    // The replacement is still recoverable, and still the one that may post.
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T14:00:00.000Z')).toBe(true);
+  });
+
+  it('lets a claim that never posted be retaken once its worker is gone', async () => {
+    const store = makeStore();
+    await claimed(store);
+
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:30.000Z')).toBe(false);
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z')).toBe(true);
+  });
+
+  it('refuses once a newer delivery took the claim', async () => {
+    const store = makeStore();
+    await claimed(store);
+    await store.setSubmissionPreviewVersion(11, 'v2');
+    await store.claimDreamRun(11, 'v2', '2026-09-07T12:01:00.000Z');
+
+    expect(
+      await store.appendProposalMessage(11, claim, 'Two directions.', { proposal, ownerUid: 'g:owner' }),
+    ).toBeNull();
+    expect(await store.listCreatorMessages(11)).toEqual([]);
+  });
+});
+
+// The strip filters after the read; a crowd must not empty it.
+describeStoreContract('media strip paging', (makeStore) => {
+  // Explicit timestamps; same-millisecond appends would not order.
+  const shot = (label: string, minute: number) => ({
+    data: 'AAA=',
+    mediaType: 'image/png' as const,
+    label,
+    createdAt: new Date(Date.UTC(2026, 8, 7, 12, minute)).toISOString(),
+  });
+
+  it('reaches past two deliveries of proposal shots to the real one', async () => {
+    const store = makeStore();
+    await store.appendBuildShot(12, shot('Opening', 0));
+    // Two deliveries of proposal shots, all newer than the real one.
+    for (let index = 0; index < 6; index += 1) await store.appendBuildShot(12, shot('AI concept', index + 1));
+
+    const strip = await store.listBuildShots(12, { limit: 1, excludeLabels: ['AI concept'] });
+
+    expect(strip.map((item) => item.label)).toEqual(['Opening']);
+  });
+});

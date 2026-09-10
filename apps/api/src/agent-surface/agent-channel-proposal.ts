@@ -174,13 +174,16 @@ export function registerAgentChannelProposalRoutes(app: FastifyInstance, deps: A
         ...texts[index]!,
         frameRef: option.frameId,
       }));
-      await store.appendCreatorMessage(jobId, PROPOSAL_TEXT_EN, {
-        origin: 'studio',
-        delivered: true,
+      // The platform job's posting transaction: claim, mute and stamp together.
+      const posted = await store.appendProposalMessage(jobId, { version, claimedAt }, PROPOSAL_TEXT_EN, {
         textLocalized: PROPOSAL_TEXT_PL,
         locale: 'pl',
-        proposal: { sourceRef: sourceShot.id, version, options },
+        proposal: { sourceRef: sourceShot.id, version, options, builder: 'self' },
+        ownerUid: record.ownerUid,
       });
+      if (!posted) {
+        return reject((await store.getUser(record.ownerUid))?.proposalsMutedAt ? 'muted' : 'already_proposed');
+      }
       deps.onPosted?.(jobId);
 
       return reply.send({

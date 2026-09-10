@@ -28,6 +28,8 @@ export interface CreatorProposal {
   sourceRef: string;
   version: string;
   options: CreatorProposalOption[];
+  // Who was building when this card was drawn.
+  builder?: BuilderKind;
 }
 
 // A change request the creator sent from the status page.

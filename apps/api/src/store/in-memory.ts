@@ -78,14 +78,14 @@ import { InMemoryDreamQuotaStore } from './slices/quota-dreams.js';
 import { InMemoryQuotaStore } from './slices/quota.js';
 import { InMemoryReviewSweepStore } from './slices/review-sweeps.js';
 import { InMemoryReviewStore } from './slices/review.js';
-import { InMemoryRoundBudgetStore } from './slices/round-budget.js';
+import { InMemoryRoundBudgetStore, type DreamClaimRef } from './slices/round-budget.js';
 import { InMemoryRoundsStore } from './slices/rounds.js';
 import { InMemorySocialStore } from './slices/social.js';
 import { InMemorySubmissionQueryStore } from './slices/submission-queries.js';
 import { InMemorySubmissionStore } from './slices/submission.js';
 import { InMemoryTelemetryStore } from './slices/telemetry.js';
 import { InMemoryWorldEntriesStore } from './slices/world-entries.js';
-import type { AssessmentSource, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
+import type { AssessmentSource, CreatorProposal, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
 
 export class InMemoryStore implements Store {
   private identityStore = new InMemoryIdentityStore();
@@ -96,7 +96,7 @@ export class InMemoryStore implements Store {
   private dispatchStore = new InMemoryDispatchStore(this.submissions);
   private submissionStore = new InMemorySubmissionStore(this.submissions);
   private submissionQueryStore = new InMemorySubmissionQueryStore(this.submissions);
-  private buildLogStore = new InMemoryBuildLogStore(this.submissions);
+  private buildLogStore = new InMemoryBuildLogStore(this.submissions, this.identityStore.users);
   private buildMediaStore = new InMemoryBuildMediaStore(this.submissions);
   private catalogEnrichmentStore = new InMemoryCatalogEnrichmentStore();
   private quotaStore = new InMemoryQuotaStore((uid) => this.identityStore.getUser(uid));
@@ -361,6 +361,10 @@ export class InMemoryStore implements Store {
     return this.roundBudgetStore.claimDreamRun(jobId, version, at);
   }
 
+  async finishDreamRun(jobId: number, claim: DreamClaimRef, at: string): Promise<void> {
+    return this.roundBudgetStore.finishDreamRun(jobId, claim, at);
+  }
+
   async allocateJobId(): Promise<number> {
     return this.dispatchStore.allocateJobId();
   }
@@ -590,6 +594,15 @@ export class InMemoryStore implements Store {
     return this.buildLogStore.appendCreatorMessage(jobId, text, opts);
   }
 
+  async appendProposalMessage(
+    jobId: number,
+    claim: DreamClaimRef,
+    text: string,
+    opts: { textLocalized?: string; locale?: string; proposal: CreatorProposal; ownerUid: string },
+  ): Promise<CreatorMessage | null> {
+    return this.buildLogStore.appendProposalMessage(jobId, claim, text, opts);
+  }
+
   async listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
     return this.buildLogStore.listPendingCreatorMessages(jobId, opts);
   }
@@ -774,8 +787,12 @@ export class InMemoryStore implements Store {
     return this.dreamQuotaStore.getGlobalDreamCount(dateStr);
   }
 
-  async checkAndIncrementGlobalDreams(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
-    return this.dreamQuotaStore.checkAndIncrementGlobalDreams(dateStr, limit);
+  async checkAndIncrementGlobalDreams(
+    dateStr: string,
+    limit: number,
+    count?: number,
+  ): Promise<{ allowed: boolean; current: number }> {
+    return this.dreamQuotaStore.checkAndIncrementGlobalDreams(dateStr, limit, count);
   }
 
   async getGlobalBotCallCount(dateStr: string): Promise<number> {

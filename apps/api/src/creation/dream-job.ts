@@ -7,6 +7,7 @@ import {
 } from '../platform/dream-shots.js';
 import { imageSize, isPng, sameAspectRatio, type ImageSize } from '../platform/image-size.js';
 import type { Store } from '../platform/store.js';
+import { dreamClaimHolds } from '../store/slices/round-budget.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
 import type { DreamAvailabilityGate } from './dream-availability.js';
 import type { DreamFrame, DreamFrameGenerator } from './dream-frames.js';
@@ -30,6 +31,7 @@ export type DreamOutcome =
   | 'pure_ui'
   | 'no_ideas'
   | 'no_frames'
+  | 'superseded'
   | 'failed';
 
 export interface DreamLog {
@@ -112,14 +114,20 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     }
   }
 
-  async function run(input: DreamRunInput): Promise<DreamOutcome> {
+  async function run(input: DreamRunInput, claimedAt: string): Promise<DreamOutcome> {
     const { record, version, screenshotPath } = input;
     const jobId = record.jobId;
-    // Cheap read before the transaction: every status poll comes through here.
-    if (record.dreamRun?.version === version) return 'already_ran';
-    if (!(await store.claimDreamRun(jobId, version, new Date(now()).toISOString()))) return 'already_ran';
-    if (!(await availability.dreamingEnabled())) return 'paused';
-    if ((await store.getUser(record.ownerUid))?.proposalsMutedAt) return 'muted';
+    // The same predicate the claim uses; two spellings would drift apart.
+    if (dreamClaimHolds(record.dreamRun, version, new Date(now()).toISOString())) return 'already_ran';
+    if (!(await store.claimDreamRun(jobId, version, claimedAt))) return 'already_ran';
+    // The switch and the creator's mute; either ends the run.
+    const stopped = async (): Promise<DreamOutcome | null> => {
+      if (!(await availability.dreamingEnabled())) return 'paused';
+      if ((await store.getUser(record.ownerUid))?.proposalsMutedAt) return 'muted';
+      return null;
+    };
+    let halt = await stopped();
+    if (halt) return halt;
     if (!record.slug || !screenshotPath) return 'no_screenshot';
 
     const source = await gamesStore.getDerivedArtifact(record.slug, version, screenshotPath);
@@ -132,30 +140,45 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     if (hudCoverage(hudRegions, size.width, size.height) >= PURE_UI_COVERAGE) return 'pure_ui';
 
     if (!record.spec?.trim()) return 'no_ideas';
+    // An improvement round runs on a live game.
+    const published = Boolean(record.publishedAt) || Boolean(await store.getPublishedSubmissionBySlug(record.slug));
+    // The reads above take real time; either flag may have moved since.
+    halt = await stopped();
+    if (halt) return halt;
     const generated = await ideas.generate({
       spec: record.spec,
       ...(record.qa?.length ? { qa: record.qa } : {}),
       title: record.title,
-      published: false,
+      published,
       ...(record.locale ? { locale: record.locale } : {}),
     });
     const candidates = generated.slice(0, DREAM_OPTIONS);
-    if (candidates.length === 0) return 'no_ideas';
+    // A slot and an image call for a card that cannot post.
+    if (candidates.length < DREAM_OPTIONS) return 'no_ideas';
 
     const sourcePng = source.toString('base64');
     const styleNote = styleNoteFor(record);
     const dreamed: { frame: DreamFrame; idea: NextIdea }[] = [];
     const dateStr = new Date(now()).toISOString().slice(0, 10);
-    let refused = 0;
+    // Both frames or neither; one buys nothing.
+    if (!(await availability.spendFrameSlots(dateStr, DREAM_OPTIONS))) return 'no_capacity';
     for (const idea of candidates) {
-      if (!(await availability.spendFrameSlot(dateStr))) {
-        refused += 1;
-        continue;
-      }
+      // An opt-out during one image call cancels the next.
+      halt = await stopped();
+      if (halt) return halt;
       const result = await dreamFrame({ idea, sourcePng, size, styleNote, hudRegions, jobId });
       if (result) dreamed.push(result);
     }
-    if (dreamed.length === 0) return refused === candidates.length ? 'no_capacity' : 'no_frames';
+    // The copy promises two directions; one is not a choice.
+    if (dreamed.length < DREAM_OPTIONS) return 'no_frames';
+
+    // Minutes of paid calls have passed; ask both again before writing.
+    halt = await stopped();
+    if (halt) return halt;
+    // Cheap check before three writes; the post settles the race.
+    const current = await store.getSubmission(jobId);
+    if ((current?.previewVersion ?? current?.deliveredVersion) !== version) return 'superseded';
+    if (current?.dreamRun?.version !== version) return 'superseded';
 
     const sourceShot = await store.appendBuildShot(jobId, {
       data: sourcePng,
@@ -173,14 +196,21 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       });
       options.push({ id: idea.id, label: idea.label, prompt: idea.prompt, frameRef: shot.id });
     }
-    const proposal: CreatorProposal = { sourceRef: sourceShot.id, version, options };
-    await store.appendCreatorMessage(jobId, PROPOSAL_TEXT_EN, {
-      origin: 'studio',
-      delivered: true,
+    const proposal: CreatorProposal = {
+      sourceRef: sourceShot.id,
+      version,
+      options,
+      builder: record.builder === 'self' ? 'self' : 'platform',
+    };
+    // Posted only if the claim still holds, in one transaction.
+    const posted = await store.appendProposalMessage(jobId, { version, claimedAt }, PROPOSAL_TEXT_EN, {
       textLocalized: PROPOSAL_TEXT_PL,
       locale: 'pl',
       proposal,
+      ownerUid: record.ownerUid,
     });
+    // The transaction refuses on a mute too; name the real reason.
+    if (!posted) return (await stopped()) ?? 'superseded';
     deps.onPosted?.(jobId);
     return 'posted';
   }
@@ -188,9 +218,17 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
   return {
     async runForVersion(input) {
       const startedAt = now();
+      const claimedAt = new Date(now()).toISOString();
+      // Any answer ends the claim; the TTL is for silence.
+      const finish = async () => {
+        await store
+          .finishDreamRun(input.record.jobId, { version: input.version, claimedAt }, new Date(now()).toISOString())
+          .catch((error: unknown) => log.warn({ err: error, jobId: input.record.jobId }, 'dream claim not closed'));
+      };
       try {
-        const outcome = await run(input);
+        const outcome = await run(input, claimedAt);
         if (outcome !== 'already_ran') {
+          await finish();
           log.info(
             { jobId: input.record.jobId, version: input.version, outcome, durationMs: now() - startedAt },
             'dream job finished',
@@ -199,6 +237,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
         return outcome;
       } catch (error) {
         log.error({ err: error, jobId: input.record.jobId, version: input.version }, 'dream job failed');
+        await finish();
         return 'failed';
       }
     },

@@ -315,7 +315,7 @@
     "apps/api/src/runtime-image.test.ts": 145,
     "apps/api/src/self-build.test.ts": 342,
     "apps/api/src/static-serving.test.ts": 70,
-    "apps/api/src/store-firestore.test.ts": 566,
+    "apps/api/src/store-firestore.test.ts": 618,
     "apps/api/src/store/fake-firestore.ts": 328,
     "apps/api/src/store/firestore-util.ts": 163,
     "apps/api/src/store/firestore.ts": 145,

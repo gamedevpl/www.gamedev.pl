@@ -6,6 +6,7 @@ import type { CreatorMessage, CreatorMessageOrigin } from '../records/build-log.
 import { isStudioOrigin } from '../records/build-log.js';
 import type { AgentEndedBy } from '../records/rounds.js';
 import type { SubmissionRecord } from '../records/submission.js';
+import { ownsDreamClaim, type DreamClaimRef } from './round-budget.js';
 
 // Newest first, id as a tie-break for same-millisecond events.
 export function byNewestFirst(a: { createdAt: string; id: string }, b: { createdAt: string; id: string }): number {
@@ -50,6 +51,14 @@ export interface BuildLogStore {
     },
   ): Promise<CreatorMessage>;
 
+  // Posts only while the claim holds and the owner has not muted.
+  appendProposalMessage(
+    jobId: number,
+    claim: DreamClaimRef,
+    text: string,
+    opts: { textLocalized?: string; locale?: string; proposal: CreatorProposal; ownerUid: string },
+  ): Promise<CreatorMessage | null>;
+
   // Undelivered messages, oldest first -- the agent's inbox. Never a 'studio' row.
   listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
 
@@ -60,11 +69,24 @@ export interface BuildLogStore {
   markCreatorMessagesDelivered(jobId: number, ids: string[]): Promise<void>;
 }
 
+// This attempt holds the claim, nothing posted, delivery unchanged.
+function holdsDreamClaim(
+  record: Pick<SubmissionRecord, 'dreamRun' | 'previewVersion' | 'deliveredVersion'> | undefined,
+  claim: DreamClaimRef,
+): boolean {
+  if (!record || !ownsDreamClaim(record.dreamRun, claim)) return false;
+  if (record.dreamRun?.postedAt) return false;
+  return (record.previewVersion ?? record.deliveredVersion) === claim.version;
+}
+
 export class InMemoryBuildLogStore implements BuildLogStore {
   private buildEvents = new Map<number, BuildEvent[]>();
   private creatorMessages = new Map<number, CreatorMessage[]>();
 
-  constructor(private submissions: Map<number, SubmissionRecord>) {}
+  constructor(
+    private submissions: Map<number, SubmissionRecord>,
+    private users: Map<string, { proposalsMutedAt?: string | null }>,
+  ) {}
 
   async appendBuildEvent(
     jobId: number,
@@ -157,6 +179,21 @@ export class InMemoryBuildLogStore implements BuildLogStore {
     existing.push(record);
     this.creatorMessages.set(jobId, existing);
     return { ...record };
+  }
+
+  async appendProposalMessage(
+    jobId: number,
+    claim: DreamClaimRef,
+    text: string,
+    opts: { textLocalized?: string; locale?: string; proposal: CreatorProposal; ownerUid: string },
+  ): Promise<CreatorMessage | null> {
+    const record = this.submissions.get(jobId);
+    if (!holdsDreamClaim(record, claim)) return null;
+    if (this.users.get(opts.ownerUid)?.proposalsMutedAt) return null;
+    const posted = await this.appendCreatorMessage(jobId, text, { ...opts, origin: 'studio', delivered: true });
+    // Stamped with the card: only a posted claim is final.
+    this.submissions.set(jobId, { ...record!, dreamRun: { ...record!.dreamRun!, postedAt: posted.createdAt } });
+    return posted;
   }
 
   async listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
@@ -288,6 +325,37 @@ export class FirestoreBuildLogStore implements BuildLogStore {
     };
     await this.messagesCollection(jobId).doc(record.id).set(record);
     return record;
+  }
+
+  async appendProposalMessage(
+    jobId: number,
+    claim: DreamClaimRef,
+    text: string,
+    opts: { textLocalized?: string; locale?: string; proposal: CreatorProposal; ownerUid: string },
+  ): Promise<CreatorMessage | null> {
+    const now = new Date().toISOString();
+    const record: CreatorMessage = {
+      id: randomUUID(),
+      text,
+      createdAt: now,
+      deliveredAt: now,
+      origin: 'studio',
+      ...(opts.textLocalized && opts.locale ? { textLocalized: opts.textLocalized, locale: opts.locale } : {}),
+      proposal: opts.proposal,
+    };
+    return await this.db.runTransaction(async (transaction) => {
+      // Read and post together, or a newer delivery wins the gap.
+      const snap = await transaction.get(this.submissionRef(jobId));
+      // Read here too, so an opt-out mid-write still refuses.
+      const owner = await transaction.get(this.db.collection('users').doc(opts.ownerUid));
+      const job = snap.data() as SubmissionRecord | undefined;
+      if (!snap.exists || !holdsDreamClaim(job, claim)) return null;
+      if ((owner.data() as { proposalsMutedAt?: string | null } | undefined)?.proposalsMutedAt) return null;
+      transaction.set(this.messagesCollection(jobId).doc(record.id), record);
+      // Stamped with the card: only a posted claim is final.
+      transaction.set(this.submissionRef(jobId), { dreamRun: { ...job!.dreamRun!, postedAt: now } }, { merge: true });
+      return record;
+    });
   }
 
   async listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {

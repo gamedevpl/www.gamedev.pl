@@ -1,9 +1,30 @@
 import { useEffect, useRef, useState } from 'react';
 import { useClampToViewport } from '../../useClampToViewport.js';
 
-export type ComposerAttachment = { id: string; name: string; dataUrl: string };
+// `replacedBy` groups attachments a later pick supersedes.
+export type ComposerAttachment = { id: string; name: string; dataUrl: string; replacedBy?: string };
 
 export const MAX_COMPOSER_ATTACHMENTS = 4;
+
+// A frame a pick could not attach; bytes mean it awaits room.
+export type BlockedAttachment = { name: string; dataUrl: string | null; options?: { replaces?: string } };
+
+// True when one more attachment fits, once the superseded ones drop out.
+export function fitsAttachment(prev: ComposerAttachment[], options?: { replaces?: string }): boolean {
+  const kept = options?.replaces ? prev.filter((item) => item.replacedBy !== options.replaces) : prev;
+  return kept.length < MAX_COMPOSER_ATTACHMENTS;
+}
+
+// Adds one attachment, replacing whatever it supersedes.
+export function withAttachment(
+  prev: ComposerAttachment[],
+  entry: ComposerAttachment,
+  options?: { replaces?: string },
+): ComposerAttachment[] {
+  const kept = options?.replaces ? prev.filter((item) => item.replacedBy !== options.replaces) : prev;
+  if (kept.length >= MAX_COMPOSER_ATTACHMENTS) return kept;
+  return [...kept, options?.replaces ? { ...entry, replacedBy: options.replaces } : entry];
+}
 
 // Attachment state: uploads and sketches, capped at MAX_COMPOSER_ATTACHMENTS.
 export function useComposerAttachments(sending: boolean) {
@@ -12,6 +33,12 @@ export function useComposerAttachments(sending: boolean) {
   const [pendingAttachmentReads, setPendingAttachmentReads] = useState(0);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [isSketchOpen, setIsSketchOpen] = useState(false);
+  // Newest read per group; a slower one cannot land on it.
+  const latestRead = useRef(new Map<string, { token: symbol; abort: AbortController }>());
+  // What a pick could not attach; null `dataUrl` means it failed.
+  const [blockedAttachment, setBlockedAttachment] = useState<BlockedAttachment | null>(null);
+  const attachmentsRef = useRef<ComposerAttachment[]>([]);
+  attachmentsRef.current = attachments;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const attachMenuRef = useRef<HTMLDivElement | null>(null);
   const attachPanelRef = useClampToViewport<HTMLDivElement>(attachMenuOpen);
@@ -60,18 +87,38 @@ export function useComposerAttachments(sending: boolean) {
     });
   };
 
-  const addAttachment = (name: string, dataUrl: string) => {
-    setAttachments((prev) =>
-      prev.length >= MAX_COMPOSER_ATTACHMENTS ? prev : [...prev, { id: `${name}-${Date.now()}`, name, dataUrl }],
-    );
+  const addAttachment = (name: string, dataUrl: string, options?: { replaces?: string }) => {
+    setAttachments((prev) => withAttachment(prev, { id: `${name}-${Date.now()}`, name, dataUrl }, options));
   };
 
   // Send waits for this like a file read.
-  const addAttachmentFromUrl = (name: string, url: string) => {
+  const addAttachmentFromUrl = (name: string, url: string, options?: { replaces?: string }) => {
+    const group = options?.replaces;
+    const token = Symbol('read');
+    const abort = new AbortController();
+    if (group) {
+      // A superseded read must free Send, not hold it.
+      latestRead.current.get(group)?.abort.abort();
+      latestRead.current.set(group, { token, abort });
+      // Dropped now, not on success; a failed pick leaves none.
+      setAttachments((prev) => prev.filter((item) => item.replacedBy !== group));
+    }
+    setBlockedAttachment(null);
     setPendingAttachmentReads((count) => count + 1);
-    void fetchImageAsDataUrl(url)
+    void fetchImageAsDataUrl(url, abort.signal)
       .then((dataUrl) => {
-        if (dataUrl) addAttachment(name, dataUrl);
+        // A later pick won; this frame answers an old prompt.
+        if (group && latestRead.current.get(group)?.token !== token) return;
+        // The text is already the new one; say which frame is missing.
+        if (!dataUrl) {
+          setBlockedAttachment({ name, dataUrl: null });
+          return;
+        }
+        if (!fitsAttachment(attachmentsRef.current, options)) {
+          setBlockedAttachment({ name, dataUrl, ...(options ? { options } : {}) });
+          return;
+        }
+        addAttachment(name, dataUrl, options);
       })
       .finally(() => setPendingAttachmentReads((count) => count - 1));
   };
@@ -85,14 +132,31 @@ export function useComposerAttachments(sending: boolean) {
   };
 
   const removeAttachment = (id: string) => {
-    setAttachments((prev) => prev.filter((item) => item.id !== id));
+    const next = attachmentsRef.current.filter((item) => item.id !== id);
+    setAttachments(next);
+    const waiting = blockedAttachment;
+    // Making room is what the notice asked for; honour it.
+    if (waiting?.dataUrl && fitsAttachment(next, waiting.options)) {
+      setBlockedAttachment(null);
+      setAttachments(
+        withAttachment(
+          next,
+          { id: `${waiting.name}-${Date.now()}`, name: waiting.name, dataUrl: waiting.dataUrl },
+          waiting.options,
+        ),
+      );
+    }
   };
 
-  const resetAttachments = () => setAttachments([]);
+  const resetAttachments = () => {
+    setBlockedAttachment(null);
+    setAttachments([]);
+  };
 
   return {
     attachments,
     pendingAttachmentReads,
+    blockedAttachment,
     attachMenuOpen,
     setAttachMenuOpen,
     isSketchOpen,
@@ -111,9 +175,9 @@ export function useComposerAttachments(sending: boolean) {
 export type ComposerAttachmentsApi = ReturnType<typeof useComposerAttachments>;
 
 // Pulls a same-origin image into a data URL for the composer.
-export async function fetchImageAsDataUrl(url: string): Promise<string | null> {
+export async function fetchImageAsDataUrl(url: string, signal?: AbortSignal): Promise<string | null> {
   try {
-    const response = await fetch(url, { credentials: 'include' });
+    const response = await fetch(url, { credentials: 'include', ...(signal ? { signal } : {}) });
     if (!response.ok) return null;
     const blob = await response.blob();
     return await new Promise<string | null>((resolve) => {

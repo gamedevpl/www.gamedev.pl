@@ -1144,6 +1144,10 @@
       "sending": "Sending…",
       "sent": "Sent for publication — the full check is running.",
       "error": "Could not send it for publication. Try again in a moment."
+    },
+    "composer": {
+      "attachmentFull": "The composer is full — remove an image to attach \"{{name}}\".",
+      "attachmentFailed": "Could not load \"{{name}}\" — send without it, or pick again."
     }
   },
   "suggestions": {
