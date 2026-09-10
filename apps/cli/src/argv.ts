@@ -21,6 +21,7 @@ export const SLASH_VERBS = [
   'whoami',
   'submit',
   'pull',
+  'push',
   'diff',
   'update',
 ] as const;

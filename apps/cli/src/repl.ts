@@ -144,13 +144,13 @@ export async function handleReplLine(input: {
       }
       return { next: 'continue', conversationId: input.conversationId };
     }
-    if (cmd === 'submit') {
+    if (cmd === 'submit' || cmd === 'push') {
       try {
-        const parsed = parseArgv(['node', 'cli', 'submit', ...rest]);
+        const parsed = parseArgv(['node', 'cli', cmd, ...rest]);
         const dest = parsed.args[0] ?? input.workshop?.root ?? process.cwd();
         const slug = (typeof parsed.flags.slug === 'string' ? parsed.flags.slug : null) ?? readCheckoutSlug(dest);
         if (!slug) {
-          input.write(`run it as ${cliUsage('submit', '[dir]')}`);
+          input.write(`run it as ${cliUsage(cmd, '[dir]')}`);
           return { next: 'continue', conversationId: input.conversationId };
         }
         const result = await submitGame({

@@ -8,7 +8,7 @@ describe('formatHelp', () => {
     expect(out).not.toMatch(/gamedevpl <[a-z]+\|/);
     expect(out).toContain('open a browser and sign in');
     expect(out).toContain('interactive conversation');
-    expect(out).toMatch(/submit\s+deliver sources after the local ladder/);
+    expect(out).toMatch(/push\s+send local changes as a preview/);
     for (const verb of SLASH_VERBS) {
       expect(out).toMatch(new RegExp(`^  ${verb}\\s+\\S`, 'm'));
     }

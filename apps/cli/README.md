@@ -285,3 +285,7 @@ When Antigravity cannot ask for a permission in headless mode, the interactive C
 ### Recover an open agent session
 
 If a previous MCP agent stopped without ending its session, preview delivery can remain locked. The interactive delivery prompt offers to disconnect that session and deliver the local checkout. For an explicit retry, use `/submit --takeover` or `gamedevpl submit --takeover [dir]`. This revokes the previous session key and sends the full local file snapshot after checks pass. It does not stop the local agent process, so stop that process first if it is still editing your checkout. Old server staging stays in the previous generation; it is not mixed into your local delivery. Managed agents and pending handoffs must finish through Studio. `--force` alone never takes over an agent session.
+
+### Push local changes
+
+Use `/push` in the checkout session, or `gamedevpl push [dir]`, to run checks and deliver a preview. `/pull` brings platform changes into the checkout. `/submit` remains an alias for `/push`; neither publishes publicly unless you explicitly pass `--publish`.
