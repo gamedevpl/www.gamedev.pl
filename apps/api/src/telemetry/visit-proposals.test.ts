@@ -26,8 +26,8 @@ describe('summarizeProposals', () => {
 
     expect(read).toMatchObject({ exposed: 3, picked: 1, postponed: 1, muted: 1 });
     expect(read.byBuilder).toEqual([
-      { builder: 'platform', exposed: 2, picked: 1, postponed: 1, muted: 0 },
-      { builder: 'self', exposed: 1, picked: 0, postponed: 0, muted: 1 },
+      { builder: 'platform', exposed: 2, decided: 2, picked: 1, postponed: 1, muted: 0 },
+      { builder: 'self', exposed: 1, decided: 1, picked: 0, postponed: 0, muted: 1 },
     ]);
   });
 
@@ -43,10 +43,23 @@ describe('summarizeProposals', () => {
     const read = summarizeProposals([step('v1', 'proposal_shown'), step('v1', 'proposal_picked')]);
 
     expect(read.byBuilder).toEqual([
-      { builder: 'platform', exposed: 0, picked: 0, postponed: 0, muted: 0 },
-      { builder: 'self', exposed: 0, picked: 0, postponed: 0, muted: 0 },
-      { builder: 'unknown', exposed: 1, picked: 1, postponed: 0, muted: 0 },
+      { builder: 'platform', exposed: 0, decided: 0, picked: 0, postponed: 0, muted: 0 },
+      { builder: 'self', exposed: 0, decided: 0, picked: 0, postponed: 0, muted: 0 },
+      { builder: 'unknown', exposed: 1, decided: 1, picked: 1, postponed: 0, muted: 0 },
     ]);
+  });
+
+  it('counts a reopened card once, however many outcomes it recorded', () => {
+    // The card stays open, so one visit can postpone then pick.
+    const read = summarizeProposals([
+      step('v1', 'proposal_shown', 'platform'),
+      step('v1', 'proposal_postponed', 'platform'),
+      step('v1', 'proposal_picked', 'platform'),
+    ]);
+
+    expect(read).toMatchObject({ exposed: 1, decided: 1, picked: 1, postponed: 1 });
+    expect(read.decided).toBeLessThanOrEqual(read.exposed);
+    expect(read.byBuilder[0]).toMatchObject({ builder: 'platform', exposed: 1, decided: 1 });
   });
 
   it('reads nothing from the other studio rungs', () => {

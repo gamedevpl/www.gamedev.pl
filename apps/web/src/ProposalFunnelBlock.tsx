@@ -14,10 +14,6 @@ function percent(part: number, whole: number): string {
   return `${Math.round((part / whole) * 100)}%`;
 }
 
-function decided(row: { picked: number; postponed: number; muted: number }): number {
-  return row.picked + row.postponed + row.muted;
-}
-
 export function ProposalFunnelBlock({ funnel }: { funnel: VisitFunnel }) {
   const proposals: Proposals | undefined = funnel.proposals;
   if (!proposals) return null;
@@ -29,7 +25,7 @@ export function ProposalFunnelBlock({ funnel }: { funnel: VisitFunnel }) {
       <p className="health-summary">
         {proposals.exposed === 0
           ? 'No visit was shown a concept card in this window.'
-          : `${proposals.exposed} visits saw a card; ${percent(decided(proposals), proposals.exposed)} decided, ${percent(proposals.picked, proposals.exposed)} picked an idea.`}
+          : `${proposals.exposed} visits saw a card; ${percent(proposals.decided, proposals.exposed)} decided, ${percent(proposals.picked, proposals.exposed)} picked an idea.`}
       </p>
       {rows.length > 0 ? (
         <table className="health-table">

@@ -6,6 +6,8 @@ type Builder = (typeof BUILDERS)[number];
 export interface ProposalOutcomes {
   // Visits shown at least one concept card; the denominator for the rest.
   exposed: number;
+  // Visits with any outcome. A reopened card can record more than one.
+  decided: number;
   picked: number;
   postponed: number;
   muted: number;
@@ -24,9 +26,10 @@ function seen(): Seen {
 
 function outcomes(from: Seen): ProposalOutcomes {
   // Counted inside the exposed set, so no ratio exceeds one.
-  const within = (decided: Set<string>) => [...decided].filter((id) => from.exposed.has(id)).length;
+  const within = (ids: Set<string>) => [...ids].filter((id) => from.exposed.has(id)).length;
   return {
     exposed: from.exposed.size,
+    decided: within(new Set([...from.picked, ...from.postponed, ...from.muted])),
     picked: within(from.picked),
     postponed: within(from.postponed),
     muted: within(from.muted),

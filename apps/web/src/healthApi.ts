@@ -77,10 +77,18 @@ export interface VisitFunnel {
   // NP-1v concept proposals; optional like its neighbours.
   proposals?: {
     exposed: number;
+    decided: number;
     picked: number;
     postponed: number;
     muted: number;
-    byBuilder: Array<{ builder: string; exposed: number; picked: number; postponed: number; muted: number }>;
+    byBuilder: Array<{
+      builder: string;
+      exposed: number;
+      decided: number;
+      picked: number;
+      postponed: number;
+      muted: number;
+    }>;
   };
   completion?: {
     requests: number;
