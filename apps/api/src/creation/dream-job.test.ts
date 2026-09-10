@@ -52,7 +52,7 @@ async function harness(params: {
   const deps: DreamJobDeps = {
     store,
     gamesStore: { getDerivedArtifact: async (_slug, _version, name) => artifacts[name] ?? null },
-    availability: createDreamAvailabilityGate({ store, ttlMs: 0 }),
+    availability: createDreamAvailabilityGate({ store }),
     ideas: ideaGenerator,
     frames,
     readHudRegions: async ({ slug, version, width, height }) => {
@@ -78,6 +78,22 @@ async function harness(params: {
 }
 
 describe('createDreamJob', () => {
+  it('refuses the idea call when the pause lands after the gate opened', async () => {
+    const { store, ideas: generator, run } = await harness({ hud: [{ x: 16, y: 16, w: 200, h: 40 }] });
+    const real = store.getCreationLimits.bind(store);
+    let reads = 0;
+    store.getCreationLimits = async () => {
+      reads += 1;
+      const stored = await real();
+      // The operator pauses while the run reads the screenshot and HUD.
+      return reads === 1 ? stored : { ...stored, dreamsPaused: true };
+    };
+
+    expect(await run()).toBe('paused');
+    expect(generator.requests).toEqual([]);
+    expect(await store.getGlobalDreamCount('2026-09-07')).toBe(0);
+  });
+
   it('posts a two-option proposal with the real frame and two concept frames', async () => {
     const { store, frames, posted, run } = await harness({ hud: [{ x: 16, y: 16, w: 200, h: 40, label: 'score' }] });
     expect(await run()).toBe('posted');

@@ -134,6 +134,8 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     if (!record.spec?.trim()) return 'no_ideas';
     // An improvement round runs on a live game.
     const published = Boolean(record.publishedAt) || Boolean(await store.getPublishedSubmissionBySlug(record.slug));
+    // The reads above take real time; the switch may have moved since.
+    if (!(await availability.dreamingEnabled())) return 'paused';
     const generated = await ideas.generate({
       spec: record.spec,
       ...(record.qa?.length ? { qa: record.qa } : {}),

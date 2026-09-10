@@ -13,7 +13,6 @@ export interface DreamJobEnvOptions {
   };
   log: DreamLog;
   now: () => number;
-  creationLimitsTtlMs?: number;
   dreamAvailabilityGate?: DreamAvailabilityGate;
   nextIdeaGenerator?: NextIdeaGenerator;
   dreamFrameGenerator?: DreamFrameGenerator;
@@ -33,8 +32,6 @@ export function createDreamJobFromEnv(options: DreamJobEnvOptions): DreamJob | n
       options.dreamAvailabilityGate ??
       createDreamAvailabilityGate({
         store,
-        now: options.now,
-        ttlMs: options.creationLimitsTtlMs,
         logWarn: (payload, message) => options.log.warn(payload, message),
       }),
     ideas: options.nextIdeaGenerator ?? new VertexNextIdeaGenerator(),

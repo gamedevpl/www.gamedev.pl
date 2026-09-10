@@ -1348,7 +1348,6 @@ export async function registerSubmissionRoutes(
       gamesStore: options.agentChannel?.gamesStore,
       log: app.log,
       now,
-      creationLimitsTtlMs: options.creationLimitsTtlMs,
       dreamAvailabilityGate: options.dreamAvailabilityGate,
       nextIdeaGenerator: options.nextIdeaGenerator,
       dreamFrameGenerator: options.dreamFrameGenerator,

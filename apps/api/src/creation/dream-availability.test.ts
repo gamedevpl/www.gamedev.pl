@@ -9,7 +9,7 @@ import { InMemoryStore } from '../platform/store.js';
 describe('createDreamAvailabilityGate', () => {
   it('dreams by default and honours the operator pause', async () => {
     const store = new InMemoryStore();
-    const gate = createDreamAvailabilityGate({ store, ttlMs: 0 });
+    const gate = createDreamAvailabilityGate({ store });
     expect(await gate.dreamingEnabled()).toBe(true);
     await store.setCreationLimits({ dreamsPaused: true }, 'g:boss');
     expect(await gate.dreamingEnabled()).toBe(false);
@@ -21,7 +21,7 @@ describe('createDreamAvailabilityGate', () => {
     store.getCreationLimits = async () => {
       throw new Error('firestore down');
     };
-    const gate = createDreamAvailabilityGate({ store, ttlMs: 0 });
+    const gate = createDreamAvailabilityGate({ store });
     expect(await gate.dreamingEnabled()).toBe(false);
     expect(await gate.spendFrameSlots('2026-09-07', 1)).toBe(false);
     expect(await store.getGlobalDreamCount('2026-09-07')).toBe(0);
@@ -29,7 +29,7 @@ describe('createDreamAvailabilityGate', () => {
 
   it('keeps dreaming on a later blip, from the values it did read', async () => {
     const store = new InMemoryStore();
-    const gate = createDreamAvailabilityGate({ store, ttlMs: 0 });
+    const gate = createDreamAvailabilityGate({ store });
     expect(await gate.dreamingEnabled()).toBe(true);
     store.getCreationLimits = async () => {
       throw new Error('firestore down');
@@ -40,7 +40,7 @@ describe('createDreamAvailabilityGate', () => {
   it('refuses the frames when the pause landed after the run began', async () => {
     // A live TTL: a cached read would never see the new pause.
     const store = new InMemoryStore();
-    const gate = createDreamAvailabilityGate({ store, ttlMs: 60_000 });
+    const gate = createDreamAvailabilityGate({ store });
     expect(await gate.dreamingEnabled()).toBe(true);
     await store.setCreationLimits({ dreamsPaused: true }, 'g:boss');
     expect(await gate.spendFrameSlots('2026-09-07', 2)).toBe(false);
@@ -50,7 +50,7 @@ describe('createDreamAvailabilityGate', () => {
   it('falls back to the last known values when the fresh look fails', async () => {
     const store = new InMemoryStore();
     await store.setCreationLimits({ globalDailyDreamCap: 5 }, 'g:boss');
-    const gate = createDreamAvailabilityGate({ store, ttlMs: 60_000 });
+    const gate = createDreamAvailabilityGate({ store });
     expect(await gate.dreamingEnabled()).toBe(true);
     store.getCreationLimits = async () => {
       throw new Error('firestore down');
@@ -68,7 +68,7 @@ describe('createDreamAvailabilityGate', () => {
     const store = new InMemoryStore();
     await store.setCreationLimits({ globalDailyDreamCap: 2 }, 'g:boss');
     const warnings: string[] = [];
-    const gate = createDreamAvailabilityGate({ store, ttlMs: 0, logWarn: (_p, message) => warnings.push(message) });
+    const gate = createDreamAvailabilityGate({ store, logWarn: (_p, message) => warnings.push(message) });
     expect(await gate.spendFrameSlots('2026-09-07', 1)).toBe(true);
     expect(await gate.spendFrameSlots('2026-09-07', 1)).toBe(true);
     expect(await gate.spendFrameSlots('2026-09-07', 1)).toBe(false);
@@ -79,7 +79,7 @@ describe('createDreamAvailabilityGate', () => {
   it('a zero cap refuses without touching the counter', async () => {
     const store = new InMemoryStore();
     await store.setCreationLimits({ globalDailyDreamCap: 0 }, 'g:boss');
-    const gate = createDreamAvailabilityGate({ store, ttlMs: 0 });
+    const gate = createDreamAvailabilityGate({ store });
     expect(await gate.spendFrameSlots('2026-09-07', 1)).toBe(false);
     expect(await store.getGlobalDreamCount('2026-09-07')).toBe(0);
   });
@@ -89,14 +89,14 @@ describe('createDreamAvailabilityGate', () => {
     store.checkAndIncrementGlobalDreams = async () => {
       throw new Error('firestore down');
     };
-    const gate = createDreamAvailabilityGate({ store, ttlMs: 0 });
+    const gate = createDreamAvailabilityGate({ store });
     expect(await gate.spendFrameSlots('2026-09-07', 1)).toBe(false);
   });
 
   it('a pair that does not fit spends nothing', async () => {
     const store = new InMemoryStore();
     await store.setCreationLimits({ globalDailyDreamCap: 3 }, 'g:boss');
-    const gate = createDreamAvailabilityGate({ store, ttlMs: 0 });
+    const gate = createDreamAvailabilityGate({ store });
     expect(await gate.spendFrameSlots('2026-09-07', 2)).toBe(true);
     // One slot is left, and a two-frame proposal cannot use it.
     expect(await gate.spendFrameSlots('2026-09-07', 2)).toBe(false);

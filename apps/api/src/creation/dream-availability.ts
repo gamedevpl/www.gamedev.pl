@@ -1,7 +1,5 @@
 import type { CreationLimits, Store } from '../platform/store.js';
 
-export const DEFAULT_DREAM_AVAILABILITY_TTL_MS = 60_000;
-
 // Frames, not proposals: a two-option proposal spends two.
 export const DEFAULT_GLOBAL_DAILY_DREAM_CAP = 200;
 
@@ -16,8 +14,6 @@ export function resolveDefaultGlobalDailyDreamCap(env: NodeJS.ProcessEnv = proce
 
 export interface DreamAvailabilityOptions {
   store?: Store;
-  now?: () => number;
-  ttlMs?: number;
   logWarn?: (payload: Record<string, unknown>, message: string) => void;
 }
 
@@ -31,27 +27,25 @@ export interface DreamAvailabilityGate {
 // Same chassis as seed availability: a platform job, not a request.
 export function createDreamAvailabilityGate(options: DreamAvailabilityOptions): DreamAvailabilityGate {
   const { store } = options;
-  const now = options.now ?? Date.now;
-  const ttlMs = options.ttlMs ?? DEFAULT_DREAM_AVAILABILITY_TTL_MS;
   const logWarn = options.logWarn ?? (() => {});
 
-  let cache: { value: CreationLimits | null; expiresAt: number } | null = null;
+  // Kept only for a failed read; `undefined` means never read.
+  let lastKnown: CreationLimits | null | undefined;
 
   // Unknown is not unset: only one of the two may dream.
   type ConfigRead = { known: true; value: CreationLimits | null } | { known: false };
 
-  // `fresh` skips the cached value; a failed read still falls back.
-  async function config(fresh = false): Promise<ConfigRead> {
+  // Never cached: a stale pause is a kill switch with a delay.
+  async function config(): Promise<ConfigRead> {
     if (!store) return { known: true, value: null };
-    if (!fresh && cache && cache.expiresAt > now()) return { known: true, value: cache.value };
     try {
       const stored = await store.getCreationLimits();
-      cache = { value: stored, expiresAt: now() + ttlMs };
+      lastKnown = stored;
       return { known: true, value: stored };
     } catch (error) {
-      if (cache) {
+      if (lastKnown !== undefined) {
         logWarn({ err: error }, 'dream availability config unreadable; using the last known values');
-        return { known: true, value: cache.value };
+        return { known: true, value: lastKnown };
       }
       logWarn({ err: error }, 'dream availability config unreadable and never read; refusing to dream');
       return { known: false };
@@ -60,15 +54,14 @@ export function createDreamAvailabilityGate(options: DreamAvailabilityOptions): 
 
   async function dreamingEnabled(): Promise<boolean> {
     const read = await config();
-    // An unread switch may be a set switch; guessing spends real money.
+    // An unread switch may be a set one; guessing spends real money.
     if (!read.known) return false;
     return read.value?.dreamsPaused !== true;
   }
 
   async function spendFrameSlots(dateStr: string, count: number): Promise<boolean> {
     if (!store) return true;
-    // A cached switch cannot see a pause set since; look again.
-    const read = await config(true);
+    const read = await config();
     if (!read.known || read.value?.dreamsPaused === true) return false;
     const cap = read.value?.globalDailyDreamCap ?? resolveDefaultGlobalDailyDreamCap();
     if (cap <= 0) return false;
