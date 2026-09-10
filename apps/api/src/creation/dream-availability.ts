@@ -37,32 +37,39 @@ export function createDreamAvailabilityGate(options: DreamAvailabilityOptions): 
 
   let cache: { value: CreationLimits | null; expiresAt: number } | null = null;
 
-  async function config(): Promise<CreationLimits | null> {
-    if (!store) return null;
-    if (cache && cache.expiresAt > now()) return cache.value;
+  // Unknown is not unset: only one of the two may dream.
+  type ConfigRead = { known: true; value: CreationLimits | null } | { known: false };
+
+  async function config(): Promise<ConfigRead> {
+    if (!store) return { known: true, value: null };
+    if (cache && cache.expiresAt > now()) return { known: true, value: cache.value };
     try {
       const stored = await store.getCreationLimits();
       cache = { value: stored, expiresAt: now() + ttlMs };
-      return stored;
+      return { known: true, value: stored };
     } catch (error) {
       if (cache) {
         logWarn({ err: error }, 'dream availability config unreadable; using the last known values');
-        return cache.value;
+        return { known: true, value: cache.value };
       }
-      logWarn({ err: error }, 'dream availability config unreadable and never read; treating as unset');
-      return null;
+      logWarn({ err: error }, 'dream availability config unreadable and never read; refusing to dream');
+      return { known: false };
     }
   }
 
   async function dreamingEnabled(): Promise<boolean> {
-    const stored = await config();
-    return stored?.dreamsPaused !== true;
+    const read = await config();
+    // An unread switch may be a set switch; guessing spends real money.
+    if (!read.known) return false;
+    return read.value?.dreamsPaused !== true;
   }
 
   async function spendFrameSlots(dateStr: string, count: number): Promise<boolean> {
     if (!store) return true;
-    const stored = await config();
-    const cap = stored?.globalDailyDreamCap ?? resolveDefaultGlobalDailyDreamCap();
+    const read = await config();
+    // The last look before the paid call; the pause may have landed.
+    if (!read.known || read.value?.dreamsPaused === true) return false;
+    const cap = read.value?.globalDailyDreamCap ?? resolveDefaultGlobalDailyDreamCap();
     if (cap <= 0) return false;
     try {
       const spent = await store.checkAndIncrementGlobalDreams(dateStr, cap, count);

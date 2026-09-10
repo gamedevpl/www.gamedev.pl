@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act } from 'react';
+import { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n/index.js';
@@ -73,6 +73,32 @@ async function mount(
     );
   });
   return { container, rail, picks, onMute };
+}
+
+// The real parent flips `muted` synchronously, replacing the whole card.
+function MutingCard({ picks }: { picks: ProposalPick[] }) {
+  const [muted, setMuted] = useState(false);
+  return (
+    <ProposalCard
+      token="tok"
+      proposal={proposal}
+      handlers={{ builder: 'platform', muted, onPick: (pick) => picks.push(pick), onMute: () => setMuted(true) }}
+    />
+  );
+}
+
+async function mountMuting() {
+  (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  await i18n.changeLanguage('pl');
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  roots.push(root);
+  const picks: ProposalPick[] = [];
+  await act(async () => {
+    root.render(<MutingCard picks={picks} />);
+  });
+  return { container, picks };
 }
 
 describe('ProposalCard', () => {
@@ -243,6 +269,41 @@ describe('ProposalCard', () => {
     });
     expect(shell).not.toHaveBeenCalled();
     window.removeEventListener('keydown', shell);
+  });
+
+  it('parks focus on the muted note when muting removes the opener', async () => {
+    // The card holding the focused button is gone by the next commit.
+    const { container } = await mountMuting();
+    const opener = button(container, 'Zobacz oba pomys\u0142y');
+    opener.focus();
+    await act(async () => {
+      opener.click();
+    });
+    await act(async () => {
+      button(document.body, 'Nie podpowiadaj mi tego').click();
+    });
+
+    const note = container.querySelector('.studio-proposal-muted');
+    expect(note).toBeTruthy();
+    expect(document.activeElement).toBe(note);
+  });
+
+  it('parks focus on a surviving thumbnail when a pick removes the opener', async () => {
+    // "Open" goes away once decided; the thumbnails stay.
+    const { container } = await mount();
+    const opener = button(container, 'Zobacz oba pomys\u0142y');
+    opener.focus();
+    await act(async () => {
+      opener.click();
+    });
+    await act(async () => {
+      document.body
+        .querySelectorAll('.studio-proposal-pick')[0]!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(opener.isConnected).toBe(false);
+    expect(document.activeElement).toBe(container.querySelector('.studio-proposal-thumb'));
   });
 
   it('renders the muted note instead of frames once the creator opted out', async () => {

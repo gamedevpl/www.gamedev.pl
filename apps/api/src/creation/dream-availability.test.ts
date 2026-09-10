@@ -15,6 +15,44 @@ describe('createDreamAvailabilityGate', () => {
     expect(await gate.dreamingEnabled()).toBe(false);
   });
 
+  it('refuses to dream while the switch has never been read', async () => {
+    // An unreadable switch may be a set one; guessing spends real money.
+    const store = new InMemoryStore();
+    store.getCreationLimits = async () => {
+      throw new Error('firestore down');
+    };
+    const gate = createDreamAvailabilityGate({ store, ttlMs: 0 });
+    expect(await gate.dreamingEnabled()).toBe(false);
+    expect(await gate.spendFrameSlots('2026-09-07', 1)).toBe(false);
+    expect(await store.getGlobalDreamCount('2026-09-07')).toBe(0);
+  });
+
+  it('keeps dreaming on a later blip, from the values it did read', async () => {
+    const store = new InMemoryStore();
+    const gate = createDreamAvailabilityGate({ store, ttlMs: 0 });
+    expect(await gate.dreamingEnabled()).toBe(true);
+    store.getCreationLimits = async () => {
+      throw new Error('firestore down');
+    };
+    expect(await gate.dreamingEnabled()).toBe(true);
+  });
+
+  it('refuses the frames when the pause landed after the run began', async () => {
+    // The last check before the paid call; the gate opened earlier.
+    const store = new InMemoryStore();
+    const gate = createDreamAvailabilityGate({ store, ttlMs: 0 });
+    expect(await gate.dreamingEnabled()).toBe(true);
+    await store.setCreationLimits({ dreamsPaused: true }, 'g:boss');
+    expect(await gate.spendFrameSlots('2026-09-07', 2)).toBe(false);
+    expect(await store.getGlobalDreamCount('2026-09-07')).toBe(0);
+  });
+
+  it('dreams with no store at all, as local runs do', async () => {
+    const gate = createDreamAvailabilityGate({});
+    expect(await gate.dreamingEnabled()).toBe(true);
+    expect(await gate.spendFrameSlots('2026-09-07', 2)).toBe(true);
+  });
+
   it('spends frames against the stored cap and refuses past it', async () => {
     const store = new InMemoryStore();
     await store.setCreationLimits({ globalDailyDreamCap: 2 }, 'g:boss');

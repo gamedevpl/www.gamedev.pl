@@ -44,6 +44,17 @@ export function ProposalCard({
   // The builder that drew the card, not the current one.
   const builderRef = useRef(proposal.builder ?? handlers.builder);
   const exposed = useRef(false);
+  const mutedNoteRef = useRef<HTMLParagraphElement | null>(null);
+  const claimFocus = useRef(false);
+
+  useLayoutEffect(() => {
+    if (!claimFocus.current) return;
+    claimFocus.current = false;
+    // Deciding removes the opener, so the dialog had nowhere to restore.
+    if (document.activeElement !== document.body) return;
+    const landing = mutedNoteRef.current ?? cardRef.current?.querySelector<HTMLElement>(FOCUSABLE);
+    landing?.focus();
+  });
 
   useEffect(() => {
     // Mounting is not seeing; an off-screen card is no exposure.
@@ -65,11 +76,16 @@ export function ProposalCard({
   }, [handlers.muted]);
 
   if (handlers.muted) {
-    return <p className="studio-proposal-muted">{t('statusView.proposal.muted')}</p>;
+    return (
+      <p className="studio-proposal-muted" ref={mutedNoteRef} tabIndex={-1}>
+        {t('statusView.proposal.muted')}
+      </p>
+    );
   }
 
   const pick = (option: CreatorProposalOption) => {
     recordStudioStep('proposal_picked', builderRef.current);
+    claimFocus.current = true;
     setOpen(false);
     setDecided(true);
     handlers.onPick({ option, frame: frameItem(option.frameRef), text: option.prompt[lang] });
@@ -80,6 +96,7 @@ export function ProposalCard({
   };
   const mute = () => {
     recordStudioStep('proposal_muted', builderRef.current);
+    claimFocus.current = true;
     setOpen(false);
     handlers.onMute();
   };
