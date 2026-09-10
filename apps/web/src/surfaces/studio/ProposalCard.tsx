@@ -1,9 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import type { CreatorProposal, CreatorProposalOption } from '@gamedevpl/contract';
 import { buildMediaUrl, type BuildMediaItem } from '../../submissionApi.js';
 import { recordStudioStep, type BuilderDimension } from '../../visitTelemetry.js';
 import './studio-proposal.css';
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export type ProposalPick = { option: CreatorProposalOption; frame: BuildMediaItem; text: string };
 
@@ -132,22 +136,65 @@ function ProposalDialog({
   onMute: () => void;
 }) {
   const { t } = useTranslation();
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const openerRef = useRef<HTMLElement | null | undefined>(undefined);
+  // Read at first render, before the commit moves focus.
+  if (openerRef.current === undefined) {
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  }
+  const onPostponeRef = useRef(onPostpone);
+  onPostponeRef.current = onPostpone;
+
+  useLayoutEffect(() => {
+    dialogRef.current?.focus();
+    return () => openerRef.current?.focus?.();
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onPostpone();
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        onPostponeRef.current();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const root = dialogRef.current;
+      if (!root) return;
+      const focusable = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE));
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) {
+        event.preventDefault();
+        root.focus();
+        return;
+      }
+      const active = document.activeElement;
+      // The box is a landing spot, not a stop on the ring.
+      const atEdge = active === root || !root.contains(active);
+      if (event.shiftKey && (atEdge || active === first)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (atEdge || active === last)) {
+        event.preventDefault();
+        first.focus();
+      }
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onPostpone]);
+    // Capture, so Escape cannot also switch the studio tab behind.
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, []);
 
-  return (
+  // The rail's blurred backdrop would trap and clip a fixed overlay.
+  return createPortal(
     <div className="studio-proposal-overlay" role="presentation" onClick={onPostpone}>
       <div
+        ref={dialogRef}
         className="studio-proposal-dialog"
         role="dialog"
         aria-modal="true"
         aria-label={t('statusView.proposal.title')}
+        tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
       >
         <header className="studio-proposal-head">
@@ -190,6 +237,7 @@ function ProposalDialog({
           </button>
         </footer>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

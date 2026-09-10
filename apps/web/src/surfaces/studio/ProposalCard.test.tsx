@@ -41,15 +41,26 @@ function button(container: HTMLElement, text: string): HTMLButtonElement {
   return match;
 }
 
+const roots: Array<{ unmount: () => void }> = [];
+
+function press(key: string, init: KeyboardEventInit = {}) {
+  const target = (document.activeElement as HTMLElement | null) ?? document.body;
+  target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init }));
+}
+
 async function mount(
   handlers: Partial<Parameters<typeof ProposalCard>[0]['handlers']> = {},
   overrides: Partial<CreatorProposal> = {},
 ) {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   await i18n.changeLanguage('pl');
+  const rail = document.createElement('div');
+  rail.className = 'studio-chat-rail';
   const container = document.createElement('div');
-  document.body.appendChild(container);
+  rail.appendChild(container);
+  document.body.appendChild(rail);
   const root = createRoot(container);
+  roots.push(root);
   const picks: ProposalPick[] = [];
   const onMute = vi.fn();
   await act(async () => {
@@ -61,11 +72,15 @@ async function mount(
       />,
     );
   });
-  return { container, picks, onMute };
+  return { container, rail, picks, onMute };
 }
 
 describe('ProposalCard', () => {
-  afterEach(() => {
+  afterEach(async () => {
+    // A root left mounted over a wiped body flushes into dead nodes.
+    await act(async () => {
+      roots.splice(0).forEach((root) => root.unmount());
+    });
     document.body.innerHTML = '';
     recordStudioStep.mockReset();
   });
@@ -164,6 +179,70 @@ describe('ProposalCard', () => {
     expect(onMute).toHaveBeenCalledTimes(1);
     expect(picks).toHaveLength(0);
     expect(recordStudioStep).toHaveBeenCalledWith('proposal_muted', 'platform');
+  });
+
+  it('portals the comparison out of the chat rail, which would otherwise clip it', async () => {
+    // A blurred backdrop makes the rail the containing block for fixed children.
+    const { container, rail } = await mount();
+    await act(async () => {
+      (container.querySelector('.studio-proposal-thumb') as HTMLButtonElement).click();
+    });
+
+    expect(rail.querySelector('.studio-proposal-overlay')).toBeNull();
+    expect(document.body.querySelector('.studio-proposal-overlay')?.parentElement).toBe(document.body);
+  });
+
+  it('holds keyboard focus inside the dialog and hands it back on close', async () => {
+    const { container } = await mount();
+    const opener = button(container, 'Zobacz oba pomys\u0142y');
+    opener.focus();
+    await act(async () => {
+      opener.click();
+    });
+
+    const dialog = document.body.querySelector('.studio-proposal-dialog') as HTMLElement;
+    expect(document.activeElement).toBe(dialog);
+    const focusable = [...dialog.querySelectorAll('button')];
+    const first = focusable[0]!;
+    const last = focusable[focusable.length - 1]!;
+
+    await act(async () => {
+      press('Tab');
+    });
+    expect(document.activeElement).toBe(first);
+
+    last.focus();
+    await act(async () => {
+      press('Tab');
+    });
+    expect(document.activeElement).toBe(first);
+
+    await act(async () => {
+      press('Tab', { shiftKey: true });
+    });
+    expect(document.activeElement).toBe(last);
+
+    await act(async () => {
+      press('Escape');
+    });
+    expect(document.body.querySelector('.studio-proposal-dialog')).toBeNull();
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it('keeps Escape from reaching the studio shell behind the dialog', async () => {
+    // The shell closes its details tab on Escape; the dialog swallows it.
+    const shell = vi.fn();
+    window.addEventListener('keydown', shell);
+    const { container } = await mount();
+    await act(async () => {
+      button(container, 'Zobacz oba pomys\u0142y').click();
+    });
+
+    await act(async () => {
+      press('Escape');
+    });
+    expect(shell).not.toHaveBeenCalled();
+    window.removeEventListener('keydown', shell);
   });
 
   it('renders the muted note instead of frames once the creator opted out', async () => {
