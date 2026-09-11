@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, lstat, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { setupAgyPermissions } from './agy-permissions.js';
@@ -87,13 +87,15 @@ it('cancelling during the picker does not write settings', async () => {
   expect(await setupAgyPermissions(input)).toBe(false);
   expect(await readFile(path, 'utf8')).toBe('{}');
 });
-it('refuses symlink profiles without following or replacing them', async () => {
+it('refuses to modify symlink profiles after explicit setup selection', async () => {
   const { root, path, input } = await fixture();
   const target = join(root, 'original.json');
   await writeFile(target, '{}');
   await symlink(target, path);
   await expect(setupAgyPermissions(input)).rejects.toThrow('safely read');
   expect(await readFile(target, 'utf8')).toBe('{}');
+  expect((await lstat(path)).isSymbolicLink()).toBe(true);
+  expect(input.pick).toHaveBeenCalledTimes(1);
 });
 
 it('does not configure unsupported sandbox platforms', async () => {
@@ -102,3 +104,22 @@ it('does not configure unsupported sandbox platforms', async () => {
   expect(input.pick).not.toHaveBeenCalled();
   expect(await readFile(path, 'utf8')).toBe('{}');
 });
+
+for (const mode of ['current', 'unattended', 'configured', 'cancel'] as const) {
+  it(`preserves symlink profiles when using ${mode} permissions`, async () => {
+    const { root, path, input } = await fixture();
+    const target = join(root, 'dotfiles.json');
+    const raw =
+      mode === 'configured'
+        ? JSON.stringify({ enableTerminalSandbox: true, toolPermission: 'proceed-in-sandbox' })
+        : '{}';
+    await writeFile(target, raw);
+    await symlink(target, path);
+    input.pick.mockImplementation(async (choices) => choices[mode === 'cancel' ? 2 : 1]!);
+    expect(await setupAgyPermissions({ ...input, unattended: mode === 'unattended' })).toBe(mode !== 'cancel');
+    expect(await readFile(target, 'utf8')).toBe(raw);
+    expect((await lstat(path)).isSymbolicLink()).toBe(true);
+    expect(await readdir(dirname(path))).toEqual(['settings.json']);
+    expect(input.pick).toHaveBeenCalledTimes(mode === 'current' || mode === 'cancel' ? 1 : 0);
+  });
+}

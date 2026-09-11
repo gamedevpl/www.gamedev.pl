@@ -1,4 +1,4 @@
-import { lstat, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { lstat, stat, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -11,10 +11,11 @@ const CANCEL = 'Return without starting';
 
 type Settings = Record<string, unknown>;
 
-async function snapshot(path: string): Promise<string | undefined> {
+async function snapshot(path: string, followSymlink = false): Promise<string | undefined> {
   try {
-    const info = await lstat(path);
-    if (!info.isFile() || info.isSymbolicLink()) throw new Error('not a regular settings file');
+    const entry = await lstat(path);
+    const info = followSymlink && entry.isSymbolicLink() ? await stat(path) : entry;
+    if (!info.isFile()) throw new Error('not a regular settings file');
     return await readFile(path, 'utf8');
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
@@ -47,7 +48,7 @@ export async function setupAgyPermissions(input: {
     return true;
   }
   const path = join(input.env.HOME ?? homedir(), '.gemini', 'antigravity-cli', 'settings.json');
-  const raw = await snapshot(path);
+  const raw = await snapshot(path, true);
   const settings = decode(raw);
   if (settings.toolPermission === 'proceed-in-sandbox' && settings.enableTerminalSandbox === true) {
     input.write('Antigravity: sandboxed headless mode. Existing permission rules still apply.');
