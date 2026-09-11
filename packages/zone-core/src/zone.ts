@@ -270,6 +270,10 @@ export class Zone {
   // Snapshot now, as hibernation did; keep the sim so a return skips the reload.
   private park(): void {
     if (this.status !== 'live' || !this.sim) return;
+    // The departures that emptied the zone are still queued, and the snapshot is what the
+    // next wake restores. Dropping them would park a world still holding their actors.
+    if (this.pending.length > 0 && !this.runOneTick()) return;
+    if (this.status !== 'live' || !this.sim) return;
     let record: ZoneSnapshot;
     try {
       record = this.captureSnapshot();

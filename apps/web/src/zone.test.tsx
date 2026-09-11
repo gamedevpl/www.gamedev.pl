@@ -319,4 +319,50 @@ describe('useZoneBridge', () => {
       { binding: 0, step: 'joined' },
     ]);
   });
+  describe('a link the host retired for idleness', () => {
+    /** Drives a live link to the host's idle close, the way the sweep does. */
+    async function reaped() {
+      const handles = await connected();
+      act(() => handles.socket.deliver({ t: 'closed', reason: 'idle' }));
+      act(() => handles.socket.onclose?.());
+      return handles;
+    }
+
+    it('lets the player back in by playing, without a reload', async () => {
+      // The reap disposes the client, and a disposed one left installed is worse than
+      // none: `admit` bails on its own guard and every input goes to a dead socket. The
+      // protocol says coming back mints a fresh ticket; this is what makes that true.
+      const { fromGame } = await reaped();
+
+      act(() => fromGame({ t: 'zone:send', k: 'move', d: 'n' }));
+
+      await waitFor(() => expect(FakeSocket.instances).toHaveLength(2));
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const second = FakeSocket.instances[1];
+      act(() => second.open());
+      await waitFor(() => expect(second.framesSent()[0]).toMatchObject({ t: 'hello', zone: 'ember-watch' }));
+    });
+
+    it('answers a fresh hello as well, rather than the dead link', async () => {
+      const { fromGame } = await reaped();
+
+      act(() => fromGame({ t: 'zone:hello' }));
+
+      await waitFor(() => expect(FakeSocket.instances).toHaveLength(2));
+    });
+
+    it('does not redial a reason that playing cannot undo', async () => {
+      // `kicked` is a decision about the player, not about their attention. Redialling it
+      // would be a loop that spends a request per keypress for as long as the tab is open.
+      const { socket, fromGame } = await connected();
+      act(() => socket.deliver({ t: 'closed', reason: 'kicked' }));
+      act(() => socket.onclose?.());
+
+      act(() => fromGame({ t: 'zone:send', k: 'move', d: 'n' }));
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(FakeSocket.instances).toHaveLength(1);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
 });

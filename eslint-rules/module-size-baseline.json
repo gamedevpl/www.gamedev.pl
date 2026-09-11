@@ -957,11 +957,11 @@
     "apps/web/src/world.test.tsx": 322,
     "apps/web/src/world.ts": 202,
     "apps/web/src/worldApi.ts": 97,
-    "apps/web/src/zone.test.tsx": 322,
-    "apps/web/src/zone.ts": 175,
+    "apps/web/src/zone.test.tsx": 368,
+    "apps/web/src/zone.ts": 191,
     "apps/web/src/zone/protocol.test.ts": 200,
     "apps/web/src/zone/protocol.ts": 292,
-    "apps/web/src/zone/zoneClient.ts": 156,
+    "apps/web/src/zone/zoneClient.ts": 159,
     "apps/web/src/zoneApi.ts": 66,
     "apps/web/vite.config.ts": 140,
     "apps/web/vitest.config.ts": 13,
@@ -1056,7 +1056,7 @@
     "packages/zone-core/src/testSims.ts": 155,
     "packages/zone-core/src/ticket.test.ts": 101,
     "packages/zone-core/src/ticket.ts": 111,
-    "packages/zone-core/src/zone.test.ts": 689,
-    "packages/zone-core/src/zone.ts": 671
+    "packages/zone-core/src/zone.test.ts": 711,
+    "packages/zone-core/src/zone.ts": 675
   }
 }

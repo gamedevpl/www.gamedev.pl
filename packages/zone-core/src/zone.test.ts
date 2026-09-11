@@ -268,6 +268,24 @@ describe('a seat nobody is playing', () => {
     expect(h.zone.idleSlots(1_000_000 + IDLE_MS)).toEqual([1]);
   });
 
+  it('lets the sim hear the departure that emptied it before parking', async () => {
+    // The park snapshot is what the next wake restores, and `leave` queues its event
+    // rather than applying it. Parking on top of that pending queue wrote a world still
+    // holding the actors of everyone who had just left — the zombie this reap exists to
+    // remove, preserved across the sleep it was supposed to trigger.
+    const h = harness({ idleMs: IDLE_MS });
+    await h.zone.join('player-a');
+    await h.zone.join('player-b');
+    h.runTicks(1);
+
+    h.zone.leave(0);
+    h.zone.leave(1);
+    expect(h.zone.state).toBe('parked');
+
+    const parked = h.store.saved.get('ember-watch');
+    expect(JSON.parse(parked!.state as string).players).toEqual([]);
+  });
+
   it('has nobody to reap while the world is parked or asleep', async () => {
     const h = harness({ idleMs: IDLE_MS });
     await h.zone.join('player-a');
@@ -356,12 +374,14 @@ describe('hibernation', () => {
     const h = harness({ store });
     await h.zone.join('player-a');
     h.runTicks(5);
-    const tickAtLeave = h.zone.currentTick;
     h.zone.leave(0);
+    // One tick past the leave: the departure is simulated work, and with nobody left
+    // there is no later tick for it to ride, so parking runs it.
+    const parkedTick = h.zone.currentTick;
 
     expect(h.zone.state).toBe('parked');
     h.runTicks(3);
-    expect(h.zone.currentTick).toBe(tickAtLeave);
+    expect(h.zone.currentTick).toBe(parkedTick);
 
     await h.zone.join('player-a');
     expect(h.zone.state).toBe('live');
@@ -370,8 +390,8 @@ describe('hibernation', () => {
     // The write landing later must not park an occupied world.
     expect(h.zone.state).toBe('live');
     h.runTicks(2);
-    expect(h.zone.currentTick).toBe(tickAtLeave + 2);
-    expect(store.saved.get('ember-watch')!.tick).toBe(tickAtLeave);
+    expect(h.zone.currentTick).toBe(parkedTick + 2);
+    expect(store.saved.get('ember-watch')!.tick).toBe(parkedTick);
   });
 
   it('lets a player back inside the grace without reloading anything', async () => {
@@ -413,8 +433,10 @@ describe('hibernation', () => {
     const first = harness({ store });
     await first.zone.join('player-a');
     first.runTicks(12);
-    first.zone.leave(0);
-    await new Promise((resolve) => setTimeout(resolve, 5));
+    // Hibernated rather than emptied, to match the control exactly. A departure is a
+    // simulated event, so leaving here would compare a world that processed one against
+    // a world that did not — which is a question about `leave`, not about sleeping.
+    await first.zone.hibernate('empty');
 
     // A fresh zone object, as a woken zone always is — new realm, new process in
     // production. Same clock, so no time passed and `wake` has nothing to catch up on.

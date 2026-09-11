@@ -183,3 +183,28 @@ above rather than an inconsistency with it. A reason the client retried on would
 dial straight back into a seat it is about to lose again, once per backoff, for as long as
 the tab stayed open. Coming back is something the player does by playing, which mints a
 fresh ticket and rejoins the world — exactly what §6 says a reconnect is anyway.
+
+That last sentence is a claim about the shell, so the shell has to honour it. A client
+that reaches a final reason disposes itself, and a disposed one left installed in the
+bridge is worse than none at all: admission refuses to start because a client already
+exists, and every input goes to a socket that is never going to open again. So the bridge
+drops the link when it closes for good, and rebuilds it on the next input — but only when
+the reason was `idle`. That is the one final reason a player is expected to come back
+from, and playing is how they say so. `kicked` and `bad_ticket` are decisions about the
+player rather than about their attention; redialling those on a keypress would be a loop
+that spends a request per key for as long as the tab is open.
+
+The input that triggers the rebuild is itself lost, and that is not a gap to close later.
+An input is an intent about a moment (§5), and by the time a seat comes back the moment it
+referred to is gone — replaying it would act out a decision the player made about a world
+that has since moved on.
+
+### The departure that empties a zone
+
+A `leave` reaches the sim as an event on the next tick, like everything else. When the
+departing player was the last one, there is no next tick — the zone parks — so the
+departure is run on its own tick before the park snapshot is taken. Skipping it would
+write a world that still holds the actors of everyone who just left, and the wake would
+restore exactly the zombie this section exists to remove. A final departure therefore
+costs one tick that a mid-session departure does not; that asymmetry is the cost of there
+being no later tick to ride, not an inefficiency to optimise away.

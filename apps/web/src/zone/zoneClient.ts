@@ -46,6 +46,8 @@ export class ZoneClient {
   private readonly backoff: ReconnectBackoff = createReconnectBackoff();
   private retryTimer: number | null = null;
   private disposed = false;
+  // Why the host hung up for good, so `closed` can say so rather than just happening.
+  private finalReason: string | null = null;
 
   constructor(options: ZoneClientOptions) {
     this.options = options;
@@ -88,13 +90,14 @@ export class ZoneClient {
       if (!frame) return;
       if (frame.t === 'closed' && FINAL_REASONS.has(frame.reason)) {
         this.disposed = true;
+        this.finalReason = frame.reason;
       }
       this.options.onFrame(frame);
     };
 
     socket.onclose = () => {
       if (this.disposed) {
-        this.options.onStatus('closed');
+        this.options.onStatus('closed', this.finalReason ?? undefined);
         return;
       }
       this.scheduleRetry();
