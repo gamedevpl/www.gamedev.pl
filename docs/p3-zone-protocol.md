@@ -156,3 +156,55 @@ host is snapshotting and will accept the next dial.
 Inputs are dropped rather than queued while the socket is down. An input is an intent
 about a moment; a zone that replayed a second of buffered intents on reconnect would act
 out a plan the player abandoned while the screen was frozen.
+
+## 7. A seat is held by playing, not by connecting
+
+An open socket says nothing about whether anybody is at the keyboard, so a seat that has
+sent no accepted input for `IDLE_SEAT_MS` (three minutes) is retired: the host closes that
+one socket with the final reason `idle`, and the sim is told `leave` through the ordinary
+event stream, the same way it hears about anyone else departing.
+
+Three things go wrong without it, and the third is the one that pays for the mechanism.
+A seat is one of four to eight, so an absent player is a door locked against a present
+one. The entity holding it keeps being simulated as a live target, which is free kills for
+everyone still there. And **a zone cannot hibernate while a seat is held** — §3's "no
+sockets → hibernated zones → no instances" quietly meant "nobody _seated_", so one
+backgrounded tab billed an instance until Cloud Run's sixty-minute socket ceiling cut it
+off.
+
+Only what the declared vocabulary accepted counts as activity. A client one version behind
+its game, sending kinds the zone does not know, is not playing it — the sim never sees any
+of that — so it cannot hold a chair either. Time the zone spent asleep or stopped is never
+charged to anybody: there was no world to be idle in, and counting it would reap the whole
+roster on the next wake, starting with whoever's arrival did the waking.
+
+`idle` is final for the client, and that is the opposite of the `zone_full` reasoning
+above rather than an inconsistency with it. A reason the client retried on would have it
+dial straight back into a seat it is about to lose again, once per backoff, for as long as
+the tab stayed open. Coming back is something the player does by playing, which mints a
+fresh ticket and rejoins the world — exactly what §6 says a reconnect is anyway.
+
+That last sentence is a claim about the shell, so the shell has to honour it. A client
+that reaches a final reason disposes itself, and a disposed one left installed in the
+bridge is worse than none at all: admission refuses to start because a client already
+exists, and every input goes to a socket that is never going to open again. So the bridge
+drops the link when it closes for good, and rebuilds it on the next input — but only when
+the reason was `idle`. That is the one final reason a player is expected to come back
+from, and playing is how they say so. `kicked` and `bad_ticket` are decisions about the
+player rather than about their attention; redialling those on a keypress would be a loop
+that spends a request per key for as long as the tab is open.
+
+The input that triggers the rebuild is itself lost, and that is not a gap to close later.
+An input is an intent about a moment (§5), and by the time a seat comes back the moment it
+referred to is gone — replaying it would act out a decision the player made about a world
+that has since moved on.
+
+### The departure that empties a zone
+
+A `leave` reaches the sim as an event on the next tick, like everything else. When the
+departing player was the last one, there is no next tick — the zone parks — so the
+departure is run on its own tick before the park snapshot is taken. Skipping it would
+write a world that still holds the actors of everyone who just left, and the wake would
+restore exactly the zombie this section exists to remove. A final departure therefore
+costs one tick that a mid-session departure does not; that asymmetry is the cost of there
+being no later tick to ride, not an inefficiency to optimise away.
