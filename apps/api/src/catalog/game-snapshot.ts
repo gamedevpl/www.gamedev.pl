@@ -272,6 +272,19 @@ export function createGcsSnapshotStore(options: GcsSnapshotStoreOptions): GameSn
     });
   }
 
+  // Metadata only: a redirect must not point at nothing.
+  async function objectExists(name: string): Promise<boolean> {
+    const url = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(name)}?fields=name`;
+    return withReadDeadline(name, async (signal) => {
+      const response = await fetchImpl(url, { headers: await authHeaders(), signal });
+      if (response.status === 404) return false;
+      if (!response.ok) {
+        throw new Error(`snapshot probe of ${name} failed: ${response.status} ${await safeBodyText(response)}`);
+      }
+      return true;
+    });
+  }
+
   async function readJson<T>(name: string): Promise<T | null> {
     const body = await readObject(name);
     if (!body) return null;
@@ -355,7 +368,10 @@ export function createGcsSnapshotStore(options: GcsSnapshotStoreOptions): GameSn
       assertSafeMediaFilename(filename);
       const pointer = await this.getPointer();
       if (!pointer) return null;
-      return mediaObject(pointer.snapshotId, slug, filename, width);
+
+      // The variant may never have been baked.
+      const name = mediaObject(pointer.snapshotId, slug, filename, width);
+      return (await objectExists(name)) ? name : null;
     },
 
     async getMedia(slug, filename, width) {
