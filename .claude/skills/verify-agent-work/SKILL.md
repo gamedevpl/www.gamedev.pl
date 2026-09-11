@@ -112,6 +112,10 @@ Two concrete instances of that (observed 2026-07-23):
   edited dependency ranges in `package.json` without regenerating the lock — every local
   check green, CI dead on arrival at `npm ci` (EUSAGE). After ANY `package.json` edit,
   `npm install --package-lock-only` must produce a zero lockfile diff before committing.
+- **A security upgrade can exceed the repository's Node floor.** PR #1251 selected
+  Vitest 5, which requires Node 22.12+, while CI and the repo support Node 20.
+  Check the target package's `engines` before installing; npm only warns by default.
+  Vitest 4.1.11 fixes the same advisory and supports Node 20.
 - **Swapping a Vertex / Gemini model id is not a one-line default change.** Observed
   (#1007, 2026-08-25): `text-embedding-005` → `gemini-embedding-2` kept the legacy
   `:predict` URL and `{ instances: [{ content }] }` body. Google dropped `:predict` for
