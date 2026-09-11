@@ -17,7 +17,7 @@ import { typeCheckGame } from './type-check.js';
 import { remixClientPayload } from './remix-view.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { Store } from '../platform/store.js';
-import type { ContentChecker } from '../platform/moderation.js';
+import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
 import { peekQuota } from '../platform/quota-peek.js';
 import { assembleGameHtml } from '../platform/assemble.js';
@@ -1069,7 +1069,8 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
             uid: request.user?.uid,
             category: verdict.category,
           });
-          return reply.status(422).send({ error: 'content_rejected', category: verdict.category ?? 'other' });
+          const rejection = rejectionFor(verdict);
+          return reply.status(rejection.status).send({ error: rejection.error, category: rejection.category });
         }
       }
 

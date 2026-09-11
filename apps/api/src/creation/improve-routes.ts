@@ -5,7 +5,7 @@ import { MANAGED_UNAVAILABLE_ERROR } from '../platform/managed-builder-error.js'
 import type { GitHubClient } from '../catalog/github-client.js';
 import { storeCreatorPlaytestShot, storeCreatorReferenceImages } from '../platform/creator-media-store.js';
 import { formatPlaytestContextBlock } from '../platform/playtest-context.js';
-import type { ContentChecker } from '../platform/moderation.js';
+import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import { peekQuota } from '../platform/quota-peek.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
@@ -153,7 +153,8 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
           uid: request.user?.uid,
           category: moderation.category,
         });
-        return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
+        const rejection = rejectionFor(moderation);
+        return reply.status(rejection.status).send({ error: rejection.error, category: rejection.category });
       }
 
       const currentTime = now();

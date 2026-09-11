@@ -6,7 +6,7 @@ import { checkUserAccess } from '../platform/auth.js';
 import { cliSurfaceEnabled } from '../platform/cli-surface.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
-import type { ContentChecker } from '../platform/moderation.js';
+import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import { peekQuota } from '../platform/quota-peek.js';
 import type { Store } from '../platform/store.js';
 import { mintToken, verifyToken } from '../platform/submission-token.js';
@@ -132,7 +132,8 @@ export function registerCliChatRoutes(app: FastifyInstance, options: CliChatRout
       const moderation = await contentChecker.checkFields([text]);
       if (!moderation.allowed) {
         logModerationRejection(request.log, { surface: 'cli_chat', uid, category: moderation.category });
-        return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
+        const rejection = rejectionFor(moderation);
+        return reply.status(rejection.status).send({ error: rejection.error, category: rejection.category });
       }
 
       if (chatGate) {

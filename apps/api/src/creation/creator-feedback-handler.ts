@@ -7,7 +7,7 @@ import { cliSurfaceEnabled } from '../platform/cli-surface.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
 import { peekQuota } from '../platform/quota-peek.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
-import type { ContentChecker } from '../platform/moderation.js';
+import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { InvalidTokenError, verifyToken } from '../platform/submission-token.js';
@@ -157,7 +157,8 @@ export async function handleCreatorFeedback(
       uid: request.user?.uid,
       category: moderation.category,
     });
-    return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
+    const rejection = rejectionFor(moderation);
+    return reply.status(rejection.status).send({ error: rejection.error, category: rejection.category });
   }
 
   const record = store ? await store.getSubmission(jobId) : null;

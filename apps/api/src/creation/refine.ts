@@ -5,7 +5,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { checkUserAccess } from '../platform/auth.js';
 import { createVertexClient, type VertexGenerationConfig } from '../platform/genai.js';
-import type { ContentChecker } from '../platform/moderation.js';
+import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { BOT_UID_PREFIX, type Store } from '../platform/store.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
@@ -431,7 +431,8 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
         uid: request.user?.uid,
         category: moderation.category,
       });
-      return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
+      const rejection = rejectionFor(moderation);
+      return reply.status(rejection.status).send({ error: rejection.error, category: rejection.category });
     }
 
     // 3. Daily refine quota check

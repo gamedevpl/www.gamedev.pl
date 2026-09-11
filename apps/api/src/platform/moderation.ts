@@ -15,6 +15,22 @@ export type { RejectCategory } from './moderation-terms.js';
 export interface ModerationVerdict {
   allowed: boolean;
   category?: RejectCategory;
+  // Set when the checker could not decide; the text was never judged.
+  unavailable?: boolean;
+}
+
+export interface ModerationRejection {
+  status: 422 | 503;
+  error: 'content_rejected' | 'moderation_unavailable';
+  category: RejectCategory | 'other';
+}
+
+// One answer for a block, so outages never read as rejections.
+export function rejectionFor(verdict: ModerationVerdict): ModerationRejection {
+  if (verdict.unavailable) {
+    return { status: 503, error: 'moderation_unavailable', category: verdict.category ?? 'other' };
+  }
+  return { status: 422, error: 'content_rejected', category: verdict.category ?? 'other' };
 }
 
 export interface ContentChecker {
@@ -137,8 +153,8 @@ const VerdictSchema = z.object({
   category: z.string().nullish(),
 });
 
-// 10s budget prevents fail-closed aborts on Gemini thinking.
-export const DEFAULT_MODERATION_TIMEOUT_MS = 10_000;
+// 20s: healthy refine measured 12.3-12.7s, so 10s clipped ordinary latency.
+export const DEFAULT_MODERATION_TIMEOUT_MS = 20_000;
 
 export class VertexChecker implements ContentChecker {
   private options: VertexCheckerOptions;
@@ -233,7 +249,7 @@ export class VertexChecker implements ContentChecker {
     } catch (err) {
       // Fail closed, never cached: describes Vertex, not the text.
       console.warn('Vertex AI moderation failed or timed out, failing closed:', err);
-      return { allowed: false, category: 'other' };
+      return { allowed: false, category: 'other', unavailable: true };
     }
   }
 
