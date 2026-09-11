@@ -14,43 +14,43 @@ export function byNewestFirst(a: { createdAt: string; id: string }, b: { created
 export interface BuildLogStore {
   // Appends a progress event. Returns it with its assigned id and timestamp.
   appendBuildEvent(
-    issueNumber: number,
+    jobId: number,
     event: Omit<BuildEvent, 'id' | 'createdAt'> & { createdAt?: string },
     options?: { preserveEnded?: boolean },
   ): Promise<BuildEvent>;
 
   // Refreshes lastAgentSignalAt without a chat event (MCP presence heartbeats).
   touchLastAgentSignalAt(
-    issueNumber: number,
+    jobId: number,
     at?: string,
     presence?: { key: string },
     options?: { preserveEnded?: boolean },
   ): Promise<void>;
 
   // Marks the agent finished iterating this round (MCP `end`). Idempotent.
-  markAgentEnded(issueNumber: number, at?: string, by?: AgentEndedBy): Promise<void>;
+  markAgentEnded(jobId: number, at?: string, by?: AgentEndedBy): Promise<void>;
 
   // Agent progress events for a build, newest first.
-  listBuildEvents(issueNumber: number, opts?: { limit?: number }): Promise<BuildEvent[]>;
+  listBuildEvents(jobId: number, opts?: { limit?: number }): Promise<BuildEvent[]>;
 
   // How many events a build has recorded -- bounds a runaway agent.
-  countBuildEvents(issueNumber: number): Promise<number>;
+  countBuildEvents(jobId: number): Promise<number>;
 
   // Queues a creator change request; `delivered` skips the inbox.
   appendCreatorMessage(
-    issueNumber: number,
+    jobId: number,
     text: string,
     opts?: { origin?: CreatorMessageOrigin; delivered?: boolean; textLocalized?: string; locale?: string },
   ): Promise<CreatorMessage>;
 
   // Undelivered messages, oldest first -- the agent's inbox. Never a 'studio' row.
-  listPendingCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
+  listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
 
   // Every creator message on a build, delivered or not, oldest first.
-  listCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
+  listCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
 
   // Marks messages collected, so the agent isn't handed them twice.
-  markCreatorMessagesDelivered(issueNumber: number, ids: string[]): Promise<void>;
+  markCreatorMessagesDelivered(jobId: number, ids: string[]): Promise<void>;
 }
 
 export class InMemoryBuildLogStore implements BuildLogStore {
@@ -60,15 +60,15 @@ export class InMemoryBuildLogStore implements BuildLogStore {
   constructor(private submissions: Map<number, SubmissionRecord>) {}
 
   async appendBuildEvent(
-    issueNumber: number,
+    jobId: number,
     event: Omit<BuildEvent, 'id' | 'createdAt'> & { createdAt?: string },
     options?: { preserveEnded?: boolean },
   ): Promise<BuildEvent> {
     const record: BuildEvent = { ...event, id: randomUUID(), createdAt: event.createdAt ?? new Date().toISOString() };
-    const existing = this.buildEvents.get(issueNumber) ?? [];
+    const existing = this.buildEvents.get(jobId) ?? [];
     existing.push(record);
-    this.buildEvents.set(issueNumber, existing);
-    const submission = this.submissions.get(issueNumber);
+    this.buildEvents.set(jobId, existing);
+    const submission = this.submissions.get(jobId);
     if (submission) {
       const next: SubmissionRecord = { ...submission, lastAgentSignalAt: record.createdAt };
       // A real chat row supersedes the ambient thought flash.
@@ -78,18 +78,18 @@ export class InMemoryBuildLogStore implements BuildLogStore {
         delete next.agentEndedAt;
         delete next.agentEndedBy;
       }
-      this.submissions.set(issueNumber, next);
+      this.submissions.set(jobId, next);
     }
     return { ...record };
   }
 
   async touchLastAgentSignalAt(
-    issueNumber: number,
+    jobId: number,
     at?: string,
     presence?: { key: string },
     options?: { preserveEnded?: boolean },
   ): Promise<void> {
-    const submission = this.submissions.get(issueNumber);
+    const submission = this.submissions.get(jobId);
     if (!submission) return;
     const stamped = at ?? new Date().toISOString();
     const next: SubmissionRecord = {
@@ -101,32 +101,32 @@ export class InMemoryBuildLogStore implements BuildLogStore {
       delete next.agentEndedAt;
       delete next.agentEndedBy;
     }
-    this.submissions.set(issueNumber, next);
+    this.submissions.set(jobId, next);
   }
 
-  async markAgentEnded(issueNumber: number, at?: string, by: AgentEndedBy = 'end'): Promise<void> {
-    const submission = this.submissions.get(issueNumber);
+  async markAgentEnded(jobId: number, at?: string, by: AgentEndedBy = 'end'): Promise<void> {
+    const submission = this.submissions.get(jobId);
     if (!submission) return;
-    this.submissions.set(issueNumber, {
+    this.submissions.set(jobId, {
       ...submission,
       agentEndedAt: at ?? new Date().toISOString(),
       agentEndedBy: by,
     });
   }
 
-  async listBuildEvents(issueNumber: number, opts?: { limit?: number }): Promise<BuildEvent[]> {
-    return [...(this.buildEvents.get(issueNumber) ?? [])]
+  async listBuildEvents(jobId: number, opts?: { limit?: number }): Promise<BuildEvent[]> {
+    return [...(this.buildEvents.get(jobId) ?? [])]
       .sort(byNewestFirst)
       .slice(0, opts?.limit ?? 20)
       .map((event) => ({ ...event }));
   }
 
-  async countBuildEvents(issueNumber: number): Promise<number> {
-    return this.buildEvents.get(issueNumber)?.length ?? 0;
+  async countBuildEvents(jobId: number): Promise<number> {
+    return this.buildEvents.get(jobId)?.length ?? 0;
   }
 
   async appendCreatorMessage(
-    issueNumber: number,
+    jobId: number,
     text: string,
     opts?: { origin?: CreatorMessageOrigin; delivered?: boolean; textLocalized?: string; locale?: string },
   ): Promise<CreatorMessage> {
@@ -139,35 +139,35 @@ export class InMemoryBuildLogStore implements BuildLogStore {
       ...(opts?.origin === 'agent' || isStudioOrigin(opts?.origin) ? { origin: opts?.origin } : {}),
       ...(opts?.textLocalized && opts?.locale ? { textLocalized: opts.textLocalized, locale: opts.locale } : {}),
     };
-    const existing = this.creatorMessages.get(issueNumber) ?? [];
+    const existing = this.creatorMessages.get(jobId) ?? [];
     existing.push(record);
-    this.creatorMessages.set(issueNumber, existing);
+    this.creatorMessages.set(jobId, existing);
     return { ...record };
   }
 
-  async listPendingCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
-    return (this.creatorMessages.get(issueNumber) ?? [])
+  async listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
+    return (this.creatorMessages.get(jobId) ?? [])
       .filter((message) => !message.deliveredAt && !isStudioOrigin(message.origin))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
       .slice(0, opts?.limit ?? 10)
       .map((message) => ({ ...message }));
   }
 
-  async listCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
+  async listCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
     // No id tie-break -- a stable sort keeps same-millisecond append order.
-    return [...(this.creatorMessages.get(issueNumber) ?? [])]
+    return [...(this.creatorMessages.get(jobId) ?? [])]
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       .slice(-(opts?.limit ?? 20))
       .map((message) => ({ ...message }));
   }
 
-  async markCreatorMessagesDelivered(issueNumber: number, ids: string[]): Promise<void> {
-    const existing = this.creatorMessages.get(issueNumber);
+  async markCreatorMessagesDelivered(jobId: number, ids: string[]): Promise<void> {
+    const existing = this.creatorMessages.get(jobId);
     if (!existing || ids.length === 0) return;
     const at = new Date().toISOString();
     const targets = new Set(ids);
     this.creatorMessages.set(
-      issueNumber,
+      jobId,
       existing.map((message) =>
         targets.has(message.id) && !message.deliveredAt ? { ...message, deliveredAt: at } : message,
       ),
@@ -178,29 +178,29 @@ export class InMemoryBuildLogStore implements BuildLogStore {
 export class FirestoreBuildLogStore implements BuildLogStore {
   constructor(private db: Firestore) {}
 
-  private submissionRef(issueNumber: number) {
-    return this.db.collection('submissions').doc(String(issueNumber));
+  private submissionRef(jobId: number) {
+    return this.db.collection('submissions').doc(String(jobId));
   }
 
-  private eventsCollection(issueNumber: number) {
-    return this.submissionRef(issueNumber).collection('events');
+  private eventsCollection(jobId: number) {
+    return this.submissionRef(jobId).collection('events');
   }
 
-  private messagesCollection(issueNumber: number) {
-    return this.submissionRef(issueNumber).collection('messages');
+  private messagesCollection(jobId: number) {
+    return this.submissionRef(jobId).collection('messages');
   }
 
   async appendBuildEvent(
-    issueNumber: number,
+    jobId: number,
     event: Omit<BuildEvent, 'id' | 'createdAt'> & { createdAt?: string },
     options?: { preserveEnded?: boolean },
   ): Promise<BuildEvent> {
     const record: BuildEvent = { ...event, id: randomUUID(), createdAt: event.createdAt ?? new Date().toISOString() };
     // Firestore rejects undefined values; optional fields are simply absent instead.
     const document = Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
-    await this.eventsCollection(issueNumber).doc(record.id).set(document);
+    await this.eventsCollection(jobId).doc(record.id).set(document);
     // Denormalized onto the parent -- lets the operator queue judge silence cheaply.
-    await this.submissionRef(issueNumber).set(
+    await this.submissionRef(jobId).set(
       {
         lastAgentSignalAt: record.createdAt,
         // A real chat row supersedes the ambient thought flash.
@@ -214,13 +214,13 @@ export class FirestoreBuildLogStore implements BuildLogStore {
   }
 
   async touchLastAgentSignalAt(
-    issueNumber: number,
+    jobId: number,
     at?: string,
     presence?: { key: string },
     options?: { preserveEnded?: boolean },
   ): Promise<void> {
     const stamped = at ?? new Date().toISOString();
-    await this.submissionRef(issueNumber).set(
+    await this.submissionRef(jobId).set(
       {
         lastAgentSignalAt: stamped,
         ...(options?.preserveEnded ? {} : { agentEndedAt: FieldValue.delete(), agentEndedBy: FieldValue.delete() }),
@@ -230,28 +230,28 @@ export class FirestoreBuildLogStore implements BuildLogStore {
     );
   }
 
-  async markAgentEnded(issueNumber: number, at?: string, by: AgentEndedBy = 'end'): Promise<void> {
-    await this.submissionRef(issueNumber).set(
+  async markAgentEnded(jobId: number, at?: string, by: AgentEndedBy = 'end'): Promise<void> {
+    await this.submissionRef(jobId).set(
       { agentEndedAt: at ?? new Date().toISOString(), agentEndedBy: by },
       { merge: true },
     );
   }
 
-  async listBuildEvents(issueNumber: number, opts?: { limit?: number }): Promise<BuildEvent[]> {
-    const snap = await this.eventsCollection(issueNumber)
+  async listBuildEvents(jobId: number, opts?: { limit?: number }): Promise<BuildEvent[]> {
+    const snap = await this.eventsCollection(jobId)
       .orderBy('createdAt', 'desc')
       .limit(opts?.limit ?? 20)
       .get();
     return snap.docs.map((doc) => doc.data() as BuildEvent).sort(byNewestFirst);
   }
 
-  async countBuildEvents(issueNumber: number): Promise<number> {
-    const snap = await this.eventsCollection(issueNumber).count().get();
+  async countBuildEvents(jobId: number): Promise<number> {
+    const snap = await this.eventsCollection(jobId).count().get();
     return snap.data().count;
   }
 
   async appendCreatorMessage(
-    issueNumber: number,
+    jobId: number,
     text: string,
     opts?: { origin?: CreatorMessageOrigin; delivered?: boolean; textLocalized?: string; locale?: string },
   ): Promise<CreatorMessage> {
@@ -265,13 +265,13 @@ export class FirestoreBuildLogStore implements BuildLogStore {
       ...(opts?.origin === 'agent' || isStudioOrigin(opts?.origin) ? { origin: opts?.origin } : {}),
       ...(opts?.textLocalized && opts?.locale ? { textLocalized: opts.textLocalized, locale: opts.locale } : {}),
     };
-    await this.messagesCollection(issueNumber).doc(record.id).set(record);
+    await this.messagesCollection(jobId).doc(record.id).set(record);
     return record;
   }
 
-  async listPendingCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
+  async listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
     // Filtered/sorted here, not by index -- the set is tiny.
-    const snap = await this.messagesCollection(issueNumber).where('deliveredAt', '==', null).get();
+    const snap = await this.messagesCollection(jobId).where('deliveredAt', '==', null).get();
     return snap.docs
       .map((doc) => doc.data() as CreatorMessage)
       .filter((message) => !isStudioOrigin(message.origin))
@@ -279,19 +279,19 @@ export class FirestoreBuildLogStore implements BuildLogStore {
       .slice(0, opts?.limit ?? 10);
   }
 
-  async listCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
+  async listCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
     // Slices the newest `limit` off an oldest-first sort, matching InMemory.
-    const snap = await this.messagesCollection(issueNumber).get();
+    const snap = await this.messagesCollection(jobId).get();
     return snap.docs
       .map((doc) => doc.data() as CreatorMessage)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
       .slice(-(opts?.limit ?? 20));
   }
 
-  async markCreatorMessagesDelivered(issueNumber: number, ids: string[]): Promise<void> {
+  async markCreatorMessagesDelivered(jobId: number, ids: string[]): Promise<void> {
     if (ids.length === 0) return;
     const at = new Date().toISOString();
-    const collection = this.messagesCollection(issueNumber);
+    const collection = this.messagesCollection(jobId);
     // A merge-set on a missing doc creates a phantom row.
     const refs = ids.map((id) => collection.doc(id));
     const snaps = await this.db.getAll(...refs);

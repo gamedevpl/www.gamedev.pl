@@ -341,7 +341,7 @@ describe('InMemoryStore', () => {
     expect(await store.getSubmission(42)).toBeNull();
 
     const created = await store.createSubmission(42, 'g:123', 'My Game');
-    expect(created.issueNumber).toBe(42);
+    expect(created.jobId).toBe(42);
     expect(created.ownerUid).toBe('g:123');
 
     const fetched = await store.getSubmission(42);
@@ -510,7 +510,7 @@ describe('InMemoryStore', () => {
 
     const queued = await store.listQueuedSubmissions();
 
-    expect(queued.map((s) => s.issueNumber)).toEqual([1]);
+    expect(queued.map((s) => s.jobId)).toEqual([1]);
   });
 
   it('claims a job stuck queued exactly once', async () => {

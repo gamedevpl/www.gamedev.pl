@@ -28,6 +28,7 @@ For coding agents (GitHub Copilot, Claude Code, Codex) and humans picking up wor
 ```
 apps/
   web/       Vite + React + TS frontend (prompt form + game player)
+  cli/       `gamedevpl` terminal client (`/connect` on the site)
   api/       Fastify + TS backend (catalog, jobs, agent channel, MCP)
   world/     Zone host (authoritative sims)
 packages/
@@ -120,6 +121,13 @@ never be committed or pasted into a game, an issue, or a PR description. Full gu
   untrusted seam.
 - **Prettier** formats everything; don't hand-format against it.
 
+## Product language
+
+The public list of published games is the **catalog**. Do not call it an "arcade" in
+user-facing copy, legal text, emails, or docs — that nickname made gamedev.pl sound like a
+genre, not a place. `arcade` / `arcade_racing` is one shelf among others. Component and CSS
+names may still say arcade; leave those unless you are already in the file.
+
 ## The one safety rule you must not break
 
 Generated games run **only** inside a sandboxed iframe with `sandbox="allow-scripts allow-pointer-lock"` and
@@ -138,7 +146,7 @@ see `genaicode.config.ts` (its `lintCommand` is `npm run type-check && npm run l
 **Two different things share the name.** `genaicode.config.ts` configures the legacy **1.x
 coding agent** (`npx genaicode@1`). **GenAIcode 2.x is a backend LLM toolkit**, not an agent,
 and is a runtime dependency of `@gamedevpl/api`: every Vertex AI call goes through
-[`apps/api/src/agent-surface/genai.ts`](../apps/api/src/agent-surface/genai.ts). Add LLM call sites there rather than
+[`apps/api/src/platform/genai.ts`](../apps/api/src/platform/genai.ts). Add LLM call sites there rather than
 hand-rolling `GoogleAuth` + REST against `*-aiplatform.googleapis.com`.
 
 ## Removed approaches

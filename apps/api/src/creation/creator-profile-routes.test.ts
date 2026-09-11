@@ -203,6 +203,7 @@ describe('creator profile routes', () => {
       saves: null,
       world: null,
       sensing: null,
+      editor: null,
       orientation: 'any',
       submittedBy: null,
     };

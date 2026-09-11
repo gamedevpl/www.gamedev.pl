@@ -1,19 +1,18 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { generateAccessToken } from './access-token.js';
-import { MAX_TOKENS_PER_UID } from './access-token-service.js';
+import { DEFAULT_EXPIRY_DAYS, MAX_TOKENS_PER_UID, mintAccessTokenFor } from './access-token-service.js';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { InMemoryStore } from './store.js';
 
-/**
- * Every test here drives the **fully assembled app** (`buildApp`), never the route
- * plugin alone. That is deliberate: this repo has a cross-cutting private-beta wall
- * that lives in `app.ts`, and a previous route shipped green unit tests while the wall
- * 401'd it in production. A credential whose entire purpose is getting through that
- * wall has to be tested against it.
- */
+// Every test drives the fully assembled app, never the route plugin.
+
+// The private beta wall once 401'd a route with green tests.
+
+// A credential for getting through that wall must be tested against it.
 
 const sessionSecret = 'dev-session-secret-change-me';
+const HOUR = 60 * 60 * 1000;
 
 function sessionHeaders(uid: string) {
   return { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, sessionSecret)}` };
@@ -23,8 +22,15 @@ function bearer(token: string) {
   return { authorization: `Bearer ${token}` };
 }
 
-function appWith(store: InMemoryStore, extra: { betaAllowedUids?: string } = {}) {
-  return buildApp({ store, sessionSecret, adminUids: 'g:boss', ...extra });
+function appWith(store: InMemoryStore, extra: { betaAllowedUids?: string; now?: () => number } = {}) {
+  const { now, ...rest } = extra;
+  return buildApp({
+    store,
+    sessionSecret,
+    adminUids: 'g:boss',
+    ...rest,
+    ...(now ? { accessTokenRoutes: { now } } : {}),
+  });
 }
 
 async function mintFor(app: Awaited<ReturnType<typeof buildApp>>, uid: string, name = 'agent vm') {
@@ -290,6 +296,85 @@ describe('authenticating with a personal access token', () => {
     expect(res.statusCode).toBe(401);
   });
 
+  it('reports its own remaining lifetime to the holder', async () => {
+    // One clock, sampled once, for both the mint and the read. The day count is
+    // floored, so two wall-clock readings straddle a day boundary or not depending on
+    // how slowly the suite happens to run. A real instant, because the token still has
+    // to resolve as unexpired against the wall clock.
+    const nowMs = Date.now();
+    const app = await appWith(store, { now: () => nowMs });
+    const { token } = (await mintFor(app, 'bot:ci', 'github actions')).json();
+
+    const res = await app.inject({ method: 'GET', url: '/api/auth/token-info', headers: bearer(token) });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().name).toBe('github actions');
+    expect(res.json().expiresInDays).toBe(DEFAULT_EXPIRY_DAYS);
+    // The date has to be readable, not just the day count.
+    expect(Date.parse(res.json().expiresAt)).toBeGreaterThan(nowMs);
+  });
+
+  // Minted off-clock, so the remainder is real.
+  it.each([
+    [12 * HOUR, 7],
+    [-12 * HOUR, 6],
+  ])('floors the day count rather than rounding it (offset %i)', async (offsetMs, expected) => {
+    const app = await appWith(store);
+    const { token } = await mintAccessTokenFor(store, {
+      uid: 'bot:ci',
+      name: 'clock probe',
+      createdByUid: 'g:boss',
+      expiresInDays: 7,
+      nowMs: Date.now() + offsetMs,
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/api/auth/token-info', headers: bearer(token) });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().expiresInDays).toBe(expected);
+  });
+
+  it('never leaks credential material through token-info', async () => {
+    const app = await appWith(store);
+    const { token } = (await mintFor(app, 'bot:ci')).json();
+
+    const res = await app.inject({ method: 'GET', url: '/api/auth/token-info', headers: bearer(token) });
+    const body = JSON.stringify(res.json());
+    expect(body).not.toContain('secretHash');
+    expect(body).not.toContain('tokenId');
+    expect(body).not.toContain(token);
+  });
+
+  it('refuses token-info to a browser session, which holds no token', async () => {
+    // Kept off the User object; a cookie must not reach it.
+    const app = await appWith(store);
+
+    const res = await app.inject({ method: 'GET', url: '/api/auth/token-info', headers: sessionHeaders('g:boss') });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it.each([
+    ['an expired token', -1],
+    ['a revoked token', 0],
+  ])('answers token-info with a bare 401 for %s', async (label, _marker) => {
+    const { token, tokenId, secretHash } = generateAccessToken();
+    await store.upsertUser({ uid: 'bot:ci' });
+    await store.createAccessToken({
+      tokenId,
+      uid: 'bot:ci',
+      secretHash,
+      name: 'stale',
+      createdAt: new Date(Date.now() - 200 * 86_400_000).toISOString(),
+      expiresAt: new Date(Date.now() - 86_400_000).toISOString(),
+      createdByUid: 'g:boss',
+    });
+    const app = await appWith(store);
+    if (label === 'a revoked token') await store.deleteAccessToken(tokenId);
+
+    const res = await app.inject({ method: 'GET', url: '/api/auth/token-info', headers: bearer(token) });
+    // Same answer for both: a stolen token learns nothing.
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ error: 'unauthenticated' });
+  });
+
   it('prefers a browser session over a token when both are present', async () => {
     const app = await appWith(store);
     const { token } = (await mintFor(app, 'bot:e2e')).json();
@@ -301,6 +386,27 @@ describe('authenticating with a personal access token', () => {
     });
 
     expect(res.json().user.uid).toBe('g:boss');
+  });
+
+  // A replacement session must be the only session cookie on the response.
+  it('issues exactly one session cookie when the exchange replaces a session', async () => {
+    const app = await appWith(store, { betaAllowedUids: 'g:boss' });
+    const { token } = (await mintFor(app, 'bot:e2e')).json();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/session',
+      headers: {
+        ...bearer(token),
+        cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:boss', sessionSecret)}`,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().user.uid).toBe('bot:e2e');
+
+    const issued = res.cookies.filter((entry) => entry.name === SESSION_COOKIE_NAME);
+    expect(issued).toHaveLength(1);
   });
 
   it('exchanges for a session cookie so a real browser can be driven', async () => {

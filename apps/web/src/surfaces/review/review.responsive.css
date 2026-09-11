@@ -1,0 +1,49 @@
+/* Phone overrides for the review desk shell; loads after review.css to win the cascade. */
+
+@media (max-width: 640px) {
+  .app:has(.review-desk) > .content {
+    padding: 8px 12px 0;
+  }
+
+  .review-desk {
+    padding-top: 0.35rem;
+    gap: 0.55rem;
+  }
+
+  .review-desk-title {
+    font-size: 1.2rem;
+  }
+
+  .review-card-meta {
+    padding: 0.65rem 0.75rem 0.35rem;
+  }
+
+  /* Preview stays compact; the dock owns the verdicts. Live play grows. */
+  .review-card-stage:not(.is-playing) {
+    aspect-ratio: 16 / 10;
+    max-height: min(38dvh, 260px);
+  }
+
+  .review-card-stage.is-playing {
+    min-height: min(46dvh, 340px);
+  }
+
+  .review-scroll {
+    min-height: min(28dvh, 160px);
+  }
+
+  .review-dock {
+    margin: 0 -12px;
+    padding: 0.55rem 12px 0.65rem;
+    max-height: min(52dvh, 380px);
+  }
+
+  .review-note-label {
+    font-size: 0.78rem;
+  }
+
+  .review-action {
+    padding: 0.7rem 0.3rem;
+    font-size: 0.92rem;
+  }
+}

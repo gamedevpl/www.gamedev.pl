@@ -1,0 +1,121 @@
+/* Status view build timeline (SubmissionStatusView.tsx). */
+
+.status-timeline {
+  display: flex;
+  list-style: none;
+  margin: 18px 0 20px;
+  padding: 0;
+}
+
+.status-timeline-step {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.status-timeline-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 15px;
+  left: 50%;
+  width: 100%;
+  height: 2px;
+  background: rgba(148, 163, 184, 0.25);
+  z-index: 0;
+}
+
+.status-timeline-done:not(:last-child)::after {
+  background: var(--turquoise);
+}
+
+.status-timeline-dot {
+  position: relative;
+  z-index: 1;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 6px;
+  border-radius: 50%;
+  border: 2px solid rgba(148, 163, 184, 0.3);
+  background: var(--panel-card);
+  font-size: 0.85rem;
+}
+
+.status-timeline-done .status-timeline-dot {
+  border-color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.15);
+  color: var(--turquoise);
+}
+
+.status-timeline-active .status-timeline-dot {
+  border-color: var(--accent-blue);
+  background: rgba(56, 189, 248, 0.18);
+  animation: timeline-pulse 1.8s ease-in-out infinite;
+}
+
+.status-timeline-upcoming .status-timeline-dot {
+  opacity: 0.5;
+}
+
+.status-timeline-label {
+  max-width: 84px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.status-timeline-active .status-timeline-label {
+  color: var(--text);
+  font-weight: 700;
+}
+
+@keyframes timeline-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(56, 189, 248, 0);
+  }
+}
+
+.status-timeline-halted {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 20px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: rgba(255, 107, 107, 0.08);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+}
+
+.status-timeline-halted-icon {
+  font-size: 1.3rem;
+}
+
+.status-timeline-halted-label {
+  color: var(--error);
+  font-weight: 700;
+}
+
+@media (max-width: 768px) {
+  .status-timeline-dot {
+    width: 24px;
+    height: 24px;
+    font-size: 0.7rem;
+  }
+
+  .status-timeline-step:not(:last-child)::after {
+    top: 12px;
+  }
+
+  .status-timeline-label {
+    font-size: 0.6rem;
+    max-width: 60px;
+  }
+}

@@ -1,6 +1,7 @@
 import type { BuilderKind } from './builderKind.js';
 import { isBuilderKind } from './builderKind.js';
 import type { QAQuestion } from './CreatorQA.js';
+import { readStorageJSON, removeStorageItem, writeStorageJSON } from './core/persistence.js';
 
 /**
  * The clarifying-questions session, parked in localStorage.
@@ -44,50 +45,37 @@ const STORAGE_KEY = 'gamedev_pending_qa';
 const MAX_AGE_MS = 24 * 60 * 60_000;
 
 export function loadPendingQa(): PendingQaSession | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as PendingQaSession;
-    // An empty question list is a real session now, not a corrupt one: the confirm
-    // panel opens for every concept so the game can be named, and a clean concept
-    // reaches it with nothing to clarify. The concept is what makes a session
-    // meaningful; the title may legitimately be blank while the creator picks one.
-    if (
-      !parsed?.spec?.concept ||
-      !Array.isArray(parsed.questions) ||
-      typeof parsed.savedAt !== 'number' ||
-      Date.now() - parsed.savedAt > MAX_AGE_MS
-    ) {
-      clearPendingQa();
-      return null;
-    }
-    return {
-      ...parsed,
-      // displayName is optional to the creator, so tolerate its absence in older blobs.
-      spec: { ...parsed.spec, title: parsed.spec.title ?? '', displayName: parsed.spec.displayName ?? '' },
-      answers: { selected: parsed.answers?.selected ?? {}, custom: parsed.answers?.custom ?? {} },
-      ...(typeof parsed.locale === 'string' && parsed.locale ? { locale: parsed.locale } : {}),
-      ...(isBuilderKind(parsed.builder) ? { builder: parsed.builder } : {}),
-    };
-  } catch {
-    // Corrupt or unreadable (private mode, disabled storage): start clean rather than
-    // letting a bad blob wedge the creation flow on every load.
+  // Corrupt or unreadable (private mode, disabled storage): readStorageJSON returns
+  // null, and starting clean beats wedging the creation flow on every load.
+  const parsed = readStorageJSON<PendingQaSession>(STORAGE_KEY);
+  if (!parsed) return null;
+  // An empty question list is a real session now, not a corrupt one: the confirm
+  // panel opens for every concept so the game can be named, and a clean concept
+  // reaches it with nothing to clarify. The concept is what makes a session
+  // meaningful; the title may legitimately be blank while the creator picks one.
+  if (
+    !parsed?.spec?.concept ||
+    !Array.isArray(parsed.questions) ||
+    typeof parsed.savedAt !== 'number' ||
+    Date.now() - parsed.savedAt > MAX_AGE_MS
+  ) {
+    clearPendingQa();
     return null;
   }
+  return {
+    ...parsed,
+    // displayName is optional to the creator, so tolerate its absence in older blobs.
+    spec: { ...parsed.spec, title: parsed.spec.title ?? '', displayName: parsed.spec.displayName ?? '' },
+    answers: { selected: parsed.answers?.selected ?? {}, custom: parsed.answers?.custom ?? {} },
+    ...(typeof parsed.locale === 'string' && parsed.locale ? { locale: parsed.locale } : {}),
+    ...(isBuilderKind(parsed.builder) ? { builder: parsed.builder } : {}),
+  };
 }
 
 export function savePendingQa(session: Omit<PendingQaSession, 'savedAt'>): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...session, savedAt: Date.now() }));
-  } catch {
-    // Storage full or blocked — persistence is a convenience, never a precondition.
-  }
+  writeStorageJSON(STORAGE_KEY, { ...session, savedAt: Date.now() });
 }
 
 export function clearPendingQa(): void {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // ignore
-  }
+  removeStorageItem(STORAGE_KEY);
 }

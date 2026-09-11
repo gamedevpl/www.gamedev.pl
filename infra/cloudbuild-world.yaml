@@ -1,3 +1,4 @@
+# Hand-run path only: the deploy workflow builds this image on the GitHub runner.
 # Builds the gamedev-world zone host image from the repo root using apps/world/Dockerfile
 # and pushes it to Artifact Registry. Invoked by infra/deploy-world.sh.
 #

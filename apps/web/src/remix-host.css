@@ -1,0 +1,202 @@
+/* Remix host chrome: the published-game frame that carries the panel (PublishedGameFrame.tsx). */
+
+/*
+ * `display: contents` on purpose: the frame must stay exactly where it was in
+ * the theater's layout, so the wrapper contributes no box of its own and the
+ * remix UI overlays the viewport instead of resizing it.
+ */
+.remix-host {
+  display: contents;
+}
+
+/*
+ * Transparent while the remix sheet overlays the theater so the iframe still
+ * participates in `.game-viewport-container`'s flex fill. Editor-stage CSS
+ * below turns this into a real box so the frame can PiP without remounting.
+ */
+.remix-host .remix-game-slot {
+  display: contents;
+}
+
+.remix-host .remix-panel {
+  position: absolute;
+  z-index: 4;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  max-height: 60%;
+  overflow-y: auto;
+}
+
+/*
+ * After the second landing the sheet docks as a mini chat: taller, with its
+ * own scroller for the transcript so the composer stays pinned at the bottom.
+ * Written once outside media queries — phone and desktop share the shape;
+ * only the dock edge differs at 720px.
+ */
+.remix-host .remix-panel.is-chat {
+  max-height: min(78%, calc(100% - 16px));
+  overflow: hidden;
+  gap: 10px;
+}
+
+.remix-transcript {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 72px;
+  max-height: 40vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.remix-panel.is-chat .remix-transcript {
+  max-height: none;
+}
+
+.remix-bubble {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  max-width: 92%;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.remix-bubble.is-user {
+  align-self: flex-end;
+  background: var(--panel-card, #1a2430);
+  border: 1px solid var(--panel-border, #2b333f);
+  color: var(--text);
+}
+
+.remix-bubble.is-assistant {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted);
+  padding-left: 2px;
+}
+
+.remix-bubble.is-miss {
+  color: var(--text);
+  border-color: var(--panel-border, #2b333f);
+}
+
+.remix-bubble.is-pending {
+  font-style: italic;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 100%;
+}
+
+.remix-bubble.is-pending .remix-bar {
+  width: 100%;
+}
+
+.remix-bubble-text {
+  display: block;
+}
+
+.remix-bubble-undo {
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.remix-bubble-undo:hover,
+.remix-bubble-undo:focus-visible {
+  color: var(--text);
+}
+
+.remix-bubble-undo:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--accent, #62dcff);
+  outline-offset: 2px;
+}
+
+.remix-bubble-undo:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.remix-bubble-undo.is-urgent {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.remix-host .remix-panel.is-collapsed {
+  max-height: none;
+  padding: 8px 12px 10px;
+  gap: 4px;
+}
+
+.remix-collapsed-hit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 4px 2px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.remix-collapsed-hit .remix-title {
+  flex: 1 1 auto;
+}
+
+.remix-collapsed-hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 70%;
+}
+
+.remix-collapsed-hit:focus-visible {
+  border-radius: 8px;
+  outline: 2px solid var(--accent, #62dcff);
+  outline-offset: 2px;
+}
+
+@media (min-width: 720px) {
+  .remix-host .remix-panel {
+    left: auto;
+    width: 320px;
+  }
+
+  .remix-host .remix-panel.is-chat {
+    top: 8px;
+    bottom: 8px;
+    max-height: none;
+    width: 300px;
+  }
+
+  .remix-host .remix-panel.is-collapsed {
+    top: auto;
+    bottom: 8px;
+    width: 220px;
+  }
+}

@@ -70,6 +70,9 @@ export interface BuildMediaItem {
   createdAt?: string;
 }
 
+// Provisional: 'seed' predates the agent, 'staged' is a tree mid-upload.
+export type BuildPlayableOrigin = 'seed' | 'staged' | 'candidate';
+
 // One playable build, pushed before any commit exists.
 export interface BuildPlayableItem {
   ref: string;
@@ -77,6 +80,8 @@ export interface BuildPlayableItem {
   // Agent-authored caption, in the reader's language when supplied.
   label?: string;
   createdAt?: string;
+  // Absent means the agent pushed this itself.
+  origin?: BuildPlayableOrigin;
 }
 
 // One row inside a prior round's collapsed history block.
@@ -122,7 +127,7 @@ export interface RecentBuild {
   // Number of source files in this build.
   fileCount?: number;
   // Producing job, used to attach the changelog.
-  issueNumber?: number;
+  jobId?: number;
 }
 
 // Whether platform can be picked now; absent means no opinion.
@@ -134,10 +139,12 @@ export interface SubmissionStatusResponseBase {
   // Finer than status; absent for GitHub-derived submissions.
   phase?: JobState;
   // This round's own job id, distinct from slug-scoped `recentBuilds[0]`.
-  issueNumber?: number;
+  jobId?: number;
   slug?: string;
   // 'remix' means a private save-as-yours fork that never gates.
   draftOrigin?: 'remix';
+  // Preview is green but nothing publishable exists yet; POST :token/seal makes one.
+  canSeal?: true;
   // Signal to try loading a draft, not a 200 guarantee.
   preview?: { slug: string };
   previewGate?: { green: boolean; ranAt: string; report?: string; status?: 'kit_outdated' };

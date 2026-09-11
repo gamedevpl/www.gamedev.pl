@@ -1,0 +1,175 @@
+/* Studio screenshot toast stack, scattered over the stage near Play (StudioShotToasts.tsx). */
+
+/* Scattered screenshot toast stack inside the game detail — sits under/near Play.
+   Click opens Details → Media; expand-in-place was removed. */
+.studio-shot-toasts {
+  position: absolute;
+  z-index: 40;
+  pointer-events: none;
+  touch-action: none;
+}
+
+.studio-shot-toasts.is-collapsed.is-bottom-right {
+  right: 14px;
+  bottom: 14px;
+  width: 168px;
+  height: 150px;
+}
+
+.studio-shot-toasts.is-collapsed.is-near-play {
+  right: 8px;
+  top: 48px;
+  width: 168px;
+  height: 150px;
+  cursor: grab;
+}
+
+.studio-shot-toasts.is-collapsed.is-near-play:active {
+  cursor: grabbing;
+}
+
+.studio-shot-toasts-cards {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.studio-shot-toast {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 148px;
+  pointer-events: auto;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-card);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  transform-origin: 85% 0%;
+  animation: studio-shot-toast-in 0.28s ease-out both;
+  transition:
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.25s ease;
+}
+
+/* Slight stack + scatter — newest (slot-0) on top, peeking siblings behind. */
+.studio-shot-toasts.is-collapsed .studio-shot-toast.is-slot-0 {
+  transform: rotate(2.5deg) translate(6px, 0);
+  z-index: 3;
+}
+
+.studio-shot-toasts.is-collapsed .studio-shot-toast.is-slot-1 {
+  transform: rotate(-3.5deg) translate(-10px, 14px);
+  z-index: 2;
+  animation-delay: 0.04s;
+}
+
+.studio-shot-toasts.is-collapsed .studio-shot-toast.is-slot-2 {
+  transform: rotate(5deg) translate(12px, 28px);
+  z-index: 1;
+  animation-delay: 0.08s;
+}
+
+@keyframes studio-shot-toast-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.studio-shot-toast-body {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: grab;
+  text-align: left;
+  user-select: none;
+}
+
+.studio-shot-toast-body img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  background: #0b1018;
+  pointer-events: none;
+}
+
+.studio-shot-toast-caption {
+  display: block;
+  padding: 5px 8px 7px;
+  font-size: 0.68rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.studio-shot-toast-dismiss {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(8, 12, 16, 0.72);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.studio-shot-toast-dismiss:hover {
+  background: rgba(8, 12, 16, 0.92);
+  border-color: rgba(0, 228, 172, 0.35);
+}
+
+/* Phone: tighter fan near Play. */
+@media (max-width: 800px) {
+  .studio-shot-toasts.is-collapsed.is-near-play,
+  .studio-shot-toasts.is-collapsed.is-bottom-right {
+    right: 6px;
+    top: 44px;
+    bottom: auto;
+    width: 118px;
+    height: 110px;
+  }
+
+  .studio-shot-toasts.is-collapsed .studio-shot-toast {
+    width: 104px;
+    border-radius: 10px;
+  }
+
+  .studio-shot-toasts.is-collapsed .studio-shot-toast.is-slot-0 {
+    transform: rotate(2deg) translate(4px, 0);
+  }
+
+  .studio-shot-toasts.is-collapsed .studio-shot-toast.is-slot-1 {
+    transform: rotate(-2.5deg) translate(-6px, 10px);
+  }
+
+  .studio-shot-toasts.is-collapsed .studio-shot-toast.is-slot-2 {
+    transform: rotate(3.5deg) translate(8px, 20px);
+  }
+
+  .studio-shot-toast-caption {
+    padding: 4px 6px 5px;
+    font-size: 0.6rem;
+  }
+
+  .studio-shot-toast-dismiss {
+    width: 20px;
+    height: 20px;
+    top: 4px;
+    right: 4px;
+  }
+}

@@ -138,7 +138,7 @@ The join page is part of our own web shell (trusted code, normal origin) — **n
 The load-bearing invariant of this codebase: games run in an iframe with
 `sandbox="allow-scripts allow-pointer-lock"`, **no** `allow-same-origin` (`GameFrame.tsx`), and served bundles
 carry a CSP with no `connect-src` — fetch/XHR/WebSocket are all blocked inside the game
-([assemble.ts](../apps/api/src/catalog/assemble.ts)). Games are also validated to be offline-only and
+([assemble.ts](../apps/api/src/platform/assemble.ts)). Games are also validated to be offline-only and
 self-contained ([validate.mjs](https://github.com/gamedevpl/www.gamedev.pl-games) Check 6:
 no `fetch(`, no `XMLHttpRequest`, no remote assets).
 
@@ -178,7 +178,7 @@ A room service inside the existing Fastify app (no new deployable) using
 
 **Room model**: in-memory `Map<code, Room>`, same pattern as the existing in-memory rate
 limiter. A room holds: code, slug, host socket, `slots[]` (nickname, color, socket,
-lastSeen), phase (`lobby | playing | ended`), timestamps. Rooms are **ephemeral by design** —
+lastSeen), phase (`lobby | playing | paused | ended`), timestamps. Rooms are **ephemeral by design** —
 nothing is persisted to Firestore. Caps: `max_players` from the game's spec (≤8), one open
 room per host, 2 h TTL, 10 min idle reap.
 
@@ -192,7 +192,10 @@ connection):
 | host → server  | `hello { code, token }`, `phase { phase }`, `kick { slot }`                    |
 | server → host  | `roster { slots }`, `input { slot, k, d }`, `closed { reason }`                |
 
-`k` is one of `up|down|left|right|a` (the v1 layout) and `d` is `0|1` (down/up). Every frame
+`k` is one of `up|down|left|right|a|menu` and `d` is `0|1` (down/up). `menu` is the phone's
+Start button — the seat's hand on the shared screen's shell scenes (see §4.8); it was added
+after v1 without moving the protocol version, because a game built before it drops key names
+it does not know. Every frame
 already carries `v` as the protocol version, so key state cannot reuse that field — a release
 of `0` would look like a version mismatch and be dropped. The server is a **relay with
 admission control**, not a game engine: it validates, tags with the slot number, rate-limits
@@ -244,10 +247,10 @@ lobby, in hot-seat, and in the deterministic capture harness.
 
 **Bridge protocol** (`postMessage`, namespaced `gdp` + `v: 1`):
 
-| Direction    | Messages                                                      |
-| ------------ | ------------------------------------------------------------- |
-| game → shell | `hello { slots }` (announce slot count), `phase { phase }`    |
-| shell → game | `roster { slots }`, `input { slot, k, d }`, `phase { phase }` |
+| Direction    | Messages                                                                         |
+| ------------ | -------------------------------------------------------------------------------- |
+| game → shell | `hello { slots }` (announce slot count), `phase { phase }`                       |
+| shell → game | `roster { slots }`, `input { slot, k, d }`, `phase { phase }`, `command { cmd }` |
 
 Bridge rules in the shell (`GameFrame` gains an optional `bridge` prop):
 
@@ -335,6 +338,28 @@ gameplay, drawing, actors, gfx, effects, audio, party`) in both `tools/lib/assem
   model's core invariant and hand untrusted generated code a network exfiltration path.
 
 ---
+
+### 4.8 Shell scenes are driven from every seat, not just the host
+
+A game's own front door (splash, main menu, pause, terminal replay — `docs/shell-scenes.md`
+in the games repo) reads the kit's local `input`: the host's keyboard and the host screen's
+touch. Phone input never lands there, it lands in the game's party slots. Left alone, that
+means a room full of controllers watching one person lean over a laptop to press Start, and a
+pause nobody but the host can lift.
+
+Two additions close it, both additive:
+
+- **`command { cmd }`**, shell → game: `start | pause | resume | restart | lobby | quit`. The
+  host sends `start` the moment the game announces itself, because the _room's_ lobby was
+  already the front door — the game's own splash would be a second one. The party bar's
+  lifecycle rows send the rest.
+- **`menu`** as a sixth input key, so any seat can open and close the pause screen.
+
+The game side of this lives in GameKit (`shared/modules/core.ts` + `party.ts`): the shell
+reads the union of local input and every slot, publishes each of its own lifecycle
+transitions as a party phase, and clears slot input edges across transitions. A game
+therefore reports `paused` and `lobby` without writing a line of code, which is why
+`phase` gained `paused` and why a game-reported `lobby` returns the room to its QR screen.
 
 ## 5. Security & privacy invariants (additions)
 

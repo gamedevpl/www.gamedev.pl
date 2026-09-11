@@ -3,8 +3,8 @@
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import type { BuildBrief } from '../src/agent-surface/agent-backend.js';
-import { mintManagedMcpOpener } from '../src/agent-surface/agent-token.js';
-import { buildPrompt } from '../src/delivery/build-prompt.js';
+import { mintManagedMcpOpener } from '../src/platform/agent-token.js';
+import { buildPrompt } from '../src/agent-surface/build-prompt.js';
 import { createManagedProvider } from '../src/agent-surface/managed-agent.js';
 import '../src/agent-surface/managed-provider-anthropic.js';
 import '../src/agent-surface/managed-provider-copilot.js';
@@ -75,7 +75,7 @@ if (vendor === 'copilot' && flag('override-tools')) {
 const mcpOpenerToken = mintManagedMcpOpener(ISSUE, openerSecret, { roundGeneration });
 
 const brief: BuildBrief = {
-  issueNumber: ISSUE,
+  jobId: ISSUE,
   roundGeneration,
   ...(SLUG ? { slug: SLUG } : {}),
   ...(creation ? { createGame: { title: CREATE_TITLE, concept: CREATE_CONCEPT } } : {}),
@@ -120,7 +120,7 @@ const model =
     : vendor === 'copilot'
       ? 'claude-sonnet-4.6'
       : vendor === 'gemini'
-        ? 'gemini-3.7-flash'
+        ? 'gemini-3.8-flash'
         : undefined);
 if (!apiKey || !model) {
   console.error(`--vendor ${vendor} needs an API key and model`);
@@ -234,7 +234,7 @@ for (let attempt = 1; attempt <= pollCount; attempt += 1) {
   rule(`observe #${attempt}`);
   const observation = await backend.observe(dispatch.ref, {
     hasCandidate: false,
-    issueNumber: ISSUE,
+    jobId: ISSUE,
     slug: SLUG,
     roundGeneration,
   });

@@ -41,6 +41,24 @@ describe('createSeedAvailabilityGate', () => {
     expect(await g.seedingEnabled()).toBe(true);
   });
 
+  it('spends a slot per seed and refuses once the day is full', async () => {
+    const { store, gate: g } = gate({ ttlMs: 0 });
+    await store.setCreationLimits({ globalDailySeedCap: 2 }, 'g:boss');
+
+    expect(await g.spendSeedSlot('2026-08-30')).toBe(true);
+    expect(await g.spendSeedSlot('2026-08-30')).toBe(true);
+    // On/off was a seed's only bound before this.
+    expect(await g.spendSeedSlot('2026-08-30')).toBe(false);
+    // A new day is a new allowance.
+    expect(await g.spendSeedSlot('2026-08-31')).toBe(true);
+  });
+
+  it('treats a stored cap of zero as closed', async () => {
+    const { store, gate: g } = gate({ ttlMs: 0 });
+    await store.setCreationLimits({ globalDailySeedCap: 0 }, 'g:boss');
+    expect(await g.spendSeedSlot('2026-08-30')).toBe(false);
+  });
+
   it('resolves a stored override once it is configured', async () => {
     const { store, gate: g } = gate({ configuredProviders: new Set(['vertex', 'anthropic']) });
     await store.setCreationLimits({ seedProviderOverride: 'anthropic' }, 'g:boss');

@@ -4,9 +4,9 @@ import { InMemoryStore } from '../platform/store.js';
 
 const AT = Date.parse('2026-08-15T12:00:00.000Z');
 
-async function queuedJob(store: InMemoryStore, issueNumber: number, stateSince: string) {
-  await store.createSubmission(issueNumber, 'g:a', `Game ${issueNumber}`);
-  await store.recordJobTransition(issueNumber, { to: 'queued', at: stateSince, by: 'system' });
+async function queuedJob(store: InMemoryStore, jobId: number, stateSince: string) {
+  await store.createSubmission(jobId, 'g:a', `Game ${jobId}`);
+  await store.recordJobTransition(jobId, { to: 'queued', at: stateSince, by: 'system' });
 }
 
 const noopLog = { error: () => {} };
@@ -21,8 +21,8 @@ describe('runDispatchReaperSweep', () => {
       store,
       now: () => AT,
       thresholdMs: 10 * 60 * 1000,
-      redispatchQueuedJob: async ({ issueNumber }) => {
-        calls.push(issueNumber);
+      redispatchQueuedJob: async ({ jobId }) => {
+        calls.push(jobId);
         return { outcome: 'retried' };
       },
       log: noopLog,
@@ -47,7 +47,7 @@ describe('runDispatchReaperSweep', () => {
       store,
       now: () => AT,
       thresholdMs: 10 * 60 * 1000,
-      redispatchQueuedJob: async ({ issueNumber }) => outcomes[issueNumber],
+      redispatchQueuedJob: async ({ jobId }) => outcomes[jobId],
       log: noopLog,
     });
 
@@ -64,8 +64,8 @@ describe('runDispatchReaperSweep', () => {
       store,
       now: () => AT,
       thresholdMs: 10 * 60 * 1000,
-      redispatchQueuedJob: async ({ issueNumber }) => {
-        if (issueNumber === 1) throw new Error('boom');
+      redispatchQueuedJob: async ({ jobId }) => {
+        if (jobId === 1) throw new Error('boom');
         return { outcome: 'retried' };
       },
       log: { error: (context) => errors.push(context) },

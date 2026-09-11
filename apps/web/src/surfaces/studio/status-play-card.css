@@ -1,0 +1,152 @@
+/* Status view play card + screenshot lightbox (SubmissionStatusView.tsx). */
+
+/* Playable call-to-action. Launches the game in the full-viewport theater — the
+   status page never embeds a live iframe inline, so it always scrolls freely and
+   the game's own title/description chrome is never duplicated here. */
+.status-play-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin: 20px 0 24px;
+  padding: 22px 24px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 228, 172, 0.28);
+  background:
+    radial-gradient(130% 150% at 100% 0%, rgba(56, 189, 248, 0.1), transparent 55%),
+    linear-gradient(135deg, rgba(0, 228, 172, 0.1), rgba(28, 36, 44, 0.35));
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+.status-play-card-info {
+  min-width: 0;
+  flex: 1 1 260px;
+}
+
+/* Play and Playtest travel together: one opens the game, the other opens the surface
+   where pausing it and pointing at the problem turns into a message to the agent. */
+.status-play-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.status-play-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--accent-blue);
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.status-play-badge.is-live {
+  color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.12);
+  border-color: rgba(0, 228, 172, 0.3);
+}
+
+.status-play-badge.is-live .live-dot {
+  background: var(--turquoise);
+}
+
+.status-play-card-title {
+  margin: 12px 0 4px;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.3px;
+  overflow-wrap: anywhere;
+}
+
+.status-play-card-sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  max-width: 52ch;
+}
+
+.status-play-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding: 13px 26px;
+  font-size: 1.02rem;
+}
+
+.status-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.82);
+  cursor: zoom-out;
+}
+
+.status-lightbox-image {
+  max-width: min(100%, 1100px);
+  max-height: 78vh;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border);
+  image-rendering: pixelated;
+  cursor: default;
+}
+
+.status-lightbox-caption {
+  margin: 0;
+  max-width: 60ch;
+  text-align: center;
+  color: #e8e8e8;
+  font-size: 0.95rem;
+}
+
+.status-lightbox-close {
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-card);
+  color: var(--text);
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .status-play-cta {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Play card: the CTA earns a full-width row rather than a squeezed column. */
+@media (max-width: 640px) {
+  .status-play-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .status-play-card-actions {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .status-play-card-actions .status-play-cta,
+  .status-play-card-actions .status-playtest-cta {
+    width: 100%;
+    justify-content: center;
+  }
+}

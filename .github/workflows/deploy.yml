@@ -42,12 +42,30 @@ jobs:
       GAMES_STORE_BUCKET: 'gamedevpl-games-store'
       WIF_PROVIDER: 'projects/334141807880/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
       WIF_SERVICE_ACCOUNT: 'github-actions-deployer@gamedevpl.iam.gserviceaccount.com'
+      # The identity each service RUNS as — its own account, named after the service and
+      # created by infra/setup-runtime-sa.sh. Hard-coded here rather than read from a repo
+      # variable so there is no lever that can be blanked, and pinned on every deploy
+      # rather than set once on the service, because a value that lives only on the
+      # service is whatever the last deploy said. The default compute account, which
+      # holds project-wide editor, is refused by the assertion step before promotion.
+      # infra/deploy-api.sh, deploy-relay.sh and deploy-world.sh derive the same values.
+      APP_RUNTIME_SA: 'gamedev-app@gamedevpl.iam.gserviceaccount.com'
+      RELAY_RUNTIME_SA: 'gamedev-mp-relay@gamedevpl.iam.gserviceaccount.com'
+      WORLD_RUNTIME_SA: 'gamedev-world@gamedevpl.iam.gserviceaccount.com'
+      # The account the app ran as before APP_RUNTIME_SA, kept trusted by the relay for
+      # the length of the move. The relay is reconfigured while the previous revision is
+      # still serving, so both identities have to be accepted at once or party mode
+      # breaks for the minutes between. A repo variable, not a literal here: this one is
+      # meant to be deleted, and deleting a variable is the clearest way to say the move
+      # is finished. Left set, it keeps the old account trusted — the thing the move
+      # exists to end — so unset it once every service serves on its own identity.
+      APP_RUNTIME_SA_PREVIOUS: ${{ vars.APP_RUNTIME_SA_PREVIOUS }}
       # workflow_run's github.sha is the default-branch tip at schedule time, not
       # necessarily the commit CI validated. Prefer the triggering run's head_sha.
       DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ env.DEPLOY_SHA }}
 
@@ -60,17 +78,113 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
 
-      - name: Build image via Cloud Build
+      - name: Build and push image
+        # Built on this runner, not in Cloud Build. CI already builds this exact Dockerfile
+        # here for its image-boot check, so every master push was paying Cloud Build to do
+        # it a second time — 627 builds and ~1,900 default-pool minutes in August 2026, for
+        # work GitHub's runner does inside its free allowance. infra/cloudbuild.yaml stays
+        # as the hand-run path behind infra/deploy-api.sh.
+        env:
+          VITE_GOOGLE_OAUTH_CLIENT_ID: ${{ vars.GOOGLE_OAUTH_CLIENT_ID }}
+          VITE_APPLE_SERVICES_ID: ${{ vars.APPLE_SERVICES_ID }}
+          VITE_MP_RELAY_URL: ${{ vars.MP_RELAY_URL }}
         run: |
           SHORT_SHA=$(echo "${DEPLOY_SHA}" | cut -c1-7)
           IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/app:${SHORT_SHA}"
           echo "IMAGE=${IMAGE}" >> $GITHUB_ENV
-          gcloud builds submit . \
-            --config infra/cloudbuild.yaml \
-            --substitutions "_IMAGE=${IMAGE},_GOOGLE_OAUTH_CLIENT_ID=${{ vars.GOOGLE_OAUTH_CLIENT_ID }},_APPLE_SERVICES_ID=${{ vars.APPLE_SERVICES_ID }},_MP_RELAY_URL=${{ vars.MP_RELAY_URL }}" \
-            --project "$PROJECT_ID"
+          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+          docker build -f apps/api/Dockerfile \
+            --build-arg "VITE_GOOGLE_OAUTH_CLIENT_ID=${VITE_GOOGLE_OAUTH_CLIENT_ID}" \
+            --build-arg "VITE_APPLE_SERVICES_ID=${VITE_APPLE_SERVICES_ID}" \
+            --build-arg "VITE_MP_RELAY_URL=${VITE_MP_RELAY_URL}" \
+            -t "${IMAGE}" .
+          docker push "${IMAGE}"
 
       - name: Deploy candidate revision to Cloud Run
+        # Repo variables arrive as step env rather than being interpolated into the script.
+        # GitHub compiles a run: body containing ${{ }} as one expression, and this one blew
+        # past the 21,000-character ceiling (2026-08-26: every deploy since #1044 failed to
+        # start, "Invalid workflow file ... Exceeded max expression length 21000"). Reading the
+        # values from env keeps the body a literal string, so it cannot hit that limit again —
+        # and a variable value can no longer be spliced into the script as shell.
+        env:
+          ADMIN_UIDS: ${{ vars.ADMIN_UIDS }}
+          APP_CSP_REPORT_ONLY: ${{ vars.APP_CSP_REPORT_ONLY }}
+          APPLE_CLIENT_IDS: ${{ vars.APPLE_CLIENT_IDS }}
+          BETA_ALLOWED_EMAILS: ${{ vars.BETA_ALLOWED_EMAILS }}
+          BETA_ALLOWED_UIDS: ${{ vars.BETA_ALLOWED_UIDS }}
+          CODE_LANE: ${{ vars.CODE_LANE }}
+          CODE_SURFACE: ${{ vars.CODE_SURFACE }}
+          CLI_CHAT_MODEL: ${{ vars.CLI_CHAT_MODEL }}
+          CLI_SURFACE: ${{ vars.CLI_SURFACE }}
+          DIGEST_SWEEP_AUDIENCE: ${{ vars.DIGEST_SWEEP_AUDIENCE }}
+          DISPATCH_REAPER_AUDIENCE: ${{ vars.DISPATCH_REAPER_AUDIENCE }}
+          EDITORKIT_V2: ${{ vars.EDITORKIT_V2 }}
+          EDITOR_ASSIST: ${{ vars.EDITOR_ASSIST }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ vars.GOOGLE_OAUTH_CLIENT_ID }}
+          HEALTH_SWEEP_AUDIENCE: ${{ vars.HEALTH_SWEEP_AUDIENCE }}
+          SEED_DISPATCH_AUDIENCE: ${{ vars.SEED_DISPATCH_AUDIENCE }}
+          HEALTH_SWEEP_BATCH: ${{ vars.HEALTH_SWEEP_BATCH }}
+          KNOWLEDGE_SEARCH_COLLECTION: ${{ vars.KNOWLEDGE_SEARCH_COLLECTION }}
+          KNOWLEDGE_SEARCH_ENGINE_ID: ${{ vars.KNOWLEDGE_SEARCH_ENGINE_ID }}
+          KNOWLEDGE_SEARCH_LOCATION: ${{ vars.KNOWLEDGE_SEARCH_LOCATION }}
+          KNOWLEDGE_SEARCH_PROJECT_ID: ${{ vars.KNOWLEDGE_SEARCH_PROJECT_ID }}
+          KNOWLEDGE_SEARCH_QUOTA_PROJECT: ${{ vars.KNOWLEDGE_SEARCH_QUOTA_PROJECT }}
+          KNOWLEDGE_SEARCH_SERVING_CONFIG: ${{ vars.KNOWLEDGE_SEARCH_SERVING_CONFIG }}
+          MAIL_FROM: ${{ vars.MAIL_FROM }}
+          MANAGED_AGENT_COPILOT_MAX_CREDITS: ${{ vars.MANAGED_AGENT_COPILOT_MAX_CREDITS }}
+          MANAGED_AGENT_COPILOT_MCP_BASE_REF: ${{ vars.MANAGED_AGENT_COPILOT_MCP_BASE_REF }}
+          MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT: ${{ vars.MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT }}
+          MANAGED_AGENT_COPILOT_MCP_REPO: ${{ vars.MANAGED_AGENT_COPILOT_MCP_REPO }}
+          MANAGED_AGENT_DELIVERY_MODE: ${{ vars.MANAGED_AGENT_DELIVERY_MODE }}
+          MANAGED_AGENT_ENVIRONMENT_ID: ${{ vars.MANAGED_AGENT_ENVIRONMENT_ID }}
+          MANAGED_AGENT_GEMINI_MODEL: ${{ vars.MANAGED_AGENT_GEMINI_MODEL }}
+          MANAGED_AGENT_ID: ${{ vars.MANAGED_AGENT_ID }}
+          MANAGED_AGENT_MAX_LIST_COST_CENTS: ${{ vars.MANAGED_AGENT_MAX_LIST_COST_CENTS }}
+          MANAGED_AGENT_MAX_SECONDS: ${{ vars.MANAGED_AGENT_MAX_SECONDS }}
+          MANAGED_AGENT_MAX_TOTAL_TOKENS: ${{ vars.MANAGED_AGENT_MAX_TOTAL_TOKENS }}
+          MANAGED_AGENT_MCP_URL: ${{ vars.MANAGED_AGENT_MCP_URL }}
+          MANAGED_AGENT_MODEL: ${{ vars.MANAGED_AGENT_MODEL }}
+          MANAGED_AGENT_OPENAI_MODEL: ${{ vars.MANAGED_AGENT_OPENAI_MODEL }}
+          MANAGED_AGENT_VAULT_IDS: ${{ vars.MANAGED_AGENT_VAULT_IDS }}
+          MANAGED_AGENT_VENDOR: ${{ vars.MANAGED_AGENT_VENDOR }}
+          MCP_UI: ${{ vars.MCP_UI }}
+          MP_RELAY_URL: ${{ vars.MP_RELAY_URL }}
+          NOTIFY_SWEEP_AUDIENCE: ${{ vars.NOTIFY_SWEEP_AUDIENCE }}
+          OPENAI_APPS_CHALLENGE_TOKEN: ${{ vars.OPENAI_APPS_CHALLENGE_TOKEN }}
+          PUBLIC_PLAY_SLUGS: ${{ vars.PUBLIC_PLAY_SLUGS }}
+          REMIX_DEBUG: ${{ vars.REMIX_DEBUG }}
+          REVIEWER_UIDS: ${{ vars.REVIEWER_UIDS }}
+          SCORECARD_SWEEP_AUDIENCE: ${{ vars.SCORECARD_SWEEP_AUDIENCE }}
+          SPEND_BRAKE_AUDIENCE: ${{ vars.SPEND_BRAKE_AUDIENCE }}
+          SPEND_BRAKE_CALLER_SA: ${{ vars.SPEND_BRAKE_CALLER_SA }}
+          SEED_ANTHROPIC_MAX_OUTPUT_TOKENS: ${{ vars.SEED_ANTHROPIC_MAX_OUTPUT_TOKENS }}
+          SEED_ANTHROPIC_MODEL: ${{ vars.SEED_ANTHROPIC_MODEL }}
+          SEED_ANTHROPIC_PICK_MAX_OUTPUT_TOKENS: ${{ vars.SEED_ANTHROPIC_PICK_MAX_OUTPUT_TOKENS }}
+          SEED_MAX_OUTPUT_TOKENS: ${{ vars.SEED_MAX_OUTPUT_TOKENS }}
+          SEED_META_BASE_URL: ${{ vars.SEED_META_BASE_URL }}
+          SEED_META_MAX_OUTPUT_TOKENS: ${{ vars.SEED_META_MAX_OUTPUT_TOKENS }}
+          SEED_META_MODEL: ${{ vars.SEED_META_MODEL }}
+          SEED_META_PICK_MAX_OUTPUT_TOKENS: ${{ vars.SEED_META_PICK_MAX_OUTPUT_TOKENS }}
+          SEED_MODEL: ${{ vars.SEED_MODEL }}
+          SEED_OPENAI_MAX_OUTPUT_TOKENS: ${{ vars.SEED_OPENAI_MAX_OUTPUT_TOKENS }}
+          SEED_OPENAI_MODEL: ${{ vars.SEED_OPENAI_MODEL }}
+          SEED_OPENAI_PICK_MAX_OUTPUT_TOKENS: ${{ vars.SEED_OPENAI_PICK_MAX_OUTPUT_TOKENS }}
+          SEED_OPENROUTER_BASE_URL: ${{ vars.SEED_OPENROUTER_BASE_URL }}
+          SEED_OPENROUTER_MAX_OUTPUT_TOKENS: ${{ vars.SEED_OPENROUTER_MAX_OUTPUT_TOKENS }}
+          SEED_OPENROUTER_MODEL: ${{ vars.SEED_OPENROUTER_MODEL }}
+          SEED_OPENROUTER_PICK_MAX_OUTPUT_TOKENS: ${{ vars.SEED_OPENROUTER_PICK_MAX_OUTPUT_TOKENS }}
+          SEED_PICK_MAX_OUTPUT_TOKENS: ${{ vars.SEED_PICK_MAX_OUTPUT_TOKENS }}
+          SEED_PROVIDER: ${{ vars.SEED_PROVIDER }}
+          SUGGESTION_SWEEP_AUDIENCE: ${{ vars.SUGGESTION_SWEEP_AUDIENCE }}
+          TAB_COMPLETE: ${{ vars.TAB_COMPLETE }}
+          TRANSLATE_BUILD_LOG: ${{ vars.TRANSLATE_BUILD_LOG }}
+          VAPID_PUBLIC_KEY: ${{ vars.VAPID_PUBLIC_KEY }}
+          VAPID_SUBJECT: ${{ vars.VAPID_SUBJECT }}
+          VERTEX_MODEL: ${{ vars.VERTEX_MODEL }}
+          VERTEX_REGION: ${{ vars.VERTEX_REGION }}
+          TRUST_EDGE_CLIENT_IP: ${{ vars.TRUST_EDGE_CLIENT_IP }}
+          ZONE_HOST_URL: ${{ vars.ZONE_HOST_URL }}
         run: |
           SECRET_MAPPINGS=()
           if gcloud secrets describe github-token --project "$PROJECT_ID" >/dev/null 2>&1 \
@@ -151,10 +265,10 @@ jobs:
           # Safety guard: in private-beta mode, deploying with an empty allowlist
           # would produce a site that nobody can sign into. Fail fast here rather
           # than silently serving a broken login flow.
-          BETA_ALLOWED_UIDS_VAL="${{ vars.BETA_ALLOWED_UIDS }}"
-          BETA_ALLOWED_EMAILS_VAL="${{ vars.BETA_ALLOWED_EMAILS }}"
-          PUBLIC_PLAY_SLUGS_VAL="${{ vars.PUBLIC_PLAY_SLUGS }}"
-           EDITORKIT_V2_VAL="${{ vars.EDITORKIT_V2 }}"
+          BETA_ALLOWED_UIDS_VAL="${BETA_ALLOWED_UIDS}"
+          BETA_ALLOWED_EMAILS_VAL="${BETA_ALLOWED_EMAILS}"
+          PUBLIC_PLAY_SLUGS_VAL="${PUBLIC_PLAY_SLUGS}"
+           EDITORKIT_V2_VAL="${EDITORKIT_V2}"
            EDITORKIT_V2_VAL="${EDITORKIT_V2_VAL:-true}"
           if [ "true" = "true" ] && [ -z "$BETA_ALLOWED_UIDS_VAL" ] && [ -z "$BETA_ALLOWED_EMAILS_VAL" ]; then
             echo "Error: PRIVATE_BETA=true but both BETA_ALLOWED_UIDS and BETA_ALLOWED_EMAILS are empty. Set at least one allowlist variable."
@@ -189,27 +303,15 @@ jobs:
           # docs/p3-zone-host-infra.md).
           PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
           SWEEP_SA="notify-sweep@${PROJECT_ID}.iam.gserviceaccount.com"
+          # The seed call is the service calling itself, so the caller it must accept is
+          # the identity it runs as — derived, not a repo variable, so the two cannot
+          # disagree (they did: the variable still named the default compute account
+          # after the runtime moved off it, and every seed dispatch would have 401'd).
+          SEED_DISPATCH_SA="$APP_RUNTIME_SA"
           ACCOUNT_DELETION_SWEEP_URL="https://${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app/api/internal/account-deletion-sweep"
-          ENV_VARS="^|^GAMES_REPO=${GAMES_REPO}|GAMES_SNAPSHOT_BUCKET=${GAMES_SNAPSHOT_BUCKET}|GAMES_STORE_BUCKET=${GAMES_STORE_BUCKET}|GATE_BUILD_PROJECT=${{ env.PROJECT_ID }}|GOOGLE_OAUTH_CLIENT_ID=${{ vars.GOOGLE_OAUTH_CLIENT_ID }}|APPLE_CLIENT_IDS=${{ vars.APPLE_CLIENT_IDS }}|WEB_ORIGIN=https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl|CANONICAL_HOST=www.gamedev.pl|MCP_AUTHORIZATION_SERVERS=https://www.gamedev.pl|PRIVATE_BETA=true|PUBLIC_PLAY_SLUGS=${PUBLIC_PLAY_SLUGS_VAL}|EDITORKIT_V2=${EDITORKIT_V2_VAL}|BETA_ALLOWED_UIDS=${{ vars.BETA_ALLOWED_UIDS }}|BETA_ALLOWED_EMAILS=${{ vars.BETA_ALLOWED_EMAILS }}|ADMIN_UIDS=${{ vars.ADMIN_UIDS }}|REVIEWER_UIDS=${{ vars.REVIEWER_UIDS }}|NOTIFY_SWEEP_AUDIENCE=${{ vars.NOTIFY_SWEEP_AUDIENCE }}|NOTIFY_SWEEP_SA=${SWEEP_SA}|SCORECARD_SWEEP_AUDIENCE=${{ vars.SCORECARD_SWEEP_AUDIENCE }}|DIGEST_SWEEP_AUDIENCE=${{ vars.DIGEST_SWEEP_AUDIENCE }}|SUGGESTION_SWEEP_AUDIENCE=${{ vars.SUGGESTION_SWEEP_AUDIENCE }}|HEALTH_SWEEP_AUDIENCE=${{ vars.HEALTH_SWEEP_AUDIENCE }}|DISPATCH_REAPER_AUDIENCE=${{ vars.DISPATCH_REAPER_AUDIENCE }}|ACCOUNT_DELETION_SWEEP_AUDIENCE=${ACCOUNT_DELETION_SWEEP_URL}|VAPID_PUBLIC_KEY=${{ vars.VAPID_PUBLIC_KEY }}|VAPID_SUBJECT=${{ vars.VAPID_SUBJECT }}|OPENAI_APPS_CHALLENGE_TOKEN=${{ vars.OPENAI_APPS_CHALLENGE_TOKEN }}"
+          ENV_VARS="^|^GAMES_REPO=${GAMES_REPO}|GAMES_SNAPSHOT_BUCKET=${GAMES_SNAPSHOT_BUCKET}|GAMES_STORE_BUCKET=${GAMES_STORE_BUCKET}|GATE_BUILD_PROJECT=${PROJECT_ID}|GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}|APPLE_CLIENT_IDS=${APPLE_CLIENT_IDS}|WEB_ORIGIN=https://gamedev-app-334141807880.europe-west1.run.app,https://www.gamedev.pl,https://gamedev.pl|CANONICAL_HOST=www.gamedev.pl|MCP_AUTHORIZATION_SERVERS=https://www.gamedev.pl|PRIVATE_BETA=true|PUBLIC_PLAY_SLUGS=${PUBLIC_PLAY_SLUGS_VAL}|EDITORKIT_V2=${EDITORKIT_V2_VAL}|BETA_ALLOWED_UIDS=${BETA_ALLOWED_UIDS}|BETA_ALLOWED_EMAILS=${BETA_ALLOWED_EMAILS}|ADMIN_UIDS=${ADMIN_UIDS}|REVIEWER_UIDS=${REVIEWER_UIDS}|NOTIFY_SWEEP_AUDIENCE=${NOTIFY_SWEEP_AUDIENCE}|NOTIFY_SWEEP_SA=${SWEEP_SA}|SCORECARD_SWEEP_AUDIENCE=${SCORECARD_SWEEP_AUDIENCE}|DIGEST_SWEEP_AUDIENCE=${DIGEST_SWEEP_AUDIENCE}|SUGGESTION_SWEEP_AUDIENCE=${SUGGESTION_SWEEP_AUDIENCE}|HEALTH_SWEEP_AUDIENCE=${HEALTH_SWEEP_AUDIENCE}|DISPATCH_REAPER_AUDIENCE=${DISPATCH_REAPER_AUDIENCE}|SPEND_BRAKE_AUDIENCE=${SPEND_BRAKE_AUDIENCE}|SPEND_BRAKE_CALLER_SA=${SPEND_BRAKE_CALLER_SA}|SEED_DISPATCH_AUDIENCE=${SEED_DISPATCH_AUDIENCE}|SEED_DISPATCH_SA=${SEED_DISPATCH_SA}|ACCOUNT_DELETION_SWEEP_AUDIENCE=${ACCOUNT_DELETION_SWEEP_URL}|VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}|VAPID_SUBJECT=${VAPID_SUBJECT}|OPENAI_APPS_CHALLENGE_TOKEN=${OPENAI_APPS_CHALLENGE_TOKEN}|TRUST_EDGE_CLIENT_IP=${TRUST_EDGE_CLIENT_IP:-false}"
           for MANAGED_VAR in MANAGED_AGENT_VENDOR MANAGED_AGENT_MODEL MANAGED_AGENT_GEMINI_MODEL MANAGED_AGENT_OPENAI_MODEL MANAGED_AGENT_ID MANAGED_AGENT_ENVIRONMENT_ID MANAGED_AGENT_MAX_SECONDS MANAGED_AGENT_MAX_LIST_COST_CENTS MANAGED_AGENT_COPILOT_MAX_CREDITS MANAGED_AGENT_MAX_TOTAL_TOKENS MANAGED_AGENT_VAULT_IDS MANAGED_AGENT_MCP_URL MANAGED_AGENT_DELIVERY_MODE MANAGED_AGENT_COPILOT_MCP_REPO MANAGED_AGENT_COPILOT_MCP_BASE_REF MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT; do
-            case "$MANAGED_VAR" in
-              MANAGED_AGENT_VENDOR) MANAGED_VAL="${{ vars.MANAGED_AGENT_VENDOR }}" ;;
-              MANAGED_AGENT_MODEL) MANAGED_VAL="${{ vars.MANAGED_AGENT_MODEL }}" ;;
-              MANAGED_AGENT_GEMINI_MODEL) MANAGED_VAL="${{ vars.MANAGED_AGENT_GEMINI_MODEL }}" ;;
-              MANAGED_AGENT_OPENAI_MODEL) MANAGED_VAL="${{ vars.MANAGED_AGENT_OPENAI_MODEL }}" ;;
-              MANAGED_AGENT_ID) MANAGED_VAL="${{ vars.MANAGED_AGENT_ID }}" ;;
-              MANAGED_AGENT_ENVIRONMENT_ID) MANAGED_VAL="${{ vars.MANAGED_AGENT_ENVIRONMENT_ID }}" ;;
-              MANAGED_AGENT_MAX_SECONDS) MANAGED_VAL="${{ vars.MANAGED_AGENT_MAX_SECONDS }}" ;;
-              MANAGED_AGENT_MAX_LIST_COST_CENTS) MANAGED_VAL="${{ vars.MANAGED_AGENT_MAX_LIST_COST_CENTS }}" ;;
-              MANAGED_AGENT_COPILOT_MAX_CREDITS) MANAGED_VAL="${{ vars.MANAGED_AGENT_COPILOT_MAX_CREDITS }}" ;;
-              MANAGED_AGENT_MAX_TOTAL_TOKENS) MANAGED_VAL="${{ vars.MANAGED_AGENT_MAX_TOTAL_TOKENS }}" ;;
-              MANAGED_AGENT_VAULT_IDS) MANAGED_VAL="${{ vars.MANAGED_AGENT_VAULT_IDS }}" ;;
-              MANAGED_AGENT_MCP_URL) MANAGED_VAL="${{ vars.MANAGED_AGENT_MCP_URL }}" ;;
-              MANAGED_AGENT_DELIVERY_MODE) MANAGED_VAL="${{ vars.MANAGED_AGENT_DELIVERY_MODE }}" ;;
-              MANAGED_AGENT_COPILOT_MCP_REPO) MANAGED_VAL="${{ vars.MANAGED_AGENT_COPILOT_MCP_REPO }}" ;;
-              MANAGED_AGENT_COPILOT_MCP_BASE_REF) MANAGED_VAL="${{ vars.MANAGED_AGENT_COPILOT_MCP_BASE_REF }}" ;;
-              MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT) MANAGED_VAL="${{ vars.MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT }}" ;;
-            esac
+            MANAGED_VAL="${!MANAGED_VAR}"
             if [ -n "$MANAGED_VAL" ]; then
               ENV_VARS="${ENV_VARS}|${MANAGED_VAR}=${MANAGED_VAL}"
             fi
@@ -217,31 +319,12 @@ jobs:
           # Round-0 seed providers. SEED_PROVIDER/SEED_MODEL tune the always-on Vertex
           # default; the rest only matter once the matching secret above exists too.
           for SEED_VAR in SEED_PROVIDER SEED_MODEL SEED_ANTHROPIC_MODEL SEED_OPENAI_MODEL SEED_META_MODEL SEED_META_BASE_URL SEED_OPENROUTER_MODEL SEED_OPENROUTER_BASE_URL SEED_MAX_OUTPUT_TOKENS SEED_ANTHROPIC_MAX_OUTPUT_TOKENS SEED_OPENAI_MAX_OUTPUT_TOKENS SEED_META_MAX_OUTPUT_TOKENS SEED_OPENROUTER_MAX_OUTPUT_TOKENS SEED_PICK_MAX_OUTPUT_TOKENS SEED_ANTHROPIC_PICK_MAX_OUTPUT_TOKENS SEED_OPENAI_PICK_MAX_OUTPUT_TOKENS SEED_META_PICK_MAX_OUTPUT_TOKENS SEED_OPENROUTER_PICK_MAX_OUTPUT_TOKENS; do
-            case "$SEED_VAR" in
-              SEED_PROVIDER) SEED_VAL="${{ vars.SEED_PROVIDER }}" ;;
-              SEED_MODEL) SEED_VAL="${{ vars.SEED_MODEL }}" ;;
-              SEED_ANTHROPIC_MODEL) SEED_VAL="${{ vars.SEED_ANTHROPIC_MODEL }}" ;;
-              SEED_OPENAI_MODEL) SEED_VAL="${{ vars.SEED_OPENAI_MODEL }}" ;;
-              SEED_META_MODEL) SEED_VAL="${{ vars.SEED_META_MODEL }}" ;;
-              SEED_META_BASE_URL) SEED_VAL="${{ vars.SEED_META_BASE_URL }}" ;;
-              SEED_OPENROUTER_MODEL) SEED_VAL="${{ vars.SEED_OPENROUTER_MODEL }}" ;;
-              SEED_OPENROUTER_BASE_URL) SEED_VAL="${{ vars.SEED_OPENROUTER_BASE_URL }}" ;;
-              SEED_MAX_OUTPUT_TOKENS) SEED_VAL="${{ vars.SEED_MAX_OUTPUT_TOKENS }}" ;;
-              SEED_ANTHROPIC_MAX_OUTPUT_TOKENS) SEED_VAL="${{ vars.SEED_ANTHROPIC_MAX_OUTPUT_TOKENS }}" ;;
-              SEED_OPENAI_MAX_OUTPUT_TOKENS) SEED_VAL="${{ vars.SEED_OPENAI_MAX_OUTPUT_TOKENS }}" ;;
-              SEED_META_MAX_OUTPUT_TOKENS) SEED_VAL="${{ vars.SEED_META_MAX_OUTPUT_TOKENS }}" ;;
-              SEED_OPENROUTER_MAX_OUTPUT_TOKENS) SEED_VAL="${{ vars.SEED_OPENROUTER_MAX_OUTPUT_TOKENS }}" ;;
-              SEED_PICK_MAX_OUTPUT_TOKENS) SEED_VAL="${{ vars.SEED_PICK_MAX_OUTPUT_TOKENS }}" ;;
-              SEED_ANTHROPIC_PICK_MAX_OUTPUT_TOKENS) SEED_VAL="${{ vars.SEED_ANTHROPIC_PICK_MAX_OUTPUT_TOKENS }}" ;;
-              SEED_OPENAI_PICK_MAX_OUTPUT_TOKENS) SEED_VAL="${{ vars.SEED_OPENAI_PICK_MAX_OUTPUT_TOKENS }}" ;;
-              SEED_META_PICK_MAX_OUTPUT_TOKENS) SEED_VAL="${{ vars.SEED_META_PICK_MAX_OUTPUT_TOKENS }}" ;;
-              SEED_OPENROUTER_PICK_MAX_OUTPUT_TOKENS) SEED_VAL="${{ vars.SEED_OPENROUTER_PICK_MAX_OUTPUT_TOKENS }}" ;;
-            esac
+            SEED_VAL="${!SEED_VAR}"
             if [ -n "$SEED_VAL" ]; then
               ENV_VARS="${ENV_VARS}|${SEED_VAR}=${SEED_VAL}"
             fi
           done
-          ZONE_HOST_URL_VAL="${{ vars.ZONE_HOST_URL }}"
+          ZONE_HOST_URL_VAL="${ZONE_HOST_URL}"
           if [ -n "$ZONE_HOST_URL_VAL" ]; then
             ENV_VARS="${ENV_VARS}|ZONE_HOST_URL=${ZONE_HOST_URL_VAL}"
           fi
@@ -256,7 +339,7 @@ jobs:
           # next deploy and the composer would go quiet with nothing to explain it.
           # Absent or not "true" leaves the route answering 503, which is the state
           # every deployment was in before it existed.
-          EDITOR_ASSIST_VAL="${{ vars.EDITOR_ASSIST }}"
+          EDITOR_ASSIST_VAL="${EDITOR_ASSIST}"
           if [ -n "$EDITOR_ASSIST_VAL" ]; then
             ENV_VARS="${ENV_VARS}|EDITOR_ASSIST=${EDITOR_ASSIST_VAL}"
           fi
@@ -267,14 +350,14 @@ jobs:
           # blast radius — model-written code, even though it is ephemeral and never
           # published — so it must be switchable on its own. Threaded, not hand-set,
           # for the same reason as everything above.
-          CODE_LANE_VAL="${{ vars.CODE_LANE }}"
+          CODE_LANE_VAL="${CODE_LANE}"
           if [ -n "$CODE_LANE_VAL" ]; then
             ENV_VARS="${ENV_VARS}|CODE_LANE=${CODE_LANE_VAL}"
           fi
 
           # TA-01's ghost-text completion route: off unless set, same reasoning as
           # EDITOR_ASSIST above — a hand-set value would vanish on the next deploy.
-          TAB_COMPLETE_VAL="${{ vars.TAB_COMPLETE }}"
+          TAB_COMPLETE_VAL="${TAB_COMPLETE}"
           if [ -n "$TAB_COMPLETE_VAL" ]; then
             ENV_VARS="${ENV_VARS}|TAB_COMPLETE=${TAB_COMPLETE_VAL}"
           fi
@@ -284,9 +367,16 @@ jobs:
           # gate — the owner decision is all-creators, so it ships on by default and this
           # variable is only ever set to turn it *off*. Threaded so a hand-set value
           # cannot vanish on the next deploy the way the incident above found others had.
-          CODE_SURFACE_VAL="${{ vars.CODE_SURFACE }}"
+          CODE_SURFACE_VAL="${CODE_SURFACE}"
           if [ -n "$CODE_SURFACE_VAL" ]; then
             ENV_VARS="${ENV_VARS}|CODE_SURFACE=${CODE_SURFACE_VAL}"
+          fi
+
+          # Creator CLI (gamedev) surface: OAuth `creator` scope, /cli page, connect
+          # card tab. Default off until the pilot; a kill switch, not a cohort gate.
+          CLI_SURFACE_VAL="${CLI_SURFACE}"
+          if [ -n "$CLI_SURFACE_VAL" ]; then
+            ENV_VARS="${ENV_VARS}|CLI_SURFACE=${CLI_SURFACE_VAL}"
           fi
 
           # MCP Apps views (SEP-1865) on /api/mcp: a ui:// resource registry and _meta.ui
@@ -297,9 +387,17 @@ jobs:
           # radius is limited to hosts that opted in. Enabled by "true" or "1",
           # case-insensitive (mcpUiEnabled, apps/api/src/mcp-ui.ts); absent or any other
           # value is the pre-views state the endpoint has always run in production.
-          MCP_UI_VAL="${{ vars.MCP_UI }}"
+          MCP_UI_VAL="${MCP_UI}"
           if [ -n "$MCP_UI_VAL" ]; then
             ENV_VARS="${ENV_VARS}|MCP_UI=${MCP_UI_VAL}"
+          fi
+
+          # App-level CSP, report-only (apps/api/src/platform/security-headers.ts): unset or
+          # "true" is the built-in policy, "false"/"off" sends none, anything else is used
+          # verbatim as a draft policy. Never enforced by this flag.
+          APP_CSP_REPORT_ONLY_VAL="${APP_CSP_REPORT_ONLY}"
+          if [ -n "$APP_CSP_REPORT_ONLY_VAL" ]; then
+            ENV_VARS="${ENV_VARS}|APP_CSP_REPORT_ONLY=${APP_CSP_REPORT_ONLY_VAL}"
           fi
 
           # The remix code-lane trace: every step of a run, in the log and in the
@@ -321,7 +419,7 @@ jobs:
           # --set-env-vars replaces the whole map, so a value typed onto the
           # service would vanish on the next deploy and the trace would go quiet
           # with nothing to explain it.
-          REMIX_DEBUG_VAL="${{ vars.REMIX_DEBUG }}"
+          REMIX_DEBUG_VAL="${REMIX_DEBUG}"
           if [ -n "$REMIX_DEBUG_VAL" ]; then
             ENV_VARS="${ENV_VARS}|REMIX_DEBUG=${REMIX_DEBUG_VAL}"
           fi
@@ -331,7 +429,7 @@ jobs:
           # would be wiped by the next deploy — here that would silently pull room
           # creation back into this process while the ceiling stayed raised, which is
           # the worst of both configurations.
-          MP_RELAY_URL_VAL="${{ vars.MP_RELAY_URL }}"
+          MP_RELAY_URL_VAL="${MP_RELAY_URL}"
           if [ -n "$MP_RELAY_URL_VAL" ]; then
             ENV_VARS="${ENV_VARS}|MP_RELAY_URL=${MP_RELAY_URL_VAL}"
             MAX_INSTANCES=4
@@ -357,15 +455,30 @@ jobs:
           # leak twice — the flag was applied, worked for ten minutes, and vanished under
           # an unrelated deploy. An emergency lever that quietly reverts is worse than no
           # lever, because the operator believes the incident is over.
-          for VERTEX_VAR in VERTEX_MODEL VERTEX_REGION TRANSLATE_BUILD_LOG; do
-            case "$VERTEX_VAR" in
-              VERTEX_MODEL) VERTEX_VAL="${{ vars.VERTEX_MODEL }}" ;;
-              VERTEX_REGION) VERTEX_VAL="${{ vars.VERTEX_REGION }}" ;;
-              TRANSLATE_BUILD_LOG) VERTEX_VAL="${{ vars.TRANSLATE_BUILD_LOG }}" ;;
-            esac
+          for VERTEX_VAR in VERTEX_MODEL VERTEX_REGION TRANSLATE_BUILD_LOG CLI_CHAT_MODEL; do
+            VERTEX_VAL="${!VERTEX_VAR}"
             if [ -n "$VERTEX_VAL" ]; then
               ENV_VARS="${ENV_VARS}|${VERTEX_VAR}=${VERTEX_VAL}"
               echo "Threading ${VERTEX_VAR}=${VERTEX_VAL}"
+            fi
+          done
+
+          # The last two variables infra/deploy-api.sh threaded and this workflow did not.
+          # Same bug class as the Vertex levers above, still open until now: set either by
+          # hand or via deploy-api.sh, and the next merge deploy wiped it.
+          #
+          #   MAIL_FROM          — the RFC 5322 sender. Reverting is silent: mailer.ts
+          #                        falls back to DEFAULT_MAIL_FROM and mail keeps sending
+          #                        from the wrong address with no error anywhere.
+          #   HEALTH_SWEEP_BATCH — how many health re-gates one sweep run may start
+          #                        (platform/app.ts). Reverting quietly restores the
+          #                        default batch size, so a deliberately throttled sweep
+          #                        speeds back up mid-incident.
+          for MAIL_HEALTH_VAR in MAIL_FROM HEALTH_SWEEP_BATCH; do
+            MAIL_HEALTH_VAL="${!MAIL_HEALTH_VAR}"
+            if [ -n "$MAIL_HEALTH_VAL" ]; then
+              ENV_VARS="${ENV_VARS}|${MAIL_HEALTH_VAR}=${MAIL_HEALTH_VAL}"
+              echo "Threading ${MAIL_HEALTH_VAR}=${MAIL_HEALTH_VAL}"
             fi
           done
 
@@ -375,14 +488,7 @@ jobs:
           # games-repo corpus has actually been imported into that engine.
           for KNOWLEDGE_VAR in KNOWLEDGE_SEARCH_ENGINE_ID KNOWLEDGE_SEARCH_PROJECT_ID KNOWLEDGE_SEARCH_LOCATION \
             KNOWLEDGE_SEARCH_COLLECTION KNOWLEDGE_SEARCH_SERVING_CONFIG KNOWLEDGE_SEARCH_QUOTA_PROJECT; do
-            case "$KNOWLEDGE_VAR" in
-              KNOWLEDGE_SEARCH_ENGINE_ID) KNOWLEDGE_VAL="${{ vars.KNOWLEDGE_SEARCH_ENGINE_ID }}" ;;
-              KNOWLEDGE_SEARCH_PROJECT_ID) KNOWLEDGE_VAL="${{ vars.KNOWLEDGE_SEARCH_PROJECT_ID }}" ;;
-              KNOWLEDGE_SEARCH_LOCATION) KNOWLEDGE_VAL="${{ vars.KNOWLEDGE_SEARCH_LOCATION }}" ;;
-              KNOWLEDGE_SEARCH_COLLECTION) KNOWLEDGE_VAL="${{ vars.KNOWLEDGE_SEARCH_COLLECTION }}" ;;
-              KNOWLEDGE_SEARCH_SERVING_CONFIG) KNOWLEDGE_VAL="${{ vars.KNOWLEDGE_SEARCH_SERVING_CONFIG }}" ;;
-              KNOWLEDGE_SEARCH_QUOTA_PROJECT) KNOWLEDGE_VAL="${{ vars.KNOWLEDGE_SEARCH_QUOTA_PROJECT }}" ;;
-            esac
+            KNOWLEDGE_VAL="${!KNOWLEDGE_VAR}"
             if [ -n "$KNOWLEDGE_VAL" ]; then
               ENV_VARS="${ENV_VARS}|${KNOWLEDGE_VAR}=${KNOWLEDGE_VAL}"
               echo "Threading ${KNOWLEDGE_VAR}=${KNOWLEDGE_VAL}"
@@ -399,7 +505,10 @@ jobs:
             --allow-unauthenticated \
             --min-instances 0 \
             --max-instances "$MAX_INSTANCES" \
-            --no-cpu-throttling \
+            --cpu-throttling \
+            --timeout 900 \
+            --memory 1Gi \
+            --service-account "$APP_RUNTIME_SA" \
             --port 8080 \
             --set-env-vars "$ENV_VARS" \
             "${SECRET_FLAGS[@]}"
@@ -540,6 +649,28 @@ jobs:
               ;;
           esac
 
+          # 2b. Warn before the cliff, not at it. Token expiry is mandatory and CI runs
+          #     on the shortest window, so without this the first signal is a failed
+          #     deploy that also blocks promotion — which is how five merges once sat
+          #     unpromoted for most of a day. Never fails the step: an expired token is
+          #     already caught by the 401 above, and a warning that can break a deploy
+          #     would just be the same cliff moved earlier.
+          EXPIRY_CODE=$(curl -s -o /tmp/smoke-token.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${GAMEDEV_ACCESS_TOKEN}" "${CANDIDATE_URL}/api/auth/token-info" || echo 000)
+          if [ "$EXPIRY_CODE" = "200" ]; then
+            DAYS_LEFT=$(jq -r '.expiresInDays // empty' /tmp/smoke-token.json)
+            EXPIRES_AT=$(jq -r '.expiresAt // empty' /tmp/smoke-token.json)
+            if [ -n "$DAYS_LEFT" ] && [ "$DAYS_LEFT" -le 7 ]; then
+              echo "::warning::GAMEDEV_ACCESS_TOKEN expires in ${DAYS_LEFT} day(s), on ${EXPIRES_AT}. When it lapses this step fails and promotion stops. Rotate: npm run token:mint -w @gamedevpl/api -- bot:ci --name 'github actions' --days 30, then update the GAMEDEV_ACCESS_TOKEN repo secret."
+            else
+              echo "CI token valid for ${DAYS_LEFT} more day(s) (expires ${EXPIRES_AT})."
+            fi
+          else
+            # A candidate that predates the route answers 404. Not a failure: the bearer
+            # check above already proved the credential works on this revision.
+            echo "::notice::token-info returned ${EXPIRY_CODE} — expiry lead-time check skipped on this candidate."
+          fi
+
           # 3. Cookie path: exchange the token for the session cookie the SPA sends,
           #    then prove that cookie passes a session-walled route.
           STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" -c /tmp/smoke-cookies.txt -X POST \
@@ -593,7 +724,7 @@ jobs:
       # `deploy` is a fresh runner with no node_modules — everything before this point is
       # gcloud and curl — so Node is set up here.
       - name: Set up Node for the browser gate
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
           cache: 'npm'
@@ -627,15 +758,6 @@ jobs:
           echo "Chromium: $BIN"
           echo "E2E_CHROMIUM_PATH=$BIN" >> "$GITHUB_ENV"
 
-      - name: Browser gate against the candidate
-        env:
-          E2E_BASE_URL: ${{ env.CANDIDATE_URL }}
-          GAMEDEV_ACCESS_TOKEN: ${{ secrets.GAMEDEV_ACCESS_TOKEN }}
-          # Turns "cannot run" into a failed deploy instead of a silent skip
-          # (apps/e2e/src/gate-prerequisites.test.ts).
-          E2E_REQUIRED: '1'
-        run: npm run e2e
-
       - name: Move the party relay onto the same image
         # Only when the split is switched on. Both roles run one image, so the relay has to
         # be redeployed whenever the app is — otherwise the socket protocol the freshly
@@ -647,6 +769,14 @@ jobs:
         # any client speaking it exists. The relay's own env (MP_RELAY_ONLY, the audience,
         # the caller identity) is left untouched — `--image` alone, so this step cannot
         # reconfigure the relay by omission the way a --set-env-vars deploy would.
+        #
+        # And BEFORE the browser gate, which is what the ordering used to get wrong. The
+        # gate opens a party lobby, so it exercises exactly this call. With the relay
+        # updated afterwards, the first deploy to change the app's runtime identity ran the
+        # gate against a candidate the relay did not yet trust: room creation 401'd, the
+        # gate failed, nothing was promoted — and because the relay is only reconfigured on
+        # a deploy that gets this far, the next run repeated it. A wedge that cannot clear
+        # itself. Verified 2026-09-06: `RelayUnavailableError: relay responded 401`.
         if: ${{ vars.MP_RELAY_URL != '' }}
         run: |
           RELAY_SERVICE="${{ vars.MP_RELAY_SERVICE || 'gamedev-mp-relay' }}"
@@ -661,10 +791,29 @@ jobs:
             exit 1
           fi
           echo "Updating ${RELAY_SERVICE} to ${IMAGE}"
+          # An additive env update, never the whole-map flag: only the caller identity
+          # is touched, and it is the app's runtime account by construction — the
+          # relay's create route trusts exactly that email (internal-auth.ts), so it has
+          # to move with the app. --service-account pins the relay's own identity for
+          # the same reason the app's is pinned: a value set once on the service is one
+          # deploy from being lost.
+          #
+          # The list is what makes this step safe to run before promotion. At this point
+          # the *serving* app is still the previous revision, which may run as a different
+          # account than the candidate; naming only the candidate's would refuse every
+          # lobby in production for the length of the gate. internal-auth.ts accepts any
+          # email in the list, so both are honoured and neither end has to change in the
+          # same instant as the other.
+          CALLER_SAS="$APP_RUNTIME_SA"
+          if [ -n "$APP_RUNTIME_SA_PREVIOUS" ]; then
+            CALLER_SAS="${CALLER_SAS},${APP_RUNTIME_SA_PREVIOUS}"
+          fi
           gcloud run services update "$RELAY_SERVICE" \
             --region "$REGION" \
             --project "$PROJECT_ID" \
-            --image "$IMAGE"
+            --image "$IMAGE" \
+            --service-account "$RELAY_RUNTIME_SA" \
+            --update-env-vars "^|^MP_RELAY_CALLER_SA=${CALLER_SAS}"
 
           RELAY_URL=$(gcloud run services describe "$RELAY_SERVICE" --region "$REGION" \
             --project "$PROJECT_ID" --format 'value(status.url)')
@@ -684,6 +833,213 @@ jobs:
           fi
           echo "Relay healthy at ${RELAY_URL}"
 
+      - name: Browser gate against the candidate
+        env:
+          E2E_BASE_URL: ${{ env.CANDIDATE_URL }}
+          GAMEDEV_ACCESS_TOKEN: ${{ secrets.GAMEDEV_ACCESS_TOKEN }}
+          # Turns "cannot run" into a failed deploy instead of a silent skip
+          # (apps/e2e/src/gate-prerequisites.test.ts).
+          E2E_REQUIRED: '1'
+        run: npm run e2e
+
+      - name: Keep the zone host on the same source revision
+        # gamedev-world was the one production service with no CI path at all: its image
+        # was only ever advanced by hand through infra/deploy-world.sh, so it could drift
+        # from the zone-core and contract versions the app was built against. That drift
+        # is invisible by construction — a zone that refuses admission drops the player
+        # into solo play while /health stays green and every page returns 200
+        # (docs/runbooks/zones-down-triage.md), and the browser gate cannot see it either.
+        #
+        # Deliberately NOT rebuilt on every deploy. apps/world/Dockerfile states the
+        # reason: the world deploys on its own cadence so that shipping a CSS change does
+        # not mass-hibernate every live world. A redeploy drains running zones, so it has
+        # to be caused by a change to the world's own inputs, not by any merge to master.
+        #
+        # Same placement and the same reasoning as the relay step above: before promotion,
+        # because the host is the server and the freshly promoted bundle is its client.
+        if: ${{ vars.ZONE_HOST_URL != '' }}
+        run: |
+          ZONE_SERVICE="${{ vars.ZONE_SERVICE || 'gamedev-world' }}"
+          # The same guard the relay step carries, for the same blast radius: a mis-set
+          # variable naming the app service would push an unrelated image straight onto
+          # production, past the candidate revision, the smoke tests and the browser gate.
+          if [ "$ZONE_SERVICE" = "$SERVICE" ]; then
+            echo "Error: vars.ZONE_SERVICE is '${ZONE_SERVICE}', which is the app service."
+            exit 1
+          fi
+
+          ZONE_URL=$(gcloud run services describe "$ZONE_SERVICE" --region "$REGION" \
+            --project "$PROJECT_ID" --format 'value(status.url)' 2>/dev/null || true)
+          if [ -z "$ZONE_URL" ]; then
+            echo "::warning::vars.ZONE_HOST_URL is set but ${ZONE_SERVICE} does not exist in ${REGION}. Run infra/deploy-world.sh once to create it."
+            exit 0
+          fi
+
+          # The app mints its OIDC-free ticket against the URL it was told about, so a
+          # mismatch means admission is pointed at something other than this service.
+          if [ "$ZONE_URL" != "${{ vars.ZONE_HOST_URL }}" ]; then
+            echo "Error: vars.ZONE_HOST_URL is '${{ vars.ZONE_HOST_URL }}' but ${ZONE_SERVICE} is at '${ZONE_URL}'."
+            exit 1
+          fi
+
+          # What the running image was built from. deploy-world.sh tags by timestamp, so
+          # an untagged-by-SHA image means "provenance unknown" — rebuild to establish the
+          # baseline rather than guess it is current.
+          CURRENT_IMAGE=$(gcloud run services describe "$ZONE_SERVICE" --region "$REGION" \
+            --project "$PROJECT_ID" --format 'value(spec.template.spec.containers[0].image)')
+          DEPLOYED_SHA="${CURRENT_IMAGE##*:sha-}"
+          TARGET_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/gamedev/world:sha-${DEPLOY_SHA}"
+
+          # These are exactly the paths apps/world/Dockerfile copies into the image.
+          # packages/contract is in the list on purpose: it carries the wire constants both
+          # sides read, so a contract change is the drift this step exists to stop.
+          WORLD_INPUTS="apps/world packages/zone-core packages/contract package.json package-lock.json"
+
+          NEEDS_BUILD=true
+          if [ "$CURRENT_IMAGE" = "$TARGET_IMAGE" ]; then
+            NEEDS_BUILD=false
+            echo "${ZONE_SERVICE} already runs ${DEPLOY_SHA}."
+          elif [ "$DEPLOYED_SHA" = "$CURRENT_IMAGE" ]; then
+            # No sha- tag to parse. deploy-world.sh tags by timestamp, so this is what a
+            # hand-deployed host looks like: provenance unknown, and guessing it is current
+            # is the failure this step exists to prevent.
+            echo "Cannot read provenance from '${CURRENT_IMAGE}' — rebuilding to establish it."
+          else
+            # The checkout is shallow, so the deployed commit is almost never present.
+            # Fetch just that one commit rather than deepening the whole clone.
+            git fetch --depth=1 origin "$DEPLOYED_SHA" 2>/dev/null || true
+            if git cat-file -e "${DEPLOYED_SHA}^{commit}" 2>/dev/null; then
+              if git diff --quiet "$DEPLOYED_SHA" "$DEPLOY_SHA" -- $WORLD_INPUTS; then
+                NEEDS_BUILD=false
+                echo "No change to the zone host's inputs since ${DEPLOYED_SHA}; leaving live zones alone."
+              else
+                echo "Zone host inputs changed since ${DEPLOYED_SHA}:"
+                git diff --name-only "$DEPLOYED_SHA" "$DEPLOY_SHA" -- $WORLD_INPUTS
+              fi
+            else
+              echo "Deployed commit ${DEPLOYED_SHA} is not reachable — rebuilding rather than assuming."
+            fi
+          fi
+
+          if [ "$NEEDS_BUILD" = true ]; then
+            echo "Building ${TARGET_IMAGE}"
+            # Same runner-side build as the app image, for the same reason.
+            gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+            docker build -f apps/world/Dockerfile -t "${TARGET_IMAGE}" .
+            docker push "${TARGET_IMAGE}"
+            # --image alone, never --set-env-vars: this step must not be able to
+            # reconfigure the zone host by omission. Its env and secrets are
+            # deploy-world.sh's business.
+            gcloud run services update "$ZONE_SERVICE" \
+              --region "$REGION" \
+              --project "$PROJECT_ID" \
+              --image "$TARGET_IMAGE" \
+              --service-account "$WORLD_RUNTIME_SA"
+          else
+            # The image is left alone, but the identity is still reconciled: a host that
+            # is on the wrong account is the drift this step exists to catch, and it does
+            # not wait for a zone-core change to become worth fixing. A new revision
+            # drains live zones, so this fires only when the account actually differs.
+            CURRENT_SA=$(gcloud run services describe "$ZONE_SERVICE" --region "$REGION" \
+              --project "$PROJECT_ID" --format 'value(spec.template.spec.serviceAccountName)')
+            if [ "$CURRENT_SA" != "$WORLD_RUNTIME_SA" ]; then
+              echo "${ZONE_SERVICE} runs as '${CURRENT_SA}'; moving it to ${WORLD_RUNTIME_SA}"
+              gcloud run services update "$ZONE_SERVICE" \
+                --region "$REGION" \
+                --project "$PROJECT_ID" \
+                --service-account "$WORLD_RUNTIME_SA"
+            fi
+          fi
+
+          STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${ZONE_URL}/health" || echo 000)
+          if [ "$STATUS_CODE" -ne 200 ]; then
+            if [ "$NEEDS_BUILD" = true ]; then
+              echo "Error: zone host health returned ${STATUS_CODE} after this deploy updated it."
+              exit 1
+            fi
+            # Not caused by this deploy, and zones failing does not stop the site serving
+            # games — so it warns rather than blocking every app release behind it.
+            echo "::warning::Zone host health returned ${STATUS_CODE}; it was not updated by this deploy. See docs/runbooks/zones-down-triage.md."
+          else
+            echo "Zone host healthy at ${ZONE_URL}"
+          fi
+
+      - name: Assert no service runs as the default compute account
+        # The whole point of the dedicated identities is that the default compute account
+        # (project-wide editor) is never in the request path. Read back what Cloud Run
+        # will actually run rather than trusting the flags above: the candidate revision
+        # for the app, and the live template for the relay and the zone host when they
+        # are switched on. Before promotion, so a regression blocks the deploy instead of
+        # being discovered in the IAM policy months later.
+        run: |
+          fail=0
+          check() {
+            local svc="$1" want="$2"
+            local got
+            got=$(gcloud run services describe "$svc" --region "$REGION" --project "$PROJECT_ID" \
+              --format 'value(spec.template.spec.serviceAccountName)' 2>/dev/null || true)
+            if [ -z "$got" ] || [[ "$got" == *-compute@developer.gserviceaccount.com ]]; then
+              echo "::error::${svc} runs as '${got:-the default compute account}'"
+              fail=1
+            elif [ "$got" != "$want" ]; then
+              echo "::error::${svc} runs as '${got}', expected ${want}"
+              fail=1
+            else
+              echo "${svc}: ${got}"
+            fi
+          }
+          check "$SERVICE" "$APP_RUNTIME_SA"
+          if [ -n "${{ vars.MP_RELAY_URL }}" ]; then
+            check "${{ vars.MP_RELAY_SERVICE || 'gamedev-mp-relay' }}" "$RELAY_RUNTIME_SA"
+          fi
+          if [ -n "${{ vars.ZONE_HOST_URL }}" ]; then
+            check "${{ vars.ZONE_SERVICE || 'gamedev-world' }}" "$WORLD_RUNTIME_SA"
+          fi
+          exit "$fail"
+
+      - name: Upload web assets to Firebase Hosting
+        # Before promotion, so the assets are in place when the new index.html goes live.
+        #
+        # Only apps/web/dist/assets is uploaded. Hosting appends `cookie` to Vary on anything
+        # it takes from a Cloud Run rewrite, and each signed-in caller carries a distinct
+        # __session, so an asset fetched through the rewrite is cached per user and never
+        # shared — measured 2026-09-04. Files Hosting serves itself carry no cookie in Vary.
+        #
+        # index.html is deliberately NOT uploaded: Hosting matches static files before
+        # rewrites, so it would bypass the origin's SPA shell handling.
+        #
+        # A hash mismatch between this upload and the image degrades to serving from the
+        # origin rather than 404ing, because the ** rewrite catches whatever Hosting lacks
+        # and the image always carries a complete copy. That is what makes this safe to run
+        # on every deploy.
+        #
+        # Needs roles/firebasehosting.admin on the deploy service account.
+        # The hashes must match the image's. Vite content-hashes each chunk, and the main
+        # bundle inlines these three values, so a build without them produces a different
+        # index-*.js name than the one the image's index.html references — measured on the
+        # first deploy: the CSS (which embeds nothing) was served by Hosting, the JS fell
+        # through to the rewrite. The set must equal the Dockerfile's VITE_* ARGs, not just
+        # the ones the image build passes: the Dockerfile defines VITE_API_BASE_URL as an
+        # empty string, and Vite compiles a defined-empty variable differently from an
+        # absent one — measured, the JS hash differs on that alone while the CSS matches.
+        env:
+          VITE_API_BASE_URL: ''
+          VITE_GOOGLE_OAUTH_CLIENT_ID: ${{ vars.GOOGLE_OAUTH_CLIENT_ID }}
+          VITE_APPLE_SERVICES_ID: ${{ vars.APPLE_SERVICES_ID }}
+          VITE_MP_RELAY_URL: ${{ vars.MP_RELAY_URL }}
+        run: |
+          # npm ci alone leaves the workspace packages unbuilt, and apps/web will not
+          # typecheck against their stale dists.
+          npm run build:packages
+          npm run build --workspace apps/web
+          rm -rf infra/firebase/public/assets
+          cp -r apps/web/dist/assets infra/firebase/public/assets
+          npx firebase-tools@15.29.0 deploy \
+            --only hosting \
+            --project "$PROJECT_ID" \
+            --config infra/firebase/firebase.json \
+            --non-interactive
+
       - name: Promote candidate revision to 100% traffic
         run: |
           gcloud run services update-traffic "$SERVICE" \
@@ -691,3 +1047,24 @@ jobs:
             --project "$PROJECT_ID" \
             --to-latest \
             --remove-tags candidate
+
+      - name: Prune old Firebase Hosting versions
+        # Last, and after promotion: Hosting keeps every version ever deployed and bills
+        # storage over the free tier, but nothing here is worth delaying a release for.
+        # The script never deletes the live version, and keeps the newest KEEP besides it
+        # so a rollback still has somewhere to roll back to.
+        #
+        # continue-on-error, because by this line the release is already serving: a
+        # transient 500 from the Hosting API must not paint a live deployment red and
+        # send someone re-running it. A failure here costs one deploy's worth of stale
+        # versions, which the next successful run prunes anyway.
+        continue-on-error: true
+        env:
+          KEEP: '10'
+        run: |
+          if ! ./infra/prune-hosting-versions.sh; then
+            echo "::warning title=Hosting prune failed::Old Hosting versions were not pruned. \
+          The release is live and unaffected; storage stays high until the next deploy \
+          prunes, or until ./infra/prune-hosting-versions.sh is run by hand."
+            exit 1
+          fi

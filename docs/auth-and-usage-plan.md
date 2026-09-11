@@ -69,7 +69,7 @@ users/{uid}            # uid = "g:<Google sub claim>" (provider-prefixed for fut
   createdAt, lastLoginAt
   tier: 'standard' | 'trusted' | 'blocked'
 
-submissions/{issueNumber}
+submissions/{jobId}
   ownerUid, createdAt, title      # title sanitized, as sent to GitHub
 
 usage/{uid}/counters/{yyyy-mm-dd}
@@ -86,16 +86,15 @@ No events collection (rethink #3). Google `sub` is stable for the life of the ac
 
 ## AuthZ matrix
 
-| Route                                 | Today              | M1                               | M2+ (product decision)                |
-| ------------------------------------- | ------------------ | -------------------------------- | ------------------------------------- |
-| `GET /api/health`                     | basic auth         | public                           | public                                |
-| `GET /api/auth/*` (new)               | —                  | public                           | public                                |
-| `POST /api/submissions`               | basic auth         | **session + quota + owner**      | same                                  |
-| `GET /api/submissions/:token/preview` | basic auth + token | **session + token**              | same                                  |
-| `POST /api/generate-game`             | basic auth         | **session + quota (cheap tier)** | same                                  |
-| `GET /api/submissions/:token`         | basic auth + token | unchanged                        | session + token                       |
-| `GET /api/catalog`                    | basic auth         | unchanged                        | **public** (owner decided 2026-07-23) |
-| `GET /api/games/:slug`                | basic auth         | unchanged                        | **public** (owner decided 2026-07-23) |
+| Route                                 | Today              | M1                          | M2+ (product decision)                |
+| ------------------------------------- | ------------------ | --------------------------- | ------------------------------------- |
+| `GET /api/health`                     | basic auth         | public                      | public                                |
+| `GET /api/auth/*` (new)               | —                  | public                      | public                                |
+| `POST /api/submissions`               | basic auth         | **session + quota + owner** | same                                  |
+| `GET /api/submissions/:token/preview` | basic auth + token | **session + token**         | same                                  |
+| `GET /api/submissions/:token`         | basic auth + token | unchanged                   | session + token                       |
+| `GET /api/catalog`                    | basic auth         | unchanged                   | **public** (owner decided 2026-07-23) |
+| `GET /api/games/:slug`                | basic auth         | unchanged                   | **public** (owner decided 2026-07-23) |
 
 Rate limiting: per-uid daily counters for quotas; existing per-IP in-memory limiter stays as
 the coarse outer layer (and is the only limiter on `/api/auth/*`).
@@ -110,8 +109,9 @@ the coarse outer layer (and is the only limiter on `/api/auth/*`).
   - `requireSession` Fastify guard applied per-route. Basic-Auth hook stays outermost.
 - `apps/api/src/platform/store.ts` (new) — thin Firestore wrapper with an **in-memory fake for tests**
   (same seam pattern as the `githubClient` stubs; unit tests never touch real Firestore).
-- `submissions.ts` — owner recorded on create; transactional quota check before
-  `createIssue`; preview requires session; counters incremented on spend.
+- `submissions.ts` — owner recorded on create; transactional quota check before job
+  creation (native-job allocation and direct agent dispatch, not a GitHub issue); preview
+  requires session; counters incremented on spend.
 
 ## Web changes
 
@@ -154,7 +154,7 @@ the coarse outer layer (and is the only limiter on `/api/auth/*`).
   `submissions.ownerUid` + daily quota (default: 5 submissions/day, env-tunable; `trusted`
   tier bypasses), preview/mock gated.
 - **M2 — Read-side decision + UX.** (IN PROGRESS — quota UX & public read decision implemented) Owner decided public catalog/play reads; quota-exceeded and blocked UX; status links stay shareable read-only.
-- **M3 — Retire Basic-Auth.** (NOT STARTED — awaiting owner authorization) Delete `site-basic-auth` + hook; smoke tests flip to session-only checks. Google sign-in is the single auth boundary.
+- **M3 — Retire Basic-Auth.** (DONE in code — one owner action left) The hook is gone, no source reads `SITE_BASIC_AUTH`, the secret is mapped into none of the three Cloud Run services, and the smoke tests are session-only. Sign-in plus the `PRIVATE_BETA` allowlist is the single auth boundary. Remaining: delete the orphaned `site-basic-auth` secret in Secret Manager — see [`deployment.md`](./deployment.md).
 - **M4 — Visibility + reach.** Admin usage view (allowlisted uids) / BigQuery log sink; optionally add GitHub as a second provider for power-creators.
 
 ## The global cap and pause switch (built 2026-07-30)

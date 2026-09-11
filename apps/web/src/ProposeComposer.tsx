@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { proposeFromRemix, type ProposalApiError } from './proposalsApi.js';
+import './propose-composer.css';
 
 /**
  * The composer behind Remix's "Propose this change".

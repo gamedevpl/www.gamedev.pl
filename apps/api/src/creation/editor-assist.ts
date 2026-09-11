@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ASSIST_LANES, type AssistLane } from '@gamedevpl/contract';
-import { createVertexClient, type VertexGenerationConfig } from '../agent-surface/genai.js';
+import { createVertexClient, type VertexGenerationConfig } from '../platform/genai.js';
 import type { GenAIClient } from 'genaicode';
 import {
   PARAMS_KEY,
@@ -35,7 +35,7 @@ import { formatRemixTurns } from './remix-turns.js';
 
 export { ASSIST_LANES, type AssistLane };
 
-export const DEFAULT_ASSIST_MODEL = 'gemini-3.7-flash';
+export const DEFAULT_ASSIST_MODEL = 'gemini-3.8-flash';
 export const DEFAULT_ASSIST_TIMEOUT_MS = 8000;
 /** Utterances are one-liners; a wall of text is a prompt-injection vehicle, not a tweak. */
 export const MAX_UTTERANCE_LENGTH = 240;

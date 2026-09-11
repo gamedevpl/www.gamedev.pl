@@ -39,9 +39,30 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import type { GameProject } from '@gamedevpl/contract';
 import { gateProgressFor, type GateProgressLane, type GateProgressStage } from '../src/delivery/gate-progress.js';
 import { runGate } from '../src/delivery/gate-runner.js';
 import { createGcsGamesStore } from '../src/delivery/games-store.js';
+import { withRemoteVerdicts } from '../src/delivery/gate-verdict-client.js';
+import { createLocalGamesClient } from '../src/catalog/local-games-repo.js';
+import { assembleGameHtml } from '../src/platform/assemble.js';
+
+// Not the repo's dist/ build — assembleGameHtml applies our serve-time policy.
+async function assembleFromHarness(harness: string, slug: string): Promise<string | null> {
+  const client = createLocalGamesClient({ rootDir: harness });
+  const sources = await client.getGameSources('main', slug);
+  if (!sources) return null;
+
+  const project: GameProject = {
+    title: sources.title ?? slug,
+    description: '',
+    html: sources.indexHtml,
+    js: sources.gameJs,
+    css: sources.styleCss,
+  };
+  // Self-contained by repo policy, same as the bake and play route.
+  return assembleGameHtml(project, { restrictNetwork: true });
+}
 
 function arg(name: string): string | undefined {
   const index = process.argv.indexOf(`--${name}`);
@@ -98,7 +119,19 @@ async function main(): Promise<void> {
   }
 
   const repo = process.env.GAMES_REPO?.trim() ?? 'gamedevpl/www.gamedev.pl-games';
-  const store = createGcsGamesStore({ bucket });
+  // Verdicts to the API, artifacts direct; unset keeps the old write.
+  const verdictUrl = process.env.GATE_VERDICT_URL?.trim();
+  const verdictToken = process.env.GATE_VERDICT_TOKEN?.trim();
+  const gcsStore = createGcsGamesStore({ bucket });
+  const store =
+    verdictUrl && verdictToken ? withRemoteVerdicts(gcsStore, { endpoint: verdictUrl, token: verdictToken }) : gcsStore;
+  // Said before the checks, not after.
+  if (!verdictUrl || !verdictToken) {
+    console.warn(
+      'GATE_VERDICT_URL/TOKEN unset — writing the manifest directly. Against the shared\n' +
+        'bucket that is refused; mint one with `npm run gate:capability -w @gamedevpl/api`.',
+    );
+  }
   const harnesses: string[] = [];
   const health = process.argv.includes('--health');
   const preview = process.argv.includes('--preview');
@@ -126,6 +159,7 @@ async function main(): Promise<void> {
     {
       store,
       run,
+      assembleBundle: assembleFromHarness,
       onProgress: (progress) => store.putGateProgress(slug, version, progress).catch(() => {}),
       async prepareHarness(engineRef) {
         // A real clone rather than the tarball reader the bake uses: the gate has to *run*
@@ -186,6 +220,7 @@ async function main(): Promise<void> {
       ...(outcome.status ? { status: outcome.status } : {}),
       ...(outcome.behaviouralDiff ? { behaviouralDiff: true } : {}),
       ...(outcome.screenshot ? { screenshot: outcome.screenshot } : {}),
+      ...(outcome.derivedSourceFiles ? { derivedSourceFiles: outcome.derivedSourceFiles } : {}),
     });
   }
 

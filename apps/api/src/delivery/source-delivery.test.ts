@@ -2,16 +2,22 @@ import { describe, expect, it, vi } from 'vitest';
 import type { GamesStore, SourceFile, VersionManifest } from './games-store.js';
 import { InvalidUploadError } from './games-store.js';
 import type { KitFileStore, KitTree } from '../agent-surface/kit-files.js';
-import { KIT_ROOT_DIR } from '../agent-surface/kit-registry.js';
+import { KIT_ROOT_DIR } from '../platform/kit-registry.js';
 import { InMemoryStore } from '../platform/store.js';
 import { NoopTranslator, type BilingualText, type Translator } from '../platform/translate.js';
-import { DELIVERY_ACCEPTED_MSG, DELIVERY_PREFLIGHT_REFUSED_MSG } from '../telemetry/delivery-metrics.js';
+import { DELIVERY_ACCEPTED_MSG, DELIVERY_PREFLIGHT_REFUSED_MSG } from '../platform/delivery-metrics.js';
 import {
   createSourceDeliveryService,
   SourceDeliveryAuthorityError,
   type SourceDeliveryAuthority,
 } from './source-delivery.js';
 import type { StagedPreviewPublisher } from './staged-preview.js';
+import { parseSpecTitle } from '../catalog/github-client.js';
+import {
+  runTypecheckPreflight,
+  sharedSourcesFromKitTree,
+  TYPECHECK_PREFLIGHT_MAX_REFUSALS,
+} from '../creation/typecheck-preflight.js';
 
 const ISSUE = 701;
 const SLUG = 'managed-comet';
@@ -35,7 +41,7 @@ function manifest(files: SourceFile[], version: string): VersionManifest {
     slug: SLUG,
     version,
     createdAt: '2026-08-09T18:00:00.000Z',
-    issueNumber: ISSUE,
+    jobId: ISSUE,
     sourceFiles: files.map((file) => file.path),
   };
 }
@@ -75,6 +81,8 @@ async function setup(opts?: {
   failPutCandidateSources?: boolean;
   translator?: Translator;
   stagedPreviews?: Pick<StagedPreviewPublisher, 'publishCandidate'>;
+  gateRunGate?: { peek(uid: string, dateStr: string): Promise<{ allowed: boolean }> } | null;
+  builder?: 'self';
 }) {
   const store = new InMemoryStore();
   await store.createSubmission(ISSUE, 'owner', 'Original title');
@@ -107,6 +115,11 @@ async function setup(opts?: {
     onEvent: vi.fn(),
     log,
     translator: opts?.translator ?? new NoopTranslator(),
+    parseSpecTitle,
+    runTypecheckPreflight,
+    sharedSourcesFromKitTree,
+    typecheckPreflightMaxRefusals: TYPECHECK_PREFLIGHT_MAX_REFUSALS,
+    ...(opts?.gateRunGate !== undefined ? { gateRunGate: opts.gateRunGate } : {}),
   });
   const authority: SourceDeliveryAuthority = {
     backend: BACKEND,
@@ -121,7 +134,7 @@ describe('shared source delivery', () => {
     const { store, putCandidateSources, gate, service, authority } = await setup();
 
     const result = await service.deliver({
-      issueNumber: ISSUE,
+      jobId: ISSUE,
       slug: SLUG,
       files: PREVIEW_FILES,
       mode: 'preview',
@@ -139,14 +152,15 @@ describe('shared source delivery', () => {
     });
     expect(putCandidateSources).toHaveBeenCalledWith(
       expect.objectContaining({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         roundGeneration: 1,
         slug: SLUG,
         backend: BACKEND,
         mode: 'preview',
+        requireCompiledEditor: true,
       }),
     );
-    expect(gate).toHaveBeenCalledWith({ issueNumber: ISSUE, slug: SLUG, version: 'v-managed-1', mode: 'preview' });
+    expect(gate).toHaveBeenCalledWith({ jobId: ISSUE, slug: SLUG, version: 'v-managed-1', mode: 'preview' });
     const record = await store.getSubmission(ISSUE);
     expect(record).toMatchObject({
       slug: SLUG,
@@ -156,11 +170,72 @@ describe('shared source delivery', () => {
     expect(record?.deliveredVersion).toBeUndefined();
   });
 
+  it('refuses a delivery once the daily gate-build allowance is spent', async () => {
+    let allowed = true;
+    const { service, authority, gate } = await setup({
+      gateRunGate: { peek: async () => ({ allowed }) },
+    });
+
+    const first = await service.deliver({
+      jobId: ISSUE,
+      slug: SLUG,
+      files: PREVIEW_FILES,
+      mode: 'preview',
+      backend: BACKEND,
+      authority,
+    });
+    expect(first).toMatchObject({ accepted: true });
+    expect(gate).toHaveBeenCalledTimes(1);
+
+    allowed = false;
+    const refused = await service.deliver({
+      jobId: ISSUE,
+      slug: SLUG,
+      files: PREVIEW_FILES,
+      mode: 'preview',
+      backend: BACKEND,
+      authority,
+    });
+    // A preview delivery is a 30-minute build too.
+    expect(refused).toEqual({ accepted: false, rejected: 'gate_capacity' });
+    expect(gate).toHaveBeenCalledTimes(1);
+  });
+
+  it('never spends a slot itself — the ceiling is charged where the build starts', async () => {
+    let peeked = 0;
+    const { service, authority, gate } = await setup({
+      failPutCandidateSources: true,
+      gateRunGate: {
+        peek: async () => {
+          peeked += 1;
+          return { allowed: true };
+        },
+      },
+    });
+    await expect(
+      service.deliver({
+        jobId: ISSUE,
+        slug: SLUG,
+        files: PREVIEW_FILES,
+        mode: 'preview',
+        backend: BACKEND,
+        authority,
+      }),
+    ).rejects.toThrow();
+
+    // A rejected delivery starts no build, so it costs nothing.
+    expect(gate).not.toHaveBeenCalled();
+    expect(peeked).toBe(1);
+  });
+
   it('uses the same service for publish side effects and transition', async () => {
-    const { store, service, authority } = await setup();
+    const { store, putCandidateSources, service, authority } = await setup();
+    await store.createSubmission(700, 'owner', 'Published catalog game');
+    await store.setSubmissionSlug(700, SLUG);
+    await store.setSubmissionPublishedAt(700, '2026-08-01T00:00:00.000Z');
 
     const result = await service.deliver({
-      issueNumber: ISSUE,
+      jobId: ISSUE,
       slug: SLUG,
       files: PUBLISH_FILES,
       mode: 'publish',
@@ -169,6 +244,7 @@ describe('shared source delivery', () => {
     });
 
     expect(result).toMatchObject({ accepted: true, mode: 'publish' });
+    expect(putCandidateSources).toHaveBeenCalledWith(expect.objectContaining({ requireCompiledEditor: false }));
     expect((await store.getSubmission(ISSUE)) ?? {}).toMatchObject({
       deliveredVersion: 'v-managed-1',
       previewVersion: 'v-managed-1',
@@ -185,7 +261,7 @@ describe('shared source delivery', () => {
 
     await expect(
       service.deliver({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         files: PREVIEW_FILES,
         mode: 'preview',
@@ -202,7 +278,7 @@ describe('shared source delivery', () => {
 
     await expect(
       service.deliver({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         files: PREVIEW_FILES,
         mode: 'preview',
@@ -224,7 +300,7 @@ describe('shared source delivery', () => {
 
     await expect(
       service.deliver({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         files: PREVIEW_FILES,
         mode: 'preview',
@@ -263,7 +339,7 @@ export function tick(round: Round) {
 
       await expect(
         service.deliver({
-          issueNumber: ISSUE,
+          jobId: ISSUE,
           slug: SLUG,
           files: brokenFiles,
           mode: 'preview',
@@ -284,7 +360,7 @@ export function tick(round: Round) {
     it('logs an accepted delivery with submitAttempts and refusals', async () => {
       const { store, service, authority, log } = await setup();
       await service.deliver({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         files: PREVIEW_FILES,
         mode: 'preview',
@@ -309,7 +385,6 @@ export function tick(round: Round) {
         loadRegistry: async () => ({ engineRef: CURRENT, previous: PINNED, sha256: 'a'.repeat(64) }),
         loadTree: async (engineRef?: string) => {
           loaded = engineRef ?? CURRENT;
-          // Empty current kit would skip if pin ignored.
           if (loaded === PINNED) return treeFor(PINNED, KIT_DTS);
           return treeFor(CURRENT, '');
         },
@@ -320,7 +395,7 @@ export function tick(round: Round) {
 
       await expect(
         service.deliver({
-          issueNumber: ISSUE,
+          jobId: ISSUE,
           slug: SLUG,
           files: brokenFiles,
           mode: 'preview',
@@ -340,7 +415,7 @@ export function tick(round: Round) {
       for (let i = 0; i < 2; i += 1) {
         await expect(
           service.deliver({
-            issueNumber: ISSUE,
+            jobId: ISSUE,
             slug: SLUG,
             files: brokenFiles,
             mode: 'preview',
@@ -352,7 +427,7 @@ export function tick(round: Round) {
       expect(putCandidateSources).not.toHaveBeenCalled();
 
       const result = await service.deliver({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         files: brokenFiles,
         mode: 'preview',
@@ -365,7 +440,6 @@ export function tick(round: Round) {
       expect(record?.roundTypecheckPreflightRefusals).toBe(2);
       expect(record?.roundTypecheckPreflightBypassErrors).toMatch(/Typecheck preflight failed/);
       expect(log.warn.mock.calls[0]?.[0]).toMatchObject({ message: record?.roundTypecheckPreflightBypassErrors });
-      // Regression: bypass diagnostics never reached the thread, only a log line.
       const events = await store.listBuildEvents(ISSUE);
       expect(events).toContainEqual(
         expect.objectContaining({ kind: 'blocked', text: expect.stringContaining('without a passing typecheck') }),
@@ -373,7 +447,6 @@ export function tick(round: Round) {
     });
 
     it('does not post the bypass warning when the delivery itself fails to store', async () => {
-      // Regression: bypass event used to post before storage could fail.
       const kitFileStore = fakeKitStore({ [PINNED]: treeFor(PINNED, KIT_DTS) });
       const { store, service, authority } = await setup({ kitFileStore, failPutCandidateSources: true });
       await store.pinRoundKitEngineRef(ISSUE, PINNED);
@@ -381,7 +454,7 @@ export function tick(round: Round) {
       for (let i = 0; i < 2; i += 1) {
         await expect(
           service.deliver({
-            issueNumber: ISSUE,
+            jobId: ISSUE,
             slug: SLUG,
             files: brokenFiles,
             mode: 'preview',
@@ -393,7 +466,7 @@ export function tick(round: Round) {
 
       await expect(
         service.deliver({
-          issueNumber: ISSUE,
+          jobId: ISSUE,
           slug: SLUG,
           files: brokenFiles,
           mode: 'preview',
@@ -406,7 +479,6 @@ export function tick(round: Round) {
     });
 
     it('localizes the bypass warning like any other build event', async () => {
-      // Regression: this event skipped intake localization, unlike agent progress events.
       const kitFileStore = fakeKitStore({ [PINNED]: treeFor(PINNED, KIT_DTS) });
       const { store, service, authority } = await setup({
         kitFileStore,
@@ -416,7 +488,7 @@ export function tick(round: Round) {
 
       for (let i = 0; i < 3; i += 1) {
         await service
-          .deliver({ issueNumber: ISSUE, slug: SLUG, files: brokenFiles, mode: 'preview', backend: BACKEND, authority })
+          .deliver({ jobId: ISSUE, slug: SLUG, files: brokenFiles, mode: 'preview', backend: BACKEND, authority })
           .catch(() => {});
       }
 
@@ -433,7 +505,7 @@ export function tick(round: Round) {
     it('does not refuse when no kit store is configured', async () => {
       const { putCandidateSources, service, authority } = await setup({ kitFileStore: null });
       const result = await service.deliver({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         files: brokenFiles,
         mode: 'preview',
@@ -456,7 +528,7 @@ export function tick(round: Round) {
         { path: 'game.ts', content: 'export const n = 1;\n' },
       ];
       const result = await service.deliver({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         files: clean,
         mode: 'preview',
@@ -466,7 +538,6 @@ export function tick(round: Round) {
       expect(result.accepted).toBe(true);
       expect((await store.getSubmission(ISSUE))?.roundTypecheckPreflightBypassErrors).toBeUndefined();
 
-      // Regression: the stale 'blocked' warning was never superseded for a reader.
       const events = await store.listBuildEvents(ISSUE);
       expect(events).toContainEqual(
         expect.objectContaining({ kind: 'milestone', text: expect.stringContaining('no longer applies') }),
@@ -474,7 +545,6 @@ export function tick(round: Round) {
     });
 
     it('does not resolve the bypass when the check only skipped, not passed', async () => {
-      // Regression: a skipped check is not a real pass.
       const emptyKit = { engineRef: PINNED, sha256: 'a'.repeat(64), files: new Map() };
       const kitFileStore = fakeKitStore({ [PINNED]: emptyKit });
       const { store, service, authority } = await setup({ kitFileStore });
@@ -487,7 +557,7 @@ export function tick(round: Round) {
         { path: 'game.ts', content: 'export const n = 1;\n' },
       ];
       const result = await service.deliver({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         files: clean,
         mode: 'preview',
@@ -500,7 +570,6 @@ export function tick(round: Round) {
     });
 
     it('does not let a thread-event write failure roll back an accepted delivery', async () => {
-      // Regression: a decorative event write used to reject deliver() after storage.
       const kitFileStore = fakeKitStore({ [PINNED]: treeFor(PINNED, KIT_DTS) });
       const { store, service, authority } = await setup({ kitFileStore });
       await store.pinRoundKitEngineRef(ISSUE, PINNED);
@@ -511,7 +580,7 @@ export function tick(round: Round) {
       for (let i = 0; i < 2; i += 1) {
         await expect(
           service.deliver({
-            issueNumber: ISSUE,
+            jobId: ISSUE,
             slug: SLUG,
             files: brokenFiles,
             mode: 'preview',
@@ -522,7 +591,7 @@ export function tick(round: Round) {
       }
 
       const result = await service.deliver({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         files: brokenFiles,
         mode: 'preview',
@@ -534,7 +603,6 @@ export function tick(round: Round) {
     });
 
     it('does not relock a creator manual delivery as a resumed agent round', async () => {
-      // Regression: any delivery always cleared agentEndedAt, faking agent liveness.
       const kitFileStore = fakeKitStore({ [PINNED]: treeFor(PINNED, KIT_DTS) });
       const { store, service } = await setup({ kitFileStore });
       await store.pinRoundKitEngineRef(ISSUE, PINNED);
@@ -543,7 +611,7 @@ export function tick(round: Round) {
       for (let i = 0; i < 2; i += 1) {
         await expect(
           service.deliver({
-            issueNumber: ISSUE,
+            jobId: ISSUE,
             slug: SLUG,
             files: brokenFiles,
             mode: 'preview',
@@ -552,7 +620,7 @@ export function tick(round: Round) {
         ).rejects.toBeInstanceOf(InvalidUploadError);
       }
       const result = await service.deliver({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         files: brokenFiles,
         mode: 'preview',
@@ -576,7 +644,7 @@ export function tick(round: Round) {
       ];
 
       const result = await service.deliver({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         files,
         mode: 'publish',
@@ -586,7 +654,7 @@ export function tick(round: Round) {
 
       expect(result.accepted).toBe(true);
       expect(stagedPreviews.publishCandidate).toHaveBeenCalledWith({
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         version: expect.any(String),
         roundGeneration: 1,

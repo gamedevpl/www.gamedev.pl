@@ -1,7 +1,7 @@
 import { genaicode } from 'genaicode';
 import type { GenerationRequest, ModelProvider } from 'genaicode';
 import { describe, expect, it } from 'vitest';
-import { moderateFields, moderateText, VertexChecker } from './moderation.js';
+import { DEFAULT_MODERATION_TIMEOUT_MS, moderateFields, moderateText, VertexChecker } from './moderation.js';
 
 // Stub provider: exercises the real genaicode request/response path (prompt
 // assembly, JSON parsing, schema validation) with no GCP calls.
@@ -171,6 +171,69 @@ describe('VertexChecker', () => {
     const verdict = await checker.check('A completely clean game concept');
     expect(verdict).toEqual({ allowed: false, category: 'other' });
   });
+
+  it('serves a decided verdict for the same text without paying again', async () => {
+    let calls = 0;
+    const checker = new VertexChecker({
+      vertexFetcher: async () => {
+        calls += 1;
+        return { allowed: true };
+      },
+    });
+
+    expect(await checker.check('A cozy farming game')).toEqual({ allowed: true });
+    expect(await checker.check('A cozy farming game')).toEqual({ allowed: true });
+    expect(await checker.check('A cozy farming game')).toEqual({ allowed: true });
+    expect(calls).toBe(1);
+  });
+
+  it('caches rejections too, and keys on the exact text', async () => {
+    let calls = 0;
+    const checker = new VertexChecker({
+      vertexFetcher: async (prompt) => {
+        calls += 1;
+        return prompt.includes('nasty') ? { allowed: false, category: 'other' } : { allowed: true };
+      },
+    });
+
+    expect(await checker.check('something nasty happens')).toEqual({ allowed: false, category: 'other' });
+    expect(await checker.check('something nasty happens')).toEqual({ allowed: false, category: 'other' });
+    expect(calls).toBe(1);
+
+    // A different string is never a cache hit.
+    expect(await checker.check('something pleasant happens')).toEqual({ allowed: true });
+    expect(calls).toBe(2);
+  });
+
+  it('never caches the fail-closed outcome of an unreachable classifier', async () => {
+    let calls = 0;
+    const checker = new VertexChecker({
+      vertexFetcher: async () => {
+        calls += 1;
+        if (calls === 1) throw new Error('Vertex AI network timeout');
+        return { allowed: true };
+      },
+    });
+
+    // The first verdict describes Vertex being down, not the text.
+    expect(await checker.check('A completely clean game concept')).toEqual({ allowed: false, category: 'other' });
+    expect(await checker.check('A completely clean game concept')).toEqual({ allowed: true });
+    expect(calls).toBe(2);
+  });
+
+  it('checkFields pays once for repeated identical fields', async () => {
+    let calls = 0;
+    const checker = new VertexChecker({
+      vertexFetcher: async () => {
+        calls += 1;
+        return { allowed: true };
+      },
+    });
+
+    // Autosave resubmits every field; identical values must not each pay.
+    expect(await checker.checkFields(['My Game', 'My Game', 'My Game'])).toEqual({ allowed: true });
+    expect(calls).toBe(1);
+  });
 });
 
 describe('VertexChecker over a genaicode client', () => {
@@ -216,13 +279,13 @@ describe('VertexChecker over a genaicode client', () => {
   });
 
   it('coerces an unknown reject category to "other"', async () => {
-    const checker = new VertexChecker({
-      client: genaicode(stubProvider('{"allowed": false, "category": "wobble"}')),
-    });
+    const checker = new VertexChecker({ client: genaicode(stubProvider('{"allowed": false, "category": "wobble"}')) });
+    expect(await checker.check('A completely clean game concept')).toEqual({ allowed: false, category: 'other' });
+  });
 
-    expect(await checker.check('A completely clean game concept')).toEqual({
-      allowed: false,
-      category: 'other',
-    });
+  it('defaults to 10s timeout and allows custom timeout', () => {
+    expect(DEFAULT_MODERATION_TIMEOUT_MS).toBe(10_000);
+    const custom = new VertexChecker({ timeoutMs: 15_000 });
+    expect((custom as unknown as { timeoutMs: number }).timeoutMs).toBe(15_000);
   });
 });

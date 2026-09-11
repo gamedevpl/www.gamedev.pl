@@ -16,7 +16,7 @@ import {
   type KitTree,
   KitFilesError,
 } from './kit-files.js';
-import { KIT_ROOT_DIR } from './kit-registry.js';
+import { KIT_ROOT_DIR } from '../platform/kit-registry.js';
 
 const BLOCK = 512;
 const ENGINE = 'deadbeef0123456789abcdef0123456789abcdef';

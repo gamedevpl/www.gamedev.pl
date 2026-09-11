@@ -48,7 +48,7 @@ not a fork: sources without the engine do not run.
 
 Nothing built is accepted back, either — the site assembles the bundle, because that is
 where serve-time policy lives (CSP, AI-Act provenance marking, the credential scan, the byte
-budget). See `apps/api/src/delivery/workspace-archive.ts`.
+budget). See `apps/api/src/platform/workspace-archive.ts`.
 
 ## Engine pinning and coming back after a while
 
@@ -64,6 +64,15 @@ change when the engine does — an accepted diff should be a decision, not a ref
 Start every returning session by pulling current sources and diffing. Platform-side lanes
 (content edits in the Studio, improvement rounds) can move a game while a checkout sits on
 someone's disk, and the checkout is not the source of truth.
+
+The `gamedevpl` CLI records the platform version at checkout time (`.gamedev-base.json`)
+and classifies later `diff` / `pull` / `submit` against that base: local-only, platform-only,
+both, or a real path conflict. Ordinary local edits are not a conflict. `pull` will not
+overwrite unsaved local files; if the same path changed on both sides it refuses and tells
+you to copy those files aside first. Delivery is `gamedevpl submit`, which stages through
+`/api/me/studio/games/:slug/sources/stage` and delivers through
+`/api/me/studio/games/:slug/sources/deliver` — the same Code-surface path Studio uses.
+Accepted sources, a started gate, a gate verdict, and publish are four different events.
 
 ## One delivery allowlist, not two
 

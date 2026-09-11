@@ -1,6 +1,6 @@
 # Game recommendations (catalog sort order)
 
-> Status: ✅ Built (2026-07-29). The home-page arcade grid can be sorted several
+> Status: ✅ Built (2026-07-29). The home-page catalog grid can be sorted several
 > ways. **Recommended** is the default; players can also pick Newest, Most played,
 > Last played, or A–Z. **My games** and **Not played** are filters. A signed-in
 > creator’s published games are pinned to the front of the same gallery when the
@@ -87,7 +87,7 @@ wrong account's affinity.
 
 ## UI
 
-[`ArcadeCatalog`](../apps/web/src/ArcadeCatalog.tsx) shows the My games / Not played
+[`ArcadeCatalog`](../apps/web/src/surfaces/catalog/ArcadeCatalog.tsx) shows the My games / Not played
 toggles and Sort dropdown beside the Games heading, pins the creator’s published
 games first when My games is off, then filters/reorders the same grid. Logic lives
-in [`catalogSort.ts`](../apps/web/src/catalogSort.ts).
+in [`catalogSort.ts`](../apps/web/src/surfaces/catalog/catalogSort.ts).

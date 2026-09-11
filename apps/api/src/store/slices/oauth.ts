@@ -14,7 +14,7 @@ export interface OAuthStore {
 
   getOAuthClient(clientId: string): Promise<OAuthClientRecord | null>;
 
-  createOAuthGrant(record: OAuthGrantRecord): Promise<void>;
+  createOAuthGrant(record: OAuthGrantRecord, opts?: { maxPerOwner?: number }): Promise<boolean>;
 
   getOAuthGrant(grantId: string): Promise<OAuthGrantRecord | null>;
 
@@ -46,7 +46,7 @@ export interface OAuthStore {
     nowMs: number;
   }): Promise<RotateRefreshTokenResult>;
 
-  // First token issue after authorization_code exchange (no refresh yet).
+  // Issue or replace the refresh family after an authorization_code exchange.
   issueOAuthTokensFromGrant(input: {
     grantId: string;
     refreshTokenId: string;
@@ -54,6 +54,7 @@ export interface OAuthStore {
     refreshExpiresAt: string;
     accessToken: OAuthAccessTokenRecord;
     nowMs: number;
+    scope?: string;
   }): Promise<OAuthGrantRecord | null>;
 }
 
@@ -75,11 +76,16 @@ export class InMemoryOAuthStore implements OAuthStore {
     return record ? { ...record } : null;
   }
 
-  async createOAuthGrant(record: OAuthGrantRecord): Promise<void> {
+  async createOAuthGrant(record: OAuthGrantRecord, opts?: { maxPerOwner?: number }): Promise<boolean> {
+    if (opts?.maxPerOwner !== undefined) {
+      const held = [...this.oauthGrants.values()].filter((g) => g.ownerUid === record.ownerUid && !g.revokedAt);
+      if (held.length >= opts.maxPerOwner) return false;
+    }
     this.oauthGrants.set(record.grantId, { ...record });
     if (record.currentRefreshTokenId) {
       this.oauthRefreshTokenIndex.set(record.currentRefreshTokenId, record.grantId);
     }
+    return true;
   }
 
   async getOAuthGrant(grantId: string): Promise<OAuthGrantRecord | null> {
@@ -184,13 +190,17 @@ export class InMemoryOAuthStore implements OAuthStore {
     refreshExpiresAt: string;
     accessToken: OAuthAccessTokenRecord;
     nowMs: number;
+    scope?: string;
   }): Promise<OAuthGrantRecord | null> {
     const grant = this.oauthGrants.get(input.grantId);
     if (!grant || grant.revokedAt) return null;
-    if (grant.currentRefreshTokenId) return null;
+    for (const [tokenId, grantId] of this.oauthRefreshTokenIndex) {
+      if (grantId === input.grantId) this.oauthRefreshTokenIndex.delete(tokenId);
+    }
 
     const updated: OAuthGrantRecord = {
       ...grant,
+      ...(input.scope ? { scope: input.scope } : {}),
       currentRefreshTokenId: input.refreshTokenId,
       currentRefreshHash: input.refreshHash,
       refreshExpiresAt: input.refreshExpiresAt,
@@ -216,15 +226,32 @@ export class FirestoreOAuthStore implements OAuthStore {
     return snap.data() as OAuthClientRecord;
   }
 
-  async createOAuthGrant(record: OAuthGrantRecord): Promise<void> {
-    const batch = this.db.batch();
-    batch.create(this.db.collection('oauthGrants').doc(record.grantId), stripUndefined(record));
-    if (record.currentRefreshTokenId) {
-      batch.set(this.db.collection('oauthRefreshTokens').doc(record.currentRefreshTokenId), {
-        grantId: record.grantId,
-      });
+  async createOAuthGrant(record: OAuthGrantRecord, opts?: { maxPerOwner?: number }): Promise<boolean> {
+    if (opts?.maxPerOwner === undefined) {
+      const batch = this.db.batch();
+      batch.create(this.db.collection('oauthGrants').doc(record.grantId), stripUndefined(record));
+      if (record.currentRefreshTokenId) {
+        batch.set(this.db.collection('oauthRefreshTokens').doc(record.currentRefreshTokenId), {
+          grantId: record.grantId,
+        });
+      }
+      await batch.commit();
+      return true;
     }
-    await batch.commit();
+    const max = opts.maxPerOwner;
+    const grants = this.db.collection('oauthGrants');
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(grants.where('ownerUid', '==', record.ownerUid));
+      const held = snap.docs.map((doc) => doc.data() as OAuthGrantRecord).filter((grant) => !grant.revokedAt);
+      if (held.length >= max) return false;
+      tx.create(grants.doc(record.grantId), stripUndefined(record));
+      if (record.currentRefreshTokenId) {
+        tx.set(this.db.collection('oauthRefreshTokens').doc(record.currentRefreshTokenId), {
+          grantId: record.grantId,
+        });
+      }
+      return true;
+    });
   }
 
   async getOAuthGrant(grantId: string): Promise<OAuthGrantRecord | null> {
@@ -355,17 +382,21 @@ export class FirestoreOAuthStore implements OAuthStore {
     refreshExpiresAt: string;
     accessToken: OAuthAccessTokenRecord;
     nowMs: number;
+    scope?: string;
   }): Promise<OAuthGrantRecord | null> {
     const grantRef = this.db.collection('oauthGrants').doc(input.grantId);
+    const indexQuery = this.db.collection('oauthRefreshTokens').where('grantId', '==', input.grantId);
     return this.db.runTransaction(async (tx) => {
       const snap = await tx.get(grantRef);
       if (!snap.exists) return null;
       const grant = snap.data() as OAuthGrantRecord;
       if (grant.revokedAt) return null;
-      if (grant.currentRefreshTokenId) return null;
+      const indexes = await tx.get(indexQuery);
+      for (const doc of indexes.docs) tx.delete(doc.ref);
 
       const updated: OAuthGrantRecord = {
         ...grant,
+        ...(input.scope ? { scope: input.scope } : {}),
         currentRefreshTokenId: input.refreshTokenId,
         currentRefreshHash: input.refreshHash,
         refreshExpiresAt: input.refreshExpiresAt,

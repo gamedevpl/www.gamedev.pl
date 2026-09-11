@@ -1,0 +1,364 @@
+import type { InteractiveRun } from './agy-interactive.js';
+import { configureAdapter, selectionLabel } from './agent-settings.js';
+import { trackAgentFailure } from './agent-failure.js';
+import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { randomUUID } from 'node:crypto';
+import { createInterface } from 'node:readline';
+import type { ApiClient } from './api.js';
+import { detectAdapter, loadAdapters, preflightAdapter, whichOnPath, type AdapterSpec } from './adapters.js';
+import { cliUsage } from './bin-name.js';
+import { CREATOR_TOKEN_PATTERN, childEnv, createDelegateStream, spawnAdapter } from './delegate.js';
+import { CliError, EXIT_AUTH, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
+import { studioToken } from './studio.js';
+import { adapterMcpSupported } from './agents.js';
+import { findCheckout } from './checkout.js';
+import type { CliTelemetry } from './telemetry.js';
+
+export type ConnectPayload = {
+  mcpUrl?: string;
+  kickoffPrompt?: string;
+  authorizationHeader?: string;
+  authorizationHeaderMasked?: string;
+  installSnippets?: { claudeCode?: string; cli?: string };
+  slug?: string;
+};
+
+export type AdapterRun = (input: {
+  spec: AdapterSpec;
+  prompt: string;
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  abort?: AbortSignal;
+  onLine?: (line: string) => void;
+  authCheck?: Promise<void>;
+}) => Promise<{ code: number | null; lines: string[] }>;
+
+async function defaultAdapterRun(input: Parameters<AdapterRun>[0]): Promise<{ code: number | null; lines: string[] }> {
+  const child = await spawnAdapter({ ...input, timeoutMs: 10 * 60_000 });
+  const lines: string[] = [];
+  for (const stream of [child.stdout, child.stderr]) {
+    if (stream)
+      createInterface({ input: stream }).on('line', (line: string) => {
+        if (input.onLine) input.onLine(line);
+        else lines.push(line);
+      });
+  }
+  const code = await new Promise<number | null>((resolve, reject) => {
+    child.once('error', reject);
+    child.once('close', (value) => resolve(value));
+  });
+  return { code, lines };
+}
+
+function authorizationValue(header: string): string {
+  return header.replace(/^Authorization:\s*/i, '');
+}
+
+function installHeader(header: string): string {
+  return /^Authorization:/i.test(header) ? header : `Authorization: ${header}`;
+}
+
+export function claudeMcpAddCommand(mcpUrl: string, authorizationHeader: string): string {
+  return `claude mcp add --transport http gamedevpl ${mcpUrl} --header "${installHeader(authorizationHeader)}"`;
+}
+
+function mcpConfigBody(payload: ConnectPayload): string {
+  return `${JSON.stringify(
+    {
+      mcpServers: {
+        gamedevpl: {
+          type: 'http',
+          url: payload.mcpUrl,
+          headers: { Authorization: authorizationValue(payload.authorizationHeader ?? '') },
+        },
+      },
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+function formatHandoff(payload: ConnectPayload, slug: string): string[] {
+  const lines = [`MCP handoff for ${payload.slug ?? slug}`];
+  if (payload.mcpUrl) lines.push(`mcp: ${payload.mcpUrl}`);
+  if (payload.authorizationHeaderMasked) lines.push(`auth: ${payload.authorizationHeaderMasked}`);
+  if (payload.mcpUrl && payload.authorizationHeader) {
+    lines.push('install:');
+    lines.push(`  ${claudeMcpAddCommand(payload.mcpUrl, payload.authorizationHeader)}`);
+  }
+  if (payload.kickoffPrompt) {
+    lines.push('kickoff:');
+    lines.push(payload.kickoffPrompt);
+  }
+  return lines;
+}
+
+function requireMcpAuth(payload: ConnectPayload | null): asserts payload is ConnectPayload & {
+  mcpUrl: string;
+  authorizationHeader: string;
+} {
+  if (!payload?.mcpUrl || !payload.authorizationHeader) {
+    throw new CliError(
+      'connect payload has no MCP authorization; re-run `gamedevpl login`',
+      EXIT_AUTH,
+      cliUsage('login'),
+    );
+  }
+  if (CREATOR_TOKEN_PATTERN.test(payload.authorizationHeader)) {
+    throw new CliError(
+      'connect payload has no MCP authorization; re-run `gamedevpl login`',
+      EXIT_AUTH,
+      cliUsage('login'),
+    );
+  }
+}
+
+function tomlString(value: string): string {
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+function wireAdapterMcp(
+  spec: AdapterSpec,
+  payload: { mcpUrl: string; authorizationHeader: string },
+): { spec: AdapterSpec; cleanup: string[] } {
+  if (spec.name === 'claude') {
+    const mcpPath = join(tmpdir(), `gamedev-mcp-${randomUUID()}.json`);
+    writeFileSync(mcpPath, mcpConfigBody(payload), { mode: 0o600 });
+    return {
+      spec: { ...spec, headless: ['--mcp-config', mcpPath, '--allowedTools', 'mcp__gamedevpl__*', ...spec.headless] },
+      cleanup: [mcpPath],
+    };
+  }
+  if (spec.name === 'codex') {
+    const auth = authorizationValue(payload.authorizationHeader);
+    return {
+      spec: {
+        ...spec,
+        headless: [
+          '-c',
+          `mcp_servers.gamedevpl.url=${tomlString(payload.mcpUrl)}`,
+          '-c',
+          `mcp_servers.gamedevpl.http_headers={ Authorization = ${tomlString(auth)} }`,
+          ...spec.headless,
+        ],
+      },
+      cleanup: [],
+    };
+  }
+  if (spec.name === 'copilot') {
+    const mcpPath = join(tmpdir(), `gamedev-mcp-${randomUUID()}.json`);
+    const config = JSON.parse(mcpConfigBody(payload)) as { mcpServers: { gamedevpl: Record<string, unknown> } };
+    config.mcpServers.gamedevpl.tools = ['*'];
+    writeFileSync(mcpPath, JSON.stringify(config), { mode: 0o600 });
+    return {
+      spec: {
+        ...spec,
+        headless: ['--additional-mcp-config', `@${mcpPath}`, '--allow-tool=gamedevpl', ...spec.headless],
+      },
+      cleanup: [mcpPath],
+    };
+  }
+  throw new CliError(
+    `adapter ${spec.name} has no MCP wiring — use a local checkout or claude, codex, copilot`,
+    EXIT_INPUT,
+    cliUsage('connect'),
+  );
+}
+
+export async function connectGame(input: {
+  api: ApiClient;
+  slug: string;
+  dest: string;
+  env?: NodeJS.ProcessEnv;
+  agent?: string;
+  handoff?: boolean;
+  which?: (cmd: string) => string | null;
+  runAdapter?: AdapterRun;
+  interactiveRun?: InteractiveRun;
+  abort?: AbortSignal;
+  write: (line: string) => void;
+  telemetry?: CliTelemetry;
+}): Promise<{ spawned: boolean; mcp: boolean }> {
+  const checkCancelled = (): void => {
+    if (input.abort?.aborted) throw new CliError('agent launch cancelled', EXIT_REFUSED, 'retry when ready');
+  };
+  checkCancelled();
+  const env = input.env ?? process.env;
+  const token = await studioToken(input.api, input.slug);
+  checkCancelled();
+  let spec = input.agent
+    ? detectAdapter(input.agent, input.which ?? ((cmd) => whichOnPath(cmd, env)), loadAdapters(env))
+    : null;
+  if (input.agent && !spec) {
+    throw new CliError(
+      `adapter ${input.agent} is not on PATH`,
+      EXIT_INPUT,
+      `install ${input.agent}, or omit --agent for the MCP handoff`,
+    );
+  }
+  if (spec && !adapterMcpSupported(spec.name)) {
+    throw new CliError(
+      `adapter ${spec.name} has no MCP wiring — use a checkout or claude, codex, copilot`,
+      EXIT_INPUT,
+      cliUsage('connect'),
+    );
+  }
+  if (spec?.name === 'codex' && !input.interactiveRun && !input.runAdapter)
+    throw new CliError(
+      'Codex MCP needs an interactive terminal for permissions.',
+      EXIT_INPUT,
+      'Run gamedevpl connect in a terminal, or use a local checkout and delegate.',
+    );
+  if (spec) {
+    spec = configureAdapter(spec, env);
+    input.write(selectionLabel(spec.name, spec.selection ?? {}));
+  }
+  if (spec && !input.runAdapter) preflightAdapter(spec, env);
+  checkCancelled();
+  if (input.handoff) {
+    checkCancelled();
+    const outcome = await input.api.request<{ pending?: boolean }>(
+      'POST',
+      `/api/submissions/${encodeURIComponent(token)}/handoff`,
+      {
+        builder: 'self',
+        stopActivePlatformAgent: true,
+      },
+    );
+    checkCancelled();
+    if (outcome.pending) {
+      throw new CliError(
+        'handoff pending — the platform agent still owns this round',
+        EXIT_REFUSED,
+        'retry after the handoff completes',
+      );
+    }
+  }
+
+  let payload: ConnectPayload;
+  try {
+    payload = await input.api.request<ConnectPayload>('GET', `/api/submissions/${encodeURIComponent(token)}/connect`);
+  } catch (error) {
+    if (error instanceof CliError && error.exitCode === EXIT_AUTH) throw error;
+    throw new CliError(
+      'connect unavailable — switch this round to self in Studio, or pass --handoff',
+      EXIT_REFUSED,
+      `${cliUsage('connect', input.slug)} --handoff`,
+    );
+  }
+  checkCancelled();
+
+  if (payload?.mcpUrl && !input.agent) {
+    for (const line of formatHandoff(payload, input.slug)) input.write(line);
+  }
+
+  if (!input.agent) {
+    if (!payload?.mcpUrl) {
+      throw new CliError(
+        'connect unavailable — not a self round',
+        EXIT_REFUSED,
+        `${cliUsage('connect', input.slug)} --handoff`,
+      );
+    }
+    input.write(`No agent has been started. Open an interactive session: ${cliUsage('repl', input.slug)}`);
+    input.write(`Or download local files: ${cliUsage('checkout', input.slug)}`);
+    return { spawned: false, mcp: true };
+  }
+  if (!spec) {
+    throw new CliError(
+      `adapter ${input.agent} is not on PATH`,
+      EXIT_INPUT,
+      `install ${input.agent}, or omit --agent for the MCP handoff`,
+    );
+  }
+  requireMcpAuth(payload);
+  if (input.abort?.aborted) throw new CliError('agent launch cancelled', EXIT_REFUSED, 'retry when ready');
+
+  const wired = wireAdapterMcp(spec, payload);
+  try {
+    const checkout = findCheckout(input.dest);
+    const local = checkout?.slug === input.slug;
+    const cwd = local
+      ? spec.cwd === 'game-dir'
+        ? join(checkout.root, 'games', input.slug)
+        : checkout.root
+      : mkdtempSync(join(tmpdir(), 'gamedev-mcp-work-'));
+    if (!local) {
+      input.write(`MCP workspace: ${cwd} — scratch files are kept here after the agent exits`);
+    }
+    const envForAgent = childEnv(env, '', { url: payload.mcpUrl, authorization: payload.authorizationHeader });
+    const authCheck =
+      spec.name === 'claude' && !input.runAdapter
+        ? requireClaudeSubscription({
+            command: wired.spec.command,
+            args: wired.spec.headless,
+            cwd,
+            env: subscriptionEnv(envForAgent),
+            abort: input.abort,
+          })
+        : undefined;
+    await authCheck;
+    input.telemetry?.record('delegate_used', { adapter: spec.name });
+    const failure = trackAgentFailure(spec.name);
+    const render = createDelegateStream(spec.name);
+    const prompt =
+      payload.kickoffPrompt ?? `Edit ${input.slug} in this checkout. The creator will deliver with gamedevpl submit.`;
+    if (spec.name === 'codex' && input.interactiveRun) {
+      input.write(
+        'Codex now controls the terminal. Answer permission prompts there; exit Codex to return to gamedevpl.',
+      );
+      const result = await input.interactiveRun({
+        spec: wired.spec,
+        prompt,
+        cwd,
+        env: envForAgent,
+        abort: input.abort ?? new AbortController().signal,
+      });
+      input.write(
+        `Returned from Codex (${result.code ?? 'stopped'}). This does not confirm delivery; check Studio. Files remain at ${cwd}`,
+      );
+      if (result.code !== 0)
+        throw new CliError('Codex stopped before confirming completion.', EXIT_INPUT, `Files remain at ${cwd}`);
+      return { spawned: true, mcp: true };
+    }
+    const result = await (input.runAdapter ?? defaultAdapterRun)({
+      spec: wired.spec,
+      prompt:
+        payload.kickoffPrompt ?? `Edit ${input.slug} in this checkout. The creator will deliver with gamedevpl submit.`,
+      cwd,
+      env: envForAgent,
+      authCheck,
+      abort: input.abort,
+      onLine: (line) => {
+        failure.observe(line);
+        for (const shown of render(line)) input.write(shown);
+      },
+    });
+    for (const line of result.lines) failure.observe(line);
+    for (const raw of result.lines) for (const line of render(raw)) input.write(line);
+    if (input.abort?.aborted) {
+      throw new CliError(
+        `${spec.name} stopped — files remain at ${cwd}`,
+        EXIT_REFUSED,
+        'review the files before retrying',
+      );
+    }
+    if ((result.code ?? 1) !== 0) {
+      throw failure.error(
+        result.code,
+        `Reconnect to this round with /connect ${input.slug} --agent ${spec.name} (in the shell: ${cliUsage('connect', `${input.slug} --agent ${spec.name}`)})`,
+      );
+    }
+    input.write(
+      local
+        ? `adapter finished — review the tree, then ${cliUsage('submit')}`
+        : `adapter finished — check the round in Studio; scratch files remain at ${cwd}`,
+    );
+    return { spawned: true, mcp: true };
+  } finally {
+    for (const path of wired.cleanup) rmSync(path, { force: true });
+  }
+}

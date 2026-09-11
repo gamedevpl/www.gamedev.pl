@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from './app.js';
-import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from '../agent-surface/agent-token.js';
+import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
 import { mintGameAgentKey } from '../agent-surface/agent-game-key.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { cimdSupportsPublicClientAuth, consentToken, OAUTH_AS_METADATA_PATH } from './oauth-as.js';
@@ -23,13 +23,11 @@ async function buildOAuthApp(store: InMemoryStore) {
     sessionSecret: SESSION_SECRET,
     submissionRoutes: {
       githubClient: {
-        createIssue: async () => ({ number: 42 }),
         getIssueState: async () => ({ state: 'open' as const }),
         findLinkedPR: async () => null,
         createIssueComment: async () => ({ id: 1 }),
         updateIssueBody: async () => {},
         closeIssue: async () => {},
-        closePullRequest: async () => {},
         ensureOpenPullRequest: async () => ({ number: 1 }),
         deleteBranch: async () => {},
         getGameSources: async () => null,
@@ -870,13 +868,11 @@ describe('oauth token helpers', () => {
       sessionSecretPrev: PREV,
       submissionRoutes: {
         githubClient: {
-          createIssue: async () => ({ number: 42 }),
           getIssueState: async () => ({ state: 'open' as const }),
           findLinkedPR: async () => null,
           createIssueComment: async () => ({ id: 1 }),
           updateIssueBody: async () => {},
           closeIssue: async () => {},
-          closePullRequest: async () => {},
           ensureOpenPullRequest: async () => ({ number: 1 }),
           deleteBranch: async () => {},
           getGameSources: async () => null,

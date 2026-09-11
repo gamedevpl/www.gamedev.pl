@@ -18,6 +18,7 @@ export interface EmailMessage {
    * to the writer, not the noreply sender identity.
    */
   replyTo?: string;
+  from?: string;
   /** Extra headers, e.g. `List-Unsubscribe` for the recurring notification mails. */
   headers?: Record<string, string>;
 }
@@ -72,7 +73,7 @@ export class ResendMailer implements Mailer {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: this.opts.from,
+        from: message.from ?? this.opts.from,
         to: message.to,
         subject: message.subject,
         text: message.text,
@@ -106,7 +107,10 @@ export class ConsoleMailer implements Mailer {
 
   async send(message: EmailMessage): Promise<SendResult> {
     this.sent.push(message);
-    this.log(`[mailer:console] to=${message.to} subject=${JSON.stringify(message.subject)}\n${message.text}`);
+    const fromNote = message.from ? ` from=${message.from}` : '';
+    this.log(
+      `[mailer:console] to=${message.to}${fromNote} subject=${JSON.stringify(message.subject)}\n${message.text}`,
+    );
     return { id: `console-${this.sent.length}`, provider: 'console' };
   }
 }

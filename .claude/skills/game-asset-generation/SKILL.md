@@ -37,8 +37,12 @@ not left to taste.
    `npm run check:gfx`.
 3. **Never hand-roll `new AudioContext()` or oscillators in game code.** All audio goes
    through the `audio` module (`GameKit.createAudio`). Enforced by validate Checks 9 and 17.
-4. **Byte budget is real.** 200 KiB author budget per game; platform ceiling and serve cap
-   are contract-locked across two repos. Assets are not free.
+4. **Byte budget is real.** ~936 KiB author budget per game (`authorBudgetBytes` in
+   `shared/assemble-contract.json`, mirrored in `tools/validate.ts`'s `GAME_BUDGET_BYTES`),
+   plus a 410 KB platform/GameKit reserve not billed to the author (`GAMEKIT_PLATFORM_BYTES`)
+   — contract-locked across two repos. Assets are not free, but the ceiling is far higher
+   than the old "200 KiB" figure this line used to give; verify against `tools/validate.ts`
+   before assuming a feature won't fit.
 5. **Reference art packs are study-only.** `references/packs/` (CC0 Kenney/itch material)
    must never be shipped into a bundle or inlined as `data:image` — validate Checks 15/16.
 

@@ -401,7 +401,7 @@ export interface OperatorEmailParams {
   /** Sanitized game title, or a waitlist applicant's display label. */
   title: string;
   /** Present for job alerts; absent for waitlist joins (no issue). */
-  issueNumber?: number;
+  jobId?: number;
   /** Absolute URL to the console. */
   actionUrl: string;
   /** Machine-readable extra, e.g. which kind of stall. Rendered verbatim, so keep it ours. */
@@ -462,7 +462,7 @@ export function operatorNotificationMessage(
   const actionUrl = escapeHtml(params.actionUrl);
   const detail = params.detail ? ` (${params.detail})` : '';
   const emailLine = params.email;
-  const jobLine = params.issueNumber !== undefined ? `Job #${params.issueNumber}` : undefined;
+  const jobLine = params.jobId !== undefined ? `Job #${params.jobId}` : undefined;
 
   const text = [
     `“${params.title}” ${copy.lead}${detail}`,

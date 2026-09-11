@@ -131,21 +131,15 @@ describe('local games repo', () => {
     expect(await client.getProgressNotes('main', '../../package.json')).toBeNull();
   });
 
-  it('invents issue state in memory so the creation flow can complete', async () => {
-    const issue = await client.createIssue({
-      title: 'A local game idea',
-      body: 'concept',
-      labels: [],
-    });
-    expect(issue.number).toBeGreaterThan(0);
+  it('invents issue state in memory', async () => {
+    const issueNumber = 1234;
+    expect(await client.getIssueState(issueNumber)).toEqual({ state: 'open' });
 
-    expect(await client.getIssueState(issue.number)).toEqual({ state: 'open' });
-
-    await client.closeIssue(issue.number);
-    expect(await client.getIssueState(issue.number)).toEqual({ state: 'closed' });
+    await client.closeIssue(issueNumber);
+    expect(await client.getIssueState(issueNumber)).toEqual({ state: 'closed' });
 
     // No agent runs locally, so there is never a linked pull request.
-    expect(await client.findLinkedPR(issue.number)).toBeNull();
+    expect(await client.findLinkedPR(issueNumber)).toBeNull();
   });
 
   it('falls back to the bundled fixtures when the configured directory is empty', async () => {

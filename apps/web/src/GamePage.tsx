@@ -6,7 +6,7 @@ import { catalogMediaUrl, gamePageHandle, type CatalogEntry } from './catalog.js
 import { fetchGamePage, type GamePage as GamePageData } from './gamePageApi.js';
 import { PixelIcon } from './PixelIcon.js';
 import { ShareGameButton } from './ShareGameButton.js';
-import { creatorPath, gamePath, playPath, studioPath } from './router.js';
+import { creatorPath, gamePath, playPath, studioPath } from './core/router.js';
 import { isPlayVia, recordRemixStep, type PlayVia } from './visitTelemetry.js';
 import { VoteWidget } from './VoteWidget.js';
 
@@ -87,7 +87,7 @@ export function GamePage({
   useEffect(() => {
     if (!page) return;
     onGameLoaded?.(page.entry.title);
-    recordRemixStep('offered', { control: 'page' });
+    recordRemixStep(page.entry.editor === 'content' ? 'offered' : 'no_lane', { control: 'page' });
   }, [page, onGameLoaded]);
 
   const canonicalHandle = page?.entry.creatorHandle ?? null;
@@ -202,6 +202,7 @@ export function GamePage({
   const playTogether = () => onPlayTogether?.(entry, arrivalVia);
 
   const openRemixEntry = () => {
+    if (entry.editor !== 'content') return;
     recordRemixStep('opened', { control: 'page' });
     setRemixEntryOpen(true);
   };
@@ -210,6 +211,7 @@ export function GamePage({
 
   const startRemix = (event: FormEvent) => {
     event.preventDefault();
+    if (entry.editor !== 'content') return;
     const request = remixRequest.trim();
     if (request.length < 2) return;
     setRemixEntryOpen(false);
@@ -254,9 +256,16 @@ export function GamePage({
               <PixelIcon name="wrench" size={13} /> {t('gamePage.openStudio')}
             </a>
           ) : null}
-          <button type="button" className="secondary-btn game-page-remix" onClick={openRemixEntry} ref={remixButtonRef}>
-            <PixelIcon name="wrench" size={13} /> {t('gamePage.remix')}
-          </button>
+          {entry.editor === 'content' ? (
+            <button
+              type="button"
+              className="secondary-btn game-page-remix"
+              onClick={openRemixEntry}
+              ref={remixButtonRef}
+            >
+              <PixelIcon name="wrench" size={13} /> {t('gamePage.remix')}
+            </button>
+          ) : null}
           <ShareGameButton slug={slug} title={entry.title} path={gamePath(shareHandle, slug)} />
         </div>
       </header>

@@ -14,13 +14,13 @@ Then open **http://localhost:5173** — not `127.0.0.1:5173`. Vite binds to `loc
 
 ## What works without any configuration
 
-| Flow              | How it works locally                                                               |
-| ----------------- | ---------------------------------------------------------------------------------- |
-| Browse the arcade | Games come from a local directory instead of the games repo (see below)            |
-| Play a game       | Assembled and sandboxed by the same code path production uses                      |
-| Sign in           | `POST /api/auth/dev` mints a session for a synthetic `dev:local` account           |
-| Create a game     | The submission is accepted and gets a status page; the issue only exists in memory |
-| Everything else   | Users, quotas and telemetry live in an in-memory store; email and push are no-ops  |
+| Flow               | How it works locally                                                               |
+| ------------------ | ---------------------------------------------------------------------------------- |
+| Browse the catalog | Games come from a local directory instead of the games repo (see below)            |
+| Play a game        | Assembled and sandboxed by the same code path production uses                      |
+| Sign in            | `POST /api/auth/dev` mints a session for a synthetic `dev:local` account           |
+| Create a game      | The submission is accepted and gets a status page; the issue only exists in memory |
+| Everything else    | Users, quotas and telemetry live in an in-memory store; email and push are no-ops  |
 
 Nothing here talks to GitHub, Google or Google Cloud.
 

@@ -1,0 +1,16 @@
+{
+  "hosting": {
+    "site": "gamedevpl",
+    "public": "public",
+    "ignore": ["**/.*"],
+    "rewrites": [
+      {
+        "source": "**",
+        "run": {
+          "serviceId": "gamedev-app",
+          "region": "europe-west1"
+        }
+      }
+    ]
+  }
+}

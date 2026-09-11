@@ -9,6 +9,8 @@
 // `isPushSupported()` is still true but the OS permission never sticks in a plain
 // tab, so we simply surface whatever state the browser reports.
 
+import { hasServiceWorkerSupport } from './serviceWorkerSupport.js';
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
 export type PushPermission = 'default' | 'granted' | 'denied' | 'unsupported';
@@ -16,7 +18,7 @@ export type PushPermission = 'default' | 'granted' | 'denied' | 'unsupported';
 /** Whether this browser has the APIs Web Push needs at all. */
 export function isPushSupported(): boolean {
   return (
-    typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
+    typeof window !== 'undefined' && hasServiceWorkerSupport() && 'PushManager' in window && 'Notification' in window
   );
 }
 

@@ -8,8 +8,6 @@ export const JOB_STATES = [
   'building',
   // Agent delivered candidate sources; nothing has verified them yet.
   'submitted',
-  // Our gate runs against delivered sources; never actually observed here.
-  'gating',
   // Gate green; waiting on the human moderation review.
   'ready_for_review',
   // Approved; the snapshot bake is in flight.

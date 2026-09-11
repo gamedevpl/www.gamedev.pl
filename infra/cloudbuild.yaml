@@ -1,3 +1,4 @@
+# Hand-run path only: the deploy workflow builds this image on the GitHub runner.
 # Builds the gamedev.pl app image (static web + API) from the repo root using
 # apps/api/Dockerfile and pushes it to Artifact Registry. Invoked by
 # infra/deploy-api.sh via `gcloud builds submit --config infra/cloudbuild.yaml`.

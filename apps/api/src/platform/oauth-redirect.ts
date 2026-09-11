@@ -1,9 +1,7 @@
 /**
  * OAuth redirect URI matching for loopback and exact registered URIs.
  *
- * Loopback (http://127.0.0.1 and http://localhost): host + path must match; port is
- * ignored. Near-miss hosts such as 127.0.0.1.evil.test or localhost.evil.test must
- * never match.
+ * Loopback hosts (127.0.0.1, ::1, localhost): match host + path; ignore port.
  */
 
 function parseRedirectUri(uri: string): URL | null {
@@ -16,7 +14,7 @@ function parseRedirectUri(uri: string): URL | null {
 
 function isLoopbackHost(hostname: string): boolean {
   const host = hostname.toLowerCase();
-  return host === '127.0.0.1' || host === 'localhost';
+  return host === '127.0.0.1' || host === 'localhost' || host === '::1' || host === '[::1]';
 }
 
 /**

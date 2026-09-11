@@ -1,9 +1,15 @@
 import type { Firestore } from '@google-cloud/firestore';
 import type { WorldEntryRecord } from '../records/player-data.js';
 
+// More shards, less contention, more documents per revision check.
+const REVISION_SHARDS = 8;
+
 export interface WorldEntriesStore {
   // Every entry in one shared world. The public read -- no uid involved.
   listWorldEntries(worldId: string): Promise<WorldEntryRecord[]>;
+
+  // Changes on every write; equal tokens mean nothing changed.
+  getWorldRevision(worldId: string): Promise<string>;
 
   // One entry, or null. Used to settle ownership before a write.
   getWorldEntry(worldId: string, key: string): Promise<WorldEntryRecord | null>;
@@ -33,9 +39,23 @@ export interface WorldEntriesStore {
 
 export class InMemoryWorldEntriesStore implements WorldEntriesStore {
   private worldEntries = new Map<string, Map<string, WorldEntryRecord>>();
+  private revisions = new Map<string, number>();
+
+  private bump(worldId: string): void {
+    this.revisions.set(worldId, (this.revisions.get(worldId) ?? 0) + 1);
+  }
+
+  private token(worldId: string): string {
+    const n = this.revisions.get(worldId) ?? 0;
+    return n === 0 ? '' : String(n);
+  }
 
   async listWorldEntries(worldId: string): Promise<WorldEntryRecord[]> {
     return [...(this.worldEntries.get(worldId)?.values() ?? [])].map((entry) => ({ ...entry }));
+  }
+
+  async getWorldRevision(worldId: string): Promise<string> {
+    return this.token(worldId);
   }
 
   async getWorldEntry(worldId: string, key: string): Promise<WorldEntryRecord | null> {
@@ -70,6 +90,7 @@ export class InMemoryWorldEntriesStore implements WorldEntriesStore {
     };
     world.set(options.key, entry);
     this.worldEntries.set(options.worldId, world);
+    this.bump(options.worldId);
     return { ok: true, entry: { ...entry } };
   }
 
@@ -78,6 +99,7 @@ export class InMemoryWorldEntriesStore implements WorldEntriesStore {
     const existing = world?.get(key);
     if (!existing || existing.ownerUid !== uid) return false;
     world!.delete(key);
+    this.bump(worldId);
     return true;
   }
 
@@ -99,12 +121,15 @@ export class InMemoryWorldEntriesStore implements WorldEntriesStore {
 
   async deleteWorldEntriesForUser(uid: string): Promise<number> {
     let removed = 0;
-    for (const world of this.worldEntries.values()) {
+    for (const [worldId, world] of this.worldEntries) {
+      let touched = false;
       for (const entry of [...world.values()]) {
         if (entry.ownerUid !== uid) continue;
         world.delete(entry.key);
         removed += 1;
+        touched = true;
       }
+      if (touched) this.bump(worldId);
     }
     return removed;
   }
@@ -116,6 +141,28 @@ export class FirestoreWorldEntriesStore implements WorldEntriesStore {
   // Worlds are top-level (not per-user); worldId is opaque, today == slug.
   private worldCollection(worldId: string) {
     return this.db.collection('worlds').doc(worldId).collection('worldEntries');
+  }
+
+  // Sharded, so concurrent writers rarely touch the same document.
+  private revisionShards(worldId: string) {
+    return this.db.collection('worlds').doc(worldId).collection('revision');
+  }
+
+  private revisionShard(worldId: string) {
+    return this.revisionShards(worldId).doc(String(Math.floor(Math.random() * REVISION_SHARDS)));
+  }
+
+  // Unique per write, so two writes never collapse into one token.
+  private stamp() {
+    return { at: `${new Date().toISOString()}:${Math.random().toString(36).slice(2, 10)}` };
+  }
+
+  async getWorldRevision(worldId: string): Promise<string> {
+    const snap = await this.revisionShards(worldId).get();
+    return snap.docs
+      .map((doc) => `${doc.id}=${String(doc.data().at ?? '')}`)
+      .sort()
+      .join('|');
   }
 
   private toWorldEntry(id: string, data: Record<string, unknown>): WorldEntryRecord {
@@ -182,6 +229,8 @@ export class FirestoreWorldEntriesStore implements WorldEntriesStore {
         createdAt: entry.createdAt,
         updatedAt: entry.updatedAt,
       });
+      // Same transaction, so no reader sees one without the other.
+      tx.set(this.revisionShard(options.worldId), this.stamp(), { merge: true });
       return { ok: true as const, entry };
     });
   }
@@ -194,6 +243,7 @@ export class FirestoreWorldEntriesStore implements WorldEntriesStore {
       // Re-checked inside the transaction, ordered against a concurrent write.
       if (this.toWorldEntry(key, snap.data() ?? {}).ownerUid !== uid) return false;
       tx.delete(ref);
+      tx.set(this.revisionShard(worldId), this.stamp(), { merge: true });
       return true;
     });
   }
@@ -225,7 +275,12 @@ export class FirestoreWorldEntriesStore implements WorldEntriesStore {
     // Chunked batches (400/batch), like deleteGameSaves -- an accepted erasure request.
     for (let index = 0; index < snap.docs.length; index += 400) {
       const batch = this.db.batch();
-      for (const doc of snap.docs.slice(index, index + 400)) batch.delete(doc.ref);
+      const chunk = snap.docs.slice(index, index + 400);
+      for (const doc of chunk) batch.delete(doc.ref);
+      // Same batch: the rows and the token invalidating them go together.
+      for (const worldId of new Set(chunk.map((doc) => doc.ref.parent.parent?.id).filter(Boolean) as string[])) {
+        batch.set(this.revisionShard(worldId), this.stamp(), { merge: true });
+      }
       await batch.commit();
     }
     return snap.docs.length;

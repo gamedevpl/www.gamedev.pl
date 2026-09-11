@@ -3,12 +3,21 @@ import cookie from '@fastify/cookie';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { OAuth2Client } from 'google-auth-library';
 import { z } from 'zod';
-import { resolveAccessTokenUser } from './access-token-service.js';
+import { resolveAccessTokenRecord, resolveAccessTokenUser } from './access-token-service.js';
+import { resolveBearerIdentity } from './oauth-request-auth.js';
 import { isAdmin, isAdminSession } from './admin-session.js';
 import { isReviewer, isReviewerSession } from '../community/review.js';
 import { resolveAppleAccount } from './apple-account.js';
 import { createAppleAuthVerifierFromEnv, parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { readBearerToken } from './bearer.js';
+import { sessionWriteAllowed } from './session-csrf.js';
+import {
+  clearSessionCookies,
+  handlerWroteSessionCookie,
+  readSessionCookie,
+  SESSION_COOKIE_NAME,
+} from './session-cookie.js';
+export { readSessionCookie, SESSION_COOKIE_NAME } from './session-cookie.js';
 import { createMailerFromEnv } from '../notifications/mailer.js';
 import { emitWaitlistJoined } from '../notifications/notify.js';
 import { createPusherFromEnv } from '../notifications/pusher.js';
@@ -33,8 +42,6 @@ function localeFromRequest(request: FastifyRequest): string | undefined {
   if (typeof header !== 'string' || !header.trim()) return undefined;
   return normalizeLocale(header.split(',')[0]);
 }
-
-export const SESSION_COOKIE_NAME = 'gamedev_session';
 
 // Renewal fires only on requests, so this bounds absence between visits.
 export const DEFAULT_SESSION_DURATION_SECONDS = 30 * 24 * 60 * 60; // 30 days
@@ -217,7 +224,7 @@ declare module 'fastify' {
      * the operator surfaces, and token issuance itself — check this rather than just
      * `user`, so a leaked token can never widen its own privileges.
      */
-    authMethod: 'session' | 'token' | null;
+    authMethod: 'session' | 'token' | 'oauth' | null;
   }
 }
 
@@ -251,6 +258,8 @@ export interface AuthPluginOptions {
   adminUids?: Set<string>;
   // Reviewer desk hint only; every review route re-checks.
   reviewerUids?: Set<string>;
+  // Same clock as minting, or token-info's day count drifts.
+  now?: () => number;
 }
 
 const GoogleAuthSchema = z.object({
@@ -324,10 +333,15 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
   const googleClientId = options.googleClientId ?? process.env.GOOGLE_OAUTH_CLIENT_ID ?? '';
   const isAuthConfigured = Boolean(sessionSecret && (googleClientId || options.googleAuthVerifier)) || !isProd;
 
+  // Same rule as the zones and room registries: no fallback secret in production.
+  if (!sessionSecret && isProd) {
+    throw new Error('SESSION_SECRET is required to sign sessions in production');
+  }
   const effectiveSessionSecret = sessionSecret ?? 'dev-session-secret-change-me';
   const adminUids = options.adminUids;
   const reviewerUids = options.reviewerUids;
   const sessionSecretPrev = options.sessionSecretPrev ?? process.env.SESSION_SECRET_PREV;
+  const now = options.now ?? Date.now;
 
   const verifier = options.googleAuthVerifier ?? new DefaultGoogleAuthVerifier(googleClientId);
 
@@ -341,13 +355,15 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
   const authRateLimitWindowMs = 60 * 60 * 1000;
   const maxAuthRequestsPerWindow = 20;
   const authAttemptsByIp = new Map<string, number[]>();
+  const tooManyAuthAttempts = (ip: string) =>
+    isRateLimited(authAttemptsByIp, ip, Date.now(), maxAuthRequestsPerWindow, authRateLimitWindowMs);
 
   await app.register(cookie);
 
   const getSessionUser = async (
     request: FastifyRequest,
   ): Promise<{ user: User | null; needsRenewal: boolean; fromToken: boolean }> => {
-    const cookieToken = request.cookies[SESSION_COOKIE_NAME];
+    const cookieToken = readSessionCookie(request.cookies);
     if (!cookieToken) return { user: null, needsRenewal: false, fromToken: false };
 
     try {
@@ -357,27 +373,14 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         return { user: null, needsRenewal: false, fromToken: false };
       }
 
-      const now = Math.floor(Date.now() / 1000);
-      const needsRenewal = exp - now < sessionRenewalThresholdSeconds(src);
-
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      const needsRenewal = exp - nowSeconds < sessionRenewalThresholdSeconds(src);
       return { user, needsRenewal, fromToken: src === 'token' };
     } catch {
       return { user: null, needsRenewal: false, fromToken: false };
     }
   };
 
-  /**
-   * Resolve a personal access token from the Authorization header
-   * (docs/agent-access-tokens.md).
-   *
-   * The checks themselves live in access-token-service.ts, shared with the browser
-   * sign-in form, so the header and the form can never disagree about which tokens are
-   * good. What is specific to this door is the question of which Bearer credentials are
-   * even candidates: this API carries others that are not PATs (the build channel's
-   * per-issue tokens, the scheduler's OIDC tokens), and the `gdpl_pat_` prefix check
-   * inside the resolver is what keeps those out — they fall through untouched to the
-   * handlers that do understand them.
-   */
   const getAccessTokenUser = async (request: FastifyRequest): Promise<User | null> => {
     const bearer = readBearerToken(request.headers.authorization);
     if (!bearer) return null;
@@ -388,23 +391,20 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
   app.decorateRequest('needsSessionRenewal', false);
   app.decorateRequest('authMethod', null);
 
-  app.addHook('onRequest', async (request) => {
+  app.addHook('onRequest', async (request, reply) => {
     if (!isAuthConfigured) return;
     const { user, needsRenewal, fromToken } = await getSessionUser(request);
     if (!user) {
-      // No cookie session — fall back to a personal access token. Deliberately second:
-      // a browser that has both should be treated as the human it is.
-      const tokenUser = await getAccessTokenUser(request);
-      if (tokenUser) {
-        request.user = tokenUser;
-        request.authMethod = 'token';
+      // Cookie first; PAT and creator-scoped OAuth are the programmatic doors.
+      const identity = await resolveBearerIdentity(store, request.headers.authorization);
+      if (identity) {
+        request.user = identity.user;
+        request.authMethod = identity.method;
       }
-      // No `activeDays` write on this path, and that is the point: the list feeds the
-      // creator-return metric, and an agent polling on a schedule would report perfect
-      // retention for an account that is not a person.
       return;
     }
 
+    if (!sessionWriteAllowed(request)) return reply.status(403).send({ error: 'untrusted request origin' });
     request.user = user;
     request.needsSessionRenewal = needsRenewal;
     // A cookie minted from a PAT still reports 'token': the credential behind this
@@ -412,15 +412,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     // the cookie it was traded for.
     request.authMethod = fromToken ? 'token' : 'session';
 
-    /**
-     * Record that this account was active today.
-     *
-     * `lastLoginAt` cannot stand in for this: sessions last weeks, so a creator who
-     * comes back every day still shows a single login and reads as never returning.
-     * `withActiveDay` returns null when today is already the newest entry, so the
-     * common case costs no write at all — and a failure here must never turn a
-     * working request into an error, hence the swallow.
-     */
+    // Sessions last weeks; record activity separately from sign-in, once per day.
     const today = new Date().toISOString().slice(0, 10);
     const activeDays = withActiveDay(user.activeDays, today);
     if (activeDays) {
@@ -431,7 +423,14 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
   });
 
   app.addHook('onSend', async (request, reply) => {
-    if (isAuthConfigured && request.user && request.needsSessionRenewal && request.user.tier !== 'blocked') {
+    if (!isAuthConfigured) return;
+    // The handler's own session cookie always wins; see handlerWroteSessionCookie.
+    if (
+      request.user &&
+      request.needsSessionRenewal &&
+      request.user.tier !== 'blocked' &&
+      !handlerWroteSessionCookie(reply)
+    ) {
       // Provenance survives renewal, or a token-derived cookie would quietly become a
       // genuine one after six hours and regain exactly the authority it was denied.
       // `needsSessionRenewal` is only ever set on the cookie path, so 'token' here
@@ -463,8 +462,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         return reply.status(503).send({ error: 'authentication is not configured' });
       }
 
-      const currentTime = Date.now();
-      if (isRateLimited(authAttemptsByIp, request.ip, currentTime, maxAuthRequestsPerWindow, authRateLimitWindowMs)) {
+      if (tooManyAuthAttempts(request.clientIp)) {
         return reply.status(429).send({ error: 'too many login attempts, please try again later' });
       }
 
@@ -575,8 +573,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         return reply.status(503).send({ error: 'sign in with apple is not configured' });
       }
 
-      const currentTime = Date.now();
-      if (isRateLimited(authAttemptsByIp, request.ip, currentTime, maxAuthRequestsPerWindow, authRateLimitWindowMs)) {
+      if (tooManyAuthAttempts(request.clientIp)) {
         return reply.status(429).send({ error: 'too many login attempts, please try again later' });
       }
 
@@ -692,8 +689,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         return reply.status(503).send({ error: 'authentication is not configured' });
       }
 
-      const currentTime = Date.now();
-      if (isRateLimited(authAttemptsByIp, request.ip, currentTime, maxAuthRequestsPerWindow, authRateLimitWindowMs)) {
+      if (tooManyAuthAttempts(request.clientIp)) {
         return reply.status(429).send({ error: 'too many requests, please try again later' });
       }
 
@@ -769,8 +765,11 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     '/api/beta-invites/claim',
     { config: { rateLimit: { max: maxAuthRequestsPerWindow, timeWindow: authRateLimitWindowMs } } },
     async (request, reply) => {
-      if (request.authMethod !== 'session' || !request.user) {
+      if (!request.user) {
         return reply.status(401).send({ error: 'authentication required' });
+      }
+      if (request.authMethod !== 'session') {
+        return reply.status(404).send({ error: 'not_found' });
       }
       const parsed = BetaInviteClaimSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -915,9 +914,31 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     });
   });
 
-  app.post('/api/auth/logout', async (_request, reply) => {
-    reply.clearCookie(SESSION_COOKIE_NAME, { path: '/' });
+  app.post('/api/auth/logout', async (request, reply) => {
+    clearSessionCookies(request, reply);
     return { status: 'ok' };
+  });
+
+  // Bearer only: token records are kept off the User object.
+
+  // Expiry is mandatory and arrives as a cliff; this warns early.
+  app.get('/api/auth/token-info', async (request, reply) => {
+    if (!isAuthConfigured) {
+      return reply.status(503).send({ error: 'authentication is not configured' });
+    }
+    const bearer = readBearerToken(request.headers.authorization);
+    const record = bearer ? await resolveAccessTokenRecord(store, bearer) : null;
+    // One answer for absent, malformed, unknown, revoked and expired alike.
+    if (!record) {
+      return reply.status(401).send({ error: 'unauthenticated' });
+    }
+    const expiresAtMs = Date.parse(record.expiresAt);
+    return {
+      name: record.name,
+      expiresAt: record.expiresAt,
+      // Floor, so "1" never means "expires in ninety minutes".
+      expiresInDays: Math.floor((expiresAtMs - now()) / (24 * 60 * 60 * 1000)),
+    };
   });
 
   app.get('/api/auth/me', async (request, reply) => {

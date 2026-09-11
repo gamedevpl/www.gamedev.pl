@@ -110,11 +110,11 @@ describe('GET /api/me/studio', () => {
     for (let game = 0; game < 3; game++) {
       const slug = `game-${game}`;
       for (let tip = 0; tip < 20; tip++) {
-        const issueNumber = game * 100 + tip + 1;
-        await store.createSubmission(issueNumber, 'g:creator', `Game ${game} tip ${tip}`);
-        await store.setSubmissionSlug(issueNumber, slug);
+        const jobId = game * 100 + tip + 1;
+        await store.createSubmission(jobId, 'g:creator', `Game ${game} tip ${tip}`);
+        await store.setSubmissionSlug(jobId, slug);
         if (tip === 0) {
-          await store.setSubmissionPublishedAt(issueNumber, `${today}T12:00:00.000Z`);
+          await store.setSubmissionPublishedAt(jobId, `${today}T12:00:00.000Z`);
         }
         if (tip < 19) await new Promise((resolve) => setTimeout(resolve, 2));
       }
@@ -144,9 +144,9 @@ describe('GET /api/me/studio', () => {
 
   it('includes a specifically addressed game beyond the shelf ceiling', async () => {
     for (let game = 0; game < 51; game++) {
-      const issueNumber = 1_000 + game;
-      await store.createSubmission(issueNumber, 'g:creator', `Game ${game}`);
-      await store.setSubmissionSlug(issueNumber, `game-${game}`);
+      const jobId = 1_000 + game;
+      await store.createSubmission(jobId, 'g:creator', `Game ${game}`);
+      await store.setSubmissionSlug(jobId, `game-${game}`);
       if (game < 50) await new Promise((resolve) => setTimeout(resolve, 2));
     }
 
@@ -259,7 +259,7 @@ describe('GET /api/me/studio', () => {
               slug: 'sky-dodge',
               version,
               createdAt: today,
-              issueNumber: 10,
+              jobId: 10,
               sourceFiles: sourceFilesByVersion[version],
             }
           : null,
@@ -429,11 +429,11 @@ describe('GET /api/me/studio/health', () => {
     for (let game = 0; game < 3; game++) {
       const slug = `game-${game}`;
       for (let tip = 0; tip < 20; tip++) {
-        const issueNumber = game * 100 + tip + 1;
-        await store.createSubmission(issueNumber, 'g:creator', `Game ${game} tip ${tip}`);
-        await store.setSubmissionSlug(issueNumber, slug);
+        const jobId = game * 100 + tip + 1;
+        await store.createSubmission(jobId, 'g:creator', `Game ${game} tip ${tip}`);
+        await store.setSubmissionSlug(jobId, slug);
         if (tip === 0) {
-          await store.setSubmissionPublishedAt(issueNumber, `${today}T12:00:00.000Z`);
+          await store.setSubmissionPublishedAt(jobId, `${today}T12:00:00.000Z`);
         }
         if (tip < 19) await new Promise((resolve) => setTimeout(resolve, 2));
       }
@@ -610,7 +610,7 @@ describe('GET /api/me/studio/scorecards', () => {
           slug: 'sky-dodge',
           version: 'v2',
           createdAt: `${today}T12:00:00.000Z`,
-          issueNumber: 10,
+          jobId: 10,
           deliveryMode: 'publish' as const,
           sourceFiles: ['game.ts', 'GAME.json'],
           gate: { green: true, ranAt: `${today}T12:05:00.000Z` },
@@ -620,7 +620,7 @@ describe('GET /api/me/studio/scorecards', () => {
           slug: 'sky-dodge',
           version: 'v1',
           createdAt: `${today}T11:00:00.000Z`,
-          issueNumber: 10,
+          jobId: 10,
           deliveryMode: 'preview' as const,
           sourceFiles: ['game.ts'],
           previewGate: { green: true, ranAt: `${today}T11:02:00.000Z` },
@@ -677,7 +677,7 @@ describe('GET /api/me/studio/scorecards', () => {
             slug: 'sky-dodge',
             version: 'v2',
             createdAt: `${today}T12:00:00.000Z`,
-            issueNumber: 10,
+            jobId: 10,
             deliveryMode: 'publish' as const,
             sourceFiles: ['game.ts'],
             gate: { green: true, ranAt: `${today}T12:05:00.000Z` },

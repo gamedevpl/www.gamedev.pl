@@ -8,6 +8,7 @@ import {
   type ContributionMode,
   type ContributorBlock,
 } from './proposalsApi.js';
+import './propose-composer.css';
 
 /**
  * The contributions switch, and the block list beside it.

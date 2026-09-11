@@ -482,6 +482,45 @@ describe('GET /api/admin/suggestions', () => {
  * The operator's half of the creation breaker. Session-only, like every operator write —
  * a leaked access token must not be able to pause the product.
  */
+// The whole effective object, so an accidental shape change fails loudly.
+function effectiveLimits(overrides: Partial<CreationLimitsResponse['effective']> = {}) {
+  return {
+    paused: true,
+    globalDailySubmissionCap: 25,
+    managedBuilderMode: 'auto',
+    managedDailyCap: null,
+    managedDailyUserCap: null,
+    hasPlatformBackend: false,
+    managedAgentVendor: {
+      stored: null,
+      effective: null,
+      available: false,
+      configuredVendors: [],
+      defaultVendor: null,
+    },
+    tabCompletePaused: false,
+    globalDailyTabCompleteTokenCap: 2_000_000,
+    editingPaused: false,
+    chatPaused: false,
+    searchPaused: false,
+    globalDailySearchEmbeddingCap: 20_000,
+    gatePaused: false,
+    globalDailyGateRunCap: 400,
+    partyPaused: false,
+    telemetrySampleRate: null,
+    seedingMode: 'auto',
+    globalDailySeedCap: 300,
+    seedProvider: {
+      stored: null,
+      effective: 'vertex',
+      available: false,
+      configuredProviders: [],
+      defaultProvider: 'vertex',
+    },
+    ...overrides,
+  };
+}
+
 describe('/api/admin/creation-limits', () => {
   let store: InMemoryStore;
 
@@ -562,31 +601,7 @@ describe('/api/admin/creation-limits', () => {
 
     expect(res.statusCode).toBe(200);
     const body = res.json() as CreationLimitsResponse;
-    expect(body.effective).toEqual({
-      paused: true,
-      globalDailySubmissionCap: 25,
-      managedBuilderMode: 'auto',
-      managedDailyCap: null,
-      managedDailyUserCap: null,
-      hasPlatformBackend: false,
-      managedAgentVendor: {
-        stored: null,
-        effective: null,
-        available: false,
-        configuredVendors: [],
-        defaultVendor: null,
-      },
-      tabCompletePaused: false,
-      globalDailyTabCompleteTokenCap: 2_000_000,
-      seedingMode: 'auto',
-      seedProvider: {
-        stored: null,
-        effective: 'vertex',
-        available: false,
-        configuredProviders: [],
-        defaultProvider: 'vertex',
-      },
-    });
+    expect(body.effective).toEqual(effectiveLimits({ paused: true }));
     // A pause left on by accident is this feature's own failure mode, so the record of
     // who set it is part of the deliverable.
     expect(body.stored).toMatchObject({ paused: true, updatedBy: 'g:boss' });
@@ -606,31 +621,7 @@ describe('/api/admin/creation-limits', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect((res.json() as CreationLimitsResponse).effective).toEqual({
-      paused: false,
-      globalDailySubmissionCap: 25,
-      managedBuilderMode: 'auto',
-      managedDailyCap: null,
-      managedDailyUserCap: null,
-      hasPlatformBackend: false,
-      managedAgentVendor: {
-        stored: null,
-        effective: null,
-        available: false,
-        configuredVendors: [],
-        defaultVendor: null,
-      },
-      tabCompletePaused: false,
-      globalDailyTabCompleteTokenCap: 2_000_000,
-      seedingMode: 'auto',
-      seedProvider: {
-        stored: null,
-        effective: 'vertex',
-        available: false,
-        configuredProviders: [],
-        defaultProvider: 'vertex',
-      },
-    });
+    expect((res.json() as CreationLimitsResponse).effective).toEqual(effectiveLimits({ paused: false }));
     await app.close();
   });
 
@@ -674,6 +665,7 @@ describe('/api/admin/creation-limits', () => {
     process.env.MANAGED_AGENT_MAX_SECONDS = '900';
     process.env.MANAGED_AGENT_MCP_URL = 'https://www.gamedev.pl/api/mcp';
     process.env.MANAGED_AGENT_COPILOT_MCP_REPO = 'gamedevpl/scratchpad';
+    process.env.MANAGED_AGENT_COPILOT_MAX_CREDITS = '20';
     delete process.env.GEMINI_API_KEY;
     delete process.env.MANAGED_AGENT_API_KEY;
 
@@ -986,7 +978,7 @@ describe('GET /api/admin/summary', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json() as AdminSummaryResponse;
     expect(body.alerts).toHaveLength(1);
-    expect(body.alerts[0]).toMatchObject({ kind: 'review_ready', issueNumber: 1_000_001, title: 'Comet Courier' });
+    expect(body.alerts[0]).toMatchObject({ kind: 'review_ready', jobId: 1_000_001, title: 'Comet Courier' });
     expect(body.queue).toMatchObject({ active: 1, stalled: 0, byState: { ready_for_review: 1 } });
     expect(body.limits.paused).toBe(false);
     expect(body.waitlist.pending).toBe(1);

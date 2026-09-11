@@ -19,10 +19,9 @@
 // This never publishes. It records a verdict; a human still approves. Publishing on green
 // would quietly delete the moderation boundary that human review exists to be.
 
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
-import type { GameProject } from '@gamedevpl/contract';
-import { assembleGameHtml } from '../catalog/assemble.js';
+import { materializeCandidate } from './gate-materialize.js';
 import { firstGateScreenshotPath } from './gate-screenshot.js';
 import {
   createGateStageBannerParser,
@@ -31,9 +30,8 @@ import {
   type GateProgressLane,
   type GateProgressStage,
 } from './gate-progress.js';
-import type { GamesStore, VersionManifest } from './games-store.js';
-import { isKitEngineRefSupported, kitOutdatedReport, type KitRegistry } from '../agent-surface/kit-window.js';
-import { createLocalGamesClient } from '../catalog/local-games-repo.js';
+import type { GamesStore } from './games-store.js';
+import { isKitEngineRefSupported, kitOutdatedReport, type KitRegistry } from '../platform/kit-window.js';
 
 export interface GateOutcome {
   green: boolean;
@@ -62,6 +60,8 @@ export interface GateOutcome {
    * a thing a gate refuses.
    */
   behaviouralDiff?: boolean;
+  /** Golden the gate derived itself (editor/seal lanes) — the caller merges it into sourceFiles. */
+  derivedSourceFiles?: string[];
 }
 
 export interface GateRunOptions {
@@ -119,7 +119,7 @@ export interface GateRunnerDeps {
    * Builds the document that will actually be served, from the checked harness.
    * Injected so the runner can be tested without esbuild or a games-repo tree.
    */
-  assembleBundle?: (harness: string, slug: string) => Promise<string | null>;
+  assembleBundle: (harness: string, slug: string) => Promise<string | null>;
   /**
    * The Creator Kit window. Injected so tests can fix the registry without GCS;
    * production reads `kits/current.json` via {@link GamesStore.getKitRegistry}.
@@ -139,39 +139,6 @@ export interface GateRunnerDeps {
 const DEFAULT_ARTIFACT_ROOTS = {
   media: (slug: string) => path.join('games', slug, 'media'),
 };
-
-/**
- * Assembles the served document from the harness the check just passed against.
- *
- * Deliberately *not* the games repo's own `dist/` build output, which is what this used
- * to store. That output is the repo's idea of a playable page; it is not ours, and the
- * difference is the whole of serve-time policy — the restrictive CSP that stops a game
- * calling home, the AI Act art. 50(2) provenance marking, the credential scan, the byte
- * budget. All four live in `assembleGameHtml`, none of them are in `tools/build.ts`, and
- * shipping the repo's build meant shipping a document with none of them.
- *
- * Assembling here rather than at serve time is what keeps one definition of "what a
- * served game is" across the three things that need one: the creator's draft preview,
- * the published game, and the snapshot bake. It also belongs here for the reason the
- * gate itself does — this repo owns the policy, and the harness is already checked out
- * with the GameKit modules the assembler has to resolve.
- */
-async function assembleFromHarness(harness: string, slug: string): Promise<string | null> {
-  const client = createLocalGamesClient({ rootDir: harness });
-  const sources = await client.getGameSources('main', slug);
-  if (!sources) return null;
-
-  const project: GameProject = {
-    title: sources.title ?? slug,
-    description: '',
-    html: sources.indexHtml,
-    js: sources.gameJs,
-    css: sources.styleCss,
-  };
-  // Matches the bake and the play route exactly: a game is self-contained by repo
-  // policy, so it is locked to its own inline assets.
-  return assembleGameHtml(project, { restrictNetwork: true });
-}
 
 /**
  * Files the capture harness produces that are worth keeping.
@@ -290,6 +257,8 @@ export async function runGate(
     .then((head) => (head.code === 0 ? head.output.trim().split('\n').pop()?.trim() : undefined))
     .catch(() => undefined);
   const gameDir = path.join(harness, 'games', slug);
+  // Set only when the golden below is derived and durably stored — never guessed.
+  let derivedSourceFiles: string[] | undefined;
 
   try {
     await materializeCandidate(deps.store, manifest, gameDir);
@@ -304,7 +273,13 @@ export async function runGate(
     // content for real; `--accept` here only retires the has-it-changed question,
     // which for a content edit is always answered "yes, that was the point".
     // Preview lane skips this: it never reaches the trace stage.
-    if (!previewRun && manifest.origin === 'editor') {
+    //
+    // A sealed preview (`origin: 'seal'`) carries no golden at all: the sources come
+    // from a preview-lane delivery, and no agent on that lane can record one — the
+    // harness that does it is not in their sandbox. Same remedy, and the same limit:
+    // deriving the golden only settles what the game *does*, and every stage after
+    // still has to pass on its own.
+    if (!previewRun && (manifest.origin === 'editor' || manifest.origin === 'seal')) {
       const trace = await deps.run('npm', ['run', 'trace', '--', slug, '--accept'], harness);
       if (trace.code !== 0) {
         return {
@@ -316,11 +291,30 @@ export async function runGate(
         };
       }
       const golden = await readFile(path.join(gameDir, 'TRACE.json')).catch(() => null);
-      if (golden) {
-        await deps.store
-          .putDerivedArtifact(slug, version, 'source/TRACE.json', golden, 'text/plain; charset=utf-8')
-          .catch(() => {});
+      if (!golden) {
+        return {
+          green: false,
+          report: '`npm run trace -- --accept` produced no TRACE.json to derive from',
+          artifacts: [],
+          durationMs: now() - startedAt,
+          ...(engineCommit ? { engineCommit } : {}),
+        };
       }
+      try {
+        await deps.store.putDerivedArtifact(slug, version, 'source/TRACE.json', golden, 'text/plain; charset=utf-8');
+      } catch (error) {
+        // Best-effort here would leave a green, publishable version with no durable
+        // golden on a store hiccup — refused rather than risked, same as any other
+        // stage this function refuses on.
+        return {
+          green: false,
+          report: `could not persist the derived golden: ${error instanceof Error ? error.message : String(error)}`,
+          artifacts: [],
+          durationMs: now() - startedAt,
+          ...(engineCommit ? { engineCommit } : {}),
+        };
+      }
+      derivedSourceFiles = ['TRACE.json'];
     }
 
     // Preview: typecheck→smoke→build only. Publish: full check:game without `--accept`
@@ -476,6 +470,7 @@ export async function runGate(
       ...(engineCommit ? { engineCommit } : {}),
       ...(screenshot ? { screenshot } : {}),
       ...(behaviouralDiff ? { behaviouralDiff: true } : {}),
+      ...(derivedSourceFiles ? { derivedSourceFiles } : {}),
     };
   } finally {
     await flushProgress();
@@ -507,21 +502,6 @@ export function failedOnlyOnTrace(output: string): boolean {
   return !otherStageFailed;
 }
 
-/** Writes a stored version's sources into the harness as the game's own directory. */
-async function materializeCandidate(store: GamesStore, manifest: VersionManifest, gameDir: string): Promise<void> {
-  // Removed first: the harness may already carry this game from the context mirror, and a
-  // candidate must be verified as *itself*, not as a merge over whatever was published.
-  await rm(gameDir, { recursive: true, force: true });
-
-  for (const relative of manifest.sourceFiles) {
-    const content = await store.getSourceFile(manifest.slug, manifest.version, relative);
-    if (content === null) throw new Error(`version ${manifest.version} claims ${relative}, which is not stored`);
-    const target = path.join(gameDir, relative);
-    await mkdir(path.dirname(target), { recursive: true });
-    await writeFile(target, content, 'utf8');
-  }
-}
-
 /**
  * Stores a playable document for a candidate the check refused.
  *
@@ -551,7 +531,7 @@ async function storePreviewStrict(
   version: string,
   harness: string,
 ): Promise<string[]> {
-  const preview = await (deps.assembleBundle ?? assembleFromHarness)(harness, slug);
+  const preview = await deps.assembleBundle(harness, slug);
   if (preview === null) {
     throw new Error(`check:game --preview passed for ${slug} but its sources could not be assembled`);
   }
@@ -612,7 +592,7 @@ async function collectArtifacts(
   // store a version that reads as publishable and has nothing to publish — and the
   // failure would surface later, as a creator's preview that never appears, rather
   // than here where the run that caused it is still in front of someone.
-  const bundle = await (deps.assembleBundle ?? assembleFromHarness)(harness, slug);
+  const bundle = await deps.assembleBundle(harness, slug);
   if (bundle === null) throw new Error(`check:game passed for ${slug} but its sources could not be assembled`);
   await deps.store.putDerivedArtifact(
     slug,

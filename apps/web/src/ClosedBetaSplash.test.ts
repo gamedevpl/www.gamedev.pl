@@ -38,6 +38,7 @@ describe('ClosedBetaSplash', () => {
 
     expect(container.querySelector('.app-loading-screen__mascot')).not.toBeNull();
     expect(container.querySelector('.app-loading-screen__logo')).not.toBeNull();
+    expect(container.querySelector('.app-loading-screen__exit')).toBeNull();
 
     await act(async () => root.unmount());
   });

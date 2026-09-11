@@ -19,6 +19,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
+import { hasServiceWorkerSupport } from './serviceWorkerSupport.js';
 import { clearPendingShellUpdate, pendingShellUpdate, SHELL_UPDATED_EVENT } from './shellUpdate.js';
 
 export function AppUpdateBanner() {
@@ -26,7 +27,7 @@ export function AppUpdateBanner() {
   const [updated, setUpdated] = useState(() => pendingShellUpdate() != null);
 
   useEffect(() => {
-    if (!('serviceWorker' in navigator)) return;
+    if (!hasServiceWorkerSupport()) return;
 
     function show() {
       setUpdated(true);

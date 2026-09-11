@@ -1,4 +1,22 @@
 {
+  "localActivity": {
+    "interactive": "Interaktywny agent steruje terminalem. Odpowiadaj tam na pytania o zgodę.",
+    "title": "Lokalny agent: {{agent}}",
+    "preparing": "Przygotowywanie lokalnego katalogu.",
+    "editing": "Agent edytuje grę lokalnie.",
+    "permission": "Oczekiwanie na zgodę w terminalu.",
+    "verifying": "Sprawdzanie lokalnych zmian.",
+    "ready": "Lokalne testy przeszły. Możesz wysłać zmiany przez /submit.",
+    "failed": "Lokalne zadanie nie przeszło weryfikacji. Szczegóły w terminalu.",
+    "stopped": "Lokalne zadanie zostało zatrzymane.",
+    "offline": "Utracono kontakt z CLI. Sprawdź terminal — agent może nadal pracować.",
+    "localOnly": "Pliki gry pozostają na Twoim komputerze do momentu wysłania."
+  },
+  "app": {
+    "loadingSurface": "Wczytywanie…",
+    "surfaceLoadFailed": "Ta strona się nie wczytała — dostępna jest nowsza wersja serwisu.",
+    "reload": "Odśwież"
+  },
   "notifications": {
     "aria": "Powiadomienia",
     "title": "Powiadomienia",
@@ -102,8 +120,9 @@
     "navPlay": "Graj",
     "navCreate": "Stwórz",
     "navParty": "Impreza",
-    "navArcade": "Arcade",
+    "navArcade": "Gry",
     "navStudio": "Studio",
+    "navConnect": "Podłącz agenta",
     "navFeed": "Strumień Agentów",
     "activeBuilds": "w trakcie: {{count}}",
     "upHome": "Wróć do strony głównej",
@@ -111,17 +130,20 @@
     "upCreator": "Wróć do strony twórcy"
   },
   "hero": {
-    "bigPromptPlaceholder": "Opisz grę…",
+    "bigPromptPlaceholder": "Wpisz w co chcesz zagrać lub opisz pomysł dla AI…",
     "buildGameButton": "Stwórz Moją Grę",
     "attachMenu": "Dodaj",
     "attachMenuAria": "Dodaj obraz lub szkic",
     "instantMockButton": "Szybki Lokalny Podgląd",
     "smartFoundTitle": "Znaleziono pasującą grę: {{title}}",
-    "smartPlayBtn": "Zagraj w {{title}} teraz",
+    "smartPlayBtn": "Zagraj teraz",
     "smartRemixBtn": "Stwórz nową wersję z AI",
-    "smartNoMatchTitle": "Nie znaleziono jeszcze dokładnie takiej gry: \"{{query}}\"",
+    "smartMatchHint": "Chcesz stworzyć coś innego? Dopisz więcej szczegółów powyżej i stwórz nową grę.",
+    "smartNoMatchTitle": "Opisz swój pomysł na grę: \"{{query}}\"",
     "smartNoMatchSub": "Zostań twórcą — pozwól agentom AI stworzyć Twój pomysł!",
-    "smartBuildBtn": "Stwórz \"{{query}}\" z AI",
+    "smartSearching": "Szukanie w katalogu…",
+    "smartBuildBtn": "Stwórz taką grę",
+    "orBuildOwnGame": "lub stwórz swoją grę",
     "keyboardShortcutHint": "Naciśnij ⌘+Enter lub Ctrl+Enter, aby wysłać",
     "micStart": "Mów",
     "micListening": "Słucham...",
@@ -233,6 +255,7 @@
     },
     "loading": "Wczytywanie gier…",
     "gameLoading": "Wczytywanie gry…",
+    "gameLoadingSize": "{{loaded}} / {{total}}",
     "gameLoadError": "Nie udało się wczytać tej gry.",
     "retry": "Spróbuj ponownie",
     "refreshError": "Nie udało się odświeżyć katalogu. {{message}}",
@@ -359,6 +382,48 @@
       "filePickerDelete": "Usuń {{path}}",
       "filePickerDeleteConfirm": "Usunąć {{path}}? Kliknij ponownie, aby potwierdzić",
       "deleteFileError": "Nie udało się usunąć — spróbuj ponownie",
+      "tree": {
+        "newFile": "Nowy plik",
+        "newFolder": "Nowy folder",
+        "uploadFile": "Wgraj pliki",
+        "uploadFolder": "Wgraj folder",
+        "uploadArchive": "Wgraj zip lub tar.gz",
+        "move": "Przenieś",
+        "moveItem": "Przenieś {{path}}",
+        "delete": "Usuń",
+        "deleteFolder": "Usuń folder {{path}}",
+        "cancel": "Anuluj",
+        "create": "Utwórz",
+        "addFiles": "Dodaj pliki",
+        "working": "Pracuję…",
+        "pathLabel": "Ścieżka",
+        "nameLabel": "Nazwa folderu",
+        "promptNewFile": "Nowy plik",
+        "promptNewFolder": "Nowy folder",
+        "promptMoveFile": "Przenieś plik",
+        "promptMoveFolder": "Przenieś folder",
+        "exists": "Plik o tej ścieżce już istnieje.",
+        "error": "Nie udało się zaktualizować plików — spróbuj ponownie",
+        "nothingToAdd": "W tym wgraniu nie ma źródeł gry, które da się dodać.",
+        "noArchive": "Nie udało się rozpakować archiwum",
+        "invalidName": "Ten cel nie jest dozwolony",
+        "confirmDeleteTitle": "Usunąć z kopii roboczej?",
+        "confirmMoveTitle": "Przenieść w kopii roboczej?",
+        "confirmUploadTitle": "Dodać te pliki?",
+        "confirmDiscardTitle": "Odrzucić zmiany w kopii roboczej?",
+        "confirmDeleteFile": "Usunąć {{path}}? Do publikacji Odrzuć przywróci ostatnią zapisaną wersję.",
+        "confirmDeleteFolder": "Usunąć folder {{path}} i {{count}} plików w środku? Do publikacji Odrzuć je przywróci.",
+        "confirmDeleteEmptyFolder": "Usunąć pusty folder {{path}}?",
+        "confirmMoveFile": "Przenieść {{from}} do {{to}}? Plik znika z obecnej ścieżki.",
+        "confirmMoveFolder": "Przenieść folder {{from}} do {{to}} ({{count}} plików)? Pliki znikają z obecnych ścieżek.",
+        "confirmOverwrite": "{{path}} już istnieje i zostanie zastąpiony.",
+        "confirmOverwriteMany": "{{count}} plików w miejscu docelowym zostanie zastąpionych.",
+        "confirmUpload": "Dodać {{count}} plików do kopii roboczej.",
+        "confirmUploadOverwrite": "{{count}} istniejących plików zostanie zastąpionych.",
+        "confirmUploadSkip": "{{count}} plików zostanie pominiętych.",
+        "confirmDiscardBody": "Odrzucić wszystkie niezapisane zmiany w kopii roboczej, w tym usunięcia i wgrania?",
+        "moreFiles": "i jeszcze {{count}}"
+      },
       "loading": "Wczytywanie plików źródłowych…",
       "loadError": "Nie udało się teraz wczytać plików źródłowych.",
       "agentRound": "Agent aktywnie pracuje — tylko do odczytu, dopóki nie skończy",
@@ -489,6 +554,7 @@
       "checks": "Kontrole",
       "checksOk": "Wszystkie kontrole zaliczone",
       "checksElsewhere": "Popraw przed publikacją: {{list}}",
+      "checksFromGame": "własne kontrole tej gry",
       "addItem": "Dodaj: {{name}}",
       "removeItem": "Usuń",
       "empty": "Nie ma jeszcze nic do edycji.",
@@ -593,10 +659,10 @@
     "share": {
       "title": "Udostępnij wersję roboczą",
       "liveTitle": "Udostępnij grę",
-      "liveHint": "Ta gra jest już w arcade. Każdy z tym linkiem zagra w najnowszą opublikowaną wersję.",
+      "liveHint": "Ta gra jest już w katalogu. Każdy z tym linkiem zagra w najnowszą opublikowaną wersję.",
       "on": "Wł.",
       "off": "Wył.",
-      "hintOff": "Na razie tylko Ty możesz zagrać w tę grę. Włącz, aby każdy z linkiem mógł spróbować — i tak nie trafi do arcade.",
+      "hintOff": "Na razie tylko Ty możesz zagrać w tę grę. Włącz, aby każdy z linkiem mógł spróbować — i tak nie trafi do katalogu.",
       "hintOn": "Każdy z tym linkiem może zagrać w najnowszą wersję. To ten sam link, który gra zachowa po publikacji, więc nie trzeba wysyłać go ponownie.",
       "error": "Nie udało się tego teraz zmienić. Spróbuj ponownie za chwilę."
     },
@@ -836,7 +902,7 @@
     "dialogLabel": "Podłącz swojego agenta",
     "stepLabel": "Połączenie",
     "eyebrow": "Twój agent",
-    "lede": "Ta runda czeka na Twojego agenta. Dodaj gamedev.pl, wklej prompt budowy — zostań tu, aż się odezwie, albo otwórz Studio kiedy chcesz.",
+    "lede": "Wybierz sposób pracy. Przeprowadzimy Cię przez kolejne kroki.",
     "ledeConnected": "Twój agent się odezwał. Otwórz Studio, żeby śledzić postęp i sterować budową.",
     "preparing": "Przygotowuję kroki połączenia…",
     "loadError": "Nie udało się odświeżyć statusu. Próbuję ponownie…",
@@ -982,15 +1048,15 @@
       },
       "publishing": {
         "label": "Publikujemy",
-        "description": "Zatwierdzone! Twoja gra trafia właśnie do arcade."
+        "description": "Zatwierdzone! Twoja gra właśnie jest publikowana."
       },
       "published": {
         "label": "Gotowe!",
-        "description": "Twoja gra jest w arcade. Zagraj w nią!"
+        "description": "Twoja gra jest w katalogu. Zagraj w nią!"
       },
       "needs_changes": {
         "label": "Wymaga poprawki",
-        "description": "Ta wersja potrzebuje jeszcze jednej rundy, zanim będzie mogła trafić do arcade. Wyślij poniżej krótką uwagę, aby kontynuować — nawet „popraw testy” wystarczy."
+        "description": "Ta wersja potrzebuje jeszcze jednej rundy, zanim będzie mogła zostać opublikowana. Wyślij poniżej krótką uwagę, aby kontynuować — nawet „popraw testy” wystarczy."
       },
       "abandoned": {
         "label": "Zatrzymana",
@@ -1054,7 +1120,7 @@
       "task_failed": "Agent budujący niespodziewanie przerwał pracę. Twoja gra i dotychczasowe postępy są bezpieczne — wyślij poniżej uwagi, aby rozpocząć kolejną rundę.",
       "task_timed_out": "Budowanie nie zdążyło się skończyć w wyznaczonym czasie. Postępy są bezpieczne — wyślij poniżej uwagi, aby rozpocząć kolejną rundę.",
       "task_completed_without_delivery": "Agent zakończył pracę, ale nie dostarczył gry. Wyślij poniżej uwagi, aby rozpocząć kolejną rundę.",
-      "gate_red": "Automatyczne testy nie przeszły, więc ta wersja nie może jeszcze trafić do arcade.",
+      "gate_red": "Automatyczne testy nie przeszły, więc ta wersja nie może jeszcze zostać opublikowana.",
       "self_build_delivery_cap": "Ta runda wyczerpała limit dostarczeń, więc Twój agent nie może wysłać kolejnej wersji, dopóki nie zaczniesz nowej rundy. Wyślij poniżej krótką uwagę, aby kontynuować — dotychczasowe postępy są bezpieczne.",
       "generic": "Ta runda budowania zakończyła się błędem. Postępy są bezpieczne — wyślij poniżej uwagi, aby rozpocząć kolejną rundę."
     },
@@ -1080,7 +1146,13 @@
       "sending": "Porzucam…",
       "error": "Nie udało się teraz porzucić tego buildu. Spróbuj ponownie za chwilę."
     },
-    "playableHint": "Wczesna wersja prosto z warsztatu — surowa, niedokończona i już grywalna. Powiedz, co zmienić, póki to łatwe."
+    "playableHint": "Wczesna wersja prosto z warsztatu — surowa, niedokończona i już grywalna. Powiedz, co zmienić, póki to łatwe.",
+    "seal": {
+      "action": "Wyślij do publikacji",
+      "sending": "Wysyłam…",
+      "sent": "Wysłano do publikacji — trwa pełny sprawdzian.",
+      "error": "Nie udało się wysłać do publikacji. Spróbuj za chwilę."
+    }
   },
   "suggestions": {
     "dodge": "Unikaj spadających skał",
@@ -1157,6 +1229,8 @@
   },
   "errors": {
     "generic": "Coś poszło nie tak",
+    "signInRequired": "Twoja sesja wygasła. Zaloguj się ponownie i wyślij jeszcze raz — odpowiedzi są zachowane.",
+    "tooManyAttempts": "To dużo nowych gier naraz. Odczekaj kilka minut i spróbuj ponownie.",
     "creationPaused": "Tworzenie nowych gier jest na chwilę wstrzymane — sprawdzamy coś u nas. Twój dzienny limit pozostaje nietknięty, spróbuj ponownie za moment.",
     "creationOverCapacity": "Osiągnęliśmy dzisiejszy limit nowych gier w całym serwisie, więc nie możemy teraz zacząć kolejnej. Twój własny limit jest nietknięty i będzie czekał jutro.",
     "nameUnavailable": "Ta nazwa została zajęta, gdy przygotowywaliśmy Twoją grę. Nadaj inną i spróbuj ponownie.",
@@ -1200,6 +1274,41 @@
     "projectNav": "Projekt",
     "openSource": "Otwarte źródła",
     "reportBug": "Zgłoś błąd"
+  },
+  "connectAgents": {
+    "title": "Podłącz agenta",
+    "intro": "Twórz gry w rozmowie z gamedevpl CLI albo podłącz własnego agenta przez MCP. Poniżej znajdziesz instrukcje zarówno dla nowego pomysłu, jak i gry, którą masz już w Studio.",
+    "back": "Wróć do serwisu",
+    "jump": "Na tej stronie",
+    "beta": "Tworzenie gier jest w zamkniętej becie. Połączenie ładuje się dla każdego; wywołania wymagają zatwierdzonego konta twórcy.",
+    "mcp": {
+      "nav": "MCP",
+      "title": "MCP — własny agent kodujący",
+      "lead": "Serwer jest zdalny i nic nie trzeba instalować. Zaloguj się przez OAuth, gdy klient o to poprosi.",
+      "oauth": "Wklej URL do Claude Code, Codex, Cursora, VS Code albo dowolnego klienta MCP.",
+      "studio": "Już w grze? Karta Connect w Studio ma instalację jednym kliknięciem dla Cursora i VS Code.",
+      "studioLink": "Otwórz Studio",
+      "claude": "Kolejność instalacji wtyczki Claude",
+      "registry": "Oficjalny rejestr MCP"
+    },
+    "cli": {
+      "nav": "gamedevpl CLI",
+      "title": "gamedevpl CLI — terminal",
+      "lead": "Zacznij od pomysłu albo otwórz grę ze swojego Studio. CLI prowadzi rozmowę i pomaga wybrać agenta do budowy.",
+      "installHint": "Potrzebujesz Node 20.19 lub nowszego. Masz już CLI? Uruchom gamedevpl update. Na Windows zainstaluj przez PowerShell: irm https://www.gamedev.pl/install.ps1 | iex.",
+      "installPending": "Instalatory nie są jeszcze publiczne. Klient jest w tym repozytorium w apps/cli; zbierz go lokalnie: npm run bundle -w @gamedevpl/cli.",
+      "login": "gamedevpl login otwiera przeglądarkę. Zaloguj się na to samo konto co w Studio — bez kopiowania tokenów.",
+      "repl": "gamedevpl bez czasownika otwiera REPL: najpierw rozmowa, gra dopiero gdy o nią poprosisz.",
+      "checkout": "W sesji wybierz lokalny checkout albo wpisz /checkout. Gdy nie ma jeszcze builda, pobierzesz brief do rozpoczęcia pracy; po zbudowaniu /play uruchomi podgląd, a /submit odda zmiany.",
+      "ci": "CI: GAMEDEV_TOKEN z secrets. Nigdy nie przekazuj tokenu OAuth twórcy do sub-agenta.",
+      "newTitle": "Mam dopiero pomysł",
+      "newHint": "Nie potrzebujesz jeszcze gry w Studio ani jej identyfikatora. Uruchom rozmowę:",
+      "newPrompt": "Napisz na przykład: „Chcę stworzyć grę o akrobacie skaczącym między dachami”. CLI zbierze pomysł i zaproponuje, kto zbuduje grę.",
+      "existingTitle": "Mam już grę w Studio",
+      "existingHint": "Wyświetl swoje gry, a potem zastąp <slug> identyfikatorem wybranej gry:",
+      "existingDraft": "Gra może dopiero czekać na pierwszy build. Wystarczy, że została już utworzona w Studio — nie musi być opublikowana ani mieć gotowych plików.",
+      "afterConnect": "Connect otwiera interaktywną sesję. Wybierz lokalny checkout, rozmowę o grze albo dostępnego agenta. Nie musisz ręcznie konfigurować MCP."
+    }
   },
   "contact": {
     "title": "Kontakt",
@@ -1292,8 +1401,6 @@
     "cancel": "Anuluj",
     "statusReady": "Pokój działa — czekamy na graczy",
     "statusConnecting": "Otwieram pokój…",
-    "statusPlaying": "Gramy",
-    "statusWaiting": "Czekaj na gospodarza",
     "statusReconnecting": "Ponowne łączenie…",
     "joinTitle": "Dołącz do gry",
     "nickLabel": "Twoja nazwa",
@@ -1325,6 +1432,17 @@
       "room_full_or_invalid": "Pokój jest pełny.",
       "unreachable": "Utracono połączenie z pokojem.",
       "rate_limited": "Zbyt wiele sygnałów — połączenie zamknięte."
+    },
+    "pause": "Pauza",
+    "resume": "Wznów",
+    "restart": "Od nowa",
+    "backToLobby": "Wróć do lobby",
+    "menuButton": "Wstrzymaj lub wznów wspólny ekran",
+    "phase": {
+      "lobby": "Czekamy na hosta",
+      "playing": "Gramy",
+      "paused": "Pauza — ☰ wznawia",
+      "ended": "Koniec rundy — A gra dalej"
     }
   },
   "sensing": {
@@ -1351,6 +1469,7 @@
     "studio": "Studio Twórcy",
     "notFound": "Nie znaleziono strony",
     "contact": "Kontakt",
+    "connect": "Podłącz agenta",
     "create": "Zbuduj grę",
     "party": "Tryb imprezowy",
     "playNamed": "Graj: {{title}}",
@@ -1597,6 +1716,12 @@
       "kimi": "Kimi",
       "cli": "CLI"
     },
+    "gamedevCli": {
+      "title": "gamedevpl CLI",
+      "hint": "Zainstaluj lub zaktualizuj CLI, zaloguj się na to samo konto co w Studio i otwórz tę grę. Potrzebujesz Node 20.19 lub nowszego.",
+      "next": "Wybierz „Open a local checkout”, aby pracować na plikach, lub rozmowę albo agenta. Sesja pozostanie otwarta; /checkout pobierze tę grę, /help pokaże dostępne działania.",
+      "draft": "Nie musisz czekać na pierwszy build. Jeśli nie ma jeszcze kodu gry, checkout zawiera brief. Opisz agentowi, co ma zbudować; /play będzie dostępne po powstaniu gry."
+    },
     "rotate": {
       "start": "Obróć klucz",
       "confirm": "Obrócenie zatrzyma każdego agenta, który nadal używa starego klucza. Kontynuować?",
@@ -1617,7 +1742,7 @@
   },
   "workspaceCheckout": {
     "title": "Pracuj nad tą grą we własnym IDE",
-    "hint": "Pobierz kopię roboczą — źródła tej gry, skrypt konfiguracyjny i README, gotowe dla Twojego edytora i Twojego repozytorium Git. Gra zostaje tutaj: gdy skończysz, Twój agent oddaje zmiany, a te przechodzą zwykłą rundę, bramkę i recenzję, zanim cokolwiek zostanie opublikowane.",
+    "hint": "Pobierz kopię roboczą — źródła tej gry, skrypt konfiguracyjny i README, gotowe dla Twojego edytora. Oddaj zmiany poleceniem `gamedevpl submit`; przechodzą zwykłą rundę, bramkę i recenzję, zanim cokolwiek zostanie opublikowane.",
     "action": "Pobierz kopię roboczą",
     "pending": "Przygotowujemy kopię roboczą…",
     "done": "Kopia robocza trafia do Twoich pobranych plików.",
@@ -1631,7 +1756,7 @@
   },
   "oauthClients": {
     "title": "Podłączone agenty kodujące",
-    "hint": "Agenty z dostępem do Twoich gier przez MCP. Odłączenie natychmiast odbiera dostęp.",
+    "hint": "Agenty i gamedevpl CLI z dostępem do Twoich gier. Odłączenie natychmiast odbiera dostęp.",
     "loading": "Wczytywanie podłączonych klientów…",
     "loadError": "Nie udało się wczytać podłączonych klientów.",
     "revokeError": "Nie udało się odłączyć tego klienta. Spróbuj za chwilę.",
@@ -1675,6 +1800,20 @@
       "sending": "Unieważnianie…"
     },
     "revokeError": "Nie udało się unieważnić klucza. Spróbuj za chwilę."
+  },
+  "patTokens": {
+    "title": "Osobiste tokeny dostępu",
+    "hint": "Do CI i skryptów bez nadzoru. Token nie może utworzyć kolejnego tokenu — twórz je będąc zalogowanym w przeglądarce. Skopiuj sekret, gdy się pojawi; pokazywany jest tylko raz.",
+    "loading": "Wczytuję tokeny…",
+    "loadError": "Nie udało się wczytać tokenów.",
+    "mint": "Utwórz token",
+    "minting": "Tworzenie…",
+    "mintError": "Nie udało się teraz utworzyć tokenu. Spróbuj za chwilę.",
+    "shownOnce": "Skopiuj teraz",
+    "name": "Nazwa tokenu",
+    "days": "Wygasa za (dni)",
+    "revoke": "Unieważnij",
+    "revokeError": "Nie udało się unieważnić tego tokenu. Spróbuj za chwilę."
   },
   "remix": {
     "title": "Remiks",
@@ -1754,7 +1893,8 @@
     "undone": "Przywrócono poprzednią wersję.",
     "undoFailed": "Nie udało się cofnąć.",
     "brokeIt": "Ta zmiana zepsuła grę. Cofnąć?",
-    "changeStanding": "Twoja zmiana działa."
+    "changeStanding": "Twoja zmiana działa.",
+    "changedWhere": "Zmieniono {{name}} w {{file}}."
   },
   "gamePage": {
     "loading": "Wczytywanie strony gry…",
@@ -1881,5 +2021,57 @@
     "diffTruncated": "Różnica w tym pliku jest długa — pokazujemy początek.",
     "diffOmitted": "Nie pokazano kolejnych zmienionych plików: {{count}}.",
     "diffUnavailable": "Nie udało się wczytać zmian. Nadal możesz zagrać i przeczytać opis."
+  },
+  "connectGuide": {
+    "choose": "Jak chcesz tworzyć grę?",
+    "platformTitle": "Niech gamedev.pl przejmie pracę",
+    "tool": "Z jakiego narzędzia korzystasz?",
+    "start": "Zacznij pracę nad grą",
+    "setup": "Połącz swoje narzędzie",
+    "back": "← Zmień wybór",
+    "progress": "Krok {{step}} z {{total}}",
+    "copy": "Kopiuj",
+    "retry": "Spróbuj ponownie",
+    "platformBody": "Agent gamedev.pl będzie kontynuował tę rundę, korzystając z Twojego limitu na platformie. Postęp zobaczysz w Studio.",
+    "cliStart": "Uruchom te polecenia w terminalu, a potem wybierz swojego zainstalowanego agenta lub lokalny checkout. Agent korzysta ze swojego konta i rozliczeń. gamedevpl CLI łączy go z tą grą; kliknięcie „Gotowe” tutaj nie uruchamia agenta managed.",
+    "agentStart": "Wklej tę wiadomość w rozmowie ze swoim agentem. Wskaże mu tę grę i poprosi o rozpoczęcie bieżącej rundy.",
+    "localWaiting": "Postęp lokalnej pracy zobaczysz w terminalu i podglądzie gry. Studio nie widzi lokalnych zmian, dopóki nie wyślesz ich przez /submit po pomyślnej weryfikacji.",
+    "waiting": "Połączenie nie jest jeszcze potwierdzone. Ten ekran zaktualizuje się, gdy agent się odezwie. Możesz też otworzyć Studio poniżej.",
+    "cliSetup": "Uruchom te polecenia w terminalu. Potrzebujesz Node.js 20.19 lub nowszego. Zaloguj się na to samo konto co tutaj.",
+    "toolSetup": "Dodaj gamedev.pl w {{tool}}, a potem przejdź do wiadomości rozpoczynającej pracę.",
+    "cliDraft": "Nie ma jeszcze kodu? To w porządku — lokalne pliki zaczną się od opisu Twojej gry.",
+    "signin": "Dokończ logowanie, gdy narzędzie otworzy przeglądarkę. Link instalacyjny nie zawiera danych dostępu.",
+    "manual": "Logowanie nie działa / konfiguracja ręczna",
+    "oauth": "Wróć do logowania w przeglądarce",
+    "configHint": "Dodaj tę konfigurację w swoim narzędziu. Sekret jest tutaj ukryty; przycisk Kopiuj pobiera właściwe dane dostępu. Nie udostępniaj ich innym.",
+    "add": "Dodaj do {{tool}}",
+    "next": "Gotowe — przejdź dalej",
+    "copyError": "Nie udało się skopiować. Zezwól na dostęp do schowka i spróbuj ponownie.",
+    "routes": {
+      "cli": {
+        "title": "gamedevpl CLI",
+        "body": "Twórz w terminalu. Wybierz agenta lub pracuj na lokalnych plikach."
+      },
+      "agent": {
+        "title": "Mam własnego agenta",
+        "body": "Podłącz Cursor, VS Code, Claude Code, Codex lub inne narzędzie."
+      },
+      "platform": {
+        "title": "Nie wiem — zbuduj za mnie",
+        "body": "Skorzystaj z agenta gamedev.pl. Nie musisz niczego instalować."
+      }
+    },
+    "tools": {
+      "cursor": "Cursor",
+      "vscode": "VS Code / Copilot",
+      "claudeCode": "Claude Code",
+      "codex": "Codex",
+      "kimi": "Kimi",
+      "other": "Inne narzędzie MCP",
+      "muse": "Muse Code (Meta)"
+    },
+    "museStart": "W terminalu wybierz „Open a local checkout”, a następnie Muse. Muse pracuje na lokalnych plikach; ta ścieżka nie konfiguruje MCP. Jeśli nie masz jeszcze Muse Code, zainstaluj je z dev.meta.ai.",
+    "panelWaiting": "Czekamy, aż Twój agent się połączy. Możesz zamknąć ten panel i śledzić postęp w rozmowie.",
+    "selfMode": "Ta runda: Twój agent (BYOCA)"
   }
 }

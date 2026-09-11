@@ -21,6 +21,32 @@ class UndefinedValueError extends Error {
   }
 }
 
+// Resolves FieldValue.increment sentinels the fake used to store verbatim.
+
+// Stored raw, a counter read back undefined and its test passed anyway.
+
+// Detected structurally: importing the real FieldValue would pull in the client.
+function resolveFieldValues(data: Record<string, unknown>, previous: Record<string, unknown>): Record<string, unknown> {
+  const resolved: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    const delta = incrementDelta(value);
+    if (delta === null) {
+      resolved[key] = value;
+      continue;
+    }
+    const before = previous[key];
+    resolved[key] = (typeof before === 'number' ? before : 0) + delta;
+  }
+  return resolved;
+}
+
+function incrementDelta(value: unknown): number | null {
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as { constructor?: { name?: string }; operand?: unknown };
+  if (candidate.constructor?.name !== 'NumericIncrementTransform') return null;
+  return typeof candidate.operand === 'number' ? candidate.operand : 0;
+}
+
 function rejectUndefined(data: Record<string, unknown>, path = ''): void {
   for (const [key, value] of Object.entries(data)) {
     const field = path ? `${path}.${key}` : key;
@@ -84,7 +110,7 @@ export function fakeFirestore() {
         },
         apply: () => {
           const previous = options?.merge ? (docs.get(docKey) ?? {}) : {};
-          docs.set(docKey, { ...previous, ...data });
+          docs.set(docKey, { ...previous, ...resolveFieldValues(data, docs.get(docKey) ?? {}) });
         },
       }),
       // Unlike set, the real client refuses a create over an existing document --

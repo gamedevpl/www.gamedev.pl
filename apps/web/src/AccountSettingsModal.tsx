@@ -3,12 +3,12 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { AccountDeletionControl } from './AccountDeletionControl.js';
 import { PixelIcon } from './PixelIcon.js';
-import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
-import { StudioOAuthClientsPanel } from './StudioOAuthClientsPanel.js';
+import { StudioCreatorAgentKeyPanel } from './surfaces/studio/StudioCreatorAgentKeyPanel.js';
+import { StudioOAuthClientsPanel } from './surfaces/studio/StudioOAuthClientsPanel.js';
+import { StudioPatPanel } from './surfaces/studio/StudioPatPanel.js';
 
 type AccountSettingsSection = 'credentials' | 'account';
 
-/** Account settings remain reachable even before a creator claims a public handle. */
 export function AccountSettingsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { t } = useTranslation();
   const headingId = useId();
@@ -82,10 +82,10 @@ export function AccountSettingsModal({ isOpen, onClose }: { isOpen: boolean; onC
             <p className="studio-rail-credentials-hint">{t('studioPanel.rail.credentialsHint')}</p>
             <div className="studio-rail-credentials-body">
               <StudioCreatorAgentKeyPanel />
+              <StudioPatPanel />
               <StudioOAuthClientsPanel />
             </div>
           </div>
-
           <div className="account-settings-panel" data-section="account" hidden={section !== 'account'}>
             <AccountDeletionControl labelledBy={`${headingId}-danger`} />
           </div>

@@ -106,6 +106,17 @@ DELETE /api/admin/access-tokens/<tokenId>
 The token is readable exactly once, in the mint response. Nothing stores it — a caller who
 loses it revokes and mints again.
 
+**Self-service HTTP — the account holder, session only.** Same `mintAccessTokenFor` rules
+and the same per-account cap. `POST /api/me/access-tokens` requires `authMethod ===
+'session'` (a browser cookie). A PAT or a `creator`-scoped OAuth token gets 404 — a
+token can never mint a token.
+
+```
+POST   /api/me/access-tokens             {"name":"ci","expiresInDays":30}
+GET    /api/me/access-tokens
+DELETE /api/me/access-tokens/<tokenId>
+```
+
 ## Where the token lives
 
 **One token per environment, never one shared token.** Revocation is per-token, so a

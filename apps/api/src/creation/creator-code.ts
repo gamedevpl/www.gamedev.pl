@@ -1,21 +1,23 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from '../catalog/assemble.js';
+import { registerCreatorTakeover } from './creator-takeover.js';
+import {
+  assembleGameHtml,
+  CredentialLeakError,
+  EmptyProjectError,
+  ProjectTooLargeError,
+} from '../platform/assemble.js';
 import { isActiveBuildRound } from './builder.js';
 import { codeSurfaceEnabled, isLiveAgentRound, isOpenAgentRound } from './code-surface.js';
 import type { GcsObjectStore } from '../delivery/gcs-sign.js';
-import {
-  InvalidUploadError,
-  MAX_UPLOAD_FILES,
-  type GamesStore,
-  type SourceFile,
-  type StagedSourceEntry,
-} from '../delivery/games-store.js';
+import type { GamesStore, SourceFile, StagedSourceEntry } from '../delivery/games-store.js';
+import { DELIVERY_MAX_FILES } from '../platform/games-repo-contract.js';
+import { InvalidUploadError } from '../platform/upload-error.js';
 import type { TabCompleteGate } from './creation-limits.js';
 import type { GitHubClient } from '../catalog/github-client.js';
 import { resolveJobState } from './job-state.js';
-import { createKitFileStore, type KitFileStore } from '../agent-surface/kit-files.js';
-import { parseKitRegistry } from '../agent-surface/kit-registry.js';
+import type { KitFileStore } from '../agent-surface/kit-files.js';
+import { parseKitRegistry } from '../platform/kit-registry.js';
 import {
   assessModuleSize,
   isGameTsModule,
@@ -23,19 +25,11 @@ import {
   MODULE_SOFT_LIMIT_BYTES,
   MODULE_SOFT_LIMIT_LINES,
 } from './module-size.js';
-import { resolveRoundBaseVersion } from './round-base-version.js';
-import { applyExactReplace, applySourcePatch, SourcePatchError } from './source-patch.js';
-import {
-  createSourceDeliveryService,
-  SourceDeliveryValidationError,
-  type SourceDeliveryService,
-} from '../delivery/source-delivery.js';
-import {
-  hasPlayableOverlay,
-  overlayGameSources,
-  readDeliveredSources,
-  type StagedPreviewPublisher,
-} from '../delivery/staged-preview.js';
+import { resolveRoundBaseVersion } from '../platform/round-base-version.js';
+import { applyExactReplace, applySourcePatch, SourcePatchError } from '../platform/source-patch.js';
+import type { SourceDeliveryService } from '../delivery/source-delivery.js';
+import { hasPlayableOverlay, overlayGameSources, readDeliveredSources } from '../platform/game-overlay.js';
+import type { StagedPreviewPublisher } from '../delivery/staged-preview.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { MAX_PREFIX_CHARS, MAX_SUFFIX_CHARS, tabCompleteEnabled, type TabCompleter } from './tab-complete.js';
 import { sharedSourcesFromKitTree } from './typecheck-preflight.js';
@@ -60,7 +54,7 @@ export interface CreatorCodeRoutesOptions {
   store: Store;
   gamesStore?: GamesStore;
   objectStore?: GcsObjectStore;
-  /** Test/production kit resolution seam; defaults to a fresh store over `objectStore`. */
+  // N1: built at the composition root, never here — see app.ts.
   kitFileStore?: KitFileStore | null;
   // Track 2: the fast-lane synchronous preview route's engine half.
   githubClient?: Pick<GitHubClient, 'getGameSources'>;
@@ -68,11 +62,11 @@ export interface CreatorCodeRoutesOptions {
   stagedPreviews?: Pick<StagedPreviewPublisher, 'publishCandidate'> | null;
   now?: () => number;
   /** Busts the cached status response after an owner write — see submissions.ts. */
-  invalidateStatusCache?: (issueNumber: number) => void;
+  invalidateStatusCache?: (jobId: number) => void;
   /** Arms the staged-preview publisher — the CE-12 fix's other half lives here: an
    * owner write has to feed the same assembly an agent write does, or the "stage
    * refreshes" fix on the read side has nothing to read. */
-  scheduleStagedPreview?: (issueNumber: number) => void;
+  scheduleStagedPreview?: (jobId: number) => void;
   // TA-01: the ghost-text completer. Built unconditionally; TAB_COMPLETE gates the route.
   tabCompleter?: TabCompleter;
   // Shared daily token budget for ghost text — same chassis as editingGate.
@@ -80,13 +74,14 @@ export interface CreatorCodeRoutesOptions {
   dailyTabCompleteQuota?: number;
   /** Starts the gate on a manual delivery — the same trigger the agent channel uses. */
   onSourcesDelivered?: (input: {
-    issueNumber: number;
+    jobId: number;
     slug: string;
     version: string;
     mode?: 'health' | 'preview' | 'proposal';
   }) => Promise<{ buildId?: string; accepted?: boolean } | void> | void;
+  // N1: delivery owns this service; app.ts builds it.
   sourceDelivery?: SourceDeliveryService | null;
-  mintStatusToken?: (issueNumber: number) => string;
+  mintStatusToken?: (jobId: number) => string;
   log?: {
     warn: (context: object, message: string) => void;
     error: (context: object, message: string) => void;
@@ -189,26 +184,8 @@ export async function registerCreatorCodeRoutes(
   options: CreatorCodeRoutesOptions,
 ): Promise<void> {
   const { store } = options;
-  const kitFileStore =
-    options.kitFileStore !== undefined
-      ? options.kitFileStore
-      : options.objectStore
-        ? createKitFileStore(options.objectStore)
-        : null;
-  const sourceDelivery: SourceDeliveryService | null =
-    options.sourceDelivery !== undefined
-      ? options.sourceDelivery
-      : options.gamesStore
-        ? createSourceDeliveryService({
-            store: options.store,
-            gamesStore: options.gamesStore,
-            kitFileStore,
-            stagedPreviews: options.stagedPreviews,
-            onSourcesDelivered: options.onSourcesDelivered,
-            onEvent: (issueNumber) => options.scheduleStagedPreview?.(issueNumber),
-            log: options.log,
-          })
-        : null;
+  const kitFileStore = options.kitFileStore ?? null;
+  const sourceDelivery: SourceDeliveryService | null = options.sourceDelivery ?? null;
   /** CE-19: per-slug cooldown between manual deliveries. Process-local, same posture
    * as source-delivery.ts's own per-build rate limiter. */
   const lastDeliverAt = new Map<string, number>();
@@ -240,7 +217,7 @@ export async function registerCreatorCodeRoutes(
     // Carry the version forward — else its first write sees no base.
     const baseVersion = await resolveRoundBaseVersion(store, source, slug);
     if (baseVersion) await store.setSubmissionPreviewVersion(jobId, baseVersion);
-    return (await store.getSubmission(jobId)) ?? { ...source, issueNumber: jobId, roundGeneration: undefined };
+    return (await store.getSubmission(jobId)) ?? { ...source, jobId, roundGeneration: undefined };
   }
 
   /** Owner-resolved round + version, or the exact reply already sent on failure. */
@@ -263,6 +240,8 @@ export async function registerCreatorCodeRoutes(
     }
     return { record, slug };
   }
+
+  registerCreatorTakeover(app, { store, resolveForSlug, invalidate: options.invalidateStatusCache, now: options.now });
 
   /**
    * GET /api/me/studio/games/:slug/sources (CE-03).
@@ -295,8 +274,8 @@ export async function registerCreatorCodeRoutes(
 
       const [manifest, stagedSummary, stagedContents] = await Promise.all([
         version ? gamesStore.getManifest(slug, version) : Promise.resolve(null),
-        gamesStore.listStagedSources({ slug, issueNumber: record.issueNumber, roundGeneration }),
-        gamesStore.getStagedSourceFiles({ slug, issueNumber: record.issueNumber, roundGeneration }),
+        gamesStore.listStagedSources({ slug, jobId: record.jobId, roundGeneration }),
+        gamesStore.getStagedSourceFiles({ slug, jobId: record.jobId, roundGeneration }),
       ]);
 
       if (version && !manifest) {
@@ -411,27 +390,27 @@ export async function registerCreatorCodeRoutes(
       }
 
       const roundGeneration =
-        (await store.ensureRoundGeneration(activeRecord.issueNumber)) ?? activeRecord.roundGeneration ?? 1;
+        (await store.ensureRoundGeneration(activeRecord.jobId)) ?? activeRecord.roundGeneration ?? 1;
 
       try {
         const staged = await options.gamesStore.putStagedSourceFile({
           slug,
-          issueNumber: activeRecord.issueNumber,
+          jobId: activeRecord.jobId,
           roundGeneration,
           path: parsed.data.path,
           content: parsed.data.content,
           stagedBy: 'owner',
           agentAssisted: parsed.data.agentAuthored === true,
         });
-        options.invalidateStatusCache?.(activeRecord.issueNumber);
-        if (parsed.data.rebuild !== false) options.scheduleStagedPreview?.(activeRecord.issueNumber);
+        options.invalidateStatusCache?.(activeRecord.jobId);
+        if (parsed.data.rebuild !== false) options.scheduleStagedPreview?.(activeRecord.jobId);
         const hint = largeSourceFileHint(staged.path, staged.bytes, parsed.data.content);
         return reply.send({
           accepted: true,
           path: staged.path,
           bytes: staged.bytes,
           ...(hint ? { hint } : {}),
-          ...(activeRecord.issueNumber !== record.issueNumber ? { roundOpened: activeRecord.issueNumber } : {}),
+          ...(activeRecord.jobId !== record.jobId ? { roundOpened: activeRecord.jobId } : {}),
           staged: {
             totalBytes: staged.totalBytes,
             maxBytes: staged.maxBytes,
@@ -476,22 +455,22 @@ export async function registerCreatorCodeRoutes(
       }
 
       const roundGeneration =
-        (await store.ensureRoundGeneration(activeRecord.issueNumber)) ?? activeRecord.roundGeneration ?? 1;
+        (await store.ensureRoundGeneration(activeRecord.jobId)) ?? activeRecord.roundGeneration ?? 1;
 
       try {
         const staged = await options.gamesStore.deleteStagedSourceFile({
           slug,
-          issueNumber: activeRecord.issueNumber,
+          jobId: activeRecord.jobId,
           roundGeneration,
           path: parsed.data.path,
           stagedBy: 'owner',
         });
-        options.invalidateStatusCache?.(activeRecord.issueNumber);
-        options.scheduleStagedPreview?.(activeRecord.issueNumber);
+        options.invalidateStatusCache?.(activeRecord.jobId);
+        options.scheduleStagedPreview?.(activeRecord.jobId);
         return reply.send({
           accepted: true,
           path: staged.path,
-          ...(activeRecord.issueNumber !== record.issueNumber ? { roundOpened: activeRecord.issueNumber } : {}),
+          ...(activeRecord.jobId !== record.jobId ? { roundOpened: activeRecord.jobId } : {}),
           staged: {
             totalBytes: staged.totalBytes,
             maxBytes: staged.maxBytes,
@@ -562,13 +541,13 @@ export async function registerCreatorCodeRoutes(
       }
 
       const roundGeneration =
-        (await store.ensureRoundGeneration(activeRecord.issueNumber)) ?? activeRecord.roundGeneration ?? 1;
+        (await store.ensureRoundGeneration(activeRecord.jobId)) ?? activeRecord.roundGeneration ?? 1;
       const gamesStore = options.gamesStore;
 
       try {
         const stagedContent = await gamesStore.getStagedSourceFile({
           slug,
-          issueNumber: activeRecord.issueNumber,
+          jobId: activeRecord.jobId,
           roundGeneration,
           path: parsed.data.path,
         });
@@ -595,15 +574,15 @@ export async function registerCreatorCodeRoutes(
 
         const staged = await gamesStore.putStagedSourceFile({
           slug,
-          issueNumber: activeRecord.issueNumber,
+          jobId: activeRecord.jobId,
           roundGeneration,
           path: parsed.data.path,
           content: patched.content,
           stagedBy: 'owner',
           agentAssisted: parsed.data.agentAuthored === true,
         });
-        options.invalidateStatusCache?.(activeRecord.issueNumber);
-        options.scheduleStagedPreview?.(activeRecord.issueNumber);
+        options.invalidateStatusCache?.(activeRecord.jobId);
+        options.scheduleStagedPreview?.(activeRecord.jobId);
         const hint = largeSourceFileHint(staged.path, staged.bytes, patched.content);
         return reply.send({
           accepted: true,
@@ -612,7 +591,7 @@ export async function registerCreatorCodeRoutes(
           replacements: patched.replacements,
           baseFrom,
           ...(hint ? { hint } : {}),
-          ...(activeRecord.issueNumber !== record.issueNumber ? { roundOpened: activeRecord.issueNumber } : {}),
+          ...(activeRecord.jobId !== record.jobId ? { roundOpened: activeRecord.jobId } : {}),
           staged: {
             totalBytes: staged.totalBytes,
             maxBytes: staged.maxBytes,
@@ -630,7 +609,7 @@ export async function registerCreatorCodeRoutes(
   );
 
   const DiscardInputSchema = z.object({
-    paths: z.array(z.string().trim().min(1).max(120)).max(MAX_UPLOAD_FILES).optional(),
+    paths: z.array(z.string().trim().min(1).max(120)).max(DELIVERY_MAX_FILES).optional(),
   });
 
   /**
@@ -663,7 +642,7 @@ export async function registerCreatorCodeRoutes(
       const roundGeneration = record.roundGeneration ?? 1;
       const summary = await options.gamesStore.listStagedSources({
         slug,
-        issueNumber: record.issueNumber,
+        jobId: record.jobId,
         roundGeneration,
       });
       const ownerPaths = new Set(summary.files.filter((file) => file.stagedBy === 'owner').map((file) => file.path));
@@ -676,13 +655,13 @@ export async function registerCreatorCodeRoutes(
 
       const result = await options.gamesStore.clearStagedSources({
         slug,
-        issueNumber: record.issueNumber,
+        jobId: record.jobId,
         roundGeneration,
         paths,
       });
-      options.invalidateStatusCache?.(record.issueNumber);
+      options.invalidateStatusCache?.(record.jobId);
       // Rebuild so Play drops the cancelled draft.
-      options.scheduleStagedPreview?.(record.issueNumber);
+      options.scheduleStagedPreview?.(record.jobId);
       return reply.send(result);
     },
   );
@@ -727,24 +706,24 @@ export async function registerCreatorCodeRoutes(
       }
 
       const roundGeneration =
-        (await store.ensureRoundGeneration(activeRecord.issueNumber)) ?? activeRecord.roundGeneration ?? 1;
+        (await store.ensureRoundGeneration(activeRecord.jobId)) ?? activeRecord.roundGeneration ?? 1;
       try {
         const staged = await gamesStore.putStagedSourceFile({
           slug,
-          issueNumber: activeRecord.issueNumber,
+          jobId: activeRecord.jobId,
           roundGeneration,
           path,
           content,
           stagedBy: 'owner',
         });
-        options.invalidateStatusCache?.(activeRecord.issueNumber);
-        options.scheduleStagedPreview?.(activeRecord.issueNumber);
+        options.invalidateStatusCache?.(activeRecord.jobId);
+        options.scheduleStagedPreview?.(activeRecord.jobId);
         return reply.send({
           accepted: true,
           path: staged.path,
           bytes: staged.bytes,
           from: delivered !== null ? ('delivery' as const) : ('stub' as const),
-          ...(activeRecord.issueNumber !== record.issueNumber ? { roundOpened: activeRecord.issueNumber } : {}),
+          ...(activeRecord.jobId !== record.jobId ? { roundOpened: activeRecord.jobId } : {}),
           staged: {
             totalBytes: staged.totalBytes,
             maxBytes: staged.maxBytes,
@@ -778,7 +757,7 @@ export async function registerCreatorCodeRoutes(
       if (!options.scheduleStagedPreview) {
         return reply.status(503).send({ error: 'stage rebuilds are not configured on this deployment' });
       }
-      options.scheduleStagedPreview(record.issueNumber);
+      options.scheduleStagedPreview(record.jobId);
       return reply.send({ scheduled: true });
     },
   );
@@ -786,7 +765,7 @@ export async function registerCreatorCodeRoutes(
   const TypecheckInputSchema = z.object({
     overlay: z
       .array(z.object({ path: z.string().trim().min(1).max(120), content: z.string().max(1_000_000) }))
-      .max(MAX_UPLOAD_FILES)
+      .max(DELIVERY_MAX_FILES)
       .optional(),
   });
 
@@ -832,7 +811,7 @@ export async function registerCreatorCodeRoutes(
           }
         }
       }
-      const staged = await gamesStore.getStagedSourceFiles({ slug, issueNumber: record.issueNumber, roundGeneration });
+      const staged = await gamesStore.getStagedSourceFiles({ slug, jobId: record.jobId, roundGeneration });
       for (const file of staged) {
         if (file.deleted) delete sources[file.path];
         else sources[file.path] = file.content;
@@ -875,7 +854,7 @@ export async function registerCreatorCodeRoutes(
       }
 
       const roundGeneration = record.roundGeneration ?? 1;
-      const staged = await gamesStore.getStagedSourceFiles({ slug, issueNumber: record.issueNumber, roundGeneration });
+      const staged = await gamesStore.getStagedSourceFiles({ slug, jobId: record.jobId, roundGeneration });
       const delivered = await readDeliveredSources({ gamesStore, store, record });
       const overlay = overlayGameSources({
         staged,
@@ -1021,7 +1000,7 @@ export async function registerCreatorCodeRoutes(
       await options.tabCompleteGate?.spend(uid, dateStr, tokens ? tokens.input + tokens.output : 0, reserved);
       if (tokens) {
         await store
-          .recordJobCost(resolved.record.issueNumber, {
+          .recordJobCost(resolved.record.jobId, {
             kind: 'tab_complete',
             at: new Date(nowMs).toISOString(),
             by: result.model ?? 'vertex',
@@ -1109,10 +1088,10 @@ export async function registerCreatorCodeRoutes(
           if (entry.content !== null) baseFiles.set(entry.path, entry.content);
         }
       }
-      const staged = await gamesStore.getStagedSourceFiles({ slug, issueNumber: record.issueNumber, roundGeneration });
+      const staged = await gamesStore.getStagedSourceFiles({ slug, jobId: record.jobId, roundGeneration });
       const stagedEntries = await gamesStore.listStagedSources({
         slug,
-        issueNumber: record.issueNumber,
+        jobId: record.jobId,
         roundGeneration,
       });
       for (const entry of staged) {
@@ -1148,7 +1127,7 @@ export async function registerCreatorCodeRoutes(
           const registryBody = await options.objectStore.readObject('kits/current.json');
           if (registryBody) {
             const currentRef = parseKitRegistry(registryBody.toString('utf8')).current;
-            kitEngineRef = (await store.pinRoundKitEngineRef(record.issueNumber, currentRef)) ?? currentRef;
+            kitEngineRef = (await store.pinRoundKitEngineRef(record.jobId, currentRef)) ?? currentRef;
           }
         } catch (error) {
           request.log.warn({ err: error, slug }, 'code surface deliver: could not pin the kit engine ref');
@@ -1156,13 +1135,13 @@ export async function registerCreatorCodeRoutes(
       }
 
       request.log.info?.(
-        { issueNumber: record.issueNumber, slug, uid: request.user!.uid, attestedAt: new Date(nowMs).toISOString() },
+        { jobId: record.jobId, slug, uid: request.user!.uid, attestedAt: new Date(nowMs).toISOString() },
         'code surface: IP attestation recorded for manual delivery',
       );
 
       try {
         const outcome = await sourceDelivery.deliver({
-          issueNumber: record.issueNumber,
+          jobId: record.jobId,
           slug,
           files,
           mode: parsed.data.mode,
@@ -1175,18 +1154,18 @@ export async function registerCreatorCodeRoutes(
           lastDeliverAt.set(slug, nowMs);
           // Publish consumes the buffer, like agent fromStaged submit.
           await gamesStore
-            .clearStagedSources({ slug, issueNumber: record.issueNumber, roundGeneration })
+            .clearStagedSources({ slug, jobId: record.jobId, roundGeneration })
             .catch((error: unknown) => {
               request.log.warn(
-                { err: error, issueNumber: record.issueNumber, slug },
+                { err: error, jobId: record.jobId, slug },
                 'code surface deliver: could not clear working copy after publish',
               );
             });
         }
-        options.invalidateStatusCache?.(record.issueNumber);
+        options.invalidateStatusCache?.(record.jobId);
         return reply.send(outcome);
       } catch (error) {
-        if (error instanceof SourceDeliveryValidationError || error instanceof InvalidUploadError) {
+        if (error instanceof InvalidUploadError) {
           // `error` stays the sentence; `code`/`missing` drive the fixit.
           const missing = error instanceof InvalidUploadError ? error.missingPaths : undefined;
           return reply.status(400).send({
@@ -1264,7 +1243,7 @@ export async function registerCreatorCodeRoutes(
           const registryBody = await options.objectStore.readObject('kits/current.json');
           if (registryBody) {
             const currentRef = parseKitRegistry(registryBody.toString('utf8')).current;
-            kitEngineRef = (await store.pinRoundKitEngineRef(activeRecord.issueNumber, currentRef)) ?? currentRef;
+            kitEngineRef = (await store.pinRoundKitEngineRef(activeRecord.jobId, currentRef)) ?? currentRef;
           }
         } catch (error) {
           request.log.warn({ err: error, slug }, 'code surface revert: could not pin current kit engine ref');
@@ -1274,7 +1253,7 @@ export async function registerCreatorCodeRoutes(
       const nowMs = Date.now();
       request.log.info?.(
         {
-          issueNumber: activeRecord.issueNumber,
+          jobId: activeRecord.jobId,
           slug,
           targetVersion,
           uid: request.user!.uid,
@@ -1286,7 +1265,7 @@ export async function registerCreatorCodeRoutes(
       try {
         const roundGeneration = activeRecord.roundGeneration ?? 1;
         const outcome = await sourceDelivery.deliver({
-          issueNumber: activeRecord.issueNumber,
+          jobId: activeRecord.jobId,
           slug,
           files,
           mode,
@@ -1297,20 +1276,18 @@ export async function registerCreatorCodeRoutes(
         });
         if (outcome.accepted) {
           lastDeliverAt.set(slug, nowMs);
-          await gamesStore
-            .clearStagedSources({ slug, issueNumber: activeRecord.issueNumber, roundGeneration })
-            .catch(() => {});
+          await gamesStore.clearStagedSources({ slug, jobId: activeRecord.jobId, roundGeneration }).catch(() => {});
         }
-        options.invalidateStatusCache?.(activeRecord.issueNumber);
-        const token = options.mintStatusToken?.(activeRecord.issueNumber);
+        options.invalidateStatusCache?.(activeRecord.jobId);
+        const token = options.mintStatusToken?.(activeRecord.jobId);
         return reply.send({
           ...outcome,
           targetVersion,
-          ...(activeRecord.issueNumber !== record.issueNumber ? { roundOpened: activeRecord.issueNumber } : {}),
+          ...(activeRecord.jobId !== record.jobId ? { roundOpened: activeRecord.jobId } : {}),
           ...(token ? { token } : {}),
         });
       } catch (error) {
-        if (error instanceof SourceDeliveryValidationError || error instanceof InvalidUploadError) {
+        if (error instanceof InvalidUploadError) {
           const missing = error instanceof InvalidUploadError ? error.missingPaths : undefined;
           return reply.status(400).send({
             error: error.message,

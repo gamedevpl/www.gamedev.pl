@@ -16,7 +16,6 @@
 // same exposure refine.ts has carried in production, same containment — output lands
 // in a workspace whose only exits are our gate and human review, and the path guard
 // below refuses anything outside one game directory.
-import path from 'node:path';
 import { z } from 'zod';
 import type { GenAIClient, GenerationResult } from 'genaicode';
 import { createSeedClient, type SeedProviderConfig } from './seed-provider.js';
@@ -27,15 +26,9 @@ import { typeCheckGame } from './type-check.js';
 import type { TypeCheckResult } from './type-check.js';
 import { TYPECHECK_PREFLIGHT_BUDGET_MS } from './typecheck-preflight.js';
 import type { QueryKnowledgeFn } from './knowledge-search.js';
+import { isAllowedSeedPath, normalizeSeedPath } from './seed-paths.js';
 
-/**
- * Files a seed is allowed to write, relative to `games/<slug>/`.
- *
- * ACCEPTANCE.json is included deliberately: the games repo template ships a placeholder
- * objective ("collect at least one star"), and a seed that leaves it there fails the
- * gate's accept stage structurally, for every game, no matter how good the draft is.
- */
-const TOP_LEVEL_ALLOWED = new Set(['SPEC.md', 'GAME.json', 'game.ts', 'index.html', 'style.css', 'ACCEPTANCE.json']);
+export { isAllowedSeedPath, normalizeSeedPath } from './seed-paths.js';
 
 /** The fence label carrying the hand-off note rather than a file. */
 const NOTES_FENCE = 'NOTES';
@@ -151,33 +144,6 @@ export interface GameSeeder {
 
 const PickSchema = z.object({ picks: z.array(z.string()).optional() });
 
-/**
- * Strips what a model prepends in practice, so the guard judges the path a file would
- * actually land on rather than the string it was labelled with.
- */
-export function normalizeSeedPath(relative: string, slug: string): string {
-  let normalized = relative.trim().replaceAll('\\', '/').replace(/^\.\//, '');
-  const prefix = `games/${slug}/`;
-  if (normalized.startsWith(prefix)) normalized = normalized.slice(prefix.length);
-  return path.posix.normalize(normalized);
-}
-
-/**
- * Whether a normalized path is inside the one game directory this seed may write.
- *
- * The whole containment story for generated content: a draft is model output derived
- * from untrusted creator text, so nothing decides where its bytes go except this
- * function. Traversal, absolute paths, other games, `shared/`, `tools/` and every
- * non-source file are refused rather than sanitized.
- */
-export function isAllowedSeedPath(normalized: string): boolean {
-  if (!normalized || normalized.startsWith('..') || normalized.startsWith('/') || path.posix.isAbsolute(normalized)) {
-    return false;
-  }
-  if (TOP_LEVEL_ALLOWED.has(normalized)) return true;
-  return normalized.startsWith('game/') && normalized.endsWith('.ts');
-}
-
 export interface ParsedSeedResponse {
   files: { path: string; content: string }[];
   notes?: string;
@@ -269,7 +235,8 @@ export function collectSeedFiles(parsed: ParsedSeedResponse, slug: string): Seed
 export function isUsableSeed(files: SeedFile[]): boolean {
   const paths = new Set(files.map((file) => file.path));
   const hasModule = files.some((file) => file.path.startsWith('game/') && file.path.endsWith('.ts'));
-  return paths.has('game.ts') && paths.has('SPEC.md') && hasModule;
+  const hasEditor = paths.has('EDITOR.json');
+  return paths.has('game.ts') && paths.has('SPEC.md') && hasModule && hasEditor;
 }
 
 function usageOf(result: GenerationResult, provider: string, fallbackModel: string): SeedUsage {
@@ -312,14 +279,14 @@ export function buildGeneratePrompt(input: {
     'your draft is its starting point, so completeness and idiomatic engine use matter more than polish.',
     '',
     'Rules:',
-    `- Write files only under games/${input.slug}/: SPEC.md, GAME.json, game.ts, ACCEPTANCE.json,`,
-    '  and game/*.ts modules.',
+    `- Write files only under games/${input.slug}/: SPEC.md, GAME.json, ACCEPTANCE.json,`,
+    '  EDITOR.ts, EDITOR.json, EDITOR.content.json, game.ts, and game/*.ts modules.',
     '- howToPlay in GAME.json (goal, hint, optional controls/scoring/mode) generates index.html —',
     '  never write that file. theme in GAME.json (optional accent/canvasBackground/',
     '  canvasBorderColor/pixelArt) generates style.css the same way — never write that file either.',
     '- Follow the reference games exactly for imports, GameKit usage, file layout, and bilingual en/pl text.',
     `- SPEC.md frontmatter must be valid and carry title: ${input.title} and slug: ${input.slug}.`,
-    '- GAME.json lists only the engine modules and sounds the code actually uses, like the references do.',
+    '- GAME.json lists only the engine modules and sounds the code actually uses, like the references do. Every seed must ship compiled EDITOR.json with at least three meaningful tunables or one content collection. EDITOR.ts is optional authoring source; when present it must match editor:gen output. Keep generated artifacts in sync and have the game consume game/editor-content.ts.',
     '- ACCEPTANCE.json is exactly {"objective": "<one sentence a player would say>", "achieved": [<conditions>]},',
     '  each condition {"field": "<a field your snapshot() reports>", "atLeast"|"atMost"|"equals": <value>}.',
     '- No external assets, no network calls, no new dependencies.',
@@ -537,7 +504,7 @@ export class ModelGameSeeder implements GameSeeder {
     spec: string,
     providerId: string,
   ): Promise<{ picks: string[]; usage: SeedUsage }> {
-    // Raw thinkingBudget:0 also 400s on gemini-3.7-flash; 'low' is the floor.
+    // Raw thinkingBudget:0 also 400s on gemini-3.8-flash; 'low' is the floor.
     // Reasoning-locked models reject temperature overrides; schema constraints suffice.
     const result = await this.client(providerId)(buildPickPrompt(context, spec, this.references))
       .responseFormat(this.pickResponseFormat())

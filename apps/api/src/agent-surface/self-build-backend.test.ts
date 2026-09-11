@@ -14,7 +14,7 @@ describe('createSelfBuildBackend', () => {
     const backend = createSelfBuildBackend({ persistSeed });
 
     const result = await backend.dispatch({
-      issueNumber: 1001,
+      jobId: 1001,
       spec: 'a game',
       channelToken: 'tok',
       apiBaseUrl: 'https://example.test',
@@ -33,7 +33,7 @@ describe('createSelfBuildBackend', () => {
 
     const result = await backend.resume(
       {
-        issueNumber: 7,
+        jobId: 7,
         spec: 'feedback',
         feedback: 'make it louder',
         channelToken: 'tok',

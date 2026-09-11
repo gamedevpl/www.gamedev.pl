@@ -8,7 +8,7 @@ import {
   mintAgentToken,
   mintManagedMcpOpener,
   STALE_AGENT_TOKEN_REASON,
-} from './agent-token.js';
+} from '../platform/agent-token.js';
 import { mintGameAgentKey } from './agent-game-key.js';
 import { buildApp } from '../platform/app.js';
 import type { GamesStore } from '../delivery/games-store.js';
@@ -17,7 +17,7 @@ import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } f
 import type { KnowledgeQueryResult, QueryKnowledgeFn } from '../creation/knowledge-search.js';
 import { mintMcpSessionKey, verifyMcpSessionKey } from './mcp-session-key.js';
 import { MCP_UNADVERTISED_TOOLS } from './mcp-server.js';
-import { KIT_ROOT_DIR } from './kit-registry.js';
+import { KIT_ROOT_DIR } from '../platform/kit-registry.js';
 import { InMemoryStore } from '../platform/store.js';
 
 const secret = 'test-secret';
@@ -65,13 +65,11 @@ const MINIMAL_FILES = [
 
 function stubGitHub(): GitHubClient {
   return {
-    createIssue: async () => ({ number: ISSUE }),
     getIssueState: async () => ({ state: 'open' as const }),
     findLinkedPR: async (): Promise<LinkedPullRequest | null> => null,
     createIssueComment: async () => ({ id: 1 }),
     updateIssueBody: async () => {},
     closeIssue: async () => {},
-    closePullRequest: async () => {},
     ensureOpenPullRequest: async () => ({ number: 1 }),
     deleteBranch: async () => {},
     getGameSources: async (): Promise<GameSources | null> => null,
@@ -93,7 +91,7 @@ function stubGamesStore(gate?: {
   const gamesStore = {
     putCandidateSources: async (input: {
       slug: string;
-      issueNumber: number;
+      jobId: number;
       files: Array<{ path: string; content: string }>;
       kitEngineRef?: string;
       summary?: string;
@@ -189,11 +187,11 @@ async function createApp(
   return await buildApp({
     store,
     sessionSecret: 'dev-session-secret-change-me',
+    ...(platformConnectorSecret ? { platformConnectorSecret } : {}),
     submissionRoutes: {
       githubClient: stubGitHub(),
       githubToken: 'gh-token',
       submissionTokenSecret: secret,
-      ...(platformConnectorSecret ? { platformConnectorSecret } : {}),
       agentChannel: {
         ...(gamesStore ? { gamesStore } : {}),
         ...(objectStore ? { objectStore } : {}),
@@ -2864,9 +2862,9 @@ declare const GameKit: { defineGame(): unknown };
       return {
         getManifest: async (slug: string, version: string) =>
           slug === 'comet-courier' && version === 'v1'
-            ? // issueNumber is the ownership check the route makes — a slug is shared
+            ? // jobId is the ownership check the route makes — a slug is shared
               // by every improvement round on the same game.
-              { slug, version, issueNumber: ISSUE, gate: { green, ranAt: '2026-08-01T12:00:00.000Z' } }
+              { slug, version, jobId: ISSUE, gate: { green, ranAt: '2026-08-01T12:00:00.000Z' } }
             : null,
         getDerivedArtifact: async (slug: string, version: string, name: string) =>
           slug === 'comet-courier' && version === 'v1' ? (artifacts.get(name) ?? null) : null,
@@ -3542,7 +3540,7 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
         // and it is the one that carries lane 'preview'.
         getManifest: async (slug: string, version: string) =>
           slug === 'comet-courier' && version === 'v1'
-            ? { slug, version, issueNumber: ISSUE, previewGate: { green: true, ranAt: '2026-08-01T12:00:00.000Z' } }
+            ? { slug, version, jobId: ISSUE, previewGate: { green: true, ranAt: '2026-08-01T12:00:00.000Z' } }
             : null,
         getDerivedArtifact: async (slug: string, version: string, name: string) =>
           slug === 'comet-courier' && version === 'v1' ? (artifacts.get(name) ?? null) : null,

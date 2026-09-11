@@ -30,6 +30,9 @@
 # This script is idempotent — safe to re-run after changing any of the knobs above.
 set -euo pipefail
 
+# An old copy of this script does not fail; it reverts what a newer copy fixed.
+source "$(dirname "${BASH_SOURCE[0]}")/require-current-checkout.sh"
+
 # Every gcloud call here is GA, so none should prompt — but the existence checks below
 # discard both streams, so any prompt that did appear would be invisible and the script
 # would wait on stdin forever. setup-monitoring.sh hung exactly that way. Prompts off.
@@ -116,9 +119,13 @@ else
   gcloud storage buckets create "gs://${BACKUP_BUCKET}" \
     --location="$FIRESTORE_REGION" \
     --uniform-bucket-level-access \
+    --public-access-prevention \
     --project="$PROJECT_ID"
   echo "    Created in ${FIRESTORE_REGION} (must match the database's location)."
 fi
+# "NOT public by any path" above was a comment until 2026-09-08; this makes it a property
+# the platform enforces, on buckets that already existed as well as new ones.
+gcloud storage buckets update "gs://${BACKUP_BUCKET}" --public-access-prevention --project="$PROJECT_ID" >/dev/null
 
 # Retention costs pennies at this data volume, and the window is what decides whether a
 # corruption discovered late is recoverable. 30 days is well past the point where anyone

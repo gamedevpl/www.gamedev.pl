@@ -8,7 +8,7 @@ async function* chunks(pieces: string[]): AsyncGenerator<StreamEvent> {
     type: 'done',
     result: {
       parts: [{ type: 'text', text: pieces.join('') }],
-      model: 'gemini-3.7-flash',
+      model: 'gemini-3.8-flash',
       usage: { inputTokens: 100, outputTokens: 50 },
     },
   };

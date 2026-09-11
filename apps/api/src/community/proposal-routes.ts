@@ -23,7 +23,7 @@ import { isAdminSession } from '../platform/admin-session.js';
 import type { GamesStore, SourceFile } from '../delivery/games-store.js';
 import { diffProposal } from './proposal-diff.js';
 import type { ContentChecker } from '../platform/moderation.js';
-import { resolveOwnerOfRecord } from '../catalog/owner-of-record.js';
+import { resolveOwnerOfRecord } from './owner-of-record.js';
 import { DECLINE_REASONS, toPublicProposalState, type DeclineReason } from './proposal-state.js';
 import {
   acceptProposal,
@@ -88,10 +88,7 @@ export interface ProposalRoutesOptions {
    * could not be created, which the caller reports rather than swallowing — an accepted
    * proposal with no job is a change the owner cannot publish.
    */
-  adoptIntoJob?: (input: {
-    proposal: ProposalRecord;
-    ownerUid: string | null;
-  }) => Promise<{ issueNumber: number } | null>;
+  adoptIntoJob?: (input: { proposal: ProposalRecord; ownerUid: string | null }) => Promise<{ jobId: number } | null>;
   now?: () => number;
 }
 

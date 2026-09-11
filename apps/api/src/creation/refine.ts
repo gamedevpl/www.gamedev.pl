@@ -4,11 +4,11 @@ import type { GenAIClient } from 'genaicode';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { checkUserAccess } from '../platform/auth.js';
-import { createVertexClient, type VertexGenerationConfig } from '../agent-surface/genai.js';
+import { createVertexClient, type VertexGenerationConfig } from '../platform/genai.js';
 import type { ContentChecker } from '../platform/moderation.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { BOT_UID_PREFIX, type Store } from '../platform/store.js';
-import { logModerationRejection } from '../telemetry/moderation-metrics.js';
+import { logModerationRejection } from '../platform/moderation-metrics.js';
 import { normalizeLocale } from '../platform/translate.js';
 
 /** Full names the model is asked to write in — a bare `pl` tag is easy to ignore. */
@@ -160,7 +160,7 @@ export class VertexSpecRefiner implements SpecRefiner {
         region: this.options.region,
         defaultRegion: 'global',
         model: this.options.model,
-        defaultModel: 'gemini-3.7-flash',
+        defaultModel: 'gemini-3.8-flash',
         generationConfig: {
           responseMimeType: 'application/json',
         } as VertexGenerationConfig,
@@ -176,7 +176,7 @@ export class VertexSpecRefiner implements SpecRefiner {
         region: this.options.region,
         defaultRegion: 'global',
         model: this.options.model,
-        defaultModel: 'gemini-3.7-flash',
+        defaultModel: 'gemini-3.8-flash',
       });
     return this.groundingClient;
   }
@@ -406,7 +406,7 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
     }
 
     const currentTime = Date.now();
-    if (isRateLimited(refinesByIp, request.ip, currentTime, maxRefinesPerWindowPerIp, rateLimitWindowMs)) {
+    if (isRateLimited(refinesByIp, request.clientIp, currentTime, maxRefinesPerWindowPerIp, rateLimitWindowMs)) {
       return reply.status(429).send({ error: 'too many refine requests, please try again later' });
     }
 

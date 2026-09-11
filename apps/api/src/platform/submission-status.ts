@@ -64,6 +64,27 @@ export function parseProgressNote(raw: string | null): string | undefined {
   return undefined;
 }
 
+// Splits a raw concept into spec text and QA answers.
+
+// Raw, not sanitized: sanitizeCreatorText strips `#` and destroys the marker.
+export function splitConceptBrief(rawConcept: string): { spec: string; qa: string[] } {
+  const marker = '## Creator clarifications';
+  const index = rawConcept.indexOf(marker);
+  if (index === -1) {
+    return { spec: rawConcept.trim(), qa: [] };
+  }
+  const spec = rawConcept.slice(0, index).trim();
+  const qa = rawConcept
+    .slice(index)
+    .split('\n')
+    .slice(1)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('- '))
+    .map((line) => line.slice(2).trim())
+    .filter(Boolean);
+  return { spec, qa };
+}
+
 /**
  * How many QA answers the creator appended to a concept.
  *

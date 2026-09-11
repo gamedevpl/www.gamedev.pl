@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canSubmitProposal,
   canTransitionProposal,
   countsAsOpen,
+  MAX_PROPOSAL_SUBMITS,
   DECLINE_REASONS,
   isBaseStale,
   isModerationDecline,
@@ -177,5 +179,21 @@ describe('exhaustiveness', () => {
         expect(() => canTransitionProposal(from as ProposalState, to as ProposalState)).not.toThrow();
       }
     }
+  });
+});
+
+describe('proposal submit ceiling', () => {
+  it('allows the first submits and refuses past the ceiling', () => {
+    // The repair cycle is endless; each turn is a gate build.
+    expect(canSubmitProposal(undefined)).toBe(true);
+    expect(canSubmitProposal(0)).toBe(true);
+    expect(canSubmitProposal(MAX_PROPOSAL_SUBMITS - 1)).toBe(true);
+    expect(canSubmitProposal(MAX_PROPOSAL_SUBMITS)).toBe(false);
+    expect(canSubmitProposal(MAX_PROPOSAL_SUBMITS + 5)).toBe(false);
+  });
+
+  it('keeps the repair cycle legal, so the ceiling is the only bound', () => {
+    expect(canTransitionProposal('needs_work', 'submitted')).toBe(true);
+    expect(canTransitionProposal('submitted', 'needs_work')).toBe(true);
   });
 });

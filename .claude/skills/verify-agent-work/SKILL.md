@@ -77,6 +77,18 @@ Two concrete instances of that (observed 2026-07-23):
   blocked promotion. When a PR changes _when_ a frame mounts (or the copy of an error
   state the gate asserts), update `apps/e2e` in the same PR — the unit suite never
   drives that path.
+- **A 302 to another host can be unit-green while CSP forbids the destination.**
+  Observed (#1261 review, 2026-09-11): game media started answering 302 to a
+  15-minute GCS V4 URL. Route tests asserted `Location` and an empty body; CI was
+  green. Catalog/detail/theater load `gameplay.mp4` via `<video src="/api/…/media/…">`,
+  and CSP checks the *final* URL after redirects. `img-src` already allowed `https:`;
+  `media-src` was still `'self' data: blob:` — report-only today (a `/api/csp-report`
+  warn per catalog preview), enforcing later would block the file the PR exists to
+  move. `app.inject()` never executes CSP. When a PR changes the *origin* of a
+  media/img/script/connect URL (redirect, signed URL, new CDN), grep `img-src` /
+  `media-src` / `connect-src` / `script-src` and the actual tags (`<video>`, `<img>`,
+  `fetch`), not only the handler. Report-only still matters: the report sink logs
+  every violation.
 - **A responsive control can move into an overflow menu while its e2e selector stays
   direct.** Observed (#878, 2026-08-18): the mobile Studio Code action moved behind
   More, but the deploy gate still searched for a visible inline Code button. When a
@@ -112,13 +124,40 @@ Two concrete instances of that (observed 2026-07-23):
   edited dependency ranges in `package.json` without regenerating the lock — every local
   check green, CI dead on arrival at `npm ci` (EUSAGE). After ANY `package.json` edit,
   `npm install --package-lock-only` must produce a zero lockfile diff before committing.
+- **A security upgrade can exceed the repository's Node floor.** PR #1251 selected
+  Vitest 5, which requires Node 22.12+, while CI and the repo support Node 20.
+  Check the target package's `engines` before installing; npm only warns by default.
+  Vitest 4.1.11 fixes the same advisory and supports Node 20.
+- **Swapping a Vertex / Gemini model id is not a one-line default change.** Observed
+  (#1007, 2026-08-25): `text-embedding-005` → `gemini-embedding-2` kept the legacy
+  `:predict` URL and `{ instances: [{ content }] }` body. Google dropped `:predict` for
+  that family (`400 FAILED_PRECONDITION`); live `embedText` swallows the error to `[]`,
+  so the vector index stays empty and every search returns `{ match: null, score: 0 }`.
+  The suite stayed green because it mocked the _old_ prediction shape and never asserted
+  the request URL. When a model id changes, grep the RPC (`:predict` vs `:embedContent`
+  vs `:generateContent`), the request body, and the response parse path — and add a test
+  that the constructed URL contains the verb the new model actually serves.
+- **A lowered server threshold is a no-op if the client still gates the old value.**
+  Same PR: `/api/catalog/search` dropped `findBestMatch` from 0.65 to 0.55 for
+  "cross-lingual sensitivity", but `HeroPromptSection` still accepts a vector hit only
+  when `data.score >= 0.65`. Scores in the newly admitted band are discarded. When a
+  PR changes an accept-set, grep every caller for the old constant; a split threshold
+  is a behaviour change that no unit test will see if each side is tested in isolation.
+- **A widened substring / alias matcher needs negative controls, not just the prompt
+  that motivated it.** Same PR: the new local matcher made `chcę pograć w piłkę` →
+  `mexico-86` (intended) and also `I want to play a card game` → `carjack-city`
+  (`includes('car')`), `gold rush` / `golden axe` → `mexico-86` (`includes('gol')`),
+  `author` / `autumn leaves` → `carjack-city` (`includes('aut')`), `chess` / `szachy` →
+  `checker-champ`. The added test only mounted the happy-path prompt. When a matcher
+  grows `includes` / alias tables, run the same function on the pre-change branch and
+  require a control query that must _not_ match.
 - **A games-repo PR that adds a GameKit module can 502 play/draft even when its own
   gate is green.** Observed (www.gamedev.pl-games#690, 2026-08-12): `platformer` was
   inserted into `GAME_KIT_MODULES` / `shared/assemble-contract.json` with no paired
   website PR. Website `contract:games-repo` fails when games-repo introduces a name the
   serve side does not recognize; play/draft then 502s for every game that selects it.
   Merge order is website first — same rule as a budget raise
-  (`apps/api/src/catalog/games-repo-contract.ts`). Diff the module array against _current_
+  (`apps/api/src/platform/games-repo-contract.ts`). Diff the module array against _current_
   `main`, not the PR's merge-base: that branch was ~20 commits behind and its array had
   dropped `cards` and `ui` that main had added, so a 2-line "add platformer" diff against
   a stale base is a module deletion against current main.
@@ -261,6 +300,36 @@ Two concrete instances of that (observed 2026-07-23):
   functions write the same piece of state, the sequence (A then B then A) is the test,
   not A and B separately. A latch that means “stop trying” is only safe if nothing else
   can raise the value underneath it.
+- **Stepping a corpse with the live combat solver is not the same as advancing a collapse
+  pose.** Observed (bonfire-arena / www.gamedev.pl-games#1198 review, 2026-09-01):
+  `stepFighter()` was the only writer of `fallen`, and runtime skipped it on `e.dead`, so
+  knights vanished standing. A unit test that called `stepFighter` on a dead fighter
+  passed. Wiring the full solver back in left residual `arm.vel` in the still-live
+  clash/strike loop; the capture path then never reached `won`. A/B against the pre-fix
+  commit proved the regression was the corpse step, not the rebase. `trace:classify`
+  on a later fallen-only path was render-only. Advance the pose field the spec names;
+  do not keep a dead blade in the exchange.
+- **Games-repo `gate-attest` follows CI scope, not the "one game → check:game" heuristic.**
+  Observed (bonfire-arena / www.gamedev.pl-games#1237, 2026-09-01): a game-only read of
+  rule 5b replaced a correct `npm run check:catalog-static` attest with
+  `check:game -- bonfire-arena`. CI still classified the diff as `static` because it also
+  touched `tools/idle-agency.ts` and `tools/tests/` (`isStaticOk` widens scoped → static).
+  The attest job then failed: required command `check:catalog-static`. Ask
+  `node tools/gate-attest.mjs expected` (or the Actions log's `Required command:`) for
+  the SHA you are opening; do not "correct" a static attest down to `check:game` just
+  because a `games/<slug>/` path is in the diff. `check:pr` remains an accepted alias.
+
+- **Mocked tool calls can hide a schema/parser mismatch.** Observed in CLI chat
+  (#1187): one model tool advertised optional `slug` and `request` fields together,
+  while the runtime accepted only one per action. Play passed; real edit requests
+  failed with `invalid CLI action`. Check the tool schema sent to the provider as
+  well as the parser, and exercise each action on its real lifecycle state. Published
+  edits need `/improve` and its new token, not the closed round's `/turn`.
+
+- **Exercise auth variants and partial agent failures.** CLI #1201 initially accepted only
+  `claude.ai`, rejecting subscription `oauth_token` logins, and treated any tool denial as
+  failure of the entire edit. Test each supported login source and an exit-zero run with
+  completed edits plus one denied tool. An agent's denial list is not a task verdict.
 
 ## Read the diff against the spec
 

@@ -6,19 +6,15 @@
  * published catalog and never stores them on an account from this path.
  */
 
+import { readStorageJSON, writeStorageJSON } from './core/persistence.js';
+
 const STORAGE_KEY = 'gdpl.recentPlays';
 const MAX_RECENT = 8;
 
 function readRaw(): string[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((entry): entry is string => typeof entry === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(entry));
-  } catch {
-    return [];
-  }
+  const parsed = readStorageJSON<unknown>(STORAGE_KEY);
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter((entry): entry is string => typeof entry === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(entry));
 }
 
 export function getRecentPlays(): string[] {
@@ -28,9 +24,5 @@ export function getRecentPlays(): string[] {
 export function rememberRecentPlay(slug: string): void {
   if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) return;
   const next = [slug, ...readRaw().filter((entry) => entry !== slug)].slice(0, MAX_RECENT);
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  } catch {
-    // Quota / private mode — recommendations simply stay cold-start.
-  }
+  writeStorageJSON(STORAGE_KEY, next);
 }

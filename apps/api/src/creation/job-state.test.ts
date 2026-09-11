@@ -30,7 +30,6 @@ describe('job state projection', () => {
   it('hides our own verification behind "building"', () => {
     // Whether the agent or our gate is doing the work is not the creator's business.
     expect(toSubmissionStatus('submitted')).toBe('building');
-    expect(toSubmissionStatus('gating')).toBe('building');
     expect(toSubmissionStatus('building')).toBe('building');
   });
 
@@ -116,7 +115,6 @@ describe('transition rules', () => {
     // `in_progress`. Forcing `building` at dispatch lied about that boot window.
     expect(canTransition('building', 'dispatched')).toBe(true);
     expect(canTransition('submitted', 'dispatched')).toBe(true);
-    expect(canTransition('gating', 'dispatched')).toBe(true);
   });
 
   // A gate-red round is not always over: `mustFixGate` tells the live session to fix the
@@ -132,15 +130,13 @@ describe('transition rules', () => {
 
   // The gate reports by writing its verdict to the version manifest, which we read on a
   // poll — so a delivered job goes straight from `submitted` to the outcome and is never
-  // seen mid-gate. When `gating` was the only exit, that made `submitted` a dead end:
-  // the reconciler computed the right target, canTransition refused it, and the job sat
-  // there telling the creator the gate had never started for as long as they watched.
-  it('lets a delivered job reach the gate verdict without passing through gating', () => {
+  // seen mid-gate. `gating` was that never-taken step, and while it was `submitted`'s
+  // only exit the reconciler computed the right target, canTransition refused it, and
+  // the job sat telling the creator the gate had never started for as long as they
+  // watched. The state is gone; these are the exits that carry the delivery now.
+  it('lets a delivered job reach the gate verdict directly', () => {
     expect(canTransition('submitted', 'ready_for_review')).toBe(true);
     expect(canTransition('submitted', 'needs_changes')).toBe(true);
-    // Still reachable, for records written while it was a step and for a future gate
-    // that reports its start.
-    expect(canTransition('submitted', 'gating')).toBe(true);
     // But not a shortcut past the moderation boundary.
     expect(canTransition('submitted', 'published')).toBe(false);
     expect(canTransition('submitted', 'publishing')).toBe(false);
@@ -208,7 +204,7 @@ describe('reconcileAgentObservation', () => {
   it('ignores agent lifecycle once the work has been delivered', () => {
     // A session reporting failure after a successful upload must not snatch the
     // candidate back from the gate or the reviewer.
-    for (const state of ['submitted', 'gating', 'ready_for_review', 'publishing'] as JobState[]) {
+    for (const state of ['submitted', 'ready_for_review', 'publishing'] as JobState[]) {
       expect(reconcileAgentObservation(state, { state: 'failed', hasCandidate: true })).toBeNull();
       expect(reconcileAgentObservation(state, { state: 'completed', hasCandidate: true })).toBeNull();
     }
@@ -246,10 +242,9 @@ describe('planObservedStatusTransition', () => {
   });
 
   it('does not erase a richer internal state that projects to the same public status', () => {
-    // `submitted`/`gating` both read as `building` to creators — a derived-status
-    // poll must not yank the delivery back to `building` on that lossy match.
+    // `submitted` reads as `building` to creators — a derived-status poll must not
+    // yank the delivery back to `building` on that lossy match.
     expect(planObservedStatusTransition('submitted', 'building', AT)).toBeNull();
-    expect(planObservedStatusTransition('gating', 'building', AT)).toBeNull();
     expect(planObservedStatusTransition('failed', 'needs_changes', AT)).toBeNull();
     expect(planObservedStatusTransition('dispatched', 'queued', AT)).toBeNull();
   });

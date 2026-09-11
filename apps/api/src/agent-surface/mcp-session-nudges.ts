@@ -7,7 +7,7 @@
  * results by the MCP dispatcher.
  */
 
-import type { SeedStatus } from '../creation/seed-status.js';
+import type { SeedStatus } from './seed-status.js';
 
 export type NudgeCode =
   | 'progress_stale'

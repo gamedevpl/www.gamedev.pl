@@ -28,6 +28,19 @@ export type CatalogWorld = 'shared';
 // Extra ways a game can be steered beyond keys and touch.
 export type CatalogSensing = 'tilt' | 'backdrop';
 
+// Whether the game exposes an EditorKit content editor.
+export type CatalogEditor = 'content';
+
+// The status a catalog entry carries when its game is live.
+
+// SPEC frontmatter is agent-authored, so this stays a bare string.
+export const CATALOG_PUBLISHED_STATUS = 'published';
+
+// One reading of the repo lane's "is this game live?".
+export function isPublishedEntry(entry: { status?: string } | null | undefined): boolean {
+  return entry?.status === CATALOG_PUBLISHED_STATUS;
+}
+
 // One game's catalog entry, derived from its SPEC frontmatter.
 export interface CatalogEntry {
   slug: string;
@@ -43,6 +56,7 @@ export interface CatalogEntry {
   // Advisory like saves, but it promises other people are here.
   world: CatalogWorld | null;
   sensing: CatalogSensing | null;
+  editor: CatalogEditor | null;
   orientation: CatalogOrientation;
   // Absent on the SPEC-only GraphQL fallback, null once normalized.
   touch?: CatalogTouch | null;
@@ -52,4 +66,10 @@ export interface CatalogEntry {
   creatorHandle?: string | null;
   // Handles whose proposals were merged into the live version.
   contributorHandles?: string[];
+  // AI-generated punchy summary/taglines (e.g. from Flash-Lite).
+  tagline?: { en?: string; pl?: string } | null;
+  // AI-generated concise keybindings summary.
+  shortControls?: { en?: string; pl?: string } | null;
+  // AI-generated search keywords for intent matching.
+  searchKeywords?: string[] | null;
 }

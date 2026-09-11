@@ -1,0 +1,163 @@
+/* Job preview modal + publish/cancel confirm (AdminJobPreviewModal.tsx, AdminConfirmDialog.tsx). */
+
+/* Modal overlay and sandboxed preview theater */
+.admin-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.admin-preview-modal {
+  background: var(--bg-dark, #16181d);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.15));
+  border-radius: 10px;
+  width: min(1100px, 95vw);
+  height: min(820px, 92vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+}
+
+.admin-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.admin-preview-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.admin-preview-meta {
+  font-size: 0.8rem;
+  opacity: 0.75;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.2rem;
+}
+
+.admin-preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.admin-job-publish.is-promoted {
+  background: #2ecc71;
+  color: #0f141c;
+  border-color: #2ecc71;
+  font-weight: 700;
+}
+
+.admin-preview-close-btn {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.admin-preview-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Confirms publish/cancel from queue or preview; stacks above the preview overlay. */
+.admin-job-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.admin-job-confirm {
+  width: min(92vw, 420px);
+  padding: 1.15rem 1.2rem 1rem;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.15));
+  border-radius: 10px;
+  background: var(--bg-dark, #16181d);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  white-space: normal;
+}
+
+.admin-job-confirm.is-danger {
+  border-color: color-mix(in srgb, var(--danger, #c0392b) 45%, var(--border, rgba(255, 255, 255, 0.15)));
+}
+
+.admin-job-confirm h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.admin-job-confirm p {
+  margin: 0.55rem 0 0;
+  color: var(--muted, #94a3b8);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.admin-job-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.admin-preview-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-preview-frame-wrap {
+  width: 100%;
+  height: 100%;
+}
+
+.admin-preview-frame-wrap iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.admin-preview-state {
+  font-size: 1rem;
+  opacity: 0.75;
+  text-align: center;
+  padding: 2rem;
+}
+
+.admin-preview-state.is-error {
+  color: var(--danger, #c0392b);
+}
+
+.admin-preview-footer {
+  padding: 0.5rem 1rem;
+  border-top: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  font-size: 0.8rem;
+  background: rgba(255, 255, 255, 0.03);
+}

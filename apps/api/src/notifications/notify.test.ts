@@ -150,7 +150,7 @@ describe('emitSubmissionNotification', () => {
       {
         uid: 'g:1',
         type: 'submission.published',
-        issueNumber: 42,
+        jobId: 42,
         gameTitle: 'Sky Dodge',
         statusToken: 'tok',
         slug: 'sky-dodge',
@@ -158,7 +158,7 @@ describe('emitSubmissionNotification', () => {
     );
     await emitSubmissionNotification(
       { store },
-      { uid: 'g:1', type: 'submission.building', issueNumber: 42, gameTitle: 'Sky Dodge', statusToken: 'tok' },
+      { uid: 'g:1', type: 'submission.building', jobId: 42, gameTitle: 'Sky Dodge', statusToken: 'tok' },
     );
 
     const list = await store.listNotifications('g:1');
@@ -175,7 +175,7 @@ describe('emitSubmissionNotification', () => {
     const event = {
       uid: 'g:1',
       type: 'submission.published' as const,
-      issueNumber: 42,
+      jobId: 42,
       gameTitle: 'Sky Dodge',
       statusToken: 'tok',
       slug: 'sky-dodge',
@@ -202,7 +202,7 @@ describe('emitSubmissionNotification push fan-out', () => {
   const event = {
     uid: 'g:1',
     type: 'submission.published' as const,
-    issueNumber: 42,
+    jobId: 42,
     gameTitle: 'Sky Dodge',
     statusToken: 'tok',
     slug: 'sky-dodge',
@@ -318,7 +318,7 @@ describe('emitSubmissionNotification email fan-out', () => {
   const event = {
     uid: 'g:owner',
     type: 'submission.published' as const,
-    issueNumber: 9,
+    jobId: 9,
     gameTitle: 'Sky Dodge',
     statusToken: 'tok',
     slug: 'sky-dodge',
@@ -440,7 +440,7 @@ describe('digest opt-out', () => {
       {
         uid: 'g:owner',
         type: 'submission.published' as const,
-        issueNumber: 42,
+        jobId: 42,
         gameTitle: 'Sky Dodge',
         statusToken: 'tok',
         slug: 'sky-dodge',
@@ -458,7 +458,7 @@ describe('emitOperatorAlert', () => {
   const alert = {
     id: 'op-1000001-review_ready',
     kind: 'review_ready' as const,
-    issueNumber: 1_000_001,
+    jobId: 1_000_001,
     title: 'Comet Courier',
     ownerUid: 'g:creator',
     slug: 'comet-courier',
@@ -491,7 +491,7 @@ describe('emitOperatorAlert', () => {
       type: 'operator.review_ready',
       titleKey: 'notifications.operator.review_ready.title',
       link: '/admin/queue',
-      params: { title: 'Comet Courier', issueNumber: '1000001' },
+      params: { title: 'Comet Courier', jobId: '1000001' },
     });
     expect(mailer.sent.map((message) => message.to)).toEqual(['boss@example.com', 'second@example.com']);
   });

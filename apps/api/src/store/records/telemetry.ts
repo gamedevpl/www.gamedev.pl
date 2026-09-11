@@ -31,7 +31,7 @@ export interface TelemetryEvent {
    * Not the submission's issue number. The catalog is built straight from the games
    * repo ([github-client.ts](./github-client.ts) `getCatalog`), so the slug is the only
    * identity every playable game has — most predate the submission flow and have no
-   * `submissions/{issueNumber}` document at all. IL-2 can join to a submission at read
+   * `submissions/{jobId}` document at all. IL-2 can join to a submission at read
    * time via `getSubmissionBySlug` when it needs a creator to notify.
    */
   slug: string;
@@ -95,13 +95,15 @@ export interface VisitEvent {
     | 'create_step'
     | 'waitlist_step'
     | 'invite_step'
+    | 'party_step'
     | 'beta_welcome_step'
     | 'studio_step'
     | 'editor_step'
     | 'assist_step'
     | 'remix_step'
     | 'code_step'
-    | 'code_completion';
+    | 'code_completion'
+    | 'cli_step';
   /** Server-anchored instant, derived like `TelemetryEvent.at`. */
   at: string;
   /** Milliseconds from visit start — the trustworthy measure of within-visit timing. */
@@ -134,6 +136,7 @@ export interface VisitEvent {
    * (`redirect` | `menu`). Absent on events recorded before the field existed;
    * never a game identity.
    */
+  // party_step: bar is the host's party chrome, seat is the game.
   via?: string;
   /**
    * `remix_step` with `step: 'offered'` or `'opened'`: which control it was —
@@ -162,6 +165,14 @@ export interface VisitEvent {
   utmSource?: string;
   utmMedium?: string;
   utmCampaign?: string;
+  // cli_step: curl, ps1, or update. Never a uid.
+  channel?: string;
+  // cli_step: linux, darwin, or win32. Never a uid.
+  os?: string;
+  // cli_step: which adapter ran. Never a uid.
+  adapter?: string;
+  // cli_step: verify_failed rung. Never a uid.
+  stage?: string;
 }
 
 /**

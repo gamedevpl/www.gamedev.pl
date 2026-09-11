@@ -8,5 +8,6 @@ export default defineConfig({
     // files that never once ran. Files needing a DOM opt in per file with
     // `// @vitest-environment jsdom`.
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    setupFiles: ['./src/i18nTestSetup.ts'],
   },
 });

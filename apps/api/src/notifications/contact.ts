@@ -4,7 +4,7 @@ import { renderContactEmail } from './email-templates.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
 import { moderateFields } from '../platform/moderation.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
-import { logModerationRejection } from '../telemetry/moderation-metrics.js';
+import { logModerationRejection } from '../platform/moderation-metrics.js';
 
 /**
  * Public contact form → transactional email to the published operator address
@@ -110,7 +110,7 @@ export async function registerContactRoutes(app: FastifyInstance, options: Conta
         return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
       }
 
-      if (isRateLimited(byIp, request.ip, now(), maxPerWindow, rateLimitWindowMs)) {
+      if (isRateLimited(byIp, request.clientIp, now(), maxPerWindow, rateLimitWindowMs)) {
         return reply.status(429).send({ error: 'too many contact requests, please try again later' });
       }
 

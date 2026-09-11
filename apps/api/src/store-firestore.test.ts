@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { FirestoreStore } from './platform/store.js';
+import { FirestoreStore, InMemoryStore } from './platform/store.js';
+import { lastRoundActivityAt } from './platform/quiet-round.js';
 import { fakeFirestore } from './store/fake-firestore.js';
 
 /**
@@ -692,5 +693,80 @@ describe('FirestoreStore.markCreatorMessagesDelivered', () => {
 
     expect(docs.has(key('submissions/9/messages', 'never-appended'))).toBe(false);
     expect(await store.listCreatorMessages(9)).toEqual([]);
+  });
+});
+
+describe('sharded spend counters', () => {
+  it('spreads writes across shards instead of one hot document', async () => {
+    const { db, docs, key } = fakeFirestore();
+    const store = new FirestoreStore(db);
+
+    for (let i = 0; i < 40; i += 1) {
+      await store.checkAndIncrementGlobalSearchEmbeddings('2026-08-30', 1000);
+    }
+
+    // Firestore takes about one write per second per document; a per-keystroke
+    // counter on a single doc is the bottleneck exactly when a runaway is on.
+    const touched = [...docs.keys()].filter((k) => k.includes('searchEmbeddings'));
+    expect(touched.length).toBeGreaterThan(1);
+    expect(await store.getGlobalSearchEmbeddingCount('2026-08-30')).toBe(40);
+    // The day's single document is not where this lands any more.
+    expect(docs.get(key('globalUsage', '2026-08-30'))?.searchEmbeddings).toBeUndefined();
+  });
+
+  it('still refuses at the cap, and counts moderation the same way', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+
+    let admitted = 0;
+    for (let i = 0; i < 40; i += 1) {
+      if ((await store.checkAndIncrementGlobalSearchEmbeddings('2026-08-30', 20)).allowed) admitted += 1;
+    }
+    // Shard ceilings sum to the ceiling; skew can refuse sooner, never later.
+    expect(admitted).toBeGreaterThan(0);
+    expect(admitted).toBeLessThanOrEqual(20);
+
+    await store.incrementGlobalModerationCalls('2026-08-30', 3);
+    await store.incrementGlobalModerationCalls('2026-08-30', 2);
+    expect(await store.getGlobalModerationCount('2026-08-30')).toBe(5);
+  });
+});
+
+describe.each([
+  ['InMemoryStore', () => new InMemoryStore()],
+  ['FirestoreStore', () => new FirestoreStore(fakeFirestore().db)],
+])('%s.recordJobTransition guard', (_name, make) => {
+  it('refuses the close when the round moved since the sweep read it', async () => {
+    const store = make();
+    // Stamps run forward from the wall clock: createSubmission stamps roundStartedAt with it.
+    const HOUR = 60 * 60 * 1000;
+    const base = Date.now();
+    const at = (ms: number) => new Date(base + ms).toISOString();
+    await store.createSubmission(9, 'g:owner', 'Racing');
+    await store.recordJobTransition(9, { to: 'building', at: at(HOUR), by: 'system' });
+    const seen = lastRoundActivityAt((await store.getSubmission(9))!);
+    // Something happened after the read: the agent delivered.
+    await store.recordJobTransition(9, { to: 'submitted', at: at(2 * HOUR), by: 'agent' });
+
+    const stale = { to: 'abandoned' as const, at: at(15 * 24 * HOUR), by: 'system' as const, reason: 'quiet' };
+    expect(await store.recordJobTransition(9, stale, { activityAt: seen })).toBe(false);
+    expect((await store.getSubmission(9))?.state).toBe('submitted');
+
+    // The claim with the current stamp goes through.
+    const fresh = lastRoundActivityAt((await store.getSubmission(9))!);
+    expect(fresh).toBeGreaterThan(seen);
+    expect(await store.recordJobTransition(9, stale, { activityAt: fresh })).toBe(true);
+    expect((await store.getSubmission(9))?.state).toBe('abandoned');
+  });
+
+  it('lists a notified change-request round as open, which the sweep filter does not', async () => {
+    const store = make();
+    await store.createSubmission(10, 'g:owner', 'Told');
+    await store.recordJobTransition(10, { to: 'needs_changes', at: '2026-07-01T00:00:00.000Z', by: 'gate' });
+    await store.setSubmissionNotifiedStatus(10, 'needs_changes');
+    expect((await store.listActiveSubmissions()).map((r) => r.jobId)).toEqual([]);
+    expect((await store.listOpenRounds()).map((r) => r.jobId)).toEqual([10]);
+    await store.setSubmissionAbandoned(10, '2026-07-16T00:00:00.000Z');
+    expect(await store.listOpenRounds()).toEqual([]);
   });
 });

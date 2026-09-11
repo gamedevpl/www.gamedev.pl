@@ -9,7 +9,7 @@ const NOW = Date.parse('2026-07-30T12:00:00Z');
 const MINUTE = 60_000;
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
 
-function record(overrides: Partial<SubmissionRecord> & { issueNumber: number }): SubmissionRecord {
+function record(overrides: Partial<SubmissionRecord> & { jobId: number }): SubmissionRecord {
   return {
     ownerUid: 'g:1',
     title: 'A game',
@@ -24,13 +24,13 @@ describe('buildJobQueue', () => {
     // healthy ones that happen to be older.
     const queue = buildJobQueue(
       [
-        record({ issueNumber: 1, state: 'building', stateSince: ago(90 * MINUTE), lastAgentSignalAt: ago(MINUTE) }),
-        record({ issueNumber: 2, state: 'queued', stateSince: ago(20 * MINUTE) }),
+        record({ jobId: 1, state: 'building', stateSince: ago(90 * MINUTE), lastAgentSignalAt: ago(MINUTE) }),
+        record({ jobId: 2, state: 'queued', stateSince: ago(20 * MINUTE) }),
       ],
       NOW,
     );
 
-    expect(queue.jobs.map((job) => job.issueNumber)).toEqual([2, 1]);
+    expect(queue.jobs.map((job) => job.jobId)).toEqual([2, 1]);
     expect(queue.jobs[0].stall).toBe('not_dispatched');
     expect(queue.jobs[1].stall).toBeNull();
     expect(queue.stalled).toBe(1);
@@ -42,14 +42,14 @@ describe('buildJobQueue', () => {
     const queue = buildJobQueue(
       [
         record({
-          issueNumber: 1,
+          jobId: 1,
           createdAt: ago(10 * 60 * MINUTE),
           state: 'building',
           stateSince: ago(2 * MINUTE),
           lastAgentSignalAt: ago(MINUTE),
         }),
         record({
-          issueNumber: 2,
+          jobId: 2,
           createdAt: ago(60 * MINUTE),
           state: 'building',
           stateSince: ago(10 * MINUTE),
@@ -59,26 +59,26 @@ describe('buildJobQueue', () => {
       NOW,
     );
 
-    expect(queue.jobs.map((job) => job.issueNumber)).toEqual([2, 1]);
+    expect(queue.jobs.map((job) => job.jobId)).toEqual([2, 1]);
   });
 
   it('drops finished jobs — the queue is what still needs attention', () => {
     const queue = buildJobQueue(
       [
-        record({ issueNumber: 1, state: 'published', stateSince: ago(MINUTE) }),
-        record({ issueNumber: 2, state: 'canceled', stateSince: ago(MINUTE) }),
-        record({ issueNumber: 3, state: 'building', stateSince: ago(MINUTE), lastAgentSignalAt: ago(MINUTE) }),
+        record({ jobId: 1, state: 'published', stateSince: ago(MINUTE) }),
+        record({ jobId: 2, state: 'canceled', stateSince: ago(MINUTE) }),
+        record({ jobId: 3, state: 'building', stateSince: ago(MINUTE), lastAgentSignalAt: ago(MINUTE) }),
       ],
       NOW,
     );
 
-    expect(queue.jobs.map((job) => job.issueNumber)).toEqual([3]);
+    expect(queue.jobs.map((job) => job.jobId)).toEqual([3]);
   });
 
   it('includes jobs that predate adoption by falling back to the derived status', () => {
     // Otherwise the queue would fill in gradually as each job happened to be polled,
     // and would be misleadingly short exactly when it is first looked at.
-    const queue = buildJobQueue([record({ issueNumber: 7, lastStatus: 'building' })], NOW);
+    const queue = buildJobQueue([record({ jobId: 7, lastStatus: 'building' })], NOW);
 
     expect(queue.jobs).toHaveLength(1);
     expect(queue.jobs[0].state).toBe('building');
@@ -86,18 +86,18 @@ describe('buildJobQueue', () => {
   });
 
   it('shows both the internal state and what the creator is being told', () => {
-    const queue = buildJobQueue([record({ issueNumber: 1, state: 'gating', stateSince: ago(MINUTE) })], NOW);
+    const queue = buildJobQueue([record({ jobId: 1, state: 'submitted', stateSince: ago(MINUTE) })], NOW);
 
-    expect(queue.jobs[0].state).toBe('gating');
+    expect(queue.jobs[0].state).toBe('submitted');
     expect(queue.jobs[0].creatorStatus).toBe('building');
   });
 
   it('counts by state so the shape of the queue is answerable at a glance', () => {
     const queue = buildJobQueue(
       [
-        record({ issueNumber: 1, state: 'queued', stateSince: ago(MINUTE) }),
-        record({ issueNumber: 2, state: 'queued', stateSince: ago(MINUTE) }),
-        record({ issueNumber: 3, state: 'building', stateSince: ago(MINUTE), lastAgentSignalAt: ago(MINUTE) }),
+        record({ jobId: 1, state: 'queued', stateSince: ago(MINUTE) }),
+        record({ jobId: 2, state: 'queued', stateSince: ago(MINUTE) }),
+        record({ jobId: 3, state: 'building', stateSince: ago(MINUTE), lastAgentSignalAt: ago(MINUTE) }),
       ],
       NOW,
     );
@@ -109,7 +109,7 @@ describe('buildJobQueue', () => {
     const queue = buildJobQueue(
       [
         record({
-          issueNumber: 1,
+          jobId: 1,
           state: 'building',
           stateSince: ago(MINUTE),
           lastAgentSignalAt: ago(MINUTE),
@@ -130,7 +130,7 @@ describe('buildJobQueue', () => {
     const queue = buildJobQueue(
       [
         record({
-          issueNumber: 1,
+          jobId: 1,
           state: 'building',
           stateSince: ago(MINUTE),
           lastAgentSignalAt: ago(MINUTE),
@@ -144,7 +144,7 @@ describe('buildJobQueue', () => {
   });
 });
 
-describe('POST /api/admin/jobs/:issueNumber/publish', () => {
+describe('POST /api/admin/jobs/:jobId/publish', () => {
   const sessionSecret = 'dev-session-secret-change-me';
   const adminHeaders = { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:boss', sessionSecret)}` };
 
@@ -159,7 +159,7 @@ describe('POST /api/admin/jobs/:issueNumber/publish', () => {
         slug: 'comet-courier',
         version: 'v1',
         createdAt: '2026-07-30T10:00:00Z',
-        issueNumber: 1_000_001,
+        jobId: 1_000_001,
         sourceFiles: ['SPEC.md'],
         ...(deliveryMode ? { deliveryMode } : {}),
         ...(gate ? { gate: { ...gate, ranAt: '2026-07-30T11:00:00Z' } } : {}),
@@ -251,6 +251,32 @@ describe('POST /api/admin/jobs/:issueNumber/publish', () => {
     await app.close();
   });
 
+  it('supersedes older active submissions for the same slug when publishing', async () => {
+    const { app, store } = await appWithJob(gamesStoreWith({ green: true }));
+    // Create an older submission for the same slug
+    await store.createSubmission(1_000_000, 'g:boss', 'Comet Courier v0');
+    await store.setSubmissionSlug(1_000_000, 'comet-courier');
+    await store.setSubmissionDeliveredVersion(1_000_000, 'v0');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/jobs/1000001/publish',
+      headers: adminHeaders,
+    });
+
+    expect(response.statusCode).toBe(200);
+    const older = await store.getSubmission(1_000_000);
+    expect(older?.lastStatus).toBe('abandoned');
+    expect(older?.abandonedAt).toBeTruthy();
+    const transitions = older?.transitions ?? [];
+    expect(transitions[transitions.length - 1]).toMatchObject({
+      to: 'abandoned',
+      reason: 'superseded_by_publish',
+    });
+
+    await app.close();
+  });
+
   it('refuses to publish when the creator has no profile', async () => {
     const { app, store } = await appWithJob(gamesStoreWith({ green: true }), { claimProfile: false });
 
@@ -313,6 +339,91 @@ describe('POST /api/admin/jobs/:issueNumber/publish', () => {
     expect(response.statusCode).toBe(404);
     expect(await store.getPublication('comet-courier')).toBeNull();
 
+    await app.close();
+  });
+});
+
+describe('GET /api/admin/jobs/:jobId/preview', () => {
+  const sessionSecret = 'dev-session-secret-change-me';
+  const adminHeaders = { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:boss', sessionSecret)}` };
+
+  function gamesStoreWith(bundleHtml: string | null) {
+    return {
+      getDerivedArtifact: async (_slug: string, _version: string, artifact: string) => {
+        if (!bundleHtml) return null;
+        if (artifact === 'bundle.html') return Buffer.from(bundleHtml, 'utf8');
+        return null;
+      },
+    } as unknown as GamesStore;
+  }
+
+  async function appWithJob(gamesStore: GamesStore) {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.createSubmission(1_000_001, 'g:boss', 'Comet Courier');
+    await store.setSubmissionSlug(1_000_001, 'comet-courier');
+    await store.setSubmissionDeliveredVersion(1_000_001, 'v1');
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      adminUids: 'g:boss',
+      submissionRoutes: { agentChannel: { gamesStore } },
+    });
+    return { app, store };
+  }
+
+  it('serves the game preview HTML for an admin', async () => {
+    const { app } = await appWithJob(gamesStoreWith('<!doctype html><html><body>Game Preview</body></html>'));
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/admin/jobs/1000001/preview',
+      headers: adminHeaders,
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.slug).toBe('comet-courier');
+    expect(body.title).toBe('Comet Courier');
+    expect(body.version).toBe('v1');
+    expect(body.html).toContain('Game Preview');
+
+    await app.close();
+  });
+
+  it('returns 404 for non-admin session', async () => {
+    const { app, store } = await appWithJob(gamesStoreWith('<html>preview</html>'));
+    await store.upsertUser({ uid: 'g:regular' });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/admin/jobs/1000001/preview',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:regular', sessionSecret)}` },
+    });
+
+    expect(response.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('returns 409 if no version is delivered or previewable', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.createSubmission(1_000_002, 'g:boss', 'Empty Job');
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      adminUids: 'g:boss',
+      submissionRoutes: { agentChannel: { gamesStore: gamesStoreWith('<html>preview</html>') } },
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/admin/jobs/1000002/preview',
+      headers: adminHeaders,
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error).toBe('no_preview_available');
     await app.close();
   });
 });

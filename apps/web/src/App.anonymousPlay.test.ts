@@ -8,7 +8,7 @@ import { AuthProvider } from './AuthContext.js';
 import i18n from './i18n/index.js';
 
 /**
- * Closed beta: anonymous visitors see the splash, not the arcade.
+ * Closed beta: anonymous visitors see the splash, not the catalog.
  *
  * A brief regression opened browse/play without a session; these guard the splash wall
  * so a shared link or a cold visit lands on sign-in + waitlist, not the catalog.
@@ -76,7 +76,7 @@ describe('anonymous visitors during closed beta', () => {
     vi.restoreAllMocks();
   });
 
-  it('shows the closed-beta splash instead of the arcade', async () => {
+  it('shows the closed-beta splash instead of the catalog', async () => {
     mockApi();
     window.history.pushState(null, '', '/');
 

@@ -1,0 +1,114 @@
+name: CLI release
+
+# Publishes gamedevpl to GitHub Releases. Three doors, one job:
+#   - master push that changes apps/cli/package.json — the release PR was merged,
+#     so its version is the cutoff (see .claude/skills/cli-release/SKILL.md)
+#   - a cli-v* tag push, for a by-hand cut
+#   - workflow_dispatch with a version, for manual publish
+# A version that already has a release is skipped, so a dependency bump in
+# package.json does not republish.
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'apps/cli/package.json'
+    tags:
+      - 'cli-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'CLI version without prefix (e.g. 0.1.0)'
+        required: true
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: cli-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Bundle and publish gamedevpl CLI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Resolve the version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          case "${{ github.event_name }}" in
+            workflow_dispatch)
+              version="${{ github.event.inputs.version }}"
+              ;;
+            push)
+              if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+                version="${GITHUB_REF_NAME#cli-v}"
+              else
+                version="$(node -p "require('./apps/cli/package.json').version")"
+              fi
+              ;;
+            *)
+              echo "unexpected event ${{ github.event_name }}" >&2
+              exit 1
+              ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if gh release view "cli-v$version" >/dev/null 2>&1; then
+            echo "cli-v$version is already published; nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.version.outputs.skip != 'true'
+        run: npm ci
+
+      - name: Bundle the shebang script
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          chmod +x apps/cli/scripts/compile-release.sh
+          apps/cli/scripts/compile-release.sh "${{ steps.version.outputs.version }}"
+
+      - name: Attest provenance
+        if: steps.version.outputs.skip != 'true'
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: apps/cli/dist/release/*
+
+      - name: Publish GitHub Release
+        if: steps.version.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Create and push tag at the merged cut commit only after bundling succeeds
+          if git ls-remote --tags origin "refs/tags/cli-v$VERSION" | grep -q "cli-v$VERSION"; then
+            echo "Tag cli-v$VERSION already exists on origin."
+          else
+            echo "Tagging cli-v$VERSION at $GITHUB_SHA..."
+            git tag "cli-v$VERSION" "$GITHUB_SHA"
+            git push origin "cli-v$VERSION"
+          fi
+
+          # Notes come from the changelog section; fallback to install line
+          if ! node apps/cli/scripts/release.mjs notes "$VERSION" > /tmp/notes.md 2>/dev/null; then
+            printf 'Install: `curl -fsSL https://www.gamedev.pl/install.sh | bash`\n' > /tmp/notes.md
+          fi
+          gh release create "cli-v$VERSION" \
+            --title "gamedevpl CLI v$VERSION" \
+            --latest \
+            --notes-file /tmp/notes.md \
+            apps/cli/dist/release/*

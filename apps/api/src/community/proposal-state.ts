@@ -1,3 +1,5 @@
+import { canSubmitProposal, MAX_PROPOSAL_SUBMITS } from '../platform/proposal-limits.js';
+export { canSubmitProposal, MAX_PROPOSAL_SUBMITS };
 import { DECLINE_REASONS, type DeclineReason, type ProposalPublicState } from '@gamedevpl/contract';
 
 // The proposal state machine.
@@ -210,6 +212,7 @@ export const MAX_OPEN_PROPOSALS_PER_TARGET = 3;
 
 /** Open proposals one person may hold across the whole platform. */
 export const MAX_OPEN_PROPOSALS_PER_PROPOSER = 10;
+
 
 /**
  * States that count against those caps: everything not yet decided.

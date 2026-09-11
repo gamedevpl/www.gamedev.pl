@@ -1,0 +1,266 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import './party.css';
+import type { CatalogEntry } from '../../catalog.js';
+import { recordPartyStep, type PlayVia } from '../../visitTelemetry.js';
+import { joinUrl, type PartySession } from './mpApi.js';
+import { PartyPlaying } from './PartyPlaying.js';
+import { QrCode } from './QrCode.js';
+import { RoomClient, type RoomStatus } from './roomClient.js';
+import {
+  BRIDGE_NAMESPACE,
+  parseGameBridgeMessage,
+  PROTOCOL_VERSION,
+  type PartyCommand,
+  type RoomPhase,
+  type RosterSlot,
+} from '../../mp/protocol.js';
+
+// How long a command may wait for the game's echo.
+const ECHO_WINDOW_MS = 5_000;
+
+type PartyStageProps = {
+  game: CatalogEntry;
+  session: PartySession;
+  // Which home page surface launched Play Together, if it did.
+  via?: PlayVia;
+  onExit: () => void;
+};
+
+/**
+ * The shared screen: lobby first (QR + who has joined), then the game with a live
+ * bridge relaying phone input into the sandboxed iframe.
+ *
+ * The game is deliberately NOT mounted during the lobby. Our games start their
+ * round the moment they load, so mounting early would burn the first minute of
+ * play while everyone is still scanning.
+ */
+export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
+  const { t } = useTranslation();
+  const [roster, setRoster] = useState<RosterSlot[]>([]);
+  const [status, setStatus] = useState<RoomStatus>('connecting');
+  const [closedReason, setClosedReason] = useState<string | null>(null);
+  const [started, setStarted] = useState(false);
+  const [phase, setPhase] = useState<RoomPhase>('lobby');
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
+  const clientRef = useRef<RoomClient | null>(null);
+  const rosterRef = useRef<RosterSlot[]>([]);
+
+  const url = useMemo(() => joinUrl(session), [session]);
+
+  /** Everything sent into the game is platform-built — never a raw client frame. */
+  const postToGame = useCallback((payload: Record<string, unknown>) => {
+    // The frame is sandboxed to an opaque origin, so '*' is the only possible
+    // target; the frame in turn only accepts messages from its parent.
+    frameRef.current?.contentWindow?.postMessage({ ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, ...payload }, '*');
+  }, []);
+
+  // False until the game answers our start command with a round.
+  const startedRef = useRef(false);
+  // Commands the bar sent that the game has not echoed back yet.
+  const pendingPhasesRef = useRef<Array<{ phase: RoomPhase; at: number }>>([]);
+  const phaseRef = useRef<RoomPhase>('lobby');
+  phaseRef.current = phase;
+
+  function expectEcho(phaseCommanded: RoomPhase) {
+    pendingPhasesRef.current.push({ phase: phaseCommanded, at: Date.now() });
+  }
+
+  // A phase the bar did not command came from a seat.
+  const recordSeatPhase = useCallback((next: RoomPhase) => {
+    const previous = phaseRef.current;
+    const fresh = pendingPhasesRef.current.filter((entry) => Date.now() - entry.at < ECHO_WINDOW_MS);
+    const match = fresh.findIndex((entry) => entry.phase === next);
+    // A command the game answered with no phase change is never echoed.
+    pendingPhasesRef.current = match === -1 ? fresh : fresh.slice(match + 1);
+    if (match !== -1) return;
+    if (next === 'paused') recordPartyStep('paused', 'seat');
+    else if (next === 'lobby') recordPartyStep('returned_to_lobby', 'seat');
+    else if (next === 'playing') recordPartyStep(previous === 'paused' ? 'resumed' : 'started', 'seat');
+  }, []);
+
+  // Phones have no keyboard here; the host drives the shell.
+  const sendCommand = useCallback(
+    (cmd: PartyCommand) => {
+      postToGame({ t: 'command', cmd });
+      if (cmd === 'pause') recordPartyStep('paused', 'bar');
+      else if (cmd === 'resume') recordPartyStep('resumed', 'bar');
+      else if (cmd === 'restart') recordPartyStep('restarted', 'bar');
+      else if (cmd === 'lobby') recordPartyStep('returned_to_lobby', 'bar');
+      const echoed: RoomPhase | null =
+        cmd === 'pause'
+          ? 'paused'
+          : cmd === 'resume' || cmd === 'restart'
+            ? 'playing'
+            : cmd === 'lobby'
+              ? 'lobby'
+              : null;
+      if (echoed) expectEcho(echoed);
+      // The relay refuses guests in an `ended` room; leave it now.
+      const next: RoomPhase | null = cmd === 'restart' ? 'playing' : cmd === 'lobby' ? 'lobby' : null;
+      if (!next) return;
+      setPhase(next);
+      clientRef.current?.setPhase(next);
+    },
+    [postToGame],
+  );
+
+  // The rung every later one is measured against.
+  useEffect(() => {
+    recordPartyStep('lobby_opened');
+  }, []);
+
+  useEffect(() => {
+    const client = new RoomClient({
+      code: session.code,
+      token: session.hostToken,
+      onStatus: (next, reason) => {
+        setStatus(next);
+        if (next === 'closed' && reason) setClosedReason(reason);
+      },
+      onFrame: (frame) => {
+        if (frame.t === 'roster') {
+          if (frame.slots.some((slot) => slot.connected)) recordPartyStep('guest_joined');
+          rosterRef.current = frame.slots;
+          setRoster(frame.slots);
+          postToGame({ t: 'roster', slots: frame.slots });
+          return;
+        }
+        if (frame.t === 'input') {
+          // `d` is key down/up. Do not rename to `v` — every bridge frame already
+          // carries `v` as PROTOCOL_VERSION, and the game reads `d` for held state.
+          postToGame({ t: 'input', slot: frame.slot, k: frame.k, d: frame.d });
+          return;
+        }
+        if (frame.t === 'closed') {
+          setClosedReason(frame.reason);
+        }
+      },
+    });
+    clientRef.current = client;
+    client.connect();
+
+    return () => {
+      client.close();
+      clientRef.current = null;
+    };
+  }, [session, postToGame]);
+
+  // The game announces itself when it boots; answer with the current roster so it
+  // knows which slots are on phones. Messages from the frame are untrusted.
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (!frameRef.current || event.source !== frameRef.current.contentWindow) return;
+      const message = parseGameBridgeMessage(event.data);
+      if (!message) return;
+      if (message.t === 'hello') {
+        startedRef.current = false;
+        postToGame({ t: 'roster', slots: rosterRef.current });
+        // The lobby was the front door; skip the game's.
+        postToGame({ t: 'phase', phase: 'playing' });
+        postToGame({ t: 'command', cmd: 'start' });
+      }
+      if (message.t === 'phase') {
+        // A booting game reports its own menu before reading our start.
+        if (!startedRef.current) {
+          if (message.phase !== 'playing') return;
+          startedRef.current = true;
+        }
+        recordSeatPhase(message.phase);
+        setPhase(message.phase);
+        clientRef.current?.setPhase(message.phase);
+        // The room's front door is the lobby, not the game's.
+        if (message.phase === 'lobby') setStarted(false);
+      }
+    };
+
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [postToGame, recordSeatPhase]);
+
+  const joined = roster.filter((slot) => slot.connected).length;
+  const minPlayers = game.multiplayer?.minPlayers ?? 2;
+  // Unclaimed slots stay playable on the host keyboard, so a lobby is never a
+  // dead end — but the button copy should still nudge people to scan.
+  const canStart = status === 'connected';
+
+  function handleStart() {
+    clientRef.current?.setPhase('playing');
+    setPhase('playing');
+    setStarted(true);
+    recordPartyStep('started', 'bar');
+    // The host's own start; its echo is not a seat.
+    expectEcho('playing');
+  }
+
+  if (closedReason) {
+    return (
+      <div className="party-panel">
+        <h2>{t('party.roomClosedTitle')}</h2>
+        <p>{t(`party.closed.${closedReason}`, { defaultValue: t('party.closed.generic') })}</p>
+        <button className="primary-btn" onClick={onExit}>
+          {t('party.backToCatalog')}
+        </button>
+      </div>
+    );
+  }
+
+  if (started) {
+    return (
+      <PartyPlaying
+        game={game}
+        roster={roster}
+        frameRef={frameRef}
+        via={via}
+        phase={phase}
+        onCommand={sendCommand}
+        onExit={onExit}
+      />
+    );
+  }
+
+  return (
+    <div className="party-lobby">
+      <div className="party-qr-block">
+        <QrCode value={url} label={t('party.qrLabel', { code: session.code })} />
+        <p className="party-code">{session.code}</p>
+        <a className="party-url" href={url} target="_blank" rel="noopener noreferrer">
+          {url.replace(/^https?:\/\//, '')}
+        </a>
+      </div>
+
+      <div className="party-lobby-side">
+        <h2 className="party-title">{t('party.scanToJoin')}</h2>
+        <p className="party-sub">{t('party.scanHint', { min: minPlayers, max: session.maxPlayers })}</p>
+
+        <ul className="party-slots">
+          {roster.map((slot) => (
+            <li key={slot.slot} className={`party-slot ${slot.connected ? 'is-connected' : ''}`}>
+              <span className="party-dot" style={{ background: slot.color }} />
+              <span className="party-slot-name">{slot.nick ?? t('party.emptySlot')}</span>
+              <span className="party-slot-tag">
+                {slot.connected ? t('party.onPhone') : t('party.keyboardSlot', { slot: slot.slot })}
+              </span>
+              {slot.connected && (
+                <button className="party-kick" onClick={() => clientRef.current?.kick(slot.slot)}>
+                  {t('party.kick')}
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+
+        <div className="party-actions">
+          <button className="primary-btn" disabled={!canStart} onClick={handleStart}>
+            {joined >= minPlayers ? t('party.start', { count: joined }) : t('party.startAnyway')}
+          </button>
+          <button className="secondary-btn" onClick={onExit}>
+            {t('party.cancel')}
+          </button>
+        </div>
+
+        <p className="party-status">{status === 'connected' ? t('party.statusReady') : t('party.statusConnecting')}</p>
+      </div>
+    </div>
+  );
+}

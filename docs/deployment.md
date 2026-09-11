@@ -38,9 +38,10 @@ build / image-boot run once (in CI), and deploy does not re-pay for them. Manual
 2. **Keyless OIDC Auth:** Authenticates via GCP Workload Identity Federation (no long-lived service account keys).
 3. **Cloud Build Image Creation:** Submits image build using `infra/cloudbuild.yaml` to Artifact Registry. The WIF deployer service account must also have `roles/serviceusage.serviceUsageConsumer` and storage access for the default Cloud Build staging bucket; `infra/setup-wif.sh` grants both.
 4. **Staging / Candidate Revision:** Deploys revision to Cloud Run with `--no-traffic --tag candidate`.
-5. **Candidate Smoke Test:** Anonymous checks (health, shell, beta wall on catalog/games, waitlist open, forged bearer token rejected) plus an **authenticated smoke** when the `GAMEDEV_ACCESS_TOKEN` repo secret exists — bearer auth, token→cookie exchange, a session-walled route, and catalog/play assemble, run as the CI bot (see [`agent-access-tokens.md`](./agent-access-tokens.md)). Skips loudly when the secret is absent.
+5. **Candidate Smoke Test:** Anonymous checks (health, shell, beta wall on catalog/games, waitlist open, forged bearer token rejected) plus an **authenticated smoke** when the `GAMEDEV_ACCESS_TOKEN` repo secret exists — bearer auth, token→cookie exchange, a session-walled route, and catalog/play assemble, run as the CI bot (see [`agent-access-tokens.md`](./agent-access-tokens.md)). Skips loudly when the secret is absent. The step also reads `/api/auth/token-info` and warns when the CI token has **seven days or fewer** left: expiry is mandatory and a lapsed token fails this step, which blocks promotion, so the warning is the only lead time there is. It never fails the step on the expiry check alone — an expired token is already caught by the bearer 401 above it.
 6. **Browser gate (`apps/e2e`):** Drives real Chromium against the candidate and asserts the site works where HTTP checks cannot see — most importantly that **published games actually run**. See below for why this blocks.
-7. **Traffic Promotion & Tag Cleanup:** Promotes traffic to the latest revision (`--to-latest`) and removes the candidate tag (`--remove-tags candidate`) only if **both** the curl smoke checks and the browser gate succeed.
+7. **Zone host (`gamedev-world`):** when `ZONE_HOST_URL` is set, CI advances the zone host's **image only** — never its env or secrets, which stay `infra/deploy-world.sh`'s business — and only when the world's own inputs changed (`apps/world`, `packages/zone-core`, `packages/contract`, the lockfile). It is deliberately not rebuilt on every deploy: a redeploy drains running zones, and `apps/world/Dockerfile` states the rule that shipping a CSS change must not mass-hibernate every live world. Runs before promotion, same as the relay, because the host is the server and the new bundle is its client.
+8. **Traffic Promotion & Tag Cleanup:** Promotes traffic to the latest revision (`--to-latest`) and removes the candidate tag (`--remove-tags candidate`) only if **both** the curl smoke checks and the browser gate succeed.
 
 ### Why the browser gate blocks a deploy
 
@@ -78,10 +79,117 @@ Run it yourself against anything: `E2E_BASE_URL=https://www.gamedev.pl npm run e
 
 ## Secrets & access (current live state)
 
-Secrets live only in GCP Secret Manager (never in the repo); the Cloud Run runtime service
-account (`<project-number>-compute@developer.gserviceaccount.com`) needs
-`roles/secretmanager.secretAccessor` on each. `deploy.yml` and `infra/deploy-api.sh` wire whichever exist into
-a single `--set-secrets` list.
+Secrets live only in GCP Secret Manager (never in the repo); each service's runtime service
+account (below) needs `roles/secretmanager.secretAccessor` on each secret it mounts —
+granted per secret by `infra/setup-runtime-sa.sh`, never project-wide. `deploy.yml` and
+`infra/deploy-api.sh` wire whichever exist into a single `--set-secrets` list.
+
+### Runtime identities
+
+Every Cloud Run service runs as its own service account, named after the service:
+
+| Service            | Runs as                                              | Holds                                                                                                                                                                                                                                                                     |
+| ------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gamedev-app`      | `gamedev-app@gamedevpl.iam.gserviceaccount.com`      | Firestore, Vertex, Discovery Engine (+ `serviceUsageConsumer` for the quota-project header), Cloud Build submit + `actAs` **gate-runner only**, `signBlob` on itself, store bucket read/create (+ staging mutate), snapshot bucket read, every secret in the env manifest |
+| `gamedev-world`    | `gamedev-world@gamedevpl.iam.gserviceaccount.com`    | Firestore (one document per zone), `session-secret`, `github-token`                                                                                                                                                                                                       |
+| `gamedev-mp-relay` | `gamedev-mp-relay@gamedevpl.iam.gserviceaccount.com` | `session-secret`. Nothing else                                                                                                                                                                                                                                            |
+
+None of them is the project's default compute account
+(`<project-number>-compute@developer.gserviceaccount.com`). That account was created
+holding project-wide `roles/editor` and every service ran as it until September 2026, which
+made every narrow grant above cosmetic — an identity that can already write any bucket and
+read any secret is not bounded by a bucket condition. The relay terminates untrusted
+websocket traffic and the app runs gate builds on creator-submitted code, so a compromise
+of either was project-wide write access. It now holds no project role at all.
+
+CI has three identities on the same principle, created by `infra/setup-wif.sh`:
+
+| Identity                   | Used by                                          | Holds                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `github-actions-deployer@` | this repo's `deploy.yml` and `publish-games.yml` | Cloud Run, Cloud Build, Artifact Registry, Secret Manager access, `storage.admin`, Firebase Hosting. No Firestore or Discovery Engine role of its own — but see the transitive reach below, which is not the same thing                                                                                                                                                                                       |
+| `erase-verifier@`          | this repo's `verify-erase.yml`                   | `datastore.user` and nothing else                                                                                                                                                                                                                                                                                                                                                        |
+| `kit-publisher@`           | the **games repo's** three publish workflows     | **Conditional:** `storage.objectAdmin` on the store bucket, only under `kits/`, `workspaces/`, `examples/`, `knowledge/`. **Unconditional:** `storage.legacyBucketReader` on that bucket (listing, which a per-object condition cannot express), and at project level `discoveryengine.editor` plus `serviceusage.serviceUsageConsumer` (the corpus import and its quota-project header) |
+
+**The deployer's Firestore row says "no role of its own", and that is a narrower claim
+than "cannot reach Firestore".** It holds `run.admin` together with project-wide
+`iam.serviceAccountUser`, so a compromised deploy run can deploy a Cloud Run workload
+*as* `gamedev-app@` or `erase-verifier@` and execute with those accounts' Firestore
+access. Removing `datastore.user` from the deployer closed the direct path and is worth
+having; it did not make the data unreachable. Scoping the act-as grant to the three
+runtime identities a deploy actually needs is the fix, tracked in the ops IAM plan — it
+touches the deploy path, so it wants its own change and a verified deploy behind it.
+
+The games repo used to publish as the deployer, which handed a content repository the
+whole deploy credential. Its account can no longer read the contents of, or modify,
+anything under `versions/` or `games/` — every stored and published game — let alone
+reach Cloud Run. Be precise about what remains: `legacyBucketReader` is bucket-wide, so
+the publisher can still **list** object names and metadata across the whole bucket. That
+is the cost of a listing permission GCS cannot scope per prefix, and it discloses slugs
+and version ids rather than game content. The provider's attribute condition also pins
+each repository to its own default branch, so a pull request cannot mint any of the three.
+
+The identity is **pinned on every deploy**, in both paths: `deploy.yml` hard-codes the three
+emails and passes `--service-account` to the app deploy, the relay image update and the zone
+host update; `infra/deploy-api.sh`, `deploy-relay.sh` and `deploy-world.sh` derive the same
+email from the service name. A value set only on the service would be whatever the last
+deploy said. Two things enforce it: `infra/check-runtime-sa.mjs` (inside `npm run lint`)
+fails CI if any deploy command loses the flag, and the deploy workflow reads
+`serviceAccountName` back from every service and refuses to promote if one is the default
+compute account.
+
+Things that follow from the identity and are derived, not configured: `SEED_DISPATCH_SA` is
+the app's own account (the seed call is the service calling itself) and the relay's
+`MP_RELAY_CALLER_SA` is set to the app's account on every relay update. Neither is a repo
+variable any more.
+
+`MP_RELAY_CALLER_SA` accepts a **comma-separated list**, and the deploy sends two entries
+while the repo variable `APP_RUNTIME_SA_PREVIOUS` holds the account the app is moving off.
+That is not decoration. The relay is reconfigured before the candidate is promoted, so for
+the length of the browser gate the serving app and the candidate run as _different_
+accounts; naming only one of them refuses every lobby on one side or the other.
+
+**Delete the variable once every service serves on its own identity.** Left set, it keeps
+the old account trusted, which is the thing the move exists to end. It is a repo variable
+rather than a literal in `deploy.yml` for exactly that reason — and because
+`infra/check-runtime-sa.mjs` refuses to let the default compute account be named in the
+workflow at all.
+
+Rollout and rollback, owner-run (`infra/setup-runtime-sa.sh` prints the exact commands):
+
+1. `./infra/setup-runtime-sa.sh` creates the accounts and applies the resource-level grants;
+   run the project-level bindings it prints (or `APPLY_PROJECT_BINDINGS=1`).
+2. Merge the deploy change. Every service moves to its own account while the default one
+   still holds editor, so nothing can break at this step — the new grants are additive.
+3. Soak until one full cycle of every sweep has run on the new identity: the weekly digest
+   (Monday 09:00) is the longest. Watch the Cloud Run logs for `PERMISSION_DENIED`, `403`,
+   `iam.serviceAccounts.actAs` and `signBlob`, and each sweep for its normal log line.
+4. `PRUNE_DEFAULT_COMPUTE=1 ./infra/setup-runtime-sa.sh` removes the default account from
+   every secret, bucket and service-account policy, then prints the project-level removals
+   ending with `roles/editor`.
+
+Until step 4 is done the whole change is reversible with one line, which the script also
+prints: re-adding `roles/editor` to the default compute account. Never delete or disable
+that account (other Google services depend on its existence), and never touch
+`<project-number>@cloudservices.gserviceaccount.com`, the Google APIs service agent, which
+also holds editor and is meant to.
+
+### The env manifest
+
+Both deploy paths build the service's environment independently, and `--set-env-vars`
+**replaces the whole map** — so a variable one path threads and the other does not is not
+half-configured, it is deleted the next time the other path runs. That is the 2026-08-04
+incident recorded in [`infra/deploy-api.sh`](../infra/deploy-api.sh): a hand-set
+`TRANSLATE_BUILD_LOG=false` stopped a Vertex spend leak, then vanished under an unrelated
+deploy ten minutes later.
+
+[`infra/env-manifest.json`](../infra/env-manifest.json) declares every service variable and
+secret once. [`infra/check-env-manifest.mjs`](../infra/check-env-manifest.mjs) asserts both
+paths thread exactly that set, and runs as part of `npm run lint`, so adding a variable to
+one path alone now fails CI instead of reverting itself in production months later.
+
+**Adding a variable:** add it to the manifest _and_ to both deploy paths in the same
+change. A name that only looks like a service variable — a step-local, or something read by
+a CLI rather than the service — goes under `notServiceVars` with a reason.
 
 | Secret                                 | Purpose                                                                                                                                                                                                                                                        | State (2026-07-26)                                                                                  |
 | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -99,7 +207,7 @@ a single `--set-secrets` list.
 | `openrouter-api-key`                   | Round-0 seed provider credential → `SEED_OPENROUTER_API_KEY`; OpenRouter routes to `SEED_OPENROUTER_MODEL` (repo var), default `google/gemini-3.5-flash-lite`                                                                                                  | ✅ set                                                                                              |
 | `resend-api-key`                       | Outbound email → `RESEND_API_KEY` (see below)                                                                                                                                                                                                                  | ✅ set                                                                                              |
 | `vapid-private-key`                    | Web push signing → `VAPID_PRIVATE_KEY`                                                                                                                                                                                                                         | ✅ set                                                                                              |
-| `site-basic-auth`                      | Former "not public yet" lock → `SITE_BASIC_AUTH`                                                                                                                                                                                                               | ⚠️ exists but **unused**                                                                            |
+| `site-basic-auth`                      | Former "not public yet" lock → `SITE_BASIC_AUTH`                                                                                                                                                                                                               | 🗑️ orphaned — no code or config references it; safe to delete (below)                               |
 
 ### Managed agent configuration
 
@@ -137,7 +245,18 @@ backward-compatible probe escape hatch.
 
 `site-basic-auth` is a leftover: the running revision does not wire it, and the site answers
 without an auth challenge. Access is controlled by `PRIVATE_BETA` and the beta allowlist
-instead. Delete the secret when you are sure nothing references it.
+instead.
+
+**Nothing references it — verified 2026-08-26.** No `.ts`, `.sh`, `.yml` or `.yaml` in the
+repo mentions `site-basic-auth` or `SITE_BASIC_AUTH`, and it is absent from
+[`infra/env-manifest.json`](../infra/env-manifest.json), which both deploy paths are now
+asserted against. The remaining copies are this page, the M3 note in
+[`auth-and-usage-plan.md`](./auth-and-usage-plan.md) and the historical snapshot in
+[`steel-thread-plan.md`](./steel-thread-plan.md). Deleting it is an owner action:
+
+```bash
+gcloud secrets delete site-basic-auth --project gamedevpl
+```
 
 **`GAMES_REPO_TOKEN` is one hourly REST budget shared by two very different consumers.**
 The CI lockstep check spends 2 requests per run. The snapshot bake used to spend roughly a
@@ -159,6 +278,9 @@ it means the snapshot did not refresh.
 
 **Opening the site to everyone** is a config change, not a code change: set `PRIVATE_BETA=false`
 on the service (and clear the allowlists if you want). Nothing needs redeploying from source.
+Do it before the traffic rather than during it — it takes a new revision, which drops every
+live party room — and follow [`runbooks/launch-day.md`](./runbooks/launch-day.md), which
+carries the service-level objectives and the load-shedding ladder.
 
 ### Promotional game links during closed beta
 
@@ -168,6 +290,151 @@ Firestore and reaches instances within the displayed propagation window; no rede
 needed. `PUBLIC_PLAY_SLUGS` remains an optional deploy-time fallback for bootstrapping an
 empty config. The API still requires each game to be published, and all other catalog,
 draft, and creation routes remain gated.
+
+### Which game bodies the Hosting edge may cache
+
+The play route (`/api/games/:slug`) decides its own `Cache-Control` from the same rule the
+beta wall applies: a published game that a sessionless visitor may play — every game once
+`PRIVATE_BETA=false`, and the promotional slugs while it is `true` — is sent as
+`public, max-age=60`, so Firebase Hosting serves repeat plays from its edge instead of
+Cloud Run. Everything else (walled games, drafts, refusals) keeps the API default of
+`private, no-store`. Nothing to flip: opening the beta widens the cacheable set on its own.
+The minute is the revocation window: Hosting cannot be purged per URL, so a promotional
+slug removed in the console stops being served anonymously within the same minute the
+instances stop honouring it. One origin fetch per game per edge location per minute is
+the price.
+
+## The session cookie is named `__session`
+
+`apps/api/src/platform/session-cookie.ts` owns the name, and the name is a constraint
+rather than a style choice: `__session` is the one cookie name Firebase Hosting documents
+as guaranteed to reach a backend. Measured on the live site on 2026-09-06, Hosting does in
+fact forward other cookies to a Cloud Run rewrite too — the token-login CSRF cookie
+round-trips through it — but that is observed behaviour, not a documented promise, and the
+session is the one cookie that must never depend on an undocumented one. Do not "tidy" it
+back to something descriptive.
+
+The pre-rename name `gamedev_session` was read as a fallback from 2026-09-02 until it was
+removed on 2026-09-08, after the cutover to Hosting and once every active account had
+been re-minted under the new name. A browser that still carries only the old cookie is
+simply anonymous now, and the API never writes or clears that name. If a sign-out storm
+ever coincides with a cookie rename again, the shape to reach for is the same dual-read
+window with a re-mint on the response, not a flag day.
+
+**One invariant holds the whole thing together:** session renewal runs on `onSend`, after
+the handler, and mints for whoever the request _arrived_ as. A response that already wrote
+the session cookie has decided who the browser is — signing in as someone else, or signing
+out — so renewal must never overwrite it. Three separate defects came from breaking one half of that
+(logout re-minting the session it cleared; a sign-in leaving the previous identity's
+cookie last; a replacement leaving the 30-day old cookie standing beside a 12-hour new
+one). The tests in `auth.test.ts` and `access-token-routes.test.ts` pin each case.
+
+## The client address, and `TRUST_EDGE_CLIENT_IP`
+
+Every per-IP rate limiter — including the auth brute-force one — and every abuse record
+reads `request.clientIp`, not `request.ip`. The two are the same today. They stop being the
+same the moment a CDN fronts the service, and the difference is silent.
+
+Cloud Run _appends_ its immediate peer to `X-Forwarded-For` rather than replacing the
+header. With nothing in front, the rightmost entry is the caller and `trustProxy: 1`
+resolves it — which is also what makes a client-supplied `X-Forwarded-For: 1.2.3.4` prefix
+harmless. Put Firebase Hosting in front and the chain becomes
+`<caller>,<Google frontend>`: the rightmost entry is now the edge, so every limiter would
+bucket the whole internet onto a handful of Google addresses.
+
+**Raising `trustProxy` is not the fix**, and this is the trap worth spelling out. A larger
+hop count would reach the caller's entry behind the edge, but it would equally trust a
+forged prefix on any request that did _not_ arrive through the edge — and the service's own
+`*.run.app` URL stays publicly reachable. Measured 2026-09-04 on a throwaway service: the
+Hosting rewrite reaches Cloud Run by the same path as public traffic, so neither
+`--no-default-url` nor `--ingress=internal-and-cloud-load-balancing` can close that URL
+without killing the rewrite too. The direct path cannot be closed by configuration.
+
+So the caller is read from `Fastly-Client-IP`, a header the edge overwrites (a forged one
+sent through Hosting is discarded and replaced — measured, not assumed), **and only when the
+request provably came through Google's edge.** The proof is the peer Cloud Run appended:
+through Hosting it is one of Google's own addresses (`66.102.8.x` was measured); sent
+directly it is the caller's. A caller cannot choose that entry — Cloud Run writes it — so
+the only way to satisfy the check is to actually go through Hosting, where the header is
+overwritten anyway. `apps/api/src/platform/edge-ranges.ts` holds the check; "Google's own"
+is Google's documented definition, the prefixes in `goog.json` that are not in
+`cloud.json`, evaluated per address at runtime because a customer VM can sit inside a
+parent range Google owns. `infra/refresh-edge-ranges.mjs` regenerates the bundled snapshot,
+and the service refreshes it in the background.
+
+The flag is now a kill switch rather than a precondition:
+
+- **`TRUST_EDGE_CLIENT_IP` unset or anything but `true`** (the default, and the state
+  before the cutover): the header is ignored entirely and `clientIp` is `request.ip`.
+- **`TRUST_EDGE_CLIENT_IP=true`**: `clientIp` comes from `Fastly-Client-IP` when it holds
+  exactly one address _and_ the appended peer is Google's own, falling back to
+  `request.ip` otherwise. A header that fails the peer check is logged as
+  `edge client header not trusted` with the peer that gave it away.
+
+**Turn it on in the same window as the DNS cutover.** Behind the edge with the flag off,
+every limiter shares Google's frontend addresses and starts refusing real traffic on
+product routes; with it on before the cutover, nothing changes, because no request carries
+a Google-own peer yet.
+
+`GET /api/diagnostics/proxy` reports `resolvedIp`, `clientIp` and `peerIsGoogleEdge` side
+by side, so the three can be compared through either path after a change.
+
+## Media egress
+
+Hosting rewrites `**` to Cloud Run, so **every byte the origin returns is billed as
+Hosting egress**, against a 360 MB/day free tier and $0.15/GB after it. Game media is the
+bulk of that traffic — a gameplay capture measured 662 KB against a 282 KB bundle — and
+`GET /api/games/:slug/media/:filename` answers **without a session**, bounded only by a
+per-IP budget of 400 requests/minute. At that ceiling one address can pull ~264 MB/minute,
+which is the free tier in 82 seconds and roughly $57/day sustained.
+
+The route therefore does not carry those bytes. It resolves the
+snapshot object (probing that it exists — a redirect cannot fall through the way an
+inline read can), signs a six-hour V4 URL with the runtime service account
+([`gcs-sign.ts`](../apps/api/src/delivery/gcs-sign.ts), the same path kit downloads use)
+and answers **302** to `storage.googleapis.com`.
+
+**What the limiter still caps, and what it stops capping.** The catalog lookup, the media
+allow-list and the 400/min per-IP budget all run before a URL is minted, so they bound
+*minting*. They no longer bound *volume*: one 302 is a six-hour URL that Cloud Storage
+will serve to any address, at any speed, outside this service's reach. The meter moves
+too — Hosting egress becomes Cloud Storage egress (~$0.12/GB, no daily free tier to
+exhaust). This trades a metered, abusable proxy for unmetered direct reads of files that
+were already served without a session; it is not a volume control, and if one is wanted
+it has to be a byte budget, not a request count.
+
+CSP matters here: `media-src` must allow `https://storage.googleapis.com`, or every
+`<video>` pointing at a redirected capture is a policy violation (report-only today,
+silent breakage the day it is enforced).
+
+There is no flag. Redirects happen wherever the buckets are set, and they cover both
+populations of published games:
+
+- **Catalog games** (games repo, baked into a snapshot) — signed against
+  `GAMES_SNAPSHOT_BUCKET`, object `snapshots/<id>/media/<slug>/<file>`.
+- **Games made on the platform** (created from prompts, published through the store) —
+  signed against `GAMES_STORE_BUCKET`, object
+  `games/<slug>/versions/<version>/media/<file>`. These were missed at first and are the
+  heavier half: the 662 KB capture that motivated this work belongs to one of them.
+
+Repo-backed media with no snapshot still serves inline. A URL is signed only after the
+object is confirmed to exist, because a redirect cannot fall through to the next source
+the way an inline read does.
+
+**A signing failure falls back to inline** rather than to a broken image: a missing
+`roles/iam.serviceAccountTokenCreator` grant costs money, not pictures. That fallback is
+the reason a switch was not worth its own variable: the failure mode it would guard
+against is already handled in code, per request, without anyone having to notice.
+
+Redirects carry `Cache-Control: public, max-age=10800` — half the URL's life, so a cached
+redirect never outlives what it points at. `public`, and the TTL six hours rather than
+fifteen minutes, because the alternative was worse than the risk it avoided: a short
+private redirect made every repeat catalog view re-download `gameplay.mp4` from Cloud
+Storage under a new query string, which no cache can reuse. The files are already
+reachable without a session, so treating each screenshot as a short-lived credential
+bought nothing and cost bandwidth.
+
+To put media back on the origin, revert the change — there is no variable to unset.
 
 ## Outbound email (Resend)
 
@@ -207,17 +474,23 @@ both deploy paths; the value is never in the repo.
 # Create (first time):
 printf '%s' '<Resend API key: re_...>' \
   | gcloud secrets create resend-api-key --data-file=- --replication-policy=automatic --project gamedevpl
-# Let the Cloud Run runtime SA read it:
+# Let the app's runtime SA read it (or re-run infra/setup-runtime-sa.sh, which grants
+# every secret in the env manifest):
 gcloud secrets add-iam-policy-binding resend-api-key \
-  --member="serviceAccount:334141807880-compute@developer.gserviceaccount.com" \
+  --member="serviceAccount:gamedev-app@gamedevpl.iam.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor" --project gamedevpl
 # Rotate later (new version; takes effect on the next revision):
 printf '%s' '<new key>' | gcloud secrets versions add resend-api-key --data-file=- --project gamedevpl
 ```
 
-Optional plain env vars (both have code defaults, so only set to override):
-`MAIL_FROM` (default `gamedev.pl <noreply@mail.gamedev.pl>`) and `INVITE_URL`
-(default `https://www.gamedev.pl`).
+Optional plain env var on the service (has a code default, so only set to
+override): `MAIL_FROM` (default `gamedev.pl <noreply@mail.gamedev.pl>`). Set it
+as a repo variable — both deploy paths thread it, so a value set by hand on the
+revision is wiped by the next deploy.
+
+`INVITE_URL` (default `https://www.gamedev.pl`) is **not** a service variable:
+only the `beta:invite` and `beta:welcome` CLIs read it, and those run on the operator's
+machine, so set it in the shell you run the script from.
 
 ### Sending beta invites
 
@@ -236,6 +509,44 @@ It refuses to run without `RESEND_API_KEY` (rather than silently not sending); `
 previews the rendered email with no Firestore write and no send. See
 [`.claude/skills/managing-beta-participants`](../.claude/skills/managing-beta-participants) for
 the full access model.
+
+### Sending the waitlist welcome
+
+`beta:welcome` mails people already on the Firestore waitlist once a spot is opening —
+the email the splash promised. It is a **preview by default**: no send and no writes
+until `--send`. Language follows waitlist `locale`, then a `.pl` email domain, else
+English. From is the already-verified `Grzegorz <noreply@mail.gamedev.pl>`; Reply-To is
+`grzegorz@gamedev.pl`, so a reply reaches the owner without adding a Resend sending domain.
+
+```bash
+# Preview everyone currently pending (no mail, no writes)
+npm run beta:welcome -w @gamedevpl/api
+
+# One person, still a preview
+npm run beta:welcome -w @gamedevpl/api -- --only you@example.com
+
+# Let that person in for real (approve + send)
+export RESEND_API_KEY='re_...'
+npm run beta:welcome -w @gamedevpl/api -- --approve --send --only you@example.com
+```
+
+`--send` without `RESEND_API_KEY` is refused. `--send` to pending rows also requires
+`--approve`, so the mail and the allowlist stay in sync. Pending recipients are
+approved and verified **before** the send; `welcomeEmailedAt` is stamped only after
+Resend accepts. If the mailer fails, they can already sign in, and the next pending
+run still picks them (unstamped approved rows stay in the pending filter). `--force`
+resends a stamped row.
+
+**Owner setup before the first real send** (the script will not do this):
+
+1. Add a Google Workspace alias so `grzegorz@gamedev.pl` receives mail (inbound only —
+   Resend keeps sending from `mail.gamedev.pl`).
+2. Send one `--only you@… --approve --send` to yourself and confirm that Reply-To is
+   `grzegorz@gamedev.pl` and that a reply reaches the alias.
+
+Do not change the service `MAIL_FROM` — notification mail should keep using the subdomain.
+
+`INVITE_URL` (default `https://www.gamedev.pl`) is read by this CLI too.
 
 ### Sending a one-time invite link
 
@@ -368,7 +679,7 @@ npm run slug:backfill -w @gamedevpl/api --             # name them
 ```
 
 Always rehearse first: a slug is a permanent public address. The dry run prints the exact
-`{issueNumber, title, slug}` it would write, including the collisions it resolves — two
+`{jobId, title, slug}` it would write, including the collisions it resolves — two
 games called "Space Miner" get `space-miner` and `space-miner-2`, in the same run.
 
 Abandoned builds are skipped on purpose. Their creator stopped them, so they need no
@@ -431,8 +742,15 @@ Rollout, owner-run and in this order:
    that; a relay can health-check green while the QR code goes nowhere.
 
 Once `MP_RELAY_URL` is set, `deploy.yml` moves the relay onto each new image **before** promoting
-the app — server before client, since the promoted web bundle is the relay's websocket client.
-Only `--image` is updated, so a deploy cannot silently reconfigure the relay by omission.
+the app — server before client, since the promoted web bundle is the relay's websocket client —
+and **before the browser gate**, which opens a lobby and therefore calls the relay itself. That
+second ordering was learned the hard way: with the relay updated after the gate, the first deploy
+to change the app's runtime identity failed its own gate on `relay responded 401`, and since the
+relay is only reconfigured past that point, every later deploy failed the same way. A wedge that
+cannot clear itself.
+Only `--image`, the relay's own `--service-account` and `MP_RELAY_CALLER_SA` (the app's
+runtime account, see "Runtime identities") are updated, so a deploy cannot silently
+reconfigure the rest of the relay by omission.
 
 Security shape worth understanding before touching it: the relay is `--allow-unauthenticated`
 because a phone that scanned a QR has no Google identity and never will. What protects it is

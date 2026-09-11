@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { recordCreateStep, type PlayVia } from './visitTelemetry.js';
-import type { CatalogEntry } from './catalog.js';
+import { catalogMediaUrl, defaultScreenshotIndex, type CatalogEntry } from './catalog.js';
 import { SketchModal } from './SketchModal.js';
 import { PixelIcon } from './PixelIcon.js';
 import { getQuota, type PlatformBuilderAvailability } from './submissionApi.js';
@@ -33,52 +33,7 @@ export type VisualAttachment = {
   dataUrl: string;
 };
 
-function findMatchingGame(query: string, catalog: CatalogEntry[]): CatalogEntry | null {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized || normalized.length < 2) return null;
-
-  const tokens = normalized.split(/\s+/).filter((t) => t.length > 1);
-
-  for (const entry of catalog) {
-    const title = entry.title.toLowerCase();
-    const genre = entry.genre.toLowerCase();
-    const controls = entry.controls.toLowerCase();
-    const slug = entry.slug.toLowerCase();
-
-    // 1. Direct match in title or slug
-    if (title.includes(normalized) || normalized.includes(title) || slug.includes(normalized)) {
-      return entry;
-    }
-
-    // 2. Special aliases
-    if (normalized.includes('mario') && (slug.includes('plumber') || title.includes('plumber'))) {
-      return entry;
-    }
-    if (normalized.includes('coin') && slug.includes('coin')) {
-      return entry;
-    }
-    if ((normalized.includes('rock') || normalized.includes('dodge')) && slug.includes('rock')) {
-      return entry;
-    }
-    if (
-      (normalized.includes('space') ||
-        normalized.includes('ship') ||
-        normalized.includes('rocket') ||
-        normalized.includes('fly')) &&
-      slug.includes('asteroid')
-    ) {
-      return entry;
-    }
-
-    // 3. Token match
-    const matchCount = tokens.filter((t) => title.includes(t) || genre.includes(t) || controls.includes(t)).length;
-    if (matchCount > 0 && matchCount >= Math.ceil(tokens.length / 2)) {
-      return entry;
-    }
-  }
-
-  return null;
-}
+import { findMatchingGame } from './findMatchingGame.js';
 
 interface SpeechRecognitionResultItem {
   transcript: string;
@@ -118,7 +73,7 @@ export function HeroPromptSection({
   onPlatformBuilderAvailability,
   exampleChips,
 }: HeroPromptSectionProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   // Skip autofocus on phone — keyboard would hide the composer.
   const shouldAutoFocusPrompt = typeof matchMedia !== 'function' || !matchMedia('(max-width: 768px)').matches;
   const [promptText, setPromptText] = useState(initialPrompt);
@@ -136,18 +91,16 @@ export function HeroPromptSection({
   const attachMenuRef = useRef<HTMLDivElement | null>(null);
   const attachPanelRef = useClampToViewport<HTMLDivElement>(attachMenuOpen);
 
-  // Show quota before a 429 after they finish typing.
-  const [quota, setQuota] = useState<{ used: number; limit: number | null } | null>(null);
+  // Platform builder availability poll.
   useEffect(() => {
     let cancelled = false;
     getQuota()
       .then((result) => {
         if (cancelled) return;
-        setQuota(result.submissions);
         onPlatformBuilderAvailability?.(result.platformBuilder);
       })
       .catch(() => {
-        // Signed out or unreachable — the line simply doesn't render.
+        // Signed out or unreachable.
       });
     return () => {
       cancelled = true;
@@ -248,7 +201,83 @@ export function HeroPromptSection({
     }
   };
 
-  const matchedGame = useMemo(() => findMatchingGame(promptText, catalogEntries), [promptText, catalogEntries]);
+  const isBusy = submissionStatus !== 'idle' || isPreparingAttachments;
+  const busyLabel =
+    submissionStatus === 'refining'
+      ? t('qa.analyzing')
+      : submissionStatus === 'loading'
+        ? t('submit.submitting')
+        : null;
+
+  const localMatchedGame = useMemo(() => findMatchingGame(promptText, catalogEntries), [promptText, catalogEntries]);
+  const [vectorMatch, setVectorMatch] = useState<{ query: string; match: CatalogEntry | null }>({
+    query: '',
+    match: null,
+  });
+
+  const trimmedPrompt = promptText.trim();
+  const needsVectorSearch = trimmedPrompt.length >= 3 && !localMatchedGame && !isBusy;
+  const isSearching = needsVectorSearch && vectorMatch.query !== trimmedPrompt;
+  const rawVectorGame = needsVectorSearch && vectorMatch.query === trimmedPrompt ? vectorMatch.match : null;
+
+  // Enriches matched game with screenshots from catalog.
+  const vectorMatchedGame = useMemo(() => {
+    if (!rawVectorGame) return null;
+    const full = catalogEntries.find((e) => e.slug === rawVectorGame.slug);
+    return full ? { ...full, ...rawVectorGame } : rawVectorGame;
+  }, [rawVectorGame, catalogEntries]);
+
+  const matchedGame = localMatchedGame || vectorMatchedGame;
+
+  useEffect(() => {
+    if (!needsVectorSearch) return;
+
+    const controller = new AbortController();
+    const handle = setTimeout(() => {
+      fetch(`/api/catalog/search?q=${encodeURIComponent(trimmedPrompt)}`, { signal: controller.signal })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data: { match?: CatalogEntry | null; score?: number } | null) => {
+          if (data?.match && typeof data.score === 'number' && data.score >= 0.55) {
+            const found = catalogEntries.find((e) => e.slug === data.match?.slug);
+            const entry = found
+              ? {
+                  ...found,
+                  tagline: data.match.tagline || found.tagline,
+                  shortControls: data.match.shortControls || found.shortControls,
+                  searchKeywords: data.match.searchKeywords || found.searchKeywords,
+                }
+              : (data.match as CatalogEntry);
+            setVectorMatch({ query: trimmedPrompt, match: entry });
+            return;
+          }
+          setVectorMatch({ query: trimmedPrompt, match: null });
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) {
+            setVectorMatch({ query: trimmedPrompt, match: null });
+          }
+        });
+    }, 200);
+
+    return () => {
+      clearTimeout(handle);
+      controller.abort();
+    };
+  }, [trimmedPrompt, catalogEntries, needsVectorSearch]);
+
+  const matchedPoster = useMemo(() => {
+    if (!matchedGame?.media?.screenshots?.length) return null;
+    const idx = defaultScreenshotIndex(matchedGame.media.screenshots);
+    const file = matchedGame.media.screenshots[idx]?.file;
+    return file ? catalogMediaUrl(matchedGame.slug, file, 320) : null;
+  }, [matchedGame]);
+
+  const isCreationIntentEligible = useMemo(() => {
+    const trimmed = promptText.trim();
+    if (attachments.length > 0) return true;
+    const words = trimmed.split(/\s+/).filter(Boolean);
+    return words.length >= 2 && trimmed.length >= 6;
+  }, [promptText, attachments.length]);
 
   const handleFiles = (files: FileList | File[]) => {
     if (submissionStatus !== 'idle') return;
@@ -282,15 +311,6 @@ export function HeroPromptSection({
       e.target.value = '';
     }
   };
-
-  // Desktop clips Build label; spinner + status must stay visible.
-  const isBusy = submissionStatus !== 'idle' || isPreparingAttachments;
-  const busyLabel =
-    submissionStatus === 'refining'
-      ? t('qa.analyzing')
-      : submissionStatus === 'loading'
-        ? t('submit.submitting')
-        : null;
 
   // Close attach while busy so upload/draw cannot change mid-request.
   useEffect(() => {
@@ -447,7 +467,6 @@ export function HeroPromptSection({
                 if (pastedImages.length > 0) handleFiles(pastedImages);
               }}
             />
-
             <div className="prompt-bar-actions">
               <button
                 type="button"
@@ -462,17 +481,7 @@ export function HeroPromptSection({
               </button>
             </div>
 
-            <button
-              type="submit"
-              className={`primary-btn build-btn${isBusy ? ' is-busy' : ''}`}
-              title={busyLabel ?? t('hero.buildGameButton')}
-              aria-label={busyLabel ?? t('hero.buildGameButton')}
-              disabled={isBusy || pendingAttachmentReads > 0 || (!promptText.trim() && attachments.length === 0)}
-            >
-              {isBusy ? <span className="build-btn-spinner" aria-hidden="true" /> : <PixelIcon name="send" size={16} />}
-              {/* refining ≠ submitting; phone shows label, desktop clips to icon */}
-              <span className="build-btn-label">{busyLabel ?? t('hero.buildGameButton')}</span>
-            </button>
+            <button type="submit" style={{ display: 'none' }} aria-hidden="true" disabled={isBusy} />
           </div>
 
           {exampleChips && exampleChips.length > 0 && !isBusy && (
@@ -529,16 +538,47 @@ export function HeroPromptSection({
             </div>
           )}
 
-          {matchedGame && (
+          {matchedGame ? (
             <div className="smart-intent-card matched-card">
+              {matchedPoster ? (
+                <div className="matched-thumb-wrap">
+                  <img
+                    src={matchedPoster}
+                    alt={matchedGame.title}
+                    className="matched-thumb"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </div>
+              ) : null}
               <div className="matched-info">
-                <span className="smart-badge">
-                  <PixelIcon name="gamepad" size={14} /> {t('catalog.genre')}: {matchedGame.genre}
-                </span>
+                <div className="matched-badges">
+                  {matchedGame.genre && (
+                    <span className="smart-badge">
+                      <PixelIcon name="gamepad" size={12} /> {t('catalog.genre')}: {matchedGame.genre}
+                    </span>
+                  )}
+                  {matchedGame.multiplayer && (
+                    <span className="smart-badge smart-badge-secondary">
+                      <PixelIcon name="user" size={12} /> {t('catalog.categories.multiplayer_party')}
+                    </span>
+                  )}
+                </div>
                 <h3 className="matched-title">{matchedGame.title}</h3>
-                <p className="matched-desc">
-                  {t('catalog.controls')}: {matchedGame.controls}
-                </p>
+                {(() => {
+                  const isPl = (i18n?.language || '').startsWith('pl');
+                  const tagline = isPl ? matchedGame.tagline?.pl : matchedGame.tagline?.en;
+                  const shortControls = isPl ? matchedGame.shortControls?.pl : matchedGame.shortControls?.en;
+                  const descText =
+                    tagline ||
+                    (shortControls
+                      ? `${t('catalog.controls')}: ${shortControls}`
+                      : matchedGame.controls
+                        ? `${t('catalog.controls')}: ${matchedGame.controls}`
+                        : '');
+                  return descText ? <p className="matched-desc">{descText}</p> : null;
+                })()}
+                <p className="matched-hint">{t('hero.smartMatchHint')}</p>
               </div>
               <div className="matched-actions">
                 <button
@@ -547,13 +587,28 @@ export function HeroPromptSection({
                   onClick={() => onPlayGame?.(matchedGame, 'composer_match')}
                   disabled={isBusy}
                 >
-                  <PixelIcon name="play" size={14} /> {t('hero.smartPlayBtn', { title: matchedGame.title })}
+                  <PixelIcon name="play" size={14} /> {t('hero.smartPlayBtn')}
+                </button>
+                <button
+                  type="submit"
+                  className="match-build-link"
+                  disabled={isBusy || pendingAttachmentReads > 0 || (!promptText.trim() && attachments.length === 0)}
+                >
+                  <PixelIcon name="sparkle" size={12} /> {t('hero.orBuildOwnGame')}
                 </button>
               </div>
             </div>
-          )}
-
-          {!matchedGame && promptText.trim().length >= 3 && (
+          ) : isSearching ? (
+            <div className="smart-intent-card searching-card" role="status" aria-live="polite">
+              <span className="searching-spinner" aria-hidden="true" />
+              <div className="searching-info">
+                <span className="smart-badge searching-badge">
+                  {t('hero.smartSearching')}
+                </span>
+                <p className="searching-sub">"{promptText.trim()}"</p>
+              </div>
+            </div>
+          ) : isCreationIntentEligible ? (
             <div className={`smart-intent-card creation-card${isBusy ? ' is-busy' : ''}`}>
               <div className="creation-info">
                 <span className="smart-badge creation-badge">
@@ -561,13 +616,16 @@ export function HeroPromptSection({
                 </span>
                 <p className="creation-sub">{t('hero.smartNoMatchSub')}</p>
               </div>
+              <div className="creation-actions">
+                <button
+                  type="submit"
+                  className="primary-btn build-match-btn"
+                  disabled={isBusy || pendingAttachmentReads > 0 || (!promptText.trim() && attachments.length === 0)}
+                >
+                  <PixelIcon name="sparkle" size={14} /> {t('hero.smartBuildBtn')}
+                </button>
+              </div>
             </div>
-          )}
-
-          {quota && quota.limit !== null ? (
-            <span className={`quota-note${quota.used >= quota.limit ? ' is-spent' : ''}`}>
-              {t('hero.quotaLeft', { left: Math.max(0, quota.limit - quota.used), limit: quota.limit })}
-            </span>
           ) : null}
         </form>
 

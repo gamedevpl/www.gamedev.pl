@@ -2,7 +2,10 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-const css = readFileSync(fileURLToPath(new URL('./styles.css', import.meta.url)), 'utf8');
+const read = (name: string) => readFileSync(fileURLToPath(new URL(name, import.meta.url)), 'utf8');
+
+// Overlay rule in the stage file, editor grammar in the kit.
+const css = [read('./styles.css'), read('./surfaces/studio/studio-stage.css'), read('./editor-kit.css')].join('\n');
 
 function declarations(selector: string): string {
   const start = css.indexOf(`${selector} {`);
@@ -11,7 +14,6 @@ function declarations(selector: string): string {
   expect(end, `unclosed ${selector} rule`).toBeGreaterThan(start);
   return css.slice(start, end);
 }
-
 describe('layered editor surface CSS contract', () => {
   it('pins the stacked board posture and active-layer interaction', () => {
     expect(declarations('.editor-layer-stack')).toMatch(/display:\s*grid/);
@@ -28,6 +30,7 @@ describe('layered editor surface CSS contract', () => {
 
   it('pins the edit overlay dock posture used by layered definitions', () => {
     const dock = ".studio-edit-overlay:not(.studio-code-overlay)[data-surface='docked']";
+    expect(css).not.toContain(':has(.editor-board-col)');
     expect(declarations(dock)).toMatch(/inset:\s*0 0 0 auto/);
     expect(declarations(dock)).toMatch(/width:\s*min\(360px, 100%\)/);
   });

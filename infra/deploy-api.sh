@@ -32,12 +32,14 @@
 #                               /api/mcp — SEP-1865. Inert for any client that does not
 #                               negotiate the extension; any other value keeps the
 #                               pre-views contract)
+#   APP_CSP_REPORT_ONLY=...    (app-level CSP, report-only: unset/"true" built-in policy,
+#                               "false"/"off" none, anything else a verbatim draft policy;
+#                               apps/api/src/platform/security-headers.ts)
 #   BETA_ALLOWED_UIDS=...      (comma-separated g:<sub> values)
 #   ADMIN_UIDS=...             (comma-separated g:<sub> values; operator telemetry view)
 #   REVIEWER_UIDS=...          (comma-separated g:<sub> values; /review desk; admins count too)
 #   BETA_ALLOWED_EMAILS=...    (comma-separated verified email addresses)
 #   MAIL_FROM=...              (RFC 5322 sender; defaults to noreply@mail.gamedev.pl)
-#   INVITE_URL=...             (where invitees land; defaults to https://www.gamedev.pl)
 #   NOTIFY_SWEEP_AUDIENCE=...  (sweep endpoint URL; enables OIDC auth on /api/internal/notify-sweep)
 #   NOTIFY_SWEEP_SA=...        (Cloud Scheduler SA email allowed to call the sweeps;
 #                               defaults to notify-sweep@<project>.iam.gserviceaccount.com)
@@ -62,6 +64,17 @@
 #                               /api/internal/dispatch-reaper, the retry for a job whose
 #                               dispatch died before it recorded a session. Its own
 #                               audience for the same reason.)
+#   SEED_DISPATCH_AUDIENCE=... (/api/internal/seed's own URL; enables the service to
+#                               hand round-0 seeding to itself as a request, which is
+#                               what lets CPU be request-scoped -- see seed-dispatch.ts.
+#                               Unset, create-game seeds inline as before.)
+#   SEED_DISPATCH_SA=...       (the runtime service account the seed call arrives as;
+#                               defaults to RUNTIME_SA below, because the caller IS this
+#                               service. Override only to test a different identity.)
+#   RUNTIME_SA=...             (the identity this service runs as; defaults to
+#                               <SERVICE>@<project>.iam.gserviceaccount.com, created by
+#                               infra/setup-runtime-sa.sh. Never the default compute
+#                               account — see that script for why.)
 #   HEALTH_SWEEP_BATCH=...     (how many health re-gates one sweep run may start;
 #                               defaults to 3. Each one is a Cloud Build run, so this is
 #                               the knob that decides what the loop costs per day. Set it
@@ -128,7 +141,6 @@ EDITORKIT_V2="${EDITORKIT_V2:-true}"
 BETA_ALLOWED_UIDS="${BETA_ALLOWED_UIDS:-}"
 BETA_ALLOWED_EMAILS="${BETA_ALLOWED_EMAILS:-}"
 MAIL_FROM="${MAIL_FROM:-}"
-INVITE_URL="${INVITE_URL:-}"
 NOTIFY_SWEEP_AUDIENCE="${NOTIFY_SWEEP_AUDIENCE:-}"
 NOTIFY_SWEEP_SA="${NOTIFY_SWEEP_SA:-}"
 SCORECARD_SWEEP_AUDIENCE="${SCORECARD_SWEEP_AUDIENCE:-}"
@@ -137,6 +149,19 @@ SUGGESTION_SWEEP_AUDIENCE="${SUGGESTION_SWEEP_AUDIENCE:-}"
 HEALTH_SWEEP_AUDIENCE="${HEALTH_SWEEP_AUDIENCE:-}"
 ACCOUNT_DELETION_SWEEP_AUDIENCE="${ACCOUNT_DELETION_SWEEP_AUDIENCE:-}"
 DISPATCH_REAPER_AUDIENCE="${DISPATCH_REAPER_AUDIENCE:-}"
+SEED_DISPATCH_AUDIENCE="${SEED_DISPATCH_AUDIENCE:-}"
+# The runtime identity, and the same value both deploy paths pin (deploy.yml derives it
+# from the service name identically). Set on every deploy rather than once on the
+# service: a --service-account left off a `gcloud run deploy` keeps the previous
+# revision's value today, but "keeps" is not "pins" — the day someone deploys from a
+# fresh service, or the flag is dropped, it falls back to the default compute account
+# and every narrow grant in infra/ becomes cosmetic again.
+RUNTIME_SA="${RUNTIME_SA:-${SERVICE}@${PROJECT_ID}.iam.gserviceaccount.com}"
+SEED_DISPATCH_SA="${SEED_DISPATCH_SA:-${RUNTIME_SA}}"
+# Arms the alert-pulled spend brake; unset leaves the endpoint refusing everything.
+# Its own caller identity: the Pub/Sub push subscription, not the scheduler.
+SPEND_BRAKE_AUDIENCE="${SPEND_BRAKE_AUDIENCE:-}"
+SPEND_BRAKE_CALLER_SA="${SPEND_BRAKE_CALLER_SA:-}"
 HEALTH_SWEEP_BATCH="${HEALTH_SWEEP_BATCH:-}"
 # Web Push (docs/notifications-plan.md M2). Public key is public by design (env var);
 # the private key is a Secret Manager secret wired in below. Push is off without them.
@@ -295,6 +320,12 @@ fi
 if [ -n "${REMIX_DEBUG:-}" ]; then
   ENV_VARS="${ENV_VARS}|REMIX_DEBUG=${REMIX_DEBUG}"
 fi
+# Default true since www moved behind Firebase Hosting (2026-09-06). Off, every per-IP
+# limiter collapses onto Google's frontend addresses; the peer check in client-address.ts
+# keeps the flag inert on the run.app URL, so true is safe on both deploy paths. Until
+# this line, a hand deploy that forgot to export it switched the limiter off in silence.
+ENV_VARS="${ENV_VARS}|TRUST_EDGE_CLIENT_IP=${TRUST_EDGE_CLIENT_IP:-true}"
+
 if [ -n "${CANONICAL_HOST:-}" ]; then
   ENV_VARS="${ENV_VARS}|CANONICAL_HOST=${CANONICAL_HOST}"
 fi
@@ -308,7 +339,7 @@ fi
 # None of them survived a deploy before this. On 2026-08-04 a TRANSLATE_BUILD_LOG=false
 # set by hand fixed a spend leak, then vanished under an unrelated deploy ten minutes
 # later and the leak resumed unnoticed. A lever that reverts itself is worse than none.
-for VERTEX_VAR in VERTEX_MODEL VERTEX_REGION TRANSLATE_BUILD_LOG; do
+for VERTEX_VAR in VERTEX_MODEL VERTEX_REGION TRANSLATE_BUILD_LOG CLI_CHAT_MODEL; do
   eval "VERTEX_VAL=\${${VERTEX_VAR}:-}"
   if [ -n "${VERTEX_VAL}" ]; then
     ENV_VARS="${ENV_VARS}|${VERTEX_VAR}=${VERTEX_VAL}"
@@ -335,7 +366,7 @@ done
 #
 # The rule this file already states for REMIX_DEBUG applies to every one of them: both
 # supported paths carry a flag, or neither should.
-for FLAG_VAR in CODE_LANE EDITOR_ASSIST MCP_AUTHORIZATION_SERVERS MCP_UI CODE_SURFACE TAB_COMPLETE; do
+for FLAG_VAR in CODE_LANE EDITOR_ASSIST MCP_AUTHORIZATION_SERVERS MCP_UI CODE_SURFACE TAB_COMPLETE CLI_SURFACE APP_CSP_REPORT_ONLY; do
   eval "FLAG_VAL=\${${FLAG_VAR}:-}"
   if [ -n "${FLAG_VAL}" ]; then
     ENV_VARS="${ENV_VARS}|${FLAG_VAR}=${FLAG_VAL}"
@@ -422,9 +453,6 @@ fi
 if [ -n "$MAIL_FROM" ]; then
   ENV_VARS="${ENV_VARS}|MAIL_FROM=${MAIL_FROM}"
 fi
-if [ -n "$INVITE_URL" ]; then
-  ENV_VARS="${ENV_VARS}|INVITE_URL=${INVITE_URL}"
-fi
 if [ -n "$NOTIFY_SWEEP_AUDIENCE" ]; then
   ENV_VARS="${ENV_VARS}|NOTIFY_SWEEP_AUDIENCE=${NOTIFY_SWEEP_AUDIENCE}"
 fi
@@ -452,6 +480,18 @@ if [ -n "$SUGGESTION_SWEEP_AUDIENCE" ]; then
 fi
 if [ -n "$DISPATCH_REAPER_AUDIENCE" ]; then
   ENV_VARS="${ENV_VARS}|DISPATCH_REAPER_AUDIENCE=${DISPATCH_REAPER_AUDIENCE}"
+fi
+if [ -n "$SEED_DISPATCH_AUDIENCE" ]; then
+  ENV_VARS="${ENV_VARS}|SEED_DISPATCH_AUDIENCE=${SEED_DISPATCH_AUDIENCE}"
+fi
+if [ -n "$SEED_DISPATCH_SA" ]; then
+  ENV_VARS="${ENV_VARS}|SEED_DISPATCH_SA=${SEED_DISPATCH_SA}"
+fi
+if [ -n "$SPEND_BRAKE_AUDIENCE" ]; then
+  ENV_VARS="${ENV_VARS}|SPEND_BRAKE_AUDIENCE=${SPEND_BRAKE_AUDIENCE}"
+fi
+if [ -n "$SPEND_BRAKE_CALLER_SA" ]; then
+  ENV_VARS="${ENV_VARS}|SPEND_BRAKE_CALLER_SA=${SPEND_BRAKE_CALLER_SA}"
 fi
 if [ -n "$VAPID_PUBLIC_KEY" ]; then
   ENV_VARS="${ENV_VARS}|VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}"
@@ -491,15 +531,16 @@ else
   MAX_INSTANCES=1
 fi
 
-# --no-cpu-throttling (CPU always allocated) is load-bearing, not a performance tweak.
-# Round-0 seeding is dispatched with `void dispatchBuild(...)`: it runs entirely after
-# the creator's HTTP response has been sent, and it is the CPU-bound half — an esbuild
-# bundle and a typecheck — that decides whether the draft compiles. Under the default
-# (CPU throttled outside a request) that work crawls while the seeder's wall-clock
-# timeouts keep running, and an instance reclaimed mid-seed kills the draft with no
-# error and no record. Same threading rule as the flags above: both supported deploy
-# paths carry it, or neither should.
-echo "==> Deploying to Cloud Run (scale-to-zero, CPU always allocated, max ${MAX_INSTANCES} instance(s))"
+# CPU is request-scoped again (--cpu-throttling). It used to be always-on for one reason:
+# round-0 seeding ran after the creator's response, in the background, and its esbuild
+# pass and typecheck crawled without CPU. That work now runs inside a request the
+# service makes to itself (apps/api/src/creation/seed-dispatch.ts, SEED_DISPATCH_* above),
+# so the instance is billed for the seed and nothing else -- always-on cost ~30
+# instance-hours a day at idle in August 2026. --timeout 900 is for that same request:
+# a seed may take up to ten minutes to generate plus a typecheck, and the default 300s
+# would cut it off. Same threading rule as the flags above: both supported deploy paths
+# carry these, or neither should.
+echo "==> Deploying to Cloud Run (scale-to-zero, request-scoped CPU, max ${MAX_INSTANCES} instance(s))"
 gcloud run deploy "$SERVICE" \
   --image "$IMAGE" \
   --region "$REGION" \
@@ -508,7 +549,10 @@ gcloud run deploy "$SERVICE" \
   --allow-unauthenticated \
   --min-instances 0 \
   --max-instances "$MAX_INSTANCES" \
-  --no-cpu-throttling \
+  --cpu-throttling \
+  --timeout 900 \
+  --memory 1Gi \
+  --service-account "$RUNTIME_SA" \
   --port 8080 \
   --set-env-vars "${ENV_VARS}" \
   ${SECRET_FLAGS[@]+"${SECRET_FLAGS[@]}"}

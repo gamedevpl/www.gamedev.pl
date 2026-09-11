@@ -1,6 +1,6 @@
 import type { GitHubClient } from '../catalog/github-client.js';
 import type { PublishedSlugGate } from '../catalog/published-slugs.js';
-import { createGamesRepoClientFromEnv, createManifestBlockSource } from '../delivery/manifest-source.js';
+import { createManifestBlockSource } from './manifest-source.js';
 import { parseWorldSchema, type WorldSchema } from './world-schema.js';
 
 /**
@@ -34,13 +34,12 @@ export interface WorldSchemaSourceOptions {
  * Null (no games repo configured) makes every world route answer 404, exactly like an
  * absent slug gate does for votes and saves.
  */
-export async function createWorldSchemaSourceFromEnv(
+export function createWorldSchemaSourceFromEnv(
   publishedSlugs: PublishedSlugGate | null,
-  fetchImpl?: typeof fetch,
-): Promise<WorldSchemaSource | null> {
-  if (!publishedSlugs) return null;
-  const client = await createGamesRepoClientFromEnv(fetchImpl);
-  return client ? createWorldSchemaSource({ client, publishedSlugs }) : null;
+  client: Pick<GitHubClient, 'getGameManifest'> | null,
+): WorldSchemaSource | null {
+  if (!publishedSlugs || !client) return null;
+  return createWorldSchemaSource({ client, publishedSlugs });
 }
 
 export function createWorldSchemaSource(options: WorldSchemaSourceOptions): WorldSchemaSource {

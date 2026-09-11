@@ -1,4 +1,4 @@
-import type { AppRoute } from './router.js';
+import type { AppRoute } from './core/router.js';
 
 /** Brand suffix used on every non-home tab title. */
 export const SITE_BRAND = 'Gamedev.pl';
@@ -34,6 +34,7 @@ export type DocumentTitleCopy = {
   privacy: string;
   terms: string;
   contact: string;
+  connect: string;
   create: string;
   party: string;
   proposals: string;
@@ -90,6 +91,8 @@ export function resolveDocumentTitle(route: AppRoute, ctx: DocumentTitleContext)
       return brandedPageTitle(route.doc === 'privacy' ? ctx.copy.privacy : ctx.copy.terms);
     case 'contact':
       return brandedPageTitle(ctx.copy.contact);
+    case 'connect':
+      return brandedPageTitle(ctx.copy.connect);
     case 'create':
       return brandedPageTitle(ctx.copy.create);
     case 'party':

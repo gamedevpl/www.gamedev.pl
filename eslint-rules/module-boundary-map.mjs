@@ -24,12 +24,31 @@ export const MODULE_BUCKETS = [
   'notifications',
 ];
 
+/**
+ * Buckets whose own files are error-clean as importers -- every real (value-level) edge
+ * out of the bucket stays inside platform/ or its own bucket. eslint.config.mjs turns
+ * `gamedev/module-boundary` to 'error' for exactly these buckets' directories in the main
+ * `eslint .` pass; every other bucket stays warn-only via `npm run module-boundary` until
+ * its own turn. Append to this list, never edit its enforcement elsewhere.
+ */
+export const ENFORCED_BUCKETS = [
+  'telemetry',
+  'catalog',
+  'realtime',
+  'notifications',
+  'community',
+  'delivery',
+  'creation',
+  'agent-surface',
+];
+
 const DEFAULT_BUCKET = 'platform';
 
 /** Filename (no directory, no .ts/.test.ts) -> bucket. A name with no entry is unclassified. */
 const FILE_BUCKET = {
   // platform: composition root, auth, errors, rate limits, shared primitives
   app: 'platform',
+  'error-handler': 'platform',
   server: 'platform',
   auth: 'platform',
   bearer: 'platform',
@@ -47,6 +66,11 @@ const FILE_BUCKET = {
   'oauth-page-chrome': 'platform',
   'oauth-pkce': 'platform',
   'oauth-redirect': 'platform',
+  'oauth-scopes': 'platform',
+  'oauth-first-party': 'platform',
+  'oauth-request-auth': 'platform',
+  'oauth-consent': 'platform',
+  'oauth-device': 'platform',
   'oauth-token-login': 'platform',
   'oauth-tokens': 'platform',
   'apple-account': 'platform',
@@ -59,37 +83,148 @@ const FILE_BUCKET = {
   'submission-token': 'platform',
   'access-token': 'platform',
   'access-token-routes': 'platform',
+  'creator-pat-routes': 'platform',
   'access-token-service': 'platform',
   digest: 'platform',
   'sweep-scope': 'platform',
   'dev-seed-studio': 'platform',
   'openai-apps-challenge': 'platform',
   'spa-paths': 'platform',
+  // Kill switch + reserved installer routes for the gamedevpl CLI surface (CL-02).
+  'cli-surface': 'platform',
+  'cli-installers': 'platform',
+  'cli-page': 'platform',
+  'oauth-cli-test-app': 'platform',
   'theme-css-generator': 'platform',
   translate: 'platform',
   'localize-intake': 'platform',
   'image-variants': 'platform',
+  'ip-rate-limit': 'platform',
+  'media-response': 'platform',
   // Cross-domain status vocabulary read by every phase of the pipeline -- the
   // N2 contract plan moves it to packages/contract; platform until then.
   'submission-status': 'platform',
+  // Same reasoning, same precedent -- each depends only on platform/ or external
+  // packages, and is a leaf sink or single-client-factory called from most domains,
+  // not domain business logic of its own bucket.
+  genai: 'platform',
+  'moderation-metrics': 'platform',
+  'knowledge-metrics': 'platform',
+  'telemetry-health': 'platform',
+  'delivery-metrics': 'platform',
+  // Pure vocabulary and formatting for a creator's public identity -- read by every
+  // surface that renders a byline, not creation-domain business logic.
+  'creator-profile': 'platform',
+  // A tar reader/writer with no domain dependencies at all (node:zlib only), used by
+  // four different buckets.
+  tar: 'platform',
+  // A single Store-querying ownership check, factored out of agent-game-key-resolve.ts
+  // because catalog needed the same question without the agent-key machinery around it.
+  'slug-ownership': 'platform',
+  // Bare env-driven constant factored out of creation/builder.ts because delivery,
+  // agent-surface, and submissions.ts all need the cap without the rest of builder.ts's
+  // handoff-authorization logic.
+  'self-build-delivery-cap': 'platform',
+  'self-build-connect-days': 'platform',
+  'quiet-round': 'platform',
+  // Shared build/serve contract read by delivery, creation, and community alike --
+  // pure schema, HTML assembly, or directory/archive-parsing plumbing, not domain
+  // business logic of any one bucket.
+  assemble: 'platform',
+  'games-repo-archive': 'platform',
+  'games-repo-contract': 'platform',
+  'games-repo-bundle-bytes': 'platform',
+  'raster-contract': 'platform',
+  'raster-source': 'platform',
+  'music-tracks': 'platform',
+  'how-to-play': 'platform',
+  'spec-frontmatter': 'platform',
+  'kit-registry': 'platform',
+  'kit-window': 'platform',
+  'round-base-version': 'platform',
+  'publication-state': 'platform',
+  // Job vocabulary and its transition table, read by eight buckets. Its only
+  // domain import is type-only, so nothing follows it at runtime.
+  'job-state': 'platform',
+  // Signed-URL minting over GCS. No relative imports at all.
+  'gcs-sign': 'platform',
+  // A cache in front of gcs-sign, so the media route can redirect instead of
+  // carrying bytes. Imports gcs-sign and nothing else.
+  'media-url-signer': 'platform',
+  // A line counter. No relative imports at all.
+  'module-size': 'platform',
+  // A generic HTTP rate-limit classifier with no domain deps at all, and a bare
+  // env-flag reader -- neither has business logic tied to any one bucket.
+  'github-rate-limit': 'platform',
+  'editor-kit-env': 'platform',
+  // HMAC capability tokens, the sibling of submission-token.ts/access-token.ts. Pure
+  // node:crypto over a caller-supplied secret, with no agent-surface state at all.
+  'agent-token': 'platform',
+  // Slug minting and claim settlement. Pure aside from caller-supplied probes, and
+  // read by creation, catalog and the backfill CLI alike.
+  slug: 'platform',
+  // Pure predicates and formatters shared across buckets: a byte ceiling, a changelog
+  // over plain events, a tar composition, a seal refusal, a chat-agent log shape.
+  'build-preview-limits': 'platform',
+  'build-changelog': 'platform',
+  'workspace-archive': 'platform',
+  'seal-preview': 'platform',
+  'chat-agent-metrics': 'platform',
+  // Wire vocabulary and pure helpers factored out of one bucket's module because
+  // creation needs them without that bucket's stateful half.
+  'playtest-context': 'platform',
+  'creator-media-store': 'platform',
+  'game-overlay': 'platform',
+  'kit-file-kind': 'platform',
+  'seed-outcome': 'platform',
+  'game-module-path': 'platform',
+  'agent-quota-headroom': 'agent-surface',
+  'quota-shards': 'platform',
+  'proposal-limits': 'platform',
+  // A Store helper and a config resolver: every bucket may read them.
+  'quota-peek': 'platform',
+  'bot-allowance': 'platform',
+  'spend-brake': 'platform',
+  'gate-run-ceiling': 'platform',
+  'feedback-themes-contract': 'platform',
+  'managed-builder-error': 'platform',
+  'upload-error': 'platform',
+  // The vendor-neutral state vocabulary every agent backend reports in, read by
+  // the store, job-state, creation and agent-surface alike.
+  'agent-state': 'platform',
+  // Pure parsers, caps and refusal rules with no owner bucket: a media manifest,
+  // GitHub's in-flight run statuses, transcript window caps, the unified-diff
+  // patcher, and the deliverable-path refusals a delivery and a proposal share.
+  'game-media': 'platform',
+  'github-run-status': 'platform',
+  'transcript-window': 'platform',
+  'source-patch': 'platform',
+  'delivery-path-guard': 'platform',
 
   // creation: jobs, rounds, dispatch, seed, refine
-  'job-state': 'creation',
+  'draft-lifecycle-routes': 'creation',
+  'close-job': 'platform',
+  'handoff-seal-routes': 'creation',
+  'feedback-request': 'creation',
+  'feedback-routes': 'creation',
+  'improve-routes': 'creation',
+  'create-game': 'creation',
+  'job-reconciler': 'creation',
+  'dispatch-build': 'creation',
+  'resume-build': 'creation',
+  'seed-pipeline': 'creation',
+  'creator-self-routes': 'creation',
   'job-costs': 'creation',
   'job-admin-routes': 'creation',
   'dispatch-reaper': 'creation',
   refine: 'creation',
-  'round-base-version': 'creation',
   'creation-limits': 'creation',
   'quota-gate': 'creation',
-  autonomy: 'creation',
   builder: 'creation',
   'typecheck-preflight': 'creation',
-  'source-patch': 'creation',
   'code-lane': 'creation',
   'code-surface': 'creation',
   'symbol-map': 'creation',
-  'ts-any-scan': 'creation',
   'type-check': 'creation',
   'tab-complete': 'creation',
   'editor-assist': 'creation',
@@ -97,22 +232,24 @@ const FILE_BUCKET = {
   'editor-drafts': 'creation',
   remix: 'creation',
   'remix-save': 'creation',
+  'remix-view': 'creation',
   'remix-suggestions': 'creation',
   'remix-turns': 'creation',
-  'agent-build-brief': 'creation',
-  'agent-build-examples': 'creation',
-  'agent-state': 'creation',
-  'agent-tasks': 'creation',
   'chat-agent': 'creation',
+  'intake-agent': 'creation',
+  'cli-chat-routes': 'creation',
+  'chat-orchestration': 'creation',
   'chat-turns': 'creation',
+  'chat-turns-history': 'creation',
+  'creator-feedback-handler': 'creation',
+  'creator-takeover': 'creation',
   'creator-code': 'creation',
   'creator-studio': 'creation',
-  'creator-profile': 'creation',
+  'creator-versions': 'creation',
   'creator-profile-routes': 'creation',
   'seed-context': 'creation',
   'seed-bundle': 'creation',
   'seed-availability': 'creation',
-  'seed-status': 'creation',
   'seed-stream': 'creation',
   'seed-provider': 'creation',
   'seed-provider-anthropic': 'creation',
@@ -120,18 +257,43 @@ const FILE_BUCKET = {
   'seed-provider-openai': 'creation',
   'seed-provider-openrouter': 'creation',
   'seed-provider-vertex': 'creation',
-  'version-verdict': 'creation',
-  'module-size': 'creation',
+  // The env half of round-0 seeding, split out of agent-surface's backend registry:
+  // which seed vendor is configured is creation's question, not the agent surface's.
+  'seed-provider-env': 'creation',
   'game-seed': 'creation',
+  'seed-paths': 'creation',
   'session-crash': 'creation',
   scorecard: 'creation',
-  'source-link-check': 'creation',
+  'scorecard-aggregate-log': 'creation',
   'knowledge-search': 'creation',
-  'example-files': 'creation',
+  // Collapses jobs to distinct games for the Studio shelf -- pure Store-record
+  // grouping, no catalog dependency, only ever read by creator-studio.ts.
+  'owner-games': 'creation',
 
   // agent-surface: channel + MCP + kit
   'agent-channel': 'agent-surface',
+  'agent-channel-kit-files': 'agent-surface',
+  'agent-channel-examples': 'agent-surface',
+  'agent-channel-brief': 'agent-surface',
+  'agent-channel-seed': 'agent-surface',
+  'agent-channel-kit': 'agent-surface',
+  'agent-channel-gate-media': 'agent-surface',
   'mcp-server': 'agent-surface',
+  'mcp-tool-support': 'agent-surface',
+  'mcp-example-tools': 'agent-surface',
+  'mcp-kit-tools': 'agent-surface',
+  'mcp-kit-file-tools': 'agent-surface',
+  'mcp-inbox-tools': 'agent-surface',
+  'mcp-seed-tools': 'agent-surface',
+  'mcp-round-card-tools': 'agent-surface',
+  'mcp-gate-media-tools': 'agent-surface',
+  'mcp-proposal-tools': 'agent-surface',
+  'mcp-source-stage-tools': 'agent-surface',
+  'mcp-source-patch-tools': 'agent-surface',
+  'mcp-source-submit-tools': 'agent-surface',
+  'mcp-game-create-tools': 'agent-surface',
+  'mcp-round-reopen-tools': 'agent-surface',
+  'mcp-session-basics-tools': 'agent-surface',
   'mcp-server-discovery': 'agent-surface',
   'mcp-ui': 'agent-surface',
   'mcp-oauth-metadata': 'agent-surface',
@@ -140,7 +302,6 @@ const FILE_BUCKET = {
   'mcp-debug-log': 'agent-surface',
   'mcp-install-links': 'agent-surface',
   'mcp-presence': 'agent-surface',
-  'agent-token': 'agent-surface',
   'agent-upload-token': 'agent-surface',
   'agent-session-revocation': 'agent-surface',
   'agent-creator-key': 'agent-surface',
@@ -151,6 +312,7 @@ const FILE_BUCKET = {
   'agent-backend-env': 'agent-surface',
   'managed-agent': 'agent-surface',
   'managed-availability': 'agent-surface',
+  'managed-bot-availability': 'agent-surface',
   'managed-backend': 'agent-surface',
   'managed-provider-anthropic': 'agent-surface',
   'managed-provider-copilot': 'agent-surface',
@@ -158,58 +320,87 @@ const FILE_BUCKET = {
   'managed-provider-openai': 'agent-surface',
   'self-build-backend': 'agent-surface',
   'self-build-connect': 'agent-surface',
+  'self-build-connect-routes': 'agent-surface',
   'creator-agent-key-routes': 'agent-surface',
   'kit-digest': 'agent-surface',
   'kit-files': 'agent-surface',
-  'kit-registry': 'agent-surface',
-  'kit-window': 'agent-surface',
-  'editor-kit-env': 'agent-surface',
-  genai: 'agent-surface',
+  // Content and status for BYOCA/MCP agents specifically (get_examples, the build
+  // brief, round-0 draft availability) -- read only by agent-channel.ts/mcp-server.ts,
+  // never by creation's own files, despite having lived in creation/.
+  'agent-build-brief': 'agent-surface',
+  'agent-build-examples': 'agent-surface',
+  'seed-status': 'agent-surface',
+  // Same rule, other buckets: the curated exemplar store, the Copilot agent-tasks
+  // client, the build brief every backend renders, and the gate verdict the channel
+  // route and MCP `start` share -- none is read by the bucket it used to live in.
+  'example-files': 'agent-surface',
+  'agent-tasks': 'agent-surface',
+  'build-prompt': 'agent-surface',
+  'gate-verdict': 'agent-surface',
+  // GAME.json shape hint surfaced by the MCP tools -- reads catalog's own
+  // games-repo-contract.js but is never consumed inside catalog/ itself.
+  'game-manifest-hint': 'agent-surface',
 
   // delivery: staging, games-store, gate
+  'build-status': 'delivery',
+  'creator-media': 'delivery',
+  'draft-preview-routes': 'delivery',
+  'editor-upload-requirements': 'delivery',
   'staged-preview': 'delivery',
   'stage-hints': 'delivery',
   'games-store': 'delivery',
-  'gcs-sign': 'delivery',
-  'workspace-archive': 'delivery',
-  tar: 'delivery',
+  'storage-write-retry': 'delivery',
+  'games-store-raster': 'delivery',
+  'source-file-bytes': 'delivery',
+  'gate-materialize': 'delivery',
+  'gate-runner-raster': 'delivery',
   'build-transcript': 'delivery',
-  'build-changelog': 'delivery',
-  'build-preview-limits': 'delivery',
-  'build-prompt': 'delivery',
-  'manifest-source': 'delivery',
   'source-delivery': 'delivery',
   'recent-builds': 'delivery',
   'gate-runner': 'delivery',
   'gate-progress': 'delivery',
   'gate-trigger': 'delivery',
-  'gate-verdict': 'delivery',
   'gate-crash': 'delivery',
   'gate-screenshot': 'delivery',
+  'gate-verdict-routes': 'delivery',
+  'gate-verdict-token': 'delivery',
+  'gate-verdict-client': 'delivery',
+  'native-job-status': 'delivery',
+  // Writes verdicts onto delivery's own VersionManifest, and validates a delivery's
+  // sources at gate time -- delivery-domain checks that had drifted into creation/.
+  'version-verdict': 'delivery',
+  'source-link-check': 'delivery',
+  'ts-any-scan': 'delivery',
 
   // catalog: github-client, snapshots, assemble, play
-  'music-tracks': 'catalog',
+  'admin-game-routes': 'catalog',
+  'game-play-route': 'catalog',
+  'assembled-game-cache': 'catalog',
+  'slug-resolver': 'catalog',
+  'catalog-enricher': 'catalog',
+  'catalog-indexer': 'catalog',
+  'catalog-vector-index': 'catalog',
+  'catalog-routes': 'catalog',
+  'catalog-search-routes': 'catalog',
+  'embedding-service': 'catalog',
   'github-client': 'catalog',
-  'github-rate-limit': 'catalog',
+  'github-client-images': 'catalog',
+  'bake-game-images': 'catalog',
+  'parse-game-manifest': 'catalog',
+  'raster-assets': 'catalog',
   'game-snapshot': 'catalog',
   'game-snapshot-publish': 'catalog',
-  assemble: 'catalog',
   'catalog-genre-source': 'catalog',
   'catalog-touch': 'catalog',
   recommend: 'catalog',
   recommendations: 'catalog',
   'published-slugs': 'catalog',
-  'owner-games': 'catalog',
-  'owner-of-record': 'catalog',
   'game-page-routes': 'catalog',
-  'game-manifest-hint': 'catalog',
   'game-health': 'catalog',
-  'games-repo-archive': 'catalog',
-  'games-repo-contract': 'catalog',
+  'games-repo-client': 'catalog',
   'games-repo-contract-check': 'catalog',
   'local-games-repo': 'catalog',
   'index-html-generator': 'catalog',
-  slug: 'catalog',
   'slug-backfill': 'catalog',
 
   // community: votes, feedback, review, proposals, suggestions
@@ -221,6 +412,7 @@ const FILE_BUCKET = {
   'assessment-resolution': 'community',
   review: 'community',
   'review-checklist': 'community',
+  'review-queue-cache': 'community',
   'review-sweep': 'community',
   'proposal-apply-bot': 'community',
   'proposal-base': 'community',
@@ -233,6 +425,10 @@ const FILE_BUCKET = {
   'suggestion-sweep': 'community',
   suggestions: 'community',
   'editorial-suggestions': 'community',
+  // "Who reviews this game" and "may the platform act on my behalf" are proposal/
+  // suggestion routing rules, not catalog or creation business logic.
+  'owner-of-record': 'community',
+  autonomy: 'community',
 
   // realtime: mp, presence, worlds, zones
   mp: 'realtime',
@@ -244,32 +440,37 @@ const FILE_BUCKET = {
   'game-saves': 'realtime',
   zones: 'realtime',
   'zone-source': 'realtime',
+  // Declared-shape cache backing P2 shared worlds and P3 zones -- only ever consumed
+  // by realtime's own source files, despite having lived in delivery/ since Wave A.
+  'manifest-source': 'realtime',
 
   // telemetry
   telemetry: 'telemetry',
-  'telemetry-health': 'telemetry',
   'telemetry-trends': 'telemetry',
   'visit-funnel': 'telemetry',
   'visit-telemetry': 'telemetry',
-  'delivery-metrics': 'telemetry',
+  'visit-cli-event': 'telemetry',
+  'visit-cli-funnel': 'telemetry',
+  'visit-cli-pilot': 'telemetry',
+  'visit-telemetry-limit': 'telemetry',
   'creator-metrics': 'telemetry',
-  'chat-agent-metrics': 'telemetry',
-  'knowledge-metrics': 'telemetry',
-  'moderation-metrics': 'telemetry',
 
   // notifications
+  'notification-cache': 'notifications',
   notify: 'notifications',
   notifications: 'notifications',
   'game-follow-notify': 'notifications',
   'game-follow-routes': 'notifications',
   'email-routes': 'notifications',
   'email-templates': 'notifications',
+  'beta-welcome-email': 'notifications',
   mailer: 'notifications',
   'push-routes': 'notifications',
   pusher: 'notifications',
   'unsubscribe-token': 'notifications',
   contact: 'notifications',
   'operator-alerts': 'notifications',
+  'notify-sweep-routes': 'notifications',
 
   // submissions.ts is deliberately unmapped: it's the D2 mega-file (registerSubmissionRoutes,
   // ~5,400 lines) Phase 3 Wave B dismantles piece by piece, not a Wave A move target -- every

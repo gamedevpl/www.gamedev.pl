@@ -30,6 +30,7 @@ function funnel(overrides: Partial<VisitFunnel> = {}): VisitFunnel {
     creating: [],
     waitlist: [],
     editing: [],
+    cli: [],
     howToPlay: {
       opens: 0,
       visits: 0,
@@ -77,12 +78,10 @@ describe('VisitFunnelPanel', () => {
   });
 
   it('reports the conversion rate as a share of visits, not of plays', () => {
-    // 3 of 4 visits reached a game. A panel that divided by plays instead would show
-    // 75% here too if plays happened to equal visits — so the fixture makes plays (5)
-    // differ from playing visits (3) deliberately.
     const text = render(response({ visits: 4, visitsWithPlay: 3, bounces: 1, plays: 5 }));
     expect(text).toContain('75%');
     expect(text).toContain('reached a game');
+    expect(text).toContain('gamedevpl CLI');
   });
 
   it('shows dashes rather than a fake zero when nobody played', () => {
@@ -273,7 +272,7 @@ describe('VisitFunnelPanel', () => {
     expect(text).toContain('theater bar');
     expect(text).toContain('More menu');
     expect(text).toContain('deep link (/play)');
-    expect(text).toContain('arcade (home)');
+    expect(text).toContain('catalog (home)');
     // 1 of 2 openers reopened the same card — 50%, not 10% of all visits.
     expect(text).toContain('50% reopened the same card');
     // byEntry rates: 1/100 home vs 1/2 play — not raw opener counts.

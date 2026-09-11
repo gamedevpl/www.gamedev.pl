@@ -1,4 +1,4 @@
-import type { AgentTaskState } from '../../creation/agent-state.js';
+import type { AgentTaskState } from '../../platform/agent-state.js';
 import type { SeedFiles } from '../../agent-surface/agent-backend.js';
 import type { BuilderKind } from '../../creation/builder.js';
 import type { JobState, JobTransition } from '../../creation/job-state.js';
@@ -7,7 +7,8 @@ import type { AgentEndedBy, BuilderHandoff } from './rounds.js';
 import type { JobCostEntry, JobSeedOutcome } from './dispatch.js';
 
 export interface SubmissionRecord {
-  issueNumber: number;
+  localActivity?: import('@gamedevpl/contract').LocalActivity & { generation: number };
+  jobId: number;
   ownerUid: string;
   createdAt: string;
   title: string;
@@ -94,6 +95,8 @@ export interface SubmissionRecord {
    * ping someone; wrong for showing them what their game is doing.
    */
   lastStatus?: SubmissionStatus;
+  // Denormalized isRoundOpen -- the sweep and badge query this instead of scanning.
+  openRound?: boolean;
   /**
    * The language the creator submitted in. Told to the agent over the build channel
    * so it can write its progress updates in that language directly — which beats
@@ -239,6 +242,8 @@ export interface SubmissionRecord {
    * (`SELF_BUILD_DELIVERY_CAP`); resets when a new round opens.
    */
   roundDeliveryCount?: number;
+  // Deliveries over this job's whole life. Never reset — reopening is cheap.
+  jobDeliveryCount?: number;
   // Typecheck preflight refusals this round (cap 2).
   roundTypecheckPreflightRefusals?: number;
   // Grouped diagnostics when accepting past that cap.
@@ -267,6 +272,27 @@ export interface SubmissionRecord {
   qa?: string[];
   // Set before the reaper's one retry of a job stuck queued.
   dispatchReaperAttemptedAt?: string;
+  // Set by whichever caller won the first dispatch; the reaper ignores it.
+  initialDispatchClaimedAt?: string;
+  // The exact brief the first dispatch sends, sanitized once at creation.
+  dispatchBrief?: string;
   // True when `spec` is a machine-assembled brief, not creator words.
   specIsSystemGenerated?: boolean;
+}
+
+// A record stored before `gating` was retired can carry it.
+
+// Nothing entered it deliberately, so `submitted` is where such a job sat.
+
+// A record stored before the field was renamed still carries `issueNumber`
+// instead of `jobId` — Firestore is schemaless, so the TS rename alone
+// leaves every already-persisted document unreadable under the new name.
+export function fromStoredSubmission(data: unknown): SubmissionRecord {
+  const record = data as SubmissionRecord & { issueNumber?: number };
+  // A record written before it was removed can still hold the string.
+  const storedState: string | undefined = record.state;
+  const state = storedState === 'gating' ? 'submitted' : record.state;
+  const jobId = record.jobId ?? record.issueNumber;
+  if (state === record.state && jobId === record.jobId) return record;
+  return { ...record, state, jobId: jobId as number };
 }

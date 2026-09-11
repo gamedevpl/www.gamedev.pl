@@ -359,6 +359,25 @@ describe('Auth API Routes', () => {
     expect(JSON.parse(meRes.body).user.uid).toBe('g:10002');
   });
 
+  // The old name is dead: a browser carrying only it is anonymous.
+  it('ignores the retired gamedev_session cookie', async () => {
+    const { app, store } = await setupTestServer();
+    await store.upsertUser({ uid: 'g:10009', email: 'legacy@example.com' });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/auth/me',
+      headers: {
+        cookie: `gamedev_session=${mintSessionToken('g:10009', 'test-secret-key', DEFAULT_SESSION_DURATION_SECONDS)}`,
+      },
+    });
+
+    expect(res.statusCode).toBe(401);
+    const setCookie = [res.headers['set-cookie'] ?? []].flat().join('\n');
+    // Nothing minted for an identity the request did not prove.
+    expect(setCookie).not.toContain(`${SESSION_COOKIE_NAME}=`);
+  });
+
   it('blocks old credentials while deletion is pending and restores the account on sign-in', async () => {
     const { app, store } = await setupTestServer({
       'restore-token': { sub: '10005', email: 'restore@example.com' },
@@ -417,6 +436,50 @@ describe('Auth API Routes', () => {
     expect(JSON.parse(login.body).user).not.toHaveProperty('admin');
   });
 
+  // Renewal must not append the arriving identity after a different sign-in.
+  it('does not re-mint the previous identity when signing in over an existing session', async () => {
+    const { app, store } = await setupTestServer({ 'newcomer-token': { sub: '20002', email: 'b@example.com' } });
+    await store.upsertUser({ uid: 'g:20001', email: 'a@example.com' });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'newcomer-token' },
+      headers: {
+        cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:20001', 'test-secret-key')}`,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).user.uid).toBe('g:20002');
+
+    // The browser must hold the account the response named.
+    const issued = res.cookies.filter((entry) => entry.name === SESSION_COOKIE_NAME);
+    expect(issued).toHaveLength(1);
+    expect(readSessionToken(issued[0]!.value, 'test-secret-key').uid).toBe('g:20002');
+  });
+
+  // Logout must not re-mint the session it just cleared.
+  it('does not re-mint a session when logging out with a near-expiry cookie', async () => {
+    const { app, store } = await setupTestServer();
+    await store.upsertUser({ uid: 'g:10012', email: 'logout@example.com' });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/logout',
+      headers: {
+        // Short-lived, so the renewal hook would want to re-mint it.
+        cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:10012', 'test-secret-key', 60)}`,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const setCookie = [res.headers['set-cookie'] ?? []].flat().join('\n');
+    expect(setCookie).toContain(`${SESSION_COOKIE_NAME}=;`);
+    // Guards a second, non-empty __session from the renewal hook.
+    expect(setCookie).not.toMatch(new RegExp(`${SESSION_COOKIE_NAME}=[^;\\s]`));
+  });
+
   it('POST /api/auth/logout clears session cookie', async () => {
     const { app } = await setupTestServer();
 
@@ -426,7 +489,7 @@ describe('Auth API Routes', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const setCookie = res.headers['set-cookie'] as string;
+    const setCookie = [res.headers['set-cookie'] ?? []].flat().join('\n');
     expect(setCookie).toContain(`${SESSION_COOKIE_NAME}=;`);
   });
 
@@ -434,7 +497,7 @@ describe('Auth API Routes', () => {
     process.env.NODE_ENV = 'production';
     const store = new InMemoryStore();
     const app = Fastify();
-    await registerAuthPlugin(app, { store });
+    await registerAuthPlugin(app, { store, sessionSecret: 'test-secret-key' });
 
     const res = await app.inject({
       method: 'POST',

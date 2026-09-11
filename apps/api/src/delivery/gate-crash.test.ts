@@ -3,11 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createCloudBuildOutcomeReader,
   createGateCrashProbe,
-  gateCrashStall,
   lastGateRunRef,
   outcomeFromBuildStatus,
   type GateCrashProbeDeps,
 } from './gate-crash.js';
+import { gateCrashStall } from '../creation/job-state.js';
 import type { SubmissionRecord } from '../platform/store.js';
 
 const NOW = Date.parse('2026-08-21T09:00:00.000Z');
@@ -15,7 +15,7 @@ const DELIVERED_AT = '2026-08-21T08:00:00.000Z';
 
 function record(overrides: Partial<SubmissionRecord> = {}): SubmissionRecord {
   return {
-    issueNumber: 1000081,
+    jobId: 1000081,
     ownerUid: 'bot:grok',
     title: 'Transport Tycoon Remake',
     createdAt: DELIVERED_AT,

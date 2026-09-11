@@ -1,0 +1,112 @@
+/* Status view feedback card, shared with StudioStage.tsx's own feedback block (SubmissionStatusView.tsx, StudioStage.tsx). */
+
+.status-feedback {
+  margin: 20px 0 24px;
+  padding: 18px 20px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-card);
+}
+
+.status-feedback-title {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.status-feedback-hint {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  max-width: 60ch;
+}
+
+.status-feedback-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 72px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.status-feedback-input:focus {
+  outline: none;
+  border-color: var(--turquoise);
+}
+
+.status-feedback-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.status-feedback-sent {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--turquoise);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+/* Standalone status-page receipt next to Send. The studio composer skips this —
+   the thread already echoes the message on send. */
+.status-feedback-receipt {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.status-feedback-receipt-dismiss {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.status-feedback-receipt-dismiss:hover {
+  color: var(--text);
+  background: rgba(148, 163, 184, 0.12);
+}
+
+/* Kept, but nothing started behind it. Amber rather than the error red: the creator did
+   nothing wrong and has nothing to redo — this is a caveat on "sent", not a failure. */
+.status-feedback-notice {
+  margin: 0;
+  color: #fbbf24; /* same amber as .status-warning — one colour for "true, not alarming" */
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+/* Self-build routing note: honest about whether a running agent will see the message. */
+.status-feedback-route {
+  margin: 0 0 6px;
+  color: var(--muted, #9ca3af);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 768px) {
+  .status-feedback-input {
+    font-size: 16px;
+  }
+}

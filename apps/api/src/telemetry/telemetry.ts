@@ -135,6 +135,8 @@ export interface TelemetryRoutesOptions {
    */
   publishedSlugs?: PublishedSlugGate | null;
   now?: () => number;
+  // Ladder rung 2. Absent keeps every session.
+  keepsSession?: (sessionId: string) => Promise<boolean>;
 }
 
 /**
@@ -170,7 +172,7 @@ export async function registerTelemetryRoutes(app: FastifyInstance, options: Tel
       return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
     }
 
-    if (isRateLimited(requestsByIp, request.ip, currentTime)) {
+    if (isRateLimited(requestsByIp, request.clientIp, currentTime)) {
       return reply.status(429).send({ error: 'too many telemetry requests' });
     }
 
@@ -277,6 +279,11 @@ export async function registerTelemetryRoutes(app: FastifyInstance, options: Tel
       if (bucket) bucket.push(event);
       else byDate.set(dateStr, [event]);
     });
+
+    // Whole sessions. Accepted, so no client retries into it.
+    if (options.keepsSession && !(await options.keepsSession(parsed.data.sessionId))) {
+      return reply.status(202).send({ accepted: 0 });
+    }
 
     try {
       for (const [dateStr, dateEvents] of byDate) {

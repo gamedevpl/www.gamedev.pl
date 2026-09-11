@@ -26,10 +26,10 @@
 import { randomUUID } from 'node:crypto';
 import type { ContributionMode } from '@gamedevpl/contract';
 import type { FastifyBaseLogger } from 'fastify';
-import { logModerationRejection } from '../telemetry/moderation-metrics.js';
+import { logModerationRejection } from '../platform/moderation-metrics.js';
 import type { ContentChecker } from '../platform/moderation.js';
 import type { GamesStore, SourceFile } from '../delivery/games-store.js';
-import { ownerUidOf, resolveOwnerOfRecord, reviewerKindOf, type OwnerOfRecord } from '../catalog/owner-of-record.js';
+import { ownerUidOf, resolveOwnerOfRecord, reviewerKindOf, type OwnerOfRecord } from './owner-of-record.js';
 import { isRepoBaseStale } from './proposal-base.js';
 import {
   countsAsOpen,
@@ -53,18 +53,22 @@ import {
   type Store,
 } from '../platform/store.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
+import { isPublished } from '../platform/publication-state.js';
+import {
+  MAX_PROPOSAL_DESCRIPTION_LENGTH,
+  MAX_PROPOSAL_MESSAGE_LENGTH,
+  MAX_PROPOSAL_TITLE_LENGTH,
+  MIN_PROPOSAL_DESCRIPTION_LENGTH,
+  PROPOSAL_NO_JOB,
+} from '../platform/proposal-limits.js';
 
-/**
- * `issueNumber` written onto a proposal's version manifest.
- *
- * Zero, because a proposal has no job — and it must not have one. A submission record for
- * a proposal would be owned by the proposer and carry the target's slug, which is exactly
- * the shape `creatorOwnsSlug` reads as a transfer: sending a proposal would take the game
- * away from the person you sent it to. Job ids start at `JOB_ID_FLOOR` (1,000,000), so
- * zero is unambiguously "no job" and every equality check against a real job id already
- * refuses it. The real provenance lives in `manifest.proposal`.
- */
-export const PROPOSAL_NO_JOB = 0;
+export {
+  MAX_PROPOSAL_DESCRIPTION_LENGTH,
+  MAX_PROPOSAL_MESSAGE_LENGTH,
+  MAX_PROPOSAL_TITLE_LENGTH,
+  MIN_PROPOSAL_DESCRIPTION_LENGTH,
+  PROPOSAL_NO_JOB,
+};
 
 /**
  * Fallback when no logger was injected — a sweep or a test calling the domain layer
@@ -73,11 +77,6 @@ export const PROPOSAL_NO_JOB = 0;
  * contexts that have no request.
  */
 const SILENT_LOG = { warn: () => {} } as unknown as FastifyBaseLogger;
-
-export const MAX_PROPOSAL_TITLE_LENGTH = 120;
-export const MIN_PROPOSAL_DESCRIPTION_LENGTH = 20;
-export const MAX_PROPOSAL_DESCRIPTION_LENGTH = 2000;
-export const MAX_PROPOSAL_MESSAGE_LENGTH = 2000;
 
 export type ProposalRefusal =
   | 'contributions_off'
@@ -178,7 +177,7 @@ export async function canProposeTo(
   const publication = await store.getPublication(slug);
   // Repo-lane games have no publication record and are still perfectly proposable; what
   // is refused is a game that is not *live*, whichever lane it is in.
-  if (publication && publication.state !== 'published') {
+  if (publication && !isPublished(publication)) {
     return { ok: false, reason: 'not_published' };
   }
 
@@ -282,7 +281,7 @@ export async function openProposal(deps: ProposalDeps, input: OpenProposalInput)
   const id = randomUUID();
   const { version } = await deps.gamesStore.putCandidateSources({
     slug: input.targetSlug,
-    issueNumber: PROPOSAL_NO_JOB,
+    jobId: PROPOSAL_NO_JOB,
     files: input.files,
     mode: 'proposal',
     proposal: { id, proposerUid: input.proposerUid },
@@ -382,10 +381,7 @@ export type DecisionResult =
 export async function acceptProposal(
   deps: ProposalDeps & {
     /** Creates the owner-side improvement job. Injected to keep submissions out of here. */
-    adoptIntoJob: (input: {
-      proposal: ProposalRecord;
-      ownerUid: string | null;
-    }) => Promise<{ issueNumber: number } | null>;
+    adoptIntoJob: (input: { proposal: ProposalRecord; ownerUid: string | null }) => Promise<{ jobId: number } | null>;
     /**
      * Lands an accepted **repo-lane** proposal in the games repo as a pull request.
      *
@@ -450,7 +446,7 @@ export async function acceptProposal(
     if (pr) record.mergePr = { number: pr.number, url: pr.url, openedAt: at };
   } else {
     const job = await deps.adoptIntoJob({ proposal: record, ownerUid: input.byUid });
-    if (job) record.adoptedJobId = job.issueNumber;
+    if (job) record.adoptedJobId = job.jobId;
   }
 
   record.decision = { at, byUid: input.byUid, reviewer: input.reviewer };

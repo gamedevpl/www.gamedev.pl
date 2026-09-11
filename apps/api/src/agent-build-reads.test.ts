@@ -1,14 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { gzipSync } from 'node:zlib';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-surface/agent-token.js';
-import { AGENT_BUILD_RULES_DIGEST } from './creation/agent-build-brief.js';
-import { listAgentBuildExamples } from './creation/agent-build-examples.js';
+import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './platform/agent-token.js';
+import { AGENT_BUILD_RULES_DIGEST } from './agent-surface/agent-build-brief.js';
+import { listAgentBuildExamples } from './agent-surface/agent-build-examples.js';
 import { buildApp } from './platform/app.js';
-import { MAX_PROJECT_BYTES } from './catalog/games-repo-contract.js';
+import { MAX_PROJECT_BYTES } from './platform/games-repo-contract.js';
 import type { GcsObjectStore } from './delivery/gcs-sign.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
-import { KIT_ROOT_DIR } from './agent-surface/kit-registry.js';
+import { KIT_ROOT_DIR } from './platform/kit-registry.js';
 import { InMemoryStore } from './platform/store.js';
 
 const secret = 'test-secret';
@@ -37,13 +37,11 @@ function packedKitTarball(files: Record<string, string | Buffer>): Buffer {
 
 function stubGitHub(): GitHubClient {
   return {
-    createIssue: async () => ({ number: ISSUE }),
     getIssueState: async () => ({ state: 'open' as const }),
     findLinkedPR: async (): Promise<LinkedPullRequest | null> => null,
     createIssueComment: async () => ({ id: 1 }),
     updateIssueBody: async () => {},
     closeIssue: async () => {},
-    closePullRequest: async () => {},
     ensureOpenPullRequest: async () => ({ number: 1 }),
     deleteBranch: async () => {},
     getGameSources: async (): Promise<GameSources | null> => null,
@@ -53,8 +51,8 @@ function stubGitHub(): GitHubClient {
   };
 }
 
-function agentHeaders(issueNumber = ISSUE, roundGeneration = 1) {
-  return { authorization: `Bearer ${mintAgentToken(issueNumber, secret, { roundGeneration })}` };
+function agentHeaders(jobId = ISSUE, roundGeneration = 1) {
+  return { authorization: `Bearer ${mintAgentToken(jobId, secret, { roundGeneration })}` };
 }
 
 function mockObjectStore(objects: Map<string, Buffer>, signedUrl = 'https://signed.example/kit.tgz'): GcsObjectStore {

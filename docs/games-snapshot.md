@@ -137,7 +137,7 @@ thousand requests per run. `GAMES_REPO_TOKEN` is shared with CI's `contract:game
 check, so at a bake per push to the games repo those bursts emptied the PAT's hourly
 budget and 403'd both jobs (2026-07-28).
 
-`fetchGamesRepoArchive` ([`games-repo-archive.ts`](../apps/api/src/catalog/games-repo-archive.ts))
+`fetchGamesRepoArchive` ([`games-repo-archive.ts`](../apps/api/src/platform/games-repo-archive.ts))
 downloads `GET /repos/<repo>/tarball/<ref>` once and hands `createGitHubClient` a
 `RepoFileSource` backed by it. Assembly logic is untouched — the same
 `getGameSources` / `getGameMedia` / `getCatalog` run against archive bytes instead of
@@ -175,7 +175,9 @@ The nightly `schedule:` in `publish-games.yml` (04:23 UTC) is that something. It
 how long a stale snapshot can serve at roughly a day, covering both a takedown whose
 bake failed and a dispatch that stopped arriving at all. It is a floor on recovery, not
 a substitute for the merge-time publish, and a day is far too slow for an urgent
-takedown.
+takedown. That daily run uses the same cheap full gate as a merge (playtest `--suite
+default`, no catalog `agent-play`). The Sunday 06:17 UTC cron is a separate catalog
+seal (`playtest --all` plus `agent-play`); it is not the staleness floor.
 
 If a takedown is urgent, do not wait for the next merge: run **Publish games snapshot**
 via `workflow_dispatch` against the games-repo ref that already omits the game. That
@@ -202,11 +204,13 @@ a compromise of this repo rather than of the games repo.
 IAM is split by direction: the deploy service account has `storage.objectAdmin` (it
 writes), the Cloud Run runtime SA has `storage.objectViewer` (it reads). A compromised
 runtime cannot rewrite what it serves. `infra/setup-gcp.sh` step 7 provisions all of it,
-including a 90-day lifecycle rule on `snapshots/`.
+including a 14-day lifecycle rule on `snapshots/`.
 
-If the games repo ever goes 90 days without a merge, the live snapshot ages out and
-published serving returns **503** until a fresh bake restores `current.json` — the
-lifecycle rule is a cost control, not a soft degrade to GitHub.
+The window is bounded by bakes rather than merges: `publish-games.yml` rebuilds on a
+04:23 UTC cron whether or not anything merged. It would take 14 consecutive failed
+bakes for the live snapshot to age out and published serving to return **503** until
+a fresh bake restores `current.json` — the lifecycle rule is a cost control, not a
+soft degrade to GitHub.
 
 ## What this does not solve
 

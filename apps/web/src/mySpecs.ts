@@ -1,3 +1,5 @@
+import { readStorageJSON, writeStorageJSON } from './core/persistence.js';
+
 export type SavedSpec = {
   token: string;
   title: string;
@@ -13,14 +15,8 @@ export type SavedSpec = {
 const STORAGE_KEY = 'gamedev_saved_specs';
 
 export function getSavedSpecs(): SavedSpec[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as SavedSpec[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const parsed = readStorageJSON<SavedSpec[]>(STORAGE_KEY);
+  return Array.isArray(parsed) ? parsed : [];
 }
 
 export function saveSpec(spec: SavedSpec): SavedSpec[] {
@@ -28,21 +24,13 @@ export function saveSpec(spec: SavedSpec): SavedSpec[] {
   // Filter out any duplicate token
   const filtered = current.filter((item) => item.token !== spec.token);
   const updated = [spec, ...filtered];
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-  } catch {
-    // ignore quota errors
-  }
+  writeStorageJSON(STORAGE_KEY, updated);
   return updated;
 }
 
 export function removeSpec(token: string): SavedSpec[] {
   const current = getSavedSpecs();
   const updated = current.filter((item) => item.token !== token);
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-  } catch {
-    // ignore
-  }
+  writeStorageJSON(STORAGE_KEY, updated);
   return updated;
 }

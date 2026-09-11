@@ -1,12 +1,11 @@
-import { selfBuildDeliveryCap } from '../creation/builder.js';
+import { selfBuildDeliveryCap, selfBuildJobDeliveryCap } from '../platform/self-build-delivery-cap.js';
 import {
   asDeliveryLogger,
   builderLabelFromRecord,
   logDeliveryAccepted,
   logDeliveryPreflightRefused,
-} from '../telemetry/delivery-metrics.js';
+} from '../platform/delivery-metrics.js';
 import { InvalidUploadError, type GamesStore, type SourceFile } from './games-store.js';
-import { parseSpecTitle } from '../catalog/github-client.js';
 import {
   canTransition,
   resolveJobState,
@@ -14,16 +13,12 @@ import {
   type JobState,
   type TransitionActor,
 } from '../creation/job-state.js';
-import type { KitFileStore } from '../agent-surface/kit-files.js';
+import type { KitFileStore, KitTree } from '../agent-surface/kit-files.js';
 import { normalizeAtIntake } from '../platform/localize-intake.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
 import { createTranslatorFromEnv, type Translator } from '../platform/translate.js';
-import {
-  runTypecheckPreflight,
-  sharedSourcesFromKitTree,
-  TYPECHECK_PREFLIGHT_MAX_REFUSALS,
-} from '../creation/typecheck-preflight.js';
+import type { TypecheckPreflightResult } from '../creation/typecheck-preflight.js';
 import type { StagedPreviewPublisher } from './staged-preview.js';
 
 export interface SourceDeliveryAuthority {
@@ -35,7 +30,7 @@ export interface SourceDeliveryAuthority {
 }
 
 export interface SourceDeliveryInput {
-  issueNumber: number;
+  jobId: number;
   slug: string;
   files: SourceFile[];
   mode: 'preview' | 'publish';
@@ -47,10 +42,7 @@ export interface SourceDeliveryInput {
   /** Who wrote this delivery — see {@link VersionManifest.authorship} (CE-20). */
   authorship?: 'agent' | 'owner' | 'mixed';
   summary?: string;
-  /** Who *called this route* — distinct from `authorship`'s file-level provenance.
-   * Drives the `by` field on the job transitions this delivery records. Defaults to
-   * `'agent'` (the agent channel and managed-harvest callers never set this); the Code
-   * surface's manual delivery route is the one caller that passes `'creator'`. */
+  // Caller identity is distinct from file authorship.
   actor?: 'agent' | 'creator';
 }
 
@@ -65,7 +57,7 @@ export interface SourceDeliveryAccepted {
 
 export type SourceDeliveryRejected = {
   accepted: false;
-  rejected: 'stopped' | 'rate_limited' | 'delivery_cap';
+  rejected: 'stopped' | 'rate_limited' | 'delivery_cap' | 'job_delivery_cap' | 'gate_capacity';
   deliveryCap?: number;
   deliveriesUsed?: number;
 };
@@ -99,6 +91,11 @@ export class SourceDeliveryValidationError extends InvalidUploadError {
   }
 }
 
+// Narrowed here so a caller can read `reason` without importing the class.
+export function isSourceDeliveryValidationError(error: unknown): error is SourceDeliveryValidationError {
+  return error instanceof SourceDeliveryValidationError;
+}
+
 export interface SourceDeliveryService {
   deliver(input: SourceDeliveryInput): Promise<SourceDeliveryOutcome>;
 }
@@ -112,12 +109,12 @@ export interface SourceDeliveryServiceOptions {
   now?: () => number;
   maxSubmitsPerWindow?: number;
   onSourcesDelivered?: (input: {
-    issueNumber: number;
+    jobId: number;
     slug: string;
     version: string;
     mode?: 'health' | 'preview' | 'proposal';
   }) => Promise<{ buildId?: string; accepted?: boolean } | void> | void;
-  onEvent?: (issueNumber: number) => void;
+  onEvent?: (jobId: number) => void;
   log?: {
     info?: (context: object, message: string) => void;
     error: (context: object, message: string) => void;
@@ -125,10 +122,26 @@ export interface SourceDeliveryServiceOptions {
   };
   // Same lazy-default pattern as agent-channel.ts / submissions.ts.
   translator?: Translator;
+  // N1: injected so this module has no value-level creation/catalog import.
+  parseSpecTitle: (specMd: string) => string | null;
+  runTypecheckPreflight: (input: {
+    slug: string;
+    sources: Record<string, string>;
+    kitShared: Record<string, string>;
+  }) => Promise<TypecheckPreflightResult>;
+  sharedSourcesFromKitTree: (tree: KitTree) => Record<string, string>;
+  typecheckPreflightMaxRefusals: number;
+  // Read-only: refuses early. Slots are spent in platform/gate-run-ceiling.ts.
+  gateRunGate?: {
+    peek(uid: string, dateStr: string): Promise<{ allowed: boolean }>;
+  } | null;
 }
 
 const DEFAULT_MAX_SUBMITS_PER_WINDOW = 20;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+
+// When the map passes this, sweep the entries whose window has emptied.
+const MAX_TRACKED_BUILDS = 500;
 
 // Matches agent-channel.ts's MAX_EVENT_TEXT — same field, same reader, same cap.
 const MAX_DELIVERY_EVENT_TEXT = 300;
@@ -137,14 +150,14 @@ const MAX_DELIVERY_EVENT_TEXT = 300;
 async function reportDeliveryEvent(
   store: Store,
   translator: Translator,
-  issueNumber: number,
+  jobId: number,
   kind: 'blocked' | 'milestone',
   rawText: string,
 ): Promise<void> {
   const clean = sanitizeCreatorText(rawText, { singleLine: true }).slice(0, MAX_DELIVERY_EVENT_TEXT);
   const intake = await normalizeAtIntake(translator, clean, { kind: 'log', maxLength: MAX_DELIVERY_EVENT_TEXT });
   await store.appendBuildEvent(
-    issueNumber,
+    jobId,
     {
       kind,
       text: intake.text,
@@ -215,24 +228,33 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
   const maxSubmitsPerWindow = options.maxSubmitsPerWindow ?? DEFAULT_MAX_SUBMITS_PER_WINDOW;
   const submitsByBuild = new Map<number, number[]>();
 
-  function isRateLimited(issueNumber: number): boolean {
+  // Burst smoothing only: in-memory, so the durable caps do the real work.
+  function isRateLimited(jobId: number): boolean {
     const currentTime = now();
-    const hits = (submitsByBuild.get(issueNumber) ?? []).filter(
+    const hits = (submitsByBuild.get(jobId) ?? []).filter(
       (timestamp) => currentTime - timestamp < RATE_LIMIT_WINDOW_MS,
     );
     if (hits.length >= maxSubmitsPerWindow) {
-      submitsByBuild.set(issueNumber, hits);
+      submitsByBuild.set(jobId, hits);
       return true;
     }
     hits.push(currentTime);
-    submitsByBuild.set(issueNumber, hits);
+    submitsByBuild.set(jobId, hits);
+    // Drop emptied windows so the map cannot grow forever.
+    if (submitsByBuild.size > MAX_TRACKED_BUILDS) {
+      for (const [key, timestamps] of submitsByBuild) {
+        if (timestamps.every((timestamp) => currentTime - timestamp >= RATE_LIMIT_WINDOW_MS)) {
+          submitsByBuild.delete(key);
+        }
+      }
+    }
     return false;
   }
 
-  async function markBuilding(issueNumber: number, record: SubmissionRecord, by: TransitionActor): Promise<JobState> {
+  async function markBuilding(jobId: number, record: SubmissionRecord, by: TransitionActor): Promise<JobState> {
     const state = currentState(record);
     if (!canTransition(state, 'building')) return state;
-    await options.store.recordJobTransition(issueNumber, {
+    await options.store.recordJobTransition(jobId, {
       to: 'building',
       at: new Date(now()).toISOString(),
       by,
@@ -243,7 +265,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
 
   return {
     async deliver(input): Promise<SourceDeliveryOutcome> {
-      let record = await options.store.getSubmission(input.issueNumber);
+      let record = await options.store.getSubmission(input.jobId);
       if (!record) {
         if (input.authority) {
           throw new SourceDeliveryAuthorityError('job_not_found', 'managed delivery job no longer exists');
@@ -257,7 +279,14 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       }
 
       if (stopReason(record)) return { accepted: false, rejected: 'stopped' };
-      if (isRateLimited(input.issueNumber)) return { accepted: false, rejected: 'rate_limited' };
+      if (isRateLimited(input.jobId)) return { accepted: false, rejected: 'rate_limited' };
+
+      // Read-only: a delivery refused later costs the ceiling nothing.
+      if (options.gateRunGate) {
+        const dateStr = new Date(now()).toISOString().slice(0, 10);
+        const headroom = await options.gateRunGate.peek(record.ownerUid, dateStr);
+        if (!headroom.allowed) return { accepted: false, rejected: 'gate_capacity' };
+      }
 
       if (record.builder === 'self') {
         const cap = selfBuildDeliveryCap();
@@ -268,6 +297,17 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
             rejected: 'delivery_cap',
             deliveryCap: cap,
             deliveriesUsed: used,
+          };
+        }
+        // The per-round cap resets on reopen; this one does not.
+        const jobCap = selfBuildJobDeliveryCap();
+        const jobUsed = record.jobDeliveryCount ?? 0;
+        if (jobUsed >= jobCap) {
+          return {
+            accepted: false,
+            rejected: 'job_delivery_cap',
+            deliveryCap: jobCap,
+            deliveriesUsed: jobUsed,
           };
         }
         if (!input.kitEngineRef) {
@@ -287,18 +327,18 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
         );
       }
 
-      const attempt = await options.store.incrementRoundSubmitAttempts(input.issueNumber);
+      const attempt = await options.store.incrementRoundSubmitAttempts(input.jobId);
       const builderLabel = builderLabelFromRecord(record.builder, record.dispatch?.backend ?? input.backend);
       const roundGeneration = record.roundGeneration ?? 1;
       const deliveryLog = options.log ? asDeliveryLogger(options.log) : null;
 
       const emitRefusal = async (kind: 'audio' | 'symbols' | 'typecheck' | 'any-type') => {
         if (kind === 'audio' || kind === 'symbols') {
-          await options.store.incrementRoundPreflightRefusal(input.issueNumber, kind);
+          await options.store.incrementRoundPreflightRefusal(input.jobId, kind);
         }
         if (deliveryLog) {
           logDeliveryPreflightRefused(deliveryLog, {
-            issueNumber: input.issueNumber,
+            jobId: input.jobId,
             roundGeneration,
             builder: builderLabel,
             mode: input.mode,
@@ -316,30 +356,30 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       if (options.kitFileStore && engineRefForCheck) {
         try {
           const tree = await options.kitFileStore.loadTree(engineRefForCheck);
-          const kitShared = sharedSourcesFromKitTree(tree);
+          const kitShared = options.sharedSourcesFromKitTree(tree);
           const sources: Record<string, string> = {};
           for (const file of input.files) {
             sources[file.path.trim()] = file.content;
           }
-          const check = await runTypecheckPreflight({
+          const check = await options.runTypecheckPreflight({
             slug: input.slug,
             sources,
             kitShared,
           });
           if (!check.ok) {
             const prior = record.roundTypecheckPreflightRefusals ?? 0;
-            if (prior < TYPECHECK_PREFLIGHT_MAX_REFUSALS) {
-              await options.store.incrementRoundTypecheckPreflightRefusals(input.issueNumber);
+            if (prior < options.typecheckPreflightMaxRefusals) {
+              await options.store.incrementRoundTypecheckPreflightRefusals(input.jobId);
               await emitRefusal('typecheck');
               throw new InvalidUploadError(check.message, 'typecheck');
             }
             // Soft bypass: still count as a refusal for MR-07, then accept.
             await emitRefusal('typecheck');
             typecheckBypass = true;
-            await options.store.setRoundTypecheckPreflightBypassErrors(input.issueNumber, check.message);
+            await options.store.setRoundTypecheckPreflightBypassErrors(input.jobId, check.message);
             options.log?.warn?.(
               {
-                issueNumber: input.issueNumber,
+                jobId: input.jobId,
                 slug: input.slug,
                 engineRef: engineRefForCheck,
                 durationMs: check.durationMs,
@@ -349,13 +389,13 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
             );
             pendingThreadEvents.push({
               kind: 'blocked',
-              text: `Delivered without a passing typecheck after ${TYPECHECK_PREFLIGHT_MAX_REFUSALS} failed attempts: ${check.message}`,
+              text: `Delivered without a passing typecheck after ${options.typecheckPreflightMaxRefusals} failed attempts: ${check.message}`,
             });
           } else {
             // A skipped check is not a pass; leave the bypass state alone.
             if (record.roundTypecheckPreflightBypassErrors && !check.skipped) {
               typecheckBypass = false;
-              await options.store.setRoundTypecheckPreflightBypassErrors(input.issueNumber, null);
+              await options.store.setRoundTypecheckPreflightBypassErrors(input.jobId, null);
               pendingThreadEvents.push({
                 kind: 'milestone',
                 text: "Typecheck now passes — this round's earlier bypass warning no longer applies.",
@@ -363,7 +403,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
             }
             if (check.skipped === 'timeout') {
               options.log?.warn?.(
-                { issueNumber: input.issueNumber, slug: input.slug, durationMs: check.durationMs },
+                { jobId: input.jobId, slug: input.slug, durationMs: check.durationMs },
                 'typecheck preflight skipped: budget exceeded',
               );
               pendingThreadEvents.push({
@@ -375,7 +415,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
         } catch (error) {
           if (error instanceof InvalidUploadError) throw error;
           options.log?.warn?.(
-            { err: error, issueNumber: input.issueNumber, engineRef: engineRefForCheck },
+            { err: error, jobId: input.jobId, engineRef: engineRefForCheck },
             'typecheck preflight skipped: kit load failed',
           );
         }
@@ -397,19 +437,23 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
             'managed delivery requires the job to have a bound slug',
           );
         }
-        await options.store.setSubmissionSlug(input.issueNumber, input.slug);
-        record = (await options.store.getSubmission(input.issueNumber)) ?? record;
+        await options.store.setSubmissionSlug(input.jobId, input.slug);
+        record = (await options.store.getSubmission(input.jobId)) ?? record;
       }
 
       const transitionActor: TransitionActor = input.actor === 'creator' ? 'creator' : 'agent';
-      const stateAfterSignal = await markBuilding(input.issueNumber, record, transitionActor);
+      const stateAfterSignal = await markBuilding(input.jobId, record, transitionActor);
+      const requireCompiledEditor =
+        !(await options.store.getPublication(input.slug)) &&
+        !(await options.store.getPublishedSubmissionBySlug(input.slug));
       let version: string;
       try {
         ({ version } = await options.gamesStore.putCandidateSources({
           slug: input.slug,
-          issueNumber: input.issueNumber,
+          jobId: input.jobId,
           roundGeneration,
           files: input.files,
+          requireCompiledEditor,
           backend: input.backend ?? record.dispatch?.backend ?? record.builder,
           mode: input.mode,
           ...(input.kitEngineRef ? { kitEngineRef: input.kitEngineRef } : {}),
@@ -427,25 +471,25 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       }
       for (const event of pendingThreadEvents) {
         try {
-          await reportDeliveryEvent(options.store, translator, input.issueNumber, event.kind, event.text);
+          await reportDeliveryEvent(options.store, translator, input.jobId, event.kind, event.text);
         } catch (error) {
           // Decorative: a stored version must not roll back over an event write.
-          options.log?.warn?.({ err: error, issueNumber: input.issueNumber }, 'delivery thread event not stored');
+          options.log?.warn?.({ err: error, jobId: input.jobId }, 'delivery thread event not stored');
         }
       }
 
       if (input.mode === 'preview') {
-        await options.store.setSubmissionPreviewVersion(input.issueNumber, version);
+        await options.store.setSubmissionPreviewVersion(input.jobId, version);
       } else {
-        await options.store.setSubmissionDeliveredVersion(input.issueNumber, version);
+        await options.store.setSubmissionDeliveredVersion(input.jobId, version);
       }
-      await options.store.incrementRoundDeliveryCount(input.issueNumber);
+      await options.store.incrementRoundDeliveryCount(input.jobId);
 
       if (deliveryLog) {
-        const latest = (await options.store.getSubmission(input.issueNumber)) ?? record;
+        const latest = (await options.store.getSubmission(input.jobId)) ?? record;
         const startedMs = latest.roundStartedAt ? Date.parse(latest.roundStartedAt) : NaN;
         logDeliveryAccepted(deliveryLog, {
-          issueNumber: input.issueNumber,
+          jobId: input.jobId,
           roundGeneration,
           builder: builderLabel,
           mode: input.mode,
@@ -461,16 +505,16 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       }
 
       const spec = input.files.find((file) => file.path === 'SPEC.md')?.content;
-      const deliveredTitle = spec ? parseSpecTitle(spec) : null;
+      const deliveredTitle = spec ? options.parseSpecTitle(spec) : null;
       if (deliveredTitle) {
         const sanitized = sanitizeCreatorText(deliveredTitle, { singleLine: true }).slice(0, 80);
         if (sanitized.length >= 3 && sanitized !== record.title) {
-          await options.store.setSubmissionTitle(input.issueNumber, sanitized);
+          await options.store.setSubmissionTitle(input.jobId, sanitized);
         }
       }
 
       if (input.mode === 'publish' && canTransition(stateAfterSignal, 'submitted')) {
-        await options.store.recordJobTransition(input.issueNumber, {
+        await options.store.recordJobTransition(input.jobId, {
           to: 'submitted',
           at: new Date(now()).toISOString(),
           by: transitionActor,
@@ -482,7 +526,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       if (options.stagedPreviews?.publishCandidate) {
         await options.stagedPreviews
           .publishCandidate({
-            issueNumber: input.issueNumber,
+            jobId: input.jobId,
             slug: input.slug,
             version,
             roundGeneration,
@@ -496,7 +540,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       }
 
       const gate = await options.onSourcesDelivered?.({
-        issueNumber: input.issueNumber,
+        jobId: input.jobId,
         slug: input.slug,
         version,
         ...(input.mode === 'preview' ? { mode: 'preview' as const } : {}),
@@ -505,20 +549,20 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       const gateStarted = Boolean(buildId || (gate && typeof gate === 'object' && gate.accepted === true));
       if (buildId) {
         await options.store
-          .recordJobCost(input.issueNumber, {
+          .recordJobCost(input.jobId, {
             kind: 'gate_run',
             at: new Date(now()).toISOString(),
             by: 'cloud-build',
             ref: buildId,
           })
           .catch((error) => {
-            options.log?.error({ err: error, issueNumber: input.issueNumber }, 'could not record gate cost');
+            options.log?.error({ err: error, jobId: input.jobId }, 'could not record gate cost');
           });
       }
 
-      options.onEvent?.(input.issueNumber);
+      options.onEvent?.(input.jobId);
       // A creator's own manual delivery is not the agent resuming.
-      await options.store.touchLastAgentSignalAt(input.issueNumber, undefined, undefined, {
+      await options.store.touchLastAgentSignalAt(input.jobId, undefined, undefined, {
         preserveEnded: transitionActor === 'creator',
       });
 

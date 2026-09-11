@@ -67,7 +67,7 @@ describe('summarizeRetentionByEligibilityDay', () => {
 
   function submission(ownerUid: string, publishedAt: string): SubmissionRecord {
     return {
-      issueNumber: Math.floor(Math.random() * 10_000),
+      jobId: Math.floor(Math.random() * 10_000),
       ownerUid,
       title: 't',
       createdAt: publishedAt,

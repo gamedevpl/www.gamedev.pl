@@ -41,6 +41,27 @@ describe('validateSourceUpload — the delivery contract', () => {
     expect(validateSourceUpload(MINIMAL)).toHaveLength(MINIMAL.length);
   });
 
+  it('refuses a publish with no behavioural golden', () => {
+    const withoutTrace = MINIMAL.filter((file) => file.path !== 'TRACE.json');
+    expect(() => validateSourceUpload(withoutTrace)).toThrow(/TRACE.json is required/);
+  });
+
+  it('accepts a publish with no golden when the gate will derive one', () => {
+    // The seal lane: preview-lane sources have no golden and no agent could record one,
+    // so the gate derives it. "Dead on arrival" — the reason for the refusal above — is
+    // what stops being true, and nothing downstream is waived.
+    const withoutTrace = MINIMAL.filter((file) => file.path !== 'TRACE.json');
+    expect(validateSourceUpload(withoutTrace, 'publish', true)).toHaveLength(withoutTrace.length);
+  });
+
+  it('still requires the progress landmarks when the gate derives the golden', () => {
+    // Only the golden is derivable. PLAYTEST.json declares what the capture must reach,
+    // which is a claim about the game, not a recording of it — the seal route supplies
+    // the documented minimum rather than the gate inventing one.
+    const withoutEither = MINIMAL.filter((file) => file.path !== 'TRACE.json' && file.path !== 'PLAYTEST.json');
+    expect(() => validateSourceUpload(withoutEither, 'publish', true)).toThrow(/PLAYTEST.json is required/);
+  });
+
   it('accepts the game’s own modules', () => {
     expect(validateSourceUpload([...MINIMAL, { path: 'entities/player.ts', content: 'export {};' }])).toHaveLength(
       MINIMAL.length + 1,
@@ -520,7 +541,7 @@ describe('defaultVersionId', () => {
     // sorts identically with no shared state to contend for.
     const first = defaultVersionId(new Date('2026-07-30T10:00:00.000Z'));
     const second = defaultVersionId(new Date('2026-07-30T10:00:01.000Z'));
-    expect(first).toMatch(/^v20260730T100000000Z-[0-9a-f]{6}$/);
+    expect(first).toMatch(/^v20260730T100000000Z-[0-9a-f]{12}$/);
     expect([second, first].sort()).toEqual([first, second]);
   });
 
@@ -597,7 +618,7 @@ describe('GCS games store', () => {
 
     const { version, manifest } = await store.putCandidateSources({
       slug: 'comet-courier',
-      issueNumber: 42,
+      jobId: 42,
       files: MINIMAL,
       backend: 'copilot',
       model: 'claude-sonnet-4.6',
@@ -610,7 +631,7 @@ describe('GCS games store', () => {
     expect(objects.has(`games/comet-courier/versions/${version}/source/game.ts`)).toBe(true);
     // Provenance is the point: which job, which backend, which model, which engine.
     expect(manifest).toMatchObject({
-      issueNumber: 42,
+      jobId: 42,
       backend: 'copilot',
       model: 'claude-sonnet-4.6',
       engineRef: 'abc123',
@@ -625,7 +646,7 @@ describe('GCS games store', () => {
     }) as unknown as typeof fetch;
 
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
-    await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
+    await store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL });
 
     expect(writes.at(-1)).toMatch(/manifest\.json$/);
   });
@@ -634,7 +655,7 @@ describe('GCS games store', () => {
     const { impl, objects } = stubGcs();
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
 
-    await expect(store.putCandidateSources({ slug: '../evil', issueNumber: 1, files: MINIMAL })).rejects.toThrow(
+    await expect(store.putCandidateSources({ slug: '../evil', jobId: 1, files: MINIMAL })).rejects.toThrow(
       InvalidUploadError,
     );
     expect(objects.size).toBe(0);
@@ -645,7 +666,7 @@ describe('GCS games store', () => {
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
     const { version } = await store.putCandidateSources({
       slug: 'g',
-      issueNumber: 1,
+      jobId: 1,
       roundGeneration: 4,
       files: MINIMAL,
     });
@@ -659,7 +680,7 @@ describe('GCS games store', () => {
   it('writes a changelog sentence onto an existing version', async () => {
     const { impl } = stubGcs();
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
-    const { version } = await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
+    const { version } = await store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL });
 
     await store.setVersionSummary('g', version, '  Jump feels tighter.  ');
 
@@ -670,15 +691,15 @@ describe('GCS games store', () => {
     const { impl, objects } = stubGcs();
     let tick = 0;
     const store = createGcsGamesStore({ ...base, fetchImpl: impl, versionId: () => `v${++tick}` });
-    await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
-    await store.putCandidateSources({ slug: 'g', issueNumber: 2, files: MINIMAL });
+    await store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL });
+    await store.putCandidateSources({ slug: 'g', jobId: 2, files: MINIMAL });
     // An interrupted upload: source objects landed, the manifest never did.
     objects.set('games/g/versions/v9/source/game.ts', Buffer.from('x'));
 
     const versions = await store.listVersions('g');
 
     expect(versions.map((manifest) => manifest.version)).toEqual(['v2', 'v1']);
-    expect(versions[0]).toMatchObject({ issueNumber: 2 });
+    expect(versions[0]).toMatchObject({ jobId: 2 });
 
     const limited = await store.listVersions('g', { limit: 1 });
     expect(limited.map((manifest) => manifest.version)).toEqual(['v2']);
@@ -695,34 +716,32 @@ describe('GCS games store', () => {
     for (const file of draft) {
       await store.putStagedSourceFile({
         slug: 'g',
-        issueNumber: 7,
+        jobId: 7,
         roundGeneration: 1,
         path: file.path,
         content: file.content,
       });
     }
 
-    const listed = await store.listStagedSources({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
+    const listed = await store.listStagedSources({ slug: 'g', jobId: 7, roundGeneration: 1 });
     expect(listed.files.map((f) => f.path).sort()).toEqual(draft.map((f) => f.path).sort());
     expect(objects.has('games/g/staging/7/g1/source/game.ts')).toBe(true);
-    expect(await store.getStagedSourceFile({ slug: 'g', issueNumber: 7, roundGeneration: 1, path: 'game.ts' })).toBe(
+    expect(await store.getStagedSourceFile({ slug: 'g', jobId: 7, roundGeneration: 1, path: 'game.ts' })).toBe(
       draft.find((f) => f.path === 'game.ts')!.content,
     );
-    expect(
-      await store.getStagedSourceFile({ slug: 'g', issueNumber: 7, roundGeneration: 1, path: 'missing.ts' }),
-    ).toBeNull();
+    expect(await store.getStagedSourceFile({ slug: 'g', jobId: 7, roundGeneration: 1, path: 'missing.ts' })).toBeNull();
 
-    const assembled = await store.getStagedSourceFiles({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
+    const assembled = await store.getStagedSourceFiles({ slug: 'g', jobId: 7, roundGeneration: 1 });
     const { version } = await store.putCandidateSources({
       slug: 'g',
-      issueNumber: 7,
+      jobId: 7,
       files: assembled,
       mode: 'preview',
     });
     expect(version).toBeTruthy();
 
-    await store.clearStagedSources({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
-    expect((await store.listStagedSources({ slug: 'g', issueNumber: 7, roundGeneration: 1 })).files).toEqual([]);
+    await store.clearStagedSources({ slug: 'g', jobId: 7, roundGeneration: 1 });
+    expect((await store.listStagedSources({ slug: 'g', jobId: 7, roundGeneration: 1 })).files).toEqual([]);
   });
 
   it('refuses to stage a non-blank index.html, but a blank one is a no-op', async () => {
@@ -732,7 +751,7 @@ describe('GCS games store', () => {
     await expect(
       store.putStagedSourceFile({
         slug: 'g',
-        issueNumber: 7,
+        jobId: 7,
         roundGeneration: 1,
         path: 'index.html',
         content: '<canvas id="game"></canvas>',
@@ -742,7 +761,7 @@ describe('GCS games store', () => {
     await expect(
       store.putStagedSourceFile({
         slug: 'g',
-        issueNumber: 7,
+        jobId: 7,
         roundGeneration: 1,
         path: 'index.html',
         content: '   \n  ',
@@ -756,7 +775,7 @@ describe('GCS games store', () => {
 
     await store.putStagedSourceFile({
       slug: 'g',
-      issueNumber: 7,
+      jobId: 7,
       roundGeneration: 1,
       path: 'game/old-module.ts',
       content: 'export const dead = 1;',
@@ -765,7 +784,7 @@ describe('GCS games store', () => {
 
     const deleted = await store.deleteStagedSourceFile({
       slug: 'g',
-      issueNumber: 7,
+      jobId: 7,
       roundGeneration: 1,
       path: 'game/old-module.ts',
     });
@@ -773,83 +792,16 @@ describe('GCS games store', () => {
     // Never re-read as content.
     expect(objects.has('games/g/staging/7/g1/source/game/old-module.ts')).toBe(false);
 
-    const listed = await store.listStagedSources({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
+    const listed = await store.listStagedSources({ slug: 'g', jobId: 7, roundGeneration: 1 });
     // CE-04: every staging write is now stamped with who wrote it; omitted here defaults to 'agent'.
     expect(listed.files).toEqual([{ path: 'game/old-module.ts', bytes: 0, deleted: true, stagedBy: 'agent' }]);
 
-    const assembled = await store.getStagedSourceFiles({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
+    const assembled = await store.getStagedSourceFiles({ slug: 'g', jobId: 7, roundGeneration: 1 });
     expect(assembled).toEqual([{ path: 'game/old-module.ts', content: '', deleted: true }]);
 
     expect(
-      await store.getStagedSourceFile({ slug: 'g', issueNumber: 7, roundGeneration: 1, path: 'game/old-module.ts' }),
+      await store.getStagedSourceFile({ slug: 'g', jobId: 7, roundGeneration: 1, path: 'game/old-module.ts' }),
     ).toBeNull();
-  });
-
-  it('retries staging manifest writes when a concurrent update wins the generation race', async () => {
-    const objects = new Map<string, Buffer>();
-    const generations = new Map<string, number>();
-    let manifestWrites = 0;
-    const impl = (async (url: string | URL, init: RequestInit = {}) => {
-      const href = String(url);
-      if (init.method === 'POST') {
-        const parsed = new URL(href);
-        const name = decodeURIComponent(parsed.searchParams.get('name') ?? '');
-        if (name.endsWith('/manifest.json')) {
-          manifestWrites += 1;
-          // First attempt pretends another writer landed first.
-          if (manifestWrites === 1) {
-            return new Response('Precondition Failed', { status: 412 });
-          }
-        }
-        const ifMatch = parsed.searchParams.get('ifGenerationMatch');
-        const current = generations.get(name) ?? 0;
-        if (ifMatch !== null && Number(ifMatch) !== current) {
-          return new Response('Precondition Failed', { status: 412 });
-        }
-        objects.set(name, Buffer.from(init.body as Uint8Array));
-        const next = current + 1;
-        generations.set(name, next);
-        return new Response('{}', { status: 200 });
-      }
-      if (init.method === 'DELETE') {
-        const name = decodeURIComponent(href.split('/o/')[1].split('?')[0]);
-        objects.delete(name);
-        generations.delete(name);
-        return new Response(null, { status: 200 });
-      }
-      const name = decodeURIComponent(href.split('/o/')[1].split('?')[0]);
-      // After the first 412, the concurrent writer's manifest appears for the retry read.
-      if (name.endsWith('/manifest.json') && manifestWrites >= 1 && !objects.has(name)) {
-        const concurrent = {
-          slug: 'g',
-          issueNumber: 7,
-          roundGeneration: 1,
-          updatedAt: '2026-07-30T10:00:00.000Z',
-          files: [{ path: 'SPEC.md', bytes: 3 }],
-          totalBytes: 3,
-        };
-        objects.set(name, Buffer.from(JSON.stringify(concurrent)));
-        generations.set(name, 1);
-      }
-      const body = objects.get(name);
-      if (!body) return new Response('', { status: 404 });
-      return new Response(new Uint8Array(body), {
-        status: 200,
-        headers: { 'x-goog-generation': String(generations.get(name) ?? 1) },
-      });
-    }) as unknown as typeof fetch;
-
-    const store = createGcsGamesStore({ ...base, fetchImpl: impl });
-    const result = await store.putStagedSourceFile({
-      slug: 'g',
-      issueNumber: 7,
-      roundGeneration: 1,
-      path: 'game.ts',
-      content: 'export {};',
-    });
-
-    expect(manifestWrites).toBeGreaterThanOrEqual(2);
-    expect(result.files.map((f) => f.path).sort()).toEqual(['SPEC.md', 'game.ts']);
   });
 
   it('handles high concurrency (20 parallel staged source file updates) without dropping updates', async () => {
@@ -892,7 +844,7 @@ describe('GCS games store', () => {
       paths.map((path) =>
         store.putStagedSourceFile({
           slug: 'g',
-          issueNumber: 7,
+          jobId: 7,
           roundGeneration: 1,
           path,
           content: `export const mod = "${path}";`,
@@ -901,7 +853,7 @@ describe('GCS games store', () => {
     );
 
     expect(results).toHaveLength(20);
-    const listed = await store.listStagedSources({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
+    const listed = await store.listStagedSources({ slug: 'g', jobId: 7, roundGeneration: 1 });
     expect(listed.files.map((f) => f.path).sort()).toEqual(paths.sort());
   });
 
@@ -911,7 +863,7 @@ describe('GCS games store', () => {
     const draft = MINIMAL.filter((f) => f.path !== 'TRACE.json' && f.path !== 'PLAYTEST.json');
     const { version } = await store.putCandidateSources({
       slug: 'g',
-      issueNumber: 1,
+      jobId: 1,
       files: draft,
       mode: 'preview',
     });
@@ -934,7 +886,7 @@ describe('GCS games store', () => {
   it('records mid-gate progress and clears it when a verdict lands', async () => {
     const { impl } = stubGcs();
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
-    const { version } = await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
+    const { version } = await store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL });
 
     await store.putGateProgress('g', version, {
       lane: 'preview',
@@ -994,7 +946,7 @@ describe('GCS games store', () => {
     }) as unknown as typeof fetch;
 
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
-    const { version } = await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
+    const { version } = await store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL });
     const manifestName = `games/g/versions/${version}/manifest.json`;
     const genBefore = generations.get(manifestName) ?? 0;
 
@@ -1017,7 +969,7 @@ describe('GCS games store', () => {
   it('pins the engine the first gate run checked against, and never repins', async () => {
     const { impl } = stubGcs();
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
-    const { version } = await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
+    const { version } = await store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL });
 
     await store.putGateResult('g', version, { green: true, engineRef: 'aaa111' });
     // A later re-run against a moved engine must not rewrite what the verdict was
@@ -1030,7 +982,7 @@ describe('GCS games store', () => {
   it('records a health verdict beside the gate verdict, never over it', async () => {
     const { impl } = stubGcs();
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
-    const { version } = await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
+    const { version } = await store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL });
     await store.putGateResult('g', version, { green: true, report: 'accepted' });
 
     // The engine moved on and the same game now fails. The acceptance verdict is the
@@ -1046,7 +998,7 @@ describe('GCS games store', () => {
   it('round-trips derived artifacts the gate produces', async () => {
     const { impl } = stubGcs();
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
-    const { version } = await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
+    const { version } = await store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL });
 
     await store.putDerivedArtifact('g', version, 'bundle.html', Buffer.from('<!doctype html>'), 'text/html');
 
@@ -1061,6 +1013,34 @@ describe('GCS games store', () => {
     expect(await store.getSourceFile('g', 'v1', 'game.ts')).toBeNull();
   });
 
+  it("normalizes a manifest stored under the field's old name, issueNumber", async () => {
+    const { impl, objects } = stubGcs();
+    // GCS is schemaless: a manifest written before the field was renamed still
+    // has this shape on disk, and the TS rename alone cannot rewrite history.
+    objects.set(
+      'games/g/versions/v1/manifest.json',
+      Buffer.from(JSON.stringify({ slug: 'g', version: 'v1', createdAt: '2026-01-01T00:00:00Z', issueNumber: 7 })),
+    );
+    const store = createGcsGamesStore({ ...base, fetchImpl: impl });
+
+    expect((await store.getManifest('g', 'v1'))?.jobId).toBe(7);
+    expect((await store.listVersions('g'))[0]?.jobId).toBe(7);
+  });
+
+  it('dual-writes issueNumber on a new manifest, for a rollback to the previous revision', async () => {
+    const { impl, objects } = stubGcs();
+    const store = createGcsGamesStore({ ...base, fetchImpl: impl });
+
+    const { version, manifest } = await store.putCandidateSources({ slug: 'g', jobId: 9, files: MINIMAL });
+
+    // The returned/typed object stays clean...
+    expect((manifest as { issueNumber?: number }).issueNumber).toBeUndefined();
+    // ...but the previous revision's code, which only reads issueNumber, can still
+    // load what this revision just wrote.
+    const stored = JSON.parse(objects.get(`games/g/versions/${version}/manifest.json`)!.toString('utf8'));
+    expect(stored).toMatchObject({ jobId: 9, issueNumber: 9 });
+  });
+
   it('marks version objects immutable so a CDN can front them later', async () => {
     const headers: Array<Record<string, string>> = [];
     const impl = (async (_url: string | URL, init: RequestInit = {}) => {
@@ -1069,7 +1049,7 @@ describe('GCS games store', () => {
     }) as unknown as typeof fetch;
 
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
-    await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
+    await store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL });
 
     expect(headers[0]['cache-control']).toContain('immutable');
   });

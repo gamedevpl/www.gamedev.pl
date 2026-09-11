@@ -1,4 +1,4 @@
-import type { AvatarMode } from '../../creation/creator-profile.js';
+import type { AvatarMode } from '../../platform/creator-profile.js';
 
 export interface User {
   uid: string;

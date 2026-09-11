@@ -53,11 +53,9 @@ describe('HeroPromptSection', () => {
 
     const attachBtn = container.querySelector('.attach-btn');
     const micBtn = container.querySelector('.mic-btn');
-    const buildBtn = container.querySelector('.build-btn');
 
     expect(attachBtn).not.toBeNull();
     expect(micBtn).not.toBeNull();
-    expect(buildBtn).not.toBeNull();
     expect(container.querySelector('.prompt-composer-bar')).not.toBeNull();
     expect(container.querySelectorAll('.chip-btn')).toHaveLength(0);
 
@@ -93,13 +91,13 @@ describe('HeroPromptSection', () => {
       await flushEffects();
     });
 
-    expect(document.activeElement).not.toBe(container.querySelector('.big-prompt-input'));
+    const textarea = container.querySelector('.big-prompt-input');
+    expect(document.activeElement).not.toBe(textarea);
 
     await act(async () => root.unmount());
   });
 
   it('says it is analyzing while the refiner runs, and submitting only once it is', async () => {
-    // refining must not claim Submitting before anything is sent
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
 
@@ -120,17 +118,19 @@ describe('HeroPromptSection', () => {
         );
         await flushEffects();
       });
-      return container.querySelector<HTMLButtonElement>('.build-btn');
     };
 
-    expect((await renderWithStatus('refining'))?.textContent).toContain('Analyzing your idea');
-    expect((await renderWithStatus('loading'))?.textContent).toContain('Submitting');
-    expect((await renderWithStatus('idle'))?.textContent).toContain('Build My Game');
+    await renderWithStatus('refining');
+    expect(container.querySelector('.prompt-busy-status')?.textContent).toContain('Analyzing your idea');
+    expect(container.querySelector<HTMLInputElement>('.big-prompt-input')?.disabled).toBe(true);
 
-    // Busy must disable the button against a second fire.
-    expect((await renderWithStatus('refining'))?.disabled).toBe(true);
-    expect((await renderWithStatus('loading'))?.disabled).toBe(true);
-    expect((await renderWithStatus('idle'))?.disabled).toBe(false);
+    await renderWithStatus('loading');
+    expect(container.querySelector('.prompt-busy-status')?.textContent).toContain('Submitting');
+    expect(container.querySelector<HTMLInputElement>('.big-prompt-input')?.disabled).toBe(true);
+
+    await renderWithStatus('idle');
+    expect(container.querySelector('.prompt-busy-status')).toBeNull();
+    expect(container.querySelector<HTMLInputElement>('.big-prompt-input')?.disabled).toBe(false);
 
     await act(async () => root.unmount());
   });
@@ -161,7 +161,6 @@ describe('HeroPromptSection', () => {
 
     await renderWithStatus('refining');
     expect(container.querySelector('.prompt-composer-bar.is-busy')).not.toBeNull();
-    expect(container.querySelector('.build-btn.is-busy')).not.toBeNull();
     expect(container.querySelector('.build-btn-spinner')).not.toBeNull();
     expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Analyzing your idea/i);
     expect(container.querySelector('.creation-card.is-busy .creation-sub')?.textContent).toMatch(/Become the creator/i);
@@ -318,7 +317,6 @@ describe('HeroPromptSection', () => {
       await flushEffects();
     });
 
-    expect(container.querySelector<HTMLButtonElement>('.build-btn')?.disabled).toBe(true);
     await act(async () => {
       container
         .querySelector('.prompt-box-form')
@@ -330,7 +328,6 @@ describe('HeroPromptSection', () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
-    expect(container.querySelector<HTMLButtonElement>('.build-btn')?.disabled).toBe(false);
 
     await act(async () => root.unmount());
   });
@@ -372,7 +369,7 @@ describe('HeroPromptSection', () => {
         value: { files: [file] },
       });
       card.dispatchEvent(drop);
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 50));
     });
 
     await act(async () => {
@@ -381,14 +378,12 @@ describe('HeroPromptSection', () => {
         ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
       await flushEffects();
     });
-    expect(container.querySelector<HTMLButtonElement>('.build-btn')?.disabled).toBe(true);
     expect(onSubmitSpec).not.toHaveBeenCalled();
 
     await act(async () => {
       resolveNormalization(['small']);
       await flushEffects();
     });
-    expect(container.querySelector<HTMLButtonElement>('.build-btn')?.disabled).toBe(false);
     expect(onSubmitSpec).toHaveBeenCalledTimes(1);
 
     await act(async () => root.unmount());
@@ -503,7 +498,9 @@ describe('HeroPromptSection', () => {
     const recognition = new FakeSpeechRecognition();
     Object.defineProperty(window, 'webkitSpeechRecognition', {
       configurable: true,
-      value: vi.fn(() => recognition),
+      value: vi.fn(function () {
+        return recognition;
+      }),
     });
 
     const container = document.createElement('div');
@@ -538,5 +535,461 @@ describe('HeroPromptSection', () => {
 
     await act(async () => root.unmount());
     delete (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition;
+  });
+
+  it('renders a matched game card with thumbnail, genre badge, and play button', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const onPlayGame = vi.fn();
+
+    const mockCatalog = [
+      {
+        slug: 'mexico-86',
+        title: "Mexico '86 Arcade Football",
+        genre: 'sports',
+        controls: 'Arrows / Enter / Tap to navigate; 1–4 to pick action',
+        status: 'published',
+        media: {
+          screenshots: [
+            { name: 'opening', file: 'opening.png' },
+            { name: 'action', file: 'action.png' },
+          ],
+          video: null,
+        },
+        multiplayer: { mode: 'controllers' as const, minPlayers: 1, maxPlayers: 2 },
+        saves: null,
+        world: null,
+        sensing: null,
+        editor: null,
+        orientation: 'landscape' as const,
+        submittedBy: null,
+      },
+    ];
+
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'mexico',
+          catalogEntries: mockCatalog,
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+          onPlayGame,
+        }),
+      );
+      await flushEffects();
+    });
+
+    const card = container.querySelector('.matched-card');
+    expect(card).not.toBeNull();
+
+    const thumb = container.querySelector<HTMLImageElement>('.matched-thumb');
+    expect(thumb).not.toBeNull();
+    expect(thumb?.getAttribute('src')).toBe('/api/games/mexico-86/media/action.png?w=320');
+
+    const title = container.querySelector('.matched-title');
+    expect(title?.textContent).toBe("Mexico '86 Arcade Football");
+
+    const badges = container.querySelectorAll('.smart-badge');
+    expect(badges.length).toBeGreaterThanOrEqual(1);
+    expect(badges[0].textContent).toContain('sports');
+
+    const playBtn = container.querySelector<HTMLButtonElement>('.play-match-btn');
+    expect(playBtn).not.toBeNull();
+    expect(playBtn?.textContent).toContain('Play now');
+
+    await act(async () => {
+      playBtn?.click();
+      await flushEffects();
+    });
+
+    expect(onPlayGame).toHaveBeenCalledTimes(1);
+    expect(onPlayGame).toHaveBeenCalledWith(mockCatalog[0], 'composer_match');
+
+    await act(async () => root.unmount());
+  });
+
+  it('matches games by searchKeywords and displays enriched tagline', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const mockCatalog = [
+      {
+        slug: 'mexico-86',
+        title: "Mexico '86 Arcade Football",
+        genre: 'sports',
+        controls: 'Arrows / Enter / Tap to navigate; 1–4 to pick action',
+        status: 'published',
+        media: null,
+        multiplayer: null,
+        saves: null,
+        world: null,
+        sensing: null,
+        editor: null,
+        orientation: 'landscape' as const,
+        submittedBy: null,
+        tagline: {
+          en: 'Retro 11v11 arcade soccer tournament.',
+          pl: 'Turniej piłkarski retro 11v11.',
+        },
+        shortControls: {
+          en: 'Arrows + Enter / Tap',
+          pl: 'Strzałki + Enter / Dotyk',
+        },
+        searchKeywords: ['mundial', 'soccer', 'maradona', 'football'],
+      },
+    ];
+
+    // Search by semantic keyword "mundial"
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'mundial',
+          catalogEntries: mockCatalog,
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    const card = container.querySelector('.matched-card');
+    expect(card).not.toBeNull();
+
+    const desc = container.querySelector('.matched-desc');
+    expect(desc?.textContent).toBe('Retro 11v11 arcade soccer tournament.');
+
+    await act(async () => root.unmount());
+  });
+
+  it('updates matched game when vector search returns high confidence match', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const mockCatalog = [
+      {
+        slug: 'cosmic-rift',
+        title: 'Cosmic Rift',
+        genre: 'Sci-Fi',
+        controls: 'WASD to fly',
+        status: 'published',
+        media: null,
+        multiplayer: null,
+        saves: null,
+        world: null,
+        sensing: null,
+        editor: null,
+        orientation: 'landscape' as const,
+        submittedBy: null,
+        tagline: { en: 'Deep space dogfights in a shattered galaxy.', pl: 'Walki w kosmosie.' },
+      },
+    ];
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (String(url).includes('/api/catalog/search')) {
+        return {
+          ok: true,
+          json: async () => ({
+            match: {
+              slug: 'cosmic-rift',
+              title: 'Cosmic Rift',
+              genre: 'Sci-Fi',
+              tagline: { en: 'Deep space dogfights in a shattered galaxy.', pl: 'Walki w kosmosie.' },
+            },
+            score: 0.88,
+          }),
+        } as Response;
+      }
+      return { ok: false } as Response;
+    });
+
+    // An ambiguous natural language prompt that local search wouldn't direct match
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'shooting aliens in deep space with laser cannons',
+          catalogEntries: mockCatalog,
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    // In-flight debounce shows search card and no creation flash.
+    expect(container.querySelector('.searching-card')).not.toBeNull();
+    expect(container.querySelector('.searching-spinner')).not.toBeNull();
+    expect(container.querySelector('.creation-card')).toBeNull();
+    expect(container.querySelector('.matched-card')).toBeNull();
+
+    // Advance timer for 200ms debounce
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250));
+      await flushEffects();
+    });
+
+    // Search match replaces search indicator with matched card.
+    expect(container.querySelector('.searching-card')).toBeNull();
+    const card = container.querySelector('.matched-card');
+    expect(card).not.toBeNull();
+
+    const title = container.querySelector('.matched-title');
+    expect(title?.textContent).toBe('Cosmic Rift');
+
+    const desc = container.querySelector('.matched-desc');
+    expect(desc?.textContent).toBe('Deep space dogfights in a shattered galaxy.');
+
+    fetchSpy.mockRestore();
+    await act(async () => root.unmount());
+  });
+
+  it('shows searching state while debouncing and falls back to creation card when no match is found', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('pl');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (String(url).includes('/api/catalog/search')) {
+        return {
+          ok: true,
+          json: async () => ({ match: null, score: 0 }),
+        } as Response;
+      }
+      return { ok: false } as Response;
+    });
+
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'symulator gotowania zupy pomidorowej',
+          catalogEntries: [],
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    // In-flight shows searching indicator, not creation card.
+    expect(container.querySelector('.searching-card')).not.toBeNull();
+    expect(container.querySelector('.searching-card')?.textContent).toContain('Szukanie w katalogu');
+    expect(container.querySelector('.creation-card')).toBeNull();
+
+    // During debounced search: searching card is displayed
+    expect(container.querySelector('.searching-card')).not.toBeNull();
+
+    // Advance debounce timer
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250));
+      await flushEffects();
+    });
+
+    // Search with no match shows creation card and build button.
+    expect(container.querySelector('.searching-card')).toBeNull();
+    expect(container.querySelector('.matched-card')).toBeNull();
+    expect(container.querySelector('.creation-card')).not.toBeNull();
+    expect(container.querySelector('.creation-card')?.textContent).toContain('Opisz swój pomysł na grę');
+    expect(container.querySelector('.creation-card .build-match-btn')?.textContent).toContain('Stwórz taką grę');
+
+    fetchSpy.mockRestore();
+    await act(async () => root.unmount());
+  });
+
+  it('does not show creation card for single-word query when search finds no match', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('pl');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(() =>
+        Promise.resolve(new Response(JSON.stringify({ match: null, score: 0 }), { status: 200 })),
+      );
+
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'miecz',
+          catalogEntries: [],
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    // Advance debounce timer
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250));
+      await flushEffects();
+    });
+
+    // Single-word search with no match should not propose creation
+    expect(container.querySelector('.searching-card')).toBeNull();
+    expect(container.querySelector('.matched-card')).toBeNull();
+    expect(container.querySelector('.creation-card')).toBeNull();
+
+    fetchSpy.mockRestore();
+    await act(async () => root.unmount());
+  });
+
+  it('renders searching card on the very first synchronous paint when initialPrompt requires search', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('pl');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(() =>
+        Promise.resolve(new Response(JSON.stringify({ match: null, score: 0 }), { status: 200 })),
+      );
+
+    // Initial render without flushing effects or advancing timers
+    act(() => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'symulator gotowania zupy pomidorowej',
+          catalogEntries: [],
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+        }),
+      );
+    });
+
+    // Synchronous first paint must already show searching, never creation card
+    expect(container.querySelector('.searching-card')).not.toBeNull();
+    expect(container.querySelector('.creation-card')).toBeNull();
+
+    fetchSpy.mockRestore();
+    await act(async () => root.unmount());
+  });
+
+  it('matches Polish sports intent query "chcę pograć w piłkę" to mexico-86', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('pl');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const mockCatalog = [
+      {
+        slug: 'mexico-86',
+        title: "Mexico '86 Arcade Football",
+        genre: 'sports',
+        controls: 'Arrows / Enter',
+        media: null,
+        multiplayer: null,
+        saves: null,
+        world: null,
+        sensing: null,
+        orientation: 'landscape' as const,
+        editor: null,
+        status: 'published' as const,
+        submittedBy: null,
+        tagline: { en: 'Tournament football.', pl: 'Turniej piłkarski.' },
+        searchKeywords: ['football', 'soccer', 'piłka', 'mundial'],
+      },
+    ];
+
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'chcę pograć w piłkę',
+          catalogEntries: mockCatalog,
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    const card = container.querySelector('.matched-card');
+    expect(card).not.toBeNull();
+    expect(container.querySelector('.matched-title')?.textContent).toBe("Mexico '86 Arcade Football");
+
+    await act(async () => root.unmount());
+  });
+
+  it('matches game from vector search even when catalogEntries is initially empty on cold load', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('pl');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const vectorMatchGame = {
+      slug: 'bonfire-arena',
+      title: 'Bonfire Arena',
+      genre: 'soulslike',
+      tagline: { pl: 'Pojedynki na miecze', en: 'Sword duels' },
+      shortControls: { pl: 'Strzałki / Spacja', en: 'Arrows / Space' },
+      searchKeywords: ['miecze', 'walka'],
+    };
+
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(() =>
+        Promise.resolve(new Response(JSON.stringify({ match: vectorMatchGame, score: 0.85 }), { status: 200 })),
+      );
+
+    // Initial render with catalogEntries = [] (e.g. initial cold load)
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'walka na miecze',
+          catalogEntries: [],
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    // Advance debounce
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250));
+      await flushEffects();
+    });
+
+    // Match is displayed with play CTA and secondary build link.
+    const card = container.querySelector('.matched-card');
+    expect(card).not.toBeNull();
+    expect(container.querySelector('.matched-title')?.textContent).toBe('Bonfire Arena');
+    expect(container.querySelector('.matched-actions .match-build-link')?.textContent).toContain(
+      'lub stwórz swoją grę',
+    );
+
+    fetchSpy.mockRestore();
+    await act(async () => root.unmount());
   });
 });

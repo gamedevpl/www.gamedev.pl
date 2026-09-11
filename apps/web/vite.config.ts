@@ -6,7 +6,14 @@ import path from 'node:path';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vite';
 import { isKnownSpaShellPath, looksLikeStaticAsset } from '../api/src/platform/spa-paths.js';
-import { replaceBuildManifest, shellAssetEntries, shellRevision } from './src/shellPrecache.js';
+import {
+  type BundleFile,
+  deferredAssetEntries,
+  reachableFromShell,
+  replaceBuildManifest,
+  shellAssetEntries,
+  shellRevision,
+} from './src/shellPrecache.js';
 
 const apiTarget = process.env.VITE_API_TARGET ?? 'http://127.0.0.1:3001';
 
@@ -48,14 +55,9 @@ function pathnameOf(req: IncomingMessage): string {
 }
 
 function isViteInternal(pathname: string): boolean {
-  return (
-    pathname.startsWith('/api') ||
-    pathname.startsWith('/@') ||
-    pathname.startsWith('/node_modules') ||
-    pathname.startsWith('/src') ||
-    pathname.startsWith('/__') ||
-    pathname === '/index.html'
-  );
+  const prefixes = ['/api', '/oauth/', '/.well-known', '/@', '/node_modules', '/src', '/__'];
+  const exact = ['/oauth', '/device', '/cli', '/install.sh', '/install.ps1', '/index.html'];
+  return prefixes.some((p) => pathname.startsWith(p)) || exact.includes(pathname);
 }
 
 /** Ensure later `writeHead(200)` / default 200 from the HTML middleware become 404. */
@@ -83,14 +85,34 @@ function shellPrecache(): Plugin {
     apply: 'build',
     async writeBundle(options, bundle) {
       const outDir = options.dir ?? 'dist';
-      const shell = shellAssetEntries(Object.keys(bundle));
+      const indexHtml = await readFile(path.join(outDir, 'index.html'), 'utf8');
+
+      // Reduce Rollup's bundle to what reachableFromShell needs.
+      const files: Record<string, BundleFile> = {};
+      for (const [fileName, output] of Object.entries(bundle)) {
+        files[fileName] =
+          output.type === 'chunk'
+            ? {
+                kind: 'chunk',
+                text: output.code,
+                isEntry: output.isEntry,
+                isDynamicEntry: output.isDynamicEntry,
+                imports: output.imports,
+              }
+            : { kind: 'asset', text: typeof output.source === 'string' ? output.source : undefined };
+      }
+      const reachable = reachableFromShell(files, indexHtml);
+      const isDeferred = (fileName: string) => !reachable.has(fileName);
+
+      const shell = shellAssetEntries(Object.keys(bundle), isDeferred);
+      const deferred = deferredAssetEntries(Object.keys(bundle), isDeferred);
 
       const contents = await Promise.all(shell.map((entry) => readFile(path.join(outDir, entry.slice(1)))));
       const revision = shellRevision(contents, (input) => createHash('sha256').update(input).digest('hex'));
 
       const swPath = path.join(outDir, 'sw.js');
       const source = await readFile(swPath, 'utf8');
-      await writeFile(swPath, replaceBuildManifest(source, { revision, shell }));
+      await writeFile(swPath, replaceBuildManifest(source, { revision, shell, deferred }));
 
       const bytes = contents.reduce((sum, buffer) => sum + buffer.byteLength, 0);
       this.info(`shell precache: ${shell.length} files, ${(bytes / 1024).toFixed(0)} kB, revision ${revision}`);
@@ -102,9 +124,13 @@ export default defineConfig({
   plugins: [react(), spaProper404(), shellPrecache()],
   server: {
     port: 5173,
-    proxy: {
-      '/api': { target: apiTarget, changeOrigin: true },
-    },
+    proxy: Object.fromEntries(
+      ['/api', '/oauth', '/device', '/cli', '/install.sh', '/install.ps1', '/.well-known'].map((p) => [
+        p,
+        // Preserve the browser's target origin for the API's session CSRF check.
+        { target: apiTarget, changeOrigin: false },
+      ]),
+    ),
   },
   // GA-02: tsWorker.ts needs code-split chunks; IIFE can't.
   worker: {

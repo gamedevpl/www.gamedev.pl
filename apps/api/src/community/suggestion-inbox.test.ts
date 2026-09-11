@@ -72,10 +72,10 @@ const PUBLISHED_JOB_ID = 1_000_000_001;
 let nextJobId = PUBLISHED_JOB_ID;
 
 async function publish(slug: string, ownerUid = OWNER): Promise<void> {
-  const issueNumber = nextJobId++;
-  await store.createSubmission(issueNumber, ownerUid, slug);
-  await store.setSubmissionSlug(issueNumber, slug);
-  await store.setSubmissionPublishedAt(issueNumber, '2026-07-01T00:00:00.000Z');
+  const jobId = nextJobId++;
+  await store.createSubmission(jobId, ownerUid, slug);
+  await store.setSubmissionSlug(jobId, slug);
+  await store.setSubmissionPublishedAt(jobId, '2026-07-01T00:00:00.000Z');
 }
 
 beforeEach(() => {
@@ -141,8 +141,8 @@ describe('POST /api/me/suggestions/:id/approve', () => {
     expect(res.json().suggestion).toMatchObject({ status: 'dispatched', decidedBy: OWNER });
     // No issue number for a native job — there is no issue. Recording one would invent a
     // GitHub artefact that does not exist.
-    expect(res.json().suggestion.issueNumber).toBeUndefined();
-    expect(start.mock.calls[0][0]).toMatchObject({ issueNumber: PUBLISHED_JOB_ID });
+    expect(res.json().suggestion.jobId).toBeUndefined();
+    expect(start.mock.calls[0][0]).toMatchObject({ jobId: PUBLISHED_JOB_ID });
     expect(start.mock.calls[0][0].text).toContain('40 uncaught errors across 100 sessions.');
     // No `requestedBy`, so this brief never opens the thread as a creator message. It is
     // assembled here out of player evidence — nobody typed it, and putting it on the
@@ -331,7 +331,7 @@ describe('an improvement is a new job', () => {
     // publishing is terminal for this one". Resuming would dispatch an agent and then
     // silently record no transition, leaving work that can never reach gating, review or
     // publication — and nothing would say so.
-    const dispatched: Array<{ issueNumber: number; slug?: string; feedback?: string }> = [];
+    const dispatched: Array<{ jobId: number; slug?: string; feedback?: string }> = [];
     await publish('crashy');
     await store.putSuggestion(suggestion());
 
@@ -342,11 +342,11 @@ describe('an improvement is a new job', () => {
         dailyImprovementQuota: 5,
         startImprovementRound: async (input) => {
           // Stand in for the real implementation: allocate a fresh job on the same slug.
-          const source = await store.getSubmission(input.issueNumber);
+          const source = await store.getSubmission(input.jobId);
           const jobId = await store.allocateJobId();
           await store.createSubmission(jobId, source!.ownerUid, source!.title);
           await store.setSubmissionSlug(jobId, source!.slug!);
-          dispatched.push({ issueNumber: jobId, slug: source!.slug, feedback: input.text });
+          dispatched.push({ jobId, slug: source!.slug, feedback: input.text });
           return { route: 'job', jobId };
         },
       },
@@ -359,9 +359,9 @@ describe('an improvement is a new job', () => {
 
     // A different job from the published one, carrying the slug so the agent revises the
     // existing game rather than building a new one.
-    expect(dispatched[0].issueNumber).not.toBe(PUBLISHED_JOB_ID);
+    expect(dispatched[0].jobId).not.toBe(PUBLISHED_JOB_ID);
     expect(dispatched[0].slug).toBe('crashy');
-    expect(res.json().suggestion.jobId).toBe(dispatched[0].issueNumber);
+    expect(res.json().suggestion.jobId).toBe(dispatched[0].jobId);
     // The published job is untouched and still published.
     expect((await store.getSubmission(PUBLISHED_JOB_ID))?.publishedAt).toBeTruthy();
     await app.close();

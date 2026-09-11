@@ -1,6 +1,6 @@
 import type { ChatAgentScope } from '@gamedevpl/contract';
 import { image, resultText, resultToolCalls, user, type GenAIClient, type ToolDefinition } from 'genaicode';
-import { createVertexClient } from '../agent-surface/genai.js';
+import { createVertexClient } from '../platform/genai.js';
 import type { ChatTurn } from './chat-turns.js';
 import type { JobStall } from './job-state.js';
 
@@ -8,7 +8,7 @@ import type { JobStall } from './job-state.js';
 
 // decide() throws on any failure; callers must fail open.
 
-export const DEFAULT_CHAT_MODEL = 'gemini-3.7-flash';
+export const DEFAULT_CHAT_MODEL = 'gemini-3.8-flash';
 // Live Vertex ran slower than the API key it was tuned on.
 export const DEFAULT_CHAT_TIMEOUT_MS = 8000;
 // Enough for genre/premise, not a spec dump.

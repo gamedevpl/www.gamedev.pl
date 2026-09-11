@@ -1,6 +1,6 @@
 # The build brief — what every agent is told, and why each part is there
 
-`apps/api/src/delivery/build-prompt.ts` composes the one message that starts a round. It is shared
+`apps/api/src/agent-surface/build-prompt.ts` composes the one message that starts a round. It is shared
 by every backend that runs a platform build, so the reasoning behind it belongs here rather
 than in comments inside one backend's file.
 
@@ -82,6 +82,10 @@ a real acceptance objective, and the progress landmarks that need a running game
 
 The brief also states plainly that the draft has never been run, typechecked or gated, so
 the agent expects those parts to be missing rather than trusting them.
+
+## The editor is part of every delivery
+
+Every newly seeded or built game ships compiled `EDITOR.json`, declaring at least three meaningful tunables or one content collection. `EDITOR.ts` is optional authoring source; when present, run `npm run editor:gen -- <slug>` and ship both files because the gate rejects a stale pair. Keep `EDITOR.content.json` (when the schema uses content) and generated `game/editor-content.ts` in sync, and make the game read those typed values instead of shadowing defaults. The kit also exposes `npm run edit -- <slug>` for local verification.
 
 ## Scope is stated as a fact, not a request
 

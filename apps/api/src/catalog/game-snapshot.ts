@@ -94,6 +94,8 @@ export interface GameSnapshotReader {
    * could not read one PNG skips only that variant.
    */
   getMedia(slug: string, filename: string, width?: number): Promise<SnapshotMedia | null>;
+  // Object name for signing. Optional: non-GCS readers have none.
+  getMediaObjectName?(slug: string, filename: string, width?: number): Promise<string | null>;
 }
 
 /** The write side, used by the publish job. */
@@ -270,6 +272,26 @@ export function createGcsSnapshotStore(options: GcsSnapshotStoreOptions): GameSn
     });
   }
 
+  // Immutable under a pointer, so existence caches as long as the pointer.
+  const existsCache = new Map<string, { exists: boolean; expiresAt: number }>();
+
+  // Metadata only: a redirect must not point at nothing.
+  async function objectExists(name: string): Promise<boolean> {
+    const cached = existsCache.get(name);
+    if (cached && cached.expiresAt > now()) return cached.exists;
+    const url = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(name)}?fields=name`;
+    return withReadDeadline(name, async (signal) => {
+      const response = await fetchImpl(url, { headers: await authHeaders(), signal });
+      if (!response.ok && response.status !== 404) {
+        throw new Error(`snapshot probe of ${name} failed: ${response.status} ${await safeBodyText(response)}`);
+      }
+      const exists = response.status !== 404;
+      if (existsCache.size >= 2_000) existsCache.clear();
+      existsCache.set(name, { exists, expiresAt: now() + pointerTtlMs });
+      return exists;
+    });
+  }
+
   async function readJson<T>(name: string): Promise<T | null> {
     const body = await readObject(name);
     if (!body) return null;
@@ -346,6 +368,17 @@ export function createGcsSnapshotStore(options: GcsSnapshotStoreOptions): GameSn
       const pointer = await this.getPointer();
       if (!pointer) return null;
       return readJson<SnapshotGame>(gameObject(pointer.snapshotId, slug));
+    },
+
+    async getMediaObjectName(slug, filename, width) {
+      assertSafeSlug(slug);
+      assertSafeMediaFilename(filename);
+      const pointer = await this.getPointer();
+      if (!pointer) return null;
+
+      // The variant may never have been baked.
+      const name = mediaObject(pointer.snapshotId, slug, filename, width);
+      return (await objectExists(name)) ? name : null;
     },
 
     async getMedia(slug, filename, width) {

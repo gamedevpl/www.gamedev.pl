@@ -10,7 +10,7 @@ import {
   type WorldSchema,
 } from './world-schema.js';
 import type { WorldSchemaSource } from './world-source.js';
-import { logModerationRejection } from '../telemetry/moderation-metrics.js';
+import { logModerationRejection } from '../platform/moderation-metrics.js';
 
 /**
  * Shared asynchronous worlds (docs/persistent-world-plan.md, phase P2).
@@ -56,7 +56,12 @@ export interface WorldRoutesOptions {
   /** Absent (no games repo configured) makes every slug answer 404, like votes. */
   worlds?: WorldSchemaSource | null;
   contentChecker: ContentChecker;
+  dailyWorldWriteQuota?: number;
+  now?: () => number;
 }
+
+// A world write moderates every text field it carries.
+export const DEFAULT_DAILY_WORLD_WRITE_QUOTA = 200;
 
 /**
  * Today a game has exactly one world and its id is the slug. The id is kept opaque
@@ -94,17 +99,78 @@ function toPublicEntry(entry: WorldEntryRecord, worldId: string, uid: string | u
 
 export async function registerWorldRoutes(app: FastifyInstance, options: WorldRoutesOptions): Promise<void> {
   const { store, worlds, contentChecker } = options;
+  const now = options.now ?? Date.now;
 
   // Lower than a save's. A world write is a deliberate player action — planting a
   // thing, leaving a note — not something a game loop emits, and the module coalesces
   // per key on a four-second timer. Anything above this rate is a bug or an attempt.
   const writeRateLimit = { max: 30, timeWindow: 60_000 };
 
+  // A read costs the whole collection, and game code sets the cadence.
+  const readRateLimit = { max: 60, timeWindow: 60_000 };
+
+  // How long a checked snapshot is trusted without asking the store anything.
+  const CACHE_TTL_MS = 3_000;
+  // Ceiling on what a change that skipped the counter can hide.
+  const SNAPSHOT_MAX_AGE_MS = 5 * 60_000;
+  // Cached raw: rows are shared, `mine` and `writable` are not.
+  const cache = new Map<string, { at: number; readAt: number; rev: string; entries: WorldEntryRecord[] }>();
+  // One read in flight per world; the rest await it.
+  const reading = new Map<string, { rows: Promise<WorldEntryRecord[]>; stale: boolean }>();
+
+  // A write's rows beat any read already in flight.
+  function invalidate(worldId: string): void {
+    cache.delete(worldId);
+    const inFlight = reading.get(worldId);
+    if (inFlight) inFlight.stale = true;
+  }
+
+  // Revision first: a racing write then costs a redundant refresh, never staleness.
+  async function refresh(worldId: string, held?: { rev: string; entries: WorldEntryRecord[] }) {
+    const rev = await store.getWorldRevision(worldId);
+    // The point: an unchanged world costs one document.
+    if (held && rev === held.rev) return { rev, entries: held.entries, full: false };
+    return { rev, entries: await store.listWorldEntries(worldId), full: true };
+  }
+
+  async function entriesFor(worldId: string): Promise<WorldEntryRecord[]> {
+    // Swept on read, so an idle world holds nothing here.
+    for (const [id, entry] of cache) {
+      if (now() - entry.readAt >= SNAPSHOT_MAX_AGE_MS) cache.delete(id);
+    }
+    const hit = cache.get(worldId);
+    if (hit && now() - hit.at < CACHE_TTL_MS) return hit.entries;
+
+    // Else a cold window costs one read per simultaneous player.
+    const joined = reading.get(worldId);
+    if (joined) return joined.rows;
+
+    const started: { rows: Promise<WorldEntryRecord[]>; stale: boolean } = {
+      rows: refresh(worldId, hit)
+        .then((next) => {
+          // A write landed mid-read; caching this would undo it.
+          if (!started.stale) {
+            cache.set(worldId, {
+              at: now(),
+              readAt: next.full ? now() : (hit?.readAt ?? now()),
+              rev: next.rev,
+              entries: next.entries,
+            });
+          }
+          return next.entries;
+        })
+        .finally(() => reading.delete(worldId)),
+      stale: false,
+    };
+    reading.set(worldId, started);
+    return started.rows;
+  }
+
   async function schemaFor(slug: string): Promise<WorldSchema | null> {
     return (await worlds?.getSchema(slug)) ?? null;
   }
 
-  app.get('/api/games/:slug/world', async (request, reply) => {
+  app.get('/api/games/:slug/world', { config: { rateLimit: readRateLimit } }, async (request, reply) => {
     const params = ParamsSchema.safeParse(request.params);
     if (!params.success) {
       return reply.status(400).send({ error: params.error.issues[0]?.message ?? 'invalid slug' });
@@ -116,7 +182,7 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
     if (!schema) return reply.status(404).send({ error: 'world not found' });
 
     const worldId = worldIdFor(params.data.slug);
-    const entries = await store.listWorldEntries(worldId);
+    const entries = await entriesFor(worldId);
     const uid = request.user?.uid;
     return reply.send({
       entries: entries.map((entry) => toPublicEntry(entry, worldId, uid)),
@@ -150,6 +216,18 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
     const validated = validateWorldEntry(schema, body.data.fields);
     if (!validated.ok) return reply.status(400).send({ error: validated.error });
 
+    // A paid classifier per field, for any signed-in player.
+    const dateStr = new Date((options.now ?? Date.now)()).toISOString().slice(0, 10);
+    if (validated.texts.length > 0) {
+      // Read-only peek; `blocked` is already refused above.
+      const worldQuota =
+        options.dailyWorldWriteQuota ?? Number(process.env.DAILY_WORLD_WRITE_QUOTA ?? DEFAULT_DAILY_WORLD_WRITE_QUOTA);
+      const usage = await store.getUsage(request.user.uid, dateStr);
+      if ((usage.worldWrites ?? 0) >= worldQuota) {
+        return reply.status(429).send({ error: 'daily world-entry quota exceeded' });
+      }
+    }
+
     // Moderation before storage, never after. An entry is visible to every other player
     // the moment it lands, so there is no window in which a rejected string is merely
     // "pending review" — it would already have been read.
@@ -167,6 +245,19 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
         // all, and the client's `errors.contentRejected.<category>` lookup would resolve to
         // nothing. Every other moderated route already normalized here; this one did not.
         return reply.status(422).send({ error: 'that text was rejected', category: verdict.category ?? 'other' });
+      }
+    }
+
+    if (validated.texts.length > 0) {
+      // Authoritative: concurrent writes all pass the peek above, one increment wins.
+      const spent = await store.checkAndIncrementQuota(
+        request.user.uid,
+        dateStr,
+        options.dailyWorldWriteQuota ?? Number(process.env.DAILY_WORLD_WRITE_QUOTA ?? DEFAULT_DAILY_WORLD_WRITE_QUOTA),
+        'worldWrites',
+      );
+      if (!spent.allowed) {
+        return reply.status(429).send({ error: 'daily world-entry quota exceeded' });
       }
     }
 
@@ -192,6 +283,8 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
     }
 
     const worldId = worldIdFor(params.data.slug);
+    // Their own change must not wait out the shared window.
+    invalidate(worldId);
     return reply.send({ ok: true, entry: toPublicEntry(result.entry, worldId, request.user.uid) });
   });
 
@@ -206,7 +299,9 @@ export async function registerWorldRoutes(app: FastifyInstance, options: WorldRo
     // No schema gate here, matching the save route's delete. If a game leaves the
     // catalog its entries are still something a player wrote, and "take my thing back"
     // must keep working — a 404 would strand a row nobody can reach.
-    const removed = await store.deleteWorldEntry(worldIdFor(params.data.slug), params.data.key, request.user.uid);
+    const worldId = worldIdFor(params.data.slug);
+    const removed = await store.deleteWorldEntry(worldId, params.data.key, request.user.uid);
+    invalidate(worldId);
     if (!removed) {
       // Also the answer for an entry that belongs to somebody else: not found and not
       // yours are the same sentence, so the route cannot be used to probe what exists.

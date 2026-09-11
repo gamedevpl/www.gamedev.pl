@@ -1,28 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import {
-  DEFAULT_TRANSCRIPT_WINDOW_ENTRIES,
-  loadBuildTranscript,
-  MAX_TRANSCRIPT_LIST_ENTRIES,
-  MAX_TRANSCRIPT_ROUNDS,
-  MAX_TRANSCRIPT_WINDOW_ENTRIES,
-  PLAYTEST_CONTEXT_HEADER,
-  stripPlaytestContext,
-} from './build-transcript.js';
-import { mcpPresenceText } from '../agent-surface/mcp-presence.js';
+import { loadBuildTranscript, MAX_TRANSCRIPT_LIST_ENTRIES, MAX_TRANSCRIPT_ROUNDS } from './build-transcript.js';
+import { DEFAULT_TRANSCRIPT_WINDOW_ENTRIES, MAX_TRANSCRIPT_WINDOW_ENTRIES } from '../platform/transcript-window.js';
+import { PLAYTEST_CONTEXT_HEADER, stripPlaytestContext } from '../platform/playtest-context.js';
+import { isMcpPresenceEventText, mcpPresenceText } from '../agent-surface/mcp-presence.js';
 import type { CreatorMessage, Store, SubmissionRecord } from '../platform/store.js';
 import type { BuildEvent } from '../platform/submission-status.js';
 
 type TranscriptStore = Pick<Store, 'listSubmissionsBySlug' | 'listCreatorMessages' | 'listBuildEvents'>;
 
 function job(
-  issueNumber: number,
+  jobId: number,
   createdAt: string,
   slug = 'comet-courier',
   spec?: string,
   specIsSystemGenerated?: boolean,
 ): SubmissionRecord {
   return {
-    issueNumber,
+    jobId,
     ownerUid: 'g:owner',
     title: 'Comet Courier',
     slug,
@@ -40,15 +34,15 @@ function fakeStore(input: {
 }): TranscriptStore {
   return {
     listSubmissionsBySlug: async (slug) => (input.submissions ?? []).filter((submission) => submission.slug === slug),
-    listCreatorMessages: async (issueNumber) =>
-      (input.messages?.[issueNumber] ?? []).map((message, index) => ({
-        id: `m${issueNumber}-${index}`,
+    listCreatorMessages: async (jobId) =>
+      (input.messages?.[jobId] ?? []).map((message, index) => ({
+        id: `m${jobId}-${index}`,
         deliveredAt: null,
         ...message,
       })) as CreatorMessage[],
-    listBuildEvents: async (issueNumber) =>
-      (input.events?.[issueNumber] ?? []).map((event, index) => ({
-        id: `e${issueNumber}-${index}`,
+    listBuildEvents: async (jobId) =>
+      (input.events?.[jobId] ?? []).map((event, index) => ({
+        id: `e${jobId}-${index}`,
         kind: 'step',
         ...event,
       })) as BuildEvent[],
@@ -68,7 +62,7 @@ describe('loadBuildTranscript', () => {
     const current = job(1, '2026-08-16T00:00:00.000Z');
     const store = fakeStore({ messages: { 1: manyMessages(25) } });
 
-    const page = await loadBuildTranscript(store, current);
+    const page = await loadBuildTranscript(store, current, isMcpPresenceEventText);
 
     expect(page.entries).toHaveLength(DEFAULT_TRANSCRIPT_WINDOW_ENTRIES);
     expect(page.entries[0]!.text).toBe('message-5');
@@ -85,7 +79,12 @@ describe('loadBuildTranscript', () => {
     let cursor: string | undefined;
     let pages = 0;
     for (;;) {
-      const page = await loadBuildTranscript(store, current, cursor !== undefined ? { cursor } : undefined);
+      const page = await loadBuildTranscript(
+        store,
+        current,
+        isMcpPresenceEventText,
+        cursor !== undefined ? { cursor } : undefined,
+      );
       pages += 1;
       expect(page.entries.length).toBeLessThanOrEqual(DEFAULT_TRANSCRIPT_WINDOW_ENTRIES);
       seen.unshift(...page.entries.map((e) => e.text));
@@ -103,15 +102,15 @@ describe('loadBuildTranscript', () => {
     const store = fakeStore({ messages: { 1: manyMessages(25) } });
 
     // Garbage cursor: falls back to the tail.
-    const garbage = await loadBuildTranscript(store, current, { cursor: 'not-a-number' });
+    const garbage = await loadBuildTranscript(store, current, isMcpPresenceEventText, { cursor: 'not-a-number' });
     expect(garbage.entries.at(-1)!.text).toBe('message-24');
 
     // Cursor past the end: clamps to the tail.
-    const tooFar = await loadBuildTranscript(store, current, { cursor: '9999' });
+    const tooFar = await loadBuildTranscript(store, current, isMcpPresenceEventText, { cursor: '9999' });
     expect(tooFar.entries.at(-1)!.text).toBe('message-24');
 
     // Cursor before the start: clamps to nothing.
-    const beforeStart = await loadBuildTranscript(store, current, { cursor: '-5' });
+    const beforeStart = await loadBuildTranscript(store, current, isMcpPresenceEventText, { cursor: '-5' });
     expect(beforeStart.entries).toEqual([]);
     expect(beforeStart.hasMore).toBe(false);
     expect(beforeStart.nextCursor).toBeUndefined();
@@ -121,11 +120,11 @@ describe('loadBuildTranscript', () => {
     const current = job(1, '2026-08-16T00:00:00.000Z');
     const store = fakeStore({ messages: { 1: manyMessages(80) } });
 
-    const small = await loadBuildTranscript(store, current, { limit: 3 });
+    const small = await loadBuildTranscript(store, current, isMcpPresenceEventText, { limit: 3 });
     expect(small.entries).toHaveLength(3);
     expect(small.entries.at(-1)!.text).toBe('message-79');
 
-    const oversized = await loadBuildTranscript(store, current, { limit: 1000 });
+    const oversized = await loadBuildTranscript(store, current, isMcpPresenceEventText, { limit: 1000 });
     expect(oversized.entries).toHaveLength(MAX_TRANSCRIPT_WINDOW_ENTRIES);
   });
 
@@ -138,7 +137,7 @@ describe('loadBuildTranscript', () => {
     }));
     const store = fakeStore({ messages: { 1: messages } });
 
-    const page = await loadBuildTranscript(store, current);
+    const page = await loadBuildTranscript(store, current, isMcpPresenceEventText);
 
     expect(page.entries.length).toBeLessThan(10);
     expect(page.entries.length).toBeGreaterThan(0);
@@ -164,7 +163,7 @@ describe('loadBuildTranscript', () => {
       },
     });
 
-    const page = await loadBuildTranscript(store, current);
+    const page = await loadBuildTranscript(store, current, isMcpPresenceEventText);
 
     expect(page.hasMore).toBe(false);
     expect(page.entries).toEqual([
@@ -220,7 +219,7 @@ describe('loadBuildTranscript', () => {
       },
     });
 
-    const page = await loadBuildTranscript(store, current);
+    const page = await loadBuildTranscript(store, current, isMcpPresenceEventText);
 
     expect(page.entries.map((entry) => entry.text)).toEqual(['Make it faster.', presence]);
   });
@@ -241,7 +240,7 @@ describe('loadBuildTranscript', () => {
       messages: { 1: [{ text: 'Make the parcels bigger.', createdAt: '2026-08-16T01:00:00.000Z' }] },
     });
 
-    const page = await loadBuildTranscript(store, current);
+    const page = await loadBuildTranscript(store, current, isMcpPresenceEventText);
 
     expect(page.entries).toEqual([
       {
@@ -266,7 +265,7 @@ describe('loadBuildTranscript', () => {
       messages: { 1: [{ text: 'Add a boss fight.', createdAt: '2026-08-16T00:00:00.500Z' }] },
     });
 
-    const page = await loadBuildTranscript(store, current);
+    const page = await loadBuildTranscript(store, current, isMcpPresenceEventText);
 
     expect(page.entries).toHaveLength(1);
     expect(page.entries[0]).toMatchObject({ text: 'Add a boss fight.', createdAt: '2026-08-16T00:00:00.500Z' });
@@ -280,7 +279,7 @@ describe('loadBuildTranscript', () => {
     }));
     const store = fakeStore({ events: { 1: events } });
 
-    const page = await loadBuildTranscript(store, current);
+    const page = await loadBuildTranscript(store, current, isMcpPresenceEventText);
 
     expect(page.truncatedAtSource).toBe(true);
   });
@@ -289,7 +288,7 @@ describe('loadBuildTranscript', () => {
     const current = job(1, '2026-08-16T00:00:00.000Z');
     const store = fakeStore({ messages: { 1: manyMessages(5) } });
 
-    const page = await loadBuildTranscript(store, current);
+    const page = await loadBuildTranscript(store, current, isMcpPresenceEventText);
 
     expect(page).not.toHaveProperty('truncatedAtSource');
   });
@@ -302,7 +301,7 @@ describe('loadBuildTranscript', () => {
     );
     const store = fakeStore({ submissions: [current, ...siblings] });
 
-    const page = await loadBuildTranscript(store, current);
+    const page = await loadBuildTranscript(store, current, isMcpPresenceEventText);
 
     expect(page.truncatedAtSource).toBe(true);
   });
@@ -313,7 +312,7 @@ describe('loadBuildTranscript', () => {
       job(i + 1, `2026-08-${String(i + 10).padStart(2, '0')}T00:00:00.000Z`),
     );
     const store = fakeStore({ submissions: [current, ...siblings] });
-    const page = await loadBuildTranscript(store, current);
+    const page = await loadBuildTranscript(store, current, isMcpPresenceEventText);
     expect(page).not.toHaveProperty('truncatedAtSource');
   });
 
@@ -326,7 +325,7 @@ describe('loadBuildTranscript', () => {
       true,
     );
     const store = fakeStore({});
-    const page = await loadBuildTranscript(store, current);
+    const page = await loadBuildTranscript(store, current, isMcpPresenceEventText);
     expect(page.entries).toEqual([
       expect.objectContaining({ kind: 'agent_note', text: 'Evidence brief: players stall at level 2.' }),
     ]);

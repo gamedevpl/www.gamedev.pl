@@ -6,7 +6,7 @@ import { catalogMediaUrl, isPlatformAuthor, type CatalogEntry } from './catalog.
 import { PixelIcon } from './PixelIcon.js';
 import { ShareGameButton } from './ShareGameButton.js';
 import { VoteWidget } from './VoteWidget.js';
-import { creatorPath, studioPath } from './router.js';
+import { PLATFORM_HANDLE, creatorPath, studioPath } from './core/router.js';
 import { recordRemixStep } from './visitTelemetry.js';
 
 type GameDetailPageProps = {
@@ -37,7 +37,7 @@ export function GameDetailPage({ game, state, onPlay, onPlayTogether, onRemix, o
 
   useEffect(() => {
     if (!game) return;
-    recordRemixStep('offered', { control: 'page' });
+    recordRemixStep(game.editor === 'content' ? 'offered' : 'no_lane', { control: 'page' });
   }, [game]);
 
   if (state === 'loading') {
@@ -64,7 +64,10 @@ export function GameDetailPage({ game, state, onPlay, onPlayTogether, onRemix, o
   const primaryScreenshot = previewScreenshot(game);
   const screenshot = screenshots.find((candidate) => candidate.name === selectedScreenshotName) ?? primaryScreenshot;
   const authorLabel = isPlatformAuthor(game.submittedBy) ? t('catalog.platformAuthor') : game.submittedBy;
-  const authorPath = game.creatorHandle ? creatorPath(game.creatorHandle) : null;
+  const authorPath =
+    game.creatorHandle && !isPlatformAuthor(game.submittedBy) && game.creatorHandle !== PLATFORM_HANDLE
+      ? creatorPath(game.creatorHandle)
+      : null;
   const isOwner = Boolean(
     user?.handle && game.creatorHandle && user.handle.toLowerCase() === game.creatorHandle.toLowerCase(),
   );
@@ -100,9 +103,11 @@ export function GameDetailPage({ game, state, onPlay, onPlayTogether, onRemix, o
               <PixelIcon name="wrench" size={13} /> {t('gamePage.openStudio')}
             </a>
           ) : null}
-          <button type="button" className="secondary-btn game-page-remix" onClick={remix}>
-            <PixelIcon name="wrench" size={13} /> {t('catalog.remix')}
-          </button>
+          {game.editor === 'content' ? (
+            <button type="button" className="secondary-btn game-page-remix" onClick={remix}>
+              <PixelIcon name="wrench" size={13} /> {t('catalog.remix')}
+            </button>
+          ) : null}
           <ShareGameButton slug={game.slug} title={game.title} />
         </div>
       </header>

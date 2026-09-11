@@ -4,7 +4,7 @@ import type { ContentChecker } from '../platform/moderation.js';
 import type { PublishedSlugGate } from '../catalog/published-slugs.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import type { Store } from '../platform/store.js';
-import { logModerationRejection } from '../telemetry/moderation-metrics.js';
+import { logModerationRejection } from '../platform/moderation-metrics.js';
 
 /**
  * Written player feedback (docs/improvement-loop-plan.md, signal source #1) — free
@@ -18,7 +18,7 @@ import { logModerationRejection } from '../telemetry/moderation-metrics.js';
  *    `submissions/{n}` document at all, so addressing by submission would silently
  *    drop the majority of real feedback, the exact bug telemetry and votes both hit
  *    and fixed. Storage follows suit: `games/{slug}/playerFeedback/{id}`, not
- *    `submissions/{issueNumber}/playerFeedback/{id}` (see store.ts `PlayerFeedbackRecord`
+ *    `submissions/{jobId}/playerFeedback/{id}` (see store.ts `PlayerFeedbackRecord`
  *    for the full correction — the plan doc originally specified the submission path).
  * 2. **Requires a session.** Votes chose public-read/session-write; free text is a
  *    materially larger abuse surface than a thumb (moderation bypass attempts, spam
@@ -166,7 +166,7 @@ export async function registerPlayerFeedbackRoutes(
       const currentTime = now();
 
       // 3. Coarse per-IP rate limit.
-      if (isRateLimited(feedbackByIp, request.ip, currentTime, maxPerWindow, rateLimitWindowMs)) {
+      if (isRateLimited(feedbackByIp, request.clientIp, currentTime, maxPerWindow, rateLimitWindowMs)) {
         return reply.status(429).send({ error: 'too many feedback requests, please try again later' });
       }
 

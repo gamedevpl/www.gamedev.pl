@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import githubIcon from './assets/github-mark-white.svg';
 import { bugReportUrl, REPO_URL } from './github.js';
 import { OPERATOR_LEGAL_NAME } from './legal/operator.js';
-import { contactPath, legalPath } from './router.js';
+import { contactPath, legalPath } from './core/router.js';
 import { currentVisitId } from './visitTelemetry.js';
 
 /**
@@ -13,17 +13,12 @@ import { currentVisitId } from './visitTelemetry.js';
  * renders on every route including the closed-beta splash, because an anonymous
  * visitor is exactly the person these disclosures are written for.
  *
- * Contact opens the in-app form that emails the published address. The address itself
- * also lives in the legal documents (and as a mailto fallback on the form), not as a
- * second prominent line under the brand. Address and tax id stay in legal/operator.ts
- * until the operator publishes them; rendering empty constants was a CodeQL
- * false-positive (js/trivial-conditional) and is omitted until those values are
- * non-empty.
+ * Contact opens the in-app form. Address and tax id stay in legal/operator.ts until
+ * published; empty constants were a CodeQL false-positive and are omitted.
  */
 export function SiteFooter() {
   const { t } = useTranslation();
   const year = new Date().getFullYear();
-
   return (
     <footer className="site-footer">
       <div className="site-footer__inner">

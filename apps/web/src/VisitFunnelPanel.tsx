@@ -1,18 +1,16 @@
+import { CliFunnelBlock } from './CliFunnelBlock.js';
 import { type VisitFunnel, type VisitsResponse } from './healthApi.js';
 
 /**
  * The visit funnel, rendered beside game health on the operator page.
  *
- * Game health answers "is this game working". This answers the questions that come
- * before that and which no per-game view can reach: how many arrivals there were, how
- * many reached a game at all, how fast, how deep, and where they came from.
+ * Game health answers "is this game working". This answers arrivals, first play,
+ * depth, and where they came from — questions no per-game view can reach.
  *
- * Time-to-first-play and games-per-visit distributions live in TelemetryOverview at
- * the top of the tab (histograms); this panel keeps the medians in its headline row
- * and the acquisition / creation / edit funnels below.
+ * Time-to-first-play and games-per-visit live in TelemetryOverview (histograms);
+ * this panel keeps medians plus the acquisition / creation / edit / CLI funnels.
  *
- * Untranslated for the same reason as the rest of this page — a single-operator
- * surface no player can reach.
+ * Untranslated: a single-operator surface no player can reach.
  */
 
 function percent(part: number, whole: number): string {
@@ -32,6 +30,17 @@ const STEP_LABELS: Record<string, string> = {
 const WAITLIST_LABELS: Record<string, string> = {
   cta_clicked: 'clicked Join waitlist',
   joined: 'joined waitlist',
+};
+
+const PARTY_LABELS: Record<string, string> = {
+  lobby_opened: 'opened a party lobby',
+  guest_joined: 'a phone joined',
+  started: 'started the round',
+  paused: 'paused',
+  resumed: 'resumed',
+  restarted: 'restarted the round',
+  returned_to_lobby: 'went back to the lobby',
+  quit: 'quit from the game menu',
 };
 
 const INVITE_LABELS: Record<string, string> = {
@@ -120,7 +129,7 @@ const PLAY_VIA_LABELS: Record<string, string> = {
 
 const HOW_TO_ENTRY_LABELS: Record<string, string> = {
   play: 'deep link (/play)',
-  home: 'arcade (home)',
+  home: 'catalog (home)',
 };
 
 /** A labelled count with its share of visits, for the small ranked tables. */
@@ -156,6 +165,8 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
     visits: row.visits,
     plays: row.plays,
   }));
+  const remixRows = (funnel.remixing ?? []).filter((row) => row.step !== 'no_lane');
+  const remixNoLane = (funnel.remixing ?? []).find((row) => row.step === 'no_lane')?.visits ?? 0;
 
   return (
     <section className="funnel">
@@ -285,6 +296,41 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
         </div>
 
         <div className="funnel-block">
+          <h3>Party mode</h3>
+          {(funnel.party ?? []).every((row) => row.visits === 0) ? (
+            <p className="health-empty">No party lobby opened in this window.</p>
+          ) : (
+            <table className="health-table">
+              <thead>
+                <tr>
+                  <th scope="col">Step</th>
+                  <th scope="col" className="num">
+                    Visits
+                  </th>
+                  <th scope="col" className="num">
+                    Of lobbies
+                  </th>
+                  <th scope="col" className="num">
+                    From a seat
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {(funnel.party ?? []).map((row) => (
+                  <tr key={row.step}>
+                    <td>{PARTY_LABELS[row.step] ?? row.step}</td>
+                    <td className="num">{row.visits}</td>
+                    <td className="num">{percent(row.visits, funnel.party?.[0]?.visits ?? 0)}</td>
+                    {/* Absence of evidence renders as absence: a rung no route reports shows a dash. */}
+                    <td className="num">{row.barVisits + row.seatVisits === 0 ? '—' : row.seatVisits}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="funnel-block">
           <h3>Invites</h3>
           {(funnel.invites ?? []).every((row) => row.visits === 0) ? (
             <p className="health-empty">Nobody opened an invite in this window.</p>
@@ -346,7 +392,7 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
 
         <div className="funnel-block">
           <h3>Remix</h3>
-          {(funnel.remixing ?? []).every((row) => row.visits === 0) ? (
+          {remixRows.every((row) => row.visits === 0) ? (
             <p className="health-empty">Nobody opened a remix in this window.</p>
           ) : (
             <table className="health-table">
@@ -362,7 +408,7 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
                 </tr>
               </thead>
               <tbody>
-                {(funnel.remixing ?? []).map((row) => (
+                {remixRows.map((row) => (
                   <tr key={row.step}>
                     <td>{REMIX_LABELS[row.step] ?? row.step}</td>
                     <td className="num">{row.visits}</td>
@@ -372,12 +418,13 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
                      * is read the same way rather than as a strict ladder — sharing
                      * without typing is a normal path, not a leak.
                      */}
-                    <td className="num">{percent(row.visits, funnel.remixing?.[0]?.visits ?? 0)}</td>
+                    <td className="num">{percent(row.visits, remixRows[0]?.visits ?? 0)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
+          {remixNoLane > 0 ? <p className="health-note">No editor lane: {remixNoLane}</p> : null}
           {(funnel.remixPaintedVia ?? []).some((row) => row.visits > 0) ? (
             /*
              * One line, not a table: the door split exists to settle a single
@@ -517,6 +564,8 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
             </table>
           )}
         </div>
+
+        <CliFunnelBlock funnel={funnel} />
 
         {funnel.completion?.requests ? (
           <div className="funnel-block">

@@ -52,7 +52,7 @@ gcloud logging read \
 ```
 
 **The logs do not contain the rejected text, deliberately** — see
-`apps/api/src/telemetry/moderation-metrics.ts`. So you cannot read what was submitted, only what it
+`apps/api/src/platform/moderation-metrics.ts`. So you cannot read what was submitted, only what it
 was classified as. If you need the text to judge a false positive, ask the affected creator;
 do not add text logging in the middle of an incident.
 

@@ -59,6 +59,12 @@ describe('verify-erase workflow', () => {
     // out. Anything beyond that is a workflow that can change the thing it is auditing.
     expect(workflow).toMatch(/permissions:\s*\n\s*contents: read\s*\n\s*id-token: write/);
   });
+
+  it('builds workspace packages before running the tsx script', () => {
+    // Nightly died on missing contract dist
+    const body = workflow.replace(/^\s*#.*$/gm, '');
+    expect(body).toMatch(/npm ci[\s\S]*npm run build:packages[\s\S]*npm run verify:erase/);
+  });
 });
 
 describe('setup-wif.sh', () => {

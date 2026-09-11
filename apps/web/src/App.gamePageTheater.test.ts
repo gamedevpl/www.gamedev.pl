@@ -34,6 +34,7 @@ const catalogEntry: CatalogEntry = {
   saves: null,
   world: null,
   sensing: null,
+  editor: 'content',
   orientation: 'any',
   touch: null,
   submittedBy: 'nightshift',

@@ -1,6 +1,6 @@
 // The incumbent seed provider: Gemini on Vertex.
 
-import { createVertexClient } from '../agent-surface/genai.js';
+import { createVertexClient } from '../platform/genai.js';
 import { registerSeedProvider, type SeedProviderConfig } from './seed-provider.js';
 
 export const VERTEX_SEED_PROVIDER = 'vertex';

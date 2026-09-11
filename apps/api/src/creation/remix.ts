@@ -14,12 +14,13 @@ import { applyAssistPatches, assistEnabled, MAX_UTTERANCE_LENGTH, type EditorAss
 import { rememberRemixTurn, type RemixTurn } from './remix-turns.js';
 import { codeLaneDebugEnabled, codeLaneEnabled, type VertexCodeLane } from './code-lane.js';
 import { typeCheckGame } from './type-check.js';
-import { buildSuggestions } from './remix-suggestions.js';
+import { remixClientPayload } from './remix-view.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { Store } from '../platform/store.js';
 import type { ContentChecker } from '../platform/moderation.js';
-import { logModerationRejection } from '../telemetry/moderation-metrics.js';
-import { assembleGameHtml } from '../catalog/assemble.js';
+import { logModerationRejection } from '../platform/moderation-metrics.js';
+import { peekQuota } from '../platform/quota-peek.js';
+import { assembleGameHtml } from '../platform/assemble.js';
 import type { GitHubClient } from '../catalog/github-client.js';
 import { type EditingGate, type CreationGate } from './creation-limits.js';
 import {
@@ -29,16 +30,16 @@ import {
   type RemixSaveContent,
   type RemixSaveParams,
 } from './remix-save.js';
+import type { OpenProposalInput, OpenProposalResult, ProposalDeps } from '../community/proposals.js';
 import {
-  openProposal,
-  PROPOSAL_NO_JOB,
   MAX_PROPOSAL_DESCRIPTION_LENGTH,
   MAX_PROPOSAL_TITLE_LENGTH,
   MIN_PROPOSAL_DESCRIPTION_LENGTH,
-  type ProposalDeps,
-} from '../community/proposals.js';
+  PROPOSAL_NO_JOB,
+} from '../platform/proposal-limits.js';
 import type { ProposalBase } from '../platform/store.js';
 import type { SourceFile } from '../delivery/games-store.js';
+import { isPublished } from '../platform/publication-state.js';
 
 /**
  * Remix: a player bends a published game while playing it.
@@ -92,6 +93,9 @@ export const REMIX_TTL_MS = 60 * 60_000;
 export const MAX_REMIX_SESSIONS = 500;
 /** Code edits per session — a bound on spend, and on how far a remix can drift. */
 export const MAX_CODE_EDITS = 12;
+
+// Remix had only the global cap; one account drained the day.
+export const DEFAULT_DAILY_REMIX_QUOTA = 120;
 
 interface RemixSession {
   id: string;
@@ -264,11 +268,13 @@ function readRemixId(id: string): { uidTag: string; slug: string; expiresAt: num
 export interface RemixRoutesOptions {
   /** Tells somebody a proposal moved. Best effort — see ProposalDeps.notify. */
   notifyProposal?: ProposalDeps['notify'];
+  // N1: community owns opening a proposal; this route is handed the function.
+  openProposal: (deps: ProposalDeps, input: OpenProposalInput) => Promise<OpenProposalResult>;
   /**
    * Starts the gate on a delivered candidate. Shared with the delivery path so a
    * proposal is checked by exactly the machinery a creator's own upload is.
    */
-  onSourcesDelivered?: (input: { issueNumber: number; slug: string; version: string }) => void | Promise<unknown>;
+  onSourcesDelivered?: (input: { jobId: number; slug: string; version: string }) => void | Promise<unknown>;
   /**
    * Published sources + base pin for a proposal, both lanes.
    *
@@ -279,6 +285,7 @@ export interface RemixRoutesOptions {
    */
   resolveProposalBase?: (slug: string) => Promise<{ base: ProposalBase; files: SourceFile[] } | null>;
   store?: Store;
+  dailyRemixQuota?: number;
   gamesStore?: GamesStore;
   githubClient?: GitHubClient;
   /** Ref the repo-published games are served from — the rebuild pins to it. */
@@ -312,9 +319,55 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
    * Runs after moderation and the per-route limits, immediately before the paid
    * call, so a refusal never spends anything and a spend is never refused late.
    */
-  async function spendEditSlot(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
-    if (!options.editingGate) return true;
+  // Free read before the classifier: a resting platform refuses for nothing.
+  async function editHeadroom(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
     const dateStr = new Date(now()).toISOString().slice(0, 10);
+    if (options.store) {
+      const headroom = await peekQuota(
+        options.store,
+        request.user!.uid,
+        dateStr,
+        options.dailyRemixQuota ?? Number(process.env.DAILY_REMIX_QUOTA ?? DEFAULT_DAILY_REMIX_QUOTA),
+        'remixEdits',
+      );
+      if (!headroom.allowed) {
+        reply.status(429).send({ error: 'daily remix limit reached — the game still plays' });
+        return false;
+      }
+    }
+    if (!options.editingGate) return true;
+    const gate = await options.editingGate.peek(request.user!.uid, dateStr);
+    if (!gate.allowed) {
+      reply.status(503).send({ error: 'editing is resting right now — the game still plays' });
+      return false;
+    }
+    return true;
+  }
+
+  // One slot used to buy five calls; reconciled after.
+  async function spendExtraEditSlots(request: FastifyRequest, extra: number): Promise<void> {
+    if (!options.editingGate || extra <= 0) return;
+    const dateStr = new Date(now()).toISOString().slice(0, 10);
+    for (let index = 0; index < extra; index += 1) {
+      await options.editingGate.checkAndSpend(request.user!.uid, dateStr);
+    }
+  }
+
+  async function spendEditSlot(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
+    const dateStr = new Date(now()).toISOString().slice(0, 10);
+    if (options.store) {
+      const quota = await options.store.checkAndIncrementQuota(
+        request.user!.uid,
+        dateStr,
+        options.dailyRemixQuota ?? Number(process.env.DAILY_REMIX_QUOTA ?? DEFAULT_DAILY_REMIX_QUOTA),
+        'remixEdits',
+      );
+      if (!quota.allowed) {
+        reply.status(429).send({ error: 'daily remix limit reached — the game still plays' });
+        return false;
+      }
+    }
+    if (!options.editingGate) return true;
     const gate = await options.editingGate.checkAndSpend(request.user!.uid, dateStr);
     if (!gate.allowed) {
       reply.status(503).send({ error: 'editing is resting right now — the game still plays' });
@@ -353,7 +406,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     return true;
   }
 
-  async function getSession(request: FastifyRequest): Promise<RemixSession | null> {
+  async function takeSession(request: FastifyRequest): Promise<{ session: RemixSession; rehydrated: boolean } | null> {
     sweep();
     const id = (request.params as { id?: string }).id;
     const uid = request.user?.uid;
@@ -364,9 +417,15 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       // Someone else's remix is indistinguishable from an expired one, which is
       // the honest answer as well as the safe one.
       if (session.ownerUid !== uid) return null;
-      return session;
+      return { session, rehydrated: false };
     }
-    return rehydrate(id, uid);
+    const rebuilt = await rehydrate(id, uid);
+    return rebuilt ? { session: rebuilt, rehydrated: true } : null;
+  }
+
+  async function getSession(request: FastifyRequest): Promise<RemixSession | null> {
+    const found = await takeSession(request);
+    return found?.session ?? null;
   }
 
   /**
@@ -439,7 +498,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
   } | null> {
     const gamesStore = options.gamesStore;
     const publication = options.store ? await options.store.getPublication(slug) : null;
-    if (gamesStore && publication?.state === 'published') {
+    if (gamesStore && isPublished(publication)) {
       const manifest = await gamesStore.getManifest(slug, publication.currentVersion);
       if (!manifest) return null;
       const entries = await Promise.all(
@@ -557,30 +616,45 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       // privilege. Whether *this* game can actually be assembled is answered
       // on the first request that needs it rather than paid for here.
       const canCode = Boolean(options.codeLane && codeLaneEnabled());
-      return reply.send({
-        remixId: id,
-        // The declaration drives the sliders; its defaults are the starting values.
-        params: definition?.params ?? null,
-        values: definition?.params
-          ? Object.fromEntries(Object.entries(definition.params).map(([key, spec]) => [key, spec.default]))
-          : null,
-        // The collections half of the declaration, defaults included — what the
-        // painter renders. Already validated (it parsed), already public (it
-        // ships inside the game's own bundle), and edits to it never come back
-        // to this server: painted content lives in the player's session and
-        // reaches the game over the bridge, exactly like params.
-        content: definition && Object.keys(definition.content).length > 0 ? definition.content : null,
-        layers: definition && definition.layers && Object.keys(definition.layers).length > 0 ? definition.layers : null,
-        constraints: definition?.constraints ?? null,
-        contentDefaults: defaultCollections(definition, loaded.sources[EDITOR_CONTENT_FILE]),
-        canAssist,
-        canCode,
-        // What is worth saying here, derived from what this game can do.
-        suggestions: buildSuggestions(definition, { canAssist, canCode }),
-        expiresInMs: REMIX_TTL_MS,
-      });
+      return reply.send(
+        remixClientPayload({
+          remixId: id,
+          definition,
+          contentDefaults: defaultCollections(definition, loaded.sources[EDITOR_CONTENT_FILE]),
+          canAssist,
+          canCode,
+          expiresInMs: REMIX_TTL_MS,
+        }),
+      );
     },
   );
+
+  app.get('/api/remixes/:id', { config: { rateLimit: { max: 30, timeWindow: 60_000 } } }, async (request, reply) => {
+    if (!requireUser(request, reply)) return;
+    const found = await takeSession(request);
+    if (!found) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
+    const { session, rehydrated } = found;
+    let html: string | null = null;
+    if (!rehydrated && Object.keys(session.overrides).length > 0) {
+      html = await rebuild(session);
+    }
+    const canAssist = Boolean(options.assistant && assistEnabled() && session.definition?.params);
+    const canCode = Boolean(options.codeLane && codeLaneEnabled());
+    return reply.send(
+      remixClientPayload({
+        remixId: session.id,
+        definition: session.definition,
+        contentDefaults: defaultCollections(session.definition, session.sources[EDITOR_CONTENT_FILE]),
+        canAssist,
+        canCode,
+        expiresInMs: Math.max(0, session.expiresAt - now()),
+        html,
+        undoable: !rehydrated && session.history.length > 0,
+        turns: rehydrated ? [] : session.turns,
+        rehydrated,
+      }),
+    );
+  });
 
   app.post(
     '/api/remixes/:id/assist',
@@ -594,6 +668,8 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       }
       const body = AssistSchema.safeParse(request.body);
       if (!body.success) return reply.status(400).send({ error: 'invalid request' });
+
+      if (!(await editHeadroom(request, reply))) return;
 
       // Anonymous players reach a model here, so the same fail-closed check every
       // other creator-text path uses runs first, before a paid call.
@@ -733,6 +809,8 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       const body = AssistSchema.safeParse(request.body);
       if (!body.success) return reply.status(400).send({ error: 'invalid request' });
 
+      if (!(await editHeadroom(request, reply))) return;
+
       if (options.contentChecker) {
         const verdict = await options.contentChecker.check(body.data.utterance);
         if (!verdict.allowed) {
@@ -801,6 +879,9 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         // on purpose: opening it is a deploy, because it should be deliberate,
         // and closing it must not wait for one, because until it closes the log
         // is filling with players' own words. Emission is what this gates — the
+        // The earlier slot covers one call; the rest land here.
+        await spendExtraEditSlots(request, Math.max(0, (outcome.tokens?.calls ?? 1) - 1));
+
         // lane may still assemble a trace, but nothing leaves the process.
         const tracing = codeLaneDebugEnabled() && !(await options.editingGate?.isTracePaused());
         if (tracing) {
@@ -1009,7 +1090,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         // Test / degraded deployments that never wired the shared resolver: the session
         // already holds the store-lane sources, so propose can still work for those.
         const publication = await options.store.getPublication(session.slug);
-        if (publication?.state !== 'published' || !publication.currentVersion) {
+        if (!isPublished(publication) || !publication.currentVersion) {
           return reply.status(409).send({ error: 'not_published' });
         }
         base = { kind: 'store', version: publication.currentVersion };
@@ -1027,7 +1108,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       const files = Object.entries(merged).map(([path, fileContent]) => ({ path, content: fileContent }));
       bakeRemixEditorDefaults(files, session.definition, params, content);
 
-      const result = await openProposal(
+      const result = await options.openProposal(
         {
           store: options.store,
           gamesStore: options.gamesStore,
@@ -1065,7 +1146,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         // constant. The trigger uses the number only to label the build.
         void Promise.resolve(
           options.onSourcesDelivered({
-            issueNumber: PROPOSAL_NO_JOB,
+            jobId: PROPOSAL_NO_JOB,
             slug: session.slug,
             version: result.proposal.version,
           }),
@@ -1251,7 +1332,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
 
       const saved = await saveRemixAsStudioDraft({
         uid: request.user!.uid,
-        ip: request.ip,
+        ip: request.clientIp,
         parentSlug: session.slug,
         parentVersion,
         parentTitle: session.title,

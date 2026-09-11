@@ -9,7 +9,7 @@ const TOOLS = { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'g
 
 function brief(overrides: Partial<BuildBrief> = {}): BuildBrief {
   return {
-    issueNumber: ISSUE,
+    jobId: ISSUE,
     slug: SLUG,
     spec: 'Deliver parcels between comets while dodging debris.',
     channelToken: 'token',
@@ -69,7 +69,7 @@ describe('managed backend', () => {
     const backend = createManagedBackend({ provider, tools: TOOLS });
     setState('completed');
 
-    const observation = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+    const observation = await backend.observe('session-1', { hasCandidate: false, jobId: ISSUE, slug: SLUG });
 
     expect(observation).toMatchObject({ state: 'completed', hasCandidate: false });
   });
@@ -96,14 +96,14 @@ describe('managed backend', () => {
 
     const result = await backend.dispatch(brief({ channelToken: 'round-token' }));
     setState('idle');
-    await backend.observe(result.ref, { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+    await backend.observe(result.ref, { hasCandidate: false, jobId: ISSUE, slug: SLUG });
 
     expect(started[0].mcpBearerCredential).toEqual({ url: 'https://www.gamedev.pl/api/mcp', token: 'round-token' });
     expect(result.credentialRef).toBe('lease-1');
     expect(released).toEqual(['lease-1']);
     expect(info).toHaveBeenCalledWith(
       {
-        issueNumber: ISSUE,
+        jobId: ISSUE,
         slug: SLUG,
         ref: 'session-1',
         credentialRef: 'lease-1',
@@ -112,7 +112,7 @@ describe('managed backend', () => {
       'managed round credential minted',
     );
     expect(info).toHaveBeenCalledWith(
-      { issueNumber: ISSUE, slug: SLUG, ref: 'session-1', credentialRef: 'lease-1' },
+      { jobId: ISSUE, slug: SLUG, ref: 'session-1', credentialRef: 'lease-1' },
       'managed round credential revoked',
     );
   });
@@ -194,8 +194,8 @@ describe('managed backend', () => {
       budget: { unit: 'tokens', max: 100 },
     });
 
-    const first = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
-    const second = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+    const first = await backend.observe('session-1', { hasCandidate: false, jobId: ISSUE, slug: SLUG });
+    const second = await backend.observe('session-1', { hasCandidate: false, jobId: ISSUE, slug: SLUG });
 
     expect(cancel).toHaveBeenCalledTimes(1);
     expect(first).toMatchObject({
@@ -241,7 +241,7 @@ describe('managed backend', () => {
       setState('in_progress');
       vi.advanceTimersByTime(1_001);
 
-      const observation = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+      const observation = await backend.observe('session-1', { hasCandidate: false, jobId: ISSUE, slug: SLUG });
 
       expect(cancel).toHaveBeenCalledWith('session-1');
       expect(observation).toMatchObject({ state: 'timed_out', hasCandidate: false });
@@ -272,8 +272,8 @@ describe('managed backend', () => {
     });
 
     await backend.dispatch(brief());
-    const first = await backend.observe('copilot-task', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
-    const second = await backend.observe('copilot-task', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+    const first = await backend.observe('copilot-task', { hasCandidate: false, jobId: ISSUE, slug: SLUG });
+    const second = await backend.observe('copilot-task', { hasCandidate: false, jobId: ISSUE, slug: SLUG });
 
     expect(first).toMatchObject({
       state: 'cancelled',
@@ -294,8 +294,8 @@ describe('managed backend', () => {
     await backend.dispatch(brief());
     setState('idle');
 
-    const first = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
-    const second = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+    const first = await backend.observe('session-1', { hasCandidate: false, jobId: ISSUE, slug: SLUG });
+    const second = await backend.observe('session-1', { hasCandidate: false, jobId: ISSUE, slug: SLUG });
 
     expect(first).toMatchObject({ state: 'in_progress', hasCandidate: false });
     // Spent nudge + still idle → completed (leave building).
@@ -314,7 +314,7 @@ describe('managed backend', () => {
 
     await backend.dispatch(brief());
     setState('idle');
-    await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+    await backend.observe('session-1', { hasCandidate: false, jobId: ISSUE, slug: SLUG });
 
     expect(sendMessage).not.toHaveBeenCalled();
   });
@@ -330,7 +330,7 @@ describe('managed backend', () => {
 
     await backend.dispatch(brief());
     setState('idle');
-    const observation = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+    const observation = await backend.observe('session-1', { hasCandidate: false, jobId: ISSUE, slug: SLUG });
 
     expect(sendMessage).not.toHaveBeenCalled();
     expect(observation).toMatchObject({ state: 'idle' });
@@ -347,8 +347,8 @@ describe('managed backend', () => {
 
     await backend.dispatch(brief());
     setState('idle');
-    const first = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
-    const second = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+    const first = await backend.observe('session-1', { hasCandidate: false, jobId: ISSUE, slug: SLUG });
+    const second = await backend.observe('session-1', { hasCandidate: false, jobId: ISSUE, slug: SLUG });
 
     expect(sendMessage).toHaveBeenCalledTimes(1);
     expect(sendMessage.mock.calls[0]?.[1]).toContain('No delivery is recorded for this round');
@@ -371,7 +371,7 @@ describe('managed backend', () => {
     setState('idle');
     setStopReason('requires_action');
 
-    const observation = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+    const observation = await backend.observe('session-1', { hasCandidate: false, jobId: ISSUE, slug: SLUG });
 
     expect(sendMessage).not.toHaveBeenCalled();
     expect(observation).toMatchObject({ state: 'completed', hasCandidate: false });
@@ -398,7 +398,7 @@ describe('managed backend', () => {
     await backend.dispatch(brief());
     setState('idle');
 
-    const observation = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+    const observation = await backend.observe('session-1', { hasCandidate: false, jobId: ISSUE, slug: SLUG });
 
     expect(sendMessage).toHaveBeenCalledTimes(1);
     expect(observation).toMatchObject({ state: 'completed', hasCandidate: false });
@@ -416,9 +416,9 @@ describe('managed backend', () => {
 
     await backend.dispatch(brief());
     setState('idle');
-    await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+    await backend.observe('session-1', { hasCandidate: false, jobId: ISSUE, slug: SLUG });
     signals.previewVersion = 'v20260809T071502153Z-9fbd2f';
-    const second = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+    const second = await backend.observe('session-1', { hasCandidate: false, jobId: ISSUE, slug: SLUG });
 
     expect(sendMessage).toHaveBeenCalledTimes(1);
     expect(second).toMatchObject({ state: 'idle', hasCandidate: false });
@@ -449,9 +449,9 @@ describe('managed backend', () => {
     await backend.dispatch(brief());
     await expect(backend.cancel('session-1')).rejects.toThrow(/interrupt unavailable/);
     expect(releaseCredential).toHaveBeenCalledWith('vault-1');
-    // Cancel has no issueNumber arg; sessionJobs still correlates the revoke log.
+    // Cancel has no jobId arg; sessionJobs still correlates the revoke log.
     expect(info).toHaveBeenCalledWith(
-      { issueNumber: ISSUE, slug: SLUG, ref: 'session-1', credentialRef: 'vault-1' },
+      { jobId: ISSUE, slug: SLUG, ref: 'session-1', credentialRef: 'vault-1' },
       'managed round credential revoked',
     );
   });
@@ -459,7 +459,7 @@ describe('managed backend', () => {
   it('answers null for a session the vendor has forgotten', async () => {
     const { provider } = fakeProvider({ getSession: async () => null });
     const backend = createManagedBackend({ provider, tools: TOOLS });
-    expect(await backend.observe('gone', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG })).toBeNull();
+    expect(await backend.observe('gone', { hasCandidate: false, jobId: ISSUE, slug: SLUG })).toBeNull();
   });
 
   it('releases sandbox state on cleanup', async () => {

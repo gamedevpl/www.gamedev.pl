@@ -1,3 +1,4 @@
+import { retryStorageWrite } from './storage-write-retry.js';
 // The games store: Cloud Storage as the system of record for creator game content.
 //
 // Today the games repo is that record, and git is the medium — which is why ~200 MB of
@@ -17,8 +18,10 @@
 // flag flip plus a re-bake instead of a revert-and-wait, and what stops a stray object
 // resurrecting a withdrawn game.
 
-import type { DeliveryMode, PreflightKind } from '@gamedevpl/contract';
+import type { DeliveryMode } from '@gamedevpl/contract';
 import { randomBytes } from 'node:crypto';
+import { isPublishableMode } from '../platform/publication-state.js';
+import { InvalidUploadError, type PreflightRefusalKind } from '../platform/upload-error.js';
 import { GoogleAuth } from 'google-auth-library';
 import {
   DELIVERY_EXTRA_MODULE_PATTERN,
@@ -26,14 +29,27 @@ import {
   DELIVERY_MAX_FILES,
   DELIVERY_MAX_UPLOAD_BYTES,
   DELIVERY_RESERVED_SEGMENTS,
-} from '../catalog/games-repo-contract.js';
+} from '../platform/games-repo-contract.js';
 import type { GateProgress, GateProgressStage } from './gate-progress.js';
-import { applyGateVerdict, applyPreviewGateVerdict, applyHealthVerdict } from '../creation/version-verdict.js';
-import { hasPlayableHowToPlay } from '../catalog/index-html-generator.js';
-import { parseKitSidecar } from '../agent-surface/kit-registry.js';
-import { KIT_REGISTRY_OBJECT, parseKitRegistry, type KitRegistry } from '../agent-surface/kit-window.js';
-import { findUnresolvedSourceLinks, formatSourceLinkError, sourceFilesToMap } from '../creation/source-link-check.js';
-import { BANNED_ANY_GUIDANCE, describeBannedAnyFinding, findBannedAnyUsages } from '../creation/ts-any-scan.js';
+import { applyGateVerdict, applyPreviewGateVerdict, applyHealthVerdict } from './version-verdict.js';
+import { hasPlayableHowToPlay } from '../platform/how-to-play.js';
+import { isRasterSourcePath } from '../platform/raster-source.js';
+import { forbiddenDeliveryPathReason, forbiddenIndexHtmlWriteReason } from '../platform/delivery-path-guard.js';
+import {
+  canonicalizeUploadedSource,
+  measureUploadedSourceBytes,
+  sourceFileContentFromObject,
+  sourceFileFromObject,
+  sourceObjectBytes,
+  sourceObjectContentType,
+} from './source-file-bytes.js';
+import { parseKitSidecar } from '../platform/kit-registry.js';
+import { KIT_REGISTRY_OBJECT, parseKitRegistry, type KitRegistry } from '../platform/kit-window.js';
+import { findUnresolvedSourceLinks, formatSourceLinkError, sourceFilesToMap } from './source-link-check.js';
+import { BANNED_ANY_GUIDANCE, describeBannedAnyFinding, findBannedAnyUsages } from './ts-any-scan.js';
+import { missingFreshEditorFile } from './editor-upload-requirements.js';
+
+export { forbiddenDeliveryPathReason, forbiddenIndexHtmlWriteReason } from '../platform/delivery-path-guard.js';
 
 export type { GateProgress } from './gate-progress.js';
 
@@ -58,20 +74,7 @@ export const ALLOWED_SOURCE_FILES = DELIVERY_FIXED_FILES;
 /** A game's own `.ts` modules, the one thing it may add beyond the fixed set. */
 const EXTRA_SOURCE_PATTERN = DELIVERY_EXTRA_MODULE_PATTERN;
 
-/**
- * Config-shaped or executable-config paths an externally-authored delivery must never
- * carry. Named separately from the allowlist so the rejection reason can point at the
- * offending path as a config/exec smell rather than a vague "not deliverable".
- *
- * Deliberately *not* part of the shared delivery contract: these are platform-side
- * anti-RCE controls with no games-repo counterpart. The games repo's submit tool has
- * nothing to gain from knowing them — it never sends such a path — while a game that does
- * is either confused or hostile, and either way this side must refuse it whatever the
- * shared contract says. Tightening them is a website-only change and needs no lockstep.
- */
-const FORBIDDEN_DELIVERY_BASENAME =
-  /^(tsconfig(\..*)?\.json|package(-lock)?\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|composer\.json|\.npmrc|\.eslintrc(\..*)?|vite\.config\..+|webpack\.config\..+|rollup\.config\..+|jest\.config\..+|vitest\.config\..+)$/i;
-const FORBIDDEN_DELIVERY_EXTENSION = /\.(js|mjs|cjs|jsx|tsx|sh|bash|zsh|ps1|bat|cmd|exe|bin|yml|yaml|toml|lock)$/i;
+/** Config/exec path refusals live in delivery-path-guard.ts. */
 
 /**
  * First path segments a game may not use.
@@ -116,6 +119,8 @@ const MAX_SCANNED_DELIVERY_BYTES = 1024 * 1024;
 export interface SourceFile {
   path: string;
   content: string;
+  // Raster content is base64 of file bytes, never UTF-8.
+  encoding?: 'utf8' | 'base64';
 }
 
 /**
@@ -131,33 +136,9 @@ export interface SourceFile {
  */
 export type { DeliveryMode } from '@gamedevpl/contract';
 
-/**
- * Whether a version in this mode may ever be published.
- *
- * Called by every path that can make a version live. Deliberately a named predicate
- * rather than an inline `!== 'proposal'`: it is the single place the rule is stated, so a
- * fourth mode cannot be added without an answer here.
- */
-export function isPublishableMode(mode: DeliveryMode | undefined): boolean {
-  // Absent means a legacy manifest from before the field existed — those are publishes.
-  return mode !== 'preview' && mode !== 'proposal';
-}
+export { isPublishableMode };
 
-// Preflight kinds counted by delivery metrics.
-export type PreflightRefusalKind = PreflightKind;
-
-export class InvalidUploadError extends Error {
-  readonly kind?: PreflightRefusalKind;
-  // Required paths the upload lacked, so a caller can offer them.
-  readonly missingPaths?: readonly string[];
-
-  constructor(message: string, kind?: PreflightRefusalKind, missingPaths?: readonly string[]) {
-    super(message);
-    this.name = 'InvalidUploadError';
-    this.kind = kind;
-    this.missingPaths = missingPaths;
-  }
-}
+export { InvalidUploadError, type PreflightRefusalKind };
 
 /** Staging manifest lost a race — caller should re-read and retry. */
 export class StagingGenerationMismatchError extends Error {
@@ -169,52 +150,6 @@ export class StagingGenerationMismatchError extends Error {
 
 /** How many times a staging manifest write may retry after a concurrent update. */
 export const MAX_STAGING_MANIFEST_RETRIES = 64;
-
-/** Hint derived from {@link ALLOWED_SOURCE_FILES} so refusal text cannot drift from the contract. */
-const ALLOWED_SOURCES_HINT = `${ALLOWED_SOURCE_FILES.join(', ')}, or your own .ts modules`;
-
-/**
- * True when a path is config-shaped or executable-config: tsconfig*, package*.json,
- * lockfiles, workflows, shell/JS entrypoints, dotfiles. The reason always names `path`.
- */
-export function forbiddenDeliveryPathReason(path: string): string | null {
-  const basename = path.split('/').pop() ?? path;
-  if (path.startsWith('.') || path.split('/').some((segment) => segment.startsWith('.'))) {
-    return (
-      `path not deliverable: ${path}. Dotfiles and hidden paths are config/executable-shaped — ` +
-      `deliver only game sources (${ALLOWED_SOURCES_HINT}).`
-    );
-  }
-  if (path === 'media' || path.startsWith('media/')) {
-    return (
-      `path not deliverable: ${path}. Media is produced by the platform gate, not uploaded — ` +
-      'deliver game sources only.'
-    );
-  }
-  if (FORBIDDEN_DELIVERY_BASENAME.test(basename) || FORBIDDEN_DELIVERY_EXTENSION.test(basename)) {
-    return (
-      `path not deliverable: ${path}. Config or executable-shaped files are refused — ` +
-      `deliver only game sources (${ALLOWED_SOURCES_HINT}).`
-    );
-  }
-  if (path.includes('.github/') || basename === 'Dockerfile' || basename === 'Makefile') {
-    return `path not deliverable: ${path}. Workflow/build files are refused — deliver only game sources.`;
-  }
-  return null;
-}
-
-// index.html is generated, never hand-authored — see byoca-mcp SKILL.md.
-export function forbiddenIndexHtmlWriteReason(path: string, content: string): string | null {
-  if (path !== 'index.html' || !content.trim()) return null;
-  return (
-    'index.html cannot be staged or patched — it is generated from GAME.json howToPlay, never hand-authored. ' +
-    'Add a valid howToPlay to GAME.json instead: at minimum howToPlay.goal and howToPlay.hint, each a ' +
-    '{"en": "...", "pl": "..."} pair (both languages, both non-empty) — that is what the generator requires ' +
-    'to produce a playable page; optional controls/scoring/mode add more rows. Without it, the game has no ' +
-    'markup and the gate refuses it as unplayable. If an index.html from an earlier round is in the way, ' +
-    'call delete_source_file("index.html").'
-  );
-}
 
 /**
  * Validates one delivery path (shape + allowlist). Used by full uploads and by
@@ -241,28 +176,23 @@ export function assertDeliverableSourcePath(rawPath: string): string {
 
   const allowed =
     (ALLOWED_SOURCE_FILES as readonly string[]).includes(path) ||
-    (EXTRA_SOURCE_PATTERN.test(path) && !path.includes('//'));
+    (EXTRA_SOURCE_PATTERN.test(path) && !path.includes('//')) ||
+    isRasterSourcePath(path);
   if (!allowed) {
     throw new InvalidUploadError(
       `path not deliverable: ${path}. Deliver only your own game's files ` +
-        `(${ALLOWED_SOURCE_FILES.join(', ')}, or your own .ts modules under the game).`,
+        `(${ALLOWED_SOURCE_FILES.join(', ')}, your own .ts modules, or scenes/cast/images PNG/WebP).`,
     );
   }
   return path;
 }
 
-/**
- * Validates an upload against the delivery contract.
- *
- * Returns the files to store; throws {@link InvalidUploadError} with a message meant for
- * the agent, since the agent is the only one who can fix it and a vague rejection costs a
- * whole session.
- *
- * `mode: 'preview'` skips publish-stage seals (TRACE / PLAYTEST) so a first playable
- * draft can land without burning the agent on capture tooling. Publish (default) keeps
- * the hard requirements — a TRACE-less publishable candidate is still dead on arrival.
- */
-export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = 'publish'): SourceFile[] {
+export function validateSourceUpload(
+  files: SourceFile[],
+  mode: DeliveryMode = 'publish',
+  traceDerivedByGate = false,
+  requireCompiledEditor = false,
+): SourceFile[] {
   if (files.length === 0) throw new InvalidUploadError('no files in upload');
   if (files.length > MAX_UPLOAD_FILES) {
     throw new InvalidUploadError(`too many files: ${files.length} > ${MAX_UPLOAD_FILES}`);
@@ -275,7 +205,11 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
     const path = assertDeliverableSourcePath(file.path);
     if (seen.has(path)) throw new InvalidUploadError(`duplicate path: ${path}`);
 
-    total += Buffer.byteLength(file.content, 'utf8');
+    try {
+      total += measureUploadedSourceBytes(path, file.content);
+    } catch (error) {
+      throw new InvalidUploadError(error instanceof Error ? error.message : `invalid raster: ${path}`);
+    }
     if (total > MAX_UPLOAD_BYTES) throw new InvalidUploadError(`upload too large: over ${MAX_UPLOAD_BYTES} bytes`);
 
     seen.add(path);
@@ -286,6 +220,10 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
   }
   if (!seen.has('game.ts')) {
     throw new InvalidUploadError('game.ts is required — a game must be playable', undefined, ['game.ts']);
+  }
+  const missingEditorFile = requireCompiledEditor ? missingFreshEditorFile(files) : null;
+  if (missingEditorFile) {
+    throw new InvalidUploadError(missingEditorFile.message, undefined, [missingEditorFile.path]);
   }
   const gameJson = files.find((file) => file.path.trim() === 'GAME.json');
 
@@ -347,7 +285,7 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
     //
     // Preview deliveries skip this: they run `check:game --preview` (typecheck→smoke→build)
     // and only produce Studio-playable preview.html — never a publishable green.
-    if (!seen.has('TRACE.json')) {
+    if (!seen.has('TRACE.json') && !traceDerivedByGate) {
       throw new InvalidUploadError(
         'TRACE.json is required for publish — the gate diffs your game against it and cannot ' +
           'verify a publishable delivery without one. Record it with `npm run trace -- <slug> --accept`, ' +
@@ -369,7 +307,7 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
   }
 
   // Refuse missing cross-file symbols before the async gate.
-  const normalized = files.map((file) => ({ path: file.path.trim(), content: file.content }));
+  const normalized = files.map((file) => canonicalizeUploadedSource(file));
 
   // `any` is refused here rather than at the gate, for the reason the gate refuses it at
   // all: it is the difference between a mistake the checker catches and one a player
@@ -431,7 +369,7 @@ export interface VersionManifest {
   version: string;
   createdAt: string;
   /** The job that produced it. */
-  issueNumber: number;
+  jobId: number;
   // Producing round, used to reject stale verdicts.
   roundGeneration?: number;
   /** Which backend and model built it — unattributable cost is how budgets get lost. */
@@ -463,8 +401,13 @@ export interface VersionManifest {
    * `'remix'` marks a private Studio draft forked from a published game via the
    * player remix panel — sources copied (with baked editor defaults), no agent.
    * Never a catalog publication by itself; see {@link forkedFrom}.
+   *
+   * `'seal'` marks a green preview promoted to a publish candidate without an agent:
+   * the same sources, re-delivered so the full gate judges them. It carries no
+   * TRACE.json because no agent could record one — the gate derives it, the same way
+   * it does for `'editor'`.
    */
-  origin?: 'editor' | 'remix';
+  origin?: 'editor' | 'remix' | 'seal';
   /**
    * Parent game this version was forked from, when {@link origin} is `'remix'`.
    * Attribution / genealogy — not a publish path.
@@ -623,7 +566,7 @@ export type StagedSourcesSummary = {
 
 type StagingManifest = {
   slug: string;
-  issueNumber: number;
+  jobId: number;
   roundGeneration: number;
   updatedAt: string;
   files: StagedSourceEntry[];
@@ -634,17 +577,18 @@ export interface GamesStore {
   /** Writes a candidate version's sources. Returns the version id assigned. */
   putCandidateSources(input: {
     slug: string;
-    issueNumber: number;
+    jobId: number;
     // Producing round, persisted with the candidate manifest.
     roundGeneration?: number;
     files: SourceFile[];
+    requireCompiledEditor?: boolean;
     backend?: string;
     model?: string;
     engineRef?: string;
     /** Creator Kit engineRef the sources were built against (BY-06). */
     kitEngineRef?: string;
-    /** Content-only Studio publish or remix fork — see {@link VersionManifest.origin}. */
-    origin?: 'editor' | 'remix';
+    /** Content-only Studio publish, remix fork, or sealed preview — see {@link VersionManifest.origin}. */
+    origin?: 'editor' | 'remix' | 'seal';
     /** Parent provenance for remix forks — see {@link VersionManifest.forkedFrom}. */
     forkedFrom?: { slug: string; version?: string };
     /** Preview skips TRACE/PLAYTEST; default publish. */
@@ -677,7 +621,7 @@ export interface GamesStore {
    */
   putStagedSourceFile(input: {
     slug: string;
-    issueNumber: number;
+    jobId: number;
     roundGeneration: number;
     path: string;
     content: string;
@@ -687,34 +631,30 @@ export interface GamesStore {
   }): Promise<StagedSourcesSummary & { path: string; bytes: number }>;
   deleteStagedSourceFile(input: {
     slug: string;
-    issueNumber: number;
+    jobId: number;
     roundGeneration: number;
     path: string;
     stagedBy?: 'agent' | 'owner';
   }): Promise<StagedSourcesSummary & { path: string }>;
   /** Lists staged paths + byte totals (no contents). */
-  listStagedSources(input: {
-    slug: string;
-    issueNumber: number;
-    roundGeneration: number;
-  }): Promise<StagedSourcesSummary>;
+  listStagedSources(input: { slug: string; jobId: number; roundGeneration: number }): Promise<StagedSourcesSummary>;
   /** Reads staged contents for finalize. */
   getStagedSourceFiles(input: {
     slug: string;
-    issueNumber: number;
+    jobId: number;
     roundGeneration: number;
   }): Promise<Array<SourceFile & { deleted?: true }>>;
   /** Reads one staged path (null when not in the buffer). Used by patch_source_file. */
   getStagedSourceFile(input: {
     slug: string;
-    issueNumber: number;
+    jobId: number;
     roundGeneration: number;
     path: string;
   }): Promise<string | null>;
   /** Clears the staging buffer (all paths, or a named subset). */
   clearStagedSources(input: {
     slug: string;
-    issueNumber: number;
+    jobId: number;
     roundGeneration: number;
     paths?: string[];
   }): Promise<{ cleared: number }>;
@@ -751,6 +691,8 @@ export interface GamesStore {
       screenshot?: string;
       /** Proposal lane only — see {@link GateVerdict.behaviouralDiff}. */
       behaviouralDiff?: boolean;
+      /** Golden the gate derived itself (editor/seal lanes) — merged into sourceFiles. */
+      derivedSourceFiles?: string[];
     },
   ): Promise<void>;
   /** Mid-gate milestone overwrite. */
@@ -814,10 +756,15 @@ export interface GcsGamesStoreOptions {
  * can collide makes them silently not: the loser's sources vanish under the winner's,
  * and the manifest that survives describes a mixture of both. The suffix costs nothing
  * and the timestamp still sorts.
+ *
+ * Six bytes rather than three: at three, 200 ids drawn from one instant collide about
+ * once in 850 draws, which is rare enough to look like a passing test and common enough
+ * to fail CI on an unrelated branch. The suffix is fixed-width either way, so listing
+ * order is unchanged.
  */
 export function defaultVersionId(at: Date): string {
   const stamp = at.toISOString().replace(/[-:.]/g, '');
-  return `v${stamp}-${randomBytes(3).toString('hex')}`;
+  return `v${stamp}-${randomBytes(6).toString('hex')}`;
 }
 
 function assertSlug(slug: string): void {
@@ -870,17 +817,19 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
     if (opts?.ifGenerationMatch !== undefined) {
       url += `&ifGenerationMatch=${opts.ifGenerationMatch}`;
     }
-    const response = await fetchImpl(url, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${await getAccessToken()}`,
-        'content-type': contentType,
-        // Versions are immutable, so their objects are safe to cache indefinitely —
-        // which is what lets a CDN sit in front of this later without a redesign.
-        'cache-control': 'public, max-age=31536000, immutable',
-      },
-      body: new Uint8Array(body),
-    });
+    const response = await retryStorageWrite(async () =>
+      fetchImpl(url, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${await getAccessToken()}`,
+          'content-type': contentType,
+          // Versions are immutable, so their objects are safe to cache indefinitely —
+          // which is what lets a CDN sit in front of this later without a redesign.
+          'cache-control': 'public, max-age=31536000, immutable',
+        },
+        body: new Uint8Array(body),
+      }),
+    );
     if (response.status === 412) {
       throw new StagingGenerationMismatchError(`games store write of ${name} lost a race (412)`);
     }
@@ -900,15 +849,26 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
   }
 
   const versionPrefix = (slug: string, version: string) => `games/${slug}/versions/${version}`;
-  const stagingPrefix = (slug: string, issueNumber: number, roundGeneration: number) =>
-    `games/${slug}/staging/${issueNumber}/g${roundGeneration}`;
+  const stagingPrefix = (slug: string, jobId: number, roundGeneration: number) =>
+    `games/${slug}/staging/${jobId}/g${roundGeneration}`;
+
+  // A manifest written before the field was renamed still carries `issueNumber`
+  // instead of `jobId` — GCS is schemaless, so the TS rename alone leaves every
+  // already-stored manifest unreadable under the new name.
+  function parseVersionManifest(body: Buffer): VersionManifest {
+    const manifest = JSON.parse(body.toString('utf8')) as VersionManifest & { issueNumber?: number };
+    if (manifest.jobId === undefined && manifest.issueNumber !== undefined) {
+      manifest.jobId = manifest.issueNumber;
+    }
+    return manifest;
+  }
 
   async function readStagingManifest(
     slug: string,
-    issueNumber: number,
+    jobId: number,
     roundGeneration: number,
   ): Promise<{ manifest: StagingManifest; generation: number } | null> {
-    const got = await readObjectWithGeneration(`${stagingPrefix(slug, issueNumber, roundGeneration)}/manifest.json`);
+    const got = await readObjectWithGeneration(`${stagingPrefix(slug, jobId, roundGeneration)}/manifest.json`);
     if (!got) return null;
     return {
       manifest: JSON.parse(got.body.toString('utf8')) as StagingManifest,
@@ -944,14 +904,23 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         input.mode === 'preview' ? 'preview' : input.mode === 'proposal' ? 'proposal' : 'publish';
       // A proposal is a sealed candidate — it must carry everything a publish carries,
       // because the reviewer judges a full gate run, not a compile.
-      const files = validateSourceUpload(input.files, mode === 'proposal' ? 'publish' : mode);
+      const files = validateSourceUpload(
+        input.files,
+        mode === 'proposal' ? 'publish' : mode,
+        input.origin === 'seal',
+        input.requireCompiledEditor === true,
+      );
       const at = new Date(now());
       const version = versionId(at);
       const prefix = versionPrefix(input.slug, version);
 
       await Promise.all(
         files.map((file) =>
-          writeObject(`${prefix}/source/${file.path}`, Buffer.from(file.content, 'utf8'), 'text/plain; charset=utf-8'),
+          writeObject(
+            `${prefix}/source/${file.path}`,
+            sourceObjectBytes(file.path, file.content),
+            sourceObjectContentType(file.path),
+          ),
         ),
       );
 
@@ -959,7 +928,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         slug: input.slug,
         version,
         createdAt: at.toISOString(),
-        issueNumber: input.issueNumber,
+        jobId: input.jobId,
         ...(input.roundGeneration !== undefined ? { roundGeneration: input.roundGeneration } : {}),
         backend: input.backend,
         model: input.model,
@@ -976,7 +945,14 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       // Written last: a manifest is what makes a version real, so a run that dies
       // mid-upload leaves orphaned objects rather than a version claiming files that
       // were never stored.
-      await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
+      //
+      // Dual-write the pre-rename key too: a rollback to the previous revision (traffic
+      // reassignment, seconds, no rebuild — docs/runbooks/rollback-deploy.md) runs code
+      // that only reads `issueNumber`. Drop once that revision is no longer a rollback
+      // target. Kept off the returned/typed `manifest` on purpose — only the stored bytes
+      // carry it.
+      const stored = { ...manifest, issueNumber: manifest.jobId };
+      await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(stored, null, 2)), 'application/json');
 
       return { version, manifest };
     },
@@ -986,21 +962,27 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const path = assertDeliverableSourcePath(input.path);
       const indexHtmlReason = forbiddenIndexHtmlWriteReason(path, input.content);
       if (indexHtmlReason) throw new InvalidUploadError(indexHtmlReason);
-      const bytes = Buffer.byteLength(input.content, 'utf8');
+      let stored: Buffer;
+      try {
+        stored = sourceObjectBytes(path, input.content);
+      } catch (error) {
+        throw new InvalidUploadError(error instanceof Error ? error.message : `invalid file: ${path}`);
+      }
+      const bytes = stored.byteLength;
       if (bytes > 1_000_000) {
         throw new InvalidUploadError(`file too large: ${path} is ${bytes} bytes (max 1000000 per file)`);
       }
 
-      const prefix = stagingPrefix(input.slug, input.issueNumber, input.roundGeneration);
+      const prefix = stagingPrefix(input.slug, input.jobId, input.roundGeneration);
       // Source bytes first — orphaned sources without a manifest entry are harmless;
       // a lost race on the manifest is retried below.
-      await writeObject(`${prefix}/source/${path}`, Buffer.from(input.content, 'utf8'), 'text/plain; charset=utf-8');
+      await writeObject(`${prefix}/source/${path}`, stored, sourceObjectContentType(path));
 
       for (let attempt = 0; attempt < MAX_STAGING_MANIFEST_RETRIES; attempt++) {
-        const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+        const existing = await readStagingManifest(input.slug, input.jobId, input.roundGeneration);
         const base = existing?.manifest ?? {
           slug: input.slug,
-          issueNumber: input.issueNumber,
+          jobId: input.jobId,
           roundGeneration: input.roundGeneration,
           updatedAt: new Date(now()).toISOString(),
           files: [],
@@ -1028,7 +1010,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
 
         const manifest: StagingManifest = {
           slug: input.slug,
-          issueNumber: input.issueNumber,
+          jobId: input.jobId,
           roundGeneration: input.roundGeneration,
           updatedAt: new Date(now()).toISOString(),
           files: nextFiles,
@@ -1055,14 +1037,14 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
     async deleteStagedSourceFile(input) {
       assertSlug(input.slug);
       const path = assertDeliverableSourcePath(input.path);
-      const prefix = stagingPrefix(input.slug, input.issueNumber, input.roundGeneration);
+      const prefix = stagingPrefix(input.slug, input.jobId, input.roundGeneration);
       await deleteObject(`${prefix}/source/${path}`).catch(() => undefined);
 
       for (let attempt = 0; attempt < MAX_STAGING_MANIFEST_RETRIES; attempt++) {
-        const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+        const existing = await readStagingManifest(input.slug, input.jobId, input.roundGeneration);
         const base = existing?.manifest ?? {
           slug: input.slug,
-          issueNumber: input.issueNumber,
+          jobId: input.jobId,
           roundGeneration: input.roundGeneration,
           updatedAt: new Date(now()).toISOString(),
           files: [],
@@ -1078,7 +1060,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
 
         const manifest: StagingManifest = {
           slug: input.slug,
-          issueNumber: input.issueNumber,
+          jobId: input.jobId,
           roundGeneration: input.roundGeneration,
           updatedAt: new Date(now()).toISOString(),
           files: nextFiles,
@@ -1102,16 +1084,16 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
 
     async listStagedSources(input) {
       assertSlug(input.slug);
-      const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+      const existing = await readStagingManifest(input.slug, input.jobId, input.roundGeneration);
       return summaryFromManifest(existing?.manifest ?? null);
     },
 
     async getStagedSourceFiles(input) {
       assertSlug(input.slug);
-      const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+      const existing = await readStagingManifest(input.slug, input.jobId, input.roundGeneration);
       const manifest = existing?.manifest;
       if (!manifest || manifest.files.length === 0) return [];
-      const prefix = stagingPrefix(input.slug, input.issueNumber, input.roundGeneration);
+      const prefix = stagingPrefix(input.slug, input.jobId, input.roundGeneration);
       const files = await Promise.all(
         manifest.files.map(async (entry) => {
           if (entry.deleted) return { path: entry.path, content: '', deleted: true as const };
@@ -1121,7 +1103,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
               `staged file missing: ${entry.path} — stage it again, then submit_sources with fromStaged=true`,
             );
           }
-          return { path: entry.path, content: body.toString('utf8') };
+          return sourceFileFromObject(entry.path, body);
         }),
       );
       return files;
@@ -1130,20 +1112,18 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
     async getStagedSourceFile(input) {
       assertSlug(input.slug);
       const path = assertDeliverableSourcePath(input.path);
-      const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+      const existing = await readStagingManifest(input.slug, input.jobId, input.roundGeneration);
       if (!existing?.manifest.files.some((file) => file.path === path)) return null;
-      const body = await readObject(
-        `${stagingPrefix(input.slug, input.issueNumber, input.roundGeneration)}/source/${path}`,
-      );
-      return body ? body.toString('utf8') : null;
+      const body = await readObject(`${stagingPrefix(input.slug, input.jobId, input.roundGeneration)}/source/${path}`);
+      return body ? sourceFileContentFromObject(path, body) : null;
     },
 
     async clearStagedSources(input) {
       assertSlug(input.slug);
-      const prefix = stagingPrefix(input.slug, input.issueNumber, input.roundGeneration);
+      const prefix = stagingPrefix(input.slug, input.jobId, input.roundGeneration);
 
       for (let attempt = 0; attempt < MAX_STAGING_MANIFEST_RETRIES; attempt++) {
-        const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+        const existing = await readStagingManifest(input.slug, input.jobId, input.roundGeneration);
         if (!existing || existing.manifest.files.length === 0) return { cleared: 0 };
 
         const removePaths = input.paths?.length
@@ -1185,7 +1165,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
 
     async getManifest(slug, version) {
       const body = await readObject(`${versionPrefix(slug, version)}/manifest.json`);
-      return body ? (JSON.parse(body.toString('utf8')) as VersionManifest) : null;
+      return body ? parseVersionManifest(body) : null;
     },
 
     async setVersionSummary(slug, version, summary) {
@@ -1195,7 +1175,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const prefix = versionPrefix(slug, version);
       const existing = await readObject(`${prefix}/manifest.json`);
       if (!existing) return;
-      const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
+      const manifest = parseVersionManifest(existing);
       if (manifest.summary === trimmed) return;
       manifest.summary = trimmed.slice(0, 1024);
       await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
@@ -1203,7 +1183,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
 
     async getSourceFile(slug, version, path) {
       const body = await readObject(`${versionPrefix(slug, version)}/source/${path}`);
-      return body ? body.toString('utf8') : null;
+      return body ? sourceFileContentFromObject(path, body) : null;
     },
 
     async listVersions(slug, opts) {
@@ -1234,7 +1214,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         const batch = await Promise.all(
           versions.slice(offset, offset + limit).map(async (version) => {
             const body = await readObject(`${versionPrefix(slug, version)}/manifest.json`);
-            return body ? (JSON.parse(body.toString('utf8')) as VersionManifest) : null;
+            return body ? parseVersionManifest(body) : null;
           }),
         );
         for (const manifest of batch) {
@@ -1261,7 +1241,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const prefix = versionPrefix(input.slug, input.version);
       const existing = await readObject(`${prefix}/manifest.json`);
       if (!existing) throw new Error(`no manifest for ${input.slug}@${input.version}`);
-      const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
+      const manifest = parseVersionManifest(existing);
       if (manifest.deliveryMode !== 'proposal') {
         // Not idempotent-by-accident: re-stamping an already-adopted version would
         // rewrite who adopted it, and re-stamping an ordinary delivery would invent a
@@ -1285,11 +1265,17 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const prefix = versionPrefix(slug, version);
       const existing = await readObject(`${prefix}/manifest.json`);
       if (!existing) throw new Error(`no manifest for ${slug}@${version}`);
-      const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
+      const manifest = parseVersionManifest(existing);
       applyGateVerdict(manifest, result, new Date(now()).toISOString());
       // First writer wins: the ref the *first* gate run checked against is the one the
       // verdict is reproducible against, and a re-run must not quietly repin it.
       if (result.engineRef && !manifest.engineRef) manifest.engineRef = result.engineRef;
+      if (result.derivedSourceFiles) {
+        const known = new Set(manifest.sourceFiles);
+        for (const path of result.derivedSourceFiles) {
+          if (!known.has(path)) manifest.sourceFiles.push(path);
+        }
+      }
       await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
     },
 
@@ -1300,7 +1286,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       for (let attempt = 0; attempt < MAX_STAGING_MANIFEST_RETRIES; attempt++) {
         const got = await readObjectWithGeneration(name);
         if (!got) throw new Error(`no manifest for ${slug}@${version}`);
-        const manifest = JSON.parse(got.body.toString('utf8')) as VersionManifest;
+        const manifest = parseVersionManifest(got.body);
         if (manifest.gate || manifest.previewGate || manifest.health) return;
         manifest.gateProgress = progress;
         try {
@@ -1316,7 +1302,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       // Retries exhausted — drop advisory progress if still open.
       const final = await readObject(name);
       if (!final) throw new Error(`no manifest for ${slug}@${version}`);
-      const finalManifest = JSON.parse(final.toString('utf8')) as VersionManifest;
+      const finalManifest = parseVersionManifest(final);
       if (finalManifest.gate || finalManifest.previewGate || finalManifest.health) return;
     },
 
@@ -1324,7 +1310,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const prefix = versionPrefix(slug, version);
       const existing = await readObject(`${prefix}/manifest.json`);
       if (!existing) throw new Error(`no manifest for ${slug}@${version}`);
-      const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
+      const manifest = parseVersionManifest(existing);
       applyPreviewGateVerdict(manifest, result, new Date(now()).toISOString());
       await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
     },
@@ -1333,7 +1319,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const prefix = versionPrefix(slug, version);
       const existing = await readObject(`${prefix}/manifest.json`);
       if (!existing) throw new Error(`no manifest for ${slug}@${version}`);
-      const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
+      const manifest = parseVersionManifest(existing);
       applyHealthVerdict(manifest, result, new Date(now()).toISOString());
       await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
     },

@@ -5,8 +5,9 @@ import {
   type AgentTask,
   type AgentTasksClient,
   type AgentTaskModel,
-} from '../creation/agent-tasks.js';
-import { createGitHubClient, IN_FLIGHT_RUN_STATUSES, type GitHubClient } from '../catalog/github-client.js';
+} from './agent-tasks.js';
+import type { GitHubClient } from '../catalog/github-client.js';
+import { IN_FLIGHT_RUN_STATUSES } from '../platform/github-run-status.js';
 import {
   ManagedAgentError,
   normalizeManagedState,
@@ -26,6 +27,9 @@ const DEFAULT_CUSTOM_AGENT = 'game-builder-mcp';
 export const COPILOT_AGENT_WORKFLOW_PATH = 'dynamic/copilot-swe-agent/copilot';
 
 export type CopilotGitHubClient = Pick<GitHubClient, 'deleteBranch' | 'listWorkflowRuns' | 'cancelWorkflowRun'>;
+
+// N1: catalog owns the client; the composition root builds it.
+export type CopilotGitHubClientFactory = (input: { token: string; repo: string }) => CopilotGitHubClient;
 
 export interface CopilotManagedProviderDeps {
   tasks?: AgentTasksClient;
@@ -72,7 +76,8 @@ export function createCopilotManagedProvider(
       ...(config.fetchImpl ? { fetchImpl: config.fetchImpl } : {}),
       ...(config.timeoutMs ? { timeoutMs: config.timeoutMs } : {}),
     });
-  const github = deps.github ?? createGitHubClient({ token: config.apiKey, repo });
+  const github = deps.github ?? config.githubClientFactory?.({ token: config.apiKey, repo });
+  if (!github) throw new ManagedAgentError('copilot managed provider requires a GitHub client factory');
 
   return {
     vendor: COPILOT_VENDOR,

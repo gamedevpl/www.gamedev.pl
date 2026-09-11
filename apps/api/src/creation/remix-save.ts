@@ -11,13 +11,13 @@ import {
   type EditorDefinition,
 } from './editor-contract.js';
 import type { GamesStore, SourceFile, VersionManifest } from '../delivery/games-store.js';
-import { InvalidUploadError } from '../delivery/games-store.js';
-import { mintGameSlug } from '../catalog/slug.js';
-import { settleSlugClaim } from '../catalog/slug-backfill.js';
+import { InvalidUploadError } from '../platform/upload-error.js';
+import { mintGameSlug } from '../platform/slug.js';
+import { settleSlugClaim } from '../platform/slug-ownership.js';
 import type { Store } from '../platform/store.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { mintToken } from '../platform/submission-token.js';
-import { peekQuota } from './quota-gate.js';
+import { peekQuota } from '../platform/quota-peek.js';
 import { CREATION_REFUSAL_CODES, type CreationGate } from './creation-limits.js';
 
 export type RemixSaveParams = Record<string, string | number | boolean>;
@@ -220,7 +220,7 @@ export function bakeRemixEditorDefaults(
 async function isSlugTaken(store: Store, slug: string, except?: number): Promise<boolean> {
   try {
     const existing = await store.getSubmissionBySlug(slug);
-    if (existing && existing.issueNumber !== except) return true;
+    if (existing && existing.jobId !== except) return true;
     if (await store.getPublication(slug)) return true;
   } catch {
     // Same forgiveness as createGame: an unavailable store must not block creation.
@@ -290,7 +290,7 @@ export async function saveRemixAsStudioDraft(input: RemixSaveInput): Promise<Rem
     );
     if (!slug) {
       await input.store.setSubmissionAbandoned(jobId, new Date(now()).toISOString());
-      input.log.error({ issueNumber: jobId, slug: wanted }, 'could not claim a slug for a remix save');
+      input.log.error({ jobId, slug: wanted }, 'could not claim a slug for a remix save');
       return { ok: false, status: 409, error: 'name_unavailable', reason: 'name_unavailable' };
     }
 
@@ -314,8 +314,9 @@ export async function saveRemixAsStudioDraft(input: RemixSaveInput): Promise<Rem
     try {
       ({ version, manifest } = await input.gamesStore.putCandidateSources({
         slug,
-        issueNumber: jobId,
+        jobId,
         files,
+        requireCompiledEditor: true,
         backend: 'remix',
         origin: 'remix',
         mode: 'preview',
@@ -344,7 +345,6 @@ export async function saveRemixAsStudioDraft(input: RemixSaveInput): Promise<Rem
     );
 
     await input.store.setSubmissionPreviewVersion(jobId, version);
-    // Also delivered so Studio treats the draft as having sources (edit, improve,
     // shelf) without waiting on a gate that will never run for a preview fork.
     await input.store.setSubmissionDeliveredVersion(jobId, version);
     await input.store.recordJobTransition(jobId, {
@@ -357,7 +357,7 @@ export async function saveRemixAsStudioDraft(input: RemixSaveInput): Promise<Rem
     const token = mintToken(jobId, input.submissionTokenSecret);
     input.log.info?.(
       {
-        issueNumber: jobId,
+        jobId,
         slug,
         parentSlug: input.parentSlug,
         parentVersion: input.parentVersion,

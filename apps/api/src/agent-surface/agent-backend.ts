@@ -17,7 +17,7 @@ import type { AgentObservation } from '../creation/job-state.js';
 /** Everything a backend needs to start a build. Deliberately not a GitHub issue. */
 export interface BuildBrief {
   /** Our job identity, for correlating an agent's reports back to the job. */
-  issueNumber: number;
+  jobId: number;
   roundGeneration?: number;
   /** The game directory the agent may touch, and nothing else. */
   slug?: string;
@@ -104,7 +104,7 @@ export interface AgentBackend {
   // Job identity is for pull-delivery backends; push backends ignore it.
   observe(
     ref: string,
-    options: { hasCandidate: boolean; issueNumber?: number; slug?: string; roundGeneration?: number },
+    options: { hasCandidate: boolean; jobId?: number; slug?: string; roundGeneration?: number },
   ): Promise<AgentObservation | null>;
   /**
    * Stops work, as far as the backend allows.

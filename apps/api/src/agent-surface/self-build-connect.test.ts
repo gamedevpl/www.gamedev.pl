@@ -39,13 +39,11 @@ const MASKED_AUTH = 'Authorization: Bearer ····9a10e';
 
 function stubGitHub(): GitHubClient {
   return {
-    createIssue: async () => ({ number: 1 }),
     getIssueState: async () => ({ state: 'open' as const }),
     findLinkedPR: async (): Promise<LinkedPullRequest | null> => null,
     createIssueComment: async () => ({ id: 1 }),
     updateIssueBody: async () => {},
     closeIssue: async () => {},
-    closePullRequest: async () => {},
     ensureOpenPullRequest: async () => ({ number: 1 }),
     deleteBranch: async () => {},
     getGameSources: async (): Promise<GameSources | null> => null,
@@ -293,7 +291,7 @@ describe('GET /api/submissions/:id/connect (BY-03 / BY-27b)', () => {
     expect(body.slug).toBe(record.slug);
     expect(body.canSwitchToPlatform).toBe(true);
 
-    await store.touchLastAgentSignalAt(record.issueNumber, '2026-07-31T12:00:00Z');
+    await store.touchLastAgentSignalAt(record.jobId, '2026-07-31T12:00:00Z');
     const activeResponse = await app.inject({
       method: 'GET',
       url: `/api/submissions/${id}/connect`,
@@ -441,8 +439,8 @@ describe('GET /api/submissions/:id/connect (BY-03 / BY-27b)', () => {
 
     const originalGet = store.getSubmission.bind(store);
     let reads = 0;
-    store.getSubmission = async (issueNumber: number) => {
-      const hit = await originalGet(issueNumber);
+    store.getSubmission = async (jobId: number) => {
+      const hit = await originalGet(jobId);
       reads += 1;
       // After the connect handler's first ownership/builder check, close the round
       // before ensureRoundGeneration / the revalidation read.
@@ -454,7 +452,7 @@ describe('GET /api/submissions/:id/connect (BY-03 / BY-27b)', () => {
           reason: 'gate_green',
         });
       }
-      return originalGet(issueNumber);
+      return originalGet(jobId);
     };
 
     const response = await app.inject({
@@ -512,13 +510,13 @@ describe('GET /api/submissions/:id/connect (BY-03 / BY-27b)', () => {
     });
     const id = submit.json().token as string;
     const record = (await store.listSubmissionsByOwner('g:creator'))[0]!;
-    await store.recordJobTransition(record.issueNumber, {
+    await store.recordJobTransition(record.jobId, {
       to: 'abandoned',
       at: new Date().toISOString(),
       by: 'system',
       reason: 'no_connect',
     });
-    await store.setSubmissionAbandoned(record.issueNumber, new Date().toISOString());
+    await store.setSubmissionAbandoned(record.jobId, new Date().toISOString());
 
     const response = await app.inject({
       method: 'GET',
@@ -606,9 +604,9 @@ describe('GET /api/submissions/:id/connect (BY-03 / BY-27b)', () => {
     const id = submit.json().token as string;
     const record = (await store.listSubmissionsByOwner('g:creator'))[0]!;
 
-    const first = await store.appendCreatorMessage(record.issueNumber, 'make the ship faster');
-    await store.appendCreatorMessage(record.issueNumber, 'add a pause button');
-    await store.markCreatorMessagesDelivered(record.issueNumber, [first.id]);
+    const first = await store.appendCreatorMessage(record.jobId, 'make the ship faster');
+    await store.appendCreatorMessage(record.jobId, 'add a pause button');
+    await store.markCreatorMessagesDelivered(record.jobId, [first.id]);
 
     const response = await app.inject({
       method: 'GET',

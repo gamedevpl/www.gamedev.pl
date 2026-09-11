@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Ideas for **the platform** belong here — the arcade, the player, the creation flow,
+        Ideas for **the platform** belong here — the catalog, the player, the creation flow,
         party mode. An idea for **a game** is not a feature request: describe it on the site
         and an AI agent will build it.
 

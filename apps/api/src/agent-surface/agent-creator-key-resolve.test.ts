@@ -37,7 +37,7 @@ describe('resolveCreatorAgentKeyForStart (BY-27a)', () => {
     const result = await resolveCreatorAgentKeyForStart(store, key, secret, slug);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.record.issueNumber).toBe(1);
+      expect(result.record.jobId).toBe(1);
     }
   });
 

@@ -138,6 +138,8 @@ export interface ProposalRecord {
   version?: string;
   state: ProposalState;
   stateSince: string;
+  // Gate runs this proposal has started. Each is a full Cloud Build.
+  submitCount?: number;
   transitions: ProposalTransition[];
   /** Creator-supplied, moderated, sanitized. Rendered as text, never as markup. */
   title: string;

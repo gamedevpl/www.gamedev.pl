@@ -100,8 +100,19 @@ each band the CSS assembles differently — see `apps/e2e/src/studio-shell.test.
 
 ## Current architecture
 
-Production games will live in a **dedicated games repo maintained by coding agents**; this app
-is becoming a catalog, player, and spec-submission surface. Self-hosted agent execution (the
+The catalog has **two lanes**, and which one a game is in decides where its sources live.
+**Repo lane:** the ~98 older games, whose system of record is `games/<slug>/` in the
+**dedicated games repo maintained by coding agents**; they are baked to the Cloud Storage
+snapshot on merge. **Store lane:** games built through the platform, delivered over the build
+channel and held in the publication registry with their sources in GCS — these are never
+committed to the games repo, and the play route checks them first. A slug with no publication
+record is a repo-lane game; that is the literal test in `apps/api/src/community/proposal-base.ts`,
+which resolves the difference for a proposal's source base. The serving paths decide
+independently — `catalog/game-play-route.ts` checks store first, `catalog/catalog-routes.ts`
+merges repo entries with untaken store publications. See
+[`architecture.md`](docs/architecture.md) for the full picture.
+
+Self-hosted agent execution (the
 agent-runner container, auth proxy, job tokens, and orchestrator) was **removed for legal
 reasons** and is not a future phase. That finding is about compute **we** operate on a
 seated human subscription — a builder on a hosted platform paid by metered API key is a
@@ -140,16 +151,17 @@ These live under `.claude/skills/` because that path makes them auto-loadable fo
 but **the content is agent-agnostic** and is the project's record of how to work with
 autonomous agents here. Read them directly:
 
-| Playbook                                                                                                   | When it applies                                                                                                                                                                                                                           |
-| ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`.claude/skills/verify-agent-work/SKILL.md`](.claude/skills/verify-agent-work/SKILL.md)                   | **Any time you review, verify, or merge work you didn't write** — from Copilot, another agent, or a subagent. Covers verifying in a throwaway clone, what to check in a diff, and why a passing-looking CI check may be no signal at all. |
-| [`.claude/skills/byoca-mcp/SKILL.md`](.claude/skills/byoca-mcp/SKILL.md)                                   | When **adding or changing MCP / self-build** tools, the agent channel, Studio connect/status for self rounds, or builder handoff — session loop, `end` / `call_end`, quiet fallback.                                                      |
-| [`.claude/skills/copilot-orchestration/SKILL.md`](.claude/skills/copilot-orchestration/SKILL.md)           | When **delegating** work to GitHub Copilot's remote coding agent — dispatch mechanics, which tasks are worth delegating, and the traps (default-branch forking, `action_required` CI).                                                    |
-| [`.claude/skills/game-asset-generation/SKILL.md`](.claude/skills/game-asset-generation/SKILL.md)           | When **generating, styling, or composing game assets** (sprites, audio, UI) for any game specification using modern procedural and tool-assisted workflows.                                                                               |
-| [`.claude/skills/managing-beta-participants/SKILL.md`](.claude/skills/managing-beta-participants/SKILL.md) | When **managing closed beta participants**, approving waitlisted users, pre-approving emails/UIDs, or inspecting beta access controls.                                                                                                    |
-| [`.claude/skills/product-instrumentation/SKILL.md`](.claude/skills/product-instrumentation/SKILL.md)       | When **adding or changing any user-facing flow** (play, creation, sign-in, sharing, party mode) or touching telemetry/metrics code — the measurement contract, privacy invariants, event vocabulary, and the current gap list.            |
-| [`.claude/skills/ingest-desk-reviews/SKILL.md`](.claude/skills/ingest-desk-reviews/SKILL.md)               | When **copying `/review` desk outcomes** (Admin → Assessments → Copy JSON) and turning keep/cut/checklist signal into a catalog improvement plan for coding agents.                                                                       |
-| [`.claude/skills/internal-ops-repo/SKILL.md`](.claude/skills/internal-ops-repo/SKILL.md)                   | When work touches **planning, launch stages, legal/compliance, store submission, ops gates, or product risks** — those docs live in the private `www.gamedev.pl-ops` repo, not here. Also the rules against leaking its content.          |
+| Playbook                                                                                                   | When it applies                                                                                                                                                                                                                                  |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [`.claude/skills/verify-agent-work/SKILL.md`](.claude/skills/verify-agent-work/SKILL.md)                   | **Any time you review, verify, or merge work you didn't write** — from Copilot, another agent, or a subagent. Covers verifying in a throwaway clone, what to check in a diff, and why a passing-looking CI check may be no signal at all.        |
+| [`.claude/skills/byoca-mcp/SKILL.md`](.claude/skills/byoca-mcp/SKILL.md)                                   | When **adding or changing MCP / self-build** tools, the agent channel, Studio connect/status for self rounds, or builder handoff — session loop, `end` / `call_end`, quiet fallback.                                                             |
+| [`.claude/skills/copilot-orchestration/SKILL.md`](.claude/skills/copilot-orchestration/SKILL.md)           | When **delegating** work to GitHub Copilot's remote coding agent — dispatch mechanics, which tasks are worth delegating, and the traps (default-branch forking, `action_required` CI).                                                           |
+| [`.claude/skills/game-asset-generation/SKILL.md`](.claude/skills/game-asset-generation/SKILL.md)           | When **generating, styling, or composing game assets** (sprites, audio, UI) for any game specification using modern procedural and tool-assisted workflows.                                                                                      |
+| [`.claude/skills/managing-beta-participants/SKILL.md`](.claude/skills/managing-beta-participants/SKILL.md) | When **managing closed beta participants**, approving waitlisted users, pre-approving emails/UIDs, or inspecting beta access controls.                                                                                                           |
+| [`.claude/skills/product-instrumentation/SKILL.md`](.claude/skills/product-instrumentation/SKILL.md)       | When **adding or changing any user-facing flow** (play, creation, sign-in, sharing, party mode) or touching telemetry/metrics code — the measurement contract, privacy invariants, event vocabulary, and the current gap list.                   |
+| [`.claude/skills/ingest-desk-reviews/SKILL.md`](.claude/skills/ingest-desk-reviews/SKILL.md)               | When **copying `/review` desk outcomes** (Admin → Assessments → Copy JSON) and turning keep/cut/checklist signal into a catalog improvement plan for coding agents.                                                                              |
+| [`.claude/skills/internal-ops-repo/SKILL.md`](.claude/skills/internal-ops-repo/SKILL.md)                   | When work touches **planning, launch stages, legal/compliance, store submission, ops gates, or product risks** — those docs live in the private `www.gamedev.pl-ops` repo, not here. Also the rules against leaking its content.                 |
+| [`.claude/skills/cli-release/SKILL.md`](.claude/skills/cli-release/SKILL.md)                               | When **changing anything under `apps/cli`** or cutting a `gamedevpl` release — the changelog is the source of truth, its categories decide semver, merging the auto-opened `release(cli)` PR is the cutoff, and the traps the first release hit. |
 
 Both carry a **mandatory self-improvement clause**: if you use one and it turns out to be
 wrong, stale, or missing something that cost you time, update it in the same session. That

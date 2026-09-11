@@ -2,6 +2,7 @@ import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import {
+  createFrameLimiter,
   DEFAULT_MAX_SOCKETS_PER_IP,
   INPUT_KEYS,
   MAX_SOCKET_FRAME_BYTES,
@@ -478,18 +479,6 @@ export class RoomRegistry {
   }
 }
 
-/** Sliding-window frame limiter for one connection. */
-class FrameLimiter {
-  private timestamps: number[] = [];
-
-  allow(now: number): boolean {
-    this.timestamps = this.timestamps.filter((timestamp) => now - timestamp < 1000);
-    if (this.timestamps.length >= MAX_FRAMES_PER_SECOND) return false;
-    this.timestamps.push(now);
-    return true;
-  }
-}
-
 export interface MultiplayerRoutesOptions {
   registry?: RoomRegistry;
   /** Max rooms one IP may open per hour. */
@@ -511,6 +500,8 @@ export interface MultiplayerRoutesOptions {
   relayOnly?: boolean;
   /** Verifies the app service's OIDC token on the internal create route. */
   internalAuth?: InternalAuthVerifier;
+  // Rung 3: an operator has closed hosting during a spike.
+  refusesNewRooms?: () => Promise<boolean>;
 }
 
 /**
@@ -523,10 +514,10 @@ export { DEFAULT_MAX_SOCKETS_PER_IP };
 /**
  * The address to bucket a connection under, or null when it cannot be determined.
  *
- * `request.ip` is the value we want — `trustProxy` resolves the real client rather
- * than Cloud Run's proxy, which is the whole reason app.ts sets it — but the getter
- * reads `raw.socket.remoteAddress`, and an upgrade request with no underlying socket
- * makes it throw rather than return undefined.
+ * `request.clientIp` is the value we want — it resolves the real client rather than
+ * Cloud Run's proxy or, behind a CDN, the edge; see platform/client-address.ts. It is
+ * empty rather than absent for an upgrade request with no underlying socket, because
+ * the `request.ip` behind it throws there rather than returning undefined.
  *
  * Null (rather than a shared "unknown" bucket) is the deliberate choice: connections
  * we cannot classify simply are not capped. Collapsing them together would let one
@@ -536,7 +527,7 @@ export { DEFAULT_MAX_SOCKETS_PER_IP };
  */
 function connectionAddress(request: FastifyRequest): string | null {
   try {
-    return request.ip || null;
+    return request.clientIp || null;
   } catch {
     return null;
   }
@@ -601,8 +592,13 @@ export async function registerMultiplayerRoutes(
         return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
       }
 
-      if (isRateLimited(roomsByIp, request.ip, Date.now(), maxRoomsPerWindow, 60 * 60 * 1000)) {
+      if (isRateLimited(roomsByIp, request.clientIp, Date.now(), maxRoomsPerWindow, 60 * 60 * 1000)) {
         return reply.status(429).send({ error: 'too many rooms' });
+      }
+
+      // Refused here, on the cookie-bearing origin, like every host check.
+      if (options.refusesNewRooms && (await options.refusesNewRooms())) {
+        return reply.status(503).send({ error: 'party mode is paused' });
       }
 
       const ownerUid = request.user?.uid ?? 'unknown';
@@ -667,7 +663,7 @@ export async function registerMultiplayerRoutes(
   if (options.relayClient) return;
 
   app.get('/api/mp/ws', { websocket: true }, (socket, request) => {
-    const limiter = new FrameLimiter();
+    const limiter = createFrameLimiter(MAX_FRAMES_PER_SECOND);
     let role: 'none' | 'host' | 'guest' = 'none';
     let roomCode: string | null = null;
     let slotNumber = 0;

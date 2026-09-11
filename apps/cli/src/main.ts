@@ -1,0 +1,404 @@
+#!/usr/bin/env node
+import { modelCommand } from './model-command.js';
+import { offerKitUpdate, updateKit } from './kit-update.js';
+import { playGame } from './play.js';
+import { resolve as resolvePath } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { stdin, stdout, stderr } from 'node:process';
+import { parseArgv, jsonMode, SLASH_VERBS } from './argv.js';
+import { GIT_REMOTE_HELPER, GIT_REMOTE_SCHEME, cliUsage } from './bin-name.js';
+import { createApi, requireTtyFlag, type ApiClient } from './api.js';
+import {
+  encryptedFileStore,
+  FILE_FALLBACK_WARNING,
+  fileKeychainOptedIn,
+  memoryStore,
+  type TokenStore,
+} from './keychain.js';
+import { runLoopbackLogin } from './login.js';
+import { originFromEnv } from './oauth.js';
+import { CliError, EXIT_GREEN, EXIT_INPUT, EXIT_RED, EXIT_REFUSED } from './exit-codes.js';
+import { describeError, pipeNeedsFlag } from './errors.js';
+import { studioToken } from './studio.js';
+import { checkoutGame, diffGame, findCheckout, formatSyncLines, pullGame, readCheckoutSlug } from './checkout.js';
+import { connectGame } from './connect.js';
+import { formatSubmitLines, submitGame } from './submit.js';
+import { runGitRemoteHelper } from './git-remote-main.js';
+import { runStatusVerb } from './status-watch.js';
+import { dispatchReadVerb } from './verbs.js';
+import { formatHelp } from './help.js';
+import { detectLocalAdapters, handoffBuilder, pickAdapter, workshopTurn } from './workshop.js';
+import { preflightAdapter } from './adapters.js';
+import { createCliTelemetry, type CliTelemetry } from './telemetry.js';
+import { takeInstallReport } from './install-mark.js';
+import { getStatus } from './turn.js';
+
+function storeFromEnv(env: NodeJS.ProcessEnv, warn: (line: string) => void): TokenStore {
+  const token = env.GAMEDEV_TOKEN?.trim();
+  if (token) {
+    return memoryStore({ accessToken: token, tokenType: 'Bearer', scope: 'creator' });
+  }
+  if (fileKeychainOptedIn(env)) {
+    warn(`${FILE_FALLBACK_WARNING}\n`);
+  }
+  return encryptedFileStore(env);
+}
+
+export function isGitRemoteHelper(argv: string[]): boolean {
+  if ((argv[1] ?? argv[0] ?? '').includes(GIT_REMOTE_HELPER)) return true;
+  if (!argv.some((arg) => arg.startsWith(`${GIT_REMOTE_SCHEME}://`))) return false;
+  const first = argv[2];
+  if (first && !first.startsWith('-') && (SLASH_VERBS as readonly string[]).includes(first)) return false;
+  return true;
+}
+
+// A checkout here means working on that game, not a new one.
+export async function openCheckoutGame(
+  api: ApiClient,
+  cwd: string,
+): Promise<{ token: string; slug: string; root: string } | null> {
+  const found = findCheckout(cwd);
+  if (!found) return null;
+  try {
+    return { token: await studioToken(api, found.slug), ...found };
+  } catch {
+    return null;
+  }
+}
+
+// Non-interactive twin of the REPL turn: agent, ladder, optional delivery.
+async function runDelegateVerb(input: {
+  telemetry?: CliTelemetry;
+  api: ApiClient;
+  args: string[];
+  flags: Record<string, string | boolean>;
+  env: NodeJS.ProcessEnv;
+  cwd: string;
+  write: (line: string) => void;
+}): Promise<number> {
+  const request = input.args.join(' ').trim();
+  if (!request) throw new CliError(cliUsage('delegate', '"<task>"'), EXIT_INPUT, '<task>');
+  const adapters = detectLocalAdapters(input.env);
+  const agent = typeof input.flags.agent === 'string' ? input.flags.agent : undefined;
+  const spec = pickAdapter({ adapters, env: input.env }, agent);
+  preflightAdapter(spec, input.env);
+  const opened = await openCheckoutGame(input.api, input.cwd);
+  if (!opened) throw new CliError('not inside a game checkout', EXIT_INPUT, cliUsage('checkout', '<slug>'));
+  let builder = (await getStatus(input.api, opened.token)).builder ?? 'platform';
+  if (builder !== 'self' && input.flags.handoff === true) {
+    const outcome = await handoffBuilder(input.api, opened.token, 'self', builder);
+    if (outcome.pending) {
+      throw new CliError(
+        'handoff pending — the platform agent has not acknowledged yet',
+        EXIT_REFUSED,
+        'retry shortly',
+      );
+    }
+    builder = outcome.builder;
+  }
+  if (builder !== 'self') {
+    throw new CliError(
+      `builder is ${builder} — the platform owns this round`,
+      EXIT_REFUSED,
+      `${cliUsage('delegate', '--handoff')} takes it here`,
+    );
+  }
+  const ws = {
+    ...opened,
+    env: input.env,
+    adapters,
+    telemetry: input.telemetry,
+    builder,
+    pick: async () => '',
+    abort: { current: null },
+    unattended: { deliver: input.flags.submit === true },
+  };
+  const ok = await workshopTurn({
+    api: input.api,
+    ws,
+    request,
+    agent: typeof input.flags.agent === 'string' ? input.flags.agent : undefined,
+    write: input.write,
+  });
+  return ok ? EXIT_GREEN : EXIT_RED;
+}
+
+// Verbs that already speak to the platform; the rest stay silent.
+const TELEMETRY_VERBS = new Set(['kit', 'connect', 'delegate', 'play', 'login', 'update', 'status']);
+
+// One rung per install, so `installed` counts installs not runs.
+export function reportInstall(telemetry: CliTelemetry, env: NodeJS.ProcessEnv, isTty: boolean): void {
+  const report = takeInstallReport({ env, isTty });
+  if (report) telemetry.record('installed', report);
+}
+
+export async function runCli(
+  argv: string[],
+  env: NodeJS.ProcessEnv,
+  io: { stdin: NodeJS.ReadStream; stdout: NodeJS.WriteStream; stderr: NodeJS.WriteStream } = {
+    stdin,
+    stdout,
+    stderr,
+  },
+): Promise<number> {
+  if (isGitRemoteHelper(argv)) {
+    return runGitRemoteHelper(argv, env);
+  }
+  const { verb, args, flags } = parseArgv(argv);
+  const asJson = jsonMode(flags);
+  const origin = originFromEnv(env);
+  const store = storeFromEnv(env, (line) => io.stderr.write(line));
+  const api = createApi({ origin, store, env });
+  const tty = Boolean(io.stdin.isTTY);
+  const telemetry = TELEMETRY_VERBS.has(verb) ? createCliTelemetry(origin) : undefined;
+  if (telemetry) reportInstall(telemetry, env, tty);
+
+  try {
+    if (verb === 'help' || flags.help || flags.h) {
+      io.stdout.write(`${formatHelp()}\n`);
+      return EXIT_GREEN;
+    }
+    if (verb === 'model') {
+      await modelCommand({ args, flags, env, write: (line) => io.stdout.write(`${line}\n`) });
+      return EXIT_GREEN;
+    }
+    if (verb === 'kit') {
+      if (args[0] && args[0] !== 'update') throw new CliError('Use gamedevpl kit [update].', EXIT_INPUT);
+      const controller = new AbortController();
+      const cancel = () => controller.abort();
+      process.once('SIGINT', cancel);
+      try {
+        const options = {
+          api,
+          cwd: process.cwd(),
+          env,
+          telemetry,
+          abort: controller.signal,
+          write: (line: string) => io.stdout.write(`${line}\n`),
+        };
+        if (args[0] === 'update') await updateKit(options);
+        else await offerKitUpdate(options);
+      } finally {
+        process.removeListener('SIGINT', cancel);
+      }
+      return EXIT_GREEN;
+    }
+    if (verb === 'play') {
+      if (!flags.stop && findCheckout(process.cwd())) {
+        try {
+          await offerKitUpdate({
+            api,
+            cwd: process.cwd(),
+            env,
+            telemetry,
+            write: (line) => io.stderr.write(`${line}\n`),
+          });
+        } catch {
+          // Update discovery must not prevent offline local play.
+        }
+      }
+
+      const played = await playGame({
+        cwd: process.cwd(),
+        slug: args[0],
+        origin,
+        env,
+        noOpen: flags['no-open'] === true || asJson,
+        stop: flags.stop === true,
+        telemetry,
+        write: (line) => (asJson ? io.stderr : io.stdout).write(`${line}\n`),
+      });
+      if (asJson) io.stdout.write(`${JSON.stringify(played)}\n`);
+      return EXIT_GREEN;
+    }
+    if (verb === 'login') {
+      const persist = encryptedFileStore(env);
+      const fromFlag = typeof flags.token === 'string' ? flags.token.trim() : '';
+      const fromEnv = env.GAMEDEV_TOKEN?.trim() ?? '';
+      const imported = fromFlag || fromEnv;
+      if (imported) {
+        await persist.set({ accessToken: imported, tokenType: 'Bearer', scope: 'creator' });
+        if (fileKeychainOptedIn(env) && fromEnv) {
+          io.stderr.write(`${FILE_FALLBACK_WARNING}\n`);
+        }
+        io.stdout.write(fromFlag ? 'signed in with --token\n' : 'signed in with GAMEDEV_TOKEN\n');
+        return EXIT_GREEN;
+      }
+      requireTtyFlag(tty, '--token', `GAMEDEV_TOKEN=… ${cliUsage('login')}`);
+      await runLoopbackLogin({
+        origin,
+        store: persist,
+        stdout: io.stdout,
+        stderr: io.stderr,
+        env,
+        isTty: Boolean(io.stdout.isTTY),
+      });
+      telemetry?.record('authorized');
+      return EXIT_GREEN;
+    }
+    if (verb === 'logout') {
+      await store.clear();
+      io.stdout.write('signed out\n');
+      return EXIT_GREEN;
+    }
+    if (verb === 'whoami') {
+      const profile = await api.request<{ handle?: string; uid?: string }>('GET', '/api/me/profile');
+      io.stdout.write(asJson ? `${JSON.stringify(profile)}\n` : `${profile.handle ?? profile.uid ?? 'signed in'}\n`);
+      return EXIT_GREEN;
+    }
+    if (verb === 'status') {
+      const token = args[0];
+      if (!token) throw new CliError(cliUsage('status', '<token-or-slug>'), EXIT_INPUT, '<token>');
+      const max = typeof flags.watch === 'string' ? Number(flags.watch) || 30 : flags.watch ? 30 : 1;
+      return runStatusVerb({
+        api,
+        token,
+        maxPolls: max,
+        asJson,
+        live: Boolean(io.stdout.isTTY) && Boolean(flags.watch) && !asJson,
+        stdout: io.stdout,
+        ...(telemetry ? { telemetry } : {}),
+      });
+    }
+    if (verb === 'checkout') {
+      const slug = args[0];
+      if (!slug) throw new CliError(cliUsage('checkout', '<slug>'), EXIT_INPUT, '<slug>');
+      const dest = args[1] ?? slug;
+      const result = await checkoutGame({ api, slug, dest, allowUndelivered: true });
+      io.stdout.write(`checked out ${slug} → ${result.dest} (origin ${result.remote})\n`);
+      io.stdout.write(
+        `Next: cd ${JSON.stringify(resolvePath(result.dest))} and run gamedevpl to edit interactively.\n`,
+      );
+      return EXIT_GREEN;
+    }
+    if (verb === 'pull') {
+      const slug = args[0] ?? readCheckoutSlug(process.cwd());
+      if (!slug) throw new CliError(cliUsage('pull', '<slug>'), EXIT_INPUT, '<slug>');
+      const dest = args[1] ?? process.cwd();
+      const pulled = await pullGame({ api, slug, dest, force: flags.force === true });
+      if (asJson) io.stdout.write(`${JSON.stringify(pulled)}\n`);
+      else {
+        const extra = pulled.kept.length ? `; kept local ${pulled.kept.join(', ')}` : '';
+        io.stdout.write(`pulled ${slug} @ ${pulled.version} (${pulled.sync.kind.replaceAll('_', ' ')})${extra}\n`);
+      }
+      return EXIT_GREEN;
+    }
+    if (verb === 'diff') {
+      const slug = args[0] ?? readCheckoutSlug(process.cwd());
+      if (!slug) throw new CliError(cliUsage('diff', '<slug>'), EXIT_INPUT, '<slug>');
+      const dest = args[1] ?? process.cwd();
+      const diff = await diffGame({ api, slug, dest });
+      if (asJson) io.stdout.write(`${JSON.stringify(diff)}\n`);
+      else io.stdout.write(`${formatSyncLines(diff).join('\n')}\n`);
+      if (!flags.force && (diff.kind === 'conflict' || diff.kind === 'legacy')) {
+        throw new CliError(formatSyncLines(diff)[0] ?? diff.kind, EXIT_REFUSED, cliUsage('pull'));
+      }
+      return EXIT_GREEN;
+    }
+    if (verb === 'submit' || verb === 'push') {
+      const dest = args[0] ?? process.cwd();
+      const slug = (typeof flags.slug === 'string' ? flags.slug : null) ?? readCheckoutSlug(dest);
+      if (!slug) throw new CliError(cliUsage(verb, '[dir]'), EXIT_INPUT, '--slug');
+      const result = await submitGame({
+        api,
+        slug,
+        dest,
+        force: flags.force === true,
+        publish: flags.publish === true,
+        takeover: flags.takeover === true,
+      });
+      if (asJson) io.stdout.write(`${JSON.stringify(result)}\n`);
+      else io.stdout.write(`${formatSubmitLines(result, slug).join('\n')}\n`);
+      return EXIT_GREEN;
+    }
+    if (verb === 'connect') {
+      const slug = args[0] ?? readCheckoutSlug(process.cwd());
+      if (!slug) throw new CliError(cliUsage('connect', '<slug>'), EXIT_INPUT, '<slug>');
+      if (tty && io.stdout.isTTY && !asJson && !flags.manual && !args[1]) {
+        const { runInkRepl } = await import('./tui/host.js');
+        return runInkRepl({
+          api,
+          env,
+          io,
+          token: await studioToken(api, slug),
+          slug,
+          currentPath: argv[1],
+          initialLine: `/connect ${slug}${flags.handoff ? ' --handoff' : ''}${typeof flags.agent === 'string' ? ` --agent ${flags.agent}` : ''}`,
+        });
+      }
+      const dest = args[1] ?? process.cwd();
+      await connectGame({
+        api,
+        slug,
+        dest,
+        env,
+        interactiveRun: tty && io.stdout.isTTY ? (await import('./agy-interactive.js')).runInteractive : undefined,
+        agent: typeof flags.agent === 'string' ? flags.agent : undefined,
+        handoff: flags.handoff === true,
+        write: (line) => io.stdout.write(`${line}\n`),
+        telemetry,
+      });
+      return EXIT_GREEN;
+    }
+    if (verb === 'delegate') {
+      return runDelegateVerb({
+        api,
+        args,
+        flags,
+        env,
+        cwd: process.cwd(),
+        write: (line) => io.stdout.write(`${line}\n`),
+        telemetry,
+      });
+    }
+    const read = await dispatchReadVerb({ verb, args, flags, api, io, env, currentPath: argv[1] });
+    if (read !== null) return read;
+    if (verb === 'repl') {
+      if (!tty || !io.stdout.isTTY) throw pipeNeedsFlag(`a verb such as ${cliUsage('whoami')}`);
+      const { runInkRepl } = await import('./tui/host.js');
+      const requestedSlug = args[0];
+      const local = findCheckout(process.cwd());
+      const opened =
+        typeof flags.token === 'string' || (requestedSlug && local?.slug !== requestedSlug)
+          ? null
+          : await openCheckoutGame(api, process.cwd());
+      const token =
+        typeof flags.token === 'string'
+          ? flags.token
+          : requestedSlug
+            ? await studioToken(api, requestedSlug)
+            : (opened?.token ?? null);
+      return runInkRepl({
+        api,
+        env,
+        io,
+        token,
+        slug: requestedSlug,
+        initialLine: requestedSlug && !opened ? `/connect ${requestedSlug}` : undefined,
+        currentPath: argv[1],
+        ...(opened ? { checkout: { slug: opened.slug, root: opened.root } } : {}),
+      });
+    }
+    io.stderr.write(`unknown verb ${verb} — ${cliUsage('help')}\n`);
+    return EXIT_INPUT;
+  } catch (error) {
+    const shown = describeError(error);
+    io.stderr.write(`${shown.message}${shown.next ? `\nnext: ${shown.next}` : ''}\n`);
+    return shown.code;
+  } finally {
+    await telemetry?.flush();
+  }
+}
+
+export function isLaunchedEntry(entry: string | undefined, moduleUrl: string = import.meta.url): boolean {
+  if (!entry) return false;
+  try {
+    return moduleUrl === pathToFileURL(resolvePath(entry)).href;
+  } catch {
+    return false;
+  }
+}
+
+if (isLaunchedEntry(process.argv[1])) {
+  void runCli(process.argv, process.env).then((code) => process.exit(code));
+}

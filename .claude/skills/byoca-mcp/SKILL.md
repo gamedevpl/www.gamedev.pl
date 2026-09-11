@@ -28,7 +28,7 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
    - The draft is a starting point, not an authority: where it and the brief disagree, the
      brief wins. `regenerate_seed({ steer })` once if it is plainly not the game the brief
      describes — then keep building rather than waiting on it
-2. Build; `report_progress`; screenshot when something draws via
+2. Build; `report_progress`; every game delivery must include an EditorKit declaration (`EDITOR.json` (required compiled contract; `EDITOR.ts` is optional authoring source)) with at least three meaningful tunables or one content collection. If `EDITOR.ts` is present, run `npm run editor:gen -- <slug>` and ship its matching `EDITOR.json`; the gate rejects stale pairs. Keep generated editor content (`EDITOR.content.json` when applicable and `game/editor-content.ts`) in sync and consumed by the game. Screenshot when something draws via
    `screenshot_upload_url` then `curl --upload-file <png> "$url"`. There is **no**
    base64 `send_screenshot` — PNG bytes must never enter the model. Without shell
    egress, skip mid-build screenshots; the gate still captures on delivery
@@ -621,7 +621,7 @@ a `failed[]` entry naming the reason (`forbiddenIndexHtmlWriteReason` in
 `apps/api/src/delivery/games-store.ts`, checked against the request's own `files[]` in the
 submit route before any overlay runs) — not a soft `warnings` entry an agent could
 ignore. This replaced an earlier, weaker fix: a shape-checked advisory in
-`apps/api/src/catalog/game-manifest-hint.ts` that only flagged a full-document or
+`apps/api/src/agent-surface/game-manifest-hint.ts` that only flagged a full-document or
 non-standard-chrome shape, after transport-tycoon-remake (2026-08-18) delivered a
 hand-written full-document `index.html` whose stray `<main>` title/description block
 rendered as visible text under the canvas — the assembler inlines the file into the
@@ -653,7 +653,7 @@ that fixed an unrelated typecheck bug in `game.ts` never looked at GAME.json aga
 because nothing pointed it there until a Cloud Build log did, minutes later.
 
 `stage_source_file` and `patch_source_file` now run a shallow shape check
-(`apps/api/src/catalog/game-manifest-hint.ts`) whenever the staged/patched path is `GAME.json`,
+(`apps/api/src/agent-surface/game-manifest-hint.ts`) whenever the staged/patched path is `GAME.json`,
 and emit `warnings.code=game_manifest_invalid` on the _same_ reply if it's missing
 `engine.modules` (or `audio` is selected without `audio.sounds`/`audio.music`). This is
 deliberately shallow — it does not know the kit's module catalog, canonical order, or
@@ -678,7 +678,7 @@ genuine breaking change, not that the repo merged twice while the agent was work
 
 It used to mean the latter, and often did: on 2026-08-05 seven kits published in ten hours, a
 `get_kit` answer was good for 45–90 minutes, and three consecutive rounds were refused for age —
-one over a commit that added an internal probe script. `apps/api/src/agent-surface/kit-window.ts` is the rule;
+one over a commit that added an internal probe script. `apps/api/src/platform/kit-window.ts` is the rule;
 the games repo's `docs/kit-versioning.md` is when to bump.
 
 ### One round builds against one engine
@@ -1053,7 +1053,7 @@ queued.
 | Gate milestones                    | `apps/api/src/delivery/gate-progress.ts` + `GamesStore.putGateProgress` (GCS; Studio/MCP poll while checks run)                                                                                                     |
 | Gate verdict (shared)              | `apps/api/src/delivery/gate-verdict.ts` — `readGateVerdict` / `deriveGateStatusString`, used by the channel's `/api/agent/build/gate` route and by `start`'s reconnect visibility                                   |
 | Preview-gate reconciliation        | `apps/api/src/submissions.ts` (`reconcileGateVerdict`) — red `previewGate` → `needs_changes`/`gate_red`; green preview never promotes                                                                               |
-| GAME.json staging shape check      | `apps/api/src/catalog/game-manifest-hint.ts` (`gameManifestHint`) — wired into the stage/patch routes in `agent-channel.ts`                                                                                         |
+| GAME.json staging shape check      | `apps/api/src/agent-surface/game-manifest-hint.ts` (`gameManifestHint`) — wired into the stage/patch routes in `agent-channel.ts`                                                                                   |
 | Round-0 seed generation            | `apps/api/src/creation/game-seed.ts` (`ModelGameSeeder`) + `seedBuild`/`seedStagingMutedUntil` in `submissions.ts` — mute is `builder === 'platform'`-scoped and honours the cooldown only for `workspace` delivery |
 | Seed regeneration                  | `regenerateSeed` in `submissions.ts` + `POST /api/agent/build/seed/regenerate` in `agent-channel.ts` + `regenerate_seed` in `mcp-server.ts`; cap via `store.incrementSeedRegenerations`                             |
 | "How would this round get a seed?" | `AgentBackend.seedDelivery` → `workspace` / `channel`; read before generating, and `seedDeliveryFor` in `submissions.ts` backstops a backend that does not declare it                                               |
@@ -1078,3 +1078,7 @@ the Studio live-preview frame, which additionally takes no pointer input and no 
 
 If you change the MCP tool set, submit warnings, stall vocabulary, or handoff rules
 and this file is wrong or missing the new behaviour, update it in the same session.
+
+### Creator takeover for local delivery
+
+`GET /api/me/studio/games/:slug/sources/session` reports a live lock and its job/generation. The owner can explicitly `POST` the same job/generation with `stopAgent: true` to disconnect an own-agent session before delivering local files. The atomic takeover increments generation and marks the session ended, preserving round budgets and published/preview versions. It refuses managed agents, closed rounds, pending handoffs, and changed generations. The old staging remains isolated in the previous generation; the CLI stages a full local snapshot. `/submit --takeover` is explicit authorization; `--force` is not. This revokes session access, not the local OS process.

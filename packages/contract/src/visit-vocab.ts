@@ -13,6 +13,7 @@ export const VISIT_ROUTE_KINDS = [
   'game',
   'create',
   'party',
+  'cli',
   'notFound',
 ] as const;
 export type VisitRouteKind = (typeof VISIT_ROUTE_KINDS)[number];
@@ -143,6 +144,10 @@ export const CODE_STEPS = [
   'conflict_seen',
   'round_reopened',
   'restored_missing',
+  'file_created',
+  'file_deleted',
+  'file_moved',
+  'files_uploaded',
   'agent_mode_enabled',
   'agent_mode_disabled',
   'agent_console_run',
@@ -154,3 +159,62 @@ export type CodeCompletionKind = (typeof CODE_COMPLETION_KINDS)[number];
 
 export const CODE_COMPLETION_OUTCOMES = ['shown', 'empty', 'failed'] as const;
 export type CodeCompletionOutcome = (typeof CODE_COMPLETION_OUTCOMES)[number];
+
+// One rung per visit per route; `via` says which drove it.
+export const PARTY_STEPS = [
+  'lobby_opened',
+  'guest_joined',
+  'started',
+  'paused',
+  'resumed',
+  'restarted',
+  'returned_to_lobby',
+  'quit',
+] as const;
+export type PartyStep = (typeof PARTY_STEPS)[number];
+
+// `seat` is a phone or the host keyboard, told apart by neither.
+export const PARTY_VIAS = ['bar', 'seat'] as const;
+export type PartyVia = (typeof PARTY_VIAS)[number];
+
+export const CLI_STEPS = [
+  'installed',
+  'authorized',
+  'first_turn',
+  'build_requested',
+  'delivered',
+  'published',
+  'play_requested',
+  'connect_opened',
+  'checkout_opened',
+  'kit_update_available',
+  'kit_update_started',
+  'kit_update_completed',
+  'kit_update_failed',
+  'delegate_offered',
+  'delegate_used',
+  'verify_failed',
+] as const;
+export type CliStep = (typeof CLI_STEPS)[number];
+
+export const CLI_INSTALL_CHANNELS = ['curl', 'ps1', 'update'] as const;
+export type CliInstallChannel = (typeof CLI_INSTALL_CHANNELS)[number];
+
+export const CLI_PLATFORM_OS = ['linux', 'darwin', 'win32'] as const;
+export type CliPlatformOs = (typeof CLI_PLATFORM_OS)[number];
+
+export const CLI_ADAPTERS = [
+  'claude',
+  'codex',
+  'gemini',
+  'vibe',
+  'agy',
+  'cursor',
+  'copilot',
+  'muse',
+  'custom',
+] as const;
+export type CliAdapter = (typeof CLI_ADAPTERS)[number];
+
+export const CLI_VERIFY_STAGES = ['typecheck', 'check_static', 'check_game'] as const;
+export type CliVerifyStage = (typeof CLI_VERIFY_STAGES)[number];

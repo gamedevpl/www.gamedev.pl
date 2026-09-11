@@ -1,0 +1,333 @@
+/* Remix composer: entry, chat/prompt panel (RemixPanel.tsx). */
+
+/* --- Remix: the player-facing live-editing panel --------------------------- */
+
+.remix-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 12px 14px 13px;
+  background: var(--panel, #0f151b);
+  border: 1px solid var(--panel-border, #24313d);
+  border-radius: 16px;
+  /*
+   * 0.94rem, not 0.82: this panel is read at arm's length, one-handed, over a
+   * moving game. The old size was legible on a desk and guesswork on a phone.
+   */
+  font-size: 0.94rem;
+  line-height: 1.45;
+  box-shadow: 0 -14px 34px rgba(0, 0, 0, 0.42);
+}
+
+.remix-panel-note {
+  color: var(--muted);
+}
+
+.remix-grip {
+  display: block;
+  width: 48px;
+  height: 18px;
+  margin: -4px auto 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+  position: relative;
+}
+
+.remix-grip::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--panel-border, #2b333f);
+  transform: translate(-50%, -50%);
+}
+
+.remix-grip:active {
+  cursor: grabbing;
+}
+
+.remix-grip:focus-visible {
+  outline: 2px solid var(--accent, #62dcff);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.remix-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/*
+ * The title is a label, not a headline: the game is the subject here and the
+ * panel is furniture, so it sits back rather than competing for the eye.
+ */
+.remix-title {
+  font-size: 0.74rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.remix-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.remix-keep-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.remix-keep-link:hover {
+  color: var(--text);
+}
+
+.remix-keep-link:focus-visible {
+  color: var(--text);
+  border-radius: 4px;
+  outline: 2px solid var(--accent, #62dcff);
+  outline-offset: 2px;
+}
+
+.remix-keep-offer {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--panel-border, #24313d);
+  border-radius: 12px;
+  background: var(--panel-card, #141b22);
+}
+
+.remix-keep-heading {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.remix-keep-body {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+.remix-keep-field {
+  display: grid;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.remix-keep-field input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--panel-border, #24313d);
+  border-radius: 10px;
+  background: var(--panel, #0f151b);
+  color: inherit;
+  font: inherit;
+}
+
+.remix-keep-field input:focus-visible {
+  outline: 2px solid var(--accent, #62dcff);
+  outline-offset: 1px;
+}
+
+.remix-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--panel-border, #24313d);
+  border-radius: 8px;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.remix-close:hover,
+.remix-close:focus-visible {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+/*
+ * One field, sized for a sentence, with send inside it where a thumb already
+ * is. The old shape — a one-line input with a button beside it — scrolled the
+ * request out of its own box while it was being typed.
+ */
+.remix-ask {
+  position: relative;
+  display: block;
+  background: #0c1116;
+  border: 1px solid var(--panel-border, #24313d);
+  border-radius: 13px;
+  padding: 11px 12px 46px;
+}
+
+.remix-ask textarea {
+  display: block;
+  width: 100%;
+  min-height: 1.45em;
+  max-height: 84px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: 1.42;
+  resize: none;
+  overflow-y: auto;
+}
+
+.remix-ask textarea:focus {
+  outline: none;
+}
+
+.remix-ask:focus-within {
+  border-color: var(--accent, #62dcff);
+}
+
+.remix-ask.is-compact {
+  /*
+   * A row rather than a box with a hole reserved in it. The full-size composer
+   * can afford to place Send absolutely — its bottom padding is the space. Here
+   * there is no such space, and reserving it as a padding-right magic number
+   * only holds while the label is short: "Change it" fits where a longer
+   * translation would sit on top of the text.
+   */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
+  font-size: 0.9rem;
+}
+
+.remix-ask.is-compact textarea {
+  flex: 1;
+  /* A flex item will not shrink below its content without this, and one long
+     unbroken word is enough to push Send off the edge of a phone. */
+  min-width: 0;
+}
+
+.remix-ask.is-compact .remix-send {
+  position: static;
+  flex: none;
+}
+
+.remix-count {
+  position: absolute;
+  left: 12px;
+  bottom: 15px;
+  font-size: 0.7rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.remix-ask.is-compact .remix-count {
+  display: none;
+}
+
+.remix-send {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  min-height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 9px;
+  background: var(--accent, #62dcff);
+  color: #06222b;
+  font-size: 0.86rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.remix-send:disabled {
+  background: #263039;
+  color: var(--muted);
+  cursor: default;
+}
+
+/*
+ * Three things worth saying — inline pills rather than the full-width rows they
+ * were.
+ *
+ * The rows read as a menu you were already aiming at, sat directly under a
+ * composer that grows as you type, and arrived late with the session. All three
+ * put a tap target under a moving finger. Pills are smaller and plainly
+ * secondary to the box above them; `min-height` holds the space before the
+ * suggestions arrive so nothing below them jumps when they do; and
+ * `.is-arming` keeps them inert for the first moments after the panel opens,
+ * while the gesture that opened it is still landing.
+ */
+.remix-tries {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 32px;
+  transition: opacity 0.18s ease;
+}
+
+.remix-tries.is-arming {
+  opacity: 0.5;
+}
+
+.remix-try {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  text-align: left;
+  background: none;
+  border: 1px solid var(--panel-border, #24313d);
+  border-radius: 999px;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.remix-try::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent, #62dcff);
+  opacity: 0.7;
+  flex: none;
+}
+
+.remix-try:hover:not(:disabled),
+.remix-try:focus-visible {
+  border-color: var(--accent, #62dcff);
+  color: inherit;
+}
+
+.remix-try:disabled {
+  cursor: default;
+}

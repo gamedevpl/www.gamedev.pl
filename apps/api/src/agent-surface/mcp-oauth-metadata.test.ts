@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../platform/app.js';
-import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
+import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from '../platform/agent-token.js';
 import { mintGameAgentKey } from './agent-game-key.js';
 import { mintMcpSessionKey } from './mcp-session-key.js';
 import {
@@ -160,13 +160,11 @@ describe('MCP OAuth 401 challenge (BY-18a)', () => {
       sessionSecret: 'dev-session-secret-change-me',
       submissionRoutes: {
         githubClient: {
-          createIssue: async () => ({ number: 42 }),
           getIssueState: async () => ({ state: 'open' as const }),
           findLinkedPR: async () => null,
           createIssueComment: async () => ({ id: 1 }),
           updateIssueBody: async () => {},
           closeIssue: async () => {},
-          closePullRequest: async () => {},
           ensureOpenPullRequest: async () => ({ number: 1 }),
           deleteBranch: async () => {},
           getGameSources: async () => null,
@@ -234,13 +232,11 @@ describe('MCP OAuth 401 challenge (BY-18a)', () => {
       sessionSecret: 'dev-session-secret-change-me',
       submissionRoutes: {
         githubClient: {
-          createIssue: async () => ({ number: 42 }),
           getIssueState: async () => ({ state: 'open' as const }),
           findLinkedPR: async () => null,
           createIssueComment: async () => ({ id: 1 }),
           updateIssueBody: async () => {},
           closeIssue: async () => {},
-          closePullRequest: async () => {},
           ensureOpenPullRequest: async () => ({ number: 1 }),
           deleteBranch: async () => {},
           getGameSources: async () => null,
@@ -306,13 +302,11 @@ describe('MCP OAuth challenge regressions (BY-18a)', () => {
       sessionSecret: 'dev-session-secret-change-me',
       submissionRoutes: {
         githubClient: {
-          createIssue: async () => ({ number: ISSUE }),
           getIssueState: async () => ({ state: 'open' as const }),
           findLinkedPR: async () => null,
           createIssueComment: async () => ({ id: 1 }),
           updateIssueBody: async () => {},
           closeIssue: async () => {},
-          closePullRequest: async () => {},
           ensureOpenPullRequest: async () => ({ number: 1 }),
           deleteBranch: async () => {},
           getGameSources: async () => null,

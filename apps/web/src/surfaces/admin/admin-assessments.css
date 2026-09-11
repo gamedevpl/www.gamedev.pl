@@ -1,0 +1,234 @@
+/* Assessment sweep review (AdminAssessmentsPanel.tsx, AdminAssessmentResolve.tsx). */
+
+.admin-assessments-summary {
+  color: var(--muted);
+  margin: 0 0 1rem;
+}
+
+.admin-assessments-export {
+  font: inherit;
+  font-size: inherit;
+  color: var(--turquoise);
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+  margin-left: 0.35rem;
+}
+
+.admin-assessments-export:hover {
+  border-color: var(--turquoise);
+}
+
+.admin-assessments-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.admin-assessments-table th,
+.admin-assessments-table td {
+  text-align: left;
+  padding: 0.55rem 0.4rem;
+  border-bottom: 1px solid var(--panel-border);
+  vertical-align: top;
+}
+
+.admin-assessments-table th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.admin-assessments-slug {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.admin-assessments-recent-title {
+  margin: 1.4rem 0 0.6rem;
+  font-size: 1rem;
+}
+
+.admin-assessments-recent {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.admin-verdict {
+  display: inline-block;
+  min-width: 3.2rem;
+  text-align: center;
+  border-radius: 6px;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  border: 1px solid var(--panel-border);
+}
+
+.admin-verdict.is-keep {
+  color: var(--turquoise);
+  border-color: rgba(0, 228, 172, 0.55);
+}
+
+.admin-verdict.is-cut {
+  color: var(--error);
+  border-color: rgba(255, 107, 107, 0.55);
+}
+
+.admin-assessments-note {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.admin-assessments-env,
+.admin-assessments-checklist {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-assessment-resolution {
+  margin: 0.4rem 0 0;
+  padding: 0.4rem 0.55rem;
+  border-left: 2px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 0 6px 6px 0;
+}
+
+.admin-resolution-status {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.admin-assessment-resolution.is-addressed .admin-resolution-status {
+  color: var(--turquoise);
+}
+
+.admin-assessment-resolution.is-wont_fix .admin-resolution-status,
+.admin-assessment-resolution.is-deferred .admin-resolution-status {
+  color: var(--muted);
+}
+
+.admin-resolution-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0;
+}
+
+.admin-resolution-form textarea,
+.admin-resolution-form input[type='text'] {
+  width: 100%;
+}
+
+.admin-resolution-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.35rem;
+}
+
+.admin-resolution-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--muted);
+  text-transform: none;
+}
+
+.admin-resolution-error {
+  color: var(--error);
+  font-size: 0.8rem;
+  margin: 0.25rem 0 0;
+}
+
+.admin-review-sweep {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.admin-review-sweep-open,
+.admin-review-sweep-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin: 0.75rem 0;
+}
+
+.admin-review-sweep-actions,
+.admin-review-sweep-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.admin-review-sweep-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.admin-review-sweep-form input,
+.admin-review-sweep-form select {
+  min-width: 7rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--panel-card);
+  color: var(--text);
+  font: inherit;
+  padding: 0.4rem 0.55rem;
+}
+
+.admin-review-sweep-note {
+  flex: 1 1 12rem;
+}
+
+.admin-review-sweep-note input {
+  min-width: 12rem;
+  width: 100%;
+}
+
+.admin-review-sweep-actions button,
+.admin-review-sweep-form button {
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  padding: 0.45rem 0.75rem;
+  cursor: pointer;
+}
+
+.admin-review-sweep-actions button:disabled,
+.admin-review-sweep-form button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.admin-review-sweep-message {
+  margin: 0.4rem 0 0;
+  color: var(--turquoise);
+  font-size: 0.85rem;
+}

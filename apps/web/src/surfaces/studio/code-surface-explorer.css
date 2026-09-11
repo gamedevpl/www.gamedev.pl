@@ -1,0 +1,381 @@
+/* Code surface file explorer: rail, tree rows, tree confirm dialogs (CodeSurfaceExplorerTree.tsx, CodeSurfaceTreeDialogs.tsx). */
+
+.code-surface-rail {
+  min-width: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--panel-border);
+  padding: 8px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.code-surface-rail-item {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: 0.8rem;
+  font-family: var(--mono-font, monospace);
+  cursor: pointer;
+}
+
+.code-surface-rail-item:hover {
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.code-surface-rail-item.is-active {
+  background: rgba(0, 228, 172, 0.1);
+  color: var(--turquoise);
+}
+
+.code-surface-rail-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.code-surface-rail-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--turquoise);
+}
+
+.code-surface-rail-locked {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  cursor: default;
+}
+
+.code-surface-tree-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 4px 6px 6px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.code-surface-tree-tool,
+.code-surface-tree-row-action,
+.code-surface-file-option-delete {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.code-surface-tree-tool:hover,
+.code-surface-tree-tool:focus-visible,
+.code-surface-tree-row-action:hover,
+.code-surface-tree-row-action:focus-visible {
+  border-color: rgba(0, 228, 172, 0.35);
+  color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.08);
+}
+
+.code-surface-file-option-delete:hover,
+.code-surface-file-option-delete:focus-visible {
+  border-color: color-mix(in srgb, var(--error) 40%, transparent);
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 8%, transparent);
+}
+
+.code-surface-tree-tool:disabled,
+.code-surface-tree-row-action:disabled,
+.code-surface-file-option-delete:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.code-surface-tree-rows {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.code-surface-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.code-surface-tree-row .code-surface-rail-item,
+.code-surface-tree-row .code-surface-file-option-open,
+.code-surface-tree-folder-toggle {
+  flex: 1;
+  min-width: 0;
+}
+
+.code-surface-tree-indent {
+  width: calc(var(--tree-depth, 0) * 12px);
+  flex: none;
+}
+
+.code-surface-tree-actions {
+  display: flex;
+  flex: none;
+  opacity: 0;
+}
+
+.code-surface-tree-row:hover .code-surface-tree-actions,
+.code-surface-tree-row:focus-within .code-surface-tree-actions,
+.code-surface-tree-row.is-drop-target .code-surface-tree-actions {
+  opacity: 1;
+}
+
+.code-surface-tree-folder-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.code-surface-tree-folder.is-focused .code-surface-tree-folder-toggle,
+.code-surface-tree-folder.is-drop-target {
+  background: rgba(0, 228, 172, 0.1);
+}
+
+.code-surface-tree-folder-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono-font, monospace);
+  font-size: 0.78rem;
+}
+
+.code-surface-tree-locked {
+  margin-top: 4px;
+}
+
+.code-surface-tree-backdrop {
+  position: fixed;
+  z-index: 1300;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(3, 8, 13, 0.66);
+}
+
+.code-surface-tree-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(100% - 24px, 420px);
+  max-height: min(80%, 28rem);
+  padding: 14px 16px 16px;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  overflow: auto;
+}
+
+.code-surface-tree-dialog-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.code-surface-tree-dialog-head h3 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.code-surface-tree-dialog p {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.84rem;
+}
+
+.code-surface-tree-dialog-warn {
+  color: var(--error);
+}
+
+.code-surface-tree-dialog-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.code-surface-tree-dialog-label input {
+  padding: 8px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--mono-font, monospace);
+  font-size: 0.82rem;
+}
+
+.code-surface-tree-dialog-list {
+  margin: 0;
+  padding-left: 1.2em;
+  max-height: 8rem;
+  overflow: auto;
+  font-family: var(--mono-font, monospace);
+  font-size: 0.78rem;
+}
+
+.code-surface-tree-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.code-surface-tree-dialog-actions button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.code-surface-tree-dialog-confirm {
+  background: var(--turquoise);
+  border-color: transparent;
+  color: #08241d;
+}
+
+.code-surface-tree-dialog-confirm.is-danger {
+  background: var(--error);
+  color: #fff;
+}
+
+@media (max-width: 1099px) {
+  .code-surface-file-option {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    min-height: 44px;
+    padding: 2px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    color: var(--text);
+  }
+
+  .code-surface-file-option:has(.code-surface-file-option-open:hover),
+  .code-surface-file-option:has(.code-surface-file-option-open:focus-visible) {
+    border-color: rgba(0, 228, 172, 0.3);
+    background: rgba(0, 228, 172, 0.07);
+  }
+
+  .code-surface-file-option.is-active {
+    color: var(--turquoise);
+    background: rgba(0, 228, 172, 0.12);
+  }
+
+  .code-surface-file-option.is-locked {
+    color: var(--muted);
+    padding: 8px 9px;
+    cursor: default;
+  }
+
+  .code-surface-file-option-open {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    padding: 8px 7px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .code-surface-file-option-path {
+    min-width: 0;
+    flex: 1;
+    overflow-wrap: anywhere;
+    font-family: var(--mono-font, monospace);
+    font-size: 0.78rem;
+  }
+
+  .code-surface-file-option-status {
+    flex: none;
+    color: var(--muted);
+    font-size: 0.68rem;
+  }
+
+  .code-surface-file-option-delete {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    margin-right: 4px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+  }
+
+  .code-surface-file-option-delete:hover,
+  .code-surface-file-option-delete:focus-visible {
+    border-color: color-mix(in srgb, var(--error) 40%, transparent);
+    color: var(--error);
+    background: color-mix(in srgb, var(--error) 8%, transparent);
+  }
+
+  .code-surface-file-option-delete.is-armed {
+    border-color: color-mix(in srgb, var(--error) 50%, transparent);
+    color: var(--error);
+    background: color-mix(in srgb, var(--error) 12%, transparent);
+  }
+
+  .code-surface-file-option-delete:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .code-surface-tree-actions {
+    opacity: 1;
+  }
+
+  .code-surface-tree-row {
+    min-height: 44px;
+  }
+
+  .code-surface-rail {
+    display: none;
+  }
+}

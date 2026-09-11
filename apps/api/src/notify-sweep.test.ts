@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { buildApp } from './platform/app.js';
 import type { GamesStore } from './delivery/games-store.js';
 import type { CatalogGameEntry, GitHubClient, LinkedPullRequest } from './catalog/github-client.js';
@@ -32,7 +32,6 @@ function publishedGithubClient(): GitHubClient {
     },
   ];
   return {
-    createIssue: async () => ({ number: 42 }),
     getIssueState: async () => ({ state: 'open' }),
     findLinkedPR: async () => mergedPr,
     getGameSources: async () => null,
@@ -53,7 +52,6 @@ function buildingGithubClient(): GitHubClient {
     changedFiles: ['games/sky-dodge/index.html'],
   };
   return {
-    createIssue: async () => ({ number: 42 }),
     getIssueState: async () => ({ state: 'open' }),
     findLinkedPR: async () => openPr,
     getGameSources: async () => null,
@@ -84,6 +82,46 @@ async function buildSweepApp(
 const HOUR_MS = 60 * 60 * 1000;
 
 describe('POST /api/internal/notify-sweep', () => {
+  it('closes a change-request draft the creator walked away from, once it is quiet long enough', async () => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const opened = Date.now();
+    let clock = opened;
+    const store = new InMemoryStore();
+    await store.createSubmission(77, 'g:owner', 'Left Behind');
+    await store.setSubmissionSlug(77, 'left-behind');
+    await store.recordJobTransition(77, {
+      to: 'needs_changes',
+      at: new Date(opened).toISOString(),
+      by: 'gate',
+      reason: 'gate_red',
+    });
+    // Already told: isSweepActive drops it, so hygiene must not use that filter.
+    await store.setSubmissionNotifiedStatus(77, 'needs_changes');
+    expect(await store.listActiveSubmissions()).toHaveLength(0);
+    const app = await buildSweepApp(store, acceptAll, { now: () => clock });
+
+    clock = opened + 13 * DAY;
+    const early = await app.inject({
+      method: 'POST',
+      url: '/api/internal/notify-sweep',
+      headers: { authorization: 'Bearer scheduler-token' },
+    });
+    expect(early.json().closed).toBe(0);
+
+    clock = opened + 15 * DAY;
+    const late = await app.inject({
+      method: 'POST',
+      url: '/api/internal/notify-sweep',
+      headers: { authorization: 'Bearer scheduler-token' },
+    });
+    expect(late.json().closed).toBe(1);
+    const record = await store.getSubmission(77);
+    expect(record?.state).toBe('abandoned');
+    expect(record?.abandonedAt).toBeTruthy();
+    expect(record?.transitions?.at(-1)).toMatchObject({ to: 'abandoned', by: 'system', reason: 'quiet' });
+    expect(await store.listOpenRounds()).toHaveLength(0);
+  });
+
   it('rejects callers that fail OIDC verification with 401', async () => {
     const store = new InMemoryStore();
     const app = await buildSweepApp(store, { verify: async () => false });
@@ -115,6 +153,7 @@ describe('POST /api/internal/notify-sweep', () => {
     expect(first.statusCode).toBe(200);
     expect(first.json()).toEqual({
       scanned: 1,
+      closed: 0,
       emitted: 1,
       alerts: 0,
       alerted: 0,
@@ -137,6 +176,7 @@ describe('POST /api/internal/notify-sweep', () => {
     });
     expect(second.json()).toEqual({
       scanned: 0,
+      closed: 0,
       emitted: 0,
       alerts: 0,
       alerted: 0,
@@ -403,7 +443,7 @@ describe('health re-gate verdicts on the notify sweep', () => {
         slug: 'sky-dodge',
         version: 'v1',
         createdAt: '2026-06-30T00:00:00.000Z',
-        issueNumber: 1_000_042,
+        jobId: 1_000_042,
         sourceFiles: [],
         ...(health ? { health: { ...health, report: 'trace diverged' } } : {}),
       }),
@@ -424,6 +464,82 @@ describe('health re-gate verdicts on the notify sweep', () => {
     });
     return { app, store };
   }
+
+  it('scans the games collection once per window, not on every two-minute run', async () => {
+    // Every run listed every publication; at 120 games that was most of the day's reads.
+    const { app, store } = await appWithPendingCheck(null);
+    const list = vi.spyOn(store, 'listPublications');
+    await sweep(app);
+    await sweep(app);
+    expect(list).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
+  it('forgets the cached scan the moment a verdict is recorded', async () => {
+    const { app, store } = await appWithPendingCheck({ green: true, ranAt: RAN_AT });
+    const list = vi.spyOn(store, 'listPublications');
+    expect(await sweep(app)).toMatchObject({ healthResolved: 1 });
+    // A stale list would re-resolve — and re-notify — the same check next run.
+    expect(await sweep(app)).toMatchObject({ healthResolved: 0 });
+    expect(list).toHaveBeenCalledTimes(2);
+    await app.close();
+  });
+
+  it('resolves the check the record holds now, not the one the scan saw', async () => {
+    // A re-gate inside the window must not be resolved by the old check.
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.upsertUser({ uid: 'g:creator' });
+    await store.createSubmission(1_000_042, 'g:creator', 'Sky Dodge');
+    await store.setSubmissionPublishedAt(1_000_042, '2026-07-01T00:00:00.000Z');
+    await store.setPublication({
+      slug: 'sky-dodge',
+      state: 'published',
+      currentVersion: 'v1',
+      publishedAt: '2026-07-01T00:00:00.000Z',
+    });
+    await store.setPublicationHealthCheck('sky-dodge', { version: 'v1', requestedAt: REQUESTED_AT });
+
+    // No answer yet, so this sweep resolves nothing and leaves the scan cached.
+    let health: { green: boolean; ranAt: string } | null = null;
+    const gamesStore = {
+      getManifest: async () => ({
+        slug: 'sky-dodge',
+        version: 'v1',
+        createdAt: '2026-06-30T00:00:00.000Z',
+        jobId: 1_000_042,
+        sourceFiles: [],
+        ...(health ? { health: { ...health, report: 'trace diverged' } } : {}),
+      }),
+    } as unknown as GamesStore;
+
+    const app = await buildApp({
+      store,
+      sessionSecret: 'dev-session-secret-change-me',
+      adminUids: 'g:boss',
+      submissionRoutes: {
+        githubToken: 'token',
+        submissionTokenSecret: secret,
+        gamesRepo: 'gamedevpl/www.gamedev.pl-games',
+        githubClient: publishedGithubClient(),
+        internalAuthVerifier: acceptAll,
+        agentChannel: { gamesStore },
+      },
+    });
+
+    expect(await sweep(app)).toMatchObject({ healthResolved: 0 });
+
+    // Now the first run answers, and an operator re-gates a newer version.
+    health = { green: true, ranAt: RAN_AT };
+    await store.setPublicationHealthCheck('sky-dodge', { version: 'v2', requestedAt: '2026-07-30T13:00:00.000Z' });
+
+    // The cached record still says v1/12:00, which that answer would satisfy.
+    expect(await sweep(app)).toMatchObject({ healthResolved: 0 });
+    const check = (await store.getPublication('sky-dodge'))?.healthCheck;
+    expect(check).toMatchObject({ version: 'v2', requestedAt: '2026-07-30T13:00:00.000Z' });
+    expect(check?.verdictAt).toBeUndefined();
+    await app.close();
+  });
 
   it('nudges the creator and copies the operator when a live game goes red', async () => {
     const { app, store } = await appWithPendingCheck({ green: false, ranAt: RAN_AT });

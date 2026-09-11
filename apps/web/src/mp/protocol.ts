@@ -9,13 +9,16 @@
  * the other), so every frame is narrowed by the guards below before it is used.
  */
 
-import { INPUT_KEYS, MP_PROTOCOL_VERSION, ROOM_PHASES, type InputKey, type RoomPhase } from '@gamedevpl/contract';
+import { INPUT_KEYS, ROOM_PHASES, type InputKey, type RoomPhase } from '@gamedevpl/contract';
+import { BRIDGE_NAMESPACE, PROTOCOL_VERSION, type GdpEnvelope } from '../editorControllerProtocol.js';
 
 export { INPUT_KEYS, ROOM_PHASES, type InputKey, type RoomPhase };
+export { BRIDGE_NAMESPACE, PROTOCOL_VERSION, type GdpEnvelope };
 
-export const PROTOCOL_VERSION = MP_PROTOCOL_VERSION;
-/** Namespace on the bridge, so a game's own postMessage traffic can't be confused for ours. */
-export const BRIDGE_NAMESPACE = 'gdp';
+// Lifecycle the host drives for phones; see docs/multiplayer-plan.md.
+export const PARTY_COMMANDS = ['start', 'pause', 'resume', 'restart', 'lobby', 'quit'] as const;
+
+export type PartyCommand = (typeof PARTY_COMMANDS)[number];
 
 export interface RosterSlot {
   slot: number;
@@ -37,7 +40,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 function isPhase(value: unknown): value is RoomPhase {
-  return value === 'lobby' || value === 'playing' || value === 'ended';
+  return ROOM_PHASES.some((phase) => phase === value);
 }
 
 function isInputKey(value: unknown): value is InputKey {

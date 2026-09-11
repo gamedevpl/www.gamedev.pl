@@ -6,6 +6,7 @@ import { InMemoryStore } from '../platform/store.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { GitHubClient } from '../catalog/github-client.js';
 import type { EditorAssistant } from './editor-assist.js';
+import { openProposal } from '../community/proposals.js';
 
 /*
  * The remix surface's promises, tested at the route: it is signed-in only for
@@ -64,7 +65,7 @@ function stubGamesStore(captures?: {
       slug: 'dog-dash',
       version: 'v1',
       createdAt: 'now',
-      issueNumber: 1,
+      jobId: 1,
       engineRef: 'abc123',
       sourceFiles: Object.keys(SOURCES),
     }),
@@ -75,11 +76,12 @@ function stubGamesStore(captures?: {
         slug: input.slug,
         version,
         createdAt: 'now',
-        issueNumber: input.issueNumber,
+        jobId: input.jobId,
         engineRef: input.engineRef,
         deliveryMode: input.mode ?? 'publish',
         origin: input.origin,
         forkedFrom: input.forkedFrom,
+        requireCompiledEditor: input.requireCompiledEditor,
         sourceFiles: input.files.map((file) => file.path),
       };
       captures?.puts?.push({ slug: input.slug, files: input.files, manifest });
@@ -141,7 +143,7 @@ async function buildTestApp(
       base: { kind: 'store'; version: string } | { kind: 'repo'; snapshotId: string; sha: string };
       files: Array<{ path: string; content: string }>;
     } | null>;
-    onSourcesDelivered?: (input: { issueNumber: number; slug: string; version: string }) => void;
+    onSourcesDelivered?: (input: { jobId: number; slug: string; version: string }) => void;
   } = {},
 ) {
   const store = new InMemoryStore();
@@ -166,6 +168,7 @@ async function buildTestApp(
   });
   await registerRemixRoutes(app, {
     store,
+    openProposal,
     gamesStore: overrides.gamesStore ?? stubGamesStore(),
     githubClient: stubGitHubClient(seen),
     publishedRef: 'main',
@@ -203,6 +206,7 @@ describe('remix routes', () => {
     app = built.app;
     const start = await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix' });
     expect(start.statusCode).toBe(401);
+    expect((await app.inject({ method: 'GET', url: '/api/remixes/whatever' })).statusCode).toBe(401);
     for (const lane of ['assist', 'code', 'share', 'save']) {
       const response = await app.inject({
         method: 'POST',
@@ -341,6 +345,68 @@ describe('remix routes', () => {
     const last = built.seen.at(-1)!;
     expect(last['game/runtime.ts']).toContain('return 0.08;');
     expect(last['index.html']).toBe(SOURCES['index.html']);
+  });
+
+  it('resumes a remix by id, including the rebuilt document after a code edit', async () => {
+    const codeLane = {
+      run: async (_request: unknown, build: (o: Record<string, string>) => Promise<{ ok: boolean }>) => {
+        const good = { 'game/runtime.ts': 'export function startGame() {\n  return 0.08;\n}\n' };
+        await build(good);
+        return {
+          ok: true,
+          overrides: good,
+          region: { file: 'game/runtime.ts', name: 'startGame' },
+          rounds: 0,
+          tokens: { input: 1, output: 1 },
+        };
+      },
+    };
+    const built = await buildTestApp({
+      codeLane,
+      assistant: {
+        assist: async () => ({
+          lane: 'params',
+          patches: [{ key: 'dogScale', value: 1.4 }],
+          summary: { en: 'Bigger dog.', pl: 'Większy pies.' },
+        }),
+      } as EditorAssistant,
+    });
+    app = built.app;
+    const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })).json();
+    await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/assist`,
+      headers: alice,
+      payload: { utterance: 'bigger dog', params: { dogScale: 1, tagline: 'go!' } },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/code`,
+      headers: alice,
+      payload: { utterance: 'make it twice as fast' },
+    });
+    const resumed = await app.inject({ method: 'GET', url: `/api/remixes/${remixId}`, headers: alice });
+    expect(resumed.statusCode).toBe(200);
+    const body = resumed.json();
+    expect(body.remixId).toBe(remixId);
+    expect(body.html).toContain('return 0.08;');
+    expect(body.undoable).toBe(true);
+    expect(body.turns.at(-1).utterance).toBe('make it twice as fast');
+    const fresh = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })).json();
+    const empty = await app.inject({ method: 'GET', url: `/api/remixes/${fresh.remixId}`, headers: alice });
+    expect(empty.json().html).toBeNull();
+    expect(empty.json().undoable).toBe(false);
+    expect(empty.json().rehydrated).toBeUndefined();
+    const other = await buildTestApp();
+    try {
+      const hopped = await other.app.inject({ method: 'GET', url: `/api/remixes/${remixId}`, headers: alice });
+      expect(hopped.statusCode).toBe(200);
+      expect(hopped.json().rehydrated).toBe(true);
+      expect(hopped.json().html).toBeNull();
+      expect(hopped.json().undoable).toBe(false);
+    } finally {
+      await other.app.close();
+    }
   });
 
   it('discards an abandoned code edit rather than letting it land later', async () => {
@@ -522,11 +588,13 @@ describe('remix routes', () => {
     let tracePaused = false;
     await registerRemixRoutes(instance, {
       store,
+      openProposal,
       gamesStore: stubGamesStore(),
       githubClient: stubGitHubClient([]),
       publishedRef: 'main',
       editingGate: {
         checkAndSpend: async () => ({ allowed: true }),
+        peek: async () => ({ allowed: true }),
         isTracePaused: async () => tracePaused,
       },
       codeLane: {
@@ -673,7 +741,7 @@ describe('remix across the two catalog eras', () => {
         base: { kind: 'store'; version: string } | { kind: 'repo'; snapshotId: string; sha: string };
         files: Array<{ path: string; content: string }>;
       } | null>;
-      onSourcesDelivered?: (input: { issueNumber: number; slug: string; version: string }) => void;
+      onSourcesDelivered?: (input: { jobId: number; slug: string; version: string }) => void;
     } = {},
   ) {
     const store = overrides.store ?? new InMemoryStore();
@@ -687,6 +755,7 @@ describe('remix across the two catalog eras', () => {
     });
     await registerRemixRoutes(instance, {
       store,
+      openProposal,
       gamesStore: overrides.gamesStore ?? stubGamesStore(),
       githubClient: stubGitHubClient(seen, overrides.sourceMapCalls ?? []),
       publishedRef: 'main',
@@ -771,6 +840,7 @@ describe('remix across the two catalog eras', () => {
     };
     await registerRemixRoutes(instance, {
       store,
+      openProposal,
       gamesStore: stubGamesStore(),
       githubClient: client,
       publishedRef: 'main',
@@ -807,7 +877,6 @@ describe('remix across the two catalog eras', () => {
       headers: alice,
       payload: { utterance: 'add a double jump' },
     });
-    // A fact about this game, not a failure of the request.
     expect(response.statusCode).toBe(409);
   });
 
@@ -1001,6 +1070,7 @@ describe('remix save as yours', () => {
     expect(body.openPath).toBe(`/play/${body.slug}`);
     expect(body.token).toBeTruthy();
     expect(puts).toHaveLength(1);
+    expect((puts[0].manifest as { requireCompiledEditor?: boolean }).requireCompiledEditor).toBe(true);
     expect(puts[0].slug).toBe(body.slug);
     expect(
       (puts[0].manifest as { origin?: string; forkedFrom?: { slug: string; version?: string }; deliveryMode?: string })
@@ -1019,7 +1089,6 @@ describe('remix save as yours', () => {
     expect(job?.previewVersion).toBe('v-saved');
     expect(job?.deliveredVersion).toBe('v-saved');
     expect(job?.transitions?.some((transition) => transition.reason === 'remix_saved')).toBe(true);
-    // The parent publication is untouched — this is a fork, not an overwrite.
     expect(await built.store.getPublication('dog-dash')).toMatchObject({ state: 'published', currentVersion: 'v1' });
     expect(await built.store.getPublication(body.slug)).toBeNull();
 
@@ -1068,7 +1137,7 @@ describe('remix propose', () => {
 
   it('proposes a params-only change on a store-lane game', async () => {
     const puts: Array<{ slug: string; files: Array<{ path: string; content: string }>; manifest: unknown }> = [];
-    const gated: Array<{ issueNumber: number; slug: string; version: string }> = [];
+    const gated: Array<{ jobId: number; slug: string; version: string }> = [];
     const built = await buildTestApp({
       gamesStore: stubGamesStore({ puts }),
       onSourcesDelivered: (input) => {

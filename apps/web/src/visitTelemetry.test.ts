@@ -1,6 +1,6 @@
 import { webcrypto } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { parsePathRoute } from './router.js';
+import { parsePathRoute } from './core/router.js';
 
 // vitest's node environment does not expose the webcrypto global that a real browser
 // (and plain Node) provides, and `readVisitIdentity` relies on `crypto.randomUUID()`
@@ -16,6 +16,7 @@ import {
   recordCreateStep,
   recordStudioStep,
   recordVisitEvent,
+  recordPartyStep,
   recordWaitlistStep,
   referrerDomain,
   routeKind,
@@ -132,6 +133,8 @@ describe('route kinds follow the real router', () => {
     ['/privacy', 'legal'],
     ['/terms', 'legal'],
     ['/contact', 'legal'],
+    ['/connect', 'legal'],
+    ['/mcp', 'legal'],
     ['/status/some-token', 'studio'],
     ['/health', 'health'],
     ['/studio', 'studio'],
@@ -302,6 +305,38 @@ describe('recordVisitEvent', () => {
     session.flush();
     setVisitSessionForTesting(null);
     expect(batches[0].events[0].type).toBe('play_started');
+  });
+});
+
+describe('recordPartyStep', () => {
+  it('keeps the bar and a seat apart while deduping each', () => {
+    const { batches, send } = capture();
+    const session = new VisitSession('v1', 0, send, () => 0);
+    setVisitSessionForTesting(session);
+
+    recordPartyStep('lobby_opened');
+    recordPartyStep('paused', 'bar');
+    // The same rung the other way is the question, not a duplicate.
+    recordPartyStep('paused', 'seat');
+    recordPartyStep('paused', 'seat');
+    session.flush();
+    setVisitSessionForTesting(null);
+
+    expect(batches[0].events).toEqual([
+      expect.objectContaining({ type: 'party_step', step: 'lobby_opened' }),
+      expect.objectContaining({ type: 'party_step', step: 'paused', via: 'bar' }),
+      expect.objectContaining({ type: 'party_step', step: 'paused', via: 'seat' }),
+    ]);
+  });
+
+  it('carries no room code or slug', () => {
+    const { batches, send } = capture();
+    const session = new VisitSession('v1', 0, send, () => 0);
+    setVisitSessionForTesting(session);
+    recordPartyStep('started', 'seat');
+    session.flush();
+    setVisitSessionForTesting(null);
+    expect(Object.keys(batches[0].events[0])).toEqual(['type', 'step', 'via', 'msSinceStart']);
   });
 });
 

@@ -3,7 +3,7 @@
 import { GoogleAuth } from 'google-auth-library';
 
 import type { JobCostEntry, SubmissionRecord } from '../platform/store.js';
-import { canTransition, type JobStall, type JobTransition } from '../creation/job-state.js';
+import { canTransition, type JobTransition } from '../creation/job-state.js';
 import { gateTriggerOptionsFromEnv } from './gate-trigger.js';
 
 // The A28 log metric keys on this exact string.
@@ -41,25 +41,18 @@ export function lastGateRunRef(costs: JobCostEntry[] | undefined, since: string 
   return best?.ref;
 }
 
-// Append-ordered, so the last entry is current; `at` is not ordered.
-export function gateCrashStall(record: Pick<SubmissionRecord, 'state' | 'transitions'>): JobStall | null {
-  if (record.state !== 'needs_changes') return null;
-  const last = record.transitions?.[record.transitions.length - 1];
-  return last?.reason === 'gate_crashed' ? 'gate_crashed' : null;
-}
-
 interface CrashLogger {
   info: (context: object, message: string) => void;
 }
 
 export function logDeliveryGateCrashed(
   log: CrashLogger,
-  input: { issueNumber: number; roundGeneration: number; slug: string; version?: string; buildId: string },
+  input: { jobId: number; roundGeneration: number; slug: string; version?: string; buildId: string },
 ): void {
   log.info(
     {
       delivery: {
-        issueNumber: input.issueNumber,
+        jobId: input.jobId,
         roundGeneration: input.roundGeneration,
         slug: input.slug,
         ...(input.version ? { version: input.version } : {}),
@@ -109,7 +102,7 @@ export function createCloudBuildOutcomeReader(
 }
 
 export interface GateCrashProbeDeps {
-  recordJobTransition: (issueNumber: number, transition: JobTransition) => Promise<boolean>;
+  recordJobTransition: (jobId: number, transition: JobTransition) => Promise<boolean>;
   getManifest: (slug: string, version: string) => Promise<{ gate?: unknown; previewGate?: unknown } | null>;
   readBuildOutcome: (buildId: string) => Promise<GateBuildOutcome>;
   log: CrashLogger & { warn?: (context: object, message: string) => void };
@@ -122,7 +115,7 @@ export function createGateCrashProbe(
 ): (record: SubmissionRecord) => Promise<JobTransition | null> {
   return async (record: SubmissionRecord): Promise<JobTransition | null> => {
     const state = record.state ?? 'submitted';
-    if (state !== 'submitted' && state !== 'gating') return null;
+    if (state !== 'submitted') return null;
     if (!record.slug) return null;
 
     const since = Date.parse(record.stateSince ?? record.createdAt ?? '');
@@ -154,9 +147,9 @@ export function createGateCrashProbe(
         by: 'gate',
         reason: 'gate_crashed',
       };
-      if (!(await deps.recordJobTransition(record.issueNumber, transition))) return null;
+      if (!(await deps.recordJobTransition(record.jobId, transition))) return null;
       logDeliveryGateCrashed(deps.log, {
-        issueNumber: record.issueNumber,
+        jobId: record.jobId,
         roundGeneration,
         slug: record.slug,
         ...(version ? { version } : {}),
@@ -164,7 +157,7 @@ export function createGateCrashProbe(
       });
       return transition;
     } catch (error) {
-      deps.log.warn?.({ err: error, issueNumber: record.issueNumber }, 'could not read the gate build outcome');
+      deps.log.warn?.({ err: error, jobId: record.jobId }, 'could not read the gate build outcome');
       return null;
     }
   };
@@ -192,7 +185,7 @@ export function resetGateCrashProbe(): void {
 export async function probeGateCrash(
   record: SubmissionRecord,
   deps: {
-    store: { recordJobTransition: (issueNumber: number, transition: JobTransition) => Promise<boolean> } | null;
+    store: { recordJobTransition: (jobId: number, transition: JobTransition) => Promise<boolean> } | null;
     gamesStore: GamesStoreLike | undefined;
     log: CrashLogger & { warn?: (context: object, message: string) => void };
     now: () => number;

@@ -16,10 +16,18 @@ export type { CatalogOrientation };
  * `controllers` = playable only with phones as controllers on a second screen,
  * `none` = keyboard only. null when the API served a catalog without the field.
  */
-import type { CatalogEntry, CatalogMedia, CatalogMultiplayer, CatalogScreenshot } from '@gamedevpl/contract';
+import { isPublishedEntry } from '@gamedevpl/contract';
+import type {
+  CatalogEditor,
+  CatalogEntry,
+  CatalogMedia,
+  CatalogMultiplayer,
+  CatalogScreenshot,
+} from '@gamedevpl/contract';
 
 export type { CatalogTouch };
 export type {
+  CatalogEditor,
   CatalogEntry,
   CatalogMedia,
   CatalogMultiplayer,
@@ -33,8 +41,8 @@ export type {
 export const PLATFORM_SUBMITTED_BY = 'gamedev-platform';
 
 /** Re-exported so callers reach one name for "the platform's namespace". */
-export { PLATFORM_HANDLE } from './router.js';
-import { PLATFORM_HANDLE } from './router.js';
+export { PLATFORM_HANDLE } from './core/router.js';
+import { PLATFORM_HANDLE } from './core/router.js';
 
 /**
  * True when the byline should read as the site itself rather than a named person —
@@ -129,6 +137,10 @@ function parseCatalogOrientation(value: unknown): CatalogOrientation {
   return (CATALOG_ORIENTATIONS as readonly unknown[]).includes(value) ? (value as CatalogOrientation) : 'any';
 }
 
+function parseCatalogEditor(value: unknown): CatalogEditor | null {
+  return value === 'content' ? 'content' : null;
+}
+
 /**
  * null rather than a guess when the field is missing or unrecognised: the UI only
  * warns a phone visitor off a game it *knows* is keyboard-only, so an absent value
@@ -177,7 +189,7 @@ export function normalizeCatalogEntry(value: unknown): CatalogEntry | null {
     typeof entry.genre !== 'string' ||
     typeof entry.controls !== 'string' ||
     typeof entry.status !== 'string' ||
-    entry.status !== 'published'
+    !isPublishedEntry(entry)
   ) {
     return null;
   }
@@ -192,6 +204,7 @@ export function normalizeCatalogEntry(value: unknown): CatalogEntry | null {
     saves: entry.saves === 'player' ? 'player' : null,
     world: entry.world === 'shared' ? 'shared' : null,
     sensing: entry.sensing === 'tilt' || entry.sensing === 'backdrop' ? entry.sensing : null,
+    editor: parseCatalogEditor(entry.editor),
     orientation: parseCatalogOrientation(entry.orientation),
     touch: parseCatalogTouch(entry.touch),
     submittedBy: parseCatalogSubmittedBy(entry.submittedBy ?? entry.submitted_by),
@@ -222,25 +235,6 @@ function parseCatalogSubmittedBy(value: unknown): string | null {
 }
 
 /** Thrown by {@link fetchPublishedGame} so callers can tell a miss from a glitch. */
-export type GameFetchError = Error & { status?: number };
-
-export async function fetchPublishedGame(slug: string): Promise<PublishedGame> {
-  // Credentialed because a game is playable at this address before it is published —
-  // by its creator always, by anyone else once the creator shares it. Without the
-  // session cookie a creator opening their own unpublished game gets a 404.
-  const response = await fetch(`${API_BASE}/api/games/${encodeURIComponent(slug)}`, { credentials: 'include' });
-
-  if (!response.ok) {
-    const error = new Error(
-      await readApiErrorMessage(response, `Game request failed (${response.status})`),
-    ) as GameFetchError;
-    error.status = response.status;
-    throw error;
-  }
-
-  const body = (await response.json()) as PublishedGame;
-  if (typeof body?.html !== 'string' || typeof body?.title !== 'string') {
-    throw new Error('Game response was malformed');
-  }
-  return body;
-}
+export type { GameFetchError } from './fetchPublishedGame.js';
+export type { FetchProgress } from './fetchProgress.js';
+export { fetchPublishedGame } from './fetchPublishedGame.js';

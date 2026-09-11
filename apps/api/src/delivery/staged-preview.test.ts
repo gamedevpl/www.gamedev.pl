@@ -1,12 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createStagedPreviewPublisher,
-  hasPlayableOverlay,
-  overlayGameSources,
   STAGED_PREVIEW_LABEL,
   STAGED_PREVIEW_LABEL_PL,
   type StagedPreviewOptions,
 } from './staged-preview.js';
+import { hasPlayableOverlay, overlayGameSources } from '../platform/game-overlay.js';
 
 /**
  * The publisher's whole job is to answer "is there something to show yet?" about a tree
@@ -46,8 +45,7 @@ type HarnessInput = {
 >;
 
 function harness(input: HarnessInput = {}) {
-  const record =
-    input.record === undefined ? { issueNumber: 7, slug: 'comet-courier', roundGeneration: 2 } : input.record;
+  const record = input.record === undefined ? { jobId: 7, slug: 'comet-courier', roundGeneration: 2 } : input.record;
   const delivered = input.delivered ?? null;
   const previews: Array<Record<string, unknown>> = [];
   const getGameSources = vi.fn(input.assemble ?? (async () => GAME_SOURCES));
@@ -61,8 +59,8 @@ function harness(input: HarnessInput = {}) {
         input.published && delivered
           ? { slug: 'comet-courier', state: 'published', currentVersion: delivered.version }
           : null,
-      appendBuildPreview: async (issueNumber: number, preview: Record<string, unknown>) => {
-        previews.push({ issueNumber, ...preview });
+      appendBuildPreview: async (jobId: number, preview: Record<string, unknown>) => {
+        previews.push({ jobId, ...preview });
         return { ...preview, id: `p${previews.length}`, createdAt: '2026-01-01T00:00:00.000Z' };
       },
       pruneBuildPreviews: async () => 0,
@@ -260,13 +258,20 @@ describe('createStagedPreviewPublisher', () => {
     // confirm the fix CE-12a asked for was already true of the shipped layering and
     // nothing here needs to change to seed the buffer on a game's first *owner* write.
     const { publisher, previews } = harness({
-      record: { issueNumber: 7, slug: 'comet-courier', roundGeneration: 2, deliveredVersion: 'v1' },
+      record: { jobId: 7, slug: 'comet-courier', roundGeneration: 2, deliveredVersion: 'v1' },
       staged: [{ path: 'game/render.ts', content: 'export const paint = () => {};' }],
       delivered: { version: 'v1', files: PLAYABLE_TREE },
     });
 
     expect(await publisher.publishNow(7)).toBe('published');
     expect(previews).toHaveLength(1);
+  });
+
+  it('marks the preview provisional, so nothing downstream calls a half-written tree a ready draft', async () => {
+    const { publisher, previews } = harness();
+
+    expect(await publisher.publishNow(7)).toBe('published');
+    expect(previews[0]!.origin).toBe('staged');
   });
 
   it('marks the assembled document network-restricted, like every other unreviewed preview', async () => {
@@ -280,7 +285,7 @@ describe('createStagedPreviewPublisher', () => {
 
   it('captions in the creator’s language when they submitted in one we author', async () => {
     const { publisher, previews } = harness({
-      record: { issueNumber: 7, slug: 'comet-courier', roundGeneration: 2, locale: 'pl' },
+      record: { jobId: 7, slug: 'comet-courier', roundGeneration: 2, locale: 'pl' },
     });
 
     expect(await publisher.publishNow(7)).toBe('published');
@@ -350,12 +355,12 @@ describe('createStagedPreviewPublisher', () => {
 
   it('skips an abandoned job, and one that has no game yet', async () => {
     const abandoned = harness({
-      record: { issueNumber: 7, slug: 'comet-courier', abandonedAt: '2026-01-01T00:00:00.000Z' },
+      record: { jobId: 7, slug: 'comet-courier', abandonedAt: '2026-01-01T00:00:00.000Z' },
     });
     expect(await abandoned.publisher.publishNow(7)).toBe('skipped');
     expect(abandoned.previews).toHaveLength(0);
 
-    const slugless = harness({ record: { issueNumber: 7 } });
+    const slugless = harness({ record: { jobId: 7 } });
     expect(await slugless.publisher.publishNow(7)).toBe('skipped');
     expect(slugless.previews).toHaveLength(0);
   });
@@ -364,7 +369,7 @@ describe('createStagedPreviewPublisher', () => {
     // An improvement round stages one module against a live game. The base comes from the
     // store, not from a ref — a store-era game is in no branch to read.
     const { publisher, getGameSources } = harness({
-      record: { issueNumber: 7, slug: 'comet-courier', roundGeneration: 3 },
+      record: { jobId: 7, slug: 'comet-courier', roundGeneration: 3 },
       staged: [{ path: 'game.ts', content: 'edited entry' }],
       delivered: { version: 'v1', files: PLAYABLE_TREE },
       published: true,
@@ -381,7 +386,7 @@ describe('createStagedPreviewPublisher', () => {
 
   it('layers over this round’s own last delivery before consulting what is published', async () => {
     const { publisher, getGameSources } = harness({
-      record: { issueNumber: 7, slug: 'comet-courier', roundGeneration: 3, previewVersion: 'v9' },
+      record: { jobId: 7, slug: 'comet-courier', roundGeneration: 3, previewVersion: 'v9' },
       staged: [{ path: 'style.css', content: 'restyled' }],
       delivered: { version: 'v9', files: PLAYABLE_TREE },
     });
@@ -397,7 +402,7 @@ describe('createStagedPreviewPublisher', () => {
   it('layers over the generated seed while the agent is still replacing it', async () => {
     const { publisher, getGameSources } = harness({
       record: {
-        issueNumber: 7,
+        jobId: 7,
         slug: 'comet-courier',
         roundGeneration: 1,
         seed: { slug: 'comet-courier', files: PLAYABLE_TREE, references: [] },
@@ -583,7 +588,7 @@ describe('createStagedPreviewPublisher', () => {
   it('assembles and stores candidate preview without ref fallback', async () => {
     const { publisher, previews, getGameSources, putDerivedArtifact } = harness();
     const outcome = await publisher.publishCandidate({
-      issueNumber: 7,
+      jobId: 7,
       slug: 'comet-courier',
       version: 'v20260823T120000Z-abcdef',
       roundGeneration: 2,
@@ -601,6 +606,8 @@ describe('createStagedPreviewPublisher', () => {
     );
     expect(previews).toHaveLength(1);
     expect(previews[0].label).toBe(STAGED_PREVIEW_LABEL);
+    // Submitted, not caught mid-upload: the agent handed this over.
+    expect(previews[0].origin).toBe('candidate');
   });
 
   it('candidate assembly cancels pending debounce and sets digest preventing redundant staged assembly', async () => {
@@ -610,7 +617,7 @@ describe('createStagedPreviewPublisher', () => {
       publisher.schedule(7);
 
       const outcome = await publisher.publishCandidate({
-        issueNumber: 7,
+        jobId: 7,
         slug: 'comet-courier',
         version: 'v20260823T120000Z-abcdef',
         roundGeneration: 2,
@@ -658,7 +665,7 @@ describe('createStagedPreviewPublisher', () => {
       expect(previews).toHaveLength(0);
 
       const candidate = publisher.publishCandidate({
-        issueNumber: 7,
+        jobId: 7,
         slug: 'comet-courier',
         version: 'v20260823T120000Z-abcdef',
         roundGeneration: 2,

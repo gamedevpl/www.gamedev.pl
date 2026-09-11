@@ -1,5 +1,5 @@
-import type { GameProject } from '@gamedevpl/contract';
-import { assembleGameHtml } from './assemble.js';
+import { isPublishedEntry, type GameProject } from '@gamedevpl/contract';
+import { assembleGameHtml } from '../platform/assemble.js';
 import {
   generateSnapshotId,
   mediaContentType,
@@ -68,7 +68,7 @@ export async function publishSnapshot(options: PublishSnapshotOptions): Promise<
   log(`baking snapshot ${snapshotId} from ${ref}`);
 
   const catalog = await client.getCatalog(ref);
-  const published = catalog.filter((entry) => entry.status === 'published');
+  const published = catalog.filter(isPublishedEntry);
   log(`catalog: ${catalog.length} entries, ${published.length} published`);
 
   const failures: PublishSnapshotFailure[] = [];

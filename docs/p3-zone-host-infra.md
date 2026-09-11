@@ -156,11 +156,23 @@ where the money stops:
 1. **Occupied → ticking.** Zone lives in memory, ticks at its manifest `tickHz`,
    snapshots to Firestore every 30 s (a full snapshot is ≤ 192 KiB by contract, one
    document write; the event log since the last snapshot rides along for replay).
-2. **Last player leaves → hibernate.** Final snapshot, drop the sim, forget the zone.
-   No timers, no keep-alives, nothing that would hold CPU on an empty world. When the
-   last zone on the instance hibernates, the last socket is gone, the last request
-   ends, and Cloud Run drains the instance. This is the step that makes min-instances 0
-   honest.
+2. **Last player leaves → park, then hibernate.** The final snapshot is written the
+   moment the last seat goes, and the sim stops ticking — no timers, no keep-alives,
+   nothing that would hold CPU on an empty world. The loaded isolate is then _held_
+   for `PARK_GRACE_MS` (one minute) and dropped afterwards. The grace exists because
+   the common way to leave a zone is not to leave it: a phone locking its screen, a
+   tab going to the background, a deploy redial. Each closes the socket and reopens it
+   seconds later, and each used to cost a Firestore read, a games-repo fetch and a cold
+   isolate. A return inside the grace is `wake(elapsed)` on the world already in
+   memory — the same catch-up a cold wake performs, minus the reload. Nothing ticks and
+   nothing writes while parked, and hibernating a parked zone writes nothing either
+   (the park-time snapshot is still the world), so the cost model is unchanged: an
+   empty zone is one Firestore document, plus for one minute an idle isolate. When the
+   last zone on the instance parks, the last socket is gone, the last request ends,
+   and Cloud Run drains the instance — the parked copy simply dies with it, which is
+   fine, because the snapshot was written first. A full host evicts its longest-parked
+   zone before refusing a new one: a held world never outranks a player who wants to
+   open one. This is the step that makes min-instances 0 honest.
 3. **Player arrives at a sleeping zone → wake.** Load snapshot, rebuild the realm,
    fast-forward the rng by the recorded draw count, call `wake(state, elapsedMs, rng)`
    once with real elapsed wall time. The game's own code decides what sleep meant —
@@ -196,17 +208,17 @@ cadence as the loss bound; runtime budget enforcement as the cost bound.
 
 ## 6. What shipped against this
 
-| Claim in this document                                   | Where it lives now                                                    |
-| -------------------------------------------------------- | --------------------------------------------------------------------- |
-| Separate service, own image, own cadence                 | `apps/world/`, `apps/world/Dockerfile`, `infra/cloudbuild-world.yaml` |
-| min-instances 0, max-instances 1, 60-min timeout         | `infra/deploy-world.sh`                                               |
-| HMAC tickets from the main API; host never sees a cookie | `packages/zone-core/src/ticket.ts`, `apps/api/src/realtime/zones.ts`  |
-| `isolated-vm` in production, `node:vm` never             | `packages/zone-core/src/cage.ts`, `assertProductionCage`              |
-| Hibernate on empty; instance drains                      | `Zone.hibernate`, `ZoneHost.pump`                                     |
-| Wake via `wake()` with rng draw alignment                | `Zone.wakeUp`, `SimInstance.restore`                                  |
-| Snapshot every 30 s; that is the loss bound              | `SNAPSHOT_EVERY_MS`, `Zone.persist`                                   |
-| Runtime metering, not only CI                            | `Zone.recordTickCost`, `Zone.measure`                                 |
-| SIGTERM is a scheduled hibernate                         | `ZoneHost.shutdown`, `apps/world/src/platform/server.ts`              |
+| Claim in this document                                    | Where it lives now                                                    |
+| --------------------------------------------------------- | --------------------------------------------------------------------- |
+| Separate service, own image, own cadence                  | `apps/world/`, `apps/world/Dockerfile`, `infra/cloudbuild-world.yaml` |
+| min-instances 0, max-instances 1, 60-min timeout          | `infra/deploy-world.sh`                                               |
+| HMAC tickets from the main API; host never sees a cookie  | `packages/zone-core/src/ticket.ts`, `apps/api/src/realtime/zones.ts`  |
+| `isolated-vm` in production, `node:vm` never              | `packages/zone-core/src/cage.ts`, `assertProductionCage`              |
+| Park on empty, hibernate after the grace; instance drains | `Zone.park`, `Zone.hibernate`, `PARK_GRACE_MS`, `ZoneHost.pump`       |
+| Wake via `wake()` with rng draw alignment                 | `Zone.wakeUp`, `SimInstance.restore`                                  |
+| Snapshot every 30 s; that is the loss bound               | `SNAPSHOT_EVERY_MS`, `Zone.persist`                                   |
+| Runtime metering, not only CI                             | `Zone.recordTickCost`, `Zone.measure`                                 |
+| SIGTERM is a scheduled hibernate                          | `ZoneHost.shutdown`, `apps/world/src/platform/server.ts`              |
 
 Three things about the build are worth knowing before changing any of it.
 

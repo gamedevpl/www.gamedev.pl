@@ -44,8 +44,11 @@ prompt (web) → POST /api/submissions → GitHub issue → Copilot agent → PR
 
 ## Layer 1 — Input screening at the API (first slice, build now)
 
-New `apps/api/src/platform/moderation.ts`, applied to title + spec in `POST /api/submissions`
-and to the prompt in `POST /api/generate-game`, BEFORE quota is consumed:
+New `apps/api/src/platform/moderation.ts`, applied to title + spec in `POST /api/submissions`,
+BEFORE quota is consumed:
+
+> The `POST /api/generate-game` route this slice also named was removed with the local mock
+> generator; only the submissions path remains. See [`architecture.md`](./architecture.md).
 
 - **Deny patterns**: curated regex lists (en + pl — Polish profanity/slur coverage is
   a must, the audience is Polish) for: slurs/hate, sexual content, sexualized minors
@@ -181,7 +184,7 @@ reopen it, and neither is in scope today:
      legally operative text rather than UI wording. Building it first would mean writing it
      twice.
    - **Moderation metrics — built.** Every rejection now emits one structured line from
-     [`moderation-metrics.ts`](../apps/api/src/telemetry/moderation-metrics.ts), carrying surface,
+     [`moderation-metrics.ts`](../apps/api/src/platform/moderation-metrics.ts), carrying surface,
      category and uid, and never the rejected text. A log-based metric backs alert **A14**
      ([`moderation-burst.md`](./runbooks/moderation-burst.md)).
 

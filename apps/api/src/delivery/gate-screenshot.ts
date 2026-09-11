@@ -33,7 +33,7 @@ export function firstGateScreenshotPath(artifacts: readonly string[]): string | 
 export async function postGateScreenshotToThread(input: {
   store: Store;
   gamesStore: GamesStore;
-  issueNumber: number;
+  jobId: number;
   slug: string;
   version: string;
   /** Path under the version prefix, e.g. `media/opening.png`. */
@@ -44,7 +44,7 @@ export async function postGateScreenshotToThread(input: {
   if (body.length === 0 || body.length > MAX_SHOT_BYTES) return null;
   if (!body.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) return null;
 
-  const stored = await input.store.appendBuildShot(input.issueNumber, {
+  const stored = await input.store.appendBuildShot(input.jobId, {
     data: body.toString('base64'),
     label: PLATFORM_CHECK_SHOT_LABEL,
   });

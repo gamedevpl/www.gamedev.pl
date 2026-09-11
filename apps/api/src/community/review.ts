@@ -10,7 +10,6 @@ import {
   type AssessmentNoteOrigin,
   type AssessmentSource,
   type AssessmentVerdict,
-  type ReviewSweepSource,
 } from '@gamedevpl/contract';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -21,8 +20,10 @@ import {
   registerAssessmentResolutionRoute,
   summarizeResolutions,
 } from './assessment-resolution.js';
-import { emitReviewSweep, type EmitDeps } from '../notifications/notify.js';
+import type { emitReviewSweep as EmitReviewSweep, EmitDeps } from '../notifications/notify.js';
 import { ASSESSMENT_CHECKLIST_KEYS, isAssessmentChecklist } from './review-checklist.js';
+import { createReviewQueueCache } from './review-queue-cache.js';
+import type { ReviewCatalogEntry, ReviewQueueItem } from './review-queue-cache.js';
 import {
   effectiveReleasedCount,
   MAX_RELEASE_PER_DAY,
@@ -36,10 +37,8 @@ import type {
   AssessmentChecklist,
   AssessmentClientContext,
   GameAssessment,
-  ReReviewRequest,
   ReviewSweep,
   Store,
-  SubmissionRecord,
 } from '../platform/store.js';
 
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
@@ -60,30 +59,8 @@ const ChecklistSchema = z
   .strict();
 const MAX_QUEUE = 500;
 
-export interface ReviewCatalogMedia {
-  screenshots: Array<{ name: string; file: string }>;
-  video: string | null;
-}
-
-export interface ReviewCatalogEntry {
-  slug: string;
-  title: string;
-  creatorHandle: string | null;
-  genre?: string | null;
-  media?: ReviewCatalogMedia | null;
-}
-
-export interface ReviewQueueItem {
-  slug: string;
-  title: string;
-  source: AssessmentSource;
-  creatorHandle: string | null;
-  genre: string | null;
-  issueNumber: number | null;
-  media: ReviewCatalogMedia | null;
-  // Set when an operator targeted this slug for re-review.
-  reReview?: { reason: string | null; gameVersion: string | null; requestedAt: string } | null;
-}
+export { isReviewableCreatorDraft } from './review-queue-cache.js';
+export type { ReviewCatalogEntry, ReviewCatalogMedia, ReviewQueueItem } from './review-queue-cache.js';
 
 export interface ReviewRoutesOptions {
   store: Store;
@@ -92,6 +69,8 @@ export interface ReviewRoutesOptions {
   listCatalog?: () => Promise<ReviewCatalogEntry[]>;
   now?: () => number;
   emitDeps?: EmitDeps;
+  // Injected so this module has no value-level notifications import.
+  emitReviewSweep?: typeof EmitReviewSweep;
 }
 
 const ClientContextSchema = z
@@ -157,18 +136,6 @@ export function isReviewerSession(
   return isReviewer(request.user?.uid, reviewerUids, adminUids);
 }
 
-function titleFromSubmission(record: SubmissionRecord): string {
-  const titled = record.title.trim();
-  if (titled) return titled;
-  return record.slug ?? `issue-${record.issueNumber}`;
-}
-
-export function isReviewableCreatorDraft(record: SubmissionRecord): boolean {
-  return Boolean(
-    record.slug && record.deliveredVersion && record.draftSharedAt && !record.publishedAt && !record.abandonedAt,
-  );
-}
-
 function reviewerAudience(reviewerUids: Set<string>, adminUids: Set<string>): Set<string> {
   return new Set([...reviewerUids, ...adminUids]);
 }
@@ -179,6 +146,16 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
   const adminUids = options.adminUids ?? new Set<string>();
   const listCatalog = options.listCatalog ?? (async () => []);
   const now = options.now ?? Date.now;
+  const {
+    loadReviewPools,
+    openReviewSweep,
+    assessedSlugsFor,
+    collectPool,
+    findQueueItem,
+    targetedQueueItems,
+    invalidateOpenSweep,
+    invalidateReviewer,
+  } = createReviewQueueCache({ store, listCatalog, now });
 
   function refuseUnlessReviewer(
     request: FastifyRequest,
@@ -190,134 +167,12 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     return null;
   }
 
-  async function collectPool(source: ReviewSweepSource): Promise<ReviewQueueItem[]> {
-    const items: ReviewQueueItem[] = [];
-    if (source === 'catalog' || source === 'all') {
-      let catalog: ReviewCatalogEntry[];
-      try {
-        catalog = await listCatalog();
-      } catch {
-        catalog = [];
-      }
-      for (const entry of catalog) {
-        items.push({
-          slug: entry.slug,
-          title: entry.title || entry.slug,
-          source: 'catalog',
-          creatorHandle: entry.creatorHandle,
-          genre: entry.genre ?? null,
-          issueNumber: null,
-          media: entry.media ?? null,
-        });
-        if (items.length >= MAX_SWEEP_GAMES) return items;
-      }
-    }
-    if ((source === 'creator' || source === 'all') && items.length < MAX_SWEEP_GAMES) {
-      const delivered = await store.listSubmissionsWithDelivery();
-      for (const record of delivered) {
-        if (!isReviewableCreatorDraft(record)) continue;
-        const slug = record.slug!;
-        if (items.some((item) => item.slug === slug)) continue;
-        let creatorHandle: string | null = null;
-        try {
-          creatorHandle = (await store.getUser(record.ownerUid))?.handle ?? null;
-        } catch {
-          // best-effort
-        }
-        items.push({
-          slug,
-          title: titleFromSubmission(record),
-          source: 'creator',
-          creatorHandle,
-          genre: null,
-          issueNumber: record.issueNumber,
-          media: null,
-        });
-        if (items.length >= MAX_SWEEP_GAMES) break;
-      }
-    }
-    return items;
-  }
-
-  interface ReviewPools {
-    catalog: ReviewCatalogEntry[];
-    delivered: SubmissionRecord[];
-  }
-
-  // Loaded once per request, not once per targeted slug.
-  async function loadReviewPools(): Promise<ReviewPools> {
-    let catalog: ReviewCatalogEntry[];
-    try {
-      catalog = await listCatalog();
-    } catch {
-      catalog = [];
-    }
-    const delivered = await store.listSubmissionsWithDelivery();
-    return { catalog, delivered };
-  }
-
-  // Single-slug lookup for a targeted re-review, against already-loaded pools.
-  async function findQueueItem(slug: string, pools: ReviewPools): Promise<ReviewQueueItem | null> {
-    const entry = pools.catalog.find((row) => row.slug === slug);
-    if (entry) {
-      return {
-        slug: entry.slug,
-        title: entry.title || entry.slug,
-        source: 'catalog',
-        creatorHandle: entry.creatorHandle,
-        genre: entry.genre ?? null,
-        issueNumber: null,
-        media: entry.media ?? null,
-      };
-    }
-    const record = pools.delivered.find((row) => row.slug === slug && isReviewableCreatorDraft(row));
-    if (!record) return null;
-    let creatorHandle: string | null = null;
-    try {
-      creatorHandle = (await store.getUser(record.ownerUid))?.handle ?? null;
-    } catch {
-      // best-effort
-    }
-    return {
-      slug,
-      title: titleFromSubmission(record),
-      source: 'creator',
-      creatorHandle,
-      genre: null,
-      issueNumber: record.issueNumber,
-      media: null,
-    };
-  }
-
-  async function targetedQueueItems(
-    reviewerUid: string,
-    sourceFilter: 'catalog' | 'creator' | 'all',
-  ): Promise<{
-    items: ReviewQueueItem[];
-    requests: ReReviewRequest[];
-  }> {
-    const requests = await store.listOpenReReviewRequestsForReviewer(reviewerUid);
-    if (requests.length === 0) return { items: [], requests };
-    const pools = await loadReviewPools();
-    const items: ReviewQueueItem[] = [];
-    for (const req of requests) {
-      const item = await findQueueItem(req.slug, pools);
-      if (!item) continue;
-      if (sourceFilter !== 'all' && item.source !== sourceFilter) continue;
-      items.push({
-        ...item,
-        reReview: { reason: req.reason, gameVersion: req.gameVersion, requestedAt: req.createdAt },
-      });
-    }
-    return { items, requests };
-  }
-
   async function notifySweep(sweep: ReviewSweep, notificationId: string): Promise<number> {
-    if (!options.emitDeps) return 0;
+    if (!options.emitDeps || !options.emitReviewSweep) return 0;
     const audience = reviewerAudience(reviewerUids, adminUids);
     if (audience.size === 0) return 0;
     const released = effectiveReleasedCount(sweep, now());
-    const { created } = await emitReviewSweep(
+    const { created } = await options.emitReviewSweep(
       { ...options.emitDeps, reviewerUids: audience, now },
       {
         notificationId,
@@ -331,6 +186,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
       updatedAt: new Date(now()).toISOString(),
       updatedBy: sweep.updatedBy,
     });
+    invalidateOpenSweep();
     return created;
   }
 
@@ -344,15 +200,16 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     }
     const sourceFilter = query.data.source ?? 'all';
     const uid = request.user!.uid;
-    const mine = await store.listGameAssessmentsByReviewer(uid);
+    // One row per slug per reviewer, so size is the count.
+    const done = await assessedSlugsFor(uid);
     const { items: targeted } = await targetedQueueItems(uid, sourceFilter);
 
-    const open = await store.getOpenReviewSweep();
+    const open = await openReviewSweep();
     if (!open || open.status === 'paused') {
       return {
         source: sourceFilter,
         remaining: targeted.length,
-        assessed: mine.length,
+        assessed: done.size,
         items: targeted,
         sweep: open
           ? {
@@ -366,7 +223,6 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
       };
     }
 
-    const done = new Set(mine.map((row) => row.slug));
     const unlocked = new Set(releasedSlugs(open, now()));
     const pool = await collectPool(open.source);
     const bySlug = new Map(pool.map((item) => [item.slug, item]));
@@ -392,7 +248,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     return {
       source: sourceFilter,
       remaining: items.length,
-      assessed: mine.length,
+      assessed: done.size,
       items,
       sweep: {
         id: open.id,
@@ -411,7 +267,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     const uid = request.user!.uid;
     const { items: targeted } = await targetedQueueItems(uid, 'all');
     const targetedSlugs = new Set(targeted.map((item) => item.slug));
-    const open = await store.getOpenReviewSweep();
+    const open = await openReviewSweep();
     if (!open || open.status !== 'active') {
       return {
         remaining: targetedSlugs.size,
@@ -425,8 +281,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
           : null,
       };
     }
-    const mine = await store.listGameAssessmentsByReviewer(uid);
-    const done = new Set(mine.map((row) => row.slug));
+    const done = await assessedSlugsFor(uid);
     const unlocked = releasedSlugs(open, now());
     const sweepRemaining = unlocked.filter((slug) => !done.has(slug) && !targetedSlugs.has(slug)).length;
     return {
@@ -511,8 +366,13 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
       gameVersion,
     });
 
+    // Their verdict, and the re-review it resolves, show next poll.
+    invalidateReviewer(reviewerUid);
+
     if (targeted) {
       await store.resolveReReviewRequest(body.data.slug, reviewerUid);
+      // Again: a poll between the writes would cache the open request.
+      invalidateReviewer(reviewerUid);
     }
 
     return { assessment };
@@ -649,7 +509,8 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
       return reply.status(400).send({ error: body.error.issues[0]?.message ?? 'invalid request' });
     }
 
-    const pool = await collectPool(body.data.source);
+    // Minted from what is published now, not the badge's window.
+    const pool = await collectPool(body.data.source, { fresh: true });
     // Prefer unjudged games when re-sweeping.
     const assessed = new Set((await store.listGameAssessments()).map((row) => row.slug));
     const fresh = pool.filter((item) => !assessed.has(item.slug));
@@ -677,6 +538,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
       notifiedAt: null,
       notifiedCount: 0,
     });
+    invalidateOpenSweep();
 
     let notified = 0;
     if (body.data.notify !== false) {
@@ -734,6 +596,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
 
     const updated = await store.updateReviewSweep(id, patch);
     if (!updated) return reply.status(404).send({ error: 'not found' });
+    invalidateOpenSweep();
 
     let notified = 0;
     if (body.data.notify) {
@@ -803,8 +666,8 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
       return reply.status(400).send({ error: `${unknownReviewer} is not a reviewer` });
     }
 
-    // Refuse a phantom request the reviewer could never see or resolve.
-    const pools = await loadReviewPools();
+    // Refuse a phantom slug, judged against the catalog as it is now.
+    const pools = await loadReviewPools({ fresh: true });
     for (const slug of body.data.slugs) {
       if (!(await findQueueItem(slug, pools))) {
         return reply.status(400).send({ error: `${slug} is not a published or reviewable slug` });
@@ -818,11 +681,13 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
       body.data.reviewerUids.map((reviewerUid) => ({ slug, reviewerUid, gameVersion, reason, createdBy })),
     );
     const created = await store.upsertReReviewRequests(requests);
+    // New work: these badges must not wait out the window.
+    for (const reviewerUid of body.data.reviewerUids) invalidateReviewer(reviewerUid);
 
     let notified = 0;
-    if (body.data.notify !== false && options.emitDeps) {
+    if (body.data.notify !== false && options.emitDeps && options.emitReviewSweep) {
       const targetedReviewers = new Set(body.data.reviewerUids);
-      const { created: n } = await emitReviewSweep(
+      const { created: n } = await options.emitReviewSweep(
         { ...options.emitDeps, reviewerUids: targetedReviewers, now },
         {
           notificationId: `review-requeue-${now().toString(36)}`,

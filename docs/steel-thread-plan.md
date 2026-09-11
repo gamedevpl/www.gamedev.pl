@@ -67,7 +67,7 @@ bundle + catalog to the games origin, and the app picked it up. The creator saw 
    display name captured at submission (goes into the issue body; `submitted_by` in
    frontmatter stays `null` until accounts exist — treat display names as unverified).
 3. **No database.** The tracking token is stateless:
-   `base64url(issueNumber + "." + HMAC-SHA256(SUBMISSION_TOKEN_SECRET, issueNumber))`.
+   `base64url(jobId + "." + HMAC-SHA256(SUBMISSION_TOKEN_SECRET, jobId))`.
    Status is derived live from the GitHub API on each request.
 4. **The new app deploys as ONE Cloud Run service (web + API, same origin)**, on its own
    `*.run.app` URL — **the live `www.gamedev.pl` Pages site is not touched at all.** _(Revised

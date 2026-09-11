@@ -6,8 +6,12 @@
 # Usage:
 #   ./infra/setup-gcp.sh
 #
-# Override any of these via env if needed: PROJECT_ID, REGION, APP_REGION, SA_NAME.
+# Override any of these via env if needed: PROJECT_ID, REGION, APP_REGION, SA_NAME,
+# APP_SA_NAME, WORLD_SA_NAME.
 set -euo pipefail
+
+# An old copy of this script does not fail; it reverts what a newer copy fixed.
+source "$(dirname "${BASH_SOURCE[0]}")/require-current-checkout.sh"
 
 PROJECT_ID="${PROJECT_ID:-gamedevpl}"
 REGION="${REGION:-europe-central2}"
@@ -32,16 +36,31 @@ else
   gcloud firestore databases create --location="$REGION" --type=firestore-native --project="$PROJECT_ID"
 fi
 
-echo "==> 3/10 Granting datastore.user role to Deployer SA (${DEPLOYER_SA})"
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+echo "==> 3/10 Ensuring the Deployer SA (${DEPLOYER_SA}) holds no Firestore role"
+# This step used to grant datastore.user, contradicting setup-wif.sh, which keeps the
+# nightly erasure proof on a separate account precisely because "the deployer
+# deliberately does not have" Firestore. No deploy step reads or writes Firestore — the
+# publish job writes GCS only — and Firestore IAM has no collection scope, so the grant
+# meant a leaked deploy credential could read every player record. Removed 2026-09-08;
+# this reconciles rather than skips, so a re-run on an older project takes it away too.
+gcloud projects remove-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${DEPLOYER_SA}" \
   --role="roles/datastore.user" \
   --condition=None \
-  >/dev/null
+  >/dev/null 2>&1 || echo "    (no datastore.user binding to remove)"
 
-echo "==> 4/10 Ensuring Cloud Run runtime SA has datastore.user and aiplatform.user roles"
-PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format="value(projectNumber)")
-RUN_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+echo "==> 4/10 Ensuring the Cloud Run runtime identities exist, with datastore.user and aiplatform.user"
+# The app runs as its own account, never the project's default compute one (which holds
+# project-wide editor and made every narrow grant below cosmetic). setup-runtime-sa.sh
+# creates all three service identities and applies their resource-level grants; the
+# project-level roles that script only prints are applied here, because this script is
+# already the owner's full bootstrap. RUN_SA is the app's account for everything below.
+APP_SA_NAME="${APP_SA_NAME:-gamedev-app}"
+# APPLY_PROJECT_BINDINGS: this script already binds project roles as the owner, so the
+# runtime script applies its own here instead of printing them for a second pass.
+PROJECT_ID="$PROJECT_ID" APP_SA_NAME="$APP_SA_NAME" APPLY_PROJECT_BINDINGS="${APPLY_PROJECT_BINDINGS:-1}" \
+  "$SCRIPT_DIR/setup-runtime-sa.sh"
+RUN_SA="${APP_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${RUN_SA}" \
   --role="roles/datastore.user" \
@@ -51,6 +70,22 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${RUN_SA}" \
   --role="roles/aiplatform.user" \
+  --condition=None \
+  >/dev/null
+
+# knowledge-search.ts sends X-Goog-User-Project, which needs serviceusage.services.use on
+# the quota project. Editor used to cover it silently.
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${RUN_SA}" \
+  --role="roles/serviceusage.serviceUsageConsumer" \
+  --condition=None \
+  >/dev/null
+
+# The zone host keeps one Firestore document per zone and needs nothing else.
+WORLD_SA="${WORLD_SA_NAME:-gamedev-world}@${PROJECT_ID}.iam.gserviceaccount.com"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${WORLD_SA}" \
+  --role="roles/datastore.user" \
   --condition=None \
   >/dev/null
 
@@ -172,9 +207,15 @@ else
   gcloud storage buckets create "gs://${SNAPSHOT_BUCKET}" \
     --location="$SNAPSHOT_BUCKET_REGION" \
     --uniform-bucket-level-access \
+    --public-access-prevention \
     --project="$PROJECT_ID"
   echo "    Created bucket in ${SNAPSHOT_BUCKET_REGION}."
 fi
+# Enforced on existing buckets too: the API reads with its own identity through the JSON
+# API and the web client never fetches this bucket directly, so nothing legitimate needs
+# an allUsers grant — and without this a single mis-click makes every game public at
+# the storage layer, bypassing the beta wall the bucket comment above relies on.
+gcloud storage buckets update "gs://${SNAPSHOT_BUCKET}" --public-access-prevention --project="$PROJECT_ID" >/dev/null
 
 # The publish job (github-actions-deployer via WIF) writes; Cloud Run only reads.
 # Splitting the two means a compromised runtime cannot rewrite what it serves.
@@ -191,10 +232,12 @@ gcloud storage buckets add-iam-policy-binding "gs://${SNAPSHOT_BUCKET}" \
   >/dev/null
 
 # Old snapshots are dead weight once the pointer moves past them, but they are
-# also the rollback path, so they are kept for a quarter rather than a day. If the
-# games repo ever goes 90 days without a merge the live snapshot ages out and
-# published serving returns 503 until a fresh bake restores current.json — the
-# lifecycle rule is a cost control, not a soft degrade to GitHub.
+# also the rollback path, so they are kept for a fortnight rather than a day.
+# The window is bounded by BAKES, not merges: publish-games.yml runs a full
+# rebuild on a 04:23 UTC cron whether or not anything merged, so 14 days costs
+# a fortnight of rollback points and nothing else. It would take 14 consecutive
+# failed bakes for the live snapshot to age out and published serving to return
+# 503 — the lifecycle rule is a cost control, not a soft degrade to GitHub.
 LIFECYCLE_FILE="$(mktemp)"
 cat > "$LIFECYCLE_FILE" <<'EOF'
 {
@@ -202,7 +245,7 @@ cat > "$LIFECYCLE_FILE" <<'EOF'
     "rule": [
       {
         "action": { "type": "Delete" },
-        "condition": { "age": 90, "matchesPrefix": ["snapshots/"] }
+        "condition": { "age": 14, "matchesPrefix": ["snapshots/"] }
       }
     ]
   }
@@ -213,7 +256,7 @@ gcloud storage buckets update "gs://${SNAPSHOT_BUCKET}" \
   --project="$PROJECT_ID" \
   >/dev/null
 rm -f "$LIFECYCLE_FILE"
-echo "    IAM (deployer: write, Cloud Run: read) and 90-day lifecycle applied."
+echo "    IAM (deployer: write, Cloud Run: read) and 14-day lifecycle applied."
 
 # The games store (apps/api/src/games-store.ts) — the system of record for creator
 # game content, as opposed to the snapshot, which is a rebuildable projection of it.
@@ -270,6 +313,18 @@ gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
   --member="serviceAccount:${RUN_SA}" \
   --role="roles/storage.objectAdmin" \
   --condition="expression=resource.type == 'storage.googleapis.com/Object' && resource.name.extract('projects/_/buckets/${STORE_BUCKET}/objects/games/{slug}/staging/') != '',title=games-store-staging-mutate,description=Overwrite/delete only under games/*/staging/ for MCP file-by-file staging" \
+  --project="$PROJECT_ID" \
+  >/dev/null
+
+# The mirror image of the gate's condition below: the gate may write anything EXCEPT a
+# manifest, and the API may write manifests. Both halves are needed — moving the verdict
+# write to /api/internal/gate-verdict only helps if the identity behind that route can
+# perform it, and the runtime's bucket-wide grant is create-and-read. Without this every
+# gate would report progress against a 500 and finish with no verdict recorded.
+gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
+  --member="serviceAccount:${RUN_SA}" \
+  --role="roles/storage.objectAdmin" \
+  --condition="expression=resource.type == 'storage.googleapis.com/Object' && resource.name.startsWith('projects/_/buckets/${STORE_BUCKET}/objects/games/') && resource.name.endsWith('/manifest.json'),title=games-store-manifest-write,description=Replace a version manifest — the gate verdict path. Nothing else under games/" \
   --project="$PROJECT_ID" \
   >/dev/null
 
@@ -348,14 +403,77 @@ grant_gate_with_retry() {
   "$@" >/dev/null
 }
 
-# objectAdmin (includes delete) is forced by in-place manifest updates — see
-# infra/gate-hardening.md "Store IAM: why objectAdmin". Compensated above with
-# versioning + soft-delete + noncurrent prune on this bucket.
+# Read every object, overwrite everything EXCEPT a manifest. The gate needs overwrite
+# because a re-gate of the same version rewrites its own derived artifacts; it no longer
+# needs it on manifest.json, because the verdict now goes to the API instead
+# (gate-verdict-routes.ts). Bucket-wide objectAdmin until 2026-09-08 meant the identity
+# that executes hostile candidate code could delete or green-light any published game.
+#
+# What this does not fix: within the versions it can name, the gate can still overwrite
+# another game's *artifacts*. Closing that needs a per-slug scope IAM cannot express for
+# a runtime value — see infra/gate-hardening.md for the staging-prefix design that would.
+grant_gate_with_retry gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
+  --member="serviceAccount:${GATE_SA_EMAIL}" \
+  --role="roles/storage.objectViewer" \
+  --condition=None \
+  --project="$PROJECT_ID"
+
 grant_gate_with_retry gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
   --member="serviceAccount:${GATE_SA_EMAIL}" \
   --role="roles/storage.objectAdmin" \
-  --condition=None \
+  --condition="expression=resource.type == 'storage.googleapis.com/Object' && !resource.name.endsWith('/manifest.json'),title=gate-no-manifest-writes,description=Gate artifacts yes but no game's manifest — the verdict goes through the API" \
   --project="$PROJECT_ID"
+
+# An older run of this script left the unconditional binding; reconcile it away.
+# Not `|| true`: if this removal fails, the old unconditional objectAdmin stays in force
+# beside the narrow one, hostile gate code keeps bucket-wide delete, and the hardening
+# only looks applied. So the removal may fail, and then the absence is verified.
+gcloud storage buckets remove-iam-policy-binding "gs://${STORE_BUCKET}" \
+  --member="serviceAccount:${GATE_SA_EMAIL}" \
+  --role="roles/storage.objectAdmin" \
+  --condition=None \
+  --project="$PROJECT_ID" \
+  >/dev/null 2>&1 || true
+# The read is checked on its own before anything inspects it. Piping straight into a
+# test conflates "the policy says no such binding" with "the policy could not be read" —
+# expired credentials, a permission gap, a transient API error — and the second must
+# never print "verified" over a grant that is still in force.
+if ! GATE_POLICY="$(gcloud storage buckets get-iam-policy "gs://${STORE_BUCKET}" \
+  --project="$PROJECT_ID" --format=json)"; then
+  echo "Error: could not read the IAM policy of gs://${STORE_BUCKET} to confirm the removal." >&2
+  echo "The narrow binding may be in place, but the broad one is unverified. Re-run." >&2
+  exit 1
+fi
+# Three outcomes, not two. A checker that answers by exit status alone cannot separate
+# "no such binding" from "python is missing" or "that JSON did not parse", and the second
+# pair would print "verified" over a grant still in force. So it answers in words.
+if ! GATE_BROAD="$(printf '%s' "$GATE_POLICY" | python3 -c "
+import json, sys
+policy = json.load(sys.stdin)
+member = 'serviceAccount:${GATE_SA_EMAIL}'
+broad = any(
+    b.get('role') == 'roles/storage.objectAdmin' and 'condition' not in b and member in b.get('members', [])
+    for b in policy.get('bindings', [])
+)
+print('BROAD' if broad else 'CLEAN')
+")"; then
+  echo "Error: could not evaluate the IAM policy of gs://${STORE_BUCKET}." >&2
+  echo "The broad binding is unverified, not absent. Re-run once python3 is available." >&2
+  exit 1
+fi
+case "$GATE_BROAD" in
+  CLEAN) ;;
+  BROAD)
+    echo "Error: gate-runner still holds unconditional objectAdmin on gs://${STORE_BUCKET}." >&2
+    echo "The narrow binding was added but the broad one remains — the gate is NOT hardened." >&2
+    exit 1
+    ;;
+  *)
+    echo "Error: the policy checker answered '${GATE_BROAD}', which is neither CLEAN nor BROAD." >&2
+    exit 1
+    ;;
+esac
+echo "    gate-runner: no unconditional objectAdmin (verified)." 
 
 grant_gate_with_retry gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${GATE_SA_EMAIL}" \
@@ -516,15 +634,16 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --condition=None \
   >/dev/null
 
-# UNVERIFIED role name: not confirmed against `gcloud iam roles describe` from this
-# environment. If it 404s, list `roles/discoveryengine.*` and pick the editor-level one —
-# CI needs write access for `documents:import`, not full admin.
-echo "    Granting roles/discoveryengine.editor to CI deployer (${DEPLOYER_SA}, for documents:import)"
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-  --member="serviceAccount:${DEPLOYER_SA}" \
-  --role="roles/discoveryengine.editor" \
-  --condition=None \
-  >/dev/null
+# The deployer used to hold discoveryengine.editor because the corpus import ran as it —
+# the games repo published as this account. Since 2026-09-08 that import runs as
+# kit-publisher@ (setup-wif.sh step 5b), and no workflow in *this* repo touches Discovery
+# Engine, so the grant is obsolete write access to every data store in the project.
+# Reconciled away rather than skipped, so a re-run on an older project takes it too.
+# The deployer's discoveryengine.editor is NOT revoked here. This script can run on a
+# project where setup-wif.sh has not, and the games repo would then still be importing
+# the corpus as the deployer — removing it here would break that import before its
+# replacement exists. The revocation belongs to the cutover, and lives in setup-wif.sh
+# step 5d, after the publisher has been granted.
 
 echo ""
 echo "==> Done. Firestore database, storage, IAM, deletion sweep, session secret, telemetry TTL, indexes, gate-runner, and the knowledge_query Discovery Engine data store configured for project ${PROJECT_ID}."

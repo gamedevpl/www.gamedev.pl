@@ -81,7 +81,7 @@ function stubGamesStore(options: { hasEditor?: boolean; sealed?: boolean } = {})
           slug: 'garden-gather',
           version: 'v1',
           createdAt: 'now',
-          issueNumber: 1_000_001,
+          jobId: 1_000_001,
           engineRef: 'abc1234',
           sourceFiles: Object.keys(VERSION_SOURCES).filter(
             (path) =>
@@ -95,7 +95,7 @@ function stubGamesStore(options: { hasEditor?: boolean; sealed?: boolean } = {})
         slug: candidate.slug,
         version,
         createdAt: 'now',
-        issueNumber: sourceJob,
+        jobId: sourceJob,
         engineRef: candidate.engineRef,
         origin: 'editor',
         sourceFiles: candidate.files.map((file) => file.path),
@@ -354,6 +354,30 @@ describe('editor draft routes', () => {
     });
     expect(stale.statusCode).toBe(409);
     expect(stale.json().revision).toBe(1);
+  });
+
+  it("starts no build once the day's gate-run ceiling is spent", async () => {
+    // The editor publishes through the trigger delivery uses, ceiling included.
+    await store.setCreationLimits({ globalDailyGateRunCap: 0 }, 'test');
+    const gateRuns: string[] = [];
+    const { app } = await createApp({ gateRuns });
+    await app.inject({
+      method: 'PUT',
+      url: '/api/me/games/garden-gather/editor/draft',
+      headers: authHeaders('g:alice'),
+      payload: {
+        content: { gardens: [{ properties: { name: 'Published' }, rows: ['########', '#.@...*#', '########'] }] },
+      },
+    });
+    const publish = await app.inject({
+      method: 'POST',
+      url: '/api/me/games/garden-gather/editor/publish',
+      headers: authHeaders('g:alice'),
+    });
+
+    // Stored and unverified: it cannot publish, and re-gates tomorrow.
+    expect(publish.statusCode).toBe(200);
+    expect(gateRuns).toEqual([]);
   });
 
   it('publishes the draft as a content-only candidate: defaults swapped, module regenerated, gate started', async () => {

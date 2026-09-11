@@ -27,10 +27,11 @@ import type { GamesStore, PublicationRecord } from '../delivery/games-store.js';
 import type { GitHubClient } from './github-client.js';
 import type { InternalAuthVerifier } from '../platform/internal-auth.js';
 import type { Store } from '../platform/store.js';
+import { isPublished } from '../platform/publication-state.js';
 
 /** The configured Cloud Build gate trigger — the same seam the delivery path uses. */
 export type HealthGateTrigger = (input: {
-  issueNumber: number;
+  jobId: number;
   slug: string;
   version: string;
   mode?: 'health';
@@ -64,14 +65,14 @@ export async function startHealthCheck(
   if (!manifest) return { started: false, reason: 'version_missing' };
 
   const requestedAt = new Date(now()).toISOString();
-  const triggered = await deps.gateTrigger({ issueNumber: manifest.issueNumber, slug, version, mode: 'health' });
+  const triggered = await deps.gateTrigger({ jobId: manifest.jobId, slug, version, mode: 'health' });
   const buildId = triggered && typeof triggered === 'object' ? triggered.buildId : undefined;
 
   await deps.store.setPublicationHealthCheck(slug, { version, requestedAt, ...(buildId ? { buildId } : {}) });
   // Booked to the job that built the game — a health run is a gate run on the bill, and
   // the manifest is the only place the issue number is known.
   if (buildId) {
-    await deps.store.recordJobCost(manifest.issueNumber, {
+    await deps.store.recordJobCost(manifest.jobId, {
       kind: 'gate_run',
       at: requestedAt,
       by: 'cloud-build',
@@ -190,7 +191,7 @@ export async function runHealthSweep(deps: HealthSweepDeps): Promise<HealthSweep
   const head = await deps.githubClient.getRefSha(engineRef).catch(() => null);
   if (!head) return emptyResult();
 
-  const publications = (await deps.store.listPublications()).filter((publication) => publication.state === 'published');
+  const publications = (await deps.store.listPublications()).filter(isPublished);
   const result: HealthSweepResult = { ...emptyResult(), head, published: publications.length };
 
   /** Stale games with the timestamp that decides who goes first. */

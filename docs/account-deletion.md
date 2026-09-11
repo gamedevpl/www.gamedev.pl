@@ -13,7 +13,7 @@ Remove the uid from `ADMIN_UIDS` and deploy that configuration before deletion c
 After the deadline, `POST /api/internal/account-deletion-sweep` runs the existing idempotent
 erasure path. Published games remain under the non-personal platform owner; unpublished
 work is abandoned and unlinked; identity, credentials, subscriptions, player contributions,
-saves, and private drafts are erased.
+saves, private drafts, and pre-game CLI chat history are erased.
 
 ## Scheduler setup
 

@@ -1,0 +1,316 @@
+/* The chat rail over the stage: desktop side panel, phone bottom sheet with its three
+   detents, and the unread badge (StudioChatRail.tsx; the badge is also rendered by
+   StudioStrip.tsx and StudioStripOverflowMenu.tsx).
+   The two `.app-header` z-index claims from this run stay in styles.css — they target
+   the eagerly-loaded site header. */
+
+/* ── THE CHAT RAIL ────────────────────────────────────────────────────────────── */
+
+.studio-chat-unread-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #f87171;
+  color: #1a0505;
+  font-size: 0.62rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.studio-chat-rail {
+  position: absolute;
+  z-index: 40;
+  inset: 12px 12px auto auto;
+  bottom: 12px;
+  width: min(380px, calc(100% - 24px));
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: calc(100% - 24px);
+  border-radius: 16px;
+  border: 1px solid var(--panel-border);
+  background: rgba(10, 14, 20, 0.86);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.studio-chat-rail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding: 10px 10px 8px 14px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.studio-chat-rail-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-chat-rail-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.studio-chat-rail-head-action {
+  position: relative;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    background 140ms ease,
+    border-color 140ms ease;
+}
+
+.studio-chat-rail-head-action:hover,
+.studio-chat-rail-head-action:focus-visible {
+  color: var(--text);
+  background: rgba(148, 163, 184, 0.1);
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
+.studio-chat-rail-head-action:focus-visible {
+  outline: 2px solid var(--turquoise);
+  outline-offset: 2px;
+}
+
+.studio-chat-rail-head-action::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  width: max-content;
+  max-width: 190px;
+  padding: 6px 8px;
+  border: 1px solid var(--panel-border);
+  border-radius: 7px;
+  background: rgba(5, 9, 13, 0.98);
+  color: var(--text);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.42);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: normal;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-3px);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease,
+    visibility 0s linear 120ms;
+}
+
+.studio-chat-rail-head-action:hover::after,
+.studio-chat-rail-head-action:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition-delay: 0s;
+}
+
+.studio-chat-rail-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+.studio-chat-rail-body .studio-thread {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 8px 12px 12px;
+}
+
+.studio-chat-rail-body .studio-thread-scroll {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+}
+
+.studio-chat-rail .studio-thread-scroll-pad {
+  pointer-events: auto;
+}
+
+.studio-chat-rail-grab {
+  display: none;
+}
+
+.studio-chat-rail-peek {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 14px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.studio-chat-rail-peek-line {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.82rem;
+}
+
+.studio-chat-rail-backdrop {
+  z-index: 1090;
+  top: var(--studio-chat-rail-top-inset, 0px);
+}
+
+/* Collapsed to the pill: the thread stays mounted (its poll, and any unsent composer
+   text, must survive a collapse) but is out of the layout and the accessibility tree. */
+.studio-chat-rail.is-collapsed {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Phone: the rail is a bottom sheet with three detents (Workstream B4). */
+@media (max-width: 800px) {
+  .studio-chat-rail.is-sheet {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 1100;
+    width: auto;
+    max-height: 85vh;
+    border-radius: 16px 16px 0 0;
+    animation: fadeIn 0.2s ease;
+    transition: height 180ms ease;
+  }
+
+  /* Install / update banners pin to the bottom edge too — lift the sheet above them
+     (measured overlay height, --studio-chat-rail-overlay-lift from StudioChatRail)
+     instead of painting over their dismiss/reload controls. */
+  .app:has(.install-prompt) .studio-chat-rail.is-sheet,
+  .app:has(.app-update) .studio-chat-rail.is-sheet {
+    bottom: var(--studio-chat-rail-overlay-lift, 5.5rem);
+  }
+
+  .studio-chat-rail.is-sheet .studio-chat-rail-head {
+    padding-top: 4px;
+  }
+
+  .studio-chat-rail.is-sheet .studio-chat-rail-grab {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    min-height: 28px;
+    padding: 10px 0 2px;
+    border: 0;
+    background: transparent;
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .studio-chat-rail.is-sheet.is-dragging .studio-chat-rail-grab {
+    cursor: grabbing;
+  }
+
+  .studio-chat-rail.is-sheet .studio-chat-rail-grab-bar {
+    width: 36px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--panel-border);
+  }
+
+  .studio-chat-rail.is-peek {
+    max-height: none;
+    height: var(--studio-chat-rail-peek-height, 124px);
+  }
+
+  .studio-chat-rail.is-half {
+    height: 48vh;
+  }
+
+  .studio-chat-rail.is-full {
+    /* Guards a stale JS inset falling back to 0px under the notch. */
+    top: max(var(--studio-chat-rail-top-inset, 0px), env(safe-area-inset-top, 0px));
+    height: auto;
+    max-height: none;
+    border-radius: 0;
+  }
+
+  .studio-chat-rail.is-sheet.is-dragging {
+    height: var(--studio-chat-rail-drag-height);
+    max-height: none;
+    transition: none;
+  }
+}
+
+@media (max-width: 800px) {
+  /* Keep the Studio strip usable while the sheet is half-open. Full chat still
+     leaves the global header as its escape hatch. */
+  .app:has(.studio-chat-rail.is-sheet.is-peek:not(.is-collapsed)) .studio-strip,
+  .app:has(.studio-chat-rail.is-sheet.is-half:not(.is-collapsed)) .studio-strip {
+    position: relative;
+    z-index: 1200;
+  }
+}
+
+@media (max-width: 800px) {
+  /* The mobile sheet rules above are more specific than the shared collapsed
+     clip. Repeat the clip after them or a covered rail remains painted over a
+     drawer even though it is inert. */
+  .studio-chat-rail.is-sheet.is-collapsed {
+    position: absolute;
+    inset: auto;
+    width: 1px;
+    height: 1px;
+    max-width: 1px;
+    max-height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    visibility: hidden;
+    pointer-events: none;
+    border: 0;
+  }
+}

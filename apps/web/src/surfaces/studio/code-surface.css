@@ -1,0 +1,230 @@
+/* Code surface shell: header, file picker/sheet, readonly banners, empty/loading states, mobile chrome (CodeSurface.tsx). */
+
+.code-surface {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.code-surface-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+/* Keep the global escape and Code's thread action on one row. */
+.studio-stage-layout:has(.studio-code-overlay) .code-surface-head {
+  padding-left: 180px;
+}
+
+.code-surface-head h2 {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.code-surface-file-picker {
+  display: none;
+}
+
+.code-surface-file-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.code-surface-file-trigger-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono-font, monospace);
+  font-size: 0.78rem;
+}
+
+.code-surface-file-trigger:hover:not(:disabled),
+.code-surface-file-trigger:focus-visible {
+  color: var(--turquoise);
+}
+
+.code-surface-file-trigger:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.code-surface-file-backdrop,
+.code-surface-file-sheet {
+  display: none;
+}
+
+.code-surface-readonly-banner {
+  margin-left: auto;
+  min-width: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.code-surface-diff-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.code-surface-diff-toggle:hover,
+.code-surface-diff-toggle:focus-visible {
+  color: var(--text);
+  border-color: rgba(0, 228, 172, 0.35);
+}
+
+.code-surface-diff-toggle.is-active {
+  color: var(--turquoise);
+  border-color: rgba(0, 228, 172, 0.5);
+  background: rgba(0, 228, 172, 0.08);
+}
+
+.code-surface-readonly-banner-compact {
+  display: none;
+}
+
+.code-surface-loading,
+.code-surface-error,
+.code-surface-empty {
+  padding: 24px 16px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.code-surface-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(140px, 220px) minmax(0, 1fr);
+}
+
+@media (max-width: 1099px) {
+  .code-surface-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .code-surface-file-picker {
+    display: flex;
+    align-items: center;
+    flex: none;
+    min-width: 0;
+    padding: 5px 12px;
+    border-bottom: 1px solid var(--panel-border);
+  }
+
+  .code-surface-file-trigger {
+    width: 100%;
+    min-height: 34px;
+    padding: 5px 7px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    text-align: left;
+  }
+
+  .code-surface-file-trigger:hover:not(:disabled),
+  .code-surface-file-trigger:focus-visible {
+    border-color: rgba(0, 228, 172, 0.35);
+    background: rgba(0, 228, 172, 0.08);
+  }
+
+  .code-surface-file-backdrop {
+    position: absolute;
+    z-index: 20;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: rgba(3, 8, 13, 0.66);
+  }
+
+  .code-surface-file-sheet {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    width: min(100%, 480px);
+    max-height: min(76%, 34rem);
+    border: 1px solid var(--panel-border);
+    border-bottom: 0;
+    border-radius: 16px 16px 0 0;
+    background: var(--panel);
+    box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.42);
+    overflow: hidden;
+  }
+
+  .code-surface-file-sheet-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+    padding: 12px 12px 10px 16px;
+    border-bottom: 1px solid var(--panel-border);
+  }
+
+  .code-surface-file-sheet-head h3 {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    font-size: 0.86rem;
+  }
+
+  .code-surface-file-options {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 5px 8px max(8px, env(safe-area-inset-bottom));
+  }
+}
+
+/* Below desktop widths the global escape gets its own top row. The desktop 180px
+   reservation leaves too little room for the Code controls and the live read-only
+   status on phones and narrow tablets. */
+@media (max-width: 1099px) {
+  .studio-stage-layout:has(.studio-code-overlay) .code-surface-head {
+    padding: 52px 14px 10px;
+  }
+
+  .code-surface-readonly-banner-full {
+    display: none;
+  }
+
+  .code-surface-readonly-banner-compact {
+    display: inline;
+  }
+
+  /* Back / Kod / diff-toggle / banners had no wrap at all, so a read-only or
+     agent-active banner could shove Akcje hard against — or past — the right
+     edge on a phone. Let the row wrap, and always give Akcje its own full-width
+     line: a right-pinned button on a wrapped line lands in an unpredictable spot
+     otherwise. */
+  .code-surface-head {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+}

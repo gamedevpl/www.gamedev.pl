@@ -2,9 +2,11 @@
 
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import type { CatalogEntry } from './catalog.js';
 import i18n from './i18n/index.js';
 import type { GamePage as GamePageData } from './gamePageApi.js';
+import type { PlayVia } from './visitTelemetry.js';
 
 const fetchGamePage = vi.fn();
 let authUser: { uid: string; handle?: string } | null = null;
@@ -48,6 +50,7 @@ function pageData(overrides: Partial<GamePageData> = {}): GamePageData {
       saves: null,
       world: null,
       sensing: null,
+      editor: 'content',
       orientation: 'any',
       touch: null,
       submittedBy: 'nightshift',
@@ -68,8 +71,8 @@ function pageData(overrides: Partial<GamePageData> = {}): GamePageData {
 
 let container: HTMLDivElement;
 let root: Root | null = null;
-let playAction: ReturnType<typeof vi.fn>;
-let remixAction: ReturnType<typeof vi.fn>;
+let playAction: Mock<(game: CatalogEntry, via?: PlayVia) => void>;
+let remixAction: Mock<(game: CatalogEntry, request: string) => void>;
 const originalVisualViewport = window.visualViewport;
 
 beforeEach(async () => {
@@ -258,6 +261,19 @@ describe('GamePage', () => {
     expect(container.querySelector('iframe')).toBeNull();
   });
 
+  it('does not offer Remix when the catalog has no editor lane', async () => {
+    fetchGamePage.mockResolvedValue(
+      pageData({
+        entry: { ...pageData().entry, editor: null },
+      }),
+    );
+    await renderPage();
+
+    expect(container.querySelector('.game-page-remix')).toBeNull();
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(remixAction).not.toHaveBeenCalled();
+  });
+
   it('follows the visual viewport so the mobile keyboard cannot cover the actions', async () => {
     const viewport = stubVisualViewport(844);
     await renderPage();
@@ -390,6 +406,5 @@ describe('GamePage', () => {
 });
 
 function nativeSetValue(el: HTMLTextAreaElement, value: string) {
-  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
-  setter?.call(el, value);
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set?.call(el, value);
 }

@@ -14,6 +14,9 @@
 # Override via env: PROJECT_ID, SA_NAME, POOL_NAME, REPO, KEY_OUT.
 set -euo pipefail
 
+# An old copy of this script does not fail; it reverts what a newer copy fixed.
+source "$(dirname "${BASH_SOURCE[0]}")/require-current-checkout.sh"
+
 PROJECT_ID="${PROJECT_ID:-gamedevpl}"
 SA_NAME="${SA_NAME:-agent-investigator}"
 SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
@@ -71,20 +74,30 @@ for ROLE in \
     >/dev/null
 done
 
-echo "==> 3/6 Granting object read on the two public-content buckets only"
-# These hold published game snapshots and store artifacts — content that is already served
-# publicly, so reading it discloses nothing. The backup bucket is pointedly absent.
-for BUCKET in "$SNAPSHOT_BUCKET" "$STORE_BUCKET"; do
-  if gcloud storage buckets describe "gs://${BUCKET}" --project "$PROJECT_ID" >/dev/null 2>&1; then
-    echo "    - gs://${BUCKET}"
-    gcloud storage buckets add-iam-policy-binding "gs://${BUCKET}" \
-      --member="serviceAccount:${SA_EMAIL}" \
-      --role="roles/storage.objectViewer" \
-      >/dev/null
-  else
-    echo "    (gs://${BUCKET} not found, skipping)"
-  fi
-done
+echo "==> 3/6 Granting object read on the published-snapshot bucket only"
+# The snapshot bucket holds assembled published games — content the site serves to every
+# signed-in player, so reading it discloses nothing. The store bucket is pointedly NOT
+# here: it carries creator sources, staged and unpublished work, and is created with
+# --public-access-prevention because the privacy policy promises those are not public.
+# An earlier version of this script granted it under the same "already public" claim,
+# which was true of the snapshot bucket and false of the store; the binding was removed
+# from the live bucket on 2026-09-08 and the step below takes it away on older projects.
+# The backup bucket has never been granted.
+if gcloud storage buckets describe "gs://${SNAPSHOT_BUCKET}" --project "$PROJECT_ID" >/dev/null 2>&1; then
+  echo "    - gs://${SNAPSHOT_BUCKET}"
+  gcloud storage buckets add-iam-policy-binding "gs://${SNAPSHOT_BUCKET}" \
+    --member="serviceAccount:${SA_EMAIL}" \
+    --role="roles/storage.objectViewer" \
+    >/dev/null
+else
+  echo "    (gs://${SNAPSHOT_BUCKET} not found, skipping)"
+fi
+if gcloud storage buckets describe "gs://${STORE_BUCKET}" --project "$PROJECT_ID" >/dev/null 2>&1; then
+  gcloud storage buckets remove-iam-policy-binding "gs://${STORE_BUCKET}" \
+    --member="serviceAccount:${SA_EMAIL}" \
+    --role="roles/storage.objectViewer" \
+    >/dev/null 2>&1 && echo "    - gs://${STORE_BUCKET}: stale read grant removed" || true
+fi
 
 echo "==> 4/6 Allowing your own account to impersonate ${SA_NAME}"
 # This is how local Claude Code should reach GCP: no key at all, just

@@ -40,7 +40,7 @@ function annotate(title: string, message: string): void {
 }
 
 async function main(): Promise<void> {
-  console.log(`games-repo contract: checking ${repo}@${ref} against apps/api/src/catalog/games-repo-contract.ts`);
+  console.log(`games-repo contract: checking ${repo}@${ref} against apps/api/src/platform/games-repo-contract.ts`);
 
   const outcome = await runGamesRepoContractCheck({
     repo,

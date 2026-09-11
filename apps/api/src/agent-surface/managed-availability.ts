@@ -3,6 +3,7 @@
 // Reuses the creation-limits document and TTL cache; see creation-limits.ts.
 
 import { BOT_UID_PREFIX, type CreationLimits, type Store } from '../platform/store.js';
+import { botAllowanceAvailable } from './managed-bot-availability.js';
 
 import type { BuilderUnavailableReason } from '@gamedevpl/contract';
 
@@ -10,10 +11,13 @@ export type ManagedUnavailableReason = BuilderUnavailableReason;
 
 export type ManagedAvailability = { available: true } | { available: false; reason: ManagedUnavailableReason };
 
-// Wire error code for a refused `builder: 'platform'` request.
-export const MANAGED_UNAVAILABLE_ERROR = 'platform_builder_unavailable';
+export { MANAGED_UNAVAILABLE_ERROR } from '../platform/managed-builder-error.js';
 
 export const DEFAULT_MANAGED_AVAILABILITY_TTL_MS = 60_000;
+
+// Unset must not read as unlimited here.
+export const DEFAULT_MANAGED_DAILY_CAP = 40;
+export const DEFAULT_MANAGED_DAILY_USER_CAP = 5;
 
 export interface ManagedAvailabilityOptions {
   // Absent only in tests with no store; caps and mode are skipped.
@@ -79,12 +83,24 @@ export function createManagedAvailabilityGate(options: ManagedAvailabilityOption
   }
 
   async function checkCaps(uid: string, dateStr: string, spend: boolean): Promise<ManagedAvailability> {
-    if (bypassesBreaker(uid)) return { available: true };
+    // Automation keeps its own allowance, not an unbounded pass.
+    if (bypassesBreaker(uid)) {
+      if (!store) return { available: true };
+      try {
+        if (!(await botAllowanceAvailable(store, dateStr, spend))) {
+          return { available: false, reason: 'global_limit' };
+        }
+      } catch (error) {
+        logWarn({ err: error, dateStr }, 'automation counter unreachable; admitting the managed round');
+      }
+      return { available: true };
+    }
     if (!store) return { available: true };
 
     const stored = await config();
-    const globalCap = stored?.managedDailyCap ?? null;
-    const userCap = stored?.managedDailyUserCap ?? null;
+    // Unset used to mean unlimited, alone among the gates.
+    const globalCap = stored?.managedDailyCap ?? DEFAULT_MANAGED_DAILY_CAP;
+    const userCap = stored?.managedDailyUserCap ?? DEFAULT_MANAGED_DAILY_USER_CAP;
 
     // Checked first: an exhausted creator must never spend the shared slot.
     if (userCap !== null) {

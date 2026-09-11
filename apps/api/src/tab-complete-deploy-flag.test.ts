@@ -8,7 +8,9 @@ const script = readFileSync(new URL('../../../infra/deploy-api.sh', import.meta.
 
 describe('the tab-complete flag', () => {
   it('is threaded by both deploy paths, so neither drops what the other set', () => {
-    expect(workflow).toContain('TAB_COMPLETE_VAL="${{ vars.TAB_COMPLETE }}"');
+    // Read as step env; expressions in a run body share one 21k ceiling.
+    expect(workflow).toContain('TAB_COMPLETE: ${{ vars.TAB_COMPLETE }}');
+    expect(workflow).toContain('TAB_COMPLETE_VAL="${TAB_COMPLETE}"');
     expect(workflow).toContain('ENV_VARS="${ENV_VARS}|TAB_COMPLETE=${TAB_COMPLETE_VAL}"');
     expect(script).toMatch(/for FLAG_VAR in [^;]*\bTAB_COMPLETE\b/);
   });

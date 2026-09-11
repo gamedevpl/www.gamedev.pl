@@ -58,7 +58,7 @@ export function listModuleSizeFiles(root = REPO_ROOT) {
         continue;
       }
       if (!entry.isFile()) continue;
-      if (!entry.name.endsWith('.ts') && !entry.name.endsWith('.tsx')) continue;
+      if (!entry.name.endsWith('.ts') && !entry.name.endsWith('.tsx') && !entry.name.endsWith('.css')) continue;
       out.push(path.relative(root, abs).split(path.sep).join('/'));
     }
   }

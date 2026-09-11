@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { ALL_LEGAL_DOCUMENTS, legalDocument, type LegalDocument } from './index.js';
+import { legalDocument, type LegalDocId, type LegalDocument } from './index.js';
 import { CONTACT_EMAIL } from './operator.js';
+import { privacyEn } from './privacy.en.js';
+import { privacyPl } from './privacy.pl.js';
+import { termsEn } from './terms.en.js';
+import { termsPl } from './terms.pl.js';
 
 const DOC_IDS = ['privacy', 'terms'] as const;
+
+// Statically imported here (test-only) for cross-language parity checks below —
+// legal/index.ts itself loads only the reader's language, on purpose.
+const ALL_LEGAL_DOCUMENTS: Record<'en' | 'pl', Record<LegalDocId, LegalDocument>> = {
+  en: { privacy: privacyEn, terms: termsEn },
+  pl: { privacy: privacyPl, terms: termsPl },
+};
 
 /**
  * A legal document that exists in one language but not the other is not a cosmetic
@@ -77,11 +88,11 @@ describe('legal documents', () => {
     }
   });
 
-  it('falls back to the binding Polish text for unknown languages', () => {
-    expect(legalDocument('terms', 'de')).toBe(ALL_LEGAL_DOCUMENTS.pl.terms);
-    expect(legalDocument('terms', undefined)).toBe(ALL_LEGAL_DOCUMENTS.pl.terms);
-    expect(legalDocument('terms', 'en-US')).toBe(ALL_LEGAL_DOCUMENTS.en.terms);
-    expect(legalDocument('privacy', 'pl-PL')).toBe(ALL_LEGAL_DOCUMENTS.pl.privacy);
+  it('falls back to the binding Polish text for unknown languages', async () => {
+    expect(await legalDocument('terms', 'de')).toBe(ALL_LEGAL_DOCUMENTS.pl.terms);
+    expect(await legalDocument('terms', undefined)).toBe(ALL_LEGAL_DOCUMENTS.pl.terms);
+    expect(await legalDocument('terms', 'en-US')).toBe(ALL_LEGAL_DOCUMENTS.en.terms);
+    expect(await legalDocument('privacy', 'pl-PL')).toBe(ALL_LEGAL_DOCUMENTS.pl.privacy);
   });
 });
 

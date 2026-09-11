@@ -1,0 +1,488 @@
+/* Status view conversation thread + prior rounds (SubmissionStatusView.tsx, StudioPriorRounds.tsx). */
+
+/* ── THE THREAD ──────────────────────────────────────────────────────────────────
+   One game is one conversation, so this is built like every other place you talk to
+   something: the transcript scrolls in its own pane and the box you answer in never
+   moves. What it replaced was a bordered box titled BUILD ACTIVITY containing rows of
+   12px text behind an icon column — all of it true, none of it reading as a dialogue.
+
+   The height is viewport-relative rather than full-screen because the studio still
+   lives inside an ordinary scrolling page with a header above it; what matters is that
+   the transcript, not the document, is the thing that scrolls. */
+.studio-thread {
+  display: flex;
+  flex-direction: column;
+  height: min(70vh, 780px);
+  min-height: 24rem;
+}
+
+.studio-thread-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 2px 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Short threads sit above the composer (flex-end), not under the lid. Long threads
+   grow past min-height and scroll normally from the top of the conversation. */
+.studio-thread-scroll-body {
+  flex: 1 0 auto;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+/* Claude / Cursor / GPT slack: enough empty runway under the transcript that the
+   last turn can scroll up to the top of the pane. Without this the scroller ends
+   on the last line and you cannot lift it. `100%` is the scrollport when the shell
+   gives the thread a height; `min-height` covers the page-scroll phone band where
+   the scrollport height is indefinite. vh first, then dvh — same pairing as
+   `.beta-splash` / `.qa-wizard`, so browsers without dvh keep the runway.
+
+   Stick-to-bottom must target the body end, not this pad — scrolling to absolute
+   bottom parks the last turn at the top with an empty void under it.
+
+   A percentage of the scrollport cannot create overflow on an empty thread
+   (H−4.5rem ≤ H), and that is fine: the runway matters once there is a last
+   turn to lift. The browser gate checks pad height and slack-with-a-stand-in
+   turn, not scrollHeight on the empty fixture. */
+.studio-thread-scroll-pad {
+  flex: none;
+  height: calc(100% - 4.5rem);
+  min-height: min(42vh, 22rem);
+  min-height: min(42dvh, 22rem);
+  pointer-events: none;
+}
+
+.studio-thread-empty {
+  color: var(--muted);
+  margin: 0;
+  padding: 8px 2px;
+}
+
+/* Superseded improve jobs — collapsed above the live round so history does not vanish. */
+.studio-prior-rounds {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 18px;
+  padding: 0 2px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.studio-prior-round {
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.studio-prior-round-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+  padding: 10px 12px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  user-select: none;
+}
+
+.studio-prior-round-summary::-webkit-details-marker {
+  display: none;
+}
+
+.studio-prior-round-summary::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  opacity: 0.7;
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.studio-prior-round[open] > .studio-prior-round-summary::before {
+  transform: rotate(90deg);
+}
+
+.studio-prior-round-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.45em 0.75em;
+  flex: 1;
+  min-width: 0;
+}
+
+.studio-prior-round-label time {
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.studio-prior-round-dismiss {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.studio-prior-round-dismiss:hover,
+.studio-prior-round-dismiss:focus-visible {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  outline: none;
+}
+
+.studio-prior-round-turns {
+  list-style: none;
+  margin: 0;
+  padding: 4px 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  opacity: 0.88;
+}
+
+.studio-prior-turn .studio-turn-text {
+  font-size: 0.92em;
+}
+
+.studio-thread-turns {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* An agent turn is prose with nothing drawn around it — the widest, quietest thing on
+   the screen, which is what makes it read as the voice rather than as a log line. */
+.studio-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.studio-turn-body {
+  max-width: 68ch;
+  min-width: 0;
+}
+
+.studio-turn-kicker {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--turquoise);
+  margin-bottom: 3px;
+}
+
+.studio-turn-text {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.97rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.studio-turn-time {
+  font-size: 0.72rem;
+  color: var(--muted);
+  opacity: 0.75;
+}
+
+/* Whether a message sent while the agent is still mid-build has been picked up from
+   its inbox yet — queued is the honest default (the agent may be seconds from reading
+   it), delivered confirms it landed without the creator having to guess or reload. */
+.studio-turn-delivery {
+  font-weight: 600;
+}
+
+.studio-turn-delivery.is-delivered {
+  color: var(--success, #2e8b57);
+}
+
+.studio-turn-delivery.is-queued {
+  color: var(--muted);
+}
+
+/* The creator's own turn: a bubble on the other side, and deliberately the quieter of
+   the two. It is there to be recognised as theirs while scrolling past, not to compete
+   with the answer it asked for. */
+.studio-turn.is-mine {
+  align-items: flex-end;
+}
+
+.studio-turn.is-mine .studio-turn-body {
+  background: var(--panel-card);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 10px 14px;
+  max-width: min(62ch, 78%);
+}
+
+.studio-turn.is-mine .studio-turn-text {
+  color: var(--text);
+}
+
+/* The kicker on the creator's side is a disclaimer, not a heading: it says an agent
+   wrote these words on their behalf. Turquoise is the agent voice elsewhere in the
+   thread and would make the quieter bubble the loud one, so this stays muted. */
+.studio-turn.is-mine .studio-turn-kicker {
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0.4px;
+}
+
+.studio-turn.is-pending .studio-turn-body {
+  opacity: 0.7;
+}
+
+/* The mini chat agent's own turn: a third voice, visually distinct from both the
+   builder's prose (turquoise kicker, full width) and the creator's bubble (right side,
+   panel background). Left-aligned like the builder — it is not the creator's words —
+   but a thin accent rule and a different kicker colour keep it from being mistaken for
+   the builder talking, which would read as a commitment the builder never made. */
+.studio-turn.is-studio-voice .studio-turn-body {
+  border-left: 2px solid var(--accent-blue);
+  padding-left: 10px;
+}
+
+.studio-turn-kicker-studio {
+  color: var(--accent-blue) !important;
+}
+
+/* Live agent work — last transcript row, Claude-shaped. Pulse is a mascot-colour
+   square so motion reads without another spinner next to the composer. */
+.studio-turn.is-working {
+  margin-top: 2px;
+}
+
+.studio-turn-working {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.studio-turn-working-pulse {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 2px;
+  background: var(--turquoise, #00e4ac);
+  box-shadow: 0 0 0 0 var(--turquoise-glow, rgba(0, 228, 172, 0.35));
+  animation: studio-working-pulse 1.4s ease-in-out infinite;
+}
+
+.studio-turn-working-label {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text);
+  line-height: 1.35;
+}
+
+.studio-turn.is-working.is-thought .studio-turn-working-label {
+  color: var(--turquoise);
+  animation: studio-thought-flash 0.55s ease-out;
+}
+
+@keyframes studio-working-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.92);
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 0 4px var(--turquoise-glow, rgba(0, 228, 172, 0.28));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-turn-working-pulse {
+    animation: none;
+    opacity: 1;
+    box-shadow: none;
+  }
+
+  .studio-turn.is-working.is-thought .studio-turn-working-label {
+    animation: none;
+  }
+}
+
+.studio-turn-shots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* Nothing below this line moves when the thread grows. */
+.studio-thread-foot {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--panel-border);
+  /* The positioning context for the live preview below. Anchoring that card to this
+     block's top edge is what keeps it off the composer no matter how tall the composer,
+     the builder chooser and the status chips grow — the bug this shell already had once,
+     from a viewport-fixed banner landing on the textarea. */
+  position: relative;
+}
+
+/* `.studio-live-preview*` is gone — the stage itself is the live preview now, at full
+   size, not a 190px thumb over the thread. Workstream E; the component that rendered
+   this (`StudioLivePreview.tsx`) is deleted. */
+
+/* Where the work is, and the one thing to do about it — the bar directly above the
+   composer, in place of a timeline, a progress bar, a pill and a sentence stacked over
+   the conversation and pushing it down the page. */
+.studio-thread-context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--panel-card);
+  border: 1px solid var(--panel-border);
+  font-size: 0.82rem;
+}
+
+.studio-context-state,
+.studio-context-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.studio-thread-context.is-active {
+  border-color: rgba(0, 228, 172, 0.32);
+  background: linear-gradient(90deg, rgba(0, 228, 172, 0.06), var(--panel-card) 40%);
+}
+
+/* Ambient MCP thought — a headline flash in the bar, not a chat turn. */
+.studio-thread-context.is-thought .studio-context-phase {
+  color: var(--turquoise);
+  animation: studio-thought-flash 0.55s ease-out;
+}
+
+@keyframes studio-thought-flash {
+  from {
+    opacity: 0.35;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.studio-context-phase {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.studio-context-phase-spinner {
+  width: 11px;
+  height: 11px;
+  flex: none;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0, 228, 172, 0.22);
+  border-top-color: var(--turquoise);
+  animation: status-spin 0.8s linear infinite;
+}
+
+.studio-context-beat,
+.studio-context-progress {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.studio-thread-context .primary-btn {
+  padding: 6px 14px;
+  font-size: 0.82rem;
+}
+
+/* Playtest is a quieter path than Play — a text link, not a peer button. */
+.studio-context-link {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: rgba(148, 163, 184, 0.45);
+  text-underline-offset: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.studio-context-link:hover {
+  color: var(--text);
+  text-decoration-color: rgba(238, 245, 241, 0.55);
+}
+
+@media (max-width: 800px), (max-height: 500px) {
+  /* Four stacked rows of status above the composer is most of a phone screen spent on
+     metadata. One line: what the build is doing. */
+  .studio-thread-context {
+    gap: 8px;
+    font-size: 0.78rem;
+  }
+
+  /* Left to wrap rather than forced onto one line: nowrap here just moves the overflow
+     somewhere it cannot be seen. It fits on one line because there is less in it. */
+  .studio-thread-context .studio-context-state {
+    min-width: 0;
+    gap: 8px;
+  }
+
+  /* The heartbeat is the first thing to go: "updated 10 minutes ago" is reassurance, and
+     the phase beside it already carries the fact. */
+  .studio-thread-context .studio-context-beat {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  /* Too little width left for two sides of a conversation; the bubble carries it. */
+  .studio-turn.is-mine .studio-turn-body {
+    max-width: 100%;
+  }
+}

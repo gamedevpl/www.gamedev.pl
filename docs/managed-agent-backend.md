@@ -306,7 +306,7 @@ There are four levels of test:
 ```bash
 npx vitest run apps/api/src/agent-surface/managed-agent.test.ts apps/api/src/agent-surface/managed-backend.test.ts \
   apps/api/src/agent-surface/managed-provider-anthropic.test.ts apps/api/src/agent-surface/managed-provider-gemini.test.ts \
-  apps/api/src/agent-surface/managed-provider-openai.test.ts apps/api/src/delivery/build-prompt.test.ts
+  apps/api/src/agent-surface/managed-provider-openai.test.ts apps/api/src/agent-surface/build-prompt.test.ts
 ```
 
 **2. The probe.** One whole round through the real backend, over MCP, requires a real
@@ -386,7 +386,7 @@ npm run managed:probe -w @gamedevpl/api -- --vendor gemini --wait \
   --wait-seconds 120 --budget-tokens 50000
 ```
 
-`--vendor gemini` defaults to `gemini-3.7-flash`; `GEMINI_API_KEY` or
+`--vendor gemini` defaults to `gemini-3.8-flash`; `GEMINI_API_KEY` or
 `MANAGED_AGENT_API_KEY` supplies the credential and `--model` overrides the model label.
 
 OpenAI also uses a native token ceiling, forwarded as `max_output_tokens` — a partial
@@ -420,7 +420,7 @@ system prompt — pinned to the same engine ref the round receives, rather than 
 this repository.
 
 **4. A live platform round.** With valid managed configuration deployed, create a game with
-`builder: "platform"` (the default). Cloud Run should log, correlated by `issueNumber` / `slug`:
+`builder: "platform"` (the default). Cloud Run should log, correlated by `jobId` / `slug`:
 
 - `managed agent dispatch enabled` (once per process, at registry build)
 - `managed round credential minted` — includes `credentialRef` and `mcpUrl`

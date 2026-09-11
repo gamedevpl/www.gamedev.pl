@@ -14,10 +14,11 @@ import {
   validateHandleShape,
   type AvatarMode,
   type PublicCreatorProfile,
-} from './creator-profile.js';
-import { catalogEntryFromSpec, type CatalogGameEntry } from '../catalog/github-client.js';
+} from '../platform/creator-profile.js';
+import type { CatalogGameEntry } from '../catalog/github-client.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { Store } from '../platform/store.js';
+import { isPublished } from '../platform/publication-state.js';
 
 /**
  * Creator profiles — claim a handle, edit the public page, publish gate data.
@@ -46,6 +47,12 @@ export interface CreatorProfileRoutesOptions {
   gamesStore?: GamesStore | null;
   /** Repo-backed catalog lookup; this source wins in the public media route too. */
   getRepoPublishedCatalogEntry?: (slug: string) => Promise<CatalogGameEntry | null>;
+  // N1: catalog's own SPEC.md parse, injected not imported.
+  catalogEntryFromSpec: (
+    slug: string,
+    specMd: string,
+    readSibling: (name: string) => string | null,
+  ) => CatalogGameEntry | null;
   now?: () => number;
 }
 
@@ -230,6 +237,7 @@ export async function registerCreatorProfileRoutes(
       store,
       gamesStore ?? null,
       getRepoPublishedCatalogEntry,
+      options.catalogEntryFromSpec,
       user.uid,
       profile,
     );
@@ -242,6 +250,7 @@ async function listCreatorPublishedGames(
   store: Store,
   gamesStore: GamesStore | null,
   getRepoPublishedCatalogEntry: ((slug: string) => Promise<CatalogGameEntry | null>) | undefined,
+  catalogEntryFromSpec: CreatorProfileRoutesOptions['catalogEntryFromSpec'],
   ownerUid: string,
   profile: PublicCreatorProfile,
 ): Promise<CatalogGameEntry[]> {
@@ -262,7 +271,7 @@ async function listCreatorPublishedGames(
     // archived / disabled publications must not stay on the public profile with a
     // dead Play button — same gate the play endpoint uses.
     const publication = await store.getPublication(slug);
-    if (!publication || publication.state !== 'published') continue;
+    if (!isPublished(publication)) continue;
 
     // Match /api/games/:slug/media/:filename: a repo-backed catalog entry wins
     // whenever both the migrated repo copy and store delivery exist.
@@ -298,6 +307,7 @@ async function listCreatorPublishedGames(
         saves: null,
         world: null,
         sensing: null,
+        editor: null,
         orientation: 'any',
         submittedBy: profileBylineName(profile),
       };

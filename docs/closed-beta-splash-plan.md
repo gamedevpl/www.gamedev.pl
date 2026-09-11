@@ -150,3 +150,6 @@ another persistent personal-data field. Anonymous visit telemetry records `shown
 
 - Admin UI for the waitlist shipped as the operator console **Waitlist** tab
   (`/admin/waitlist`) — list, approve/reject/reset, pre-approve by email.
+- Waitlist welcome mail: `npm run beta:welcome` previews (and with `--send --approve`
+  actually sends) the "a spot opened" email the splash promised. Dry-run is the default.
+  See [deployment.md](./deployment.md) → "Sending the waitlist welcome".

@@ -1,0 +1,205 @@
+/* Shared chrome for the smaller admin panels (limits/tokens/waitlist/costs/suggestions). */
+
+.admin-limits-controls,
+.admin-tokens-form,
+.admin-waitlist-filters,
+.admin-waitlist-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.6rem;
+  margin: 0.75rem 0;
+}
+
+.admin-waitlist-filters {
+  align-items: center;
+}
+
+.admin-beta-invites {
+  margin: 1.25rem 0 1.5rem;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 6px;
+}
+
+.admin-beta-invites h3 {
+  margin: 0 0 0.35rem;
+}
+
+.admin-beta-invites .health-summary {
+  margin-bottom: 0.75rem;
+}
+
+.admin-beta-invite-created {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.admin-beta-invite-created input {
+  min-width: min(100%, 24rem);
+  flex: 1;
+  font: inherit;
+  padding: 0.3rem 0.4rem;
+}
+
+.admin-waitlist-actions {
+  margin: 0;
+  gap: 0.35rem;
+}
+
+.admin-limits-controls button,
+.admin-tokens-form button,
+.admin-tokens button,
+.admin-beta-invites button,
+.admin-waitlist-filters button,
+.admin-waitlist-actions button {
+  cursor: pointer;
+  padding: 0.3rem 0.7rem;
+  font: inherit;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+}
+
+.admin-waitlist-filters button.is-active {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  font-weight: 600;
+}
+
+.admin-limits-controls button:disabled,
+.admin-tokens-form button:disabled,
+.admin-tokens button:disabled,
+.admin-waitlist-filters button:disabled,
+.admin-waitlist-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Pausing creation is the one destructive control on this page; it looks like it. */
+.admin-limits-pause {
+  color: var(--danger, #c0392b);
+}
+
+.admin-limits-cap,
+.admin-tokens-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.78rem;
+  opacity: 0.8;
+}
+
+.admin-limits-cap input,
+.admin-tokens-form input {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.4rem;
+  width: 9rem;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  background: transparent;
+  color: inherit;
+}
+
+.admin-limits-message {
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+/* Shown once; wraps rather than truncating a token someone would copy. */
+.admin-token-secret code {
+  display: block;
+  margin-top: 0.3rem;
+  padding: 0.4rem;
+  word-break: break-all;
+  font-size: 0.8rem;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  border-radius: 4px;
+}
+
+.admin-token-row.is-expired {
+  opacity: 0.55;
+}
+
+.admin-waitlist-person {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 10rem;
+}
+
+.admin-waitlist-name {
+  font-weight: 600;
+}
+
+.admin-waitlist-email,
+.admin-waitlist-uid {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  word-break: break-all;
+}
+
+.admin-waitlist-status {
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
+.admin-waitlist-status.is-approved {
+  color: var(--accent, #00e4ac);
+}
+
+.admin-waitlist-status.is-rejected {
+  color: var(--danger, #c0392b);
+}
+
+.admin-suggestion-class {
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
+.admin-suggestion-class--defect {
+  color: var(--danger, #c0392b);
+}
+
+.admin-suggestion-evidence {
+  margin: 0;
+  padding-left: 1rem;
+  font-size: 0.8rem;
+}
+
+/* Cost facts read as a row of four, not a dashboard chart. */
+.admin-cost-headline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.admin-cost-headline dt {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+.admin-cost-headline dd {
+  margin: 0.15rem 0 0;
+  font-size: 1.35rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The same figure in the unit the bill arrives in, under the one worth quoting. */
+.admin-cost-headline .admin-cost-sub {
+  font-size: 0.75rem;
+  opacity: 0.6;
+  margin-top: 0;
+}
+
+/* Dimmed not hidden: an unshipped build still cost money and stays checkable. */
+.admin-cost-row.is-unpublished {
+  opacity: 0.7;
+}

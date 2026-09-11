@@ -81,19 +81,13 @@ describe('buildBarModel', () => {
   });
 
   it('reads "round in progress" when the newest build belongs to a prior round', () => {
-    const model = buildBarModel(
-      status({ issueNumber: 42, recentBuilds: [build({ verdict: 'green', issueNumber: 41 })] }),
-      t,
-    );
+    const model = buildBarModel(status({ jobId: 42, recentBuilds: [build({ verdict: 'green', jobId: 41 })] }), t);
 
     expect(model).toMatchObject({ state: 'starting', fraction: null, label: 'studioPanel.buildBar.roundInProgress' });
   });
 
   it('trusts the newest build once it belongs to the current round', () => {
-    const model = buildBarModel(
-      status({ issueNumber: 42, recentBuilds: [build({ verdict: 'green', issueNumber: 42 })] }),
-      t,
-    );
+    const model = buildBarModel(status({ jobId: 42, recentBuilds: [build({ verdict: 'green', jobId: 42 })] }), t);
 
     expect(model).toMatchObject({ state: 'green' });
   });

@@ -1,0 +1,412 @@
+/* Status view compact composer + builder-mode row (SubmissionStatusView.tsx). */
+
+/* One control, not a field with a button parked under it.
+   The border used to be on the textarea, which left the send button floating in the gap
+   below with nothing tying the two together. Moving it out here makes the box the thing
+   you focus and the button something inside it — and the focus ring, now on the box,
+   covers both. */
+/* Claude / Cursor / Copilot shape: one card, clean field on top, toolbar underneath. */
+.status-composer.is-compact {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 10px 12px 8px;
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  background: var(--panel-card);
+  /* Card chrome click focuses the textarea. */
+  cursor: text;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+
+.status-composer.is-compact:focus-within {
+  border-color: rgba(0, 228, 172, 0.5);
+  box-shadow: 0 0 0 3px rgba(0, 228, 172, 0.08);
+}
+
+/* Empty: placeholder and send share one grid row. */
+.status-composer.is-compact.is-empty {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 4px;
+  padding: 8px 8px 8px 12px;
+}
+
+.status-composer.is-compact.is-empty .status-feedback-route,
+.status-composer.is-compact.is-empty .status-feedback-actions {
+  grid-column: 1 / -1;
+}
+
+.status-feedback-quick-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-composer.is-compact .status-feedback-quick-actions {
+  grid-column: 1 / -1;
+  margin: 0 0 2px;
+}
+
+.status-feedback-quick-action {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 1px solid rgba(251, 191, 36, 0.38);
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.1);
+  color: #fbbf24;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.status-feedback-quick-action:hover {
+  border-color: rgba(251, 191, 36, 0.62);
+  background: rgba(251, 191, 36, 0.16);
+}
+
+.status-feedback-quick-action:focus-visible {
+  outline: 2px solid #fbbf24;
+  outline-offset: 2px;
+}
+
+.status-composer.is-compact.is-empty .status-feedback-input {
+  grid-column: 1;
+  grid-row: auto;
+  padding: 6px 0;
+  /* Center the placeholder line inside the send button's height. */
+  min-height: 34px;
+  line-height: 1.35;
+}
+
+.status-composer.is-compact.is-empty .status-composer-toolbar {
+  grid-column: 2;
+  padding-top: 0;
+  /* Keep toolbar auto-width beside the field. */
+  width: auto;
+}
+
+.status-composer.is-compact.is-empty .status-composer-toolbar-left {
+  flex: none;
+}
+
+.status-composer.is-compact.is-empty .status-composer-toolbar-left:empty {
+  display: none;
+}
+
+/* The builder pill needs its own row, pinned left like a model picker — squeezed
+   next to send otherwise. Higher specificity than the grid row above, so it wins. */
+.status-composer.is-compact.is-empty:has(.builder-mode-controls:not(:empty)) {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 10px 12px 8px;
+}
+
+.status-composer.is-compact.is-empty:has(.builder-mode-controls:not(:empty)) .status-feedback-input {
+  grid-column: auto;
+  padding: 2px 0 6px;
+  min-height: 1.6rem;
+  line-height: 1.45;
+}
+
+.status-composer.is-compact.is-empty:has(.builder-mode-controls:not(:empty)) .status-composer-toolbar {
+  grid-column: auto;
+  padding-top: 2px;
+  width: auto;
+}
+
+.status-composer.is-compact.is-empty:has(.builder-mode-controls:not(:empty)) .status-composer-toolbar-left {
+  flex: 1;
+}
+
+/* Kept for any lingering standalone markup; compact uses the toolbar below. */
+.status-composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.status-composer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.status-composer-toolbar-left,
+.status-composer-toolbar-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.status-composer-toolbar-left {
+  flex: 1;
+}
+
+.status-composer-toolbar-right {
+  flex: none;
+}
+
+.status-composer-attach {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.status-composer-attach-btn.is-open {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.status-composer-attach-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.status-composer-attach-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.status-composer-attach-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.status-composer-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 0 6px;
+}
+
+.status-composer-attachment-chip {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex: none;
+}
+
+.status-composer-attachment-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.status-composer-attachment-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #1e293b;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.status-composer-attachment-remove:hover {
+  color: #f43f5e;
+  background: rgba(244, 63, 94, 0.2);
+}
+
+.status-composer.is-compact .status-feedback-input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  padding: 2px 0 6px;
+  /* The box grows with the text instead (see autoGrow). */
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.45;
+  /* One line at rest — empty box should not look like a paragraph of the thread. */
+  min-height: 1.6rem;
+  cursor: text;
+}
+
+.status-composer.is-compact .status-composer-toolbar,
+.status-composer.is-compact .status-composer-send,
+.status-composer.is-compact .status-composer-toolbar-left {
+  cursor: auto;
+}
+
+.status-composer.is-compact .status-feedback-input:focus {
+  /* The ring belongs to the card — two nested rings looked like a bug. */
+  outline: none;
+  box-shadow: none;
+}
+
+/* Round send in the toolbar — icon-only so Polish labels never steal field width. */
+.status-composer.is-compact .status-composer-send {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+/* A live platform round replaces the inactive send affordance with an explicit
+   stop-and-switch action. Icon-only, round, same footprint as send — so the eye
+   reads it as "the other thing send became" rather than a whole separate control. */
+.status-composer.is-compact .status-composer-stop {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid rgba(248, 113, 113, 0.58);
+  border-radius: 50%;
+  background: rgba(248, 113, 113, 0.12);
+  color: #fecaca;
+  cursor: pointer;
+}
+
+.status-composer.is-compact .status-composer-stop:hover {
+  border-color: rgba(248, 113, 113, 0.82);
+  background: rgba(248, 113, 113, 0.2);
+}
+
+.status-composer.is-compact .status-composer-stop:focus-visible {
+  outline: 2px solid #f87171;
+  outline-offset: 2px;
+}
+
+/* In-flight: keep the teal so "disabled" does not read as "broken", and swap the
+   arrow for a spinner the eye can see without reading the title attribute. */
+.status-composer.is-compact.is-sending .status-composer-send {
+  opacity: 1;
+  cursor: progress;
+}
+
+.status-composer-send-spinner {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  animation: status-spin 0.8s linear infinite;
+}
+
+.status-feedback-sending {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.status-feedback-sending .status-composer-send-spinner {
+  border-color: rgba(148, 163, 184, 0.25);
+  border-top-color: var(--turquoise);
+}
+
+@media (max-width: 768px) {
+  .status-composer.is-compact .status-composer-send {
+    width: 44px;
+    height: 44px;
+  }
+
+  .status-composer.is-compact .status-composer-stop {
+    width: 44px;
+    height: 44px;
+  }
+
+  .status-composer-attach-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .status-composer-attachment-chip {
+    width: 48px;
+    height: 48px;
+  }
+
+  .status-feedback-quick-action {
+    min-height: 44px;
+    padding-inline: 14px;
+  }
+
+  .status-composer.is-compact.is-empty .status-feedback-input {
+    min-height: 44px;
+    padding-block: 11px;
+  }
+
+  /* The pill-visible layout above restates min-height at desktop size — redo the
+     44px floor here, same selector, so it wins by source order under this query. */
+  .status-composer.is-compact.is-empty:has(.builder-mode-controls:not(:empty)) .status-feedback-input {
+    min-height: 44px;
+    padding-block: 11px;
+  }
+}
+
+/* Present only when there is an error or a receipt to show — see the composer's markup.
+   A row that is always in the DOM is a row the resting composer pays for. */
+.status-composer.is-compact .status-feedback-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 4px 3px 0;
+  font-size: 0.82rem;
+}
+
+.status-composer.is-compact .status-feedback-actions .error {
+  margin: 0;
+}
+
+/* Standalone status page: builder control above the field. Compact uses the toolbar. */
+.builder-mode-row {
+  display: flex;
+  justify-content: flex-start;
+  margin: 0 0 8px;
+  min-width: 0;
+}
+
+.builder-mode-controls {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}

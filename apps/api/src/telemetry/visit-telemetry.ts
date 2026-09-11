@@ -8,6 +8,8 @@ import {
   EDITOR_STEPS,
   HOW_TO_PLAY_VIAS,
   INVITE_STEPS,
+  PARTY_STEPS,
+  PARTY_VIAS,
   PLAY_VIAS,
   REMIX_CONTROLS,
   REMIX_PAINTED_VIAS,
@@ -22,7 +24,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { rememberBounded } from '../platform/bounded-map.js';
 import type { Store, VisitEvent } from '../platform/store.js';
-
+import { cliStepEventSchema, toCliVisitEvent } from './visit-cli-event.js';
+import { isVisitTelemetryRateLimited } from './visit-telemetry-limit.js';
 /**
  * Visit telemetry intake — the write half of the funnel that play telemetry cannot see.
  *
@@ -45,8 +48,6 @@ import type { Store, VisitEvent } from '../platform/store.js';
 const MAX_EVENTS_PER_REQUEST = 25;
 const MAX_EVENTS_PER_VISIT = 200;
 const MAX_COMPLETION_EVENTS_PER_VISIT = 50;
-const MAX_REQUESTS_PER_WINDOW = 60;
-const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const MAX_VISIT_MS = 24 * 60 * 60 * 1000;
 /** How far back an event may be dated from its flush — bounds client-supplied offsets. */
 const MAX_BACKDATE_MS = 6 * 60 * 60 * 1000;
@@ -57,12 +58,12 @@ const MAX_BACKDATE_MS = 6 * 60 * 60 * 1000;
  * caller a fresh window, and real client addresses are not cheap to vary.
  */
 const MAX_TRACKED_VISITS = 5000;
-const MAX_TRACKED_IPS = 20_000;
-
 const RouteKindSchema = z.enum(VISIT_ROUTE_KINDS);
 const CreateStepSchema = z.enum(CREATE_STEPS);
 const WaitlistStepSchema = z.enum(WAITLIST_STEPS);
 const InviteStepSchema = z.enum(INVITE_STEPS);
+const PartyStepSchema = z.enum(PARTY_STEPS);
+const PartyViaSchema = z.enum(PARTY_VIAS);
 const BetaWelcomeStepSchema = z.enum(BETA_WELCOME_STEPS);
 const StudioStepSchema = z.enum(STUDIO_STEPS);
 /** Platform vs creator's own agent. Optional on create_step; required on studio_step. */
@@ -123,6 +124,12 @@ const EventSchema = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('waitlist_step'), step: WaitlistStepSchema, ...offsetField }),
   z.object({ type: z.literal('invite_step'), step: InviteStepSchema, ...offsetField }),
+  z.object({
+    type: z.literal('party_step'),
+    step: PartyStepSchema,
+    via: PartyViaSchema.optional(),
+    ...offsetField,
+  }),
   z.object({ type: z.literal('beta_welcome_step'), step: BetaWelcomeStepSchema, ...offsetField }),
   z.object({
     type: z.literal('studio_step'),
@@ -141,6 +148,7 @@ const EventSchema = z.discriminatedUnion('type', [
     ...offsetField,
   }),
   z.object({ type: z.literal('code_step'), step: CodeStepSchema, ...offsetField }),
+  cliStepEventSchema(offsetField),
   z.object({
     type: z.literal('code_completion'),
     kind: CodeCompletionKindSchema,
@@ -161,17 +169,8 @@ const RequestSchema = z.object({
 export interface VisitTelemetryRoutesOptions {
   store: Store;
   now?: () => number;
-}
-
-function isRateLimited(buckets: Map<string, number[]>, key: string, currentTime: number): boolean {
-  const hits = (buckets.get(key) ?? []).filter((timestamp) => currentTime - timestamp < RATE_LIMIT_WINDOW_MS);
-  if (hits.length >= MAX_REQUESTS_PER_WINDOW) {
-    rememberBounded(buckets, key, hits, MAX_TRACKED_IPS);
-    return true;
-  }
-  hits.push(currentTime);
-  rememberBounded(buckets, key, hits, MAX_TRACKED_IPS);
-  return false;
+  // Rung 2: drops a sampled-out visit's writes before they reach Firestore.
+  keepsVisit?: (visitId: string) => Promise<boolean>;
 }
 
 export async function registerVisitTelemetryRoutes(
@@ -180,6 +179,7 @@ export async function registerVisitTelemetryRoutes(
 ): Promise<void> {
   const { store } = options;
   const now = options.now ?? Date.now;
+  const keepsVisit = options.keepsVisit ?? (async () => true);
 
   const requestsByIp = new Map<string, number[]>();
   /** visitId -> lane counts. Capped and LRU-evicted — see bounded-map.ts. */
@@ -193,10 +193,11 @@ export async function registerVisitTelemetryRoutes(
       return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
     }
 
-    if (isRateLimited(requestsByIp, request.ip, currentTime)) {
+    if (isVisitTelemetryRateLimited(requestsByIp, request.clientIp, currentTime)) {
       return reply.status(429).send({ error: 'too many telemetry requests' });
     }
 
+    if (!(await keepsVisit(parsed.data.visitId))) return reply.status(202).send({ accepted: 0 });
     const visit =
       visitCounts.get(parsed.data.visitId) ??
       ({ coreCount: 0, completionCount: 0, lastSeen: currentTime } satisfies {
@@ -209,11 +210,7 @@ export async function registerVisitTelemetryRoutes(
       return reply.status(202).send({ accepted: 0 });
     }
 
-    /**
-     * Same anchoring as play telemetry: the flush's arrival is a real instant we
-     * measured, and each event's age within the visit is a duration, so subtracting
-     * dates the event without trusting the client's wall clock for anything.
-     */
+    // Anchored like play telemetry: arrival is measured, each age is a duration.
     const flushOffset = parsed.data.flushMsSinceStart;
     function eventTimeIso(msSinceStart: number): string {
       const backdateMs = Math.min(MAX_BACKDATE_MS, Math.max(0, flushOffset - msSinceStart));
@@ -268,6 +265,13 @@ export async function registerVisitTelemetryRoutes(
           return { ...base, type: event.type, step: event.step };
         case 'invite_step':
           return { ...base, type: event.type, step: event.step };
+        case 'party_step':
+          return {
+            ...base,
+            type: event.type,
+            step: event.step,
+            ...(event.via === undefined ? {} : { via: event.via }),
+          };
         case 'beta_welcome_step':
           return { ...base, type: event.type, step: event.step };
         case 'studio_step':
@@ -284,6 +288,8 @@ export async function registerVisitTelemetryRoutes(
           return { ...base, type: event.type, step: event.step };
         case 'code_step':
           return { ...base, type: event.type, step: event.step };
+        case 'cli_step':
+          return toCliVisitEvent(base, event);
         case 'code_completion':
           return {
             ...base,

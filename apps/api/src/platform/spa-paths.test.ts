@@ -31,6 +31,8 @@ describe('isKnownSpaShellPath', () => {
     '/terms',
     '/health',
     '/contact',
+    '/connect',
+    '/mcp',
     '/create',
     '/party',
     '/ada',

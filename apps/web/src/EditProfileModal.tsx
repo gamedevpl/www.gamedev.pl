@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { AccountDeletionControl } from './AccountDeletionControl.js';
 import { useStudioCreatorProfile } from './studioCreatorProfile.js';
 import { PixelIcon } from './PixelIcon.js';
-import { creatorPath } from './router.js';
+import { creatorPath } from './core/router.js';
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';

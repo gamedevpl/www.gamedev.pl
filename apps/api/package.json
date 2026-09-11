@@ -5,19 +5,21 @@
   "type": "module",
   "scripts": {
     "dev": "PORT=3001 tsx watch src/platform/server.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && npm run build:assets",
     "start": "node dist/platform/server.js",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "contract:games-repo": "tsx scripts/check-games-repo-contract.ts",
     "snapshot:publish": "tsx scripts/publish-snapshot.ts",
     "gate:run": "tsx scripts/run-gate.ts",
+    "gate:capability": "tsx scripts/gate-capability.ts",
     "remix:probe": "tsx scripts/remix-lane-probe.ts",
     "managed:probe": "tsx scripts/managed-probe.ts",
     "managed:agent:apply": "tsx scripts/managed-agent-apply.ts",
     "beta:approve": "tsx scripts/beta-approve.ts",
     "beta:invite": "tsx scripts/beta-invite.ts",
     "beta:invite:backfill": "tsx scripts/beta-invite-backfill.ts",
+    "beta:welcome": "tsx scripts/beta-welcome.ts",
     "token:mint": "tsx scripts/access-token.ts mint",
     "token:list": "tsx scripts/access-token.ts list",
     "token:revoke": "tsx scripts/access-token.ts revoke",
@@ -30,7 +32,9 @@
     "verify:erase": "tsx scripts/verify-erase-signals.ts",
     "remix:sweep": "tsx scripts/remix-lane-sweep.ts",
     "remix:judge": "tsx scripts/remix-lane-judge.ts",
-    "remix:calibrate": "tsx scripts/remix-lane-calibrate.ts"
+    "remix:calibrate": "tsx scripts/remix-lane-calibrate.ts",
+    "// build:assets": "tsc emits only .js; the MCP round card is real .html and has to be copied beside it.",
+    "build:assets": "cp src/agent-surface/mcp-ui-round-status.html dist/agent-surface/"
   },
   "dependencies": {
     "@babel/parser": "^7.29.8",
@@ -45,7 +49,7 @@
     "@google-cloud/firestore": "^8.7.0",
     "diff": "^9.0.0",
     "esbuild": "0.25.12",
-    "fastify": "^5.10.0",
+    "fastify": "^5.12.3",
     "fastify-rate-limit": "npm:@fastify/rate-limit@^11.1.0",
     "genaicode": "^2.3.0",
     "google-auth-library": "^10.9.0",
@@ -61,7 +65,7 @@
     "@types/web-push": "^3.6.4",
     "@types/ws": "^8.18.1",
     "tsx": "^4.16.5",
-    "vitest": "^3.2.7",
+    "vitest": "^4.1.11",
     "ws": "^8.18.0"
   }
 }

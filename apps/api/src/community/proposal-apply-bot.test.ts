@@ -34,7 +34,7 @@ function gamesStoreWith(files: Record<string, string>): GamesStore {
         slug: 'apex-sprint',
         version: 'v7',
         createdAt: NOW,
-        issueNumber: 0,
+        jobId: 0,
         sourceFiles: Object.keys(files),
       } as VersionManifest;
     },

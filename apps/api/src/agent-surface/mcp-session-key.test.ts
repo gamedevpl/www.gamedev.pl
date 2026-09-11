@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { InvalidAgentTokenError, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
+import { InvalidAgentTokenError, STALE_AGENT_TOKEN_REASON } from '../platform/agent-token.js';
 import {
   assertMcpSessionKeyUnexpired,
   mintMcpSessionKey,

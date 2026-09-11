@@ -63,7 +63,12 @@ export function useStageSource(
   const selectedPreviewVersion = options?.selectedPreviewVersion ?? null;
   const [preview, setPreview] = useState<{ html: string; at: number } | null>(null);
   const [versionPreview, setVersionPreview] = useState<{ html: string; at: number; version: string } | null>(null);
-  const [channel, setChannel] = useState<{ html: string; at: number; label: string | null } | null>(null);
+  const [channel, setChannel] = useState<{
+    html: string;
+    at: number;
+    label: string | null;
+    seed: boolean;
+  } | null>(null);
   const [published, setPublished] = useState<{ html: string; slug: string } | null>(null);
   const [dataToken, setDataToken] = useState(token);
 
@@ -228,6 +233,8 @@ export function useStageSource(
           html,
           at: latest.createdAt ? Date.parse(latest.createdAt) : Date.now(),
           label: latest.label ?? null,
+          // The scaffold has its own ribbon identity; nobody staged it.
+          seed: latest.origin === 'seed',
         });
       })
       .catch(() => {
@@ -314,11 +321,11 @@ export function useStageSource(
   } else if (isPublished) {
     origin = { kind: 'delivered', at: null, versionLabel: null };
   } else if (showChannel) {
-    origin = { kind: 'staged', at: channel!.at, versionLabel: channel!.label };
+    origin = { kind: channel!.seed ? 'seed' : 'staged', at: channel!.at, versionLabel: channel!.label };
   } else if (preview) {
     origin = { kind: 'staged', at: preview.at, versionLabel: null };
   } else if (channel) {
-    origin = { kind: 'staged', at: channel.at, versionLabel: channel.label };
+    origin = { kind: channel.seed ? 'seed' : 'staged', at: channel.at, versionLabel: channel.label };
   } else if (published) {
     origin = { kind: 'delivered', at: null, versionLabel: null };
   } else if (status && !status.preview && !status.playable?.length) {

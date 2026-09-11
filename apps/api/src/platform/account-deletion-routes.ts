@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { SESSION_COOKIE_NAME } from './auth.js';
+import { clearSessionCookies } from './session-cookie.js';
 import { runAccountDeletionSweep, scheduleAccountDeletion } from './account-deletion.js';
 import { OperatorAccountDeletionError } from './erase-account.js';
 import type { InternalAuthVerifier } from './internal-auth.js';
@@ -24,7 +24,7 @@ export function registerAccountDeletionRoutes(app: FastifyInstance, options: Acc
 
   app.delete('/api/me/account', async (request, reply) => {
     if (!request.user) return reply.status(401).send({ error: 'authentication required' });
-    if (request.authMethod !== 'session') return reply.status(403).send({ error: 'browser session required' });
+    if (request.authMethod !== 'session') return reply.status(404).send({ error: 'not_found' });
 
     const body = DeleteAccountBody.safeParse(request.body);
     if (!body.success) return reply.status(400).send({ error: 'confirmation required' });
@@ -46,7 +46,7 @@ export function registerAccountDeletionRoutes(app: FastifyInstance, options: Acc
     }
     if (!deletion) return reply.status(404).send({ error: 'account not found' });
 
-    reply.clearCookie(SESSION_COOKIE_NAME, { path: '/' });
+    clearSessionCookies(request, reply);
     return reply.status(202).send({ scheduled: true, deleteAfter: deletion.scheduledFor });
   });
 

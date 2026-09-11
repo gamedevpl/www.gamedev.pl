@@ -45,9 +45,9 @@ async function publish(
     createdAt?: string;
   } = {},
 ): Promise<number> {
-  const issueNumber = issue++;
+  const jobId = issue++;
   const version = 'v1';
-  await store.createSubmission(issueNumber, 'creator-1', slug);
+  await store.createSubmission(jobId, 'creator-1', slug);
   await store.setPublication({
     slug,
     state: 'published',
@@ -57,7 +57,7 @@ async function publish(
   manifests.set(key(slug, version), {
     slug,
     version,
-    issueNumber,
+    jobId,
     createdAt: options.createdAt ?? '2026-07-01T00:00:00.000Z',
     sourceFiles: [],
     ...(options.engineRef ? { engineRef: options.engineRef } : {}),
@@ -71,7 +71,7 @@ async function publish(
         }
       : {}),
   });
-  return issueNumber;
+  return jobId;
 }
 
 const sweep = (overrides: Partial<Parameters<typeof runHealthSweep>[0]> = {}) =>
@@ -93,7 +93,7 @@ beforeEach(() => {
 
 describe('startHealthCheck', () => {
   it('records the request and books the build before any verdict exists', async () => {
-    const issueNumber = await publish('comet-courier');
+    const jobId = await publish('comet-courier');
 
     const result = await startHealthCheck(
       { store, gamesStore, gateTrigger: gateTrigger as unknown as HealthGateTrigger, now: () => NOW },
@@ -101,7 +101,7 @@ describe('startHealthCheck', () => {
     );
 
     expect(result).toEqual({ started: true, version: 'v1', buildId: 'b-1' });
-    expect(gateTrigger).toHaveBeenCalledWith({ issueNumber, slug: 'comet-courier', version: 'v1', mode: 'health' });
+    expect(gateTrigger).toHaveBeenCalledWith({ jobId, slug: 'comet-courier', version: 'v1', mode: 'health' });
     // The request is durable before the gate answers, which is what lets the notify
     // sweep tell "waiting" apart from "never asked".
     const publication = await store.getPublication('comet-courier');
@@ -111,7 +111,7 @@ describe('startHealthCheck', () => {
       buildId: 'b-1',
     });
     // Booked to the job that built the game — a health run is a gate run on the bill.
-    const submission = await store.getSubmission(issueNumber);
+    const submission = await store.getSubmission(jobId);
     expect(submission?.costs).toEqual([
       { kind: 'gate_run', at: '2026-07-30T12:00:00.000Z', by: 'cloud-build', ref: 'b-1' },
     ]);

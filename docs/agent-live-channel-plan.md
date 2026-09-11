@@ -61,7 +61,7 @@ over an id (`submission-token.ts`, `unsubscribe-token.ts`, `mp.ts` room tokens);
 pattern with a fresh scope prefix:
 
 ```ts
-mintAgentToken(issueNumber, secret); // scope: 'agent-channel-v1'
+mintAgentToken(jobId, secret); // scope: 'agent-channel-v1'
 ```
 
 It goes into the issue body under a `## Build channel` heading, so the agent reads it from the

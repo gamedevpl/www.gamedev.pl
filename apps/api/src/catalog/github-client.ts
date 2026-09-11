@@ -4,6 +4,7 @@ import {
   CATALOG_ORIENTATIONS,
   MAX_MULTIPLAYER_SLOTS,
   CATALOG_TOUCH_VALUES as CONTRACT_CATALOG_TOUCH_VALUES,
+  type CatalogEditor,
   type CatalogEntry,
   type CatalogMedia,
   type CatalogMultiplayer,
@@ -19,26 +20,27 @@ import {
   DELIVERY_FIXED_FILES,
   GAME_KIT_MODULES,
   GAME_KIT_VERTICAL_ENTRIES,
+  MAX_SOURCE_GRAPH_MODULES,
   MUSIC_CONTRACT,
   SOURCE_GRAPH_BUDGET_BYTES,
   type GameKitModuleName,
-} from './games-repo-contract.js';
-import { isRateLimitResponse } from './github-rate-limit.js';
-import {
-  generateIndexHtml,
-  hasPlayableHowToPlay,
-  type GameManifest as IndexHtmlManifest,
-} from './index-html-generator.js';
-import { mergeMusicTrackMaps, parseGameMusicTracks, parseMusicCatalogTracks } from './music-tracks.js';
+} from '../platform/games-repo-contract.js';
+import { appendDeclaredImageSources, bakeGameImageAssets, resolveGameImageBytes } from './bake-game-images.js';
+import { parseGameManifest } from './parse-game-manifest.js';
+import { isRateLimitResponse } from '../platform/github-rate-limit.js';
+import { generateIndexHtml, type GameManifest as IndexHtmlManifest } from './index-html-generator.js';
+import { hasPlayableHowToPlay } from '../platform/how-to-play.js';
+import { mergeMusicTrackMaps, parseGameMusicTracks, parseMusicCatalogTracks } from '../platform/music-tracks.js';
+import { resolveGameTypeScriptPath } from '../platform/game-module-path.js';
+import { parseSpecFrontmatter, parseSpecTitle } from '../platform/spec-frontmatter.js';
+import { parseGameMedia } from '../platform/game-media.js';
+import { IN_FLIGHT_RUN_STATUSES } from '../platform/github-run-status.js';
 import { generateStyleCss, type Theme } from '../platform/theme-css-generator.js';
 
 export type { CatalogGameTouch } from './catalog-touch.js';
 
-interface CreateIssueInput {
-  title: string;
-  body: string;
-  labels: string[];
-}
+// Pure vocabulary, re-exported for this bucket's own callers.
+export { IN_FLIGHT_RUN_STATUSES, parseGameMedia };
 
 export interface PullRequestCommit {
   /** First line of the commit message — a human-readable step in the build. */
@@ -62,9 +64,6 @@ export interface WorkflowRun {
   headBranch?: string;
   createdAt?: string;
 }
-
-// Statuses meaning the run still burns time.
-export const IN_FLIGHT_RUN_STATUSES = ['queued', 'in_progress', 'requested', 'waiting', 'pending'];
 
 export interface LinkedPullRequest {
   number: number;
@@ -160,7 +159,6 @@ function generateStyleCssFromManifest(manifestSource: string): string | null {
 
 // GAME_KIT_MODULES lives in games-repo-contract.ts — CI re-checks the live
 // games repo copy when GAMES_REPO_TOKEN is set (issue #247).
-const MAX_SOURCE_GRAPH_MODULES = 64;
 /** Alias of {@link SOURCE_GRAPH_BUDGET_BYTES} — keep the local name at the call sites. */
 const MAX_SOURCE_GRAPH_BYTES = SOURCE_GRAPH_BUDGET_BYTES;
 /**
@@ -170,122 +168,11 @@ const MAX_SOURCE_GRAPH_BYTES = SOURCE_GRAPH_BUDGET_BYTES;
  */
 const GAME_KIT_MODULE_ENTRIES = GAME_KIT_VERTICAL_ENTRIES;
 
-/**
- * Maps a relative import specifier onto a `.ts` source path.
- *
- * The games repo authors TypeScript the way TypeScript ESM projects do: an import
- * may write `./foo.ts`, `./foo.js` (emit path — source is still `foo.ts`), or `./foo`.
- * The play-time bundler has to accept all three or every modular game 502s while the
- * games repo's own assemble (which resolves the same way) stays green.
- *
- * Returns null when the specifier is not a relative TypeScript module path.
- */
 /** What `getGameFile` will read. Declarations and manifests, never source or media. */
 const GAME_FILE_READS = new Set(['GAME.json', 'SPEC.md', 'EDITOR.json']);
 
-export function resolveGameTypeScriptPath(resolveDir: string, specifier: string): string | null {
-  if (!specifier.startsWith('./') && !specifier.startsWith('../')) {
-    return null;
-  }
-  const resolvedPath = path.posix.resolve(resolveDir, specifier);
-  if (resolvedPath.endsWith('.ts')) {
-    return resolvedPath;
-  }
-  if (resolvedPath.endsWith('.js')) {
-    return `${resolvedPath.slice(0, -'.js'.length)}.ts`;
-  }
-  // Extensionless — only accept bare paths (no other extension). `./foo.json` stays rejected.
-  if (path.posix.extname(resolvedPath) !== '') {
-    return null;
-  }
-  return `${resolvedPath}.ts`;
-}
-
-interface GameManifest {
-  engine?: { modules?: unknown };
-  audio?: { sounds?: unknown; music?: unknown; musicTracks?: unknown };
-}
-
 interface SourcedAudioCatalog {
   sounds?: Record<string, { mime?: unknown }>;
-}
-
-interface ParsedGameManifest {
-  modules: GameKitModuleName[];
-  sounds: string[];
-  /**
-   * Selected BGM track id from GAME.json (`audio.music` string). Null when the
-   * audio module is off. Matches games-repo `tools/lib/assemble.ts`.
-   */
-  music: string | null;
-  /**
-   * Extra BGM ids from GAME.json (`audio.musicTracks`), embedded alongside `music` so a
-   * game can change score mid-round without a fetch. Empty for almost every game.
-   */
-  musicTracks: string[];
-}
-
-function isKebabCaseName(value: unknown): value is string {
-  return typeof value === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(value);
-}
-
-function parseGameManifest(source: string): ParsedGameManifest {
-  const manifest = JSON.parse(source) as GameManifest;
-  const modules = manifest.engine?.modules;
-  if (
-    !Array.isArray(modules) ||
-    modules.some(
-      (moduleName) =>
-        typeof moduleName !== 'string' || !GAME_KIT_MODULES.some((allowedModule) => allowedModule === moduleName),
-    )
-  ) {
-    throw new Error('game manifest contains invalid engine modules');
-  }
-
-  const expectedOrder = GAME_KIT_MODULES.filter((moduleName) => modules.includes(moduleName));
-  if (new Set(modules).size !== modules.length || modules.join(',') !== expectedOrder.join(',')) {
-    throw new Error('game manifest engine modules are duplicated or out of order');
-  }
-
-  if (!modules.includes('audio')) {
-    return { modules: modules as GameKitModuleName[], sounds: [], music: null, musicTracks: [] };
-  }
-
-  const sounds = manifest.audio?.sounds;
-  if (
-    !Array.isArray(sounds) ||
-    sounds.length === 0 ||
-    new Set(sounds).size !== sounds.length ||
-    !sounds.every(isKebabCaseName)
-  ) {
-    throw new Error('game manifest contains invalid audio sounds');
-  }
-
-  // Games-repo assemble: `audio.music` is a single track name string. Injected as
-  // `window.__GAME_AUDIO_MUSIC__ = "<name>"`, and it is the track that autoplays.
-  const music = manifest.audio?.music;
-  if (!isKebabCaseName(music)) {
-    throw new Error('game manifest contains invalid audio music');
-  }
-
-  // `audio.musicTracks` is optional. Mirrors games-repo validate Check 3: non-empty when
-  // present, kebab-case names, no duplicates, and never a repeat of `audio.music`.
-  const rawTracks = manifest.audio?.musicTracks;
-  let musicTracks: string[] = [];
-  if (rawTracks !== undefined) {
-    if (
-      !Array.isArray(rawTracks) ||
-      rawTracks.length === 0 ||
-      new Set(rawTracks).size !== rawTracks.length ||
-      !rawTracks.every(isKebabCaseName) ||
-      rawTracks.includes(music)
-    ) {
-      throw new Error('game manifest contains invalid audio musicTracks');
-    }
-    musicTracks = rawTracks;
-  }
-
-  return { modules: modules as GameKitModuleName[], sounds, music, musicTracks };
 }
 
 /**
@@ -305,6 +192,7 @@ export type CatalogGameEntry = CatalogEntry;
 export type CatalogGameSaves = CatalogSaves;
 export type CatalogGameWorld = CatalogWorld;
 export type CatalogGameSensing = CatalogSensing;
+export type CatalogGameEditor = CatalogEditor;
 
 /**
  * `player` is the only mode that exists. Anything else — a typo, a value from a newer
@@ -321,6 +209,10 @@ function parseWorld(value: unknown): CatalogGameWorld | null {
 
 function parseSensing(value: unknown): CatalogGameSensing | null {
   return value === 'tilt' || value === 'backdrop' ? value : null;
+}
+
+function parseEditor(value: unknown): CatalogGameEditor | null {
+  return value === 'content' ? 'content' : null;
 }
 
 /** Platform ceiling on player slots — mirrors SLOT_COLORS in mp.ts. */
@@ -374,7 +266,6 @@ export function parseSubmittedBy(raw: string | undefined | null): string | null 
 }
 
 export interface GitHubClient {
-  createIssue(input: CreateIssueInput): Promise<{ number: number }>;
   getIssueState(issueNumber: number): Promise<{ state: 'open' | 'closed' }>;
   findLinkedPR(issueNumber: number): Promise<LinkedPullRequest | null>;
   /**
@@ -384,28 +275,15 @@ export interface GitHubClient {
    * on its open PR.
    */
   createIssueComment(issueOrPrNumber: number, body: string): Promise<{ id: number }>;
-  /**
-   * Rewrites an issue body. Used once, right after creation, to add the build-channel
-   * credentials — they are derived from the issue number, which GitHub only assigns
-   * when the issue already exists.
-   */
+  /** Rewrites an issue body. No production caller — the issue-first flow is retired. */
   updateIssueBody(issueNumber: number, body: string): Promise<void>;
-  /**
-   * Closes an issue (a creator abandoning their build) or an open pull request.
-   * The REST issues endpoint covers both — a PR is an issue for state purposes —
-   * but PRs are closed through the pulls endpoint so GitHub records it as such.
-   */
+  /** Closes an issue. No production caller — the issue-first flow is retired. */
   closeIssue(issueNumber: number): Promise<void>;
-  closePullRequest(pullNumber: number): Promise<void>;
   /**
    * Opens a pull request for an existing branch, or returns the open one if there
-   * already is one.
-   *
-   * Exists for one narrow reason: GitHub's agent tasks API can only resume work on a
-   * branch that has an **open pull request** — without one, the `head_ref` asking it to
-   * resume is silently ignored and the agent branches fresh instead. So a revision round
-   * has to guarantee the PR exists first. The PR is never merged and nothing reads it;
-   * it is resumption context, and the adapter closes it when the job finishes.
+   * already is one. The sole production caller, `proposal-apply-bot.ts`, uses this for
+   * the repo-lane merge-back: the PR it opens goes through the games repo's normal
+   * CODEOWNERS review and merge, same as any other PR.
    */
   ensureOpenPullRequest(input: { headRef: string; baseRef: string; title: string; body: string }): Promise<{
     number: number;
@@ -1063,14 +941,6 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
   }
 
   return {
-    async createIssue(input) {
-      const result = await requestJson<{ number: number }>(`https://api.github.com/repos/${repo}/issues`, {
-        method: 'POST',
-        body: JSON.stringify(input),
-      });
-      return { number: result.number };
-    },
-
     async getIssueState(issueNumber) {
       const result = await requestJson<{ state: 'open' | 'closed' }>(
         `https://api.github.com/repos/${repo}/issues/${issueNumber}`,
@@ -1180,13 +1050,6 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
 
     async closeIssue(issueNumber) {
       await requestJson(`https://api.github.com/repos/${repo}/issues/${issueNumber}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ state: 'closed' }),
-      });
-    },
-
-    async closePullRequest(pullNumber) {
-      await requestJson(`https://api.github.com/repos/${repo}/pulls/${pullNumber}`, {
         method: 'PATCH',
         body: JSON.stringify({ state: 'closed' }),
       });
@@ -1384,9 +1247,12 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       for (const entry of fixedEntries) {
         if (entry) sources[entry[0]] = entry[1];
       }
-      // Every game relies on this — neither file is ever committed anymore.
       const manifestSource = sources['GAME.json'];
       if (manifestSource) {
+        await appendDeclaredImageSources(sources, manifestSource, (relPath) =>
+          readRawBytes(`games/${slug}/${relPath}`, ref),
+        );
+        // Every game relies on this — neither file is ever committed anymore.
         if (!sources['index.html']?.trim()) {
           const title = sources['SPEC.md'] ? parseSpecTitle(sources['SPEC.md']) : null;
           const generated = generateIndexHtmlFromManifest(manifestSource, title ?? slug);
@@ -1570,6 +1436,18 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         assetChunks.unshift(`window.__GAME_AUDIO_ASSETS__ = Object.freeze(${JSON.stringify(assets)});`);
       }
 
+      let loaderHtml = '';
+      const bakedImages = await bakeGameImageAssets(manifest.images, (relPath, name) =>
+        resolveGameImageBytes(relPath, name, overrides, options?.noRefFallback, () =>
+          readRawBytes(`games/${slug}/${relPath}`, ref),
+        ),
+      );
+      if (bakedImages) {
+        assetChunks.push(bakedImages.assetChunk);
+        assetChunks.push(bakedImages.bootJs);
+        loaderHtml = bakedImages.loaderHtml;
+      }
+
       const assetsJs = assetChunks.length > 0 ? `${assetChunks.join('\n')}\n` : '';
       const bundleStartedAt = Date.now();
       const transpiledSources = [coreJs, ...availableModuleSources];
@@ -1581,7 +1459,7 @@ ${gameJs}`;
       const bundledCss = `${gameShellCss}\n${resolvedStyleCss}`;
 
       return {
-        indexHtml: resolvedIndexHtml,
+        indexHtml: `${loaderHtml}${resolvedIndexHtml}`,
         gameJs: bundledJs,
         styleCss: bundledCss,
         title,
@@ -1849,6 +1727,7 @@ function parseCommittedCatalog(raw: string): CatalogGameEntry[] | null {
       saves: parseSaves(candidate.saves),
       world: parseWorld(candidate.world),
       sensing: parseSensing(candidate.sensing),
+      editor: parseEditor(candidate.editor),
       orientation: GAME_ORIENTATIONS.has(orientationRaw as CatalogGameOrientation)
         ? (orientationRaw as CatalogGameOrientation)
         : 'any',
@@ -1916,43 +1795,6 @@ function parseCommittedMultiplayer(value: unknown): CatalogGameMultiplayer | nul
 }
 
 /**
- * Turns a capture harness `media/metadata.json` into the catalog's media shape.
- *
- * Exported so the store-publish path can apply the same allowlist the repo path uses
- * when serving `/api/games/:slug/media/:filename` — a second parser would be a second
- * answer to "which filenames are public".
- */
-export function parseGameMedia(metadataJson: string | null): CatalogGameMedia | null {
-  if (!metadataJson) {
-    return null;
-  }
-
-  try {
-    const metadata = JSON.parse(metadataJson) as {
-      captures?: Record<string, { file?: unknown }>;
-      video?: { file?: unknown };
-    };
-    const screenshots = Object.entries(metadata.captures ?? {})
-      .filter(
-        (entry): entry is [string, { file: string }] =>
-          /^[a-z0-9][a-z0-9-]*$/.test(entry[0]) &&
-          typeof entry[1]?.file === 'string' &&
-          /^[a-z0-9][a-z0-9-]*\.png$/.test(entry[1].file),
-      )
-      .slice(0, 8)
-      .map(([name, capture]) => ({ name, file: capture.file }));
-    const video =
-      typeof metadata.video?.file === 'string' && /^[a-z0-9][a-z0-9-]*\.mp4$/.test(metadata.video.file)
-        ? metadata.video.file
-        : null;
-
-    return screenshots.length > 0 || video ? { screenshots, video } : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Parses a game SPEC.md's YAML-ish frontmatter into a flat string map — the same
  * lenient `key: value` format the games repo's tools/lib/spec.mjs uses (no nested
  * YAML). Lines that don't look like `key: value` are skipped.
@@ -1992,36 +1834,10 @@ export function catalogEntryFromSpec(
     saves: parseSaves(frontmatter.saves),
     world: parseWorld(frontmatter.world),
     sensing: parseSensing(frontmatter.sensing),
+    editor: parseEditor(frontmatter.editor),
     orientation: parseOrientation(frontmatter),
     submittedBy: parseSubmittedBy(frontmatter.submitted_by),
   };
 }
 
-function parseSpecFrontmatter(specMd: string): Record<string, string> {
-  const matched = /^---\s*\n([\s\S]*?)\n---/.exec(specMd);
-  if (!matched?.[1]) {
-    return {};
-  }
-
-  const data: Record<string, string> = {};
-  for (const line of matched[1].split(/\r?\n/)) {
-    const separatorIndex = line.indexOf(':');
-    if (separatorIndex === -1) {
-      continue;
-    }
-    const key = line.slice(0, separatorIndex).trim();
-    const value = line
-      .slice(separatorIndex + 1)
-      .trim()
-      .replace(/^["']|["']$/g, '');
-    if (key) {
-      data[key] = value;
-    }
-  }
-  return data;
-}
-
-/** Extracts the `title:` value from a game's SPEC.md YAML frontmatter, if any. */
-export function parseSpecTitle(specMd: string): string | null {
-  return parseSpecFrontmatter(specMd).title || null;
-}
+export { parseSpecTitle };

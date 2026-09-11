@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { InvalidAgentTokenError, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
+import { InvalidAgentTokenError, STALE_AGENT_TOKEN_REASON } from '../platform/agent-token.js';
 
 /**
  * Short-lived MCP session capability (BY-05).

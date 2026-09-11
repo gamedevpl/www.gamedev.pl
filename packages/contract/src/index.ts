@@ -8,8 +8,10 @@ export { AVATAR_MODES, type AvatarMode } from './avatar-mode.js';
 export { BUILD_EVENT_KINDS, BUILD_STEPS, type BuildEventKind, type BuildStep } from './build-event.js';
 export { BUILDER_UNAVAILABLE_REASONS, type BuilderUnavailableReason } from './builder-availability.js';
 export { BUILDERS, isBuilderKind, type BuilderKind } from './builder-kind.js';
+export { CATALOG_PUBLISHED_STATUS, isPublishedEntry } from './catalog-entry.js';
 export type {
   CatalogEntry,
+  CatalogEditor,
   CatalogMedia,
   CatalogMultiplayer,
   CatalogSaves,
@@ -40,7 +42,13 @@ export { DELIVERY_MODES, type DeliveryMode } from './delivery-mode.js';
 export { DISMISS_REASONS, type DismissReason } from './dismiss-reason.js';
 export type { GameHealth } from './game-health.js';
 export type { GameProject } from './game-project.js';
-export { MAX_GAME_SAVE_BYTES, MAX_MULTIPLAYER_SLOTS, MAX_SHOT_BYTES, MAX_TITLE_LENGTH } from './game-limits.js';
+export {
+  MAX_AGENT_SHOT_BYTES,
+  MAX_GAME_SAVE_BYTES,
+  MAX_MULTIPLAYER_SLOTS,
+  MAX_SHOT_BYTES,
+  MAX_TITLE_LENGTH,
+} from './game-limits.js';
 export {
   GATE_PROGRESS_LANES,
   GATE_PROGRESS_STAGES,
@@ -89,10 +97,12 @@ export {
 } from './review-vocab.js';
 export { SOCKET_STATUSES, type SocketStatus } from './socket-status.js';
 export { DEFAULT_MAX_SOCKETS_PER_IP, MAX_SOCKET_FRAME_BYTES, MAX_SOCKET_FRAMES_PER_SECOND } from './socket-limits.js';
+export { createFrameLimiter, type FrameLimiter } from './frame-limiter.js';
 export type {
   BuildEvent,
   BuildMediaItem,
   BuildPlayableItem,
+  BuildPlayableOrigin,
   BuildProgress,
   ChecklistItem,
   CreatorRevision,
@@ -108,7 +118,12 @@ export type {
   SubmissionStatusResponse,
   SubmissionStatusResponseBase,
 } from './submission-status.js';
-export { SUBMISSION_STATES, type SubmissionState } from './submission-state.js';
+export {
+  SUBMISSION_IN_FLIGHT_STATES,
+  SUBMISSION_STATES,
+  isSubmissionInFlight,
+  type SubmissionState,
+} from './submission-state.js';
 export type {
   StudioBuildsResponse,
   StudioGame,
@@ -118,42 +133,7 @@ export type {
   StudioScorecardsResponse,
 } from './studio-status.js';
 export { TREND_GRAINS, type TrendGrain } from './trend-grain.js';
-export {
-  ASSIST_STEPS,
-  BETA_WELCOME_STEPS,
-  CODE_COMPLETION_KINDS,
-  CODE_COMPLETION_OUTCOMES,
-  CODE_STEPS,
-  CREATE_STEPS,
-  EDITOR_STEPS,
-  HOW_TO_PLAY_VIAS,
-  INVITE_STEPS,
-  PLAY_VIAS,
-  REMIX_CONTROLS,
-  REMIX_PAINTED_VIAS,
-  REMIX_STEPS,
-  STUDIO_STEP_DETAILS,
-  STUDIO_STEPS,
-  VISIT_ROUTE_KINDS,
-  WAITLIST_STEPS,
-  type AssistStep,
-  type BetaWelcomeStep,
-  type CodeCompletionKind,
-  type CodeCompletionOutcome,
-  type CodeStep,
-  type CreateStep,
-  type EditorStep,
-  type HowToPlayVia,
-  type InviteStep,
-  type PlayVia,
-  type RemixControl,
-  type RemixPaintedVia,
-  type RemixStep,
-  type StudioStep,
-  type StudioStepDetail,
-  type VisitRouteKind,
-  type WaitlistStep,
-} from './visit-vocab.js';
+export * from './visit-vocab-contract.js';
 export { MAX_WORLD_ENTRY_BYTES, MAX_WORLD_FIELDS, MAX_WORLD_KEY_LENGTH } from './world-limits.js';
 export { ZONE_LINK_STEPS, type ZoneLinkStep } from './zone-link-step.js';
 export {
@@ -165,3 +145,6 @@ export {
   type ZoneEvent,
 } from './zone-contract.js';
 export { ZONE_PROTOCOL_VERSION } from './zone-protocol.js';
+export { isCliAction, type CliAction, type CliSessionContext } from './cli-assistant.js';
+
+export type { LocalActivity } from './local-activity.js';

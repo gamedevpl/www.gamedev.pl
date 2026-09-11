@@ -2,13 +2,13 @@ import { gunzipSync } from 'node:zlib';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from '../delivery/gcs-sign.js';
-import { KitRegistryError, parseKitRegistry, parseKitSidecar } from '../agent-surface/kit-registry.js';
+import { KitRegistryError, parseKitRegistry, parseKitSidecar } from '../platform/kit-registry.js';
 import { codeSurfaceEnabled } from './code-surface.js';
-import { collapseJobsToOwnerGames, MAX_OWNER_GAMES, pageOwnerGames } from '../catalog/owner-games.js';
-import { readTarEntries, type TarEntry } from '../delivery/tar.js';
-import { hydrateRecentBuildSummaries } from '../delivery/build-changelog.js';
-import { toRecentBuilds } from '../delivery/recent-builds.js';
+import { collapseJobsToOwnerGames, MAX_OWNER_GAMES, pageOwnerGames } from './owner-games.js';
+import { readTarEntries, type TarEntry } from '../platform/tar.js';
+import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
 import type {
+  RecentBuild,
   StudioBuildsResponse,
   StudioGame,
   StudioGamesResponse,
@@ -16,7 +16,7 @@ import type {
   StudioScorecard,
   StudioScorecardsResponse,
 } from '@gamedevpl/contract';
-import { recentPartitions, summarizeGameHealth } from '../telemetry/telemetry-health.js';
+import { recentPartitions, summarizeGameHealth } from '../platform/telemetry-health.js';
 
 export type CreatorStudioGame = StudioGame;
 export type CreatorHealthResponse = StudioHealthResponse;
@@ -24,10 +24,12 @@ export type CreatorScorecardSummary = StudioScorecard;
 export type CreatorScorecardsResponse = StudioScorecardsResponse;
 export type CreatorStudioGamesResponse = StudioGamesResponse;
 export type CreatorBuildsResponse = StudioBuildsResponse;
-import { composeWorkspaceArchive, WorkspaceCompositionError } from '../delivery/workspace-archive.js';
-import type { GamesStore } from '../delivery/games-store.js';
+import { composeWorkspaceArchive, WorkspaceCompositionError } from '../platform/workspace-archive.js';
+import { buildSpecStub } from './creator-code.js';
+import type { GamesStore, VersionManifest } from '../delivery/games-store.js';
 import type { Store, TelemetryEvent } from '../platform/store.js';
 import { normalizeLocale } from '../platform/translate.js';
+import { isPublished } from '../platform/publication-state.js';
 
 /**
  * Creator control panel reads (docs/improvement-loop-plan.md IL-2 creator surface).
@@ -59,10 +61,14 @@ export interface CreatorStudioRoutesOptions {
   /** Read manifests to learn which games ship an editor definition (EditorKit). */
   gamesStore?: GamesStore;
   /** Mints status tokens so the studio can deep-link into the build page. */
-  mintStatusToken?: (issueNumber: number) => string;
+  mintStatusToken?: (jobId: number) => string;
   /** Reads the workspace scaffold and signs the kit URL the scaffold fetches. */
   objectStore?: GcsObjectStore;
   now?: () => number;
+  // N1: agent-surface's presence vocabulary, injected rather than imported.
+  isPresenceEventText: (text: string, createdAt?: string) => boolean;
+  // N1: delivery's own manifest mapping, injected the same way.
+  toRecentBuilds: (manifests: readonly VersionManifest[]) => RecentBuild[];
 }
 
 /** Ceiling on the scaffold we will unpack — it is a handful of text files, not a kit. */
@@ -164,11 +170,11 @@ export async function registerCreatorStudioRoutes(
     const requested = parsed.data.game;
     if (requested) {
       const addressedRecord = records.find(
-        (record) => record.slug === requested || options.mintStatusToken!(record.issueNumber) === requested,
+        (record) => record.slug === requested || options.mintStatusToken!(record.jobId) === requested,
       );
       const addressedGame = addressedRecord
         ? collapsed.find(({ tip }) =>
-            addressedRecord.slug ? tip.slug === addressedRecord.slug : tip.issueNumber === addressedRecord.issueNumber,
+            addressedRecord.slug ? tip.slug === addressedRecord.slug : tip.jobId === addressedRecord.jobId,
           )
         : undefined;
       if (addressedGame && !shelf.includes(addressedGame)) shelf.push(addressedGame);
@@ -197,12 +203,12 @@ export async function registerCreatorStudioRoutes(
         .filter(({ tip, catalogPublishedAt }) => tip.slug && (tip.publishedAt || catalogPublishedAt))
         .map(async ({ tip }) => {
           const publication = await store.getPublication(tip.slug as string);
-          if (publication && publication.state !== 'published') notLiveSlugs.add(tip.slug as string);
+          if (publication && !isPublished(publication)) notLiveSlugs.add(tip.slug as string);
         }),
     );
 
     const games: CreatorStudioGame[] = shelf.map(({ tip, catalogPublishedAt }) => ({
-      token: options.mintStatusToken!(tip.issueNumber),
+      token: options.mintStatusToken!(tip.jobId),
       title: tip.title,
       createdAt: tip.createdAt,
       // Prefer `lastStatus` (kept current on every derivation, and written at publish)
@@ -345,9 +351,10 @@ export async function registerCreatorStudioRoutes(
 
     const body: CreatorBuildsResponse = {
       builds: await hydrateRecentBuildSummaries({
-        builds: toRecentBuilds(pagedVersions),
+        builds: options.toRecentBuilds(pagedVersions),
         ...(locale ? { locale } : {}),
-        loadEvents: (issueNumber) => store.listBuildEvents(issueNumber, { limit: 20 }),
+        loadEvents: (jobId) => store.listBuildEvents(jobId, { limit: 20 }),
+        isPresenceEventText: options.isPresenceEventText,
       }),
       totalCount,
     };
@@ -402,27 +409,22 @@ export async function registerCreatorStudioRoutes(
         return reply.status(404).send({ error: 'no such game' });
       }
 
-      // Same preference order as the agent's own `get_sources`, and it has to be read off
-      // the *newest* round rather than the first owned record that happens to carry a
-      // version. An improvement round starts empty on a slug whose older job still points
-      // at the version it delivered before publication; scanning all records would hand
-      // back that older delivery, and a creator who edited it and delivered would overwrite
-      // newer published work with something derived from a superseded base. When the newest
-      // round has nothing of its own, the live publication is what they last played.
+      const kitOnly = (request.query as { kitOnly?: string }).kitOnly === 'true';
+      // Prefer the newest round, then the live publication.
       const tip = [...owned].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
       let version = tip.previewVersion ?? tip.deliveredVersion ?? null;
       if (!version) {
         const publication = await store.getPublication(slug);
-        if (publication?.state === 'published') version = publication.currentVersion;
+        if (isPublished(publication)) version = publication.currentVersion;
       }
-      if (!version) {
+      if (!kitOnly && !version && (request.query as { allowUndelivered?: string }).allowUndelivered !== 'true') {
         return reply.status(409).send({
           error: 'nothing_delivered',
           message: 'this game has no delivered version yet — let the first build finish, then check it out',
         });
       }
 
-      const manifest = await options.gamesStore.getManifest(slug, version);
+      const manifest = version && !kitOnly ? await options.gamesStore.getManifest(slug, version) : { sourceFiles: [] };
       if (!manifest) {
         request.log.error({ slug, version }, 'workspace checkout: manifest missing for a version a job points at');
         return reply.status(502).send({ error: 'the delivered version could not be read back' });
@@ -431,9 +433,10 @@ export async function registerCreatorStudioRoutes(
       const sources = await Promise.all(
         manifest.sourceFiles.map(async (path) => ({
           path,
-          content: await options.gamesStore!.getSourceFile(slug, version, path),
+          content: await options.gamesStore!.getSourceFile(slug, version!, path),
         })),
       );
+      if (!version) sources.push({ path: 'SPEC.md', content: buildSpecStub(tip) });
       const missing = sources.filter((file) => file.content === null).map((file) => file.path);
       if (missing.length > 0) {
         request.log.error(
@@ -462,6 +465,15 @@ export async function registerCreatorStudioRoutes(
           });
         }
 
+        const lock = {
+          slug,
+          engineRef,
+          kitUrl: await options.objectStore.signReadUrl(`kits/${engineRef}.tgz`, DEFAULT_SIGNED_URL_TTL_SECONDS),
+          kitSha256: parseKitSidecar(sidecarBody.toString('utf8')).sha256,
+          issuedAt: new Date(now()).toISOString(),
+        };
+        if (kitOnly) return reply.header('cache-control', 'private, no-store').send(lock);
+
         // Bounded at the gunzip, not only after it: `readTarEntries`' cap is on what it
         // retains, so an over-large or corrupt scaffold would already have been inflated
         // in full by the time that applied. The scaffold is our own artifact rather than
@@ -489,16 +501,7 @@ export async function registerCreatorStudioRoutes(
 
         const archive = composeWorkspaceArchive({
           slug,
-          lock: {
-            slug,
-            engineRef,
-            // Short-lived by design. `setup.mjs` is meant to be re-run — that is also the
-            // re-baseline path when the pin falls outside the kit's N/N−1 window — so a URL
-            // that expires costs a fresh checkout link, not a broken workspace.
-            kitUrl: await options.objectStore.signReadUrl(`kits/${engineRef}.tgz`, DEFAULT_SIGNED_URL_TTL_SECONDS),
-            kitSha256: parseKitSidecar(sidecarBody.toString('utf8')).sha256,
-            issuedAt: new Date(now()).toISOString(),
-          },
+          lock,
           scaffold,
           sources: sources as Array<{ path: string; content: string }>,
         });

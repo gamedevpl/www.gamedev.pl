@@ -16,7 +16,7 @@ export class OperatorAccountDeletionError extends Error {
 /**
  * Complete account erasure shared by self-service deletion and the operator CLI.
  *
- * Published games remain in the arcade under the platform owner. Unpublished jobs are
+ * Published games remain in the catalog under the platform owner. Unpublished jobs are
  * abandoned, and every submission is unlinked from the person's uid. The player-data
  * pass runs first because its indexed reads are deliberately ordered before writes;
  * both halves are idempotent so an interrupted operator run can be repeated safely.

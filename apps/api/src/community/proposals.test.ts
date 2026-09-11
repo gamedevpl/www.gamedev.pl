@@ -42,7 +42,7 @@ function fakeGamesStore() {
   const store = {
     async putCandidateSources(input: {
       slug: string;
-      issueNumber: number;
+      jobId: number;
       files: SourceFile[];
       mode?: string;
       proposal?: { id: string; proposerUid: string };
@@ -52,7 +52,7 @@ function fakeGamesStore() {
         slug: input.slug,
         version,
         createdAt: new Date(NOW).toISOString(),
-        issueNumber: input.issueNumber,
+        jobId: input.jobId,
         deliveryMode: input.mode ?? 'publish',
         ...(input.proposal ? { proposal: input.proposal } : {}),
         sourceFiles: input.files.map((file) => file.path),
@@ -94,7 +94,7 @@ async function seedPublishedCreatorGame(store: InMemoryStore, opts?: { mode?: 'o
   await store.upsertUser({ uid: OWNER, name: 'Kasia' });
   await store.upsertUser({ uid: PROPOSER, name: 'Tomek' });
   const job = await store.createSubmission(1_000_001, OWNER, 'Neon Drift');
-  await store.setSubmissionSlug(job.issueNumber, SLUG);
+  await store.setSubmissionSlug(job.jobId, SLUG);
   await store.setPublication({
     slug: SLUG,
     state: 'published',
@@ -142,7 +142,7 @@ describe('eligibility', () => {
     const fresh = new InMemoryStore();
     await fresh.upsertUser({ uid: OWNER, name: 'Kasia' });
     const job = await fresh.createSubmission(1_000_002, OWNER, 'Quiet Game');
-    await fresh.setSubmissionSlug(job.issueNumber, 'quiet-game');
+    await fresh.setSubmissionSlug(job.jobId, 'quiet-game');
     expect(await canProposeTo(fresh, 'quiet-game', PROPOSER)).toMatchObject({
       ok: false,
       reason: 'contributions_off',
@@ -320,7 +320,7 @@ describe('decisions', () => {
 
   it('accepting adopts the version but publishes nothing', async () => {
     const proposal = await openAndGreen();
-    const adoptIntoJob = vi.fn().mockResolvedValue({ issueNumber: 1_000_009 });
+    const adoptIntoJob = vi.fn().mockResolvedValue({ jobId: 1_000_009 });
     const result = await acceptProposal(
       { ...deps(store, gamesStore), adoptIntoJob },
       {
@@ -476,7 +476,7 @@ describe('sweeps', () => {
     gamesStore.setGate(SLUG, result.proposal.version!, { green: true });
     await reconcileProposalGate(deps(store, gamesStore), result.proposal.id);
     await acceptProposal(
-      { ...deps(store, gamesStore), adoptIntoJob: async () => ({ issueNumber: 1_000_009 }) },
+      { ...deps(store, gamesStore), adoptIntoJob: async () => ({ jobId: 1_000_009 }) },
       { id: result.proposal.id, byUid: OWNER, reviewer: 'creator' },
     );
 

@@ -1,0 +1,80 @@
+/* Proposal composer: title/description form reused by review and contribution settings. */
+
+/*
+ * Proposals — the composer behind Remix's third exit, and the tracker.
+ *
+ * Styled from the remix panel's own tokens rather than new ones: a proposal starts inside
+ * that panel, and a form that looked like it came from somewhere else would read as a
+ * different product asking for something.
+ */
+.propose-composer {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: var(--panel-card);
+}
+
+.propose-heading {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.propose-field {
+  display: grid;
+  gap: 5px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.propose-field input,
+.propose-field textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--panel-border);
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-weight: 400;
+  resize: vertical;
+}
+
+.propose-field input:focus-visible,
+.propose-field textarea:focus-visible {
+  outline: 2px solid var(--turquoise);
+  outline-offset: 1px;
+}
+
+.propose-actions {
+  display: flex;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.propose-error {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--error);
+}
+
+.propose-note {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.propose-field select {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--panel-border);
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-weight: 400;
+}

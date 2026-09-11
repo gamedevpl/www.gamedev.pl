@@ -12,8 +12,8 @@ describe('submission token', () => {
   it('rejects tampered tokens', () => {
     const token = mintToken(123, secret);
     const decoded = Buffer.from(token, 'base64url').toString('utf8');
-    const [issueNumber, signature] = decoded.split('.');
-    const tampered = Buffer.from(`${issueNumber}.${signature.slice(0, -1)}0`, 'utf8').toString('base64url');
+    const [jobId, signature] = decoded.split('.');
+    const tampered = Buffer.from(`${jobId}.${signature.slice(0, -1)}0`, 'utf8').toString('base64url');
 
     expect(() => verifyToken(tampered, secret)).toThrow(InvalidTokenError);
   });

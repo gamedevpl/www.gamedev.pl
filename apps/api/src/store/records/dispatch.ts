@@ -46,7 +46,7 @@ export interface JobCostEntry {
   at: string;
   /**
    * Who charged for it: an agent backend (`copilot`), a service (`cloud-build`), or —
-   * for a `seed` entry — the model id that billed the tokens (`gemini-3.7-flash`).
+   * for a `seed` entry — the model id that billed the tokens (`gemini-3.8-flash`).
    * A model id here is a well-formed entry, not corrupt data.
    */
   by: string;
@@ -163,7 +163,7 @@ export const JOB_ID_FLOOR = 1_000_000;
 // Counts dispatches on this job plus earlier sibling jobs (own refs undercount).
 export async function dispatchAttempt(
   store: Pick<Store, 'listSubmissionsBySlug'>,
-  record: Pick<SubmissionRecord, 'dispatch' | 'slug' | 'issueNumber' | 'ownerUid' | 'createdAt'>,
+  record: Pick<SubmissionRecord, 'dispatch' | 'slug' | 'jobId' | 'ownerUid' | 'createdAt'>,
 ): Promise<number> {
   const ownAttempts = record.dispatch?.refs?.length ?? 0;
   if (!record.slug) return Math.max(ownAttempts, 1);
@@ -171,9 +171,7 @@ export async function dispatchAttempt(
   const priorAttempts = siblings
     .filter(
       (sibling) =>
-        sibling.issueNumber !== record.issueNumber &&
-        sibling.ownerUid === record.ownerUid &&
-        sibling.createdAt < record.createdAt,
+        sibling.jobId !== record.jobId && sibling.ownerUid === record.ownerUid && sibling.createdAt < record.createdAt,
     )
     .reduce((sum, sibling) => sum + (sibling.dispatch?.refs?.length ?? 0), 0);
   return Math.max(ownAttempts + priorAttempts, 1);

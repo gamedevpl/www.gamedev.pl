@@ -89,7 +89,6 @@ describe('builder helpers', () => {
     expect(shouldSteerFeedbackViaInbox({ state: 'dispatched', ...withRef })).toBe(true);
     expect(shouldSteerFeedbackViaInbox({ state: 'building', ...withRef })).toBe(true);
     expect(shouldSteerFeedbackViaInbox({ state: 'submitted', ...withRef })).toBe(true);
-    expect(shouldSteerFeedbackViaInbox({ state: 'gating', ...withRef })).toBe(true);
     expect(
       shouldSteerFeedbackViaInbox({
         state: 'needs_changes',

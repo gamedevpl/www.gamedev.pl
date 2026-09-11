@@ -38,6 +38,9 @@
 # service-agnostic name ("A1 site down …") would have done.
 set -euo pipefail
 
+# An old copy of this script does not fail; it reverts what a newer copy fixed.
+source "$(dirname "${BASH_SOURCE[0]}")/require-current-checkout.sh"
+
 # gcloud asks for confirmation on stderr — including "you do not have this command group
 # installed, continue?" for alpha/beta. A script that redirects stderr then waits on stdin
 # forever, showing nothing: this script hung on step 2 for exactly that reason. Prompts off
@@ -325,6 +328,46 @@ ensure_log_metric knowledge_query_calls \
   'knowledge_query calls, any mode. Backs alert A26.' \
   "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"knowledge_query answered\""
 
+# Callers Cloud Run could not attribute: X-Forwarded-For arrives holding 0.0.0.0, the
+# unspecified address, so every one of them lands in a single shared per-IP bucket. Measured
+# at ~3% of requests and present since 2026-08-04, long before any CDN work. Harmless while
+# traffic is low and a trap under a wave, which is when a shared bucket refuses hardest.
+#
+# The counter that matters is the rateLimited field, not the volume: it says whether the
+# shared bucket has actually refused anyone yet, which is what decides the fix. Failing open
+# would be wrong here — the auth brute-force limiter reads the same address, and anyone able
+# to reach us by this path would get unlimited attempts.
+#
+# The message string is the contract with apps/api/src/platform/client-address-metrics.ts,
+# asserted from both sides by client-address-metrics.test.ts.
+ensure_log_metric unattributable_client_requests \
+  'Requests whose caller Cloud Run reported as the unspecified address (shared rate-limit bucket).' \
+  "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"unattributable client address\""
+
+# The one that decides the fix. Volume above only says how many share the bucket; this says
+# whether the bucket has refused anyone, which is a different question and the answer nobody
+# has. Its own message rather than a status filter on the metric above, because a 429 there
+# can be a per-account quota (creation/improve-routes.ts) that has nothing to do with the
+# shared address — counting those would answer this question wrongly and confidently.
+#
+# Emitted only where the refusal is provable: the IP-keyed sliding window in
+# platform/ip-rate-limit.ts, and the rate-limit plugin's own onExceeded.
+ensure_log_metric unattributable_client_refusals \
+  'An IP-keyed limiter refused a caller with no attributable address.' \
+  "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"unattributable client refused by ip limiter\""
+
+# Fastly-Client-IP arrived but the peer Cloud Run appended is not one of Google's own
+# addresses, so the header was ignored. Two causes, both worth a look: a header forged and
+# sent straight at the service — the bypass the peer check exists to stop — or a Google range
+# newer than the bundled snapshot. A burst from one peer is the former; a steady trickle
+# from Google-looking peers is the latter, fixed by node infra/refresh-edge-ranges.mjs.
+#
+# The message string is the contract with apps/api/src/platform/client-address-metrics.ts,
+# asserted from both sides by client-address-metrics.test.ts.
+ensure_log_metric edge_header_untrusted \
+  'Fastly-Client-IP present but the appended peer is not Google-own (forgery or stale ranges).' \
+  "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"edge client header not trusted\""
+
 # The in-process tsc preflight (typecheck-preflight.ts) abandons a check that ran past its
 # soft wall and accepts the delivery unvalidated rather than blocking the agent — the same
 # fail-open shape as everywhere else in this pipeline. One skip is a heavy round (a big
@@ -587,7 +630,7 @@ cat > "${POLICY_DIR}/a24.json" <<EOF
   "conditions": [{
     "displayName": "model invocations sustained over 10 minutes",
     "conditionThreshold": {
-      "filter": "metric.type=\"aiplatform.googleapis.com/publisher/online_serving/model_invocation_count\" AND resource.type=\"aiplatform.googleapis.com/PublisherModel\"",
+      "filter": "metric.type=\"aiplatform.googleapis.com/publisher/online_serving/model_invocation_count\" AND resource.type=\"aiplatform.googleapis.com/PublisherModel\" AND metric.label.method != \"EmbedContent\"",
       "aggregations": [{
         "alignmentPeriod": "600s",
         "perSeriesAligner": "ALIGN_RATE",
@@ -687,7 +730,7 @@ cat > "${POLICY_DIR}/a26.json" <<EOF
   "notificationChannels": ["${CHANNEL_NAME}"],
   "alertStrategy": { "autoClose": "86400s" },
   "documentation": {
-    "content": "knowledge_query is being called far more than expected in a day. This protects against cost runaway on Discovery Engine's SEARCH_ADD_ON_LLM (:answer), which is billed per call unlike plain chunk retrieval. Triage: Logs Explorer, jsonPayload.msg=\"knowledge_query answered\", group by jsonPayload.knowledgeQuery.mode (answer costs ~3.7x chunks) and .issueNumber (one round looping vs many rounds using it normally). The per-round soft caps live in apps/api/src/agent-surface/agent-channel.ts (maxKnowledgeAnswersPerWindow / maxKnowledgeChunksPerWindow); a single round cannot exceed them, so sustained volume above this threshold means many rounds, not one runaway loop.",
+    "content": "knowledge_query is being called far more than expected in a day. This protects against cost runaway on Discovery Engine's SEARCH_ADD_ON_LLM (:answer), which is billed per call unlike plain chunk retrieval. Triage: Logs Explorer, jsonPayload.msg=\"knowledge_query answered\", group by jsonPayload.knowledgeQuery.mode (answer costs ~3.7x chunks) and .jobId (one round looping vs many rounds using it normally). The per-round soft caps live in apps/api/src/agent-surface/agent-channel.ts (maxKnowledgeAnswersPerWindow / maxKnowledgeChunksPerWindow); a single round cannot exceed them, so sustained volume above this threshold means many rounds, not one runaway loop.",
     "mimeType": "text/markdown"
   }
 }
@@ -761,6 +804,209 @@ cat > "${POLICY_DIR}/a28.json" <<EOF
 }
 EOF
 
+# A29 -- Firestore write rate. The database has no spend signal at all today: the cost
+# model is per-operation, and the failure that produces a surprise bill is volume from a
+# loop, not one expensive query. Every ceiling this project added in 2026-08 is itself a
+# Firestore counter, so a runaway now shows up here before it shows up on the invoice --
+# and a hot document (one shard taking every write) shows up as latency at the same time.
+#
+# Threshold: the closed beta's steady state is a fraction of a write per second. The
+# first draft used 25/s, guessed as "an order of magnitude above a few writes a second"
+# before anybody had measured. The real distribution is roughly forty times lower than
+# that guess, which made the policy decorative -- a runaway loop could have run for days
+# at fifty times normal volume without ever reaching it.
+#
+# CALIBRATION, measured rather than guessed (ALIGN_RATE/600s, REDUCE_SUM over all series,
+# the same shape this condition evaluates):
+#   Sep 5 20:06 - Sep 7 22:06 UTC, 301 windows:
+#     max 0.662/s (Sep 6 21:56 UTC), p95 0.448/s, median 0.113/s
+#   38,518 writes over the window, split by metric.op:
+#     CREATE 26,628 (peak 0.587/s), UPDATE 11,892 (peak 0.270/s)
+# Per-collection attribution is NOT available here: document/write_count carries only
+# module/version/op, no collection_id, and billable_write_units returns nothing on this
+# database. Naming the hot collection needs the application's own counters, not this
+# metric -- do not go looking for a group_by that does not exist.
+#
+# 3x the busiest real window is ~2/s, which is too tight to survive one unusual creation
+# burst, so this takes a floor of 10/s instead: ~15x the observed max, ~22x p95, and still
+# far enough below a runaway to catch one within ten minutes.
+#
+# The window was mostly a weekend (Sep 5 was a Saturday) and covers only two days.
+# Recheck after a full working week -- if weekday peaks land materially above 0.662/s,
+# the floor of 10 is what absorbs it, but the p95 line should be re-read.
+cat > "${POLICY_DIR}/a29.json" <<EOF
+{
+  "displayName": "A29 Firestore write rate",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "sustained document writes well above steady state",
+    "conditionThreshold": {
+      "filter": "metric.type=\"firestore.googleapis.com/document/write_count\" AND resource.type=\"firestore_instance\"",
+      "aggregations": [{
+        "alignmentPeriod": "600s",
+        "perSeriesAligner": "ALIGN_RATE",
+        "crossSeriesReducer": "REDUCE_SUM"
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 10,
+      "duration": "600s",
+      "trigger": { "count": 1 }
+    }
+  }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
+  "alertStrategy": { "autoClose": "86400s" },
+  "documentation": {
+    "content": "Firestore is taking far more writes than the closed beta's steady state, sustained for ten minutes. Firestore bills per operation, so this is a cost signal as much as a load one, and it is the only one the database has -- there is no per-document budget and no equivalent of the Vertex token alarm. Likely causes, in the order they have actually happened: a client polling a route that writes on read; a sweep or reaper looping over a growing collection without a batch ceiling; one of the global spend counters in apps/api/src/store/slices/quota-global.ts becoming a hot document under a traffic burst (searchEmbeddings and moderationCalls are sharded across ten documents each for exactly this reason -- if a single shard is taking every write, the shard key is broken, not the traffic). Triage, and read this before opening Metrics Explorer: there is no per-collection attribution to be had from this metric. document/write_count carries only module, version and op, and no other firestore.googleapis.com metric in this project exposes a collection_id either, so grouping by collection is not an option no matter how the query is written. The one useful group_by is metric.op, which separates CREATE from UPDATE: a flood of CREATE is a collection growing (a sweep, a reaper, a log-like write path), while a flood of UPDATE on a flat document count is a hot document being rewritten, which is the shard-key failure above. From there the attribution is the application's own, not Google's: the admin console's Limits tab carries today's per-lane counters (submissions, managed builds, tab-complete tokens, search embeddings, gate runs, seeds, moderation calls, bot calls), and the lane whose counter is climbing against a flat clock is the writer. Confirm it in Logs Explorer on the app service, then pause that lane -- creation, editing, chat, tab-complete, search, gate and seeding each have a breaker on the same tab, effective within a minute, and pausing one stops its counter writing as a side effect.",
+    "mimeType": "text/markdown"
+  }
+}
+EOF
+
+# A30 -- Firestore read rate. A29 watches writes; reads had no signal at all, and they
+# are where the 2026-09 bill actually was: ~800K reads a day against a 50K free tier,
+# with the platform writing a few hundred. The shape was not a loop -- it was one public
+# route (/api/catalog, the home page) doing one document read per game per request,
+# uncached, plus a two-minute sweep scanning the games collection every run. A crawler
+# hitting that route at 10 rps would have been 100M reads a day. Reads bill at a third
+# of writes, so the money is smaller; the shape is the same and so is the fix.
+#
+# CALIBRATION, measured after the caches shipped rather than predicted before them. The
+# first draft of this policy expected a post-fix steady state "well under 1/s" and set a
+# single 5/s threshold on that expectation. Measured, the expectation was wrong by four
+# times, and 5/s sat below the ordinary daytime p95 -- the policy fired on normal traffic
+# within hours of being created, which is the one failure mode this file refuses to ship.
+#
+# Sep 8 10:00-19:00 UTC, 53 windows, ALIGN_RATE/600s and REDUCE_SUM, the same shape both
+# conditions evaluate:
+#   median 4.21/s, p95 5.65/s, max 5.98/s -- a pace of ~364K reads/day
+# Split by metric.label.type over the same window:
+#   QUERY 3.66/s mean (flat to within 0.2/s all day), LOOKUP 0.59/s, NOT_FOUND 0.03/s
+# The flat QUERY floor is not a sweep: per-minute counts show no scheduler cadence, and
+# the request log for the same hour is ~700 requests of which /api/review/status and
+# /api/notifications are 270 -- authenticated badge polling from open tabs, each poll
+# running collection queries. That floor is the next reads fix, not something a threshold
+# should be bent around, and it is why the numbers above are a ceiling to live under
+# rather than the intended steady state.
+#
+# Two conditions, because reads fail in two shapes and one threshold cannot see both:
+#   spike -- 20/s over ten minutes, ~3.3x the measured max, a pace of ~1.7M/day. This is
+#   the crawler or the runaway loop, and it is what a ten-minute window is good at.
+#   drift -- 8/s over three hours, a pace of ~690K/day. The 2026-09 incident averaged
+#   ~9.3/s across whole days and would never have tripped any ten-minute spike threshold
+#   set high enough not to false-alarm; it needs a lower bar held for longer. Steady state
+#   has ~2x headroom under it, and the pre-fix mornings that would have tripped it were
+#   the bug it is meant to catch.
+#
+# The window is one weekday afternoon and it does not include a morning peak. Re-read both
+# thresholds against a full working week -- the same 2026-09-15 checkpoint as A29.
+#
+# THAT BADGE-POLLING FLOOR IS NOW FIXED (see docs/firestore-read-cost.md): /api/review/status
+# and /api/notifications read once per window instead of once per poll, which by the read
+# counts each route was issuing should take the QUERY component down by roughly an order of
+# magnitude and the total well under 1/s. Both thresholds here are therefore calibrated
+# against a floor that no longer exists, and both are now much too high to catch a
+# regression the size of the one they were written for. Do not lower them on that estimate:
+# the last time this policy was set from a prediction rather than a measurement it was wrong
+# by four times and fired on normal traffic. At the 2026-09-15 recheck, measure a full
+# working week of post-fix reads first, then re-derive spike and drift from that floor the
+# same way -- roughly 3x the measured max for the spike, ~2x the steady state for the drift.
+cat > "${POLICY_DIR}/a30.json" <<EOF
+{
+  "displayName": "A30 Firestore read rate",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "document reads spiking far above steady state",
+    "conditionThreshold": {
+      "filter": "metric.type=\"firestore.googleapis.com/document/read_count\" AND resource.type=\"firestore_instance\"",
+      "aggregations": [{
+        "alignmentPeriod": "600s",
+        "perSeriesAligner": "ALIGN_RATE",
+        "crossSeriesReducer": "REDUCE_SUM"
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 20,
+      "duration": "600s",
+      "trigger": { "count": 1 }
+    }
+  }, {
+    "displayName": "document reads elevated for hours on end",
+    "conditionThreshold": {
+      "filter": "metric.type=\"firestore.googleapis.com/document/read_count\" AND resource.type=\"firestore_instance\"",
+      "aggregations": [{
+        "alignmentPeriod": "600s",
+        "perSeriesAligner": "ALIGN_RATE",
+        "crossSeriesReducer": "REDUCE_SUM"
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 8,
+      "duration": "10800s",
+      "trigger": { "count": 1 }
+    }
+  }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
+  "alertStrategy": { "autoClose": "86400s" },
+  "documentation": {
+    "content": "Firestore is taking far more document reads than the closed beta's steady state. Two conditions fire this policy and they mean different things: the ten-minute one at 20/s is a spike -- a crawler or a loop -- while the three-hour one at 8/s is drift, the shape of the 2026-09 incident, which averaged ~9.3/s for whole days and would never trip a spike threshold. Reads bill per operation like writes, at a third of the price, and a public route that fans out one read per catalog entry is what produced ~800K reads a day in 2026-09 with almost no traffic. Triage: this metric carries no collection label; group it by metric.label.type -- LOOKUP is per-document gets (a request path fanning out over entries), QUERY is collection scans (a sweep, or a list running on every request). Then Logs Explorer on the app service, requests grouped by route, to find which one scales with it; check the per-minute counts first, because a scheduler job shows a cadence and request-driven reads do not. Measured steady state as of 2026-09-08 is ~4.2/s median and ~5.7/s p95, most of it a flat QUERY floor from authenticated badge polling on /api/review/status and /api/notifications -- so a reading a little above 5/s is normal and neither condition should see it. The per-request caches in catalog-routes.ts, catalog-enricher.ts and notify-sweep-routes.ts are the reference for the fix: read a collection once per window, never per request.",
+    "mimeType": "text/markdown"
+  }
+}
+EOF
+
+# A31 -- Firestore reads, daily total. A30 watches the rate in two windows: ten minutes for
+# a spike and three hours for drift. Both are still rate thresholds, and a rate threshold is
+# blind to the one shape that has actually cost money here -- a leak small enough never to
+# hold any window above its bar, running all day, every day. A regression that adds a steady
+# 5/s on top of the floor never trips A30's 8/s drift condition for three unbroken hours if
+# nights and quiet hours pull the average down, yet it bills ~430K extra reads a day and
+# nobody sees it until the invoice. The free tier is 50K reads/day; the 2026-09 incident was
+# ~800K/day and ran for weeks before anyone read the graph.
+#
+# So this condition sums instead of averaging: ALIGN_DELTA over 86400s with REDUCE_SUM is
+# the actual count of document reads in the trailing day, evaluated on a sliding window, and
+# it crosses only if the day as a whole was expensive -- however the reads were spread.
+#
+# THRESHOLD 600000/day. Derivation, from the same measurement A30 is calibrated on: Sep 8
+# daytime ran ~4.2/s median, ~5.7/s p95, which is a pace of ~364K/day if it held around the
+# clock, and it does not -- nights are quieter, so the real day is lower. 600K is ~1.6x that
+# pace ceiling, comfortably above any ordinary day including a busy one, and well under the
+# ~800K/day the incident was actually billing. It is deliberately a slow signal: duration 0
+# on a daily sum still means the leak has to have been running most of a day before the
+# policy fires, which is the point -- this is the detector for what the fast ones miss, not
+# a second copy of them.
+#
+# Like A30, this number is calibrated against a floor that the badge-polling fix removes
+# (see docs/firestore-read-cost.md). At the 2026-09-15 recheck, take the post-fix daily
+# totals for a full working week and re-derive: roughly 2x the busiest measured day, floored
+# at something that still leaves the 50K/day free tier visible as a target rather than a
+# rounding error. Do not lower it from an estimate -- measure first, the way A30 had to be.
+cat > "${POLICY_DIR}/a31.json" <<EOF
+{
+  "displayName": "A31 Firestore reads daily total",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "document reads over the last day above the daily budget",
+    "conditionThreshold": {
+      "filter": "metric.type=\"firestore.googleapis.com/document/read_count\" AND resource.type=\"firestore_instance\"",
+      "aggregations": [{
+        "alignmentPeriod": "86400s",
+        "perSeriesAligner": "ALIGN_DELTA",
+        "crossSeriesReducer": "REDUCE_SUM"
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 600000,
+      "duration": "0s",
+      "trigger": { "count": 1 }
+    }
+  }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
+  "alertStrategy": { "autoClose": "86400s" },
+  "documentation": {
+    "content": "Firestore served more than 600K document reads in the last 24 hours. This is the slow-leak detector, and it is deliberately the slowest signal in the file: A30 watches the read *rate* over ten minutes and over three hours, which catches a crawler or a loop but is blind to a regression that adds a couple of reads a second and simply never stops. Summed over a day that leak is the whole bill -- the 2026-09 incident was ~800K reads/day against a 50K/day free tier, and it ran for weeks unnoticed. If this fires while A30 stayed quiet, do not look for a spike: look for something that got permanently more expensive per request. Triage: group document/read_count by metric.label.type (LOOKUP is per-document fan-out on a request path, QUERY is a collection scan) and compare the day against the previous week to find when the step change happened; then match that time to a deploy. Reference steady state as of 2026-09-08 is a pace of ~364K/day and falling as the per-window caches land, so a sustained 600K day means something regressed, not that traffic grew. The fix is always the same shape: read a collection once per window, never per request (catalog-routes.ts, catalog-enricher.ts, notify-sweep-routes.ts, and the badge routes in docs/firestore-read-cost.md).",
+    "mimeType": "text/markdown"
+  }
+}
+EOF
+
 fi
 
 for FILE in "${POLICY_DIR}"/*.json; do
@@ -793,11 +1039,38 @@ for FILE in "${POLICY_DIR}"/*.json; do
   # to be in the file — including notificationChannels. Omitting it there would leave the
   # policies present and visibly "enabled" while silently emailing nobody, which is the
   # one failure mode worse than having no alerting at all.
+  #
+  # Wholesale also means this script erases decoration it does not know about. On
+  # 2026-09-07 a re-run stripped the Spend brake channel and the `lanes` user labels that
+  # setup-spend-brake.sh had attached to A24/A25/A26, leaving the alerts emailing an
+  # operator while pausing nothing — the brake's Monitoring half was dead for an hour and
+  # nothing said so. So the live policy's channels and labels are merged in below: this
+  # script stays authoritative for the policy body, and anything another script added to
+  # the same policy survives.
   if [ -n "$EXISTING" ]; then
+    LIVE="$(mktemp)"
+    MERGED="$(mktemp)"
+    gcloud alpha monitoring policies describe "$EXISTING" --project "$PROJECT_ID" --format=json >"$LIVE"
+    python3 - "$FILE" "$LIVE" >"$MERGED" <<'MERGE_POLICY'
+import json, sys
+
+want = json.load(open(sys.argv[1]))
+live = json.load(open(sys.argv[2]))
+# Ours first, so the email channel keeps its place; dict.fromkeys dedupes in order.
+channels = list(dict.fromkeys(want.get('notificationChannels', []) + live.get('notificationChannels', [])))
+if channels:
+    want['notificationChannels'] = channels
+# The file wins on a key it sets; everything else another script wrote is kept.
+labels = {**live.get('userLabels', {}), **want.get('userLabels', {})}
+if labels:
+    want['userLabels'] = labels
+json.dump(want, sys.stdout)
+MERGE_POLICY
     gcloud alpha monitoring policies update "$EXISTING" \
       --project "$PROJECT_ID" \
-      --policy-from-file="$FILE" \
+      --policy-from-file="$MERGED" \
       >/dev/null
+    rm -f "$LIVE" "$MERGED"
     echo "    Updated: ${DISPLAY}"
   else
     gcloud alpha monitoring policies create \

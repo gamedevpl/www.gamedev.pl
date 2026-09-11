@@ -1,0 +1,187 @@
+/* Studio stats tab: the funnel numbers, error samples, player reactions/themes, the
+   suggested-improvement cards and the autonomy permission scale (CreatorStudioView.tsx). */
+
+.studio-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.studio-stats-range {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.studio-error-samples {
+  margin-top: 0.5rem;
+}
+
+.studio-error-samples .health-section-title {
+  margin-top: 0.5rem;
+}
+
+.studio-error-samples ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.studio-error-samples li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  background: var(--panel-card);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+}
+
+.studio-error-samples code {
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+
+/* "What players think" on the studio stats tab (docs/improvement-loop-plan.md IL-2).
+   Set apart from the numbers above it because it is measured over the nightly roll-up's
+   fixed window rather than the one the creator picked — the divider is doing real work,
+   not decoration. */
+.studio-reactions {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--panel-border);
+}
+
+.studio-themes {
+  margin-top: 0.75rem;
+}
+
+.studio-themes-title {
+  font-size: 0.9rem;
+  margin: 0 0 0.25rem;
+}
+
+.studio-theme-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.studio-theme-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  background: var(--panel-card);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  /* Player text is arbitrary length and script; wrap instead of overflowing the card. */
+  overflow-wrap: anywhere;
+}
+
+/* Suggested improvements (docs/improvement-loop-plan.md IL-3). Sits under the reactions
+   block in the stats tab, because a suggestion is a reading of the same evidence. */
+.studio-suggestions {
+  margin-top: 1.5rem;
+}
+
+.studio-suggestion {
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  margin-top: 0.75rem;
+}
+
+.studio-suggestion-class {
+  margin: 0 0 0.4rem;
+  font-size: 0.95rem;
+}
+
+.studio-suggestion-evidence {
+  margin: 0 0 0.6rem;
+  padding-left: 1.1rem;
+}
+
+/* Indented and quieter than the evidence above it: these are somebody else's words,
+   carried as evidence, and must not read as the platform asserting them. */
+.studio-suggestion-context {
+  margin: 0.6rem 0;
+  padding-left: 0.75rem;
+  border-left: 2px solid var(--border, rgba(255, 255, 255, 0.12));
+  opacity: 0.85;
+}
+
+.studio-suggestion-actions,
+.studio-suggestion-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.studio-suggestion-reasons p {
+  width: 100%;
+  margin: 0 0 0.25rem;
+}
+
+.studio-suggestion-approve,
+.studio-suggestion-dismiss,
+.studio-suggestion-reason {
+  /* 44px tap floor, same as every other control added since the M0 responsive audit. */
+  min-height: 44px;
+  padding: 0 0.9rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.studio-suggestion-outcome {
+  margin: 0.5rem 0;
+}
+
+/* Autonomy permission (docs/improvement-loop-plan.md IL-4). A scale from least to most
+   permission, laid out as a list rather than a select so every option's consequence is
+   readable without opening anything. */
+.studio-autonomy {
+  margin-top: 1.5rem;
+}
+
+.studio-autonomy-options {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+}
+
+.studio-autonomy-option {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  /* 44px tap floor, as with every control added since the M0 responsive audit. */
+  min-height: 44px;
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.studio-autonomy-option.is-active {
+  background: rgba(127, 127, 127, 0.12);
+}
+
+.studio-autonomy-option small {
+  display: block;
+  opacity: 0.75;
+}
+
+.studio-autonomy-saved {
+  margin: 0.4rem 0 0;
+  opacity: 0.75;
+}

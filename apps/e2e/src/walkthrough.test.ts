@@ -175,7 +175,7 @@ describe.skipIf(!prereq.ok)('signed-in walkthrough', () => {
     for (const alias of ['ai', 'ay']) {
       await visit(page, `/${alias}/${slug}`, 3_000);
       // Shared links must converge on one permalink rather than fragmenting across
-      // aliases (apps/web/src/router.ts).
+      // aliases (apps/web/src/core/router.ts).
       expect(new URL(page.url()).pathname).toBe(`/play/${slug}`);
     }
 

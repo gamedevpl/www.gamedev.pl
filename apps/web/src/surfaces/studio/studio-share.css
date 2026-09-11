@@ -1,0 +1,111 @@
+/* The "anyone with the link may play" switch on an unpublished game, plus the shared
+   hint paragraph its panels reuse (CreatorStudioView.tsx, StudioCreatorAgentKeyPanel.tsx,
+   StudioOAuthClientsPanel.tsx, StudioWorkspaceCheckoutPanel.tsx). */
+
+/* Whether anyone else may play an unpublished game. One switch, because the link is
+   the only way in: the game is in no catalog and no rail either way. */
+.studio-share {
+  margin-top: 20px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border, #33383d);
+  background: var(--panel-card);
+}
+
+.studio-share.is-compact {
+  margin-top: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+}
+
+.studio-share-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.studio-share-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.studio-share-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border, #33383d);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.studio-share-toggle:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.studio-share-toggle.is-on {
+  color: var(--turquoise);
+  border-color: rgba(0, 228, 172, 0.4);
+  background: rgba(0, 228, 172, 0.1);
+}
+
+/* The switch itself: a track with a knob that slides when it is on. */
+.studio-share-toggle-track {
+  position: relative;
+  width: 30px;
+  height: 16px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.3);
+  transition: background 0.15s ease;
+}
+
+.studio-share-toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
+}
+
+.studio-share-toggle.is-on .studio-share-toggle-track {
+  background: rgba(0, 228, 172, 0.35);
+}
+
+.studio-share-toggle.is-on .studio-share-toggle-track::after {
+  transform: translateX(14px);
+  background: var(--turquoise);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-share-toggle-track,
+  .studio-share-toggle-track::after {
+    transition: none;
+  }
+}
+
+.studio-share-hint {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.studio-share .status-share {
+  margin: 12px 0 0;
+}

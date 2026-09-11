@@ -46,7 +46,8 @@ result.
 - Require PR review and passing validation before merge; never auto-merge agent work.
 - Run untrusted PR checks without deployment secrets.
 - Do not use `pull_request_target` to execute PR-controlled code.
-- Give workflows explicit least-privilege permissions and pin third-party actions to commits.
+- Give workflows explicit least-privilege permissions and pin third-party actions to commits
+  (enforced by `infra/check-action-pins.mjs`, in the lint chain).
 - Publish only from the protected default branch through a protected environment.
 - Use OIDC/workload identity for hosting access instead of long-lived cloud keys.
 - Keep submission credentials server-side and scope them to issue creation where possible.
@@ -75,6 +76,10 @@ route. The properties that keep this inside the threat model:
 - **Issuance requires an admin session.** A token-authenticated request is refused by every
   operator surface, so a leaked token cannot mint another or read across other people's
   games.
+- OAuth access tokens with the `creator` scope (`gdpl_oat_`) are the same class-A door for
+  creator routes. Tokens that hold only `mcp` do not authenticate those routes. Operator
+  surfaces, account deletion, and invite claim answer **404** (not 403) for any
+  non-session credential — PAT or OAuth. A token never mints another token.
 - Only `sha256(secret)` is stored, in its own collection, never on the user document that
   gets serialized to browsers.
 - Revocation is a delete and takes effect on the next request — no redeploy, unlike
@@ -92,6 +97,61 @@ Before publication, each game must pass the checks in
 consistency, size limit, credential scan, no remote dependencies, no frame-escape attempts, and
 a headless-browser smoke test. The gate complements review; it does not replace moderation.
 
+## Browser hardening headers
+
+### Session write origins
+
+Before a cookie-authenticated POST/PUT/PATCH/DELETE reaches a handler, the auth hook
+checks its Origin (or Referer when Origin is absent). Only the exact request target,
+the canonical application origin, or an explicitly configured WEB_ORIGIN is accepted.
+A sibling subdomain or another port is not the same origin. Opaque `null` origins
+are refused. This applies to PAT-derived cookies too; adding a Bearer header does
+not bypass the check when the cookie authenticates first.
+
+Clients without Origin/Referer remain supported unless Fetch Metadata identifies a
+non-same-origin browser request. Bearer-only callers and GET/HEAD/OPTIONS retain their
+existing authentication rules. The PAT mint endpoint additionally requires
+application/json; OAuth's shared form parser must not admit token creation by forms.
+OAuth retains its own consent/nonce checks. SameSite cookies and CORS are additional
+controls, not substitutes for this check.
+
+The Vite development proxy preserves Host so its default origin works without extra
+configuration. The exact target origin also admits same-origin candidate revisions;
+X-Forwarded-Host is never used to authorize an origin.
+
+### Response policies
+
+One Cloud Run service serves the API and the web app, so response headers are set in one
+place: `apps/api/src/platform/security-headers.ts`, registered in `app.ts` right after the rate
+limiter, whose annotation its report sink relies on. Every response carries `X-Content-Type-Options: nosniff` and
+`Referrer-Policy: strict-origin-when-cross-origin`. Every response also carries
+`Strict-Transport-Security: max-age=31536000`, rather than relying on an edge layer to add it
+only to some response classes. HTML documents — the SPA shell, the OAuth
+consent and device pages, the CLI page — additionally carry:
+
+- `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY`. Nothing this
+  service serves as a top-level document is meant to be embedded by another site. Games are
+  not top-level documents here: the shell renders them itself from `blob:`/`srcdoc` in the
+  sandboxed iframe, which no response header reaches. The sandboxed build preview that the
+  studio frames by URL (`delivery/creator-media.ts`) writes its own policy and deliberately
+  omits `frame-ancestors`: the web app may live on a different origin than the API
+  (`VITE_API_BASE_URL`, and every dev setup), and the rule would block the studio from
+  framing its own preview there. A route that has written a CSP owns its embedding story and
+  the hook leaves it alone. MCP Apps views travel inside the MCP protocol, not as HTTP
+  documents, so they are unaffected and need no exemption.
+- `Permissions-Policy` switching off only what the product never uses (geolocation, payment,
+  USB, display capture). Microphone, camera and motion sensors are deliberately not named:
+  the shell owns the first two and delegates the sensors to the game frame via `allow=`, and
+  naming them in the header would change how that delegation resolves for the opaque origin.
+- `Content-Security-Policy-Report-Only`, the app-level policy, observed rather than enforced.
+  Violations are posted to `/api/csp-report` (public through the beta wall, IP-rate-limited)
+  and logged at warn level. `APP_CSP_REPORT_ONLY` turns it off or swaps in a draft policy.
+  Because `blob:`/`srcdoc` documents inherit the creating page's policy, the report-only
+  policy is also observed inside every game frame — inline script/style and `data:`/`blob:`
+  media are allowed there so a game exercising its own sandbox never reads as a violation of
+  ours, while a game reaching the network does. Enforcing this policy is a separate decision
+  to be taken on the reports, never by flipping the header name.
+
 ## Historical finding: self-hosted agent credentials
 
 The previous design placed an agent behind an auth proxy and short-lived job token. That work
@@ -106,6 +166,9 @@ credentials operated by gamedev.pl. Historical details are available in Git hist
 ## Non-negotiable invariants
 
 - Games render only in `sandbox="allow-scripts allow-pointer-lock"` without `allow-same-origin`.
+- HTML documents served by the app carry `frame-ancestors 'none'` / `X-Frame-Options: DENY`
+  unless the route wrote its own CSP; the game iframe's sandbox is never relaxed to make a
+  header fit, and the app-level CSP stays report-only until its reports say otherwise.
 - The game iframe's `allow=` delegation is pinned to exactly
   `accelerometer; gyroscope; magnetometer` (opt-in GameKit tilt) and never grows —
   asserted by `apps/web/src/GameFrame.sandbox.test.ts`. In particular it never includes
@@ -116,6 +179,11 @@ credentials operated by gamedev.pl. Historical details are available in Git hist
   keeps crossing the postMessage bridge as data. Camera pixels and microphone loudness
   stay shell-owned, and party input / shell-read sensors reach games only as clamped,
   structured postMessage data.
+- Every third-party GitHub Action is pinned to a commit SHA, never a tag. A tag is a moving
+  pointer the action's owner can repoint, and the deploy job holds `id-token: write`, the
+  Workload Identity credential that deploys Cloud Run, and a production access token —
+  a step running before the auth step can still mint the OIDC token, because the permission
+  belongs to the job. Asserted by `infra/check-action-pins.mjs`.
 - Games are served from a separate cookieless origin in production.
 - Public specs and issue text are data, never agent instructions.
 - Agent-authored changes require review and validation; they are never auto-merged.

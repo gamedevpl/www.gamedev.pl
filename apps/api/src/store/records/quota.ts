@@ -42,14 +42,28 @@ export interface CreationLimits {
   globalDailyEditCap: number | null;
   // Refuse the studio mini chat agent outright; feedback/improve still work normally.
   chatPaused?: boolean;
+  // Load-shedding rungs, read by load-shedding.ts. Null keeps every visit.
+  telemetrySampleRate?: number | null;
+  // Refuse new party rooms honestly; play and running rooms are untouched.
+  partyPaused?: boolean;
   // Own daily ceiling on chat-agent calls, separate from the edit cap.
   globalDailyChatCap?: number | null;
   // Refuse the tab-complete ghost-text lane outright (TA-*); Play/editing untouched.
   tabCompletePaused?: boolean;
+  // Refuse semantic search; the client keeps its own local match.
+  searchPaused?: boolean;
+  // Refuse to start new gate builds; delivered sources are kept, not lost.
+  gatePaused?: boolean;
+  // Daily gate builds, everyone together. Each is a 30-minute E2_HIGHCPU_8 run.
+  globalDailyGateRunCap?: number | null;
+  // Daily query embeddings, everyone together — anonymous traffic's only ceiling.
+  globalDailySearchEmbeddingCap?: number | null;
   // Shared daily token ceiling for ghost-text completion, everyone together.
   globalDailyTabCompleteTokenCap?: number | null;
   // Switches the `platform` option; `auto` defers to whether a backend exists.
   managedBuilderMode?: ManagedBuilderMode;
+  // Alerts the brake acted on, bounded; any of them again pauses nothing.
+  handledBrakeIncidents?: string[];
   // Runtime override; unset defers to MANAGED_AGENT_VENDOR, the env-var default.
   managedAgentVendorOverride?: ManagedAgentVendorName | null;
   // Shared daily ceiling on platform rounds started. `null` = no cap.
@@ -58,6 +72,8 @@ export interface CreationLimits {
   managedDailyUserCap: number | null;
   // Round 0's kill switch; no env var exists for it.
   seedingMode?: 'auto' | 'off';
+  // Daily seed pipelines, everyone together. Each is the priciest call we make.
+  globalDailySeedCap?: number | null;
   // Runtime override; unset defers to SEED_PROVIDER. Free-form: providers self-register.
   seedProviderOverride?: string | null;
   /** Who last changed this and when, so a leftover pause is legible as a leftover. */
@@ -95,4 +111,10 @@ export interface UsageCounters {
   managedBuilds: number;
   // Ghost-text completion calls today (TA-01), one per model call.
   tabCompletes: number;
+  // Semantic catalog searches today, one per paid query embedding. Signed-in only.
+  searchQueries: number;
+  // World entries written today; each moderates its text fields.
+  worldWrites: number;
+  // Remix model calls today. Studio's lanes count separately, under `assists`.
+  remixEdits: number;
 }

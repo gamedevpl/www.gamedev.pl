@@ -1,0 +1,476 @@
+import { existsSync, statSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { describe, expect, it } from 'vitest';
+import { createApi } from './api.js';
+import { connectGame } from './connect.js';
+import { memoryStore } from './keychain.js';
+import { CliError, EXIT_AUTH, EXIT_INPUT } from './exit-codes.js';
+import { CREATOR_TOKEN_PATTERN } from './delegate.js';
+
+function json(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
+}
+
+describe('connectGame', () => {
+  it('cancels a deferred studio lookup before handoff or credentials', async () => {
+    const controller = new AbortController();
+    const seen: string[] = [];
+    const api = createApi({
+      origin: 'https://example.test',
+      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url) => {
+        seen.push(String(url));
+        controller.abort();
+        return json({ games: [{ slug: 'sky-dodge', token: 'tok' }] });
+      },
+    });
+    await expect(
+      connectGame({
+        api,
+        slug: 'sky-dodge',
+        dest: '/tmp',
+        handoff: true,
+        abort: controller.signal,
+        write: () => undefined,
+      }),
+    ).rejects.toThrow('cancelled');
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toContain('/api/me/studio');
+  });
+
+  it('cancels after handoff without fetching credentials or launching', async () => {
+    const controller = new AbortController();
+    const seen: string[] = [];
+    const api = createApi({
+      origin: 'https://example.test',
+      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url) => {
+        seen.push(String(url));
+        if (String(url).endsWith('/handoff')) {
+          controller.abort();
+          return json({ ok: true });
+        }
+        return json({ games: [{ slug: 'sky-dodge', token: 'tok' }] });
+      },
+    });
+    await expect(
+      connectGame({
+        api,
+        slug: 'sky-dodge',
+        dest: '/tmp',
+        handoff: true,
+        abort: controller.signal,
+        write: () => undefined,
+      }),
+    ).rejects.toThrow('cancelled');
+    expect(seen).toHaveLength(2);
+    expect(seen.some((url) => url.endsWith('/connect'))).toBe(false);
+  });
+
+  it('prints a working MCP handoff from the connect route', async () => {
+    const lines: string[] = [];
+    const seen: string[] = [];
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_oat_creator', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url, init) => {
+        seen.push(`${init?.method ?? 'GET'} ${String(url)}`);
+        if (String(url).includes('/api/me/studio?game=')) {
+          return json({ games: [{ slug: 'sky-dodge', token: 'tok-1', title: 'Sky' }] });
+        }
+        if (String(url).endsWith('/api/submissions/tok-1/connect')) {
+          return json({
+            slug: 'sky-dodge',
+            mcpUrl: 'https://www.gamedev.pl/api/mcp',
+            kickoffPrompt: 'Build "Sky" for gamedev.pl.\nStart with the gamedevpl tool, slug: sky-dodge',
+            authorizationHeader: 'Authorization: Bearer gdpl_cak_secret',
+            authorizationHeaderMasked: 'Authorization: Bearer ····play',
+            installSnippets: {
+              claudeCode:
+                'claude mcp add --transport http gamedevpl https://www.gamedev.pl/api/mcp --header "Authorization: Bearer ····play"',
+            },
+          });
+        }
+        return json({}, 404);
+      },
+    });
+    const result = await connectGame({
+      api,
+      slug: 'sky-dodge',
+      dest: '/tmp',
+      write: (line) => lines.push(line),
+    });
+    expect(result).toEqual({ spawned: false, mcp: true });
+    expect(seen).toContain('GET https://www.gamedev.pl/api/me/studio?game=sky-dodge');
+    expect(seen).toContain('GET https://www.gamedev.pl/api/submissions/tok-1/connect');
+    expect(lines.join('\n')).toContain('https://www.gamedev.pl/api/mcp');
+    expect(lines.join('\n')).toContain('slug: sky-dodge');
+    expect(lines.join('\n')).toContain(
+      'claude mcp add --transport http gamedevpl https://www.gamedev.pl/api/mcp --header "Authorization: Bearer gdpl_cak_secret"',
+    );
+    expect(lines.join('\n')).not.toMatch(/claude mcp add[^\n]*····/);
+  });
+
+  it('does not pretend success when connect is unavailable', async () => {
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_oat_creator', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url) => {
+        if (String(url).includes('/api/me/studio?game=')) {
+          return json({ games: [{ slug: 'sky-dodge', token: 'tok-1' }] });
+        }
+        return json({ error: 'connect_unavailable', reason: 'not_self_round' }, 409);
+      },
+    });
+    await expect(connectGame({ api, slug: 'sky-dodge', dest: '/tmp', write: () => undefined })).rejects.toBeInstanceOf(
+      CliError,
+    );
+  });
+
+  it('spawns an adapter with MCP auth, not the submission-status token', async () => {
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-connect-'));
+    writeFileSync(join(dest, '.gamedev-slug'), 'sky-dodge');
+    mkdirSync(join(dest, 'games', 'sky-dodge'), { recursive: true });
+    const seenEnv: NodeJS.ProcessEnv[] = [];
+    const seenSpecs: string[][] = [];
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_oat_creator', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url) => {
+        if (String(url).includes('/api/me/studio?game=')) {
+          return json({ games: [{ slug: 'sky-dodge', token: 'round-tok' }] });
+        }
+        if (String(url).includes('/connect')) {
+          return json({
+            slug: 'sky-dodge',
+            mcpUrl: 'https://www.gamedev.pl/api/mcp',
+            kickoffPrompt: 'Build it',
+            authorizationHeader: 'Authorization: Bearer gdpl_cak_secret',
+          });
+        }
+        return json({}, 404);
+      },
+    });
+    await connectGame({
+      api,
+      slug: 'sky-dodge',
+      dest,
+      env: { PATH: '/usr/bin', GAMEDEV_TOKEN: 'gdpl_pat_ci', SECRET: 'gdpl_oat_hidden', HOME: '/tmp' },
+      agent: 'claude',
+      which: (cmd) => (cmd === 'claude' ? '/usr/bin/claude' : null),
+      runAdapter: async ({ env, cwd, spec }) => {
+        seenEnv.push(env);
+        seenSpecs.push(spec.headless);
+        expect(spec.name).toBe('claude');
+        expect(cwd).toBe(join(dest, 'games', 'sky-dodge'));
+        const mcpIdx = spec.headless.indexOf('--mcp-config');
+        expect(mcpIdx).toBeGreaterThan(-1);
+        const mcpPath = spec.headless[mcpIdx + 1];
+        expect(mcpPath).toBeTruthy();
+        expect(readFileSync(mcpPath, 'utf8')).toContain('gdpl_cak_secret');
+        expect(existsSync(join(dest, '.mcp.json'))).toBe(false);
+        return { code: 0, lines: ['{"text":"edited"}'] };
+      },
+      write: () => undefined,
+    });
+    expect(seenEnv).toHaveLength(1);
+    expect(JSON.stringify(seenEnv[0])).not.toMatch(CREATOR_TOKEN_PATTERN);
+    expect(seenEnv[0]?.GAMEDEV_TOKEN).toBeUndefined();
+    expect(seenEnv[0]?.GAMEDEV_ROUND_TOKEN).toBeUndefined();
+    expect(seenEnv[0]?.GAMEDEVPL_MCP_URL).toBe('https://www.gamedev.pl/api/mcp');
+    expect(seenEnv[0]?.GAMEDEVPL_MCP_AUTHORIZATION).toBe('Authorization: Bearer gdpl_cak_secret');
+    const tempCfg = seenSpecs[0]?.[seenSpecs[0].indexOf('--mcp-config') + 1];
+    expect(tempCfg).toBeTruthy();
+    expect(existsSync(tempCfg)).toBe(false);
+  });
+
+  it('passes Codex a TOML MCP overlay, not Claude --mcp-config', async () => {
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-connect-'));
+    let headless: string[] = [];
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_oat_creator', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url) => {
+        if (String(url).includes('/api/me/studio?game=')) {
+          return json({ games: [{ slug: 'sky-dodge', token: 'round-tok' }] });
+        }
+        if (String(url).includes('/connect')) {
+          return json({
+            slug: 'sky-dodge',
+            mcpUrl: 'https://www.gamedev.pl/api/mcp',
+            kickoffPrompt: 'Build it',
+            authorizationHeader: 'Authorization: Bearer gdpl_cak_secret',
+          });
+        }
+        return json({}, 404);
+      },
+    });
+    await connectGame({
+      api,
+      slug: 'sky-dodge',
+      dest,
+      agent: 'codex',
+      which: (cmd) => (cmd === 'codex' ? '/usr/bin/codex' : null),
+      runAdapter: async ({ spec, cwd }) => {
+        headless = spec.headless;
+        expect(spec.name).toBe('codex');
+        expect(existsSync(cwd)).toBe(true);
+        expect(cwd).not.toBe(dest);
+        expect(spec.headless).toContain('--skip-git-repo-check');
+        return { code: 0, lines: [] };
+      },
+      write: () => undefined,
+    });
+    expect(headless).toContain('-c');
+    expect(headless.some((arg) => arg.includes('mcp_servers.gamedevpl.url="https://www.gamedev.pl/api/mcp"'))).toBe(
+      true,
+    );
+    expect(headless.some((arg) => arg.includes('Authorization = "Bearer gdpl_cak_secret"'))).toBe(true);
+    expect(headless).toContain('exec');
+    expect(headless).not.toContain('--mcp-config');
+    expect(existsSync(join(dest, '.mcp.json'))).toBe(false);
+    expect(existsSync(join(dest, '.codex'))).toBe(false);
+  });
+
+  it('refuses adapters that cannot take an MCP config', async () => {
+    const seen: string[] = [];
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url, init) => {
+        seen.push(`${init?.method ?? 'GET'} ${String(url)}`);
+        if (String(url).includes('/api/me/studio?game='))
+          return json({ games: [{ slug: 'sky-dodge', token: 'tok-1' }] });
+        if (String(url).endsWith('/handoff')) return json({ ok: true });
+        return json({}, 404);
+      },
+    });
+    let spawned = false;
+    await expect(
+      connectGame({
+        api,
+        slug: 'sky-dodge',
+        dest: mkdtempSync(join(tmpdir(), 'gdpl-connect-')),
+        agent: 'gemini',
+        handoff: true,
+        which: (cmd) => (cmd === 'gemini' ? '/usr/bin/gemini' : null),
+        runAdapter: async () => {
+          spawned = true;
+          return { code: 0, lines: [] };
+        },
+        write: () => undefined,
+      }),
+    ).rejects.toMatchObject({ exitCode: EXIT_INPUT, message: expect.stringMatching(/no MCP wiring/) });
+    expect(spawned).toBe(false);
+    expect(seen.some((row) => row.endsWith('/handoff'))).toBe(false);
+  });
+
+  it('does not overwrite a checkout .mcp.json', async () => {
+    const dest = mkdtempSync(join(tmpdir(), 'gdpl-connect-'));
+    writeFileSync(join(dest, '.mcp.json'), '{"mcpServers":{"other":{"url":"https://example.invalid"}}}\n');
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_oat_creator', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url) => {
+        if (String(url).includes('/api/me/studio?game=')) {
+          return json({ games: [{ slug: 'sky-dodge', token: 'round-tok' }] });
+        }
+        if (String(url).includes('/connect')) {
+          return json({
+            slug: 'sky-dodge',
+            mcpUrl: 'https://www.gamedev.pl/api/mcp',
+            kickoffPrompt: 'Build it',
+            authorizationHeader: 'Authorization: Bearer gdpl_cak_secret',
+          });
+        }
+        return json({}, 404);
+      },
+    });
+    await connectGame({
+      api,
+      slug: 'sky-dodge',
+      dest,
+      agent: 'claude',
+      which: (cmd) => (cmd === 'claude' ? '/usr/bin/claude' : null),
+      runAdapter: async () => ({ code: 0, lines: [] }),
+      write: () => undefined,
+    });
+    expect(readFileSync(join(dest, '.mcp.json'), 'utf8')).toContain('example.invalid');
+    expect(readFileSync(join(dest, '.mcp.json'), 'utf8')).not.toContain('gdpl_cak_secret');
+  });
+
+  it('refuses to spawn without MCP authorization', async () => {
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_oat_creator', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url) => {
+        if (String(url).includes('/api/me/studio?game=')) {
+          return json({ games: [{ slug: 'sky-dodge', token: 'round-tok' }] });
+        }
+        if (String(url).includes('/connect')) {
+          return json({
+            slug: 'sky-dodge',
+            mcpUrl: 'https://www.gamedev.pl/api/mcp',
+            kickoffPrompt: 'Build it',
+          });
+        }
+        return json({}, 404);
+      },
+    });
+    let spawned = false;
+    await expect(
+      connectGame({
+        api,
+        slug: 'sky-dodge',
+        dest: mkdtempSync(join(tmpdir(), 'gdpl-connect-')),
+        agent: 'claude',
+        which: (cmd) => (cmd === 'claude' ? '/usr/bin/claude' : null),
+        runAdapter: async () => {
+          spawned = true;
+          return { code: 0, lines: [] };
+        },
+        write: () => undefined,
+      }),
+    ).rejects.toMatchObject({ exitCode: EXIT_AUTH, message: expect.stringMatching(/MCP authorization/) });
+    expect(spawned).toBe(false);
+  });
+
+  it('posts a self handoff when asked, then reads connect', async () => {
+    const seen: string[] = [];
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url, init) => {
+        seen.push(`${init?.method ?? 'GET'} ${String(url)}`);
+        if (String(url).includes('/api/me/studio?game='))
+          return json({ games: [{ slug: 'sky-dodge', token: 'tok-1' }] });
+        if (String(url).endsWith('/handoff')) return json({ ok: true });
+        if (String(url).endsWith('/connect')) {
+          return json({ slug: 'sky-dodge', mcpUrl: 'https://www.gamedev.pl/api/mcp', kickoffPrompt: 'Build it' });
+        }
+        return json({}, 404);
+      },
+    });
+    await connectGame({
+      api,
+      slug: 'sky-dodge',
+      dest: '/tmp',
+      handoff: true,
+      write: () => undefined,
+    });
+    expect(seen.some((row) => row.startsWith('POST ') && row.endsWith('/handoff'))).toBe(true);
+    expect(seen.some((row) => row.startsWith('GET ') && row.endsWith('/connect'))).toBe(true);
+  });
+
+  it('does not hand off when the requested adapter is missing', async () => {
+    const seen: string[] = [];
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url, init) => {
+        seen.push(`${init?.method ?? 'GET'} ${String(url)}`);
+        if (String(url).includes('/api/me/studio?game='))
+          return json({ games: [{ slug: 'sky-dodge', token: 'tok-1' }] });
+        if (String(url).endsWith('/handoff')) return json({ ok: true });
+        return json({}, 404);
+      },
+    });
+    await expect(
+      connectGame({
+        api,
+        slug: 'sky-dodge',
+        dest: '/tmp',
+        agent: 'claude',
+        handoff: true,
+        which: () => null,
+        write: () => undefined,
+      }),
+    ).rejects.toMatchObject({ message: expect.stringMatching(/not on PATH/) });
+    expect(seen.some((row) => row.endsWith('/handoff'))).toBe(false);
+  });
+});
+
+it('uses a private temporary Copilot MCP config and removes it on failure', async () => {
+  let configPath = '';
+  const api = createApi({
+    origin: 'https://example.test',
+    store: memoryStore({ accessToken: 'creator', tokenType: 'Bearer', scope: 'creator' }),
+    fetch: async (url) =>
+      String(url).includes('/api/me/studio')
+        ? json({ games: [{ slug: 'robots', token: 'tok' }] })
+        : json({
+            mcpUrl: 'https://example.test/api/mcp',
+            kickoffPrompt: 'Build it',
+            authorizationHeader: 'Authorization: Bearer gdpl_cak_secret',
+          }),
+  });
+  await expect(
+    connectGame({
+      api,
+      slug: 'robots',
+      dest: '/tmp',
+      agent: 'copilot',
+      which: () => '/bin/copilot',
+      write: () => undefined,
+      runAdapter: async ({ spec }) => {
+        configPath = spec.headless[spec.headless.indexOf('--additional-mcp-config') + 1]!.slice(1);
+        expect(statSync(configPath).mode & 0o777).toBe(0o600);
+        expect(JSON.parse(readFileSync(configPath, 'utf8')).mcpServers.gamedevpl).toMatchObject({
+          type: 'http',
+          url: 'https://example.test/api/mcp',
+          headers: { Authorization: 'Bearer gdpl_cak_secret' },
+          tools: ['*'],
+        });
+        expect(spec.headless).toContain('--allow-tool=gamedevpl');
+        throw new Error('agent failed');
+      },
+    }),
+  ).rejects.toThrow('agent failed');
+  expect(configPath).not.toBe('');
+  expect(existsSync(configPath)).toBe(false);
+});
+
+it.each(['streamed', 'buffered', 'unknown'] as const)(
+  'offers reconnection instead of submit after %s failure',
+  async (mode) => {
+    const calls: string[] = [];
+    const output: string[] = [];
+    const api = createApi({
+      origin: 'https://example.test',
+      store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async (url, init) => {
+        calls.push(`${init?.method ?? 'GET'} ${url}`);
+        if (String(url).includes('/api/me/studio')) return json({ games: [{ slug: 'sky', token: 'tok' }] });
+        return json({ mcpUrl: 'https://example.test/api/mcp', authorizationHeader: 'Bearer gdpl_cak_test' });
+      },
+    });
+    const message = JSON.stringify({
+      type: 'turn.failed',
+      error: { message: 'Selected model is at capacity. Please try a different model.' },
+    });
+    const attempt = () =>
+      connectGame({
+        api,
+        slug: 'sky',
+        dest: '/tmp',
+        env: { PATH: '/usr/bin' },
+        agent: 'codex',
+        which: () => '/usr/bin/codex',
+        runAdapter: async ({ onLine }) => {
+          if (mode === 'streamed') onLine?.(message);
+          return { code: 1, lines: mode === 'buffered' ? [message] : [] };
+        },
+        write: (line) => output.push(line),
+      });
+    for (let i = 0; i < 2; i++) {
+      await expect(attempt()).rejects.toMatchObject({
+        message: expect.stringContaining(mode === 'unknown' ? 'exit 1' : 'selected model is at capacity'),
+        next: expect.stringContaining('/connect sky --agent codex'),
+      });
+    }
+    expect(calls.every((call) => call.startsWith('GET '))).toBe(true);
+    expect(output.join('\n')).not.toContain('adapter finished');
+    await expect(attempt()).rejects.not.toMatchObject({ next: expect.stringContaining('submit') });
+  },
+);

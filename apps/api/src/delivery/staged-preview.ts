@@ -30,16 +30,16 @@
 // publish, and is served back under the same sandbox as any other unreviewed agent output.
 
 import { createHash } from 'node:crypto';
-import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from '../catalog/assemble.js';
-import { MAX_BUILD_PREVIEW_BYTES } from './build-preview-limits.js';
-import type { GamesStore, SourceFile } from './games-store.js';
-import { hasPlayableHowToPlay } from '../catalog/index-html-generator.js';
-import type { GitHubClient } from '../catalog/github-client.js';
 import {
-  resolveRoundBaseVersion,
-  type BaseVersionRecord,
-  type BaseVersionStore,
-} from '../creation/round-base-version.js';
+  assembleGameHtml,
+  CredentialLeakError,
+  EmptyProjectError,
+  ProjectTooLargeError,
+} from '../platform/assemble.js';
+import { MAX_BUILD_PREVIEW_BYTES } from '../platform/build-preview-limits.js';
+import type { GamesStore, SourceFile } from './games-store.js';
+import { hasPlayableOverlay, overlayGameSources, readDeliveredSources } from '../platform/game-overlay.js';
+import type { GitHubClient } from '../catalog/github-client.js';
 import type { Store } from '../platform/store.js';
 
 /**
@@ -142,102 +142,6 @@ export type StagedPreviewOutcome =
   /** Something threw. Logged, never surfaced to the agent. */
   | 'failed';
 
-/** One layer of the overlay, newest-wins. Absent layers are simply not passed. */
-export type OverlayLayers = {
-  /** The round's staging buffer — what the agent is writing right now. */
-  staged?: Array<SourceFile & { deleted?: true }>;
-  /** The last version this game delivered, so a one-file tweak still renders a whole game. */
-  delivered?: SourceFile[];
-  /** The generated round-0 draft, when the agent has not replaced it yet. */
-  seed?: SourceFile[];
-};
-
-/**
- * Flattens the layers into the `overrides` map `getGameSources` takes.
- *
- * Order is the whole point. An improvement round stages one edited file against a game
- * that already exists, and a new round stages against a seed it is part-way through
- * replacing — in both cases rendering the staged file alone would show a game with holes,
- * and rendering the base alone would show work the agent has already moved past. Staged
- * beats delivered beats seed, which is newest-first by construction.
- */
-export function overlayGameSources(layers: OverlayLayers): Record<string, string> {
-  const overlay: Record<string, string> = Object.create(null) as Record<string, string>;
-  for (const layer of [layers.seed, layers.delivered]) {
-    for (const file of layer ?? []) overlay[file.path] = file.content;
-  }
-  for (const file of layers.staged ?? []) {
-    if (file.deleted) delete overlay[file.path];
-    else overlay[file.path] = file.content;
-  }
-  return overlay;
-}
-
-/**
- * The delivered sources a round improves, when there are any.
- *
- * Reads the same base version the channel's `GET /sources` does (round-base-version.ts),
- * because an improvement round inherits a slug long before it delivers anything of its
- * own, and without the base layer a one-file stage would render (or typecheck) a game
- * with holes.
- */
-export async function readDeliveredSources(input: {
-  gamesStore: Pick<GamesStore, 'getManifest' | 'getSourceFile'>;
-  store: BaseVersionStore;
-  record: BaseVersionRecord & { slug?: string };
-}): Promise<SourceFile[]> {
-  const { gamesStore, store, record } = input;
-  const slug = record.slug;
-  if (!slug) return [];
-  const version = await resolveRoundBaseVersion(store, record, slug);
-  if (!version) return [];
-
-  const manifest = await gamesStore.getManifest(slug, version);
-  if (!manifest) return [];
-  const files = await Promise.all(
-    manifest.sourceFiles.map(async (path) => ({
-      path,
-      content: await gamesStore.getSourceFile(slug, version!, path),
-    })),
-  );
-  // A hole in the base is not fatal: the staged layer may supply that very file, and
-  // a caller-specific readiness check (or the typecheck itself) reports the rest.
-  return files.filter((file): file is SourceFile => file.content !== null);
-}
-
-/** True when the overlay carries everything an assembly needs from the game's own tree. */
-export function hasPlayableOverlay(overlay: Record<string, string>): boolean {
-  // trim(), matching getGameSources: a whitespace-only file is absent, not staged.
-  const staged = (path: string): boolean => typeof overlay[path] === 'string' && overlay[path].trim().length > 0;
-  if (!staged('game.ts') || !staged('GAME.json')) return false;
-  // Neither means half-staged: a quiet no.
-  if (!staged('index.html') && !manifestDeclaresHowToPlay(overlay['GAME.json'])) return false;
-  // The assembler derives CSS from GAME.json themes.
-  // Otherwise require style.css to reject partial trees.
-  return staged('style.css') || manifestDeclaresTheme(overlay['GAME.json']);
-}
-
-function manifestDeclaresHowToPlay(source: string | undefined): boolean {
-  if (typeof source !== 'string') return false;
-  try {
-    const manifest = JSON.parse(source) as { howToPlay?: unknown };
-    return hasPlayableHowToPlay(manifest.howToPlay);
-  } catch {
-    // Mid-write manifests are invalid JSON
-    return false;
-  }
-}
-
-function manifestDeclaresTheme(source: string | undefined): boolean {
-  if (typeof source !== 'string') return false;
-  try {
-    const manifest = JSON.parse(source) as { theme?: unknown };
-    return typeof manifest.theme === 'object' && manifest.theme !== null;
-  } catch {
-    return false;
-  }
-}
-
 /** Same shape `mcp-presence.ts` uses: callers own the map, this keeps it bounded. */
 function noteJob<K, V>(entries: Map<K, V>, key: K, value: V, maxJobs = MAX_STAGED_PREVIEW_JOBS): void {
   entries.delete(key);
@@ -269,7 +173,9 @@ export interface StagedPreviewOptions {
   /** How many previews are kept per job — matches the channel's own pruning. */
   keepPreviews?: number;
   /** Called after a preview lands, so a cached status response is dropped. */
-  onPublished?: (issueNumber: number) => void;
+  onPublished?: (jobId: number) => void;
+  // Assembles inside a request (seed-dispatch.ts); false means assemble here.
+  handoff?: (jobId: number) => Promise<boolean>;
   log: {
     warn: (context: object, message: string) => void;
     error: (context: object, message: string) => void;
@@ -288,7 +194,7 @@ export interface StagedPreviewOptions {
 }
 
 export interface CandidatePreviewInput {
-  issueNumber: number;
+  jobId: number;
   slug: string;
   version: string;
   roundGeneration?: number;
@@ -302,9 +208,9 @@ export interface StagedPreviewPublisher {
    * Note that a file was staged. Coalesces into one assembly per burst and never
    * throws — callers are request handlers that owe the agent an answer either way.
    */
-  schedule(issueNumber: number): void;
+  schedule(jobId: number): void;
   /** Runs one attempt now, bypassing the timers. The seam the tests drive. */
-  publishNow(issueNumber: number): Promise<StagedPreviewOutcome>;
+  publishNow(jobId: number): Promise<StagedPreviewOutcome>;
   /**
    * Assembles and stores an immediate fast preview for a delivered candidate version,
    * bounded by the publisher's concurrency limit, without ref fallback.
@@ -341,14 +247,14 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
   const lastDigest = new Map<string, string>();
   let inFlight = 0;
 
-  async function attempt(issueNumber: number): Promise<StagedPreviewOutcome> {
+  async function attempt(jobId: number): Promise<StagedPreviewOutcome> {
     const attemptStartedAt = Date.now();
-    const record = await options.store.getSubmission(issueNumber);
+    const record = await options.store.getSubmission(jobId);
     if (!record?.slug || record.abandonedAt) return 'skipped';
     const slug = record.slug;
     const roundGeneration = record.roundGeneration ?? 1;
 
-    const staged = await options.gamesStore.getStagedSourceFiles({ slug, issueNumber, roundGeneration });
+    const staged = await options.gamesStore.getStagedSourceFiles({ slug, jobId, roundGeneration });
     if (staged.length === 0) return 'not_staged';
 
     const overlayStartedAt = Date.now();
@@ -383,28 +289,30 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
     // Cheap guard against a thrash the creator would see as a flickering preview: an agent
     // that stages a file back to the bytes it already had produces the same document, and
     // a new row on the rail claiming an update would be a lie about work that happened.
-    const digestKey = `${issueNumber}:${roundGeneration}`;
+    const digestKey = `${jobId}:${roundGeneration}`;
     const digest = createHash('sha256').update(html).digest('hex');
     if (lastDigest.get(digestKey) === digest) return 'unchanged';
 
     const storeWriteStartedAt = Date.now();
     const locale = record.locale ?? '';
-    await options.store.appendBuildPreview(issueNumber, {
+    await options.store.appendBuildPreview(jobId, {
       data: Buffer.from(html, 'utf8').toString('base64'),
       slug,
+      // A tree mid-upload: worth showing, never worth calling ready.
+      origin: 'staged',
       label: STAGED_PREVIEW_LABEL,
       ...(locale.startsWith('pl') ? { labelLocalized: STAGED_PREVIEW_LABEL_PL, locale } : {}),
     });
     // After the write, like the channel's own preview verb: a push that lands and then
     // fails to tidy up has still delivered the thing the creator was waiting for.
-    await options.store.pruneBuildPreviews(issueNumber, keepPreviews).catch(() => 0);
+    await options.store.pruneBuildPreviews(jobId, keepPreviews).catch(() => 0);
     const storeWriteMs = Date.now() - storeWriteStartedAt;
     noteJob(lastDigest, digestKey, digest);
-    options.onPublished?.(issueNumber);
+    options.onPublished?.(jobId);
     // Per-phase timing — see docs/live-editing-latency.md.
     options.log.info?.(
       {
-        issueNumber,
+        jobId,
         totalMs: Date.now() - attemptStartedAt,
         overlayMs,
         getGameSourcesMs: sources.timings?.totalMs,
@@ -417,12 +325,12 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
     return 'published';
   }
 
-  async function publishNow(issueNumber: number): Promise<StagedPreviewOutcome> {
-    if (running.has(issueNumber)) return 'skipped';
-    running.add(issueNumber);
+  async function publishNow(jobId: number): Promise<StagedPreviewOutcome> {
+    if (running.has(jobId)) return 'skipped';
+    running.add(jobId);
     inFlight += 1;
     try {
-      return await attempt(issueNumber);
+      return await attempt(jobId);
     } catch (error) {
       // A game being written does not compile, and neither an agent nor a creator can act
       // on that fact — so it is recorded and dropped rather than raised. The hygiene
@@ -434,14 +342,14 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
         error instanceof ProjectTooLargeError ||
         error instanceof CredentialLeakError;
       options.log.warn(
-        { issueNumber, err: error, ...(known ? { hygiene: true } : {}) },
+        { jobId, err: error, ...(known ? { hygiene: true } : {}) },
         'staged preview could not be assembled',
       );
       return 'failed';
     } finally {
-      running.delete(issueNumber);
+      running.delete(jobId);
       inFlight -= 1;
-      noteJob(lastAttemptAt, issueNumber, now());
+      noteJob(lastAttemptAt, jobId, now());
     }
   }
 
@@ -452,41 +360,45 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
    * max-wait; `gap` is the per-job floor between assemblies; `atLeast` is what a
    * busy re-arm needs so it cannot spin. The latest of the three wins.
    */
-  function arm(issueNumber: number, burstStartedAt: number, atLeast = 0): void {
+  function arm(jobId: number, burstStartedAt: number, atLeast = 0): void {
     const current = now();
-    const sinceLast = current - (lastAttemptAt.get(issueNumber) ?? Number.NEGATIVE_INFINITY);
+    const sinceLast = current - (lastAttemptAt.get(jobId) ?? Number.NEGATIVE_INFINITY);
     const gap = Number.isFinite(sinceLast) ? Math.max(0, minGapMs - sinceLast) : 0;
     const settle = Math.min(debounceMs, Math.max(0, burstStartedAt + maxWaitMs - current));
     const timer = setTimeout(
       () => {
-        pending.delete(issueNumber);
+        pending.delete(jobId);
         // A job already assembling, or a process at its concurrency ceiling, must be
         // *re-armed* rather than run: `publishNow` would answer `skipped` and this file
         // would then wait for a stage that may never come, because the burst it belongs
         // to may have just ended. Re-arming keeps the burst's own max-wait window.
-        if (running.has(issueNumber) || inFlight >= maxConcurrent) {
-          arm(issueNumber, burstStartedAt, busyRetryMs);
+        if (running.has(jobId) || inFlight >= maxConcurrent) {
+          arm(jobId, burstStartedAt, busyRetryMs);
           return;
         }
-        void publishNow(issueNumber).catch((error: unknown) => {
-          options.log.error({ issueNumber, err: error }, 'staged preview attempt failed unexpectedly');
+        void (async () => {
+          // An esbuild pass from a timer: no request holds CPU unless handed off.
+          if (options.handoff && (await options.handoff(jobId).catch(() => false))) return;
+          await publishNow(jobId);
+        })().catch((error: unknown) => {
+          options.log.error({ jobId, err: error }, 'staged preview attempt failed unexpectedly');
         });
       },
       Math.max(gap, settle, atLeast),
     );
     // Never a reason to hold the process open — this is courtesy work beside a build.
     timer.unref?.();
-    pending.set(issueNumber, { timer, burstStartedAt });
+    pending.set(jobId, { timer, burstStartedAt });
   }
 
-  function schedule(issueNumber: number): void {
+  function schedule(jobId: number): void {
     // Trailing edge: every staged file restarts the clock, so the assembly lands after
     // the *last* of a burst rather than being armed by the first and firing on a tree
     // that is still half-uploaded. `burstStartedAt` survives the restart, which is what
     // stops a steady staging stream from deferring the first preview forever.
-    const existing = pending.get(issueNumber);
+    const existing = pending.get(jobId);
     if (existing) clearTimeout(existing.timer);
-    arm(issueNumber, existing?.burstStartedAt ?? now());
+    arm(jobId, existing?.burstStartedAt ?? now());
   }
 
   function stop(): void {
@@ -495,24 +407,24 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
   }
 
   async function publishCandidate(input: CandidatePreviewInput): Promise<StagedPreviewOutcome> {
-    const { issueNumber, slug, version, files } = input;
-    const existing = pending.get(issueNumber);
+    const { jobId, slug, version, files } = input;
+    const existing = pending.get(jobId);
     if (existing) {
       clearTimeout(existing.timer);
-      pending.delete(issueNumber);
+      pending.delete(jobId);
     }
 
     // Count-based: `now` is injectable and may be frozen.
     const maxBusyRetries = Math.max(1, Math.ceil(STAGED_PREVIEW_CANDIDATE_BUSY_WAIT_MS / busyRetryMs));
-    for (let retries = 0; running.has(issueNumber) || inFlight >= maxConcurrent; retries++) {
+    for (let retries = 0; running.has(jobId) || inFlight >= maxConcurrent; retries++) {
       if (retries >= maxBusyRetries) {
-        options.log.warn({ issueNumber, version }, 'candidate preview skipped: assembly slot never freed');
+        options.log.warn({ jobId, version }, 'candidate preview skipped: assembly slot never freed');
         return 'skipped';
       }
       await new Promise((resolve) => setTimeout(resolve, busyRetryMs));
     }
 
-    running.add(issueNumber);
+    running.add(jobId);
     inFlight += 1;
     const attemptStartedAt = Date.now();
     try {
@@ -521,14 +433,14 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
         overlay[file.path] = file.content;
       }
       if (!hasPlayableOverlay(overlay)) {
-        options.log.warn({ issueNumber, version }, 'candidate preview incomplete: overlay not playable');
+        options.log.warn({ jobId, version }, 'candidate preview incomplete: overlay not playable');
         return 'incomplete';
       }
 
       const engineRef = input.kitEngineRef || options.engineRef;
       const sources = await options.githubClient.getGameSources(engineRef, slug, overlay, { noRefFallback: true });
       if (!sources) {
-        options.log.warn({ issueNumber, version }, 'candidate preview incomplete: sources did not resolve');
+        options.log.warn({ jobId, version }, 'candidate preview incomplete: sources did not resolve');
         return 'incomplete';
       }
 
@@ -545,10 +457,7 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
       );
       const assembleMs = Date.now() - assembleStartedAt;
       if (Buffer.byteLength(html, 'utf8') > maxBytes) {
-        options.log.warn(
-          { issueNumber, version, bytes: Buffer.byteLength(html, 'utf8') },
-          'candidate preview too large',
-        );
+        options.log.warn({ jobId, version, bytes: Buffer.byteLength(html, 'utf8') }, 'candidate preview too large');
         return 'too_large';
       }
 
@@ -563,25 +472,27 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
       }
 
       const roundGen = input.roundGeneration ?? 1;
-      const digestKey = `${issueNumber}:${roundGen}`;
+      const digestKey = `${jobId}:${roundGen}`;
       const digest = createHash('sha256').update(html).digest('hex');
       noteJob(lastDigest, digestKey, digest);
 
       const storeWriteStartedAt = Date.now();
       const locale = input.locale ?? '';
-      await options.store.appendBuildPreview(issueNumber, {
+      await options.store.appendBuildPreview(jobId, {
         data: Buffer.from(html, 'utf8').toString('base64'),
         slug,
+        // Submitted, unlike the debounced assembly: the agent handed this over.
+        origin: 'candidate',
         label: STAGED_PREVIEW_LABEL,
         ...(locale.startsWith('pl') ? { labelLocalized: STAGED_PREVIEW_LABEL_PL, locale } : {}),
       });
-      await options.store.pruneBuildPreviews(issueNumber, keepPreviews).catch(() => 0);
+      await options.store.pruneBuildPreviews(jobId, keepPreviews).catch(() => 0);
       const storeWriteMs = Date.now() - storeWriteStartedAt;
 
-      options.onPublished?.(issueNumber);
+      options.onPublished?.(jobId);
       options.log.info?.(
         {
-          issueNumber,
+          jobId,
           version,
           totalMs: Date.now() - attemptStartedAt,
           getGameSourcesMs: sources.timings?.totalMs,
@@ -592,12 +503,12 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
       );
       return 'published';
     } catch (error) {
-      options.log.warn({ issueNumber, version, err: error }, 'candidate preview could not be assembled');
+      options.log.warn({ jobId, version, err: error }, 'candidate preview could not be assembled');
       return 'failed';
     } finally {
-      running.delete(issueNumber);
+      running.delete(jobId);
       inFlight -= 1;
-      noteJob(lastAttemptAt, issueNumber, now());
+      noteJob(lastAttemptAt, jobId, now());
     }
   }
 
