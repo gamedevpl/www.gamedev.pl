@@ -268,14 +268,19 @@ describe('a seat nobody is playing', () => {
     expect(h.zone.idleSlots(1_000_000 + IDLE_MS)).toEqual([1]);
   });
 
-  it('has nobody to reap while the world is asleep', async () => {
+  it('has nobody to reap while the world is parked or asleep', async () => {
     const h = harness({ idleMs: IDLE_MS });
     await h.zone.join('player-a');
     h.zone.leave(0);
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    expect(h.zone.state).toBe('sleeping');
+    expect(h.zone.state).toBe('parked');
 
     h.setNow(1_000_000 + IDLE_MS * 20);
+    expect(h.zone.idleSlots()).toEqual([]);
+
+    // And the same once the grace runs out and the sim is dropped entirely.
+    h.zone.pump();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(h.zone.state).toBe('sleeping');
     expect(h.zone.idleSlots()).toEqual([]);
 
     // And the player who comes back starts their budget when the world does.
