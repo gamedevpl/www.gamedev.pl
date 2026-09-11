@@ -17,7 +17,7 @@ import { typeCheckGame } from './type-check.js';
 import { remixClientPayload } from './remix-view.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import type { Store } from '../platform/store.js';
-import type { ContentChecker } from '../platform/moderation.js';
+import { replyModerationBlock, isModerationBlock, type ContentChecker   } from '../platform/moderation.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
 import { peekQuota } from '../platform/quota-peek.js';
 import { assembleGameHtml } from '../platform/assemble.js';
@@ -680,8 +680,9 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
             surface: 'remix_assist',
             uid: request.user?.uid,
             category: verdict.category,
+            unavailable: verdict.unavailable,
           });
-          return reply.status(422).send({ error: 'that request was rejected' });
+          return replyModerationBlock(reply, verdict, 'that request was rejected');
         }
       }
 
@@ -818,8 +819,9 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
             surface: 'remix_code',
             uid: request.user?.uid,
             category: verdict.category,
+            unavailable: verdict.unavailable,
           });
-          return reply.status(422).send({ error: 'that request was rejected' });
+          return replyModerationBlock(reply, verdict, 'that request was rejected');
         }
       }
 
@@ -1068,8 +1070,9 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
             surface: 'proposal',
             uid: request.user?.uid,
             category: verdict.category,
+            unavailable: verdict.unavailable,
           });
-          return reply.status(422).send({ error: 'content_rejected', category: verdict.category ?? 'other' });
+          return replyModerationBlock(reply, verdict);
         }
       }
 
@@ -1131,8 +1134,8 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         // are sent apart. Normalized here as well as in the domain layer because the
         // client looks up `errors.contentRejected.<category>`, and JSON drops an
         // undefined value rather than sending null.
-        if (result.error === 'content_rejected') {
-          return reply.status(422).send({ error: 'content_rejected', category: result.category ?? 'other' });
+        if (isModerationBlock(result.error)) {
+          return reply.status(result.status).send({ error: result.error, category: result.category ?? 'other' });
         }
         return reply.status(result.status).send({ error: result.error });
       }
@@ -1181,8 +1184,9 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
             surface: 'remix_share',
             uid: request.user?.uid,
             category: verdict.category,
+            unavailable: verdict.unavailable,
           });
-          return reply.status(422).send({ error: 'that text was rejected' });
+          return replyModerationBlock(reply, verdict, 'that text was rejected');
         }
       }
       // Validated against the declaration, so a hand-edited link cannot smuggle a
@@ -1268,8 +1272,9 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
             surface: 'remix_save',
             uid: request.user?.uid,
             category: verdict.category,
+            unavailable: verdict.unavailable,
           });
-          return reply.status(422).send({ error: 'that text was rejected', category: verdict.category ?? 'other' });
+          return replyModerationBlock(reply, verdict, 'that text was rejected');
         }
       }
 
@@ -1353,7 +1358,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       });
 
       if (!saved.ok) {
-        if (saved.error === 'content_rejected') {
+        if (isModerationBlock(saved.error)) {
           return reply.status(saved.status).send({ error: saved.error, category: saved.category ?? 'other' });
         }
         return reply.status(saved.status).send({

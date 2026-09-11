@@ -9,6 +9,9 @@ export function submissionErrorKey(input: { status?: number; message: string; ca
 
   if (message === 'content_rejected') return `errors.contentRejected.${category ?? 'other'}`;
 
+  // Never judged: calling it rejected would be an accusation.
+  if (message === 'moderation_unavailable') return 'errors.moderationUnavailable';
+
   // Site limits, not this creator's; the quota branch would be untrue.
   if (message === 'creation_paused') return 'errors.creationPaused';
   if (message === 'creation_over_capacity') return 'errors.creationOverCapacity';

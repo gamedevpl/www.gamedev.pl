@@ -9,7 +9,7 @@ import { mintGameSlug } from '../platform/slug.js';
 import { storeCreatorReferenceImages } from '../platform/creator-media-store.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
-import type { ContentChecker } from '../platform/moderation.js';
+import { isModerationBlock, rejectionFor, type ContentChecker  } from '../platform/moderation.js';
 import type { Store } from '../platform/store.js';
 import { countCreatorClarifications, sanitizeCreatorText, splitConceptBrief } from '../platform/submission-status.js';
 import { mintToken } from '../platform/submission-token.js';
@@ -170,8 +170,9 @@ export function createGameCreator(deps: CreateGameDeps): {
     // Moderation before any quota is spent; see the content safety plan.
     const moderation = await contentChecker.checkFields([parsed.data.title, parsed.data.concept]);
     if (!moderation.allowed) {
+      const rejection = rejectionFor(moderation);
       logModerationRejection(log, { surface: 'submission', uid: input.uid, category: moderation.category });
-      return { ok: false, status: 422, error: 'content_rejected', category: moderation.category };
+      return { ok: false, status: rejection.status, error: rejection.error, category: rejection.category };
     }
 
     // The global circuit-breaker: pause switch and shared daily ceiling.
@@ -334,7 +335,7 @@ export function registerCreateGameRoute(app: FastifyInstance, deps: CreateGameRo
       // A refusal without one is a 422 the client cannot look up.
 
       // moderation-metrics.test.ts scans for this shape on every such route.
-      if (created.error === 'content_rejected') {
+      if (isModerationBlock(created.error)) {
         return reply.status(created.status).send({ error: created.error, category: created.category ?? 'other' });
       }
       if (created.error === MANAGED_UNAVAILABLE_ERROR) {

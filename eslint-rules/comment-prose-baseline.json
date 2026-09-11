@@ -636,18 +636,18 @@
     "apps/web/src/world.test.tsx": 350,
     "apps/web/src/world.ts": 755,
     "apps/web/src/worldApi.ts": 286,
-    "apps/web/src/zone.test.tsx": 458,
-    "apps/web/src/zone.ts": 738,
+    "apps/web/src/zone.test.tsx": 548,
+    "apps/web/src/zone.ts": 793,
     "apps/web/src/zone/protocol.test.ts": 292,
     "apps/web/src/zone/protocol.ts": 1222,
-    "apps/web/src/zone/zoneClient.ts": 427,
+    "apps/web/src/zone/zoneClient.ts": 443,
     "apps/web/src/zoneApi.ts": 135,
     "apps/web/vite.config.ts": 193,
     "apps/web/vitest.config.ts": 44,
     "apps/world/src/app.test.ts": 331,
     "apps/world/src/app.ts": 648,
-    "apps/world/src/host.test.ts": 548,
-    "apps/world/src/host.ts": 935,
+    "apps/world/src/host.test.ts": 697,
+    "apps/world/src/host.ts": 948,
     "apps/world/src/server.ts": 240,
     "apps/world/src/sim-source.ts": 400,
     "apps/world/src/snapshot-store.ts": 224,
@@ -664,7 +664,7 @@
     "packages/zone-core/src/testSims.ts": 473,
     "packages/zone-core/src/ticket.test.ts": 142,
     "packages/zone-core/src/ticket.ts": 397,
-    "packages/zone-core/src/zone.test.ts": 714,
-    "packages/zone-core/src/zone.ts": 1916
+    "packages/zone-core/src/zone.test.ts": 890,
+    "packages/zone-core/src/zone.ts": 1957
   }
 }

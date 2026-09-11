@@ -17,6 +17,7 @@
 // who is asking, and maps refusals onto status codes.
 
 import { CONTRIBUTION_MODES, type ContributionMode } from '@gamedevpl/contract';
+import { isModerationBlock } from '../platform/moderation.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { isAdminSession } from '../platform/admin-session.js';
@@ -337,8 +338,8 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
       // ProposalDeps.log. Normalized at the send site like every other moderating route,
       // because JSON drops an undefined value and the client looks up
       // `errors.contentRejected.<category>`.
-      if (result.error === 'content_rejected') {
-        return reply.status(422).send({ error: 'content_rejected', category: result.category ?? 'other' });
+      if (isModerationBlock(result.error)) {
+        return reply.status(result.status).send({ error: result.error, category: result.category ?? 'other' });
       }
       return reply.status(result.status).send({ error: result.error });
     }
@@ -372,8 +373,8 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
       // ProposalDeps.log. Normalized at the send site like every other moderating route,
       // because JSON drops an undefined value and the client looks up
       // `errors.contentRejected.<category>`.
-      if (result.error === 'content_rejected') {
-        return reply.status(422).send({ error: 'content_rejected', category: result.category ?? 'other' });
+      if (isModerationBlock(result.error)) {
+        return reply.status(result.status).send({ error: result.error, category: result.category ?? 'other' });
       }
       return reply.status(result.status).send({ error: result.error });
     }

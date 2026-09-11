@@ -40,10 +40,10 @@ type EventShape = {
   subtype?: unknown;
   permission_denials?: unknown;
   result?: unknown;
-  item?: { type?: unknown; text?: unknown; command?: unknown };
+  item?: { type?: unknown; text?: unknown; message?: unknown; command?: unknown };
 };
 
-const QUIET_EVENT_TYPES = /^(system|user|rate_limit_event|thread\.|turn\.|item\.started)/;
+const QUIET_EVENT_TYPES = /^(system|user|rate_limit_event|thread\.|turn\.|item\.)/;
 
 function textOf(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null;
@@ -95,6 +95,7 @@ export function parseEventLine(line: string, adapter?: string): string | null {
     contentText(parsed.message) ??
     textOf(parsed.result) ??
     textOf(parsed.item?.text) ??
+    textOf(parsed.item?.message) ??
     textOf(parsed.content) ??
     textOf(parsed.response) ??
     textOf(parsed.data?.content) ??

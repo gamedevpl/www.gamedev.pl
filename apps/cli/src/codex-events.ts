@@ -1,11 +1,13 @@
 export function codexEventText(value: unknown): string | null | undefined {
   const event = value as {
     type?: string;
+    error?: { message?: string };
     item?: {
       type?: string;
       server?: string;
       tool?: string;
       status?: string;
+      message?: string;
       error?: { message?: string };
       changes?: { path?: string }[];
     };
@@ -29,5 +31,5 @@ export function codexEventText(value: unknown): string | null | undefined {
     return paths ? `Edited: ${paths}` : null;
   }
   if (item?.type === 'agent_message' || item?.type === 'command_execution') return undefined;
-  return null;
+  return typeof (event.error?.message ?? item?.message) === 'string' ? undefined : null;
 }

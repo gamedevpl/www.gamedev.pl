@@ -50,6 +50,8 @@ export function useZoneBridge(frameRef: MutableRefObject<HTMLIFrameElement | nul
     let sent: number[] = [];
     /** Whether a world ever arrived, which is what separates a fallback from a drop. */
     let joined = false;
+    // Why the last link closed for good. See docs/p3-zone-protocol.md §7.
+    let closedReason: string | null = null;
     /**
      * Bound at admission to the play session that was open then, and used for every rung
      * after it. The socket outlives this effect: a frame queued before teardown still
@@ -76,6 +78,9 @@ export function useZoneBridge(frameRef: MutableRefObject<HTMLIFrameElement | nul
     async function admit() {
       if (admitting || client) return;
       admitting = true;
+      closedReason = null;
+      // A re-admission is a new link; the funnel must not reuse the old arrival.
+      joined = false;
       try {
         const admission = await fetchZoneAdmission(slug!);
         if (cancelled) return;
@@ -103,7 +108,8 @@ export function useZoneBridge(frameRef: MutableRefObject<HTMLIFrameElement | nul
           durable: admission.durable,
         });
 
-        client = new ZoneClient({
+        // Named so `onStatus` can tell its own client from whatever replaced it.
+        const self = new ZoneClient({
           hostUrl: admission.hostUrl,
           zone: admission.zone,
           ticket: admission.ticket,
@@ -125,10 +131,16 @@ export function useZoneBridge(frameRef: MutableRefObject<HTMLIFrameElement | nul
             // never delivered a snapshot would report `lost` and read as churn, when it
             // is the flat failure `joined`-over-`admitted` is there to expose.
             if (status === 'closed' && joined) recordPlayEvent({ type: 'zone_link', step: 'lost' });
+            // Only if still current: an older socket must not clear a newer link.
+            if (status === 'closed' && client === self) {
+              client = null;
+              closedReason = reason ?? null;
+            }
             postToGame({ t: 'zone:link', status, ...(reason ? { reason } : {}) });
           },
         });
-        client.connect();
+        client = self;
+        self.connect();
       } catch {
         // Could not find out. Distinct from "there is nothing here" on purpose, the same
         // distinction the save bridge needed: `retryable` lets the game ask again rather
@@ -150,7 +162,11 @@ export function useZoneBridge(frameRef: MutableRefObject<HTMLIFrameElement | nul
         void admit();
         return;
       }
-      if (!client) return;
+      if (!client) {
+        // Playing again re-opens a link retired for idleness, and only that reason.
+        if (message.t === 'zone:send' && closedReason === 'idle' && allowInput()) void admit();
+        return;
+      }
       if (message.t === 'zone:resync') {
         client.requestResync();
         return;

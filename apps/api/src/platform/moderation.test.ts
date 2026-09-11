@@ -1,7 +1,13 @@
 import { genaicode } from 'genaicode';
 import type { GenerationRequest, ModelProvider } from 'genaicode';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_MODERATION_TIMEOUT_MS, moderateFields, moderateText, VertexChecker } from './moderation.js';
+import {
+  DEFAULT_MODERATION_TIMEOUT_MS,
+  moderateFields,
+  moderateText,
+  rejectionFor,
+  VertexChecker,
+} from './moderation.js';
 
 // Stub provider: exercises the real genaicode request/response path (prompt
 // assembly, JSON parsing, schema validation) with no GCP calls.
@@ -169,7 +175,7 @@ describe('VertexChecker', () => {
     });
 
     const verdict = await checker.check('A completely clean game concept');
-    expect(verdict).toEqual({ allowed: false, category: 'other' });
+    expect(verdict).toEqual({ allowed: false, category: 'other', unavailable: true });
   });
 
   it('serves a decided verdict for the same text without paying again', async () => {
@@ -216,7 +222,7 @@ describe('VertexChecker', () => {
     });
 
     // The first verdict describes Vertex being down, not the text.
-    expect(await checker.check('A completely clean game concept')).toEqual({ allowed: false, category: 'other' });
+    expect(await checker.check('A completely clean game concept')).toEqual({ allowed: false, category: 'other', unavailable: true });
     expect(await checker.check('A completely clean game concept')).toEqual({ allowed: true });
     expect(calls).toBe(2);
   });
@@ -271,9 +277,11 @@ describe('VertexChecker over a genaicode client', () => {
   it('fails closed on a malformed or non-conforming response', async () => {
     for (const body of ['not json at all', '', '{"allowed": "yes"}', '{}']) {
       const checker = new VertexChecker({ client: genaicode(stubProvider(body)) });
+      // Unparseable is the classifier failing, not a verdict.
       expect(await checker.check('A completely clean game concept')).toEqual({
         allowed: false,
         category: 'other',
+        unavailable: true,
       });
     }
   });
@@ -283,9 +291,46 @@ describe('VertexChecker over a genaicode client', () => {
     expect(await checker.check('A completely clean game concept')).toEqual({ allowed: false, category: 'other' });
   });
 
-  it('defaults to 10s timeout and allows custom timeout', () => {
-    expect(DEFAULT_MODERATION_TIMEOUT_MS).toBe(10_000);
+  it('defaults to the shipped timeout and allows custom timeout', () => {
+    expect(DEFAULT_MODERATION_TIMEOUT_MS).toBe(20_000);
     const custom = new VertexChecker({ timeoutMs: 15_000 });
     expect((custom as unknown as { timeoutMs: number }).timeoutMs).toBe(15_000);
+  });
+});
+
+// A timeout is not a verdict on what the writer wrote.
+describe('when the checker cannot decide', () => {
+  it('marks a failed Vertex call unavailable rather than rejected', async () => {
+    const checker = new VertexChecker({
+      vertexFetcher: async () => {
+        throw new Error('aborted');
+      },
+    });
+
+    const verdict = await checker.check('a short arcade game about dodging rocks');
+
+    expect(verdict.allowed).toBe(false);
+    expect(verdict.unavailable).toBe(true);
+  });
+
+  it('answers an outage with 503 moderation_unavailable, not 422 content_rejected', () => {
+    expect(rejectionFor({ allowed: false, category: 'other', unavailable: true })).toEqual({
+      status: 503,
+      error: 'moderation_unavailable',
+      category: 'other',
+    });
+  });
+
+  it('still answers a real rejection with 422 and its category', () => {
+    expect(rejectionFor({ allowed: false, category: 'pii' })).toEqual({
+      status: 422,
+      error: 'content_rejected',
+      category: 'pii',
+    });
+  });
+
+  it('gives Vertex more than the observed refine latency before giving up', () => {
+    // Healthy refine measured 12.3-12.7s; 10s clipped it.
+    expect(DEFAULT_MODERATION_TIMEOUT_MS).toBeGreaterThan(12_700);
   });
 });
