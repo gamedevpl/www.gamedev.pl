@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { catalogEntryFromSpec, parseGameMedia, type CatalogGameEntry, type GitHubClient } from './github-client.js';
 import { SnapshotUnavailableError, type GameSnapshotReader } from './game-snapshot.js';
@@ -29,6 +29,7 @@ export interface CatalogRoutesOptions {
   mediaRateLimitWindowMs: number;
   // Absent: the route serves media bytes itself, as before.
   mediaUrlSigner?: MediaUrlSigner | null;
+  storeMediaUrlSigner?: MediaUrlSigner | null;
 }
 
 export interface CatalogRoutesHandle {
@@ -56,6 +57,7 @@ export async function registerCatalogRoutes(
     maxMediaPerWindow,
     mediaRateLimitWindowMs,
     mediaUrlSigner,
+    storeMediaUrlSigner,
   } =
     options;
   const snapshotReader = options.snapshotReader ?? null;
@@ -173,6 +175,44 @@ export async function registerCatalogRoutes(
     const spec = await gamesStore.getSourceFile(slug, publication.currentVersion, 'SPEC.md');
     const title = (spec && catalogEntryFromSpec(slug, spec, () => null)?.title) || slug;
     return { slug, title, html: bundle.toString('utf8') };
+  }
+
+  // What readStorePublishedMedia would read, unread.
+  async function storePublishedMediaObject(slug: string, filename: string): Promise<string | null> {
+    if (!store || !gamesStore) return null;
+    const publication = await store.getPublication(slug);
+    if (!isPublished(publication)) return null;
+    const mediaMetadata = await gamesStore.getDerivedArtifact(slug, publication.currentVersion, 'media/metadata.json');
+    const media = parseGameMedia(mediaMetadata?.toString('utf8') ?? null);
+    if (!media) return null;
+    const allowed = new Set([
+      ...media.screenshots.map((screenshot) => screenshot.file),
+      ...(media.video ? [media.video] : []),
+    ]);
+    if (!allowed.has(filename)) return null;
+    return `games/${slug}/versions/${publication.currentVersion}/media/${filename}`;
+  }
+
+  // Returns whether it answered: reply.redirect() itself resolves to undefined.
+  async function redirectToSignedMedia(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    signer: MediaUrlSigner,
+    object: string,
+  ): Promise<boolean> {
+    try {
+      const signed = await signer.urlFor(object);
+      if (!signed) return false;
+      // Half-life, so a cached redirect never outlives the URL in it.
+      reply
+        .header('Cache-Control', `public, max-age=${Math.floor(MEDIA_URL_TTL_SECONDS / 2)}`)
+        .redirect(signed, 302);
+      return true;
+    } catch (error) {
+      // Signing is an optimisation; a failure must cost money, not pictures.
+      request.log.warn({ err: error, object }, 'media URL signing failed; serving inline');
+      return false;
+    }
   }
 
   async function readStorePublishedMedia(slug: string, filename: string): Promise<Buffer | null> {
@@ -339,17 +379,19 @@ export async function registerCatalogRoutes(
             ? await snapshotReader.getMediaObjectName(parsedParams.data.slug, parsedParams.data.filename, variantWidth)
             : null)
           ?? (await snapshotReader.getMediaObjectName(parsedParams.data.slug, parsedParams.data.filename));
-        if (objectName) {
-          try {
-            const signed = await mediaUrlSigner.urlFor(objectName);
-            // Half-life, so a cached redirect never outlives the URL in it.
-            return reply
-              .header('Cache-Control', `public, max-age=${Math.floor(MEDIA_URL_TTL_SECONDS / 2)}`)
-              .redirect(signed, 302);
-          } catch (error) {
-            // Signing is an optimisation; a failure must cost money, not pictures.
-            request.log.warn({ err: error, object: objectName }, 'media URL signing failed; serving inline');
-          }
+        if (objectName && (await redirectToSignedMedia(request, reply, mediaUrlSigner, objectName))) {
+          return reply;
+        }
+      }
+
+      // Platform-made games keep media in the store bucket.
+      if (storeMediaUrlSigner) {
+        const storeObject = await storePublishedMediaObject(
+          parsedParams.data.slug,
+          parsedParams.data.filename,
+        );
+        if (storeObject && (await redirectToSignedMedia(request, reply, storeMediaUrlSigner, storeObject))) {
+          return reply;
         }
       }
 
