@@ -361,7 +361,23 @@ describe('naming an object for a signed URL', () => {
 
     await store.getMediaObjectName('bubble-pop', 'opening.png');
 
-    const probe = fake.calls.find((call) => call.name === 'snapshots/snap1/media/bubble-pop/opening.png');
-    expect(probe).toBeDefined();
+    // fields=name is metadata; alt=media is the bytes.
+    const urls = fake.raw.mock.calls.map(([url]: [string]) => String(url));
+    const probe = urls.find((url) => url.includes('media%2Fbubble-pop%2Fopening.png'));
+    expect(probe).toContain('fields=name');
+    expect(probe).not.toContain('alt=media');
+  });
+
+  it('remembers existence for the pointer TTL instead of probing per thumbnail', async () => {
+    const fake = createFakeStorage();
+    fake.store.set('current.json', { body: Buffer.from(JSON.stringify({ snapshotId: 'snap1' })) });
+    fake.store.set('snapshots/snap1/media/bubble-pop/opening.png', { body: Buffer.from('png') });
+    const store = createStore(fake);
+
+    await store.getMediaObjectName('bubble-pop', 'opening.png');
+    const after = fake.calls.length;
+    await store.getMediaObjectName('bubble-pop', 'opening.png');
+
+    expect(fake.calls.length).toBe(after);
   });
 });

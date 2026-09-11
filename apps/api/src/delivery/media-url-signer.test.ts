@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { createMediaUrlSigner, createMediaUrlSignerFromEnv, MEDIA_URL_TTL_SECONDS } from './media-url-signer.js';
 
+// Fixed, not the constant: these cases test the reuse window.
+const TTL_SECONDS = 15 * 60;
+
 const NOW = Date.parse('2026-09-11T08:30:00.000Z');
 
 function signerWithCounter(now: () => number) {
   let signatures = 0;
   const signer = createMediaUrlSigner({
     now,
-    ttlSeconds: MEDIA_URL_TTL_SECONDS,
+    ttlSeconds: TTL_SECONDS,
     store: {
       signReadUrl: async (name: string) => {
         signatures++;
@@ -61,6 +64,12 @@ describe('media URL signer', () => {
     // 'a' was evicted by 'c', so it re-signs.
     expect(await signer.urlFor('a')).toBe(`url:a:${clock}`);
     expect(await signer.urlFor('c')).toBe(`url:c:${NOW}`);
+  });
+});
+
+describe('the shipped TTL', () => {
+  it('is long enough that repeat views reuse one URL rather than re-downloading', () => {
+    expect(MEDIA_URL_TTL_SECONDS).toBeGreaterThanOrEqual(60 * 60);
   });
 });
 

@@ -479,8 +479,8 @@ describe('serving media straight from Cloud Storage', () => {
     expect(response.headers.location).toBe(
       'https://storage.googleapis.com/b/snapshots/s1/media/bubble-pop/opening.png?signed',
     );
-    // The signed URL is a credential; caches must not share it.
-    expect(response.headers['cache-control']).toMatch(/^private, max-age=/);
+    // Half the URL's life; the media is public anyway.
+    expect(response.headers['cache-control']).toBe('public, max-age=10800');
     expect(response.rawPayload.length).toBe(0);
     expect(snapshot.getMedia).not.toHaveBeenCalled();
     await app.close();

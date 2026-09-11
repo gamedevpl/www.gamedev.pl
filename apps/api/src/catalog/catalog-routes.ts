@@ -342,9 +342,9 @@ export async function registerCatalogRoutes(
         if (objectName) {
           try {
             const signed = await mediaUrlSigner.urlFor(objectName);
-            // Half-life, and private: the URL is a credential.
+            // Half-life, so a cached redirect never outlives the URL in it.
             return reply
-              .header('Cache-Control', `private, max-age=${Math.floor(MEDIA_URL_TTL_SECONDS / 2)}`)
+              .header('Cache-Control', `public, max-age=${Math.floor(MEDIA_URL_TTL_SECONDS / 2)}`)
               .redirect(signed, 302);
           } catch (error) {
             // Signing is an optimisation; a failure must cost money, not pictures.

@@ -2,8 +2,8 @@
 
 import { createGcsObjectStore, type GcsObjectStore } from './gcs-sign.js';
 
-// Long enough to start and seek; short enough that leaks die.
-export const MEDIA_URL_TTL_SECONDS = 15 * 60;
+// Media is unauthenticated anyway; short TTLs only churn caches.
+export const MEDIA_URL_TTL_SECONDS = 6 * 60 * 60;
 
 export interface MediaUrlSigner {
   urlFor(object: string): Promise<string>;

@@ -389,11 +389,23 @@ per-IP budget of 400 requests/minute. At that ceiling one address can pull ~264 
 which is the free tier in 82 seconds and roughly $57/day sustained.
 
 With `SERVE_MEDIA_FROM_GCS=true` the route stops carrying those bytes. It resolves the
-snapshot object, signs a 15-minute V4 URL with the runtime service account
+snapshot object (probing that it exists — a redirect cannot fall through the way an
+inline read can), signs a six-hour V4 URL with the runtime service account
 ([`gcs-sign.ts`](../apps/api/src/delivery/gcs-sign.ts), the same path kit downloads use)
-and answers **302** to `storage.googleapis.com`. The API still decides *whether* a file
-may be fetched — the catalog lookup, the allow-list and the rate limiter all run first —
-it just stops being the pipe.
+and answers **302** to `storage.googleapis.com`.
+
+**What the limiter still caps, and what it stops capping.** The catalog lookup, the media
+allow-list and the 400/min per-IP budget all run before a URL is minted, so they bound
+*minting*. They no longer bound *volume*: one 302 is a six-hour URL that Cloud Storage
+will serve to any address, at any speed, outside this service's reach. The meter moves
+too — Hosting egress becomes Cloud Storage egress (~$0.12/GB, no daily free tier to
+exhaust). This trades a metered, abusable proxy for unmetered direct reads of files that
+were already served without a session; it is not a volume control, and if one is wanted
+it has to be a byte budget, not a request count.
+
+CSP matters here: `media-src` must allow `https://storage.googleapis.com`, or every
+`<video>` pointing at a redirected capture is a policy violation (report-only today,
+silent breakage the day it is enforced).
 
 - **Unset or anything but `true`** (the default): the bytes are read and served inline,
   exactly as before. Always correct, only more expensive.
@@ -402,9 +414,13 @@ it just stops being the pipe.
   broken image — a missing `roles/iam.serviceAccountTokenCreator` grant costs money, not
   pictures.
 
-Redirects carry `Cache-Control: private, max-age=450` — half the URL's life, so a cached
-redirect never outlives what it points at, and `private` because the signed URL *is* a
-credential: a shared cache handing it on would be handing on the credential.
+Redirects carry `Cache-Control: public, max-age=10800` — half the URL's life, so a cached
+redirect never outlives what it points at. `public`, and the TTL six hours rather than
+fifteen minutes, because the alternative was worse than the risk it avoided: a short
+private redirect made every repeat catalog view re-download `gameplay.mp4` from Cloud
+Storage under a new query string, which no cache can reuse. The files are already
+reachable without a session, so treating each screenshot as a short-lived credential
+bought nothing and cost bandwidth.
 
 Threaded through **both** deploy paths (`deploy.yml` and `infra/deploy-api.sh`), because a
 lever only the workflow knows about is off the moment someone deploys by hand.

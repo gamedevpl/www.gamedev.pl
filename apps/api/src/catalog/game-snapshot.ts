@@ -272,16 +272,23 @@ export function createGcsSnapshotStore(options: GcsSnapshotStoreOptions): GameSn
     });
   }
 
+  // Immutable under a pointer, so existence caches as long as the pointer.
+  const existsCache = new Map<string, { exists: boolean; expiresAt: number }>();
+
   // Metadata only: a redirect must not point at nothing.
   async function objectExists(name: string): Promise<boolean> {
+    const cached = existsCache.get(name);
+    if (cached && cached.expiresAt > now()) return cached.exists;
     const url = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(name)}?fields=name`;
     return withReadDeadline(name, async (signal) => {
       const response = await fetchImpl(url, { headers: await authHeaders(), signal });
-      if (response.status === 404) return false;
-      if (!response.ok) {
+      if (!response.ok && response.status !== 404) {
         throw new Error(`snapshot probe of ${name} failed: ${response.status} ${await safeBodyText(response)}`);
       }
-      return true;
+      const exists = response.status !== 404;
+      if (existsCache.size >= 2_000) existsCache.clear();
+      existsCache.set(name, { exists, expiresAt: now() + pointerTtlMs });
+      return exists;
     });
   }
 
