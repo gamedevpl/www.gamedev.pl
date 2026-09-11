@@ -1,7 +1,8 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { recordCreateStep, type PlayVia } from './visitTelemetry.js';
-import { catalogMediaUrl, defaultScreenshotIndex, type CatalogEntry } from './catalog.js';
+import { catalogMediaUrl, defaultScreenshotIndex, gamePageHandle, type CatalogEntry } from './catalog.js';
+import { gamePath, NAVIGATE_EVENT } from './core/router.js';
 import { SketchModal } from './SketchModal.js';
 import { PixelIcon } from './PixelIcon.js';
 import { getQuota, type PlatformBuilderAvailability } from './submissionApi.js';
@@ -17,6 +18,7 @@ type HeroPromptSectionProps = {
   initialPrompt?: string;
   catalogEntries?: CatalogEntry[];
   onPlayGame?: (entry: CatalogEntry, via?: PlayVia) => void;
+  onNavigate?: (path: string) => void;
   // refining = pre-submit spec refiner; nothing sent yet
   submissionStatus: 'idle' | 'refining' | 'loading';
   submissionError: string | null;
@@ -67,6 +69,7 @@ export function HeroPromptSection({
   initialPrompt = '',
   catalogEntries = [],
   onPlayGame,
+  onNavigate,
   submissionStatus,
   submissionError,
   onSubmitSpec,
@@ -228,6 +231,22 @@ export function HeroPromptSection({
   }, [rawVectorGame, catalogEntries]);
 
   const matchedGame = localMatchedGame || vectorMatchedGame;
+  const matchedGameHref = matchedGame
+    ? `${gamePath(gamePageHandle(matchedGame), matchedGame.slug)}?via=composer_match`
+    : '';
+
+  const handleGameLinkClick = (path: string) => (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (event.defaultPrevented || event.button !== 0) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    if (onNavigate) {
+      onNavigate(path);
+      return;
+    }
+    window.history.pushState(null, '', path);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    window.dispatchEvent(new CustomEvent(NAVIGATE_EVENT, { detail: { path } }));
+  };
 
   useEffect(() => {
     if (!needsVectorSearch) return;
@@ -541,15 +560,21 @@ export function HeroPromptSection({
           {matchedGame ? (
             <div className="smart-intent-card matched-card">
               {matchedPoster ? (
-                <div className="matched-thumb-wrap">
+                <a
+                  href={matchedGameHref}
+                  className="matched-thumb-wrap"
+                  onClick={handleGameLinkClick(matchedGameHref)}
+                  tabIndex={-1}
+                  aria-hidden="true"
+                >
                   <img
                     src={matchedPoster}
-                    alt={matchedGame.title}
+                    alt=""
                     className="matched-thumb"
                     loading="lazy"
                     decoding="async"
                   />
-                </div>
+                </a>
               ) : null}
               <div className="matched-info">
                 <div className="matched-badges">
@@ -564,7 +589,15 @@ export function HeroPromptSection({
                     </span>
                   )}
                 </div>
-                <h3 className="matched-title">{matchedGame.title}</h3>
+                <h3 className="matched-title">
+                  <a
+                    href={matchedGameHref}
+                    className="matched-title-link"
+                    onClick={handleGameLinkClick(matchedGameHref)}
+                  >
+                    {matchedGame.title}
+                  </a>
+                </h3>
                 {(() => {
                   const isPl = (i18n?.language || '').startsWith('pl');
                   const tagline = isPl ? matchedGame.tagline?.pl : matchedGame.tagline?.en;
