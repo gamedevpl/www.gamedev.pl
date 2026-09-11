@@ -11,6 +11,11 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 - Configure remembered sandboxed headless permissions before starting local Antigravity tasks (#1267).
 
+### Fixed
+
+- Recalling slash commands keeps arrow keys available for history and restores your unfinished input (#1233).
+- Agent output hides empty Codex item lifecycle events instead of printing `item.completed` (#1233).
+
 ## 0.13.1 — 2026-09-11
 
 ### Fixed

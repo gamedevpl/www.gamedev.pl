@@ -172,6 +172,40 @@ describe('command completion keyboard', () => {
     expect(view.session.get().draft).toBe('/p');
   });
 
+  it('walks past recalled commands and restores the draft without opening suggestions', async () => {
+    const view = screen(80, 24);
+    for (const line of ['older request', '/help']) {
+      void view.session.prompt();
+      view.session.setDraft(line);
+      view.session.submit();
+    }
+    void view.session.prompt();
+    view.session.setDraft('unfinished request');
+    await wait();
+    view.input.write('\x1b[A');
+    await wait();
+    expect(view.session.get().draft).toBe('/help');
+    expect(view.frame()).not.toContain('▸ /help');
+    view.input.write('\x1b[A');
+    await wait();
+    expect(view.session.get().draft).toBe('older request');
+    view.input.write('\x1b[B');
+    await wait();
+    expect(view.session.get().draft).toBe('/help');
+    view.input.write('\x1b[B');
+    await wait();
+    expect(view.session.get().draft).toBe('unfinished request');
+    view.input.write('\x1b[A');
+    await wait();
+    view.input.write('\x7f');
+    await wait();
+    expect(view.session.get().draft).toBe('/hel');
+    expect(view.frame()).toContain('▸ /help');
+    view.input.write('\t');
+    await wait();
+    expect(view.session.get().draft).toBe('/help ');
+  });
+
   it.each([
     [40, 12],
     [80, 24],
