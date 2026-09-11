@@ -45,6 +45,15 @@ it('tails appended partial lines and skips oversized unrelated records', async (
   await appendFile(path, approval.slice(25) + '\n');
   expect(await read(path)).toBe(true);
 });
+it('skips oversized records ending in the chunk that crosses the limit', async () => {
+  const { path } = await fixture();
+  const oversized = JSON.stringify({ payload_type: 'approval_wait.effect.started', padding: 'x'.repeat(1024 * 1024) });
+  await writeFile(path, oversized + '\n');
+  const read = approvalJournalReader();
+  for (let i = 0; i < 5; i++) expect(await read(path)).toBe(false);
+  await appendFile(path, approval + '\n');
+  expect(await read(path)).toBe(true);
+});
 it('stops a silent headless run on journal approval without aborting the parent task', async () => {
   const { env, path } = await fixture();
   const controller = new AbortController();

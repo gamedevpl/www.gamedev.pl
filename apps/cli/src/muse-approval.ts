@@ -57,13 +57,14 @@ export function approvalJournalReader() {
         .toString('utf8')
         .split(/(?<=\n)/)) {
         if (!skipping) buffered += part;
+        if (buffered.length > 1024 * 1024) {
+          buffered = '';
+          skipping = true;
+        }
         if (part.endsWith('\n')) {
           if (!skipping && museApproval(buffered)) return true;
           buffered = '';
           skipping = false;
-        } else if (buffered.length > 1024 * 1024) {
-          buffered = '';
-          skipping = true;
         }
       }
       return false;
