@@ -28,6 +28,7 @@ describe('typecheck preflight', () => {
     const shared = sharedSourcesFromKitTree(
       kitTree({
         'shared/game-kit.d.ts': KIT_DTS,
+        'shared/editor-def.ts': 'export const defineEditor = 1;\n',
         'shared/modules/core.ts': 'export const core = 1;\n',
         'shared/sim/box-world.ts': 'export const boxWorld = 1;\n',
         'SKILL.md': '# ignore\n',
@@ -35,10 +36,29 @@ describe('typecheck preflight', () => {
       }),
     );
     expect(Object.keys(shared).sort()).toEqual([
+      'shared/editor-def.ts',
       'shared/game-kit.d.ts',
       'shared/modules/core.ts',
       'shared/sim/box-world.ts',
     ]);
+  });
+
+  it('checks editor imports against the pinned Kit, including missing exports and files', () => {
+    const kitShared = sharedSourcesFromKitTree(
+      kitTree({
+        'shared/game-kit.d.ts': KIT_DTS,
+        'shared/editor-def.ts': 'export function defineEditor(value: number) { return value; }',
+      }),
+    );
+    const check = (name: string, file: string) =>
+      typecheckDeliverySources({
+        slug: 'comet',
+        kitShared,
+        sources: { 'EDITOR.ts': `import { ${name} } from '../../shared/${file}.ts'; export default ${name}(1);` },
+      });
+    expect(check('defineEditor', 'editor-def').ok).toBe(true);
+    expect(check('missingExport', 'editor-def').ok).toBe(false);
+    expect(check('defineEditor', 'missing-file').ok).toBe(false);
   });
 
   it('refuses the Round-field transcript failure with one grouped line', () => {

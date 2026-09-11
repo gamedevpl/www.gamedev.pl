@@ -41,6 +41,17 @@ describe('validateSourceUpload — the delivery contract', () => {
     expect(validateSourceUpload(MINIMAL)).toHaveLength(MINIMAL.length);
   });
 
+  it('accepts editor authoring imports from the Kit without uploading shared sources', () => {
+    const files = [
+      ...MINIMAL,
+      {
+        path: 'EDITOR.ts',
+        content: "import { defineEditor } from '../../shared/editor-def.ts'; export default defineEditor({});",
+      },
+    ];
+    expect(validateSourceUpload(files)).toHaveLength(files.length);
+  });
+
   it('refuses a publish with no behavioural golden', () => {
     const withoutTrace = MINIMAL.filter((file) => file.path !== 'TRACE.json');
     expect(() => validateSourceUpload(withoutTrace)).toThrow(/TRACE.json is required/);
