@@ -289,3 +289,26 @@ If a previous MCP agent stopped without ending its session, preview delivery can
 ### Push local changes
 
 Use `/push` in the checkout session, or `gamedevpl push [dir]`, to run checks and deliver a preview. `/pull` brings platform changes into the checkout. `/submit` remains an alias for `/push`; neither publishes publicly unless you explicitly pass `--publish`.
+
+### Antigravity permissions
+
+Before a local Antigravity task starts, the interactive CLI offers to enable
+sandboxed headless execution. Confirming sets `enableTerminalSandbox: true` and
+`toolPermission: "proceed-in-sandbox"` in
+`~/.gemini/antigravity-cli/settings.json`. This is an **agy-wide setting**, shared
+by all projects. Existing permission rules and other preferences are preserved;
+the previous file is backed up beside it, with the backup path printed after setup.
+
+Agy runs approved sandboxed commands without opening another terminal UI. Existing
+ask/deny rules still apply, as do any outside-sandbox exceptions you previously
+configured. The CLI does not add wildcard grants or `--dangerously-skip-permissions`.
+If agy still needs permission, you can resume the task interactively or return with
+local edits preserved. Network access and tools outside the sandbox may still need
+approval; enabling this preset does not grant unrestricted access.
+
+The enabled preset is detected on subsequent runs. To change it later, use agy's
+`/config` or restore the printed backup. You can also choose existing permissions
+for one run or cancel before preparation starts. Unattended CLI runs never modify
+agy settings or open a permission picker.
+
+See the [Antigravity sandbox documentation](https://antigravity.google/docs/cli/sandbox/).
