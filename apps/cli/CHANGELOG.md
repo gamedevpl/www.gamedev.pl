@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.13.1 — 2026-09-11
+
 ### Fixed
 
 - Explain how to retry uploads when source storage is busy (#1263).
