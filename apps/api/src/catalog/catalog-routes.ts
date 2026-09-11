@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { catalogEntryFromSpec, parseGameMedia, type CatalogGameEntry, type GitHubClient } from './github-client.js';
 import { SnapshotUnavailableError, type GameSnapshotReader } from './game-snapshot.js';
+import { MEDIA_URL_TTL_SECONDS, type MediaUrlSigner } from '../delivery/media-url-signer.js';
 import { attachCatalogEnrichments } from './catalog-enricher.js';
 import { profileBylineName, toPublicCreatorProfile } from '../platform/creator-profile.js';
 import { isVariantWidth } from '../platform/image-variants.js';
@@ -26,6 +27,12 @@ export interface CatalogRoutesOptions {
   mediaByIp: Map<string, number[]>;
   maxMediaPerWindow: number;
   mediaRateLimitWindowMs: number;
+  /**
+   * When present, published media is answered with a redirect to a signed Cloud Storage
+   * URL instead of the bytes. Absent — local dev, tests, or the flag off — the route
+   * serves the body itself, exactly as before.
+   */
+  mediaUrlSigner?: MediaUrlSigner | null;
 }
 
 export interface CatalogRoutesHandle {
@@ -43,7 +50,17 @@ export async function registerCatalogRoutes(
   app: FastifyInstance,
   options: CatalogRoutesOptions,
 ): Promise<CatalogRoutesHandle> {
-  const { store, gamesStore, now, githubClient, publishedRef, mediaByIp, maxMediaPerWindow, mediaRateLimitWindowMs } =
+  const {
+    store,
+    gamesStore,
+    now,
+    githubClient,
+    publishedRef,
+    mediaByIp,
+    maxMediaPerWindow,
+    mediaRateLimitWindowMs,
+    mediaUrlSigner,
+  } =
     options;
   const snapshotReader = options.snapshotReader ?? null;
 
@@ -318,6 +335,32 @@ export async function registerCatalogRoutes(
         ...(entry?.media?.screenshots.map((screenshot) => screenshot.file) ?? []),
         ...(entry?.media?.video ? [entry.media.video] : []),
       ]);
+
+      // Before any body is read: the point is that these bytes never enter this process.
+      // Snapshot-backed media only — that is every published game; a store-published or
+      // repo-backed file falls through and is served inline below.
+      if (mediaUrlSigner && entry && allowedFiles.has(parsedParams.data.filename) && snapshotReader?.getMediaObjectName) {
+        const objectName =
+          (variantWidth !== undefined
+            ? await snapshotReader.getMediaObjectName(parsedParams.data.slug, parsedParams.data.filename, variantWidth)
+            : null)
+          ?? (await snapshotReader.getMediaObjectName(parsedParams.data.slug, parsedParams.data.filename));
+        if (objectName) {
+          try {
+            const signed = await mediaUrlSigner.urlFor(objectName);
+            // Half the URL's life, so a cached redirect never outlives what it points at.
+            // `private` because the URL carries a credential: a shared cache handing it to
+            // the next viewer would be handing out that credential.
+            return reply
+              .header('Cache-Control', `private, max-age=${Math.floor(MEDIA_URL_TTL_SECONDS / 2)}`)
+              .redirect(signed, 302);
+          } catch (error) {
+            // Signing is an optimisation, not the contract. If IAM is unreachable or the
+            // token-creator grant is missing, serve the bytes rather than fail the page.
+            request.log.warn({ err: error, object: objectName }, 'media URL signing failed; serving inline');
+          }
+        }
+      }
 
       let body: Buffer | null = null;
       if (entry && allowedFiles.has(parsedParams.data.filename)) {

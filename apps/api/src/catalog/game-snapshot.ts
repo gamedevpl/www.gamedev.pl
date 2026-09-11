@@ -94,6 +94,17 @@ export interface GameSnapshotReader {
    * could not read one PNG skips only that variant.
    */
   getMedia(slug: string, filename: string, width?: number): Promise<SnapshotMedia | null>;
+  /**
+   * The object a `getMedia` call would read, without reading it — what the media route
+   * signs a URL for so the browser fetches from the bucket instead of through here.
+   * Null when no snapshot is published yet, and it does not promise the object exists:
+   * a variant that was never baked resolves to a name that 404s, so callers ask for the
+   * variant first and fall back to the original, exactly as `getMedia` does.
+   *
+   * Optional: a reader that is not GCS-backed (tests, the local fixture path) has no
+   * object to name, and the route serves the bytes itself.
+   */
+  getMediaObjectName?(slug: string, filename: string, width?: number): Promise<string | null>;
 }
 
 /** The write side, used by the publish job. */
@@ -346,6 +357,14 @@ export function createGcsSnapshotStore(options: GcsSnapshotStoreOptions): GameSn
       const pointer = await this.getPointer();
       if (!pointer) return null;
       return readJson<SnapshotGame>(gameObject(pointer.snapshotId, slug));
+    },
+
+    async getMediaObjectName(slug, filename, width) {
+      assertSafeSlug(slug);
+      assertSafeMediaFilename(filename);
+      const pointer = await this.getPointer();
+      if (!pointer) return null;
+      return mediaObject(pointer.snapshotId, slug, filename, width);
     },
 
     async getMedia(slug, filename, width) {

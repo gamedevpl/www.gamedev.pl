@@ -379,6 +379,36 @@ a Google-own peer yet.
 `GET /api/diagnostics/proxy` reports `resolvedIp`, `clientIp` and `peerIsGoogleEdge` side
 by side, so the three can be compared through either path after a change.
 
+## Media egress, and `SERVE_MEDIA_FROM_GCS`
+
+Hosting rewrites `**` to Cloud Run, so **every byte the origin returns is billed as
+Hosting egress**, against a 360 MB/day free tier and $0.15/GB after it. Game media is the
+bulk of that traffic — a gameplay capture measured 662 KB against a 282 KB bundle — and
+`GET /api/games/:slug/media/:filename` answers **without a session**, bounded only by a
+per-IP budget of 400 requests/minute. At that ceiling one address can pull ~264 MB/minute,
+which is the free tier in 82 seconds and roughly $57/day sustained.
+
+With `SERVE_MEDIA_FROM_GCS=true` the route stops carrying those bytes. It resolves the
+snapshot object, signs a 15-minute V4 URL with the runtime service account
+([`gcs-sign.ts`](../apps/api/src/delivery/gcs-sign.ts), the same path kit downloads use)
+and answers **302** to `storage.googleapis.com`. The API still decides *whether* a file
+may be fetched — the catalog lookup, the allow-list and the rate limiter all run first —
+it just stops being the pipe.
+
+- **Unset or anything but `true`** (the default): the bytes are read and served inline,
+  exactly as before. Always correct, only more expensive.
+- **`true`**: published snapshot media redirects. Store-published and repo-backed files
+  still serve inline, and **a signing failure falls back to inline** rather than to a
+  broken image — a missing `roles/iam.serviceAccountTokenCreator` grant costs money, not
+  pictures.
+
+Redirects carry `Cache-Control: private, max-age=450` — half the URL's life, so a cached
+redirect never outlives what it points at, and `private` because the signed URL *is* a
+credential: a shared cache handing it on would be handing on the credential.
+
+Threaded through **both** deploy paths (`deploy.yml` and `infra/deploy-api.sh`), because a
+lever only the workflow knows about is off the moment someone deploys by hand.
+
 ## Outbound email (Resend)
 
 Email is used for **beta invites** today (`npm run beta:invite`) and is the shared

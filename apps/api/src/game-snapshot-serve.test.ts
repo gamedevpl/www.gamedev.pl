@@ -73,19 +73,25 @@ function createSnapshotStub(params: {
     const body = params.media?.[key];
     return body ? { body, contentType: 'image/png' } : null;
   });
+  const getMediaObjectName = vi.fn(async (slug: string, filename: string, width?: number) => {
+    const key = width === undefined ? `${slug}/${filename}` : `${slug}/w${width}/${filename}`;
+    return params.media?.[key] ? `snapshots/s1/media/${key}` : null;
+  });
   const reader: GameSnapshotReader = {
     getPointer: vi.fn(async () => null),
     getCatalog,
     getGame,
     getMedia,
+    getMediaObjectName,
   };
-  return { reader, getCatalog, getGame, getMedia };
+  return { reader, getCatalog, getGame, getMedia, getMediaObjectName };
 }
 
 async function createApp(params: {
   githubClient: GitHubClient;
   snapshotReader?: GameSnapshotReader | null;
   store?: InMemoryStore;
+  mediaUrlSigner?: { urlFor(object: string): Promise<string> } | null;
 }): Promise<FastifyInstance> {
   const store = params.store ?? new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
@@ -98,6 +104,7 @@ async function createApp(params: {
       gamesRepo: repo,
       githubClient: params.githubClient,
       snapshotReader: params.snapshotReader ?? null,
+      mediaUrlSigner: params.mediaUrlSigner ?? null,
     },
   });
 }
@@ -446,6 +453,118 @@ describe('with no snapshot configured', () => {
     expect(game.statusCode).toBe(200);
     expect(getCatalog).toHaveBeenCalled();
     expect(getGameSources).toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+/**
+ * Media bytes are the bulk of Hosting egress, and the route answers without a session,
+ * so the redirect is what keeps an abusive client from pulling them through the origin.
+ */
+describe('serving media straight from Cloud Storage', () => {
+  const withSignedMedia = { ...catalogEntry('bubble-pop'), media: { screenshots: [{ file: 'opening.png' }] } };
+
+  it('redirects to a signed URL instead of carrying the bytes', async () => {
+    const { githubClient } = createGithubStub([withSignedMedia]);
+    const snapshot = createSnapshotStub({
+      catalog: [withSignedMedia],
+      media: { 'bubble-pop/opening.png': Buffer.from('baked-bytes') },
+    });
+    const app = await createApp({
+      githubClient,
+      snapshotReader: snapshot.reader,
+      mediaUrlSigner: { urlFor: async (object) => `https://storage.googleapis.com/b/${object}?signed` },
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/opening.png' });
+
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toBe(
+      'https://storage.googleapis.com/b/snapshots/s1/media/bubble-pop/opening.png?signed',
+    );
+    // The signed URL is a credential: a shared cache must not hand it to the next viewer.
+    expect(response.headers['cache-control']).toMatch(/^private, max-age=/);
+    expect(response.rawPayload.length).toBe(0);
+    expect(snapshot.getMedia).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('redirects to the baked variant when one is asked for', async () => {
+    const { githubClient } = createGithubStub([withSignedMedia]);
+    const snapshot = createSnapshotStub({
+      catalog: [withSignedMedia],
+      media: {
+        'bubble-pop/opening.png': Buffer.from('full-size'),
+        'bubble-pop/w96/opening.png': Buffer.from('thumb'),
+      },
+    });
+    const app = await createApp({
+      githubClient,
+      snapshotReader: snapshot.reader,
+      mediaUrlSigner: { urlFor: async (object) => `https://signed/${object}` },
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/opening.png?w=96' });
+
+    expect(response.headers.location).toBe('https://signed/snapshots/s1/media/bubble-pop/w96/opening.png');
+    await app.close();
+  });
+
+  it('falls back to the original when the variant was never baked', async () => {
+    const { githubClient } = createGithubStub([withSignedMedia]);
+    const snapshot = createSnapshotStub({
+      catalog: [withSignedMedia],
+      media: { 'bubble-pop/opening.png': Buffer.from('full-size') },
+    });
+    const app = await createApp({
+      githubClient,
+      snapshotReader: snapshot.reader,
+      mediaUrlSigner: { urlFor: async (object) => `https://signed/${object}` },
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/opening.png?w=96' });
+
+    expect(response.headers.location).toBe('https://signed/snapshots/s1/media/bubble-pop/opening.png');
+    await app.close();
+  });
+
+  // Signing is an optimisation. A missing tokenCreator grant or an unreachable IAM must
+  // cost money, not pictures.
+  it('serves the bytes itself when signing fails', async () => {
+    const { githubClient } = createGithubStub([withSignedMedia]);
+    const snapshot = createSnapshotStub({
+      catalog: [withSignedMedia],
+      media: { 'bubble-pop/opening.png': Buffer.from('baked-bytes') },
+    });
+    const app = await createApp({
+      githubClient,
+      snapshotReader: snapshot.reader,
+      mediaUrlSigner: {
+        urlFor: async () => {
+          throw new Error('signBlob failed: 403');
+        },
+      },
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/opening.png' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.rawPayload.toString()).toBe('baked-bytes');
+    await app.close();
+  });
+
+  it('carries the bytes as before when no signer is configured', async () => {
+    const { githubClient } = createGithubStub([withSignedMedia]);
+    const snapshot = createSnapshotStub({
+      catalog: [withSignedMedia],
+      media: { 'bubble-pop/opening.png': Buffer.from('baked-bytes') },
+    });
+    const app = await createApp({ githubClient, snapshotReader: snapshot.reader });
+
+    const response = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/opening.png' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.rawPayload.toString()).toBe('baked-bytes');
     await app.close();
   });
 });

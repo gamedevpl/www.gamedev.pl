@@ -24,6 +24,7 @@ import {
   type GitHubClient,
 } from './catalog/github-client.js';
 import { createSnapshotReaderFromEnv, type GameSnapshotReader } from './catalog/game-snapshot.js';
+import { createMediaUrlSignerFromEnv, type MediaUrlSigner } from './delivery/media-url-signer.js';
 import { registerAdminGameRoutes } from './catalog/admin-game-routes.js';
 import { createSlugResolver } from './catalog/slug-resolver.js';
 import { registerSelfBuildConnectRoutes } from './agent-surface/self-build-connect-routes.js';
@@ -244,6 +245,8 @@ export interface SubmissionRoutesOptions {
    * GitHub, never a requirement — see game-snapshot.ts.
    */
   snapshotReader?: GameSnapshotReader | null;
+  /** Injected by tests; production builds one from the environment. */
+  mediaUrlSigner?: MediaUrlSigner | null;
   /**
    * Cap on in-memory assembled draft previews (HTML can be large). Defaults to
    * 50; tests pass a smaller value to exercise eviction without minting dozens
@@ -1128,6 +1131,11 @@ export async function registerSubmissionRoutes(
   const maxMediaPerWindow = 400;
   const mediaByIp = new Map<string, number[]>();
 
+  const mediaUrlSigner = options.mediaUrlSigner ?? createMediaUrlSignerFromEnv();
+  if (mediaUrlSigner) {
+    app.log.info('serving published media as signed Cloud Storage redirects');
+  }
+
   const catalogRoutes = await registerCatalogRoutes(app, {
     store,
     gamesStore: options.agentChannel?.gamesStore,
@@ -1138,6 +1146,7 @@ export async function registerSubmissionRoutes(
     mediaByIp,
     maxMediaPerWindow,
     mediaRateLimitWindowMs: gamesRateLimitWindowMs,
+    mediaUrlSigner,
   });
   await registerCatalogSearchRoutes(app, {
     store,

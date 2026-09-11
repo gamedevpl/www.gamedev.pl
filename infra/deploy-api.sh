@@ -325,6 +325,12 @@ fi
 # keeps the flag inert on the run.app URL, so true is safe on both deploy paths. Until
 # this line, a hand deploy that forgot to export it switched the limiter off in silence.
 ENV_VARS="${ENV_VARS}|TRUST_EDGE_CLIENT_IP=${TRUST_EDGE_CLIENT_IP:-true}"
+# Media as signed-URL redirects instead of bytes through the origin. Threaded on both
+# deploy paths for the reason above: a lever only the workflow knows about is off the
+# moment someone deploys by hand. Default false — off is the older, costlier, always
+# correct behaviour, and flipping it on is the owner's call once the snapshot bucket and
+# the runtime's tokenCreator grant are both in place.
+ENV_VARS="${ENV_VARS}|SERVE_MEDIA_FROM_GCS=${SERVE_MEDIA_FROM_GCS:-false}"
 
 if [ -n "${CANONICAL_HOST:-}" ]; then
   ENV_VARS="${ENV_VARS}|CANONICAL_HOST=${CANONICAL_HOST}"
