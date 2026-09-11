@@ -7,6 +7,11 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Explain how to retry uploads when source storage is busy (#1263).
+- Distinguish interactive takeover commands from shell commands (#1263).
+
 ## 0.13.0 — 2026-09-10
 
 ### Added
@@ -14,9 +19,6 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 - Use `/push` or `gamedevpl push` to deliver local changes as a preview; `/submit` remains supported (#1255).
 
 ### Fixed
-
-- Explain how to retry uploads when source storage is busy (#1263).
-- Distinguish interactive takeover commands from shell commands (#1263).
 
 - Make terminal conversations easier to scan with colored roles, checks, links and clearer spacing (#1259).
 - Summarize repeated tool activity while preserving every operation in `/logs` (#1259).

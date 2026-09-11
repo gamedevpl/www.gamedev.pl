@@ -5,7 +5,10 @@ export function registerErrorHandler(app: FastifyInstance): void {
   // Fastify's default 500 echoes err.message; 4xx replies pass through.
   app.setErrorHandler((error: FastifyError, request, reply) => {
     if (error instanceof StorageWriteBusyError) {
-      void reply.header('Retry-After', '5').code(503).send({ error: 'storage_busy', message: error.message });
+      void reply
+        .header('Retry-After', String(error.retryAfterSeconds))
+        .code(503)
+        .send({ error: 'storage_busy', message: error.message });
       return;
     }
     // Fastify reads both; statusCode wins when an error carries each.

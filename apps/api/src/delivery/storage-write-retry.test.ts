@@ -28,8 +28,19 @@ it.each([400, 403, 412, 500])('leaves status %i to the caller without retrying',
   expect((await retryStorageWrite(send)).status).toBe(status);
   expect(send).toHaveBeenCalledTimes(1);
 });
-it('does not retry earlier than a long Retry-After', async () => {
-  const send = vi.fn(async () => new Response('', { status: 429, headers: { 'retry-after': '60' } }));
-  await expect(retryStorageWrite(send)).rejects.toBeInstanceOf(StorageWriteBusyError);
+it.each(['seconds', 'date'])('preserves a long Retry-After expressed as %s', async (format) => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-09-11T12:00:00Z'));
+  const after = format === 'seconds' ? '60' : 'Fri, 11 Sep 2026 12:01:00 GMT';
+  const send = vi.fn(async () => new Response('', { status: 429, headers: { 'retry-after': after } }));
+  await expect(retryStorageWrite(send)).rejects.toMatchObject({ retryAfterSeconds: 60 });
   expect(send).toHaveBeenCalledTimes(1);
+});
+it('preserves Retry-After when the retry budget is exhausted', async () => {
+  vi.useFakeTimers();
+  const send = vi.fn(async () => new Response('', { status: 429, headers: { 'retry-after': '8' } }));
+  const check = expect(retryStorageWrite(send)).rejects.toMatchObject({ retryAfterSeconds: 8 });
+  await vi.runAllTimersAsync();
+  await check;
+  expect(send).toHaveBeenCalledTimes(4);
 });
