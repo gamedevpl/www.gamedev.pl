@@ -1,3 +1,5 @@
+import { runMuseWithApprovals } from './muse-approval.js';
+import { permissionHandoff } from './permission-handoff.js';
 import { prepareAgyPermissions } from './agy-permissions.js';
 import { localActivity } from './local-activity.js';
 import { agyConversation, type InteractiveRun } from './agy-interactive.js';
@@ -34,7 +36,7 @@ export type AdapterRun = (input: {
   abort?: AbortSignal;
   onLine?: (line: string) => void;
   authCheck?: Promise<void>;
-}) => Promise<{ code: number | null }>;
+}) => Promise<{ code: number | null; permissionSession?: string }>;
 
 type VerifyRun = NonNullable<Parameters<typeof runLadder>[0]['run']>;
 
@@ -76,7 +78,11 @@ export function detectLocalAdapters(
   });
 }
 
-async function defaultAdapterRun(input: Parameters<AdapterRun>[0]): Promise<{ code: number | null }> {
+async function defaultAdapterRun(input: Parameters<AdapterRun>[0]): ReturnType<AdapterRun> {
+  return runMuseWithApprovals(input, spawnLocalAdapter);
+}
+
+async function spawnLocalAdapter(input: Parameters<AdapterRun>[0]): ReturnType<AdapterRun> {
   const child = await spawnAdapter({ ...input, timeoutMs: ADAPTER_TIMEOUT_MS });
   for (const stream of [child.stdout, child.stderr]) {
     if (stream) createInterface({ input: stream }).on('line', (line: string) => input.onLine?.(line));
@@ -340,41 +346,29 @@ export async function runLocalBuild(input: {
           abort: controller.signal,
           onLine: (line) => {
             failure.observe(line);
+            if (line.startsWith('Muse needs your approval')) ws.onActivity?.('Muse needs your approval');
             conversation = agyConversation(line) ?? conversation;
             if (permissionBlocked(line)) blocked = true;
             for (const shown of stream(line)) {
               if (shown.includes('⚙ ')) ws.onActivity?.(`${spec.name} · running a tool — /logs after completion`);
+              if (shown.includes('Waiting for model response'))
+                ws.onActivity?.(`${spec.name} · waiting for model response`);
               input.write(shown);
             }
           },
         });
         if (controller.signal.aborted) return false;
-        if (blocked && spec.name === 'agy' && ws.interactiveRun && !ws.unattended) {
-          presence?.phase('permission');
-          const choice = await ws.pick(
-            ['Open Antigravity interactively', 'Keep edits and return'],
-            'Antigravity needs permission. Open its permission prompts in this terminal?',
-          );
-          if (choice !== 'Open Antigravity interactively' || controller.signal.aborted) return false;
-          input.write(
-            'Antigravity now owns the terminal. Answer its permission prompts, then exit Antigravity to return here for verification.',
-          );
-          presence?.phase('interactive');
-          const resumed = await ws.interactiveRun({
+        if (result.permissionSession || (blocked && spec.name === 'agy' && ws.interactiveRun && !ws.unattended)) {
+          return permissionHandoff({
+            ws,
             spec,
             cwd,
-            env: childEnv(ws.env, ''),
             prompt,
-            conversation,
-            logPath: ws.lastLog,
+            conversation: result.permissionSession ?? conversation,
+            write: input.write,
             abort: controller.signal,
+            phase: (phase) => presence?.phase(phase),
           });
-          input.write('Returned to gamedevpl.');
-          if (resumed.code !== 0) {
-            input.write('Interactive Antigravity stopped without success. Edits remain local; /diff to inspect.');
-            return false;
-          }
-          return true;
         }
         if (blocked) {
           input.write(

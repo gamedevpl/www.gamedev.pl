@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Recover Muse tasks waiting for approval by offering to resume the same session interactively.
+
 ### Added
 
 - Configure remembered sandboxed headless permissions before starting local Antigravity tasks (#1267).
