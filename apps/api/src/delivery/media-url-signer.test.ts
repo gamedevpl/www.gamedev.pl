@@ -74,17 +74,12 @@ describe('the shipped TTL', () => {
 });
 
 describe('environment wiring', () => {
-  const full = { SERVE_MEDIA_FROM_GCS: 'true', GAMES_SNAPSHOT_BUCKET: 'gamedevpl-games-snapshots' };
-
-  it('builds a signer only when asked and configured', () => {
-    expect(createMediaUrlSignerFromEnv(full)).not.toBeNull();
+  it('signs wherever snapshots are configured', () => {
+    expect(createMediaUrlSignerFromEnv({ GAMES_SNAPSHOT_BUCKET: 'gamedevpl-games-snapshots' })).not.toBeNull();
   });
 
-  it('stays off by default and for every half-configuration', () => {
+  it('has nothing to sign without a snapshot bucket', () => {
     expect(createMediaUrlSignerFromEnv({})).toBeNull();
-    expect(createMediaUrlSignerFromEnv({ ...full, SERVE_MEDIA_FROM_GCS: undefined })).toBeNull();
-    expect(createMediaUrlSignerFromEnv({ ...full, SERVE_MEDIA_FROM_GCS: 'false' })).toBeNull();
-    expect(createMediaUrlSignerFromEnv({ ...full, SERVE_MEDIA_FROM_GCS: 'TRUE' })).toBeNull();
-    expect(createMediaUrlSignerFromEnv({ ...full, GAMES_SNAPSHOT_BUCKET: '  ' })).toBeNull();
+    expect(createMediaUrlSignerFromEnv({ GAMES_SNAPSHOT_BUCKET: '  ' })).toBeNull();
   });
 });

@@ -40,9 +40,8 @@ export function createMediaUrlSigner(options: {
   };
 }
 
-// Opt-in kill switch; unset serves inline. Both deploy paths carry it.
+// Signs wherever snapshots live; no bucket, nothing to sign.
 export function createMediaUrlSignerFromEnv(env: NodeJS.ProcessEnv = process.env): MediaUrlSigner | null {
-  if (env.SERVE_MEDIA_FROM_GCS?.trim() !== 'true') return null;
   const bucket = env.GAMES_SNAPSHOT_BUCKET?.trim();
   if (!bucket) return null;
 

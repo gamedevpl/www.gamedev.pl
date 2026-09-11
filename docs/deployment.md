@@ -379,7 +379,7 @@ a Google-own peer yet.
 `GET /api/diagnostics/proxy` reports `resolvedIp`, `clientIp` and `peerIsGoogleEdge` side
 by side, so the three can be compared through either path after a change.
 
-## Media egress, and `SERVE_MEDIA_FROM_GCS`
+## Media egress
 
 Hosting rewrites `**` to Cloud Run, so **every byte the origin returns is billed as
 Hosting egress**, against a 360 MB/day free tier and $0.15/GB after it. Game media is the
@@ -388,7 +388,7 @@ bulk of that traffic — a gameplay capture measured 662 KB against a 282 KB bun
 per-IP budget of 400 requests/minute. At that ceiling one address can pull ~264 MB/minute,
 which is the free tier in 82 seconds and roughly $57/day sustained.
 
-With `SERVE_MEDIA_FROM_GCS=true` the route stops carrying those bytes. It resolves the
+The route therefore does not carry those bytes. It resolves the
 snapshot object (probing that it exists — a redirect cannot fall through the way an
 inline read can), signs a six-hour V4 URL with the runtime service account
 ([`gcs-sign.ts`](../apps/api/src/delivery/gcs-sign.ts), the same path kit downloads use)
@@ -407,12 +407,14 @@ CSP matters here: `media-src` must allow `https://storage.googleapis.com`, or ev
 `<video>` pointing at a redirected capture is a policy violation (report-only today,
 silent breakage the day it is enforced).
 
-- **Unset or anything but `true`** (the default): the bytes are read and served inline,
-  exactly as before. Always correct, only more expensive.
-- **`true`**: published snapshot media redirects. Store-published and repo-backed files
-  still serve inline, and **a signing failure falls back to inline** rather than to a
-  broken image — a missing `roles/iam.serviceAccountTokenCreator` grant costs money, not
-  pictures.
+There is no flag. Redirects happen wherever `GAMES_SNAPSHOT_BUCKET` is set — which is
+every environment that has published games — and store-published or repo-backed files
+still serve inline because they are not snapshot objects.
+
+**A signing failure falls back to inline** rather than to a broken image: a missing
+`roles/iam.serviceAccountTokenCreator` grant costs money, not pictures. That fallback is
+the reason a switch was not worth its own variable: the failure mode it would guard
+against is already handled in code, per request, without anyone having to notice.
 
 Redirects carry `Cache-Control: public, max-age=10800` — half the URL's life, so a cached
 redirect never outlives what it points at. `public`, and the TTL six hours rather than
@@ -422,8 +424,7 @@ Storage under a new query string, which no cache can reuse. The files are alread
 reachable without a session, so treating each screenshot as a short-lived credential
 bought nothing and cost bandwidth.
 
-Threaded through **both** deploy paths (`deploy.yml` and `infra/deploy-api.sh`), because a
-lever only the workflow knows about is off the moment someone deploys by hand.
+To put media back on the origin, revert the change — there is no variable to unset.
 
 ## Outbound email (Resend)
 

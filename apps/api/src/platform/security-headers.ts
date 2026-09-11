@@ -22,7 +22,7 @@ export const APP_CSP_REPORT_ONLY = [
   // Avatars come from whichever identity provider signed the visitor in.
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
-  // storage.googleapis.com: media redirects there when SERVE_MEDIA_FROM_GCS is on.
+  // storage.googleapis.com: published media redirects there.
   "media-src 'self' data: blob: https://storage.googleapis.com",
   // Realtime hosts over WebSocket; the MediaPipe model file from GCS.
   "connect-src 'self' wss: https://accounts.google.com/gsi/ https://cdn.jsdelivr.net https://storage.googleapis.com",
