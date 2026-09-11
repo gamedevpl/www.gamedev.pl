@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.14.0 — 2026-09-11
+
 ### Added
 
 - Configure remembered sandboxed headless permissions before starting local Antigravity tasks (#1267).
