@@ -147,6 +147,9 @@ const FILE_BUCKET = {
   'job-state': 'platform',
   // Signed-URL minting over GCS. No relative imports at all.
   'gcs-sign': 'platform',
+  // A cache in front of gcs-sign, so the media route can redirect instead of
+  // carrying bytes. Imports gcs-sign and nothing else.
+  'media-url-signer': 'platform',
   // A line counter. No relative imports at all.
   'module-size': 'platform',
   // A generic HTTP rate-limit classifier with no domain deps at all, and a bare

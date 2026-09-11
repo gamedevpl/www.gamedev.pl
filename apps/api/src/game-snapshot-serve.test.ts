@@ -457,10 +457,7 @@ describe('with no snapshot configured', () => {
   });
 });
 
-/**
- * Media bytes are the bulk of Hosting egress, and the route answers without a session,
- * so the redirect is what keeps an abusive client from pulling them through the origin.
- */
+// Redirects keep media bytes off the origin. See docs/deployment.md.
 describe('serving media straight from Cloud Storage', () => {
   const withSignedMedia = { ...catalogEntry('bubble-pop'), media: { screenshots: [{ file: 'opening.png' }] } };
 
@@ -482,7 +479,7 @@ describe('serving media straight from Cloud Storage', () => {
     expect(response.headers.location).toBe(
       'https://storage.googleapis.com/b/snapshots/s1/media/bubble-pop/opening.png?signed',
     );
-    // The signed URL is a credential: a shared cache must not hand it to the next viewer.
+    // The signed URL is a credential; caches must not share it.
     expect(response.headers['cache-control']).toMatch(/^private, max-age=/);
     expect(response.rawPayload.length).toBe(0);
     expect(snapshot.getMedia).not.toHaveBeenCalled();
@@ -528,8 +525,7 @@ describe('serving media straight from Cloud Storage', () => {
     await app.close();
   });
 
-  // Signing is an optimisation. A missing tokenCreator grant or an unreachable IAM must
-  // cost money, not pictures.
+  // A missing grant must cost money, not pictures.
   it('serves the bytes itself when signing fails', async () => {
     const { githubClient } = createGithubStub([withSignedMedia]);
     const snapshot = createSnapshotStub({

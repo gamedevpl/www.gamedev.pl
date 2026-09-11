@@ -29,8 +29,7 @@ describe('media URL signer', () => {
     expect(signatures()).toBe(1);
   });
 
-  // Past halfway a handed-out URL could expire mid-download, so the next caller gets a
-  // fresh one rather than the tail of an old one.
+  // Past halfway a handed-out URL could expire mid-download.
   it('re-signs once the reuse window passes', async () => {
     let clock = NOW;
     const { signer, signatures } = signerWithCounter(() => clock);
@@ -59,7 +58,7 @@ describe('media URL signer', () => {
     await signer.urlFor('c');
     clock += 1;
 
-    // 'a' was evicted when 'c' arrived, so it is signed again at the new clock.
+    // 'a' was evicted by 'c', so it re-signs.
     expect(await signer.urlFor('a')).toBe(`url:a:${clock}`);
     expect(await signer.urlFor('c')).toBe(`url:c:${NOW}`);
   });
