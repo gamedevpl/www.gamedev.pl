@@ -6,11 +6,12 @@ import { createGcsObjectStore, type GcsObjectStore } from './gcs-sign.js';
 export const MEDIA_URL_TTL_SECONDS = 6 * 60 * 60;
 
 export interface MediaUrlSigner {
-  urlFor(object: string): Promise<string>;
+  // Null when absent: a redirect cannot fall through.
+  urlFor(object: string): Promise<string | null>;
 }
 
 export function createMediaUrlSigner(options: {
-  store: Pick<GcsObjectStore, 'signReadUrl'>;
+  store: Pick<GcsObjectStore, 'signReadUrl' | 'objectExists'>;
   ttlSeconds?: number;
   now?: () => number;
   maxCached?: number;
@@ -24,10 +25,13 @@ export function createMediaUrlSigner(options: {
   const cache = new Map<string, { url: string; signedAt: number }>();
 
   return {
-    async urlFor(object: string): Promise<string> {
+    async urlFor(object: string): Promise<string | null> {
       const cached = cache.get(object);
       const currentTime = now();
       if (cached && currentTime - cached.signedAt < reuseWindowMs) return cached.url;
+
+      // Probed only when minting; a cached URL proves existence.
+      if (!(await options.store.objectExists(object))) return null;
 
       const url = await options.store.signReadUrl(object, ttlSeconds);
       if (cache.size >= maxCached) {
@@ -46,5 +50,12 @@ export function createMediaUrlSignerFromEnv(env: NodeJS.ProcessEnv = process.env
   if (!bucket) return null;
 
   // Signs as the runtime account, like kit downloads.
+  return createMediaUrlSigner({ store: createGcsObjectStore({ bucket }) });
+}
+
+// Platform-made games: media in the store bucket, and the heavier half.
+export function createStoreMediaUrlSignerFromEnv(env: NodeJS.ProcessEnv = process.env): MediaUrlSigner | null {
+  const bucket = env.GAMES_STORE_BUCKET?.trim();
+  if (!bucket) return null;
   return createMediaUrlSigner({ store: createGcsObjectStore({ bucket }) });
 }

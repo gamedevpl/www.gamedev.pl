@@ -407,9 +407,19 @@ CSP matters here: `media-src` must allow `https://storage.googleapis.com`, or ev
 `<video>` pointing at a redirected capture is a policy violation (report-only today,
 silent breakage the day it is enforced).
 
-There is no flag. Redirects happen wherever `GAMES_SNAPSHOT_BUCKET` is set — which is
-every environment that has published games — and store-published or repo-backed files
-still serve inline because they are not snapshot objects.
+There is no flag. Redirects happen wherever the buckets are set, and they cover both
+populations of published games:
+
+- **Catalog games** (games repo, baked into a snapshot) — signed against
+  `GAMES_SNAPSHOT_BUCKET`, object `snapshots/<id>/media/<slug>/<file>`.
+- **Games made on the platform** (created from prompts, published through the store) —
+  signed against `GAMES_STORE_BUCKET`, object
+  `games/<slug>/versions/<version>/media/<file>`. These were missed at first and are the
+  heavier half: the 662 KB capture that motivated this work belongs to one of them.
+
+Repo-backed media with no snapshot still serves inline. A URL is signed only after the
+object is confirmed to exist, because a redirect cannot fall through to the next source
+the way an inline read does.
 
 **A signing failure falls back to inline** rather than to a broken image: a missing
 `roles/iam.serviceAccountTokenCreator` grant costs money, not pictures. That fallback is

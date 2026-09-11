@@ -91,7 +91,7 @@ async function createApp(params: {
   githubClient: GitHubClient;
   snapshotReader?: GameSnapshotReader | null;
   store?: InMemoryStore;
-  mediaUrlSigner?: { urlFor(object: string): Promise<string> } | null;
+  mediaUrlSigner?: { urlFor(object: string): Promise<string | null> } | null;
 }): Promise<FastifyInstance> {
   const store = params.store ?? new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
