@@ -6,7 +6,7 @@ import { catalogMediaUrl, isPlatformAuthor, type CatalogEntry } from './catalog.
 import { PixelIcon } from './PixelIcon.js';
 import { ShareGameButton } from './ShareGameButton.js';
 import { VoteWidget } from './VoteWidget.js';
-import { creatorPath, studioPath } from './core/router.js';
+import { PLATFORM_HANDLE, creatorPath, studioPath } from './core/router.js';
 import { recordRemixStep } from './visitTelemetry.js';
 
 type GameDetailPageProps = {
@@ -64,7 +64,10 @@ export function GameDetailPage({ game, state, onPlay, onPlayTogether, onRemix, o
   const primaryScreenshot = previewScreenshot(game);
   const screenshot = screenshots.find((candidate) => candidate.name === selectedScreenshotName) ?? primaryScreenshot;
   const authorLabel = isPlatformAuthor(game.submittedBy) ? t('catalog.platformAuthor') : game.submittedBy;
-  const authorPath = game.creatorHandle ? creatorPath(game.creatorHandle) : null;
+  const authorPath =
+    game.creatorHandle && !isPlatformAuthor(game.submittedBy) && game.creatorHandle !== PLATFORM_HANDLE
+      ? creatorPath(game.creatorHandle)
+      : null;
   const isOwner = Boolean(
     user?.handle && game.creatorHandle && user.handle.toLowerCase() === game.creatorHandle.toLowerCase(),
   );

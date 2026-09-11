@@ -179,7 +179,7 @@ describe('parsePathRoute', () => {
         slug: 'neon-courier',
       });
     }
-    expect(parsePathRoute('/gamedevpl')).toEqual({ view: 'creator', handle: 'gamedevpl' });
+    expect(parsePathRoute('/gamedevpl')).toEqual({ view: 'home' });
     expect(parsePathRoute('/gamedevpl/brick-storm')).toEqual({
       view: 'game',
       handle: 'gamedevpl',
@@ -273,6 +273,8 @@ describe('path builders', () => {
     expect(canonicalPath('/health')).toBe('/admin/telemetry');
     expect(canonicalPath('/status/tok-abc')).toBe('/studio/tok-abc');
     expect(canonicalPath('/creators/ada')).toBe('/ada');
+    expect(canonicalPath('/gamedevpl')).toBe('/');
+    expect(canonicalPath('/creators/gamedevpl')).toBe('/');
     // A bare /admin names no section; the queue is what it shows, so that is what it says.
     expect(canonicalPath('/admin')).toBe('/admin/queue');
     // An old tab name is not the current address for the surface that absorbed it.
@@ -305,6 +307,8 @@ describe('path builders', () => {
   it('builds a root creator path that round-trips', () => {
     expect(creatorPath('ada')).toBe('/ada');
     expect(parsePathRoute(creatorPath('ada'))).toEqual({ view: 'creator', handle: 'ada' });
+    expect(parsePathRoute('/gamedevpl')).toEqual({ view: 'home' });
+    expect(parsePathRoute('/creators/gamedevpl')).toEqual({ view: 'home' });
   });
 
   it('builds a game page path that round-trips', () => {
@@ -321,14 +325,14 @@ describe('path builders', () => {
     });
   });
 
-  it('sends game page Up to the owning creator profile', () => {
+  it('sends game page Up to the owning creator profile or home for platform games', () => {
     expect(navUpTarget({ view: 'game', handle: 'nightshift', slug: 'neon-courier' })).toEqual({
       path: '/nightshift',
       labelKey: 'upCreator',
     });
     expect(navUpTarget({ view: 'game', handle: 'gamedevpl', slug: 'brick-storm' })).toEqual({
-      path: '/gamedevpl',
-      labelKey: 'upCreator',
+      path: '/',
+      labelKey: 'upHome',
     });
   });
 
@@ -410,14 +414,8 @@ describe('navUpTarget', () => {
       path: '/studio',
       labelKey: 'upStudio',
     });
-    expect(navUpTarget({ view: 'studio', game: 'tok' })).toEqual({
-      path: '/studio',
-      labelKey: 'upStudio',
-    });
-    expect(navUpTarget({ view: 'studio' })).toEqual({
-      path: '/',
-      labelKey: 'upHome',
-    });
+    expect(navUpTarget({ view: 'studio', game: 'tok' })).toEqual({ path: '/studio', labelKey: 'upStudio' });
+    expect(navUpTarget({ view: 'studio' })).toEqual({ path: '/', labelKey: 'upHome' });
   });
 
   it('sends browsable non-studio surfaces home', () => {
