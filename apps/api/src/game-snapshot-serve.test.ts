@@ -73,20 +73,27 @@ function createSnapshotStub(params: {
     const body = params.media?.[key];
     return body ? { body, contentType: 'image/png' } : null;
   });
+  const getMediaObjectName = vi.fn(async (slug: string, filename: string, width?: number) => {
+    const key = width === undefined ? `${slug}/${filename}` : `${slug}/w${width}/${filename}`;
+    return params.media?.[key] ? `snapshots/s1/media/${key}` : null;
+  });
   const reader: GameSnapshotReader = {
     getPointer: vi.fn(async () => null),
     getCatalog,
     getGame,
     getMedia,
+    getMediaObjectName,
   };
-  return { reader, getCatalog, getGame, getMedia };
+  return { reader, getCatalog, getGame, getMedia, getMediaObjectName };
 }
 
 async function createApp(params: {
   githubClient: GitHubClient;
   snapshotReader?: GameSnapshotReader | null;
+  store?: InMemoryStore;
+  mediaUrlSigner?: { urlFor(object: string): Promise<string> } | null;
 }): Promise<FastifyInstance> {
-  const store = new InMemoryStore();
+  const store = params.store ?? new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
   return buildApp({
     store,
@@ -97,6 +104,7 @@ async function createApp(params: {
       gamesRepo: repo,
       githubClient: params.githubClient,
       snapshotReader: params.snapshotReader ?? null,
+      mediaUrlSigner: params.mediaUrlSigner ?? null,
     },
   });
 }
@@ -183,6 +191,20 @@ describe('playing a published game', () => {
 });
 
 describe('the catalog', () => {
+  it('asks Firestore about erased owners on every request, so an erasure never waits', async () => {
+    // Uncached on purpose: a cache would hide an erasure for a window.
+    const { githubClient } = createGithubStub([catalogEntry('from-github')]);
+    const store = new InMemoryStore();
+    const erased = vi.spyOn(store, 'listSubmissionsByOwner');
+    const app = await createApp({ githubClient, store });
+
+    await app.inject({ method: 'GET', url: '/api/catalog' });
+    await app.inject({ method: 'GET', url: '/api/catalog' });
+
+    expect(erased).toHaveBeenCalledTimes(2);
+    await app.close();
+  });
+
   it('comes from the snapshot when one is published', async () => {
     const { githubClient, getCatalog } = createGithubStub([catalogEntry('from-github')]);
     const snapshot = createSnapshotStub({ catalog: [catalogEntry('from-snapshot')] });
@@ -431,6 +453,114 @@ describe('with no snapshot configured', () => {
     expect(game.statusCode).toBe(200);
     expect(getCatalog).toHaveBeenCalled();
     expect(getGameSources).toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+// Redirects keep media bytes off the origin. See docs/deployment.md.
+describe('serving media straight from Cloud Storage', () => {
+  const withSignedMedia = { ...catalogEntry('bubble-pop'), media: { screenshots: [{ file: 'opening.png' }] } };
+
+  it('redirects to a signed URL instead of carrying the bytes', async () => {
+    const { githubClient } = createGithubStub([withSignedMedia]);
+    const snapshot = createSnapshotStub({
+      catalog: [withSignedMedia],
+      media: { 'bubble-pop/opening.png': Buffer.from('baked-bytes') },
+    });
+    const app = await createApp({
+      githubClient,
+      snapshotReader: snapshot.reader,
+      mediaUrlSigner: { urlFor: async (object) => `https://storage.googleapis.com/b/${object}?signed` },
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/opening.png' });
+
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toBe(
+      'https://storage.googleapis.com/b/snapshots/s1/media/bubble-pop/opening.png?signed',
+    );
+    // Half the URL's life; the media is public anyway.
+    expect(response.headers['cache-control']).toBe('public, max-age=10800');
+    expect(response.rawPayload.length).toBe(0);
+    expect(snapshot.getMedia).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('redirects to the baked variant when one is asked for', async () => {
+    const { githubClient } = createGithubStub([withSignedMedia]);
+    const snapshot = createSnapshotStub({
+      catalog: [withSignedMedia],
+      media: {
+        'bubble-pop/opening.png': Buffer.from('full-size'),
+        'bubble-pop/w96/opening.png': Buffer.from('thumb'),
+      },
+    });
+    const app = await createApp({
+      githubClient,
+      snapshotReader: snapshot.reader,
+      mediaUrlSigner: { urlFor: async (object) => `https://signed/${object}` },
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/opening.png?w=96' });
+
+    expect(response.headers.location).toBe('https://signed/snapshots/s1/media/bubble-pop/w96/opening.png');
+    await app.close();
+  });
+
+  it('falls back to the original when the variant was never baked', async () => {
+    const { githubClient } = createGithubStub([withSignedMedia]);
+    const snapshot = createSnapshotStub({
+      catalog: [withSignedMedia],
+      media: { 'bubble-pop/opening.png': Buffer.from('full-size') },
+    });
+    const app = await createApp({
+      githubClient,
+      snapshotReader: snapshot.reader,
+      mediaUrlSigner: { urlFor: async (object) => `https://signed/${object}` },
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/opening.png?w=96' });
+
+    expect(response.headers.location).toBe('https://signed/snapshots/s1/media/bubble-pop/opening.png');
+    await app.close();
+  });
+
+  // A missing grant must cost money, not pictures.
+  it('serves the bytes itself when signing fails', async () => {
+    const { githubClient } = createGithubStub([withSignedMedia]);
+    const snapshot = createSnapshotStub({
+      catalog: [withSignedMedia],
+      media: { 'bubble-pop/opening.png': Buffer.from('baked-bytes') },
+    });
+    const app = await createApp({
+      githubClient,
+      snapshotReader: snapshot.reader,
+      mediaUrlSigner: {
+        urlFor: async () => {
+          throw new Error('signBlob failed: 403');
+        },
+      },
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/opening.png' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.rawPayload.toString()).toBe('baked-bytes');
+    await app.close();
+  });
+
+  it('carries the bytes as before when no signer is configured', async () => {
+    const { githubClient } = createGithubStub([withSignedMedia]);
+    const snapshot = createSnapshotStub({
+      catalog: [withSignedMedia],
+      media: { 'bubble-pop/opening.png': Buffer.from('baked-bytes') },
+    });
+    const app = await createApp({ githubClient, snapshotReader: snapshot.reader });
+
+    const response = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/opening.png' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.rawPayload.toString()).toBe('baked-bytes');
     await app.close();
   });
 });

@@ -10,6 +10,9 @@
 # APP_SA_NAME, WORLD_SA_NAME.
 set -euo pipefail
 
+# An old copy of this script does not fail; it reverts what a newer copy fixed.
+source "$(dirname "${BASH_SOURCE[0]}")/require-current-checkout.sh"
+
 PROJECT_ID="${PROJECT_ID:-gamedevpl}"
 REGION="${REGION:-europe-central2}"
 APP_REGION="${APP_REGION:-europe-west1}"
@@ -313,6 +316,18 @@ gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
   --project="$PROJECT_ID" \
   >/dev/null
 
+# The mirror image of the gate's condition below: the gate may write anything EXCEPT a
+# manifest, and the API may write manifests. Both halves are needed — moving the verdict
+# write to /api/internal/gate-verdict only helps if the identity behind that route can
+# perform it, and the runtime's bucket-wide grant is create-and-read. Without this every
+# gate would report progress against a 500 and finish with no verdict recorded.
+gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
+  --member="serviceAccount:${RUN_SA}" \
+  --role="roles/storage.objectAdmin" \
+  --condition="expression=resource.type == 'storage.googleapis.com/Object' && resource.name.startsWith('projects/_/buckets/${STORE_BUCKET}/objects/games/') && resource.name.endsWith('/manifest.json'),title=games-store-manifest-write,description=Replace a version manifest — the gate verdict path. Nothing else under games/" \
+  --project="$PROJECT_ID" \
+  >/dev/null
+
 # Live objects are never aged out — these are the originals, not a rebuildable
 # projection. Object versioning + soft-delete are the BY-11 compensating controls
 # for gate-runner's objectAdmin (overwrite/delete recovery); the lifecycle rule
@@ -388,14 +403,77 @@ grant_gate_with_retry() {
   "$@" >/dev/null
 }
 
-# objectAdmin (includes delete) is forced by in-place manifest updates — see
-# infra/gate-hardening.md "Store IAM: why objectAdmin". Compensated above with
-# versioning + soft-delete + noncurrent prune on this bucket.
+# Read every object, overwrite everything EXCEPT a manifest. The gate needs overwrite
+# because a re-gate of the same version rewrites its own derived artifacts; it no longer
+# needs it on manifest.json, because the verdict now goes to the API instead
+# (gate-verdict-routes.ts). Bucket-wide objectAdmin until 2026-09-08 meant the identity
+# that executes hostile candidate code could delete or green-light any published game.
+#
+# What this does not fix: within the versions it can name, the gate can still overwrite
+# another game's *artifacts*. Closing that needs a per-slug scope IAM cannot express for
+# a runtime value — see infra/gate-hardening.md for the staging-prefix design that would.
+grant_gate_with_retry gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
+  --member="serviceAccount:${GATE_SA_EMAIL}" \
+  --role="roles/storage.objectViewer" \
+  --condition=None \
+  --project="$PROJECT_ID"
+
 grant_gate_with_retry gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
   --member="serviceAccount:${GATE_SA_EMAIL}" \
   --role="roles/storage.objectAdmin" \
-  --condition=None \
+  --condition="expression=resource.type == 'storage.googleapis.com/Object' && !resource.name.endsWith('/manifest.json'),title=gate-no-manifest-writes,description=Gate artifacts yes but no game's manifest — the verdict goes through the API" \
   --project="$PROJECT_ID"
+
+# An older run of this script left the unconditional binding; reconcile it away.
+# Not `|| true`: if this removal fails, the old unconditional objectAdmin stays in force
+# beside the narrow one, hostile gate code keeps bucket-wide delete, and the hardening
+# only looks applied. So the removal may fail, and then the absence is verified.
+gcloud storage buckets remove-iam-policy-binding "gs://${STORE_BUCKET}" \
+  --member="serviceAccount:${GATE_SA_EMAIL}" \
+  --role="roles/storage.objectAdmin" \
+  --condition=None \
+  --project="$PROJECT_ID" \
+  >/dev/null 2>&1 || true
+# The read is checked on its own before anything inspects it. Piping straight into a
+# test conflates "the policy says no such binding" with "the policy could not be read" —
+# expired credentials, a permission gap, a transient API error — and the second must
+# never print "verified" over a grant that is still in force.
+if ! GATE_POLICY="$(gcloud storage buckets get-iam-policy "gs://${STORE_BUCKET}" \
+  --project="$PROJECT_ID" --format=json)"; then
+  echo "Error: could not read the IAM policy of gs://${STORE_BUCKET} to confirm the removal." >&2
+  echo "The narrow binding may be in place, but the broad one is unverified. Re-run." >&2
+  exit 1
+fi
+# Three outcomes, not two. A checker that answers by exit status alone cannot separate
+# "no such binding" from "python is missing" or "that JSON did not parse", and the second
+# pair would print "verified" over a grant still in force. So it answers in words.
+if ! GATE_BROAD="$(printf '%s' "$GATE_POLICY" | python3 -c "
+import json, sys
+policy = json.load(sys.stdin)
+member = 'serviceAccount:${GATE_SA_EMAIL}'
+broad = any(
+    b.get('role') == 'roles/storage.objectAdmin' and 'condition' not in b and member in b.get('members', [])
+    for b in policy.get('bindings', [])
+)
+print('BROAD' if broad else 'CLEAN')
+")"; then
+  echo "Error: could not evaluate the IAM policy of gs://${STORE_BUCKET}." >&2
+  echo "The broad binding is unverified, not absent. Re-run once python3 is available." >&2
+  exit 1
+fi
+case "$GATE_BROAD" in
+  CLEAN) ;;
+  BROAD)
+    echo "Error: gate-runner still holds unconditional objectAdmin on gs://${STORE_BUCKET}." >&2
+    echo "The narrow binding was added but the broad one remains — the gate is NOT hardened." >&2
+    exit 1
+    ;;
+  *)
+    echo "Error: the policy checker answered '${GATE_BROAD}', which is neither CLEAN nor BROAD." >&2
+    exit 1
+    ;;
+esac
+echo "    gate-runner: no unconditional objectAdmin (verified)." 
 
 grant_gate_with_retry gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${GATE_SA_EMAIL}" \
@@ -556,15 +634,16 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --condition=None \
   >/dev/null
 
-# UNVERIFIED role name: not confirmed against `gcloud iam roles describe` from this
-# environment. If it 404s, list `roles/discoveryengine.*` and pick the editor-level one —
-# CI needs write access for `documents:import`, not full admin.
-echo "    Granting roles/discoveryengine.editor to CI deployer (${DEPLOYER_SA}, for documents:import)"
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-  --member="serviceAccount:${DEPLOYER_SA}" \
-  --role="roles/discoveryengine.editor" \
-  --condition=None \
-  >/dev/null
+# The deployer used to hold discoveryengine.editor because the corpus import ran as it —
+# the games repo published as this account. Since 2026-09-08 that import runs as
+# kit-publisher@ (setup-wif.sh step 5b), and no workflow in *this* repo touches Discovery
+# Engine, so the grant is obsolete write access to every data store in the project.
+# Reconciled away rather than skipped, so a re-run on an older project takes it too.
+# The deployer's discoveryengine.editor is NOT revoked here. This script can run on a
+# project where setup-wif.sh has not, and the games repo would then still be importing
+# the corpus as the deployer — removing it here would break that import before its
+# replacement exists. The revocation belongs to the cutover, and lives in setup-wif.sh
+# step 5d, after the publisher has been granted.
 
 echo ""
 echo "==> Done. Firestore database, storage, IAM, deletion sweep, session secret, telemetry TTL, indexes, gate-runner, and the knowledge_query Discovery Engine data store configured for project ${PROJECT_ID}."

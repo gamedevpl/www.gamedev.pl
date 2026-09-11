@@ -29,3 +29,13 @@ describe('sanitizeEventPayload', () => {
     expect(sanitizeEventPayload(`a\n\nb${'x'.repeat(400)}`)).toHaveLength(240);
   });
 });
+
+it('preserves the full agent response while stripping terminal controls', () => {
+  const text = 'Beginning ' + 'long answer '.repeat(1000) + '\u001b[2JFinal editor repair instructions';
+  const shown = formatAdapterEvent('muse', text);
+  expect(shown).toContain('Beginning');
+  expect(shown).toContain('Final editor repair instructions');
+  expect(shown).toContain('long answer '.repeat(1000));
+  expect(shown).not.toContain('\u001b');
+  expect(shown).not.toContain('…');
+});

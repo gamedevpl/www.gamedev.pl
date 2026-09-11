@@ -59,7 +59,7 @@ on:
         default: 'main'
 
 concurrency:
-  group: games-catalog-gate
+  group: ${{ github.workflow == 'Games catalog gate' && format('games-catalog-gate-manual-{0}', inputs.ref || 'main') || 'games-catalog-gate' }}
   cancel-in-progress: true
 
 permissions:
@@ -207,20 +207,7 @@ jobs:
           GAME_CAPTURE_CHROME: ${{ steps.chrome.outputs.chrome-path }}
         run: |
           set -euo pipefail
-          npm run check:no-js
-          npm run check:gfx
-          npm run check:ios
-          npm run audio:check
-          npm run audio:plan-check
-          npm run typecheck
-          npm run test
-          npm run validate
-          npm run smoke
-          npm run trace
-          npm run build
-          npm run check:webgl
-          npm run accept
-          npm run agency -- --all --strict -j 4
+          npm run check:pr
           if [ "${{ steps.resolve.outputs.catalog_agent_play }}" = 1 ]; then
             npm run agent-play
           fi

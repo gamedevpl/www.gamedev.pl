@@ -67,6 +67,10 @@ export class VertexEmbeddingService {
     this.auth = new GoogleAuth({ scopes: [SCOPE] });
   }
 
+  get modelName(): string {
+    return this.model;
+  }
+
   // Embed a search query.
   embedQuery(query: string): Promise<number[]> {
     return this.embedText(query, { role: 'query' });

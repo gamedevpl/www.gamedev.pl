@@ -49,6 +49,12 @@ describe('connect entry points', () => {
     );
     expect(fetch.mock.calls.every(([url]) => !url.endsWith('/connect'))).toBe(true);
   });
+  it('keeps explicit agents in the checkout-aware interactive flow', async () => {
+    const fetch = backend();
+    expect(await runCli(['node', 'cli', 'connect', 'sky', '--agent', 'codex'], env, streams())).toBe(0);
+    expect(runInkRepl).toHaveBeenCalledWith(expect.objectContaining({ initialLine: '/connect sky --agent codex' }));
+    expect(fetch.mock.calls.every(([url]) => !url.endsWith('/connect'))).toBe(true);
+  });
   it('can open an existing game directly in the interactive mode', async () => {
     backend();
     expect(await runCli(['node', 'cli', 'repl', 'sky'], env, streams())).toBe(0);

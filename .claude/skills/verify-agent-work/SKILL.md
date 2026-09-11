@@ -77,6 +77,18 @@ Two concrete instances of that (observed 2026-07-23):
   blocked promotion. When a PR changes _when_ a frame mounts (or the copy of an error
   state the gate asserts), update `apps/e2e` in the same PR — the unit suite never
   drives that path.
+- **A 302 to another host can be unit-green while CSP forbids the destination.**
+  Observed (#1261 review, 2026-09-11): game media started answering 302 to a
+  15-minute GCS V4 URL. Route tests asserted `Location` and an empty body; CI was
+  green. Catalog/detail/theater load `gameplay.mp4` via `<video src="/api/…/media/…">`,
+  and CSP checks the *final* URL after redirects. `img-src` already allowed `https:`;
+  `media-src` was still `'self' data: blob:` — report-only today (a `/api/csp-report`
+  warn per catalog preview), enforcing later would block the file the PR exists to
+  move. `app.inject()` never executes CSP. When a PR changes the *origin* of a
+  media/img/script/connect URL (redirect, signed URL, new CDN), grep `img-src` /
+  `media-src` / `connect-src` / `script-src` and the actual tags (`<video>`, `<img>`,
+  `fetch`), not only the handler. Report-only still matters: the report sink logs
+  every violation.
 - **A responsive control can move into an overflow menu while its e2e selector stays
   direct.** Observed (#878, 2026-08-18): the mobile Studio Code action moved behind
   More, but the deploy gate still searched for a visible inline Code button. When a
@@ -112,6 +124,10 @@ Two concrete instances of that (observed 2026-07-23):
   edited dependency ranges in `package.json` without regenerating the lock — every local
   check green, CI dead on arrival at `npm ci` (EUSAGE). After ANY `package.json` edit,
   `npm install --package-lock-only` must produce a zero lockfile diff before committing.
+- **A security upgrade can exceed the repository's Node floor.** PR #1251 selected
+  Vitest 5, which requires Node 22.12+, while CI and the repo support Node 20.
+  Check the target package's `engines` before installing; npm only warns by default.
+  Vitest 4.1.11 fixes the same advisory and supports Node 20.
 - **Swapping a Vertex / Gemini model id is not a one-line default change.** Observed
   (#1007, 2026-08-25): `text-embedding-005` → `gemini-embedding-2` kept the legacy
   `:predict` URL and `{ instances: [{ content }] }` body. Google dropped `:predict` for

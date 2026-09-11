@@ -1,3 +1,6 @@
+import type { InteractiveRun } from './agy-interactive.js';
+import { readFileSync } from 'node:fs';
+import { modelCommand } from './model-command.js';
 import { offerKitUpdate, updateKit } from './kit-update.js';
 import { improvePublished } from './improve.js';
 import { playGame } from './play.js';
@@ -42,9 +45,11 @@ export async function handleReplLine(input: {
   abort?: Workshop['abort'];
   telemetry?: CliTelemetry;
   pendingExecution?: PendingExecution;
+  interactiveRun?: InteractiveRun;
   onWorkshop?: (ws: Workshop) => void;
   write: (s: string) => void;
   onActivity?: (activity: string) => void;
+  currentPath?: string;
 }): Promise<ReplLineResult> {
   const retry = input.line.trim() === '/retry' ? input.pendingExecution?.current : undefined;
   if (input.line.trim() === '/retry' && !retry) {
@@ -53,6 +58,15 @@ export async function handleReplLine(input: {
   }
   let trimmed = retry?.request ?? input.line.trim();
   if (!trimmed) return { next: 'continue', conversationId: input.conversationId };
+  if (trimmed === '/logs') {
+    input.write(input.workshop?.lastLog ? readFileSync(input.workshop.lastLog, 'utf8') : 'No local task log yet.');
+    return { next: 'continue' };
+  }
+  if (trimmed === '/model' || trimmed.startsWith('/model ')) {
+    const parsed = parseArgv(['node', 'cli', ...trimmed.slice(1).split(/\s+/)]);
+    await modelCommand({ ...parsed, env: input.env ?? process.env, pick: input.pick, write: input.write });
+    return { next: 'continue' };
+  }
   if (trimmed === '/quit' || trimmed === '/exit') return { next: 'quit' };
   if (trimmed === '/kit' || trimmed === '/kit update') {
     const controller = new AbortController();
@@ -131,13 +145,13 @@ export async function handleReplLine(input: {
       }
       return { next: 'continue', conversationId: input.conversationId };
     }
-    if (cmd === 'submit') {
+    if (cmd === 'submit' || cmd === 'push') {
       try {
-        const parsed = parseArgv(['node', 'cli', 'submit', ...rest]);
+        const parsed = parseArgv(['node', 'cli', cmd, ...rest]);
         const dest = parsed.args[0] ?? input.workshop?.root ?? process.cwd();
         const slug = (typeof parsed.flags.slug === 'string' ? parsed.flags.slug : null) ?? readCheckoutSlug(dest);
         if (!slug) {
-          input.write(`run it as ${cliUsage('submit', '[dir]')}`);
+          input.write(`run it as ${cliUsage(cmd, '[dir]')}`);
           return { next: 'continue', conversationId: input.conversationId };
         }
         const result = await submitGame({
@@ -146,6 +160,7 @@ export async function handleReplLine(input: {
           dest,
           force: parsed.flags.force === true,
           publish: parsed.flags.publish === true,
+          takeover: parsed.flags.takeover === true,
         });
         input.write(formatSubmitLines(result, slug).join('\n'));
       } catch (error) {
@@ -209,6 +224,7 @@ export async function handleReplLine(input: {
           api: input.api,
           io: { stdout },
           env: input.env,
+          currentPath: input.currentPath,
         });
         if (code !== null) {
           input.write(chunks.join('').trimEnd() || `/${cmd}`);

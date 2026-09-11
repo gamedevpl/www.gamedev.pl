@@ -1,3 +1,5 @@
+import { startUpdateNotice } from '../update-notice.js';
+import { runInteractive, type InteractiveRun } from '../agy-interactive.js';
 import { offerKitUpdate } from '../kit-update.js';
 import { activityApi } from './activity.js';
 import type { PendingExecution } from '../execution.js';
@@ -26,6 +28,7 @@ export async function runInkRepl(input: {
   initialLine?: string;
   // Set when a checkout in the working directory opened this session.
   checkout?: { slug: string; root: string };
+  currentPath?: string;
 }): Promise<number> {
   const isTty = Boolean(input.io.stdout.isTTY);
   const color = wantsColor(input.env, isTty);
@@ -49,12 +52,25 @@ export async function runInkRepl(input: {
     session.setActivity(activity);
     return () => session.setActivity(previous);
   });
-  host.instance = render(createElement(ReplApp, { session, color }), {
-    stdin: input.io.stdin,
-    stdout: input.io.stdout,
-    exitOnCtrlC: false,
-    patchConsole: false,
-  });
+  const mount = (historyOffset = 0) => {
+    host.instance = render(createElement(ReplApp, { session, color, historyOffset }), {
+      stdin: input.io.stdin,
+      stdout: input.io.stdout,
+      exitOnCtrlC: false,
+      patchConsole: false,
+    });
+  };
+  mount();
+  const stopUpdateNotice = startUpdateNotice({ write: session.writeLine });
+  const interactiveRun: InteractiveRun = async (request) => {
+    const offset = session.get().lines.length;
+    host.instance?.unmount();
+    try {
+      return await runInteractive(request);
+    } finally {
+      mount(offset);
+    }
+  };
   let token = input.token;
   let conversationId: string | undefined;
   let who = '';
@@ -80,6 +96,8 @@ export async function runInkRepl(input: {
       abort,
       telemetry,
       onActivity: session.setActivity,
+      onLocalTask: session.setLocalTask,
+      interactiveRun,
     };
     workshop.builder = await settleBuilder({ api: input.api, ws: workshop, status: opened.status, write });
     session.writeLine('say what to change, or /help');
@@ -108,7 +126,7 @@ export async function runInkRepl(input: {
   const watch = createRoundWatch({
     getToken: () => token,
     api: input.api,
-    setLive: (live) => session.setLive(live),
+    setLive: (live) => session.setLive(live.map((line, index) => (index === 0 ? `Studio: ${line}` : line))),
     announce: (text) => session.writeLine(text),
     onStatus: (status) => {
       if (isPublishTransition(watched, status.status)) telemetry.record('published');
@@ -148,13 +166,18 @@ export async function runInkRepl(input: {
           conversationId,
           workshop,
           env: input.env,
+          currentPath: input.currentPath,
           pick: session.prompt,
           abort,
           telemetry,
           pendingExecution,
+          interactiveRun,
           onWorkshop: (opened) => {
             workshop = opened;
             opened.onActivity = session.setActivity;
+            opened.onLocalTask = session.setLocalTask;
+            opened.interactiveRun = interactiveRun;
+            opened.activityApi = input.api;
             if (token !== opened.token) {
               token = opened.token;
               delete pendingExecution.current;
@@ -177,7 +200,13 @@ export async function runInkRepl(input: {
         token = result.token;
         watch.poke();
       }
-      if (result.workshop) workshop = result.workshop;
+      if (result.workshop) {
+        workshop = result.workshop;
+        workshop.onActivity = session.setActivity;
+        workshop.onLocalTask = session.setLocalTask;
+        workshop.interactiveRun = interactiveRun;
+        workshop.activityApi = input.api;
+      }
       if (result.slug) {
         slug = result.slug;
         paintIdentity();
@@ -186,6 +215,7 @@ export async function runInkRepl(input: {
       if (result.next === 'quit') break;
     }
   } finally {
+    stopUpdateNotice();
     watch.stop();
     session.close();
     host.instance?.unmount();

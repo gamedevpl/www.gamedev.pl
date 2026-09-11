@@ -100,7 +100,33 @@ holding project-wide `roles/editor` and every service ran as it until September 
 made every narrow grant above cosmetic — an identity that can already write any bucket and
 read any secret is not bounded by a bucket condition. The relay terminates untrusted
 websocket traffic and the app runs gate builds on creator-submitted code, so a compromise
-of either was project-wide write access.
+of either was project-wide write access. It now holds no project role at all.
+
+CI has three identities on the same principle, created by `infra/setup-wif.sh`:
+
+| Identity                   | Used by                                          | Holds                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `github-actions-deployer@` | this repo's `deploy.yml` and `publish-games.yml` | Cloud Run, Cloud Build, Artifact Registry, Secret Manager access, `storage.admin`, Firebase Hosting. No Firestore or Discovery Engine role of its own — but see the transitive reach below, which is not the same thing                                                                                                                                                                                       |
+| `erase-verifier@`          | this repo's `verify-erase.yml`                   | `datastore.user` and nothing else                                                                                                                                                                                                                                                                                                                                                        |
+| `kit-publisher@`           | the **games repo's** three publish workflows     | **Conditional:** `storage.objectAdmin` on the store bucket, only under `kits/`, `workspaces/`, `examples/`, `knowledge/`. **Unconditional:** `storage.legacyBucketReader` on that bucket (listing, which a per-object condition cannot express), and at project level `discoveryengine.editor` plus `serviceusage.serviceUsageConsumer` (the corpus import and its quota-project header) |
+
+**The deployer's Firestore row says "no role of its own", and that is a narrower claim
+than "cannot reach Firestore".** It holds `run.admin` together with project-wide
+`iam.serviceAccountUser`, so a compromised deploy run can deploy a Cloud Run workload
+*as* `gamedev-app@` or `erase-verifier@` and execute with those accounts' Firestore
+access. Removing `datastore.user` from the deployer closed the direct path and is worth
+having; it did not make the data unreachable. Scoping the act-as grant to the three
+runtime identities a deploy actually needs is the fix, tracked in the ops IAM plan — it
+touches the deploy path, so it wants its own change and a verified deploy behind it.
+
+The games repo used to publish as the deployer, which handed a content repository the
+whole deploy credential. Its account can no longer read the contents of, or modify,
+anything under `versions/` or `games/` — every stored and published game — let alone
+reach Cloud Run. Be precise about what remains: `legacyBucketReader` is bucket-wide, so
+the publisher can still **list** object names and metadata across the whole bucket. That
+is the cost of a listing permission GCS cannot scope per prefix, and it discloses slugs
+and version ids rather than game content. The provider's attribute condition also pins
+each repository to its own default branch, so a pull request cannot mint any of the three.
 
 The identity is **pinned on every deploy**, in both paths: `deploy.yml` hard-codes the three
 emails and passes `--service-account` to the app deploy, the relay image update and the zone
@@ -352,6 +378,53 @@ a Google-own peer yet.
 
 `GET /api/diagnostics/proxy` reports `resolvedIp`, `clientIp` and `peerIsGoogleEdge` side
 by side, so the three can be compared through either path after a change.
+
+## Media egress
+
+Hosting rewrites `**` to Cloud Run, so **every byte the origin returns is billed as
+Hosting egress**, against a 360 MB/day free tier and $0.15/GB after it. Game media is the
+bulk of that traffic — a gameplay capture measured 662 KB against a 282 KB bundle — and
+`GET /api/games/:slug/media/:filename` answers **without a session**, bounded only by a
+per-IP budget of 400 requests/minute. At that ceiling one address can pull ~264 MB/minute,
+which is the free tier in 82 seconds and roughly $57/day sustained.
+
+The route therefore does not carry those bytes. It resolves the
+snapshot object (probing that it exists — a redirect cannot fall through the way an
+inline read can), signs a six-hour V4 URL with the runtime service account
+([`gcs-sign.ts`](../apps/api/src/delivery/gcs-sign.ts), the same path kit downloads use)
+and answers **302** to `storage.googleapis.com`.
+
+**What the limiter still caps, and what it stops capping.** The catalog lookup, the media
+allow-list and the 400/min per-IP budget all run before a URL is minted, so they bound
+*minting*. They no longer bound *volume*: one 302 is a six-hour URL that Cloud Storage
+will serve to any address, at any speed, outside this service's reach. The meter moves
+too — Hosting egress becomes Cloud Storage egress (~$0.12/GB, no daily free tier to
+exhaust). This trades a metered, abusable proxy for unmetered direct reads of files that
+were already served without a session; it is not a volume control, and if one is wanted
+it has to be a byte budget, not a request count.
+
+CSP matters here: `media-src` must allow `https://storage.googleapis.com`, or every
+`<video>` pointing at a redirected capture is a policy violation (report-only today,
+silent breakage the day it is enforced).
+
+There is no flag. Redirects happen wherever `GAMES_SNAPSHOT_BUCKET` is set — which is
+every environment that has published games — and store-published or repo-backed files
+still serve inline because they are not snapshot objects.
+
+**A signing failure falls back to inline** rather than to a broken image: a missing
+`roles/iam.serviceAccountTokenCreator` grant costs money, not pictures. That fallback is
+the reason a switch was not worth its own variable: the failure mode it would guard
+against is already handled in code, per request, without anyone having to notice.
+
+Redirects carry `Cache-Control: public, max-age=10800` — half the URL's life, so a cached
+redirect never outlives what it points at. `public`, and the TTL six hours rather than
+fifteen minutes, because the alternative was worse than the risk it avoided: a short
+private redirect made every repeat catalog view re-download `gameplay.mp4` from Cloud
+Storage under a new query string, which no cache can reuse. The files are already
+reachable without a session, so treating each screenshot as a short-lived credential
+bought nothing and cost bandwidth.
+
+To put media back on the origin, revert the change — there is no variable to unset.
 
 ## Outbound email (Resend)
 

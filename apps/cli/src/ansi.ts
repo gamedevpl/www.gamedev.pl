@@ -11,13 +11,13 @@ const C0_OTHER_THAN_TAB = new RegExp(
 
 export const MAX_EVENT_LINE = 240;
 
-export function sanitizeEventPayload(raw: string): string {
+export function sanitizeEventPayload(raw: string, maxLength = MAX_EVENT_LINE): string {
   const stripped = raw.replace(CSI_OR_OSC, '').replace(C0_OTHER_THAN_TAB, ' ');
   const oneLine = stripped.replace(/\s+/g, ' ').trim();
-  if (oneLine.length <= MAX_EVENT_LINE) return oneLine;
-  return `${oneLine.slice(0, MAX_EVENT_LINE - 1)}…`;
+  if (oneLine.length <= maxLength) return oneLine;
+  return `${oneLine.slice(0, maxLength - 1)}…`;
 }
 
 export function formatAdapterEvent(adapter: string, payload: string): string {
-  return `${adapter} ▸ ${sanitizeEventPayload(payload)}`;
+  return `${adapter} ▸ ${sanitizeEventPayload(payload, Infinity)}`;
 }

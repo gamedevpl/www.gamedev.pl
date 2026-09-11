@@ -219,8 +219,12 @@ const RESERVED_HANDLE_SEGMENTS = new Set([
   'www',
 ]);
 
-function isAddressableHandle(handle: string): boolean {
-  return CREATOR_HANDLE_PATTERN.test(handle) && (handle === PLATFORM_HANDLE || !RESERVED_HANDLE_SEGMENTS.has(handle));
+function isAddressableCreatorHandle(handle: string): boolean {
+  return CREATOR_HANDLE_PATTERN.test(handle) && !RESERVED_HANDLE_SEGMENTS.has(handle);
+}
+
+function isAddressableGameHandle(handle: string): boolean {
+  return handle === PLATFORM_HANDLE || isAddressableCreatorHandle(handle);
 }
 
 // Canonical play prefix is `/play`. `/ay` and `/ai` are accepted aliases (same view);
@@ -275,7 +279,10 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
   const creatorMatch = normalizedPath.match(/^\/creators\/([^/]+)$/);
   if (creatorMatch?.[1]) {
     const handle = decodeSegment(creatorMatch[1]);
-    if (handle && isAddressableHandle(handle)) {
+    if (handle === PLATFORM_HANDLE) {
+      return { view: 'home' };
+    }
+    if (handle && isAddressableCreatorHandle(handle)) {
       return { view: 'creator', handle };
     }
     return { view: 'notFound' };
@@ -381,8 +388,13 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
   // `/studio`, `/privacy`, etc. keep their meaning. Those segments are also reserved at
   // handle-claim time; the ordering here is defense in depth for old data and typos.
   const rootHandle = decodeSegment(normalizedPath.slice(1));
-  if (!normalizedPath.slice(1).includes('/') && rootHandle && isAddressableHandle(rootHandle)) {
-    return { view: 'creator', handle: rootHandle };
+  if (!normalizedPath.slice(1).includes('/') && rootHandle) {
+    if (rootHandle === PLATFORM_HANDLE) {
+      return { view: 'home' };
+    }
+    if (isAddressableCreatorHandle(rootHandle)) {
+      return { view: 'creator', handle: rootHandle };
+    }
   }
 
   // Public game page: `/:handle/:slug` (+ an optional legacy tab alias). Last for the same reason the
@@ -395,7 +407,7 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     const handle = decodeSegment(gameMatch[1]);
     const slug = decodeSegment(gameMatch[2]);
     const tabSegment = gameMatch[3] ? decodeSegment(gameMatch[3]) : undefined;
-    if (handle && isAddressableHandle(handle) && slug && SLUG_PATTERN.test(slug) && tabSegment !== null) {
+    if (handle && isAddressableGameHandle(handle) && slug && SLUG_PATTERN.test(slug) && tabSegment !== null) {
       if (!tabSegment) {
         return { view: 'game', handle, slug };
       }
@@ -449,6 +461,8 @@ export function canonicalPath(pathname: string): string | null {
   const route = parsePathRoute(pathname);
   const canonical = ((): string | null => {
     switch (route.view) {
+      case 'home':
+        return '/';
       case 'play':
         return playPath(route.slug);
       // Including a bare `/admin`, which lands on the queue: the section a page is
@@ -553,6 +567,11 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
     case 'game':
       // The page is nested under the creator profile the way a repo nests under its
       // owner, so Up goes to that profile rather than to the homepage.
+      // Platform-authored games live in the platform namespace and have no creator profile;
+      // their parent is the catalog.
+      if (route.handle === PLATFORM_HANDLE) {
+        return { path: '/', labelKey: 'upHome' };
+      }
       return { path: creatorPath(route.handle), labelKey: 'upCreator' };
     case 'admin':
     case 'review':

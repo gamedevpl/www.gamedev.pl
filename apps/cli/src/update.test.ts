@@ -3,7 +3,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { assetName, expectedHash, helperDest, updateCli } from './update.js';
+import {
+  assetName,
+  compareSemver,
+  defaultInstallDest,
+  expectedHash,
+  helperDest,
+  resolveUpdateVersion,
+  runningBinaryPath,
+  updateCli,
+} from './update.js';
 import { CliError } from './exit-codes.js';
 
 describe('updateCli', () => {
@@ -76,5 +85,78 @@ describe('updateCli', () => {
         },
       }),
     ).rejects.toBeInstanceOf(CliError);
+  });
+
+  it('compares semver numerically across segments', () => {
+    expect(compareSemver('0.9.0', '0.10.0')).toBeLessThan(0);
+    expect(compareSemver('0.10.0', '0.9.0')).toBeGreaterThan(0);
+    expect(compareSemver('0.10.0', '0.10.0')).toBe(0);
+    expect(compareSemver('0.10.1', '0.10.0')).toBeGreaterThan(0);
+    expect(compareSemver('1.0.0', '0.10.0')).toBeGreaterThan(0);
+  });
+
+  it('resolves the newest semver release even when GitHub returns tags out of semver order', async () => {
+    const mockReleases = [
+      { tag_name: 'cli-v0.9.0' },
+      { tag_name: 'cli-v0.8.0' },
+      { tag_name: 'cli-v0.10.0' },
+      { tag_name: 'cli-v0.7.0' },
+      { tag_name: 'untagged-build' },
+    ];
+    const version = await resolveUpdateVersion({
+      fetchImpl: async () => new Response(JSON.stringify(mockReleases), { status: 200 }),
+    });
+    expect(version).toBe('0.10.0');
+  });
+
+  describe('runningBinaryPath', () => {
+    it('recognizes installed gamedevpl and companion git-remote helper paths', () => {
+      expect(runningBinaryPath('/usr/local/bin/gamedevpl')).toBe('/usr/local/bin/gamedevpl');
+      expect(runningBinaryPath('/usr/local/bin/git-remote-gamedevpl')).toBe('/usr/local/bin/gamedevpl');
+      expect(runningBinaryPath('/opt/homebrew/bin/gamedevpl')).toBe('/opt/homebrew/bin/gamedevpl');
+    });
+
+    it('preserves Windows executable extensions', () => {
+      expect(runningBinaryPath('C:\\bin\\gamedevpl.exe')).toBe('C:\\bin\\gamedevpl.exe');
+      expect(runningBinaryPath('C:\\bin\\git-remote-gamedevpl.exe')).toBe('C:\\bin\\gamedevpl.exe');
+    });
+
+    it('rejects node_modules development paths and non-cli filenames', () => {
+      expect(runningBinaryPath('/repo/apps/cli/src/main.ts')).toBeNull();
+      expect(runningBinaryPath('/repo/apps/cli/dist/main.js')).toBeNull();
+      expect(runningBinaryPath('/repo/node_modules/vitest/vitest.mjs')).toBeNull();
+      expect(runningBinaryPath('/repo/node_modules/.bin/gamedevpl')).toBeNull();
+      expect(runningBinaryPath(undefined)).toBeNull();
+    });
+  });
+
+  describe('defaultInstallDest', () => {
+    it('defaults to ~/.local/bin/gamedevpl when outside installed binary', () => {
+      expect(defaultInstallDest({ env: {}, currentPath: '/repo/apps/cli/src/main.ts' })).toMatch(
+        /[/\\]\.local[/\\]bin[/\\]gamedevpl$/,
+      );
+    });
+
+    it('honors GAMEDEV_BIN_DIR when set', () => {
+      expect(defaultInstallDest({ env: { GAMEDEV_BIN_DIR: '/custom/bin' }, currentPath: '/repo/main.ts' })).toBe(
+        '/custom/bin/gamedevpl',
+      );
+      expect(
+        defaultInstallDest({
+          env: { GAMEDEV_BIN_DIR: 'C:\\custom\\bin' },
+          currentPath: 'C:\\other\\gamedevpl.exe',
+        }),
+      ).toBe('C:\\custom\\bin\\gamedevpl.exe');
+    });
+
+    it('preserves the active running binary installation path', () => {
+      expect(defaultInstallDest({ env: {}, currentPath: '/opt/bin/gamedevpl' })).toBe('/opt/bin/gamedevpl');
+      expect(defaultInstallDest({ env: {}, currentPath: '/opt/bin/git-remote-gamedevpl' })).toBe(
+        '/opt/bin/gamedevpl',
+      );
+      expect(defaultInstallDest({ env: {}, currentPath: 'C:\\tools\\gamedevpl.exe' })).toBe(
+        'C:\\tools\\gamedevpl.exe',
+      );
+    });
   });
 });

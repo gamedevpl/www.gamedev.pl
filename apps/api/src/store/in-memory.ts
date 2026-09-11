@@ -1,3 +1,4 @@
+import { SubmissionFacade } from './submission-facade.js';
 import type { Store } from '../platform/store.js';
 import type { TransitionGuard } from './slices/dispatch.js';
 import type { SeedFiles } from '../agent-surface/agent-backend.js';
@@ -80,14 +81,14 @@ import { InMemoryTelemetryStore } from './slices/telemetry.js';
 import { InMemoryWorldEntriesStore } from './slices/world-entries.js';
 import type { AssessmentSource, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
 
-export class InMemoryStore implements Store {
+export class InMemoryStore extends SubmissionFacade implements Store {
   private identityStore = new InMemoryIdentityStore();
   private submissions = new Map<number, SubmissionRecord>();
   private publicationStore = new InMemoryPublicationStore();
   private roundsStore = new InMemoryRoundsStore(this.submissions);
   private roundBudgetStore = new InMemoryRoundBudgetStore(this.submissions);
   private dispatchStore = new InMemoryDispatchStore(this.submissions);
-  private submissionStore = new InMemorySubmissionStore(this.submissions);
+  protected submissionStore = new InMemorySubmissionStore(this.submissions);
   private submissionQueryStore = new InMemorySubmissionQueryStore(this.submissions);
   private buildLogStore = new InMemoryBuildLogStore(this.submissions);
   private buildMediaStore = new InMemoryBuildMediaStore();
@@ -264,6 +265,10 @@ export class InMemoryStore implements Store {
     return this.dispatchStore.recordJobTransition(jobId, transition, guard);
   }
 
+  async takeOverAgentRound(jobId: number, uid: string, generation: number, at: string): Promise<boolean> {
+    return this.roundsStore.takeOverAgentRound(jobId, uid, generation, at);
+  }
+
   async bumpRoundGeneration(jobId: number): Promise<number | null> {
     return this.roundsStore.bumpRoundGeneration(jobId);
   }
@@ -418,22 +423,6 @@ export class InMemoryStore implements Store {
 
   async listCatalogEnrichments(): Promise<CatalogEnrichmentRecord[]> {
     return this.catalogEnrichmentStore.listCatalogEnrichments();
-  }
-
-  async setSubmissionSlug(jobId: number, slug: string): Promise<void> {
-    return this.submissionStore.setSubmissionSlug(jobId, slug);
-  }
-
-  async setSubmissionTitle(jobId: number, title: string): Promise<void> {
-    return this.submissionStore.setSubmissionTitle(jobId, title);
-  }
-
-  async setSubmissionDeliveredVersion(jobId: number, version: string): Promise<void> {
-    return this.submissionStore.setSubmissionDeliveredVersion(jobId, version);
-  }
-
-  async setSubmissionPreviewVersion(jobId: number, version: string): Promise<void> {
-    return this.submissionStore.setSubmissionPreviewVersion(jobId, version);
   }
 
   async recordDeliveryNudge(jobId: number): Promise<number> {

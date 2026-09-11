@@ -17,6 +17,7 @@ import { CliError, EXIT_REFUSED } from './exit-codes.js';
 import bundled from './adapters.json' with { type: 'json' };
 
 export interface AdapterSpec {
+  selection?: import('./agent-settings.js').AgentSelection;
   name: string;
   command: string;
   versionFlag: string;
@@ -77,7 +78,7 @@ export function detectAdapter(
 }
 
 export function preflightAdapter(spec: AdapterSpec, env: NodeJS.ProcessEnv): void {
-  const args = spec.name === 'codex' ? ['exec', '--help'] : ['--help'];
+  const args = ['codex', 'muse'].includes(spec.name) ? ['exec', '--help'] : ['--help'];
   const help = probeHelp(spec.command, args, env);
   if (help === null) {
     throw new CliError(`cannot run ${spec.name} --help`, EXIT_REFUSED, `check ${spec.command} in your terminal`);

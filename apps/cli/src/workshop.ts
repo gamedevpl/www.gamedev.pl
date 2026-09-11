@@ -1,3 +1,8 @@
+import { prepareAgyPermissions } from './agy-permissions.js';
+import { localActivity } from './local-activity.js';
+import { agyConversation, type InteractiveRun } from './agy-interactive.js';
+import { taskOutput } from './task-output.js';
+import { configureAdapter, selectionLabel } from './agent-settings.js';
 import { trackAgentFailure } from './agent-failure.js';
 import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { permissionBlocked } from './agent-events.js';
@@ -8,12 +13,14 @@ import type { ApiClient } from './api.js';
 import { detectAdapter, loadAdapters, preflightAdapter, whichOnPath, type AdapterSpec } from './adapters.js';
 import { cliUsage } from './bin-name.js';
 import { formatSyncLines, inspectGame, type SyncResult } from './checkout.js';
-import { childEnv, renderDelegateStream, spawnAdapter } from './delegate.js';
+import { childEnv, createDelegateStream, spawnAdapter } from './delegate.js';
 import { formatError } from './errors.js';
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
+import { deliverySession } from './submit-session.js';
 import { formatSubmitLines, submitGame } from './submit.js';
 import { getStatus, isTerminalStatus } from './turn.js';
-import { runLadder } from './verify.js';
+import { repairLoop } from './repair-loop.js';
+import { runLadder, runLadderAsync } from './verify.js';
 import type { CliTelemetry } from './telemetry.js';
 import { prepareWorkspace } from './prepare-workspace.js';
 
@@ -39,6 +46,10 @@ export type Workshop = {
   adapters: AdapterSpec[];
   selectedAgent?: string;
   onActivity?: (activity: string) => void;
+  lastLog?: string;
+  activityApi?: ApiClient;
+  interactiveRun?: InteractiveRun;
+  onLocalTask?: (agent: string) => void;
   telemetry?: CliTelemetry;
   builder: string;
   pick: PickChoice;
@@ -112,7 +123,7 @@ export async function openWorkshop(input: {
   env: NodeJS.ProcessEnv;
   which?: (cmd: string) => string | null;
   write: (line: string) => void;
-}): Promise<{ adapters: AdapterSpec[]; builder: string; status: string }> {
+}): Promise<{ adapters: AdapterSpec[]; builder: string; status: string; activityApi: ApiClient }> {
   const adapters = detectLocalAdapters(input.env, input.which);
   input.write(`◆ ${input.slug} — the checkout at ${input.root}`);
   try {
@@ -134,7 +145,7 @@ export async function openWorkshop(input: {
   } catch (error) {
     input.write(formatError(error));
   }
-  return { adapters, builder, status };
+  return { adapters, builder, status, activityApi: input.api };
 }
 
 // 202: the old builder owns the round until its agent acks.
@@ -241,17 +252,24 @@ export async function runLocalBuild(input: {
   brief: string;
   write: (line: string) => void;
 }): Promise<boolean> {
-  const { ws, spec } = input;
+  const { ws } = input;
+  const spec = configureAdapter(input.spec, ws.env);
+  const output = taskOutput(input.write);
+  ws.lastLog = output.path;
+  input = { ...input, write: output.write };
+  input.write(`\n── ${ws.slug} · local task ──`);
+  input.write(selectionLabel(spec.name, spec.selection ?? {}));
+  input.write(ws.unattended ? `Full transcript: ${output.path}` : 'Settings: /model · full transcript: /logs');
   ws.onActivity?.(`Preparing ${spec.name}`);
   if (!ws.runAdapter) preflightAdapter(spec, ws.env);
   const cwd = spec.cwd === 'game-dir' ? join(ws.root, 'games', ws.slug) : ws.root;
   const controller = new AbortController();
   ws.abort.current = controller;
-  let result: { code: number | null };
-  let blocked = false;
-  const failure = trackAgentFailure(spec.name);
+  let presence: ReturnType<typeof localActivity> | undefined;
+  let success = false;
   let authCheck: Promise<void> | undefined;
   try {
+    if (!(await prepareAgyPermissions(ws, spec.name, input.write, controller.signal))) return false;
     if (!ws.runAdapter && spec.name === 'claude') {
       authCheck = requireClaudeSubscription({
         command: spec.command,
@@ -262,9 +280,18 @@ export async function runLocalBuild(input: {
       });
       await authCheck;
     }
+    presence = localActivity(ws.activityApi, ws.token, spec.name);
+    ws.onLocalTask?.(spec.name);
     input.write(`▸ Preparing ${spec.name} in games/${ws.slug} — Ctrl+C stops it`);
-    if (!ws.runAdapter)
-      await prepareWorkspace({ cwd: ws.root, env: ws.env, abort: controller.signal, write: input.write });
+    if (!ws.runAdapter) {
+      input.write('Preparing Creator Kit and dependencies…');
+      output.preparing(true);
+      try {
+        await prepareWorkspace({ cwd: ws.root, env: ws.env, abort: controller.signal, write: input.write });
+      } finally {
+        output.preparing(false);
+      }
+    }
     if (!ws.runAdapter && !ws.unattended) {
       try {
         const preview = await startLocalPlay({
@@ -288,52 +315,92 @@ export async function runLocalBuild(input: {
         'Claude uses subscription login; API authentication is refused. This local task is not linked to Claude Desktop.',
       );
     ws.telemetry?.record('delegate_used', { adapter: spec.name });
-    result = await (ws.runAdapter ?? defaultAdapterRun)({
-      spec,
-      prompt: input.brief,
-      authCheck,
-      cwd,
-      env: childEnv(ws.env, ''),
+    success = await repairLoop({
+      brief: input.brief,
       abort: controller.signal,
-      onLine: (line) => {
-        failure.observe(line);
-        if (permissionBlocked(line)) blocked = true;
-        for (const shown of renderDelegateStream(spec.name, [line], false)) {
-          if (shown.includes('⚙ ')) ws.onActivity?.(`${spec.name} · ${shown.split('⚙ ')[1]!.slice(0, 90)}`);
-          input.write(shown);
+      activity: (text) => ws.onActivity?.(text),
+      write: input.write,
+      failed: (stage) => ws.telemetry?.record('verify_failed', { adapter: spec.name, stage }),
+      verify: () => {
+        presence?.phase('verifying');
+        return runLadderAsync({ cwd: ws.root, run: ws.run, abort: controller.signal });
+      },
+      run: async (prompt) => {
+        presence?.phase('editing');
+        const stream = createDelegateStream(spec.name);
+        const failure = trackAgentFailure(spec.name);
+        let blocked = false;
+        let conversation: string | undefined;
+        const result = await (ws.runAdapter ?? defaultAdapterRun)({
+          spec,
+          prompt,
+          authCheck,
+          cwd,
+          env: childEnv(ws.env, ''),
+          abort: controller.signal,
+          onLine: (line) => {
+            failure.observe(line);
+            conversation = agyConversation(line) ?? conversation;
+            if (permissionBlocked(line)) blocked = true;
+            for (const shown of stream(line)) {
+              if (shown.includes('⚙ ')) ws.onActivity?.(`${spec.name} · running a tool — /logs after completion`);
+              input.write(shown);
+            }
+          },
+        });
+        if (controller.signal.aborted) return false;
+        if (blocked && spec.name === 'agy' && ws.interactiveRun && !ws.unattended) {
+          presence?.phase('permission');
+          const choice = await ws.pick(
+            ['Open Antigravity interactively', 'Keep edits and return'],
+            'Antigravity needs permission. Open its permission prompts in this terminal?',
+          );
+          if (choice !== 'Open Antigravity interactively' || controller.signal.aborted) return false;
+          input.write(
+            'Antigravity now owns the terminal. Answer its permission prompts, then exit Antigravity to return here for verification.',
+          );
+          presence?.phase('interactive');
+          const resumed = await ws.interactiveRun({
+            spec,
+            cwd,
+            env: childEnv(ws.env, ''),
+            prompt,
+            conversation,
+            logPath: ws.lastLog,
+            abort: controller.signal,
+          });
+          input.write('Returned to gamedevpl.');
+          if (resumed.code !== 0) {
+            input.write('Interactive Antigravity stopped without success. Edits remain local; /diff to inspect.');
+            return false;
+          }
+          return true;
         }
+        if (blocked) {
+          input.write(
+            `${spec.name} could not obtain tool permissions in headless mode. No successful edit is confirmed; review its permissions for this game directory and retry.`,
+          );
+          return false;
+        }
+        if ((result.code ?? 1) !== 0) {
+          input.write(
+            formatError(
+              failure.error(result.code, '/diff to review partial edits, then repeat your request when ready'),
+            ),
+          );
+          return false;
+        }
+        return true;
       },
     });
+    return success;
   } finally {
+    output.flush();
+    await presence?.finish(controller.signal.aborted ? 'stopped' : success ? 'ready' : 'failed');
+    if (controller.signal.aborted) input.write(`${spec.name} stopped — the tree keeps whatever it wrote; /diff to see`);
     ws.abort.current = null;
+    ws.onLocalTask?.('');
   }
-  if (blocked) {
-    input.write(
-      `${spec.name} could not obtain tool permissions in headless mode. No successful edit is confirmed; review its permissions for this game directory and retry.`,
-    );
-    return false;
-  }
-  if (controller.signal.aborted) {
-    input.write(`${spec.name} stopped — the tree keeps whatever it wrote; /diff to see`);
-    return false;
-  }
-  if ((result.code ?? 1) !== 0) {
-    input.write(
-      formatError(failure.error(result.code, '/diff to review partial edits, then repeat your request when ready')),
-    );
-    return false;
-  }
-  ws.onActivity?.('Agent finished — verifying typecheck and static checks');
-  input.write('verifying — typecheck, check:static');
-  const verify = runLadder({ cwd: ws.root, publish: false, run: ws.run });
-  if (!verify.ok) {
-    ws.telemetry?.record('verify_failed', { adapter: spec.name, stage: verify.stage });
-    const detail = verify.detail.trim();
-    input.write(`verify failed at ${verify.stage}${detail ? `: ${detail}` : ''}\nfix by hand, or ask again`);
-    return false;
-  }
-  input.write('✓ static ladder green');
-  return true;
 }
 
 export async function offerSubmit(input: {
@@ -342,7 +409,25 @@ export async function offerSubmit(input: {
   write: (line: string) => void;
 }): Promise<void> {
   const { ws } = input;
-  const deliver = 'deliver a preview';
+  let session: Awaited<ReturnType<typeof deliverySession>>;
+  try {
+    session = await deliverySession(input.api, ws.slug);
+  } catch (error) {
+    input.write(formatError(error));
+    return;
+  }
+  const takeover = Boolean(session?.locked && session.canTakeOver);
+  if (session?.locked && (!takeover || ws.unattended)) {
+    input.write(
+      takeover
+        ? 'Delivery blocked; use /submit --takeover to explicitly disconnect your agent.'
+        : 'Delivery blocked; finish the platform agent or pending handoff in Studio, then retry.',
+    );
+    return;
+  }
+  if (takeover)
+    input.write('Delivery uses the full local checkout. The previous server draft stays in the retired session.');
+  const deliver = takeover ? 'disconnect the old agent and deliver this local checkout' : 'deliver a preview';
   const choice = ws.unattended
     ? ws.unattended.deliver
       ? deliver
@@ -353,7 +438,14 @@ export async function offerSubmit(input: {
     return;
   }
   try {
-    const result = await submitGame({ api: input.api, slug: ws.slug, dest: ws.root, run: ws.run });
+    const result = await submitGame({
+      api: input.api,
+      slug: ws.slug,
+      dest: ws.root,
+      run: ws.run,
+      takeover,
+      expectedSession: session ?? undefined,
+    });
     if (result.kind === 'delivered') ws.telemetry?.record('delivered');
     input.write(formatSubmitLines(result, ws.slug).join('\n'));
   } catch (error) {

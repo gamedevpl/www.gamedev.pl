@@ -1047,3 +1047,24 @@ jobs:
             --project "$PROJECT_ID" \
             --to-latest \
             --remove-tags candidate
+
+      - name: Prune old Firebase Hosting versions
+        # Last, and after promotion: Hosting keeps every version ever deployed and bills
+        # storage over the free tier, but nothing here is worth delaying a release for.
+        # The script never deletes the live version, and keeps the newest KEEP besides it
+        # so a rollback still has somewhere to roll back to.
+        #
+        # continue-on-error, because by this line the release is already serving: a
+        # transient 500 from the Hosting API must not paint a live deployment red and
+        # send someone re-running it. A failure here costs one deploy's worth of stale
+        # versions, which the next successful run prunes anyway.
+        continue-on-error: true
+        env:
+          KEEP: '10'
+        run: |
+          if ! ./infra/prune-hosting-versions.sh; then
+            echo "::warning title=Hosting prune failed::Old Hosting versions were not pruned. \
+          The release is live and unaffected; storage stays high until the next deploy \
+          prunes, or until ./infra/prune-hosting-versions.sh is run by hand."
+            exit 1
+          fi

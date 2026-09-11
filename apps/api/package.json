@@ -12,6 +12,7 @@
     "contract:games-repo": "tsx scripts/check-games-repo-contract.ts",
     "snapshot:publish": "tsx scripts/publish-snapshot.ts",
     "gate:run": "tsx scripts/run-gate.ts",
+    "gate:capability": "tsx scripts/gate-capability.ts",
     "remix:probe": "tsx scripts/remix-lane-probe.ts",
     "managed:probe": "tsx scripts/managed-probe.ts",
     "managed:agent:apply": "tsx scripts/managed-agent-apply.ts",
@@ -64,7 +65,7 @@
     "@types/web-push": "^3.6.4",
     "@types/ws": "^8.18.1",
     "tsx": "^4.16.5",
-    "vitest": "^3.2.7",
+    "vitest": "^4.1.11",
     "ws": "^8.18.0"
   }
 }

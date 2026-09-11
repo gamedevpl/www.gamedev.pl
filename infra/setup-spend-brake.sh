@@ -34,6 +34,9 @@
 
 set -euo pipefail
 
+# An old copy of this script does not fail; it reverts what a newer copy fixed.
+source "$(dirname "${BASH_SOURCE[0]}")/require-current-checkout.sh"
+
 PROJECT_ID="${PROJECT_ID:-gamedevpl}"
 HOST="${HOST:-www.gamedev.pl}"
 TOPIC="${TOPIC:-spend-brake}"

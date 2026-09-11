@@ -1,4 +1,17 @@
 {
+  "localActivity": {
+    "interactive": "Interaktywny agent steruje terminalem. Odpowiadaj tam na pytania o zgodę.",
+    "title": "Lokalny agent: {{agent}}",
+    "preparing": "Przygotowywanie lokalnego katalogu.",
+    "editing": "Agent edytuje grę lokalnie.",
+    "permission": "Oczekiwanie na zgodę w terminalu.",
+    "verifying": "Sprawdzanie lokalnych zmian.",
+    "ready": "Lokalne testy przeszły. Możesz wysłać zmiany przez /submit.",
+    "failed": "Lokalne zadanie nie przeszło weryfikacji. Szczegóły w terminalu.",
+    "stopped": "Lokalne zadanie zostało zatrzymane.",
+    "offline": "Utracono kontakt z CLI. Sprawdź terminal — agent może nadal pracować.",
+    "localOnly": "Pliki gry pozostają na Twoim komputerze do momentu wysłania."
+  },
   "app": {
     "loadingSurface": "Wczytywanie…",
     "surfaceLoadFailed": "Ta strona się nie wczytała — dostępna jest nowsza wersja serwisu.",
@@ -889,7 +902,7 @@
     "dialogLabel": "Podłącz swojego agenta",
     "stepLabel": "Połączenie",
     "eyebrow": "Twój agent",
-    "lede": "Ta runda czeka na Twojego agenta. Dodaj gamedev.pl, wklej prompt budowy — zostań tu, aż się odezwie, albo otwórz Studio kiedy chcesz.",
+    "lede": "Wybierz sposób pracy. Przeprowadzimy Cię przez kolejne kroki.",
     "ledeConnected": "Twój agent się odezwał. Otwórz Studio, żeby śledzić postęp i sterować budową.",
     "preparing": "Przygotowuję kroki połączenia…",
     "loadError": "Nie udało się odświeżyć statusu. Próbuję ponownie…",
@@ -2008,5 +2021,57 @@
     "diffTruncated": "Różnica w tym pliku jest długa — pokazujemy początek.",
     "diffOmitted": "Nie pokazano kolejnych zmienionych plików: {{count}}.",
     "diffUnavailable": "Nie udało się wczytać zmian. Nadal możesz zagrać i przeczytać opis."
+  },
+  "connectGuide": {
+    "choose": "Jak chcesz tworzyć grę?",
+    "platformTitle": "Niech gamedev.pl przejmie pracę",
+    "tool": "Z jakiego narzędzia korzystasz?",
+    "start": "Zacznij pracę nad grą",
+    "setup": "Połącz swoje narzędzie",
+    "back": "← Zmień wybór",
+    "progress": "Krok {{step}} z {{total}}",
+    "copy": "Kopiuj",
+    "retry": "Spróbuj ponownie",
+    "platformBody": "Agent gamedev.pl będzie kontynuował tę rundę, korzystając z Twojego limitu na platformie. Postęp zobaczysz w Studio.",
+    "cliStart": "Uruchom te polecenia w terminalu, a potem wybierz swojego zainstalowanego agenta lub lokalny checkout. Agent korzysta ze swojego konta i rozliczeń. gamedevpl CLI łączy go z tą grą; kliknięcie „Gotowe” tutaj nie uruchamia agenta managed.",
+    "agentStart": "Wklej tę wiadomość w rozmowie ze swoim agentem. Wskaże mu tę grę i poprosi o rozpoczęcie bieżącej rundy.",
+    "localWaiting": "Postęp lokalnej pracy zobaczysz w terminalu i podglądzie gry. Studio nie widzi lokalnych zmian, dopóki nie wyślesz ich przez /submit po pomyślnej weryfikacji.",
+    "waiting": "Połączenie nie jest jeszcze potwierdzone. Ten ekran zaktualizuje się, gdy agent się odezwie. Możesz też otworzyć Studio poniżej.",
+    "cliSetup": "Uruchom te polecenia w terminalu. Potrzebujesz Node.js 20.19 lub nowszego. Zaloguj się na to samo konto co tutaj.",
+    "toolSetup": "Dodaj gamedev.pl w {{tool}}, a potem przejdź do wiadomości rozpoczynającej pracę.",
+    "cliDraft": "Nie ma jeszcze kodu? To w porządku — lokalne pliki zaczną się od opisu Twojej gry.",
+    "signin": "Dokończ logowanie, gdy narzędzie otworzy przeglądarkę. Link instalacyjny nie zawiera danych dostępu.",
+    "manual": "Logowanie nie działa / konfiguracja ręczna",
+    "oauth": "Wróć do logowania w przeglądarce",
+    "configHint": "Dodaj tę konfigurację w swoim narzędziu. Sekret jest tutaj ukryty; przycisk Kopiuj pobiera właściwe dane dostępu. Nie udostępniaj ich innym.",
+    "add": "Dodaj do {{tool}}",
+    "next": "Gotowe — przejdź dalej",
+    "copyError": "Nie udało się skopiować. Zezwól na dostęp do schowka i spróbuj ponownie.",
+    "routes": {
+      "cli": {
+        "title": "gamedevpl CLI",
+        "body": "Twórz w terminalu. Wybierz agenta lub pracuj na lokalnych plikach."
+      },
+      "agent": {
+        "title": "Mam własnego agenta",
+        "body": "Podłącz Cursor, VS Code, Claude Code, Codex lub inne narzędzie."
+      },
+      "platform": {
+        "title": "Nie wiem — zbuduj za mnie",
+        "body": "Skorzystaj z agenta gamedev.pl. Nie musisz niczego instalować."
+      }
+    },
+    "tools": {
+      "cursor": "Cursor",
+      "vscode": "VS Code / Copilot",
+      "claudeCode": "Claude Code",
+      "codex": "Codex",
+      "kimi": "Kimi",
+      "other": "Inne narzędzie MCP",
+      "muse": "Muse Code (Meta)"
+    },
+    "museStart": "W terminalu wybierz „Open a local checkout”, a następnie Muse. Muse pracuje na lokalnych plikach; ta ścieżka nie konfiguruje MCP. Jeśli nie masz jeszcze Muse Code, zainstaluj je z dev.meta.ai.",
+    "panelWaiting": "Czekamy, aż Twój agent się połączy. Możesz zamknąć ten panel i śledzić postęp w rozmowie.",
+    "selfMode": "Ta runda: Twój agent (BYOCA)"
   }
 }

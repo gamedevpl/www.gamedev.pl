@@ -15,6 +15,12 @@ export interface CatalogEnrichmentRecord {
   };
   // Search keywords and tags.
   searchKeywords: string[];
+  // Precomputed document embedding vector.
+  embedding?: number[];
+  // Hash of the document text that was embedded.
+  embeddingDocTextHash?: string;
+  // Model name used to generate the embedding vector.
+  embeddingModel?: string;
   // ISO-8601 timestamp.
   updatedAt: string;
 }

@@ -137,24 +137,28 @@ const VerdictSchema = z.object({
   category: z.string().nullish(),
 });
 
+// 10s budget prevents fail-closed aborts on Gemini thinking.
+export const DEFAULT_MODERATION_TIMEOUT_MS = 10_000;
+
 export class VertexChecker implements ContentChecker {
   private options: VertexCheckerOptions;
   private thinkingLevel: string;
   private timeoutMs: number;
   private patternChecker: PatternChecker;
-  // Keyed on exact text: byte-identical inputs only.
   private verdictCache = new Map<string, { verdict: ModerationVerdict; expiresAt: number }>();
   private static readonly VERDICT_CACHE_MAX = 1000;
   private static readonly VERDICT_CACHE_TTL_MS = 10 * 60 * 1000;
   private vertexFetcher?: (prompt: string) => Promise<{ allowed: boolean; category?: string }>;
-  // Built lazily so constructing a checker never reaches for GCP credentials —
-  // tests inject `vertexFetcher` and must stay offline.
+  // Built lazily; tests inject vertexFetcher and stay offline.
   private client?: GenAIClient;
-
   constructor(options: VertexCheckerOptions = {}) {
     this.options = options;
     this.thinkingLevel = options.thinkingLevel ?? process.env.VERTEX_THINKING_LEVEL ?? 'low';
-    this.timeoutMs = options.timeoutMs ?? 5000;
+    this.timeoutMs =
+      options.timeoutMs ??
+      Number(
+        process.env.VERTEX_MODERATION_TIMEOUT_MS ?? process.env.VERTEX_TIMEOUT_MS ?? DEFAULT_MODERATION_TIMEOUT_MS,
+      );
     this.patternChecker = new PatternChecker();
     this.vertexFetcher = options.vertexFetcher;
   }
@@ -222,12 +226,8 @@ export class VertexChecker implements ContentChecker {
     this.options.onPaidCall?.();
     try {
       const result = await this.callVertex(text);
-      const verdict: ModerationVerdict = result.allowed
-        ? { allowed: true }
-        : {
-            allowed: false,
-            category: isValidCategory(result.category) ? (result.category as RejectCategory) : 'other',
-          };
+      const category = isValidCategory(result.category) ? (result.category as RejectCategory) : 'other';
+      const verdict: ModerationVerdict = result.allowed ? { allowed: true } : { allowed: false, category };
       this.writeCachedVerdict(key, verdict, now);
       return verdict;
     } catch (err) {

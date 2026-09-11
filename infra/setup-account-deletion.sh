@@ -13,6 +13,9 @@
 # time zone, and OIDC identity without changing whether an operator has paused it.
 set -euo pipefail
 
+# An old copy of this script does not fail; it reverts what a newer copy fixed.
+source "$(dirname "${BASH_SOURCE[0]}")/require-current-checkout.sh"
+
 export CLOUDSDK_CORE_DISABLE_PROMPTS=1
 
 PROJECT_ID="${PROJECT_ID:-gamedevpl}"

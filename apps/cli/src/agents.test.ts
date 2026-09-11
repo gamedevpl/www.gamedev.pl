@@ -39,7 +39,7 @@ describe('agent discovery', () => {
     const agents = discoverAgents({ HOME: directory() }, (cmd) => `/bin/${cmd}`);
     expect(agents.find((row) => row.name === 'claude')).toMatchObject({ installed: true, local: true, mcp: true });
     expect(agents.find((row) => row.name === 'vibe')).toMatchObject({ installed: true, local: true, mcp: false });
-    for (const name of ['agy', 'cursor']) {
+    for (const name of ['agy', 'cursor', 'muse']) {
       expect(agents.find((row) => row.name === name)).toMatchObject({ installed: true, local: true, mcp: false });
     }
     expect(formatAgents(agents)).toContain('launch verifies required CLI flags');
@@ -101,8 +101,8 @@ describe('agent discovery', () => {
     expect(pick.mock.calls[0]?.[0]).toEqual([
       'Open a local checkout — edit and play here',
       'Continue chatting about this game',
-      'claude',
-      'codex',
+      'claude — MCP; platform sources',
+      'codex — MCP; platform sources',
       'Show manual MCP setup',
     ]);
     expect(request).not.toHaveBeenCalled();

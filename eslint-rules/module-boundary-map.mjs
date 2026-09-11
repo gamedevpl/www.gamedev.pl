@@ -48,6 +48,7 @@ const DEFAULT_BUCKET = 'platform';
 const FILE_BUCKET = {
   // platform: composition root, auth, errors, rate limits, shared primitives
   app: 'platform',
+  'error-handler': 'platform',
   server: 'platform',
   auth: 'platform',
   bearer: 'platform',
@@ -147,6 +148,9 @@ const FILE_BUCKET = {
   'job-state': 'platform',
   // Signed-URL minting over GCS. No relative imports at all.
   'gcs-sign': 'platform',
+  // A cache in front of gcs-sign, so the media route can redirect instead of
+  // carrying bytes. Imports gcs-sign and nothing else.
+  'media-url-signer': 'platform',
   // A line counter. No relative imports at all.
   'module-size': 'platform',
   // A generic HTTP rate-limit classifier with no domain deps at all, and a bare
@@ -238,6 +242,7 @@ const FILE_BUCKET = {
   'chat-turns': 'creation',
   'chat-turns-history': 'creation',
   'creator-feedback-handler': 'creation',
+  'creator-takeover': 'creation',
   'creator-code': 'creation',
   'creator-studio': 'creation',
   'creator-versions': 'creation',
@@ -307,6 +312,7 @@ const FILE_BUCKET = {
   'agent-backend-env': 'agent-surface',
   'managed-agent': 'agent-surface',
   'managed-availability': 'agent-surface',
+  'managed-bot-availability': 'agent-surface',
   'managed-backend': 'agent-surface',
   'managed-provider-anthropic': 'agent-surface',
   'managed-provider-copilot': 'agent-surface',
@@ -343,6 +349,7 @@ const FILE_BUCKET = {
   'staged-preview': 'delivery',
   'stage-hints': 'delivery',
   'games-store': 'delivery',
+  'storage-write-retry': 'delivery',
   'games-store-raster': 'delivery',
   'source-file-bytes': 'delivery',
   'gate-materialize': 'delivery',
@@ -355,6 +362,9 @@ const FILE_BUCKET = {
   'gate-trigger': 'delivery',
   'gate-crash': 'delivery',
   'gate-screenshot': 'delivery',
+  'gate-verdict-routes': 'delivery',
+  'gate-verdict-token': 'delivery',
+  'gate-verdict-client': 'delivery',
   'native-job-status': 'delivery',
   // Writes verdicts onto delivery's own VersionManifest, and validates a delivery's
   // sources at gate time -- delivery-domain checks that had drifted into creation/.
@@ -402,6 +412,7 @@ const FILE_BUCKET = {
   'assessment-resolution': 'community',
   review: 'community',
   'review-checklist': 'community',
+  'review-queue-cache': 'community',
   'review-sweep': 'community',
   'proposal-apply-bot': 'community',
   'proposal-base': 'community',
@@ -445,6 +456,7 @@ const FILE_BUCKET = {
   'creator-metrics': 'telemetry',
 
   // notifications
+  'notification-cache': 'notifications',
   notify: 'notifications',
   notifications: 'notifications',
   'game-follow-notify': 'notifications',

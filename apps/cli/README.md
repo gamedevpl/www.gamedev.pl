@@ -123,15 +123,20 @@ the agent, not the session. `/delegate <task>` skips the chat; `gamedevpl delega
 [--agent codex] [--handoff] [--submit]` is the non-interactive form (exit `1` when the agent or the
 ladder fails).
 
-`gamedevpl connect <slug>` prints the MCP handoff (URL, kickoff, install snippet).
-`--agent claude` (or `codex` / `copilot`) launches the agent with temporary MCP configuration,
-never the creator OAuth grant or a PAT. The round must use builder `self`; explicit
-`--handoff` requests a switch and refuses execution while the switch is pending.
-In a matching checkout the agent works on that game's directory; review local changes
-before `gamedevpl submit`. Otherwise it uses a scratch directory and the MCP workflow;
-the CLI prints the directory and keeps any scratch files after exit. Check the delivery
-in Studio. Existing user MCP configuration is not overwritten.
-MCP progress appears while the agent runs; Ctrl+C in the REPL stops its process group.
+`gamedevpl connect <slug>` opens a work-mode picker in an interactive terminal.
+It detects a matching checkout in the current directory or its `<slug>` child.
+When found, the local choices reuse its files, including unsent changes; selecting
+an agent remembers it for the next editing request. `/play` then previews locally.
+The picker labels MCP choices as using platform sources when no checkout exists.
+`--manual` prints the MCP handoff without launching an agent.
+
+Codex MCP runs in its native interactive terminal with workspace-write isolation and
+on-request user approvals. Answer network/tool permission requests there, then exit
+to return to gamedevpl. It refuses an unattended MCP launch instead of starting a
+session that cannot ask for permissions. Native tool policies still apply.
+Claude and Copilot keep their existing temporary MCP configuration. Scratch files
+remain available after an MCP run; process exit alone does not confirm delivery.
+Existing user MCP configuration is not overwritten.
 
 ## Releases
 
@@ -249,3 +254,61 @@ Create in Studio establishes its submission even before an agent starts or deliv
 files. A missing game is not silently created by connect.
 
 In the interactive prompt, type `/` to browse commands or `/pu` to find `/pull`. Use ↑/↓ to select, Tab to fill, and Enter to send. Enter on a partial command fills it first. Esc hides suggestions and keeps your text; outside the suggestion list, ↑/↓ browses history. Suggestions run locally and make no model requests.
+
+### Delegated model and reasoning effort
+
+Use `/model` in the interactive session to choose an agent, model and reasoning
+effort. Choices are saved per agent for future local and MCP delegations. Codex
+choices come from its local model cache when available; other model IDs can be
+entered directly. A model still needs to be available to your agent's account.
+
+You can also configure this from a terminal:
+
+```sh
+gamedevpl model codex --model YOUR_MODEL_ID --effort high
+gamedevpl model muse --model YOUR_MODEL_ID --effort medium
+gamedevpl model codex --reset
+```
+
+Without overrides, the agent keeps its own configuration. The task header says
+“tool default (not reported)” rather than guessing its effective model or effort.
+Vibe model selection uses `VIBE_ACTIVE_MODEL`; tools without an effort override
+keep their own reasoning settings. Unsupported installed CLI flags fail preflight.
+
+The main local-task view groups progress and abbreviates shell operations. `/logs`
+shows the full sanitized transcript of the latest task in the current interactive
+checkout. Logs are private local temporary files; one-shot delegation prints the
+log path. Logs are not sent to gamedev.pl and may contain local source text.
+
+When Antigravity cannot ask for a permission in headless mode, the interactive CLI offers to hand it the terminal and resume that conversation. Answer permissions in Antigravity, then exit it to return to CLI verification. Sandbox settings stay enabled; permissions are not automatically approved. One-shot/unattended runs do not open an interactive session. On macOS and Linux, native interactive output is recorded in `/logs` using the system terminal recorder. On Windows it remains in terminal scrollback. Studio shows local task activity separately from delivery status; game files are sent only by submission.
+
+### Recover an open agent session
+
+If a previous MCP agent stopped without ending its session, preview delivery can remain locked. The interactive delivery prompt offers to disconnect that session and deliver the local checkout. For an explicit retry, use `/submit --takeover` or `gamedevpl submit --takeover [dir]`. This revokes the previous session key and sends the full local file snapshot after checks pass. It does not stop the local agent process, so stop that process first if it is still editing your checkout. Old server staging stays in the previous generation; it is not mixed into your local delivery. Managed agents and pending handoffs must finish through Studio. `--force` alone never takes over an agent session.
+
+### Push local changes
+
+Use `/push` in the checkout session, or `gamedevpl push [dir]`, to run checks and deliver a preview. `/pull` brings platform changes into the checkout. `/submit` remains an alias for `/push`; neither publishes publicly unless you explicitly pass `--publish`.
+
+### Antigravity permissions
+
+Before a local Antigravity task starts, the interactive CLI offers to enable
+sandboxed headless execution. Confirming sets `enableTerminalSandbox: true` and
+`toolPermission: "proceed-in-sandbox"` in
+`~/.gemini/antigravity-cli/settings.json`. This is an **agy-wide setting**, shared
+by all projects. Existing permission rules and other preferences are preserved;
+the previous file is backed up beside it, with the backup path printed after setup.
+
+Agy runs approved sandboxed commands without opening another terminal UI. Existing
+ask/deny rules still apply, as do any outside-sandbox exceptions you previously
+configured. The CLI does not add wildcard grants or `--dangerously-skip-permissions`.
+If agy still needs permission, you can resume the task interactively or return with
+local edits preserved. Network access and tools outside the sandbox may still need
+approval; enabling this preset does not grant unrestricted access.
+
+The enabled preset is detected on subsequent runs. To change it later, use agy's
+`/config` or restore the printed backup. You can also choose existing permissions
+for one run or cancel before preparation starts. Unattended CLI runs never modify
+agy settings or open a permission picker.
+
+See the [Antigravity sandbox documentation](https://antigravity.google/docs/cli/sandbox/).

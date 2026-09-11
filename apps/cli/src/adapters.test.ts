@@ -14,6 +14,7 @@ describe('adapter registry', () => {
       'copilot',
       'cursor',
       'gemini',
+      'muse',
       'vibe',
     ]);
   });
@@ -39,6 +40,22 @@ it('validates flags even when a CLI exits before its output pipe flushes', () =>
     expect(() => preflightAdapter({ ...base, command, headless: ['--missing'] }, process.env)).toThrow(
       'does not support --missing',
     );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+it('probes Muse exec help without starting a paid session', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gdpl-muse-help-'));
+  const command = join(root, 'muse');
+  const spec = loadAdapters({ HOME: root }).adapters.find((row) => row.name === 'muse')!;
+  try {
+    writeFileSync(
+      command,
+      `#!${process.execPath}\nif (process.argv.slice(2).join(' ') !== 'exec --help') process.exit(1); console.log('--trust-workspace --json');`,
+      { mode: 0o700 },
+    );
+    expect(() => preflightAdapter({ ...spec, command }, process.env)).not.toThrow();
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

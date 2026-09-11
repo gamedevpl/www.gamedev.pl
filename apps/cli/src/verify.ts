@@ -1,3 +1,4 @@
+import { spawnCommand } from './delegate.js';
 import { spawnSync } from 'node:child_process';
 import { CliError, EXIT_RED } from './exit-codes.js';
 
@@ -37,4 +38,37 @@ export function assertLadderGreen(result: ReturnType<typeof runLadder>): void {
   if (!result.ok) {
     throw new CliError(`verify failed at ${result.stage}`, EXIT_RED, 'hand the failure back to the adapter');
   }
+}
+
+export async function runLadderAsync(input: {
+  cwd: string;
+  abort: AbortSignal;
+  run?: VerifyRun;
+}): Promise<ReturnType<typeof runLadder>> {
+  if (input.run) return runLadder({ ...input, publish: false });
+  for (const [stage, script] of [
+    ['typecheck', 'typecheck'],
+    ['check_static', 'check:static'],
+  ] as const) {
+    if (input.abort.aborted) return { ok: false, stage, detail: 'Verification stopped' };
+    const child = spawnCommand({
+      command: 'npm',
+      args: ['run', script],
+      cwd: input.cwd,
+      env: process.env,
+      timeoutMs: 5 * 60_000,
+      abort: input.abort,
+    });
+    let detail = '';
+    for (const stream of [child.stdout, child.stderr])
+      stream?.on('data', (chunk) => {
+        detail = (detail + String(chunk)).slice(-16_000);
+      });
+    const code = await new Promise<number | null>((resolve, reject) => {
+      child.once('error', reject);
+      child.once('close', resolve);
+    });
+    if (code !== 0) return { ok: false, stage, detail };
+  }
+  return { ok: true };
 }

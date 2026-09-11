@@ -7,10 +7,76 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Added
+
+- Configure remembered sandboxed headless permissions before starting local Antigravity tasks (#1267).
+
 ### Fixed
 
 - Recalling slash commands keeps arrow keys available for history and restores your unfinished input (#1233).
 - Agent output hides empty Codex item lifecycle events instead of printing `item.completed` (#1233).
+
+## 0.13.1 — 2026-09-11
+
+### Fixed
+
+- Explain how to retry uploads when source storage is busy (#1263).
+- Distinguish interactive takeover commands from shell commands (#1263).
+
+## 0.13.0 — 2026-09-10
+
+### Added
+
+- Use `/push` or `gamedevpl push` to deliver local changes as a preview; `/submit` remains supported (#1255).
+
+### Fixed
+
+- Notify about newer CLI releases when an interactive session starts, without blocking work (#1260).
+
+- Make terminal conversations easier to scan with colored roles, checks, links and clearer spacing (#1259).
+- Summarize repeated tool activity while preserving every operation in `/logs` (#1259).
+- Wrap clickable preview links within narrow terminals (#1259).
+- Recover preview delivery from an open own-agent session with explicit takeover confirmation (#1256).
+- Continue existing local checkouts from connect instead of silently using platform sources (#1252).
+- Show meaningful Codex MCP and file activity instead of item.completed (#1252).
+- Open Codex MCP interactively so permission requests can be answered (#1252).
+
+## 0.12.0 — 2026-09-08
+
+### Added
+
+- Show local agent activity and lost CLI contact in the Studio connection guide (#1243).
+- Keep interactive Antigravity terminal output in /logs on macOS and Linux (#1243).
+- Resume blocked Antigravity tasks interactively in the terminal to answer permission prompts, then return to verification (#1243).
+- Choose and remember delegated agent model and reasoning effort with `/model` or `gamedevpl model` (#1243).
+- Open the full local task transcript with `/logs` while the main view shows concise progress (#1243).
+
+### Fixed
+
+- Wait for the final local task status before exiting the CLI (#1243).
+- Show model command help without changing saved settings (#1243).
+- Show Claude session resume instructions once instead of repeating them on every system event (#1243).
+- Group local task output and reduce setup and shell-command noise in the terminal (#1243).
+- Return local validation errors to the selected agent for up to two automatic repairs before offering delivery (#1243).
+- Keep Ctrl+C responsive while local validation runs (#1243).
+- Show local agent ownership separately from Studio status while editing and verifying (#1243).
+- Preserve complete agent responses instead of truncating them to 240 characters (#1243).
+- Stream Muse responses and tool activity instead of waiting silently for its final answer (#1243).
+- Show time since the last output when a running task stops reporting progress (#1243).
+- Keep terminal history stable while the activity spinner updates, so preview URLs can be selected and copied (#1243).
+- Render preview URLs as clickable hyperlinks in terminals that support them (#1243).
+
+## 0.11.0 — 2026-09-08
+
+### Added
+
+- Detect Muse Code and delegate local checkout tasks with `--agent muse` (#1234)
+
+## 0.10.1 — 2026-09-08
+
+### Fixed
+
+- `gamedevpl update` sorts release versions by semver instead of tag list order (#1238).
 
 ## 0.10.0 — 2026-09-08
 

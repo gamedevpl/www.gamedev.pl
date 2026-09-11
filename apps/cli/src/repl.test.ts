@@ -1,4 +1,5 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
@@ -207,7 +208,7 @@ describe('repl turn loop', () => {
     expect(lines.join('\n')).toContain('gamedevpl login');
   });
 
-  it('treats /submit dest like the one-shot verb, not as a slug', async () => {
+  it.each(['submit', 'push'])('treats /%s dest like the one-shot verb, not as a slug', async (verb) => {
     const dest = mkdtempSync(join(tmpdir(), 'gdpl-repl-sub-'));
     writeGameFiles(dest, 'ghost-roads', [{ path: 'game.ts', content: 'A' }]);
     writeBase(dest, 'v1', [{ path: 'game.ts', content: 'A' }]);
@@ -235,7 +236,7 @@ describe('repl turn loop', () => {
       },
     });
     const delivered = await handleReplLine({
-      line: `/submit --slug ghost-roads ${dest}`,
+      line: `/${verb} --slug ghost-roads ${dest}`,
       api,
       token: 'tok',
       write: (s) => lines.push(s),
@@ -246,13 +247,13 @@ describe('repl turn loop', () => {
 
     lines.length = 0;
     const missing = await handleReplLine({
-      line: '/submit not-a-checkout',
+      line: `/${verb} not-a-checkout`,
       api,
       token: 'tok',
       write: (s) => lines.push(s),
     });
     expect(missing.next).toBe('continue');
-    expect(lines.join('\n')).toContain('gamedevpl submit [dir]');
+    expect(lines.join('\n')).toContain(`gamedevpl ${verb} [dir]`);
     expect(seen.some((path) => path.includes('/studio/games/not-a-checkout/'))).toBe(false);
   });
 
@@ -272,6 +273,46 @@ describe('repl turn loop', () => {
     expect(result.next).toBe('continue');
     expect(lines.join('\n')).toContain('open a browser');
     expect(lines.join('\n')).not.toMatch(/gamedevpl <[a-z]+\|/);
+  });
+
+  it('dispatches /update to the active running binary destination', async () => {
+    const lines: string[] = [];
+    const customBin = join(mkdtempSync(join(tmpdir(), 'gdpl-repl-')), 'bin', 'gamedevpl');
+    const api = createApi({
+      origin: 'https://www.gamedev.pl',
+      store: memoryStore({ accessToken: 'gdpl_oat_t', tokenType: 'Bearer', scope: 'creator' }),
+      fetch: async () => new Response('{}', { status: 404 }),
+    });
+    const bytes = Buffer.from('#!/usr/bin/env node\n');
+    const hash = createHash('sha256').update(bytes).digest('hex');
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url: RequestInfo | URL) => {
+      const s = String(url);
+      if (s.endsWith('releases?per_page=100')) {
+        return new Response(JSON.stringify([{ tag_name: 'cli-v0.14.0' }]), { status: 200 });
+      }
+      if (s.endsWith('SHA256SUMS')) {
+        return new Response(`${hash}  gamedevpl\n`, { status: 200 });
+      }
+      if (s.endsWith('/gamedevpl')) {
+        return new Response(bytes, { status: 200 });
+      }
+      return new Response('nope', { status: 404 });
+    };
+    try {
+      const result = await handleReplLine({
+        line: '/update',
+        api,
+        token: null,
+        currentPath: customBin,
+        write: (s) => lines.push(s),
+      });
+      expect(result.next).toBe('continue');
+      expect(lines.join('\n')).toContain('updated gamedevpl to 0.14.0');
+      expect(readFileSync(customBin)).toEqual(bytes);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 
