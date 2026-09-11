@@ -498,7 +498,9 @@ describe('HeroPromptSection', () => {
     const recognition = new FakeSpeechRecognition();
     Object.defineProperty(window, 'webkitSpeechRecognition', {
       configurable: true,
-      value: vi.fn(() => recognition),
+      value: vi.fn(function () {
+        return recognition;
+      }),
     });
 
     const container = document.createElement('div');
@@ -819,9 +821,11 @@ describe('HeroPromptSection', () => {
     document.body.appendChild(container);
     const root = createRoot(container);
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
-      Promise.resolve(new Response(JSON.stringify({ match: null, score: 0 }), { status: 200 })),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(() =>
+        Promise.resolve(new Response(JSON.stringify({ match: null, score: 0 }), { status: 200 })),
+      );
 
     await act(async () => {
       root.render(
@@ -859,9 +863,11 @@ describe('HeroPromptSection', () => {
     document.body.appendChild(container);
     const root = createRoot(container);
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
-      Promise.resolve(new Response(JSON.stringify({ match: null, score: 0 }), { status: 200 })),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(() =>
+        Promise.resolve(new Response(JSON.stringify({ match: null, score: 0 }), { status: 200 })),
+      );
 
     // Initial render without flushing effects or advancing timers
     act(() => {
@@ -892,16 +898,25 @@ describe('HeroPromptSection', () => {
     document.body.appendChild(container);
     const root = createRoot(container);
 
-    const mockCatalog = [{
-      slug: 'mexico-86',
-      title: "Mexico '86 Arcade Football",
-      genre: 'sports',
-      controls: 'Arrows / Enter',
-      media: null, multiplayer: null, saves: null, world: null, sensing: null,
-      orientation: 'landscape' as const, editor: null, status: 'published' as const, submittedBy: null,
-      tagline: { en: 'Tournament football.', pl: 'Turniej piłkarski.' },
-      searchKeywords: ['football', 'soccer', 'piłka', 'mundial'],
-    }];
+    const mockCatalog = [
+      {
+        slug: 'mexico-86',
+        title: "Mexico '86 Arcade Football",
+        genre: 'sports',
+        controls: 'Arrows / Enter',
+        media: null,
+        multiplayer: null,
+        saves: null,
+        world: null,
+        sensing: null,
+        orientation: 'landscape' as const,
+        editor: null,
+        status: 'published' as const,
+        submittedBy: null,
+        tagline: { en: 'Tournament football.', pl: 'Turniej piłkarski.' },
+        searchKeywords: ['football', 'soccer', 'piłka', 'mundial'],
+      },
+    ];
 
     await act(async () => {
       root.render(
@@ -940,9 +955,11 @@ describe('HeroPromptSection', () => {
       searchKeywords: ['miecze', 'walka'],
     };
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
-      Promise.resolve(new Response(JSON.stringify({ match: vectorMatchGame, score: 0.85 }), { status: 200 })),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(() =>
+        Promise.resolve(new Response(JSON.stringify({ match: vectorMatchGame, score: 0.85 }), { status: 200 })),
+      );
 
     // Initial render with catalogEntries = [] (e.g. initial cold load)
     await act(async () => {
@@ -968,10 +985,11 @@ describe('HeroPromptSection', () => {
     const card = container.querySelector('.matched-card');
     expect(card).not.toBeNull();
     expect(container.querySelector('.matched-title')?.textContent).toBe('Bonfire Arena');
-    expect(container.querySelector('.matched-actions .match-build-link')?.textContent).toContain('lub stwórz swoją grę');
+    expect(container.querySelector('.matched-actions .match-build-link')?.textContent).toContain(
+      'lub stwórz swoją grę',
+    );
 
     fetchSpy.mockRestore();
     await act(async () => root.unmount());
   });
 });
-

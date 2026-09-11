@@ -768,7 +768,7 @@
     "apps/web/src/surfaces/catalog/catalogScrollIdle.ts": 92,
     "apps/web/src/surfaces/catalog/catalogSort.test.ts": 177,
     "apps/web/src/surfaces/catalog/catalogSort.ts": 244,
-    "apps/web/src/surfaces/party/ControllerView.test.tsx": 201,
+    "apps/web/src/surfaces/party/ControllerView.test.tsx": 203,
     "apps/web/src/surfaces/party/ControllerView.tsx": 333,
     "apps/web/src/surfaces/party/mpApi.ts": 41,
     "apps/web/src/surfaces/party/PartyDiagram.tsx": 227,
