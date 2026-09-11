@@ -322,6 +322,7 @@ export async function runCli(
           io,
           token: await studioToken(api, slug),
           slug,
+          currentPath: argv[1],
           initialLine: `/connect ${slug}${flags.handoff ? ' --handoff' : ''}${typeof flags.agent === 'string' ? ` --agent ${flags.agent}` : ''}`,
         });
       }
@@ -350,7 +351,7 @@ export async function runCli(
         telemetry,
       });
     }
-    const read = await dispatchReadVerb({ verb, args, flags, api, io, env });
+    const read = await dispatchReadVerb({ verb, args, flags, api, io, env, currentPath: argv[1] });
     if (read !== null) return read;
     if (verb === 'repl') {
       if (!tty || !io.stdout.isTTY) throw pipeNeedsFlag(`a verb such as ${cliUsage('whoami')}`);
@@ -374,6 +375,7 @@ export async function runCli(
         token,
         slug: requestedSlug,
         initialLine: requestedSlug && !opened ? `/connect ${requestedSlug}` : undefined,
+        currentPath: argv[1],
         ...(opened ? { checkout: { slug: opened.slug, root: opened.root } } : {}),
       });
     }

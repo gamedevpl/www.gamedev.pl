@@ -49,6 +49,7 @@ export async function handleReplLine(input: {
   onWorkshop?: (ws: Workshop) => void;
   write: (s: string) => void;
   onActivity?: (activity: string) => void;
+  currentPath?: string;
 }): Promise<ReplLineResult> {
   const retry = input.line.trim() === '/retry' ? input.pendingExecution?.current : undefined;
   if (input.line.trim() === '/retry' && !retry) {
@@ -223,6 +224,7 @@ export async function handleReplLine(input: {
           api: input.api,
           io: { stdout },
           env: input.env,
+          currentPath: input.currentPath,
         });
         if (code !== null) {
           input.write(chunks.join('').trimEnd() || `/${cmd}`);

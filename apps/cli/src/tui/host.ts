@@ -28,6 +28,7 @@ export async function runInkRepl(input: {
   initialLine?: string;
   // Set when a checkout in the working directory opened this session.
   checkout?: { slug: string; root: string };
+  currentPath?: string;
 }): Promise<number> {
   const isTty = Boolean(input.io.stdout.isTTY);
   const color = wantsColor(input.env, isTty);
@@ -165,6 +166,7 @@ export async function runInkRepl(input: {
           conversationId,
           workshop,
           env: input.env,
+          currentPath: input.currentPath,
           pick: session.prompt,
           abort,
           telemetry,

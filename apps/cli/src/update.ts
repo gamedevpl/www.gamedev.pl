@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { CLI_BIN, GIT_REMOTE_HELPER } from './bin-name.js';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 
@@ -41,7 +41,53 @@ export function expectedHash(sums: string, asset: string): string | null {
   return null;
 }
 
-export function defaultInstallDest(): string {
+export type DefaultInstallDestOptions = {
+  env?: NodeJS.ProcessEnv;
+  currentPath?: string;
+};
+
+export function runningBinaryPath(currentPath?: string): string | null {
+  if (!currentPath) return null;
+  const normalized = currentPath.replaceAll('\\', '/');
+  const parts = normalized.split('/');
+  if (parts.includes('node_modules')) return null;
+  const lastSlash = normalized.lastIndexOf('/');
+  const base = lastSlash >= 0 ? normalized.slice(lastSlash + 1) : normalized;
+  const lower = base.toLowerCase();
+  const ext = /\.exe$/i.test(lower) ? '.exe' : '';
+  const raw = ext ? lower.slice(0, -4) : lower;
+  if (raw !== CLI_ASSET && raw !== GIT_REMOTE_HELPER) return null;
+  const sep = currentPath.includes('\\') && !currentPath.includes('/') ? '\\' : '/';
+  const resolved =
+    currentPath.startsWith('/') || /^[a-zA-Z]:[/\\]/.test(currentPath) ? currentPath : resolve(currentPath);
+  if (raw === CLI_ASSET) return resolved;
+  const resolvedNorm = resolved.replaceAll('\\', '/');
+  const dirEnd = resolvedNorm.lastIndexOf('/');
+  const dir = dirEnd >= 0 ? resolved.slice(0, dirEnd) : '';
+  return dir ? `${dir}${sep}${CLI_ASSET}${ext}` : `${CLI_ASSET}${ext}`;
+}
+
+export function defaultInstallDest(options?: NodeJS.ProcessEnv | DefaultInstallDestOptions): string {
+  const isOptionsObject =
+    options &&
+    typeof options === 'object' &&
+    ('currentPath' in options || ('env' in options && typeof options.env === 'object'));
+  const env =
+    (isOptionsObject ? (options as DefaultInstallDestOptions).env : (options as NodeJS.ProcessEnv | undefined)) ??
+    (typeof process !== 'undefined' ? process.env : {});
+  const current =
+    (isOptionsObject ? (options as DefaultInstallDestOptions).currentPath : undefined) ??
+    (typeof process !== 'undefined' && Array.isArray(process.argv) ? process.argv[1] : undefined);
+  const binDir = env.GAMEDEV_BIN_DIR?.trim();
+  if (binDir) {
+    const ext = /\.exe$/i.test(current ?? '') ? '.exe' : '';
+    const sep = binDir.includes('\\') && !binDir.includes('/') ? '\\' : '/';
+    return binDir.endsWith(sep) ? `${binDir}${CLI_ASSET}${ext}` : `${binDir}${sep}${CLI_ASSET}${ext}`;
+  }
+  const running = runningBinaryPath(current);
+  if (running) {
+    return running;
+  }
   return join(homedir(), '.local', 'bin', CLI_ASSET);
 }
 
