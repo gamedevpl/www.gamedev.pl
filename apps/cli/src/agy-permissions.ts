@@ -39,8 +39,13 @@ export async function setupAgyPermissions(input: {
   write: (line: string) => void;
   abort: AbortSignal;
   unattended?: boolean;
+  platform?: NodeJS.Platform;
 }): Promise<boolean> {
   if (input.abort.aborted) return false;
+  if (!['darwin', 'linux'].includes(input.platform ?? process.platform)) {
+    input.write('Antigravity sandbox setup is available on macOS and Linux; using existing permissions.');
+    return true;
+  }
   const path = join(input.env.HOME ?? homedir(), '.gemini', 'antigravity-cli', 'settings.json');
   const raw = await snapshot(path);
   const settings = decode(raw);

@@ -95,3 +95,10 @@ it('refuses symlink profiles without following or replacing them', async () => {
   await expect(setupAgyPermissions(input)).rejects.toThrow('safely read');
   expect(await readFile(target, 'utf8')).toBe('{}');
 });
+
+it('does not configure unsupported sandbox platforms', async () => {
+  const { path, input } = await fixture('{}');
+  expect(await setupAgyPermissions({ ...input, platform: 'win32' })).toBe(true);
+  expect(input.pick).not.toHaveBeenCalled();
+  expect(await readFile(path, 'utf8')).toBe('{}');
+});
