@@ -373,4 +373,32 @@ describe('a seat that stopped playing', () => {
 
     await host.shutdown();
   });
+  it('does not charge a join for the time its bundle took to load', async () => {
+    // The budget is stamped before `ensureLive`, because the seat is taken for the whole
+    // of that fetch. What keeps a slow cold start from reaping itself is that the zone is
+    // not live yet and a wake restarts every surviving seat — two guards a later change
+    // could remove without noticing, which is why this window is pinned rather than
+    // reasoned about.
+    let at = 5_000_000;
+    const { source, release } = pausedSource();
+    const host = makeHost(source, { now: () => at, idleMs: IDLE_MS });
+    const connection = recordingConnection();
+
+    const admission = host.admit(ticketFor('p1'), connection);
+    await Promise.resolve();
+
+    for (let sweep = 0; sweep < 5; sweep += 1) {
+      at += IDLE_MS;
+      host.pump(at);
+    }
+    release();
+    const seated = await admission;
+
+    at += 1;
+    host.pump(at);
+    expect(connection.closedWith).toBe(null);
+    expect(seated.zone.playerCount).toBe(1);
+
+    await host.shutdown();
+  });
 });

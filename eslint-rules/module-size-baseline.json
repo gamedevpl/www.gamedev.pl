@@ -967,7 +967,7 @@
     "apps/web/vitest.config.ts": 13,
     "apps/world/src/app.test.ts": 360,
     "apps/world/src/app.ts": 279,
-    "apps/world/src/host.test.ts": 376,
+    "apps/world/src/host.test.ts": 404,
     "apps/world/src/host.ts": 344,
     "apps/world/src/server.ts": 111,
     "apps/world/src/sim-source.ts": 203,
