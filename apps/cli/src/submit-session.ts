@@ -26,7 +26,7 @@ export async function prepareDeliverySession(
       'Delivery is blocked by an open agent session. Your local files are safe.',
       EXIT_REFUSED,
       session.canTakeOver
-        ? 'gamedevpl submit --takeover — disconnect that agent and deliver your local checkout'
+        ? 'In the interactive session: /push --takeover. In your shell: gamedevpl push --takeover.'
         : 'Finish the active agent or its pending handoff in Studio, then retry.',
     );
   await api.request('POST', `/api/me/studio/games/${encodeURIComponent(slug)}/sources/session`, {

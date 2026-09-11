@@ -7,6 +7,11 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Explain how to retry uploads when source storage is busy (#1263).
+- Distinguish interactive takeover commands from shell commands (#1263).
+
 ## 0.13.0 — 2026-09-10
 
 ### Added

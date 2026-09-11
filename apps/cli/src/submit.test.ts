@@ -31,6 +31,7 @@ describe('submitGame', () => {
     ]);
     writeFileSync(join(dest, 'games', SLUG, 'game.ts'), 'B');
     const seen: string[] = [];
+    let busy = !takeover;
     const api = createApi({
       origin: 'https://www.gamedev.pl',
       store: memoryStore({ accessToken: 't', tokenType: 'Bearer', scope: 'creator' }),
@@ -62,6 +63,10 @@ describe('submitGame', () => {
             ],
           });
         if (path.endsWith('/sources/stage') && init?.method === 'PUT') {
+          if (busy) {
+            busy = false;
+            return json({ error: 'storage_busy', message: 'Source storage is temporarily busy. Retry shortly.' }, 503);
+          }
           const body = JSON.parse(String(init?.body ?? '{}')) as { path: string; content: string };
           expect(body).toEqual(
             body.path === 'game.ts' ? { path: 'game.ts', content: 'B' } : { path: 'SPEC.md', content: 'brief' },
@@ -76,6 +81,12 @@ describe('submitGame', () => {
         return json({}, 404);
       },
     });
+    if (!takeover) {
+      await expect(submitGame({ api, slug: SLUG, dest, run: () => ({ status: 0, stderr: '' }) })).rejects.toMatchObject(
+        { message: expect.stringContaining('Local files are unchanged'), next: expect.stringContaining('Retry /push') },
+      );
+      expect(readFileSync(join(dest, 'games', SLUG, 'game.ts'), 'utf8')).toBe('B');
+    }
     const result = await submitGame({
       api,
       slug: SLUG,
