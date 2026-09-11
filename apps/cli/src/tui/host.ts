@@ -1,3 +1,4 @@
+import { startUpdateNotice } from '../update-notice.js';
 import { runInteractive, type InteractiveRun } from '../agy-interactive.js';
 import { offerKitUpdate } from '../kit-update.js';
 import { activityApi } from './activity.js';
@@ -59,6 +60,7 @@ export async function runInkRepl(input: {
     });
   };
   mount();
+  const stopUpdateNotice = startUpdateNotice({ write: session.writeLine });
   const interactiveRun: InteractiveRun = async (request) => {
     const offset = session.get().lines.length;
     host.instance?.unmount();
@@ -211,6 +213,7 @@ export async function runInkRepl(input: {
       if (result.next === 'quit') break;
     }
   } finally {
+    stopUpdateNotice();
     watch.stop();
     session.close();
     host.instance?.unmount();

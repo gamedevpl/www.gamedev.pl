@@ -13,7 +13,11 @@ export function lineStyle(line: string): { label: string; tone?: string; quiet?:
     )
   )
     return { label: '!', tone: 'red' };
-  if (/^Sending validation|^No new output|^Warning|^kept locally|^.*permission.*(?:denied|refused)/i.test(line))
+  if (
+    /^Update available:|^Sending validation|^No new output|^Warning|^kept locally|^.*permission.*(?:denied|refused)/i.test(
+      line,
+    )
+  )
     return { label: '!', tone: 'yellow' };
   if (/^verifying|^preparing|^Preparing|^installing/.test(line)) return { label: 'CHECK', tone: 'yellow', space: true };
   if (/^[\w-]+ · (?:Running|Tool:|\+\d+ more)/.test(line) || /^[\w-]+ ▸ [⚙✓]/.test(line))

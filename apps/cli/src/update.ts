@@ -61,20 +61,25 @@ export function compareSemver(a: string, b: string): number {
   return 0;
 }
 
-export async function resolveUpdateVersion(input: { version?: string; fetchImpl: FetchLike }): Promise<string> {
+export async function resolveUpdateVersion(input: {
+  version?: string;
+  fetchImpl: FetchLike;
+  fallbackVersion?: string;
+}): Promise<string> {
   if (input.version) return input.version.replace(/^cli-v/, '');
   const res = await input.fetchImpl(CLI_RELEASES_API, {
     headers: { accept: 'application/vnd.github+json' },
   });
-  if (!res.ok) return CLI_VERSION;
-  const rows = (await res.json()) as Array<{ tag_name?: string }>;
+  if (!res.ok) return input.fallbackVersion ?? CLI_VERSION;
+  const rows = (await res.json()) as Array<{ tag_name?: string; draft?: boolean; prerelease?: boolean }>;
   const versions = rows
+    .filter((row) => !row.draft && !row.prerelease)
     .map((row) => row.tag_name ?? '')
-    .filter((tag) => tag.startsWith(CLI_RELEASE_PREFIX))
+    .filter((tag) => /^cli-v\d+\.\d+\.\d+$/.test(tag))
     .map((tag) => tag.slice(CLI_RELEASE_PREFIX.length))
     .sort(compareSemver);
   const newest = versions[versions.length - 1];
-  return newest || CLI_VERSION;
+  return newest || input.fallbackVersion || CLI_VERSION;
 }
 
 export async function updateCli(input: {

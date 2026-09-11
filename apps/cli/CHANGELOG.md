@@ -15,6 +15,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Fixed
 
+- Notify about newer CLI releases when an interactive session starts, without blocking work (#TBD).
+
 - Make terminal conversations easier to scan with colored roles, checks, links and clearer spacing (#1259).
 - Summarize repeated tool activity while preserving every operation in `/logs` (#1259).
 - Wrap clickable preview links within narrow terminals (#1259).
