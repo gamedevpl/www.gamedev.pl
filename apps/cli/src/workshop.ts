@@ -1,3 +1,4 @@
+import { prepareAgyPermissions } from './agy-permissions.js';
 import { localActivity } from './local-activity.js';
 import { agyConversation, type InteractiveRun } from './agy-interactive.js';
 import { taskOutput } from './task-output.js';
@@ -264,11 +265,11 @@ export async function runLocalBuild(input: {
   const cwd = spec.cwd === 'game-dir' ? join(ws.root, 'games', ws.slug) : ws.root;
   const controller = new AbortController();
   ws.abort.current = controller;
-  const presence = localActivity(ws.activityApi, ws.token, spec.name);
+  let presence: ReturnType<typeof localActivity> | undefined;
   let success = false;
-  ws.onLocalTask?.(spec.name);
   let authCheck: Promise<void> | undefined;
   try {
+    if (!(await prepareAgyPermissions(ws, spec.name, input.write, controller.signal))) return false;
     if (!ws.runAdapter && spec.name === 'claude') {
       authCheck = requireClaudeSubscription({
         command: spec.command,
@@ -279,6 +280,8 @@ export async function runLocalBuild(input: {
       });
       await authCheck;
     }
+    presence = localActivity(ws.activityApi, ws.token, spec.name);
+    ws.onLocalTask?.(spec.name);
     input.write(`▸ Preparing ${spec.name} in games/${ws.slug} — Ctrl+C stops it`);
     if (!ws.runAdapter) {
       input.write('Preparing Creator Kit and dependencies…');
@@ -319,11 +322,11 @@ export async function runLocalBuild(input: {
       write: input.write,
       failed: (stage) => ws.telemetry?.record('verify_failed', { adapter: spec.name, stage }),
       verify: () => {
-        presence.phase('verifying');
+        presence?.phase('verifying');
         return runLadderAsync({ cwd: ws.root, run: ws.run, abort: controller.signal });
       },
       run: async (prompt) => {
-        presence.phase('editing');
+        presence?.phase('editing');
         const stream = createDelegateStream(spec.name);
         const failure = trackAgentFailure(spec.name);
         let blocked = false;
@@ -347,7 +350,7 @@ export async function runLocalBuild(input: {
         });
         if (controller.signal.aborted) return false;
         if (blocked && spec.name === 'agy' && ws.interactiveRun && !ws.unattended) {
-          presence.phase('permission');
+          presence?.phase('permission');
           const choice = await ws.pick(
             ['Open Antigravity interactively', 'Keep edits and return'],
             'Antigravity needs permission. Open its permission prompts in this terminal?',
@@ -356,7 +359,7 @@ export async function runLocalBuild(input: {
           input.write(
             'Antigravity now owns the terminal. Answer its permission prompts, then exit Antigravity to return here for verification.',
           );
-          presence.phase('interactive');
+          presence?.phase('interactive');
           const resumed = await ws.interactiveRun({
             spec,
             cwd,
@@ -393,7 +396,7 @@ export async function runLocalBuild(input: {
     return success;
   } finally {
     output.flush();
-    await presence.finish(controller.signal.aborted ? 'stopped' : success ? 'ready' : 'failed');
+    await presence?.finish(controller.signal.aborted ? 'stopped' : success ? 'ready' : 'failed');
     if (controller.signal.aborted) input.write(`${spec.name} stopped — the tree keeps whatever it wrote; /diff to see`);
     ws.abort.current = null;
     ws.onLocalTask?.('');
