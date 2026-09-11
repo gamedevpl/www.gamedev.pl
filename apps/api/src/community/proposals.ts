@@ -271,6 +271,7 @@ export async function openProposal(deps: ProposalDeps, input: OpenProposalInput)
         surface: 'proposal',
         uid: input.proposerUid,
         category: verdict.category,
+        unavailable: verdict.unavailable,
       });
       return { ok: false, ...rejectionFor(verdict) };
     }
@@ -524,6 +525,7 @@ export async function declineProposal(
         surface: 'proposal',
         uid: input.byUid ?? undefined,
         category: verdict.category,
+        unavailable: verdict.unavailable,
       });
       return { ok: false, ...rejectionFor(verdict) };
     }
@@ -568,6 +570,7 @@ export async function requestProposalChanges(
         surface: 'proposal',
         uid: input.byUid ?? undefined,
         category: verdict.category,
+        unavailable: verdict.unavailable,
       });
       return { ok: false, ...rejectionFor(verdict) };
     }

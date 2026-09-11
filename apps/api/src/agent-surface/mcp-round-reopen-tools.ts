@@ -248,7 +248,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           logModerationRejection(ctx.request.log, {
             surface: 'creator_feedback',
             uid: resolved.creatorUid,
-            category: moderation.category,
+            category: moderation.category, unavailable: moderation.unavailable,
           });
           return toolErr(rejectionFor(moderation).error, { category: rejectionFor(moderation).category });
         }
@@ -457,7 +457,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
           logModerationRejection(ctx.request.log, {
             surface: 'creator_feedback',
             uid: resolved.creatorUid,
-            category: moderation.category,
+            category: moderation.category, unavailable: moderation.unavailable,
           });
           return toolErr(rejectionFor(moderation).error, { category: rejectionFor(moderation).category });
         }

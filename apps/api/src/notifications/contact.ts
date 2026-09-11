@@ -106,6 +106,7 @@ export async function registerContactRoutes(app: FastifyInstance, options: Conta
           surface: 'contact',
           uid: request.user?.uid,
           category: moderation.category,
+          unavailable: moderation.unavailable,
         });
         const rejection = rejectionFor(moderation);
         return reply.status(rejection.status).send({ error: rejection.error, category: rejection.category });

@@ -57,12 +57,17 @@ export type ModerationSurface =
 /** The stable message every rejection logs. The alert's log filter matches on this. */
 export const MODERATION_REJECTED_MSG = 'moderation rejected';
 
+// Separate message: the burst alert must not count outages.
+export const MODERATION_UNAVAILABLE_MSG = 'moderation unavailable';
+
 export interface ModerationRejection {
   surface: ModerationSurface;
   /** Absent on unauthenticated surfaces (the contact form). Never an email. */
   uid?: string;
   /** Absent when a checker refused without classifying; recorded as `other`. */
   category?: RejectCategory;
+  /** Undecided: logged apart, since no text was refused. */
+  unavailable?: boolean;
 }
 
 /**
@@ -81,6 +86,6 @@ export function logModerationRejection(log: FastifyBaseLogger, rejection: Modera
         uid: rejection.uid ?? 'anonymous',
       },
     },
-    MODERATION_REJECTED_MSG,
+    rejection.unavailable ? MODERATION_UNAVAILABLE_MSG : MODERATION_REJECTED_MSG,
   );
 }

@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { basename, dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { logModerationRejection, MODERATION_REJECTED_MSG } from './moderation-metrics.js';
+import { logModerationRejection, MODERATION_REJECTED_MSG , MODERATION_UNAVAILABLE_MSG } from './moderation-metrics.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -142,7 +142,7 @@ describe('every moderating module reports its rejections', () => {
   // as an outage, never as a verdict on what the person wrote.
   it.each(callSites)('%s answers an unavailable checker through rejectionFor', (name) => {
     const source = readFileSync(resolve(apiSrcRoot, name), 'utf8');
-    expect(source).toContain('rejectionFor(');
+    expect(source).toMatch(/rejectionFor\(|replyModerationBlock\(/);
     expect(source).not.toMatch(/status\(422\)\.send\(\{ error: 'content_rejected'/);
   });
 
@@ -183,5 +183,23 @@ describe('the alert that reads these logs', () => {
     const policy = script.slice(script.indexOf('A14 moderation rejection burst'));
     expect(policy).toContain('logging.googleapis.com/user/moderation_rejections');
     expect(policy.slice(0, 800)).toContain('service_name');
+  });
+});
+
+// The burst alert reads these lines to spot abuse. An outage in that stream reads as
+// a wave of rejections nobody made.
+describe('an outage is not a rejection in the metrics', () => {
+  it('logs an undecided verdict under its own message', () => {
+    const lines: { msg: string }[] = [];
+    const log = { warn: (_payload: unknown, msg: string) => lines.push({ msg }) } as never;
+
+    logModerationRejection(log, { surface: 'refine', uid: 'g:1', category: 'other', unavailable: true });
+    logModerationRejection(log, { surface: 'refine', uid: 'g:1', category: 'pii' });
+
+    expect(lines.map((line) => line.msg)).toEqual([MODERATION_UNAVAILABLE_MSG, MODERATION_REJECTED_MSG]);
+  });
+
+  it('keeps the two messages distinct, so one filter cannot match both', () => {
+    expect(MODERATION_UNAVAILABLE_MSG).not.toBe(MODERATION_REJECTED_MSG);
   });
 });

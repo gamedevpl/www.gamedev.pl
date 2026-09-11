@@ -25,6 +25,17 @@ export interface ModerationRejection {
   category: RejectCategory | 'other';
 }
 
+// `verdictPhrase` keeps a surface's own wording; outages use the shared code.
+export function replyModerationBlock<R extends { status(code: number): R; send(body: unknown): R }>(
+  reply: R,
+  verdict: ModerationVerdict,
+  verdictPhrase?: string,
+): R {
+  const rejection = rejectionFor(verdict);
+  const error = rejection.status === 503 ? rejection.error : (verdictPhrase ?? rejection.error);
+  return reply.status(rejection.status).send({ error, category: rejection.category });
+}
+
 // Both codes mean blocked; only one judges the text.
 export function isModerationBlock(error: string): boolean {
   return error === 'content_rejected' || error === 'moderation_unavailable';

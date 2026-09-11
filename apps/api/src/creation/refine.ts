@@ -430,6 +430,7 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
         surface: 'refine',
         uid: request.user?.uid,
         category: moderation.category,
+        unavailable: moderation.unavailable,
       });
       const rejection = rejectionFor(moderation);
       return reply.status(rejection.status).send({ error: rejection.error, category: rejection.category });
