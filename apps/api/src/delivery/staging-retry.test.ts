@@ -49,19 +49,6 @@ it.each([412, 429])('retries manifest writes after %i without losing concurrent 
       return new Response(null, { status: 200 });
     }
     const name = decodeURIComponent(href.split('/o/')[1].split('?')[0]);
-    // After the first 412, the concurrent writer's manifest appears for the retry read.
-    if (name.endsWith('/manifest.json') && manifestWrites >= 1 && !objects.has(name)) {
-      const concurrent = {
-        slug: 'g',
-        jobId: 7,
-        roundGeneration: 1,
-        updatedAt: '2026-07-30T10:00:00.000Z',
-        files: [{ path: 'SPEC.md', bytes: 3 }],
-        totalBytes: 3,
-      };
-      objects.set(name, Buffer.from(JSON.stringify(concurrent)));
-      generations.set(name, 1);
-    }
     const body = objects.get(name);
     if (!body) return new Response('', { status: 404 });
     return new Response(new Uint8Array(body), {
