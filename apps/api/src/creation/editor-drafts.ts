@@ -16,7 +16,7 @@ import { editorKitV2Enabled } from '../platform/editor-kit-env.js';
 import { isLiveAgentRound } from './code-surface.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { MAX_EDITOR_DRAFT_BYTES, type Store, type SubmissionRecord } from '../platform/store.js';
-import type { ContentChecker } from '../platform/moderation.js';
+import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
 import { MAX_UTTERANCE_LENGTH, applyAssistPatches, assistEnabled, type EditorAssistant } from './editor-assist.js';
 import type { EditingGate } from './creation-limits.js';
@@ -343,7 +343,10 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
             uid: request.user?.uid,
             category: verdict.category,
           });
-          return reply.status(422).send({ error: 'that text was rejected', category: verdict.category ?? 'other' });
+          const rejection = rejectionFor(verdict);
+          return reply
+            .status(rejection.status)
+            .send({ error: rejection.status === 503 ? rejection.error : 'that text was rejected', category: rejection.category });
         }
       }
 
@@ -418,7 +421,11 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
             uid: request.user?.uid,
             category: verdict.category,
           });
-          return reply.status(422).send({ error: 'that request was rejected', category: verdict.category ?? 'other' });
+          const requestRejection = rejectionFor(verdict);
+          return reply.status(requestRejection.status).send({
+            error: requestRejection.status === 503 ? requestRejection.error : 'that request was rejected',
+            category: requestRejection.category,
+          });
         }
       }
 

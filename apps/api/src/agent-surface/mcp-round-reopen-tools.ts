@@ -20,7 +20,7 @@ import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
 import { quotaHeadroom } from './agent-quota-headroom.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
-import type { ContentChecker } from '../platform/moderation.js';
+import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import type { ManagedUnavailableReason } from './managed-availability.js';
 import {
   toolOk,
@@ -250,7 +250,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
             uid: resolved.creatorUid,
             category: moderation.category,
           });
-          return toolErr('content_rejected', { category: moderation.category ?? 'other' });
+          return toolErr(rejectionFor(moderation).error, { category: rejectionFor(moderation).category });
         }
 
         const admitted = await store.beginAgentOpenRound(resolved.slug, at);
@@ -459,7 +459,7 @@ export function createRoundReopenTools(deps: RoundReopenToolsDeps): Record<strin
             uid: resolved.creatorUid,
             category: moderation.category,
           });
-          return toolErr('content_rejected', { category: moderation.category ?? 'other' });
+          return toolErr(rejectionFor(moderation).error, { category: rejectionFor(moderation).category });
         }
 
         const quota = await store.checkAndIncrementQuota(resolved.creatorUid, dateStr, dailyFeedbackQuota, 'feedback');

@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { renderContactEmail } from './email-templates.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
-import { moderateFields } from '../platform/moderation.js';
+import { rejectionFor, moderateFields  } from '../platform/moderation.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
 
@@ -107,7 +107,8 @@ export async function registerContactRoutes(app: FastifyInstance, options: Conta
           uid: request.user?.uid,
           category: moderation.category,
         });
-        return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
+        const rejection = rejectionFor(moderation);
+        return reply.status(rejection.status).send({ error: rejection.error, category: rejection.category });
       }
 
       if (isRateLimited(byIp, request.clientIp, now(), maxPerWindow, rateLimitWindowMs)) {

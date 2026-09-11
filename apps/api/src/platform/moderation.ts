@@ -25,6 +25,11 @@ export interface ModerationRejection {
   category: RejectCategory | 'other';
 }
 
+// Both codes mean blocked; only one judges the text.
+export function isModerationBlock(error: string): boolean {
+  return error === 'content_rejected' || error === 'moderation_unavailable';
+}
+
 // One answer for a block, so outages never read as rejections.
 export function rejectionFor(verdict: ModerationVerdict): ModerationRejection {
   if (verdict.unavailable) {
