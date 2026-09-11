@@ -27,7 +27,7 @@ import { randomUUID } from 'node:crypto';
 import type { ContributionMode } from '@gamedevpl/contract';
 import type { FastifyBaseLogger } from 'fastify';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
-import type { ContentChecker } from '../platform/moderation.js';
+import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import type { GamesStore, SourceFile } from '../delivery/games-store.js';
 import { ownerUidOf, resolveOwnerOfRecord, reviewerKindOf, type OwnerOfRecord } from './owner-of-record.js';
 import { isRepoBaseStale } from './proposal-base.js';
@@ -271,8 +271,9 @@ export async function openProposal(deps: ProposalDeps, input: OpenProposalInput)
         surface: 'proposal',
         uid: input.proposerUid,
         category: verdict.category,
+        unavailable: verdict.unavailable,
       });
-      return { ok: false, status: 422, error: 'content_rejected', category: verdict.category ?? 'other' };
+      return { ok: false, ...rejectionFor(verdict) };
     }
   }
 
@@ -524,8 +525,9 @@ export async function declineProposal(
         surface: 'proposal',
         uid: input.byUid ?? undefined,
         category: verdict.category,
+        unavailable: verdict.unavailable,
       });
-      return { ok: false, status: 422, error: 'content_rejected', category: verdict.category ?? 'other' };
+      return { ok: false, ...rejectionFor(verdict) };
     }
   }
 
@@ -568,8 +570,9 @@ export async function requestProposalChanges(
         surface: 'proposal',
         uid: input.byUid ?? undefined,
         category: verdict.category,
+        unavailable: verdict.unavailable,
       });
-      return { ok: false, status: 422, error: 'content_rejected', category: verdict.category ?? 'other' };
+      return { ok: false, ...rejectionFor(verdict) };
     }
   }
 

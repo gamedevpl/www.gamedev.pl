@@ -1232,6 +1232,7 @@
     "signInRequired": "Twoja sesja wygasła. Zaloguj się ponownie i wyślij jeszcze raz — odpowiedzi są zachowane.",
     "tooManyAttempts": "To dużo nowych gier naraz. Odczekaj kilka minut i spróbuj ponownie.",
     "creationPaused": "Tworzenie nowych gier jest na chwilę wstrzymane — sprawdzamy coś u nas. Twój dzienny limit pozostaje nietknięty, spróbuj ponownie za moment.",
+    "moderationUnavailable": "Nie udało nam się teraz sprawdzić Twojego pomysłu — to problem po naszej stronie, nie z tym, co napisałeś. Twój dzienny limit pozostaje nietknięty, spróbuj ponownie za chwilę.",
     "creationOverCapacity": "Osiągnęliśmy dzisiejszy limit nowych gier w całym serwisie, więc nie możemy teraz zacząć kolejnej. Twój własny limit jest nietknięty i będzie czekał jutro.",
     "nameUnavailable": "Ta nazwa została zajęta, gdy przygotowywaliśmy Twoją grę. Nadaj inną i spróbuj ponownie.",
     "conceptTooShort": "To za mało, żebyśmy wiedzieli, co budować — opisz grę trochę szerzej (co najmniej {{minLength}} znaków): co się w niej robi, jak się wygrywa lub przegrywa, jak wygląda.",
