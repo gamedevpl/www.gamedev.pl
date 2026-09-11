@@ -1,3 +1,4 @@
+import { startUpdateNotice } from '../update-notice.js';
 import { runInteractive, type InteractiveRun } from '../agy-interactive.js';
 import { offerKitUpdate } from '../kit-update.js';
 import { activityApi } from './activity.js';
@@ -27,6 +28,7 @@ export async function runInkRepl(input: {
   initialLine?: string;
   // Set when a checkout in the working directory opened this session.
   checkout?: { slug: string; root: string };
+  currentPath?: string;
 }): Promise<number> {
   const isTty = Boolean(input.io.stdout.isTTY);
   const color = wantsColor(input.env, isTty);
@@ -59,6 +61,7 @@ export async function runInkRepl(input: {
     });
   };
   mount();
+  const stopUpdateNotice = startUpdateNotice({ write: session.writeLine });
   const interactiveRun: InteractiveRun = async (request) => {
     const offset = session.get().lines.length;
     host.instance?.unmount();
@@ -163,6 +166,7 @@ export async function runInkRepl(input: {
           conversationId,
           workshop,
           env: input.env,
+          currentPath: input.currentPath,
           pick: session.prompt,
           abort,
           telemetry,
@@ -211,6 +215,7 @@ export async function runInkRepl(input: {
       if (result.next === 'quit') break;
     }
   } finally {
+    stopUpdateNotice();
     watch.stop();
     session.close();
     host.instance?.unmount();
