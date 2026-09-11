@@ -804,7 +804,7 @@ describe('GCS games store', () => {
     ).toBeNull();
   });
 
-  it('retries staging manifest writes when a concurrent update wins the generation race', async () => {
+  it.each([412, 429])('retries manifest writes after %i without losing concurrent files', async (firstStatus) => {
     const objects = new Map<string, Buffer>();
     const generations = new Map<string, number>();
     let manifestWrites = 0;
@@ -817,7 +817,21 @@ describe('GCS games store', () => {
           manifestWrites += 1;
           // First attempt pretends another writer landed first.
           if (manifestWrites === 1) {
-            return new Response('Precondition Failed', { status: 412 });
+            objects.set(
+              name,
+              Buffer.from(
+                JSON.stringify({
+                  slug: 'g',
+                  jobId: 7,
+                  roundGeneration: 1,
+                  updatedAt: '2026-07-30T10:00:00.000Z',
+                  files: [{ path: 'SPEC.md', bytes: 3 }],
+                  totalBytes: 3,
+                }),
+              ),
+            );
+            generations.set(name, 1);
+            return new Response('Retry', { status: firstStatus });
           }
         }
         const ifMatch = parsed.searchParams.get('ifGenerationMatch');

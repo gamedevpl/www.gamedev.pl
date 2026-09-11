@@ -8,7 +8,7 @@ describe('delivery session', () => {
     const request = vi.fn().mockResolvedValue(locked);
     const api = { request } as unknown as ApiClient;
     await expect(prepareDeliverySession(api, 'game')).rejects.toMatchObject({
-      next: expect.stringContaining('--takeover'),
+      next: expect.stringContaining('In the interactive session: /push --takeover.'),
     });
     expect(request.mock.calls.every(([method]) => method === 'GET')).toBe(true);
   });

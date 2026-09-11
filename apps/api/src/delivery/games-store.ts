@@ -1,3 +1,4 @@
+import { retryStorageWrite } from './storage-write-retry.js';
 // The games store: Cloud Storage as the system of record for creator game content.
 //
 // Today the games repo is that record, and git is the medium — which is why ~200 MB of
@@ -816,17 +817,19 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
     if (opts?.ifGenerationMatch !== undefined) {
       url += `&ifGenerationMatch=${opts.ifGenerationMatch}`;
     }
-    const response = await fetchImpl(url, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${await getAccessToken()}`,
-        'content-type': contentType,
-        // Versions are immutable, so their objects are safe to cache indefinitely —
-        // which is what lets a CDN sit in front of this later without a redesign.
-        'cache-control': 'public, max-age=31536000, immutable',
-      },
-      body: new Uint8Array(body),
-    });
+    const response = await retryStorageWrite(async () =>
+      fetchImpl(url, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${await getAccessToken()}`,
+          'content-type': contentType,
+          // Versions are immutable, so their objects are safe to cache indefinitely —
+          // which is what lets a CDN sit in front of this later without a redesign.
+          'cache-control': 'public, max-age=31536000, immutable',
+        },
+        body: new Uint8Array(body),
+      }),
+    );
     if (response.status === 412) {
       throw new StagingGenerationMismatchError(`games store write of ${name} lost a race (412)`);
     }

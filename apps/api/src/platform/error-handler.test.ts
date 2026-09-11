@@ -1,3 +1,4 @@
+import { StorageWriteBusyError } from '../delivery/storage-write-retry.js';
 import { describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { InMemoryStore } from './store.js';
@@ -154,4 +155,16 @@ describe('app-wide error handler', () => {
 
     await app.close();
   });
+});
+
+it('returns a safe retryable response for throttled source storage', async () => {
+  const app = await buildApp({ store: new InMemoryStore(), sessionSecret: 'test-secret' });
+  app.get('/api/test-storage-busy', async () => {
+    throw new StorageWriteBusyError();
+  });
+  const response = await app.inject('/api/test-storage-busy');
+  expect(response.statusCode).toBe(503);
+  expect(response.headers['retry-after']).toBe('5');
+  expect(response.json()).toEqual({ error: 'storage_busy', message: expect.stringContaining('retry delivery') });
+  await app.close();
 });

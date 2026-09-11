@@ -54,6 +54,12 @@ async function deletePath(api: ApiClient, slug: string, path: string): Promise<v
 
 function mapHttpError(error: unknown): never {
   const message = error instanceof Error ? error.message : String(error);
+  if (/Source storage is temporarily busy|storage_busy/.test(message))
+    throw new CliError(
+      'Upload paused because source storage is busy. Local files are unchanged.',
+      EXIT_REFUSED,
+      'Retry /push in this session, or gamedevpl push in your shell. Already staged files can be sent again.',
+    );
   if (/agent_round|actively building/.test(message))
     throw new CliError(
       'Delivery is blocked by an open agent session. Local files are unchanged.',

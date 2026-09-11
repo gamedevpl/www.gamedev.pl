@@ -1,15 +1,11 @@
+import { registerErrorHandler } from './error-handler.js';
 import { registerLocalActivityRoutes } from '../creation/local-activity-routes.js';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import Fastify, {
-  type FastifyError,
-  type FastifyInstance,
-  type FastifyRequest,
-  type FastifyServerOptions,
-} from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyServerOptions } from 'fastify';
 import { registerAccessTokenRoutes, type AccessTokenRoutesOptions } from './access-token-routes.js';
 import { registerApiCachePolicy } from './api-cache-policy.js';
 import { registerCanonicalHostRedirect } from './canonical-host.js';
@@ -255,17 +251,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   registerClientAddress(app);
   registerApiCachePolicy(app);
 
-  // Fastify's default 500 echoes err.message; 4xx replies pass through.
-  app.setErrorHandler((error: FastifyError, request, reply) => {
-    // Fastify reads both; statusCode wins when an error carries each.
-    const statusCode = error.statusCode ?? (error as { status?: number }).status ?? 500;
-    if (statusCode >= 400 && statusCode < 500) {
-      void reply.send(error);
-      return;
-    }
-    request.log.error({ err: error, method: request.method, url: request.url }, 'unhandled route error');
-    void reply.code(500).send({ error: 'internal' });
-  });
+  registerErrorHandler(app);
 
   const store = options.store ?? new InMemoryStore();
 

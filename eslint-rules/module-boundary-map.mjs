@@ -48,6 +48,7 @@ const DEFAULT_BUCKET = 'platform';
 const FILE_BUCKET = {
   // platform: composition root, auth, errors, rate limits, shared primitives
   app: 'platform',
+  'error-handler': 'platform',
   server: 'platform',
   auth: 'platform',
   bearer: 'platform',
@@ -345,6 +346,7 @@ const FILE_BUCKET = {
   'staged-preview': 'delivery',
   'stage-hints': 'delivery',
   'games-store': 'delivery',
+  'storage-write-retry': 'delivery',
   'games-store-raster': 'delivery',
   'source-file-bytes': 'delivery',
   'gate-materialize': 'delivery',
