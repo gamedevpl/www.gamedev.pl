@@ -12,4 +12,10 @@ it('hides empty and unsupported Codex item events without losing useful output',
   expect(parseEventLine('{"type":"item.completed","error":{"message":"Model unavailable"}}', 'codex')).toBe(
     'Model unavailable',
   );
+  expect(
+    parseEventLine(
+      JSON.stringify({ type: 'item.completed', item: { type: 'error', message: 'Falling back to HTTPS transport' } }),
+      'codex',
+    ),
+  ).toBe('Falling back to HTTPS transport');
 });
