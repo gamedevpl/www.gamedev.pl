@@ -156,3 +156,30 @@ host is snapshotting and will accept the next dial.
 Inputs are dropped rather than queued while the socket is down. An input is an intent
 about a moment; a zone that replayed a second of buffered intents on reconnect would act
 out a plan the player abandoned while the screen was frozen.
+
+## 7. A seat is held by playing, not by connecting
+
+An open socket says nothing about whether anybody is at the keyboard, so a seat that has
+sent no accepted input for `IDLE_SEAT_MS` (three minutes) is retired: the host closes that
+one socket with the final reason `idle`, and the sim is told `leave` through the ordinary
+event stream, the same way it hears about anyone else departing.
+
+Three things go wrong without it, and the third is the one that pays for the mechanism.
+A seat is one of four to eight, so an absent player is a door locked against a present
+one. The entity holding it keeps being simulated as a live target, which is free kills for
+everyone still there. And **a zone cannot hibernate while a seat is held** — §3's "no
+sockets → hibernated zones → no instances" quietly meant "nobody _seated_", so one
+backgrounded tab billed an instance until Cloud Run's sixty-minute socket ceiling cut it
+off.
+
+Only what the declared vocabulary accepted counts as activity. A client one version behind
+its game, sending kinds the zone does not know, is not playing it — the sim never sees any
+of that — so it cannot hold a chair either. Time the zone spent asleep or stopped is never
+charged to anybody: there was no world to be idle in, and counting it would reap the whole
+roster on the next wake, starting with whoever's arrival did the waking.
+
+`idle` is final for the client, and that is the opposite of the `zone_full` reasoning
+above rather than an inconsistency with it. A reason the client retried on would have it
+dial straight back into a seat it is about to lose again, once per backoff, for as long as
+the tab stayed open. Coming back is something the player does by playing, which mints a
+fresh ticket and rejoins the world — exactly what §6 says a reconnect is anyway.

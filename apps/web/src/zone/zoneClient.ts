@@ -36,7 +36,8 @@ export interface ZoneClientOptions {
  * player gets in when a seat frees. `hibernating` is likewise transient by definition:
  * the host is snapshotting and will accept the next dial.
  */
-const FINAL_REASONS = new Set(['kicked', 'expired', 'bad_ticket', 'zone_not_found', 'bye', 'unsupported']);
+// `idle` is final: retrying would retake a seat the sweep just retired.
+const FINAL_REASONS = new Set(['kicked', 'expired', 'bad_ticket', 'zone_not_found', 'bye', 'unsupported', 'idle']);
 
 const MAX_RETRIES = 8;
 

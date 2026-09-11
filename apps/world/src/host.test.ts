@@ -88,14 +88,36 @@ function silentConnection(): ZoneConnection {
   return { send: () => {}, close: () => {} };
 }
 
-function makeHost(source: SimSource): ZoneHost {
+function makeHost(source: SimSource, options: { now?: () => number; idleMs?: number } = {}): ZoneHost {
   return new ZoneHost({
     cage: createNodeVmCage(),
     source,
     store: memoryStore(),
     schemas: { getSchema: async (slug) => (slug === 'ember-watch' ? SCHEMA : null) },
     secret: SECRET,
+    now: options.now,
+    idleMs: options.idleMs,
   });
+}
+
+// The ordinary case: a sim that loads.
+function workingSource(): SimSource {
+  return { load: async () => ({ bundleJs: SIM, simMathJs: SIM_MATH }) };
+}
+
+// Remembers what it was told, which is the whole assertion for a reap.
+function recordingConnection(): ZoneConnection & { closedWith: string | null; frames: unknown[] } {
+  const record = {
+    closedWith: null as string | null,
+    frames: [] as unknown[],
+    send(frame: unknown) {
+      record.frames.push(frame);
+    },
+    close(reason: string) {
+      record.closedWith = reason;
+    },
+  };
+  return record;
 }
 
 describe('ZoneHost admission', () => {
@@ -206,5 +228,82 @@ describe('a refused admission', () => {
     expect(JSON.stringify(error)).not.toContain('p1');
 
     host.shutdown?.();
+  });
+});
+
+describe('a seat that stopped playing', () => {
+  // An open socket is not a player. See docs/p3-zone-protocol.md §7.
+  const IDLE_MS = 60_000;
+
+  function clockAt(start: number): { now: () => number; set(at: number): void } {
+    let at = start;
+    return { now: () => at, set: (next) => void (at = next) };
+  }
+
+  it('hangs up, retires the chair, and lets the world sleep', async () => {
+    const clock = clockAt(5_000_000);
+    const host = makeHost(workingSource(), { now: clock.now, idleMs: IDLE_MS });
+    const connection = recordingConnection();
+
+    const seated = await host.admit(ticketFor('p1'), connection);
+    expect(host.liveZoneCount).toBe(1);
+
+    // Still inside the budget: a player between two deliberate moves is playing.
+    clock.set(5_000_000 + IDLE_MS - 1);
+    host.pump(clock.now());
+    expect(connection.closedWith).toBe(null);
+    expect(seated.zone.playerCount).toBe(1);
+
+    clock.set(5_000_000 + IDLE_MS);
+    host.pump(clock.now());
+
+    // `idle`, a reason the shell treats as final, so it does not redial.
+    expect(connection.closedWith).toBe('idle');
+    expect(seated.zone.playerCount).toBe(0);
+
+    // The point of all of it: "empty" now counts a player who walked away.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(seated.zone.state).toBe('sleeping');
+
+    await host.shutdown();
+  });
+
+  it('leaves a player who is still sending alone', async () => {
+    const clock = clockAt(5_000_000);
+    const host = makeHost(workingSource(), { now: clock.now, idleMs: IDLE_MS });
+    const quiet = recordingConnection();
+    const playing = recordingConnection();
+
+    await host.admit(ticketFor('p1'), quiet);
+    const second = await host.admit(ticketFor('p2'), playing);
+
+    clock.set(5_000_000 + IDLE_MS - 1);
+    host.input('ember-watch', second.slot, 'douse', undefined);
+
+    clock.set(5_000_000 + IDLE_MS);
+    host.pump(clock.now());
+
+    expect(quiet.closedWith).toBe('idle');
+    expect(playing.closedWith).toBe(null);
+    expect(second.zone.playerCount).toBe(1);
+
+    await host.shutdown();
+  });
+
+  it('gives the freed seat to the next arrival', async () => {
+    const clock = clockAt(5_000_000);
+    const host = makeHost(workingSource(), { now: clock.now, idleMs: IDLE_MS });
+
+    const first = await host.admit(ticketFor('p1'), recordingConnection());
+    expect(first.slot).toBe(0);
+
+    clock.set(5_000_000 + IDLE_MS);
+    host.pump(clock.now());
+
+    // The seat itself, back in the pool: a socket-only reap would hand out slot 1.
+    const next = await host.admit(ticketFor('p2'), recordingConnection());
+    expect(next.slot).toBe(0);
+
+    await host.shutdown();
   });
 });

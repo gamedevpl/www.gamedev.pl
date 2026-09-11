@@ -71,7 +71,9 @@ interface Harness {
   runTicks(count: number): void;
 }
 
-function harness(options: { sim?: string; store?: FakeStore; schema?: ZoneSchema; startAt?: number } = {}): Harness {
+function harness(
+  options: { sim?: string; store?: FakeStore; schema?: ZoneSchema; startAt?: number; idleMs?: number } = {},
+): Harness {
   const store = options.store ?? new FakeStore();
   const broadcasts: ZoneOutboundFrame[] = [];
   const direct: Array<{ slot: number; frame: ZoneOutboundFrame }> = [];
@@ -88,6 +90,7 @@ function harness(options: { sim?: string; store?: FakeStore; schema?: ZoneSchema
     sendTo: (slot, frame) => direct.push({ slot, frame }),
     now: () => clock,
     newSeed: () => 4242,
+    idleMs: options.idleMs,
   });
 
   return {
@@ -207,6 +210,89 @@ describe('a live zone', () => {
     // rewind through. Falling behind is caught up to a point and then forgiven.
     h.zone.pump(1_000_000 + 60_000);
     expect(h.zone.currentTick).toBeLessThanOrEqual(8);
+  });
+});
+
+describe('a seat nobody is playing', () => {
+  // A held seat blocks hibernation, so silence has to be visible.
+  const IDLE_MS = 60_000;
+
+  it('reports a seat that has sent nothing for the whole budget', async () => {
+    const h = harness({ idleMs: IDLE_MS });
+    await h.zone.join('player-a');
+
+    expect(h.zone.idleSlots(1_000_000 + IDLE_MS - 1)).toEqual([]);
+    expect(h.zone.idleSlots(1_000_000 + IDLE_MS)).toEqual([0]);
+  });
+
+  it('starts the budget again on every input the vocabulary accepted', async () => {
+    const h = harness({ idleMs: IDLE_MS });
+    await h.zone.join('player-a');
+
+    h.setNow(1_000_000 + IDLE_MS - 1);
+    expect(h.zone.enqueue(0, 'douse', undefined)).toBe(true);
+
+    // The whole budget again from the input, not from the arrival.
+    expect(h.zone.idleSlots(1_000_000 + 2 * IDLE_MS - 2)).toEqual([]);
+    expect(h.zone.idleSlots(1_000_000 + 2 * IDLE_MS - 1)).toEqual([0]);
+  });
+
+  it('does not count an input the vocabulary refused', async () => {
+    const h = harness({ idleMs: IDLE_MS });
+    await h.zone.join('player-a');
+
+    h.setNow(1_000_000 + IDLE_MS - 1);
+    // A client behind its game: the sim never sees this, so it holds nothing.
+    expect(h.zone.enqueue(0, 'fire', undefined)).toBe(false);
+    expect(h.zone.idleSlots(1_000_000 + IDLE_MS)).toEqual([0]);
+  });
+
+  it('leaves the other seats alone', async () => {
+    const h = harness({ idleMs: IDLE_MS });
+    await h.zone.join('player-a');
+    await h.zone.join('player-b');
+
+    h.setNow(1_000_000 + IDLE_MS - 1);
+    h.zone.enqueue(1, 'douse', undefined);
+
+    expect(h.zone.idleSlots(1_000_000 + IDLE_MS)).toEqual([0]);
+  });
+
+  it('forgets a seat that was retired, rather than reporting it forever', async () => {
+    const h = harness({ idleMs: IDLE_MS });
+    await h.zone.join('player-a');
+    await h.zone.join('player-b');
+    h.zone.leave(0);
+
+    expect(h.zone.idleSlots(1_000_000 + IDLE_MS)).toEqual([1]);
+  });
+
+  it('has nobody to reap while the world is asleep', async () => {
+    const h = harness({ idleMs: IDLE_MS });
+    await h.zone.join('player-a');
+    h.zone.leave(0);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(h.zone.state).toBe('sleeping');
+
+    h.setNow(1_000_000 + IDLE_MS * 20);
+    expect(h.zone.idleSlots()).toEqual([]);
+
+    // And the player who comes back starts their budget when the world does.
+    await h.zone.join('player-a');
+    expect(h.zone.idleSlots()).toEqual([]);
+  });
+
+  it('does not charge a seat for the time a stopped zone spent stopped', async () => {
+    // `fail` keeps its roster; charging the outage would reap it on the next wake.
+    const h = harness({ sim: THROWING_SIM, idleMs: IDLE_MS });
+    await h.zone.join('player-a');
+    h.runTicks(10);
+    expect(h.zone.state).toBe('sleeping');
+
+    h.setNow(1_000_000 + IDLE_MS * 20);
+    await h.zone.join('player-b');
+
+    expect(h.zone.idleSlots()).toEqual([]);
   });
 });
 

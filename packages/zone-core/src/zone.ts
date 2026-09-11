@@ -58,6 +58,9 @@ const OVERRUN_LIMIT = 20;
  *  a tick's event list is meant to be a handful of intents, not a queue to flush. */
 const MAX_PENDING_PER_SLOT = 8;
 
+// Seat silence before retirement. Why three minutes: docs/p3-zone-protocol.md §7.
+export const IDLE_SEAT_MS = 180_000;
+
 /**
  * Interrupt ceiling for a tick — the zone running. Headroom over `MAX_TICK_MS` so one GC
  * pause is not a zone death; still short enough that a runaway tick cannot eat the core.
@@ -138,6 +141,8 @@ export interface ZoneOptions {
   /** Seed for a zone that has never existed. Injected so a test can pin a world. */
   newSeed?: () => number;
   memoryMb?: number;
+  // Injected so a test need not wait out three real minutes.
+  idleMs?: number;
   /**
    * Soft faults the zone chose to survive. Wake catch-up that blows its budget is the
    * current one: refusing the join would fall the shell back to solo play and fire A6,
@@ -159,6 +164,7 @@ export class Zone {
   private readonly now: () => number;
   private readonly monotonicMs: () => number;
   private readonly tickMs: number;
+  private readonly idleMs: number;
 
   private sim: SimInstance | null = null;
   private status: ZoneStatus = 'sleeping';
@@ -166,6 +172,8 @@ export class Zone {
   private tick = 0;
   /** Slot → the player's pseudonymous tag, for the roster and for reclaiming a seat. */
   private readonly seats = new Map<number, string>();
+  // Slot → last arrival or accepted input. An open socket proves nothing.
+  private readonly lastActiveAt = new Map<number, number>();
   private pending: ZoneEvent[] = [];
   private accumulatorMs = 0;
   private lastPumpAt = 0;
@@ -183,6 +191,7 @@ export class Zone {
     this.now = options.now ?? Date.now;
     this.monotonicMs = options.monotonicMs ?? (() => performance.now());
     this.tickMs = 1000 / this.tickHz;
+    this.idleMs = options.idleMs ?? IDLE_SEAT_MS;
   }
 
   get state(): ZoneStatus {
@@ -213,6 +222,7 @@ export class Zone {
 
     const existing = [...this.seats.entries()].find(([, tag]) => tag === playerTag);
     if (existing) {
+      this.lastActiveAt.set(existing[0], this.now());
       await this.ensureLive();
       return existing[0];
     }
@@ -222,11 +232,14 @@ export class Zone {
     let slot = 0;
     while (this.seats.has(slot)) slot += 1;
     this.seats.set(slot, playerTag);
+    // Before the await: the seat is taken for the whole sim fetch.
+    this.lastActiveAt.set(slot, this.now());
 
     try {
       await this.ensureLive();
     } catch (error) {
       this.seats.delete(slot);
+      this.lastActiveAt.delete(slot);
       throw error;
     }
 
@@ -238,6 +251,7 @@ export class Zone {
 
   /** Retires a seat. When it was the last one, the zone hibernates rather than idling. */
   leave(slot: number): void {
+    this.lastActiveAt.delete(slot);
     if (!this.seats.delete(slot)) return;
     if (this.status === 'live') this.pending.push({ slot, k: 'leave' });
     if (this.seats.size === 0) void this.hibernate('empty');
@@ -257,10 +271,23 @@ export class Zone {
 
     const valid = validateZoneInput(this.options.schema, kind, value);
     if (!valid) return false;
+    // Only accepted input counts; frames the vocabulary refused are not play.
+    this.lastActiveAt.set(slot, this.now());
     // The slot is attached here and nowhere else. A client never names its own, which is
     // what stops one player acting as another.
     this.pending.push(valid.v === undefined ? { slot, k: valid.k } : { slot, k: valid.k, v: valid.v });
     return true;
+  }
+
+  // Judgement only — the host owns sockets and does the hanging up.
+  idleSlots(now: number = this.now()): number[] {
+    if (this.status !== 'live') return [];
+    const cutoff = now - this.idleMs;
+    const idle: number[] = [];
+    for (const [slot, at] of this.lastActiveAt) {
+      if (at <= cutoff) idle.push(slot);
+    }
+    return idle;
   }
 
   /**
@@ -469,6 +496,8 @@ export class Zone {
 
     this.sim = sim;
     this.status = 'live';
+    // Time asleep is nobody's idleness; budgets restart with the world.
+    for (const slot of this.seats.keys()) this.lastActiveAt.set(slot, now);
     this.accumulatorMs = 0;
     this.lastPumpAt = now;
     this.lastSnapshotAt = now;
@@ -548,6 +577,7 @@ export class Zone {
     await this.hibernate(reason);
     this.status = 'closed';
     this.seats.clear();
+    this.lastActiveAt.clear();
   }
 }
 

@@ -64,6 +64,8 @@ export interface ZoneHostOptions {
   secret: string;
   now?: () => number;
   maxZones?: number;
+  // Injected so a test need not wait. Defaults to IDLE_SEAT_MS.
+  idleMs?: number;
   /** Soft faults a zone chose to survive (e.g. wake catch-up skipped after a timeout). */
   onWarn?: (event: {
     kind: 'wake_catchup_skipped';
@@ -125,12 +127,32 @@ export class ZoneHost {
   pump(at: number = this.now()): void {
     for (const [zoneId, zone] of this.zones) {
       zone.pump(at);
+      this.reapIdleSeats(zoneId, zone, at);
       // A zone that put itself to sleep — empty, or over budget — is dropped here rather
       // than lingering as an object the next join would find in a half state.
       if (zone.state !== 'live' && (this.members.get(zoneId)?.size ?? 0) === 0 && !this.admitting.has(zoneId)) {
         this.zones.delete(zoneId);
         this.members.delete(zoneId);
       }
+    }
+  }
+
+  // Retires seats nobody is playing. Rationale: docs/p3-zone-protocol.md §7.
+  private reapIdleSeats(zoneId: string, zone: Zone, at: number): void {
+    const idle = zone.idleSlots(at);
+    if (idle.length === 0) return;
+
+    const seats = this.members.get(zoneId);
+    for (const slot of idle) {
+      const dropped: Seated[] = [];
+      for (const seated of [...(seats ?? [])]) {
+        if (seated.slot !== slot) continue;
+        seats?.delete(seated);
+        dropped.push(seated);
+      }
+      zone.leave(slot);
+      // State first: a close that throws must not strand a half-reaped seat.
+      for (const seated of dropped) seated.connection.close('idle');
     }
   }
 
@@ -165,6 +187,7 @@ export class ZoneHost {
         broadcast: (frame) => this.broadcast(claims.zone, frame),
         sendTo: (slot, frame) => this.sendTo(claims.zone, slot, frame),
         now: this.now,
+        idleMs: this.options.idleMs,
         onWarn: this.options.onWarn,
       });
       this.zones.set(claims.zone, zone);
