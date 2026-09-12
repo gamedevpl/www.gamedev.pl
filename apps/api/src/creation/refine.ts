@@ -5,6 +5,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { checkUserAccess } from '../platform/auth.js';
 import { callWithVertexResilience } from '../platform/vertex-resilience.js';
+import { resolveRefineFallbackModel } from '../platform/vertex-fallback-models.js';
 import { createVertexClient, type VertexGenerationConfig } from '../platform/genai.js';
 import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
@@ -276,6 +277,8 @@ ${params.concept}
       // A 429 here stopped a deploy; one attempt is not enough.
       const parsed = await callWithVertexResilience({
         timeoutMs: this.timeoutMs,
+        // Peer-or-better only: refinement shapes what gets built.
+        fallbackModel: resolveRefineFallbackModel(),
         attempt: (model, timeoutMs) =>
           this.getClient(model)(promptText)
             .temperature(0.2)

@@ -254,6 +254,8 @@ export interface SubmissionRoutesOptions {
   /** Injected by tests; production builds one from the environment. */
   mediaUrlSigner?: MediaUrlSigner | null;
   storeMediaUrlSigner?: MediaUrlSigner | null;
+  /** Daily ceiling on signed media URLs; tests pass small numbers. */
+  mintBudget?: { perIpPerDay: number; perInstancePerDay: number };
   /**
    * Cap on in-memory assembled draft previews (HTML can be large). Defaults to
    * 50; tests pass a smaller value to exercise eviction without minting dozens
@@ -1159,6 +1161,7 @@ export async function registerSubmissionRoutes(
     mediaRateLimitWindowMs: gamesRateLimitWindowMs,
     mediaUrlSigner,
     storeMediaUrlSigner,
+    mintBudget: options.mintBudget,
   });
   await registerCatalogSearchRoutes(app, {
     store,

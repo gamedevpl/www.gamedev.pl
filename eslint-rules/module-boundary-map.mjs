@@ -146,6 +146,10 @@ const FILE_BUCKET = {
   // Job vocabulary and its transition table, read by eight buckets. Its only
   // domain import is type-only, so nothing follows it at runtime.
   'job-state': 'platform',
+  // Daily ceiling on signed media URLs. Pure counters, no relative imports.
+  'media-mint-budget': 'platform',
+  // Which model may stand in for which. No relative imports at all.
+  'vertex-fallback-models': 'platform',
   // Retry/fallback loop around a Vertex call. No relative imports at all.
   'vertex-resilience': 'platform',
   // Signed-URL minting over GCS. No relative imports at all.
