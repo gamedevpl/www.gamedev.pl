@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import './admin-small-panels.css';
+import { AdminConfirmDialog } from './AdminConfirmDialog.js';
 import {
   fetchModerationFlags,
   resolveModerationFlag,
@@ -18,15 +19,14 @@ const REASON_LABELS: Record<string, string> = {
 
 // Says what the takedown reached, and what it could not.
 function outcomeLine(outcome: ModerationResolveResult): string {
-  if (outcome.stillPublic) {
-    return 'Draft link closed, but the game is still published from the games repo — pull it there.';
-  }
   const did = [
     outcome.unpublished ? 'unpublished' : null,
     outcome.unshared ? 'closed the share link' : null,
     outcome.blocked ? 'blocked re-sharing' : null,
   ].filter(Boolean);
-  return did.length ? `Done: ${did.join(', ')}.` : 'Nothing was live to pull.';
+  const done = did.length ? `Done: ${did.join(', ')}.` : 'Nothing was live to pull.';
+  if (!outcome.stillPublic) return done;
+  return `${done} It is still published from the games repo — pull it there.`;
 }
 
 export function ModerationPanel() {
@@ -35,6 +35,7 @@ export function ModerationPanel() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<ModerationFlagRow | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -55,6 +56,7 @@ export function ModerationPanel() {
   }, [load]);
 
   async function resolve(flag: ModerationFlagRow, action: 'taken_down' | 'dismissed') {
+    setConfirming(null);
     setBusyId(flag.id);
     setMessage(null);
     try {
@@ -119,7 +121,7 @@ export function ModerationPanel() {
                   type="button"
                   className="admin-moderation-takedown"
                   disabled={busyId === flag.id}
-                  onClick={() => void resolve(flag, 'taken_down')}
+                  onClick={() => setConfirming(flag)}
                 >
                   Take down
                 </button>
@@ -128,6 +130,24 @@ export function ModerationPanel() {
           ))}
         </ul>
       )}
+
+      {confirming ? (
+        <AdminConfirmDialog
+          title={`Take down ${confirming.slug}?`}
+          body={
+            'This archives the publication, closes the share link, and blocks the creator from re-opening it. ' +
+            'There is no undo in this panel.'
+          }
+          confirmLabel="Take it down"
+          danger
+          busy={busyId === confirming.id}
+          busyLabel="Taking down…"
+          onConfirm={() => void resolve(confirming, 'taken_down')}
+          onDismiss={() => {
+            if (!busyId) setConfirming(null);
+          }}
+        />
+      ) : null}
     </section>
   );
 }

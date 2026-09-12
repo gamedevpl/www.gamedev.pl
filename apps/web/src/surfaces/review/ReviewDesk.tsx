@@ -234,11 +234,15 @@ export function ReviewDesk() {
   commitRef.current = commit;
   const busyRef = useRef(busy);
   busyRef.current = busy;
+  const flaggingRef = useRef(flagging);
+  flaggingRef.current = flagging;
 
   useEffect(() => {
     if (!current) return;
     const onKey = (event: KeyboardEvent) => {
       if (busyRef.current) return;
+      // An arrow inside the report dialog picks a reason, never a verdict.
+      if (flaggingRef.current) return;
       if (event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLInputElement) {
         return;
       }
@@ -604,6 +608,7 @@ export function ReviewDesk() {
 
       {flagging && current ? (
         <ReviewFlagDialog
+          key={current.slug}
           slug={current.slug}
           title={current.title}
           source={current.source}

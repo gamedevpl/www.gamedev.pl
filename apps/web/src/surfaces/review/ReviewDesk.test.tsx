@@ -294,6 +294,34 @@ describe('ReviewDesk', () => {
     expect(container.textContent).toContain('An operator takes it from here');
   });
 
+  it('will not let an arrow key file a verdict while the report dialog is open', async () => {
+    // The reason picker is a select, which the handler missed.
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(<ReviewDesk />);
+    });
+    await flush();
+
+    await fillRequiredForm();
+    const open = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Report abuse'),
+    );
+    await act(async () => {
+      open!.click();
+    });
+
+    const reason = container.querySelector<HTMLSelectElement>('.review-flag-select')!;
+    await act(async () => {
+      reason.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      reason.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      reason.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    });
+    await flush();
+
+    expect(reviewApi.submitAssessment).not.toHaveBeenCalled();
+    expect(container.querySelector('.review-flag')).not.toBeNull();
+  });
+
   it('flags a slug an operator explicitly requeued for re-review', async () => {
     reviewApi.fetchReviewQueue.mockResolvedValue({
       source: 'all',

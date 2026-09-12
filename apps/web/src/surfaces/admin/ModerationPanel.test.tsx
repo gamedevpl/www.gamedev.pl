@@ -40,6 +40,22 @@ async function render() {
   return { container, root };
 }
 
+// Destructive and undoable nowhere, so it needs confirmation.
+async function takeDown(container: HTMLElement) {
+  await act(async () => {
+    container.querySelector<HTMLButtonElement>('.admin-moderation-takedown')!.click();
+  });
+  const confirm = Array.from(document.querySelectorAll('button')).find((button) =>
+    button.textContent?.includes('Take it down'),
+  );
+  expect(confirm, 'no confirmation before a takedown').toBeTruthy();
+  await act(async () => {
+    confirm!.click();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
 afterEach(() => {
   document.body.innerHTML = '';
   vi.clearAllMocks();
@@ -66,11 +82,7 @@ describe('ModerationPanel', () => {
     });
     const { container } = await render();
 
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('.admin-moderation-takedown')!.click();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
+    await takeDown(container);
 
     expect(mocked.resolveModerationFlag).toHaveBeenCalledWith('sky-dodge:dev:reviewer', 'taken_down', undefined);
     expect(container.textContent).toContain('unpublished');
@@ -88,13 +100,24 @@ describe('ModerationPanel', () => {
     });
     const { container } = await render();
 
+    await takeDown(container);
+
+    // The warning rides after what actually happened, never instead of it.
+    expect(container.textContent).toContain('blocked re-sharing');
+    expect(container.textContent).toContain('still published from the games repo');
+    expect(container.textContent).not.toContain('closed the share link');
+  });
+
+  it('does not take a game down on one click', async () => {
+    mocked.fetchModerationFlags.mockResolvedValue([flag]);
+    const { container } = await render();
+
     await act(async () => {
       container.querySelector<HTMLButtonElement>('.admin-moderation-takedown')!.click();
-      await Promise.resolve();
-      await Promise.resolve();
     });
 
-    expect(container.textContent).toContain('still published from the games repo');
+    expect(mocked.resolveModerationFlag).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain('no undo');
   });
 
   it('surfaces a refused resolve instead of pretending it worked', async () => {

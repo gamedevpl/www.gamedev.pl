@@ -38,7 +38,10 @@
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  z-index: 40;
+  /* The 1000 modal tier: above the sticky header (100) and the bottom banners (900),
+     which the review desk explicitly keeps on screen. Anything lower is paintable
+     over, and on a keyboard-height viewport it covers this dialog's own controls. */
+  z-index: 1000;
 }
 
 .review-flag {
