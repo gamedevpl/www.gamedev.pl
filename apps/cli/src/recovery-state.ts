@@ -5,8 +5,14 @@ import { CliError, EXIT_REFUSED } from './exit-codes.js';
 import type { ApiClient } from './api.js';
 import type { TreeFile } from './checkout-sync.js';
 const marker = (root: string) => join(root, '.gamedev-recovery-ready');
-export function markRecoveryReady(root: string, slug: string, session: DeliverySession, version: string): void {
-  writeFileSync(marker(root), JSON.stringify({ slug, session, version }), { mode: 0o600 });
+export function markRecoveryReady(
+  root: string,
+  slug: string,
+  session: DeliverySession,
+  version: string,
+  paths: string[],
+): void {
+  writeFileSync(marker(root), JSON.stringify({ slug, session, version, paths }), { mode: 0o600 });
 }
 export function isRecoveryReady(root: string, slug: string): boolean {
   return existsSync(marker(root)) && JSON.parse(readFileSync(marker(root), 'utf8')).slug === slug;
@@ -30,4 +36,8 @@ export async function matchingStaged(api: ApiClient, slug: string, local: TreeFi
   );
   const staged = new Map((body.files ?? []).filter((file) => file.stagedBy).map((file) => [file.path, file.content]));
   return new Set(local.filter((file) => staged.get(file.path) === file.content).map((file) => file.path));
+}
+
+export function recoveryPaths(root: string): string[] {
+  return JSON.parse(readFileSync(marker(root), 'utf8')).paths;
 }

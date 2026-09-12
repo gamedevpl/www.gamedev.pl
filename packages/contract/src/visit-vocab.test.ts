@@ -220,6 +220,10 @@ describe('visit vocab', () => {
       'delegate_offered',
       'delegate_used',
       'verify_failed',
+      'recovery_attempt',
+      'recovery_succeeded',
+      'recovery_failed',
+      'recovery_canceled',
     ]);
   });
 

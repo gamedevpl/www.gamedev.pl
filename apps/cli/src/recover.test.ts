@@ -145,3 +145,13 @@ it('switches the REPL to the recovered round', async () => {
     workshop: { root: f.cwd, token: 'new-round', slug: 'sky', builder: 'self' },
   });
 });
+
+it.each(['missing', 'occupied'])('measures %s recovery without source data', async (kind) => {
+  const f = fixture(kind);
+  const telemetry = { record: vi.fn(), flush: async () => {} };
+  await recoverCheckout({ ...f, telemetry }).catch(() => {});
+  expect(telemetry.record.mock.calls).toEqual([
+    ['recovery_attempt'],
+    [kind === 'missing' ? 'recovery_succeeded' : 'recovery_failed'],
+  ]);
+});

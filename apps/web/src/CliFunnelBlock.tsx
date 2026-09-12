@@ -18,6 +18,10 @@ const CLI_LABELS: Record<CliStep, string> & Record<string, string> = {
   delegate_offered: 'was offered local delegation',
   delegate_used: 'used a local adapter',
   verify_failed: 'failed the static ladder',
+  recovery_attempt: 'started recovery',
+  recovery_succeeded: 'recovered local sources',
+  recovery_failed: 'recovery failed',
+  recovery_canceled: 'declined recovery',
 };
 
 const CHANNEL_LABELS: Record<string, string> = {

@@ -194,6 +194,10 @@ export const CLI_STEPS = [
   'delegate_offered',
   'delegate_used',
   'verify_failed',
+  'recovery_attempt',
+  'recovery_succeeded',
+  'recovery_failed',
+  'recovery_canceled',
 ] as const;
 export type CliStep = (typeof CLI_STEPS)[number];
 

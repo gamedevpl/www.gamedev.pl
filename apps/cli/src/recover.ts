@@ -1,3 +1,4 @@
+import type { CliTelemetry } from './telemetry.js';
 import { markRecoveryReady, matchingStaged } from './recovery-state.js';
 import { detectLocalAdapters } from './workshop.js';
 import type { handleReplLine, ReplLineResult } from './repl.js';
@@ -14,8 +15,23 @@ import type { PickChoice } from './workshop.js';
 
 export type RecoveryResult = { token: string; slug: string; root: string };
 
-export async function recoverCheckout(input: {
+export async function recoverCheckout(
+  input: Parameters<typeof performRecovery>[0],
+): Promise<RecoveryResult | undefined> {
+  input.telemetry?.record('recovery_attempt');
+  try {
+    const result = await performRecovery(input);
+    input.telemetry?.record(result ? 'recovery_succeeded' : 'recovery_canceled');
+    return result;
+  } catch (error) {
+    input.telemetry?.record('recovery_failed');
+    throw error;
+  }
+}
+
+async function performRecovery(input: {
   api: ApiClient;
+  telemetry?: CliTelemetry;
   cwd: string;
   slug?: string;
   yes?: boolean;
@@ -168,7 +184,13 @@ export async function recoverCheckout(input: {
     }
     writeFileSync(join(output, '.gamedev-slug'), slug + '\n');
     writeBase(output, pending.base.version, pending.base.files);
-    markRecoveryReady(output, slug, pending.session, pending.base.version);
+    markRecoveryReady(
+      output,
+      slug,
+      pending.session,
+      pending.base.version,
+      imported.map((file) => file.path),
+    );
     if (temporary) {
       writeFileSync(join(output, '.gamedev-import-key'), pending.key);
       renameSync(temporary, dest);
@@ -189,10 +211,12 @@ export async function recoverCommand(
   cwd: string,
   pick: PickChoice | undefined,
   write: (line: string) => void,
+  telemetry?: CliTelemetry,
 ): Promise<RecoveryResult | undefined> {
   const { args, flags } = parseArgv(['node', 'cli', ...line.slice(1).split(/\s+/)]);
   return recoverCheckout({
     api,
+    telemetry,
     cwd: args[0] ?? cwd,
     slug: typeof flags.slug === 'string' ? flags.slug : undefined,
     yes: flags.yes === true,
@@ -208,6 +232,7 @@ export async function recoverRepl(input: Parameters<typeof handleReplLine>[0]): 
     input.workshop?.root ?? process.cwd(),
     input.pick,
     input.write,
+    input.telemetry,
   );
   if (!recovered) return { next: 'continue' };
   const env = input.env ?? process.env;
