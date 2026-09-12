@@ -1,56 +1,41 @@
-import { Component, lazy, Suspense, type ReactNode } from 'react';
+import { lazy, Suspense } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AppLoadingScreen } from './AppLoadingScreen.js';
+import { RouteChunkBoundary, readLocationRoute } from './appRouteRecovery.js';
 import { useAuth } from './AuthContext.js';
 import { ClosedBetaSplash } from './ClosedBetaSplash.js';
-import { appChunkReloadAllowed } from './appChunkReload.js';
-import { parsePathRoute } from './core/router.js';
 
 // App pulls in every surface; a walled visitor needs none.
 const App = lazy(() => import('./App.js').then((module) => ({ default: module.App })));
 
-// Suspense does not catch a rejected import.
-class AppChunkBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
-  state = { failed: false };
-
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-
-  componentDidCatch() {
-    if (typeof window !== 'undefined' && appChunkReloadAllowed(window.sessionStorage)) {
-      window.location.reload();
-    }
-  }
-
-  render() {
-    if (!this.state.failed) return this.props.children;
-    return (
-      <div className="app app--boot-failed">
-        <button type="button" onClick={() => window.location.reload()}>
-          Reload
-        </button>
-      </div>
-    );
-  }
-}
-
 // Decides splash-or-app before the import, not after.
 export function BootGate() {
+  const { t } = useTranslation();
   const { user, loading, privateBeta } = useAuth();
   if (loading) return <AppLoadingScreen />;
 
   if (privateBeta && !user) {
-    const route = parsePathRoute(window.location.pathname, window.location.hash);
+    // Canonicalises the address first, as App does: /gamedevpl is home.
+    const route = readLocationRoute();
     // Only these two: App answers both with the splash.
     if (route.view === 'home') return <ClosedBetaSplash />;
     if (route.view === 'invite') return <ClosedBetaSplash inviteCode={route.code} />;
   }
 
   return (
-    <AppChunkBoundary>
+    <RouteChunkBoundary
+      fallback={
+        <div className="content-load-error">
+          <p>{t('app.surfaceLoadFailed')}</p>
+          <button type="button" className="secondary-btn" onClick={() => window.location.reload()}>
+            {t('app.reload')}
+          </button>
+        </div>
+      }
+    >
       <Suspense fallback={<AppLoadingScreen />}>
         <App />
       </Suspense>
-    </AppChunkBoundary>
+    </RouteChunkBoundary>
   );
 }

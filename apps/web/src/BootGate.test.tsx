@@ -16,7 +16,6 @@ const session = { user: null as unknown, loading: false, privateBeta: true };
 vi.mock('./AuthContext.js', () => ({ useAuth: () => session }));
 
 const { BootGate } = await import('./BootGate.js');
-const { appChunkReloadAllowed } = await import('./appChunkReload.js');
 
 const INVITE_CODE = 'A'.repeat(32);
 
@@ -74,6 +73,16 @@ describe.each([
   });
 });
 
+// canonicalPath rewrites these to '/', so App would have shown the splash too.
+describe.each(['/gamedevpl', '/creators/gamedevpl'])('the home alias %s', (path) => {
+  it('gets the splash, and the address bar gets the canonical path', async () => {
+    const { text, root } = await renderAt(path);
+    expect(text).toBe('splash:');
+    expect(window.location.pathname).toBe('/');
+    root.unmount();
+  });
+});
+
 describe('BootGate, once the wall does not apply', () => {
   it('loads the app for a signed-in visitor', async () => {
     Object.assign(session, { user: { uid: 'g:someone' } });
@@ -90,26 +99,3 @@ describe('BootGate, once the wall does not apply', () => {
   });
 });
 
-describe('appChunkReloadAllowed', () => {
-  it('allows one reload and refuses the second, so a bad chunk cannot loop', () => {
-    const store = new Map<string, string>();
-    const storage = {
-      getItem: (k: string) => store.get(k) ?? null,
-      setItem: (k: string, v: string) => void store.set(k, v),
-    };
-    expect(appChunkReloadAllowed(storage)).toBe(true);
-    expect(appChunkReloadAllowed(storage)).toBe(false);
-  });
-
-  it('refuses rather than throwing when storage is unavailable', () => {
-    const storage = {
-      getItem: () => {
-        throw new Error('denied');
-      },
-      setItem: () => {
-        throw new Error('denied');
-      },
-    };
-    expect(appChunkReloadAllowed(storage)).toBe(false);
-  });
-});
