@@ -165,6 +165,15 @@ this is the half of its mitigation that reads the artifact.
 > default, the model this platform already runs for managed agents and seeds), and only
 > then fails closed.
 >
+> The same loop now lives in `apps/api/src/platform/vertex-resilience.ts`, because the
+> 429 that stopped a deploy on 2026-09-12 hit `refine`, not the classifier: hardening one
+> call site left six others with a single attempt each. Refine, the CLI intake agent and
+> the Studio chat agent use it; the classifier is the only one that also carries a
+> stand-in model, since a conversation cannot change models mid-sentence and generated
+> content is a quality decision, not a reliability one. `tab-complete`,
+> `seed-provider-vertex` and `catalog-enricher` are deliberately untouched — a late
+> completion is worthless, and the other two produce content.
+>
 > The fallback is a safety control, not a cost lever. `resolveFallbackModel` refuses any
 > model outside a small allow-list of peer-or-better classifiers, because a classifier
 > that degrades to a cheaper model quietly lowers the bar on what passes — which is worse
