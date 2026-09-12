@@ -80,6 +80,26 @@ describe('FirestoreIdentityStore user cache', () => {
     expect((await store.getUser('u1'))?.deletionScheduledFor).not.toBe('2026-10-09T10:00:00Z');
   });
 
+  // The card's own opt-out reads back through this window.
+  it('drops it on each notification switch', async () => {
+    const { store, seed } = withUser();
+    await seed();
+    await store.getUser('u1');
+
+    await store.setProposalsMuted('u1', '2026-09-09T10:00:00Z');
+    expect((await store.getUser('u1'))?.proposalsMutedAt).toBe('2026-09-09T10:00:00Z');
+
+    await store.setEmailUnsubscribed('u1', '2026-09-09T10:00:01Z');
+    expect((await store.getUser('u1'))?.emailUnsubscribedAt).toBe('2026-09-09T10:00:01Z');
+
+    await store.setDigestOptOut('u1', '2026-09-09T10:00:02Z');
+    expect((await store.getUser('u1'))?.digestOptOutAt).toBe('2026-09-09T10:00:02Z');
+
+    // Turning it back on must be visible too, not only off.
+    await store.setProposalsMuted('u1', null);
+    expect((await store.getUser('u1'))?.proposalsMutedAt).toBeNull();
+  });
+
   it('hands out copies, so a caller cannot edit what the next request reads', async () => {
     const { store, seed } = withUser();
     await seed();
