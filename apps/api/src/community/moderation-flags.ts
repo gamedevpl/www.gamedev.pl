@@ -9,6 +9,8 @@ import { isReviewerSession } from './review.js';
 
 export interface ModerationFlagRoutesOptions {
   store?: Store;
+  // A queue nobody is told about waits to be found.
+  notifyFlagRaised?: (event: { flagId: string; slug: string; reason: string }) => Promise<void>;
   reviewerUids?: Set<string>;
   adminUids?: Set<string>;
   now: () => number;
@@ -81,7 +83,7 @@ export async function registerModerationFlagRoutes(
   app: FastifyInstance,
   options: ModerationFlagRoutesOptions,
 ): Promise<void> {
-  const { store, now, invalidatePublishedGameCaches, isSlugPublished } = options;
+  const { store, now, invalidatePublishedGameCaches, isSlugPublished, notifyFlagRaised } = options;
   const reviewerUids = options.reviewerUids ?? new Set<string>();
   const adminUids = options.adminUids ?? new Set<string>();
 
@@ -118,6 +120,10 @@ export async function registerModerationFlagRoutes(
         { slug: flag.slug, reason: flag.reason, raisedByUid: flag.raisedByUid },
         'moderation flag raised on a game',
       );
+      // Never blocks the reviewer: the report is already durable.
+      await notifyFlagRaised?.({ flagId: flag.id, slug: flag.slug, reason: flag.reason }).catch((error: unknown) => {
+        request.log.error({ err: error, slug: flag.slug }, 'could not notify operators of a moderation flag');
+      });
       return reply.send({ flag });
     },
   );

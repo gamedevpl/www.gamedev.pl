@@ -31,6 +31,7 @@ import {
 } from './delivery/media-url-signer.js';
 import { registerAdminGameRoutes } from './catalog/admin-game-routes.js';
 import { registerModerationFlagRoutes } from './community/moderation-flags.js';
+import { emitModerationFlag } from './notifications/notify.js';
 import { refuseUngatedShare, sharedDraftVersion, SHARE_REFUSAL_MESSAGES } from './delivery/draft-share-gate.js';
 import { createSlugResolver } from './catalog/slug-resolver.js';
 import { registerSelfBuildConnectRoutes } from './agent-surface/self-build-connect-routes.js';
@@ -1221,6 +1222,11 @@ export async function registerSubmissionRoutes(
   });
   await registerModerationFlagRoutes(app, {
     store,
+    notifyFlagRaised: adminUids?.size
+      ? async (event) => {
+          await emitModerationFlag({ ...buildNotifyDeps(), adminUids }, event);
+        }
+      : undefined,
     adminUids,
     reviewerUids: options.reviewerUids,
     now,

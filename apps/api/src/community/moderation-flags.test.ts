@@ -1,6 +1,6 @@
 // Abuse needs no consensus: one credible report, one operator, one takedown.
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../platform/app.js';
 import { InMemoryStore } from '../platform/store.js';
 import { SESSION_COOKIE_NAME } from '../platform/auth.js';
@@ -151,6 +151,31 @@ describe('moderation flags', () => {
     expect(resolved.statusCode).toBe(200);
     expect(resolved.json()).toMatchObject({ unpublished: false, unshared: true });
     expect((await store.getSubmission(jobId))?.draftSharedAt).toBeFalsy();
+  });
+
+  it('tells the operators a report landed, without making the reviewer wait on it', async () => {
+    // The queue waits to be found, so raising pages instead.
+    const { app, store } = await makeApp();
+    await store.upsertUser({ uid: 'dev:boss' });
+
+    const raised = await raise(app, await cookie(app, 'reviewer'));
+    expect(raised.statusCode).toBe(200);
+
+    const notifications = await store.listNotifications('dev:boss');
+    const alert = notifications.find((row) => row.type === 'operator.moderation_flag');
+    expect(alert).toBeTruthy();
+    expect(alert?.params).toMatchObject({ title: 'sky-dodge', detail: 'hate' });
+    expect(alert?.link).toBe('/admin/moderation');
+  });
+
+  it('still records the report when notifying the operators fails', async () => {
+    const { app, store } = await makeApp();
+    await store.upsertUser({ uid: 'dev:boss' });
+    vi.spyOn(store, 'createNotification').mockRejectedValue(new Error('mailer down'));
+
+    const raised = await raise(app, await cookie(app, 'reviewer'));
+    expect(raised.statusCode).toBe(200);
+    expect((await store.listModerationFlags()).length).toBe(1);
   });
 
   it('keeps a taken-down game down when the creator flips sharing back on', async () => {
