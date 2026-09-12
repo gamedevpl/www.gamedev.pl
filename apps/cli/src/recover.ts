@@ -144,14 +144,14 @@ async function performRecovery(input: {
     }
     return file;
   });
+  const alreadyStaged = await matchingStaged(input.api, slug, imported);
   const currentPaths = new Set(imported.map((file) => file.path));
   for (const path of pending.paths ?? []) {
-    if (!currentPaths.has(path))
+    if (!currentPaths.has(path) && !alreadyStaged.has(path))
       await input.api.request('POST', `/api/me/studio/games/${slug}/sources/stage/delete`, { path });
   }
   pending.paths = [...new Set([...(pending.paths ?? []), ...currentPaths])];
   writeFileSync(pendingPath, JSON.stringify(pending), { mode: 0o600 });
-  const alreadyStaged = await matchingStaged(input.api, slug, imported);
   for (const file of imported) {
     if (alreadyStaged.has(file.path)) continue;
     const result = await input.api.request<{ accepted?: boolean }>(

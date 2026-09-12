@@ -193,7 +193,7 @@ export async function submitGame(input: {
   try {
     for (const path of paths) {
       const file = localMap.get(path);
-      if (file && matching.has(path)) continue;
+      if (matching.has(path)) continue;
       if (file) await stagePath(input.api, input.slug, file);
       else await deletePath(input.api, input.slug, path);
       staged.push(path);
