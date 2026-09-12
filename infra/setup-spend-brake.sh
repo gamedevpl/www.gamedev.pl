@@ -199,17 +199,20 @@ Bandwidth is the one an open site spends without anybody asking for it, and it h
 no per-service budget yet. Create one, and point the two that already exist at the
 topic — a budget that only emails is not a brake:
 
-  # The service id is not guessable; read it rather than pasting one.
-  gcloud billing budgets create --billing-account ACCOUNT_ID \
-    --display-name="GCS egress lanes=video_media" \
-    --budget-amount=100PLN \
-    --filter-services="\$(gcloud beta billing services list \
-      --filter='displayName=\"Cloud Storage\"' --format='value(name)')" \
-    --threshold-rule=percent=0.5 --threshold-rule=percent=1.0 \
+  # The service id is not guessable, and the lookup needs an API this project
+  # has switched off. Enable it once, then read the id rather than pasting one.
+  gcloud services enable cloudbilling.googleapis.com --project ${PROJECT_ID}
+  STORAGE=\$(gcloud beta billing services list \\
+    --filter="displayName='Cloud Storage'" --format='value(name)')
+
+  gcloud billing budgets create --billing-account ACCOUNT_ID \\
+    --display-name='GCS egress lanes=video_media' \\
+    --budget-amount=100PLN --filter-services="\$STORAGE" \\
+    --threshold-rule=percent=0.5 --threshold-rule=percent=1.0 \\
     --notifications-rule-pubsub-topic=projects/${PROJECT_ID}/topics/${TOPIC}
 
   # "Cloud Run" and "Firebase Hosting egress" publish nowhere today:
-  gcloud billing budgets list --billing-account ACCOUNT_ID \
+  gcloud billing budgets list --billing-account ACCOUNT_ID \\
     --format='table(displayName, notificationsRule.pubsubTopic)'
 
 The lanes a budget may name are the keys of PAUSEABLE in spend-brake.ts: creation,
