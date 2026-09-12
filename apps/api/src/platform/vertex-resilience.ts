@@ -40,9 +40,13 @@ export async function callWithVertexResilience<T>(options: ResilientCallOptions<
     if (remaining <= 0) break;
     if (index > 0) await sleep(Math.min(retryDelayMs, Math.max(0, remaining)));
 
+    // Again after sleeping: the wait itself can spend what was left.
+    const budget = deadline - now();
+    if (budget <= 0) break;
+
     try {
       options.onAttempt?.(model);
-      return await options.attempt(model, Math.max(1, deadline - now()));
+      return await options.attempt(model, budget);
     } catch (err) {
       lastError = err;
       if (!isRetryableVertexError(err)) break;

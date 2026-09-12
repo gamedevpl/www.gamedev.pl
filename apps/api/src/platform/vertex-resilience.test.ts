@@ -128,3 +128,28 @@ describe('surviving a moment of no capacity', () => {
     expect(isRetryableVertexError(new Error('400 invalid argument'))).toBe(false);
   });
 });
+
+// A call past the deadline is billed against a spent budget.
+describe('the budget after sleeping', () => {
+  it('does not start an attempt the retry delay has outlived', async () => {
+    const attempts: number[] = [];
+    let clock = 0;
+    await expect(
+      callWithVertexResilience({
+        timeoutMs: 30,
+        retryDelayMs: 50,
+        now: () => clock,
+        sleepImpl: async (ms) => {
+          clock += ms;
+        },
+        attempt: async (_model, timeoutMs) => {
+          attempts.push(timeoutMs);
+          clock += 5;
+          throw new Error('429 Resource exhausted');
+        },
+      }),
+    ).rejects.toThrow(/429/);
+
+    expect(attempts).toEqual([30]);
+  });
+});
