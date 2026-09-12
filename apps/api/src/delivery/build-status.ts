@@ -271,13 +271,13 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
       // Soft: a store blip must not 500 a cached status poll.
       store ? store.getSubmission(jobId).catch(() => null) : Promise.resolve(null),
     ]);
-    // The posting transaction stamps the record already read here.
-    const cardPostedAt = record?.dreamRun?.postedAt ?? '';
-    // Presence, not order: two instances' clocks do not compare.
+    // A posted claim names the one version its card carries.
+    const postedVersion = record?.dreamRun?.postedAt ? record.dreamRun.version : '';
+    // Identity, not timestamps: no clock has to agree with another.
     const cardShown = (status.progress?.revisions ?? []).some(
-      (revision) => Boolean(revision.proposal) && revision.createdAt === cardPostedAt,
+      (revision) => revision.proposal?.version === postedVersion,
     );
-    const messages = cardPostedAt && !cardShown ? await loadCreatorMessages(jobId) : null;
+    const messages = postedVersion && !cardShown ? await loadCreatorMessages(jobId) : null;
     const progress =
       (messages ? progressOf(messages, record?.previewVersion ?? record?.deliveredVersion) : undefined) ??
       status.progress;

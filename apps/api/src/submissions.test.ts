@@ -1631,6 +1631,52 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it("shows a new version's card when an older card shares its stamp", async () => {
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.jobId, secret);
+
+    const card = async (version: string) => {
+      await store.setSubmissionPreviewVersion(job.jobId, version);
+      const claim = { version, claimedAt: new Date().toISOString() };
+      await store.claimDreamRun(job.jobId, claim.version, claim.claimedAt);
+      await store.appendProposalMessage(job.jobId, claim, `Two directions for ${version}.`, {
+        proposal: { sourceRef: `shot-${version}`, version, options: [] },
+        ownerUid: job.ownerUid,
+      });
+    };
+
+    await card('v1');
+    const first = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    const v1At = first.json().progress.revisions[0].createdAt;
+
+    await card('v2');
+    const readRecord = store.getSubmission.bind(store);
+    store.getSubmission = async (id: number) => {
+      const record = await readRecord(id);
+      return record?.dreamRun ? { ...record, dreamRun: { ...record.dreamRun, postedAt: v1At } } : record;
+    };
+
+    const after = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    const versions = after
+      .json()
+      .progress.revisions.map((revision: { proposal?: { version: string } }) => revision.proposal?.version);
+    expect(versions).toEqual(['v1', 'v2']);
+
+    await app.close();
+  });
+
   it('does not scan creator messages on a poll with no card behind it', async () => {
     const { githubClient } = createGithubClientStub({ jobId: 77 });
     const { app, authHeaders, store } = await createApp({
