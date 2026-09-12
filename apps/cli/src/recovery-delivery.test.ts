@@ -10,6 +10,7 @@ import { isRecoveryReady } from './recovery-state.js';
 it.each([
   ['missing', 'none'],
   ['missing', 'retry'],
+  ['missing', 'delete'],
   ['archived', 'none'],
   ['archived', 'version'],
   ['archived', 'disjoint'],
@@ -26,6 +27,7 @@ it.each([
     for (const file of files) writeFileSync(join(cwd, 'games/sky', file.path), file.content);
     const staged = new Map<string, string>();
     let puts = 0;
+    const deleted: string[] = [];
     let delivered = false;
     let changed = false;
     const api = createApi({
@@ -63,8 +65,10 @@ it.each([
           staged.set(file.path, file.content);
           if (change === 'retry' && puts === 170) throw new Error('response lost');
           body = { accepted: true };
-        } else if (url.endsWith('/stage/delete')) body = { accepted: true };
-        else if (url.endsWith('/sources/deliver')) {
+        } else if (url.endsWith('/stage/delete')) {
+          deleted.push(JSON.parse(String(init?.body)).path);
+          body = { accepted: true };
+        } else if (url.endsWith('/sources/deliver')) {
           delivered = true;
           body = { accepted: true, version: 'v1' };
         } else throw new Error(url);
@@ -75,7 +79,14 @@ it.each([
       await expect(recoverCheckout({ api, cwd, yes: true, write: () => {} })).rejects.toThrow('response lost');
     await recoverCheckout({ api, cwd, yes: true, write: () => {} });
     expect(isRecoveryReady(cwd, 'sky')).toBe(true);
-    changed = change !== 'none' && change !== 'retry';
+    changed = !['none', 'retry', 'delete'].includes(change);
+    if (change === 'delete') {
+      rmSync(join(cwd, 'games/sky/file1.ts'));
+      files.splice(
+        files.findIndex((file) => file.path === 'file1.ts'),
+        1,
+      );
+    }
     if (changed) {
       await expect(
         submitGame({ api, slug: 'sky', dest: cwd, run: () => ({ status: 0, stderr: '' }) }),
@@ -86,6 +97,7 @@ it.each([
     }
     const result = await submitGame({ api, slug: 'sky', dest: cwd, run: () => ({ status: 0, stderr: '' }) });
     expect(result.kind).toBe('delivered');
+    if (change === 'delete') expect(deleted).toContain('file1.ts');
     expect(puts).toBe(180);
     expect(isRecoveryReady(cwd, 'sky')).toBe(false);
   } finally {

@@ -1,4 +1,10 @@
-import { isRecoveryReady, clearRecoveryReady, matchingStaged, guardRecoverySession } from './recovery-state.js';
+import {
+  isRecoveryReady,
+  clearRecoveryReady,
+  matchingStaged,
+  guardRecoverySession,
+  recoveryPaths,
+} from './recovery-state.js';
 import { prepareDeliverySession, type DeliverySession } from './submit-session.js';
 import type { ApiClient } from './api.js';
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -141,7 +147,15 @@ export async function submitGame(input: {
   const takenOver = await prepareDeliverySession(input.api, input.slug, input.takeover, input.expectedSession);
   const paths =
     takenOver || recovered
-      ? [...new Set([...localGameFiles(input.dest, input.slug), ...latest.tree.files].map((file) => file.path))].sort()
+      ? [
+          ...new Set(
+            [
+              ...localGameFiles(input.dest, input.slug),
+              ...latest.tree.files,
+              ...(recovered ? recoveryPaths(input.dest).map((path) => ({ path })) : []),
+            ].map((file) => file.path),
+          ),
+        ].sort()
       : input.force
         ? changedPathsForced(localGameFiles(input.dest, input.slug), latest.tree.files)
         : latest.sync.local;

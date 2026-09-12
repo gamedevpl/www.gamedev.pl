@@ -125,7 +125,7 @@ async function runDelegateVerb(input: {
 }
 
 // Verbs that already speak to the platform; the rest stay silent.
-const TELEMETRY_VERBS = new Set(['kit', 'connect', 'delegate', 'play', 'login', 'update', 'status']);
+const TELEMETRY_VERBS = new Set(['recover', 'kit', 'connect', 'delegate', 'play', 'login', 'update', 'status']);
 
 // One rung per install, so `installed` counts installs not runs.
 export function reportInstall(telemetry: CliTelemetry, env: NodeJS.ProcessEnv, isTty: boolean): void {
@@ -315,6 +315,7 @@ export async function runCli(
     if (verb === 'recover') {
       await recoverCheckout({
         api,
+        telemetry,
         cwd: args[0] ?? process.cwd(),
         slug: typeof flags.slug === 'string' ? flags.slug : undefined,
         yes: flags.yes === true,
