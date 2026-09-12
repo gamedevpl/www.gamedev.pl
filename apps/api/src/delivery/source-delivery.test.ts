@@ -96,7 +96,7 @@ async function setup(opts?: {
   });
 
   let versionNumber = 0;
-  const putCandidateSources = vi.fn(async (input: { files: SourceFile[]; kitSharedPaths?: ReadonlySet<string> }) => {
+  const putCandidateSources = vi.fn(async (input: { files: SourceFile[] }) => {
     if (opts?.failPutCandidateSources) throw new InvalidUploadError('storage rejected this delivery', 'audio');
     versionNumber += 1;
     const version = `v-managed-${versionNumber}`;
@@ -514,34 +514,6 @@ export function tick(round: Round) {
       });
       expect(result.accepted).toBe(true);
       expect(putCandidateSources).toHaveBeenCalledOnce();
-      expect(putCandidateSources.mock.calls[0]![0]).not.toHaveProperty('kitSharedPaths');
-    });
-
-    it('passes pinned Kit paths into upload validation', async () => {
-      const kitFileStore = fakeKitStore({
-        [PINNED]: {
-          engineRef: PINNED,
-          sha256: 'a'.repeat(64),
-          files: new Map([
-            [`${KIT_ROOT_DIR}/shared/game-kit.d.ts`, Buffer.from(KIT_DTS, 'utf8')],
-            [`${KIT_ROOT_DIR}/shared/editor-def.ts`, Buffer.from('export function defineEditor() {}\n', 'utf8')],
-          ]),
-        },
-      });
-      const { store, putCandidateSources, service, authority } = await setup({ kitFileStore });
-      await store.pinRoundKitEngineRef(ISSUE, PINNED);
-      const result = await service.deliver({
-        jobId: ISSUE,
-        slug: SLUG,
-        files: PREVIEW_FILES,
-        mode: 'preview',
-        backend: BACKEND,
-        authority,
-      });
-      expect(result.accepted).toBe(true);
-      expect(putCandidateSources.mock.calls[0]![0].kitSharedPaths).toEqual(
-        new Set(['shared/editor-def.ts', 'shared/game-kit.d.ts']),
-      );
     });
 
     it('clears bypass diagnostics after a later clean delivery', async () => {

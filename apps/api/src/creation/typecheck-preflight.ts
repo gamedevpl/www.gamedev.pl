@@ -168,7 +168,7 @@ export function typecheckDeliverySources(input: {
     files.set(`${ROOT}/${rel}`, source);
   }
   const gameRoot = `${ROOT}/games/${input.slug}`;
-  // Resolve the full Kit; root only the game and game-kit.d.ts.
+  // Root game files plus the ambient kit declaration.
   const roots: string[] = [`${ROOT}/shared/game-kit.d.ts`];
   for (const [rel, source] of Object.entries(input.sources)) {
     if (rel.endsWith('.ts') || rel.endsWith('.tsx')) {
