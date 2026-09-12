@@ -10,6 +10,7 @@ import { isRecoveryReady } from './recovery-state.js';
 it.each([
   ['missing', 'none'],
   ['missing', 'retry'],
+  ['missing', 'lost_delivery'],
   ['missing', 'delete'],
   ['missing', 'retry_delete'],
   ['archived', 'none'],
@@ -75,6 +76,7 @@ it.each([
           body = { accepted: true };
         } else if (url.endsWith('/sources/deliver')) {
           delivered = true;
+          if (change === 'lost_delivery') throw new Error('delivery response lost');
           body = { accepted: true, version: 'v1' };
         } else throw new Error(url);
         return new Response(JSON.stringify(body));
@@ -84,13 +86,23 @@ it.each([
       await expect(recoverCheckout({ api, cwd, yes: true, write: () => {} })).rejects.toThrow('response lost');
     await recoverCheckout({ api, cwd, yes: true, write: () => {} });
     expect(isRecoveryReady(cwd, 'sky')).toBe(true);
-    changed = !['none', 'retry', 'delete', 'retry_delete'].includes(change);
+    changed = !['none', 'retry', 'delete', 'retry_delete', 'lost_delivery'].includes(change);
     if (change === 'delete') {
       rmSync(join(cwd, 'games/sky/file1.ts'));
       files.splice(
         files.findIndex((file) => file.path === 'file1.ts'),
         1,
       );
+    }
+    if (change === 'lost_delivery') {
+      await expect(submitGame({ api, slug: 'sky', dest: cwd, run: () => ({ status: 0, stderr: '' }) })).rejects.toThrow(
+        'delivery response lost',
+      );
+      expect(isRecoveryReady(cwd, 'sky')).toBe(true);
+      const retry = await submitGame({ api, slug: 'sky', dest: cwd, run: () => ({ status: 0, stderr: '' }) });
+      expect(retry.kind).toBe('nothing');
+      expect(isRecoveryReady(cwd, 'sky')).toBe(false);
+      return;
     }
     if (changed) {
       await expect(

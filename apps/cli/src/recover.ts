@@ -18,13 +18,14 @@ export type RecoveryResult = { token: string; slug: string; root: string };
 export async function recoverCheckout(
   input: Parameters<typeof performRecovery>[0],
 ): Promise<RecoveryResult | undefined> {
-  input.telemetry?.record('recovery_attempt');
+  const measuring = input.yes || !!input.pick;
+  if (measuring) input.telemetry?.record('recovery_attempt');
   try {
     const result = await performRecovery(input);
-    input.telemetry?.record(result ? 'recovery_succeeded' : 'recovery_canceled');
+    if (measuring) input.telemetry?.record(result ? 'recovery_succeeded' : 'recovery_canceled');
     return result;
   } catch (error) {
-    input.telemetry?.record('recovery_failed');
+    if (measuring) input.telemetry?.record('recovery_failed');
     throw error;
   }
 }

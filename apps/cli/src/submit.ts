@@ -1,6 +1,8 @@
 import {
   isRecoveryReady,
   clearRecoveryReady,
+  markRecoveryDelivery,
+  reconcileRecoveryDelivery,
   matchingStaged,
   guardRecoverySession,
   recoveryPaths,
@@ -111,8 +113,14 @@ export async function submitGame(input: {
   expectedSession?: DeliverySession;
   run?: Parameters<typeof runLadder>[0]['run'];
 }): Promise<SubmitResult> {
-  const recovered = isRecoveryReady(input.dest, input.slug);
-  const first = await inspectGame(input);
+  let recovered = isRecoveryReady(input.dest, input.slug);
+  let first = await inspectGame(input);
+  if (recovered && (await reconcileRecoveryDelivery(input.api, input.dest, input.slug, first.tree))) {
+    writeBase(input.dest, first.tree.version, first.tree.files);
+    clearRecoveryReady(input.dest);
+    recovered = false;
+    first = await inspectGame(input);
+  }
   if (recovered) await guardRecoverySession(input.api, input.dest, input.slug, first.tree.version);
   if (first.sync.kind === 'clean' && !recovered && !input.publish && !input.force && !input.takeover) {
     return { kind: 'nothing', sync: first.sync };
@@ -202,6 +210,7 @@ export async function submitGame(input: {
     mapHttpError(error);
   }
   const mode: DeliverMode = input.publish ? 'publish' : 'preview';
+  if (recovered) markRecoveryDelivery(input.dest, uploaded);
   let delivered: DeliverReply;
   try {
     delivered = await input.api.request<DeliverReply>('POST', `/api/me/studio/games/${input.slug}/sources/deliver`, {

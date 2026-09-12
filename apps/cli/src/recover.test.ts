@@ -173,3 +173,12 @@ it('clears ended recovery state after an interrupted renamed-checkout completion
   expect(existsSync(join(f.cwd, '.gamedev-recovery.json'))).toBe(false);
   expect(readFileSync(join(dest, 'games/other/game.ts'), 'utf8')).toBe('local edits');
 });
+
+it('does not count shell inspection as a canceled recovery', async () => {
+  const f = fixture();
+  const telemetry = { record: vi.fn(), flush: async () => {} };
+  await recoverCheckout({ ...f, yes: false, telemetry });
+  expect(telemetry.record).not.toHaveBeenCalled();
+  await recoverCheckout({ ...f, yes: false, pick: async () => 'Keep files and return', telemetry });
+  expect(telemetry.record.mock.calls).toEqual([['recovery_attempt'], ['recovery_canceled']]);
+});
