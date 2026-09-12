@@ -57,10 +57,13 @@ export async function registerDraftPreviewRoutes(
   // Playable only by its owner, or anyone the creator shared it with.
   async function canPlayDraft(request: FastifyRequest, slug: string): Promise<DraftGrant | null> {
     if (!store) return null;
-    const record = await store.getSubmissionBySlug(slug);
-    // Abandoned builds are unplayable, even by their own creator.
-    if (!record || record.abandonedAt) return null;
+    let record = await store.getSubmissionBySlug(slug);
     const uid = request.user?.uid;
+    // Slug index can lag the owner query on a just-written draft.
+    if (!record && uid) {
+      record = (await store.listSubmissionsByOwner(uid)).find((row) => row.slug === slug) ?? null;
+    }
+    if (!record || record.abandonedAt) return null;
     // The owner sees their own red build; a stranger never does.
     if (uid && uid === record.ownerUid) return { jobId: record.jobId };
     // A pulled game is not re-opened by flipping the switch.

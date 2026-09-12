@@ -74,7 +74,7 @@ describe('StudioWelcomeView', () => {
     await act(async () => {
       cta.click();
     });
-    expect(onOpenStudio).toHaveBeenCalledWith('/studio/bastion-wave?from=handoff');
+    expect(onOpenStudio).toHaveBeenCalledWith('/studio/tok-welcome?from=handoff');
     expect(localStorage.getItem('gamedev_studio_onboarded')).toBe('1');
   });
 
@@ -116,7 +116,7 @@ describe('StudioWelcomeView', () => {
     await act(async () => {
       callout.click();
     });
-    expect(onOpenStudio).toHaveBeenCalledWith('/studio/bastion-wave?from=handoff');
+    expect(onOpenStudio).toHaveBeenCalledWith('/studio/tok-welcome/playtest?from=handoff');
   });
 
   it('keeps building while the only playable builds are the seed and the staged tree', async () => {

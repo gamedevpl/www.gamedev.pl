@@ -177,4 +177,17 @@ describe('sharing a draft', () => {
     expect(off.statusCode).toBe(200);
     expect((await app.inject({ method: 'GET', url: `/api/games/${SLUG}` })).statusCode).toBe(404);
   });
+
+  it('lets the owner play when the slug index has not caught up', async () => {
+    const { app, store } = await draftApp();
+    store.getSubmissionBySlug = async () => null;
+    const mine = await app.inject({ method: 'GET', url: `/api/games/${SLUG}`, headers: headers() });
+    expect(mine.statusCode).toBe(200);
+    const stranger = await app.inject({
+      method: 'GET',
+      url: `/api/games/${SLUG}`,
+      headers: headers('g:someone-else'),
+    });
+    expect(stranger.statusCode).toBe(404);
+  });
 });
