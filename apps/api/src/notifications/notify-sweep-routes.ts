@@ -112,6 +112,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
       for (const record of openRounds) {
         const activityAt = lastRoundActivityAt(record);
         activityByJob.set(record.jobId, activityAt);
+        if (record.recoveryKey && builderOf(record) === 'self') continue;
         const reason = shouldAutoAbandonSelfRound({
           builder: builderOf(record),
           lastAgentSignalAt: record.lastAgentSignalAt,
