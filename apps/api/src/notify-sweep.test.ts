@@ -122,6 +122,54 @@ describe('POST /api/internal/notify-sweep', () => {
     expect(await store.listOpenRounds()).toHaveLength(0);
   });
 
+  it('derives a motionless record hourly instead of every run', async () => {
+    const DAY = 24 * HOUR_MS;
+    const opened = Date.now();
+    let clock = opened;
+    const store = new InMemoryStore();
+    await store.createSubmission(91, 'g:owner', 'Still Life');
+    await store.setSubmissionSlug(91, 'still-life');
+    await store.recordJobTransition(91, {
+      to: 'building',
+      at: new Date(opened).toISOString(),
+      by: 'agent',
+      reason: 'dispatched',
+    });
+    const app = await buildSweepApp(store, acceptAll, {
+      githubClient: buildingGithubClient(),
+      now: () => clock,
+    });
+    const pending = vi.spyOn(store, 'listPendingCreatorMessages');
+    const runSweep = async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/internal/notify-sweep',
+        headers: { authorization: 'Bearer scheduler-token' },
+      });
+      expect(res.statusCode).toBe(200);
+      return res.json();
+    };
+
+    clock = opened + 5 * DAY;
+    expect(await runSweep()).toMatchObject({ scanned: 1, deferred: 0 });
+
+    // The first derivation records a status, which is itself a move.
+    clock += 2 * 60 * 1000;
+    expect(await runSweep()).toMatchObject({ scanned: 1, deferred: 0 });
+    expect(pending).toHaveBeenCalledTimes(2);
+
+    clock += 2 * 60 * 1000;
+    expect(await runSweep()).toMatchObject({ scanned: 1, deferred: 1 });
+    clock += 2 * 60 * 1000;
+    expect(await runSweep()).toMatchObject({ scanned: 1, deferred: 1 });
+    expect(pending).toHaveBeenCalledTimes(2);
+
+    clock += HOUR_MS;
+    expect(await runSweep()).toMatchObject({ scanned: 1, deferred: 0 });
+    expect(pending).toHaveBeenCalledTimes(3);
+    await app.close();
+  });
+
   it('rejects callers that fail OIDC verification with 401', async () => {
     const store = new InMemoryStore();
     const app = await buildSweepApp(store, { verify: async () => false });
@@ -153,7 +201,9 @@ describe('POST /api/internal/notify-sweep', () => {
     expect(first.statusCode).toBe(200);
     expect(first.json()).toEqual({
       scanned: 1,
+      deferred: 0,
       closed: 0,
+      alertsSkipped: 0,
       emitted: 1,
       alerts: 0,
       alerted: 0,
@@ -176,7 +226,9 @@ describe('POST /api/internal/notify-sweep', () => {
     });
     expect(second.json()).toEqual({
       scanned: 0,
+      deferred: 0,
       closed: 0,
+      alertsSkipped: 0,
       emitted: 0,
       alerts: 0,
       alerted: 0,
@@ -215,6 +267,30 @@ describe('POST /api/internal/notify-sweep', () => {
       });
 
       expect(await sweep(app)).toMatchObject({ scanned: 1, stalled: 1 });
+      await app.close();
+    });
+
+    it('never defers a record whose feedback is still uncollected', async () => {
+      const store = new InMemoryStore();
+      await store.createSubmission(42, 'g:owner', 'Sky Dodge');
+      await store.recordJobTransition(42, {
+        to: 'building',
+        at: new Date(Date.now() - 30 * 24 * HOUR_MS).toISOString(),
+        by: 'agent',
+        reason: 'dispatched',
+      });
+      await store.appendCreatorMessage(42, 'make the ship slower');
+      let clock = Date.now() + 2 * HOUR_MS;
+      const app = await buildSweepApp(store, acceptAll, {
+        githubClient: buildingGithubClient(),
+        now: () => clock,
+      });
+
+      // Motionless for a month, but a stall clock is running.
+      for (let run = 0; run < 4; run += 1) {
+        expect(await sweep(app)).toMatchObject({ scanned: 1, deferred: 0, stalled: 1 });
+        clock += 2 * 60 * 1000;
+      }
       await app.close();
     });
 
@@ -336,6 +412,32 @@ describe('operator alerts on the notify sweep', () => {
     // Twice through the scheduler is one notification: the situation has not changed.
     expect(await sweep(app)).toMatchObject({ alerts: 1, alerted: 0 });
     expect(await store.listNotifications('g:boss')).toHaveLength(1);
+    await app.close();
+  });
+
+  it('stops reading an alert it has already emitted', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.createSubmission(1_000_003, 'g:creator', 'Comet Courier');
+    await store.recordJobTransition(1_000_003, {
+      to: 'ready_for_review',
+      at: new Date().toISOString(),
+      by: 'gate',
+      reason: 'gate_green',
+    });
+    const app = await appWithOperator(store, 'g:boss');
+    const created = vi.spyOn(store, 'createNotification');
+
+    expect(await sweep(app)).toMatchObject({ alerts: 1, alerted: 1, alertsSkipped: 0 });
+    const afterFirst = created.mock.calls.length;
+
+    expect(await sweep(app)).toMatchObject({ alerts: 1, alerted: 0, alertsSkipped: 0 });
+    const afterSecond = created.mock.calls.length;
+    expect(afterSecond).toBeGreaterThan(afterFirst);
+
+    // Run two learned the alert exists; run three asks nothing.
+    expect(await sweep(app)).toMatchObject({ alerts: 1, alerted: 0, alertsSkipped: 1 });
+    expect(created.mock.calls.length).toBe(afterSecond);
     await app.close();
   });
 

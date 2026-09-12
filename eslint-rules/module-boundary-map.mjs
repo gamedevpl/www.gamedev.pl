@@ -86,6 +86,7 @@ const FILE_BUCKET = {
   'creator-pat-routes': 'platform',
   'access-token-service': 'platform',
   digest: 'platform',
+  'sweep-cadence': 'platform',
   'sweep-scope': 'platform',
   'dev-seed-studio': 'platform',
   'openai-apps-challenge': 'platform',

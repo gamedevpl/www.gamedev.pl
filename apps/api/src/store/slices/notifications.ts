@@ -2,6 +2,14 @@ import { createHash } from 'node:crypto';
 import type { Firestore } from '@google-cloud/firestore';
 import type { StoredNotification, PushSubscriptionRecord } from '../records/notifications.js';
 
+const ALREADY_EXISTS = 6;
+
+function isAlreadyExists(error: unknown): boolean {
+  const candidate = error as { code?: number; message?: string } | null;
+  if (candidate?.code === ALREADY_EXISTS) return true;
+  return Boolean(candidate?.message?.includes('ALREADY_EXISTS'));
+}
+
 // Endpoint hash: stable id despite characters illegal in Firestore doc ids.
 export function pushSubscriptionId(endpoint: string): string {
   return createHash('sha256').update(endpoint).digest('hex');
@@ -131,25 +139,27 @@ export class FirestoreNotificationsStore implements NotificationsStore {
     notification: Omit<StoredNotification, 'readAt' | 'emailedAt'> & { createdAt?: string },
   ): Promise<{ created: boolean; notification: StoredNotification }> {
     const docRef = this.notificationRef(uid, notification.id);
-    return await this.db.runTransaction(async (tx) => {
-      const snap = await tx.get(docRef);
-      if (snap.exists) {
-        return { created: false, notification: snap.data() as StoredNotification };
-      }
-      const record: StoredNotification = {
-        id: notification.id,
-        type: notification.type,
-        createdAt: notification.createdAt ?? new Date().toISOString(),
-        readAt: null,
-        emailedAt: null,
-        titleKey: notification.titleKey,
-        bodyKey: notification.bodyKey,
-        params: notification.params,
-        link: notification.link,
-      };
-      tx.set(docRef, record);
+    const record: StoredNotification = {
+      id: notification.id,
+      type: notification.type,
+      createdAt: notification.createdAt ?? new Date().toISOString(),
+      readAt: null,
+      emailedAt: null,
+      titleKey: notification.titleKey,
+      bodyKey: notification.bodyKey,
+      params: notification.params,
+      link: notification.link,
+    };
+    try {
+      // create() is the atomic insert; the loser is told, and reads nothing.
+      await docRef.create(record);
       return { created: true, notification: record };
-    });
+    } catch (error) {
+      if (!isAlreadyExists(error)) throw error;
+      const snap = await docRef.get();
+      const stored = snap.data() as StoredNotification | undefined;
+      return { created: false, notification: stored ?? record };
+    }
   }
 
   async listNotifications(uid: string, opts?: { limit?: number }): Promise<StoredNotification[]> {
