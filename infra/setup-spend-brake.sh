@@ -199,6 +199,9 @@ Bandwidth is the one an open site spends without anybody asking for it, and it h
 no per-service budget yet. Create one, and point the two that already exist at the
 topic — a budget that only emails is not a brake:
 
+  # Amounts and the billing account id live in the ops repo's setup-budgets.sh,
+  # never here: this repo is public and the money is not.
+  #
   # services/95FF-2EF5-5EA1 is Cloud Storage, read from the Catalog API on
   # 2026-09-12. Pasted rather than looked up on purpose: gcloud has no
   # 'billing services list', and a lookup that fails leaves the filter empty,
@@ -210,7 +213,7 @@ topic — a budget that only emails is not a brake:
   #     python3 -c 'import sys,json; [print(s["name"], s["displayName"]) for s in json.load(sys.stdin)["services"]]'
   gcloud billing budgets create --billing-account ACCOUNT_ID \\
     --display-name='GCS egress lanes=video_media' \\
-    --budget-amount=100PLN --filter-services=services/95FF-2EF5-5EA1 \\
+    --budget-amount=AMOUNT --filter-services=services/95FF-2EF5-5EA1 \\
     --threshold-rule=percent=0.5 --threshold-rule=percent=1.0 \\
     --notifications-rule-pubsub-topic=projects/${PROJECT_ID}/topics/${TOPIC}
 
