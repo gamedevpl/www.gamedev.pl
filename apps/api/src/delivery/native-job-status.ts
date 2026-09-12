@@ -6,28 +6,8 @@ import { stripPlaytestContext } from '../platform/playtest-context.js';
 import type { BuilderKind } from '../creation/builder.js';
 import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
 import type { GamesStore } from './games-store.js';
-import type { CreatorMessage, Store, SubmissionRecord } from '../platform/store.js';
+import type { Store, SubmissionRecord } from '../platform/store.js';
 import type { SubmissionStatusResponse } from '../platform/submission-status.js';
-
-// Rebuilt on every poll, so a card is never a minute late.
-export function progressOf(messages: CreatorMessage[], playableVersion: string | undefined) {
-  if (messages.length === 0 && !playableVersion) return undefined;
-  return {
-    headSha: playableVersion ?? '',
-    commits: [],
-    checklist: [],
-    revisions: messages.map((message) => ({
-      text: stripPlaytestContext(message.text),
-      createdAt: message.createdAt,
-      ...(revisionOriginOf(message) ? { origin: revisionOriginOf(message) } : {}),
-      delivered: Boolean(message.deliveredAt),
-      ...(message.textLocalized && message.locale
-        ? { textLocalized: stripPlaytestContext(message.textLocalized), locale: message.locale }
-        : {}),
-      ...(message.proposal ? { proposal: message.proposal } : {}),
-    })),
-  };
-}
 
 export interface NativeJobStatusOptions {
   store?: Store;
@@ -96,8 +76,23 @@ export function createNativeJobStatusAssembler(options: NativeJobStatusOptions):
     }
     if (store) {
       const messages = await store.listCreatorMessages(record.jobId, { limit: 20 });
-      const progress = progressOf(messages, playableVersion);
-      if (progress) status.progress = progress;
+      if (messages.length > 0 || playableVersion) {
+        status.progress = {
+          headSha: playableVersion ?? '',
+          commits: [],
+          checklist: [],
+          revisions: messages.map((message) => ({
+            text: stripPlaytestContext(message.text),
+            createdAt: message.createdAt,
+            ...(revisionOriginOf(message) ? { origin: revisionOriginOf(message) } : {}),
+            delivered: Boolean(message.deliveredAt),
+            ...(message.textLocalized && message.locale
+              ? { textLocalized: stripPlaytestContext(message.textLocalized), locale: message.locale }
+              : {}),
+            ...(message.proposal ? { proposal: message.proposal } : {}),
+          })),
+        };
+      }
     }
     const stall =
       detectStall({

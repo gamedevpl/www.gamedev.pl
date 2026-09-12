@@ -4,8 +4,6 @@ import { stripPlaytestContext } from '../platform/playtest-context.js';
 import { detectStall, toSubmissionStatus } from '../creation/job-state.js';
 import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
 import { isStudioOrigin } from '../platform/store.js';
-import type { CreatorMessage } from '../platform/store.js';
-import { progressOf } from './native-job-status.js';
 import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
 import type { GamesStore } from './games-store.js';
 import type {
@@ -69,19 +67,6 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     }
     const value = await store.listBuildEvents(jobId, { limit: maxEventsShown });
     eventsCache.set(jobId, { value, expiresAt: currentTime + eventsCacheTtlMs });
-    return value;
-  }
-
-  // Same window as events; never a scan per poll.
-  const messagesCache = new Map<number, { expiresAt: number; value: CreatorMessage[] }>();
-
-  async function loadCreatorMessages(jobId: number): Promise<CreatorMessage[] | null> {
-    if (!store) return null;
-    const currentTime = now();
-    const cached = messagesCache.get(jobId);
-    if (cached && cached.expiresAt > currentTime) return cached.value;
-    const value = await store.listCreatorMessages(jobId, { limit: 20 }).catch(() => null);
-    if (value) messagesCache.set(jobId, { value, expiresAt: currentTime + eventsCacheTtlMs });
     return value;
   }
 
@@ -271,16 +256,6 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
       // Soft: a store blip must not 500 a cached status poll.
       store ? store.getSubmission(jobId).catch(() => null) : Promise.resolve(null),
     ]);
-    // A posted claim names the one version its card carries.
-    const postedVersion = record?.dreamRun?.postedAt ? record.dreamRun.version : '';
-    // Identity, not timestamps: no clock has to agree with another.
-    const cardShown = (status.progress?.revisions ?? []).some(
-      (revision) => revision.proposal?.version === postedVersion,
-    );
-    const messages = postedVersion && !cardShown ? await loadCreatorMessages(jobId) : null;
-    const progress =
-      (messages ? progressOf(messages, record?.previewVersion ?? record?.deliveredVersion) : undefined) ??
-      status.progress;
     // Drop leftover synthetic presence steps from before heartbeats stopped writing chat.
     const events = loadedEvents.filter((event) => !isPresenceEventText(event.text, event.createdAt));
     const next: SubmissionStatusResponse = {
@@ -289,7 +264,9 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
       ...(media.length > 0 ? { media } : {}),
       ...(playable.length > 0 ? { playable } : {}),
       // Resolved here, not in nativeJobStatus, so the cache stays language-neutral.
-      ...(progress ? { progress: { ...progress, revisions: localizeRevisions(progress.revisions, locale) } } : {}),
+      ...(status.progress
+        ? { progress: { ...status.progress, revisions: localizeRevisions(status.progress.revisions, locale) } }
+        : {}),
     };
     if (!record) return next;
 
