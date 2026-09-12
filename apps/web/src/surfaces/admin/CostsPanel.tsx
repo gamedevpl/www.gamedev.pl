@@ -45,6 +45,7 @@ function JobRow({ job }: { job: JobCostSummary }) {
       </td>
       <td>{job.sessions}</td>
       <td>{job.gateRuns}</td>
+      <td>{job.conceptCalls}</td>
       <td>{duration(job.elapsedMs)}</td>
       <td>{job.tokens ? `${job.tokens.input + job.tokens.output}` : '—'}</td>
       <td>{job.usd === undefined ? '—' : money(job.usd)}</td>
@@ -125,7 +126,8 @@ export function CostsPanel() {
       <p className="health-summary">
         {totals.jobs} job{totals.jobs === 1 ? '' : 's'} · {totals.sessions} agent session
         {totals.sessions === 1 ? '' : 's'} · {totals.gateRuns} gate run{totals.gateRuns === 1 ? '' : 's'} ·{' '}
-        {totals.published} published
+        {totals.conceptCalls} concept call
+        {totals.conceptCalls === 1 ? '' : 's'} · {totals.published} published
       </p>
 
       {report.unmeasuredJobs > 0 && (
@@ -147,6 +149,7 @@ export function CostsPanel() {
                 <th>State</th>
                 <th>Sessions</th>
                 <th>Gate runs</th>
+                <th>Concept calls</th>
                 <th>Elapsed</th>
                 <th>Tokens</th>
                 <th>Money</th>
@@ -163,10 +166,11 @@ export function CostsPanel() {
 
       <p className="health-note">
         One credit is one premium request — what an agent session costs, charged whether or not the session delivers
-        anything — and GitHub prices a credit at a flat $0.01, so the money here is converted, not estimated. Two things
-        are still missing from it: the gate&rsquo;s Cloud Build minutes, which nothing reports back yet, and tokens,
-        which the Copilot backend does not expose at all. Both would only push these figures up. Gate runs carry their
-        Cloud Build id, so a line on the bill can be traced back to the game that caused it.
+        anything — and GitHub prices a credit at a flat $0.01, so the money here is converted, not estimated. Three
+        things are still missing from it: the gate&rsquo;s Cloud Build minutes, which nothing reports back yet; tokens,
+        which the Copilot backend does not expose at all; and the concept calls a proposal makes, counted here but not
+        priced because the client drops the usage envelope those calls return. All three would only push these figures
+        up. Gate runs carry their Cloud Build id, so a line on the bill can be traced back to the game that caused it.
       </p>
     </section>
   );
