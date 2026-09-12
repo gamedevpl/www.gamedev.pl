@@ -4951,6 +4951,23 @@ describe('GET /api/me/quota', () => {
 
     await app.close();
   });
+
+  // Bare `return` after guard send sends twice; status hides it, count does not.
+  it('replies exactly once when there is no session', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const { app } = await createApp({ githubClient, submissionTokenSecret: secret });
+
+    let sends = 0;
+    app.addHook('onSend', async () => {
+      sends += 1;
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/api/me/quota' });
+    expect(res.statusCode).toBe(401);
+    expect(sends).toBe(1);
+
+    await app.close();
+  });
 });
 
 describe('managed (platform) builder availability', () => {
