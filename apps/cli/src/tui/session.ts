@@ -4,6 +4,7 @@ export type TuiState = {
   lines: string[];
   live: string[];
   localTask: string;
+  previewUrl: string;
   identity: string;
   question: string;
   mode: TuiMode;
@@ -44,6 +45,7 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
     lines: banner ? banner.split('\n') : [],
     live: [],
     localTask: '',
+    previewUrl: '',
     identity: '',
     question: '',
     mode: 'busy',
@@ -77,7 +79,13 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
       };
     },
     writeLine(text) {
-      state = { ...state, lines: [...state.lines, ...text.split('\n')], lastOutputAt: Date.now() };
+      const preview = /^(?:local live preview|live preview while .* edits): (https?:\/\/\S+)/m.exec(text)?.[1];
+      state = {
+        ...state,
+        lines: [...state.lines, ...text.split('\n')],
+        lastOutputAt: Date.now(),
+        previewUrl: preview ?? state.previewUrl,
+      };
       emit();
     },
     setLocalTask(localTask) {

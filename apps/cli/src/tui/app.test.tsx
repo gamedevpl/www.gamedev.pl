@@ -13,13 +13,13 @@ afterEach(() => {
   for (const close of cleanup.splice(0)) close();
 });
 const wait = (ms = 50) => new Promise((resolve) => setTimeout(resolve, ms));
-function screen(columns: number, rows: number) {
+function screen(columns: number, rows: number, openPreview?: (url: string) => void) {
   const session = createTuiSession('');
   const input = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
   const output = Object.assign(new PassThrough(), { columns, rows, isTTY: true });
   const frames: string[] = [];
   output.on('data', (chunk) => frames.push(stripVTControlCharacters(String(chunk))));
-  const app = render(createElement(ReplApp, { session, color: false }), {
+  const app = render(createElement(ReplApp, { session, color: false, openPreview }), {
     stdin: input as unknown as NodeJS.ReadStream,
     stdout: output as unknown as NodeJS.WriteStream,
     debug: true,
@@ -36,6 +36,17 @@ function screen(columns: number, rows: number) {
 }
 
 describe('TUI feedback', () => {
+  it('opens the live preview with o while an agent is working', async () => {
+    const openPreview = vi.fn();
+    const view = screen(80, 24, openPreview);
+    view.session.writeLine('live preview while claude edits: http://127.0.0.1:64897/preview/');
+    await wait();
+    expect(view.frame()).toContain('o open preview');
+    view.input.write('o');
+    await wait();
+    expect(openPreview).toHaveBeenCalledWith('http://127.0.0.1:64897/preview/');
+  });
+
   it('shows connection choices and returns to chat for the selected game', async () => {
     const view = screen(80, 24);
     const opened = connectSession({

@@ -18,6 +18,7 @@ import { openWorkshop, settleBuilder, type Workshop } from '../workshop.js';
 import { agentHint, discoverAgents } from '../agents.js';
 import { createCliTelemetry } from '../telemetry.js';
 import { reportInstall } from '../main.js';
+import { openUrl } from '../open-url.js';
 
 export async function runInkRepl(input: {
   api: ApiClient;
@@ -52,8 +53,14 @@ export async function runInkRepl(input: {
     session.setActivity(activity);
     return () => session.setActivity(previous);
   });
+  const openPreview = (url: string): void => {
+    telemetry.record('play_requested');
+    void openUrl(url).then((opened) => {
+      if (!opened) session.writeLine(`Could not open the preview. Copy this URL: ${url}`);
+    });
+  };
   const mount = (historyOffset = 0) => {
-    host.instance = render(createElement(ReplApp, { session, color, historyOffset }), {
+    host.instance = render(createElement(ReplApp, { session, color, historyOffset, openPreview }), {
       stdin: input.io.stdin,
       stdout: input.io.stdout,
       exitOnCtrlC: false,
