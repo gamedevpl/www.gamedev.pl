@@ -239,7 +239,7 @@ describe('createDreamJob', () => {
 
   it('posts no card when the round is reopened while the frames are drawn', async () => {
     let reopen: (() => Promise<void>) | null = null;
-    const { store, run } = await harness({
+    const { store, frames, run } = await harness({
       hud: [],
       frame: async () => {
         await reopen?.();
@@ -252,7 +252,48 @@ describe('createDreamJob', () => {
     };
 
     expect(await run()).toBe('superseded');
+    // The reopen landed mid-image; the second one is never paid for.
+    expect(frames.requests).toHaveLength(1);
     expect(await store.listCreatorMessages(7)).toEqual([]);
+    expect(await store.listBuildShots(7)).toEqual([]);
+  });
+
+  it('asks for no ideas when the round is reopened while the HUD is read', async () => {
+    const { store, ideas: generator, run } = await harness({ hud: [] });
+    const real = store.getPublishedSubmissionBySlug.bind(store);
+    store.getPublishedSubmissionBySlug = async (slug: string) => {
+      // The creator reopens the round while the run reads the capture.
+      await store.bumpRoundGeneration(7);
+      return await real(slug);
+    };
+
+    expect(await run()).toBe('superseded');
+    expect(generator.requests).toEqual([]);
+    expect(await store.getGlobalDreamCount('2026-09-07')).toBe(0);
+    expect(await store.listBuildShots(7)).toEqual([]);
+  });
+
+  it('stands down when another worker retook the claim after the TTL', async () => {
+    let retake: (() => Promise<void>) | null = null;
+    const { store, frames, run } = await harness({
+      hud: [],
+      frame: async () => {
+        await retake?.();
+        return { data: jpegHeader(1024, 1024).toString('base64'), mediaType: 'image/jpeg' };
+      },
+    });
+    retake = async () => {
+      retake = null;
+      // An hour later this run looks abandoned, so a second one starts.
+      expect((await store.claimDreamRun(7, 'v1', '2026-09-07T13:00:00.000Z', 1)).claimed).toBe(true);
+    };
+
+    expect(await run()).toBe('superseded');
+    expect(frames.requests).toHaveLength(1);
+    expect(await store.listBuildShots(7)).toEqual([]);
+    expect(await store.listCreatorMessages(7)).toEqual([]);
+    // The retaking run still owns the claim; this one closed nothing.
+    expect((await store.getSubmission(7))?.dreamRun?.endedAt).toBeUndefined();
   });
 
   it('refuses when the shared daily cap is spent', async () => {

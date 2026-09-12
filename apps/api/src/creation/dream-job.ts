@@ -7,7 +7,7 @@ import {
 } from '../platform/dream-shots.js';
 import { imageSize, isPng, sameAspectRatio, type ImageSize } from '../platform/image-size.js';
 import type { Store } from '../platform/store.js';
-import { dreamClaimHolds } from '../store/slices/round-budget.js';
+import { dreamClaimHolds, ownsDreamClaim } from '../store/slices/round-budget.js';
 import type { ProposalRefusedBy } from '../store/slices/build-log.js';
 import { resolveJobState } from './job-state.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
@@ -142,10 +142,16 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       return 'already_ran';
     if (!(await store.claimDreamRun(jobId, version, claimedAt, record.roundGeneration ?? 1)).claimed)
       return 'already_ran';
-    // The switch and the creator's mute; either ends the run.
+    // The switch, the mute, and anything that moved under this run.
     const stopped = async (): Promise<DreamOutcome | null> => {
       if (!(await availability.dreamingEnabled())) return 'paused';
       if (await store.readProposalsMutedAt(record.ownerUid)) return 'muted';
+      const live = await store.getSubmission(jobId);
+      // A reopen leaves the version alone, so the generation is the tell.
+      if ((live?.roundGeneration ?? 1) !== (record.roundGeneration ?? 1)) return 'superseded';
+      if ((live?.previewVersion ?? live?.deliveredVersion) !== version) return 'superseded';
+      // A retake after the TTL; two workers must not both write shots.
+      if (!ownsDreamClaim(live?.dreamRun, { version, claimedAt })) return 'superseded';
       return null;
     };
     let halt = await stopped();
@@ -197,13 +203,9 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     // The copy promises two directions; one is not a choice.
     if (dreamed.length < DREAM_OPTIONS) return 'no_frames';
 
-    // Minutes of paid calls have passed; ask both again before writing.
+    // Minutes of paid calls have passed; ask every guard again before writing.
     halt = await stopped();
     if (halt) return halt;
-    // Cheap check before three writes; the post settles the race.
-    const current = await store.getSubmission(jobId);
-    if ((current?.previewVersion ?? current?.deliveredVersion) !== version) return 'superseded';
-    if (current?.dreamRun?.version !== version) return 'superseded';
 
     const sourceShot = await store.appendBuildShot(jobId, {
       data: sourcePng,
