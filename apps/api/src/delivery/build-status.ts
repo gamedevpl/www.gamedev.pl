@@ -250,17 +250,27 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     jobId: number,
     locale: string,
   ): Promise<SubmissionStatusResponse> {
-    const [loadedEvents, media, playable, record, messages] = await Promise.all([
+    const [loadedEvents, media, playable, record] = await Promise.all([
       loadBuildEvents(jobId),
       buildMedia(jobId, locale),
       buildPlayables(jobId, locale),
       // Soft: a store blip must not 500 a cached status poll.
       store ? store.getSubmission(jobId).catch(() => null) : Promise.resolve(null),
-      // Read here, not from the cache: the writer is another instance.
-      store ? store.listCreatorMessages(jobId, { limit: 20 }).catch(() => null) : Promise.resolve(null),
     ]);
-    const live = messages ? progressOf(messages, record?.previewVersion ?? record?.deliveredVersion) : undefined;
-    const progress = live ?? status.progress;
+    // The posting transaction stamps the record already read here.
+    const cardPostedAt = record?.dreamRun?.postedAt ?? '';
+    const newestRevisionAt = (status.progress?.revisions ?? []).reduce(
+      (at, revision) => (revision.createdAt > at ? revision.createdAt : at),
+      '',
+    );
+    // One scan when a card landed elsewhere, not one per poll.
+    const messages =
+      store && cardPostedAt > newestRevisionAt
+        ? await store.listCreatorMessages(jobId, { limit: 20 }).catch(() => null)
+        : null;
+    const progress =
+      (messages ? progressOf(messages, record?.previewVersion ?? record?.deliveredVersion) : undefined) ??
+      status.progress;
     // Drop leftover synthetic presence steps from before heartbeats stopped writing chat.
     const events = loadedEvents.filter((event) => !isPresenceEventText(event.text, event.createdAt));
     const next: SubmissionStatusResponse = {

@@ -1560,17 +1560,55 @@ describe('submission routes', () => {
     const before = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
     expect(before.json().progress.revisions).toHaveLength(1);
 
-    // Straight to the store: another instance invalidates its own cache.
-    await store.appendCreatorMessage(job.jobId, 'I sketched two directions.', {
-      origin: 'studio',
-      delivered: true,
+    // The posting transaction, as a worker elsewhere runs it.
+    await store.setSubmissionPreviewVersion(job.jobId, 'v1');
+    const claim = { version: 'v1', claimedAt: new Date().toISOString() };
+    await store.claimDreamRun(job.jobId, claim.version, claim.claimedAt);
+    await store.appendProposalMessage(job.jobId, claim, 'I sketched two directions.', {
       proposal: { sourceRef: 'shot-a', version: 'v1', options: [] },
+      ownerUid: job.ownerUid,
     });
 
     const after = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
     const revisions = after.json().progress.revisions;
     expect(revisions).toHaveLength(2);
     expect(revisions[1].proposal).toMatchObject({ sourceRef: 'shot-a' });
+
+    await app.close();
+  });
+
+  it('does not scan creator messages on a poll with no card behind it', async () => {
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.jobId, secret);
+    await store.appendCreatorMessage(job.jobId, 'Make the enemies slower.');
+
+    const real = store.listCreatorMessages.bind(store);
+    let scans = 0;
+    store.listCreatorMessages = async (...args: Parameters<typeof real>) => {
+      scans += 1;
+      return await real(...args);
+    };
+
+    const poll = () => app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    await poll();
+    const afterFirst = scans;
+    await poll();
+    await poll();
+
+    // A scan per poll is the forbidden read-cost pattern.
+    expect(scans).toBe(afterFirst);
 
     await app.close();
   });
