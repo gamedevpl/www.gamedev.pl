@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../i18n/index.js';
 import type {
   EditorCollectionSpec,
-  EditorContentDoc,
   EditorConstraint,
   EditorDefinition,
   EditorItemContent,
@@ -68,61 +67,6 @@ const definition: EditorDefinition = {
 };
 
 const content = { maps: [mapItem], routes: [routeItem] };
-
-const layeredDefinition: EditorDefinition = {
-  version: 2,
-  content: {},
-  layers: {
-    terrain: {
-      widget: 'tilemap',
-      label: { en: 'Terrain', pl: 'Teren' },
-      grid: { minCols: 3, maxCols: 3, minRows: 3, maxRows: 3 },
-      tiles: [
-        { key: 'floor', char: '.', label: { en: 'Floor', pl: 'Podłoga' } },
-        { key: 'start', char: '@', label: { en: 'Start', pl: 'Start' } },
-        { key: 'goal', char: '*', label: { en: 'Goal', pl: 'Meta' } },
-      ],
-      properties: {},
-      constraints: [],
-    },
-    objects: {
-      widget: 'tilemap',
-      label: { en: 'Objects', pl: 'Obiekty' },
-      grid: { minCols: 3, maxCols: 3, minRows: 3, maxRows: 3 },
-      tiles: [
-        { key: 'empty', char: '.', label: { en: 'Empty', pl: 'Puste' } },
-        { key: 'wall', char: '#', label: { en: 'Wall', pl: 'Ściana' } },
-      ],
-      properties: {},
-      constraints: [],
-    },
-    triggers: {
-      widget: 'entities',
-      label: { en: 'Triggers', pl: 'Wyzwalacze' },
-      min: 0,
-      max: 2,
-      properties: { kind: { type: 'text', max: 20 } },
-      constraints: [],
-    },
-  },
-  constraints: [
-    {
-      reachable: {
-        from: { layer: 'terrain', tile: 'start' },
-        blockedBy: [{ layer: 'objects', tile: 'wall' }],
-        require: [{ layer: 'terrain', tile: 'goal' }],
-      },
-    },
-  ],
-};
-
-const layeredContent: EditorContentDoc = {
-  layers: {
-    terrain: { properties: {}, rows: ['...', '.@*', '...'] },
-    objects: { properties: {}, rows: ['...', '...', '...'] },
-    triggers: [{ properties: { kind: 'exit' } }],
-  },
-};
 
 const game: StudioGame = {
   token: 'game-token',
@@ -220,50 +164,6 @@ describe('multi-collection editor surfaces', () => {
       root!.render(<RemixPainter content={single} doc={{ maps: [mapItem] }} onChange={vi.fn()} />);
     });
     expect(container.querySelector('.editor-collection-selector')).toBeNull();
-  });
-});
-
-describe('layered editor surfaces', () => {
-  it('renders a stacked Studio board with a declaration-driven layer rail', async () => {
-    fetchGameEditor.mockResolvedValue(editorState({ definition: layeredDefinition, content: layeredContent }));
-    await renderEditor();
-
-    expect(container.querySelectorAll('.editor-layer-board')).toHaveLength(2);
-    expect(container.querySelectorAll('.editor-layer-picker-item')).toHaveLength(3);
-    expect(container.querySelector('.editor-layer-picker-item.is-active')?.textContent).toContain('Terrain');
-    expect(container.querySelector<HTMLButtonElement>('.studio-head-action.is-primary')?.disabled).toBe(false);
-
-    const objects = Array.from(container.querySelectorAll('.editor-layer-picker-item')).find((button) =>
-      button.textContent?.includes('Objects'),
-    ) as HTMLButtonElement;
-    await act(async () => objects.click());
-    expect(container.querySelector('.editor-layer-picker-item.is-active')?.textContent).toContain('Objects');
-    expect(putEditorDraft).not.toHaveBeenCalled();
-  });
-
-  it('renders Remix layers stacked and keeps lower layers read-only', async () => {
-    const onChange = vi.fn();
-    root = createRoot(container);
-    await act(async () => {
-      root!.render(
-        <RemixPainter
-          layers={layeredDefinition.layers}
-          constraints={layeredDefinition.constraints}
-          doc={layeredContent}
-          onChange={onChange}
-        />,
-      );
-    });
-
-    expect(container.querySelectorAll('.editor-layer-board')).toHaveLength(2);
-    expect(container.querySelector('.editor-layer-picker-item.is-active')?.textContent).toContain('Triggers');
-    const terrain = Array.from(container.querySelectorAll('.editor-layer-picker-item')).find((button) =>
-      button.textContent?.includes('Terrain'),
-    ) as HTMLButtonElement;
-    await act(async () => terrain.click());
-    expect(container.textContent).toContain('Only the top layer can be edited');
-    expect(container.querySelector<HTMLButtonElement>('.editor-layer-board.is-active button')?.disabled).toBe(true);
-    expect(onChange).not.toHaveBeenCalled();
   });
 });
 

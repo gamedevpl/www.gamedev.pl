@@ -137,8 +137,12 @@
 }
 .editor-layer-board.is-muted {
   z-index: 1;
-  opacity: 0.28;
+  opacity: 0.55;
   pointer-events: none;
+}
+/* A colourless tile is a hole, so the layers below it stay visible. */
+.editor-layer-board .editor-cell.is-blank {
+  background: transparent;
 }
 .editor-layer-picker {
   display: flex;
