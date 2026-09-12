@@ -122,6 +122,9 @@ jobs:
           EDITORKIT_V2: ${{ vars.EDITORKIT_V2 }}
           DREAMS_ENABLED: ${{ vars.DREAMS_ENABLED }}
           GLOBAL_DAILY_DREAM_CAP: ${{ vars.GLOBAL_DAILY_DREAM_CAP }}
+          DREAM_IMAGE_MODEL: ${{ vars.DREAM_IMAGE_MODEL }}
+          DREAM_TIMEOUT_MS: ${{ vars.DREAM_TIMEOUT_MS }}
+          NEXT_IDEAS_TIMEOUT_MS: ${{ vars.NEXT_IDEAS_TIMEOUT_MS }}
           EDITOR_ASSIST: ${{ vars.EDITOR_ASSIST }}
           GOOGLE_OAUTH_CLIENT_ID: ${{ vars.GOOGLE_OAUTH_CLIENT_ID }}
           HEALTH_SWEEP_AUDIENCE: ${{ vars.HEALTH_SWEEP_AUDIENCE }}
@@ -331,6 +334,14 @@ jobs:
             SEED_VAL="${!SEED_VAR}"
             if [ -n "$SEED_VAL" ]; then
               ENV_VARS="${ENV_VARS}|${SEED_VAR}=${SEED_VAL}"
+            fi
+          done
+          # Concept proposals. Repointing the image model or either timeout must survive
+          # the next deploy, so they thread here rather than being set by hand.
+          for DREAM_VAR in DREAM_IMAGE_MODEL DREAM_TIMEOUT_MS NEXT_IDEAS_TIMEOUT_MS; do
+            DREAM_VAL="${!DREAM_VAR}"
+            if [ -n "$DREAM_VAL" ]; then
+              ENV_VARS="${ENV_VARS}|${DREAM_VAR}=${DREAM_VAL}"
             fi
           done
           ZONE_HOST_URL_VAL="${ZONE_HOST_URL}"

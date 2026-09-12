@@ -43,6 +43,17 @@ export interface JobCostSummary {
   title: string;
   slug?: string;
   state?: JobState;
+  /**
+   * Concept-model requests this job made (`concept` rows): the idea call and each image
+   * call a proposal draws, including ones that returned nothing and still billed.
+   *
+   * Counted rather than priced. These go straight to Vertex, and the `.json()` path the
+   * idea call uses discards the usage envelope, so no token figure reaches the ledger.
+   * A count next to an absent `usd` says "this job spent on concepts and we did not
+   * price it", which is the thing `unmeasuredJobs` exists to stop a reader missing.
+   */
+  conceptCalls: number;
+
   /** Agent sessions started (ledger rows of kind `agent_session`). */
   sessions: number;
   /**
@@ -86,6 +97,8 @@ export interface CostTotals {
   sessions: number;
   credits: number;
   gateRuns: number;
+  // Concept-model requests across the window; counted, never priced.
+  conceptCalls: number;
   published: number;
   /** How many of the jobs above started from a generated draft. */
   seededJobs: number;
@@ -164,6 +177,7 @@ function summarize(record: SubmissionRecord): JobCostSummary {
     sessions: entries.filter((entry) => entry.kind === 'agent_session').length,
     credits,
     gateRuns: entries.filter((entry) => entry.kind === 'gate_run').length,
+    conceptCalls: entries.filter((entry) => entry.kind === 'concept').length,
     seeded: entries.some((entry) => entry.kind === 'seed'),
     // Absent rather than zero: a zero would read as a measurement that came back empty
     // instead of one that was never taken. Seeds report tokens and Copilot sessions do
@@ -187,6 +201,7 @@ export function buildCostReport(records: SubmissionRecord[]): CostReport {
     credits: jobs.reduce((sum, job) => sum + job.credits, 0),
     seededJobs: jobs.filter((job) => job.seeded).length,
     gateRuns: jobs.reduce((sum, job) => sum + job.gateRuns, 0),
+    conceptCalls: jobs.reduce((sum, job) => sum + job.conceptCalls, 0),
     published: jobs.filter((job) => job.published).length,
   };
 

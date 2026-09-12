@@ -86,7 +86,8 @@ export class VertexNextIdeaGenerator implements NextIdeaGenerator {
   constructor(options: VertexNextIdeaGeneratorOptions = {}) {
     this.options = options;
     this.timeoutMs = options.timeoutMs ?? Number(process.env.NEXT_IDEAS_TIMEOUT_MS ?? DEFAULT_NEXT_IDEAS_TIMEOUT_MS);
-    this.model = options.model ?? DEFAULT_NEXT_IDEAS_MODEL;
+    // VERTEX_MODEL stays in the chain; the client read it before.
+    this.model = options.model ?? process.env.VERTEX_MODEL ?? DEFAULT_NEXT_IDEAS_MODEL;
   }
 
   private getClient(): GenAIClient {
