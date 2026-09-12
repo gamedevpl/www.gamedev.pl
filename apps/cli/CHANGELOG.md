@@ -7,6 +7,10 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+### Fixed
+
+- Move the prompt cursor with the left and right arrow keys and edit long messages in place (#1290).
+
 ## 0.14.1 — 2026-09-12
 
 ### Fixed

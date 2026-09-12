@@ -36,6 +36,21 @@ function screen(columns: number, rows: number, openPreview?: (url: string) => vo
 }
 
 describe('TUI feedback', () => {
+  it('moves the cursor and inserts text inside a long draft', async () => {
+    const view = screen(40, 12);
+    void view.session.prompt();
+    view.session.setDraft('0123456789'.repeat(5));
+    await wait();
+    expect(view.frame()).toContain('█');
+    view.input.write('\u001b[D');
+    await wait();
+    view.input.write('X');
+    await wait();
+    expect(view.session.get()).toMatchObject({ draft: `${'0123456789'.repeat(4)}012345678X9`, draftCursor: 50 });
+    expect(view.frame()).toContain('█9');
+    expect(view.frame()).toContain('←→');
+  });
+
   it('opens the live preview with o while an agent is working', async () => {
     const openPreview = vi.fn();
     const view = screen(80, 24, openPreview);
