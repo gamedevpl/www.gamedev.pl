@@ -64,7 +64,7 @@ export async function registerCreatorMediaRoutes(
         return sendMedia(request, reply, {
           // Immutable once stored, so the id alone is a sound ETag.
           etag: `"${shot.id}"`,
-          contentType: 'image/png',
+          contentType: shot.mediaType ?? 'image/png',
           body,
         });
       } catch (error) {

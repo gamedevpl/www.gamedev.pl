@@ -74,6 +74,10 @@ export interface CreationLimits {
   seedingMode?: 'auto' | 'off';
   // Daily seed pipelines, everyone together. Each is the priciest call we make.
   globalDailySeedCap?: number | null;
+  // Refuse the post-gate concept-frame job outright (NP-1v dreams).
+  dreamsPaused?: boolean;
+  // Daily concept frames, everyone together. `null` = deployed default.
+  globalDailyDreamCap?: number | null;
   // Runtime override; unset defers to SEED_PROVIDER. Free-form: providers self-register.
   seedProviderOverride?: string | null;
   /** Who last changed this and when, so a leftover pause is legible as a leftover. */

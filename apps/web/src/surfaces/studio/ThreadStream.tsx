@@ -8,6 +8,7 @@ import { BuildHeartbeat } from './BuildHeartbeat.js';
 import { PRESENCE_THOUGHT_MS } from './presenceThought.js';
 import { ShotLightbox } from './ShotLightbox.js';
 import type { ActivityEntry } from './buildActivityFeed.js';
+import { ProposalCard, type ProposalHandlers } from './ProposalCard.js';
 
 export type ThreadWorkingState = {
   // Coarse phase — "Writing code" / "Starting agent".
@@ -29,6 +30,7 @@ export function ThreadStream({
   after,
   working = null,
   stickNonce = 0,
+  proposals,
 }: {
   token: string;
   entries: ActivityEntry[];
@@ -42,6 +44,8 @@ export function ThreadStream({
   working?: ThreadWorkingState | null;
   // Bump when `after`/`working` appears, for a stuck-to-bottom reader.
   stickNonce?: number;
+  // Concept proposals on studio turns; absent renders them as plain text.
+  proposals?: ProposalHandlers;
 }) {
   const { t, i18n } = useTranslation();
   const [zoomed, setZoomed] = useState<BuildMediaItem | null>(null);
@@ -49,6 +53,8 @@ export function ThreadStream({
   const [, setThoughtTick] = useState(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const stickToBottomRef = useRef(true);
+  // A muted row is one line; the card is the height landing.
+  const showsProposalCard = Boolean(proposals) && !proposals?.muted;
 
   const onScroll = () => {
     const pane = scrollRef.current;
@@ -62,7 +68,7 @@ export function ThreadStream({
     if (!pane || !stickToBottomRef.current) return;
     // Do not scroll into the Claude/Cursor runway.
     pane.scrollTop = studioThreadContentScrollTop(pane);
-  }, [entries.length, stickNonce, working?.label, working?.thoughtLabel]);
+  }, [entries.length, stickNonce, showsProposalCard, working?.label, working?.thoughtLabel]);
 
   // One timeout at expiry — no poll needed.
   useEffect(() => {
@@ -113,6 +119,9 @@ export function ThreadStream({
                     </span>
                   ) : null}
                   <p className="studio-turn-text">{entry.text}</p>
+                  {entry.proposal && proposals ? (
+                    <ProposalCard token={token} proposal={entry.proposal} handlers={proposals} />
+                  ) : null}
                   {media.length > 0 ? (
                     <span className="studio-turn-shots">
                       {media.map((item) => (

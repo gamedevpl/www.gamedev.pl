@@ -91,6 +91,8 @@ export interface CreationLimits {
     chatPaused?: boolean;
     searchPaused?: boolean;
     gatePaused?: boolean;
+    dreamsPaused?: boolean;
+    // Round 0's kill switch and provider picker.
     partyPaused?: boolean;
     seedingMode?: SeedingMode;
     seedProviderOverride?: string | null;
@@ -117,6 +119,7 @@ export interface CreationLimits {
     chatPaused?: boolean;
     searchPaused?: boolean;
     gatePaused?: boolean;
+    dreamsPaused?: boolean;
     partyPaused?: boolean;
     telemetrySampleRate?: number | null;
     seedingMode: SeedingMode;
@@ -159,6 +162,7 @@ export async function setCreationLimits(patch: {
   chatPaused?: boolean;
   searchPaused?: boolean;
   gatePaused?: boolean;
+  dreamsPaused?: boolean;
   partyPaused?: boolean;
   seedingMode?: SeedingMode;
   seedProviderOverride?: string | null;

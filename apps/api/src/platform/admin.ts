@@ -10,6 +10,7 @@ import { isAdminSession } from './admin-session.js';
 import { MANAGED_AGENT_VENDORS } from '../agent-surface/agent-backend-env.js';
 import { DEFAULT_SEED_PROVIDER } from '../creation/game-seed.js';
 import { resolveDefaultGlobalDailySeedCap } from '../creation/seed-availability.js';
+import { resolveDefaultGlobalDailyDreamCap } from '../creation/dream-availability.js';
 import {
   recentPartitions,
   scanPartitions,
@@ -177,6 +178,9 @@ export interface CreationLimitsResponse {
     // Each gate run is a 30-minute E2_HIGHCPU_8 build.
     gatePaused: boolean;
     globalDailyGateRunCap: number;
+    // NP-1v concept art: kill switch and shared daily frame ceiling.
+    dreamsPaused: boolean;
+    globalDailyDreamCap: number;
     partyPaused: boolean;
     telemetrySampleRate: number | null;
     // Round 0's kill switch, ceiling and provider picker.
@@ -199,6 +203,7 @@ export interface CreationLimitsResponse {
     searchEmbeddings: number;
     gateRuns: number;
     seeds: number;
+    dreams: number;
     moderationCalls: number;
     botCalls: number;
   };
@@ -234,6 +239,8 @@ const CreationLimitsPatchShape = z.object({
   globalDailySearchEmbeddingCap: z.number().int().min(0).max(10_000_000).nullable().optional(),
   gatePaused: z.boolean().optional(),
   globalDailyGateRunCap: z.number().int().min(0).max(100_000).nullable().optional(),
+  dreamsPaused: z.boolean().optional(),
+  globalDailyDreamCap: z.number().int().min(0).max(100_000).nullable().optional(),
   globalDailySeedCap: z.number().int().min(0).max(100_000).nullable().optional(),
   // Load-shedding rungs 2 and 3; see docs/runbooks/launch-day.md.
   telemetrySampleRate: z.number().min(0).max(1).nullable().optional(),
@@ -453,6 +460,7 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
       searchEmbeddings,
       gateRuns,
       seeds,
+      dreams,
       moderationCalls,
       botCalls,
     ] = await Promise.all([
@@ -463,6 +471,7 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
       store.getGlobalSearchEmbeddingCount(dateStr),
       store.getGlobalGateRunCount(dateStr),
       store.getGlobalSeedCount(dateStr),
+      store.getGlobalDreamCount(dateStr),
       store.getGlobalModerationCount(dateStr),
       store.getGlobalBotCallCount(dateStr),
     ]);
@@ -504,6 +513,8 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
           stored?.globalDailySearchEmbeddingCap ?? resolveDefaultGlobalDailySearchEmbeddingCap(),
         gatePaused: stored?.gatePaused === true,
         globalDailyGateRunCap: stored?.globalDailyGateRunCap ?? resolveDefaultGlobalDailyGateRunCap(),
+        dreamsPaused: stored?.dreamsPaused === true,
+        globalDailyDreamCap: stored?.globalDailyDreamCap ?? resolveDefaultGlobalDailyDreamCap(),
         partyPaused: stored?.partyPaused === true,
         telemetrySampleRate: stored?.telemetrySampleRate ?? null,
         seedingMode: stored?.seedingMode ?? 'auto',
@@ -524,6 +535,7 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
         searchEmbeddings,
         gateRuns,
         seeds,
+        dreams,
         moderationCalls,
         botCalls,
       },

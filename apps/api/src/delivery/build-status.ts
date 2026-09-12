@@ -1,8 +1,11 @@
+import { DREAM_SHOT_LABELS } from '../platform/dream-shots.js';
 import type { BuilderKind } from '@gamedevpl/contract';
 import { stripPlaytestContext } from '../platform/playtest-context.js';
 import { detectStall, toSubmissionStatus } from '../creation/job-state.js';
 import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
 import { isStudioOrigin } from '../platform/store.js';
+import type { CreatorMessage } from '../platform/store.js';
+import { progressOf } from './native-job-status.js';
 import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
 import type { GamesStore } from './games-store.js';
 import type {
@@ -69,6 +72,19 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     return value;
   }
 
+  // Same window as events; never a scan per poll.
+  const messagesCache = new Map<number, { expiresAt: number; value: CreatorMessage[] }>();
+
+  async function loadCreatorMessages(jobId: number): Promise<CreatorMessage[] | null> {
+    if (!store) return null;
+    const currentTime = now();
+    const cached = messagesCache.get(jobId);
+    if (cached && cached.expiresAt > currentTime) return cached.value;
+    const value = await store.listCreatorMessages(jobId, { limit: 20 }).catch(() => null);
+    if (value) messagesCache.set(jobId, { value, expiresAt: currentTime + eventsCacheTtlMs });
+    return value;
+  }
+
   // The channel prunes on write; only a little history is ever wanted.
   const maxPreviewsShown = 4;
   const previewsCache = new Map<number, { expiresAt: number; value: BuildPreviewSummary[] }>();
@@ -95,7 +111,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     if (cached && cached.expiresAt > currentTime) {
       return cached.value;
     }
-    const value = await store.listBuildShots(jobId, { limit: maxShotsShown });
+    const value = await store.listBuildShots(jobId, { limit: maxShotsShown, excludeLabels: DREAM_SHOT_LABELS });
     shotsCache.set(jobId, { value, expiresAt: currentTime + eventsCacheTtlMs });
     return value;
   }
@@ -255,6 +271,16 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
       // Soft: a store blip must not 500 a cached status poll.
       store ? store.getSubmission(jobId).catch(() => null) : Promise.resolve(null),
     ]);
+    // The posting transaction stamps the record already read here.
+    const cardPostedAt = record?.dreamRun?.postedAt ?? '';
+    // Presence, not order: two instances' clocks do not compare.
+    const cardShown = (status.progress?.revisions ?? []).some(
+      (revision) => Boolean(revision.proposal) && revision.createdAt === cardPostedAt,
+    );
+    const messages = cardPostedAt && !cardShown ? await loadCreatorMessages(jobId) : null;
+    const progress =
+      (messages ? progressOf(messages, record?.previewVersion ?? record?.deliveredVersion) : undefined) ??
+      status.progress;
     // Drop leftover synthetic presence steps from before heartbeats stopped writing chat.
     const events = loadedEvents.filter((event) => !isPresenceEventText(event.text, event.createdAt));
     const next: SubmissionStatusResponse = {
@@ -263,9 +289,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
       ...(media.length > 0 ? { media } : {}),
       ...(playable.length > 0 ? { playable } : {}),
       // Resolved here, not in nativeJobStatus, so the cache stays language-neutral.
-      ...(status.progress
-        ? { progress: { ...status.progress, revisions: localizeRevisions(status.progress.revisions, locale) } }
-        : {}),
+      ...(progress ? { progress: { ...progress, revisions: localizeRevisions(progress.revisions, locale) } } : {}),
     };
     if (!record) return next;
 

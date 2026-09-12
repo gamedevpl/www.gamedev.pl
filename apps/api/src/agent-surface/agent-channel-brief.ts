@@ -1,3 +1,4 @@
+import { DREAM_SHOT_LABELS } from '../platform/dream-shots.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { AGENT_CHANNEL_ROUTES } from '@gamedevpl/contract';
 import {
@@ -32,7 +33,9 @@ export function registerAgentChannelBriefRoutes(app: FastifyInstance, deps: Agen
 
       const pending = await store!.listPendingCreatorMessages(jobId);
       const seed = seedPayload(record);
-      const referenceShots = (await store!.listBuildShots(jobId)).filter((shot) => shot.label === 'creator-reference');
+      const referenceShots = (await store!.listBuildShots(jobId, { excludeLabels: DREAM_SHOT_LABELS })).filter(
+        (shot) => shot.label === 'creator-reference',
+      );
       return reply.send({
         title: record.title,
         slug: record.slug ?? null,
@@ -61,7 +64,9 @@ export function registerAgentChannelBriefRoutes(app: FastifyInstance, deps: Agen
       if (!resolved) return reply;
       const { jobId } = resolved;
 
-      const summaries = (await store!.listBuildShots(jobId)).filter((shot) => shot.label === 'creator-reference');
+      const summaries = (await store!.listBuildShots(jobId, { excludeLabels: DREAM_SHOT_LABELS })).filter(
+        (shot) => shot.label === 'creator-reference',
+      );
       const images = await Promise.all(
         summaries.map(async (summary) => {
           const shot = await store!.getBuildShot(jobId, summary.id);

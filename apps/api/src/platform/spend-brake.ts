@@ -15,6 +15,7 @@ const PAUSEABLE = {
   search: { searchPaused: true },
   gate: { gatePaused: true },
   seeding: { seedingMode: 'off' },
+  dreams: { dreamsPaused: true },
   // The platform's coding agent: the biggest line on the bill.
   managed: { managedBuilderMode: 'off' },
 } as const satisfies Record<string, Partial<CreationLimits>>;
@@ -57,7 +58,7 @@ export interface BrakeNotification {
 // Graded by how far over: the agent first, the pennies last.
 export function budgetLanes(spent: number, forecast: number): PauseableLane[] {
   if (spent >= 1.5) return Object.keys(PAUSEABLE) as PauseableLane[];
-  if (spent >= 1) return ['managed', 'seeding', 'gate'];
+  if (spent >= 1) return ['managed', 'seeding', 'dreams', 'gate'];
   if (forecast >= 1) return ['managed'];
   return [];
 }

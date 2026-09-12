@@ -1,0 +1,224 @@
+/* Concept proposals in the thread: two AI frames on the studio's own turn, and the
+   decision dialog they open. Every generated frame carries the "AI concept" badge so it
+   is never read as a screenshot of the game. */
+.studio-proposal {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.studio-proposal-thumbs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  max-width: 420px;
+}
+
+.studio-proposal-thumb {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--panel-bg, transparent);
+  cursor: pointer;
+  overflow: hidden;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+
+.studio-proposal-thumb:hover,
+.studio-proposal-thumb:focus-visible {
+  border-color: var(--accent-blue);
+  outline: none;
+}
+
+.studio-proposal-thumb img,
+.studio-proposal-figure img {
+  display: block;
+  width: 100%;
+  background: #000;
+}
+
+/* Thumbnails crop to a common square so a row of them lines up. */
+.studio-proposal-thumb img {
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+}
+
+/* The dialog is the comparison: cropping there hides HUD and the change itself. */
+.studio-proposal-figure img {
+  height: auto;
+  object-fit: contain;
+}
+
+.studio-proposal-ai {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.studio-proposal-thumb-label {
+  padding: 4px 8px 8px;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.studio-proposal-open {
+  align-self: flex-start;
+  padding: 6px 12px;
+  border: 1px solid var(--accent-blue);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent-blue);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.studio-proposal-muted {
+  margin: 8px 0 0;
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.studio-proposal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.studio-proposal-dialog {
+  position: relative;
+  width: min(960px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  background: var(--panel-bg, #111);
+  color: inherit;
+}
+
+.studio-proposal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.studio-proposal-head h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.studio-proposal-close {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--panel-border);
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.studio-proposal-intro {
+  margin: 8px 0 16px;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.studio-proposal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.studio-proposal-figure {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.studio-proposal-figure.is-current {
+  opacity: 0.85;
+}
+
+.studio-proposal-figure figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 12px 12px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.studio-proposal-pick {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent-blue);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.studio-proposal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.studio-proposal-secondary,
+.studio-proposal-quiet {
+  padding: 8px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.studio-proposal-quiet {
+  border-color: transparent;
+  opacity: 0.7;
+}
+
+@media (max-width: 720px) {
+  .studio-proposal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-proposal-dialog {
+    padding: 16px;
+  }
+}

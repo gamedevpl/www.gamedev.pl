@@ -1,3 +1,4 @@
+import type { CreatorProposal } from '@gamedevpl/contract';
 import type { BuildEvent, BuildEventKind, BuildMediaItem, BuildProgress, BuildStep } from '../../submissionApi.js';
 
 export type PendingRevision = { text: string; at: number };
@@ -18,6 +19,8 @@ export type ActivityEntry = {
   delivered?: boolean;
   // Pictures shown as thumbnails on this row, expandable to full size.
   media?: BuildMediaItem[];
+  // A studio turn carrying concept frames the creator can pick from.
+  proposal?: CreatorProposal;
 };
 
 // Places the build's pictures on the timeline, dated to their moment.
@@ -67,7 +70,12 @@ export function buildActivityFeed(
     })),
     ...(progress?.revisions ?? []).map((revision) =>
       revision.origin === 'studio'
-        ? { kind: 'studio' as const, text: revision.text, at: Date.parse(revision.createdAt) }
+        ? {
+            kind: 'studio' as const,
+            text: revision.text,
+            at: Date.parse(revision.createdAt),
+            ...(revision.proposal ? { proposal: revision.proposal } : {}),
+          }
         : {
             kind: 'revision' as const,
             text: revision.text,

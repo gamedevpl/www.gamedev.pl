@@ -6,6 +6,7 @@ const LANES = [
   { key: 'chatPaused', label: 'chat' },
   { key: 'searchPaused', label: 'search' },
   { key: 'gatePaused', label: 'gate runs' },
+  { key: 'dreamsPaused', label: 'concept art' },
   { key: 'partyPaused', label: 'party hosting' },
 ] as const;
 

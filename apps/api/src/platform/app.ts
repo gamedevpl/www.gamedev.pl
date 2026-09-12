@@ -770,6 +770,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     dispatchQueuedJob: submissionSeams.dispatchQueuedJob,
     regenerateSeedNow: submissionSeams.regenerateSeedNow,
     publishStagedPreviewNow: submissionSeams.publishStagedPreviewNow,
+    runDreamNow: submissionSeams.runDreamNow,
     internalAuthVerifier: createInternalAuthVerifierFromEnv(process.env, 'seedDispatch'),
     ...options.seedDispatchRoutes,
   });

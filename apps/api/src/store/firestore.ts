@@ -58,7 +58,11 @@ import { FirestoreAccessTokensStore } from './slices/access-tokens.js';
 import { FirestoreAccessStore } from './slices/access.js';
 import { FirestoreAgentKeysStore } from './slices/agent-keys.js';
 import { FirestoreBuildLogStore } from './slices/build-log.js';
-import { FirestoreBuildMediaStore } from './slices/build-media.js';
+import {
+  FirestoreBuildMediaStore,
+  type BuildShotCountOptions,
+  type BuildShotListOptions,
+} from './slices/build-media.js';
 import { FirestoreCatalogEnrichmentStore } from './slices/catalog-enrichment.js';
 import { FirestoreCliChatStore, type CliChatRecord } from './slices/cli-chat.js';
 import { FirestoreContributionStore } from './slices/contribution.js';
@@ -69,6 +73,7 @@ import { FirestoreOAuthStore } from './slices/oauth.js';
 import { FirestorePlayerDataStore } from './slices/player-data.js';
 import { FirestorePublicationStore } from './slices/publication.js';
 import { FirestoreGlobalQuotaStore } from './slices/quota-global.js';
+import { FirestoreDreamQuotaStore } from './slices/quota-dreams.js';
 import { FirestoreQuotaStore } from './slices/quota.js';
 import { FirestoreReviewSweepStore } from './slices/review-sweeps.js';
 import { FirestoreReviewStore } from './slices/review.js';
@@ -80,14 +85,14 @@ import type {
   ResolveModerationFlagResult,
 } from './slices/moderation-flags.js';
 
-import { FirestoreRoundBudgetStore } from './slices/round-budget.js';
+import { FirestoreRoundBudgetStore, type DreamClaimRef } from './slices/round-budget.js';
 import { FirestoreRoundsStore } from './slices/rounds.js';
 import { FirestoreSocialStore } from './slices/social.js';
 import { FirestoreSubmissionQueryStore } from './slices/submission-queries.js';
 import { FirestoreSubmissionStore } from './slices/submission.js';
 import { FirestoreTelemetryStore } from './slices/telemetry.js';
 import { FirestoreWorldEntriesStore } from './slices/world-entries.js';
-import type { AssessmentSource, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
+import type { AssessmentSource, CreatorProposal, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
 import { FieldValue, Firestore } from '@google-cloud/firestore';
 
 export class FirestoreStore extends SubmissionFacade implements Store {
@@ -106,6 +111,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   private identityStore: FirestoreIdentityStore;
   private quotaStore: FirestoreQuotaStore;
   private globalQuotaStore: FirestoreGlobalQuotaStore;
+  private dreamQuotaStore: FirestoreDreamQuotaStore;
   private socialStore: FirestoreSocialStore;
   private contributionStore: FirestoreContributionStore;
   private publicationStore: FirestorePublicationStore;
@@ -136,6 +142,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     this.identityStore = new FirestoreIdentityStore(this.db);
     this.quotaStore = new FirestoreQuotaStore(this.db);
     this.globalQuotaStore = new FirestoreGlobalQuotaStore(this.db);
+    this.dreamQuotaStore = new FirestoreDreamQuotaStore(this.db);
     this.socialStore = new FirestoreSocialStore(this.db);
     this.contributionStore = new FirestoreContributionStore(this.db);
     this.publicationStore = new FirestorePublicationStore(this.db);
@@ -336,6 +343,14 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.identityStore.setDigestOptOut(uid, at);
   }
 
+  async setProposalsMuted(uid: string, at: string | null): Promise<void> {
+    return this.identityStore.setProposalsMuted(uid, at);
+  }
+
+  async readProposalsMutedAt(uid: string): Promise<string | null> {
+    return this.identityStore.readProposalsMutedAt(uid);
+  }
+
   async createSubmission(jobId: number, ownerUid: string, title: string): Promise<SubmissionRecord> {
     return this.submissionStore.createSubmission(jobId, ownerUid, title);
   }
@@ -439,6 +454,14 @@ export class FirestoreStore extends SubmissionFacade implements Store {
 
   async setRoundLastGateMetricKey(jobId: number, key: string): Promise<void> {
     return this.roundBudgetStore.setRoundLastGateMetricKey(jobId, key);
+  }
+
+  async claimDreamRun(jobId: number, version: string, at: string): Promise<boolean> {
+    return this.roundBudgetStore.claimDreamRun(jobId, version, at);
+  }
+
+  async finishDreamRun(jobId: number, claim: DreamClaimRef, at: string): Promise<void> {
+    return this.roundBudgetStore.finishDreamRun(jobId, claim, at);
   }
 
   async allocateJobId(): Promise<number> {
@@ -591,7 +614,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.buildMediaStore.appendBuildShot(jobId, shot);
   }
 
-  async listBuildShots(jobId: number, opts?: { limit?: number }): Promise<BuildShotSummary[]> {
+  async listBuildShots(jobId: number, opts?: BuildShotListOptions): Promise<BuildShotSummary[]> {
     return this.buildMediaStore.listBuildShots(jobId, opts);
   }
 
@@ -599,8 +622,8 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.buildMediaStore.getBuildShot(jobId, id);
   }
 
-  async countBuildShots(jobId: number): Promise<number> {
-    return this.buildMediaStore.countBuildShots(jobId);
+  async countBuildShots(jobId: number, opts?: BuildShotCountOptions): Promise<number> {
+    return this.buildMediaStore.countBuildShots(jobId, opts);
   }
 
   async appendBuildPreview(
@@ -634,11 +657,23 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.buildLogStore.appendCreatorMessage(jobId, text, opts);
   }
 
+  async appendProposalMessage(
+    jobId: number,
+    claim: DreamClaimRef,
+    text: string,
+    opts: { textLocalized?: string; locale?: string; proposal: CreatorProposal; ownerUid: string },
+  ): Promise<CreatorMessage | null> {
+    return this.buildLogStore.appendProposalMessage(jobId, claim, text, opts);
+  }
+
   async listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
     return this.buildLogStore.listPendingCreatorMessages(jobId, opts);
   }
 
-  async listCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
+  async listCreatorMessages(
+    jobId: number,
+    opts?: { limit?: number; excludeProposals?: boolean },
+  ): Promise<CreatorMessage[]> {
     return this.buildLogStore.listCreatorMessages(jobId, opts);
   }
 
@@ -824,6 +859,18 @@ export class FirestoreStore extends SubmissionFacade implements Store {
 
   async checkAndIncrementGlobalSeeds(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
     return this.globalQuotaStore.checkAndIncrementGlobalSeeds(dateStr, limit);
+  }
+
+  async getGlobalDreamCount(dateStr: string): Promise<number> {
+    return this.dreamQuotaStore.getGlobalDreamCount(dateStr);
+  }
+
+  async checkAndIncrementGlobalDreams(
+    dateStr: string,
+    limit: number,
+    count?: number,
+  ): Promise<{ allowed: boolean; current: number }> {
+    return this.dreamQuotaStore.checkAndIncrementGlobalDreams(dateStr, limit, count);
   }
 
   async getGlobalBotCallCount(dateStr: string): Promise<number> {

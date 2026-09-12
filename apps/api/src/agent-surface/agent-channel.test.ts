@@ -11,6 +11,7 @@ import type { AgentBackend } from './agent-backend.js';
 import type { GameSeeder } from '../creation/game-seed.js';
 import { InvalidUploadError, type GamesStore } from '../delivery/games-store.js';
 import type { KnowledgeQueryResult } from '../creation/knowledge-search.js';
+import { DREAM_FRAME_SHOT_LABEL, DREAM_SOURCE_SHOT_LABEL } from '../platform/dream-shots.js';
 import { InMemoryStore } from '../platform/store.js';
 import { mintToken } from '../platform/submission-token.js';
 import type { Translator } from '../platform/translate.js';
@@ -993,6 +994,23 @@ describe('agent build channel', () => {
   });
   // A 1x1 PNG — the smallest payload that still carries a real PNG signature.
   const TINY_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+  it('refuses a reserved proposal caption on an agent upload', async () => {
+    // Those captions are excluded from the shot count and the media strip, so an agent
+    // that could set one would have an unbounded, invisible store.
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    app = await createApp(store);
+
+    const minted = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/shot/upload-url',
+      headers: agentHeaders(),
+      payload: { label: DREAM_FRAME_SHOT_LABEL },
+    });
+
+    expect(minted.statusCode).toBe(400);
+  });
 
   it('stores a screenshot via signed PUT, lists it on status, and serves the bytes', async () => {
     const store = new InMemoryStore();
@@ -3397,5 +3415,33 @@ describe('seed regeneration', () => {
     });
 
     expect(res.statusCode).toBe(503);
+  });
+  // NP-1v: proposal frames share the shots collection an external agent reads from.
+  it('still serves the creator reference image after several concept proposals', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    // Explicit clock: the listing window is newest-first, so ordering is the whole point.
+    let minute = 0;
+    const nextAt = () => `2026-09-08T10:${String(minute++).padStart(2, '0')}:00.000Z`;
+    await store.appendBuildShot(ISSUE, { data: 'cmVmZXJlbmNl', label: 'creator-reference', createdAt: nextAt() });
+    // Four proposals write three shots each -- more than the listing window.
+    for (let proposal = 0; proposal < 4; proposal += 1) {
+      await store.appendBuildShot(ISSUE, { data: 'c291cmNl', label: DREAM_SOURCE_SHOT_LABEL, createdAt: nextAt() });
+      await store.appendBuildShot(ISSUE, { data: 'ZnJhbWUx', label: DREAM_FRAME_SHOT_LABEL, createdAt: nextAt() });
+      await store.appendBuildShot(ISSUE, { data: 'ZnJhbWUy', label: DREAM_FRAME_SHOT_LABEL, createdAt: nextAt() });
+    }
+    app = await createApp(store);
+
+    const brief = await app.inject({ method: 'GET', url: '/api/agent/build/brief', headers: agentHeaders() });
+    expect(brief.statusCode).toBe(200);
+    expect(brief.json().referenceImages).toHaveLength(1);
+
+    const images = await app.inject({
+      method: 'GET',
+      url: '/api/agent/build/reference-images',
+      headers: agentHeaders(),
+    });
+    expect(images.statusCode).toBe(200);
+    expect(images.json().images.map((image: { png: string }) => image.png)).toEqual(['cmVmZXJlbmNl']);
   });
 });

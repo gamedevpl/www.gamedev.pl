@@ -57,12 +57,30 @@ export type NotificationPreferences = {
   digest: boolean;
   /** Notification email in general; `false` is the one-click unsubscribe. */
   email: boolean;
+  // Concept proposals in the studio thread; `false` is "ask me less".
+  proposals?: boolean;
 };
 
 export async function fetchNotificationPreferences(): Promise<NotificationPreferences> {
   const response = await fetch(`${API_BASE}/api/me/notification-preferences`, { credentials: 'include' });
   if (!response.ok) throw new Error(`Request failed (${response.status})`);
   return (await response.json()) as NotificationPreferences;
+}
+
+type PreferencesListener = (prefs: NotificationPreferences) => void;
+
+const preferencesListeners = new Set<PreferencesListener>();
+
+/**
+ * Two surfaces carry the same switches -- the bell and the studio's proposal card -- and
+ * each held its own copy, so toggling one left the other showing yesterday's answer until
+ * a reload. Anything that reads a preference subscribes; every write tells them.
+ */
+export function onNotificationPreferencesChanged(listener: PreferencesListener): () => void {
+  preferencesListeners.add(listener);
+  return () => {
+    preferencesListeners.delete(listener);
+  };
 }
 
 /**
@@ -79,5 +97,7 @@ export async function updateNotificationPreferences(
     body: JSON.stringify(changes),
   });
   if (!response.ok) throw new Error(`Request failed (${response.status})`);
-  return (await response.json()) as NotificationPreferences;
+  const prefs = (await response.json()) as NotificationPreferences;
+  for (const listener of preferencesListeners) listener(prefs);
+  return prefs;
 }

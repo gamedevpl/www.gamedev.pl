@@ -48,6 +48,11 @@ import type { IntakeAgent } from './creation/intake-agent.js';
 import { createDispatcher } from './creation/dispatch-build.js';
 import { createResumeBuild, type ResumeOutcome } from './creation/resume-build.js';
 import { createJobReconciler } from './creation/job-reconciler.js';
+import type { DreamJob, DreamRunInput } from './creation/dream-job.js';
+import { createDreamJobFromEnv } from './creation/dream-job-env.js';
+import type { DreamAvailabilityGate } from './creation/dream-availability.js';
+import type { DreamFrameGenerator } from './creation/dream-frames.js';
+import type { NextIdeaGenerator } from './creation/next-ideas.js';
 import { registerHandoffSealRoutes } from './creation/handoff-seal-routes.js';
 import { registerFeedbackRoutes } from './creation/feedback-routes.js';
 import { registerImproveRoutes } from './creation/improve-routes.js';
@@ -124,6 +129,7 @@ import {
 import { InvalidTokenError, verifyToken } from './platform/submission-token.js';
 import { normalizeLocale, type Translator } from './platform/translate.js';
 import { isRateLimited } from './platform/ip-rate-limit.js';
+import { dreamClaimHolds } from './store/slices/round-budget.js';
 
 /**
  * The store slices `registerSubmissionRoutes` actually reaches into — every domain this
@@ -228,6 +234,12 @@ export interface SubmissionRoutesOptions {
   seedProviders?: { providers: string[]; defaultProvider: string };
   // Test seam for the availability gate.
   seedAvailabilityGate?: SeedAvailabilityGate;
+  // Concept proposals after a green preview (dream-job.ts); null disables.
+  dreamJob?: DreamJob | null;
+  // Seams for the default dream job; unused when `dreamJob` is given.
+  dreamFrameGenerator?: DreamFrameGenerator;
+  nextIdeaGenerator?: NextIdeaGenerator;
+  dreamAvailabilityGate?: DreamAvailabilityGate;
   agentChannel?: Pick<
     AgentChannelOptions,
     | 'maxEventsPerBuild'
@@ -402,6 +414,8 @@ export interface SubmissionRoutesHandle {
   // The seed route's other jobs: regenerate a seed, assemble a preview.
   regenerateSeedNow: SeedPipeline['runSeedRegeneration'];
   publishStagedPreviewNow: ((jobId: number) => Promise<unknown>) | null;
+  // Same route, same reason: concept frames need a request's CPU.
+  runDreamNow: (input: { jobId: number; version: string; screenshotPath?: string }) => Promise<string>;
 }
 
 /**
@@ -1305,9 +1319,11 @@ export async function registerSubmissionRoutes(
    */
   const maxDeliveryNudges = options.maxDeliveryNudges ?? 1;
 
+  const dreamJob = resolveDreamJob();
   const { reconcileNativeJob, reconcileGateVerdict } = createJobReconciler({
     store,
     gamesStore: options.agentChannel?.gamesStore,
+    ...(dreamJob ? { onPreviewGateGreen: (input: DreamRunInput) => handOffDream(input) } : {}),
     log: app.log,
     now,
     observeQuietMs,
@@ -1320,6 +1336,71 @@ export async function registerSubmissionRoutes(
     probeGateCrash,
     postGateScreenshot: postGateScreenshotToThread,
   });
+
+  /**
+   * Concept frames take minutes of model calls, and this seam is reached from a status
+   * poll. Cloud Run runs with `--cpu-throttling` (see infra/deploy-api.sh), so work left
+   * running after the response is served can be suspended mid-flight -- and the job claims
+   * the version before it generates, so a suspended attempt would lose that version's
+   * proposal for good. Hand it to the seed route instead, which holds a request open for
+   * exactly this reason. With no dispatcher configured (local, tests) there is no
+   * throttling to dodge, so run it here; when one is configured but refuses, skip and let
+   * the next poll try again rather than start work that cannot finish.
+   *
+   * The reconciler awaits this. Handing off is itself asynchronous -- an identity token,
+   * then the callee's 202 headers -- and a status response that finished first would
+   * suspend the hand-off before the worker request existed.
+   */
+  async function handOffDream(input: DreamRunInput): Promise<void> {
+    const job = dreamJob;
+    if (!job) return;
+    const { record, version, screenshotPath } = input;
+    // The seam fires on every poll while the preview stays green, and the worker only
+    // dedupes once it has started -- so without this the round would spend the seed
+    // route's shared hourly allowance re-handing off work that is already done.
+
+    // The same predicate the claim uses, so a stale claim still reaches the retake.
+    if (dreamClaimHolds(record.dreamRun, version, new Date().toISOString())) return;
+    if (!seedDispatch) {
+      await job.runForVersion(input);
+      return;
+    }
+    const handed = await seedDispatch.enqueue(record.jobId, {
+      action: 'dream',
+      version,
+      ...(screenshotPath ? { screenshotPath } : {}),
+    });
+    if (!handed) {
+      app.log.warn({ jobId: record.jobId, version }, 'dream handoff refused; leaving it for the next poll');
+    }
+  }
+
+  // The seed route's worker for a handed-off dream; never throws.
+  async function runDreamNow(input: { jobId: number; version: string; screenshotPath?: string }): Promise<string> {
+    const job = dreamJob;
+    if (!job) return 'unavailable';
+    const record = await store?.getSubmission(input.jobId);
+    if (!record) return 'no_job';
+    return await job.runForVersion({
+      record,
+      version: input.version,
+      ...(input.screenshotPath ? { screenshotPath: input.screenshotPath } : {}),
+    });
+  }
+
+  function resolveDreamJob(): DreamJob | null {
+    if (options.dreamJob !== undefined) return options.dreamJob;
+    return createDreamJobFromEnv({
+      store,
+      gamesStore: options.agentChannel?.gamesStore,
+      log: app.log,
+      now,
+      dreamAvailabilityGate: options.dreamAvailabilityGate,
+      nextIdeaGenerator: options.nextIdeaGenerator,
+      dreamFrameGenerator: options.dreamFrameGenerator,
+      onPosted: invalidateStatusCache,
+    });
+  }
 
   const { createGame } = createGameCreator({
     store,
@@ -1781,6 +1862,7 @@ export async function registerSubmissionRoutes(
     redispatchQueuedJob,
     dispatchQueuedJob,
     regenerateSeedNow: seedPipeline.runSeedRegeneration,
+    runDreamNow,
     publishStagedPreviewNow: stagedPreviews ? (jobId: number) => stagedPreviews.publishNow(jobId) : null,
   };
 }

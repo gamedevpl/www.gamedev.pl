@@ -15,6 +15,9 @@ import { CompactFeedbackComposer } from './CompactFeedbackComposer.js';
 import './status-feedback.css';
 import './status-composer.css';
 
+// Text seeded into the composer; a picked frame rides along.
+export type ComposerDraft = { text: string; seq: number; attachment?: { name: string; url: string } };
+
 export type BuilderHandoffHandler = () => Promise<void | { pending?: boolean }> | void | { pending?: boolean };
 
 const SENT_RECEIPT_MS = 4500;
@@ -74,7 +77,7 @@ export function FeedbackPanel({
 
   // Only fires when published; a draft revision stays on this thread.
   onPublishedImprove?: (token: string) => void;
-  draft?: { text: string; seq: number } | null;
+  draft?: ComposerDraft | null;
   onDraftConsumed?: () => void;
 }) {
   const { t } = useTranslation();
@@ -100,8 +103,10 @@ export function FeedbackPanel({
   useEffect(() => {
     if (!draft) return;
     setText(draft.text);
+    const attachment = draft.attachment;
     onDraftConsumed?.();
     inputRef.current?.focus();
+    if (attachment) attachmentsApi.addAttachmentFromUrl(attachment.name, attachment.url, { replaces: 'proposal' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft?.seq]);
 
