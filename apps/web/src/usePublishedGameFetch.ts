@@ -8,7 +8,9 @@ function asFetchError(err: unknown): GameFetchError {
 
 const RETRY_STATUSES = new Set([404, 409, 502, 503]);
 const MAX_FETCH_RETRIES = 3;
-export const PUBLISHED_FETCH_RETRY_MS = 4_000;
+// Backs off 1s, 2s, 4s: long enough for a just-written draft to become readable,
+// short enough that a genuinely unknown slug reaches its error state quickly.
+export const PUBLISHED_FETCH_RETRY_MS = 1_000;
 
 export function usePublishedGameFetch(slug: string, attempt = 0) {
   const [game, setGame] = useState<PublishedGame | null>(null);
@@ -38,8 +40,8 @@ export function usePublishedGameFetch(slug: string, attempt = 0) {
           if (cancelled || (err instanceof Error && err.name === 'AbortError')) return;
           const failure = asFetchError(err);
           if (failure.status && RETRY_STATUSES.has(failure.status) && tries < MAX_FETCH_RETRIES) {
+            retryTimer = setTimeout(run, PUBLISHED_FETCH_RETRY_MS * 2 ** tries);
             tries += 1;
-            retryTimer = setTimeout(run, PUBLISHED_FETCH_RETRY_MS);
             return;
           }
           setError(failure);
