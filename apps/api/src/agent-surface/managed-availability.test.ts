@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createManagedAvailabilityGate } from './managed-availability.js';
 import { InMemoryStore } from '../platform/store.js';
 
@@ -8,6 +8,7 @@ function gate(params: {
   store?: InMemoryStore;
   hasPlatformBackend?: boolean;
   ttlMs?: number;
+  peekTtlMs?: number;
   now?: () => number;
   // The common case: one vendor built and selected as the default.
   defaultVendor?: string;
@@ -21,6 +22,7 @@ function gate(params: {
       store,
       hasPlatformBackend,
       ttlMs: params.ttlMs ?? 60_000,
+      ...(params.peekTtlMs === undefined ? {} : { peekTtlMs: params.peekTtlMs }),
       now: params.now,
       ...(hasPlatformBackend
         ? {
@@ -31,6 +33,59 @@ function gate(params: {
     }),
   };
 }
+
+describe('peek reads a creator once per window', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('answers a second peek in the same request without reading again', async () => {
+    const clock = 1_700_000_000_000;
+    const { store, gate: g } = gate({ now: () => clock });
+    const usage = vi.spyOn(store, 'getUsage');
+    const global = vi.spyOn(store, 'getGlobalManagedBuildCount');
+
+    await g.peek('g:creator', today);
+    await g.peek('g:creator', today);
+
+    expect(usage).toHaveBeenCalledTimes(1);
+    expect(global).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads again once the window lapses', async () => {
+    let clock = 1_700_000_000_000;
+    const { store, gate: g } = gate({ now: () => clock, peekTtlMs: 10_000 });
+    const usage = vi.spyOn(store, 'getUsage');
+
+    await g.peek('g:creator', today);
+    clock += 10_000;
+    await g.peek('g:creator', today);
+    expect(usage).toHaveBeenCalledTimes(2);
+  });
+
+  it('never answers one creator with another creator quota', async () => {
+    const { store, gate: g } = gate({});
+    const usage = vi.spyOn(store, 'getUsage');
+    await g.peek('g:one', today);
+    await g.peek('g:two', today);
+    expect(usage).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the window per day, so a rollover is not stale', async () => {
+    const { store, gate: g } = gate({});
+    const usage = vi.spyOn(store, 'getUsage');
+    await g.peek('g:creator', today);
+    await g.peek('g:creator', '2999-01-01');
+    expect(usage).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops every window on a spend, because the global counter moved', async () => {
+    const { store, gate: g } = gate({});
+    await g.peek('g:one', today);
+    await g.checkAndSpend('g:two', today);
+    const usage = vi.spyOn(store, 'getUsage');
+    await g.peek('g:one', today);
+    expect(usage).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('createManagedAvailabilityGate', () => {
   it('reads as coming_soon when this environment has no platform backend at all', async () => {

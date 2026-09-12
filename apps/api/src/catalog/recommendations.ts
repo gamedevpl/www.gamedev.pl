@@ -1,3 +1,4 @@
+import { invalidatePlayAffinity, readPlayAffinityCached } from './affinity-cache.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { PublishedSlugGate } from './published-slugs.js';
@@ -205,6 +206,7 @@ export async function registerRecommendationRoutes(
       return reply.status(204).send();
     }
     await store.recordPlayAffinity(request.user.uid, params.data.slug);
+    invalidatePlayAffinity(store, request.user.uid);
     return reply.status(204).send();
   });
 
@@ -224,7 +226,7 @@ export async function registerRecommendationRoutes(
 
     let affinity: Awaited<ReturnType<Store['listPlayAffinity']>> = [];
     if (request.user && !isBotUid(request.user.uid)) {
-      affinity = await store.listPlayAffinity(request.user.uid);
+      affinity = await readPlayAffinityCached(store, request.user.uid, now);
     }
 
     const ranked = rankRecommendations({

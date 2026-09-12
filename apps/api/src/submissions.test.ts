@@ -5079,9 +5079,9 @@ describe('managed (platform) builder availability', () => {
  */
 describe('status route under store pressure', () => {
   /**
-   * The route reads the store twice per request: an abandoned-check that deliberately
-   * sits outside the cache, then the coalesced refresh. `failOnCall` targets the second
-   * of those, because the stale-serve being tested only wraps the refresh.
+   * The route reads the record once per cache miss, and that read serves both the
+   * abandoned check and the coalesced refresh. `failOnCall` targets it, because the
+   * stale-serve being tested wraps the whole derivation.
    */
   function spyStore(opts: { onGet?: () => Promise<void>; failOnCall?: number } = {}) {
     const inner = new InMemoryStore();
@@ -5092,22 +5092,29 @@ describe('status route under store pressure', () => {
       if (opts.onGet) await opts.onGet();
       return inner.getSubmission(jobId);
     });
+    // Once per derivation, so it counts refreshes rather than reads.
+    const listCreatorMessages = vi.fn(inner.listCreatorMessages.bind(inner));
     const store = new Proxy(inner, {
-      get: (target, prop) => (prop === 'getSubmission' ? getSubmission : Reflect.get(target, prop)),
+      get: (target, prop) => {
+        if (prop === 'getSubmission') return getSubmission;
+        if (prop === 'listCreatorMessages') return listCreatorMessages;
+        return Reflect.get(target, prop);
+      },
     }) as Store;
-    return { store, getSubmission };
+    return { store, inner, getSubmission, listCreatorMessages };
   }
 
   it('coalesces concurrent cache misses into a single derivation', async () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => (release = resolve));
-    const { store, getSubmission } = spyStore({ onGet: () => gate });
+    const { store, inner, getSubmission, listCreatorMessages } = spyStore({ onGet: () => gate });
     const { app } = await createApp({
       githubClient: createGithubClientStub({}).githubClient,
       store,
       submissionTokenSecret: secret,
     });
     const token = mintToken(123, secret);
+    await inner.createSubmission(123, 'g:owner', 'Coalesced');
 
     const polls = Promise.all([
       app.inject({ method: 'GET', url: `/api/submissions/${token}` }),
@@ -5118,31 +5125,33 @@ describe('status route under store pressure', () => {
     release();
     const responses = await polls;
 
-    // Three abandoned-checks + one coalesced refresh + three heartbeat overlays
-    // (attachBuildEvents runs per response). A second refresh would mean no coalescing.
-    expect(getSubmission).toHaveBeenCalledTimes(7);
+    // Coalescing is asserted directly now: one derivation for three polls.
+    expect(listCreatorMessages).toHaveBeenCalledTimes(1);
+    // Three seed reads plus three heartbeat overlays; the refresh reuses the seed.
+    expect(getSubmission).toHaveBeenCalledTimes(6);
     for (const response of responses) expect(response.statusCode).toBe(200);
 
     await app.close();
   });
 
   it('keeps the two locales apart while coalescing', async () => {
-    const { store, getSubmission } = spyStore();
+    const { store, inner, getSubmission, listCreatorMessages } = spyStore();
     const { app } = await createApp({
       githubClient: createGithubClientStub({}).githubClient,
       store,
       submissionTokenSecret: secret,
     });
     const token = mintToken(123, secret);
+    await inner.createSubmission(123, 'g:owner', 'Two Locales');
 
     await Promise.all([
       app.inject({ method: 'GET', url: `/api/submissions/${token}?locale=en` }),
       app.inject({ method: 'GET', url: `/api/submissions/${token}?locale=pl` }),
     ]);
 
-    // Two keys → two refreshes (a shared one would hand a Polish reader English),
-    // plus two abandoned-checks and two heartbeat overlays.
-    expect(getSubmission).toHaveBeenCalledTimes(6);
+    // Two keys → two derivations; a shared one would hand a Polish reader English.
+    expect(listCreatorMessages).toHaveBeenCalledTimes(2);
+    expect(getSubmission).toHaveBeenCalledTimes(4);
 
     await app.close();
   });
@@ -5176,7 +5185,7 @@ describe('status route under store pressure', () => {
   });
 
   it('still 502s when it fails with nothing cached to fall back on', async () => {
-    const { store } = spyStore({ failOnCall: 2 });
+    const { store } = spyStore({ failOnCall: 1 });
     const { app } = await createApp({
       githubClient: createGithubClientStub({}).githubClient,
       store,
