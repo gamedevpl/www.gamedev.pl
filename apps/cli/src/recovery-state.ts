@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { deliverySession, type DeliverySession } from './submit-session.js';
@@ -44,4 +45,30 @@ export async function matchingStaged(api: ApiClient, slug: string, local: TreeFi
 
 export function recoveryPaths(root: string): string[] {
   return JSON.parse(readFileSync(marker(root), 'utf8')).paths;
+}
+
+const treeDigest = (files: TreeFile[]) =>
+  createHash('sha256')
+    .update(
+      JSON.stringify(files.map(({ path, content }) => [path, content]).sort((a, b) => a[0]!.localeCompare(b[0]!))),
+    )
+    .digest('hex');
+export function markRecoveryDelivery(root: string, files: TreeFile[]): void {
+  const saved = JSON.parse(readFileSync(marker(root), 'utf8'));
+  saved.deliveryDigest = treeDigest(files);
+  writeFileSync(marker(root), JSON.stringify(saved), { mode: 0o600 });
+}
+export async function reconcileRecoveryDelivery(
+  api: ApiClient,
+  root: string,
+  slug: string,
+  tree: { version: string; files: TreeFile[] },
+): Promise<boolean> {
+  const saved = JSON.parse(readFileSync(marker(root), 'utf8'));
+  if (saved.version === tree.version || !saved.deliveryDigest || saved.deliveryDigest !== treeDigest(tree.files))
+    return false;
+  const current = await deliverySession(api, slug);
+  if (!current || current.jobId !== saved.session.jobId || current.generation !== saved.session.generation)
+    return false;
+  return true;
 }
