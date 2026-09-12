@@ -8,8 +8,8 @@ import { InMemoryStore } from './store.js';
 import {
   APP_CSP_REPORT_ONLY,
   CSP_REPORT_PATH,
-  FRAME_ANCESTORS_JS13K,
   FRAME_ANCESTORS_NONE,
+  FRAME_ANCESTORS_PLAY,
   isPlayPermalinkPath,
   PERMISSIONS_POLICY,
   REFERRER_POLICY,
@@ -57,16 +57,16 @@ describe('security headers', () => {
   });
 
   it.each(['/play/unicorn-snap', '/play/unicorn-snap?ref=js13k', '/ay/rainbow-surfer'])(
-    'lets js13k frame the play permalink at %s',
+    'lets any parent frame the play permalink at %s',
     async (url) => {
       const res = await app.inject({ method: 'GET', url });
       expect(res.statusCode).toBe(200);
-      expect(res.headers['content-security-policy']).toBe(FRAME_ANCESTORS_JS13K);
+      expect(res.headers['content-security-policy']).toBe(FRAME_ANCESTORS_PLAY);
       expect(res.headers['x-frame-options']).toBeUndefined();
     },
   );
 
-  it('does not let js13k frame a typo play path', async () => {
+  it('does not let a parent frame a typo play path', async () => {
     const res = await app.inject({ method: 'GET', url: '/play/' });
     expect(res.headers['content-security-policy']).toBe(FRAME_ANCESTORS_NONE);
     expect(res.headers['x-frame-options']).toBe(X_FRAME_OPTIONS);
@@ -156,7 +156,7 @@ describe('security headers', () => {
 });
 
 describe('isPlayPermalinkPath', () => {
-  it('accepts the catalog play permalinks js13k iframes', () => {
+  it('accepts catalog play permalinks a parent may iframe', () => {
     expect(isPlayPermalinkPath('/play/unicorn-snap')).toBe(true);
     expect(isPlayPermalinkPath('/play/rainbow-surfer?x=1')).toBe(true);
     expect(isPlayPermalinkPath('/ai/seventh-color/')).toBe(true);

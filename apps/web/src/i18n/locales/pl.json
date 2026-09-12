@@ -1207,6 +1207,12 @@
       "again": "Jeszcze raz"
     }
   },
+  "framedPlay": {
+    "headline": "Otwórz tę grę w nowym oknie",
+    "sub": "Ta strona została otwarta wewnątrz innej witryny. Zagraj na gamedev.pl — ta sama gra, na pełnym ekranie.",
+    "openNew": "Otwórz w nowym oknie",
+    "openHere": "Otwórz tutaj"
+  },
   "betaInvite": {
     "headline": "Otrzymujesz zaproszenie do zamkniętej bety.",
     "sub": "Ten link jest dla jednej osoby. Zaloguj się na konto, którego chcesz używać.",

@@ -88,9 +88,9 @@ beta:approve` or the env allowlists (`BETA_ALLOWED_EMAILS` /
 
 Promotional play links are managed separately in **`/admin/limits`**. The operator enters
 published slugs in the **Promotional game links** panel; those `/play/<slug>` routes and
-their anonymous play telemetry bypass the beta wall without opening the catalog. js13kGames
-director's-cut entries iframe those same permalinks; the play-path CSP exception in
-[`security-model.md`](./security-model.md) is what lets that overlay load.
+their anonymous play telemetry bypass the beta wall without opening the catalog. A parent
+that iframes `/play/<slug>` is allowed to connect; the SPA shows an open-elsewhere
+interstitial rather than the game (see [`security-model.md`](./security-model.md)).
 
 ## Tests
 

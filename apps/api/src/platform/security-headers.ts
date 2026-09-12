@@ -6,8 +6,8 @@ export const X_CONTENT_TYPE_OPTIONS = 'nosniff';
 export const REFERRER_POLICY = 'strict-origin-when-cross-origin';
 export const STRICT_TRANSPORT_SECURITY = 'max-age=31536000';
 export const FRAME_ANCESTORS_NONE = "frame-ancestors 'none'";
-// js13k director's-cut iframes /play/<slug> from its catalog origin.
-export const FRAME_ANCESTORS_JS13K = 'frame-ancestors https://js13kgames.com https://www.js13kgames.com';
+// Play permalinks may be framed; SPA shows the interstitial.
+export const FRAME_ANCESTORS_PLAY = 'frame-ancestors *';
 export const X_FRAME_OPTIONS = 'DENY';
 // Same play-permalink grammar as spa-paths.ts PLAY_PREFIX_PATTERN.
 const PLAY_PERMALINK = /^\/(?:play|ay|ai)\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -124,7 +124,7 @@ export function registerSecurityHeaders(app: FastifyInstance, options: SecurityH
     // A route that wrote its own CSP owns its embedding story.
     if (!reply.hasHeader('content-security-policy')) {
       if (isPlayPermalinkPath(request.url)) {
-        reply.header('content-security-policy', FRAME_ANCESTORS_JS13K);
+        reply.header('content-security-policy', FRAME_ANCESTORS_PLAY);
       } else {
         reply.header('content-security-policy', FRAME_ANCESTORS_NONE);
         setIfAbsent(reply, 'x-frame-options', X_FRAME_OPTIONS);

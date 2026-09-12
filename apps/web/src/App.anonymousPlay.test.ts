@@ -73,6 +73,7 @@ describe('anonymous visitors during closed beta', () => {
     localStorage.clear();
     sessionStorage.clear();
     window.history.pushState(null, '', '/');
+    Object.defineProperty(window, 'parent', { configurable: true, value: window });
     vi.restoreAllMocks();
   });
 
@@ -119,5 +120,21 @@ describe('anonymous visitors during closed beta', () => {
       true,
     );
     expect(vi.mocked(globalThis.fetch).mock.calls.some((call) => String(call[0]).endsWith('/api/catalog'))).toBe(false);
+  });
+
+  it('shows an open-elsewhere interstitial when play is framed, not the game', async () => {
+    mockApi(['airtime']);
+    Object.defineProperty(window, 'parent', { configurable: true, value: {} });
+    window.history.pushState(null, '', '/play/airtime');
+
+    const container = await renderApp();
+
+    expect(container.querySelector('.framed-play')).not.toBeNull();
+    expect(container.querySelector('.stage')).toBeNull();
+    expect(container.querySelector('a[target="_blank"]')?.getAttribute('href')).toBe('/play/airtime');
+    expect(container.querySelector('a[target="_top"]')?.getAttribute('href')).toBe('/play/airtime');
+    expect(vi.mocked(globalThis.fetch).mock.calls.some((call) => String(call[0]).endsWith('/api/games/airtime'))).toBe(
+      false,
+    );
   });
 });

@@ -131,12 +131,13 @@ consent and device pages, the CLI page — additionally carry:
 
 - `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY` on HTML
   documents, **except** the play permalink (`/play/<slug>` and the `/ay/` `/ai/` aliases).
-  Those answer js13kGames' director's-cut iframe (`dc` on the catalog page) with
-  `frame-ancestors https://js13kgames.com https://www.js13kgames.com` and no
-  `X-Frame-Options` — `DENY` would still block the host CSP allows. Login, admin, studio,
-  OAuth, and `/` stay denied. Games themselves are not top-level documents here: the shell
-  renders them from `blob:`/`srcdoc` in the sandboxed iframe, which no response header
-  reaches. The sandboxed build preview that the studio frames by URL
+  Those allow any parent (`frame-ancestors *`) and omit `X-Frame-Options` — `DENY` would
+  still block a host CSP allows. The SPA never loads the game in that frame: it shows an
+  interstitial (open in a new window, or `target="_top"`) so a third-party page cannot
+  sit on the theater. Login, admin, studio, OAuth, and `/` stay denied. Games themselves
+  are not top-level documents here: the shell renders them from `blob:`/`srcdoc` in the
+  sandboxed iframe, which no response header reaches. The sandboxed build preview that
+  the studio frames by URL
   (`delivery/creator-media.ts`) writes its own policy and deliberately omits `frame-ancestors`:
   the web app may live on a different origin than the API (`VITE_API_BASE_URL`, and every
   dev setup), and the rule would block the studio from framing its own preview there. A route
@@ -171,9 +172,10 @@ credentials operated by gamedev.pl. Historical details are available in Git hist
 
 - Games render only in `sandbox="allow-scripts allow-pointer-lock"` without `allow-same-origin`.
 - HTML documents served by the app carry `frame-ancestors 'none'` / `X-Frame-Options: DENY`
-  unless the route wrote its own CSP or is a play permalink (js13k director's-cut hosts
-  only); the game iframe's sandbox is never relaxed to make a header fit, and the app-level
-  CSP stays report-only until its reports say otherwise.
+  unless the route wrote its own CSP or is a play permalink (`frame-ancestors *`, and the
+  SPA shows an interstitial rather than the game); the game iframe's sandbox is never
+  relaxed to make a header fit, and the app-level CSP stays report-only until its reports
+  say otherwise.
 - The game iframe's `allow=` delegation is pinned to exactly
   `accelerometer; gyroscope; magnetometer` (opt-in GameKit tilt) and never grows —
   asserted by `apps/web/src/GameFrame.sandbox.test.ts`. In particular it never includes
