@@ -1385,15 +1385,23 @@ export async function registerSubmissionRoutes(
   // varies by language is resolved per-request in `attachBuildEvents`, from text the
   // agent already sent. `cacheKey` still carries the locale so existing entries and
   // `invalidateStatusCache`'s prefix scan keep working.
-  async function refreshStatus(jobId: number, cacheKey: string, token: string): Promise<SubmissionStatusResponse> {
+  async function refreshStatus(
+    jobId: number,
+    cacheKey: string,
+    token: string,
+    // The caller already read it to answer `abandonedAt`; reading it twice is a read.
+    seed?: { record: SubmissionRecord | null | undefined; epoch: number },
+  ): Promise<SubmissionStatusResponse> {
     const existing = statusRefreshes.get(cacheKey);
     if (existing) return existing;
 
     const epochAtStart = statusCacheEpoch.get(jobId) ?? 0;
+    // A seed read before an invalidation would reseal the window it just dropped.
+    const usable = seed && seed.epoch === epochAtStart ? seed : undefined;
     const refresh = (async () => {
       // Every job answers from its own record: there is no issue to read, and the
       // GitHub round-trip it used to need is gone with the path that needed it.
-      let record = await store?.getSubmission(jobId);
+      let record = usable ? usable.record : await store?.getSubmission(jobId);
       if (record) {
         // Two things can have moved the job since the last poll, and they own different
         // stretches of it: the agent's own session up to delivery, our gate after it.
@@ -1476,16 +1484,16 @@ export async function registerSubmissionRoutes(
       // An abandoned build is terminal and self-declared: answer from the record
       // rather than deriving from GitHub, where a closed issue reads as
       // "needs_changes" — which would tell the creator the opposite of the truth.
-      if (store) {
-        const record = await store.getSubmission(jobId);
-        if (record?.abandonedAt) {
-          return reply.send({ status: 'abandoned' });
-        }
-      }
-
       let status: SubmissionStatusResponse;
       try {
-        status = await refreshStatus(jobId, cacheKey, token);
+        // One read serves the abandoned check and the refresh below.
+        const epochBeforeSeed = statusCacheEpoch.get(jobId) ?? 0;
+        const record = store ? await store.getSubmission(jobId) : undefined;
+        const moved = (statusCacheEpoch.get(jobId) ?? 0) !== epochBeforeSeed;
+        if (!moved && record?.abandonedAt) {
+          return reply.send({ status: 'abandoned' });
+        }
+        status = await refreshStatus(jobId, cacheKey, token, { record, epoch: epochBeforeSeed });
       } catch (error) {
         // The refresh is several GitHub reads, and GitHub rate-limits the whole token
         // at once — so this throws in bursts, for everyone watching a build, exactly

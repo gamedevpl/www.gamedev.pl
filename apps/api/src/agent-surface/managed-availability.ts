@@ -2,6 +2,7 @@
 
 // Reuses the creation-limits document and TTL cache; see creation-limits.ts.
 
+import { rememberBounded } from '../platform/bounded-map.js';
 import { BOT_UID_PREFIX, type CreationLimits, type Store } from '../platform/store.js';
 import { botAllowanceAvailable } from './managed-bot-availability.js';
 
@@ -23,6 +24,7 @@ export interface ManagedAvailabilityOptions {
   // Absent only in tests with no store; caps and mode are skipped.
   store?: Store;
   now?: () => number;
+  peekTtlMs?: number;
   ttlMs?: number;
   // Whether the registry's `platform` backend is actually wired.
   hasPlatformBackend: boolean;
@@ -46,10 +48,14 @@ function bypassesBreaker(uid: string): boolean {
   return uid.startsWith(BOT_UID_PREFIX);
 }
 
+const DEFAULT_MANAGED_PEEK_TTL_MS = 10_000;
+const MAX_PEEKED_CREATORS = 500;
+
 export function createManagedAvailabilityGate(options: ManagedAvailabilityOptions): ManagedAvailabilityGate {
   const { store, hasPlatformBackend, configuredVendors, defaultVendor } = options;
   const now = options.now ?? Date.now;
   const ttlMs = options.ttlMs ?? DEFAULT_MANAGED_AVAILABILITY_TTL_MS;
+  const peekTtlMs = options.peekTtlMs ?? DEFAULT_MANAGED_PEEK_TTL_MS;
   const logWarn = options.logWarn ?? (() => {});
 
   let cache: { value: CreationLimits | null; expiresAt: number } | null = null;
@@ -150,9 +156,31 @@ export function createManagedAvailabilityGate(options: ManagedAvailabilityOption
     return defaultVendor && configuredVendors?.has(defaultVendor) ? defaultVendor : undefined;
   }
 
+  // A status poll peeks twice per request for a daily counter.
+  const peeked = new Map<string, { expiresAt: number; value: ManagedAvailability }>();
+  let spends = 0;
+
+  async function peek(uid: string, dateStr: string): Promise<ManagedAvailability> {
+    const key = `${uid}|${dateStr}`;
+    const hit = peeked.get(key);
+    if (hit && hit.expiresAt > now()) return hit.value;
+    const spendsAtStart = spends;
+    const value = await resolve(uid, dateStr, false);
+    // A spend landed mid-read, so this answer is behind.
+    if (spends === spendsAtStart) {
+      rememberBounded(peeked, key, { expiresAt: now() + peekTtlMs, value }, MAX_PEEKED_CREATORS);
+    }
+    return value;
+  }
+
   return {
-    peek: (uid, dateStr) => resolve(uid, dateStr, false),
-    checkAndSpend: (uid, dateStr) => resolve(uid, dateStr, true),
+    peek,
+    // Spending moves the global counter, so nobody's peek survives it.
+    checkAndSpend: async (uid, dateStr) => {
+      spends += 1;
+      peeked.clear();
+      return resolve(uid, dateStr, true);
+    },
     resolveVendor,
   };
 }
