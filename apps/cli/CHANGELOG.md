@@ -15,6 +15,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 - Recalling slash commands keeps arrow keys available for history and restores your unfinished input (#1233).
 - Agent output hides empty Codex item lifecycle events instead of printing `item.completed` (#1233).
+- Explain a delivery refused for its wording, and tell a paused content check apart from a rejection.
 
 ## 0.13.1 — 2026-09-11
 

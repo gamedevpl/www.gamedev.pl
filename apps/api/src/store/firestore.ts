@@ -72,6 +72,10 @@ import { FirestoreGlobalQuotaStore } from './slices/quota-global.js';
 import { FirestoreQuotaStore } from './slices/quota.js';
 import { FirestoreReviewSweepStore } from './slices/review-sweeps.js';
 import { FirestoreReviewStore } from './slices/review.js';
+import { FirestoreModerationFlagStore } from './slices/moderation-flags.js';
+import type { ModerationFlag } from './records/moderation-flag.js';
+import type { RaiseModerationFlagInput, ResolveModerationFlagInput } from './slices/moderation-flags.js';
+
 import { FirestoreRoundBudgetStore } from './slices/round-budget.js';
 import { FirestoreRoundsStore } from './slices/rounds.js';
 import { FirestoreSocialStore } from './slices/social.js';
@@ -93,6 +97,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
   private agentKeysStore: FirestoreAgentKeysStore;
   private accessStore: FirestoreAccessStore;
   private reviewStore: FirestoreReviewStore;
+  private moderationFlagStore: FirestoreModerationFlagStore;
   private reviewSweepStore: FirestoreReviewSweepStore;
   private identityStore: FirestoreIdentityStore;
   private quotaStore: FirestoreQuotaStore;
@@ -122,6 +127,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     this.agentKeysStore = new FirestoreAgentKeysStore(this.db);
     this.accessStore = new FirestoreAccessStore(this.db);
     this.reviewStore = new FirestoreReviewStore(this.db);
+    this.moderationFlagStore = new FirestoreModerationFlagStore(this.db);
     this.reviewSweepStore = new FirestoreReviewSweepStore(this.db);
     this.identityStore = new FirestoreIdentityStore(this.db);
     this.quotaStore = new FirestoreQuotaStore(this.db);
@@ -1077,6 +1083,22 @@ export class FirestoreStore extends SubmissionFacade implements Store {
 
   async countPlayerFeedback(slug: string): Promise<number> {
     return this.socialStore.countPlayerFeedback(slug);
+  }
+
+  async raiseModerationFlag(input: RaiseModerationFlagInput): Promise<ModerationFlag> {
+    return this.moderationFlagStore.raiseModerationFlag(input);
+  }
+
+  async getModerationFlag(id: string): Promise<ModerationFlag | null> {
+    return this.moderationFlagStore.getModerationFlag(id);
+  }
+
+  async listModerationFlags(opts?: { status?: 'open' | 'resolved'; limit?: number }): Promise<ModerationFlag[]> {
+    return this.moderationFlagStore.listModerationFlags(opts);
+  }
+
+  async resolveModerationFlag(id: string, input: ResolveModerationFlagInput): Promise<ModerationFlag | null> {
+    return this.moderationFlagStore.resolveModerationFlag(id, input);
   }
 
   async upsertGameAssessment(

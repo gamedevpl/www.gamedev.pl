@@ -72,6 +72,10 @@ import { InMemoryGlobalQuotaStore } from './slices/quota-global.js';
 import { InMemoryQuotaStore } from './slices/quota.js';
 import { InMemoryReviewSweepStore } from './slices/review-sweeps.js';
 import { InMemoryReviewStore } from './slices/review.js';
+import { InMemoryModerationFlagStore } from './slices/moderation-flags.js';
+import type { ModerationFlag } from './records/moderation-flag.js';
+import type { RaiseModerationFlagInput, ResolveModerationFlagInput } from './slices/moderation-flags.js';
+
 import { InMemoryRoundBudgetStore } from './slices/round-budget.js';
 import { InMemoryRoundsStore } from './slices/rounds.js';
 import { InMemorySocialStore } from './slices/social.js';
@@ -100,6 +104,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   private notificationsStore = new InMemoryNotificationsStore();
   private socialStore = new InMemorySocialStore();
   private reviewStore = new InMemoryReviewStore();
+  private moderationFlagStore = new InMemoryModerationFlagStore();
   private reviewSweepStore = new InMemoryReviewSweepStore();
   private playerDataStore = new InMemoryPlayerDataStore();
   private worldEntriesStore = new InMemoryWorldEntriesStore();
@@ -996,6 +1001,22 @@ export class InMemoryStore extends SubmissionFacade implements Store {
 
   async countPlayerFeedback(slug: string): Promise<number> {
     return this.socialStore.countPlayerFeedback(slug);
+  }
+
+  async raiseModerationFlag(input: RaiseModerationFlagInput): Promise<ModerationFlag> {
+    return this.moderationFlagStore.raiseModerationFlag(input);
+  }
+
+  async getModerationFlag(id: string): Promise<ModerationFlag | null> {
+    return this.moderationFlagStore.getModerationFlag(id);
+  }
+
+  async listModerationFlags(opts?: { status?: 'open' | 'resolved'; limit?: number }): Promise<ModerationFlag[]> {
+    return this.moderationFlagStore.listModerationFlags(opts);
+  }
+
+  async resolveModerationFlag(id: string, input: ResolveModerationFlagInput): Promise<ModerationFlag | null> {
+    return this.moderationFlagStore.resolveModerationFlag(id, input);
   }
 
   async upsertGameAssessment(

@@ -2,7 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from '../../PixelIcon.js';
 import { playPath } from '../../core/router.js';
-import { setDraftShared, type StudioGame } from '../../studioApi.js';
+import { setDraftShared, type StudioApiError, type StudioGame } from '../../studioApi.js';
+
+// Refusals the creator can act on, not generic failures.
+const SHARE_REFUSAL_KEYS: Record<string, string> = {
+  gate_red: 'studioPanel.share.gateRed',
+  gate_pending: 'studioPanel.share.gatePending',
+  nothing_delivered: 'studioPanel.share.nothingDelivered',
+};
 
 // Who can play before publish — off until the creator opts in.
 
@@ -51,10 +58,11 @@ export function DraftShareControl({
       await setDraftShared(game.token, next);
       if (!mountedRef.current) return;
       onSharedChange?.(next);
-    } catch {
+    } catch (failure) {
       if (!mountedRef.current) return;
       setShared(!next);
-      setError(t('studioPanel.share.error'));
+      const code = (failure as StudioApiError)?.code;
+      setError(t(SHARE_REFUSAL_KEYS[code ?? ''] ?? 'studioPanel.share.error'));
     } finally {
       if (mountedRef.current) setBusy(false);
     }

@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { basename, dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { logModerationRejection, MODERATION_REJECTED_MSG , MODERATION_UNAVAILABLE_MSG } from './moderation-metrics.js';
+import { logModerationRejection, MODERATION_REJECTED_MSG, MODERATION_UNAVAILABLE_MSG } from './moderation-metrics.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -111,6 +111,7 @@ describe('every moderating module reports its rejections', () => {
       'creation/improve-routes.ts',
       'creation/refine.ts',
       'creation/remix.ts',
+      'delivery/delivery-moderation.ts',
       'notifications/contact.ts',
       'realtime/worlds.ts',
     ]);

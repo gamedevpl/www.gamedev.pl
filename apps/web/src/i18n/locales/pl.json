@@ -664,7 +664,10 @@
       "off": "Wył.",
       "hintOff": "Na razie tylko Ty możesz zagrać w tę grę. Włącz, aby każdy z linkiem mógł spróbować — i tak nie trafi do katalogu.",
       "hintOn": "Każdy z tym linkiem może zagrać w najnowszą wersję. To ten sam link, który gra zachowa po publikacji, więc nie trzeba wysyłać go ponownie.",
-      "error": "Nie udało się tego teraz zmienić. Spróbuj ponownie za chwilę."
+      "error": "Nie udało się tego teraz zmienić. Spróbuj ponownie za chwilę.",
+      "gateRed": "Ten build nie przeszedł testów, a udostępniony link jest publiczny. Popraw go, dostarcz ponownie i wtedy udostępnij.",
+      "gatePending": "Testy tego buildu jeszcze trwają. Udostępnianie otworzy się, gdy wyjdą na zielono.",
+      "nothingDelivered": "Nie ma jeszcze czego grać. Najpierw dostarcz build, potem udostępnij link."
     },
     "playtest": {
       "hint": "Zagraj, wstrzymaj w momencie wartym zmiany i wyślij prośbę z tym widokiem oraz sygnałami z sesji.",

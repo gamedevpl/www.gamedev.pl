@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { createSharedDraftGate, sharedDraftVersion } from './draft-share-gate.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
 import { InvalidTokenError, verifyToken } from '../platform/submission-token.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
@@ -31,6 +32,7 @@ export async function registerDraftPreviewRoutes(
   options: DraftPreviewRoutesOptions,
 ): Promise<DraftPreviewRoutesHandle> {
   const { store, gamesStore, now, submissionTokenSecret, githubConfigured, checkUserAccess } = options;
+  const shareGate = createSharedDraftGate({ gamesStore, now });
   const maxCachedDraftPreviews = options.maxCachedDraftPreviews ?? 50;
 
   // Cached per issue; coalesces misses and serves stale on refresh failure.
@@ -56,9 +58,13 @@ export async function registerDraftPreviewRoutes(
     const record = await store.getSubmissionBySlug(slug);
     // Abandoned builds are unplayable, even by their own creator.
     if (!record || record.abandonedAt) return false;
-    if (record.draftSharedAt) return true;
     const uid = request.user?.uid;
-    return Boolean(uid && uid === record.ownerUid);
+    // The owner sees their own red build; a stranger never does.
+    if (uid && uid === record.ownerUid) return true;
+    if (!record.draftSharedAt) return false;
+    const version = sharedDraftVersion(record);
+    // The flip checks too, but deliveries land after it.
+    return Boolean(version && (await shareGate.isGreen(slug, version)));
   }
 
   // Serves the gate's own bundle, never raw delivered sources.
