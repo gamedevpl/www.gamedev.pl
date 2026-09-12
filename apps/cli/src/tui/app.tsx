@@ -12,10 +12,12 @@ export function ReplApp({
   session,
   color,
   historyOffset = 0,
+  openPreview,
 }: {
   session: TuiSession;
   color: boolean;
   historyOffset?: number;
+  openPreview?: (url: string) => void;
 }) {
   const [state, setState] = useState<TuiState>(session.get);
   const completion = useCommandCompletion(state, session);
@@ -31,6 +33,10 @@ export function ReplApp({
   }, [stdout]);
   useInput((input, key) => {
     if (state.mode === 'busy') {
+      if (!key.ctrl && !key.meta && input.toLowerCase() === 'o' && state.previewUrl) {
+        openPreview?.(state.previewUrl);
+        return;
+      }
       if (key.ctrl && input === 'c') session.cancel();
       return;
     }
@@ -102,7 +108,13 @@ export function ReplApp({
         ))}
       </Box>
       {state.mode === 'busy' ? (
-        <BusyPanel activity={state.activity} since={state.busySince} lastOutputAt={state.lastOutputAt} color={color} />
+        <BusyPanel
+          activity={state.activity}
+          since={state.busySince}
+          lastOutputAt={state.lastOutputAt}
+          color={color}
+          previewAvailable={Boolean(state.previewUrl)}
+        />
       ) : (
         <Box flexDirection="column" flexShrink={0} borderStyle={border} borderColor={accent} paddingX={1}>
           {state.mode === 'pick' ? (

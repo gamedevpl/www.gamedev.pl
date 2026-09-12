@@ -188,11 +188,21 @@ That last sentence is a claim about the shell, so the shell has to honour it. A 
 that reaches a final reason disposes itself, and a disposed one left installed in the
 bridge is worse than none at all: admission refuses to start because a client already
 exists, and every input goes to a socket that is never going to open again. So the bridge
-drops the link when it closes for good, and rebuilds it on the next input — but only when
-the reason was `idle`. That is the one final reason a player is expected to come back
-from, and playing is how they say so. `kicked` and `bad_ticket` are decisions about the
-player rather than about their attention; redialling those on a keypress would be a loop
-that spends a request per key for as long as the tab is open.
+drops the link when it closes for good, and accepts a fresh `zone:hello` — or rebuilds on
+an input — but only when the reason was `idle`. That is the one final reason a player is
+expected to come back from, and playing is how they say so. `kicked` and `bad_ticket` are
+decisions about the player rather than about their attention; redialling those on a
+keypress would be a loop that spends a request per key for as long as the tab is open.
+
+**The game has to do the asking, and that is easy to miss.** Being _able_ to re-admit is
+not the same as being asked to, and the bridge is only ever asked by the thing inside the
+frame. GameKit's zone module settles offline on a close and then posts to the host only
+while it is live — so for one release the platform stood ready to hand back a seat that
+nothing would ever request, and a reaped player kept playing a world nobody else could
+see until they reloaded. The games-repo half now remembers an `idle` close as a seat to
+reclaim and posts a fresh `zone:hello` on the next input, once per retirement. Anything
+else written against this bridge has to do the same; re-admission is offered here, never
+initiated.
 
 The input that triggers the rebuild is itself lost, and that is not a gap to close later.
 An input is an intent about a moment (§5), and by the time a seat comes back the moment it

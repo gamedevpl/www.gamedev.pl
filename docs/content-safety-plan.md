@@ -107,9 +107,23 @@ BEFORE quota is consumed:
 
 ## Layer 1b — LLM moderation via Vertex AI (owner decided 2026-07-23)
 
-Decision: **Vertex AI on the gamedevpl project**, not a direct Anthropic/OpenAI
-integration. Rationale: ambient IAM auth via the Cloud Run runtime SA — **no API
-key exists anywhere** (same pattern as Firestore); single GCP bill; Gemini
+> **Amended 2026-09-12.** Vertex remains the classifier. What changed is what happens
+> when it cannot answer: a 429 from Google's global endpoint stopped creation twice in
+> one evening, with project quota nowhere near its limit. The checker now retries, then
+> tries one peer-or-better model on a **second vendor** (OpenAI `gpt-5.6-luna` by
+> default, the model this platform already runs for managed agents and seeds), and only
+> then fails closed.
+>
+> The fallback is a safety control, not a cost lever. `resolveFallbackModel` refuses any
+> model outside a small allow-list of peer-or-better classifiers, because a classifier
+> that degrades to a cheaper model quietly lowers the bar on what passes — which is worse
+> than refusing to answer. OpenAI is disclosed as a processor in the privacy policy.
+
+Decision: **Vertex AI on the gamedevpl project** as the classifier. (Superseded in part
+on 2026-09-12, see the amendment above: a second vendor now stands in when Vertex cannot
+answer, and that one does use an API key — the same `openai-api-key` the managed agents
+already use.) Rationale as written in July: ambient IAM auth via the Cloud Run runtime
+SA — no API key existed anywhere then (same pattern as Firestore); single GCP bill; Gemini
 Flash-Lite is sufficient for classification and handles Polish natively; Claude
 models remain available through Vertex Model Garden by changing a model string if
 classifier quality ever needs it.
@@ -125,7 +139,10 @@ classifier quality ever needs it.
   `{ allowed: boolean; category?: RejectCategory }`.
 - Classifier prompt: user text embedded strictly as quoted data to classify
   (never as instructions); fixed JSON output schema; malformed output or API
-  error/timeout (~5s, one retry) → **fail closed** (`other` category, WARN log).
+  error/timeout → up to three attempts inside one 20s budget (primary, an immediate
+  retry, then the second vendor), and only then **fail closed** (`other` category, WARN
+  log naming the provider that failed). The API answers a fail-closed verdict with
+  `503 moderation_unavailable`, never `422 content_rejected`: nobody's text was judged.
   Runs BEFORE issue creation and BEFORE quota consumption, after the regex
   pre-filter.
 - Tests: stub the Vertex client (same seam discipline as `githubClient` /

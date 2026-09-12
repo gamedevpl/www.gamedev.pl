@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LegalPage } from './LegalPage.js';
 import { legalDocument, type LegalDocument } from './legal/index.js';
-import i18n from './i18n/index.js';
+import i18n, { i18nReady } from './i18n/index.js';
 
 vi.mock('./legal/index.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./legal/index.js')>()),
@@ -29,7 +29,9 @@ const PRIVACY_EN: LegalDocument = {
 
 let container: HTMLDivElement;
 
-beforeEach(() => {
+beforeEach(async () => {
+  // changeLanguage throws before init(); main.tsx awaits this too.
+  await i18nReady;
   container = document.createElement('div');
   document.body.appendChild(container);
   mockedLegalDocument.mockReset();

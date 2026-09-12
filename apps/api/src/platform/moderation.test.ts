@@ -3,6 +3,7 @@ import type { GenerationRequest, ModelProvider } from 'genaicode';
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_MODERATION_TIMEOUT_MS,
+  resolveFallbackModel,
   moderateFields,
   moderateText,
   rejectionFor,
@@ -214,17 +215,23 @@ describe('VertexChecker', () => {
   it('never caches the fail-closed outcome of an unreachable classifier', async () => {
     let calls = 0;
     const checker = new VertexChecker({
+      retryDelayMs: 0,
+      // Every attempt fails: primary, retry, fallback.
       vertexFetcher: async () => {
         calls += 1;
-        if (calls === 1) throw new Error('Vertex AI network timeout');
+        if (calls <= 3) throw new Error('Vertex AI network timeout');
         return { allowed: true };
       },
     });
 
     // The first verdict describes Vertex being down, not the text.
-    expect(await checker.check('A completely clean game concept')).toEqual({ allowed: false, category: 'other', unavailable: true });
+    expect(await checker.check('A completely clean game concept')).toEqual({
+      allowed: false,
+      category: 'other',
+      unavailable: true,
+    });
     expect(await checker.check('A completely clean game concept')).toEqual({ allowed: true });
-    expect(calls).toBe(2);
+    expect(calls).toBe(4);
   });
 
   it('checkFields pays once for repeated identical fields', async () => {
@@ -332,5 +339,260 @@ describe('when the checker cannot decide', () => {
   it('gives Vertex more than the observed refine latency before giving up', () => {
     // Healthy refine measured 12.3-12.7s; 10s clipped it.
     expect(DEFAULT_MODERATION_TIMEOUT_MS).toBeGreaterThan(12_700);
+  });
+});
+
+// A 429 is one model out of capacity, not a verdict.
+describe('surviving a moment of no capacity', () => {
+  it('retries the same model once before giving up on it', async () => {
+    const models: (string | undefined)[] = [];
+    const checker = new VertexChecker({
+      retryDelayMs: 0,
+      vertexFetcher: async (_prompt, model) => {
+        models.push(model);
+        if (models.length === 1) throw new Error('429 Resource exhausted');
+        return { allowed: true };
+      },
+    });
+
+    expect(await checker.check('A cozy farming game')).toEqual({ allowed: true });
+    expect(models).toEqual([undefined, undefined]);
+  });
+
+  it('falls back to a second model when the first has none left', async () => {
+    const models: (string | undefined)[] = [];
+    const checker = new VertexChecker({
+      retryDelayMs: 0,
+      fallbackModel: 'gpt-5.6-luna',
+      fallbackApiKey: 'test-key',
+      vertexFetcher: async (_prompt, model) => {
+        models.push(model);
+        if (model === undefined) throw new Error('429 Resource exhausted');
+        return { allowed: true };
+      },
+    });
+
+    expect(await checker.check('A cozy farming game')).toEqual({ allowed: true });
+    expect(models).toEqual([undefined, undefined, 'gpt-5.6-luna']);
+  });
+
+  it('does not retry a failure a retry cannot fix', async () => {
+    let attempts = 0;
+    const checker = new VertexChecker({
+      retryDelayMs: 0,
+      vertexFetcher: async () => {
+        attempts += 1;
+        throw new Error('Could not load the default credentials');
+      },
+    });
+
+    expect(await checker.check('A cozy farming game')).toEqual({
+      allowed: false,
+      category: 'other',
+      unavailable: true,
+    });
+    expect(attempts).toBe(1);
+  });
+
+  it('still fails closed when every attempt fails', async () => {
+    const checker = new VertexChecker({
+      retryDelayMs: 0,
+      vertexFetcher: async () => {
+        throw new Error('429 Resource exhausted');
+      },
+    });
+
+    expect(await checker.check('A cozy farming game')).toEqual({
+      allowed: false,
+      category: 'other',
+      unavailable: true,
+    });
+  });
+
+  // Wall clock cannot tell one shared deadline from three separate ones.
+  it('gives each attempt only what the budget has left', async () => {
+    const budgets: (number | undefined)[] = [];
+    const checker = new VertexChecker({
+      timeoutMs: 300,
+      retryDelayMs: 10,
+      fallbackApiKey: 'test-key',
+      vertexFetcher: async (_prompt, _model, timeoutMs) => {
+        budgets.push(timeoutMs);
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        throw new Error('429 Resource exhausted');
+      },
+    });
+
+    await checker.check('A cozy farming game');
+
+    expect(budgets).toHaveLength(3);
+    expect(budgets[0]).toBeLessThanOrEqual(300);
+    expect(budgets[1]).toBeLessThan(budgets[0]!);
+    expect(budgets[2]).toBeLessThan(budgets[1]!);
+  });
+
+  it('stops attempting once the budget is spent', async () => {
+    let attempts = 0;
+    const checker = new VertexChecker({
+      timeoutMs: 60,
+      retryDelayMs: 0,
+      vertexFetcher: async () => {
+        attempts += 1;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        throw new Error('429 Resource exhausted');
+      },
+    });
+
+    const started = Date.now();
+    await checker.check('A cozy farming game');
+
+    expect(attempts).toBeLessThan(3);
+    expect(Date.now() - started).toBeLessThan(200);
+  });
+});
+
+// Each extra call is another chance to land on a 429.
+describe('checking several fields', () => {
+  it('asks once for all of them, with every field in the prompt', async () => {
+    const prompts: string[] = [];
+    const checker = new VertexChecker({
+      vertexFetcher: async (prompt) => {
+        prompts.push(prompt);
+        return { allowed: true };
+      },
+    });
+
+    expect(await checker.checkFields(['Comet Courier', 'A game about delivering parcels'])).toEqual({ allowed: true });
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain('Comet Courier');
+    expect(prompts[0]).toContain('A game about delivering parcels');
+  });
+
+  it('never pays for a field the regex filter already refused', async () => {
+    let calls = 0;
+    const checker = new VertexChecker({
+      vertexFetcher: async () => {
+        calls += 1;
+        return { allowed: true };
+      },
+    });
+
+    const verdict = await checker.checkFields(['Call me on 555-0142', 'A cozy farming game']);
+
+    expect(verdict).toEqual({ allowed: false, category: 'pii' });
+    expect(calls).toBe(0);
+  });
+
+  it('asks nothing when there is nothing to ask about', async () => {
+    let calls = 0;
+    const checker = new VertexChecker({
+      vertexFetcher: async () => {
+        calls += 1;
+        return { allowed: true };
+      },
+    });
+
+    expect(await checker.checkFields(['', '   '])).toEqual({ allowed: true });
+    expect(calls).toBe(0);
+  });
+});
+
+// Degrading to a weaker classifier lowers the bar silently.
+describe('what may stand in for the classifier', () => {
+  it('accepts a peer-or-better model on the second vendor', () => {
+    expect(resolveFallbackModel({ configured: undefined, provider: 'openai', hasApiKey: true })).toBe('gpt-5.6-luna');
+    expect(resolveFallbackModel({ configured: 'claude-opus-5', provider: 'vertex', hasApiKey: true })).toBe(
+      'claude-opus-5',
+    );
+  });
+
+  it('refuses a cheaper model, whoever configured it', () => {
+    expect(
+      resolveFallbackModel({ configured: 'gemini-3.0-flash', provider: 'openai', hasApiKey: true }),
+    ).toBeUndefined();
+    expect(resolveFallbackModel({ configured: 'gpt-4o-mini', provider: 'openai', hasApiKey: true })).toBeUndefined();
+  });
+
+  // A model the provider cannot serve reads as an outage.
+  it('refuses a peer model the configured provider does not serve', () => {
+    expect(resolveFallbackModel({ configured: 'claude-opus-5', provider: 'openai', hasApiKey: true })).toBeUndefined();
+    expect(resolveFallbackModel({ configured: 'gpt-5.6-luna', provider: 'vertex', hasApiKey: true })).toBeUndefined();
+    expect(resolveFallbackModel({ configured: 'claude-opus-5', provider: 'vertex', hasApiKey: true })).toBe(
+      'claude-opus-5',
+    );
+  });
+
+  it('has no fallback at all without a key for the second vendor', () => {
+    expect(resolveFallbackModel({ configured: 'gpt-5.6-luna', provider: 'openai', hasApiKey: false })).toBeUndefined();
+  });
+});
+
+// The admin creation-limits view reads this counter.
+describe('counting what we are billed for', () => {
+  it('counts every attempt, not every check', async () => {
+    let paid = 0;
+    let calls = 0;
+    const checker = new VertexChecker({
+      retryDelayMs: 0,
+      onPaidCall: () => {
+        paid += 1;
+      },
+      vertexFetcher: async () => {
+        calls += 1;
+        if (calls < 2) throw new Error('429 Resource exhausted');
+        return { allowed: true };
+      },
+    });
+
+    await checker.check('A cozy farming game');
+
+    expect(paid).toBe(2);
+  });
+
+  it('counts nothing when the regex filter answers first', async () => {
+    let paid = 0;
+    const checker = new VertexChecker({
+      onPaidCall: () => {
+        paid += 1;
+      },
+      vertexFetcher: async () => ({ allowed: true }),
+    });
+
+    await checker.check('Call me on 555-0142');
+
+    expect(paid).toBe(0);
+  });
+});
+
+// Batching must not give already-refused text a second hearing.
+describe('batching and what the cache already decided', () => {
+  it('keeps a rejection a field earned on its own', async () => {
+    let calls = 0;
+    const checker = new VertexChecker({
+      vertexFetcher: async (prompt) => {
+        calls += 1;
+        return prompt.includes('nasty') ? { allowed: false, category: 'violence' } : { allowed: true };
+      },
+    });
+
+    expect(await checker.check('something nasty')).toEqual({ allowed: false, category: 'violence' });
+    const batched = await checker.checkFields(['something nasty', 'a cozy farming game']);
+
+    expect(batched).toEqual({ allowed: false, category: 'violence' });
+    // The cached rejection answered; nothing asked again.
+    expect(calls).toBe(1);
+  });
+
+  it('still asks when no field has been judged before', async () => {
+    let calls = 0;
+    const checker = new VertexChecker({
+      vertexFetcher: async () => {
+        calls += 1;
+        return { allowed: true };
+      },
+    });
+
+    expect(await checker.checkFields(['a title', 'a concept'])).toEqual({ allowed: true });
+    expect(calls).toBe(1);
   });
 });
