@@ -69,6 +69,17 @@ describe('moderation flags', () => {
     return { app, store };
   }
 
+  // Detached fan-out lands a tick after the response.
+  async function settledAlert(store: InMemoryStore, uid: string) {
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const rows = await store.listNotifications(uid);
+      const hit = rows.find((row) => row.type === 'operator.moderation_flag');
+      if (hit) return hit;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    return null;
+  }
+
   async function raise(app: Awaited<ReturnType<typeof buildApp>>, cookieHeader: string, slug = 'sky-dodge') {
     return app.inject({
       method: 'POST',
@@ -153,7 +164,7 @@ describe('moderation flags', () => {
     expect((await store.getSubmission(jobId))?.draftSharedAt).toBeFalsy();
   });
 
-  it('tells the operators a report landed, without making the reviewer wait on it', async () => {
+  it('tells the operators a report landed', async () => {
     // The queue waits to be found, so raising pages instead.
     const { app, store } = await makeApp();
     await store.upsertUser({ uid: 'dev:boss' });
@@ -161,11 +172,29 @@ describe('moderation flags', () => {
     const raised = await raise(app, await cookie(app, 'reviewer'));
     expect(raised.statusCode).toBe(200);
 
-    const notifications = await store.listNotifications('dev:boss');
-    const alert = notifications.find((row) => row.type === 'operator.moderation_flag');
+    const alert = await settledAlert(store, 'dev:boss');
     expect(alert).toBeTruthy();
     expect(alert?.params).toMatchObject({ title: 'sky-dodge', detail: 'hate' });
     expect(alert?.link).toBe('/admin/moderation');
+  });
+
+  it('answers the reviewer without waiting on mail or push', async () => {
+    // A slow mail or push endpoint must not hold the request.
+    const { app, store } = await makeApp();
+    await store.upsertUser({ uid: 'dev:boss' });
+    let release = (): void => {};
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(store, 'createNotification').mockImplementation(async () => {
+      await blocked;
+      throw new Error('never settles in time');
+    });
+
+    const raised = await raise(app, await cookie(app, 'reviewer'));
+    expect(raised.statusCode).toBe(200);
+    expect((await store.listModerationFlags()).length).toBe(1);
+    release();
   });
 
   it('still records the report when notifying the operators fails', async () => {

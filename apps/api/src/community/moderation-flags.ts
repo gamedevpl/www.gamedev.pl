@@ -120,8 +120,8 @@ export async function registerModerationFlagRoutes(
         { slug: flag.slug, reason: flag.reason, raisedByUid: flag.raisedByUid },
         'moderation flag raised on a game',
       );
-      // Never blocks the reviewer: the report is already durable.
-      await notifyFlagRaised?.({ flagId: flag.id, slug: flag.slug, reason: flag.reason }).catch((error: unknown) => {
+      // Detached: mail and push must not hold the reviewer's request open.
+      void notifyFlagRaised?.({ flagId: flag.id, slug: flag.slug, reason: flag.reason }).catch((error: unknown) => {
         request.log.error({ err: error, slug: flag.slug }, 'could not notify operators of a moderation flag');
       });
       return reply.send({ flag });
