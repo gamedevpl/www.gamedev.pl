@@ -9,8 +9,11 @@ name: Games catalog gate
 # reverse-index to GAME.json consumers and run static + those slugs.
 # Those two catalog seals are the Sunday 06:17 UTC cron ('17 6 * * 0'); scoped
 # still playtests touched slugs. A games-published dispatch re-classifies the
-# SHA with tools/gate-scope.mjs --event push --base <parent> --diffs-json so a
-# one-game merge does not wait on a full-catalog check:pr (measured ~40 min).
+# SHA with tools/gate-scope.mjs --event push --base <last-published-sha>
+# --diffs-json so a one-game merge does not wait on a full-catalog check:pr
+# (measured ~40 min). The base is current.json's commitSha, not HEAD's
+# parent: cancel-in-progress would otherwise let a game-only B skip A's
+# unvalidated runtime. Missing pointer → full.
 # The daily snapshot is a cheap rebuild, not a second full-catalog seal.
 
 on:
@@ -75,6 +78,7 @@ concurrency:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   resolve:
@@ -186,6 +190,16 @@ jobs:
         working-directory: games-repo
         run: echo "games_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
+      - name: Authenticate to GCP for snapshot pointer
+        if: steps.resolve.outputs.classify_push == '1'
+        id: gcp_auth
+        continue-on-error: true
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: 'projects/334141807880/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'github-actions-deployer@gamedevpl.iam.gserviceaccount.com'
+          token_format: access_token
+
       - name: Classify merge scope
         id: scope
         working-directory: games-repo
@@ -194,6 +208,8 @@ jobs:
           GAMES_REPO: ${{ env.GAMES_REPO }}
           SHA: ${{ steps.checkout_sha.outputs.games_sha }}
           CLASSIFY_PUSH: ${{ steps.resolve.outputs.classify_push }}
+          GCS_TOKEN: ${{ steps.gcp_auth.outputs.access_token }}
+          SNAPSHOT_BUCKET: 'gamedevpl-games-snapshots'
           INPUT_MODE: ${{ inputs.mode }}
           INPUT_SLUGS: ${{ inputs.slugs }}
           INPUT_NEED_WEBKIT: ${{ inputs.need_webkit }}
@@ -234,13 +250,13 @@ jobs:
             diffs_json=$(mktemp)
             jq -c '[.files[]? | select(.filename != null and .patch != null) | {key: .filename, value: .patch}] | from_entries' "$compare" > "$diffs_json"
             rm -f "$compare"
-            # Checkout is shallow. Fetch the API parent so --base can git-diff
-            # when GitHub omitted a patch (binary / too large). Compare patches
-            # are the primary input and work without this object.
+            # Checkout is shallow. Fetch the last-published SHA so --base can
+            # git-diff when GitHub omitted a patch (binary / too large). Compare
+            # patches are the primary input and work without this object.
             if ! git cat-file -e "${parent}^{commit}" 2>/dev/null; then
               git -c "http.extraheader=AUTHORIZATION: bearer ${GAMES_REPO_TOKEN}" \
                 fetch --depth=1 "https://github.com/${GAMES_REPO}.git" "$parent" \
-                || echo "Parent fetch failed — classify from compare patches only"
+                || echo "Baseline fetch failed — classify from compare patches only"
             fi
             scope=$(printf '%s\n' "$files" | node tools/gate-scope.mjs --event push --base "$parent" --diffs-json "$diffs_json" --json)
             rm -f "$diffs_json"
@@ -254,37 +270,34 @@ jobs:
           }
 
           if [ "$CLASSIFY_PUSH" = 1 ]; then
-            commit=$(mktemp)
-            status=$(curl -sS -o "$commit" -w '%{http_code}' \
-              -H "Accept: application/vnd.github+json" \
-              -H "Authorization: Bearer ${GAMES_REPO_TOKEN}" \
-              -H "User-Agent: gamedev-snapshot-publish" \
-              "https://api.github.com/repos/${GAMES_REPO}/commits/${SHA}")
-            if [ "$status" != 200 ]; then
-              echo "Commit lookup returned ${status} — full catalog gate"
+            # Cumulative range since the live snapshot, not HEAD^: a cancelled
+            # full gate for runtime A plus game-only B would otherwise classify
+            # only B and bake A's unvalidated modules into every game.
+            baseline=
+            if [ -n "${GCS_TOKEN:-}" ]; then
+              if pointer=$(curl -sS -f --max-time 30 \
+                -H "Authorization: Bearer ${GCS_TOKEN}" \
+                "https://storage.googleapis.com/storage/v1/b/${SNAPSHOT_BUCKET}/o/current.json?alt=media"); then
+                baseline=$(printf '%s' "$pointer" | jq -r '.commitSha // empty')
+                baseline="${baseline,,}"
+              else
+                echo "Could not read snapshot pointer — full catalog gate"
+              fi
+            fi
+            if [ "${#baseline}" -ne 40 ] || printf '%s' "$baseline" | grep -q '[^0-9a-f]'; then
+              echo "No published snapshot SHA — full catalog gate"
               MODE=full
               SLUGS=
               NEED_WEBKIT=1
               NARROW_CONFORMANCE=0
               RUN_GATE=1
-            else
-              parent=$(jq -r '.parents[0].sha // empty' "$commit")
-              if [ -z "$parent" ]; then
-                echo "No parent commit — full catalog gate"
-                MODE=full
-                SLUGS=
-                NEED_WEBKIT=1
-                NARROW_CONFORMANCE=0
-                RUN_GATE=1
-              elif ! classify_from_parent "$parent"; then
-                MODE=full
-                SLUGS=
-                NEED_WEBKIT=1
-                NARROW_CONFORMANCE=0
-                RUN_GATE=1
-              fi
+            elif ! classify_from_parent "$baseline"; then
+              MODE=full
+              SLUGS=
+              NEED_WEBKIT=1
+              NARROW_CONFORMANCE=0
+              RUN_GATE=1
             fi
-            rm -f "$commit"
           fi
 
           case "$MODE" in

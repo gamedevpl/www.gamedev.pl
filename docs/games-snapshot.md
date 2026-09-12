@@ -112,9 +112,12 @@ merge to games-repo main
       (docs/tools-only pushes skip this — they cannot change served HTML)
   → publish-games.yml: re-classify that SHA after checkout (the live tree is
     the authority; a deleted game drops out of the slug list and still bakes).
-    `games-published` only: `--event push --base <parent> --diffs-json` from
-    the compare API (patches work on a shallow clone; parent is fetched if
-    GitHub omitted a patch). `games-validate` keeps the payload as sent.
+    `games-published` only: `--event push --base <last-published-sha>
+    --diffs-json` from the compare API (patches work on a shallow clone; the
+    last-published commit is fetched if GitHub omitted a patch). The base is
+    `current.json`'s `commitSha`, not `HEAD^`: with `cancel-in-progress`, a
+    game-only B would otherwise skip a cancelled/failed runtime A and bake it.
+    Missing pointer or compare → full. `games-validate` keeps the payload as sent.
   → scoped/static/full games gate (one-game merges: scoped, no WebKit)
   → npm run snapshot:publish (only after a green gate, or immediately when
     the classified push needs no gate — a deletion, a docs-only dispatch)
@@ -135,7 +138,7 @@ clean runner, and WebKit is skipped on push because the PR already sealed it
 (`gfx3d`, `sensing`, verticals, …) reverse-index to the games that select
 them in `GAME.json` and run `mode=static` on those slugs, with WebKit.
 Universal modules (`core`, `drawing`, `gfx`, `audio`, …) use the same
-`--base <parent>` classify: a named function or `draw.*` field that only
+`--base <last-published-sha>` classify: a named function or `draw.*` field that only
 a subset of games call is `mode=static` on those slugs (WebKit included).
 An unidentifiable patch, a lifecycle symbol (`mount`, `createRenderer`, …),
 or a surface most of the catalog calls (`draw.rect`) stays full — post-merge
