@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createApi } from './api.js';
 import { memoryStore } from './keychain.js';
+import { handleReplLine } from './repl.js';
 import { recoverCheckout } from './recover.js';
 const dirs: string[] = [];
 afterEach(() => dirs.splice(0).forEach((d) => rmSync(d, { recursive: true, force: true })));
@@ -22,7 +23,9 @@ function fixture(kind = 'missing') {
   writeFileSync(join(cwd, 'games', 'sky', 'game.ts'), 'local edits');
   const fetch = vi.fn(
     async (url: string) =>
-      new Response(JSON.stringify(url.endsWith('/recovery') ? { kind } : { accepted: true, slug: 'sky' })),
+      new Response(
+        JSON.stringify(url.endsWith('/recovery') ? { kind } : { accepted: true, slug: 'sky', token: 'new-round' }),
+      ),
   );
   const api = createApi({
     origin: 'https://test.example',
@@ -87,12 +90,17 @@ it('can retry a failed renamed checkout copy without damaging the source', async
   await recoverCheckout({ ...f, slug: 'other' });
   expect(existsSync(join(f.cwd, '../other-recovered'))).toBe(true);
 });
-it('clears a definitive slug refusal so a different destination can be chosen', async () => {
+it.each([
+  ['slug_unavailable', 409],
+  ['content_rejected', 422],
+])('clears definitive %s refusal with a human-readable message', async (error, status) => {
   const f = fixture();
   const original = f.fetch.getMockImplementation()!;
   f.fetch.mockImplementation(async (url) =>
     url.endsWith('/recover')
-      ? new Response(JSON.stringify({ error: 'slug_unavailable' }), { status: 409 })
+      ? new Response(JSON.stringify({ error, message: 'Choose another slug; existing games are never overwritten.' }), {
+          status,
+        })
       : original(url),
   );
   await expect(recoverCheckout(f)).rejects.toThrow();
@@ -112,4 +120,20 @@ it('removes staged files deleted locally before retrying', async () => {
   fail = false;
   await recoverCheckout(f);
   expect(f.fetch.mock.calls.some(([url]) => url.endsWith('/sources/stage/delete'))).toBe(true);
+});
+
+it('switches the REPL to the recovered round', async () => {
+  const f = fixture('canceled');
+  const result = await handleReplLine({
+    api: f.api,
+    line: `/recover ${f.cwd} --yes`,
+    token: 'canceled-round',
+    write: f.write,
+  });
+  expect(result).toMatchObject({
+    next: 'continue',
+    token: 'new-round',
+    slug: 'sky',
+    workshop: { root: f.cwd, token: 'new-round', slug: 'sky', builder: 'self' },
+  });
 });
