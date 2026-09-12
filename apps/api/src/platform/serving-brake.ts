@@ -43,6 +43,9 @@ function refuse(reply: FastifyReply, error: string, detail: string): string {
   return body;
 }
 
+// Decided in preHandler so onSend stays synchronous. See api-cache-policy.ts.
+const leanRequests = new WeakSet<FastifyRequest>();
+
 // A hook, not a branch: austerity is request policy.
 export function registerServingBrake(app: FastifyInstance, options: ServingBrakeOptions): void {
   const { controls } = options;
@@ -61,20 +64,21 @@ export function registerServingBrake(app: FastifyInstance, options: ServingBrake
     }
 
     if (!(await controls.servesLeanMedia())) return;
+    leanRequests.add(request);
     // Narrowing a width the caller asked for, never widening one.
     const query = request.query as Record<string, unknown> | undefined;
     if (query) query.w = String(LEAN_WIDTH);
   });
 
   // The width above is a request; some lanes ignore it.
-  app.addHook('onSend', async (request, reply, payload) => {
-    const filename = mediaFilename(request.url);
-    if (filename === null || filename.endsWith('.mp4')) return payload;
-    if (reply.statusCode >= 400) return payload;
-    if (!(await controls.servesLeanMedia())) return payload;
+  app.addHook('onSend', (request, reply, payload, done) => {
+    if (!leanRequests.has(request) || reply.statusCode >= 400) return done(null, payload);
+
+    // The URL still says the old width; caching this outlives the rung.
+    reply.header('cache-control', 'no-store');
 
     const length = Buffer.isBuffer(payload) ? payload.length : typeof payload === 'string' ? payload.length : 0;
-    if (isLeanEnough(reply.getHeader('location'), length)) return payload;
-    return refuse(reply, 'media_lean', 'full-size media is paused to save bandwidth');
+    if (isLeanEnough(reply.getHeader('location'), length)) return done(null, payload);
+    return done(null, refuse(reply, 'media_lean', 'full-size media is paused to save bandwidth'));
   });
 }

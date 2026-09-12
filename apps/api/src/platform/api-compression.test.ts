@@ -1,7 +1,13 @@
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { describe, expect, it } from 'vitest';
-import { chooseEncoding, encodingQuality, registerApiCompression, worthCompressing } from './api-compression.js';
+import {
+  chooseEncoding,
+  encodingQuality,
+  registerApiCompression,
+  withAcceptEncoding,
+  worthCompressing,
+} from './api-compression.js';
 
 const BIG_JSON = { games: Array.from({ length: 400 }, (_, index) => ({ slug: `game-${index}`, title: 'A Game' })) };
 
@@ -9,6 +15,10 @@ async function appUnderTest(): Promise<FastifyInstance> {
   const app = Fastify();
   registerApiCompression(app);
   app.get('/api/catalog', async () => BIG_JSON);
+  // Imperative send, the shape play and preview use.
+  app.get('/api/sent', async (_request, reply) => {
+    reply.header('vary', 'Origin').send(BIG_JSON);
+  });
   app.get('/api/tiny', async () => ({ ok: true }));
   app.get('/api/games/a/media/shot.png', async (_request, reply) =>
     reply.type('image/png').send(Buffer.alloc(64 * 1024, 7)),
@@ -167,6 +177,32 @@ describe('api compression', () => {
       headers: { 'accept-encoding': 'br' },
     });
     expect(response.headers['content-encoding']).toBeUndefined();
+    await app.close();
+  });
+});
+
+describe('withAcceptEncoding', () => {
+  it('adds itself to whatever vary is already there', () => {
+    expect(withAcceptEncoding(undefined)).toBe('accept-encoding');
+    expect(withAcceptEncoding('Origin')).toBe('Origin, accept-encoding');
+  });
+
+  it('does not repeat itself', () => {
+    expect(withAcceptEncoding('Origin, accept-encoding')).toBe('Origin, accept-encoding');
+    expect(withAcceptEncoding('Accept-Encoding')).toBe('Accept-Encoding');
+  });
+});
+
+describe('a body sent imperatively', () => {
+  it('is compressed like any other, and keeps the vary it already had', async () => {
+    const app = await appUnderTest();
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/sent',
+      headers: { 'accept-encoding': 'br' },
+    });
+    expect(response.headers['content-encoding']).toBe('br');
+    expect(response.headers['vary']).toBe('Origin, accept-encoding');
     await app.close();
   });
 });

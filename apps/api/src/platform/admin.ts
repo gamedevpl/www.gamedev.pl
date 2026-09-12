@@ -178,6 +178,10 @@ export interface CreationLimitsResponse {
     gatePaused: boolean;
     globalDailyGateRunCap: number;
     partyPaused: boolean;
+    // Bandwidth rungs; the brake pulls these and never resumes them.
+    videoPaused: boolean;
+    mediaLean: boolean;
+    anonymousPaused: boolean;
     telemetrySampleRate: number | null;
     // Round 0's kill switch, ceiling and provider picker.
     seedingMode: 'auto' | 'off';
@@ -509,6 +513,9 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
         gatePaused: stored?.gatePaused === true,
         globalDailyGateRunCap: stored?.globalDailyGateRunCap ?? resolveDefaultGlobalDailyGateRunCap(),
         partyPaused: stored?.partyPaused === true,
+        videoPaused: stored?.videoPaused === true,
+        mediaLean: stored?.mediaLean === true,
+        anonymousPaused: stored?.anonymousPaused === true,
         telemetrySampleRate: stored?.telemetrySampleRate ?? null,
         seedingMode: stored?.seedingMode ?? 'auto',
         globalDailySeedCap: stored?.globalDailySeedCap ?? resolveDefaultGlobalDailySeedCap(),

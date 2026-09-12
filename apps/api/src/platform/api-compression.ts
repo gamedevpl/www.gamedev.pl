@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 
 // Generated bodies have nothing to precompute, unlike the static shell's siblings.
 
-// The arithmetic, and why it is not close: docs/deployment.md, "Bandwidth".
+// The arithmetic, and why it is not close: deployment.md, "Bandwidth".
 
 // Below this, a compressed body saves less than the framing costs.
 const MIN_BYTES = 1_500;
@@ -56,26 +56,37 @@ function bodyOf(payload: unknown): Buffer | null {
   return null;
 }
 
+// Appended, not replaced: CORS may already vary on Origin.
+export function withAcceptEncoding(existing: unknown): string {
+  const parts = String(existing ?? '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.some((part) => part.toLowerCase() === 'accept-encoding')) return parts.join(', ');
+  return [...parts, 'accept-encoding'].join(', ');
+}
+
+// Synchronous: an async onSend defers the header write.
 export function registerApiCompression(app: FastifyInstance): void {
-  app.addHook('onSend', async (request, reply: FastifyReply, payload) => {
-    if (!request.url.startsWith('/api/')) return payload;
+  app.addHook('onSend', (request, reply: FastifyReply, payload, done) => {
+    if (!request.url.startsWith('/api/')) return done(null, payload);
 
     const body = bodyOf(payload);
-    if (body === null) return payload;
+    if (body === null) return done(null, payload);
     if (!worthCompressing(reply.getHeader('content-type'), body.length, reply.hasHeader('content-encoding'))) {
-      return payload;
+      return done(null, payload);
     }
 
     // Before the identity return too, or a cache shares it.
-    reply.header('vary', 'accept-encoding');
+    reply.header('vary', withAcceptEncoding(reply.getHeader('vary')));
 
     const accept = request.headers['accept-encoding'];
     const chosen = chooseEncoding(typeof accept === 'string' ? accept : undefined);
-    if (chosen === 'identity') return payload;
+    if (chosen === 'identity') return done(null, payload);
 
     const encoded = chosen === 'br' ? brotliCompressSync(body, BROTLI_OPTIONS) : gzipSync(body, { level: 6 });
     reply.header('content-encoding', chosen);
     reply.header('content-length', encoded.length);
-    return encoded;
+    return done(null, encoded);
   });
 }

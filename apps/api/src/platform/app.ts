@@ -1162,7 +1162,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // records no identifying data, so admitting it from the open internet is free.
     if (request.url.startsWith('/api/telemetry/visit')) return;
     if (request.url === '/api/csp-report') return; // browser-posted, mostly before sign-in
-    if (isPublicPlayRequest(request, await getPublicPlaySlugs())) return;
+    if (!closedByRung && isPublicPlayRequest(request, await getPublicPlaySlugs())) return;
     if (!request.user) {
       return reply.status(401).send({ error: 'authentication required' });
     }

@@ -61,3 +61,21 @@ describe('what the rung closes that the beta wall does not', () => {
     await app.close();
   });
 });
+
+describe('promotional play under the rung', () => {
+  it('stops handing out the bundle a public-play slug exempts', async () => {
+    const store = new InMemoryStore();
+    await store.setCreationLimits({ anonymousPaused: true }, 'test');
+    const app = await buildApp({ store, sessionSecret, publicPlaySlugs: 'promo-game' });
+    const res = await app.inject({ method: 'GET', url: '/api/games/promo-game' });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('leaves it playable while the rung is clear', async () => {
+    const app = await buildApp({ store: new InMemoryStore(), sessionSecret, publicPlaySlugs: 'promo-game' });
+    const res = await app.inject({ method: 'GET', url: '/api/games/promo-game' });
+    expect(res.statusCode).not.toBe(401);
+    await app.close();
+  });
+});

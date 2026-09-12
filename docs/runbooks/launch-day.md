@@ -97,13 +97,14 @@ worth spending longer on before you touch the play path.
 | 1    | New game creation         | `/admin/limits` → pause creation                    | within the console's stated window |
 | 2    | Telemetry writes          | `telemetrySampleRate` below 1                       | same                               |
 | 3    | New party rooms           | `/admin/limits` → incident lanes → party hosting    | same                               |
-| 4    | Preview video             | `videoPaused`                                       | 60s (the breaker's TTL)            |
-| 5    | Full-size images          | `mediaLean` — only the baked 96px copy is served    | 60s                                |
-| 6    | Visitors without an account | `anonymousPaused` — the beta wall, back up        | 60s                                |
+| 4    | Preview video             | `/admin/limits` → incident lanes → preview video     | 60s (the breaker's TTL)            |
+| 5    | Full-size images          | same panel → full-size images; only the 96px copy    | 60s                                |
+| 6    | Visitors without an account | same panel; the beta wall, back up                | 60s                                |
 | 7    | Play                      | nothing here does this; roll back or scale instead  | —                                  |
 
-Pull them in order and stop as soon as the graphs recover. Rungs 1 and 3 are toggles in
-the operator console; rungs 4 to 6 are fields on the same document. Rung 2 has no console
+Pull them in order and stop as soon as the graphs recover. Rungs 1 and 3 to 6 are toggles
+on the incident-lanes panel in the operator console, which is also where a rung the brake
+pulled by itself becomes visible. Rung 2 has no console
 field yet, so set it directly — it is a fraction of visits between 0 and 1, and `null`
 restores the default of keeping all:
 
@@ -146,9 +147,10 @@ from the operator document rather than from `PRIVATE_BETA`, so it needs no deplo
 drops no party rooms. Everyone already signed in keeps the full product. Arrivals become
 a list instead of a bill.
 
-One difference from the beta wall it borrows: that wall leaves `/api/games/*/media/*`
-public so a shared game link works, and this rung does not. Media is the bandwidth the
-rung was pulled to stop, so it closes too.
+Two differences from the beta wall it borrows. That wall leaves `/api/games/*/media/*`
+public so a shared game link works, and it exempts promotional `PUBLIC_PLAY_SLUGS` so
+those games play signed-out. Under the rung both close: media and a 533 KB game document
+are the bandwidth it was pulled to stop.
 
 ```bash
 curl -s -X POST https://www.gamedev.pl/api/admin/creation-limits \

@@ -133,6 +133,22 @@ describe('lean media reaches every lane', () => {
     await app.close();
   });
 
+  it('forbids caching what it narrowed, since the URL still says the old width', async () => {
+    const app = await appWith({ lean: true });
+    const res = await app.inject({ method: 'GET', url: '/api/games/inline/media/small.png?w=320' });
+    expect(res.statusCode).toBe(200);
+    // Cached, the 96px copy would answer ?w=320 for hours.
+    expect(res.headers['cache-control']).toBe('no-store');
+    await app.close();
+  });
+
+  it('leaves caching alone while the rung is clear', async () => {
+    const app = await appWith({});
+    const res = await app.inject({ method: 'GET', url: '/api/games/inline/media/small.png?w=320' });
+    expect(res.headers['cache-control']).toBeUndefined();
+    await app.close();
+  });
+
   it('refuses a store-lane redirect, which ignores the width entirely', async () => {
     const app = await appWith({ lean: true });
     const res = await app.inject({ method: 'GET', url: '/api/games/store/media/big.png' });
