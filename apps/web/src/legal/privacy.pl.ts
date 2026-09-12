@@ -198,7 +198,8 @@ export const privacyPl: LegalDocument = {
         {
           kind: 'ul',
           items: [
-            'Twój opis gry przechodzi automatyczną moderację (model Google Gemini), która może go odrzucić.',
+            'Twój opis gry przechodzi automatyczną moderację (model Google Gemini, a gdy jest niedostępny — model '
+              + 'OpenAI), która może go odrzucić.',
             'Opis jest następnie doprecyzowywany przez model AI, który może zadać Ci pytania pomocnicze.',
             'Zaakceptowany opis trafia jako zadanie do agenta kodującego (GitHub Copilot), który pisze kod gry ' +
               'w naszym prywatnym repozytorium. Repozytorium gier nie jest publiczne — Twój opis nie staje się ' +

@@ -409,23 +409,45 @@ describe('surviving a moment of no capacity', () => {
     });
   });
 
-  it('spends no longer than the budget, however many attempts that allows', async () => {
+  // Wall clock cannot tell one shared deadline from three separate ones.
+  it('gives each attempt only what the budget has left', async () => {
+    const budgets: (number | undefined)[] = [];
+    const checker = new VertexChecker({
+      timeoutMs: 300,
+      retryDelayMs: 10,
+      fallbackApiKey: 'test-key',
+      vertexFetcher: async (_prompt, _model, timeoutMs) => {
+        budgets.push(timeoutMs);
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        throw new Error('429 Resource exhausted');
+      },
+    });
+
+    await checker.check('A cozy farming game');
+
+    expect(budgets).toHaveLength(3);
+    expect(budgets[0]).toBeLessThanOrEqual(300);
+    expect(budgets[1]).toBeLessThan(budgets[0]!);
+    expect(budgets[2]).toBeLessThan(budgets[1]!);
+  });
+
+  it('stops attempting once the budget is spent', async () => {
     let attempts = 0;
     const checker = new VertexChecker({
-      timeoutMs: 30,
+      timeoutMs: 60,
       retryDelayMs: 0,
       vertexFetcher: async () => {
         attempts += 1;
-        await new Promise((resolve) => setTimeout(resolve, 25));
-        throw new Error('slow failure');
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        throw new Error('429 Resource exhausted');
       },
     });
 
     const started = Date.now();
     await checker.check('A cozy farming game');
 
+    expect(attempts).toBeLessThan(3);
     expect(Date.now() - started).toBeLessThan(200);
-    expect(attempts).toBeLessThanOrEqual(3);
   });
 });
 
@@ -537,5 +559,38 @@ describe('counting what we are billed for', () => {
     await checker.check('Call me on 555-0142');
 
     expect(paid).toBe(0);
+  });
+});
+
+// Batching must not give already-refused text a second hearing.
+describe('batching and what the cache already decided', () => {
+  it('keeps a rejection a field earned on its own', async () => {
+    let calls = 0;
+    const checker = new VertexChecker({
+      vertexFetcher: async (prompt) => {
+        calls += 1;
+        return prompt.includes('nasty') ? { allowed: false, category: 'violence' } : { allowed: true };
+      },
+    });
+
+    expect(await checker.check('something nasty')).toEqual({ allowed: false, category: 'violence' });
+    const batched = await checker.checkFields(['something nasty', 'a cozy farming game']);
+
+    expect(batched).toEqual({ allowed: false, category: 'violence' });
+    // The cached rejection answered; nothing asked again.
+    expect(calls).toBe(1);
+  });
+
+  it('still asks when no field has been judged before', async () => {
+    let calls = 0;
+    const checker = new VertexChecker({
+      vertexFetcher: async () => {
+        calls += 1;
+        return { allowed: true };
+      },
+    });
+
+    expect(await checker.checkFields(['a title', 'a concept'])).toEqual({ allowed: true });
+    expect(calls).toBe(1);
   });
 });

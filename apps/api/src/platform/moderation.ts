@@ -163,7 +163,7 @@ export interface VertexCheckerOptions {
   thinkingLevel?: string;
   timeoutMs?: number;
   // Custom fetcher/client seam for testing without GCP network calls
-  vertexFetcher?: (prompt: string, model?: string) => Promise<{ allowed: boolean; category?: string }>;
+  vertexFetcher?: (prompt: string, model?: string, timeoutMs?: number) => Promise<{ allowed: boolean; category?: string }>;
   // Lower-level seam than `vertexFetcher`: swap the genaicode client (i.e. a stub
   // ModelProvider) to exercise real prompt/response handling with no network.
   client?: GenAIClient;
@@ -187,7 +187,11 @@ export class VertexChecker implements ContentChecker {
   private verdictCache = new Map<string, { verdict: ModerationVerdict; expiresAt: number }>();
   private static readonly VERDICT_CACHE_MAX = 1000;
   private static readonly VERDICT_CACHE_TTL_MS = 10 * 60 * 1000;
-  private vertexFetcher?: (prompt: string, model?: string) => Promise<{ allowed: boolean; category?: string }>;
+  private vertexFetcher?: (
+    prompt: string,
+    model?: string,
+    timeoutMs?: number,
+  ) => Promise<{ allowed: boolean; category?: string }>;
   private fallbackModel?: string;
   private fallbackProvider: 'openai' | 'vertex';
   private fallbackApiKey?: string;
@@ -284,6 +288,7 @@ export class VertexChecker implements ContentChecker {
     // 3. Run Vertex AI LLM moderation check
     const deadline = now + this.timeoutMs;
     let lastError: unknown;
+    let lastProvider = 'vertex';
 
     // Same model twice, then a fallback. One shared deadline bounds the wait.
     for (const [index, model] of [undefined, undefined, this.fallbackModel].entries()) {
@@ -294,6 +299,7 @@ export class VertexChecker implements ContentChecker {
         await sleep(Math.min(this.retryDelayMs, Math.max(0, remaining)));
       }
       try {
+        lastProvider = model ? `${this.fallbackProvider}/${model}` : 'vertex';
         // Per attempt: a retry is another billed call.
         this.options.onPaidCall?.();
         const result = await this.callVertex(text, model, deadline - Date.now());
@@ -308,8 +314,11 @@ export class VertexChecker implements ContentChecker {
       }
     }
 
-    // Fail closed, never cached: describes Vertex, not the text.
-    console.warn('Vertex AI moderation failed or timed out, failing closed:', lastError);
+    // Fail closed, never cached. Names the provider: triage starts there.
+    console.warn(
+      `Moderation failed or timed out on ${lastProvider}, failing closed:`,
+      lastError,
+    );
     return { allowed: false, category: 'other', unavailable: true };
   }
 
@@ -319,6 +328,13 @@ export class VertexChecker implements ContentChecker {
     if (!patternVerdict.allowed) return patternVerdict;
     const present = fields.filter((field) => field.trim().length > 0);
     if (present.length === 0) return { allowed: true };
+
+    // A field refused on its own stays refused; no second hearing.
+    const now = Date.now();
+    for (const field of present) {
+      const cached = this.readCachedVerdict(this.cacheKey(field), now);
+      if (cached && !cached.allowed) return cached;
+    }
     return this.check(present.join('\n---\n'));
   }
 
@@ -328,7 +344,7 @@ export class VertexChecker implements ContentChecker {
     timeoutMs = this.timeoutMs,
   ): Promise<{ allowed: boolean; category?: string }> {
     if (this.vertexFetcher) {
-      return this.vertexFetcher(text, model);
+      return this.vertexFetcher(text, model, timeoutMs);
     }
 
     const promptText = `You are a strict content safety classifier for a web game creation platform.
