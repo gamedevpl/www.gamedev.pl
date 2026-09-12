@@ -206,7 +206,6 @@ export async function registerCreatorCodeRoutes(
   async function openManualRound(store: Store, source: SubmissionRecord, slug: string): Promise<SubmissionRecord> {
     const jobId = await store.allocateJobId();
     await store.createSubmission(jobId, source.ownerUid, source.title);
-    await store.setSubmissionSlug(jobId, slug);
     await store.setSubmissionLocale(jobId, source.locale ?? 'en');
     await store.recordJobTransition(jobId, {
       to: 'queued',
@@ -217,6 +216,16 @@ export async function registerCreatorCodeRoutes(
     // Carry the version forward — else its first write sees no base.
     const baseVersion = await resolveRoundBaseVersion(store, source, slug);
     if (baseVersion) await store.setSubmissionPreviewVersion(jobId, baseVersion);
+    if (!(await store.claimManualRoundSlug(jobId, slug, source.jobId))) {
+      await store.recordJobTransition(jobId, {
+        to: 'abandoned',
+        at: new Date().toISOString(),
+        by: 'system',
+        reason: 'manual_round_claim_lost',
+      });
+      await store.setSubmissionAbandoned(jobId, new Date().toISOString());
+      throw Object.assign(new Error('The game round changed. Refresh before editing.'), { statusCode: 409 });
+    }
     return (await store.getSubmission(jobId)) ?? { ...source, jobId, roundGeneration: undefined };
   }
 

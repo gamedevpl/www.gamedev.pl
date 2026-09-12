@@ -276,3 +276,17 @@ it('caps inspection reads before querying the store', async () => {
   expect((await f.app.inject('/api/me/studio/games/sky/recovery')).statusCode).toBe(429);
   expect(read).toHaveBeenCalledTimes(60);
 });
+
+it.each(['admin', 'foo-', 'foo--bar'])(
+  'rejects noncanonical recovery destination %s before admission',
+  async (slug) => {
+    const f = await fixture();
+    const begin = vi.spyOn(f.store, 'beginCheckoutRecovery');
+    expect((await f.app.inject(`/api/me/studio/games/${slug}/recovery`)).statusCode).toBe(400);
+    expect(
+      (await f.app.inject({ method: 'POST', url: '/api/me/studio/recover', payload: { ...payload(), slug } }))
+        .statusCode,
+    ).toBe(400);
+    expect(begin).not.toHaveBeenCalled();
+  },
+);

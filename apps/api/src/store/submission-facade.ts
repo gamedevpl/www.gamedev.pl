@@ -1,6 +1,9 @@
 import type { SubmissionStore } from './slices/submission.js';
 export abstract class SubmissionFacade {
   protected abstract submissionStore: SubmissionStore;
+  async claimManualRoundSlug(jobId: number, slug: string, sourceJobId: number): Promise<boolean> {
+    return this.submissionStore.claimManualRoundSlug(jobId, slug, sourceJobId);
+  }
   async beginCheckoutRecovery(slug: string, nonce: string, now: number): Promise<boolean> {
     return this.submissionStore.beginCheckoutRecovery(slug, nonce, now);
   }

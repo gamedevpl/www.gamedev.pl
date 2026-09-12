@@ -1,10 +1,12 @@
 import type { LocalActivity } from '@gamedevpl/contract';
+import { claimManualRoundSlug } from './manual-round-claim.js';
 import { FieldValue, type Firestore } from '@google-cloud/firestore';
 import { isRoundOpen } from '../../platform/sweep-scope.js';
 import type { SubmissionStatus } from '../../platform/submission-status.js';
 import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
 
 export interface SubmissionStore {
+  claimManualRoundSlug(jobId: number, slug: string, sourceJobId: number): Promise<boolean>;
   beginCheckoutRecovery(slug: string, nonce: string, now: number): Promise<boolean>;
   finishCheckoutRecovery(slug: string, nonce: string): Promise<void>;
   claimSubmissionSlug(
@@ -130,6 +132,10 @@ export class FirestoreSubmissionStore implements SubmissionStore {
       tx.update(ref, { localActivity: { ...activity, generation: doc.data()?.roundGeneration ?? 0 } });
       return true;
     });
+  }
+
+  async claimManualRoundSlug(jobId: number, slug: string, sourceJobId: number): Promise<boolean> {
+    return claimManualRoundSlug(this.db, jobId, slug, sourceJobId);
   }
 
   async beginCheckoutRecovery(slug: string, nonce: string, now: number): Promise<boolean> {

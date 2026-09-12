@@ -1,3 +1,4 @@
+import { isCanonicalSlug } from '../platform/slug-policy.js';
 import { codeSurfaceEnabled } from './code-surface.js';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
@@ -6,7 +7,7 @@ import { mintToken } from '../platform/submission-token.js';
 import type { Store } from '../platform/store.js';
 import type { CreateGameRouteDeps } from './create-game.js';
 
-const Slug = z.string().regex(/^[a-z0-9][a-z0-9-]{0,60}$/);
+const Slug = z.string().max(61).refine(isCanonicalSlug);
 const Body = z.object({
   slug: Slug,
   key: z.string().uuid(),

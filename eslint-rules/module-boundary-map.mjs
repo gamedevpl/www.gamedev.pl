@@ -124,6 +124,7 @@ const FILE_BUCKET = {
   // because catalog needed the same question without the agent-key machinery around it.
   'slug-ownership': 'platform',
   'atomic-slug-claim': 'platform',
+  'slug-policy': 'platform',
   // Bare env-driven constant factored out of creation/builder.ts because delivery,
   // agent-surface, and submissions.ts all need the cap without the rest of builder.ts's
   // handoff-authorization logic.
