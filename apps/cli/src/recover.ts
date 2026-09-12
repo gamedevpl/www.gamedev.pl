@@ -65,12 +65,14 @@ async function performRecovery(input: {
     if (pending?.slug !== slug || pending?.origin !== input.api.origin || !/^[0-9a-f-]{36}$/.test(pending?.key ?? ''))
       throw new CliError('A different recovery is pending. Resume it before changing the destination.', EXIT_REFUSED);
   }
-  if (status.kind === 'occupied')
+  if (status.kind === 'occupied') {
+    rmSync(pendingPath, { force: true });
     throw new CliError(
       'This slug is unavailable. Local files are unchanged.',
       EXIT_REFUSED,
       'gamedevpl recover <directory> --slug <new-name>',
     );
+  }
   if (status.kind === 'active' && !pending)
     throw new CliError('This game already exists. Use connect instead.', EXIT_REFUSED);
   if (!['active', 'missing', 'canceled', 'archived'].includes(status.kind))

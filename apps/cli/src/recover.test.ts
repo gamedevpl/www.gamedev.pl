@@ -194,3 +194,18 @@ it('does not count shell inspection as a canceled recovery', async () => {
   await recoverCheckout({ ...f, yes: false, pick: async () => 'Keep files and return', telemetry });
   expect(telemetry.record.mock.calls).toEqual([['recovery_attempt'], ['recovery_canceled']]);
 });
+
+it('retires a pending recovery when the destination becomes occupied', async () => {
+  const f = fixture('occupied');
+  writeFileSync(
+    join(f.cwd, '.gamedev-recovery.json'),
+    JSON.stringify({
+      slug: 'sky',
+      origin: f.api.origin,
+      key: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    }),
+  );
+  await expect(recoverCheckout(f)).rejects.toThrow('unavailable');
+  expect(existsSync(join(f.cwd, '.gamedev-recovery.json'))).toBe(false);
+  expect(readFileSync(join(f.cwd, 'games/sky/game.ts'), 'utf8')).toBe('local edits');
+});
