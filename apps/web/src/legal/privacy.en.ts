@@ -296,6 +296,11 @@ export const privacyEn: LegalDocument = {
               'Generating a starting draft of your game from your description, before the coding agent begins',
               'USA — Standard Contractual Clauses',
             ],
+            [
+              'OpenAI',
+              'Standing in for the Gemini classifier when it is unavailable, so moderation never simply stops',
+              'USA — Standard Contractual Clauses',
+            ],
             ['GitHub (Microsoft)', 'Games repository and coding agent', 'USA — Data Privacy Framework'],
             ['Resend', 'Sending email', 'USA — Standard Contractual Clauses'],
             [

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { GenAIClient } from 'genaicode';
 import { z } from 'zod';
-import { createVertexClient, type VertexGenerationConfig } from './genai.js';
+import { createOpenAiClient, createVertexClient, type VertexGenerationConfig } from './genai.js';
 import {
   CATEGORY_TERMS,
   MAX_URLS_IN_TEXT,
@@ -151,8 +151,11 @@ export interface VertexCheckerOptions {
   projectId?: string;
   region?: string;
   model?: string;
-  // Tried when the primary runs out of capacity; own quota pool.
+  // Peer-or-better only: a weaker classifier lowers the bar.
   fallbackModel?: string;
+  // Second vendor survives the first having no capacity.
+  fallbackProvider?: 'openai' | 'vertex';
+  fallbackApiKey?: string;
   // Between failure and retry; short, someone is waiting.
   retryDelayMs?: number;
   // Gemini 3 thinking level ('low' | 'medium' | 'high'). gemini-3.8-flash dropped
@@ -186,6 +189,8 @@ export class VertexChecker implements ContentChecker {
   private static readonly VERDICT_CACHE_TTL_MS = 10 * 60 * 1000;
   private vertexFetcher?: (prompt: string, model?: string) => Promise<{ allowed: boolean; category?: string }>;
   private fallbackModel?: string;
+  private fallbackProvider: 'openai' | 'vertex';
+  private fallbackApiKey?: string;
   private retryDelayMs: number;
   private clients = new Map<string, GenAIClient>();
   constructor(options: VertexCheckerOptions = {}) {
@@ -198,7 +203,13 @@ export class VertexChecker implements ContentChecker {
       );
     this.patternChecker = new PatternChecker();
     this.vertexFetcher = options.vertexFetcher;
-    this.fallbackModel = options.fallbackModel ?? process.env.VERTEX_MODERATION_FALLBACK_MODEL ?? 'gemini-3.0-flash';
+    this.fallbackProvider = options.fallbackProvider ?? (process.env.MODERATION_FALLBACK_PROVIDER as 'openai' | 'vertex' | undefined) ?? 'openai';
+    this.fallbackApiKey = options.fallbackApiKey ?? process.env.OPENAI_API_KEY;
+    this.fallbackModel = resolveFallbackModel({
+      configured: options.fallbackModel ?? process.env.MODERATION_FALLBACK_MODEL,
+      provider: this.fallbackProvider,
+      hasApiKey: Boolean(this.fallbackApiKey),
+    });
     this.retryDelayMs = options.retryDelayMs ?? 250;
   }
 
@@ -206,6 +217,11 @@ export class VertexChecker implements ContentChecker {
     const key = model ?? 'primary';
     const existing = this.clients.get(key);
     if (existing) return existing;
+    if (model && model === this.fallbackModel && this.fallbackProvider === 'openai') {
+      const openaiClient = this.options.client ?? createOpenAiClient({ model, apiKey: this.fallbackApiKey });
+      this.clients.set(key, openaiClient);
+      return openaiClient;
+    }
     const built =
       this.options.client ??
       createVertexClient({
@@ -338,6 +354,24 @@ ${text}
       category: verdict.category ?? undefined,
     };
   }
+}
+
+// Safety control, not a cost lever. See docs/content-safety-plan.md.
+const SOTA_FALLBACK_MODELS = new Set(['gpt-5.6-luna', 'claude-sonnet-5', 'claude-opus-5', 'gemini-3.8-flash']);
+
+export function resolveFallbackModel(input: {
+  configured?: string;
+  provider: 'openai' | 'vertex';
+  hasApiKey: boolean;
+}): string | undefined {
+  if (input.provider === 'openai' && !input.hasApiKey) return undefined;
+  const model = input.configured ?? (input.provider === 'openai' ? 'gpt-5.6-luna' : undefined);
+  if (!model) return undefined;
+  if (!SOTA_FALLBACK_MODELS.has(model)) {
+    console.warn(`Refusing moderation fallback to '${model}': not a peer-or-better classifier.`);
+    return undefined;
+  }
+  return model;
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));

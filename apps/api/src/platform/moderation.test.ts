@@ -3,6 +3,7 @@ import type { GenerationRequest, ModelProvider } from 'genaicode';
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_MODERATION_TIMEOUT_MS,
+  resolveFallbackModel,
   moderateFields,
   moderateText,
   rejectionFor,
@@ -362,7 +363,8 @@ describe('surviving a moment of no capacity', () => {
     const models: (string | undefined)[] = [];
     const checker = new VertexChecker({
       retryDelayMs: 0,
-      fallbackModel: 'gemini-3.0-flash',
+      fallbackModel: 'gpt-5.6-luna',
+      fallbackApiKey: 'test-key',
       vertexFetcher: async (_prompt, model) => {
         models.push(model);
         if (model === undefined) throw new Error('429 Resource exhausted');
@@ -371,7 +373,7 @@ describe('surviving a moment of no capacity', () => {
     });
 
     expect(await checker.check('A cozy farming game')).toEqual({ allowed: true });
-    expect(models).toEqual([undefined, undefined, 'gemini-3.0-flash']);
+    expect(models).toEqual([undefined, undefined, 'gpt-5.6-luna']);
   });
 
   it('does not retry a failure a retry cannot fix', async () => {
@@ -470,5 +472,24 @@ describe('checking several fields', () => {
 
     expect(await checker.checkFields(['', '   '])).toEqual({ allowed: true });
     expect(calls).toBe(0);
+  });
+});
+
+// Degrading to a weaker classifier lowers the bar silently.
+describe('what may stand in for the classifier', () => {
+  it('accepts a peer-or-better model on the second vendor', () => {
+    expect(resolveFallbackModel({ configured: undefined, provider: 'openai', hasApiKey: true })).toBe('gpt-5.6-luna');
+    expect(resolveFallbackModel({ configured: 'claude-opus-5', provider: 'openai', hasApiKey: true })).toBe(
+      'claude-opus-5',
+    );
+  });
+
+  it('refuses a cheaper model, whoever configured it', () => {
+    expect(resolveFallbackModel({ configured: 'gemini-3.0-flash', provider: 'openai', hasApiKey: true })).toBeUndefined();
+    expect(resolveFallbackModel({ configured: 'gpt-4o-mini', provider: 'openai', hasApiKey: true })).toBeUndefined();
+  });
+
+  it('has no fallback at all without a key for the second vendor', () => {
+    expect(resolveFallbackModel({ configured: 'gpt-5.6-luna', provider: 'openai', hasApiKey: false })).toBeUndefined();
   });
 });

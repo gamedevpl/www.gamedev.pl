@@ -306,6 +306,11 @@ export const privacyPl: LegalDocument = {
               'Wygenerowanie wstępnego szkicu gry na podstawie Twojego opisu, zanim zajmie się nią agent kodujący',
               'USA — standardowe klauzule umowne',
             ],
+            [
+              'OpenAI',
+              'Zastępuje klasyfikator Gemini, gdy ten jest niedostępny, żeby moderacja nigdy po prostu nie ustała',
+              'USA — standardowe klauzule umowne',
+            ],
             ['GitHub (Microsoft)', 'Repozytorium gier i agent kodujący', 'USA — Data Privacy Framework'],
             ['Resend', 'Wysyłka wiadomości e-mail', 'USA — standardowe klauzule umowne'],
             [
