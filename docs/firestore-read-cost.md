@@ -106,6 +106,17 @@ Two rules came out of it, and they generalise to any scheduled sweep here.
 The sweep's response carries `deferred` and `alertsSkipped` so the saving is observable from the
 scheduler's own logs rather than inferred from a read count.
 
+It also carries `stalledCauses`, which is not about cost. `feedback_undelivered` exists to say
+"the relay failed", and on 2026-09-12 it was firing on six rounds of which only two fit that
+description: two were parked on an operator's publish decision since August, one had received a
+message fourteen hours after its agent ended, and one had never had an agent connect. An alert
+that cannot distinguish those is a true statement nobody can act on. The kind still fires — a
+permanent false alarm is bad, silence is worse — but every stalled job now reports *why* nothing
+collected it (`uncollected-feedback.ts`), which is the difference between re-dispatching a round,
+publishing it, and closing it. The cause goes in the log and the response rather than the
+notification body, because notifications are create-only: adding `{{detail}}` to the body would
+render an empty slot in every alert already emitted.
+
 ## Measuring
 
 ```bash
