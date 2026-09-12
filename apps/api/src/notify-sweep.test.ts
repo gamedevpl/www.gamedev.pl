@@ -208,6 +208,7 @@ describe('POST /api/internal/notify-sweep', () => {
       alerts: 0,
       alerted: 0,
       stalled: 0,
+      stalledCauses: {},
       healthResolved: 0,
       unhealthy: 0,
     });
@@ -233,6 +234,7 @@ describe('POST /api/internal/notify-sweep', () => {
       alerts: 0,
       alerted: 0,
       stalled: 0,
+      stalledCauses: {},
       healthResolved: 0,
       unhealthy: 0,
     });
@@ -291,6 +293,24 @@ describe('POST /api/internal/notify-sweep', () => {
         expect(await sweep(app)).toMatchObject({ scanned: 1, deferred: 0, stalled: 1 });
         clock += 2 * 60 * 1000;
       }
+      await app.close();
+    });
+
+    it('says why nothing collected it, so the operator knows which verb to use', async () => {
+      const store = new InMemoryStore();
+      await store.createSubmission(42, 'g:owner', 'Sky Dodge');
+      await store.appendCreatorMessage(42, 'make the ship slower');
+      // The agent finished and left; no relay could ever have delivered this.
+      await store.markAgentEnded(42, new Date(Date.now() - 24 * HOUR_MS).toISOString());
+
+      const app = await buildSweepApp(store, acceptAll, {
+        githubClient: buildingGithubClient(),
+        now: () => Date.now() + 2 * HOUR_MS,
+      });
+
+      const body = await sweep(app);
+      expect(body).toMatchObject({ stalled: 1 });
+      expect(body.stalledCauses).toEqual({ '42': 'agent_ended' });
       await app.close();
     });
 

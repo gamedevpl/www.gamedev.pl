@@ -86,6 +86,7 @@ const FILE_BUCKET = {
   'creator-pat-routes': 'platform',
   'access-token-service': 'platform',
   digest: 'platform',
+  'agent-session': 'platform',
   'sweep-cadence': 'platform',
   'sweep-scope': 'platform',
   'dev-seed-studio': 'platform',
@@ -485,6 +486,7 @@ const FILE_BUCKET = {
   'unsubscribe-token': 'notifications',
   contact: 'notifications',
   'operator-alerts': 'notifications',
+  'uncollected-feedback': 'notifications',
   'notify-sweep-routes': 'notifications',
 
   // submissions.ts is deliberately unmapped: it's the D2 mega-file (registerSubmissionRoutes,

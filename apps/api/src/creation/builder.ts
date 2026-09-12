@@ -2,6 +2,7 @@
 //
 // A round may switch builders only through an explicit handoff.
 
+import { isAgentSessionEnded } from '../platform/agent-session.js';
 import { BUILDERS, isBuilderKind, type BuilderKind } from '@gamedevpl/contract';
 import type { JobState, JobStall, JobTransition } from './job-state.js';
 import { allowsSelfToPlatformHandoff, isActiveBuildRound } from './job-state.js';
@@ -60,9 +61,8 @@ export function shouldSteerFeedbackViaInbox(
   if (record.state === 'publishing') return false;
   if (!isActiveBuildRound(record)) return false;
   // A terminal platform session cannot collect another inbox note.
-  const terminalAgent = ['completed', 'failed', 'timed_out', 'cancelled'].includes(record.agentState ?? '');
-  const submitMarkerActive = record.agentEndedAt && record.agentEndedBy === 'submit' && !terminalAgent;
-  const platformSessionEnded = Boolean(record.agentEndedAt) && !submitMarkerActive;
+  const platformSessionEnded = isAgentSessionEnded(record);
+  const submitMarkerActive = Boolean(record.agentEndedAt) && !platformSessionEnded;
   const platformStalled =
     opts?.stall === 'not_dispatched' || opts?.stall === 'quiet' || (opts?.stall === 'ended' && !submitMarkerActive);
   if ((record.builder ?? 'platform') === 'platform' && (platformSessionEnded || platformStalled)) {
