@@ -199,15 +199,18 @@ Bandwidth is the one an open site spends without anybody asking for it, and it h
 no per-service budget yet. Create one, and point the two that already exist at the
 topic — a budget that only emails is not a brake:
 
-  # The service id is not guessable, and the lookup needs an API this project
-  # has switched off. Enable it once, then read the id rather than pasting one.
-  gcloud services enable cloudbilling.googleapis.com --project ${PROJECT_ID}
-  STORAGE=\$(gcloud beta billing services list \\
-    --filter="displayName='Cloud Storage'" --format='value(name)')
-
+  # services/95FF-2EF5-5EA1 is Cloud Storage, read from the Catalog API on
+  # 2026-09-12. Pasted rather than looked up on purpose: gcloud has no
+  # 'billing services list', and a lookup that fails leaves the filter empty,
+  # which silently makes this a budget over every service in the project.
+  # To re-derive it, enable cloudbilling.googleapis.com and ask the API:
+  #   curl -s -H "Authorization: Bearer \$(gcloud auth print-access-token)" \\
+  #     -H "x-goog-user-project: ${PROJECT_ID}" \\
+  #     'https://cloudbilling.googleapis.com/v1/services?pageSize=5000' |
+  #     python3 -c 'import sys,json; [print(s["name"], s["displayName"]) for s in json.load(sys.stdin)["services"]]'
   gcloud billing budgets create --billing-account ACCOUNT_ID \\
     --display-name='GCS egress lanes=video_media' \\
-    --budget-amount=100PLN --filter-services="\$STORAGE" \\
+    --budget-amount=100PLN --filter-services=services/95FF-2EF5-5EA1 \\
     --threshold-rule=percent=0.5 --threshold-rule=percent=1.0 \\
     --notifications-rule-pubsub-topic=projects/${PROJECT_ID}/topics/${TOPIC}
 
