@@ -54,8 +54,26 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
 
   // Its own short cache, not the 60s status cache.
   const eventsCacheTtlMs = 5_000;
+  // Past the window, one read asks whether the page moved.
+  const eventsProbeWindowMs = 60_000;
   const maxEventsShown = 20;
-  const eventsCache = new Map<number, { expiresAt: number; value: BuildEvent[] }>();
+  interface CachedEvents {
+    expiresAt: number;
+    probeUntil: number;
+    newestId: string | null;
+    total: number;
+    value: BuildEvent[];
+  }
+  const eventsCache = new Map<number, CachedEvents>();
+
+  // Both: the channel prunes on write, and ids can tie on createdAt.
+  async function eventsUnchanged(jobId: number, cached: CachedEvents): Promise<boolean> {
+    const [probe, total] = await Promise.all([
+      store!.listBuildEvents(jobId, { limit: 1 }),
+      store!.countBuildEvents(jobId),
+    ]);
+    return (probe[0]?.id ?? null) === cached.newestId && total === cached.total;
+  }
 
   async function loadBuildEvents(jobId: number): Promise<BuildEvent[]> {
     if (!store) return [];
@@ -64,8 +82,23 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     if (cached && cached.expiresAt > currentTime) {
       return cached.value;
     }
-    const value = await store.listBuildEvents(jobId, { limit: maxEventsShown });
-    eventsCache.set(jobId, { value, expiresAt: currentTime + eventsCacheTtlMs });
+    // A survivor is stale only if another instance appended.
+    if (cached && cached.probeUntil > currentTime && (await eventsUnchanged(jobId, cached))) {
+      cached.expiresAt = currentTime + eventsCacheTtlMs;
+      return cached.value;
+    }
+    const [value, total] = await Promise.all([
+      store.listBuildEvents(jobId, { limit: maxEventsShown }),
+      store.countBuildEvents(jobId),
+    ]);
+    eventsCache.set(jobId, {
+      value,
+      total,
+      expiresAt: currentTime + eventsCacheTtlMs,
+      // Re-armed by a full read only, so a quiet watch refreshes.
+      probeUntil: currentTime + eventsProbeWindowMs,
+      newestId: value[0]?.id ?? null,
+    });
     return value;
   }
 
