@@ -121,7 +121,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     // The switch and the creator's mute; either ends the run.
     const stopped = async (): Promise<DreamOutcome | null> => {
       if (!(await availability.dreamingEnabled())) return 'paused';
-      if ((await store.getUser(record.ownerUid))?.proposalsMutedAt) return 'muted';
+      if (await store.readProposalsMutedAt(record.ownerUid)) return 'muted';
       return null;
     };
     let halt = await stopped();

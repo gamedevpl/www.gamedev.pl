@@ -47,6 +47,9 @@ export interface IdentityStore {
 
   // Null turns concept proposals back on.
   setProposalsMuted(uid: string, at: string | null): Promise<void>;
+
+  // Never cached: a delayed opt-out still spends the creator's money.
+  readProposalsMutedAt(uid: string): Promise<string | null>;
 }
 
 export class InMemoryIdentityStore implements IdentityStore {
@@ -196,6 +199,10 @@ export class InMemoryIdentityStore implements IdentityStore {
   async setProposalsMuted(uid: string, at: string | null): Promise<void> {
     const existing = this.users.get(uid);
     if (existing) this.users.set(uid, { ...existing, proposalsMutedAt: at });
+  }
+
+  async readProposalsMutedAt(uid: string): Promise<string | null> {
+    return this.users.get(uid)?.proposalsMutedAt ?? null;
   }
 }
 
@@ -430,5 +437,11 @@ export class FirestoreIdentityStore implements IdentityStore {
   async setProposalsMuted(uid: string, at: string | null): Promise<void> {
     await this.db.collection('users').doc(uid).set({ proposalsMutedAt: at }, { merge: true });
     this.forgetUser(uid);
+  }
+
+  // Straight to the document; another instance's window is not ours.
+  async readProposalsMutedAt(uid: string): Promise<string | null> {
+    const snap = await this.db.collection('users').doc(uid).get();
+    return (snap.data() as { proposalsMutedAt?: string | null } | undefined)?.proposalsMutedAt ?? null;
   }
 }
