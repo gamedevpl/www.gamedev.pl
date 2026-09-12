@@ -149,7 +149,13 @@ this is the half of its mitigation that reads the artifact.
   game** — published play is served from the snapshot, so a merge alone leaves it playable.
 - **Kill switch that already exists**: removing the game dir from `main` (or
   flipping SPEC status) drops it from the catalog server-side within 60s.
-- **Reviewer abuse flag ✅ live (2026-09-12)**: the review desk's keep/cut/skip vocabulary
+- **Reviewer abuse flag ✅ live and reachable (2026-09-12)**: the desk carries a **Report abuse**
+  action beside the card, deliberately outside the keep/cut/skip group — overloading `cut`
+  would collapse the two axes this design separates. Reporting spends no verdict and needs
+  no checklist. The operator console gained a **Reports** section listing open flags, with
+  Take down / Dismiss; a takedown states what it reached, including the case where the game
+  is still published from the games repo and the kill switch is over there.
+- **Reviewer abuse flag — the mechanism (2026-09-12)**: the review desk's keep/cut/skip vocabulary
   cannot express abuse, so a reviewer who found it had to write a note that reached nobody
   with authority. `POST /api/review/flags` is a separate action from the verdict, needs no
   consensus, and lands in an operator queue (`GET /api/admin/moderation-flags`). Resolving

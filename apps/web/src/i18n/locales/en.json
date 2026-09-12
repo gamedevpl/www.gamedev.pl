@@ -513,7 +513,9 @@
         "commandTypecheck": "Check types",
         "commandKit": "Open GameKit declaration",
         "commandBack": "Back to thread"
-      }
+      },
+      "deliverContentRejected": "Not published — the wording in SPEC.md or GAME.json is not publishable here. Rewrite the title, description or how-to-play and publish again. Your code was not read.",
+      "deliverModerationUnavailable": "Not published — the content check could not run just now. Your files are saved; try again in a moment."
     },
     "editor": {
       "loading": "Loading the editor…",
@@ -1519,7 +1521,27 @@
     "noMedia": "No preview media yet — try the live game.",
     "previewImage": "Preview of {{title}}",
     "shotsLabel": "Screenshots",
-    "shotNamed": "Screenshot {{name}}"
+    "shotNamed": "Screenshot {{name}}",
+    "flag": {
+      "open": "Report abuse",
+      "title": "Report this game",
+      "lead": "This goes straight to an operator, separately from your verdict on “{{title}}”. Use it for content that should not be on the site at all — not for a game you simply think is weak.",
+      "reasonLabel": "What is wrong",
+      "reason": {
+        "sexual": "Sexual content",
+        "hate": "Hate or slurs",
+        "violence": "Gratuitous violence",
+        "targets_person": "Targets a real person",
+        "infringing": "Infringing material",
+        "other": "Something else"
+      },
+      "noteLabel": "What did you see",
+      "notePlaceholder": "Where it appears and what it is. An operator reads this, not the creator.",
+      "cancel": "Cancel",
+      "send": "Send report",
+      "sent": "Reported. An operator takes it from here.",
+      "error": "Could not send that report. Try again in a moment."
+    }
   },
   "creatorProfile": {
     "back": "Back",

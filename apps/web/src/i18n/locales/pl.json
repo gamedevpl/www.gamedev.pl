@@ -519,7 +519,9 @@
         "commandTypecheck": "Sprawdź typy",
         "commandKit": "Otwórz deklarację GameKit",
         "commandBack": "Wróć do wątku"
-      }
+      },
+      "deliverContentRejected": "Nie opublikowano — tekst w SPEC.md lub GAME.json nie nadaje się do publikacji. Popraw tytuł, opis albo instrukcję i opublikuj ponownie. Twój kod nie był czytany.",
+      "deliverModerationUnavailable": "Nie opublikowano — sprawdzenie treści nie mogło się teraz wykonać. Twoje pliki są zapisane; spróbuj za chwilę."
     },
     "editor": {
       "loading": "Wczytywanie edytora…",
@@ -1533,7 +1535,27 @@
     "noMedia": "Brak podglądu — spróbuj żywej gry.",
     "previewImage": "Podgląd: {{title}}",
     "shotsLabel": "Zrzuty ekranu",
-    "shotNamed": "Zrzut {{name}}"
+    "shotNamed": "Zrzut {{name}}",
+    "flag": {
+      "open": "Zgłoś nadużycie",
+      "title": "Zgłoś tę grę",
+      "lead": "To trafia prosto do operatora, niezależnie od twojego werdyktu o „{{title}}”. Użyj tego dla treści, której w ogóle nie powinno być na stronie — nie dla gry, która po prostu jest słaba.",
+      "reasonLabel": "Co jest nie tak",
+      "reason": {
+        "sexual": "Treści seksualne",
+        "hate": "Nienawiść lub obelgi",
+        "violence": "Nieuzasadniona przemoc",
+        "targets_person": "Uderza w realną osobę",
+        "infringing": "Narusza cudze prawa",
+        "other": "Coś innego"
+      },
+      "noteLabel": "Co widzisz",
+      "notePlaceholder": "Gdzie to jest i co to jest. Czyta to operator, nie twórca.",
+      "cancel": "Anuluj",
+      "send": "Wyślij zgłoszenie",
+      "sent": "Zgłoszone. Dalej zajmuje się tym operator.",
+      "error": "Nie udało się wysłać zgłoszenia. Spróbuj za chwilę."
+    }
   },
   "creatorProfile": {
     "back": "Wróć",
