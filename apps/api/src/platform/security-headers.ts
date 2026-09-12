@@ -6,7 +6,11 @@ export const X_CONTENT_TYPE_OPTIONS = 'nosniff';
 export const REFERRER_POLICY = 'strict-origin-when-cross-origin';
 export const STRICT_TRANSPORT_SECURITY = 'max-age=31536000';
 export const FRAME_ANCESTORS_NONE = "frame-ancestors 'none'";
+// js13k director's-cut iframes /play/<slug> from its catalog origin.
+export const FRAME_ANCESTORS_JS13K = 'frame-ancestors https://js13kgames.com https://www.js13kgames.com';
 export const X_FRAME_OPTIONS = 'DENY';
+// Same play-permalink grammar as spa-paths.ts PLAY_PREFIX_PATTERN.
+const PLAY_PERMALINK = /^\/(?:play|ay|ai)\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
 // Never name mic/camera/motion: the game frame delegates them.
 export const PERMISSIONS_POLICY = 'geolocation=(), payment=(), usb=(), display-capture=()';
 
@@ -51,6 +55,12 @@ export function resolveCspReportOnly(env: NodeJS.ProcessEnv): string | null {
 function isHtmlDocument(reply: FastifyReply): boolean {
   const type = reply.getHeader('content-type');
   return typeof type === 'string' && type.toLowerCase().startsWith('text/html');
+}
+
+export function isPlayPermalinkPath(url: string): boolean {
+  const path = url.split('?')[0] ?? url;
+  const pathname = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
+  return PLAY_PERMALINK.test(pathname);
 }
 
 function setIfAbsent(reply: FastifyReply, name: string, value: string): void {
@@ -106,15 +116,19 @@ export function summarizeCspReport(raw: string): Record<string, unknown>[] {
 export function registerSecurityHeaders(app: FastifyInstance, options: SecurityHeadersOptions = {}): void {
   const cspReportOnly = options.cspReportOnly === undefined ? APP_CSP_REPORT_ONLY : options.cspReportOnly;
 
-  app.addHook('onSend', async (_request, reply, payload) => {
+  app.addHook('onSend', async (request, reply, payload) => {
     setIfAbsent(reply, 'x-content-type-options', X_CONTENT_TYPE_OPTIONS);
     setIfAbsent(reply, 'referrer-policy', REFERRER_POLICY);
     setIfAbsent(reply, 'strict-transport-security', STRICT_TRANSPORT_SECURITY);
     if (!isHtmlDocument(reply)) return payload;
     // A route that wrote its own CSP owns its embedding story.
     if (!reply.hasHeader('content-security-policy')) {
-      reply.header('content-security-policy', FRAME_ANCESTORS_NONE);
-      setIfAbsent(reply, 'x-frame-options', X_FRAME_OPTIONS);
+      if (isPlayPermalinkPath(request.url)) {
+        reply.header('content-security-policy', FRAME_ANCESTORS_JS13K);
+      } else {
+        reply.header('content-security-policy', FRAME_ANCESTORS_NONE);
+        setIfAbsent(reply, 'x-frame-options', X_FRAME_OPTIONS);
+      }
     }
     setIfAbsent(reply, 'permissions-policy', PERMISSIONS_POLICY);
     if (cspReportOnly) setIfAbsent(reply, 'content-security-policy-report-only', cspReportOnly);

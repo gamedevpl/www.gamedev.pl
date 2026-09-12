@@ -1,8 +1,17 @@
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameTheater } from './GameTheater.js';
+import './PublicPlayView.css';
 
 export function PublicPlayView({ slug, onExit }: { slug: string; onExit: () => void }) {
   const { t } = useTranslation();
+  const framed = window.parent !== window;
+
+  useEffect(() => {
+    if (!framed) return;
+    document.documentElement.classList.add('is-framed-play');
+    return () => document.documentElement.classList.remove('is-framed-play');
+  }, [framed]);
 
   return (
     <GameTheater
@@ -11,7 +20,7 @@ export function PublicPlayView({ slug, onExit }: { slug: string; onExit: () => v
       source={{ slug }}
       reportSlug={slug}
       remixable={false}
-      onExit={onExit}
+      onExit={framed ? () => undefined : onExit}
     />
   );
 }

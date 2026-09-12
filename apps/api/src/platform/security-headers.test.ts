@@ -8,7 +8,9 @@ import { InMemoryStore } from './store.js';
 import {
   APP_CSP_REPORT_ONLY,
   CSP_REPORT_PATH,
+  FRAME_ANCESTORS_JS13K,
   FRAME_ANCESTORS_NONE,
+  isPlayPermalinkPath,
   PERMISSIONS_POLICY,
   REFERRER_POLICY,
   resolveCspReportOnly,
@@ -50,6 +52,22 @@ describe('security headers', () => {
   it('hardens the unknown-path 404 shell the same way', async () => {
     const res = await app.inject({ method: 'GET', url: '/definitely/not/a/route' });
     expect(res.statusCode).toBe(404);
+    expect(res.headers['content-security-policy']).toBe(FRAME_ANCESTORS_NONE);
+    expect(res.headers['x-frame-options']).toBe(X_FRAME_OPTIONS);
+  });
+
+  it.each(['/play/unicorn-snap', '/play/unicorn-snap?ref=js13k', '/ay/rainbow-surfer'])(
+    'lets js13k frame the play permalink at %s',
+    async (url) => {
+      const res = await app.inject({ method: 'GET', url });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-security-policy']).toBe(FRAME_ANCESTORS_JS13K);
+      expect(res.headers['x-frame-options']).toBeUndefined();
+    },
+  );
+
+  it('does not let js13k frame a typo play path', async () => {
+    const res = await app.inject({ method: 'GET', url: '/play/' });
     expect(res.headers['content-security-policy']).toBe(FRAME_ANCESTORS_NONE);
     expect(res.headers['x-frame-options']).toBe(X_FRAME_OPTIONS);
   });
@@ -134,6 +152,21 @@ describe('security headers', () => {
       delete process.env.APP_CSP_REPORT_ONLY;
       await probe.close();
     }
+  });
+});
+
+describe('isPlayPermalinkPath', () => {
+  it('accepts the catalog play permalinks js13k iframes', () => {
+    expect(isPlayPermalinkPath('/play/unicorn-snap')).toBe(true);
+    expect(isPlayPermalinkPath('/play/rainbow-surfer?x=1')).toBe(true);
+    expect(isPlayPermalinkPath('/ai/seventh-color/')).toBe(true);
+  });
+  it('rejects everything else', () => {
+    expect(isPlayPermalinkPath('/')).toBe(false);
+    expect(isPlayPermalinkPath('/play/')).toBe(false);
+    expect(isPlayPermalinkPath('/play/-bad')).toBe(false);
+    expect(isPlayPermalinkPath('/admin')).toBe(false);
+    expect(isPlayPermalinkPath('/draft/unicorn-snap')).toBe(false);
   });
 });
 
