@@ -214,17 +214,23 @@ describe('VertexChecker', () => {
   it('never caches the fail-closed outcome of an unreachable classifier', async () => {
     let calls = 0;
     const checker = new VertexChecker({
+      retryDelayMs: 0,
+      // Every attempt fails: primary, retry, fallback.
       vertexFetcher: async () => {
         calls += 1;
-        if (calls === 1) throw new Error('Vertex AI network timeout');
+        if (calls <= 3) throw new Error('Vertex AI network timeout');
         return { allowed: true };
       },
     });
 
     // The first verdict describes Vertex being down, not the text.
-    expect(await checker.check('A completely clean game concept')).toEqual({ allowed: false, category: 'other', unavailable: true });
+    expect(await checker.check('A completely clean game concept')).toEqual({
+      allowed: false,
+      category: 'other',
+      unavailable: true,
+    });
     expect(await checker.check('A completely clean game concept')).toEqual({ allowed: true });
-    expect(calls).toBe(2);
+    expect(calls).toBe(4);
   });
 
   it('checkFields pays once for repeated identical fields', async () => {
@@ -332,5 +338,137 @@ describe('when the checker cannot decide', () => {
   it('gives Vertex more than the observed refine latency before giving up', () => {
     // Healthy refine measured 12.3-12.7s; 10s clipped it.
     expect(DEFAULT_MODERATION_TIMEOUT_MS).toBeGreaterThan(12_700);
+  });
+});
+
+// A 429 is one model out of capacity, not a verdict.
+describe('surviving a moment of no capacity', () => {
+  it('retries the same model once before giving up on it', async () => {
+    const models: (string | undefined)[] = [];
+    const checker = new VertexChecker({
+      retryDelayMs: 0,
+      vertexFetcher: async (_prompt, model) => {
+        models.push(model);
+        if (models.length === 1) throw new Error('429 Resource exhausted');
+        return { allowed: true };
+      },
+    });
+
+    expect(await checker.check('A cozy farming game')).toEqual({ allowed: true });
+    expect(models).toEqual([undefined, undefined]);
+  });
+
+  it('falls back to a second model when the first has none left', async () => {
+    const models: (string | undefined)[] = [];
+    const checker = new VertexChecker({
+      retryDelayMs: 0,
+      fallbackModel: 'gemini-3.0-flash',
+      vertexFetcher: async (_prompt, model) => {
+        models.push(model);
+        if (model === undefined) throw new Error('429 Resource exhausted');
+        return { allowed: true };
+      },
+    });
+
+    expect(await checker.check('A cozy farming game')).toEqual({ allowed: true });
+    expect(models).toEqual([undefined, undefined, 'gemini-3.0-flash']);
+  });
+
+  it('does not retry a failure a retry cannot fix', async () => {
+    let attempts = 0;
+    const checker = new VertexChecker({
+      retryDelayMs: 0,
+      vertexFetcher: async () => {
+        attempts += 1;
+        throw new Error('Could not load the default credentials');
+      },
+    });
+
+    expect(await checker.check('A cozy farming game')).toEqual({
+      allowed: false,
+      category: 'other',
+      unavailable: true,
+    });
+    expect(attempts).toBe(1);
+  });
+
+  it('still fails closed when every attempt fails', async () => {
+    const checker = new VertexChecker({
+      retryDelayMs: 0,
+      vertexFetcher: async () => {
+        throw new Error('429 Resource exhausted');
+      },
+    });
+
+    expect(await checker.check('A cozy farming game')).toEqual({
+      allowed: false,
+      category: 'other',
+      unavailable: true,
+    });
+  });
+
+  it('spends no longer than the budget, however many attempts that allows', async () => {
+    let attempts = 0;
+    const checker = new VertexChecker({
+      timeoutMs: 30,
+      retryDelayMs: 0,
+      vertexFetcher: async () => {
+        attempts += 1;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        throw new Error('slow failure');
+      },
+    });
+
+    const started = Date.now();
+    await checker.check('A cozy farming game');
+
+    expect(Date.now() - started).toBeLessThan(200);
+    expect(attempts).toBeLessThanOrEqual(3);
+  });
+});
+
+// Each extra call is another chance to land on a 429.
+describe('checking several fields', () => {
+  it('asks once for all of them, with every field in the prompt', async () => {
+    const prompts: string[] = [];
+    const checker = new VertexChecker({
+      vertexFetcher: async (prompt) => {
+        prompts.push(prompt);
+        return { allowed: true };
+      },
+    });
+
+    expect(await checker.checkFields(['Comet Courier', 'A game about delivering parcels'])).toEqual({ allowed: true });
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain('Comet Courier');
+    expect(prompts[0]).toContain('A game about delivering parcels');
+  });
+
+  it('never pays for a field the regex filter already refused', async () => {
+    let calls = 0;
+    const checker = new VertexChecker({
+      vertexFetcher: async () => {
+        calls += 1;
+        return { allowed: true };
+      },
+    });
+
+    const verdict = await checker.checkFields(['Call me on 555-0142', 'A cozy farming game']);
+
+    expect(verdict).toEqual({ allowed: false, category: 'pii' });
+    expect(calls).toBe(0);
+  });
+
+  it('asks nothing when there is nothing to ask about', async () => {
+    let calls = 0;
+    const checker = new VertexChecker({
+      vertexFetcher: async () => {
+        calls += 1;
+        return { allowed: true };
+      },
+    });
+
+    expect(await checker.checkFields(['', '   '])).toEqual({ allowed: true });
+    expect(calls).toBe(0);
   });
 });

@@ -151,12 +151,16 @@ export interface VertexCheckerOptions {
   projectId?: string;
   region?: string;
   model?: string;
+  // Tried when the primary runs out of capacity; own quota pool.
+  fallbackModel?: string;
+  // Between failure and retry; short, someone is waiting.
+  retryDelayMs?: number;
   // Gemini 3 thinking level ('low' | 'medium' | 'high'). gemini-3.8-flash dropped
   // 'minimal' (400 THINKING_LEVEL_MINIMAL unsupported) — 'low' is now the floor.
   thinkingLevel?: string;
   timeoutMs?: number;
   // Custom fetcher/client seam for testing without GCP network calls
-  vertexFetcher?: (prompt: string) => Promise<{ allowed: boolean; category?: string }>;
+  vertexFetcher?: (prompt: string, model?: string) => Promise<{ allowed: boolean; category?: string }>;
   // Lower-level seam than `vertexFetcher`: swap the genaicode client (i.e. a stub
   // ModelProvider) to exercise real prompt/response handling with no network.
   client?: GenAIClient;
@@ -169,7 +173,7 @@ const VerdictSchema = z.object({
   category: z.string().nullish(),
 });
 
-// 20s: healthy refine measured 12.3-12.7s, so 10s clipped ordinary latency.
+// 20s: refine measured 12.3-12.7s, so 10s clipped it.
 export const DEFAULT_MODERATION_TIMEOUT_MS = 20_000;
 
 export class VertexChecker implements ContentChecker {
@@ -180,9 +184,10 @@ export class VertexChecker implements ContentChecker {
   private verdictCache = new Map<string, { verdict: ModerationVerdict; expiresAt: number }>();
   private static readonly VERDICT_CACHE_MAX = 1000;
   private static readonly VERDICT_CACHE_TTL_MS = 10 * 60 * 1000;
-  private vertexFetcher?: (prompt: string) => Promise<{ allowed: boolean; category?: string }>;
-  // Built lazily; tests inject vertexFetcher and stay offline.
-  private client?: GenAIClient;
+  private vertexFetcher?: (prompt: string, model?: string) => Promise<{ allowed: boolean; category?: string }>;
+  private fallbackModel?: string;
+  private retryDelayMs: number;
+  private clients = new Map<string, GenAIClient>();
   constructor(options: VertexCheckerOptions = {}) {
     this.options = options;
     this.thinkingLevel = options.thinkingLevel ?? process.env.VERTEX_THINKING_LEVEL ?? 'low';
@@ -193,10 +198,15 @@ export class VertexChecker implements ContentChecker {
       );
     this.patternChecker = new PatternChecker();
     this.vertexFetcher = options.vertexFetcher;
+    this.fallbackModel = options.fallbackModel ?? process.env.VERTEX_MODERATION_FALLBACK_MODEL ?? 'gemini-3.0-flash';
+    this.retryDelayMs = options.retryDelayMs ?? 250;
   }
 
-  private getClient(): GenAIClient {
-    this.client ??=
+  private getClient(model?: string): GenAIClient {
+    const key = model ?? 'primary';
+    const existing = this.clients.get(key);
+    if (existing) return existing;
+    const built =
       this.options.client ??
       createVertexClient({
         projectId: this.options.projectId,
@@ -204,7 +214,7 @@ export class VertexChecker implements ContentChecker {
         // 'global' is the safe default. VERTEX_REGION can override without a code change.
         region: this.options.region,
         defaultRegion: 'global',
-        model: this.options.model,
+        model: model ?? this.options.model,
         defaultModel: 'gemini-3.8-flash',
         // Thinking level goes on the request via `.thinking()` below, not here: genaicode's
         // Google provider computes its own thinkingConfig from `request.thinking` whenever a
@@ -214,7 +224,8 @@ export class VertexChecker implements ContentChecker {
           responseMimeType: 'application/json',
         } as VertexGenerationConfig,
       });
-    return this.client;
+    this.clients.set(key, built);
+    return built;
   }
 
   private cacheKey(text: string): string {
@@ -256,30 +267,51 @@ export class VertexChecker implements ContentChecker {
 
     // 3. Run Vertex AI LLM moderation check
     this.options.onPaidCall?.();
-    try {
-      const result = await this.callVertex(text);
-      const category = isValidCategory(result.category) ? (result.category as RejectCategory) : 'other';
-      const verdict: ModerationVerdict = result.allowed ? { allowed: true } : { allowed: false, category };
-      this.writeCachedVerdict(key, verdict, now);
-      return verdict;
-    } catch (err) {
-      // Fail closed, never cached: describes Vertex, not the text.
-      console.warn('Vertex AI moderation failed or timed out, failing closed:', err);
-      return { allowed: false, category: 'other', unavailable: true };
+    const deadline = now + this.timeoutMs;
+    let lastError: unknown;
+
+    // Same model twice, then a fallback. One shared deadline bounds the wait.
+    for (const [index, model] of [undefined, undefined, this.fallbackModel].entries()) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) break;
+      if (index > 0) {
+        if (index === 2 && !this.fallbackModel) break;
+        await sleep(Math.min(this.retryDelayMs, Math.max(0, remaining)));
+      }
+      try {
+        const result = await this.callVertex(text, model, deadline - Date.now());
+        const category = isValidCategory(result.category) ? (result.category as RejectCategory) : 'other';
+        const verdict: ModerationVerdict = result.allowed ? { allowed: true } : { allowed: false, category };
+        this.writeCachedVerdict(key, verdict, now);
+        return verdict;
+      } catch (err) {
+        lastError = err;
+        // A bad request or bad credentials answers the same three times.
+        if (!isRetryableVertexError(err)) break;
+      }
     }
+
+    // Fail closed, never cached: describes Vertex, not the text.
+    console.warn('Vertex AI moderation failed or timed out, failing closed:', lastError);
+    return { allowed: false, category: 'other', unavailable: true };
   }
 
+  // One call for all fields: each extra call is another chance at a 429.
   async checkFields(fields: string[]): Promise<ModerationVerdict> {
-    for (const field of fields) {
-      const verdict = await this.check(field);
-      if (!verdict.allowed) return verdict;
-    }
-    return { allowed: true };
+    const patternVerdict = await this.patternChecker.checkFields(fields);
+    if (!patternVerdict.allowed) return patternVerdict;
+    const present = fields.filter((field) => field.trim().length > 0);
+    if (present.length === 0) return { allowed: true };
+    return this.check(present.join('\n---\n'));
   }
 
-  private async callVertex(text: string): Promise<{ allowed: boolean; category?: string }> {
+  private async callVertex(
+    text: string,
+    model?: string,
+    timeoutMs = this.timeoutMs,
+  ): Promise<{ allowed: boolean; category?: string }> {
     if (this.vertexFetcher) {
-      return this.vertexFetcher(text);
+      return this.vertexFetcher(text, model);
     }
 
     const promptText = `You are a strict content safety classifier for a web game creation platform.
@@ -295,10 +327,10 @@ ${text}
 
     // A malformed body, a non-boolean `allowed`, or the abort firing all throw
     // out of here — and `check()` turns any throw into a fail-closed verdict.
-    const verdict = await this.getClient()(promptText)
+    const verdict = await this.getClient(model)(promptText)
       .temperature(0)
       .thinking({ level: this.thinkingLevel as 'minimal' | 'low' | 'medium' | 'high' })
-      .signal(AbortSignal.timeout(this.timeoutMs))
+      .signal(AbortSignal.timeout(Math.max(1, timeoutMs)))
       .json((value) => VerdictSchema.parse(value));
 
     return {
@@ -306,6 +338,17 @@ ${text}
       category: verdict.category ?? undefined,
     };
   }
+}
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+// Capacity and deadlines deserve a second look; bad input does not.
+const RETRYABLE_VERTEX_ERROR = /429|RESOURCE_EXHAUSTED|503|UNAVAILABLE|abort|timed? ?out|deadline|ECONNRESET|ETIMEDOUT/i;
+
+export function isRetryableVertexError(err: unknown): boolean {
+  const name = err instanceof Error ? err.name : '';
+  const message = err instanceof Error ? err.message : String(err);
+  return RETRYABLE_VERTEX_ERROR.test(`${name} ${message}`);
 }
 
 function isValidCategory(cat?: string): boolean {
