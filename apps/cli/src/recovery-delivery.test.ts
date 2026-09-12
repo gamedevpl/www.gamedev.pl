@@ -9,6 +9,7 @@ import { submitGame } from './submit.js';
 import { isRecoveryReady } from './recovery-state.js';
 it.each([
   ['missing', 'none'],
+  ['missing', 'retry'],
   ['archived', 'none'],
   ['archived', 'version'],
   ['archived', 'disjoint'],
@@ -60,6 +61,7 @@ it.each([
           if (puts > 300) return new Response('{}', { status: 429 });
           const file = JSON.parse(String(init?.body));
           staged.set(file.path, file.content);
+          if (change === 'retry' && puts === 170) throw new Error('response lost');
           body = { accepted: true };
         } else if (url.endsWith('/stage/delete')) body = { accepted: true };
         else if (url.endsWith('/sources/deliver')) {
@@ -69,9 +71,11 @@ it.each([
         return new Response(JSON.stringify(body));
       },
     });
+    if (change === 'retry')
+      await expect(recoverCheckout({ api, cwd, yes: true, write: () => {} })).rejects.toThrow('response lost');
     await recoverCheckout({ api, cwd, yes: true, write: () => {} });
     expect(isRecoveryReady(cwd, 'sky')).toBe(true);
-    changed = change !== 'none';
+    changed = change !== 'none' && change !== 'retry';
     if (changed) {
       await expect(
         submitGame({ api, slug: 'sky', dest: cwd, run: () => ({ status: 0, stderr: '' }) }),

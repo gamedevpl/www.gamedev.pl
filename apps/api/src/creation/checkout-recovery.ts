@@ -33,7 +33,7 @@ export function registerCheckoutRecovery(
       return { kind: 'occupied' as const };
     return {
       kind:
-        archived && (!holder.recoveryKey || holder.publishedAt)
+        archived && ['published', 'failed', 'canceled', 'abandoned'].includes(holder.state ?? '')
           ? ('archived' as const)
           : holder.state === 'canceled'
             ? ('canceled' as const)
