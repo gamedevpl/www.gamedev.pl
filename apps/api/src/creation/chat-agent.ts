@@ -1,4 +1,5 @@
 import type { ChatAgentScope } from '@gamedevpl/contract';
+import { callWithVertexResilience } from '../platform/vertex-resilience.js';
 import { image, resultText, resultToolCalls, user, type GenAIClient, type ToolDefinition } from 'genaicode';
 import { createVertexClient } from '../platform/genai.js';
 import type { ChatTurn } from './chat-turns.js';
@@ -209,12 +210,17 @@ export class VertexStudioChatAgent implements StudioChatAgent {
       throw new Error(`chat agent prompt exceeded ${MAX_PROMPT_CHARS} chars (${promptChars})`);
     }
 
-    const result = await builder
-      .tools([BUILD_TOOL], 'auto')
-      .thinking({ level: 'low' })
-      .temperature(0.2)
-      .signal(AbortSignal.timeout(this.options.timeoutMs ?? DEFAULT_CHAT_TIMEOUT_MS))
-      .run();
+    // Retry within the budget; no stand-in mid-conversation.
+    const result = await callWithVertexResilience({
+      timeoutMs: this.options.timeoutMs ?? DEFAULT_CHAT_TIMEOUT_MS,
+      attempt: (_model, timeoutMs) =>
+        builder
+          .tools([BUILD_TOOL], 'auto')
+          .thinking({ level: 'low' })
+          .temperature(0.2)
+          .signal(AbortSignal.timeout(timeoutMs))
+          .run(),
+    });
     const tokens = result.usage
       ? { input: result.usage.inputTokens ?? 0, output: result.usage.outputTokens ?? 0 }
       : undefined;

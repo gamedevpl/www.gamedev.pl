@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { GenAIClient } from 'genaicode';
 import { z } from 'zod';
 import { createOpenAiClient, createVertexClient, type VertexGenerationConfig } from './genai.js';
+import { callWithVertexResilience } from './vertex-resilience.js';
 import {
   CATEGORY_TERMS,
   MAX_URLS_IN_TEXT,
@@ -286,39 +287,28 @@ export class VertexChecker implements ContentChecker {
     if (cached) return cached;
 
     // 3. Run Vertex AI LLM moderation check
-    const deadline = now + this.timeoutMs;
-    let lastError: unknown;
     let lastProvider = 'vertex';
-
-    // Same model twice, then a fallback. One shared deadline bounds the wait.
-    for (const [index, model] of [undefined, undefined, this.fallbackModel].entries()) {
-      const remaining = deadline - Date.now();
-      if (remaining <= 0) break;
-      if (index > 0) {
-        if (index === 2 && !this.fallbackModel) break;
-        await sleep(Math.min(this.retryDelayMs, Math.max(0, remaining)));
-      }
-      try {
-        lastProvider = model ? `${this.fallbackProvider}/${model}` : 'vertex';
-        // Per attempt: a retry is another billed call.
-        this.options.onPaidCall?.();
-        const result = await this.callVertex(text, model, deadline - Date.now());
-        const category = isValidCategory(result.category) ? (result.category as RejectCategory) : 'other';
-        const verdict: ModerationVerdict = result.allowed ? { allowed: true } : { allowed: false, category };
-        this.writeCachedVerdict(key, verdict, now);
-        return verdict;
-      } catch (err) {
-        lastError = err;
-        // A bad request or bad credentials answers the same three times.
-        if (!isRetryableVertexError(err)) break;
-      }
+    try {
+      const result = await callWithVertexResilience({
+        timeoutMs: this.timeoutMs,
+        retryDelayMs: this.retryDelayMs,
+        fallbackModel: this.fallbackModel,
+        onAttempt: (model) => {
+          lastProvider = model ? `${this.fallbackProvider}/${model}` : 'vertex';
+          // Per attempt: a retry is another billed call.
+          this.options.onPaidCall?.();
+        },
+        attempt: (model, timeoutMs) => this.callVertex(text, model, timeoutMs),
+      });
+      const category = isValidCategory(result.category) ? (result.category as RejectCategory) : 'other';
+      const verdict: ModerationVerdict = result.allowed ? { allowed: true } : { allowed: false, category };
+      this.writeCachedVerdict(key, verdict, now);
+      return verdict;
+    } catch (err) {
+      // Fail closed, never cached. Names the provider: triage starts there.
+      console.warn(`Moderation failed or timed out on ${lastProvider}, failing closed:`, err);
     }
 
-    // Fail closed, never cached. Names the provider: triage starts there.
-    console.warn(
-      `Moderation failed or timed out on ${lastProvider}, failing closed:`,
-      lastError,
-    );
     return { allowed: false, category: 'other', unavailable: true };
   }
 
@@ -394,17 +384,6 @@ export function resolveFallbackModel(input: {
     return undefined;
   }
   return model;
-}
-
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-// Capacity and deadlines deserve a second look; bad input does not.
-const RETRYABLE_VERTEX_ERROR = /429|RESOURCE_EXHAUSTED|503|UNAVAILABLE|abort|timed? ?out|deadline|ECONNRESET|ETIMEDOUT/i;
-
-export function isRetryableVertexError(err: unknown): boolean {
-  const name = err instanceof Error ? err.name : '';
-  const message = err instanceof Error ? err.message : String(err);
-  return RETRYABLE_VERTEX_ERROR.test(`${name} ${message}`);
 }
 
 function isValidCategory(cat?: string): boolean {

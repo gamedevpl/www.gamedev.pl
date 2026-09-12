@@ -4,6 +4,7 @@ import type { GenAIClient } from 'genaicode';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { checkUserAccess } from '../platform/auth.js';
+import { callWithVertexResilience } from '../platform/vertex-resilience.js';
 import { createVertexClient, type VertexGenerationConfig } from '../platform/genai.js';
 import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
@@ -138,6 +139,7 @@ export class VertexSpecRefiner implements SpecRefiner {
   // Lazy for the same reason as VertexChecker: building one must not touch GCP.
   private client?: GenAIClient;
   private groundingClient?: GenAIClient;
+  private spareClients = new Map<string, GenAIClient>();
 
   constructor(options: VertexSpecRefinerOptions = {}) {
     this.options = options;
@@ -147,7 +149,20 @@ export class VertexSpecRefiner implements SpecRefiner {
     this.refinerFetcher = options.refinerFetcher;
   }
 
-  private getClient(): GenAIClient {
+  private getClient(model?: string): GenAIClient {
+    if (model) {
+      // Cached per model.
+      const spare = this.spareClients.get(model) ?? this.options.client ?? createVertexClient({
+        projectId: this.options.projectId,
+        region: this.options.region,
+        defaultRegion: 'global',
+        model,
+        defaultModel: model,
+        generationConfig: { responseMimeType: 'application/json' } as VertexGenerationConfig,
+      });
+      this.spareClients.set(model, spare);
+      return spare;
+    }
     this.client ??=
       this.options.client ??
       createVertexClient({
@@ -258,11 +273,16 @@ Game Concept:
 ${params.concept}
 """`;
 
-      const parsed = await this.getClient()(promptText)
-        .temperature(0.2)
-        .thinking({ level: 'low' })
-        .signal(AbortSignal.timeout(this.timeoutMs))
-        .json((value) => RefineResultSchema.parse(value));
+      // A 429 here stopped a deploy; one attempt is not enough.
+      const parsed = await callWithVertexResilience({
+        timeoutMs: this.timeoutMs,
+        attempt: (model, timeoutMs) =>
+          this.getClient(model)(promptText)
+            .temperature(0.2)
+            .thinking({ level: 'low' })
+            .signal(AbortSignal.timeout(timeoutMs))
+            .json((value) => RefineResultSchema.parse(value)),
+      });
 
       const suggestedTitle = cleanSuggestedTitle(parsed.suggestedTitle);
 
