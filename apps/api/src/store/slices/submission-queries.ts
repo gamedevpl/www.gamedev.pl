@@ -57,14 +57,14 @@ export class InMemorySubmissionQueryStore implements SubmissionQueryStore {
   async listSubmissionsBySlug(slug: string): Promise<SubmissionRecord[]> {
     return Array.from(this.submissions.values())
       .filter((s) => s.slug === slug)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)
       .map((s) => ({ ...s }));
   }
 
   async getPublishedSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
     const match = Array.from(this.submissions.values())
       .filter((s) => s.slug === slug && s.publishedAt && !s.abandonedAt)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)[0];
     return match ? { ...match } : null;
   }
 
@@ -97,7 +97,7 @@ export class InMemorySubmissionQueryStore implements SubmissionQueryStore {
   async listSubmissionsByOwner(ownerUid: string, opts?: { limit?: number }): Promise<SubmissionRecord[]> {
     const sorted = Array.from(this.submissions.values())
       .filter((s) => s.ownerUid === ownerUid)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)
       .map((s) => ({ ...s }));
     return opts?.limit !== undefined ? sorted.slice(0, opts.limit) : sorted;
   }
@@ -105,7 +105,7 @@ export class InMemorySubmissionQueryStore implements SubmissionQueryStore {
   async listOpenRoundsByOwner(ownerUid: string): Promise<SubmissionRecord[]> {
     return Array.from(this.submissions.values())
       .filter((s) => s.ownerUid === ownerUid && isRoundOpen(s))
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)
       .map((s) => ({ ...s }));
   }
 
@@ -162,7 +162,9 @@ export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
   async listSubmissionsBySlug(slug: string): Promise<SubmissionRecord[]> {
     // Equality-only query, no composite index needed; bounded by jobs per game.
     const snap = await this.db.collection('submissions').where('slug', '==', slug).get();
-    return snap.docs.map((d) => fromStoredSubmission(d.data())).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return snap.docs
+      .map((d) => fromStoredSubmission(d.data()))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId);
   }
 
   async getPublishedSubmissionBySlug(slug: string): Promise<SubmissionRecord | null> {
@@ -171,7 +173,7 @@ export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
     const records = snap.docs
       .map((d) => fromStoredSubmission(d.data()))
       .filter((record) => record.publishedAt && !record.abandonedAt);
-    records.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    records.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId);
     return records[0] ?? null;
   }
 
@@ -209,7 +211,7 @@ export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
     const snap = await this.db.collection('submissions').where('ownerUid', '==', ownerUid).get();
     const sorted = snap.docs
       .map((d) => fromStoredSubmission(d.data()))
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId);
     return opts?.limit !== undefined ? sorted.slice(0, opts.limit) : sorted;
   }
 
@@ -219,7 +221,7 @@ export class FirestoreSubmissionQueryStore implements SubmissionQueryStore {
     return snap.docs
       .map((d) => fromStoredSubmission(d.data()))
       .filter(isRoundOpen)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId);
   }
 
   async listQueuedSubmissions(): Promise<SubmissionRecord[]> {

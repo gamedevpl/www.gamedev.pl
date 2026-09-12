@@ -23,8 +23,6 @@ export interface SubmissionRecord {
    * not a state to design around.
    */
   slug?: string;
-  // Latest candidate version delivered to the games store.
-  // Kept here so the preview never lists the bucket per poll.
   deliveredVersion?: string;
   /**
    * Latest Studio-playable delivery (preview or publish). Preview-only rounds update
@@ -32,7 +30,6 @@ export interface SubmissionRecord {
    * reconciliation still wait for a sealed publish delivery.
    */
   previewVersion?: string;
-  // The kit engine this round builds against, fixed by its first get_kit.
   // Dropped when the round closes; replaced on kit_outdated or lost retention.
   roundKitEngineRef?: string;
   /**
@@ -71,6 +68,7 @@ export interface SubmissionRecord {
   draftSharedAt?: string;
   // Operator takedown. Unlike draftSharedAt, not the creator's to undo.
   moderationBlockedAt?: string;
+  recoveryKey?: string;
   /**
    * How many clarifying questions the creator actually answered before this was
    * submitted — 0 when they skipped the QA panel or it had nothing to ask.

@@ -5,6 +5,12 @@ import type { SubmissionStatus } from '../../platform/submission-status.js';
 import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
 
 export interface SubmissionStore {
+  claimSubmissionSlug(
+    jobId: number,
+    slug: string,
+    sourceJobId: number | null,
+    recovery?: { key: string; spec: string; locale: string },
+  ): Promise<boolean>;
   setLocalActivity(jobId: number, activity: LocalActivity, start: boolean): Promise<boolean>;
   createSubmission(jobId: number, ownerUid: string, title: string): Promise<SubmissionRecord>;
 
@@ -120,6 +126,57 @@ export class FirestoreSubmissionStore implements SubmissionStore {
       )
         return false;
       tx.update(ref, { localActivity: { ...activity, generation: doc.data()?.roundGeneration ?? 0 } });
+      return true;
+    });
+  }
+
+  async claimSubmissionSlug(
+    jobId: number,
+    slug: string,
+    sourceJobId: number | null,
+    recovery?: { key: string; spec: string; locale: string },
+  ): Promise<boolean> {
+    return this.db.runTransaction(async (tx) => {
+      const target = await tx.get(this.ref(jobId));
+      const rows = await tx.get(this.db.collection('submissions').where('slug', '==', slug));
+      const game = await tx.get(this.db.collection('games').doc(slug));
+      if (game.data()?.publication) return false;
+      const records = rows.docs.map((d) => fromStoredSubmission(d.data()));
+      const holder = records.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)[0];
+      if (!target.exists || target.data()?.slug) return false;
+      if (
+        sourceJobId === null
+          ? records.length > 0
+          : !holder ||
+            holder.jobId !== sourceJobId ||
+            holder.ownerUid !== target.data()?.ownerUid ||
+            holder.state !== 'canceled' ||
+            holder.abandonedAt ||
+            holder.moderationBlockedAt
+      )
+        return false;
+      tx.update(this.ref(jobId), {
+        slug,
+        ...(recovery
+          ? {
+              recoveryKey: recovery.key,
+              spec: recovery.spec,
+              qa: [],
+              locale: recovery.locale,
+              builder: 'self' as const,
+              state: 'queued' as const,
+              stateSince: new Date().toISOString(),
+              transitions: [
+                {
+                  to: 'queued' as const,
+                  at: new Date().toISOString(),
+                  by: 'creator' as const,
+                  reason: 'checkout_recovered',
+                },
+              ],
+            }
+          : {}),
+      });
       return true;
     });
   }

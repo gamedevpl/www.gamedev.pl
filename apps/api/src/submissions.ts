@@ -1,3 +1,4 @@
+import { registerCheckoutRecovery } from './creation/checkout-recovery.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AgentChannelOptions } from './agent-surface/agent-channel.js';
@@ -145,10 +146,6 @@ export type SubmissionRoutesStore = IdentityStore &
   QuotaStore &
   AgentKeysStore;
 
-// Base64 PNG, no data: prefix — same shape as a playtest screenshot.
-
-// Re-exported for callers (and tests) that knew it here; it now lives with the status
-// parser, which reads the same marker back off the PR to rebuild the revision history.
 export { CREATOR_FEEDBACK_MARKER };
 
 interface CachedStatus {
@@ -168,7 +165,6 @@ export interface SubmissionRoutesOptions {
   githubClient?: GitHubClient;
   fetchImpl?: typeof fetch;
   now?: () => number;
-  // Kept wide for the factories it forwards to; narrowing is Phase 3.
   store?: Store;
   playableWithoutSession?: (slug: string) => Promise<boolean>;
   dailySubmissionQuota?: number;
@@ -186,18 +182,13 @@ export interface SubmissionRoutesOptions {
   dailyFeedbackQuota?: number;
   /** Separate from submissions so improving a live game does not crowd out creating one. */
   dailyImprovementQuota?: number;
-  // Fronts every feedback/improve message (chat-agent.ts). Always on when set.
   chatAgent?: StudioChatAgent;
   intakeAgent?: IntakeAgent;
-  // The chat agent's own circuit breaker (creation-limits.ts); null disables.
   chatGate?: ChatGate | null;
-  // Ceiling used when the config doc sets none (creation-limits.ts).
   globalDailyChatCap?: number;
-  // Per-creator daily ceiling on chat-agent turns — separate from build quota.
   dailyChatQuota?: number;
   contentChecker?: ContentChecker;
   internalAuthVerifier?: InternalAuthVerifier;
-  // Seed handoff (seed-dispatch.ts); undefined reads env, null forces inline.
   seedDispatch?: SeedDispatchClient | null;
   /** Mailer for notification email fan-out; defaults to createMailerFromEnv(). */
   notifyMailer?: Mailer;
@@ -224,9 +215,7 @@ export interface SubmissionRoutesOptions {
    * an empty directory, which is what they all did before seeding existed.
    */
   gameSeeder?: GameSeeder;
-  // Provider ids `gameSeeder` was built with, and the fallback provider.
   seedProviders?: { providers: string[]; defaultProvider: string };
-  // Test seam for the availability gate.
   seedAvailabilityGate?: SeedAvailabilityGate;
   agentChannel?: Pick<
     AgentChannelOptions,
@@ -272,7 +261,6 @@ export interface SubmissionRoutesOptions {
    */
   adminUids?: Set<string>;
 
-  // Who may raise a moderation flag; the review desk's own allowlist.
   reviewerUids?: Set<string>;
 }
 
@@ -289,9 +277,6 @@ function checkUserAccess(request: FastifyRequest, reply: FastifyReply): boolean 
 }
 
 /** What `registerSubmissionRoutes` hands back for other route modules to build on. */
-// What the two agent surfaces need that only this registrar can build.
-
-// buildApp mounts both and supplies the rest — store, buckets, gate trigger, flags.
 
 export interface AgentSurfaceSeams {
   channel: Pick<
@@ -318,19 +303,14 @@ export interface AgentSurfaceSeams {
 }
 
 export interface SubmissionRoutesHandle {
-  // The agent channel and MCP mounts' half of the wiring; buildApp mounts both.
   agentSurface: AgentSurfaceSeams;
   /** The resolved games-repo client, or null when this deployment cannot reach one. */
   githubClient: GitHubClient | null;
   /** Whether the resolved registry has a platform backend. */
   hasPlatformBackend: boolean;
-  // Vendors with a real backend built at boot.
   configuredVendors: string[];
-  // MANAGED_AGENT_VENDOR, the fallback when no override is stored.
   defaultVendor?: string;
-  // Seed vendors configured at boot — vertex is always in here.
   configuredSeedProviders: string[];
-  // Fallback when no console override is stored.
   defaultSeedProvider: string;
   /**
    * Finds a published entry in the repo-backed catalog only.
@@ -397,7 +377,6 @@ export interface SubmissionRoutesHandle {
     jobId: number;
     log: { error: (context: object, message: string) => void };
   }) => Promise<{ outcome: 'retried' | 'exhausted' | 'skipped'; reason?: string }>;
-  // /api/internal/seed's worker: first dispatch from the stored brief.
   dispatchQueuedJob: DispatchQueuedJob;
   // The seed route's other jobs: regenerate a seed, assemble a preview.
   regenerateSeedNow: SeedPipeline['runSeedRegeneration'];
@@ -1338,6 +1317,15 @@ export async function registerSubmissionRoutes(
     confirmSlugClaim,
     dispatchQueuedJob,
     ...(seedDispatch ? { enqueueSeed: (jobId: number) => seedDispatch.enqueue(jobId) } : {}),
+  });
+
+  registerCheckoutRecovery(app, {
+    store,
+    githubClient,
+    submissionTokenSecret,
+    checkUserAccess,
+    createGame,
+    isSlugPublished: catalogRoutes.isSlugPublished,
   });
 
   registerCreateGameRoute(app, {

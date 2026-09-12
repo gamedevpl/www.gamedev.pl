@@ -8,6 +8,14 @@ export abstract class SubmissionFacade {
   ): Promise<boolean> {
     return this.submissionStore.setLocalActivity(jobId, activity, start);
   }
+  async claimSubmissionSlug(
+    jobId: number,
+    slug: string,
+    sourceJobId: number | null,
+    recovery?: { key: string; spec: string; locale: string },
+  ): Promise<boolean> {
+    return this.submissionStore.claimSubmissionSlug(jobId, slug, sourceJobId, recovery);
+  }
   async setSubmissionSlug(jobId: number, slug: string): Promise<void> {
     return this.submissionStore.setSubmissionSlug(jobId, slug);
   }

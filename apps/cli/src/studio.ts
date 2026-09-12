@@ -8,12 +8,18 @@ export async function studioToken(api: ApiClient, slug: string): Promise<string>
     `/api/me/studio?game=${encodeURIComponent(slug)}`,
   );
   const row = (studio.games ?? []).find((game) => game.slug === slug);
-  if (!row?.token)
+  if (!row?.token) {
+    const recovery = await api
+      .request<{ kind: string }>('GET', `/api/me/studio/games/${encodeURIComponent(slug)}/recovery`)
+      .catch(() => null);
     throw new CliError(
-      `no owned game ${slug}`,
+      recovery?.kind === 'canceled'
+        ? `The round for ${slug} was canceled. Local sources can be recovered.`
+        : `no owned game ${slug}`,
       EXIT_INPUT,
-      `${cliUsage('games')} lists existing games; to create a new game, run gamedevpl and describe your idea`,
+      `${cliUsage('games')} lists accessible games. If you have local sources after cancellation/deletion: gamedevpl recover <checkout-directory>; to create a new game, run gamedevpl and describe your idea`,
     );
+  }
   return row.token;
 }
 
