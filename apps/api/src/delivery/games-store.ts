@@ -45,7 +45,12 @@ import {
 } from './source-file-bytes.js';
 import { parseKitSidecar } from '../platform/kit-registry.js';
 import { KIT_REGISTRY_OBJECT, parseKitRegistry, type KitRegistry } from '../platform/kit-window.js';
-import { findUnresolvedSourceLinks, formatSourceLinkError, sourceFilesToMap } from './source-link-check.js';
+import {
+  findUnresolvedSourceLinks,
+  formatSourceLinkError,
+  sourceFilesToMap,
+  type KitSharedLookup,
+} from './source-link-check.js';
 import { BANNED_ANY_GUIDANCE, describeBannedAnyFinding, findBannedAnyUsages } from './ts-any-scan.js';
 import { missingFreshEditorFile } from './editor-upload-requirements.js';
 
@@ -192,6 +197,7 @@ export function validateSourceUpload(
   mode: DeliveryMode = 'publish',
   traceDerivedByGate = false,
   requireCompiledEditor = false,
+  kitSharedPaths?: KitSharedLookup,
 ): SourceFile[] {
   if (files.length === 0) throw new InvalidUploadError('no files in upload');
   if (files.length > MAX_UPLOAD_FILES) {
@@ -352,7 +358,7 @@ export function validateSourceUpload(
     const trailer = more ? `${hidden > 0 ? `, and ${hidden} not listed` : ''})` : '';
     throw new InvalidUploadError(`${first}${more}${trailer}. ${BANNED_ANY_GUIDANCE}`, 'any-type');
   }
-  const linkFindings = findUnresolvedSourceLinks(sourceFilesToMap(normalized));
+  const linkFindings = findUnresolvedSourceLinks(sourceFilesToMap(normalized), kitSharedPaths);
   if (linkFindings.length > 0) {
     throw new InvalidUploadError(formatSourceLinkError(linkFindings), 'symbols');
   }
@@ -361,6 +367,14 @@ export function validateSourceUpload(
   // ALLOWED_SOURCE_FILES note. Missing file → Check 28 on the gate, not a 400 at upload.
 
   return normalized;
+}
+
+// Copied origins skip Kit membership; agent delivery stays fail-closed.
+function copiedCandidateKitLookup(
+  origin: 'editor' | 'remix' | 'seal' | undefined,
+  mode: DeliveryMode,
+): KitSharedLookup | undefined {
+  return origin === 'editor' || origin === 'remix' || origin === 'seal' || mode === 'proposal' ? 'defer' : undefined;
 }
 
 /** Provenance for one stored version. Answers "where did this come from?" years later. */
@@ -597,6 +611,8 @@ export interface GamesStore {
     proposal?: { id: string; proposerUid: string };
     authorship?: 'agent' | 'owner' | 'mixed';
     summary?: string;
+    // Agent delivery supplies a Set; copies may defer.
+    kitSharedPaths?: KitSharedLookup;
   }): Promise<{ version: string; manifest: VersionManifest }>;
   /**
    * Flips an accepted proposal version from `proposal` to `publish` and records who
@@ -909,6 +925,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         mode === 'proposal' ? 'publish' : mode,
         input.origin === 'seal',
         input.requireCompiledEditor === true,
+        input.kitSharedPaths ?? copiedCandidateKitLookup(input.origin, mode),
       );
       const at = new Date(now());
       const version = versionId(at);

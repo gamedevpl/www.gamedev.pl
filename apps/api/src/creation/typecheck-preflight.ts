@@ -168,12 +168,15 @@ export function typecheckDeliverySources(input: {
     files.set(`${ROOT}/${rel}`, source);
   }
   const gameRoot = `${ROOT}/games/${input.slug}`;
+  // Root game files plus the ambient kit declaration.
+  const roots: string[] = [`${ROOT}/shared/game-kit.d.ts`];
   for (const [rel, source] of Object.entries(input.sources)) {
     if (rel.endsWith('.ts') || rel.endsWith('.tsx')) {
-      files.set(`${gameRoot}/${rel}`, source);
+      const virtual = `${gameRoot}/${rel}`;
+      files.set(virtual, source);
+      roots.push(virtual);
     }
   }
-  const roots = [...files.keys()];
 
   // Disk reads: TypeScript lib only (delivery is untrusted).
   const host: ts.CompilerHost = {

@@ -81,10 +81,10 @@ Two concrete instances of that (observed 2026-07-23):
   Observed (#1261 review, 2026-09-11): game media started answering 302 to a
   15-minute GCS V4 URL. Route tests asserted `Location` and an empty body; CI was
   green. Catalog/detail/theater load `gameplay.mp4` via `<video src="/api/…/media/…">`,
-  and CSP checks the *final* URL after redirects. `img-src` already allowed `https:`;
+  and CSP checks the _final_ URL after redirects. `img-src` already allowed `https:`;
   `media-src` was still `'self' data: blob:` — report-only today (a `/api/csp-report`
   warn per catalog preview), enforcing later would block the file the PR exists to
-  move. `app.inject()` never executes CSP. When a PR changes the *origin* of a
+  move. `app.inject()` never executes CSP. When a PR changes the _origin_ of a
   media/img/script/connect URL (redirect, signed URL, new CDN), grep `img-src` /
   `media-src` / `connect-src` / `script-src` and the actual tags (`<video>`, `<img>`,
   `fetch`), not only the handler. Report-only still matters: the report sink logs
@@ -330,6 +330,20 @@ Two concrete instances of that (observed 2026-07-23):
   `claude.ai`, rejecting subscription `oauth_token` logins, and treated any tool denial as
   failure of the entire edit. Test each supported login source and an exit-zero run with
   completed edits plus one denied tool. An agent's denial list is not a task verdict.
+
+- **A check that defers to another check still runs when that other check is skipped.**
+  Observed (#1274 review, 2026-09-12): delivery link-check skipped every `/shared/` import
+  "because typecheck will verify the Kit", but `source-delivery` still stores when the Kit
+  store is missing or Kit load fails (`skipped: no_kit`). `../../shared/missing.ts` then
+  bypassed both checks. Gate the exemption on successfully loaded Kit paths (or resolve
+  against them), and keep unimported Kit files out of typecheck _roots_ while leaving
+  them in the resolution map — otherwise opt-in ambient `.d.ts` globals typecheck as
+  present. A same-line `import …; export default` also evades the line-anchored import
+  regex, so a regression test must put the import on its own line. Fail-closed on agent
+  delivery (no Kit → refuse `/shared/`) is not the same as copied candidates
+  (seal/editor/remix/proposal): those rewrite sources without a Kit store. Defer `/shared/`
+  there (`kitShared: 'defer'`) or a green preview later `seal_failed`. A Set still
+  fail-closes agent delivery.
 
 ## Read the diff against the spec
 

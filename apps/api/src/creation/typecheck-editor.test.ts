@@ -38,4 +38,33 @@ describe('editor Kit preflight', () => {
     expect(check('missingExport', 'editor-def').ok).toBe(false);
     expect(check('defineEditor', 'missing-file').ok).toBe(false);
   });
+
+  it('loads editor helpers and genre declarations into the Kit map', () => {
+    const shared = sharedSourcesFromKitTree(
+      kitTree({
+        'shared/game-kit.d.ts': KIT_DTS,
+        'shared/editor-def.ts': 'export function defineEditor() {}\n',
+        'shared/genres/platformer.d.ts': 'declare function play(): void;\n',
+      }),
+    );
+    expect(Object.keys(shared).sort()).toEqual([
+      'shared/editor-def.ts',
+      'shared/game-kit.d.ts',
+      'shared/genres/platformer.d.ts',
+    ]);
+  });
+
+  it('does not root unimported Kit ambient declarations', () => {
+    const result = typecheckDeliverySources({
+      slug: 'plain',
+      kitShared: {
+        'shared/game-kit.d.ts': KIT_DTS,
+        'shared/genres/platformer.d.ts': 'declare function play(): void;\n',
+      },
+      sources: { 'game.ts': 'export const n = play();\n' },
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.message).toMatch(/TS2304/);
+  });
 });
