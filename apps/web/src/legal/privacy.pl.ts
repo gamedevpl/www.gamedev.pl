@@ -307,8 +307,14 @@ export const privacyPl: LegalDocument = {
               'USA — standardowe klauzule umowne',
             ],
             [
+              'Anthropic (Claude)',
+              'Pisze Twoją grę jako agent kodujący oraz generuje wstępny szkic na podstawie Twojego opisu',
+              'USA — standardowe klauzule umowne',
+            ],
+            [
               'OpenAI',
-              'Zastępuje klasyfikator Gemini, gdy ten jest niedostępny, żeby moderacja nigdy po prostu nie ustała',
+              'Generuje wstępny szkic Twojej gry; pisze Twoją grę jako agent kodujący, gdy wybrany jest ten model; '
+                + 'zastępuje klasyfikator Gemini, gdy ten jest niedostępny, żeby moderacja nigdy po prostu nie ustała',
               'USA — standardowe klauzule umowne',
             ],
             ['GitHub (Microsoft)', 'Repozytorium gier i agent kodujący', 'USA — Data Privacy Framework'],
