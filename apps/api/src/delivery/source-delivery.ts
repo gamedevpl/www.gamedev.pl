@@ -379,16 +379,11 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       let kitSharedPaths: Set<string> | undefined;
       if (options.kitFileStore && engineRefForCheck) {
         try {
-          const tree = await options.kitFileStore.loadTree(engineRefForCheck);
-          const kitShared = options.sharedSourcesFromKitTree(tree);
+          const kitShared = options.sharedSourcesFromKitTree(await options.kitFileStore.loadTree(engineRefForCheck));
           kitSharedPaths = new Set(Object.keys(kitShared));
-          const sources: Record<string, string> = {};
-          for (const file of input.files) {
-            sources[file.path.trim()] = file.content;
-          }
           const check = await options.runTypecheckPreflight({
             slug: input.slug,
-            sources,
+            sources: Object.fromEntries(input.files.map((file) => [file.path.trim(), file.content])),
             kitShared,
           });
           if (!check.ok) {
@@ -445,7 +440,6 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
           );
         }
       }
-
       if (record.slug && record.slug !== input.slug) {
         if (input.authority) {
           throw new SourceDeliveryAuthorityError(
