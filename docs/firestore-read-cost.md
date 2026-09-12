@@ -72,6 +72,27 @@ Two things bound it:
 The general rule this leaves: **a poll's cost is its cadence times its cheapest possible
 answer, and "nothing to show" is the answer it will give most of the time.**
 
+### The per-user half is the only part that grows with visitors
+
+The shared windows above make the frightening numbers flat: `/api/catalog` costs 293 reads
+cold and **1** warm, six refreshes an hour whether one person visits or ten thousand. They
+scale with catalog size, not traffic. What no shared window covers is the part keyed by the
+reader, and on 2026-09-12 there was exactly one: `/api/recommendations` read
+`users/{uid}/playAffinity` on every home load, one document per game that player had ever
+opened — 21 and 85 rows in two sampled requests. That cost is **doubly** linear, visitors
+times their own history, so ten thousand home loads a day by returning players is about
+230K reads, roughly what the whole service did that day.
+
+It now has a **60-second window per uid**, dropped the moment that player records a play.
+Sixty seconds rather than the bell's five minutes because the last-played shelf is visible:
+same-instance invalidation makes your own play immediate, and cross-instance staleness is
+bounded at a minute. Cold misses share one in-flight read, so a burst of tabs is still one
+query, and a play landing mid-read discards the answer rather than sealing it in.
+
+The rule this leaves for any new surface: **ask which half of the request is shared and which
+is keyed by the reader.** Only the second half multiplies by traffic, and it is never the half
+that looks expensive in a per-request ranking.
+
 ## The other half of the floor: our own sweeps
 
 A browser poll needs a tab open. `notify-sweep` needs nothing — Cloud Scheduler posts to it

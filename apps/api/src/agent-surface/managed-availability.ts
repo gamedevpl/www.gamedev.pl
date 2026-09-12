@@ -158,13 +158,18 @@ export function createManagedAvailabilityGate(options: ManagedAvailabilityOption
 
   // A status poll peeks twice per request for a daily counter.
   const peeked = new Map<string, { expiresAt: number; value: ManagedAvailability }>();
+  let spends = 0;
 
   async function peek(uid: string, dateStr: string): Promise<ManagedAvailability> {
     const key = `${uid}|${dateStr}`;
     const hit = peeked.get(key);
     if (hit && hit.expiresAt > now()) return hit.value;
+    const spendsAtStart = spends;
     const value = await resolve(uid, dateStr, false);
-    rememberBounded(peeked, key, { expiresAt: now() + peekTtlMs, value }, MAX_PEEKED_CREATORS);
+    // A spend landed mid-read, so this answer is behind.
+    if (spends === spendsAtStart) {
+      rememberBounded(peeked, key, { expiresAt: now() + peekTtlMs, value }, MAX_PEEKED_CREATORS);
+    }
     return value;
   }
 
@@ -172,6 +177,7 @@ export function createManagedAvailabilityGate(options: ManagedAvailabilityOption
     peek,
     // Spending moves the global counter, so nobody's peek survives it.
     checkAndSpend: async (uid, dateStr) => {
+      spends += 1;
       peeked.clear();
       return resolve(uid, dateStr, true);
     },

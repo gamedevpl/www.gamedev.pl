@@ -16,7 +16,7 @@ import type { Scorecard, Store } from '../platform/store.js';
  *
  * Community half (scorecards + newest) is process-local cached: those reads hit
  * Firestore on every home load otherwise, and scorecards only move on the nightly
- * sweep. Personal affinity stays per-request.
+ * sweep. Personal affinity is windowed.
  */
 
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;

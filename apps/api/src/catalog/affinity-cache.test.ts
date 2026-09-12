@@ -61,7 +61,7 @@ describe('play affinity window', () => {
     const store = await playerWith(['airtime']);
     vi.spyOn(store, 'listPlayAffinity').mockImplementation(async () => {
       invalidatePlayAffinity(store, 'g:player');
-      return [{ slug: 'airtime', lastPlayedAt: new Date(1_700_000_000_000).toISOString(), plays: 1 }];
+      return [{ slug: 'airtime', openCount: 1, lastPlayedAt: new Date(1_700_000_000_000).toISOString() }];
     });
 
     await readPlayAffinityCached(store, 'g:player', clock);

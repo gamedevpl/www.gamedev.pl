@@ -34,6 +34,8 @@ function gate(params: {
   };
 }
 
+const gate2 = () => gate({});
+
 describe('peek reads a creator once per window', () => {
   afterEach(() => vi.restoreAllMocks());
 
@@ -75,6 +77,26 @@ describe('peek reads a creator once per window', () => {
     await g.peek('g:creator', today);
     await g.peek('g:creator', '2999-01-01');
     expect(usage).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not let a peek that started before a spend seal in the old answer', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const { store, gate: g } = gate2();
+    vi.spyOn(store, 'getUsage').mockImplementation(async () => {
+      await gate;
+      return { managedBuilds: 0, improvements: 0, submissions: 0 } as never;
+    });
+
+    const slow = g.peek('g:creator', today);
+    await g.checkAndSpend('g:creator', today);
+    release();
+    await slow;
+
+    vi.restoreAllMocks();
+    const usage = vi.spyOn(store, 'getUsage');
+    await g.peek('g:creator', today);
+    expect(usage).toHaveBeenCalledTimes(1);
   });
 
   it('drops every window on a spend, because the global counter moved', async () => {
