@@ -8,6 +8,7 @@ import {
 import { imageSize, isPng, sameAspectRatio, type ImageSize } from '../platform/image-size.js';
 import type { Store } from '../platform/store.js';
 import { dreamClaimHolds } from '../store/slices/round-budget.js';
+import { resolveJobState } from './job-state.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
 import type { DreamAvailabilityGate } from './dream-availability.js';
 import type { DreamFrame, DreamFrameGenerator } from './dream-frames.js';
@@ -210,6 +211,8 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       proposal,
       ownerUid: record.ownerUid,
       roundGeneration: record.roundGeneration ?? 1,
+      // Publishing is this job's cue; abandoning and cancelling are stops.
+      blocked: (job) => Boolean(job.abandonedAt) || resolveJobState(job) === 'canceled',
     });
     // The transaction refuses on a mute too; name the real reason.
     if (!posted) return (await stopped()) ?? 'superseded';

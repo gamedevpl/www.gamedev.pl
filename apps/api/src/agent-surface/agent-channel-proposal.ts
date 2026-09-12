@@ -181,6 +181,7 @@ export function registerAgentChannelProposalRoutes(app: FastifyInstance, deps: A
         proposal: { sourceRef: sourceShot.id, version, options, builder: 'self' },
         ownerUid: record.ownerUid,
         roundGeneration,
+        blocked: (job) => stopReason(job) !== null,
       });
       if (!posted) {
         // Three ways the transaction refuses; say which, rather than guess.

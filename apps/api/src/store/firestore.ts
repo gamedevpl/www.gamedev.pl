@@ -677,6 +677,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
       proposal: CreatorProposal;
       ownerUid: string;
       roundGeneration: number;
+      blocked: (job: SubmissionRecord) => boolean;
     },
   ): Promise<CreatorMessage | null> {
     return this.buildLogStore.appendProposalMessage(jobId, claim, text, opts);

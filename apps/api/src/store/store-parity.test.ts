@@ -456,6 +456,7 @@ describeStoreContract('proposal posting', (makeStore) => {
         proposal,
         ownerUid: 'g:owner',
         roundGeneration: 1,
+        blocked: () => false,
       }),
     ).not.toBeNull();
     expect(await store.listCreatorMessages(11)).toHaveLength(1);
@@ -473,6 +474,7 @@ describeStoreContract('proposal posting', (makeStore) => {
         proposal,
         ownerUid: 'g:owner',
         roundGeneration: 1,
+        blocked: () => false,
       }),
     ).toBeNull();
     expect(await store.listCreatorMessages(11)).toEqual([]);
@@ -489,6 +491,39 @@ describeStoreContract('proposal posting', (makeStore) => {
         proposal,
         ownerUid: 'g:owner',
         roundGeneration: 1,
+        blocked: () => false,
+      }),
+    ).toBeNull();
+    expect(await store.listCreatorMessages(11)).toEqual([]);
+  });
+
+  it('refuses while the operator pause is set', async () => {
+    // The kill switch, read with the write rather than before it.
+    const store = makeStore();
+    await claimed(store);
+    await store.setCreationLimits({ dreamsPaused: true }, 'g:boss');
+
+    expect(
+      await store.appendProposalMessage(11, claim, 'Two directions.', {
+        proposal,
+        ownerUid: 'g:owner',
+        roundGeneration: 1,
+        blocked: () => false,
+      }),
+    ).toBeNull();
+    expect(await store.listCreatorMessages(11)).toEqual([]);
+  });
+
+  it("refuses when the caller's own stop rule says the round is closed", async () => {
+    const store = makeStore();
+    await claimed(store);
+
+    expect(
+      await store.appendProposalMessage(11, claim, 'Two directions.', {
+        proposal,
+        ownerUid: 'g:owner',
+        roundGeneration: 1,
+        blocked: () => true,
       }),
     ).toBeNull();
     expect(await store.listCreatorMessages(11)).toEqual([]);
@@ -501,12 +536,18 @@ describeStoreContract('proposal posting', (makeStore) => {
       proposal,
       ownerUid: 'g:owner',
       roundGeneration: 1,
+      blocked: () => false,
     });
 
     // A card is on the thread, so the delivery is finished.
     expect(await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z', 1)).toBe(false);
     expect(
-      await store.appendProposalMessage(11, claim, 'Again.', { proposal, ownerUid: 'g:owner', roundGeneration: 1 }),
+      await store.appendProposalMessage(11, claim, 'Again.', {
+        proposal,
+        ownerUid: 'g:owner',
+        roundGeneration: 1,
+        blocked: () => false,
+      }),
     ).toBeNull();
   });
 
@@ -526,6 +567,7 @@ describeStoreContract('proposal posting', (makeStore) => {
       proposal,
       ownerUid: 'g:owner',
       roundGeneration: 1,
+      blocked: () => false,
     });
     await store.setSubmissionPreviewVersion(11, 'v2');
 
@@ -533,7 +575,12 @@ describeStoreContract('proposal posting', (makeStore) => {
     // A kept `postedAt` from v1 would refuse v2's own card.
     const v2 = { version: 'v2', claimedAt: '2026-09-07T13:00:00.000Z' };
     expect(
-      await store.appendProposalMessage(11, v2, 'Two more.', { proposal, ownerUid: 'g:owner', roundGeneration: 1 }),
+      await store.appendProposalMessage(11, v2, 'Two more.', {
+        proposal,
+        ownerUid: 'g:owner',
+        roundGeneration: 1,
+        blocked: () => false,
+      }),
     ).not.toBeNull();
     expect((await store.getSubmission(11))?.dreamRun?.endedAt).toBeUndefined();
   });
@@ -546,7 +593,12 @@ describeStoreContract('proposal posting', (makeStore) => {
 
     await store.finishDreamRun(11, claim, '2026-09-07T13:00:05.000Z');
     expect(
-      await store.appendProposalMessage(11, claim, 'Late.', { proposal, ownerUid: 'g:owner', roundGeneration: 1 }),
+      await store.appendProposalMessage(11, claim, 'Late.', {
+        proposal,
+        ownerUid: 'g:owner',
+        roundGeneration: 1,
+        blocked: () => false,
+      }),
     ).toBeNull();
 
     // The replacement is still recoverable, and still the one that may post.
@@ -572,6 +624,7 @@ describeStoreContract('proposal posting', (makeStore) => {
         proposal,
         ownerUid: 'g:owner',
         roundGeneration: 1,
+        blocked: () => false,
       }),
     ).toBeNull();
     expect(await store.listCreatorMessages(11)).toEqual([]);

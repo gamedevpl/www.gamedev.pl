@@ -105,7 +105,9 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   private dispatchStore = new InMemoryDispatchStore(this.submissions);
   protected submissionStore = new InMemorySubmissionStore(this.submissions);
   private submissionQueryStore = new InMemorySubmissionQueryStore(this.submissions);
-  private buildLogStore = new InMemoryBuildLogStore(this.submissions, this.identityStore.users);
+  private buildLogStore = new InMemoryBuildLogStore(this.submissions, this.identityStore.users, () =>
+    this.quotaStore.getCreationLimits(),
+  );
   private buildMediaStore = new InMemoryBuildMediaStore(this.submissions);
   private catalogEnrichmentStore = new InMemoryCatalogEnrichmentStore();
   private quotaStore = new InMemoryQuotaStore((uid) => this.identityStore.getUser(uid));
@@ -606,6 +608,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
       proposal: CreatorProposal;
       ownerUid: string;
       roundGeneration: number;
+      blocked: (job: SubmissionRecord) => boolean;
     },
   ): Promise<CreatorMessage | null> {
     return this.buildLogStore.appendProposalMessage(jobId, claim, text, opts);
