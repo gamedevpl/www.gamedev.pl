@@ -447,6 +447,20 @@ describeStoreContract('proposal posting', (makeStore) => {
     await store.claimDreamRun(11, claim.version, claim.claimedAt, 1);
   }
 
+  it('drops concept cards before the window, not after', async () => {
+    const store = makeStore();
+    await store.createSubmission(11, 'g:owner', 'Parcel Run');
+    await store.appendCreatorMessage(11, 'make it blue');
+    await store.appendCreatorMessage(11, 'and add sound');
+    for (const id of ['a', 'b', 'c']) {
+      await store.appendCreatorMessage(11, `card ${id}`, { origin: 'studio', delivered: true, proposal });
+    }
+
+    // Filtered after the slice, a window this size would hold only cards.
+    const kept = await store.listCreatorMessages(11, { limit: 2, excludeProposals: true });
+    expect(kept.map((message) => message.text).sort()).toEqual(['and add sound', 'make it blue']);
+  });
+
   it('posts while the claim still names the version', async () => {
     const store = makeStore();
     await claimed(store);

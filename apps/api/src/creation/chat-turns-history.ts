@@ -48,9 +48,15 @@ export function reconstructChatTurns(messages: readonly CreatorMessage[]): ChatT
 }
 
 export async function loadRecentChatTurns(
-  store: { listCreatorMessages: (jobId: number, opts?: { limit?: number }) => Promise<CreatorMessage[]> },
+  store: {
+    listCreatorMessages: (
+      jobId: number,
+      opts?: { limit?: number; excludeProposals?: boolean },
+    ) => Promise<CreatorMessage[]>;
+  },
   jobId: number,
 ): Promise<ChatTurn[]> {
-  const raw = await store.listCreatorMessages(jobId, { limit: MAX_CHAT_TURNS * 3 });
+  // Dropped before the window, or cards would push turns out.
+  const raw = await store.listCreatorMessages(jobId, { limit: MAX_CHAT_TURNS * 3, excludeProposals: true });
   return reconstructChatTurns(raw);
 }

@@ -687,7 +687,10 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.buildLogStore.listPendingCreatorMessages(jobId, opts);
   }
 
-  async listCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
+  async listCreatorMessages(
+    jobId: number,
+    opts?: { limit?: number; excludeProposals?: boolean },
+  ): Promise<CreatorMessage[]> {
     return this.buildLogStore.listCreatorMessages(jobId, opts);
   }
 
