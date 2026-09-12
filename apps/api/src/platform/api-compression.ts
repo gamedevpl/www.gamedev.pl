@@ -14,12 +14,32 @@ const BROTLI_OPTIONS = { params: { [constants.BROTLI_PARAM_QUALITY]: 4 } };
 // Generated text only. PNG and MP4 are compressed already.
 const COMPRESSIBLE = /^(?:application\/(?:json|javascript)|text\/|application\/[^;]*\+(?:json|xml))/i;
 
-export function prefersBrotli(acceptEncoding: string | undefined): boolean {
-  return acceptEncoding !== undefined && /\bbr\b/i.test(acceptEncoding);
+export type ChosenEncoding = 'br' | 'gzip' | 'identity';
+
+// `br;q=0` refuses brotli; a substring match says yes.
+export function encodingQuality(acceptEncoding: string | undefined, token: string): number {
+  if (acceptEncoding === undefined) return 0;
+  let wildcard: number | null = null;
+  for (const part of acceptEncoding.split(',')) {
+    const [name, ...params] = part.trim().split(';');
+    const quality = params
+      .map((param) => /^\s*q=([\d.]+)\s*$/i.exec(param))
+      .find((match) => match !== null);
+    const value = quality ? Number(quality[1]) : 1;
+    const weight = Number.isFinite(value) ? value : 1;
+    if (name?.toLowerCase() === token) return weight;
+    if (name === '*') wildcard = weight;
+  }
+  return wildcard ?? 0;
 }
 
-export function acceptsGzip(acceptEncoding: string | undefined): boolean {
-  return acceptEncoding !== undefined && /\bgzip\b/i.test(acceptEncoding);
+// Brotli when at least as welcome as gzip.
+export function chooseEncoding(acceptEncoding: string | undefined): ChosenEncoding {
+  const brotli = encodingQuality(acceptEncoding, 'br');
+  const gzip = encodingQuality(acceptEncoding, 'gzip');
+  if (brotli > 0 && brotli >= gzip) return 'br';
+  if (gzip > 0) return 'gzip';
+  return 'identity';
 }
 
 // Whether a response is worth compressing, before any CPU is spent.
@@ -46,21 +66,15 @@ export function registerApiCompression(app: FastifyInstance): void {
       return payload;
     }
 
-    const accept = request.headers['accept-encoding'];
-    const accepted = typeof accept === 'string' ? accept : undefined;
-    let encoded: Buffer;
-    if (prefersBrotli(accepted)) {
-      encoded = brotliCompressSync(body, BROTLI_OPTIONS);
-      reply.header('content-encoding', 'br');
-    } else if (acceptsGzip(accepted)) {
-      encoded = gzipSync(body, { level: 6 });
-      reply.header('content-encoding', 'gzip');
-    } else {
-      return payload;
-    }
-
-    // Else a shared cache may hand brotli to a client without it.
+    // Before the identity return too, or a cache shares it.
     reply.header('vary', 'accept-encoding');
+
+    const accept = request.headers['accept-encoding'];
+    const chosen = chooseEncoding(typeof accept === 'string' ? accept : undefined);
+    if (chosen === 'identity') return payload;
+
+    const encoded = chosen === 'br' ? brotliCompressSync(body, BROTLI_OPTIONS) : gzipSync(body, { level: 6 });
+    reply.header('content-encoding', chosen);
     reply.header('content-length', encoded.length);
     return encoded;
   });

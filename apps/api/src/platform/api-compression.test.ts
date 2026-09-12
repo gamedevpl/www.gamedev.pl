@@ -1,7 +1,7 @@
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { describe, expect, it } from 'vitest';
-import { registerApiCompression, worthCompressing } from './api-compression.js';
+import { chooseEncoding, encodingQuality, registerApiCompression, worthCompressing } from './api-compression.js';
 
 const BIG_JSON = { games: Array.from({ length: 400 }, (_, index) => ({ slug: `game-${index}`, title: 'A Game' })) };
 
@@ -35,6 +35,28 @@ describe('worthCompressing', () => {
   it('accepts generated text', () => {
     expect(worthCompressing('application/json; charset=utf-8', 100_000, false)).toBe(true);
     expect(worthCompressing('text/html', 100_000, false)).toBe(true);
+  });
+});
+
+describe('encoding negotiation', () => {
+  it('reads a quality value rather than matching a substring', () => {
+    expect(encodingQuality('br;q=0, gzip;q=1', 'br')).toBe(0);
+    expect(encodingQuality('br;q=0, gzip;q=1', 'gzip')).toBe(1);
+    expect(encodingQuality('gzip, deflate, br', 'br')).toBe(1);
+    expect(encodingQuality('gzip;q=0.5', 'gzip')).toBe(0.5);
+  });
+
+  it('treats an unlisted encoding as unacceptable unless a wildcard says otherwise', () => {
+    expect(encodingQuality('gzip', 'br')).toBe(0);
+    expect(encodingQuality('gzip, *', 'br')).toBe(1);
+    expect(encodingQuality(undefined, 'gzip')).toBe(0);
+  });
+
+  it('picks brotli only when it is at least as welcome as gzip', () => {
+    expect(chooseEncoding('gzip, deflate, br')).toBe('br');
+    expect(chooseEncoding('br;q=0.5, gzip;q=1')).toBe('gzip');
+    expect(chooseEncoding('br;q=0, gzip;q=0')).toBe('identity');
+    expect(chooseEncoding(undefined)).toBe('identity');
   });
 });
 
@@ -73,6 +95,32 @@ describe('api compression', () => {
     const response = await app.inject({ method: 'GET', url: '/api/catalog' });
     expect(response.headers['content-encoding']).toBeUndefined();
     expect(response.json()).toEqual(BIG_JSON);
+    await app.close();
+  });
+
+  it('varies on the plain copy too, or a cache serves it to everyone', async () => {
+    const app = await appUnderTest();
+    const response = await app.inject({ method: 'GET', url: '/api/catalog' });
+    expect(response.headers['vary']).toContain('accept-encoding');
+    await app.close();
+  });
+
+  it('obeys a client that refuses an encoding outright', async () => {
+    const app = await appUnderTest();
+    const noBrotli = await app.inject({
+      method: 'GET',
+      url: '/api/catalog',
+      headers: { 'accept-encoding': 'br;q=0, gzip' },
+    });
+    expect(noBrotli.headers['content-encoding']).toBe('gzip');
+
+    const neither = await app.inject({
+      method: 'GET',
+      url: '/api/catalog',
+      headers: { 'accept-encoding': 'br;q=0, gzip;q=0' },
+    });
+    expect(neither.headers['content-encoding']).toBeUndefined();
+    expect(neither.headers['vary']).toContain('accept-encoding');
     await app.close();
   });
 

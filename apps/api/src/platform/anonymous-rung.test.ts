@@ -43,3 +43,21 @@ describe('the anonymous rung', () => {
     await app.close();
   });
 });
+
+describe('what the rung closes that the beta wall does not', () => {
+  it('stops serving media, which is the bandwidth it was pulled to stop', async () => {
+    const { app } = await openSiteWithRungPulled();
+    const res = await app.inject({ method: 'GET', url: '/api/games/apex-sprint/media/launch.png?w=320' });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('leaves media public while only the beta wall is up', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:owner' });
+    const app = await buildApp({ store, sessionSecret, betaAllowedUids: 'g:owner' });
+    const res = await app.inject({ method: 'GET', url: '/api/games/apex-sprint/media/launch.png?w=320' });
+    expect(res.statusCode).not.toBe(401);
+    await app.close();
+  });
+});

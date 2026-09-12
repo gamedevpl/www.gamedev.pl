@@ -98,7 +98,7 @@ worth spending longer on before you touch the play path.
 | 2    | Telemetry writes          | `telemetrySampleRate` below 1                       | same                               |
 | 3    | New party rooms           | `/admin/limits` → incident lanes → party hosting    | same                               |
 | 4    | Preview video             | `videoPaused`                                       | 60s (the breaker's TTL)            |
-| 5    | Full-size images          | `mediaLean` — every image served at 96px            | 60s                                |
+| 5    | Full-size images          | `mediaLean` — only the baked 96px copy is served    | 60s                                |
 | 6    | Visitors without an account | `anonymousPaused` — the beta wall, back up        | 60s                                |
 | 7    | Play                      | nothing here does this; roll back or scale instead  | —                                  |
 
@@ -136,11 +136,19 @@ curl -s -X POST https://www.gamedev.pl/api/admin/creation-limits \
 The catalog keeps working and looks worse. That is the trade; make it early rather than
 late, because egress is billed on bytes already delivered and cannot be refunded.
 
+Rung 5 narrows the width the client asked for **and** refuses anything that comes back
+larger anyway — a store-lane game has no baked variants, so its images 503 rather than
+quietly costing full size. Expect broken images for platform-built games while it is up.
+
 **Rung 6 closes the site**, and it is the one rung that changes what a stranger sees: the
 waitlist splash instead of the arcade. It is the same wall the private beta used, reached
 from the operator document rather than from `PRIVATE_BETA`, so it needs no deploy and
 drops no party rooms. Everyone already signed in keeps the full product. Arrivals become
 a list instead of a bill.
+
+One difference from the beta wall it borrows: that wall leaves `/api/games/*/media/*`
+public so a shared game link works, and this rung does not. Media is the bandwidth the
+rung was pulled to stop, so it closes too.
 
 ```bash
 curl -s -X POST https://www.gamedev.pl/api/admin/creation-limits \

@@ -1119,10 +1119,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // /api/health, /api/auth/*, and /api/waitlist stay public within the API (probes, login
   // flow, and the waitlist — which by definition serves people who just failed sign-in).
   app.addHook('preHandler', async (request, reply) => {
-    // The last rung of the ladder raises this wall on a site that is already open,
-    // without a deploy: arrivals meet the waitlist instead of the bill. Cached for
-    // the breaker's TTL, so the cost here is not a read per request.
-    if (await openToVisitors()) return;
+    // The last rung raises this wall on an open site, without a deploy: arrivals
+    // meet the waitlist instead of the bill. Cached for the breaker's TTL.
+    const closedByRung = await loadShed.refusesAnonymous();
+    if (!privateBeta && !closedByRung) return;
     // No entry here for the OAuth protected-resource document: it is served outside
     // `/api/`, so the next line already passes it through. An exemption that never fires
     // would imply this wall covers that route, and a bypass list has to be read as exact.
@@ -1139,7 +1139,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // stay authed (they are under /api/creators/:handle/availability and need a session).
     if (/^\/api\/creators\/[^/]+\/?(\?|$)/.test(request.url)) return;
     // Preview media and follow counts remain public; game pages stay behind beta access.
-    if (/^\/api\/games\/[^/]+\/(follow|media)(\/[^?]*)?(\?|$)/.test(request.url)) return;
+    // Not under the rung, though: media is the bandwidth it was pulled to stop.
+    if (!closedByRung && /^\/api\/games\/[^/]+\/(follow|media)(\/[^?]*)?(\?|$)/.test(request.url)) return;
     // Internal endpoints (the Cloud Scheduler notification sweep) authenticate via
     // an OIDC token in the handler, not a session — the wall would 401 them first.
     if (request.url.startsWith('/api/internal/')) return;
