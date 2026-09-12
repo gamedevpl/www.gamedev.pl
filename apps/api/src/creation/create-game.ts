@@ -319,7 +319,7 @@ export function registerCreateGameRoute(app: FastifyInstance, deps: CreateGameRo
     }
 
     if (!checkUserAccess(request, reply)) {
-      return;
+      return reply;
     }
 
     const created = await createGame({

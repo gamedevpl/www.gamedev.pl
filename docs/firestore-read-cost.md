@@ -106,6 +106,20 @@ Two rules came out of it, and they generalise to any scheduled sweep here.
 The sweep's response carries `deferred` and `alertsSkipped` so the saving is observable from the
 scheduler's own logs rather than inferred from a read count.
 
+It also carries `stalledCauses`, which is not about cost. `feedback_undelivered` exists to say
+"the relay failed", and on 2026-09-12 it was firing on six rounds of which only two fit that
+description: two were parked on an operator's publish decision since August, one had received a
+message fourteen hours after its agent ended, and one had never had an agent connect. An alert
+that cannot distinguish those is a true statement nobody can act on. The kind still fires — a
+permanent false alarm is bad, silence is worse — but every stalled job now reports *why* nothing
+collected it (`uncollected-feedback.ts`), which is the difference between re-dispatching a round,
+publishing it, and closing it. `agentEndedAt` alone does **not** mean the agent left — it is also
+set when an agent submits without calling `end`, and `isAgentSessionEnded` (platform/) is the one
+place that rule lives, shared with `shouldSteerFeedbackViaInbox` so the two cannot drift. The
+cause goes in the log and the response rather than the notification body, because notifications
+are create-only: adding `{{detail}}` to the body would render an empty slot in every alert
+already emitted.
+
 ## Measuring
 
 ```bash
@@ -211,6 +225,31 @@ calibrated against a floor the badge fix above removes; **re-derive them togethe
 full working week of post-fix numbers rather than from an estimate — `read-cost-report.sh`
 is what that measurement looks like, and the type split belongs in the PR that moves a
 threshold.
+
+**The deploy gate has no voice of its own.** `Deploy to Cloud Run` triggers on `workflow_run`
+of CI and is gated on that run concluding success, so a red master skips every deploy while
+each merged pull request still reads green. On 2026-09-12 master was red from a direct push
+and two merges deployed nothing; production served the previous revision for over an hour with
+nothing reporting it. `infra/check-deploy-freshness.mjs` (run every half hour by
+`.github/workflows/deploy-watchdog.yml`) now asks whether master's newest settled commit has a
+*successful* deploy run, and opens one issue when it does not.
+
+Four answers, because three of them are not "fine": **deployed** (0) closes the issue,
+**not deployed** (1) opens or comments on it, **too early to judge** (3) touches nothing, and
+**the check itself broke** (2) fails the workflow loudly rather than reporting a production
+incident that may not exist. The distinction between 0 and 3 is the one that matters: a
+watchdog that treats "still deploying" as health closes its own incident thirty seconds after
+raising it.
+
+Three rules the first draft got wrong, all three found in review:
+
+- **Judge only the newest settled CI run.** Scanning backwards for the newest run *older than
+  the grace window* picks a superseded red commit while the green one that fixed it is still
+  building — so the alarm stays on through the recovery it is supposed to notice ending.
+- **Look for a deploy before judging CI.** `deploy.yml` also accepts `workflow_dispatch`, with
+  no CI gate, so a manual deploy of a red-CI commit is a real deploy and must read as one.
+- **A pending deploy expires.** Any in-flight run counted as health meant a queued or hung
+  deploy looked fine for as long as it hung; past `DEPLOY_TIMEOUT_MINUTES` it is a stall.
 
 **Owed after the sweep fixes land.** A30 and A31 are calibrated against the pre-fix floor
 described above. Give the change a full working week in production, then re-derive both from

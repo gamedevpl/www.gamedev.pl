@@ -59,6 +59,10 @@ POLICIES=(
   "A24 Vertex call volume abnormally high|creation,editing,chat,tabcomplete,search,seeding"
   "A25 Vertex output token rate abnormally high|creation,editing,chat,tabcomplete,search,seeding"
   "A26 knowledge_query daily volume abnormally high|creation"
+  # A rate, so this reacts in hours where a monthly budget reacts in days.
+  # A33 and not A32: A32 watches every bucket, and the store bucket's normal
+  # traffic is the coding agent, which no serving rung reduces.
+  "A33 Snapshot bucket egress spiking|video,media"
 )
 
 echo "==> 1/4 Pub/Sub topic ${TOPIC}"
@@ -182,10 +186,41 @@ The monthly billing budget is the second publisher. Point it at the topic once
 
 The brake grades a budget by how far over it is: forecast past 100% stops the
 platform agent (managed); spent past 100% also stops round-0 seeding and the gate;
-spent past 150% stops everything. Ticks under threshold are acknowledged silently,
-and the same threshold is acted on once — a resume after it stands.
+spent past 125% also withholds preview video and serves every image at 96px; spent
+past 150% stops everything, which includes closing the site to visitors without an
+account. Ticks under threshold are acknowledged silently, and the same threshold is
+acted on once — a resume after it stands.
 
 Per-service budgets can name their own lanes in the display name instead, e.g.
 "Cloud Build lanes=gate" or "Vertex AI lanes=seeding_managed": over 100% pulls
 those lanes and nothing else. Every budget can share this one topic.
+
+Bandwidth is the one an open site spends without anybody asking for it, and it has
+no per-service budget yet. Create one, and point the two that already exist at the
+topic — a budget that only emails is not a brake:
+
+  # Amounts and the billing account id live in the ops repo's setup-budgets.sh,
+  # never here: this repo is public and the money is not.
+  #
+  # services/95FF-2EF5-5EA1 is Cloud Storage, read from the Catalog API on
+  # 2026-09-12. Pasted rather than looked up on purpose: gcloud has no
+  # 'billing services list', and a lookup that fails leaves the filter empty,
+  # which silently makes this a budget over every service in the project.
+  # To re-derive it, enable cloudbilling.googleapis.com and ask the API:
+  #   curl -s -H "Authorization: Bearer \$(gcloud auth print-access-token)" \\
+  #     -H "x-goog-user-project: ${PROJECT_ID}" \\
+  #     'https://cloudbilling.googleapis.com/v1/services?pageSize=5000' |
+  #     python3 -c 'import sys,json; [print(s["name"], s["displayName"]) for s in json.load(sys.stdin)["services"]]'
+  gcloud billing budgets create --billing-account ACCOUNT_ID \\
+    --display-name='GCS egress lanes=video_media' \\
+    --budget-amount=AMOUNT --filter-services=services/95FF-2EF5-5EA1 \\
+    --threshold-rule=percent=0.5 --threshold-rule=percent=1.0 \\
+    --notifications-rule-pubsub-topic=projects/${PROJECT_ID}/topics/${TOPIC}
+
+  # "Cloud Run" and "Firebase Hosting egress" publish nowhere today:
+  gcloud billing budgets list --billing-account ACCOUNT_ID \\
+    --format='table(displayName, notificationsRule.pubsubTopic)'
+
+The lanes a budget may name are the keys of PAUSEABLE in spend-brake.ts: creation,
+editing, chat, tabComplete, search, gate, seeding, managed, video, media, anonymous.
 EOF

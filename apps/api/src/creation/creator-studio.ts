@@ -149,7 +149,7 @@ export async function registerCreatorStudioRoutes(
    * re-minted so a fresh device recovers access.
    */
   app.get('/api/me/studio', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     if (!options.mintStatusToken) {
       return reply.status(503).send({ error: 'submissions are not configured' });
     }
@@ -239,7 +239,7 @@ export async function registerCreatorStudioRoutes(
    * stay out of the scorecard.
    */
   app.get('/api/me/studio/health', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
 
     const parsed = QuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -290,7 +290,7 @@ export async function registerCreatorStudioRoutes(
    * nothing.
    */
   app.get('/api/me/studio/scorecards', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
 
     const records = await store.listSubmissionsByOwner(request.user!.uid);
     const { games: published, truncated, total } = pageOwnerGames(records, 'published');
@@ -321,7 +321,7 @@ export async function registerCreatorStudioRoutes(
 
   // List build history for an owned game.
   app.get<{ Params: { slug: string } }>('/api/me/studio/games/:slug/builds', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     if (!options.gamesStore?.listVersions) {
       return reply.status(503).send({ error: 'games store is not configured' });
     }
@@ -387,7 +387,7 @@ export async function registerCreatorStudioRoutes(
     // hour — and bounded against a loop.
     { config: { rateLimit: { max: 30, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      if (!requireUser(request, reply)) return;
+      if (!requireUser(request, reply)) return reply;
       if (!options.gamesStore || !options.objectStore) {
         return reply.status(503).send({ error: 'workspace checkout is not configured on this deployment' });
       }

@@ -110,14 +110,14 @@ export async function registerCreatorProfileRoutes(
   const now = options.now ?? Date.now;
 
   app.get('/api/me/profile', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     const user = await store.getUser(request.user!.uid);
     if (!user) return reply.status(404).send({ error: 'not_found' });
     return reply.send(meProfileBody(user));
   });
 
   app.put('/api/me/profile', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     const body = UpdateProfileSchema.safeParse(request.body);
     if (!body.success) {
       return reply.status(400).send({ error: body.error.issues[0]?.message ?? 'invalid request' });
@@ -149,7 +149,7 @@ export async function registerCreatorProfileRoutes(
     '/api/me/profile/handle',
     { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      if (!requireUser(request, reply)) return;
+      if (!requireUser(request, reply)) return reply;
       const body = ClaimHandleSchema.safeParse(request.body);
       if (!body.success) {
         return reply.status(400).send({ error: body.error.issues[0]?.message ?? 'invalid request' });
@@ -176,7 +176,7 @@ export async function registerCreatorProfileRoutes(
     '/api/creators/:handle/availability',
     { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
     async (request, reply) => {
-      if (!requireUser(request, reply)) return;
+      if (!requireUser(request, reply)) return reply;
       const params = HandleParamsSchema.safeParse(request.params);
       if (!params.success) {
         return reply.status(400).send({ error: 'invalid handle' });

@@ -113,7 +113,7 @@ export async function handleCreatorFeedback(
   if (!githubClient || !submissionTokenSecret) {
     return reply.status(503).send({ error: 'submissions are not configured' });
   }
-  if (!checkUserAccess(request, reply)) return;
+  if (!checkUserAccess(request, reply)) return reply;
 
   const token = z.string().parse((request.params as { token?: string }).token);
   let jobId: number;
@@ -349,7 +349,7 @@ export async function handleCreatorTurnsGet(
   if (!githubClient || !submissionTokenSecret) {
     return reply.status(503).send({ error: 'submissions are not configured' });
   }
-  if (!checkUserAccess(request, reply)) return;
+  if (!checkUserAccess(request, reply)) return reply;
 
   const token = z.string().parse((request.params as { token?: string }).token);
   let jobId: number;

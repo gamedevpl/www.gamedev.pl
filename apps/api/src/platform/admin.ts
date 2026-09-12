@@ -182,6 +182,10 @@ export interface CreationLimitsResponse {
     dreamsPaused: boolean;
     globalDailyDreamCap: number;
     partyPaused: boolean;
+    // Bandwidth rungs; the brake pulls these and never resumes them.
+    videoPaused: boolean;
+    mediaLean: boolean;
+    anonymousPaused: boolean;
     telemetrySampleRate: number | null;
     // Round 0's kill switch, ceiling and provider picker.
     seedingMode: 'auto' | 'off';
@@ -245,6 +249,10 @@ const CreationLimitsPatchShape = z.object({
   // Load-shedding rungs 2 and 3; see docs/runbooks/launch-day.md.
   telemetrySampleRate: z.number().min(0).max(1).nullable().optional(),
   partyPaused: z.boolean().optional(),
+  // Bandwidth rungs; listed so an operator can clear them.
+  videoPaused: z.boolean().optional(),
+  mediaLean: z.boolean().optional(),
+  anonymousPaused: z.boolean().optional(),
   // Same document: whether the platform builder is offered. See managed-availability.ts.
   managedBuilderMode: z.enum(MANAGED_BUILDER_MODES).optional(),
   // null clears the override, same as globalDailySubmissionCap above.
@@ -516,6 +524,9 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
         dreamsPaused: stored?.dreamsPaused === true,
         globalDailyDreamCap: stored?.globalDailyDreamCap ?? resolveDefaultGlobalDailyDreamCap(),
         partyPaused: stored?.partyPaused === true,
+        videoPaused: stored?.videoPaused === true,
+        mediaLean: stored?.mediaLean === true,
+        anonymousPaused: stored?.anonymousPaused === true,
         telemetrySampleRate: stored?.telemetrySampleRate ?? null,
         seedingMode: stored?.seedingMode ?? 'auto',
         globalDailySeedCap: stored?.globalDailySeedCap ?? resolveDefaultGlobalDailySeedCap(),

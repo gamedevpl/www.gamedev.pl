@@ -88,6 +88,7 @@ const FILE_BUCKET = {
   'creator-pat-routes': 'platform',
   'access-token-service': 'platform',
   digest: 'platform',
+  'agent-session': 'platform',
   'sweep-cadence': 'platform',
   'sweep-scope': 'platform',
   'dev-seed-studio': 'platform',
@@ -151,6 +152,9 @@ const FILE_BUCKET = {
   'job-state': 'platform',
   // Daily ceiling on signed media URLs. Pure counters, no relative imports.
   'media-mint-budget': 'platform',
+  'serving-brake': 'platform',
+  'public-play': 'platform',
+  'api-compression': 'platform',
   // Which model may stand in for which. No relative imports at all.
   'vertex-fallback-models': 'platform',
   // Retry/fallback loop around a Vertex call. No relative imports at all.
@@ -491,6 +495,7 @@ const FILE_BUCKET = {
   'unsubscribe-token': 'notifications',
   contact: 'notifications',
   'operator-alerts': 'notifications',
+  'uncollected-feedback': 'notifications',
   'notify-sweep-routes': 'notifications',
 
   // submissions.ts is deliberately unmapped: it's the D2 mega-file (registerSubmissionRoutes,

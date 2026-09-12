@@ -1047,6 +1047,47 @@ cat > "${POLICY_DIR}/a32.json" <<EOF
 }
 EOF
 
+# A33 -- the snapshot bucket alone, at a rate that is worth degrading the catalog over.
+#
+# A32 pages a human about any bucket. This one exists to be acted on automatically, so it
+# is scoped to the one bucket whose bytes the video and media rungs can actually reduce:
+# catalog media leaves from here. The store bucket is deliberately excluded -- its traffic
+# is dominated by the coding agent reading kit files (measured 8 GB/day in closed beta,
+# 71 of the last 72 hours over A32's own threshold), and no serving rung reduces that.
+#
+# 2 GiB/hour is ~48 GB/day, about $5.80/day of egress and roughly 20x the snapshot
+# bucket's observed peak (94 MB/h over 2026-09-10..12). Below that a busy day is just a
+# busy day; above it, serving 96px images beats paying. Sustained over an hour, so the
+# brake reacts in about two -- slow for an alert, fast for something a budget would take
+# days to notice.
+cat > "${POLICY_DIR}/a33.json" <<EOF
+{
+  "displayName": "A33 Snapshot bucket egress spiking",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "snapshot bucket sent bytes sustained over an hour",
+    "conditionThreshold": {
+      "filter": "metric.type=\"storage.googleapis.com/network/sent_bytes_count\" AND resource.type=\"gcs_bucket\" AND resource.label.bucket_name=\"${PROJECT_ID}-games-snapshots\"",
+      "aggregations": [{
+        "alignmentPeriod": "3600s",
+        "perSeriesAligner": "ALIGN_SUM",
+        "crossSeriesReducer": "REDUCE_SUM"
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 2147483648,
+      "duration": "3600s",
+      "trigger": { "count": 1 }
+    }
+  }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
+  "alertStrategy": { "autoClose": "86400s" },
+  "documentation": {
+    "content": "Catalog media is leaving the snapshot bucket fast enough to be worth degrading the catalog over. The spend brake pulls the video and media rungs on this policy (infra/setup-spend-brake.sh), so preview video stops and every image is served at its baked 96px width until an operator clears the flags at /admin/limits. That is the intended response, not a malfunction. Check whether it was a spike worth having (visit telemetry, the Cloud Run request count) or a scraper (one IP pulling many objects: jsonPayload.msg=\"media URL budget exhausted\" means the per-IP ceiling is already refusing someone). This policy deliberately ignores the store bucket, whose traffic is the coding agent rather than visitors; A32 still pages a human about every bucket. See docs/runbooks/launch-day.md.",
+    "mimeType": "text/markdown"
+  }
+}
+EOF
+
 
 fi
 

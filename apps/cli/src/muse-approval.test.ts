@@ -96,15 +96,19 @@ it('keeps ordinary completion and refuses disabled session logging', async () =>
 });
 for (const mode of ['resume', 'decline', 'unattended', 'failure'] as const)
   it(`handles Muse approval recovery: ${mode}`, async () => {
+    const root = await mkdtemp(join(tmpdir(), 'gdpl-muse-edit-'));
+    roots.push(root);
+    await mkdir(join(root, 'games/game'), { recursive: true });
     const verify = vi.fn(() => ({ status: 0 }));
     const interactiveRun = vi.fn(async (input) => {
       expect(interactiveArgs(input)).toEqual(['--trust-workspace', '--approval-mode', 'on-request', 'resume', id]);
+      await writeFile(join(input.cwd, 'game.ts'), 'edited');
       return { code: mode === 'failure' ? 1 : 0 };
     });
     const pick = vi.fn(async () => (mode === 'decline' ? 'Keep edits and return' : 'Open Muse interactively'));
     const ws: Workshop = {
       slug: 'game',
-      root: '/checkout',
+      root,
       token: '',
       env: {},
       adapters: [spec],

@@ -23,6 +23,8 @@
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0 && npm run comment-prose && npm run module-size && npm run module-boundary && npm run env-manifest && npm run runtime-sa && npm run firebase-hosting && npm run action-pins && npm run cli:changelog",
     "// env-manifest": "Both deploy paths must thread the same service env map; --set-env-vars replaces it wholesale. See infra/env-manifest.json.",
     "firebase-hosting": "node infra/check-firebase-hosting.mjs",
+    "// deploy-freshness": "Live check, not part of lint: asks GitHub whether master reached prod. See .github/workflows/deploy-watchdog.yml.",
+    "deploy-freshness": "node infra/check-deploy-freshness.mjs",
     "env-manifest": "node infra/check-env-manifest.mjs",
     "runtime-sa": "node infra/check-runtime-sa.mjs",
     "// action-pins": "A tag is a moving pointer; the deploy job holds the Cloud Run credential. See infra/check-action-pins.mjs.",

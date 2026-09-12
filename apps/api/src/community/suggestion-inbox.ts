@@ -163,7 +163,7 @@ export async function registerSuggestionInboxRoutes(
   }
 
   app.get('/api/me/suggestions', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
 
     const records = await store.listSuggestions({ ownerUid: request.user!.uid, limit: MAX_INBOX });
     // One scorecard read per distinct game, not per suggestion.
@@ -179,12 +179,12 @@ export async function registerSuggestionInboxRoutes(
   });
 
   app.post('/api/me/suggestions/:id/approve', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     const id = z.string().parse((request.params as { id?: string }).id);
     const uid = request.user!.uid;
 
     const record = await loadOwned(id, uid, reply);
-    if (!record) return;
+    if (!record) return reply;
     // Only an undecided suggestion can be approved. Re-approving a filed one would file a
     // second issue for the same evidence, which is how an implementer ends up with
     // duplicate work and a creator ends up not trusting the button.
@@ -263,7 +263,7 @@ export async function registerSuggestionInboxRoutes(
    * they are still shaping.
    */
   app.get('/api/me/games/:slug/autonomy', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     const slug = z.string().parse((request.params as { slug?: string }).slug);
     const submission = await store.getPublishedSubmissionBySlug(slug);
     // 404 rather than 403, like the suggestion routes: a slug is public, so confirming
@@ -276,7 +276,7 @@ export async function registerSuggestionInboxRoutes(
   });
 
   app.put('/api/me/games/:slug/autonomy', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     const slug = z.string().parse((request.params as { slug?: string }).slug);
     const parsed = z.object({ mode: z.enum(AUTONOMY_MODES) }).safeParse(request.body);
     if (!parsed.success) {
@@ -291,7 +291,7 @@ export async function registerSuggestionInboxRoutes(
   });
 
   app.post('/api/me/suggestions/:id/dismiss', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     const id = z.string().parse((request.params as { id?: string }).id);
 
     const parsed = DismissSchema.safeParse(request.body);
@@ -300,7 +300,7 @@ export async function registerSuggestionInboxRoutes(
     }
 
     const record = await loadOwned(id, request.user!.uid, reply);
-    if (!record) return;
+    if (!record) return reply;
     if (record.status !== 'proposed') {
       return reply.status(409).send({ error: 'this suggestion has already been decided', status: record.status });
     }

@@ -77,60 +77,64 @@ export type { ManagedBuilderMode };
 export type ManagedAgentVendor = ManagedAgentVendorName;
 export type SeedingMode = 'auto' | 'off';
 
-export interface CreationLimits {
-  stored: {
-    paused?: boolean;
-    globalDailySubmissionCap?: number | null;
-    managedBuilderMode?: ManagedBuilderMode;
-    managedAgentVendorOverride?: ManagedAgentVendor | null;
-    managedDailyCap?: number | null;
-    managedDailyUserCap?: number | null;
-    tabCompletePaused?: boolean;
-    globalDailyTabCompleteTokenCap?: number | null;
-    editingPaused?: boolean;
-    chatPaused?: boolean;
-    searchPaused?: boolean;
-    gatePaused?: boolean;
-    dreamsPaused?: boolean;
-    // Round 0's kill switch and provider picker.
-    partyPaused?: boolean;
-    seedingMode?: SeedingMode;
-    seedProviderOverride?: string | null;
-    updatedAt?: string;
-    updatedBy?: string;
-  } | null;
-  effective: {
-    paused: boolean;
-    globalDailySubmissionCap: number;
-    managedBuilderMode: ManagedBuilderMode;
-    managedDailyCap: number | null;
-    managedDailyUserCap: number | null;
-    hasPlatformBackend: boolean;
-    managedAgentVendor: {
-      stored: ManagedAgentVendor | null;
-      effective: ManagedAgentVendor | null;
-      available: boolean;
-      configuredVendors: ManagedAgentVendor[];
-      defaultVendor: ManagedAgentVendor | null;
-    };
-    tabCompletePaused: boolean;
-    globalDailyTabCompleteTokenCap: number;
-    editingPaused?: boolean;
-    chatPaused?: boolean;
-    searchPaused?: boolean;
-    gatePaused?: boolean;
-    dreamsPaused?: boolean;
-    partyPaused?: boolean;
-    telemetrySampleRate?: number | null;
-    seedingMode: SeedingMode;
-    seedProvider: {
-      stored: string | null;
-      effective: string;
-      available: boolean;
-      configuredProviders: string[];
-      defaultProvider: string | null;
-    };
+// Lanes the spend brake can pull; see PAUSEABLE in spend-brake.ts.
+export interface PauseableLanes {
+  editingPaused?: boolean;
+  chatPaused?: boolean;
+  searchPaused?: boolean;
+  gatePaused?: boolean;
+  dreamsPaused?: boolean;
+  partyPaused?: boolean;
+  videoPaused?: boolean;
+  mediaLean?: boolean;
+  anonymousPaused?: boolean;
+}
+
+export interface CreationLimitsEffective extends PauseableLanes {
+  paused: boolean;
+  globalDailySubmissionCap: number;
+  managedBuilderMode: ManagedBuilderMode;
+  managedDailyCap: number | null;
+  managedDailyUserCap: number | null;
+  hasPlatformBackend: boolean;
+  managedAgentVendor: {
+    stored: ManagedAgentVendor | null;
+    effective: ManagedAgentVendor | null;
+    available: boolean;
+    configuredVendors: ManagedAgentVendor[];
+    defaultVendor: ManagedAgentVendor | null;
   };
+  tabCompletePaused: boolean;
+  globalDailyTabCompleteTokenCap: number;
+  telemetrySampleRate?: number | null;
+  seedingMode: SeedingMode;
+  seedProvider: {
+    stored: string | null;
+    effective: string;
+    available: boolean;
+    configuredProviders: string[];
+    defaultProvider: string | null;
+  };
+}
+
+export interface CreationLimits {
+  stored:
+    | ({
+        paused?: boolean;
+        globalDailySubmissionCap?: number | null;
+        managedBuilderMode?: ManagedBuilderMode;
+        managedAgentVendorOverride?: ManagedAgentVendor | null;
+        managedDailyCap?: number | null;
+        managedDailyUserCap?: number | null;
+        tabCompletePaused?: boolean;
+        globalDailyTabCompleteTokenCap?: number | null;
+        seedingMode?: SeedingMode;
+        seedProviderOverride?: string | null;
+        updatedAt?: string;
+        updatedBy?: string;
+      } & PauseableLanes)
+    | null;
+  effective: CreationLimitsEffective;
   today: { dateStr: string; submissions: number; managedBuilds: number; tabCompleteTokens: number };
   propagationMs: number;
 }
@@ -149,24 +153,20 @@ export async function fetchCreationLimits(): Promise<CreationLimits | null> {
  * `globalDailySubmissionCap: null` clears the stored ceiling — a different intent from
  * setting a number, and the API distinguishes them.
  */
-export async function setCreationLimits(patch: {
-  paused?: boolean;
-  globalDailySubmissionCap?: number | null;
-  managedBuilderMode?: ManagedBuilderMode;
-  managedAgentVendorOverride?: ManagedAgentVendor | null;
-  managedDailyCap?: number | null;
-  managedDailyUserCap?: number | null;
-  tabCompletePaused?: boolean;
-  globalDailyTabCompleteTokenCap?: number | null;
-  editingPaused?: boolean;
-  chatPaused?: boolean;
-  searchPaused?: boolean;
-  gatePaused?: boolean;
-  dreamsPaused?: boolean;
-  partyPaused?: boolean;
-  seedingMode?: SeedingMode;
-  seedProviderOverride?: string | null;
-}): Promise<CreationLimits | { error: string }> {
+export async function setCreationLimits(
+  patch: {
+    paused?: boolean;
+    globalDailySubmissionCap?: number | null;
+    managedBuilderMode?: ManagedBuilderMode;
+    managedAgentVendorOverride?: ManagedAgentVendor | null;
+    managedDailyCap?: number | null;
+    managedDailyUserCap?: number | null;
+    tabCompletePaused?: boolean;
+    globalDailyTabCompleteTokenCap?: number | null;
+    seedingMode?: SeedingMode;
+    seedProviderOverride?: string | null;
+  } & PauseableLanes,
+): Promise<CreationLimits | { error: string }> {
   const res = await fetch(`${API_BASE}/api/admin/creation-limits`, {
     method: 'POST',
     credentials: 'include',

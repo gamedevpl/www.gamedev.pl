@@ -420,7 +420,7 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
 
   app.post('/api/submissions/refine', async (request: FastifyRequest, reply) => {
     if (!checkUserAccess(request, reply)) {
-      return;
+      return reply;
     }
 
     const parseResult = RefineRequestSchema.safeParse(request.body);

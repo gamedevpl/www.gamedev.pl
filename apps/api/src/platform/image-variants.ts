@@ -18,8 +18,8 @@ import { PNG } from 'pngjs';
  * out of all proportion to that.
  */
 
-/** Widths the catalog asks for: thumbnail strip, then card poster at 2× its CSS box. */
-export const VARIANT_WIDTHS = [96, 640] as const;
+// Every width the web asks for; a missing one serves the original.
+export const VARIANT_WIDTHS = [96, 160, 320, 640] as const;
 
 export type VariantWidth = (typeof VARIANT_WIDTHS)[number];
 

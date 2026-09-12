@@ -16,6 +16,7 @@ import type { SubmissionStatus, SubmissionStatusResponse } from '../platform/sub
 import { mintToken } from '../platform/submission-token.js';
 import { emitOperatorAlert, emitSubmissionNotification, notifyOnTransition, type EmitDeps } from './notify.js';
 import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './operator-alerts.js';
+import { uncollectedFeedbackCause, type UncollectedFeedbackCause } from './uncollected-feedback.js';
 
 // Max wait for a handoff ack before the sweep forces it.
 const HANDOFF_ACK_STALL_MS = 10 * 60 * 1000;
@@ -155,6 +156,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
       let emitted = 0;
       let deferred = 0;
       const stalledIssues: number[] = [];
+      const stalledCauses: Record<string, UncollectedFeedbackCause> = {};
       // Oldest uncollected change request per job, so the alert pass rereads nothing.
       const pendingFeedback = new Map<number, string>();
       for (const record of active) {
@@ -188,6 +190,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
             pendingFeedback.set(record.jobId, oldest.createdAt);
             if (now() - Date.parse(oldest.createdAt) > FEEDBACK_STALL_MS) {
               stalledIssues.push(record.jobId);
+              stalledCauses[String(record.jobId)] = uncollectedFeedbackCause(record);
             }
           }
           // Same derivation the status poll uses, so sweep and page cannot disagree.
@@ -326,6 +329,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
           alertsSkipped,
           stalled: stalledIssues.length,
           stalledIssues,
+          stalledCauses,
           healthResolved,
           unhealthy,
         },
@@ -342,6 +346,7 @@ export function registerNotifySweepRoutes(app: FastifyInstance, deps: NotifySwee
         alerts: alerts.length,
         alerted,
         stalled: stalledIssues.length,
+        stalledCauses,
         healthResolved,
         unhealthy,
       });

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { API_DEFAULT_CACHE_CONTROL } from './api-cache-policy.js';
+import { API_DEFAULT_CACHE_CONTROL, SHARED_READ_CACHE_CONTROL } from './api-cache-policy.js';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { InMemoryStore } from './store.js';
@@ -113,5 +113,54 @@ describe('api cache policy', () => {
     const res = await app.inject({ method: 'GET', url: '/.well-known/oauth-authorization-server' });
     expect(res.statusCode).toBe(200);
     expect(res.headers['cache-control']).not.toBe(API_DEFAULT_CACHE_CONTROL);
+  });
+});
+
+describe('shared reads', () => {
+  it('lets an edge hold the catalog once the site is open', async () => {
+    const open = await publishedGameApp({});
+    const res = await open.inject({ method: 'GET', url: '/api/catalog' });
+    await open.close();
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['cache-control']).toBe(SHARED_READ_CACHE_CONTROL);
+  });
+
+  it('keeps the catalog private while the site is walled', async () => {
+    const walled = await publishedGameApp({ betaAllowedUids: uid });
+    const res = await walled.inject({
+      method: 'GET',
+      url: '/api/catalog',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, sessionSecret)}` },
+    });
+    await walled.close();
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['cache-control']).toBe(API_DEFAULT_CACHE_CONTROL);
+  });
+
+  it('closes the catalog to caches again when the last rung is pulled', async () => {
+    const store = new InMemoryStore();
+    await store.setCreationLimits({ anonymousPaused: true }, 'test');
+    const app = await buildApp({ store, sessionSecret });
+    const res = await app.inject({ method: 'GET', url: '/api/catalog' });
+    await app.close();
+    // Walled at runtime: the wall answers first, and nothing shareable is produced.
+    expect(res.statusCode).toBe(401);
+    expect(isPubliclyCacheable(res.headers['cache-control'] as string | undefined)).toBe(false);
+  });
+
+  it('never shares a bad answer, which would outlive the outage', async () => {
+    // No GitHub client: the catalog route answers 503.
+    const app = await buildApp({ store: new InMemoryStore(), sessionSecret });
+    const res = await app.inject({ method: 'GET', url: '/api/catalog' });
+    await app.close();
+    expect(res.statusCode).not.toBe(200);
+    expect(res.headers['cache-control']).toBe(API_DEFAULT_CACHE_CONTROL);
+  });
+
+  it('leaves personal reads per-user even on an open site', async () => {
+    const open = await publishedGameApp({});
+    const res = await open.inject({ method: 'GET', url: '/api/notifications' });
+    await open.close();
+    expect(isPubliclyCacheable(res.headers['cache-control'] as string | undefined)).toBe(false);
   });
 });

@@ -1,7 +1,16 @@
 import { privatePlayDirectory, readPlayState, lockAge } from './play-state.js';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  openSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { findCheckout } from './checkout.js';
@@ -109,15 +118,25 @@ export async function startLocalPlay(input: {
     checkAbort();
     const runtime = join(mkdtempSync(join(dir, 'runtime-')), 'server.mjs');
     writeFileSync(runtime, PLAY_RUNTIME, { mode: 0o600 });
-    const child = spawn(process.execPath, [runtime, root, input.slug, statePath, key], {
-      cwd: root,
-      env: childEnv(input.env, ''),
-      stdio: 'ignore',
-      detached: true,
-      windowsHide: true,
-    });
+    const logPath = join(runtime, '..', 'startup.log');
+    const log = openSync(logPath, 'wx', 0o600);
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(process.execPath, [runtime, root, input.slug, statePath, key], {
+        cwd: root,
+        env: childEnv(input.env, ''),
+        stdio: ['ignore', log, log],
+        detached: true,
+        windowsHide: true,
+      });
+    } finally {
+      closeSync(log);
+    }
     let failed = false;
     child.once('error', () => {
+      failed = true;
+    });
+    child.once('exit', () => {
       failed = true;
     });
     child.unref();
@@ -137,7 +156,11 @@ export async function startLocalPlay(input: {
       await delay(100);
     }
     child.kill();
-    throw new CliError('local preview could not start', EXIT_REFUSED, 'check the Creator Kit and Node installation');
+    throw new CliError(
+      'local preview could not start',
+      EXIT_REFUSED,
+      `Startup diagnostics: ${logPath}. Check browser/loopback permissions and the Creator Kit; do not bypass sandbox restrictions.`,
+    );
   } finally {
     rmSync(lock, { recursive: true, force: true });
   }
