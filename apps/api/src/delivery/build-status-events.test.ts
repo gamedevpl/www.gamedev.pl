@@ -9,8 +9,13 @@ async function harness() {
   let clock = 1_700_000_000_000;
   const store = new InMemoryStore();
   await store.createSubmission(JOB, 'g:owner', 'Airtime');
+  // Distinct stamps: prod orders on createdAt alone, so ties are arbitrary there.
   for (let i = 0; i < 20; i += 1) {
-    await store.appendBuildEvent(JOB, { kind: 'progress', text: `step ${i}` });
+    await store.appendBuildEvent(JOB, {
+      kind: 'progress',
+      text: `step ${i}`,
+      createdAt: new Date(clock - (20 - i) * 1_000).toISOString(),
+    });
   }
   const assembler = createBuildStatusAssembler({
     store,
@@ -20,7 +25,7 @@ async function harness() {
   const list = vi.spyOn(store, 'listBuildEvents');
   const poll = async () =>
     assembler.attachBuildEvents({ status: 'building' } as SubmissionStatusResponse, JOB, 'en');
-  return { store, assembler, list, poll, tick: (ms: number) => (clock += ms) };
+  return { store, assembler, list, poll, tick: (ms: number) => (clock += ms), at: () => clock };
 }
 
 // A 3s poll against a 5s window: most polls miss.
@@ -62,10 +67,14 @@ describe('build event reads under a three-second poll', () => {
   });
 
   it('refetches the page as soon as the newest event changes', async () => {
-    const { store, list, poll, tick } = await harness();
+    const { store, list, poll, tick, at } = await harness();
     await poll();
     tick(6_000);
-    await store.appendBuildEvent(JOB, { kind: 'progress', text: 'something new' });
+    await store.appendBuildEvent(JOB, {
+      kind: 'progress',
+      text: 'something new',
+      createdAt: new Date(at() + 1_000).toISOString(),
+    });
     const fresh = await poll();
 
     expect(list.mock.calls.at(-1)?.[1]).toMatchObject({ limit: 20 });
