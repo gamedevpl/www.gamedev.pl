@@ -5,7 +5,7 @@ import type { GitHubClient } from './catalog/github-client.js';
 
 it('keeps local recovery drafts past both abandonment windows while ordinary jobs still expire', async () => {
   const store = new InMemoryStore();
-  for (const jobId of [1, 2, 3]) {
+  for (const jobId of [1, 2, 3, 4]) {
     await store.createSubmission(jobId, 'owner', `Game ${jobId}`);
     if (jobId !== 2) {
       await store.claimSubmissionSlug(jobId, `recovered-${jobId}`, null, {
@@ -19,6 +19,7 @@ it('keeps local recovery drafts past both abandonment windows while ordinary job
       await store.recordJobTransition(jobId, { to: 'queued', at: new Date().toISOString(), by: 'creator' });
     }
   }
+  await store.touchLastAgentSignalAt(4);
   await store.setRoundBuilder(3, 'platform', { resetRoundBudget: false });
   const githubClient: GitHubClient = {
     getIssueState: async () => ({ state: 'open' }),
@@ -44,6 +45,7 @@ it('keeps local recovery drafts past both abandonment windows while ordinary job
     expect((await store.getSubmission(1))?.state).toBe('queued');
     expect((await store.getSubmission(2))?.state).toBe('abandoned');
     expect((await store.getSubmission(3))?.state).toBe('abandoned');
+    expect((await store.getSubmission(4))?.state).toBe('abandoned');
   } finally {
     await app.close();
   }

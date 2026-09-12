@@ -6008,6 +6008,12 @@ describe('POST /api/submissions/:token/improve', () => {
       submissionTokenSecret: secret,
     });
 
+    // Another creator's job on the same slug must never appear.
+    const foreign = await store.allocateJobId();
+    await store.createSubmission(foreign, 'g:other-user', 'History Game');
+    await store.setSubmissionSlug(foreign, 'history-game');
+    await store.appendCreatorMessage(foreign, 'Secret foreign note.');
+
     const published = await store.allocateJobId();
     await store.createSubmission(published, 'g:test-user', 'History Game');
     await store.setSubmissionSlug(published, 'history-game');
@@ -6019,12 +6025,6 @@ describe('POST /api/submissions/:token/improve', () => {
       text: 'Lobby volume bumped for the opening scene.',
       createdAt: '2026-07-01T01:00:00.000Z',
     });
-
-    // Another creator's job on the same slug must never appear.
-    const foreign = await store.allocateJobId();
-    await store.createSubmission(foreign, 'g:other-user', 'History Game');
-    await store.setSubmissionSlug(foreign, 'history-game');
-    await store.appendCreatorMessage(foreign, 'Secret foreign note.');
 
     const improve = await app.inject({
       method: 'POST',

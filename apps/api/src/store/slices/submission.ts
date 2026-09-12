@@ -1,3 +1,4 @@
+import { bindSubmissionSlug } from './bind-submission-slug.js';
 import type { LocalActivity } from '@gamedevpl/contract';
 import { claimManualRoundSlug } from './manual-round-claim.js';
 import { FieldValue, type Firestore } from '@google-cloud/firestore';
@@ -207,9 +208,8 @@ export class FirestoreSubmissionStore implements SubmissionStore {
       return true;
     });
   }
-
   async setSubmissionSlug(jobId: number, slug: string): Promise<void> {
-    await this.ref(jobId).set({ slug }, { merge: true });
+    await bindSubmissionSlug(this.db, jobId, slug);
   }
 
   async setSubmissionTitle(jobId: number, title: string): Promise<void> {

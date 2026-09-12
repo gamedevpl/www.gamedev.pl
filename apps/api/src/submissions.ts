@@ -791,6 +791,8 @@ export async function registerSubmissionRoutes(
     // Without a slug there is no game to improve, and dispatching would quietly
     // commission a brand-new one against a creator's improvement request.
     if (!source?.slug) return null;
+    const holder = await store.getSubmissionBySlug(source.slug);
+    if (!holder) return null;
 
     // Resolve against the *source* game before the new job exists. `dispatchBuild`
     // would otherwise ask `builderOf` on a blank record and always pick `platform`.
@@ -806,10 +808,6 @@ export async function registerSubmissionRoutes(
     const jobId = await store.allocateJobId();
     await store.createSubmission(jobId, input.ownerUid ?? source.ownerUid, source.title);
     await store.setSubmissionLocale(jobId, input.locale);
-    // Set before dispatch: the slug is what makes this an improvement rather than a new
-    // game, and a job that dispatched without one has already told the agent the wrong
-    // thing.
-    await store.setSubmissionSlug(jobId, source.slug);
     // The change request is this round's brief, so persist it. `dispatchBuild` below
     // carries the same text into a platform backend's prompt, but a self round has no
     // backend to read it: the creator's own agent calls get_brief, which serves the
@@ -846,6 +844,18 @@ export async function registerSubmissionRoutes(
       by: input.openedBy === 'agent' ? 'agent' : 'creator',
       reason: input.openedBy === 'agent' ? 'agent_open_round' : 'improvement_requested',
     });
+
+    if (!(await store.claimManualRoundSlug(jobId, source.slug, holder.jobId))) {
+      const at = new Date(now()).toISOString();
+      await store.recordJobTransition(jobId, {
+        to: 'abandoned',
+        at,
+        by: 'reconciler',
+        reason: 'improvement_claim_lost',
+      });
+      await store.setSubmissionAbandoned(jobId, at);
+      return null;
+    }
 
     const dispatched = await dispatchBuild({
       jobId,

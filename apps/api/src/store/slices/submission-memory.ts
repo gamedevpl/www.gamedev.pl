@@ -1,3 +1,4 @@
+import { assertRecoveryBinding } from './bind-submission-slug.js';
 import type { PublicationStore } from './publication.js';
 import { isActiveBuildRound } from '../../creation/job-state.js';
 import type { SubmissionStatus } from '../../platform/submission-status.js';
@@ -134,6 +135,10 @@ export class InMemorySubmissionStore implements SubmissionStore {
   }
 
   async setSubmissionSlug(jobId: number, slug: string): Promise<void> {
+    const holder = [...this.submissions.values()]
+      .filter((r) => r.slug === slug)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)[0];
+    assertRecoveryBinding(jobId, holder);
     const sub = this.submissions.get(jobId);
     if (sub) this.submissions.set(jobId, { ...sub, slug });
   }
