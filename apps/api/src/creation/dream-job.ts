@@ -125,6 +125,15 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     }
   }
 
+  // Paid model calls belong in the ledger, or the report lies.
+  async function bookConcept(jobId: number, model: string): Promise<void> {
+    try {
+      await store.recordJobCost(jobId, { kind: 'concept', at: new Date(now()).toISOString(), by: model });
+    } catch (error) {
+      log.error({ err: error, jobId }, 'could not record the cost of a concept call');
+    }
+  }
+
   async function run(input: DreamRunInput, claimedAt: string): Promise<DreamOutcome> {
     const { record, version, screenshotPath } = input;
     const jobId = record.jobId;
@@ -135,7 +144,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     // The switch and the creator's mute; either ends the run.
     const stopped = async (): Promise<DreamOutcome | null> => {
       if (!(await availability.dreamingEnabled())) return 'paused';
-      if ((await store.getUser(record.ownerUid))?.proposalsMutedAt) return 'muted';
+      if (await store.readProposalsMutedAt(record.ownerUid)) return 'muted';
       return null;
     };
     let halt = await stopped();
@@ -157,6 +166,8 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
     // The reads above take real time; either flag may have moved since.
     halt = await stopped();
     if (halt) return halt;
+    // Booked before the answer: a call that failed still billed.
+    await bookConcept(jobId, ideas.model);
     const generated = await ideas.generate({
       spec: record.spec,
       ...(record.qa?.length ? { qa: record.qa } : {}),
@@ -178,6 +189,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       // An opt-out during one image call cancels the next.
       halt = await stopped();
       if (halt) return halt;
+      await bookConcept(jobId, frames.model);
       const result = await dreamFrame({ idea, sourcePng, size, styleNote, hudRegions, jobId });
       if (result) dreamed.push(result);
     }

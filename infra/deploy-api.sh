@@ -142,6 +142,9 @@ EDITORKIT_V2="${EDITORKIT_V2:-true}"
 DREAMS_ENABLED="${DREAMS_ENABLED:-false}"
 # The agent writer is its own switch; see .claude/skills/byoca-mcp.
 AGENT_PROPOSALS_ENABLED="${AGENT_PROPOSALS_ENABLED:-false}"
+DREAM_IMAGE_MODEL="${DREAM_IMAGE_MODEL:-}"
+DREAM_TIMEOUT_MS="${DREAM_TIMEOUT_MS:-}"
+NEXT_IDEAS_TIMEOUT_MS="${NEXT_IDEAS_TIMEOUT_MS:-}"
 GLOBAL_DAILY_DREAM_CAP="${GLOBAL_DAILY_DREAM_CAP:-}"
 BETA_ALLOWED_UIDS="${BETA_ALLOWED_UIDS:-}"
 BETA_ALLOWED_EMAILS="${BETA_ALLOWED_EMAILS:-}"
@@ -428,6 +431,14 @@ for SEED_VAR in \
   eval "SEED_VAL=\${${SEED_VAR}:-}"
   if [ -n "${SEED_VAL}" ]; then
     ENV_VARS="${ENV_VARS}|${SEED_VAR}=${SEED_VAL}"
+  fi
+done
+# Concept proposals. Repointing the image model or either timeout must survive the
+# next deploy, so they thread here rather than being set by hand.
+for DREAM_VAR in DREAM_IMAGE_MODEL DREAM_TIMEOUT_MS NEXT_IDEAS_TIMEOUT_MS; do
+  eval "DREAM_VAL=\${${DREAM_VAR}:-}"
+  if [ -n "${DREAM_VAL}" ]; then
+    ENV_VARS="${ENV_VARS}|${DREAM_VAR}=${DREAM_VAL}"
   fi
 done
 if [ -n "$GOOGLE_OAUTH_CLIENT_ID" ]; then

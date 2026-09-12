@@ -29,6 +29,8 @@ export interface DreamFrame {
 
 export interface DreamFrameGenerator {
   generate(request: DreamFrameRequest): Promise<DreamFrame | null>;
+  // Named by whatever bills, so the ledger entry cannot drift.
+  readonly model: string;
 }
 
 // Owner policy: 3.x only; VERTEX_MODEL must not leak in.
@@ -61,6 +63,8 @@ ${regions}`;
 export class VertexDreamFrameGenerator implements DreamFrameGenerator {
   private client?: GenAIClient;
 
+  readonly model: string;
+
   constructor(
     private options: {
       client?: GenAIClient;
@@ -69,7 +73,9 @@ export class VertexDreamFrameGenerator implements DreamFrameGenerator {
       model?: string;
       timeoutMs?: number;
     } = {},
-  ) {}
+  ) {
+    this.model = options.model ?? process.env.DREAM_IMAGE_MODEL ?? DEFAULT_DREAM_IMAGE_MODEL;
+  }
 
   private getClient(): GenAIClient {
     this.client ??=
@@ -78,7 +84,7 @@ export class VertexDreamFrameGenerator implements DreamFrameGenerator {
         projectId: this.options.projectId,
         region: this.options.region,
         defaultRegion: 'global',
-        model: this.options.model ?? process.env.DREAM_IMAGE_MODEL ?? DEFAULT_DREAM_IMAGE_MODEL,
+        model: this.model,
         defaultModel: DEFAULT_DREAM_IMAGE_MODEL,
         generationConfig: { responseModalities: ['IMAGE'] } as VertexGenerationConfig,
       });
@@ -104,6 +110,7 @@ export class VertexDreamFrameGenerator implements DreamFrameGenerator {
 
 export class StubDreamFrameGenerator implements DreamFrameGenerator {
   public readonly requests: DreamFrameRequest[] = [];
+  readonly model = DEFAULT_DREAM_IMAGE_MODEL;
 
   constructor(
     private frame: DreamFrame | null | ((request: DreamFrameRequest) => DreamFrame | null | Promise<DreamFrame | null>),

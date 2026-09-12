@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createDreamJob, type DreamJobDeps, type DreamOutcome } from './dream-job.js';
 import { createDreamAvailabilityGate } from './dream-availability.js';
-import { StubDreamFrameGenerator, type DreamFrame } from './dream-frames.js';
-import { StubNextIdeaGenerator, type NextIdea } from './next-ideas.js';
+import { DEFAULT_DREAM_IMAGE_MODEL, StubDreamFrameGenerator, type DreamFrame } from './dream-frames.js';
+import { DEFAULT_NEXT_IDEAS_MODEL, StubNextIdeaGenerator, type NextIdea } from './next-ideas.js';
 import { DREAM_FRAME_SHOT_LABEL, DREAM_SHOT_LABELS, DREAM_SOURCE_SHOT_LABEL } from '../platform/dream-shots.js';
 import { InMemoryStore } from '../platform/store.js';
 import { jpegHeader, pngHeader } from '../platform/image-size.test.js';
@@ -373,6 +373,20 @@ describe('createDreamJob', () => {
     });
     expect(await run()).toBe('no_frames');
     expect(await store.listCreatorMessages(7)).toEqual([]);
+  });
+
+  it('books every concept call in the job ledger, including one that drew nothing', async () => {
+    const { store, run } = await harness({ hud: [], frame: null });
+    expect(await run()).toBe('no_frames');
+
+    const costs = (await store.getSubmission(7))?.costs ?? [];
+    const concept = costs.filter((entry) => entry.kind === 'concept');
+    // One idea call and two image calls; no card resulted.
+    expect(concept.map((entry) => entry.by)).toEqual([
+      DEFAULT_NEXT_IDEAS_MODEL,
+      DEFAULT_DREAM_IMAGE_MODEL,
+      DEFAULT_DREAM_IMAGE_MODEL,
+    ]);
   });
 
   it('posts nothing when no frame survives', async () => {

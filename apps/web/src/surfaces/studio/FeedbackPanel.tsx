@@ -93,6 +93,8 @@ export function FeedbackPanel({
   const [builder, setBuilder] = useState<BuilderKind>(initialBuilder);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const sending = state === 'sending';
+  // The pick that seeded the box, so a newer one survives.
+  const seededSeq = useRef<number | undefined>(undefined);
   const attachmentsApi = useComposerAttachments(sending);
   const { attachments, pendingAttachmentReads, resetAttachments } = attachmentsApi;
 
@@ -102,6 +104,7 @@ export function FeedbackPanel({
 
   useEffect(() => {
     if (!draft) return;
+    seededSeq.current = draft.seq;
     setText(draft.text);
     const attachment = draft.attachment;
     onDraftConsumed?.();
@@ -178,6 +181,7 @@ export function FeedbackPanel({
     const message = requestedText.trim();
     if (message.length < 10 || state === 'sending' || pendingAttachmentReads > 0) return;
     setState('sending');
+    const seqAtSend = seededSeq.current;
     setError(null);
     setNotice(null);
     // Shows Sending for the whole round trip — never abort the fetch.
@@ -226,10 +230,13 @@ export function FeedbackPanel({
         recordStudioStep('builder_chosen', roundBuilder);
       }
       setState('sent');
-      setText('');
-      resetAttachments();
-      // Reset to CSS height — not the sent message's grown size.
-      if (inputRef.current) inputRef.current.style.height = '';
+      // A pick landed mid-send; clearing would eat that draft.
+      if (seededSeq.current === seqAtSend) {
+        setText('');
+        resetAttachments();
+        // Reset to CSS height — not the sent message's grown size.
+        if (inputRef.current) inputRef.current.style.height = '';
+      }
       // Echoes locally now; the next status poll picks up the real state.
       onSent(message);
       // Moves onto the new thread last, after the receipt and echo commit.

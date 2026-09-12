@@ -268,6 +268,10 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.identityStore.setProposalsMuted(uid, at);
   }
 
+  async readProposalsMutedAt(uid: string): Promise<string | null> {
+    return this.identityStore.readProposalsMutedAt(uid);
+  }
+
   async createSubmission(jobId: number, ownerUid: string, title: string): Promise<SubmissionRecord> {
     return this.submissionStore.createSubmission(jobId, ownerUid, title);
   }

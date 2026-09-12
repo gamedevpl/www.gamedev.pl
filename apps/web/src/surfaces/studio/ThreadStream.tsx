@@ -53,8 +53,8 @@ export function ThreadStream({
   const [, setThoughtTick] = useState(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const stickToBottomRef = useRef(true);
-  // The card lands when prefs resolve, after the last scroll.
-  const showsProposals = Boolean(proposals);
+  // A muted row is one line; the card is the height landing.
+  const showsProposalCard = Boolean(proposals) && !proposals?.muted;
 
   const onScroll = () => {
     const pane = scrollRef.current;
@@ -68,7 +68,7 @@ export function ThreadStream({
     if (!pane || !stickToBottomRef.current) return;
     // Do not scroll into the Claude/Cursor runway.
     pane.scrollTop = studioThreadContentScrollTop(pane);
-  }, [entries.length, stickNonce, showsProposals, working?.label, working?.thoughtLabel]);
+  }, [entries.length, stickNonce, showsProposalCard, working?.label, working?.thoughtLabel]);
 
   // One timeout at expiry — no poll needed.
   useEffect(() => {

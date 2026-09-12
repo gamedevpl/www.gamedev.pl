@@ -100,6 +100,18 @@ describe('FirestoreIdentityStore user cache', () => {
     expect((await store.getUser('u1'))?.proposalsMutedAt).toBeNull();
   });
 
+  // Paid checkpoints cannot trust another instance's window.
+  it('reads the proposals mute past the window', async () => {
+    const { store, seed, behindTheStore } = withUser();
+    await seed();
+    await store.getUser('u1');
+
+    await behindTheStore({ proposalsMutedAt: '2026-09-09T10:00:00Z' });
+
+    expect((await store.getUser('u1'))?.proposalsMutedAt).toBeUndefined();
+    expect(await store.readProposalsMutedAt('u1')).toBe('2026-09-09T10:00:00Z');
+  });
+
   it('hands out copies, so a caller cannot edit what the next request reads', async () => {
     const { store, seed } = withUser();
     await seed();

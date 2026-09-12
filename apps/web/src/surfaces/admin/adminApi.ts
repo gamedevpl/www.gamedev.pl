@@ -356,6 +356,7 @@ export interface JobCostSummary {
   sessions: number;
   credits: number;
   gateRuns: number;
+  conceptCalls: number;
   tokens?: { input: number; output: number };
   usd?: number;
   elapsedMs: number;
@@ -370,6 +371,7 @@ export interface CostReport {
     sessions: number;
     credits: number;
     gateRuns: number;
+    conceptCalls: number;
     published: number;
     tokens?: { input: number; output: number };
     usd?: number;

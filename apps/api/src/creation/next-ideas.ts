@@ -31,10 +31,14 @@ export interface NextIdeasParams {
 
 export interface NextIdeaGenerator {
   generate(params: NextIdeasParams): Promise<NextIdea[]>;
+  // Named by whatever bills, so the ledger entry cannot drift.
+  readonly model: string;
 }
 
 export const DEFAULT_NEXT_IDEAS_TIMEOUT_MS = 8_000;
 export const MAX_NEXT_IDEAS = 3;
+// Owner policy: 3.x only.
+export const DEFAULT_NEXT_IDEAS_MODEL = 'gemini-3.7-flash';
 
 const NextIdeaResultSchema = z.object({
   ideas: z
@@ -77,9 +81,13 @@ export class VertexNextIdeaGenerator implements NextIdeaGenerator {
   private timeoutMs: number;
   private client?: GenAIClient;
 
+  readonly model: string;
+
   constructor(options: VertexNextIdeaGeneratorOptions = {}) {
     this.options = options;
     this.timeoutMs = options.timeoutMs ?? Number(process.env.NEXT_IDEAS_TIMEOUT_MS ?? DEFAULT_NEXT_IDEAS_TIMEOUT_MS);
+    // VERTEX_MODEL stays in the chain; the client read it before.
+    this.model = options.model ?? process.env.VERTEX_MODEL ?? DEFAULT_NEXT_IDEAS_MODEL;
   }
 
   private getClient(): GenAIClient {
@@ -89,8 +97,8 @@ export class VertexNextIdeaGenerator implements NextIdeaGenerator {
         projectId: this.options.projectId,
         region: this.options.region,
         defaultRegion: 'global',
-        model: this.options.model,
-        defaultModel: 'gemini-3.7-flash',
+        model: this.model,
+        defaultModel: DEFAULT_NEXT_IDEAS_MODEL,
         generationConfig: {
           responseMimeType: 'application/json',
         } as VertexGenerationConfig,
@@ -161,6 +169,7 @@ ${params.qa?.length ? `\nClarifications the creator already gave:\n${params.qa.m
 
 export class StubNextIdeaGenerator implements NextIdeaGenerator {
   public readonly requests: NextIdeasParams[] = [];
+  readonly model = DEFAULT_NEXT_IDEAS_MODEL;
 
   constructor(private ideas: NextIdea[] = []) {}
 
