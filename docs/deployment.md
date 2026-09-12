@@ -394,6 +394,18 @@ inline read can), signs a six-hour V4 URL with the runtime service account
 ([`gcs-sign.ts`](../apps/api/src/delivery/gcs-sign.ts), the same path kit downloads use)
 and answers **302** to `storage.googleapis.com`.
 
+**Ceilings that still mean something.** `MEDIA_DAILY_MINTS_PER_IP` (5 000) and
+`MEDIA_DAILY_MINTS_PER_INSTANCE` (150 000) cap how many signed URLs a day are handed out;
+past either, the route answers 429 rather than serving the bytes itself, because doing
+that would cost more than the redirect it replaced. Both are counted **in each process**:
+coordinating them would mean a Firestore write per media request, and Cloud Run runs at
+most four app instances, so treat them as a blunt circuit breaker whose service-wide
+effect is the number times however many instances are warm — not an accountant. Video
+links live 30 minutes rather than six hours — a capture is ~662 KB against a ~60 KB
+screenshot, and a link is pullable by anyone holding it for as long as it lives. **A32**
+watches `storage.googleapis.com/network/sent_bytes_count` on the buckets, which is the
+only view left of the bill forming.
+
 **What the limiter still caps, and what it stops capping.** The catalog lookup, the media
 allow-list and the 400/min per-IP budget all run before a URL is minted, so they bound
 *minting*. They no longer bound *volume*: one 302 is a six-hour URL that Cloud Storage

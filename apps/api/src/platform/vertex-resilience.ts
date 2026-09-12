@@ -32,6 +32,8 @@ export async function callWithVertexResilience<T>(options: ResilientCallOptions<
   const sleep = options.sleepImpl ?? defaultSleep;
   const retryDelayMs = options.retryDelayMs ?? 250;
   const deadline = now() + options.timeoutMs;
+  // Split so every attempt gets a turn; two without a stand-in.
+  const shares = options.fallbackModel ? [0.45, 0.2, 0.35] : [0.6, 0.4, 0];
   let lastError: unknown = new Error('no attempt was made');
 
   for (const [index, model] of [undefined, undefined, options.fallbackModel].entries()) {
@@ -41,8 +43,11 @@ export async function callWithVertexResilience<T>(options: ResilientCallOptions<
     if (index > 0) await sleep(Math.min(retryDelayMs, Math.max(0, remaining)));
 
     // Again after sleeping: the wait itself can spend what was left.
-    const budget = deadline - now();
-    if (budget <= 0) break;
+    const left = deadline - now();
+    if (left <= 0) break;
+
+    // A share, not the remainder: a stalling first attempt must leave room.
+    const budget = Math.max(1, Math.min(left, Math.floor(options.timeoutMs * shares[index]!)));
 
     try {
       options.onAttempt?.(model);
