@@ -84,6 +84,10 @@
       "review_sweep": {
         "title": "A review sweep is ready",
         "body": "“{{title}}” has games waiting on the review desk."
+      },
+      "moderation_flag": {
+        "title": "A reviewer reported a game",
+        "body": "“{{title}}” was reported as {{detail}}. One report is enough to act on."
       }
     },
     "game": {

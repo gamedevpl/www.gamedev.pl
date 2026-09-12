@@ -84,6 +84,10 @@
       "review_sweep": {
         "title": "Przegląd gier jest gotowy",
         "body": "„{{title}}” czeka na biurku ocen."
+      },
+      "moderation_flag": {
+        "title": "Recenzent zgłosił grę",
+        "body": "„{{title}}” zgłoszono jako {{detail}}. Jedno zgłoszenie wystarczy, żeby zadziałać."
       }
     },
     "game": {

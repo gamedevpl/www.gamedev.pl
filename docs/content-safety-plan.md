@@ -149,7 +149,13 @@ this is the half of its mitigation that reads the artifact.
   game** — published play is served from the snapshot, so a merge alone leaves it playable.
 - **Kill switch that already exists**: removing the game dir from `main` (or
   flipping SPEC status) drops it from the catalog server-side within 60s.
-- **Reviewer abuse flag ✅ live and reachable (2026-09-12)**: the desk carries a **Report abuse**
+- **Reviewer abuse flag ✅ live, reachable and alerting (2026-09-12)**: raising one emits an
+  operator notification (in-app, email, push) linking straight to the Reports queue. That
+  matters more than it looks: the queue is only as fast as whoever opens it, and without an
+  alert the report waits to be found — which is the latency the auto-unpublish option in
+  the ops plan's Q2 existed to avoid. Notifying is what makes queue-only defensible; the
+  alert never blocks the reviewer, since the report is durable before it fires.
+- **Reviewer abuse flag — the surfaces (2026-09-12)**: the desk carries a **Report abuse**
   action beside the card, deliberately outside the keep/cut/skip group — overloading `cut`
   would collapse the two axes this design separates. Reporting spends no verdict and needs
   no checklist. The operator console gained a **Reports** section listing open flags, with
