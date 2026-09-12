@@ -1,5 +1,5 @@
 import { genaicode, type GenAIClient } from 'genaicode';
-import { vertexAI } from 'genaicode/providers';
+import { openai, vertexAI } from 'genaicode/providers';
 
 // Single place where this app talks to Vertex AI. The three LLM call sites
 // (content moderation, spec refinement, and build-log translation) used to
@@ -44,4 +44,9 @@ export function createVertexClient(config: VertexClientConfig): GenAIClient {
       generationConfig: config.generationConfig,
     }),
   );
+}
+
+// Second vendor, used only when Vertex has no capacity.
+export function createOpenAiClient(config: { model: string; apiKey?: string }): GenAIClient {
+  return genaicode(openai({ apiKey: config.apiKey ?? process.env.OPENAI_API_KEY, model: config.model }));
 }
