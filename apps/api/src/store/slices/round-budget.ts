@@ -61,8 +61,8 @@ export function dreamClaimHolds(
   roundGeneration: number,
 ): boolean {
   if (claim?.version !== version) return false;
-  // A reopen leaves the version alone; the round frees it.
-  if ((claim.roundGeneration ?? roundGeneration) !== roundGeneration) return false;
+  // A reopen frees it; an unnumbered claim belongs to round one.
+  if ((claim.roundGeneration ?? 1) !== roundGeneration) return false;
   if (claim.postedAt || claim.endedAt) return true;
   return Date.parse(at) - Date.parse(claim.claimedAt) < DREAM_CLAIM_TTL_MS;
 }

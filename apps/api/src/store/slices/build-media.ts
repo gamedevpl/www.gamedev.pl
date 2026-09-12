@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { BuildShot, BuildShotSummary, BuildPreview, BuildPreviewSummary } from '../records/build-log.js';
 import type { SubmissionRecord } from '../records/submission.js';
 import { byNewestFirst } from './build-log.js';
+import { DREAM_SOURCE_SHOT_LABEL } from '../../platform/dream-shots.js';
 
 export interface BuildShotCountOptions {
   // Platform-written captions to leave out of agent-facing counts.
@@ -42,6 +43,11 @@ function matchesDelivery(query: DeliveryShotQuery) {
     shot.label === query.label &&
     shot.deliveryVersion === query.deliveryVersion &&
     shot.roundGeneration === query.roundGeneration;
+}
+
+// Only the platform writes a source shot; legacy rows lack the stamp.
+function platformWrote(shot: { label?: string; platformDrawn?: true }): boolean {
+  return Boolean(shot.platformDrawn) || shot.label === DREAM_SOURCE_SHOT_LABEL;
 }
 
 function keeps(excludeLabels: readonly string[] | undefined) {
@@ -122,7 +128,7 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
   async countBuildShots(jobId: number, opts?: BuildShotCountOptions): Promise<number> {
     return (this.buildShots.get(jobId) ?? [])
       .filter(keeps(opts?.excludeLabels))
-      .filter((shot) => !(opts?.excludePlatformDrawn && shot.platformDrawn)).length;
+      .filter((shot) => !(opts?.excludePlatformDrawn && platformWrote(shot))).length;
   }
 
   async countDeliveryShots(jobId: number, query: DeliveryShotQuery): Promise<number> {
@@ -252,7 +258,7 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
     return snap.docs
       .map((doc) => doc.data() as { label?: string; platformDrawn?: true })
       .filter(keeps(opts?.excludeLabels))
-      .filter((shot) => !(opts?.excludePlatformDrawn && shot.platformDrawn)).length;
+      .filter((shot) => !(opts?.excludePlatformDrawn && platformWrote(shot))).length;
   }
 
   async countDeliveryShots(jobId: number, query: DeliveryShotQuery): Promise<number> {

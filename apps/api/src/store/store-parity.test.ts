@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DREAM_SOURCE_SHOT_LABEL } from '../platform/dream-shots.js';
 import { FirestoreStore, InMemoryStore, type Store } from '../platform/store.js';
 import { fakeFirestore } from './fake-firestore.js';
 
@@ -673,6 +674,22 @@ describeStoreContract('proposal posting', (makeStore) => {
 });
 
 // The strip filters after the read; a crowd must not empty it.
+describeStoreContract('agent shot quota', (makeStore) => {
+  const png = { data: 'AAA=', mediaType: 'image/png' as const };
+
+  it('never charges the agent for a source shot, however it was stamped', async () => {
+    const store = makeStore();
+    await store.createSubmission(12, 'g:owner', 'Parcel Run');
+    await store.appendBuildShot(12, { ...png, label: DREAM_SOURCE_SHOT_LABEL, platformDrawn: true });
+    // Written before `platformDrawn`: the label is all it carries.
+    await store.appendBuildShot(12, { ...png, label: DREAM_SOURCE_SHOT_LABEL });
+    await store.appendBuildShot(12, { ...png, label: 'opening' });
+
+    expect(await store.countBuildShots(12, { excludePlatformDrawn: true })).toBe(1);
+    expect(await store.countBuildShots(12)).toBe(3);
+  });
+});
+
 describeStoreContract('media strip paging', (makeStore) => {
   // Explicit timestamps; same-millisecond appends would not order.
   const shot = (label: string, minute: number) => ({

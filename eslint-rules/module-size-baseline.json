@@ -463,7 +463,7 @@
     "apps/api/src/store/slices/submission.ts": 287,
     "apps/api/src/store/slices/world-entries.test.ts": 68,
     "apps/api/src/store/slices/world-entries.ts": 288,
-    "apps/api/src/store/store-parity.test.ts": 695,
+    "apps/api/src/store/store-parity.test.ts": 712,
     "apps/api/src/submissions.test.ts": 8125,
     "apps/api/src/submissions.ts": 1876,
     "apps/api/src/tab-complete-deploy-flag.test.ts": 28,
