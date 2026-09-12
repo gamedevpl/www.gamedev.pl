@@ -9,7 +9,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ### Added
 
-- Recover canceled or deleted games from local checkout sources with `recover`, keeping local edits and supporting a new slug when needed (#TBD).
+- Recover canceled or deleted games from local checkout sources with `recover`, keeping local edits and supporting a new slug when needed (#1305).
 
 ## 0.14.2 — 2026-09-12
 
