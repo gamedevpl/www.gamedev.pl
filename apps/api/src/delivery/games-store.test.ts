@@ -46,10 +46,15 @@ describe('validateSourceUpload — the delivery contract', () => {
       ...MINIMAL,
       {
         path: 'EDITOR.ts',
-        content: "import { defineEditor } from '../../shared/editor-def.ts'; export default defineEditor({});",
+        content: "import { defineEditor } from '../../shared/editor-def.ts';\nexport default defineEditor({});",
       },
     ];
-    expect(validateSourceUpload(files)).toHaveLength(files.length);
+    const kit = new Set(['shared/editor-def.ts']);
+    expect(validateSourceUpload(files, 'publish', false, false, kit)).toHaveLength(files.length);
+    expect(() => validateSourceUpload(files)).toThrow(/missing from the delivery/);
+    expect(() => validateSourceUpload(files, 'publish', false, false, new Set(['shared/game-kit.d.ts']))).toThrow(
+      /missing from the delivery/,
+    );
   });
 
   it('refuses a publish with no behavioural golden', () => {

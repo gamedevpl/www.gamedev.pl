@@ -192,6 +192,7 @@ export function validateSourceUpload(
   mode: DeliveryMode = 'publish',
   traceDerivedByGate = false,
   requireCompiledEditor = false,
+  kitSharedPaths?: ReadonlySet<string>,
 ): SourceFile[] {
   if (files.length === 0) throw new InvalidUploadError('no files in upload');
   if (files.length > MAX_UPLOAD_FILES) {
@@ -352,7 +353,7 @@ export function validateSourceUpload(
     const trailer = more ? `${hidden > 0 ? `, and ${hidden} not listed` : ''})` : '';
     throw new InvalidUploadError(`${first}${more}${trailer}. ${BANNED_ANY_GUIDANCE}`, 'any-type');
   }
-  const linkFindings = findUnresolvedSourceLinks(sourceFilesToMap(normalized));
+  const linkFindings = findUnresolvedSourceLinks(sourceFilesToMap(normalized), kitSharedPaths);
   if (linkFindings.length > 0) {
     throw new InvalidUploadError(formatSourceLinkError(linkFindings), 'symbols');
   }
@@ -597,6 +598,8 @@ export interface GamesStore {
     proposal?: { id: string; proposerUid: string };
     authorship?: 'agent' | 'owner' | 'mixed';
     summary?: string;
+    // Without these, /shared/ imports fail the link check.
+    kitSharedPaths?: ReadonlySet<string>;
   }): Promise<{ version: string; manifest: VersionManifest }>;
   /**
    * Flips an accepted proposal version from `proposal` to `publish` and records who
@@ -909,6 +912,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         mode === 'proposal' ? 'publish' : mode,
         input.origin === 'seal',
         input.requireCompiledEditor === true,
+        input.kitSharedPaths,
       );
       const at = new Date(now());
       const version = versionId(at);

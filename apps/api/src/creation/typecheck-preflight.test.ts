@@ -30,15 +30,33 @@ describe('typecheck preflight', () => {
         'shared/game-kit.d.ts': KIT_DTS,
         'shared/modules/core.ts': 'export const core = 1;\n',
         'shared/sim/box-world.ts': 'export const boxWorld = 1;\n',
+        'shared/editor-def.ts': 'export function defineEditor() {}\n',
+        'shared/genres/platformer.d.ts': 'declare function play(): void;\n',
         'SKILL.md': '# ignore\n',
         'shared/audio/beep.wav': 'not-text',
       }),
     );
     expect(Object.keys(shared).sort()).toEqual([
+      'shared/editor-def.ts',
       'shared/game-kit.d.ts',
+      'shared/genres/platformer.d.ts',
       'shared/modules/core.ts',
       'shared/sim/box-world.ts',
     ]);
+  });
+
+  it('does not root unimported Kit ambient declarations', () => {
+    const result = typecheckDeliverySources({
+      slug: 'plain',
+      kitShared: {
+        'shared/game-kit.d.ts': KIT_DTS,
+        'shared/genres/platformer.d.ts': 'declare function play(): void;\n',
+      },
+      sources: { 'game.ts': 'export const n = play();\n' },
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.message).toMatch(/TS2304/);
   });
 
   it('refuses the Round-field transcript failure with one grouped line', () => {
