@@ -479,7 +479,7 @@ describe('checking several fields', () => {
 describe('what may stand in for the classifier', () => {
   it('accepts a peer-or-better model on the second vendor', () => {
     expect(resolveFallbackModel({ configured: undefined, provider: 'openai', hasApiKey: true })).toBe('gpt-5.6-luna');
-    expect(resolveFallbackModel({ configured: 'claude-opus-5', provider: 'openai', hasApiKey: true })).toBe(
+    expect(resolveFallbackModel({ configured: 'claude-opus-5', provider: 'vertex', hasApiKey: true })).toBe(
       'claude-opus-5',
     );
   });
@@ -489,7 +489,53 @@ describe('what may stand in for the classifier', () => {
     expect(resolveFallbackModel({ configured: 'gpt-4o-mini', provider: 'openai', hasApiKey: true })).toBeUndefined();
   });
 
+  // A model the provider cannot serve reads as an outage.
+  it('refuses a peer model the configured provider does not serve', () => {
+    expect(resolveFallbackModel({ configured: 'claude-opus-5', provider: 'openai', hasApiKey: true })).toBeUndefined();
+    expect(resolveFallbackModel({ configured: 'gpt-5.6-luna', provider: 'vertex', hasApiKey: true })).toBeUndefined();
+    expect(resolveFallbackModel({ configured: 'claude-opus-5', provider: 'vertex', hasApiKey: true })).toBe(
+      'claude-opus-5',
+    );
+  });
+
   it('has no fallback at all without a key for the second vendor', () => {
     expect(resolveFallbackModel({ configured: 'gpt-5.6-luna', provider: 'openai', hasApiKey: false })).toBeUndefined();
+  });
+});
+
+// The admin creation-limits view reads this counter.
+describe('counting what we are billed for', () => {
+  it('counts every attempt, not every check', async () => {
+    let paid = 0;
+    let calls = 0;
+    const checker = new VertexChecker({
+      retryDelayMs: 0,
+      onPaidCall: () => {
+        paid += 1;
+      },
+      vertexFetcher: async () => {
+        calls += 1;
+        if (calls < 2) throw new Error('429 Resource exhausted');
+        return { allowed: true };
+      },
+    });
+
+    await checker.check('A cozy farming game');
+
+    expect(paid).toBe(2);
+  });
+
+  it('counts nothing when the regex filter answers first', async () => {
+    let paid = 0;
+    const checker = new VertexChecker({
+      onPaidCall: () => {
+        paid += 1;
+      },
+      vertexFetcher: async () => ({ allowed: true }),
+    });
+
+    await checker.check('Call me on 555-0142');
+
+    expect(paid).toBe(0);
   });
 });
