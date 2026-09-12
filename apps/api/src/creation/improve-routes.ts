@@ -97,7 +97,7 @@ export function registerImproveRoutes(app: FastifyInstance, options: ImproveRout
       }
 
       if (!checkUserAccess(request, reply)) {
-        return;
+        return reply;
       }
 
       const token = z.string().parse((request.params as { token?: string }).token);

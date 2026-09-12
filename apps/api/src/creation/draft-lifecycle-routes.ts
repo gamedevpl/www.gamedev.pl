@@ -61,7 +61,7 @@ export async function registerDraftLifecycleRoutes(
       if (!submissionTokenSecret) {
         return reply.status(503).send({ error: 'submissions are not configured' });
       }
-      if (!checkUserAccess(request, reply)) return;
+      if (!checkUserAccess(request, reply)) return reply;
       if (!store) {
         return reply.status(503).send({ error: 'submissions are not configured' });
       }
@@ -114,7 +114,7 @@ export async function registerDraftLifecycleRoutes(
         return reply.status(503).send({ error: 'submissions are not configured' });
       }
       if (!checkUserAccess(request, reply)) {
-        return;
+        return reply;
       }
       if (!store) {
         return reply.status(503).send({ error: 'submissions are not configured' });
@@ -155,7 +155,7 @@ export async function registerDraftLifecycleRoutes(
       if (!submissionTokenSecret) {
         return reply.status(503).send({ error: 'submissions are not configured' });
       }
-      if (!checkUserAccess(request, reply)) return;
+      if (!checkUserAccess(request, reply)) return reply;
       if (!store) {
         return reply.status(503).send({ error: 'submissions are not configured' });
       }

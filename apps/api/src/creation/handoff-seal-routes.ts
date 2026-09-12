@@ -65,7 +65,7 @@ export function registerHandoffSealRoutes(app: FastifyInstance, options: Handoff
       if (!githubClient || !submissionTokenSecret) {
         return reply.status(503).send({ error: 'submissions are not configured' });
       }
-      if (!checkUserAccess(request, reply)) return;
+      if (!checkUserAccess(request, reply)) return reply;
       if (!store) {
         return reply.status(503).send({ error: 'submissions are not configured' });
       }
@@ -258,7 +258,7 @@ export function registerHandoffSealRoutes(app: FastifyInstance, options: Handoff
       if (!submissionTokenSecret) {
         return reply.status(503).send({ error: 'submissions are not configured' });
       }
-      if (!checkUserAccess(request, reply)) return;
+      if (!checkUserAccess(request, reply)) return reply;
       if (!store || !gamesStore || !gateTrigger) {
         return reply.status(503).send({ error: 'store_unavailable' });
       }

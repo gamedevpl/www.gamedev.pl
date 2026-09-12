@@ -281,9 +281,9 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
   }
 
   app.get('/api/me/games/:slug/editor', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     const resolved = await resolveEditable(request, reply);
-    if (!resolved) return;
+    if (!resolved) return reply;
     const draft = await store.getEditorDraft(request.user!.uid, resolved.submission.slug as string);
     let draftContent: unknown = null;
     if (draft) {
@@ -306,9 +306,9 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
     '/api/me/games/:slug/editor/draft',
     { config: { rateLimit: { max: 60, timeWindow: 60_000 } } },
     async (request, reply) => {
-      if (!requireUser(request, reply)) return;
+      if (!requireUser(request, reply)) return reply;
       const resolved = await resolveEditable(request, reply);
-      if (!resolved) return;
+      if (!resolved) return reply;
       const body = DraftSchema.safeParse(request.body);
       if (!body.success) {
         return reply.status(400).send({ error: body.error.issues[0]?.message ?? 'invalid request' });
@@ -364,9 +364,9 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
   );
 
   app.delete('/api/me/games/:slug/editor/draft', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     const resolved = await resolveEditable(request, reply);
-    if (!resolved) return;
+    if (!resolved) return reply;
     await store.deleteEditorDraft(request.user!.uid, resolved.submission.slug as string);
     return reply.send({ ok: true });
   });
@@ -386,12 +386,12 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
     '/api/me/games/:slug/editor/assist',
     { config: { rateLimit: { max: 20, timeWindow: 60_000 } } },
     async (request, reply) => {
-      if (!requireUser(request, reply)) return;
+      if (!requireUser(request, reply)) return reply;
       if (!options.assistant || !assistEnabled()) {
         return reply.status(503).send({ error: 'assist is not enabled on this deployment' });
       }
       const resolved = await resolveEditable(request, reply);
-      if (!resolved) return;
+      if (!resolved) return reply;
       const body = AssistSchema.safeParse(request.body);
       if (!body.success) {
         return reply.status(400).send({ error: body.error.issues[0]?.message ?? 'invalid request' });
@@ -497,9 +497,9 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
     '/api/me/games/:slug/editor/publish',
     { config: { rateLimit: { max: 6, timeWindow: 60 * 60_000 } } },
     async (request, reply) => {
-      if (!requireUser(request, reply)) return;
+      if (!requireUser(request, reply)) return reply;
       const resolved = await resolveEditable(request, reply);
-      if (!resolved) return;
+      if (!resolved) return reply;
       const slug = resolved.submission.slug as string;
 
       // Publish forks a new job (below) — while the agent still owns this round, its

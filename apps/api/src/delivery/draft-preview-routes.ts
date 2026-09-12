@@ -175,7 +175,7 @@ export async function registerDraftPreviewRoutes(
       }
 
       if (!checkUserAccess(request, reply)) {
-        return;
+        return reply;
       }
 
       const token = z.string().parse((request.params as { token?: string }).token);
@@ -197,7 +197,9 @@ export async function registerDraftPreviewRoutes(
         throw error;
       }
 
-      return replyWithDraft(request, reply, jobId, requestedVersion);
+      await replyWithDraft(request, reply, jobId, requestedVersion);
+      return reply; // resolve only after that send finished
+
     },
   );
 
@@ -207,7 +209,7 @@ export async function registerDraftPreviewRoutes(
       return reply.status(503).send({ error: 'submissions are not configured' });
     }
     if (!checkUserAccess(request, reply)) {
-      return;
+      return reply;
     }
     if (!store) {
       return reply.status(503).send({ error: 'submissions are not configured' });
@@ -230,7 +232,8 @@ export async function registerDraftPreviewRoutes(
       return reply.status(404).send({ error: 'draft not found' });
     }
 
-    return replyWithDraft(request, reply, grant.jobId, grant.version);
+    await replyWithDraft(request, reply, grant.jobId, grant.version);
+    return reply;
   });
 
   return { canPlayDraft, replyWithDraft };

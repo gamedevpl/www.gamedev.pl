@@ -260,12 +260,12 @@ export async function registerCreatorCodeRoutes(
     '/api/me/studio/games/:slug/sources',
     { config: { rateLimit: { max: 1200, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      if (notFoundIfDisabled(reply)) return;
+      if (notFoundIfDisabled(reply)) return reply;
       if (!options.gamesStore) {
         return reply.status(503).send({ error: 'the Code surface is not configured on this deployment' });
       }
       const resolved = await resolveForSlug(request, reply);
-      if (!resolved) return;
+      if (!resolved) return reply;
       const { record, slug } = resolved;
       const gamesStore = options.gamesStore;
 
@@ -371,12 +371,12 @@ export async function registerCreatorCodeRoutes(
     '/api/me/studio/games/:slug/sources/stage',
     { config: { rateLimit: { max: 300, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      if (notFoundIfDisabled(reply)) return;
+      if (notFoundIfDisabled(reply)) return reply;
       if (!options.gamesStore) {
         return reply.status(503).send({ error: 'the Code surface is not configured on this deployment' });
       }
       const resolved = await resolveForSlug(request, reply);
-      if (!resolved) return;
+      if (!resolved) return reply;
       const { record, slug } = resolved;
 
       if (isLiveAgentRound(record)) {
@@ -436,12 +436,12 @@ export async function registerCreatorCodeRoutes(
     '/api/me/studio/games/:slug/sources/stage/delete',
     { config: { rateLimit: { max: 300, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      if (notFoundIfDisabled(reply)) return;
+      if (notFoundIfDisabled(reply)) return reply;
       if (!options.gamesStore) {
         return reply.status(503).send({ error: 'the Code surface is not configured on this deployment' });
       }
       const resolved = await resolveForSlug(request, reply);
-      if (!resolved) return;
+      if (!resolved) return reply;
       const { record, slug } = resolved;
 
       if (isLiveAgentRound(record)) {
@@ -522,12 +522,12 @@ export async function registerCreatorCodeRoutes(
     '/api/me/studio/games/:slug/sources/stage/patch',
     { config: { rateLimit: { max: 300, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      if (notFoundIfDisabled(reply)) return;
+      if (notFoundIfDisabled(reply)) return reply;
       if (!options.gamesStore) {
         return reply.status(503).send({ error: 'the Code surface is not configured on this deployment' });
       }
       const resolved = await resolveForSlug(request, reply);
-      if (!resolved) return;
+      if (!resolved) return reply;
       const { record, slug } = resolved;
 
       if (isLiveAgentRound(record)) {
@@ -622,12 +622,12 @@ export async function registerCreatorCodeRoutes(
     '/api/me/studio/games/:slug/sources/stage/discard',
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      if (notFoundIfDisabled(reply)) return;
+      if (notFoundIfDisabled(reply)) return reply;
       if (!options.gamesStore) {
         return reply.status(503).send({ error: 'the Code surface is not configured on this deployment' });
       }
       const resolved = await resolveForSlug(request, reply);
-      if (!resolved) return;
+      if (!resolved) return reply;
       const { record, slug } = resolved;
 
       if (isLiveAgentRound(record)) {
@@ -675,12 +675,12 @@ export async function registerCreatorCodeRoutes(
     '/api/me/studio/games/:slug/sources/stage/restore',
     { config: { rateLimit: { max: 30, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      if (notFoundIfDisabled(reply)) return;
+      if (notFoundIfDisabled(reply)) return reply;
       if (!options.gamesStore) {
         return reply.status(503).send({ error: 'the Code surface is not configured on this deployment' });
       }
       const resolved = await resolveForSlug(request, reply);
-      if (!resolved) return;
+      if (!resolved) return reply;
       const { record, slug } = resolved;
       const gamesStore = options.gamesStore;
 
@@ -746,12 +746,12 @@ export async function registerCreatorCodeRoutes(
     '/api/me/studio/games/:slug/sources/stage/rebuild',
     { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      if (notFoundIfDisabled(reply)) return;
+      if (notFoundIfDisabled(reply)) return reply;
       if (!options.gamesStore) {
         return reply.status(503).send({ error: 'the Code surface is not configured on this deployment' });
       }
       const resolved = await resolveForSlug(request, reply);
-      if (!resolved) return;
+      if (!resolved) return reply;
       const { record } = resolved;
 
       if (!options.scheduleStagedPreview) {
@@ -779,12 +779,12 @@ export async function registerCreatorCodeRoutes(
     '/api/me/studio/games/:slug/sources/typecheck',
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      if (notFoundIfDisabled(reply)) return;
+      if (notFoundIfDisabled(reply)) return reply;
       if (!options.gamesStore) {
         return reply.status(503).send({ error: 'the Code surface is not configured on this deployment' });
       }
       const resolved = await resolveForSlug(request, reply);
-      if (!resolved) return;
+      if (!resolved) return reply;
       const { record, slug } = resolved;
       const gamesStore = options.gamesStore;
 
@@ -840,12 +840,12 @@ export async function registerCreatorCodeRoutes(
     '/api/me/studio/games/:slug/sources/preview',
     { config: { rateLimit: { max: 300, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      if (notFoundIfDisabled(reply)) return;
+      if (notFoundIfDisabled(reply)) return reply;
       if (!options.gamesStore || !options.githubClient) {
         return reply.status(503).send({ error: 'the Code surface is not configured on this deployment' });
       }
       const resolved = await resolveForSlug(request, reply);
-      if (!resolved) return;
+      if (!resolved) return reply;
       const { record, slug } = resolved;
       const gamesStore = options.gamesStore;
 
@@ -912,9 +912,9 @@ export async function registerCreatorCodeRoutes(
     '/api/me/studio/games/:slug/sources/kit-declaration',
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      if (notFoundIfDisabled(reply)) return;
+      if (notFoundIfDisabled(reply)) return reply;
       const resolved = await resolveForSlug(request, reply);
-      if (!resolved) return;
+      if (!resolved) return reply;
       if (!kitFileStore) {
         return reply.status(404).send({ error: 'no kit published' });
       }
@@ -944,12 +944,12 @@ export async function registerCreatorCodeRoutes(
     '/api/me/studio/games/:slug/sources/complete',
     { config: { rateLimit: { max: 600, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      if (notFoundIfDisabled(reply)) return;
+      if (notFoundIfDisabled(reply)) return reply;
       if (!options.tabCompleter || !tabCompleteEnabled()) {
         return reply.status(404).send({ error: 'not found' });
       }
       const resolved = await resolveForSlug(request, reply);
-      if (!resolved) return;
+      if (!resolved) return reply;
 
       const parsed = CompleteInputSchema.safeParse(request.body ?? {});
       if (!parsed.success) {
@@ -1036,12 +1036,12 @@ export async function registerCreatorCodeRoutes(
     '/api/me/studio/games/:slug/sources/deliver',
     { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      if (notFoundIfDisabled(reply)) return;
+      if (notFoundIfDisabled(reply)) return reply;
       if (!options.gamesStore || !sourceDelivery) {
         return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
       }
       const resolved = await resolveForSlug(request, reply);
-      if (!resolved) return;
+      if (!resolved) return reply;
       const { record, slug } = resolved;
       const gamesStore = options.gamesStore;
 
@@ -1190,12 +1190,12 @@ export async function registerCreatorCodeRoutes(
     '/api/me/studio/games/:slug/sources/revert',
     { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
     async (request, reply) => {
-      if (notFoundIfDisabled(reply)) return;
+      if (notFoundIfDisabled(reply)) return reply;
       if (!options.gamesStore || !sourceDelivery) {
         return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
       }
       const resolved = await resolveForSlug(request, reply);
-      if (!resolved) return;
+      if (!resolved) return reply;
       const { record, slug } = resolved;
       const gamesStore = options.gamesStore;
 

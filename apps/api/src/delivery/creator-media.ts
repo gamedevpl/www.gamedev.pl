@@ -31,7 +31,7 @@ export async function registerCreatorMediaRoutes(
         return reply.status(503).send({ error: 'submissions are not configured' });
       }
       if (!checkUserAccess(request, reply)) {
-        return;
+        return reply;
       }
 
       const parsedParams = z.object({ token: z.string(), id: z.string().max(64) }).safeParse(request.params);
@@ -91,7 +91,7 @@ export async function registerCreatorMediaRoutes(
         return reply.status(503).send({ error: 'submissions are not configured' });
       }
       if (!checkUserAccess(request, reply)) {
-        return;
+        return reply;
       }
 
       const parsedParams = z.object({ token: z.string(), id: z.string().max(64) }).safeParse(request.params);

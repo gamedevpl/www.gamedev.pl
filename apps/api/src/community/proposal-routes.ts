@@ -159,7 +159,7 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
    * boundary into a notification, and the honest alternative — silence — is worse.
    */
   app.get<{ Params: { slug: string } }>('/api/games/:slug/contributions', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     const params = SlugParamsSchema.safeParse(request.params);
     if (!params.success) return reply.status(400).send({ error: 'invalid slug' });
 
@@ -171,13 +171,13 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
 
   /** The proposer's tracker. Only ever their own. */
   app.get('/api/proposals', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     const records = await store.listProposals({ proposerUid: request.user!.uid });
     return reply.send({ proposals: records.map(toPublicProposal) });
   });
 
   app.get<{ Params: { id: string } }>('/api/proposals/:id', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     const params = IdParamsSchema.safeParse(request.params);
     if (!params.success) return reply.status(400).send({ error: 'not_found' });
 
@@ -205,7 +205,7 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
    * second stored representation could only ever disagree with them.
    */
   app.get<{ Params: { id: string } }>('/api/proposals/:id/diff', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     const params = IdParamsSchema.safeParse(request.params);
     if (!params.success) return reply.status(404).send({ error: 'not_found' });
     if (!gamesStore || !options.resolveBase) return reply.status(503).send({ error: 'store_unavailable' });
@@ -230,7 +230,7 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
   });
 
   app.post<{ Params: { id: string } }>('/api/proposals/:id/withdraw', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     const scope = deps(request.log);
     if (!scope) return reply.status(503).send({ error: 'store_unavailable' });
     const params = IdParamsSchema.safeParse(request.params);
@@ -243,7 +243,7 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
 
   /** The creator's review queue: proposals against games they own. */
   app.get('/api/me/reviews', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     const records = await store.listProposals({ targetOwnerUid: request.user!.uid });
     const visible = records.filter((record) => visibleToReviewer(record, request.user!.uid, false));
     return reply.send({ proposals: visible.map(toPublicProposal) });
@@ -388,7 +388,7 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
    * a game that changed hands cannot be reopened to proposals by its previous owner.
    */
   app.put<{ Params: { slug: string } }>('/api/me/games/:slug/contributions', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     const params = SlugParamsSchema.safeParse(request.params);
     if (!params.success) return reply.status(400).send({ error: 'invalid slug' });
     const body = ContributionSchema.safeParse(request.body);
@@ -408,7 +408,7 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
   });
 
   app.get<{ Params: { slug: string } }>('/api/me/games/:slug/contributions', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     const params = SlugParamsSchema.safeParse(request.params);
     if (!params.success) return reply.status(400).send({ error: 'invalid slug' });
 
@@ -422,13 +422,13 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
 
   /** Blocks are per creator, not per game: a boundary is about a person. */
   app.get('/api/me/contributor-blocks', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     const blocks = await store.listContributorBlocks(request.user!.uid);
     return reply.send({ blocks });
   });
 
   app.post('/api/me/contributor-blocks', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     const body = BlockSchema.safeParse(request.body);
     if (!body.success) return reply.status(400).send({ error: 'invalid request' });
     if (body.data.uid === request.user!.uid) return reply.status(400).send({ error: 'invalid request' });
@@ -442,7 +442,7 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
   });
 
   app.delete<{ Params: { uid: string } }>('/api/me/contributor-blocks/:uid', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
+    if (!requireUser(request, reply)) return reply;
     await store.unblockContributor(request.user!.uid, request.params.uid);
     return reply.send({ ok: true });
   });
