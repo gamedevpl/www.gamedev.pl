@@ -30,6 +30,7 @@ import {
   type EditorContentDoc,
   type EditorLayersDoc,
   type EditorItemContent,
+  type EditorLayeredItemContent,
   type EditorParamValue,
   type EditorLayerSpec,
   type GameEditorState,
@@ -44,6 +45,7 @@ import '../../editor-kit-side.css';
 import {
   firstTileKey,
   itemsOf,
+  layeredItemView,
   mergeDraft,
   pathCollection,
   tilemapCollection,
@@ -166,6 +168,7 @@ export function EditorPanel(props: {
   const layerSpec: EditorLayerSpec | null =
     layerKey && editor?.definition.layers ? editor.definition.layers[layerKey] : null;
   const layersContent = (content.layers ?? {}) as EditorLayersDoc;
+  const layeredItem = layeredItemView(spec, item, selectedLayerKey, layerTileKey);
   const paramSpecs = editor?.definition.params ?? null;
   const paramValues = (content.params ?? {}) as Record<string, EditorParamValue>;
 
@@ -409,6 +412,25 @@ export function EditorPanel(props: {
     setItemIndex(0);
     setTileKey(firstTileKey(nextSpec));
     pushLive(content, { collection: nextKey, index: 0 });
+  }
+
+  function updateItemLayers(nextLayers: EditorLayersDoc) {
+    if (!collectionKey) return;
+    setContent((current) => {
+      const list = ((current[collectionKey] ?? []) as EditorItemContent[]).slice();
+      list[itemIndex] = { ...(list[itemIndex] as EditorLayeredItemContent), layers: nextLayers };
+      const nextContent = { ...current, [collectionKey]: list };
+      pushLive(nextContent, { collection: collectionKey, index: itemIndex });
+      return nextContent;
+    });
+    scheduleSave();
+  }
+
+  function selectItemLayer(nextKey: string) {
+    if (!layeredItem?.specs[nextKey]) return;
+    setSelectedLayerKey(nextKey);
+    setLayerEntityIndex(0);
+    setLayerTileKey(defaultLayerTileKey(layeredItem.specs, nextKey));
   }
 
   function selectLayer(nextKey: string) {
@@ -677,6 +699,17 @@ export function EditorPanel(props: {
             onLayerChange={selectLayer}
             onChange={updateLayers}
           />
+        ) : layeredItem ? (
+          <LayeredBoard
+            layers={layeredItem.specs}
+            content={layeredItem.layers}
+            activeLayerKey={layeredItem.layerKey}
+            name={name}
+            tileKey={layeredItem.tileKey}
+            onTileKeyChange={setLayerTileKey}
+            onLayerChange={selectItemLayer}
+            onChange={updateItemLayers}
+          />
         ) : boardSpec || pathSpec ? (
           <div className="editor-board-col">
             {boardSpec && tilemapItem ? (
@@ -871,6 +904,19 @@ export function EditorPanel(props: {
               onEntityIndexChange={setLayerEntityIndex}
               onLayerChange={selectLayer}
               onChange={updateLayers}
+            />
+          ) : null}
+
+          {layeredItem ? (
+            <LayeredSidebar
+              layers={layeredItem.specs}
+              content={layeredItem.layers}
+              activeLayerKey={layeredItem.layerKey}
+              name={name}
+              entityIndex={layerEntityIndex}
+              onEntityIndexChange={setLayerEntityIndex}
+              onLayerChange={selectItemLayer}
+              onChange={updateItemLayers}
             />
           ) : null}
 
