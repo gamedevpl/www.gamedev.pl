@@ -150,6 +150,7 @@ const FILE_BUCKET = {
   // Daily ceiling on signed media URLs. Pure counters, no relative imports.
   'media-mint-budget': 'platform',
   'serving-brake': 'platform',
+  'public-play': 'platform',
   'api-compression': 'platform',
   // Which model may stand in for which. No relative imports at all.
   'vertex-fallback-models': 'platform',

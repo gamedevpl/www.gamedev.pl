@@ -79,3 +79,40 @@ describe('promotional play under the rung', () => {
     await app.close();
   });
 });
+
+describe('what a visitor is told while the rung is up', () => {
+  it('reports the closure in health, so the client shows the waitlist', async () => {
+    const { app } = await openSiteWithRungPulled();
+    const res = await app.inject({ method: 'GET', url: '/api/health' });
+    expect(res.statusCode).toBe(200);
+    // AuthContext reads this; false renders the catalog error.
+    expect(res.json().privateBeta).toBe(true);
+    await app.close();
+  });
+
+  it('stops advertising promotional games while it is up', async () => {
+    const store = new InMemoryStore();
+    await store.setCreationLimits({ anonymousPaused: true }, 'test');
+    const app = await buildApp({ store, sessionSecret, publicPlaySlugs: 'promo-game' });
+    expect((await app.inject({ method: 'GET', url: '/api/health' })).json().publicPlaySlugs).toEqual([]);
+    await app.close();
+  });
+
+  it('says the site is open again once the rung is cleared', async () => {
+    const app = await buildApp({ store: new InMemoryStore(), sessionSecret, publicPlaySlugs: 'promo-game' });
+    const body = (await app.inject({ method: 'GET', url: '/api/health' })).json();
+    expect(body.privateBeta).toBe(false);
+    expect(body.publicPlaySlugs).toEqual(['promo-game']);
+    await app.close();
+  });
+
+  it('never marks a game document publicly cacheable during the incident', async () => {
+    const store = new InMemoryStore();
+    await store.setCreationLimits({ anonymousPaused: true }, 'test');
+    const app = await buildApp({ store, sessionSecret, publicPlaySlugs: 'promo-game' });
+    const res = await app.inject({ method: 'GET', url: '/api/games/promo-game' });
+    // A cache filled by an operator would outlive the rung.
+    expect(res.headers['cache-control']).not.toContain('public');
+    await app.close();
+  });
+});

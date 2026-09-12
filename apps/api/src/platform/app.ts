@@ -5,7 +5,7 @@ import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyServerOptions } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import { registerAccessTokenRoutes, type AccessTokenRoutesOptions } from './access-token-routes.js';
 import { registerApiCachePolicy } from './api-cache-policy.js';
 import { registerApiCompression } from './api-compression.js';
@@ -14,6 +14,7 @@ import { registerClientAddress } from './client-address.js';
 import { registerReadMeterLog } from './read-meter-log.js';
 import { createLoadShedControls } from './load-shedding.js';
 import { registerServingBrake } from './serving-brake.js';
+import { isPublicPlayRequest, parsePublicPlaySlugs } from './public-play.js';
 import { registerProxyDiagnosticsRoutes } from './proxy-diagnostics.js';
 import { registerSecurityHeaders, resolveCspReportOnly } from './security-headers.js';
 import { registerJobAdminRoutes } from '../creation/job-admin-routes.js';
@@ -122,46 +123,6 @@ import { registerOAuthAuthorizationServerRoutes } from './oauth-as.js';
 import { registerTokenLoginRoutes } from './oauth-token-login.js';
 import { registerCreatorAgentKeyRoutes } from '../agent-surface/creator-agent-key-routes.js';
 import { isPublishedEntry } from '@gamedevpl/contract';
-
-const GAME_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-function parsePublicPlaySlugs(value: string | undefined): string[] {
-  return [
-    ...new Set(
-      (value ?? '')
-        .split(',')
-        .map((slug) => slug.trim().toLowerCase())
-        .filter((slug) => GAME_SLUG_PATTERN.test(slug)),
-    ),
-  ];
-}
-
-function isPublicPlayRequest(request: FastifyRequest, publicPlaySlugs: Set<string>): boolean {
-  const path = request.url.split('?')[0] ?? request.url;
-
-  if (request.method === 'POST' && path === '/api/telemetry') {
-    const body = request.body;
-    return (
-      typeof body === 'object' &&
-      body !== null &&
-      'slug' in body &&
-      typeof (body as { slug?: unknown }).slug === 'string' &&
-      publicPlaySlugs.has((body as { slug: string }).slug)
-    );
-  }
-
-  if (request.method !== 'GET') return false;
-  const match = path.match(/^\/api\/games\/([^/]+)(?:\/(votes|world|presence))?\/?$/);
-  if (!match?.[1]) return false;
-
-  let slug: string;
-  try {
-    slug = decodeURIComponent(match[1]);
-  } catch {
-    return false;
-  }
-
-  return publicPlaySlugs.has(slug);
-}
 
 export interface BuildAppOptions {
   /** `false` in tests by default; pass a Pino destination to assert on log lines. */
@@ -298,8 +259,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       .filter(Boolean),
   );
   const loadShed = createLoadShedControls({ store, logWarn: (p, m) => app.log.warn(p, m) });
-  // One predicate for both the wall and what may be shared by a cache in front of it.
+  // One predicate for the wall, the cache in front of it, health and play.
   const openToVisitors = async () => !privateBeta && !(await loadShed.refusesAnonymous());
+  // A promotional slug is exempt from the beta wall, never from the rung.
+  const playableAnonymously = async (slug: string) =>
+    !(await loadShed.refusesAnonymous()) && (!privateBeta || (await getPublicPlaySlugs()).has(slug));
   registerServingBrake(app, { controls: loadShed });
   registerApiCachePolicy(app, { isOpenToVisitors: openToVisitors });
   const publicPlayFallbackSlugs = new Set(
@@ -463,8 +427,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     ...options.submissionRoutes,
     store,
     contentChecker,
-    // Mirrors the beta wall below: open beta, or a promotional slug, needs no session.
-    playableWithoutSession: async (slug) => !privateBeta || (await getPublicPlaySlugs()).has(slug),
+    // Mirrors the beta wall below, and closes with it when the rung is pulled.
+    playableWithoutSession: playableAnonymously,
     // Same allowlist the console is gated on: the people who can see the queue are the
     // people its alerts are addressed to. Two lists would drift, and the failure mode of
     // drift here is an alert nobody receives.
@@ -1067,9 +1031,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     status: 'ok',
     // Retained for shape stability after the mock generator was retired.
     provider: 'mock',
-    privateBeta,
+    // Effective, not the boot flag: the client renders the waitlist splash off
+    // this, and a rung that closes the site has to reach it.
+    privateBeta: !(await openToVisitors()),
     appleSignIn: Boolean(options.appleAuthVerifier) || parseAppleClientIds(process.env.APPLE_CLIENT_IDS).length > 0,
-    publicPlaySlugs: [...(await getPublicPlaySlugs())],
+    publicPlaySlugs: (await loadShed.refusesAnonymous()) ? [] : [...(await getPublicPlaySlugs())],
   }));
 
   app.get('/api/version', async () => ({ name: 'gamedev-pl', version: '0.0.0' }));

@@ -150,7 +150,17 @@ a list instead of a bill.
 Two differences from the beta wall it borrows. That wall leaves `/api/games/*/media/*`
 public so a shared game link works, and it exempts promotional `PUBLIC_PLAY_SLUGS` so
 those games play signed-out. Under the rung both close: media and a 533 KB game document
-are the bandwidth it was pulled to stop.
+are the bandwidth it was pulled to stop. A published game also stops being marked
+publicly cacheable, so a signed-in operator's own request cannot leave a copy in a shared
+cache that outlives the rung.
+
+`/api/health` reports the closure as `privateBeta: true` and an empty `publicPlaySlugs`
+while it is up, which is what makes an arrival land on the waitlist splash rather than a
+catalog that 401s. Check it before and after:
+
+```bash
+curl -s https://www.gamedev.pl/api/health | jq '{privateBeta, publicPlaySlugs}'
+```
 
 ```bash
 curl -s -X POST https://www.gamedev.pl/api/admin/creation-limits \
