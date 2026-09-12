@@ -22,12 +22,13 @@ async function fixture(owner = 'owner', state: 'canceled' | 'queued' = 'canceled
       by: 'operator',
       reason: 'operator_canceled',
     });
+  if (state === 'canceled') await store.setSubmissionAbandoned(1, '2026-01-02');
   const app = Fastify();
   apps.push(app);
   app.addHook('preHandler', async (req) => {
     req.user = { uid: 'owner' } as typeof req.user;
   });
-  const dispatch = vi.fn();
+  const dispatch = vi.fn(async () => {});
   const { createGame: realCreate } = createGameCreator({
     store,
     githubClient: {} as GitHubClient,
@@ -129,4 +130,18 @@ it('serializes same-millisecond normal creation and recovery claims', async () =
   const result = await Promise.all([store.claimSubmissionSlug(2, 'sky', 1), store.claimSubmissionSlug(3, 'sky', null)]);
   expect(result).toEqual([true, false]);
   expect((await store.getSubmissionBySlug('sky'))?.jobId).toBe(2);
+});
+
+it('retries atomic collisions for ordinary same-title creation', async () => {
+  const f = await fixture();
+  const create = () =>
+    f.createGame({
+      uid: 'owner',
+      ip: '127.0.0.1',
+      payload: { title: 'Same Title', concept: payload().concept, builder: 'self' },
+      log: f.app.log,
+    });
+  const results = await Promise.all([create(), create()]);
+  expect(results.every((result) => result.ok)).toBe(true);
+  expect(results.map((result) => result.ok && result.slug).sort()).toEqual(['same-title', 'same-title-2']);
 });

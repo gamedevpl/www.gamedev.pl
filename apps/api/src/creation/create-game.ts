@@ -5,6 +5,7 @@ import type { ManagedAvailabilityGate } from '../agent-surface/managed-availabil
 import { MANAGED_UNAVAILABLE_ERROR } from '../platform/managed-builder-error.js';
 import type { ManagedUnavailableReason } from '../agent-surface/managed-availability.js';
 import type { GitHubClient } from '../catalog/github-client.js';
+import { claimAvailableSlug } from '../platform/atomic-slug-claim.js';
 import { mintGameSlug } from '../platform/slug.js';
 import { storeCreatorReferenceImages } from '../platform/creator-media-store.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
@@ -216,14 +217,16 @@ export function createGameCreator(deps: CreateGameDeps): {
           return { ok: false, status: 409, error: 'recovery_changed' };
         }
         return { ok: true, jobId, slug: wanted };
-      } else if (!(await store.claimSubmissionSlug(jobId, wanted, null))) {
+      }
+      const claimed = await claimAvailableSlug(store, jobId, wanted, sanitizedTitle, isSlugClaimed);
+      if (!claimed) {
         await store.setSubmissionAbandoned(jobId, new Date(now()).toISOString());
         return { ok: false, status: 409, error: 'name_unavailable' };
       }
       // Best effort: an invalid image is dropped, never blocking creation.
       await storeCreatorReferenceImages(store, jobId, parsed.data.referenceImages);
 
-      const slug = input.recovery ? wanted : await confirmSlugClaim(jobId, wanted, sanitizedTitle);
+      const slug = await confirmSlugClaim(jobId, claimed, sanitizedTitle);
       if (!slug) {
         await store.setSubmissionAbandoned(jobId, new Date(now()).toISOString());
         input.log.error({ jobId, slug: wanted }, 'could not claim a slug for a new submission');

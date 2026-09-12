@@ -24,7 +24,7 @@ export function registerCheckoutRecovery(
     const publication = await deps.store!.getPublication(slug);
     if (publication || (await deps.isSlugPublished(slug))) return { kind: 'occupied' as const };
     if (!holder) return { kind: 'missing' as const };
-    if (holder.ownerUid !== uid || holder.abandonedAt || holder.moderationBlockedAt)
+    if (holder.ownerUid !== uid || (holder.abandonedAt && holder.state !== 'canceled') || holder.moderationBlockedAt)
       return { kind: 'occupied' as const };
     return { kind: holder.state === 'canceled' ? ('canceled' as const) : ('active' as const), holder };
   };
