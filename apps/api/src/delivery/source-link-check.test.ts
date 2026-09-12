@@ -9,6 +9,16 @@ import {
 } from './source-link-check.js';
 
 describe('source-link-check', () => {
+  it('defers external Kit imports but still rejects missing local and other external modules', () => {
+    const check = (from: string, target: string) =>
+      findUnresolvedSourceLinks(new Map([[from, `import { defineEditor } from '${target}';`]]));
+    expect(check('EDITOR.ts', '../../shared/editor-def.ts')).toEqual([]);
+    expect(check('game/editor.ts', '../../../shared/editor-def.ts')).toEqual([]);
+    expect(check('EDITOR.ts', './shared/editor-def.ts')).toHaveLength(1);
+    expect(check('EDITOR.ts', '../../shared/../private/editor-def.ts')).toHaveLength(1);
+    expect(check('EDITOR.ts', '../../other-game/editor-def.ts')).toHaveLength(1);
+  });
+
   it('collects named exports, default, renames, and export *', () => {
     const info = collectExports(`
       export const WIN_SCORE = 10;

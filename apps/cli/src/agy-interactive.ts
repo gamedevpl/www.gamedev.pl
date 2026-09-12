@@ -1,3 +1,4 @@
+import { museInteractiveArgs } from './muse-interactive.js';
 import { codexInteractiveArgs } from './codex-interactive.js';
 import { terminalRecording } from './terminal-recording.js';
 import { spawn } from 'node:child_process';
@@ -27,6 +28,7 @@ export function agyConversation(line: string): string | undefined {
 }
 
 export function interactiveArgs(input: Parameters<InteractiveRun>[0]): string[] {
+  if (input.spec.name === 'muse') return museInteractiveArgs(input.spec, input.conversation);
   if (input.spec.name === 'codex') return codexInteractiveArgs(input.spec.headless, input.prompt);
   const args: string[] = [];
   for (let i = 0; i < input.spec.headless.length; i++) {

@@ -35,6 +35,18 @@ describe('tui session', () => {
     expect(formatSessionIdentity('', 'maze')).toBe('maze');
   });
 
+  it('forgets a stopped preview and can clear one when the checkout changes', () => {
+    const session = createTuiSession('');
+    session.writeLine('live preview while claude edits: http://127.0.0.1:64897/preview/');
+    expect(session.get().previewUrl).toBe('http://127.0.0.1:64897/preview/');
+    session.writeLine('local preview stopped');
+    expect(session.get().previewUrl).toBe('');
+
+    session.writeLine('local live preview: http://127.0.0.1:50000/next/');
+    session.clearPreview();
+    expect(session.get().previewUrl).toBe('');
+  });
+
   it('exits busy work from cancel when no prompt is pending', async () => {
     let interrupted = 0;
     const session = createTuiSession('', () => {
