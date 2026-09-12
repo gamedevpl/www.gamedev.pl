@@ -42,3 +42,26 @@ export function createDreamJobFromEnv(options: DreamJobEnvOptions): DreamJob | n
     onPosted: options.onPosted,
   });
 }
+
+export interface DreamingEnabledEnvOptions {
+  store?: Store;
+  log: DreamLog;
+  now: () => number;
+  creationLimitsTtlMs?: number;
+  dreamAvailabilityGate?: DreamAvailabilityGate;
+  env?: NodeJS.ProcessEnv;
+}
+
+// Its own flag; the platform job would claim the version first.
+export function createAgentProposalsEnabledFromEnv(options: DreamingEnabledEnvOptions): () => Promise<boolean> {
+  const env = options.env ?? process.env;
+  const { store } = options;
+  if (!store || env.AGENT_PROPOSALS_ENABLED?.trim() !== 'true') return async () => false;
+  const gate =
+    options.dreamAvailabilityGate ??
+    createDreamAvailabilityGate({
+      store,
+      logWarn: (payload, message) => options.log.warn(payload, message),
+    });
+  return () => gate.dreamingEnabled();
+}

@@ -57,10 +57,12 @@ import type { TelemetryEvent, VisitEvent } from './records/telemetry.js';
 import { FirestoreAccessTokensStore } from './slices/access-tokens.js';
 import { FirestoreAccessStore } from './slices/access.js';
 import { FirestoreAgentKeysStore } from './slices/agent-keys.js';
-import { FirestoreBuildLogStore } from './slices/build-log.js';
+import { FirestoreBuildLogStore, type ProposalPostResult } from './slices/build-log.js';
 import {
   FirestoreBuildMediaStore,
   type BuildShotCountOptions,
+  type DeliveryShotOutcome,
+  type DeliveryShotQuery,
   type BuildShotListOptions,
 } from './slices/build-media.js';
 import { FirestoreCatalogEnrichmentStore } from './slices/catalog-enrichment.js';
@@ -85,7 +87,7 @@ import type {
   ResolveModerationFlagResult,
 } from './slices/moderation-flags.js';
 
-import { FirestoreRoundBudgetStore, type DreamClaimRef } from './slices/round-budget.js';
+import { FirestoreRoundBudgetStore, type DreamClaimRef, type DreamClaimResult } from './slices/round-budget.js';
 import { FirestoreRoundsStore } from './slices/rounds.js';
 import { FirestoreSocialStore } from './slices/social.js';
 import { FirestoreSubmissionQueryStore } from './slices/submission-queries.js';
@@ -456,8 +458,8 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.roundBudgetStore.setRoundLastGateMetricKey(jobId, key);
   }
 
-  async claimDreamRun(jobId: number, version: string, at: string): Promise<boolean> {
-    return this.roundBudgetStore.claimDreamRun(jobId, version, at);
+  async claimDreamRun(jobId: number, version: string, at: string, roundGeneration: number): Promise<DreamClaimResult> {
+    return this.roundBudgetStore.claimDreamRun(jobId, version, at, roundGeneration);
   }
 
   async finishDreamRun(jobId: number, claim: DreamClaimRef, at: string): Promise<void> {
@@ -626,6 +628,18 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     return this.buildMediaStore.countBuildShots(jobId, opts);
   }
 
+  async countDeliveryShots(jobId: number, query: DeliveryShotQuery): Promise<number> {
+    return this.buildMediaStore.countDeliveryShots(jobId, query);
+  }
+
+  async appendDeliveryShot(
+    jobId: number,
+    query: DeliveryShotQuery & { max: number; id?: string },
+    shot: Omit<BuildShot, 'id' | 'createdAt'>,
+  ): Promise<DeliveryShotOutcome> {
+    return this.buildMediaStore.appendDeliveryShot(jobId, query, shot);
+  }
+
   async appendBuildPreview(
     jobId: number,
     preview: Omit<BuildPreview, 'id' | 'createdAt'> & { createdAt?: string },
@@ -661,8 +675,15 @@ export class FirestoreStore extends SubmissionFacade implements Store {
     jobId: number,
     claim: DreamClaimRef,
     text: string,
-    opts: { textLocalized?: string; locale?: string; proposal: CreatorProposal; ownerUid: string },
-  ): Promise<CreatorMessage | null> {
+    opts: {
+      textLocalized?: string;
+      locale?: string;
+      proposal: CreatorProposal;
+      ownerUid: string;
+      roundGeneration: number;
+      blocked: (job: SubmissionRecord) => boolean;
+    },
+  ): Promise<ProposalPostResult> {
     return this.buildLogStore.appendProposalMessage(jobId, claim, text, opts);
   }
 

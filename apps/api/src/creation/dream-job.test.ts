@@ -145,7 +145,7 @@ describe('createDreamJob', () => {
 
   it('leaves a claim alone while its worker could still be running', async () => {
     const { store, run } = await harness({ hud: [] });
-    await store.claimDreamRun(7, 'v1', '2026-09-07T11:59:00.000Z');
+    await store.claimDreamRun(7, 'v1', '2026-09-07T11:59:00.000Z', 1);
 
     expect(await run()).toBe('already_ran');
   });
@@ -162,7 +162,7 @@ describe('createDreamJob', () => {
   it('retakes a claim that never posted, so a failed write is not permanent', async () => {
     const { store, run } = await harness({ hud: [] });
     // Claimed an hour ago and no card: that worker is gone.
-    await store.claimDreamRun(7, 'v1', '2026-09-07T11:00:00.000Z');
+    await store.claimDreamRun(7, 'v1', '2026-09-07T11:00:00.000Z', 1);
 
     expect(await run()).toBe('posted');
     expect(await store.listCreatorMessages(7)).toHaveLength(1);
@@ -237,6 +237,65 @@ describe('createDreamJob', () => {
     expect(await store.listCreatorMessages(7)).toEqual([]);
   });
 
+  it('posts no card when the round is reopened while the frames are drawn', async () => {
+    let reopen: (() => Promise<void>) | null = null;
+    const { store, frames, run } = await harness({
+      hud: [],
+      frame: async () => {
+        await reopen?.();
+        return { data: jpegHeader(1024, 1024).toString('base64'), mediaType: 'image/jpeg' };
+      },
+    });
+    reopen = async () => {
+      reopen = null;
+      await store.bumpRoundGeneration(7);
+    };
+
+    expect(await run()).toBe('superseded');
+    // The reopen landed mid-image; the second one is never paid for.
+    expect(frames.requests).toHaveLength(1);
+    expect(await store.listCreatorMessages(7)).toEqual([]);
+    expect(await store.listBuildShots(7)).toEqual([]);
+  });
+
+  it('asks for no ideas when the round is reopened while the HUD is read', async () => {
+    const { store, ideas: generator, run } = await harness({ hud: [] });
+    const real = store.getPublishedSubmissionBySlug.bind(store);
+    store.getPublishedSubmissionBySlug = async (slug: string) => {
+      // The creator reopens the round while the run reads the capture.
+      await store.bumpRoundGeneration(7);
+      return await real(slug);
+    };
+
+    expect(await run()).toBe('superseded');
+    expect(generator.requests).toEqual([]);
+    expect(await store.getGlobalDreamCount('2026-09-07')).toBe(0);
+    expect(await store.listBuildShots(7)).toEqual([]);
+  });
+
+  it('stands down when another worker retook the claim after the TTL', async () => {
+    let retake: (() => Promise<void>) | null = null;
+    const { store, frames, run } = await harness({
+      hud: [],
+      frame: async () => {
+        await retake?.();
+        return { data: jpegHeader(1024, 1024).toString('base64'), mediaType: 'image/jpeg' };
+      },
+    });
+    retake = async () => {
+      retake = null;
+      // An hour later this run looks abandoned, so a second one starts.
+      expect((await store.claimDreamRun(7, 'v1', '2026-09-07T13:00:00.000Z', 1)).claimed).toBe(true);
+    };
+
+    expect(await run()).toBe('superseded');
+    expect(frames.requests).toHaveLength(1);
+    expect(await store.listBuildShots(7)).toEqual([]);
+    expect(await store.listCreatorMessages(7)).toEqual([]);
+    // The retaking run still owns the claim; this one closed nothing.
+    expect((await store.getSubmission(7))?.dreamRun?.endedAt).toBeUndefined();
+  });
+
   it('refuses when the shared daily cap is spent', async () => {
     const { store, run } = await harness({ hud: [], limits: { globalDailyDreamCap: 0 } });
     expect(await run()).toBe('no_capacity');
@@ -279,7 +338,7 @@ describe('createDreamJob', () => {
       if (!moved) {
         moved = true;
         await store.setSubmissionPreviewVersion(7, 'v2');
-        await store.claimDreamRun(7, 'v2', '2026-09-07T12:00:01.000Z');
+        await store.claimDreamRun(7, 'v2', '2026-09-07T12:00:01.000Z', 1);
       }
       return stored;
     };
@@ -327,8 +386,11 @@ describe('createDreamJob', () => {
     const { store } = await harness({ hud: [] });
     await store.setSubmissionPreviewVersion(7, 'v2');
 
-    expect(await store.claimDreamRun(7, 'v1', '2026-09-09T00:00:00.000Z')).toBe(false);
-    expect(await store.claimDreamRun(7, 'v2', '2026-09-09T00:00:00.000Z')).toBe(true);
+    expect(await store.claimDreamRun(7, 'v1', '2026-09-09T00:00:00.000Z', 1)).toEqual({
+      claimed: false,
+      refusedBy: 'version',
+    });
+    expect(await store.claimDreamRun(7, 'v2', '2026-09-09T00:00:00.000Z', 1)).toEqual({ claimed: true });
   });
 
   it('spends nothing when the model returns a single idea', async () => {

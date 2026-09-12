@@ -798,6 +798,78 @@ Nothing about the proposal itself is builder-specific: it hangs off the preview-
 verdict (`onPreviewGateGreen`), which a BYOCA `mode=preview` delivery reaches the same way
 a managed one does, and the HUD rectangles come from the delivered `CAPTURE.json`.
 
+### An agent can draw the proposal itself (`suggest_next_round`)
+
+The platform's own dream job spends our image model, so it only runs where we pay for it.
+An external agent brings its own, and the write side is open to it:
+
+1. `concept_frame_upload_url` mints a signed PUT for one frame, exactly like
+   `screenshot_upload_url`. It takes no caption — the route forces
+   `DREAM_FRAME_SHOT_LABEL`, and the PUT answers with the stored frame id.
+2. `suggest_next_round` posts the studio card: two options, each a label, the sentence a
+   pick drafts into the composer, and one uploaded `frameId`.
+
+The rules the platform enforces on itself hold here too, in `agent-channel-proposal.ts`,
+because the tool is the only way in:
+
+- **The source frame is ours.** The card's "real" frame is read from the delivered
+  version's own green gate capture, never supplied by the caller — a creator comparing
+  concepts against a picture the agent chose would be comparing against nothing.
+- **`claimDreamRun` is the only gate on repetition**, shared with the platform's job, so
+  one version carries one proposal whoever drew it.
+- **`dreamsPaused` and `proposalsMutedAt` are checked here**, not in the caller. A muted
+  creator or a paused platform answers `posted: false` with a reason; both are final for
+  the round, and the tool description says so rather than inviting a retry.
+- **A frame that changed aspect ratio is refused at the upload**, the same spike rule the
+  dream job applies — a reshaped frame repainted the HUD it was meant to keep. The
+  proposal route still checks it, but refusing at the PUT is what keeps a useless frame
+  from holding a shot slot its replacement then cannot find.
+- **The reserved captions are not claimable.** `screenshot_upload_url` now refuses a label
+  that matches one, so `AI concept` means AI concept everywhere.
+
+- **Frames belong to the delivery they were drawn for.** The PUT stamps both the upload
+  token's `roundGeneration` and the job's current version on the shot, and the proposal
+  route checks both. A round delivers several previews without advancing its generation,
+  so the round alone would let v1 frames ride on v2's capture.
+- **The agent's frames spend the agent's allowance.** `maxShotsPerBuild` is counted by
+  ownership, not caption: shots carry `platformDrawn` and only those are exempt, so a
+  reserved caption cannot become an unbounded store an agent writes to forever. The
+  concept PUT is the one exception, and a narrow one: a minted URL is a promise of a
+  slot, so a frame drawn against it is stored even if an ordinary screenshot filled the
+  build meanwhile. The bound is `appendDeliveryShot`, which counts and writes in one
+  transaction — a check before the write would let concurrent PUTs, or one replayed
+  URL, each see room and all take it. The mint refuses too, once the pair exists.
+  That transaction also re-reads the delivery _and_ the round generation — a reopen
+  leaves the delivery pointers alone, so the version by itself would not catch it — and
+  the shot's document id comes from the upload token's nonce: one URL, one document, so
+  a retried PUT after a lost response gets its own frame back instead of taking the
+  delivery's other slot. The first write wins there: a card names a frame by id, and a
+  replay must not repaint what a creator is already looking at. The two refusals stay
+  distinct: `stale_delivery` means ask for a fresh URL, `too_many_shots` means stop.
+- **Text that sanitizes to nothing is refused before the claim.** A label or prompt of
+  pure markup passes the schema and empties in `sanitizeCreatorText`; posting it would
+  spend the delivery's one claim on a blank direction.
+- **Refusals come before the model call.** `concept_frame_upload_url` checks everything
+  that makes a card impossible: the switch, the creator's mute, a green capture the
+  proposal will actually accept, a delivery not already claimed, and room for the frames
+  the card still needs. The capture is read whole, not trusted from the manifest — a
+  capture inside `get_gate_media`'s limit but past the proposal's would otherwise be
+  refused only after two frames were paid for.
+  Room for one is not room: the mint reserves both required frames, minus any this
+  delivery already holds, so a build at 23 of 24 shots is refused the first URL instead
+  of paying for a frame whose partner can never be stored. Learning any of that at
+  `suggest_next_round` would mean the agent had already paid for two frames and we had
+  already stored them.
+- **One byte cap, stated once.** `concept_frame_upload_url` advertises the proposal's own
+  600 KiB and the PUT enforces it, rather than promising the screenshot route's 700 KiB
+  and refusing later at `suggest_next_round`.
+
+`AGENT_PROPOSALS_ENABLED` turns the agent writer on; `DREAMS_ENABLED` turns the platform's
+own job on. Two flags, deliberately: both writers share `claimDreamRun`, and the platform
+job runs from a status poll the moment a preview goes green, so wherever it is enabled it
+takes the version first and the agent gets `already_proposed`. One flag would leave no
+configuration in which an agent could actually post. `dreamsPaused` still stops both.
+
 ### `end` is required after submit (not optional etiquette)
 
 ChatGPT-class agents usually **submit and stop**. Soft `call_end` alone was not

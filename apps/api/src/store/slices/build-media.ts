@@ -1,11 +1,15 @@
 import type { Firestore } from '@google-cloud/firestore';
 import { randomUUID } from 'node:crypto';
 import type { BuildShot, BuildShotSummary, BuildPreview, BuildPreviewSummary } from '../records/build-log.js';
+import type { SubmissionRecord } from '../records/submission.js';
 import { byNewestFirst } from './build-log.js';
+import { DREAM_SOURCE_SHOT_LABEL } from '../../platform/dream-shots.js';
 
 export interface BuildShotCountOptions {
   // Platform-written captions to leave out of agent-facing counts.
   excludeLabels?: readonly string[];
+  // Leaves out what the platform drew, whatever caption it carries.
+  excludePlatformDrawn?: boolean;
 }
 
 // One read covers the common case; a crowd costs another.
@@ -13,6 +17,37 @@ const SHOT_PAGE_SIZE = 24;
 
 export interface BuildShotListOptions extends BuildShotCountOptions {
   limit?: number;
+}
+
+// Narrows a count to one delivery's frames in one round.
+export interface DeliveryShotQuery {
+  label: string;
+  deliveryVersion: string;
+  roundGeneration: number;
+}
+
+// A frame belongs to one delivery of one round.
+function currentRound(record: SubmissionRecord | undefined, query: DeliveryShotQuery): boolean {
+  if (!record) return false;
+  if ((record.roundGeneration ?? 1) !== query.roundGeneration) return false;
+  return (record.previewVersion ?? record.deliveredVersion) === query.deliveryVersion;
+}
+
+// Refusals the caller must tell apart; only one is retryable.
+export type DeliveryShotOutcome =
+  { ok: true; shot: BuildShot } | { ok: false; refused: 'stale_delivery' | 'too_many_shots' };
+
+function matchesDelivery(query: DeliveryShotQuery) {
+  return (shot: { label?: string; deliveryVersion?: string; roundGeneration?: number; platformDrawn?: true }) =>
+    !shot.platformDrawn &&
+    shot.label === query.label &&
+    shot.deliveryVersion === query.deliveryVersion &&
+    shot.roundGeneration === query.roundGeneration;
+}
+
+// Only the platform writes a source shot; legacy rows lack the stamp.
+function platformWrote(shot: { label?: string; platformDrawn?: true }): boolean {
+  return Boolean(shot.platformDrawn) || shot.label === DREAM_SOURCE_SHOT_LABEL;
 }
 
 function keeps(excludeLabels: readonly string[] | undefined) {
@@ -35,6 +70,16 @@ export interface BuildMediaStore {
   // How many screenshots a build has pushed -- bounds a runaway agent.
   countBuildShots(jobId: number, opts?: BuildShotCountOptions): Promise<number>;
 
+  // Frames a delivery already holds; their room is already spent.
+  countDeliveryShots(jobId: number, query: DeliveryShotQuery): Promise<number>;
+
+  // Stores a frame under `max` in one write; `id` makes retries idempotent.
+  appendDeliveryShot(
+    jobId: number,
+    query: DeliveryShotQuery & { max: number; id?: string },
+    shot: Omit<BuildShot, 'id' | 'createdAt'>,
+  ): Promise<DeliveryShotOutcome>;
+
   appendBuildPreview(
     jobId: number,
     preview: Omit<BuildPreview, 'id' | 'createdAt'> & { createdAt?: string },
@@ -53,6 +98,8 @@ export interface BuildMediaStore {
 export class InMemoryBuildMediaStore implements BuildMediaStore {
   private buildShots = new Map<number, BuildShot[]>();
   private buildPreviews = new Map<number, BuildPreview[]>();
+
+  constructor(private submissions?: Map<number, SubmissionRecord>) {}
 
   async appendBuildShot(
     jobId: number,
@@ -79,7 +126,33 @@ export class InMemoryBuildMediaStore implements BuildMediaStore {
   }
 
   async countBuildShots(jobId: number, opts?: BuildShotCountOptions): Promise<number> {
-    return (this.buildShots.get(jobId) ?? []).filter(keeps(opts?.excludeLabels)).length;
+    return (this.buildShots.get(jobId) ?? [])
+      .filter(keeps(opts?.excludeLabels))
+      .filter((shot) => !(opts?.excludePlatformDrawn && platformWrote(shot))).length;
+  }
+
+  async countDeliveryShots(jobId: number, query: DeliveryShotQuery): Promise<number> {
+    return (this.buildShots.get(jobId) ?? []).filter(matchesDelivery(query)).length;
+  }
+
+  async appendDeliveryShot(
+    jobId: number,
+    query: DeliveryShotQuery & { max: number; id?: string },
+    shot: Omit<BuildShot, 'id' | 'createdAt'>,
+  ): Promise<DeliveryShotOutcome> {
+    if (!currentRound(this.submissions?.get(jobId), query)) return { ok: false, refused: 'stale_delivery' };
+    // Counted and pushed without awaiting in between, which is the whole point.
+    const existing = this.buildShots.get(jobId) ?? [];
+    const at = query.id ? existing.findIndex((item) => item.id === query.id) : -1;
+    // First write wins; a posted card keeps the frame it named.
+    if (at >= 0) return { ok: true, shot: { ...existing[at]! } };
+    if (existing.filter(matchesDelivery(query)).length >= query.max) {
+      return { ok: false, refused: 'too_many_shots' };
+    }
+    const record: BuildShot = { ...shot, id: query.id ?? randomUUID(), createdAt: new Date().toISOString() };
+    existing.push(record);
+    this.buildShots.set(jobId, existing);
+    return { ok: true, shot: { ...record } };
   }
 
   async appendBuildPreview(
@@ -181,8 +254,49 @@ export class FirestoreBuildMediaStore implements BuildMediaStore {
 
   async countBuildShots(jobId: number, opts?: BuildShotCountOptions): Promise<number> {
     // One snapshot: two aggregates can straddle a proposal write and disagree.
-    const snap = await this.shotsCollection(jobId).select('label').get();
-    return snap.docs.map((doc) => doc.data() as { label?: string }).filter(keeps(opts?.excludeLabels)).length;
+    const snap = await this.shotsCollection(jobId).select('label', 'platformDrawn').get();
+    return snap.docs
+      .map((doc) => doc.data() as { label?: string; platformDrawn?: true })
+      .filter(keeps(opts?.excludeLabels))
+      .filter((shot) => !(opts?.excludePlatformDrawn && platformWrote(shot))).length;
+  }
+
+  async countDeliveryShots(jobId: number, query: DeliveryShotQuery): Promise<number> {
+    // One equality field, so no composite index is needed.
+    const snap = await this.shotsCollection(jobId)
+      .where('deliveryVersion', '==', query.deliveryVersion)
+      // Every field the predicate reads: an unselected one comes back undefined.
+      .select('deliveryVersion', 'label', 'roundGeneration', 'platformDrawn')
+      .get();
+    return snap.docs.map((doc) => doc.data() as BuildShotSummary).filter(matchesDelivery(query)).length;
+  }
+
+  async appendDeliveryShot(
+    jobId: number,
+    query: DeliveryShotQuery & { max: number; id?: string },
+    shot: Omit<BuildShot, 'id' | 'createdAt'>,
+  ): Promise<DeliveryShotOutcome> {
+    const ref = query.id ? this.shotsCollection(jobId).doc(query.id) : this.shotsCollection(jobId).doc();
+    return await this.db.runTransaction<DeliveryShotOutcome>(async (transaction) => {
+      // Count and write together, or every PUT sees room.
+      const job = await transaction.get(this.db.collection('submissions').doc(String(jobId)));
+      if (!currentRound(job.data() as SubmissionRecord | undefined, query)) {
+        return { ok: false, refused: 'stale_delivery' };
+      }
+      const mine = await transaction.get(ref);
+      // First write wins; a posted card keeps the frame it named.
+      if (mine.exists) return { ok: true, shot: mine.data() as BuildShot };
+      const snap = await transaction.get(
+        this.shotsCollection(jobId)
+          .where('deliveryVersion', '==', query.deliveryVersion)
+          .select('deliveryVersion', 'label', 'roundGeneration', 'platformDrawn'),
+      );
+      const held = snap.docs.map((doc) => doc.data() as BuildShotSummary).filter(matchesDelivery(query)).length;
+      if (held >= query.max) return { ok: false, refused: 'too_many_shots' };
+      const record: BuildShot = { ...shot, id: ref.id, createdAt: new Date().toISOString() };
+      transaction.set(ref, Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined)));
+      return { ok: true, shot: record };
+    });
   }
 
   async appendBuildPreview(

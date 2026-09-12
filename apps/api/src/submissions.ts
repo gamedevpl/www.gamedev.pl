@@ -49,7 +49,7 @@ import { createDispatcher } from './creation/dispatch-build.js';
 import { createResumeBuild, type ResumeOutcome } from './creation/resume-build.js';
 import { createJobReconciler } from './creation/job-reconciler.js';
 import type { DreamJob, DreamRunInput } from './creation/dream-job.js';
-import { createDreamJobFromEnv } from './creation/dream-job-env.js';
+import { createAgentProposalsEnabledFromEnv, createDreamJobFromEnv } from './creation/dream-job-env.js';
 import type { DreamAvailabilityGate } from './creation/dream-availability.js';
 import type { DreamFrameGenerator } from './creation/dream-frames.js';
 import type { NextIdeaGenerator } from './creation/next-ideas.js';
@@ -315,6 +315,7 @@ export interface AgentSurfaceSeams {
     | 'onBuilderHandoffAcknowledged'
     | 'onSourcesStaged'
     | 'onRegenerateSeed'
+    | 'dreamingEnabled'
   >;
   mcp: Pick<
     McpServerOptions,
@@ -1360,7 +1361,7 @@ export async function registerSubmissionRoutes(
     // route's shared hourly allowance re-handing off work that is already done.
 
     // The same predicate the claim uses, so a stale claim still reaches the retake.
-    if (dreamClaimHolds(record.dreamRun, version, new Date().toISOString())) return;
+    if (dreamClaimHolds(record.dreamRun, version, new Date().toISOString(), record.roundGeneration ?? 1)) return;
     if (!seedDispatch) {
       await job.runForVersion(input);
       return;
@@ -1833,6 +1834,13 @@ export async function registerSubmissionRoutes(
       onBuilderHandoffAcknowledged: (input) => acknowledgeBuilderHandoff(input),
       ...(stagedPreviews ? { onSourcesStaged: ({ jobId }: { jobId: number }) => stagedPreviews.schedule(jobId) } : {}),
       onRegenerateSeed: regenerateSeed,
+      dreamingEnabled: createAgentProposalsEnabledFromEnv({
+        store,
+        log: app.log,
+        now,
+        creationLimitsTtlMs: options.creationLimitsTtlMs,
+        ...(options.dreamAvailabilityGate ? { dreamAvailabilityGate: options.dreamAvailabilityGate } : {}),
+      }),
     },
     mcp: {
       agentTokenSecret: submissionTokenSecret,

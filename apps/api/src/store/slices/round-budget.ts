@@ -1,6 +1,11 @@
 import { FieldValue, type Firestore } from '@google-cloud/firestore';
 import type { SubmissionRecord } from '../records/submission.js';
 
+// Which of the three refused, so a caller never guesses between them.
+export type DreamClaimRefusedBy = 'round' | 'claim' | 'version';
+
+export type DreamClaimResult = { claimed: true } | { claimed: false; refusedBy: DreamClaimRefusedBy };
+
 export interface RoundBudgetStore {
   // Increments and returns how many seed regenerations this job has asked for.
   incrementSeedRegenerations(jobId: number): Promise<number>;
@@ -23,8 +28,8 @@ export interface RoundBudgetStore {
   // Records that a gate metric was logged for this version/status key.
   setRoundLastGateMetricKey(jobId: number, key: string): Promise<void>;
 
-  // First caller per version wins; one dream run per version.
-  claimDreamRun(jobId: number, version: string, at: string): Promise<boolean>;
+  // First caller per version and round wins; a stale caller takes nothing.
+  claimDreamRun(jobId: number, version: string, at: string, roundGeneration: number): Promise<DreamClaimResult>;
 
   // Marks a run finished, posted or not; the TTL is for silence.
   finishDreamRun(jobId: number, claim: DreamClaimRef, at: string): Promise<void>;
@@ -49,11 +54,15 @@ export function ownsDreamClaim(
 
 // A claim blocks while the run posted, ended, or may run.
 export function dreamClaimHolds(
-  claim: { version: string; claimedAt: string; postedAt?: string; endedAt?: string } | undefined,
+  claim:
+    { version: string; claimedAt: string; roundGeneration?: number; postedAt?: string; endedAt?: string } | undefined,
   version: string,
   at: string,
+  roundGeneration: number,
 ): boolean {
   if (claim?.version !== version) return false;
+  // A reopen frees it; an unnumbered claim belongs to round one.
+  if ((claim.roundGeneration ?? 1) !== roundGeneration) return false;
   if (claim.postedAt || claim.endedAt) return true;
   return Date.parse(at) - Date.parse(claim.claimedAt) < DREAM_CLAIM_TTL_MS;
 }
@@ -125,12 +134,14 @@ export class InMemoryRoundBudgetStore implements RoundBudgetStore {
     this.submissions.set(jobId, { ...sub, roundLastGateMetricKey: key });
   }
 
-  async claimDreamRun(jobId: number, version: string, at: string): Promise<boolean> {
+  async claimDreamRun(jobId: number, version: string, at: string, roundGeneration: number): Promise<DreamClaimResult> {
     const sub = this.submissions.get(jobId);
-    if (!sub || dreamClaimHolds(sub.dreamRun, version, at)) return false;
-    if ((sub.previewVersion ?? sub.deliveredVersion) !== version) return false;
-    this.submissions.set(jobId, { ...sub, dreamRun: { version, claimedAt: at } });
-    return true;
+    if (!sub || (sub.roundGeneration ?? 1) !== roundGeneration) return { claimed: false, refusedBy: 'round' };
+    // A moved delivery outranks a held claim; both can hold.
+    if ((sub.previewVersion ?? sub.deliveredVersion) !== version) return { claimed: false, refusedBy: 'version' };
+    if (dreamClaimHolds(sub.dreamRun, version, at, roundGeneration)) return { claimed: false, refusedBy: 'claim' };
+    this.submissions.set(jobId, { ...sub, dreamRun: { version, claimedAt: at, roundGeneration } });
+    return { claimed: true };
   }
 
   async finishDreamRun(jobId: number, claim: DreamClaimRef, at: string): Promise<void> {
@@ -227,22 +238,35 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
     await this.ref(jobId).set({ roundLastGateMetricKey: key }, { merge: true });
   }
 
-  async claimDreamRun(jobId: number, version: string, at: string): Promise<boolean> {
+  async claimDreamRun(jobId: number, version: string, at: string, roundGeneration: number): Promise<DreamClaimResult> {
     const ref = this.ref(jobId);
-    return this.db.runTransaction(async (tx) => {
+    return this.db.runTransaction<DreamClaimResult>(async (tx) => {
       const snap = await tx.get(ref);
-      if (!snap.exists) return false;
+      if (!snap.exists) return { claimed: false, refusedBy: 'round' };
       const current = snap.data() as SubmissionRecord;
-      if (dreamClaimHolds(current.dreamRun, version, at)) return false;
-      // Read and claim together, or a late claim overwrites.
-      if ((current.previewVersion ?? current.deliveredVersion) !== version) return false;
+      // A caller whose round moved takes nothing on its way out.
+      if ((current.roundGeneration ?? 1) !== roundGeneration) return { claimed: false, refusedBy: 'round' };
+      // A moved delivery outranks a held claim; both can hold.
+      if ((current.previewVersion ?? current.deliveredVersion) !== version) {
+        return { claimed: false, refusedBy: 'version' };
+      }
+      if (dreamClaimHolds(current.dreamRun, version, at, roundGeneration))
+        return { claimed: false, refusedBy: 'claim' };
       // A merged map keeps what it omits; start clean.
       tx.set(
         ref,
-        { dreamRun: { version, claimedAt: at, postedAt: FieldValue.delete(), endedAt: FieldValue.delete() } },
+        {
+          dreamRun: {
+            version,
+            claimedAt: at,
+            roundGeneration,
+            postedAt: FieldValue.delete(),
+            endedAt: FieldValue.delete(),
+          },
+        },
         { merge: true },
       );
-      return true;
+      return { claimed: true };
     });
   }
 
