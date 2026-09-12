@@ -6,6 +6,7 @@ import { handleReplLine } from './repl.js';
 import { chooseExecution, type PendingExecution } from './execution.js';
 import { connectGame } from './connect.js';
 import type { ApiClient } from './api.js';
+import { saveAgentSelection } from './agent-settings.js';
 
 vi.mock('./connect.js', () => ({ connectGame: vi.fn(async () => ({ spawned: true, mcp: true })) }));
 const roots: string[] = [];
@@ -106,6 +107,36 @@ describe('conversational builder selection', () => {
       },
     });
     expect(picked).toMatchObject({ builder: 'self', spec: { name: 'agy' }, mode: 'local' });
+  });
+
+  it('shows model settings and lets the user change them before choosing an agent', async () => {
+    const env = environment('claude');
+    const questions: string[] = [];
+    const replies = ['Configure agent model and effort…', 'claude', 'Change model and effort', 'opus', 'high'];
+    const picked = await chooseExecution({
+      env,
+      write: () => undefined,
+      pick: async (choices, question) => {
+        questions.push(question ?? '');
+        if (replies.length) return replies.shift()!;
+        expect(choices[0]).toContain('model: opus; effort: high');
+        return choices[0]!;
+      },
+    });
+    expect(questions[0]).toContain('agent defaults may not be reported');
+    expect(picked).toMatchObject({ builder: 'self', spec: { name: 'claude' } });
+  });
+
+  it('shows saved model and effort in the initial agent choice', async () => {
+    const env = environment('claude');
+    saveAgentSelection('claude', { model: 'sonnet', effort: 'medium' }, env);
+    await chooseExecution({
+      env,
+      pick: async (choices) => {
+        expect(choices[0]).toContain('model: sonnet; effort: medium');
+        return '/quit';
+      },
+    });
   });
 });
 

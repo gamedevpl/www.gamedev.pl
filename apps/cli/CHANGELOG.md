@@ -10,6 +10,7 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 ### Fixed
 
 - Move the prompt cursor with the left and right arrow keys and edit long messages in place (#1290).
+- Show each local agent's model and reasoning effort in the task picker, with an inline path to change them.
 
 ## 0.14.1 — 2026-09-12
 
