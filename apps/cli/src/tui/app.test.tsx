@@ -36,6 +36,16 @@ function screen(columns: number, rows: number, openPreview?: (url: string) => vo
 }
 
 describe('TUI feedback', () => {
+  it('shows the selected model and effort in a narrow picker', async () => {
+    const view = screen(40, 12);
+    void view.session.prompt(
+      ['codex — model: gpt-5.3-codex; effort: xhigh — this checkout; own billing', 'Configure agent model and effort…'],
+      'Who should build this task?',
+    );
+    await wait();
+    expect(view.frame()).toContain('effort: xhigh');
+    expect(view.frame()).toContain('gpt-5.3-codex');
+  });
   it('moves the cursor and inserts text inside a long draft', async () => {
     const view = screen(40, 12);
     void view.session.prompt();

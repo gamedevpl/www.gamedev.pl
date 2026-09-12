@@ -105,13 +105,16 @@ export function ReplApp({
   const border = color ? 'round' : 'single';
   const accent = color ? 'cyan' : undefined;
   const prompt = glyphs(color).prompt;
-  const choiceCount = Math.min(state.choices.length, Math.max(1, rows - 10));
+  const choiceWidth = Math.max(1, Math.min(stdout.columns || 80, 110) - 4);
+  const selectedRows = Math.max(1, Math.ceil(((state.choices[state.pickIndex]?.length ?? 0) + 5) / choiceWidth));
+  const choiceCount = Math.min(state.choices.length, Math.max(1, rows - 10 - (selectedRows - 1)));
   const choiceStart = Math.max(
     0,
     Math.min(state.pickIndex - Math.floor(choiceCount / 2), state.choices.length - choiceCount),
   );
   const suggestionRows = Math.min(completion.suggestions.length, 5, Math.max(0, rows - 9));
-  const panelRows = suggestionRows + (state.mode === 'pick' ? choiceCount + 3 : state.mode === 'busy' ? 2 : 3);
+  const panelRows =
+    suggestionRows + (state.mode === 'pick' ? choiceCount + selectedRows + 2 : state.mode === 'busy' ? 2 : 3);
   const live = state.localTask
     ? [`Local task: ${state.localTask}`, 'Studio receives your changes after /submit']
     : state.live;
@@ -151,7 +154,7 @@ export function ReplApp({
                 const index = choiceStart + offset;
                 return (
                   <Text
-                    wrap="truncate-end"
+                    wrap={index === state.pickIndex ? 'wrap' : 'truncate-end'}
                     bold={index === state.pickIndex}
                     key={`pick:${index}:${choice}`}
                     color={index === state.pickIndex ? accent : undefined}
