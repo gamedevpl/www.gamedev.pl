@@ -9,16 +9,24 @@ import { connectGame } from './connect.js';
 import { CliError, EXIT_REFUSED } from './exit-codes.js';
 import { detectLocalAdapters, workshopTurn, type Workshop, type PickChoice } from './workshop.js';
 import type { CliTelemetry } from './telemetry.js';
+import { readAgentSelection } from './agent-settings.js';
+import { modelCommand } from './model-command.js';
 
 export type ExecutionChoice = { builder: 'platform' } | { builder: 'self'; spec: AdapterSpec; mode: 'local' | 'mcp' };
 
 export type PendingExecution = { current?: { choice: ExecutionChoice; request: string } };
+
+export function executionSettingsLabel(spec: AdapterSpec, env: NodeJS.ProcessEnv): string {
+  const selection = readAgentSelection(spec.name, env);
+  return `model: ${selection.model ?? 'agent default*'}; effort: ${selection.effort ?? 'agent default*'}`;
+}
 
 export async function chooseExecution(input: {
   env: NodeJS.ProcessEnv;
   pick: PickChoice;
   workshop?: Workshop;
   telemetry?: CliTelemetry;
+  write?: (line: string) => void;
 }): Promise<ExecutionChoice | null> {
   const adapters = input.workshop?.adapters ?? detectLocalAdapters(input.env);
   if (!adapters.length) return { builder: 'platform' };
@@ -26,23 +34,39 @@ export async function chooseExecution(input: {
     const spec = adapters.find((row) => row.name === input.workshop!.selectedAgent);
     if (spec) return { builder: 'self', spec, mode: 'local' };
   }
-  const local = adapters.map((spec) => {
-    const mode = input.workshop ? 'local' : adapterMcpSupported(spec.name) ? 'mcp' : 'local';
-    const where = mode === 'mcp' ? 'MCP' : input.workshop ? 'this checkout' : 'download a checkout';
-    return {
-      choice: { builder: 'self' as const, spec, mode: mode as 'local' | 'mcp' },
-      label: `${spec.name} — ${where}; its own credentials and billing`,
-    };
-  });
   for (const spec of adapters) input.telemetry?.record('delegate_offered', { adapter: spec.name });
   const platform = 'gamedev.pl builder — uses platform quota';
-  const chosen = await input.pick([...local.map((row) => row.label), platform], 'Who should build this task?');
-  if (chosen === platform) return { builder: 'platform' };
-  const choice = local.find((row) => row.label === chosen)?.choice;
-  if (!choice) return null;
-  if (!input.workshop?.runAdapter) preflightAdapter(choice.spec, input.env);
-  if (input.workshop) input.workshop.selectedAgent = choice.spec.name;
-  return choice;
+  const configure = 'Configure agent model and effort…';
+  while (true) {
+    const local = adapters.map((spec) => {
+      const mode = input.workshop ? 'local' : adapterMcpSupported(spec.name) ? 'mcp' : 'local';
+      const where = mode === 'mcp' ? 'MCP' : input.workshop ? 'this checkout' : 'download a checkout';
+      return {
+        choice: { builder: 'self' as const, spec, mode: mode as 'local' | 'mcp' },
+        label: `${spec.name} — ${executionSettingsLabel(spec, input.env)} — ${where}; own billing`,
+      };
+    });
+    const chosen = await input.pick(
+      [...local.map((row) => row.label), configure, platform],
+      'Who should build this task? (* agent defaults may not be reported)',
+    );
+    if (chosen === configure) {
+      await modelCommand({
+        args: [],
+        flags: {},
+        env: input.env,
+        pick: input.pick,
+        write: input.write ?? (() => undefined),
+      });
+      continue;
+    }
+    if (chosen === platform) return { builder: 'platform' };
+    const choice = local.find((row) => row.label === chosen)?.choice;
+    if (!choice) return null;
+    if (!input.workshop?.runAdapter) preflightAdapter(choice.spec, input.env);
+    if (input.workshop) input.workshop.selectedAgent = choice.spec.name;
+    return choice;
+  }
 }
 
 export async function executeChoice(input: {
