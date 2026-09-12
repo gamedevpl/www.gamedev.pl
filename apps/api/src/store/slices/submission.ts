@@ -151,7 +151,6 @@ export class FirestoreSubmissionStore implements SubmissionStore {
             holder.jobId !== sourceJobId ||
             holder.ownerUid !== target.data()?.ownerUid ||
             holder.state !== 'canceled' ||
-            holder.abandonedAt ||
             holder.moderationBlockedAt
       )
         return false;

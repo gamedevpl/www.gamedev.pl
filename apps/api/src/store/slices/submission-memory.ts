@@ -69,7 +69,6 @@ export class InMemorySubmissionStore implements SubmissionStore {
           holder.jobId !== sourceJobId ||
           holder.ownerUid !== target.ownerUid ||
           holder.state !== 'canceled' ||
-          holder.abandonedAt ||
           holder.moderationBlockedAt
     )
       return false;
