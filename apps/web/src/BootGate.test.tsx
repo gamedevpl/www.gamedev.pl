@@ -16,6 +16,7 @@ const session = { user: null as unknown, loading: false, privateBeta: true };
 vi.mock('./AuthContext.js', () => ({ useAuth: () => session }));
 
 const { BootGate } = await import('./BootGate.js');
+const { withChunkTimeout } = await import('./chunkTimeout.js');
 
 const INVITE_CODE = 'A'.repeat(32);
 
@@ -52,6 +53,25 @@ describe('BootGate', () => {
     const { text, root } = await renderAt('/');
     expect(text).toBe('loading');
     root.unmount();
+  });
+
+  it('does not hold a public page hostage to a slow session read', async () => {
+    // App answers /terms before its own auth check.
+    Object.assign(session, { loading: true });
+    const { text, root } = await renderAt('/terms');
+    expect(text).toBe('app');
+    root.unmount();
+  });
+});
+
+describe('withChunkTimeout', () => {
+  it('passes a chunk that arrives through untouched', async () => {
+    await expect(withChunkTimeout(Promise.resolve('chunk'), 50, () => undefined)).resolves.toBe('chunk');
+  });
+
+  it('rejects a chunk that never arrives, so the boundary can offer a reload', async () => {
+    const fire = (run: () => void) => run();
+    await expect(withChunkTimeout(new Promise(() => {}), 0, fire)).rejects.toThrow('app chunk timed out');
   });
 });
 
