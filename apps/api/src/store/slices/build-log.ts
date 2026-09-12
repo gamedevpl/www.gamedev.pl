@@ -62,8 +62,8 @@ export interface BuildLogStore {
   // Undelivered messages, oldest first -- the agent's inbox. Never a 'studio' row.
   listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
 
-  // Every creator message on a build, delivered or not, oldest first.
-  listCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
+  // Every creator message, oldest first; cards drop before the limit.
+  listCreatorMessages(jobId: number, opts?: { limit?: number; excludeProposals?: boolean }): Promise<CreatorMessage[]>;
 
   // Marks messages collected, so the agent isn't handed them twice.
   markCreatorMessagesDelivered(jobId: number, ids: string[]): Promise<void>;
@@ -204,10 +204,14 @@ export class InMemoryBuildLogStore implements BuildLogStore {
       .map((message) => ({ ...message }));
   }
 
-  async listCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
+  async listCreatorMessages(
+    jobId: number,
+    opts?: { limit?: number; excludeProposals?: boolean },
+  ): Promise<CreatorMessage[]> {
     // No id tie-break -- a stable sort keeps same-millisecond append order.
     return [...(this.creatorMessages.get(jobId) ?? [])]
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .filter((message) => !(opts?.excludeProposals && message.proposal))
       .slice(-(opts?.limit ?? 20))
       .map((message) => ({ ...message }));
   }
@@ -368,12 +372,16 @@ export class FirestoreBuildLogStore implements BuildLogStore {
       .slice(0, opts?.limit ?? 10);
   }
 
-  async listCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
+  async listCreatorMessages(
+    jobId: number,
+    opts?: { limit?: number; excludeProposals?: boolean },
+  ): Promise<CreatorMessage[]> {
     // Slices the newest `limit` off an oldest-first sort, matching InMemory.
     const snap = await this.messagesCollection(jobId).get();
     return snap.docs
       .map((doc) => doc.data() as CreatorMessage)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
+      .filter((message) => !(opts?.excludeProposals && message.proposal))
       .slice(-(opts?.limit ?? 20));
   }
 
