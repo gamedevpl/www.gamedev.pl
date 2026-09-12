@@ -59,6 +59,10 @@ POLICIES=(
   "A24 Vertex call volume abnormally high|creation,editing,chat,tabcomplete,search,seeding"
   "A25 Vertex output token rate abnormally high|creation,editing,chat,tabcomplete,search,seeding"
   "A26 knowledge_query daily volume abnormally high|creation"
+  # A rate, so this reacts in hours where a monthly budget reacts in days.
+  # A33 and not A32: A32 watches every bucket, and the store bucket's normal
+  # traffic is the coding agent, which no serving rung reduces.
+  "A33 Snapshot bucket egress spiking|video,media"
 )
 
 echo "==> 1/4 Pub/Sub topic ${TOPIC}"
