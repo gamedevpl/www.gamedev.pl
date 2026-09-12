@@ -140,7 +140,9 @@ export class FirestoreSubmissionStore implements SubmissionStore {
       const target = await tx.get(this.ref(jobId));
       const rows = await tx.get(this.db.collection('submissions').where('slug', '==', slug));
       const game = await tx.get(this.db.collection('games').doc(slug));
-      if (game.data()?.publication) return false;
+      const publication = game.data()?.publication;
+      const archived = publication?.state === 'archived' && publication.takedownReason === 'deleted by creator';
+      if (publication && !(sourceJobId !== null && archived)) return false;
       const records = rows.docs.map((d) => fromStoredSubmission(d.data()));
       const holder = records.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)[0];
       if (!target.exists || target.data()?.slug) return false;
@@ -150,7 +152,7 @@ export class FirestoreSubmissionStore implements SubmissionStore {
           : !holder ||
             holder.jobId !== sourceJobId ||
             holder.ownerUid !== target.data()?.ownerUid ||
-            holder.state !== 'canceled' ||
+            (holder.state !== 'canceled' && !archived) ||
             holder.moderationBlockedAt
       )
         return false;

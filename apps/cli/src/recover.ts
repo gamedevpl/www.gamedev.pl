@@ -1,3 +1,4 @@
+import { markRecoveryReady } from './recovery-state.js';
 import { detectLocalAdapters } from './workshop.js';
 import type { handleReplLine, ReplLineResult } from './repl.js';
 import { parseArgv } from './argv.js';
@@ -5,7 +6,9 @@ import { randomUUID } from 'node:crypto';
 import { cpSync, existsSync, lstatSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import type { ApiClient } from './api.js';
-import { findCheckout, localGameFiles, writeBase } from './checkout.js';
+import { deliverySession, type DeliverySession } from './submit-session.js';
+import type { TreeFile } from './checkout-sync.js';
+import { findCheckout, localGameFiles, writeBase, fetchLatestTree } from './checkout.js';
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import type { PickChoice } from './workshop.js';
 
@@ -21,7 +24,7 @@ export async function recoverCheckout(input: {
 }): Promise<RecoveryResult | undefined> {
   const checkout = findCheckout(resolve(input.cwd));
   if (!checkout) throw new CliError('No local checkout found.', EXIT_INPUT, 'gamedevpl recover <checkout-directory>');
-  for (const name of ['.gamedev-slug', '.gamedev-base.json', '.gamedev-recovery.json']) {
+  for (const name of ['.gamedev-slug', '.gamedev-base.json', '.gamedev-recovery.json', '.gamedev-recovery-ready']) {
     const path = join(checkout.root, name);
     if (existsSync(path) && lstatSync(path).isSymbolicLink())
       throw new CliError('Recovery metadata must not be a symlink.', EXIT_REFUSED);
@@ -30,7 +33,16 @@ export async function recoverCheckout(input: {
   if (!/^[a-z0-9][a-z0-9-]{0,60}$/.test(slug)) throw new CliError('Invalid recovery slug.', EXIT_INPUT);
   const status = await input.api.request<{ kind: string }>('GET', `/api/me/studio/games/${slug}/recovery`);
   const pendingPath = join(checkout.root, '.gamedev-recovery.json');
-  let pending: { slug: string; key: string; origin: string; paths?: string[] } | undefined;
+  let pending:
+    | {
+        slug: string;
+        key: string;
+        origin: string;
+        paths?: string[];
+        base?: { version: string; files: TreeFile[] };
+        session?: DeliverySession;
+      }
+    | undefined;
   if (existsSync(pendingPath)) {
     pending = JSON.parse(readFileSync(pendingPath, 'utf8'));
     if (pending?.slug !== slug || pending?.origin !== input.api.origin || !/^[0-9a-f-]{36}$/.test(pending?.key ?? ''))
@@ -44,7 +56,7 @@ export async function recoverCheckout(input: {
     );
   if (status.kind === 'active' && !pending)
     throw new CliError('This game already exists. Use connect instead.', EXIT_REFUSED);
-  if (!['active', 'missing', 'canceled'].includes(status.kind))
+  if (!['active', 'missing', 'canceled', 'archived'].includes(status.kind))
     throw new CliError('Unknown recovery status.', EXIT_REFUSED);
   const files = localGameFiles(checkout.root, checkout.slug);
   const spec = files.find((f) => f.path === 'SPEC.md')?.content;
@@ -102,6 +114,10 @@ export async function recoverCheckout(input: {
       rmSync(pendingPath);
     throw error;
   }
+  pending.base ??= await fetchLatestTree(input.api, slug);
+  pending.session ??= (await deliverySession(input.api, slug)) ?? undefined;
+  if (!pending.session) throw new CliError('Recovery session is unavailable. Retry recovery.', EXIT_REFUSED);
+  writeFileSync(pendingPath, JSON.stringify(pending), { mode: 0o600 });
   const imported = files.map((file) => {
     if (slug === checkout.slug) return file;
     if (file.path === 'SPEC.md') return { ...file, content: file.content.replace(/^slug:.*$/m, `slug: ${slug}`) };
@@ -149,7 +165,8 @@ export async function recoverCheckout(input: {
       }
     }
     writeFileSync(join(output, '.gamedev-slug'), slug + '\n');
-    writeBase(output, 'undelivered', []);
+    writeBase(output, pending.base.version, pending.base.files);
+    markRecoveryReady(output, slug, pending.session, pending.base.version);
     if (temporary) {
       writeFileSync(join(output, '.gamedev-import-key'), pending.key);
       renameSync(temporary, dest);

@@ -24,7 +24,15 @@ function fixture(kind = 'missing') {
   const fetch = vi.fn(
     async (url: string) =>
       new Response(
-        JSON.stringify(url.endsWith('/recovery') ? { kind } : { accepted: true, slug: 'sky', token: 'new-round' }),
+        JSON.stringify(
+          url.endsWith('/versions')
+            ? { versions: [] }
+            : url.endsWith('/sources/session')
+              ? { jobId: 2, generation: 0, locked: false }
+              : url.endsWith('/recovery')
+                ? { kind }
+                : { accepted: true, slug: 'sky', token: 'new-round' },
+        ),
       ),
   );
   const api = createApi({

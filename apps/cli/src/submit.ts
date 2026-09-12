@@ -1,3 +1,4 @@
+import { isRecoveryReady, clearRecoveryReady, matchingStaged, guardRecoverySession } from './recovery-state.js';
 import { prepareDeliverySession, type DeliverySession } from './submit-session.js';
 import type { ApiClient } from './api.js';
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -104,8 +105,10 @@ export async function submitGame(input: {
   expectedSession?: DeliverySession;
   run?: Parameters<typeof runLadder>[0]['run'];
 }): Promise<SubmitResult> {
+  const recovered = isRecoveryReady(input.dest, input.slug);
   const first = await inspectGame(input);
-  if (first.sync.kind === 'clean' && !input.publish && !input.force && !input.takeover) {
+  if (recovered) await guardRecoverySession(input.api, input.dest, input.slug, first.tree.version);
+  if (first.sync.kind === 'clean' && !recovered && !input.publish && !input.force && !input.takeover) {
     return { kind: 'nothing', sync: first.sync };
   }
   if (
@@ -126,7 +129,7 @@ export async function submitGame(input: {
     const refused = syncRefuse(latest.sync, 'submit');
     throw new CliError(`platform changed during verify — ${refused.message}`, EXIT_REFUSED, refused.next);
   }
-  if (latest.sync.kind === 'clean' && !input.publish && !input.force && !input.takeover) {
+  if (latest.sync.kind === 'clean' && !recovered && !input.publish && !input.force && !input.takeover) {
     return { kind: 'nothing', sync: latest.sync };
   }
   if (!input.force && latest.sync.kind === 'platform_only') {
@@ -134,12 +137,14 @@ export async function submitGame(input: {
     throw new CliError(refused.message, EXIT_REFUSED, refused.next);
   }
 
+  if (recovered) await guardRecoverySession(input.api, input.dest, input.slug, latest.tree.version);
   const takenOver = await prepareDeliverySession(input.api, input.slug, input.takeover, input.expectedSession);
-  const paths = takenOver
-    ? [...new Set([...localGameFiles(input.dest, input.slug), ...latest.tree.files].map((file) => file.path))].sort()
-    : input.force
-      ? changedPathsForced(localGameFiles(input.dest, input.slug), latest.tree.files)
-      : latest.sync.local;
+  const paths =
+    takenOver || recovered
+      ? [...new Set([...localGameFiles(input.dest, input.slug), ...latest.tree.files].map((file) => file.path))].sort()
+      : input.force
+        ? changedPathsForced(localGameFiles(input.dest, input.slug), latest.tree.files)
+        : latest.sync.local;
   let extra: string[] = [];
   try {
     extra = await extraStagedPaths(input.api, input.slug, paths);
@@ -170,9 +175,11 @@ export async function submitGame(input: {
   const snapshot = hashesOf(uploaded);
   const localMap = new Map(uploaded.map((file) => [file.path, file]));
   const staged: string[] = [];
+  const matching = recovered ? await matchingStaged(input.api, input.slug, uploaded) : new Set<string>();
   try {
     for (const path of paths) {
       const file = localMap.get(path);
+      if (file && matching.has(path)) continue;
       if (file) await stagePath(input.api, input.slug, file);
       else await deletePath(input.api, input.slug, path);
       staged.push(path);
@@ -198,6 +205,7 @@ export async function submitGame(input: {
       EXIT_REFUSED,
     );
   }
+  if (recovered) clearRecoveryReady(input.dest);
   const version = delivered.version ?? latest.sync.version;
   let files = uploaded;
   try {

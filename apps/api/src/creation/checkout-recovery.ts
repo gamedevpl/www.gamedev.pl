@@ -22,11 +22,24 @@ export function registerCheckoutRecovery(
   const inspect = async (slug: string, uid: string) => {
     const holder = await deps.store!.getSubmissionBySlug(slug);
     const publication = await deps.store!.getPublication(slug);
-    if (publication || (await deps.isSlugPublished(slug))) return { kind: 'occupied' as const };
-    if (!holder) return { kind: 'missing' as const };
-    if (holder.ownerUid !== uid || (holder.abandonedAt && holder.state !== 'canceled') || holder.moderationBlockedAt)
+    const archived = publication?.state === 'archived' && publication.takedownReason === 'deleted by creator';
+    if ((publication && !archived) || (await deps.isSlugPublished(slug))) return { kind: 'occupied' as const };
+    if (!holder) return { kind: publication ? ('occupied' as const) : ('missing' as const) };
+    if (
+      holder.ownerUid !== uid ||
+      (holder.abandonedAt && holder.state !== 'canceled' && !archived) ||
+      holder.moderationBlockedAt
+    )
       return { kind: 'occupied' as const };
-    return { kind: holder.state === 'canceled' ? ('canceled' as const) : ('active' as const), holder };
+    return {
+      kind:
+        archived && (!holder.recoveryKey || holder.publishedAt)
+          ? ('archived' as const)
+          : holder.state === 'canceled'
+            ? ('canceled' as const)
+            : ('active' as const),
+      holder,
+    };
   };
   app.get<{ Params: { slug: string } }>('/api/me/studio/games/:slug/recovery', async (request, reply) => {
     if (!deps.checkUserAccess(request, reply)) return;
@@ -42,7 +55,7 @@ export function registerCheckoutRecovery(
     if (!parsed.success) return reply.code(400).send({ error: 'invalid recovery request' });
     const { slug, key, title, concept } = parsed.data;
     const status = await inspect(slug, request.user!.uid);
-    if (status.kind === 'active' && status.holder.recoveryKey === key)
+    if ('holder' in status && status.holder?.recoveryKey === key)
       return { slug, token: mintToken(status.holder.jobId, deps.submissionTokenSecret) };
     if (status.kind === 'active' || status.kind === 'occupied')
       return reply
@@ -52,7 +65,11 @@ export function registerCheckoutRecovery(
       uid: request.user!.uid,
       ip: request.clientIp,
       payload: { title, concept, builder: 'self' },
-      recovery: { slug, sourceJobId: status.kind === 'canceled' ? status.holder.jobId : null, key },
+      recovery: {
+        slug,
+        sourceJobId: status.kind === 'canceled' || status.kind === 'archived' ? status.holder.jobId : null,
+        key,
+      },
       log: request.log,
     });
     if (!created.ok) return reply.code(created.status).send({ error: created.error, category: created.category });

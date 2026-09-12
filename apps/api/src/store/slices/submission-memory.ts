@@ -57,7 +57,9 @@ export class InMemorySubmissionStore implements SubmissionStore {
     sourceJobId: number | null,
     recovery?: { key: string; spec: string; locale: string },
   ): Promise<boolean> {
-    if (await this.publication?.getPublication(slug)) return false;
+    const publication = await this.publication?.getPublication(slug);
+    const archived = publication?.state === 'archived' && publication.takedownReason === 'deleted by creator';
+    if (publication && !(sourceJobId !== null && archived)) return false;
     const target = this.submissions.get(jobId);
     const records = [...this.submissions.values()].filter((r) => r.slug === slug);
     const holder = records.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)[0];
@@ -68,7 +70,7 @@ export class InMemorySubmissionStore implements SubmissionStore {
         : !holder ||
           holder.jobId !== sourceJobId ||
           holder.ownerUid !== target.ownerUid ||
-          holder.state !== 'canceled' ||
+          (holder.state !== 'canceled' && !archived) ||
           holder.moderationBlockedAt
     )
       return false;
