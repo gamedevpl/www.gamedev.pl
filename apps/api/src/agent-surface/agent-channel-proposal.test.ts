@@ -270,6 +270,25 @@ describe('agent-written concept proposals', () => {
     expect(minted.json().url).toBeTruthy();
   });
 
+  it('says ask again when the delivery moves just before the claim', async () => {
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    app = await createApp(store, stubGamesStore());
+    const frames = [await storeConceptFrame(store), await storeConceptFrame(store)];
+    const real = store.getBuildShot.bind(store);
+    store.getBuildShot = async (jobId, id) => {
+      // The last read before the claim; a delivery lands here.
+      await store.setSubmissionPreviewVersion(ISSUE, 'v8');
+      return await real(jobId, id);
+    };
+
+    const response = await propose(app, frames);
+    // `already_proposed` would say a card exists for a version nobody claimed.
+    expect(response.json().rejected).toBe('frame_stale');
+    expect(await store.listCreatorMessages(ISSUE)).toHaveLength(0);
+  });
+
   it('offers one proposal per delivered version', async () => {
     vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
     const store = new InMemoryStore();

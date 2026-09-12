@@ -345,8 +345,11 @@ describe('createDreamJob', () => {
     const { store } = await harness({ hud: [] });
     await store.setSubmissionPreviewVersion(7, 'v2');
 
-    expect(await store.claimDreamRun(7, 'v1', '2026-09-09T00:00:00.000Z', 1)).toBe(false);
-    expect(await store.claimDreamRun(7, 'v2', '2026-09-09T00:00:00.000Z', 1)).toBe(true);
+    expect(await store.claimDreamRun(7, 'v1', '2026-09-09T00:00:00.000Z', 1)).toEqual({
+      claimed: false,
+      refusedBy: 'version',
+    });
+    expect(await store.claimDreamRun(7, 'v2', '2026-09-09T00:00:00.000Z', 1)).toEqual({ claimed: true });
   });
 
   it('spends nothing when the model returns a single idea', async () => {

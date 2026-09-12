@@ -87,7 +87,7 @@ import type {
   ResolveModerationFlagResult,
 } from './slices/moderation-flags.js';
 
-import { InMemoryRoundBudgetStore, type DreamClaimRef } from './slices/round-budget.js';
+import { InMemoryRoundBudgetStore, type DreamClaimRef, type DreamClaimResult } from './slices/round-budget.js';
 import { InMemoryRoundsStore } from './slices/rounds.js';
 import { InMemorySocialStore } from './slices/social.js';
 import { InMemorySubmissionQueryStore } from './slices/submission-queries.js';
@@ -377,7 +377,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
     return this.roundBudgetStore.setRoundLastGateMetricKey(jobId, key);
   }
 
-  async claimDreamRun(jobId: number, version: string, at: string, roundGeneration: number): Promise<boolean> {
+  async claimDreamRun(jobId: number, version: string, at: string, roundGeneration: number): Promise<DreamClaimResult> {
     return this.roundBudgetStore.claimDreamRun(jobId, version, at, roundGeneration);
   }
 

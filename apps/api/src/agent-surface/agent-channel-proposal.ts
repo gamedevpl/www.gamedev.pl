@@ -172,7 +172,9 @@ export function registerAgentChannelProposalRoutes(app: FastifyInstance, deps: A
 
       // The claim refuses unless this delivery is still current, in one transaction.
       const claimedAt = new Date().toISOString();
-      if (!(await store.claimDreamRun(jobId, version, claimedAt, roundGeneration))) return reject('already_proposed');
+      const claim = await store.claimDreamRun(jobId, version, claimedAt, roundGeneration);
+      // A moved delivery or reopened round says ask again.
+      if (!claim.claimed) return reject(claim.refusedBy === 'claim' ? 'already_proposed' : 'frame_stale');
 
       const sourceShot = await store.appendBuildShot(jobId, {
         data: source.toString('base64'),

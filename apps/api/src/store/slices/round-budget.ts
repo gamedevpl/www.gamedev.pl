@@ -1,6 +1,11 @@
 import { FieldValue, type Firestore } from '@google-cloud/firestore';
 import type { SubmissionRecord } from '../records/submission.js';
 
+// Which of the three refused, so a caller never guesses between them.
+export type DreamClaimRefusedBy = 'round' | 'claim' | 'version';
+
+export type DreamClaimResult = { claimed: true } | { claimed: false; refusedBy: DreamClaimRefusedBy };
+
 export interface RoundBudgetStore {
   // Increments and returns how many seed regenerations this job has asked for.
   incrementSeedRegenerations(jobId: number): Promise<number>;
@@ -24,7 +29,7 @@ export interface RoundBudgetStore {
   setRoundLastGateMetricKey(jobId: number, key: string): Promise<void>;
 
   // First caller per version and round wins; a stale caller takes nothing.
-  claimDreamRun(jobId: number, version: string, at: string, roundGeneration: number): Promise<boolean>;
+  claimDreamRun(jobId: number, version: string, at: string, roundGeneration: number): Promise<DreamClaimResult>;
 
   // Marks a run finished, posted or not; the TTL is for silence.
   finishDreamRun(jobId: number, claim: DreamClaimRef, at: string): Promise<void>;
@@ -129,13 +134,13 @@ export class InMemoryRoundBudgetStore implements RoundBudgetStore {
     this.submissions.set(jobId, { ...sub, roundLastGateMetricKey: key });
   }
 
-  async claimDreamRun(jobId: number, version: string, at: string, roundGeneration: number): Promise<boolean> {
+  async claimDreamRun(jobId: number, version: string, at: string, roundGeneration: number): Promise<DreamClaimResult> {
     const sub = this.submissions.get(jobId);
-    if (!sub || (sub.roundGeneration ?? 1) !== roundGeneration) return false;
-    if (dreamClaimHolds(sub.dreamRun, version, at, roundGeneration)) return false;
-    if ((sub.previewVersion ?? sub.deliveredVersion) !== version) return false;
+    if (!sub || (sub.roundGeneration ?? 1) !== roundGeneration) return { claimed: false, refusedBy: 'round' };
+    if (dreamClaimHolds(sub.dreamRun, version, at, roundGeneration)) return { claimed: false, refusedBy: 'claim' };
+    if ((sub.previewVersion ?? sub.deliveredVersion) !== version) return { claimed: false, refusedBy: 'version' };
     this.submissions.set(jobId, { ...sub, dreamRun: { version, claimedAt: at, roundGeneration } });
-    return true;
+    return { claimed: true };
   }
 
   async finishDreamRun(jobId: number, claim: DreamClaimRef, at: string): Promise<void> {
@@ -232,17 +237,20 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
     await this.ref(jobId).set({ roundLastGateMetricKey: key }, { merge: true });
   }
 
-  async claimDreamRun(jobId: number, version: string, at: string, roundGeneration: number): Promise<boolean> {
+  async claimDreamRun(jobId: number, version: string, at: string, roundGeneration: number): Promise<DreamClaimResult> {
     const ref = this.ref(jobId);
-    return this.db.runTransaction(async (tx) => {
+    return this.db.runTransaction<DreamClaimResult>(async (tx) => {
       const snap = await tx.get(ref);
-      if (!snap.exists) return false;
+      if (!snap.exists) return { claimed: false, refusedBy: 'round' };
       const current = snap.data() as SubmissionRecord;
       // A caller whose round moved takes nothing on its way out.
-      if ((current.roundGeneration ?? 1) !== roundGeneration) return false;
-      if (dreamClaimHolds(current.dreamRun, version, at, roundGeneration)) return false;
+      if ((current.roundGeneration ?? 1) !== roundGeneration) return { claimed: false, refusedBy: 'round' };
+      if (dreamClaimHolds(current.dreamRun, version, at, roundGeneration))
+        return { claimed: false, refusedBy: 'claim' };
       // Read and claim together, or a late claim overwrites.
-      if ((current.previewVersion ?? current.deliveredVersion) !== version) return false;
+      if ((current.previewVersion ?? current.deliveredVersion) !== version) {
+        return { claimed: false, refusedBy: 'version' };
+      }
       // A merged map keeps what it omits; start clean.
       tx.set(
         ref,
@@ -257,7 +265,7 @@ export class FirestoreRoundBudgetStore implements RoundBudgetStore {
         },
         { merge: true },
       );
-      return true;
+      return { claimed: true };
     });
   }
 

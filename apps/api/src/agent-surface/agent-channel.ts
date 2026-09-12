@@ -1082,16 +1082,17 @@ export async function registerAgentChannelRoutes(
       // two image-model frames and we have stored them for a card nobody will see.
       const conceptVersion = record.previewVersion ?? record.deliveredVersion;
       if (parsed.data.purpose === 'concept') {
-        // Without a green capture the card can never post, and the agent would learn that
-        // only after paying for two frames.
-        if (!conceptVersion || !(await conceptCapture(record))) {
-          return reply.send({ accepted: false, rejected: 'no_capture', ...(await channelState(jobId, record)) });
-        }
+        // Final answers first; `no_capture` only sends the agent away.
         if (!(await (options.dreamingEnabled ?? (async () => false))())) {
           return reply.send({ accepted: false, rejected: 'proposals_off', ...(await channelState(jobId, record)) });
         }
         if ((await store!.getUser(record.ownerUid))?.proposalsMutedAt) {
           return reply.send({ accepted: false, rejected: 'proposals_muted', ...(await channelState(jobId, record)) });
+        }
+        // Without a green capture the card can never post, and the agent would learn that
+        // only after paying for two frames.
+        if (!conceptVersion || !(await conceptCapture(record))) {
+          return reply.send({ accepted: false, rejected: 'no_capture', ...(await channelState(jobId, record)) });
         }
         // The shared predicate: a lapsed claim is reclaimable, so mint again.
         if (dreamClaimHolds(record.dreamRun, conceptVersion, new Date().toISOString(), record.roundGeneration ?? 1)) {

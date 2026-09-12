@@ -213,6 +213,39 @@ describe('agent concept frame slots', () => {
     expect(minted.json().rejected).toBe('no_capture');
   });
 
+  it('names the mute rather than sending the agent off to deliver first', async () => {
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    // No capture yet either; the permanent answer still outranks the transient one.
+    app = await createApp(store, stubGamesStore(null));
+    await store.setProposalsMuted('g:owner', '2026-09-07T12:00:00.000Z');
+
+    const minted = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/shot/upload-url',
+      headers: agentHeaders(),
+      payload: { purpose: 'concept' },
+    });
+
+    expect(minted.json().rejected).toBe('proposals_muted');
+  });
+
+  it('names the switch rather than sending the agent off to deliver first', async () => {
+    const store = new InMemoryStore();
+    await seed(store);
+    app = await createApp(store, stubGamesStore(null));
+
+    const minted = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/shot/upload-url',
+      headers: agentHeaders(),
+      payload: { purpose: 'concept' },
+    });
+
+    expect(minted.json().rejected).toBe('proposals_off');
+  });
+
   it('refuses an upload whose delivery moved while the frame was drawn', async () => {
     // Minting, generating and uploading spans minutes; a delivery can land inside it.
     vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');

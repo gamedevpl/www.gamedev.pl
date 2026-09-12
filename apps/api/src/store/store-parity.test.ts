@@ -399,8 +399,11 @@ describeStoreContract('dream claim generations', (makeStore) => {
   it('refuses a second claim inside the same round', async () => {
     const store = await delivering(makeStore());
 
-    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:00.000Z', 1)).toBe(true);
-    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:30.000Z', 2)).toBe(false);
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:00.000Z', 1)).toEqual({ claimed: true });
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:30.000Z', 2)).toEqual({
+      claimed: false,
+      refusedBy: 'round',
+    });
   });
 
   it('lets the reopened round claim the same delivery again', async () => {
@@ -409,7 +412,7 @@ describeStoreContract('dream claim generations', (makeStore) => {
     await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:00.000Z', 1);
     await store.bumpRoundGeneration(11);
 
-    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:30.000Z', 2)).toBe(true);
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:30.000Z', 2)).toEqual({ claimed: true });
   });
 
   it('refuses a caller whose round was reopened before it claimed', async () => {
@@ -417,10 +420,13 @@ describeStoreContract('dream claim generations', (makeStore) => {
     const store = await delivering(makeStore());
     await store.bumpRoundGeneration(11);
 
-    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:00.000Z', 1)).toBe(false);
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:00.000Z', 1)).toEqual({
+      claimed: false,
+      refusedBy: 'round',
+    });
     expect((await store.getSubmission(11))?.dreamRun).toBeUndefined();
     // The round that is actually current still can.
-    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:30.000Z', 2)).toBe(true);
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:30.000Z', 2)).toEqual({ claimed: true });
   });
 
   it('frees a delivery whose finished claim belongs to the round before', async () => {
@@ -431,7 +437,7 @@ describeStoreContract('dream claim generations', (makeStore) => {
     await store.finishDreamRun(11, claim, '2026-09-07T12:01:00.000Z');
     await store.bumpRoundGeneration(11);
 
-    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T12:02:00.000Z', 2)).toBe(true);
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T12:02:00.000Z', 2)).toEqual({ claimed: true });
   });
 });
 
@@ -554,7 +560,10 @@ describeStoreContract('proposal posting', (makeStore) => {
     });
 
     // A card is on the thread, so the delivery is finished.
-    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z', 1)).toBe(false);
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z', 1)).toEqual({
+      claimed: false,
+      refusedBy: 'claim',
+    });
     expect(
       await store.appendProposalMessage(11, claim, 'Again.', {
         proposal,
@@ -571,7 +580,10 @@ describeStoreContract('proposal posting', (makeStore) => {
     await store.finishDreamRun(11, claim, '2026-09-07T12:00:10.000Z');
 
     // A run that answered `no_frames` must not be paid twice.
-    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z', 1)).toBe(false);
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z', 1)).toEqual({
+      claimed: false,
+      refusedBy: 'claim',
+    });
   });
 
   it("starts a new version from a clean claim, not the last one's leftovers", async () => {
@@ -585,7 +597,7 @@ describeStoreContract('proposal posting', (makeStore) => {
     });
     await store.setSubmissionPreviewVersion(11, 'v2');
 
-    expect(await store.claimDreamRun(11, 'v2', '2026-09-07T13:00:00.000Z', 1)).toBe(true);
+    expect(await store.claimDreamRun(11, 'v2', '2026-09-07T13:00:00.000Z', 1)).toEqual({ claimed: true });
     // A kept `postedAt` from v1 would refuse v2's own card.
     const v2 = { version: 'v2', claimedAt: '2026-09-07T13:00:00.000Z' };
     expect(
@@ -616,15 +628,18 @@ describeStoreContract('proposal posting', (makeStore) => {
     ).toEqual({ posted: null, refusedBy: 'claim' });
 
     // The replacement is still recoverable, and still the one that may post.
-    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T14:00:00.000Z', 1)).toBe(true);
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T14:00:00.000Z', 1)).toEqual({ claimed: true });
   });
 
   it('lets a claim that never posted be retaken once its worker is gone', async () => {
     const store = makeStore();
     await claimed(store);
 
-    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:30.000Z', 1)).toBe(false);
-    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z', 1)).toBe(true);
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T12:00:30.000Z', 1)).toEqual({
+      claimed: false,
+      refusedBy: 'claim',
+    });
+    expect(await store.claimDreamRun(11, 'v1', '2026-09-07T13:00:00.000Z', 1)).toEqual({ claimed: true });
   });
 
   it('refuses once a newer delivery took the claim', async () => {
