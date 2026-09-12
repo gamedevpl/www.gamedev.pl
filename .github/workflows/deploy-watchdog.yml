@@ -1,9 +1,4 @@
-# Tells somebody when master stopped reaching production, so nobody has to look.
-#
-# The deploy job is gated on master's CI concluding success, so a red master silently
-# skips every deploy: the merged PR was green, the merge commit is on master, and
-# production keeps serving the old revision with nothing saying so. See
-# infra/check-deploy-freshness.mjs.
+# Why this exists: docs/firestore-read-cost.md, "The deploy gate has no voice of its own".
 name: Deploy watchdog
 
 on:
@@ -20,6 +15,9 @@ concurrency:
   group: deploy-watchdog
   cancel-in-progress: false
 
+env:
+  ISSUE_TITLE: 'Deploy watchdog: master is not deployed'
+
 jobs:
   freshness:
     runs-on: ubuntu-latest
@@ -29,38 +27,49 @@ jobs:
         with:
           node-version: 20
 
+      # 0 deployed, 1 not deployed, 2 the check broke, 3 too early to judge.
       - id: check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if node infra/check-deploy-freshness.mjs > verdict.txt 2>&1; then
-            echo "stale=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "stale=true" >> "$GITHUB_OUTPUT"
-          fi
+          set +e
+          node infra/check-deploy-freshness.mjs > verdict.txt 2>&1
+          verdict=$?
+          set -e
           cat verdict.txt
+          echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+          # Its own failure must never read as a production incident.
+          if [ "$verdict" -eq 2 ]; then
+            echo '::error::deploy watchdog could not reach the GitHub API'
+            exit 1
+          fi
+
+      - id: issue
+        if: steps.check.outputs.verdict == '1' || steps.check.outputs.verdict == '0'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # One open issue, commented rather than duplicated: the mail is the point.
-      - if: steps.check.outputs.stale == 'true'
         run: |
-          existing="$(gh issue list --state open --json number,title \
-            --jq 'map(select(.title | startswith("Deploy watchdog:"))) | .[0].number // empty')"
-          body="$(printf 'Master has not reached production.\n\n```\n%s\n```\n\nThis is the failure mode from 2026-09-12: a green pull request merges, master CI is red for an unrelated reason, and every deploy is skipped while production serves the previous revision.\n' "$(cat verdict.txt)")"
-          if [ -n "$existing" ]; then
-            gh issue comment "$existing" --body "$body"
+          number="$(gh issue list --state open --search "$ISSUE_TITLE in:title" --limit 100 \
+            --json number,title --jq "map(select(.title == \"$ISSUE_TITLE\")) | .[0].number // empty")"
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+      - if: steps.check.outputs.verdict == '1'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXISTING: ${{ steps.issue.outputs.number }}
+        run: |
+          body="$(printf 'Master has not reached production. The verdict below says which of the causes it is.\n\n```\n%s\n```\n\nRun: %s/%s/actions/runs/%s\n' \
+            "$(cat verdict.txt)" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")"
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$body"
           else
-            gh issue create --title "Deploy watchdog: master is not deployed" --body "$body" --assignee gtanczyk
+            gh issue create --title "$ISSUE_TITLE" --body "$body" --assignee gtanczyk
           fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Closes itself, so the issue's state is the current answer and not a log.
-      - if: steps.check.outputs.stale == 'false'
-        run: |
-          existing="$(gh issue list --state open --json number,title \
-            --jq 'map(select(.title | startswith("Deploy watchdog:"))) | .[0].number // empty')"
-          if [ -n "$existing" ]; then
-            gh issue close "$existing" --comment "Master is deployed again: $(cat verdict.txt)"
-          fi
+      # Closed only on a definite yes, never on "too early to judge".
+      - if: steps.check.outputs.verdict == '0' && steps.issue.outputs.number != ''
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXISTING: ${{ steps.issue.outputs.number }}
+        run: |
+          gh issue close "$EXISTING" --comment "$(printf 'Master is deployed again.\n\n```\n%s\n```\n' "$(cat verdict.txt)")"

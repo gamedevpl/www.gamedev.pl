@@ -1,29 +1,25 @@
 #!/usr/bin/env node
-// Assert master's tip actually reached production, so nobody has to check by hand.
-//
-// The deploy job runs on `workflow_run` of CI and is gated on that run concluding
-// success, so a red master silently stops every deploy: the PR that merged was green,
-// its merge commit is on master, and production keeps serving the previous revision with
-// nothing anywhere saying so. That happened on 2026-09-12 — master had been red since a
-// direct push, and two merges deployed nothing.
-//
-// So this asks the only question that matters after a merge: does master's newest settled
-// commit have a *successful* deploy run? A skipped deploy (CI red) and a failed deploy
-// both answer no, which is the point — the failure modes look identical from the outside.
+// Why this exists: docs/firestore-read-cost.md, "The deploy gate has no voice of its own".
 //
 //   node infra/check-deploy-freshness.mjs
-//   GRACE_MINUTES=40 node infra/check-deploy-freshness.mjs
+//   GRACE_MINUTES=40 DEPLOY_TIMEOUT_MINUTES=60 node infra/check-deploy-freshness.mjs
 //
-// Needs GITHUB_TOKEN (or GH_TOKEN) with read access to actions.
+// Exit: 0 deployed, 1 not deployed, 2 the check itself failed, 3 too early to judge.
 
 const repo = process.env.GITHUB_REPOSITORY ?? 'gamedevpl/www.gamedev.pl';
 const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
 const graceMinutes = Number(process.env.GRACE_MINUTES ?? 25);
+const deployTimeoutMinutes = Number(process.env.DEPLOY_TIMEOUT_MINUTES ?? 45);
 const branch = process.env.DEPLOY_BRANCH ?? 'master';
+
+const DEPLOYED = 0;
+const STALE = 1;
+const BROKEN = 2;
+const TOO_EARLY = 3;
 
 if (!token) {
   console.error('Set GITHUB_TOKEN (or GH_TOKEN) with actions:read.');
-  process.exit(2);
+  process.exit(BROKEN);
 }
 
 async function api(path) {
@@ -36,52 +32,58 @@ async function api(path) {
   });
   if (!response.ok) {
     console.error(`GitHub API ${response.status} for ${path}`);
-    process.exit(2);
+    process.exit(BROKEN);
   }
   return response.json();
 }
 
-function minutesAgo(iso) {
-  return (Date.now() - Date.parse(iso)) / 60_000;
-}
+const minutesAgo = (iso) => (Date.now() - Date.parse(iso)) / 60_000;
 
 const runsFor = async (workflow) =>
   (await api(`/repos/${repo}/actions/workflows/${workflow}/runs?branch=${branch}&per_page=30`)).workflow_runs ?? [];
 
-const ciRuns = await runsFor('ci.yml');
-const settled = ciRuns.filter((run) => run.status === 'completed');
-// Newer commits may still be building; judging them would alarm on normal latency.
-const candidate = settled.find((run) => minutesAgo(run.updated_at) >= graceMinutes);
+// Only ever the newest settled run: an older one is a commit master has moved past.
+const newest = (await runsFor('ci.yml')).find((run) => run.status === 'completed');
 
-if (!candidate) {
-  console.log(`No CI run on ${branch} settled more than ${graceMinutes} minutes ago — nothing to judge yet.`);
-  process.exit(0);
+if (!newest) {
+  console.log(`No CI run on ${branch} has settled yet.`);
+  process.exit(TOO_EARLY);
+}
+if (minutesAgo(newest.updated_at) < graceMinutes) {
+  console.log(`${newest.head_sha.slice(0, 9)} settled ${Math.round(minutesAgo(newest.updated_at))}m ago; deploying.`);
+  process.exit(TOO_EARLY);
 }
 
-const sha = candidate.head_sha;
+const sha = newest.head_sha;
 const short = sha.slice(0, 9);
-
-if (candidate.conclusion !== 'success') {
-  console.error(`master CI is ${candidate.conclusion} at ${short} — every deploy since is skipped.`);
-  console.error(`  ${candidate.html_url}`);
-  process.exit(1);
-}
-
+// Before the CI conclusion: workflow_dispatch deploys carry no such gate.
 const deployRuns = (await runsFor('deploy.yml')).filter((run) => run.head_sha === sha);
 const deployed = deployRuns.find((run) => run.conclusion === 'success');
 
 if (deployed) {
   console.log(`${short} is deployed (${deployed.html_url}).`);
-  process.exit(0);
+  process.exit(DEPLOYED);
 }
 
-const pending = deployRuns.find((run) => run.status !== 'completed');
-if (pending) {
-  console.log(`${short} is still deploying (${pending.html_url}).`);
-  process.exit(0);
+const inFlight = deployRuns.find((run) => run.status !== 'completed');
+if (inFlight) {
+  const running = Math.round(minutesAgo(inFlight.created_at));
+  if (running <= deployTimeoutMinutes) {
+    console.log(`${short} has been deploying for ${running}m (${inFlight.html_url}).`);
+    process.exit(TOO_EARLY);
+  }
+  console.error(`${short} has been deploying for ${running}m, past ${deployTimeoutMinutes}m.`);
+  console.error(`  ${inFlight.html_url}`);
+  process.exit(STALE);
+}
+
+if (newest.conclusion !== 'success') {
+  console.error(`${branch} CI is ${newest.conclusion} at ${short}, so every deploy is skipped.`);
+  console.error(`  ${newest.html_url}`);
+  process.exit(STALE);
 }
 
 const latest = deployRuns[0];
-console.error(`${short} passed CI ${Math.round(minutesAgo(candidate.updated_at))} minutes ago and is not deployed.`);
+console.error(`${short} passed CI ${Math.round(minutesAgo(newest.updated_at))}m ago and is not deployed.`);
 console.error(latest ? `  deploy run ${latest.conclusion}: ${latest.html_url}` : '  no deploy run exists for it');
-process.exit(1);
+process.exit(STALE);
