@@ -2,12 +2,14 @@ name: Games catalog gate
 
 # Runs the games repository's real post-merge gate on public Actions minutes.
 # publish-games.yml calls this workflow before advancing the snapshot pointer.
-# mode=full on schedule / manual dispatch / GameKit merges: playtest --suite
-# default, no catalog agent-play. Those two are the Sunday 06:17 UTC seal
-# (cron '17 6 * * 0'); scoped still playtests touched slugs. A games-published
-# dispatch re-classifies the SHA with tools/gate-scope.mjs --event push so a
-# one-game merge does not wait on a full-catalog check:pr (measured ~40 min).
-# The daily snapshot is a cheap rebuild, not a second full-catalog seal.
+# mode=full on schedule / manual dispatch / universal GameKit (core/gfx/audio/…):
+# playtest --suite default, no catalog agent-play. Opt-in modules (gfx3d,
+# sensing, …) reverse-index to GAME.json consumers and run static + those slugs.
+# Those two catalog seals are the Sunday 06:17 UTC cron ('17 6 * * 0'); scoped
+# still playtests touched slugs. A games-published dispatch re-classifies the
+# SHA with tools/gate-scope.mjs --event push so a one-game merge does not wait
+# on a full-catalog check:pr (measured ~40 min). The daily snapshot is a cheap
+# rebuild, not a second full-catalog seal.
 
 on:
   workflow_call:

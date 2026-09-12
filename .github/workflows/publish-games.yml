@@ -7,8 +7,9 @@ name: Publish games snapshot
 # The games repo dispatches its exact SHA after a main push. This workflow
 # re-classifies that SHA (tools/gate-scope.mjs --event push) so a one-game
 # merge runs the scoped gate (~8–10 min) instead of check:pr over the catalog
-# (~40 min). GameKit / universal-module pushes stay full. A failed gate leaves
-# the previous snapshot pointer untouched.
+# (~40 min). Opt-in GameKit modules reverse-index to GAME.json consumers
+# (static + those slugs). Universal modules (core/gfx/audio/…) stay full.
+# A failed gate leaves the previous snapshot pointer untouched.
 #
 # Nothing needs to be redeployed afterwards. Running instances re-read the pointer
 # on its short TTL, so a publish becomes visible on its own within about a minute.

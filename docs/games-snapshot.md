@@ -128,9 +128,13 @@ That is also why a merge train cancelled in-progress publishes: the next push
 arrived before the 45-minute job finished, so `current.json` never moved. The
 scoped path is the same `check:game` the PR already attested, re-run on a
 clean runner, and WebKit is skipped on push because the PR already sealed it
-(`gate-scope.mjs` `eventName === 'push'`). GameKit / universal-module merges
-still pay the full catalog gate. The nightly 04:23 UTC run remains the
-cheap full rebuild; Sunday 06:17 UTC remains the catalog seal.
+(`gate-scope.mjs` `eventName === 'push'`). Opt-in GameKit modules
+(`gfx3d`, `sensing`, verticals, …) reverse-index to the games that select
+them in `GAME.json` and run `mode=static` on those slugs, with WebKit.
+Universal modules (`core`, `gfx`, `audio`, …) and `game-shell.css` still
+pay the full catalog gate — every published game loads them. The nightly
+04:23 UTC run remains the cheap full rebuild; Sunday 06:17 UTC remains the
+catalog seal.
 
 No redeploy is needed — instances re-read the pointer on its own TTL.
 
