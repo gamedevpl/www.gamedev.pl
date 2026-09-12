@@ -312,3 +312,14 @@ for one run or cancel before preparation starts. Unattended CLI runs never modif
 agy settings or open a permission picker.
 
 See the [Antigravity sandbox documentation](https://antigravity.google/docs/cli/sandbox/).
+
+### Muse waiting for approval
+
+Local Muse tasks can request permission without emitting the request on headless
+stdout. The CLI follows only the active session's journal under Muse's data
+home (`XDG_DATA_HOME`, or `~/.local/share`). When approval is pending, it stops
+that headless process and offers to resume the same session in interactive Muse.
+Answer or continue there, then exit to let the CLI verify the local checkout.
+No command is automatically approved, and choosing to return preserves local edits.
+Unattended runs stop and print the exact `muse resume <session-id>` command instead
+of opening a picker or delivering unverified work. Session logging must remain enabled.
