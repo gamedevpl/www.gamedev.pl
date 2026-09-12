@@ -23,7 +23,7 @@ async function harness() {
   return { store, assembler, list, poll, tick: (ms: number) => (clock += ms) };
 }
 
-// The Studio poll is 3s and the window is 5s, so most polls land past it.
+// A 3s poll against a 5s window: most polls miss.
 describe('build event reads under a three-second poll', () => {
   it('serves an unchanged feed from a one-document probe, not a full page', async () => {
     const { list, poll, tick } = await harness();
