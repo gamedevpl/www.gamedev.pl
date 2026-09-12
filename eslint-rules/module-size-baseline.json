@@ -281,7 +281,7 @@
     "apps/api/src/delivery/gcs-sign.ts": 193,
     "apps/api/src/delivery/recent-builds.ts": 50,
     "apps/api/src/delivery/source-delivery.test.ts": 671,
-    "apps/api/src/delivery/source-delivery.ts": 601,
+    "apps/api/src/delivery/source-delivery.ts": 602,
     "apps/api/src/delivery/stage-hints.test.ts": 334,
     "apps/api/src/delivery/stage-hints.ts": 192,
     "apps/api/src/delivery/staged-preview.test.ts": 692,

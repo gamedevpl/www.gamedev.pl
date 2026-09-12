@@ -21,7 +21,7 @@ import { createTranslatorFromEnv, type Translator } from '../platform/translate.
 import type { TypecheckPreflightResult } from '../creation/typecheck-preflight.js';
 import type { StagedPreviewPublisher } from './staged-preview.js';
 import type { ContentChecker, RejectCategory } from '../platform/moderation.js';
-import { refuseDeliveredProse } from './delivery-moderation.js';
+import { createDeliveryModerationGate } from './delivery-moderation.js';
 
 export interface SourceDeliveryAuthority {
   backend: string; // Backend identity recorded at dispatch time.
@@ -240,6 +240,8 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
   const translator = options.translator ?? createTranslatorFromEnv();
   const maxSubmitsPerWindow = options.maxSubmitsPerWindow ?? DEFAULT_MAX_SUBMITS_PER_WINDOW;
   const submitsByBuild = new Map<number, number[]>();
+  // Built once: the pass cache has to outlive a single delivery.
+  const proseGate = createDeliveryModerationGate({ contentChecker: options.contentChecker, now });
 
   // Burst smoothing only: in-memory, so the durable caps do the real work.
   function isRateLimited(jobId: number): boolean {
@@ -341,8 +343,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       }
 
       // After every cap, so a flood cannot buy itself an inference call.
-      const proseRefusal = await refuseDeliveredProse({
-        contentChecker: options.contentChecker,
+      const proseRefusal = await proseGate.refuse({
         files: input.files,
         uid: record.ownerUid,
         log: options.log?.warn ? { warn: options.log.warn } : null,

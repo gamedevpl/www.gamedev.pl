@@ -149,6 +149,32 @@ describe('delivered prose moderation', () => {
     expect(total).toBeLessThanOrEqual(MAX_SPEC_CHARS + MAX_MANIFEST_CHARS);
   });
 
+  it('asks once for prose that has not changed, and again when it has', async () => {
+    // Code-only iteration is the common case; it costs no calls.
+    const contentChecker = checker({ allowed: true });
+    const { service } = await setup({ contentChecker });
+
+    await deliver(service);
+    await deliver(service, [...FILES, { path: 'style.css', content: 'body{}' }]);
+    expect(contentChecker.checkFields).toHaveBeenCalledTimes(1);
+
+    await deliver(service, [
+      { path: 'SPEC.md', content: '---\ntitle: Prose Comet\n---\nNow it is about something else.' },
+      { path: 'GAME.json', content: JSON.stringify({ title: { en: 'Comet', pl: 'Kometa' } }) },
+      { path: 'game.ts', content: 'export {};' },
+    ]);
+    expect(contentChecker.checkFields).toHaveBeenCalledTimes(2);
+  });
+
+  it('never caches a refusal into a pass', async () => {
+    const contentChecker = checker({ allowed: false, category: 'hate' });
+    const { service } = await setup({ contentChecker });
+
+    expect(await deliver(service)).toMatchObject({ rejected: 'content_rejected' });
+    expect(await deliver(service)).toMatchObject({ rejected: 'content_rejected' });
+    expect(contentChecker.checkFields).toHaveBeenCalledTimes(2);
+  });
+
   it('costs nothing when a cap already refused the delivery', async () => {
     // R12: twelve routes pay for moderation before their quota. Not this one.
     const contentChecker = checker({ allowed: true });

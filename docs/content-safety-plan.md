@@ -114,6 +114,13 @@ this is the half of its mitigation that reads the artifact.
   `MAX_MANIFEST_CHARS` (2000) across every manifest string, the same order of magnitude the
   prompt path already sends. Without the cap one delivery could hand the classifier 160k
   characters and starve its own retry and fallback.
+- **Prose that already passed is not re-asked.** Most deliveries in a session change code,
+  not text. The gate keys a bounded LRU on a hash of the exact prose it sent and skips the
+  call for 30 minutes, so a creator iterating on `game.ts` pays for one verdict, not ten.
+  Only passes are cached — a refusal is re-asked every time, and a test guards that, because
+  caching a refusal would be the same mistake in the other direction. The cache is
+  per-process, like `VertexChecker`'s own: an instance that has not seen the text asks
+  again, which costs a call and never weakens the answer.
 - Two things that cap therefore does **not** cover, stated rather than implied: prose past
   the first 4000 characters of a long SPEC.md, and **images** — a PNG under `images/` is
   checked for shape and size, never for what it depicts. Layer 4 is what stands in front of
