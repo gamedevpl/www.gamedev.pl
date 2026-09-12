@@ -25,7 +25,13 @@ export interface DraftPreviewRoutesOptions {
 export interface DraftPreviewRoutesHandle {
   // Null refuses. A grant names the exact version it authorized.
   canPlayDraft(request: FastifyRequest, slug: string): Promise<DraftGrant | null>;
-  replyWithDraft(request: FastifyRequest, reply: FastifyReply, jobId: number, versionOverride?: string): Promise<void>;
+  // Returns the reply, so a caller's `return` reads as answered.
+  replyWithDraft(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    jobId: number,
+    versionOverride?: string,
+  ): Promise<FastifyReply>;
 }
 
 // Serves a build's playable HTML to its owner or sharer.
@@ -126,7 +132,7 @@ export async function registerDraftPreviewRoutes(
     reply: FastifyReply,
     jobId: number,
     versionOverride?: string,
-  ): Promise<void> {
+  ): Promise<FastifyReply> {
     const serveLastKnown = (reason: string, err?: unknown): boolean => {
       if (versionOverride) return false;
       const lastKnown = draftPreviewCache.get(jobId);
@@ -140,25 +146,23 @@ export async function registerDraftPreviewRoutes(
     const record = gamesStore ? await store?.getSubmission(jobId) : null;
     if (record) {
       try {
-        if (await replyWithStoredDraft(request, reply, record, versionOverride)) return;
+        if (await replyWithStoredDraft(request, reply, record, versionOverride)) return reply;
       } catch (error) {
         // No hygiene-error branch: this path never assembles, only serves bytes.
-        if (serveLastKnown('stored draft read failed; serving last known draft', error)) return;
+        if (serveLastKnown('stored draft read failed; serving last known draft', error)) return reply;
 
         // No second source left — this is a failure, not a pending state.
         request.log.error({ err: error, jobId }, 'stored draft preview failed');
-        reply.status(502).send({ error: 'failed to load preview' });
-        return;
+        return reply.status(502).send({ error: 'failed to load preview' });
       }
     }
-    if (serveLastKnown('no delivery yet for native job; serving last known draft')) return;
+    if (serveLastKnown('no delivery yet for native job; serving last known draft')) return reply;
     // No store means no delivery can ever land — nothing to wait for.
     if (!gamesStore) {
       request.log.error({ jobId }, 'preview requested for a native job with no games store configured');
-      reply.status(503).send({ error: 'previews are not configured on this deployment' });
-      return;
+      return reply.status(503).send({ error: 'previews are not configured on this deployment' });
     }
-    reply.status(409).send({ error: 'no preview available for this submission yet' });
+    return reply.status(409).send({ error: 'no preview available for this submission yet' });
   }
 
   // Only reachable by the token holder for that specific submission.

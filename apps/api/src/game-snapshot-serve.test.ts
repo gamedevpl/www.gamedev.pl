@@ -193,7 +193,8 @@ describe('playing a published game', () => {
 });
 
 describe('the catalog', () => {
-  it('asks Firestore about erased owners once a window, not once an arrival', async () => {
+  it('asks Firestore about erased owners on every request, so an erasure never waits', async () => {
+    // Uncached on purpose: a cache would hide an erasure for a window.
     const { githubClient } = createGithubStub([catalogEntry('from-github')]);
     const store = new InMemoryStore();
     const erased = vi.spyOn(store, 'listSubmissionsByOwner');
@@ -202,7 +203,7 @@ describe('the catalog', () => {
     await app.inject({ method: 'GET', url: '/api/catalog' });
     await app.inject({ method: 'GET', url: '/api/catalog' });
 
-    expect(erased).toHaveBeenCalledTimes(1);
+    expect(erased).toHaveBeenCalledTimes(2);
     await app.close();
   });
 

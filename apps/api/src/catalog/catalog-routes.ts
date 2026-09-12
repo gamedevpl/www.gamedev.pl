@@ -12,12 +12,11 @@ import {
   type MintBudgetLimits,
 } from '../platform/media-mint-budget.js';
 import { attachCatalogEnrichments } from './catalog-enricher.js';
-import { createDeattributor } from './erased-attribution.js';
 import { profileBylineName, toPublicCreatorProfile } from '../platform/creator-profile.js';
 import { isVariantWidth } from '../platform/image-variants.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
 import { sendMedia } from '../platform/media-response.js';
-import { type Store } from '../platform/store.js';
+import { DELETED_ACCOUNT_UID, type Store } from '../platform/store.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { isPublished } from '../platform/publication-state.js';
 import { isPublishedEntry } from '@gamedevpl/contract';
@@ -308,7 +307,16 @@ export async function registerCatalogRoutes(
     }
   }
 
-  const deattributeDeletedOwners = createDeattributor({ store, now });
+  // Uncached: an erasure shows on the next request, not the next window.
+  async function deattributeDeletedOwners(entries: CatalogGameEntry[]): Promise<CatalogGameEntry[]> {
+    if (!store) return entries;
+    const erased = await store.listSubmissionsByOwner(DELETED_ACCOUNT_UID);
+    const slugs = new Set(erased.flatMap((submission) => (submission.slug ? [submission.slug] : [])));
+    if (slugs.size === 0) return entries;
+    return entries.map((entry) =>
+      slugs.has(entry.slug) ? { ...entry, submittedBy: 'gamedev-platform', creatorHandle: null } : entry,
+    );
+  }
 
   function invalidatePublishedGameCache(slug: string): void {
     storeCatalogCache = null;
