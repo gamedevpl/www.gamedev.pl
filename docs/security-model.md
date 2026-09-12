@@ -129,16 +129,22 @@ limiter, whose annotation its report sink relies on. Every response carries `X-C
 only to some response classes. HTML documents — the SPA shell, the OAuth
 consent and device pages, the CLI page — additionally carry:
 
-- `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY`. Nothing this
-  service serves as a top-level document is meant to be embedded by another site. Games are
-  not top-level documents here: the shell renders them itself from `blob:`/`srcdoc` in the
-  sandboxed iframe, which no response header reaches. The sandboxed build preview that the
-  studio frames by URL (`delivery/creator-media.ts`) writes its own policy and deliberately
-  omits `frame-ancestors`: the web app may live on a different origin than the API
-  (`VITE_API_BASE_URL`, and every dev setup), and the rule would block the studio from
-  framing its own preview there. A route that has written a CSP owns its embedding story and
-  the hook leaves it alone. MCP Apps views travel inside the MCP protocol, not as HTTP
-  documents, so they are unaffected and need no exemption.
+- `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY` on HTML
+  documents, **except** the play permalink (`/play/<slug>` and the `/ay/` `/ai/` aliases,
+  without a trailing slash).
+  Those allow any parent (`frame-ancestors *`) and omit `X-Frame-Options` — `DENY` would
+  still block a host CSP allows. The SPA never loads the game in that frame: it shows an
+  interstitial (open in a new window, or `target="_top"`) so a third-party page cannot
+  sit on the theater. Login, admin, studio, OAuth, and `/` stay denied. Games themselves
+  are not top-level documents here: the shell renders them from `blob:`/`srcdoc` in the
+  sandboxed iframe, which no response header reaches. The sandboxed build preview that
+  the studio frames by URL
+  (`delivery/creator-media.ts`) writes its own policy and deliberately omits `frame-ancestors`:
+  the web app may live on a different origin than the API (`VITE_API_BASE_URL`, and every
+  dev setup), and the rule would block the studio from framing its own preview there. A route
+  that has written a CSP owns its embedding story and the hook leaves it alone. MCP Apps
+  views travel inside the MCP protocol, not as HTTP documents, so they are unaffected and
+  need no exemption.
 - `Permissions-Policy` switching off only what the product never uses (geolocation, payment,
   USB, display capture). Microphone, camera and motion sensors are deliberately not named:
   the shell owns the first two and delegates the sensors to the game frame via `allow=`, and
@@ -167,8 +173,10 @@ credentials operated by gamedev.pl. Historical details are available in Git hist
 
 - Games render only in `sandbox="allow-scripts allow-pointer-lock"` without `allow-same-origin`.
 - HTML documents served by the app carry `frame-ancestors 'none'` / `X-Frame-Options: DENY`
-  unless the route wrote its own CSP; the game iframe's sandbox is never relaxed to make a
-  header fit, and the app-level CSP stays report-only until its reports say otherwise.
+  unless the route wrote its own CSP or is a play permalink (`frame-ancestors *`, and the
+  SPA shows an interstitial rather than the game); the game iframe's sandbox is never
+  relaxed to make a header fit, and the app-level CSP stays report-only until its reports
+  say otherwise.
 - The game iframe's `allow=` delegation is pinned to exactly
   `accelerometer; gyroscope; magnetometer` (opt-in GameKit tilt) and never grows —
   asserted by `apps/web/src/GameFrame.sandbox.test.ts`. In particular it never includes

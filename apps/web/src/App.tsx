@@ -25,6 +25,7 @@ import { CreatorProfilePage } from './CreatorProfilePage.js';
 import { GamePage } from './GamePage.js';
 import { GameDetailPage } from './GameDetailPage.js';
 import { NotFoundPage } from './NotFoundPage.js';
+import { FramedPlayInterstitial } from './FramedPlayInterstitial.js';
 import { PublicPlayView } from './PublicPlayView.js';
 import { AppUpdateBanner } from './AppUpdateBanner.js';
 import { InstallPrompt } from './InstallPrompt.js';
@@ -291,6 +292,10 @@ export function App() {
   // useless without a valid room token, which only an allowlisted host can mint.
   if (route.view === 'join') {
     return <ControllerView code={route.code} token={route.token} />;
+  }
+
+  if (route.view === 'play' && window.parent !== window) {
+    return <FramedPlayInterstitial slug={route.slug} />;
   }
 
   // Ahead of both the loading screen and the beta gate on purpose. The privacy policy

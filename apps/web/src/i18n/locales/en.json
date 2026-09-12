@@ -1193,6 +1193,12 @@
       "again": "Again"
     }
   },
+  "framedPlay": {
+    "headline": "Open this game in a new window",
+    "sub": "This page was opened inside another site. Play it on gamedev.pl instead — same game, full screen.",
+    "openNew": "Open in a new window",
+    "openHere": "Open here"
+  },
   "betaInvite": {
     "headline": "You've been invited to the closed beta.",
     "sub": "This link is for one person. Sign in with the account you want to use.",
