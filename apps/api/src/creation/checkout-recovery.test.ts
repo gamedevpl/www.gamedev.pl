@@ -1,3 +1,4 @@
+import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -25,6 +26,7 @@ async function fixture(owner = 'owner', state: 'canceled' | 'queued' = 'canceled
   if (state === 'canceled') await store.setSubmissionAbandoned(1, '2026-01-02');
   const app = Fastify();
   apps.push(app);
+  await app.register(rateLimit, { global: false });
   app.addHook('preHandler', async (req) => {
     req.user = { uid: 'owner' } as typeof req.user;
   });
@@ -241,4 +243,16 @@ it('admits one concurrent recovery before creation spends and reuses its result'
   const retry = await f.app.inject({ method: 'POST', url: '/api/me/studio/recover', payload: body });
   expect(retry.json()).toEqual(completed.json());
   expect(f.createGame).toHaveBeenCalledTimes(1);
+});
+
+it('rate limits refused recoveries before writing admission locks', async () => {
+  const f = await fixture('owner', 'queued');
+  const begin = vi.spyOn(f.store, 'beginCheckoutRecovery');
+  for (let i = 0; i < 10; i++) {
+    const response = await f.app.inject({ method: 'POST', url: '/api/me/studio/recover', payload: payload() });
+    expect(response.statusCode).toBe(409);
+  }
+  const response = await f.app.inject({ method: 'POST', url: '/api/me/studio/recover', payload: payload() });
+  expect(response.statusCode).toBe(429);
+  expect(begin).toHaveBeenCalledTimes(10);
 });

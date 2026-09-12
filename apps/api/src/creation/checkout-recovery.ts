@@ -49,48 +49,52 @@ export function registerCheckoutRecovery(
     const status = await inspect(request.params.slug, request.user!.uid);
     return { kind: status.kind };
   });
-  app.post('/api/me/studio/recover', { bodyLimit: 20_000 }, async (request, reply) => {
-    if (!deps.checkUserAccess(request, reply)) return;
-    if (!deps.store || !deps.submissionTokenSecret) return reply.code(503).send({ error: 'unavailable' });
-    const parsed = Body.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: 'invalid recovery request' });
-    const { slug, key, title, concept } = parsed.data;
-    const nonce = randomUUID();
-    if (!(await deps.store.beginCheckoutRecovery(slug, nonce, Date.now())))
-      return reply.code(409).send({
-        error: 'recovery_in_progress',
-        message: 'Recovery is already running. Retry shortly with the same recovery key.',
-      });
-    try {
-      const status = await inspect(slug, request.user!.uid);
-      if ('holder' in status && status.holder?.recoveryKey === key) {
-        if (['canceled', 'abandoned', 'failed', 'published'].includes(status.holder.state ?? ''))
-          return reply.code(409).send({
-            error: 'recovery_changed',
-            message:
-              'The recovery round has ended. Run recovery again to start a new draft; your local files are safe.',
-          });
-        return { slug, token: mintToken(status.holder.jobId, deps.submissionTokenSecret) };
+  app.post(
+    '/api/me/studio/recover',
+    { bodyLimit: 20_000, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      if (!deps.checkUserAccess(request, reply)) return;
+      if (!deps.store || !deps.submissionTokenSecret) return reply.code(503).send({ error: 'unavailable' });
+      const parsed = Body.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'invalid recovery request' });
+      const { slug, key, title, concept } = parsed.data;
+      const nonce = randomUUID();
+      if (!(await deps.store.beginCheckoutRecovery(slug, nonce, Date.now())))
+        return reply.code(409).send({
+          error: 'recovery_in_progress',
+          message: 'Recovery is already running. Retry shortly with the same recovery key.',
+        });
+      try {
+        const status = await inspect(slug, request.user!.uid);
+        if ('holder' in status && status.holder?.recoveryKey === key) {
+          if (['canceled', 'abandoned', 'failed', 'published'].includes(status.holder.state ?? ''))
+            return reply.code(409).send({
+              error: 'recovery_changed',
+              message:
+                'The recovery round has ended. Run recovery again to start a new draft; your local files are safe.',
+            });
+          return { slug, token: mintToken(status.holder.jobId, deps.submissionTokenSecret) };
+        }
+        if (status.kind === 'active' || status.kind === 'occupied')
+          return reply
+            .code(409)
+            .send({ error: 'slug_unavailable', message: 'Choose another slug; existing games are never overwritten.' });
+        const created = await deps.createGame({
+          uid: request.user!.uid,
+          ip: request.clientIp,
+          payload: { title, concept, builder: 'self' },
+          recovery: {
+            slug,
+            sourceJobId: status.kind === 'canceled' || status.kind === 'archived' ? status.holder.jobId : null,
+            key,
+          },
+          log: request.log,
+        });
+        if (!created.ok) return reply.code(created.status).send({ error: created.error, category: created.category });
+        return { slug: created.slug, token: mintToken(created.jobId, deps.submissionTokenSecret) };
+      } finally {
+        await deps.store.finishCheckoutRecovery(slug, nonce);
       }
-      if (status.kind === 'active' || status.kind === 'occupied')
-        return reply
-          .code(409)
-          .send({ error: 'slug_unavailable', message: 'Choose another slug; existing games are never overwritten.' });
-      const created = await deps.createGame({
-        uid: request.user!.uid,
-        ip: request.clientIp,
-        payload: { title, concept, builder: 'self' },
-        recovery: {
-          slug,
-          sourceJobId: status.kind === 'canceled' || status.kind === 'archived' ? status.holder.jobId : null,
-          key,
-        },
-        log: request.log,
-      });
-      if (!created.ok) return reply.code(created.status).send({ error: created.error, category: created.category });
-      return { slug: created.slug, token: mintToken(created.jobId, deps.submissionTokenSecret) };
-    } finally {
-      await deps.store.finishCheckoutRecovery(slug, nonce);
-    }
-  });
+    },
+  );
 }
