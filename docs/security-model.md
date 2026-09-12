@@ -130,7 +130,8 @@ only to some response classes. HTML documents — the SPA shell, the OAuth
 consent and device pages, the CLI page — additionally carry:
 
 - `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY` on HTML
-  documents, **except** the play permalink (`/play/<slug>` and the `/ay/` `/ai/` aliases).
+  documents, **except** the play permalink (`/play/<slug>` and the `/ay/` `/ai/` aliases,
+  without a trailing slash).
   Those allow any parent (`frame-ancestors *`) and omit `X-Frame-Options` — `DENY` would
   still block a host CSP allows. The SPA never loads the game in that frame: it shows an
   interstitial (open in a new window, or `target="_top"`) so a third-party page cannot

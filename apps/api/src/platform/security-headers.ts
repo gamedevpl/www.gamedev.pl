@@ -58,8 +58,8 @@ function isHtmlDocument(reply: FastifyReply): boolean {
 }
 
 export function isPlayPermalinkPath(url: string): boolean {
-  const path = url.split('?')[0] ?? url;
-  const pathname = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
+  // Trailing slash is not a play route; the SPA 404s it.
+  const pathname = url.split('?')[0] ?? url;
   return PLAY_PERMALINK.test(pathname);
 }
 

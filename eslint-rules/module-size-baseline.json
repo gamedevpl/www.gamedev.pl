@@ -403,7 +403,7 @@
     "apps/api/src/platform/openai-apps-challenge.test.ts": 66,
     "apps/api/src/platform/openai-apps-challenge.ts": 46,
     "apps/api/src/platform/rate-limit.ts": 18,
-    "apps/api/src/platform/security-headers.test.ts": 211,
+    "apps/api/src/platform/security-headers.test.ts": 218,
     "apps/api/src/platform/server.ts": 27,
     "apps/api/src/platform/slug-ownership.ts": 48,
     "apps/api/src/platform/slug.test.ts": 65,

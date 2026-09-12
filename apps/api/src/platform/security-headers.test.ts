@@ -72,6 +72,12 @@ describe('security headers', () => {
     expect(res.headers['x-frame-options']).toBe(X_FRAME_OPTIONS);
   });
 
+  it('does not let a parent frame a trailing-slash play path', async () => {
+    const res = await app.inject({ method: 'GET', url: '/play/unicorn-snap/' });
+    expect(res.headers['content-security-policy']).toBe(FRAME_ANCESTORS_NONE);
+    expect(res.headers['x-frame-options']).toBe(X_FRAME_OPTIONS);
+  });
+
   it('puts baseline hardening headers on every response, JSON included', async () => {
     for (const url of ['/api/health', '/api/auth/me', '/']) {
       const res = await app.inject({ method: 'GET', url });
@@ -159,11 +165,12 @@ describe('isPlayPermalinkPath', () => {
   it('accepts catalog play permalinks a parent may iframe', () => {
     expect(isPlayPermalinkPath('/play/unicorn-snap')).toBe(true);
     expect(isPlayPermalinkPath('/play/rainbow-surfer?x=1')).toBe(true);
-    expect(isPlayPermalinkPath('/ai/seventh-color/')).toBe(true);
+    expect(isPlayPermalinkPath('/ai/seventh-color')).toBe(true);
   });
   it('rejects everything else', () => {
     expect(isPlayPermalinkPath('/')).toBe(false);
     expect(isPlayPermalinkPath('/play/')).toBe(false);
+    expect(isPlayPermalinkPath('/play/unicorn-snap/')).toBe(false);
     expect(isPlayPermalinkPath('/play/-bad')).toBe(false);
     expect(isPlayPermalinkPath('/admin')).toBe(false);
     expect(isPlayPermalinkPath('/draft/unicorn-snap')).toBe(false);
