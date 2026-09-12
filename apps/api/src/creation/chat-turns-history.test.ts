@@ -23,6 +23,21 @@ describe('reconstructChatTurns', () => {
     ]);
   });
 
+  it('never answers a creator line with a concept card', () => {
+    const card: CreatorMessage = {
+      ...msg('I sketched two directions for the next round. Tap one to see it.', 'studio'),
+      proposal: { sourceRef: 's1', version: 'v1', options: [] },
+    };
+
+    // Dropped, not flushed: the ack that follows is still the answer.
+    expect(reconstructChatTurns([msg('make it blue'), card, msg('On it!', 'studio_ack')])).toEqual([
+      { message: 'make it blue', built: true, ackText: 'On it!' },
+    ]);
+
+    // With nothing after it, the request is still an unanswered build.
+    expect(reconstructChatTurns([msg('make it blue'), card])).toEqual([{ message: 'make it blue', built: true }]);
+  });
+
   it('keeps continue_draft paraphrases as agent turns, preferring textLocalized', () => {
     const relayed: CreatorMessage = {
       ...msg('Zoom out the battlefield.', 'agent'),
