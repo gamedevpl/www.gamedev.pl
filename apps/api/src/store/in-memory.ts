@@ -96,7 +96,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
   private roundsStore = new InMemoryRoundsStore(this.submissions);
   private roundBudgetStore = new InMemoryRoundBudgetStore(this.submissions);
   private dispatchStore = new InMemoryDispatchStore(this.submissions);
-  protected submissionStore = new InMemorySubmissionStore(this.submissions);
+  protected submissionStore = new InMemorySubmissionStore(this.submissions, this.publicationStore);
   private submissionQueryStore = new InMemorySubmissionQueryStore(this.submissions);
   private buildLogStore = new InMemoryBuildLogStore(this.submissions);
   private buildMediaStore = new InMemoryBuildMediaStore();

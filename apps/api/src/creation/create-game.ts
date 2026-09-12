@@ -5,11 +5,12 @@ import type { ManagedAvailabilityGate } from '../agent-surface/managed-availabil
 import { MANAGED_UNAVAILABLE_ERROR } from '../platform/managed-builder-error.js';
 import type { ManagedUnavailableReason } from '../agent-surface/managed-availability.js';
 import type { GitHubClient } from '../catalog/github-client.js';
+import { claimAvailableSlug } from '../platform/atomic-slug-claim.js';
 import { mintGameSlug } from '../platform/slug.js';
 import { storeCreatorReferenceImages } from '../platform/creator-media-store.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
-import { isModerationBlock, rejectionFor, type ContentChecker  } from '../platform/moderation.js';
+import { isModerationBlock, rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import type { Store } from '../platform/store.js';
 import { countCreatorClarifications, sanitizeCreatorText, splitConceptBrief } from '../platform/submission-status.js';
 import { mintToken } from '../platform/submission-token.js';
@@ -30,21 +31,13 @@ const CreateSubmissionRequestSchema = z.object({
     .max(4000, 'concept must be at most 4000 characters'),
   displayName: z.string().trim().max(40, 'display name must be at most 40 characters').optional(),
 
-  // The creator's language, so the agent reports progress in it.
   locale: z.string().trim().max(10).optional(),
 
-  // Who builds this round; defaults to platform.
-
-  // Accepted by the API so routing stays testable without the Studio card.
   builder: z.enum(BUILDERS).optional(),
 
-  // Moodboard reference for the builder agent, not instructions.
   referenceImages: ReferenceImagesSchema.optional(),
 });
 
-// The issue body a dispatch carries, also rebuilt from stored spec.
-
-// Privacy invariant: the creator uid never reaches a GitHub issue.
 export function buildDispatchIssueBody(input: { title: string; concept: string; displayName?: string }): string {
   return [
     'New game spec submitted via www.gamedev.pl.',
@@ -82,22 +75,19 @@ export interface CreateGameDeps {
   submissionsByIp: Map<string, number[]>;
   isSlugClaimed: (slug: string) => Promise<boolean>;
   confirmSlugClaim: (jobId: number, wanted: string, title: string) => Promise<string | null>;
-  // First dispatch from the stored brief, atomically claimed (dispatch-build.ts).
-  dispatchQueuedJob: (input: { jobId: number; log: { error: (context: object, message: string) => void } }) => Promise<unknown>;
-  // Hands dispatch to /api/internal/seed; false means run it here.
+  dispatchQueuedJob: (input: {
+    jobId: number;
+    log: { error: (context: object, message: string) => void };
+  }) => Promise<unknown>;
   enqueueSeed?: (jobId: number) => Promise<boolean>;
 }
 
-// The whole creation path: validate, limit, moderate, gate, quota, slug, dispatch.
-
-// Lifted out of the route so MCP create_game runs this same sequence.
-
-// Returns a result, not a reply, so each transport maps it itself.
 export function createGameCreator(deps: CreateGameDeps): {
   createGame: (input: {
     uid: string;
     ip: string;
     payload: unknown;
+    recovery?: { slug: string; sourceJobId: number | null; key: string };
     acceptLanguage?: string;
     openedBy?: 'creator' | 'agent';
     log: { error: (context: object, message: string) => void; info?: (context: object, message: string) => void };
@@ -126,11 +116,9 @@ export function createGameCreator(deps: CreateGameDeps): {
     uid: string;
     ip: string;
     payload: unknown;
+    recovery?: { slug: string; sourceJobId: number | null; key: string };
     acceptLanguage?: string;
 
-    // Who asked. Recorded on the queued transition, like agent_open_round.
-
-    // Without it an MCP creation is indistinguishable from a Studio self-build.
     openedBy?: 'creator' | 'agent';
     log: { error: (context: object, message: string) => void; info?: (context: object, message: string) => void };
   }): Promise<CreateGameResult> {
@@ -138,7 +126,6 @@ export function createGameCreator(deps: CreateGameDeps): {
       return { ok: false, status: 503, error: 'submissions are not configured' };
     }
 
-    // 1. Validate request payload first
     const parsed = CreateSubmissionRequestSchema.safeParse(input.payload);
     if (!parsed.success) {
       return { ok: false, status: 400, error: parsed.error.issues[0]?.message ?? 'invalid request' };
@@ -147,18 +134,10 @@ export function createGameCreator(deps: CreateGameDeps): {
     const currentTime = now();
     const dateStr = new Date(currentTime).toISOString().slice(0, 10);
 
-    // Coarse per-IP limit, ahead of moderation on purpose.
-
-    // Moderation is a paid call per field.
-
-    // Limiting after it would cap submissions but not the spend.
     if (isRateLimited(submissionsByIp, input.ip, currentTime, maxSubmissionsPerWindow, rateLimitWindowMs)) {
       return { ok: false, status: 429, error: 'too many submissions, please try again later' };
     }
 
-    // Quota headroom, read-only, for the same reason as the limiter.
-
-    // Spent further down, after moderation, so a refusal costs nothing.
     if (store) {
       const headroom = await peekQuota(store, input.uid, dateStr, dailySubmissionQuota, 'submissions');
       if (!headroom.allowed) {
@@ -167,7 +146,6 @@ export function createGameCreator(deps: CreateGameDeps): {
       }
     }
 
-    // Moderation before any quota is spent; see the content safety plan.
     const moderation = await contentChecker.checkFields([parsed.data.title, parsed.data.concept]);
     if (!moderation.allowed) {
       const rejection = rejectionFor(moderation);
@@ -175,9 +153,6 @@ export function createGameCreator(deps: CreateGameDeps): {
       return { ok: false, status: rejection.status, error: rejection.error, category: rejection.category };
     }
 
-    // The global circuit-breaker: pause switch and shared daily ceiling.
-
-    // Ahead of the per-user quota, so a refusal here costs nothing.
     if (creationGate) {
       const gate = await creationGate.checkAndSpend(input.uid, dateStr);
       if (!gate.allowed) {
@@ -185,7 +160,6 @@ export function createGameCreator(deps: CreateGameDeps): {
       }
     }
 
-    // Ahead of quota, same as the breaker above; self is never gated.
     const requestedBuilder: BuilderKind = parsed.data.builder ?? 'platform';
     if (requestedBuilder === 'platform' && managedAvailabilityGate) {
       const availability = await managedAvailabilityGate.checkAndSpend(input.uid, dateStr);
@@ -194,7 +168,6 @@ export function createGameCreator(deps: CreateGameDeps): {
       }
     }
 
-    // 6. User daily quota check (only increment after payload & IP checks pass)
     if (store) {
       const quota = await store.checkAndIncrementQuota(input.uid, dateStr, dailySubmissionQuota, 'submissions');
       if (!quota.allowed) {
@@ -202,14 +175,6 @@ export function createGameCreator(deps: CreateGameDeps): {
         return { ok: false, status: 429, error: 'daily submission quota exceeded' };
       }
     }
-
-    // Three sources, most specific first; the third exists for MCP.
-
-    // A chat client is not a browser; it sends no accept-language.
-
-    // Eight self-build games landed on English for a Polish creator.
-
-    // normalizeLocale collapses undefined to English, so check before it runs.
 
     // Otherwise nobody-said and said-English collapse into one input.
     const declaredLocale = parsed.data.locale ?? input.acceptLanguage?.split(',')[0];
@@ -235,15 +200,33 @@ export function createGameCreator(deps: CreateGameDeps): {
       if (!store) {
         return { ok: false, status: 503, error: 'submissions are unavailable' };
       }
-      const wanted = await mintGameSlug(sanitizedTitle, (candidate) => isSlugClaimed(candidate));
+      const wanted =
+        input.recovery?.slug ?? (await mintGameSlug(sanitizedTitle, (candidate) => isSlugClaimed(candidate)));
 
       const jobId = await store.allocateJobId();
       await store.createSubmission(jobId, input.uid, sanitizedTitle);
-      await store.setSubmissionSlug(jobId, wanted);
+      if (input.recovery) {
+        if (
+          !(await store.claimSubmissionSlug(jobId, wanted, input.recovery.sourceJobId, {
+            key: input.recovery.key,
+            spec: sanitizedConcept,
+            locale: creatorLocale,
+          }))
+        ) {
+          await store.setSubmissionAbandoned(jobId, new Date(now()).toISOString());
+          return { ok: false, status: 409, error: 'recovery_changed' };
+        }
+        return { ok: true, jobId, slug: wanted };
+      }
+      const claimed = await claimAvailableSlug(store, jobId, wanted, sanitizedTitle, isSlugClaimed);
+      if (!claimed) {
+        await store.setSubmissionAbandoned(jobId, new Date(now()).toISOString());
+        return { ok: false, status: 409, error: 'name_unavailable' };
+      }
       // Best effort: an invalid image is dropped, never blocking creation.
       await storeCreatorReferenceImages(store, jobId, parsed.data.referenceImages);
 
-      const slug = await confirmSlugClaim(jobId, wanted, sanitizedTitle);
+      const slug = await confirmSlugClaim(jobId, claimed, sanitizedTitle);
       if (!slug) {
         await store.setSubmissionAbandoned(jobId, new Date(now()).toISOString());
         input.log.error({ jobId, slug: wanted }, 'could not claim a slug for a new submission');
@@ -304,6 +287,7 @@ export interface CreateGameRouteDeps {
     uid: string;
     ip: string;
     payload: unknown;
+    recovery?: { slug: string; sourceJobId: number | null; key: string };
     acceptLanguage?: string;
     log: { error: (context: object, message: string) => void; info?: (context: object, message: string) => void };
   }) => Promise<CreateGameResult>;

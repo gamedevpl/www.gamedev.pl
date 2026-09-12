@@ -1,4 +1,5 @@
 export const SLASH_VERBS = [
+  'recover',
   'agents',
   'model',
   'logs',
@@ -34,6 +35,7 @@ export function completeSlash(prefix: string): SlashVerb[] {
 }
 
 const BOOLEAN_FLAGS = new Set([
+  'yes',
   'manual',
   'reset',
   'no-open',

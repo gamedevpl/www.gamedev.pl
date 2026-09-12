@@ -67,3 +67,15 @@ describe('cli pilot read', () => {
     expect(funnel.cliPilot.sessions).toBe(1);
   });
 });
+
+it('counts privacy-safe recovery attempts and outcomes on the read side', () => {
+  const funnel = summarizeVisitFunnel([
+    step('a', 'recovery_attempt'),
+    step('a', 'recovery_succeeded'),
+    step('b', 'recovery_attempt'),
+    step('b', 'recovery_failed'),
+  ]);
+  expect(funnel.cli).toContainEqual({ step: 'recovery_attempt', visits: 2 });
+  expect(funnel.cli).toContainEqual({ step: 'recovery_succeeded', visits: 1 });
+  expect(funnel.cli).toContainEqual({ step: 'recovery_failed', visits: 1 });
+});

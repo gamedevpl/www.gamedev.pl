@@ -3,6 +3,7 @@ import { CLI_VERSION } from './update.js';
 import { SLASH_VERBS, type SlashVerb } from './argv.js';
 
 export const BLURB: Record<SlashVerb, string> = {
+  recover: 'recover local sources after cancellation/deletion — recover [dir] [--slug <name>] --yes',
   play: 'open the game; live reload in a checkout — play [slug] [--no-open|--stop]',
   kit: 'check or update this checkout’s Creator Kit — kit [update]',
   logs: 'show the full transcript of the last local task (interactive session)',

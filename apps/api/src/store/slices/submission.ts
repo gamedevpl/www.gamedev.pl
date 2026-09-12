@@ -5,6 +5,14 @@ import type { SubmissionStatus } from '../../platform/submission-status.js';
 import { fromStoredSubmission, type SubmissionRecord } from '../records/submission.js';
 
 export interface SubmissionStore {
+  beginCheckoutRecovery(slug: string, nonce: string, now: number): Promise<boolean>;
+  finishCheckoutRecovery(slug: string, nonce: string): Promise<void>;
+  claimSubmissionSlug(
+    jobId: number,
+    slug: string,
+    sourceJobId: number | null,
+    recovery?: { key: string; spec: string; locale: string },
+  ): Promise<boolean>;
   setLocalActivity(jobId: number, activity: LocalActivity, start: boolean): Promise<boolean>;
   createSubmission(jobId: number, ownerUid: string, title: string): Promise<SubmissionRecord>;
 
@@ -120,6 +128,76 @@ export class FirestoreSubmissionStore implements SubmissionStore {
       )
         return false;
       tx.update(ref, { localActivity: { ...activity, generation: doc.data()?.roundGeneration ?? 0 } });
+      return true;
+    });
+  }
+
+  async beginCheckoutRecovery(slug: string, nonce: string, now: number): Promise<boolean> {
+    const ref = this.db.collection('games').doc(slug);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if ((snap.data()?.recoveryAdmission?.until ?? 0) > now) return false;
+      tx.set(ref, { recoveryAdmission: { nonce, until: now + 15 * 60_000 } }, { merge: true });
+      return true;
+    });
+  }
+  async finishCheckoutRecovery(slug: string, nonce: string): Promise<void> {
+    const ref = this.db.collection('games').doc(slug);
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (snap.data()?.recoveryAdmission?.nonce === nonce) tx.update(ref, { recoveryAdmission: FieldValue.delete() });
+    });
+  }
+  async claimSubmissionSlug(
+    jobId: number,
+    slug: string,
+    sourceJobId: number | null,
+    recovery?: { key: string; spec: string; locale: string },
+  ): Promise<boolean> {
+    return this.db.runTransaction(async (tx) => {
+      const target = await tx.get(this.ref(jobId));
+      const rows = await tx.get(this.db.collection('submissions').where('slug', '==', slug));
+      const game = await tx.get(this.db.collection('games').doc(slug));
+      const publication = game.data()?.publication;
+      const archived = publication?.state === 'archived' && publication.takedownReason === 'deleted by creator';
+      if (publication && !(sourceJobId !== null && archived)) return false;
+      const records = rows.docs.map((d) => fromStoredSubmission(d.data()));
+      const holder = records.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.jobId - a.jobId)[0];
+      if (!target.exists || target.data()?.slug) return false;
+      if (
+        sourceJobId === null
+          ? records.length > 0
+          : !holder ||
+            holder.jobId !== sourceJobId ||
+            holder.ownerUid !== target.data()?.ownerUid ||
+            (holder.state !== 'canceled' &&
+              !(archived && ['published', 'failed', 'abandoned'].includes(holder.state ?? ''))) ||
+            holder.moderationBlockedAt
+      )
+        return false;
+      tx.set(this.db.collection('games').doc(slug), { slugClaimJobId: jobId }, { merge: true });
+      tx.update(this.ref(jobId), {
+        slug,
+        ...(recovery
+          ? {
+              recoveryKey: recovery.key,
+              spec: recovery.spec,
+              qa: [],
+              locale: recovery.locale,
+              builder: 'self' as const,
+              state: 'queued' as const,
+              stateSince: new Date().toISOString(),
+              transitions: [
+                {
+                  to: 'queued' as const,
+                  at: new Date().toISOString(),
+                  by: 'creator' as const,
+                  reason: 'checkout_recovered',
+                },
+              ],
+            }
+          : {}),
+      });
       return true;
     });
   }

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { recoverCheckout } from './recover.js';
 import { modelCommand } from './model-command.js';
 import { offerKitUpdate, updateKit } from './kit-update.js';
 import { playGame } from './play.js';
@@ -124,7 +125,7 @@ async function runDelegateVerb(input: {
 }
 
 // Verbs that already speak to the platform; the rest stay silent.
-const TELEMETRY_VERBS = new Set(['kit', 'connect', 'delegate', 'play', 'login', 'update', 'status']);
+const TELEMETRY_VERBS = new Set(['recover', 'kit', 'connect', 'delegate', 'play', 'login', 'update', 'status']);
 
 // One rung per install, so `installed` counts installs not runs.
 export function reportInstall(telemetry: CliTelemetry, env: NodeJS.ProcessEnv, isTty: boolean): void {
@@ -309,6 +310,17 @@ export async function runCli(
       });
       if (asJson) io.stdout.write(`${JSON.stringify(result)}\n`);
       else io.stdout.write(`${formatSubmitLines(result, slug).join('\n')}\n`);
+      return EXIT_GREEN;
+    }
+    if (verb === 'recover') {
+      await recoverCheckout({
+        api,
+        telemetry,
+        cwd: args[0] ?? process.cwd(),
+        slug: typeof flags.slug === 'string' ? flags.slug : undefined,
+        yes: flags.yes === true,
+        write: (line) => io.stdout.write(`${line}\n`),
+      });
       return EXIT_GREEN;
     }
     if (verb === 'connect') {
