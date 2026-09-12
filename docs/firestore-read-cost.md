@@ -119,18 +119,33 @@ The type split says *which half of this document* a regression belongs in. It do
 which route or which collection, and until 2026-09-12 that attribution was archaeology:
 correlate a per-minute read count against a request log and guess. `store/read-meter.ts`
 removes the guessing. It patches the Firestore client's read entry points once
-(`DocumentReference.get`, `Query.get`, `Firestore.getAll`, `Transaction.get`/`getAll`,
-`WriteBatch.commit`, `runTransaction`) and tallies them into an `AsyncLocalStorage` scope
-opened per request, so every response that touched Firestore logs one line:
+(`DocumentReference.get`, `Query.get`, `AggregateQuery.get`, `Firestore.getAll`,
+`Transaction.get`/`getAll`, `WriteBatch.commit`, `runTransaction`) and tallies them into an
+`AsyncLocalStorage` scope opened per request, so every response that touched Firestore logs
+one line:
 
 ```
 {"msg":"firestore reads","route":"/api/review/status","fsReads":4,"fsMissing":1,
  "fsCalls":3,"fsCommits":0,"fsTransactions":0,"fsPaths":{"users/*":2,"submissions":2}}
 ```
 
-`fsPaths` keys are **shapes, not paths** — document ids are masked to `*`, and a
-collection-group query is `group:<id>` — so one key aggregates every read of that shape.
-An absent document counts in both `fsReads` and `fsMissing`, because Firestore bills it.
+`fsPaths` keys are **shapes, not paths** — document ids are masked to `*`, a collection-group
+query is `group:<id>`, an aggregate is `count:<shape>` — so one key aggregates every read of
+that shape.
+
+**It counts what Firestore bills, not what came back**, and the three rules there are the
+whole reason the tally can be trusted as a cost attribution:
+
+- an **absent document** counts in both `fsReads` and `fsMissing`;
+- a **query that matched nothing** still counts one read — the minimum charge. This is not a
+  rounding detail: `listPendingCreatorMessages` returns empty on nearly every sweep run, so
+  counting it as zero would have hidden 34 reads a run in exactly the job being investigated;
+- an **aggregate** counts one read per 1000 index entries matched, minimum one, so a `count()`
+  over 2,500 rows is three reads rather than one.
+
+A read that *throws* is not tallied — the meter records after the await. So a swallowed
+`PERMISSION_DENIED` (about 850/day as of 2026-09-12, logged nowhere, cost nothing) stays
+invisible here; it shows only in `api/request_count` split by `response_code`.
 
 The two questions this answers that nothing else did:
 
@@ -147,9 +162,6 @@ gcloud logging read 'jsonPayload.msg="firestore reads"
   --format='value(jsonPayload.fsReads,jsonPayload.fsPaths)'
 ```
 
-A read that *throws* is not tallied — the meter records after the await. So a swallowed
-`PERMISSION_DENIED` (about 850/day as of 2026-09-12, logged nowhere, cost nothing) stays
-invisible here; it shows only in `api/request_count` split by `response_code`.
 
 The split by `metric.label.type` (QUERY / LOOKUP / NOT_FOUND) is the whole point, and it
 decides which half of this document the next fix belongs in. QUERY is a collection scan —

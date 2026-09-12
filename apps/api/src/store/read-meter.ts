@@ -22,6 +22,7 @@ interface QueryInternals {
 
 const storage = new AsyncLocalStorage<ReadTally>();
 const INSTALLED = Symbol.for('gamedev.read-meter.installed');
+const AGGREGATES_INSTALLED = Symbol.for('gamedev.read-meter.aggregates-installed');
 
 export function beginReadTally(): ReadTally {
   const tally: ReadTally = { calls: 0, reads: 0, missing: 0, commits: 0, transactions: 0, byPath: new Map() };
@@ -96,14 +97,63 @@ function patchDocumentGet(): void {
   } as AsyncFn;
 }
 
+// Firestore bills one read for a query that matched nothing.
+function billedQueryReads(snapshot: MaybeSnapshot | undefined): number {
+  return Math.max(1, snapshot?.size ?? snapshot?.docs?.length ?? 0);
+}
+
 function patchQueryGet(): void {
   const proto = Query.prototype as unknown as { get: AsyncFn };
   const original = proto.get;
   proto.get = async function meteredQueryGet(this: Query, ...args: unknown[]) {
     const snapshot = (await original.apply(this, args)) as MaybeSnapshot;
-    record(queryLabel(this), snapshot?.size ?? snapshot?.docs?.length ?? 0, 0);
+    record(queryLabel(this), billedQueryReads(snapshot), 0);
     return snapshot;
   } as AsyncFn;
+}
+
+const AGGREGATE_INDEX_ENTRIES_PER_READ = 1_000;
+
+interface AggregateSnapshot {
+  data?: () => Record<string, unknown> | undefined;
+}
+
+// One read per 1000 index entries matched, and never fewer than one.
+function billedAggregateReads(snapshot: AggregateSnapshot | undefined): number {
+  const counted = snapshot?.data?.()?.count;
+  if (typeof counted !== 'number' || !Number.isFinite(counted)) return 1;
+  return Math.max(1, Math.ceil(counted / AGGREGATE_INDEX_ENTRIES_PER_READ));
+}
+
+interface AggregateInternals {
+  query?: Query;
+}
+
+function patchAggregatePrototype(instance: object): void {
+  const proto = Object.getPrototypeOf(instance) as { get: AsyncFn } & Record<symbol, boolean>;
+  if (proto[AGGREGATES_INSTALLED]) return;
+  proto[AGGREGATES_INSTALLED] = true;
+  const original = proto.get;
+  proto.get = async function meteredAggregateGet(this: AggregateInternals, ...args: unknown[]) {
+    const snapshot = (await original.apply(this, args)) as AggregateSnapshot;
+    const source = this.query;
+    record(`count:${source ? queryLabel(source) : 'query'}`, billedAggregateReads(snapshot), 0);
+    return snapshot;
+  } as AsyncFn;
+}
+
+// AggregateQuery is not exported, so its prototype is reached on first use.
+function patchAggregates(): void {
+  const proto = Query.prototype as unknown as Record<string, (...args: unknown[]) => object>;
+  for (const method of ['count', 'aggregate'] as const) {
+    const original = proto[method];
+    if (typeof original !== 'function') continue;
+    proto[method] = function meteredAggregateFactory(this: Query, ...args: unknown[]) {
+      const aggregate = original.apply(this, args);
+      if (aggregate && typeof aggregate === 'object') patchAggregatePrototype(aggregate);
+      return aggregate;
+    };
+  }
 }
 
 function patchGetAll(): void {
@@ -124,7 +174,7 @@ function recordTransactionResult(result: unknown): void {
   }
   const snapshot = result as MaybeSnapshot;
   if (snapshot?.docs !== undefined) {
-    record('transaction:query', snapshot.size ?? snapshot.docs.length, 0);
+    record('transaction:query', billedQueryReads(snapshot), 0);
     return;
   }
   const label = snapshot?.ref?.path ? maskPath(snapshot.ref.path) : 'transaction:get';
@@ -168,6 +218,7 @@ export function installReadMeter(): void {
   marker[INSTALLED] = true;
   patchDocumentGet();
   patchQueryGet();
+  patchAggregates();
   patchGetAll();
   patchTransaction();
   patchCommits();

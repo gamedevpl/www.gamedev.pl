@@ -14,7 +14,13 @@ beforeAll(() => {
     return snapshotFor(this.path, !this.path.endsWith('/missing'));
   };
   const queryProto = Query.prototype as unknown as { get: () => Promise<unknown> };
-  queryProto.get = async () => ({ size: 3, docs: [{}, {}, {}] });
+  queryProto.get = async function stubbedQueryGet(this: Query) {
+    const empty = (this as unknown as { _queryOptions?: { collectionId?: string } })._queryOptions?.collectionId;
+    if (empty === 'creatorMessages') return { size: 0, docs: [] };
+    return { size: 3, docs: [{}, {}, {}] };
+  };
+  const aggregateProto = Object.getPrototypeOf(db.collection('probe').count()) as { get: () => Promise<unknown> };
+  aggregateProto.get = async () => ({ data: () => ({ count: 2_500 }) });
   const dbProto = Firestore.prototype as unknown as { getAll: () => Promise<unknown> };
   dbProto.getAll = async () => [snapshotFor('users/a', true), snapshotFor('users/b', false)];
   const txProto = Transaction.prototype as unknown as { get: () => Promise<unknown> };
@@ -67,6 +73,22 @@ describe('read meter', () => {
     expect(tally.transactions).toBe(1);
     expect(tally.reads).toBe(1);
     expect(tally.missing).toBe(1);
+  });
+
+  it('bills one read for a query that matched nothing', async () => {
+    const tally = beginReadTally();
+    await db.collection('creatorMessages').where('delivered', '==', false).get();
+    expect(tally.reads).toBe(1);
+    expect(tally.calls).toBe(1);
+    expect(topReadPaths(tally)).toEqual({ creatorMessages: 1 });
+  });
+
+  it('bills an aggregate by index-entry batches, never fewer than one', async () => {
+    const tally = beginReadTally();
+    await db.collection('playerFeedback').where('slug', '==', 'sky-dodge').count().get();
+    expect(tally.reads).toBe(3);
+    expect(tally.calls).toBe(1);
+    expect(topReadPaths(tally)).toEqual({ 'count:playerFeedback': 3 });
   });
 
   it('counts a batch commit', async () => {
