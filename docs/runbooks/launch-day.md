@@ -180,6 +180,11 @@ lanes without being asked. Its grading, from `budgetLanes` in `spend-brake.ts`:
 | spent over 125%    | + rungs 4 and 5 (video, images)             |
 | spent over 150%    | everything, including rung 6 (the site closes) |
 
+A budget measures spend so far this month, so it reacts in days. The fast path is alert
+**A32**, which watches the games bucket's egress *rate* (125 MB/h) and carries
+`lanes=video,media` — minutes, not days. It is the one that catches a spike; the budget
+is the backstop for a slow bleed.
+
 A per-service budget overrides the ladder by naming lanes in its own display name, which
 is how an egress budget reaches only the bandwidth rungs:
 

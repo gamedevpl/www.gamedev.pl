@@ -59,6 +59,8 @@ POLICIES=(
   "A24 Vertex call volume abnormally high|creation,editing,chat,tabcomplete,search,seeding"
   "A25 Vertex output token rate abnormally high|creation,editing,chat,tabcomplete,search,seeding"
   "A26 knowledge_query daily volume abnormally high|creation"
+  # A rate, so this reacts in minutes where a monthly budget reacts in days.
+  "A32 Games bucket egress abnormally high|video,media"
 )
 
 echo "==> 1/4 Pub/Sub topic ${TOPIC}"
