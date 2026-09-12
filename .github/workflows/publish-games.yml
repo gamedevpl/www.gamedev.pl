@@ -4,9 +4,11 @@ name: Publish games snapshot
 # pre-assembled documents instead of rebuilding each game from GitHub + esbuild on
 # the request path (apps/api/src/game-snapshot.ts).
 #
-# The games repo dispatches its exact SHA and gate scope after a main push. This
-# workflow validates that checkout before baking its snapshot; a failed gate
-# leaves the previous snapshot pointer untouched.
+# The games repo dispatches its exact SHA after a main push. This workflow
+# re-classifies that SHA (tools/gate-scope.mjs --event push) so a one-game
+# merge runs the scoped gate (~8–10 min) instead of check:pr over the catalog
+# (~40 min). GameKit / universal-module pushes stay full. A failed gate leaves
+# the previous snapshot pointer untouched.
 #
 # Nothing needs to be redeployed afterwards. Running instances re-read the pointer
 # on its short TTL, so a publish becomes visible on its own within about a minute.
@@ -69,6 +71,10 @@ jobs:
       slugs: ${{ github.event.client_payload.slugs || '' }}
       need_webkit: ${{ github.event.client_payload.need_webkit || '1' }}
       narrow_conformance: ${{ github.event.client_payload.narrow_conformance || '0' }}
+      # Merge dispatches always re-classify against the SHA. Payload mode is a
+      # hint (and the fallback if compare fails); schedule / workflow_dispatch
+      # keep the full catalog seal.
+      classify_push: ${{ github.event_name == 'repository_dispatch' && '1' || '0' }}
       # github.event.schedule is the cron string that fired this run (empty on
       # dispatch / workflow_dispatch). Match the Sunday cron above, not
       # event_name == 'schedule' — the daily 04:23 cron is also a schedule.

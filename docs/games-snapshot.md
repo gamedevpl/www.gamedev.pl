@@ -107,14 +107,30 @@ still in flight.
 
 ```
 merge to games-repo main
-  → validate.yml: calculate scope + repository_dispatch (pinned SHA)
-  → publish-games.yml: run the scoped/static/full games gate
-  → publish-games.yml: npm run snapshot:publish (only after a green gate)
+  → gate-service: classify the push (tools/gate-scope.mjs --event push)
+  → repository_dispatch (pinned SHA, scoped/static/full)
+      (docs/tools-only pushes skip this — they cannot change served HTML)
+  → publish-games.yml: re-classify that SHA after checkout (the live tree is
+    the authority; a deleted game drops out of the slug list and still bakes)
+  → scoped/static/full games gate (one-game merges: scoped, no WebKit)
+  → npm run snapshot:publish (only after a green gate, or immediately when
+    the classified push needs no gate — a deletion, a docs-only dispatch)
       (derives catalog.json from the games archive — including code-derived touch —
        and writes it into the snapshot; the games repo does not commit catalog.json)
   → objects written, then current.json moves (only if every game baked cleanly)
   → running instances pick it up within the pointer TTL (~1 min)
 ```
+
+A typical one-game merge used to wait on `check:pr` over the whole catalog
+(~40 min) plus WebKit and the bake (~47 min wall clock in
+[run 34680596062](https://github.com/gamedevpl/www.gamedev.pl/actions/runs/34680596062)).
+That is also why a merge train cancelled in-progress publishes: the next push
+arrived before the 45-minute job finished, so `current.json` never moved. The
+scoped path is the same `check:game` the PR already attested, re-run on a
+clean runner, and WebKit is skipped on push because the PR already sealed it
+(`gate-scope.mjs` `eventName === 'push'`). GameKit / universal-module merges
+still pay the full catalog gate. The nightly 04:23 UTC run remains the
+cheap full rebuild; Sunday 06:17 UTC remains the catalog seal.
 
 No redeploy is needed — instances re-read the pointer on its own TTL.
 
