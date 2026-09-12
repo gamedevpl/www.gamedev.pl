@@ -264,7 +264,9 @@ export type CodeSurfaceDeliverOutcome =
     }
   | {
       accepted: false;
-      rejected: 'stopped' | 'rate_limited' | 'delivery_cap';
+      rejected: 'stopped' | 'rate_limited' | 'delivery_cap' | 'content_rejected' | 'moderation_unavailable';
+      // Set on content_rejected; never says which words tripped it.
+      category?: string;
       deliveryCap?: number;
       deliveriesUsed?: number;
     };

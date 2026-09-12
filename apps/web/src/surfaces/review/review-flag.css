@@ -1,0 +1,125 @@
+/* Reporting sits apart from the verdict: a different question, a different axis. */
+.review-report {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex: none;
+  margin-bottom: 0.4rem;
+}
+
+.review-report-btn {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 0.35rem 0;
+  min-height: 32px;
+  cursor: pointer;
+}
+
+.review-report-btn:hover {
+  color: var(--text);
+}
+
+.review-report-sent {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.review-flag-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  /* The 1000 modal tier: above the sticky header (100) and the bottom banners (900),
+     which the review desk explicitly keeps on screen. Anything lower is paintable
+     over, and on a keyboard-height viewport it covers this dialog's own controls. */
+  z-index: 1000;
+}
+
+.review-flag {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 1rem;
+  width: min(30rem, 100%);
+  max-height: 90dvh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.review-flag-title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.review-flag-lead {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.review-flag-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.review-flag-select,
+.review-flag-note {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 0.5rem;
+  min-height: 44px;
+}
+
+.review-flag-note {
+  min-height: 6rem;
+  resize: vertical;
+}
+
+.review-flag-error {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--danger, #ff6b6b);
+}
+
+.review-flag-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.review-flag-cancel,
+.review-flag-send {
+  font: inherit;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 0.6rem 0.9rem;
+  min-height: 44px;
+  cursor: pointer;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+}
+
+.review-flag-send {
+  border-color: rgba(255, 107, 107, 0.6);
+}
+
+.review-flag-send:disabled,
+.review-flag-cancel:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

@@ -856,6 +856,38 @@ describe('CodeSurface', () => {
     expect(mocked.deliverCodeSurface).toHaveBeenCalledWith('sky-dodge', 'publish');
   });
 
+  it.each([
+    ['content_rejected', /not publishable here/i],
+    ['moderation_unavailable', /could not run just now/i],
+  ])('says which refusal a %s delivery hit', async (rejected, expected) => {
+    mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+    mocked.stageCodeSurfaceFile.mockResolvedValue({
+      accepted: true,
+      path: 'game.ts',
+      bytes: 1,
+      staged: { totalBytes: 1, maxBytes: 1_000_000, maxFiles: 60, updatedAt: null },
+    });
+    mocked.deliverCodeSurface.mockResolvedValue({
+      accepted: false,
+      rejected: rejected as 'content_rejected',
+      ...(rejected === 'content_rejected' ? { category: 'hate' } : {}),
+    });
+
+    await render();
+    await act(async () => {
+      typeInto(container.querySelector('textarea')!, 'export const boot = () => { /* edited */ };');
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.code-surface-deliver-btn')!.click();
+      await flush();
+    });
+
+    const message = container.querySelector<HTMLElement>('.code-surface-deliver-message')!;
+    expect(message.textContent).toMatch(expected);
+    // The generic wording is what this replaces.
+    expect(message.textContent).not.toMatch(/try again shortly/i);
+  });
+
   it('offers to add the required file a refused Publish named, and opens it once added', async () => {
     mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
     mocked.stageCodeSurfaceFile.mockResolvedValue({

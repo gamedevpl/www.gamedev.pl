@@ -203,3 +203,84 @@
 .admin-cost-row.is-unpublished {
   opacity: 0.7;
 }
+
+/* Abuse reports: one row per open report, with the takedown beside it. */
+.admin-moderation-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.admin-moderation-item {
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.admin-moderation-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.admin-moderation-reason {
+  font-weight: 700;
+}
+
+.admin-moderation-when {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-left: auto;
+}
+
+.admin-moderation-note {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.admin-moderation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.admin-moderation-resolution {
+  flex: 1 1 12rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 0.45rem 0.6rem;
+  min-height: 40px;
+}
+
+.admin-moderation-dismiss,
+.admin-moderation-takedown {
+  font: inherit;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 0.45rem 0.8rem;
+  min-height: 40px;
+  cursor: pointer;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+}
+
+.admin-moderation-takedown {
+  border-color: rgba(255, 107, 107, 0.6);
+}
+
+.admin-moderation-dismiss:disabled,
+.admin-moderation-takedown:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

@@ -1,4 +1,4 @@
-import type { AssessmentResolutionStatus, ReReviewRequestStatus } from '@gamedevpl/contract';
+import type { AssessmentResolutionStatus, ModerationFlagReason, ReReviewRequestStatus } from '@gamedevpl/contract';
 import type {
   AssessmentChecklist,
   AssessmentClientContext,
@@ -135,6 +135,25 @@ export async function submitAssessment(input: SubmitAssessmentInput): Promise<Ga
   });
   const body = await readJson<{ assessment: GameAssessment }>(res);
   return body.assessment;
+}
+
+export interface ModerationFlagInput {
+  slug: string;
+  source: 'catalog' | 'creator';
+  reason: ModerationFlagReason;
+  note: string;
+  gameVersion?: string | null;
+}
+
+// Abuse is its own axis; a verdict never carries it.
+export async function raiseModerationFlag(input: ModerationFlagInput): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/review/flags`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  await readJson<{ flag: unknown }>(res);
 }
 
 export async function fetchMyAssessments(): Promise<GameAssessment[]> {

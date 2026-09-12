@@ -86,6 +86,8 @@ export const ADMIN_SECTIONS = [
   'waitlist',
   // Reviewer assessment aggregates; see game-assessment-plan.md.
   'assessments',
+  // Abuse reports awaiting a takedown decision; content-safety-plan.md Layer 5.
+  'moderation',
 ] as const;
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
 
