@@ -7,10 +7,11 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.14.2 — 2026-09-12
+
 ### Fixed
 
 - Pass the running preview to local agents, retain startup diagnostics, and skip success and delivery prompts when no game files changed (#1295).
-
 - Move the prompt cursor with the left and right arrow keys and edit long messages in place (#1290).
 - Show each local agent's model and reasoning effort in the task picker, with an inline path to change them (#1292).
 
