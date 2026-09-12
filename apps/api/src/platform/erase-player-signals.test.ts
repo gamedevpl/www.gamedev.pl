@@ -112,6 +112,38 @@ describe('erasePlayerSignals', () => {
     expect(await store.listPlayerFeedback('rock-blaster')).toEqual([]);
   });
 
+  it('erases the moderation reports that name the leaver, and the ones they resolved', async () => {
+    // A resolved report names the operator as well as the reporter.
+    const at = '2026-09-01T00:00:00.000Z';
+    await store.raiseModerationFlag({
+      slug: 'brick-storm',
+      source: 'creator',
+      reason: 'hate',
+      note: 'a slur on the title screen',
+      raisedByUid: 'g:leaver',
+      createdAt: at,
+    });
+    await store.raiseModerationFlag({
+      slug: 'rock-blaster',
+      source: 'creator',
+      reason: 'sexual',
+      note: 'not for this catalog',
+      raisedByUid: 'g:stayer',
+      createdAt: at,
+    });
+    await store.resolveModerationFlag('rock-blaster:g:stayer', {
+      action: 'dismissed',
+      resolvedByUid: 'g:leaver',
+      resolvedAt: at,
+    });
+
+    expect((await erasePlayerSignals({ store, uid: 'g:leaver', dryRun: true })).moderationFlagsDeleted).toBe(2);
+
+    const result = await erasePlayerSignals({ store, uid: 'g:leaver' });
+    expect(result.moderationFlagsDeleted).toBe(2);
+    expect(await store.listModerationFlags()).toEqual([]);
+  });
+
   it('leaves everyone else’s signals untouched', async () => {
     await erasePlayerSignals({ store, uid: 'g:leaver' });
 

@@ -265,50 +265,43 @@ export function CatalogCard({
           // Both badges anchor one corner, so they stack instead of overlapping.
         }
         <div className="catalog-badges-top-left">
-          {
-            // Label sits in its own span; a finger gets the icon alone.
-            hasVideo && (
-              <button
-                type="button"
-                className="preview-toggle preview-toggle--video"
-                aria-pressed={isPreviewPlaying}
-                aria-label={isPreviewPlaying ? t('catalog.pausePreview') : t('catalog.watchPreview')}
-                disabled={!inView}
-                onClick={togglePreview}
-              >
-                <PixelIcon name={isPreviewPlaying ? 'pause' : 'play'} size={11} />
-                <span className="btn-label">
-                  {isPreviewPlaying ? t('catalog.pausePreview') : t('catalog.watchPreview')}
-                </span>
-              </button>
-            )
-          }
-
-          {
-            // Trailer-less cards still need a deliberate way to open moments.
-            !hasVideo && hasMoments && (
-              <button
-                type="button"
-                className="preview-toggle"
-                aria-pressed={extrasOpen}
-                aria-label={extrasOpen ? t('catalog.hideMoments') : t('catalog.showMoments')}
-                disabled={!inView}
-                onClick={toggleMoments}
-              >
-                <PixelIcon name="image" size={11} />
-                <span className="btn-label">{extrasOpen ? t('catalog.hideMoments') : t('catalog.showMoments')}</span>
-              </button>
-            )
-          }
-
-          {
-            // Only 'none' earns a badge: a finger cannot drive the game.
-            entry.touch === 'none' && (
-              <span className="touch-warning-pill" title={t('catalog.keyboardOnlyTooltip')}>
-                <PixelIcon name="gamepad" size={10} /> {t('catalog.keyboardOnly')}
+          {hasVideo && (
+            <button
+              type="button"
+              className="preview-toggle preview-toggle--video"
+              aria-pressed={isPreviewPlaying}
+              aria-label={isPreviewPlaying ? t('catalog.pausePreview') : t('catalog.watchPreview')}
+              title={isPreviewPlaying ? t('catalog.pausePreview') : t('catalog.watchPreview')}
+              disabled={!inView}
+              onClick={togglePreview}
+            >
+              <PixelIcon name={isPreviewPlaying ? 'pause' : 'play'} size={12} />
+              <span className="btn-label">
+                {isPreviewPlaying ? t('catalog.pausePreview') : t('catalog.watchPreview')}
               </span>
-            )
-          }
+            </button>
+          )}
+
+          {!hasVideo && hasMoments && (
+            <button
+              type="button"
+              className="preview-toggle"
+              aria-pressed={extrasOpen}
+              aria-label={extrasOpen ? t('catalog.hideMoments') : t('catalog.showMoments')}
+              title={extrasOpen ? t('catalog.hideMoments') : t('catalog.showMoments')}
+              disabled={!inView}
+              onClick={toggleMoments}
+            >
+              <PixelIcon name="image" size={12} />
+              <span className="btn-label">{extrasOpen ? t('catalog.hideMoments') : t('catalog.showMoments')}</span>
+            </button>
+          )}
+
+          {entry.touch === 'none' && (
+            <span className="touch-warning-pill" title={t('catalog.keyboardOnlyTooltip')}>
+              <PixelIcon name="gamepad" size={10} /> {t('catalog.keyboardOnly')}
+            </span>
+          )}
 
           {isYours ? (
             <span className="yours-pill" title={t('catalog.yoursBadge')}>
@@ -337,46 +330,12 @@ export function CatalogCard({
         )}
 
         {
-          // Title, hint and CTA sit over the preview, saving a content row.
+          // Title, author, capabilities and CTAs sit over the preview.
         }
         <div className="catalog-overlay">
           <div className="card-copy">
-            <h3 className="card-title">
+            <h3 className="card-title" title={entry.title}>
               {entry.title}
-              {entry.multiplayer && (
-                <span className="card-party-badge">
-                  <PixelIcon name="phone" size={12} /> {t('party.playersBadge', { max: entry.multiplayer.maxPlayers })}
-                </span>
-              )}
-              {
-                // Says what the game does, not what this signed-out visitor gets.
-                entry.saves === 'player' && (
-                  <span className="card-saves-badge">
-                    <PixelIcon name="clock" size={12} /> {t('catalog.savesBadge')}
-                  </span>
-                )
-              }
-              {
-                // The one badge about other people rather than about the game.
-                entry.world === 'shared' && (
-                  <span className="card-world-badge">
-                    <PixelIcon name="star" size={12} /> {t('catalog.worldBadge')}
-                  </span>
-                )
-              }
-              {
-                // Advisory: the game answers tilt where the device offers it.
-                entry.sensing === 'tilt' && (
-                  <span className="card-party-badge" title={t('catalog.tiltTooltip')}>
-                    <PixelIcon name="phone" size={12} /> {t('catalog.tiltBadge')}
-                  </span>
-                )
-              }
-              {entry.sensing === 'backdrop' && (
-                <span className="card-party-badge" title={t('catalog.cameraTooltip')}>
-                  <PixelIcon name="phone" size={12} /> {t('catalog.cameraBadge')}
-                </span>
-              )}
             </h3>
             <p className="card-author">
               {entry.creatorHandle && !isPlatformAuthor(entry.submittedBy) ? (
@@ -391,11 +350,9 @@ export function CatalogCard({
                   author: isPlatformAuthor(entry.submittedBy) ? t('catalog.platformAuthor') : entry.submittedBy,
                 })
               )}
-            </p>
-            {
-              // Contributor credit on its own line, so authorship stays unblurred.
-              entry.contributorHandles && entry.contributorHandles.length > 0 ? (
-                <p className="card-contributors">
+              {entry.contributorHandles && entry.contributorHandles.length > 0 ? (
+                <span className="card-contributors">
+                  {' · '}
                   {t('catalog.withContributions')}{' '}
                   {entry.contributorHandles.map((handle, index) => (
                     <span key={handle}>
@@ -405,17 +362,50 @@ export function CatalogCard({
                       </a>
                     </span>
                   ))}
-                </p>
-              ) : null
-            }
+                </span>
+              ) : null}
+            </p>
+            <div className="card-capabilities">
+              {entry.multiplayer && (
+                <span className="card-party-badge">
+                  <PixelIcon name="phone" size={10} /> {t('party.playersBadge', { max: entry.multiplayer.maxPlayers })}
+                </span>
+              )}
+              {entry.saves === 'player' && (
+                <span className="card-saves-badge" title={t('catalog.savesBadge')}>
+                  <PixelIcon name="clock" size={10} /> {t('catalog.savesBadge')}
+                </span>
+              )}
+              {entry.world === 'shared' && (
+                <span className="card-world-badge" title={t('catalog.worldBadge')}>
+                  <PixelIcon name="star" size={10} /> {t('catalog.worldBadge')}
+                </span>
+              )}
+              {entry.sensing === 'tilt' && (
+                <span className="card-party-badge" title={t('catalog.tiltTooltip')}>
+                  <PixelIcon name="phone" size={10} /> {t('catalog.tiltBadge')}
+                </span>
+              )}
+              {entry.sensing === 'backdrop' && (
+                <span className="card-party-badge" title={t('catalog.cameraTooltip')}>
+                  <PixelIcon name="phone" size={10} /> {t('catalog.cameraBadge')}
+                </span>
+              )}
+            </div>
           </div>
           <div className="card-actions">
             <button type="button" className="primary-btn" onClick={() => onPlayGame(entry)}>
               <PixelIcon name="play" size={13} /> {t('catalog.play')}
             </button>
             {entry.multiplayer && (
-              <button type="button" className="secondary-btn party-btn" onClick={() => onPlayTogether(entry)}>
-                <PixelIcon name="phone" size={13} /> {t('party.playTogether')}
+              <button
+                type="button"
+                className="secondary-btn party-btn card-party-action"
+                title={t('party.playTogether')}
+                aria-label={t('party.playTogether')}
+                onClick={() => onPlayTogether(entry)}
+              >
+                <PixelIcon name="phone" size={13} />
               </button>
             )}
           </div>

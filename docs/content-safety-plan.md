@@ -87,11 +87,56 @@ BEFORE quota is consumed:
 - Also scan rendered _strings_ in game.js (the game's visible text), not just the
   spec — generated games can contain text the spec never asked for.
 
+## Layer 1c — Delivered prose, not just the prompt (2026-09-12)
+
+The pipeline this file describes starts at a prompt. The CLI and the MCP self-build lane
+do not: a creator edits sources locally and delivers bytes. Layer 1 never sees them, and
+Layer 2 is whatever policy the creator's own agent happens to carry — so on that lane the
+first four layers collapse to Layer 4 alone. This is **R11** in the ops risk register, and
+this is the half of its mitigation that reads the artifact.
+
+- `deliveredProseFields` ([`delivered-prose.ts`](../apps/api/src/delivery/delivered-prose.ts))
+  pulls the text a player actually reads — SPEC.md, and `GAME.json`'s title, description,
+  howToPlay and canvas aria-labels — and nothing else. **Code is never sent to a checker.**
+  Scanning `.ts` would be a false-positive engine (URL caps, PII patterns) against text no
+  player sees, and the strings that matter are all declared in the manifest.
+- The check runs in `deliver()` **after every cap and rate limit**. That ordering is the
+  point: R12 records twelve routes that pay for LLM moderation before their quota, so a
+  flood buys its own 429. A delivery refused by a cap costs nothing here, and a test pins
+  it.
+- An outage is answered as an outage. `rejectionFor()` separates `content_rejected` from
+  `moderation_unavailable`, the CLI prints a retry for the second, and the burst alert does
+  not count it as a rejection.
+- **The payload is budgeted, because `checkFields` batches.** Since #1280 every field joins
+  into one prompt, and that prompt has to fit three attempts inside one 20s deadline. A
+  delivery is not a 4000-character concept box — a SPEC.md can run to tens of thousands of
+  characters — so this lane caps what it sends: `MAX_SPEC_CHARS` (4000) from SPEC.md plus
+  `MAX_MANIFEST_CHARS` (2000) across every manifest string, the same order of magnitude the
+  prompt path already sends. Without the cap one delivery could hand the classifier 160k
+  characters and starve its own retry and fallback.
+- **Prose that already passed is not re-asked.** Most deliveries in a session change code,
+  not text. The gate keys a bounded LRU on a hash of the exact prose it sent and skips the
+  call for 30 minutes, so a creator iterating on `game.ts` pays for one verdict, not ten.
+  Only passes are cached — a refusal is re-asked every time, and a test guards that, because
+  caching a refusal would be the same mistake in the other direction. The cache is
+  per-process, like `VertexChecker`'s own: an instance that has not seen the text asks
+  again, which costs a call and never weakens the answer.
+- Two things that cap therefore does **not** cover, stated rather than implied: prose past
+  the first 4000 characters of a long SPEC.md, and **images** — a PNG under `images/` is
+  checked for shape and size, never for what it depicts. Layer 4 is what stands in front of
+  both.
+
 ## Layer 4 — Human merge (exists — keep it, name it)
 
 - Publishing = a human merging the PR. Document in the games repo README that
   content review is part of merge review. This is the safety boundary of record;
   everything above just reduces its load.
+- **Before publication there is a second public surface**: a shared draft. `draftSharedAt`
+  opens `/play/<slug>` to anyone, signed in or not. Since 2026-09-12 that link requires a
+  green gate verdict — checked when the switch is flipped _and_ again when the page is
+  served, because a delivery can land after the flip
+  ([`draft-share-gate.ts`](../apps/api/src/delivery/draft-share-gate.ts)). The owner still
+  sees their own red build; a stranger never does.
 
 ## Layer 5 — Post-publication
 
@@ -104,6 +149,12 @@ BEFORE quota is consumed:
   game** — published play is served from the snapshot, so a merge alone leaves it playable.
 - **Kill switch that already exists**: removing the game dir from `main` (or
   flipping SPEC status) drops it from the catalog server-side within 60s.
+- **Reviewer abuse flag ✅ live (2026-09-12)**: the review desk's keep/cut/skip vocabulary
+  cannot express abuse, so a reviewer who found it had to write a note that reached nobody
+  with authority. `POST /api/review/flags` is a separate action from the verdict, needs no
+  consensus, and lands in an operator queue (`GET /api/admin/moderation-flags`). Resolving
+  one with `taken_down` archives the publication **and** closes the draft's share link in
+  the same call — abuse lives in shared drafts as readily as in published games.
 
 ## Layer 1b — LLM moderation via Vertex AI (owner decided 2026-07-23)
 
@@ -114,11 +165,19 @@ BEFORE quota is consumed:
 > default, the model this platform already runs for managed agents and seeds), and only
 > then fails closed.
 >
+> The same loop now lives in `apps/api/src/platform/vertex-resilience.ts`, because the
+> 429 that stopped a deploy on 2026-09-12 hit `refine`, not the classifier: hardening one
+> call site left six others with a single attempt each. Refine, the CLI intake agent and
+> the Studio chat agent use it; the classifier is the only one that also carries a
+> stand-in model, since a conversation cannot change models mid-sentence and generated
+> content is a quality decision, not a reliability one. `tab-complete`,
+> `seed-provider-vertex` and `catalog-enricher` are deliberately untouched — a late
+> completion is worthless, and the other two produce content.
+>
 > The fallback is a safety control, not a cost lever. `resolveFallbackModel` refuses any
 > model outside a small allow-list of peer-or-better classifiers, because a classifier
 > that degrades to a cheaper model quietly lowers the bar on what passes — which is worse
 > than refusing to answer. OpenAI is disclosed as a processor in the privacy policy.
-
 
 Decision: **Vertex AI on the gamedevpl project** as the classifier. (Superseded in part
 on 2026-09-12, see the amendment above: a second vendor now stands in when Vertex cannot

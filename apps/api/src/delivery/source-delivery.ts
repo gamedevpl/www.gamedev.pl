@@ -20,6 +20,8 @@ import type { Store, SubmissionRecord } from '../platform/store.js';
 import { createTranslatorFromEnv, type Translator } from '../platform/translate.js';
 import type { TypecheckPreflightResult } from '../creation/typecheck-preflight.js';
 import type { StagedPreviewPublisher } from './staged-preview.js';
+import type { ContentChecker, RejectCategory } from '../platform/moderation.js';
+import { createDeliveryModerationGate } from './delivery-moderation.js';
 
 export interface SourceDeliveryAuthority {
   backend: string; // Backend identity recorded at dispatch time.
@@ -57,9 +59,18 @@ export interface SourceDeliveryAccepted {
 
 export type SourceDeliveryRejected = {
   accepted: false;
-  rejected: 'stopped' | 'rate_limited' | 'delivery_cap' | 'job_delivery_cap' | 'gate_capacity';
+  rejected:
+    | 'stopped'
+    | 'rate_limited'
+    | 'delivery_cap'
+    | 'job_delivery_cap'
+    | 'gate_capacity'
+    | 'content_rejected'
+    | 'moderation_unavailable';
   deliveryCap?: number;
   deliveriesUsed?: number;
+  // Category of the refused text; never which words tripped it.
+  category?: RejectCategory;
 };
 
 export type SourceDeliveryOutcome = SourceDeliveryAccepted | SourceDeliveryRejected;
@@ -135,6 +146,8 @@ export interface SourceDeliveryServiceOptions {
   gateRunGate?: {
     peek(uid: string, dateStr: string): Promise<{ allowed: boolean }>;
   } | null;
+  // Reads delivered prose only; a self-build ignores the moderated spec.
+  contentChecker?: ContentChecker | null;
 }
 
 const DEFAULT_MAX_SUBMITS_PER_WINDOW = 20;
@@ -227,6 +240,8 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
   const translator = options.translator ?? createTranslatorFromEnv();
   const maxSubmitsPerWindow = options.maxSubmitsPerWindow ?? DEFAULT_MAX_SUBMITS_PER_WINDOW;
   const submitsByBuild = new Map<number, number[]>();
+  // Built once: the pass cache has to outlive a single delivery.
+  const proseGate = createDeliveryModerationGate({ contentChecker: options.contentChecker, now });
 
   // Burst smoothing only: in-memory, so the durable caps do the real work.
   function isRateLimited(jobId: number): boolean {
@@ -326,6 +341,14 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
             'Call get_kit and submit with the engineRef it returns.',
         );
       }
+
+      // After every cap, so a flood cannot buy itself an inference call.
+      const proseRefusal = await proseGate.refuse({
+        files: input.files,
+        uid: record.ownerUid,
+        log: options.log?.warn ? { warn: options.log.warn } : null,
+      });
+      if (proseRefusal) return { accepted: false, ...proseRefusal };
 
       const attempt = await options.store.incrementRoundSubmitAttempts(input.jobId);
       const builderLabel = builderLabelFromRecord(record.builder, record.dispatch?.backend ?? input.backend);

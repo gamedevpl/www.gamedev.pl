@@ -3070,7 +3070,7 @@ describe('playing an unpublished game at its permalink', () => {
    * point of the switch. These pin both halves, because the failure modes are opposite:
    * a leak on one side, and a creator locked out of their own game on the other.
    */
-  async function draftApp() {
+  async function draftApp(verdict: { green: boolean } | null = { green: true }) {
     const store = new InMemoryStore();
     const jobId = 1_000_077;
     await store.upsertUser({ uid: 'g:test-user' });
@@ -3082,6 +3082,11 @@ describe('playing an unpublished game at its permalink', () => {
     const gamesStore = {
       getDerivedArtifact: async (_s: string, _v: string, name: string) =>
         name === 'bundle.html' ? Buffer.from('<!doctype html><title>TV Tycoon</title><canvas></canvas>') : null,
+      getManifest: async () => ({
+        version: 'v1',
+        deliveryMode: 'publish',
+        ...(verdict ? { gate: { green: verdict.green, ranAt: '2026-09-01T00:00:00.000Z' } } : {}),
+      }),
     } as unknown as GamesStore;
 
     // The catalog knows nothing about it: an unpublished game is in no catalog and no

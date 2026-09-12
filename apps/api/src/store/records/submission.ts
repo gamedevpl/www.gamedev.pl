@@ -69,6 +69,8 @@ export interface SubmissionRecord {
    * question worth being able to answer later; clearing it turns sharing back off.
    */
   draftSharedAt?: string;
+  // Operator takedown. Unlike draftSharedAt, not the creator's to undo.
+  moderationBlockedAt?: string;
   /**
    * How many clarifying questions the creator actually answered before this was
    * submitted — 0 when they skipped the QA panel or it had nothing to ask.

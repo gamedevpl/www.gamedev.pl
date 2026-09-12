@@ -146,6 +146,8 @@ const FILE_BUCKET = {
   // Job vocabulary and its transition table, read by eight buckets. Its only
   // domain import is type-only, so nothing follows it at runtime.
   'job-state': 'platform',
+  // Retry/fallback loop around a Vertex call. No relative imports at all.
+  'vertex-resilience': 'platform',
   // Signed-URL minting over GCS. No relative imports at all.
   'gcs-sign': 'platform',
   // A cache in front of gcs-sign, so the media route can redirect instead of
@@ -345,6 +347,9 @@ const FILE_BUCKET = {
   'build-status': 'delivery',
   'creator-media': 'delivery',
   'draft-preview-routes': 'delivery',
+  'draft-share-gate': 'delivery',
+  'delivered-prose': 'delivery',
+  'delivery-moderation': 'delivery',
   'editor-upload-requirements': 'delivery',
   'staged-preview': 'delivery',
   'stage-hints': 'delivery',
@@ -413,6 +418,7 @@ const FILE_BUCKET = {
   review: 'community',
   'review-checklist': 'community',
   'review-queue-cache': 'community',
+  'moderation-flags': 'community',
   'review-sweep': 'community',
   'proposal-apply-bot': 'community',
   'proposal-base': 'community',

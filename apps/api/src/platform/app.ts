@@ -461,6 +461,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // people its alerts are addressed to. Two lists would drift, and the failure mode of
     // drift here is an alert nobody receives.
     adminUids,
+    reviewerUids,
     agentBackend: options.submissionRoutes?.agentBackend,
     // Self needs store callbacks inside registerSubmissionRoutes; do not pre-build it.
     agentBackends: resolvedAgentBackends,
@@ -868,6 +869,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         store,
         gamesStore,
         kitFileStore: creatorKitFileStore,
+        contentChecker,
         onSourcesDelivered: gateTrigger,
         onEvent: (jobId) => submissionSeams.scheduleStagedPreview?.(jobId),
         log: app.log,

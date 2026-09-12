@@ -39,6 +39,9 @@ export interface SubmissionStore {
   // Turns the shared draft link on (a timestamp) or off (null).
   setDraftShared(jobId: number, at: string | null): Promise<void>;
 
+  // Operator-only: blocks sharing and the public draft read.
+  setModerationBlocked(jobId: number, at: string | null): Promise<void>;
+
   // Records the creator's language for progress reports.
   setSubmissionLocale(jobId: number, locale: string): Promise<void>;
 
@@ -166,6 +169,10 @@ export class FirestoreSubmissionStore implements SubmissionStore {
   async setDraftShared(jobId: number, at: string | null): Promise<void> {
     // Deleted, not set false -- "shared" is one shape: present or absent.
     await this.ref(jobId).set({ draftSharedAt: at ?? FieldValue.delete() }, { merge: true });
+  }
+
+  async setModerationBlocked(jobId: number, at: string | null): Promise<void> {
+    await this.ref(jobId).set({ moderationBlockedAt: at ?? FieldValue.delete() }, { merge: true });
   }
 
   async setSubmissionLocale(jobId: number, locale: string): Promise<void> {
