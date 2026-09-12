@@ -275,6 +275,7 @@ const FILE_BUCKET = {
   // Collapses jobs to distinct games for the Studio shelf -- pure Store-record
   // grouping, no catalog dependency, only ever read by creator-studio.ts.
   'owner-games': 'creation',
+  'studio-shelf-records': 'creation',
 
   // agent-surface: channel + MCP + kit
   'agent-channel': 'agent-surface',
