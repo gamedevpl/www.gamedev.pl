@@ -507,9 +507,7 @@ describe('what may stand in for the classifier', () => {
   });
 
   it('refuses a cheaper model, whoever configured it', () => {
-    expect(
-      resolveFallbackModel({ configured: 'gemini-3.0-flash', provider: 'openai', hasApiKey: true }),
-    ).toBeUndefined();
+    expect(resolveFallbackModel({ configured: 'gemini-3.0-flash', provider: 'openai', hasApiKey: true })).toBeUndefined();
     expect(resolveFallbackModel({ configured: 'gpt-4o-mini', provider: 'openai', hasApiKey: true })).toBeUndefined();
   });
 

@@ -198,8 +198,8 @@ export const privacyPl: LegalDocument = {
         {
           kind: 'ul',
           items: [
-            'Twój opis gry przechodzi automatyczną moderację (model Google Gemini, a gdy jest niedostępny — model ' +
-              'OpenAI), która może go odrzucić.',
+            'Twój opis gry przechodzi automatyczną moderację (model Google Gemini, a gdy jest niedostępny — model '
+              + 'OpenAI), która może go odrzucić.',
             'Opis jest następnie doprecyzowywany przez model AI, który może zadać Ci pytania pomocnicze.',
             'Zaakceptowany opis trafia jako zadanie do agenta kodującego (GitHub Copilot), który pisze kod gry ' +
               'w naszym prywatnym repozytorium. Repozytorium gier nie jest publiczne — Twój opis nie staje się ' +
@@ -314,8 +314,8 @@ export const privacyPl: LegalDocument = {
             ],
             [
               'OpenAI',
-              'Generuje wstępny szkic Twojej gry; pisze Twoją grę jako agent kodujący, gdy wybrany jest ten model; ' +
-                'zastępuje klasyfikator Gemini, gdy ten jest niedostępny, żeby moderacja nigdy po prostu nie ustała',
+              'Generuje wstępny szkic Twojej gry; pisze Twoją grę jako agent kodujący, gdy wybrany jest ten model; '
+                + 'zastępuje klasyfikator Gemini, gdy ten jest niedostępny, żeby moderacja nigdy po prostu nie ustała',
               'USA — standardowe klauzule umowne',
             ],
             ['GitHub (Microsoft)', 'Repozytorium gier i agent kodujący', 'USA — Data Privacy Framework'],

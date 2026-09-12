@@ -163,11 +163,7 @@ export interface VertexCheckerOptions {
   thinkingLevel?: string;
   timeoutMs?: number;
   // Custom fetcher/client seam for testing without GCP network calls
-  vertexFetcher?: (
-    prompt: string,
-    model?: string,
-    timeoutMs?: number,
-  ) => Promise<{ allowed: boolean; category?: string }>;
+  vertexFetcher?: (prompt: string, model?: string, timeoutMs?: number) => Promise<{ allowed: boolean; category?: string }>;
   // Lower-level seam than `vertexFetcher`: swap the genaicode client (i.e. a stub
   // ModelProvider) to exercise real prompt/response handling with no network.
   client?: GenAIClient;
@@ -211,10 +207,7 @@ export class VertexChecker implements ContentChecker {
       );
     this.patternChecker = new PatternChecker();
     this.vertexFetcher = options.vertexFetcher;
-    this.fallbackProvider =
-      options.fallbackProvider ??
-      (process.env.MODERATION_FALLBACK_PROVIDER as 'openai' | 'vertex' | undefined) ??
-      'openai';
+    this.fallbackProvider = options.fallbackProvider ?? (process.env.MODERATION_FALLBACK_PROVIDER as 'openai' | 'vertex' | undefined) ?? 'openai';
     this.fallbackApiKey = options.fallbackApiKey ?? process.env.OPENAI_API_KEY;
     this.fallbackModel = resolveFallbackModel({
       configured: options.fallbackModel ?? process.env.MODERATION_FALLBACK_MODEL,
@@ -322,7 +315,10 @@ export class VertexChecker implements ContentChecker {
     }
 
     // Fail closed, never cached. Names the provider: triage starts there.
-    console.warn(`Moderation failed or timed out on ${lastProvider}, failing closed:`, lastError);
+    console.warn(
+      `Moderation failed or timed out on ${lastProvider}, failing closed:`,
+      lastError,
+    );
     return { allowed: false, category: 'other', unavailable: true };
   }
 
@@ -394,9 +390,7 @@ export function resolveFallbackModel(input: {
   const model = input.configured ?? (input.provider === 'openai' ? 'gpt-5.6-luna' : undefined);
   if (!model) return undefined;
   if (!SOTA_FALLBACK_MODELS[input.provider].has(model)) {
-    console.warn(
-      `Refusing moderation fallback to '${model}' on ${input.provider}: not a peer-or-better classifier it serves.`,
-    );
+    console.warn(`Refusing moderation fallback to '${model}' on ${input.provider}: not a peer-or-better classifier it serves.`);
     return undefined;
   }
   return model;
@@ -405,8 +399,7 @@ export function resolveFallbackModel(input: {
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 // Capacity and deadlines deserve a second look; bad input does not.
-const RETRYABLE_VERTEX_ERROR =
-  /429|RESOURCE_EXHAUSTED|503|UNAVAILABLE|abort|timed? ?out|deadline|ECONNRESET|ETIMEDOUT/i;
+const RETRYABLE_VERTEX_ERROR = /429|RESOURCE_EXHAUSTED|503|UNAVAILABLE|abort|timed? ?out|deadline|ECONNRESET|ETIMEDOUT/i;
 
 export function isRetryableVertexError(err: unknown): boolean {
   const name = err instanceof Error ? err.name : '';

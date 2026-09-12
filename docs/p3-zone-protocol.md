@@ -194,7 +194,7 @@ expected to come back from, and playing is how they say so. `kicked` and `bad_ti
 decisions about the player rather than about their attention; redialling those on a
 keypress would be a loop that spends a request per key for as long as the tab is open.
 
-**The game has to do the asking, and that is easy to miss.** Being _able_ to re-admit is
+**The game has to do the asking, and that is easy to miss.** Being *able* to re-admit is
 not the same as being asked to, and the bridge is only ever asked by the thing inside the
 frame. GameKit's zone module settles offline on a close and then posts to the host only
 while it is live — so for one release the platform stood ready to hand back a seat that

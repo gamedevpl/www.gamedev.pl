@@ -119,6 +119,7 @@ BEFORE quota is consumed:
 > that degrades to a cheaper model quietly lowers the bar on what passes — which is worse
 > than refusing to answer. OpenAI is disclosed as a processor in the privacy policy.
 
+
 Decision: **Vertex AI on the gamedevpl project** as the classifier. (Superseded in part
 on 2026-09-12, see the amendment above: a second vendor now stands in when Vertex cannot
 answer, and that one does use an API key — the same `openai-api-key` the managed agents
