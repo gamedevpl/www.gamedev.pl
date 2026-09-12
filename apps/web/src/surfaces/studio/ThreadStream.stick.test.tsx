@@ -84,6 +84,33 @@ describe('ThreadStream stick-to-bottom', () => {
     expect(pane.scrollTop).toBe(500);
   });
 
+  it('scrolls back when a muted creator turns concept cards back on', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    roots.push(root);
+
+    const render = (proposals: ProposalHandlers) =>
+      act(() => {
+        root.render(<ThreadStream token="t" entries={entries} emptyLabel="" proposals={proposals} />);
+      });
+
+    // Muted resolves to a one-line note, not the card.
+    await render({ ...handlers, muted: true });
+    expect(container.querySelector('.studio-proposal')).toBeNull();
+    const pane = sizePane(container, 400, 400);
+    pane.scrollTop = 0;
+
+    // The bell turns them on and the card expands the turn.
+    Object.defineProperty(pane, 'scrollHeight', { value: 900, configurable: true });
+    await render(handlers);
+
+    expect(container.querySelector('.studio-proposal')).not.toBeNull();
+    expect(pane.scrollTop).toBe(500);
+  });
+
   it('leaves a reader who scrolled up where they were', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
