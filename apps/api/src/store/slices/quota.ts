@@ -181,6 +181,9 @@ export class InMemoryQuotaStore implements QuotaStore {
           ? patch.managedDailyUserCap
           : (this.creationLimits?.managedDailyUserCap ?? null),
       partyPaused: patch.partyPaused ?? this.creationLimits?.partyPaused ?? false,
+      videoPaused: patch.videoPaused ?? this.creationLimits?.videoPaused ?? false,
+      mediaLean: patch.mediaLean ?? this.creationLimits?.mediaLean ?? false,
+      anonymousPaused: patch.anonymousPaused ?? this.creationLimits?.anonymousPaused ?? false,
       telemetrySampleRate:
         patch.telemetrySampleRate !== undefined
           ? patch.telemetrySampleRate
@@ -385,6 +388,9 @@ export class FirestoreQuotaStore implements QuotaStore {
         managedDailyUserCap:
           patch.managedDailyUserCap !== undefined ? patch.managedDailyUserCap : (existing.managedDailyUserCap ?? null),
         partyPaused: patch.partyPaused ?? existing.partyPaused ?? false,
+        videoPaused: patch.videoPaused ?? existing.videoPaused ?? false,
+        mediaLean: patch.mediaLean ?? existing.mediaLean ?? false,
+        anonymousPaused: patch.anonymousPaused ?? existing.anonymousPaused ?? false,
         telemetrySampleRate:
           patch.telemetrySampleRate !== undefined ? patch.telemetrySampleRate : (existing.telemetrySampleRate ?? null),
         seedingMode: patch.seedingMode ?? existing.seedingMode ?? 'auto',

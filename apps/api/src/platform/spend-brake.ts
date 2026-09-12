@@ -17,9 +17,21 @@ const PAUSEABLE = {
   seeding: { seedingMode: 'off' },
   // The platform's coding agent: the biggest line on the bill.
   managed: { managedBuilderMode: 'off' },
+  // Serving lanes: these cost bytes rather than model calls.
+  video: { videoPaused: true },
+  media: { mediaLean: true },
+  anonymous: { anonymousPaused: true },
 } as const satisfies Record<string, Partial<CreationLimits>>;
 
 export type PauseableLane = keyof typeof PAUSEABLE;
+
+// Exported so a test walks every lane, not a hand-kept list.
+export const PAUSEABLE_LANES = Object.keys(PAUSEABLE) as PauseableLane[];
+
+// What pausing one lane writes to the operator document.
+export function lanePatch(lane: PauseableLane): Partial<CreationLimits> {
+  return { ...PAUSEABLE[lane] };
+}
 
 export function isPauseableLane(value: unknown): value is PauseableLane {
   return typeof value === 'string' && Object.prototype.hasOwnProperty.call(PAUSEABLE, value);
@@ -57,6 +69,7 @@ export interface BrakeNotification {
 // Graded by how far over: the agent first, the pennies last.
 export function budgetLanes(spent: number, forecast: number): PauseableLane[] {
   if (spent >= 1.5) return Object.keys(PAUSEABLE) as PauseableLane[];
+  if (spent >= 1.25) return ['managed', 'seeding', 'gate', 'video', 'media'];
   if (spent >= 1) return ['managed', 'seeding', 'gate'];
   if (forecast >= 1) return ['managed'];
   return [];

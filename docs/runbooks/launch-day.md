@@ -70,6 +70,11 @@ gcloud run services update "$SERVICE" --region "$REGION" --project "$PROJECT_ID"
 Un-flip is the same command with `PRIVATE_BETA=true`. Both take a new revision, so both
 drop live party rooms — do them before the traffic, not during it.
 
+**Closing it again in a hurry is rung 6, not this.** `anonymousPaused` raises the same
+wall from the operator document, within a minute and without a revision. Use the env var
+for a planned state change and the rung for an emergency; reach for this command during a
+spike and you will drop every party room at the worst moment.
+
 Before the flip is worth having, confirm the promotional slugs still play signed-out and
 that `/api/health` reports the state you expect:
 
@@ -83,16 +88,24 @@ Under pressure the platform degrades in a fixed order, and the order is the poin
 play path goes down last, because a visitor who cannot play is a visitor who never came
 back. Each rung is a switch, not a deploy.
 
-| Rung | What it stops     | How                                                | Propagation                        |
-| ---- | ----------------- | -------------------------------------------------- | ---------------------------------- |
-| 1    | New game creation | `/admin/limits` → pause creation                   | within the console's stated window |
-| 2    | Telemetry writes  | `telemetrySampleRate` below 1                      | same                               |
-| 3    | New party rooms   | `/admin/limits` → incident lanes → party hosting   | same                               |
-| 4    | Play              | nothing here does this; roll back or scale instead | —                                  |
+Two kinds of pressure share one ladder. Rungs 1 to 3 answer load — CPU, Firestore,
+rooms. Rungs 4 to 6 answer bandwidth, which is a bill rather than an outage and so is
+worth spending longer on before you touch the play path.
+
+| Rung | What it stops             | How                                                 | Propagation                        |
+| ---- | ------------------------- | --------------------------------------------------- | ---------------------------------- |
+| 1    | New game creation         | `/admin/limits` → pause creation                    | within the console's stated window |
+| 2    | Telemetry writes          | `telemetrySampleRate` below 1                       | same                               |
+| 3    | New party rooms           | `/admin/limits` → incident lanes → party hosting    | same                               |
+| 4    | Preview video             | `videoPaused`                                       | 60s (the breaker's TTL)            |
+| 5    | Full-size images          | `mediaLean` — every image served at 96px            | 60s                                |
+| 6    | Visitors without an account | `anonymousPaused` — the beta wall, back up        | 60s                                |
+| 7    | Play                      | nothing here does this; roll back or scale instead  | —                                  |
 
 Pull them in order and stop as soon as the graphs recover. Rungs 1 and 3 are toggles in
-the operator console. Rung 2 has no console field yet, so set it directly — it is a
-fraction of visits between 0 and 1, and `null` restores the default of keeping all:
+the operator console; rungs 4 to 6 are fields on the same document. Rung 2 has no console
+field yet, so set it directly — it is a fraction of visits between 0 and 1, and `null`
+restores the default of keeping all:
 
 ```bash
 # 10% of visits, chosen per visit so funnels stay comparable.
@@ -108,6 +121,60 @@ available and drops everything.
 
 **What rung 3 does not do.** It refuses _new_ rooms with an honest message. Rooms already
 open keep playing, and the party UI stays reachable; nobody is disconnected.
+
+**Rungs 4 and 5** are the bandwidth pair, and they are much larger than they look. A
+preview video averages 714 KB and is the biggest single object we hand out; a catalog
+poster served at its baked 320px width is 41 KB against 113 KB for the original. Pull
+them together:
+
+```bash
+curl -s -X POST https://www.gamedev.pl/api/admin/creation-limits \
+  -H 'content-type: application/json' -b "__session=$SESSION" \
+  -d '{"videoPaused":true,"mediaLean":true}'
+```
+
+The catalog keeps working and looks worse. That is the trade; make it early rather than
+late, because egress is billed on bytes already delivered and cannot be refunded.
+
+**Rung 6 closes the site**, and it is the one rung that changes what a stranger sees: the
+waitlist splash instead of the arcade. It is the same wall the private beta used, reached
+from the operator document rather than from `PRIVATE_BETA`, so it needs no deploy and
+drops no party rooms. Everyone already signed in keeps the full product. Arrivals become
+a list instead of a bill.
+
+```bash
+curl -s -X POST https://www.gamedev.pl/api/admin/creation-limits \
+  -H 'content-type: application/json' -b "__session=$SESSION" \
+  -d '{"anonymousPaused":true}'
+```
+
+## 3b. The rungs the budget pulls by itself
+
+The spend brake (`infra/setup-spend-brake.sh`) subscribes to billing budgets and pulls
+lanes without being asked. Its grading, from `budgetLanes` in `spend-brake.ts`:
+
+| Budget state       | What it pauses                              |
+| ------------------ | ------------------------------------------- |
+| forecast over 100% | the platform agent                          |
+| spent over 100%    | + round-0 seeding, the gate                 |
+| spent over 125%    | + rungs 4 and 5 (video, images)             |
+| spent over 150%    | everything, including rung 6 (the site closes) |
+
+A per-service budget overrides the ladder by naming lanes in its own display name, which
+is how an egress budget reaches only the bandwidth rungs:
+
+```bash
+# Name it "GCS egress lanes=video_media"; over 100% pulls exactly those two.
+gcloud billing budgets update BUDGET_ID --billing-account ACCOUNT_ID \
+  --notifications-rule-pubsub-topic=projects/gamedevpl/topics/spend-brake
+```
+
+Every budget must publish to that topic or it is only an email. Check which do:
+
+```bash
+gcloud billing budgets list --billing-account ACCOUNT_ID \
+  --format='table(displayName, notificationsRule.pubsubTopic)'
+```
 
 ## 4. If it is going wrong anyway
 
@@ -129,4 +196,7 @@ rooms must never scale out. See [`deployment.md`](../deployment.md).
 - [ ] `--min-instances 0` again.
 - [ ] Restore the creation quotas and clear any rung you pulled.
 - [ ] `telemetrySampleRate` back to `null`.
+- [ ] `videoPaused`, `mediaLean`, `anonymousPaused` back to `false`. The brake never
+      resumes a lane it pulled, by design — a rung left up is the failure mode here, and
+      `/admin/limits` shows who set each one and when.
 - [ ] Write down what actually happened, and correct this file where it was wrong.

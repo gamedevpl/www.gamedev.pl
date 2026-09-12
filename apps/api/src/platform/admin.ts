@@ -238,6 +238,10 @@ const CreationLimitsPatchShape = z.object({
   // Load-shedding rungs 2 and 3; see docs/runbooks/launch-day.md.
   telemetrySampleRate: z.number().min(0).max(1).nullable().optional(),
   partyPaused: z.boolean().optional(),
+  // Bandwidth rungs; listed so an operator can clear them.
+  videoPaused: z.boolean().optional(),
+  mediaLean: z.boolean().optional(),
+  anonymousPaused: z.boolean().optional(),
   // Same document: whether the platform builder is offered. See managed-availability.ts.
   managedBuilderMode: z.enum(MANAGED_BUILDER_MODES).optional(),
   // null clears the override, same as globalDailySubmissionCap above.

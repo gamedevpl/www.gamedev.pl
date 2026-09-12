@@ -8,10 +8,12 @@ import path from 'node:path';
 import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyServerOptions } from 'fastify';
 import { registerAccessTokenRoutes, type AccessTokenRoutesOptions } from './access-token-routes.js';
 import { registerApiCachePolicy } from './api-cache-policy.js';
+import { registerApiCompression } from './api-compression.js';
 import { registerCanonicalHostRedirect } from './canonical-host.js';
 import { registerClientAddress } from './client-address.js';
 import { registerReadMeterLog } from './read-meter-log.js';
 import { createLoadShedControls } from './load-shedding.js';
+import { registerServingBrake } from './serving-brake.js';
 import { registerProxyDiagnosticsRoutes } from './proxy-diagnostics.js';
 import { registerSecurityHeaders, resolveCspReportOnly } from './security-headers.js';
 import { registerJobAdminRoutes } from '../creation/job-admin-routes.js';
@@ -251,7 +253,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 
   registerClientAddress(app);
   registerReadMeterLog(app);
-  registerApiCachePolicy(app);
+  registerApiCompression(app);
 
   registerErrorHandler(app);
 
@@ -296,6 +298,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       .filter(Boolean),
   );
   const loadShed = createLoadShedControls({ store, logWarn: (p, m) => app.log.warn(p, m) });
+  // One predicate for both the wall and what may be shared by a cache in front of it.
+  const openToVisitors = async () => !privateBeta && !(await loadShed.refusesAnonymous());
+  registerServingBrake(app, { controls: loadShed });
+  registerApiCachePolicy(app, { isOpenToVisitors: openToVisitors });
   const publicPlayFallbackSlugs = new Set(
     parsePublicPlaySlugs(options.publicPlaySlugs ?? process.env.PUBLIC_PLAY_SLUGS),
   );
@@ -1113,7 +1119,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // /api/health, /api/auth/*, and /api/waitlist stay public within the API (probes, login
   // flow, and the waitlist — which by definition serves people who just failed sign-in).
   app.addHook('preHandler', async (request, reply) => {
-    if (!privateBeta) return;
+    // The last rung of the ladder raises this wall on a site that is already open,
+    // without a deploy: arrivals meet the waitlist instead of the bill. Cached for
+    // the breaker's TTL, so the cost here is not a read per request.
+    if (await openToVisitors()) return;
     // No entry here for the OAuth protected-resource document: it is served outside
     // `/api/`, so the next line already passes it through. An exemption that never fires
     // would imply this wall covers that route, and a bypass list has to be read as exact.

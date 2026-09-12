@@ -149,6 +149,8 @@ const FILE_BUCKET = {
   'job-state': 'platform',
   // Daily ceiling on signed media URLs. Pure counters, no relative imports.
   'media-mint-budget': 'platform',
+  'serving-brake': 'platform',
+  'api-compression': 'platform',
   // Which model may stand in for which. No relative imports at all.
   'vertex-fallback-models': 'platform',
   // Retry/fallback loop around a Vertex call. No relative imports at all.
@@ -389,6 +391,7 @@ const FILE_BUCKET = {
   'assembled-game-cache': 'catalog',
   'slug-resolver': 'catalog',
   'catalog-enricher': 'catalog',
+  'erased-attribution': 'catalog',
   'catalog-indexer': 'catalog',
   'catalog-vector-index': 'catalog',
   'catalog-routes': 'catalog',
