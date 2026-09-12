@@ -17,6 +17,32 @@ describe('uncollectedFeedbackCause', () => {
         state: 'building',
         lastAgentSignalAt: '2026-09-08T23:44:38.627Z',
         agentEndedAt: '2026-09-11T07:44:53.454Z',
+        agentEndedBy: 'end',
+      }),
+    ).toBe('agent_ended');
+  });
+
+  it('does not call a submit marker an ended session', () => {
+    // Agents often submit without calling end.
+    expect(
+      uncollectedFeedbackCause({
+        state: 'building',
+        lastAgentSignalAt: '2026-09-12T10:00:00.000Z',
+        agentEndedAt: '2026-09-12T10:05:00.000Z',
+        agentEndedBy: 'submit',
+        agentState: 'in_progress',
+      }),
+    ).toBe('agent_expected');
+  });
+
+  it('treats a submit marker as ended once the vendor session is terminal', () => {
+    expect(
+      uncollectedFeedbackCause({
+        state: 'building',
+        lastAgentSignalAt: '2026-09-12T10:00:00.000Z',
+        agentEndedAt: '2026-09-12T10:05:00.000Z',
+        agentEndedBy: 'submit',
+        agentState: 'completed',
       }),
     ).toBe('agent_ended');
   });

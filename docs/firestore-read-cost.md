@@ -113,9 +113,12 @@ message fourteen hours after its agent ended, and one had never had an agent con
 that cannot distinguish those is a true statement nobody can act on. The kind still fires — a
 permanent false alarm is bad, silence is worse — but every stalled job now reports *why* nothing
 collected it (`uncollected-feedback.ts`), which is the difference between re-dispatching a round,
-publishing it, and closing it. The cause goes in the log and the response rather than the
-notification body, because notifications are create-only: adding `{{detail}}` to the body would
-render an empty slot in every alert already emitted.
+publishing it, and closing it. `agentEndedAt` alone does **not** mean the agent left — it is also
+set when an agent submits without calling `end`, and `isAgentSessionEnded` (platform/) is the one
+place that rule lives, shared with `shouldSteerFeedbackViaInbox` so the two cannot drift. The
+cause goes in the log and the response rather than the notification body, because notifications
+are create-only: adding `{{detail}}` to the body would render an empty slot in every alert
+already emitted.
 
 ## Measuring
 

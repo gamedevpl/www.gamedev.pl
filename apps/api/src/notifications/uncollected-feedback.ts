@@ -1,4 +1,5 @@
 import type { JobState } from '@gamedevpl/contract';
+import { isAgentSessionEnded } from '../platform/agent-session.js';
 
 export type UncollectedFeedbackCause =
   'awaiting_gate' | 'awaiting_operator' | 'agent_ended' | 'no_agent_yet' | 'agent_expected';
@@ -9,6 +10,8 @@ export interface UncollectedFeedbackRecord {
   state?: JobState;
   lastAgentSignalAt?: string;
   agentEndedAt?: string;
+  agentEndedBy?: 'submit' | 'end';
+  agentState?: string;
 }
 
 const AWAITING_OPERATOR: ReadonlySet<JobState> = new Set(['ready_for_review', 'publishing']);
@@ -19,7 +22,7 @@ export function uncollectedFeedbackCause(record: UncollectedFeedbackRecord): Unc
   const state = record.state;
   if (state === 'submitted') return 'awaiting_gate';
   if (state && AWAITING_OPERATOR.has(state)) return 'awaiting_operator';
-  if (record.agentEndedAt) return 'agent_ended';
+  if (isAgentSessionEnded(record)) return 'agent_ended';
   if (!record.lastAgentSignalAt && (!state || BEFORE_ANY_SESSION.has(state))) return 'no_agent_yet';
   return 'agent_expected';
 }
