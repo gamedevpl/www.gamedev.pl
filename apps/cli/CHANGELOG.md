@@ -7,6 +7,8 @@ decides the next version — see [`.claude/skills/cli-release/SKILL.md`](../../.
 
 ## Unreleased
 
+## 0.14.1 — 2026-09-12
+
 ### Fixed
 
 - Recover Muse tasks waiting for approval by offering to resume the same session interactively (#1271).
