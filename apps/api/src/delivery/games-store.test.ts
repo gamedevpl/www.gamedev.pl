@@ -36,25 +36,31 @@ const MINIMAL: SourceFile[] = [
   { path: 'GAME.json', content: JSON.stringify({ engine: { modules: [] }, howToPlay: HOW_TO_PLAY }) },
 ];
 
+const MINIMAL_WITH_EDITOR: SourceFile[] = [
+  ...MINIMAL,
+  {
+    path: 'EDITOR.ts',
+    content: "import { defineEditor } from '../../shared/editor-def.ts';\nexport default defineEditor({});",
+  },
+];
+
 describe('validateSourceUpload — the delivery contract', () => {
   it('accepts a minimal game', () => {
     expect(validateSourceUpload(MINIMAL)).toHaveLength(MINIMAL.length);
   });
 
   it('accepts editor authoring imports from the Kit without uploading shared sources', () => {
-    const files = [
-      ...MINIMAL,
-      {
-        path: 'EDITOR.ts',
-        content: "import { defineEditor } from '../../shared/editor-def.ts';\nexport default defineEditor({});",
-      },
-    ];
     const kit = new Set(['shared/editor-def.ts']);
-    expect(validateSourceUpload(files, 'publish', false, false, kit)).toHaveLength(files.length);
-    expect(() => validateSourceUpload(files)).toThrow(/missing from the delivery/);
-    expect(() => validateSourceUpload(files, 'publish', false, false, new Set(['shared/game-kit.d.ts']))).toThrow(
-      /missing from the delivery/,
+    expect(validateSourceUpload(MINIMAL_WITH_EDITOR, 'publish', false, false, kit)).toHaveLength(
+      MINIMAL_WITH_EDITOR.length,
     );
+    expect(validateSourceUpload(MINIMAL_WITH_EDITOR, 'publish', false, false, 'defer')).toHaveLength(
+      MINIMAL_WITH_EDITOR.length,
+    );
+    expect(() => validateSourceUpload(MINIMAL_WITH_EDITOR)).toThrow(/missing from the delivery/);
+    expect(() =>
+      validateSourceUpload(MINIMAL_WITH_EDITOR, 'publish', false, false, new Set(['shared/game-kit.d.ts'])),
+    ).toThrow(/missing from the delivery/);
   });
 
   it('refuses a publish with no behavioural golden', () => {
@@ -652,6 +658,24 @@ describe('GCS games store', () => {
       model: 'claude-sonnet-4.6',
       engineRef: 'abc123',
     });
+  });
+
+  it('defers Kit paths for copied candidates and still fail-closes agent delivery', async () => {
+    const { impl } = stubGcs();
+    const store = createGcsGamesStore({ ...base, fetchImpl: impl });
+    for (const extra of [
+      { origin: 'seal' as const },
+      { origin: 'editor' as const },
+      { origin: 'remix' as const },
+      { mode: 'proposal' as const, proposal: { id: 'p1', proposerUid: 'u1' } },
+    ]) {
+      await expect(
+        store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL_WITH_EDITOR, ...extra }),
+      ).resolves.toMatchObject({ version: expect.stringMatching(/^v/) });
+    }
+    await expect(store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL_WITH_EDITOR })).rejects.toThrow(
+      /missing from the delivery/,
+    );
   });
 
   it('writes the manifest last, so a dead run leaves no version claiming missing files', async () => {

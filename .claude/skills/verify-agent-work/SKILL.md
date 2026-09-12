@@ -339,7 +339,11 @@ Two concrete instances of that (observed 2026-07-23):
   against them), and keep unimported Kit files out of typecheck _roots_ while leaving
   them in the resolution map — otherwise opt-in ambient `.d.ts` globals typecheck as
   present. A same-line `import …; export default` also evades the line-anchored import
-  regex, so a regression test must put the import on its own line.
+  regex, so a regression test must put the import on its own line. Fail-closed on agent
+  delivery (no Kit → refuse `/shared/`) is not the same as copied candidates
+  (seal/editor/remix/proposal): those rewrite sources without a Kit store. Defer `/shared/`
+  there (`kitShared: 'defer'`) or a green preview later `seal_failed`. A Set still
+  fail-closes agent delivery.
 
 ## Read the diff against the spec
 

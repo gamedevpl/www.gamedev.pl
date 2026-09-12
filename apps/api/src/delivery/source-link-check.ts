@@ -269,14 +269,17 @@ function kitSharedHas(kitShared: ReadonlySet<string>, rel: string): boolean {
   return false;
 }
 
-// Kit-owned only when the pinned Kit listed the path.
+export type KitSharedLookup = ReadonlySet<string> | 'defer';
+
+// Set membership, or defer for copied candidates.
 function kitSharedImportState(
   from: string,
   importPath: string,
-  kitShared: ReadonlySet<string> | undefined,
+  kitShared: KitSharedLookup | undefined,
 ): 'not-kit' | 'owned' | 'missing' {
   const workspacePath = posix.resolve('/games/delivery', posix.dirname(from), importPath);
   if (!workspacePath.startsWith('/shared/')) return 'not-kit';
+  if (kitShared === 'defer') return 'owned';
   if (!kitShared) return 'missing';
   return kitSharedHas(kitShared, workspacePath.slice(1)) ? 'owned' : 'missing';
 }
@@ -284,7 +287,7 @@ function kitSharedImportState(
 // Find unresolved relative imports across a source map.
 export function findUnresolvedSourceLinks(
   files: ReadonlyMap<string, string>,
-  kitShared?: ReadonlySet<string>,
+  kitShared?: KitSharedLookup,
 ): SourceLinkFinding[] {
   const findings: SourceLinkFinding[] = [];
   const exportCache = new Map<string, ExportInfo>();
