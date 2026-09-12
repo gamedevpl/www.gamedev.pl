@@ -458,7 +458,7 @@ describeStoreContract('proposal posting', (makeStore) => {
         roundGeneration: 1,
         blocked: () => false,
       }),
-    ).not.toBeNull();
+    ).toEqual({ posted: expect.objectContaining({ proposal }) });
     expect(await store.listCreatorMessages(11)).toHaveLength(1);
   });
 
@@ -476,7 +476,7 @@ describeStoreContract('proposal posting', (makeStore) => {
         roundGeneration: 1,
         blocked: () => false,
       }),
-    ).toBeNull();
+    ).toEqual({ posted: null, refusedBy: 'muted' });
     expect(await store.listCreatorMessages(11)).toEqual([]);
   });
 
@@ -493,7 +493,7 @@ describeStoreContract('proposal posting', (makeStore) => {
         roundGeneration: 1,
         blocked: () => false,
       }),
-    ).toBeNull();
+    ).toEqual({ posted: null, refusedBy: 'round' });
     expect(await store.listCreatorMessages(11)).toEqual([]);
   });
 
@@ -510,7 +510,7 @@ describeStoreContract('proposal posting', (makeStore) => {
         roundGeneration: 1,
         blocked: () => false,
       }),
-    ).toBeNull();
+    ).toEqual({ posted: null, refusedBy: 'paused' });
     expect(await store.listCreatorMessages(11)).toEqual([]);
   });
 
@@ -525,7 +525,7 @@ describeStoreContract('proposal posting', (makeStore) => {
         roundGeneration: 1,
         blocked: () => true,
       }),
-    ).toBeNull();
+    ).toEqual({ posted: null, refusedBy: 'blocked' });
     expect(await store.listCreatorMessages(11)).toEqual([]);
   });
 
@@ -548,7 +548,7 @@ describeStoreContract('proposal posting', (makeStore) => {
         roundGeneration: 1,
         blocked: () => false,
       }),
-    ).toBeNull();
+    ).toEqual({ posted: null, refusedBy: 'claim' });
   });
 
   it('leaves a finished run finished, however it ended', async () => {
@@ -581,7 +581,7 @@ describeStoreContract('proposal posting', (makeStore) => {
         roundGeneration: 1,
         blocked: () => false,
       }),
-    ).not.toBeNull();
+    ).toEqual({ posted: expect.objectContaining({ text: 'Two more.' }) });
     expect((await store.getSubmission(11))?.dreamRun?.endedAt).toBeUndefined();
   });
 
@@ -599,7 +599,7 @@ describeStoreContract('proposal posting', (makeStore) => {
         roundGeneration: 1,
         blocked: () => false,
       }),
-    ).toBeNull();
+    ).toEqual({ posted: null, refusedBy: 'claim' });
 
     // The replacement is still recoverable, and still the one that may post.
     expect(await store.claimDreamRun(11, 'v1', '2026-09-07T14:00:00.000Z', 1)).toBe(true);
@@ -626,7 +626,7 @@ describeStoreContract('proposal posting', (makeStore) => {
         roundGeneration: 1,
         blocked: () => false,
       }),
-    ).toBeNull();
+    ).toEqual({ posted: null, refusedBy: 'claim' });
     expect(await store.listCreatorMessages(11)).toEqual([]);
   });
 });

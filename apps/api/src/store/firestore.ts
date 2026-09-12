@@ -57,7 +57,7 @@ import type { TelemetryEvent, VisitEvent } from './records/telemetry.js';
 import { FirestoreAccessTokensStore } from './slices/access-tokens.js';
 import { FirestoreAccessStore } from './slices/access.js';
 import { FirestoreAgentKeysStore } from './slices/agent-keys.js';
-import { FirestoreBuildLogStore } from './slices/build-log.js';
+import { FirestoreBuildLogStore, type ProposalPostResult } from './slices/build-log.js';
 import {
   FirestoreBuildMediaStore,
   type BuildShotCountOptions,
@@ -679,7 +679,7 @@ export class FirestoreStore extends SubmissionFacade implements Store {
       roundGeneration: number;
       blocked: (job: SubmissionRecord) => boolean;
     },
-  ): Promise<CreatorMessage | null> {
+  ): Promise<ProposalPostResult> {
     return this.buildLogStore.appendProposalMessage(jobId, claim, text, opts);
   }
 

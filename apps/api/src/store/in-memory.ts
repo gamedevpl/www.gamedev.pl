@@ -57,7 +57,7 @@ import type { TelemetryEvent, VisitEvent } from './records/telemetry.js';
 import { InMemoryAccessTokensStore } from './slices/access-tokens.js';
 import { InMemoryAccessStore } from './slices/access.js';
 import { InMemoryAgentKeysStore } from './slices/agent-keys.js';
-import { InMemoryBuildLogStore } from './slices/build-log.js';
+import { InMemoryBuildLogStore, type ProposalPostResult } from './slices/build-log.js';
 import {
   InMemoryBuildMediaStore,
   type BuildShotCountOptions,
@@ -610,7 +610,7 @@ export class InMemoryStore extends SubmissionFacade implements Store {
       roundGeneration: number;
       blocked: (job: SubmissionRecord) => boolean;
     },
-  ): Promise<CreatorMessage | null> {
+  ): Promise<ProposalPostResult> {
     return this.buildLogStore.appendProposalMessage(jobId, claim, text, opts);
   }
 

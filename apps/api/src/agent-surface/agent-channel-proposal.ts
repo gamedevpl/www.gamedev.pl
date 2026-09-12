@@ -11,6 +11,7 @@ import {
 import { imageSize, isPng, sameAspectRatio } from '../platform/image-size.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
+import type { ProposalRefusedBy } from '../store/slices/build-log.js';
 
 // Two directions, same as the platform's own proposal.
 export const PROPOSAL_OPTIONS = 2;
@@ -29,6 +30,15 @@ export type ProposalRefusal =
   | 'frame_shape'
   // A label or prompt that is nothing but markup once sanitized.
   | 'empty_text';
+
+// The store decided; this only names the decision for the agent.
+const REFUSAL_OF: Record<ProposalRefusedBy, ProposalRefusal> = {
+  blocked: 'stopped',
+  paused: 'paused',
+  muted: 'muted',
+  round: 'frame_stale',
+  claim: 'already_proposed',
+};
 
 const OptionSchema = z.object({
   label: z
@@ -176,7 +186,7 @@ export function registerAgentChannelProposalRoutes(app: FastifyInstance, deps: A
         frameRef: option.frameId,
       }));
       // The platform job's posting transaction: claim, mute and stamp together.
-      const posted = await store.appendProposalMessage(jobId, { version, claimedAt }, PROPOSAL_TEXT_EN, {
+      const result = await store.appendProposalMessage(jobId, { version, claimedAt }, PROPOSAL_TEXT_EN, {
         textLocalized: PROPOSAL_TEXT_PL,
         locale: 'pl',
         proposal: { sourceRef: sourceShot.id, version, options, builder: 'self' },
@@ -184,14 +194,10 @@ export function registerAgentChannelProposalRoutes(app: FastifyInstance, deps: A
         roundGeneration,
         blocked: (job) => stopReason(job) !== null,
       });
-      if (!posted) {
-        // Every way the transaction refuses, in the entry checks' order.
+      if (result.posted === null) {
+        // The guard that fired, not a guess reconstructed from later reads.
         const live = (await store.getSubmission(jobId)) ?? record;
-        if (stopReason(live)) return reject('stopped', live);
-        if (!(await dreamingEnabled())) return reject('paused', live);
-        if ((await store.getUser(record.ownerUid))?.proposalsMutedAt) return reject('muted', live);
-        if ((live.roundGeneration ?? 1) !== roundGeneration) return reject('frame_stale', live);
-        return reject('already_proposed', live);
+        return reject(REFUSAL_OF[result.refusedBy], live);
       }
       deps.onPosted?.(jobId);
 

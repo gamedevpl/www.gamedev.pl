@@ -13,6 +13,11 @@ export function byNewestFirst(a: { createdAt: string; id: string }, b: { created
   return b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id);
 }
 
+// Which guard refused, decided with the write rather than read back after.
+export type ProposalRefusedBy = 'claim' | 'round' | 'muted' | 'paused' | 'blocked';
+
+export type ProposalPostResult = { posted: CreatorMessage } | { posted: null; refusedBy: ProposalRefusedBy };
+
 export interface BuildLogStore {
   // Appends a progress event. Returns it with its assigned id and timestamp.
   appendBuildEvent(
@@ -65,7 +70,7 @@ export interface BuildLogStore {
       // The caller's stop rule, re-checked against the written row.
       blocked: (job: SubmissionRecord) => boolean;
     },
-  ): Promise<CreatorMessage | null>;
+  ): Promise<ProposalPostResult>;
 
   // Undelivered messages, oldest first -- the agent's inbox. Never a 'studio' row.
   listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
@@ -202,17 +207,17 @@ export class InMemoryBuildLogStore implements BuildLogStore {
       roundGeneration: number;
       blocked: (job: SubmissionRecord) => boolean;
     },
-  ): Promise<CreatorMessage | null> {
+  ): Promise<ProposalPostResult> {
     const record = this.submissions.get(jobId);
-    if (!holdsDreamClaim(record, claim)) return null;
-    if ((record?.roundGeneration ?? 1) !== opts.roundGeneration) return null;
-    if (this.users.get(opts.ownerUid)?.proposalsMutedAt) return null;
-    if ((await this.limits())?.dreamsPaused === true) return null;
-    if (opts.blocked(record!)) return null;
+    if (!holdsDreamClaim(record, claim)) return { posted: null, refusedBy: 'claim' };
+    if ((record?.roundGeneration ?? 1) !== opts.roundGeneration) return { posted: null, refusedBy: 'round' };
+    if (this.users.get(opts.ownerUid)?.proposalsMutedAt) return { posted: null, refusedBy: 'muted' };
+    if ((await this.limits())?.dreamsPaused === true) return { posted: null, refusedBy: 'paused' };
+    if (opts.blocked(record!)) return { posted: null, refusedBy: 'blocked' };
     const posted = await this.appendCreatorMessage(jobId, text, { ...opts, origin: 'studio', delivered: true });
     // Stamped with the card: only a posted claim is final.
     this.submissions.set(jobId, { ...record!, dreamRun: { ...record!.dreamRun!, postedAt: posted.createdAt } });
-    return posted;
+    return { posted };
   }
 
   async listPendingCreatorMessages(jobId: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
@@ -358,7 +363,7 @@ export class FirestoreBuildLogStore implements BuildLogStore {
       roundGeneration: number;
       blocked: (job: SubmissionRecord) => boolean;
     },
-  ): Promise<CreatorMessage | null> {
+  ): Promise<ProposalPostResult> {
     const now = new Date().toISOString();
     const record: CreatorMessage = {
       id: randomUUID(),
@@ -377,16 +382,20 @@ export class FirestoreBuildLogStore implements BuildLogStore {
       // The operator's pause, read with the write rather than before it.
       const ops = await transaction.get(this.db.collection('opsConfig').doc('creationLimits'));
       const job = snap.data() as SubmissionRecord | undefined;
-      if (!snap.exists || !holdsDreamClaim(job, claim)) return null;
+      if (!snap.exists || !holdsDreamClaim(job, claim)) return { posted: null, refusedBy: 'claim' };
       // A reopen bumps the generation and leaves the version alone.
-      if ((job?.roundGeneration ?? 1) !== opts.roundGeneration) return null;
-      if ((owner.data() as { proposalsMutedAt?: string | null } | undefined)?.proposalsMutedAt) return null;
-      if ((ops.data() as { dreamsPaused?: boolean } | undefined)?.dreamsPaused === true) return null;
-      if (opts.blocked(job!)) return null;
+      if ((job?.roundGeneration ?? 1) !== opts.roundGeneration) return { posted: null, refusedBy: 'round' };
+      if ((owner.data() as { proposalsMutedAt?: string | null } | undefined)?.proposalsMutedAt) {
+        return { posted: null, refusedBy: 'muted' };
+      }
+      if ((ops.data() as { dreamsPaused?: boolean } | undefined)?.dreamsPaused === true) {
+        return { posted: null, refusedBy: 'paused' };
+      }
+      if (opts.blocked(job!)) return { posted: null, refusedBy: 'blocked' };
       transaction.set(this.messagesCollection(jobId).doc(record.id), record);
       // Stamped with the card: only a posted claim is final.
       transaction.set(this.submissionRef(jobId), { dreamRun: { ...job!.dreamRun!, postedAt: now } }, { merge: true });
-      return record;
+      return { posted: record };
     });
   }
 

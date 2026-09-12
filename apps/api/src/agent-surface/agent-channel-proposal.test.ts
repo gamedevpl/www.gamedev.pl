@@ -198,6 +198,30 @@ describe('agent-written concept proposals', () => {
     expect(await store.listCreatorMessages(ISSUE)).toHaveLength(0);
   });
 
+  it('names the pause the transaction saw, not the one lifted straight after', async () => {
+    vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
+    const store = new InMemoryStore();
+    await seed(store);
+    app = await createApp(store, stubGamesStore());
+    const frames = [await storeConceptFrame(store), await storeConceptFrame(store)];
+    const realShot = store.appendBuildShot.bind(store);
+    store.appendBuildShot = async (jobId, shot) => {
+      await store.setCreationLimits({ dreamsPaused: true }, 'g:boss');
+      return await realShot(jobId, shot);
+    };
+    const realPost = store.appendProposalMessage.bind(store);
+    store.appendProposalMessage = async (...args) => {
+      const result = await realPost(...args);
+      // The operator lifts it again before anything could read it back.
+      await store.setCreationLimits({ dreamsPaused: false }, 'g:boss');
+      return result;
+    };
+
+    const response = await propose(app, frames);
+    expect(response.json().rejected).toBe('paused');
+    expect(await store.listCreatorMessages(ISSUE)).toHaveLength(0);
+  });
+
   it('stops the agent when the round closes while the source shot is written', async () => {
     vi.stubEnv('AGENT_PROPOSALS_ENABLED', 'true');
     const store = new InMemoryStore();

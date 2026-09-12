@@ -8,6 +8,7 @@ import {
 import { imageSize, isPng, sameAspectRatio, type ImageSize } from '../platform/image-size.js';
 import type { Store } from '../platform/store.js';
 import { dreamClaimHolds } from '../store/slices/round-budget.js';
+import type { ProposalRefusedBy } from '../store/slices/build-log.js';
 import { resolveJobState } from './job-state.js';
 import type { SubmissionRecord } from '../store/records/submission.js';
 import type { DreamAvailabilityGate } from './dream-availability.js';
@@ -34,6 +35,15 @@ export type DreamOutcome =
   | 'no_frames'
   | 'superseded'
   | 'failed';
+
+// Naming for the store's refusal; a lost claim means superseded.
+const OUTCOME_OF: Record<ProposalRefusedBy, DreamOutcome> = {
+  paused: 'paused',
+  muted: 'muted',
+  blocked: 'superseded',
+  round: 'superseded',
+  claim: 'superseded',
+};
 
 export interface DreamLog {
   error: (context: object, message: string) => void;
@@ -205,7 +215,7 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       builder: record.builder === 'self' ? 'self' : 'platform',
     };
     // Posted only if the claim still holds, in one transaction.
-    const posted = await store.appendProposalMessage(jobId, { version, claimedAt }, PROPOSAL_TEXT_EN, {
+    const result = await store.appendProposalMessage(jobId, { version, claimedAt }, PROPOSAL_TEXT_EN, {
       textLocalized: PROPOSAL_TEXT_PL,
       locale: 'pl',
       proposal,
@@ -214,8 +224,8 @@ export function createDreamJob(deps: DreamJobDeps): DreamJob {
       // Publishing is this job's cue; abandoning and cancelling are stops.
       blocked: (job) => Boolean(job.abandonedAt) || resolveJobState(job) === 'canceled',
     });
-    // The transaction refuses on a mute too; name the real reason.
-    if (!posted) return (await stopped()) ?? 'superseded';
+    // The guard that fired, reported rather than re-derived from later reads.
+    if (result.posted === null) return OUTCOME_OF[result.refusedBy];
     deps.onPosted?.(jobId);
     return 'posted';
   }
