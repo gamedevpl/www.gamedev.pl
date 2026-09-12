@@ -103,6 +103,43 @@ describe.each(['/gamedevpl', '/creators/gamedevpl'])('the home alias %s', (path)
   });
 });
 
+// App's invite branch has no privateBeta condition.
+describe('an invite link on an open site', () => {
+  it('still gets the splash, without loading the app', async () => {
+    Object.assign(session, { privateBeta: false });
+    const { text, root } = await renderAt(`/invite/${INVITE_CODE}`);
+    expect(text).toBe(`splash:${INVITE_CODE}`);
+    root.unmount();
+  });
+
+  it('gives a signed-in visitor the app, which shows the invite page', async () => {
+    Object.assign(session, { privateBeta: false, user: { uid: 'g:someone' } });
+    const { text, root } = await renderAt(`/invite/${INVITE_CODE}`);
+    expect(text).toBe('app');
+    root.unmount();
+  });
+});
+
+describe('the title App would have set', () => {
+  it('is route-specific, not the static one index.html ships', async () => {
+    document.title = 'stale';
+    const home = await renderAt('/');
+    const homeTitle = document.title;
+    home.root.unmount();
+
+    document.title = 'stale';
+    const invite = await renderAt(`/invite/${INVITE_CODE}`);
+    const inviteTitle = document.title;
+    invite.root.unmount();
+
+    expect(homeTitle).not.toBe('stale');
+    expect(inviteTitle).not.toBe('stale');
+    // Copy is not pinned; that the two differ is the point.
+    expect(inviteTitle).not.toBe(homeTitle);
+    expect(inviteTitle).toContain('Gamedev.pl');
+  });
+});
+
 describe('BootGate, once the wall does not apply', () => {
   it('loads the app for a signed-in visitor', async () => {
     Object.assign(session, { user: { uid: 'g:someone' } });
