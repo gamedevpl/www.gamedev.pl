@@ -169,6 +169,39 @@ describe('VisitFunnelPanel', () => {
     expect(text).toContain('Nobody clicked Join waitlist');
   });
 
+  it('renders framed-play clicks as a share of shown, not of all visits', () => {
+    const text = render(
+      response({
+        visits: 10,
+        framedPlay: [
+          { step: 'shown', visits: 4 },
+          { step: 'open_new', visits: 2 },
+          { step: 'open_here', visits: 1 },
+        ],
+      }),
+    );
+    expect(text).toContain('Framed play');
+    expect(text).toContain('saw the framed play card');
+    expect(text).toContain('opened in a new window');
+    expect(text).toContain('opened in this tab');
+    expect(text).toContain('50%');
+    expect(text).toContain('25%');
+  });
+
+  it('says so when nobody landed in a framed play', () => {
+    const text = render(
+      response({
+        visits: 3,
+        framedPlay: [
+          { step: 'shown', visits: 0 },
+          { step: 'open_new', visits: 0 },
+          { step: 'open_here', visits: 0 },
+        ],
+      }),
+    );
+    expect(text).toContain('Nobody landed in a framed play');
+  });
+
   it('renders the editing funnel as a share of openers, not of all visits', () => {
     const text = render(
       response({

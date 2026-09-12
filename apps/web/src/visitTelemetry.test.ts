@@ -17,7 +17,9 @@ import {
   recordStudioStep,
   recordVisitEvent,
   recordPartyStep,
+  playHandoffHref,
   recordWaitlistStep,
+  recordFramedPlayStep,
   referrerDomain,
   routeKind,
   sanitizeUtm,
@@ -92,6 +94,19 @@ describe('utmFields', () => {
   it('omits fields entirely rather than sending empties', () => {
     expect(utmFields('?utm_source=x')).toEqual({ utmSource: 'x' });
     expect(utmFields('')).toEqual({});
+  });
+});
+
+describe('playHandoffHref', () => {
+  it('keeps only the sanitized grouping UTM fields', () => {
+    expect(playHandoffHref('unicorn-snap', '?utm_source=JS13k&utm_medium=embed&utm_term=drop&foo=1')).toBe(
+      '/play/unicorn-snap?utm_source=js13k&utm_medium=embed',
+    );
+  });
+
+  it('drops the query when nothing survives sanitizing', () => {
+    expect(playHandoffHref('unicorn-snap', '')).toBe('/play/unicorn-snap');
+    expect(playHandoffHref('unicorn-snap', '?utm_source=https://evil.example&foo=1')).toBe('/play/unicorn-snap');
   });
 });
 
@@ -435,6 +450,30 @@ describe('recordWaitlistStep', () => {
   it('is a silent no-op when tracking was never started', () => {
     setVisitSessionForTesting(null);
     expect(() => recordWaitlistStep('cta_clicked')).not.toThrow();
+  });
+});
+
+describe('recordFramedPlayStep', () => {
+  it('records each framed-play step once per visit', () => {
+    const { batches, send } = capture();
+    const session = new VisitSession('v1', 0, send, () => 0);
+    setVisitSessionForTesting(session);
+
+    recordFramedPlayStep('shown');
+    recordFramedPlayStep('shown');
+    recordFramedPlayStep('open_new');
+    session.flush();
+    setVisitSessionForTesting(null);
+
+    expect(batches[0].events).toEqual([
+      expect.objectContaining({ type: 'framed_play_step', step: 'shown' }),
+      expect.objectContaining({ type: 'framed_play_step', step: 'open_new' }),
+    ]);
+  });
+
+  it('is a silent no-op when tracking was never started', () => {
+    setVisitSessionForTesting(null);
+    expect(() => recordFramedPlayStep('shown')).not.toThrow();
   });
 });
 

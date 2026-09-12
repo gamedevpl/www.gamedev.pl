@@ -1,10 +1,15 @@
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { playPath } from './core/router.js';
+import { playHandoffHref, recordFramedPlayStep } from './visitTelemetry.js';
 import './FramedPlayInterstitial.css';
 
 export function FramedPlayInterstitial({ slug }: { slug: string }) {
   const { t } = useTranslation();
-  const href = playPath(slug);
+  const href = playHandoffHref(slug, window.location.search);
+
+  useEffect(() => {
+    recordFramedPlayStep('shown');
+  }, []);
 
   return (
     <main className="beta-splash framed-play">
@@ -16,10 +21,21 @@ export function FramedPlayInterstitial({ slug }: { slug: string }) {
         <h1 className="beta-splash__headline">{t('framedPlay.headline')}</h1>
         <p className="beta-splash__sub">{t('framedPlay.sub')}</p>
         <div className="beta-splash__waitlist">
-          <a className="beta-splash__waitlist-btn" href={href} target="_blank" rel="noopener noreferrer">
+          <a
+            className="beta-splash__waitlist-btn"
+            href={href}
+            target="_blank"
+            rel="noopener"
+            onClick={() => recordFramedPlayStep('open_new')}
+          >
             {t('framedPlay.openNew')}
           </a>
-          <a className="framed-play__open-top" href={href} target="_top">
+          <a
+            className="framed-play__open-top"
+            href={href}
+            target="_top"
+            onClick={() => recordFramedPlayStep('open_here')}
+          >
             {t('framedPlay.openHere')}
           </a>
         </div>

@@ -322,6 +322,26 @@ describe('POST /api/telemetry/visit', () => {
     expect(bad.statusCode).toBe(400);
   });
 
+  it('records a framed-play step and rejects one outside the enum', async () => {
+    const ok = await post(app, {
+      visitId,
+      flushMsSinceStart: 0,
+      events: [{ type: 'framed_play_step', step: 'shown', msSinceStart: 0 }],
+    });
+    expect(ok.statusCode).toBe(202);
+    expect((await store.listVisitEvents(today()))[0]).toMatchObject({
+      type: 'framed_play_step',
+      step: 'shown',
+    });
+
+    const bad = await post(app, {
+      visitId,
+      flushMsSinceStart: 0,
+      events: [{ type: 'framed_play_step', step: 'bounced', msSinceStart: 0 }],
+    });
+    expect(bad.statusCode).toBe(400);
+  });
+
   it('records invite steps and rejects an unknown invite outcome', async () => {
     const ok = await post(app, {
       visitId,
