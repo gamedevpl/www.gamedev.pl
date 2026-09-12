@@ -1540,6 +1540,41 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('shows a card another instance wrote, without waiting out the status cache', async () => {
+    const { githubClient } = createGithubClientStub({ jobId: 77 });
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.jobId, secret);
+    await store.appendCreatorMessage(job.jobId, 'Make the enemies slower.');
+
+    const before = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    expect(before.json().progress.revisions).toHaveLength(1);
+
+    // Straight to the store: another instance invalidates its own cache.
+    await store.appendCreatorMessage(job.jobId, 'I sketched two directions.', {
+      origin: 'studio',
+      delivered: true,
+      proposal: { sourceRef: 'shot-a', version: 'v1', options: [] },
+    });
+
+    const after = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    const revisions = after.json().progress.revisions;
+    expect(revisions).toHaveLength(2);
+    expect(revisions[1].proposal).toMatchObject({ sourceRef: 'shot-a' });
+
+    await app.close();
+  });
+
   it('busts the status cache when the agent acks an inbox message', async () => {
     const { githubClient } = createGithubClientStub({ jobId: 77 });
     const { app, authHeaders, store } = await createApp({

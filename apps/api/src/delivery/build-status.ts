@@ -4,6 +4,7 @@ import { stripPlaytestContext } from '../platform/playtest-context.js';
 import { detectStall, toSubmissionStatus } from '../creation/job-state.js';
 import { hydrateRecentBuildSummaries } from '../platform/build-changelog.js';
 import { isStudioOrigin } from '../platform/store.js';
+import { progressOf } from './native-job-status.js';
 import type { ManagedAvailabilityGate } from '../agent-surface/managed-availability.js';
 import type { GamesStore } from './games-store.js';
 import type {
@@ -249,13 +250,17 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
     jobId: number,
     locale: string,
   ): Promise<SubmissionStatusResponse> {
-    const [loadedEvents, media, playable, record] = await Promise.all([
+    const [loadedEvents, media, playable, record, messages] = await Promise.all([
       loadBuildEvents(jobId),
       buildMedia(jobId, locale),
       buildPlayables(jobId, locale),
       // Soft: a store blip must not 500 a cached status poll.
       store ? store.getSubmission(jobId).catch(() => null) : Promise.resolve(null),
+      // Read here, not from the cache: the writer is another instance.
+      store ? store.listCreatorMessages(jobId, { limit: 20 }).catch(() => null) : Promise.resolve(null),
     ]);
+    const live = messages ? progressOf(messages, record?.previewVersion ?? record?.deliveredVersion) : undefined;
+    const progress = live ?? status.progress;
     // Drop leftover synthetic presence steps from before heartbeats stopped writing chat.
     const events = loadedEvents.filter((event) => !isPresenceEventText(event.text, event.createdAt));
     const next: SubmissionStatusResponse = {
@@ -264,9 +269,7 @@ export function createBuildStatusAssembler(options: BuildStatusOptions): BuildSt
       ...(media.length > 0 ? { media } : {}),
       ...(playable.length > 0 ? { playable } : {}),
       // Resolved here, not in nativeJobStatus, so the cache stays language-neutral.
-      ...(status.progress
-        ? { progress: { ...status.progress, revisions: localizeRevisions(status.progress.revisions, locale) } }
-        : {}),
+      ...(progress ? { progress: { ...progress, revisions: localizeRevisions(progress.revisions, locale) } } : {}),
     };
     if (!record) return next;
 
