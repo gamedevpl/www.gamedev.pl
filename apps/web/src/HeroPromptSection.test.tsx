@@ -163,7 +163,9 @@ describe('HeroPromptSection', () => {
     expect(container.querySelector('.prompt-composer-bar.is-busy')).not.toBeNull();
     expect(container.querySelector('.build-btn-spinner')).not.toBeNull();
     expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Analyzing your idea/i);
-    expect(container.querySelector('.creation-card.is-busy .creation-sub')?.textContent).toMatch(/Become the creator/i);
+    expect(container.querySelector('.creation-card.is-busy .creation-sub')?.textContent).toMatch(
+      /A coding agent writes it/i,
+    );
     expect(container.querySelector('.creation-card.is-busy .creation-sub')?.textContent).not.toMatch(
       /Analyzing your idea/i,
     );
@@ -806,7 +808,7 @@ describe('HeroPromptSection', () => {
     expect(container.querySelector('.searching-card')).toBeNull();
     expect(container.querySelector('.matched-card')).toBeNull();
     expect(container.querySelector('.creation-card')).not.toBeNull();
-    expect(container.querySelector('.creation-card')?.textContent).toContain('Opisz swój pomysł na grę');
+    expect(container.querySelector('.creation-card')?.textContent).toContain('Zrobimy z tego grę');
     expect(container.querySelector('.creation-card .build-match-btn')?.textContent).toContain('Stwórz taką grę');
 
     fetchSpy.mockRestore();

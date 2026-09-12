@@ -572,13 +572,7 @@ export function HeroPromptSection({
                   tabIndex={-1}
                   aria-hidden="true"
                 >
-                  <img
-                    src={matchedPoster}
-                    alt=""
-                    className="matched-thumb"
-                    loading="lazy"
-                    decoding="async"
-                  />
+                  <img src={matchedPoster} alt="" className="matched-thumb" loading="lazy" decoding="async" />
                 </a>
               ) : null}
               <div className="matched-info">
@@ -640,9 +634,7 @@ export function HeroPromptSection({
             <div className="smart-intent-card searching-card" role="status" aria-live="polite">
               <span className="searching-spinner" aria-hidden="true" />
               <div className="searching-info">
-                <span className="smart-badge searching-badge">
-                  {t('hero.smartSearching')}
-                </span>
+                <span className="smart-badge searching-badge">{t('hero.smartSearching')}</span>
                 <p className="searching-sub">"{promptText.trim()}"</p>
               </div>
             </div>
@@ -650,7 +642,7 @@ export function HeroPromptSection({
             <div className={`smart-intent-card creation-card${isBusy ? ' is-busy' : ''}`}>
               <div className="creation-info">
                 <span className="smart-badge creation-badge">
-                  <PixelIcon name="sparkle" size={14} /> {t('hero.smartNoMatchTitle', { query: promptText.trim() })}
+                  <PixelIcon name="sparkle" size={14} /> {t('hero.smartNoMatchTitle')}
                 </span>
                 <p className="creation-sub">{t('hero.smartNoMatchSub')}</p>
               </div>
