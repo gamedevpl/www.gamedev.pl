@@ -232,6 +232,7 @@ const FILE_BUCKET = {
   'typecheck-preflight': 'creation',
   'code-lane': 'creation',
   'code-surface': 'creation',
+  'checkout-recovery': 'creation',
   'symbol-map': 'creation',
   'type-check': 'creation',
   'tab-complete': 'creation',
