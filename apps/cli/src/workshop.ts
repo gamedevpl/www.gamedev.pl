@@ -1,3 +1,5 @@
+import { workshopBrief } from './workshop-brief.js';
+export { workshopBrief } from './workshop-brief.js';
 import { runMuseWithApprovals } from './muse-approval.js';
 import { permissionHandoff } from './permission-handoff.js';
 import { prepareAgyPermissions } from './agy-permissions.js';
@@ -14,7 +16,7 @@ import { createInterface } from 'node:readline';
 import type { ApiClient } from './api.js';
 import { detectAdapter, loadAdapters, preflightAdapter, whichOnPath, type AdapterSpec } from './adapters.js';
 import { cliUsage } from './bin-name.js';
-import { formatSyncLines, inspectGame, type SyncResult } from './checkout.js';
+import { changedPaths, localGameFiles, formatSyncLines, inspectGame, type SyncResult } from './checkout.js';
 import { childEnv, createDelegateStream, spawnAdapter } from './delegate.js';
 import { formatError } from './errors.js';
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
@@ -93,20 +95,6 @@ async function spawnLocalAdapter(input: Parameters<AdapterRun>[0]): ReturnType<A
       child.once('close', resolve);
     }),
   };
-}
-
-export function workshopBrief(slug: string, request: string, ack?: string): string {
-  return [
-    `You are editing the gamedev.pl game "${slug}". This directory is its source tree (games/${slug} in the checkout).`,
-    `Creator request: ${request}`,
-    ack ? `Studio understood it as: ${ack}` : '',
-    'Change only files in this directory. Do not run git, install packages, or publish — the creator delivers with `gamedevpl submit`.',
-    'If the creator wants to play, run `gamedevpl play` in this checkout; it opens a live preview without delivering or publishing. Use --no-open for a link only and --stop to close the server.',
-    'The CLI runs typecheck and check:static after you exit. Do not run these checks yourself.',
-    'This is a non-interactive task: do not wait for replies or approvals. If blocked, report the blocker and finish.',
-  ]
-    .filter(Boolean)
-    .join('\n');
 }
 
 export function describeAdapters(adapters: AdapterSpec[], all = loadAdapters().adapters): string {
@@ -298,6 +286,7 @@ export async function runLocalBuild(input: {
         output.preparing(false);
       }
     }
+    let previewUrl: string | undefined;
     if (!ws.runAdapter && !ws.unattended) {
       try {
         const preview = await startLocalPlay({
@@ -308,6 +297,7 @@ export async function runLocalBuild(input: {
           prepared: true,
           abort: controller.signal,
         });
+        previewUrl = preview?.url;
         if (preview) input.write(`live preview while ${spec.name} edits: ${preview.url}`);
       } catch (error) {
         input.write(formatError(error));
@@ -322,7 +312,7 @@ export async function runLocalBuild(input: {
       );
     ws.telemetry?.record('delegate_used', { adapter: spec.name });
     success = await repairLoop({
-      brief: input.brief,
+      brief: `${input.brief}\n${previewUrl ? `The CLI already started this live preview: ${previewUrl}. Open this exact URL with your available browser tool. Do not start or stop another preview server.` : 'No live preview was supplied. If visual work requires a browser or preview unavailable here, report the blocker; the creator can start /play in their terminal.'}`,
       abort: controller.signal,
       activity: (text) => ws.onActivity?.(text),
       write: input.write,
@@ -333,6 +323,7 @@ export async function runLocalBuild(input: {
       },
       run: async (prompt) => {
         presence?.phase('editing');
+        const before = localGameFiles(ws.root, ws.slug);
         const stream = createDelegateStream(spec.name);
         const failure = trackAgentFailure(spec.name);
         let blocked = false;
@@ -381,6 +372,15 @@ export async function runLocalBuild(input: {
             formatError(
               failure.error(result.code, '/diff to review partial edits, then repeat your request when ready'),
             ),
+          );
+          return false;
+        }
+        if (changedPaths(before, localGameFiles(ws.root, ws.slug)).length === 0) {
+          input.write(
+            'No game files changed. Task completion is not confirmed; static checks and delivery were skipped.',
+          );
+          input.write(
+            'If the agent reported missing browser access, enable its browser tool or provide screenshots, then retry. /diff shows existing local edits; /submit delivers them explicitly.',
           );
           return false;
         }

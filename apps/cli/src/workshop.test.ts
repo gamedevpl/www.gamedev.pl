@@ -147,10 +147,14 @@ describe('workshopTurn', () => {
     const seen: string[] = [];
     const lines: string[] = [];
     let picks = 0;
+    let edits = 0;
     const ok = await workshopTurn({
       api: platform(seen),
       ws: workshop(root, {
-        runAdapter: async () => ({ code: 0 }),
+        runAdapter: async () => {
+          writeFileSync(join(root, 'games', SLUG, 'game.ts'), String(edits++));
+          return { code: 0 };
+        },
         run: (_cmd, args) =>
           args[1] === 'check:static' ? { status: 1, stderr: 'game.ts:3 unused import' } : { status: 0, stderr: '' },
         pick: async (choices) => {
@@ -323,7 +327,11 @@ describe('the REPL inside a checkout', () => {
     const lines: string[] = [];
     const prompts: string[] = [];
     const ws = workshop(root, {
-      runAdapter: async (input) => (prompts.push(input.prompt), { code: 0 }),
+      runAdapter: async (input) => {
+        prompts.push(input.prompt);
+        writeFileSync(join(input.cwd, 'game.ts'), 'updated');
+        return { code: 0 };
+      },
       pick: async (choices) => choices[1]!,
     });
     await handleReplLine({
