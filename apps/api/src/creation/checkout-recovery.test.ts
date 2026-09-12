@@ -121,6 +121,27 @@ it('reuses a fully initialized self round after a lost response without rechargi
     spec: body.concept,
   });
 });
+it('rejects a canceled retry key and allows a fresh recovery without losing history', async () => {
+  const f = await fixture();
+  const body = payload();
+  await f.app.inject({ method: 'POST', url: '/api/me/studio/recover', payload: body });
+  const recovered = (await f.store.getSubmissionBySlug('sky'))!;
+  await f.store.recordJobTransition(recovered.jobId, {
+    to: 'canceled',
+    at: new Date().toISOString(),
+    by: 'operator',
+    reason: 'operator_canceled',
+  });
+  await f.store.setSubmissionAbandoned(recovered.jobId, new Date().toISOString());
+  const retry = await f.app.inject({ method: 'POST', url: '/api/me/studio/recover', payload: body });
+  expect(retry.statusCode).toBe(409);
+  expect(retry.json().error).toBe('recovery_changed');
+  expect(f.createGame).toHaveBeenCalledTimes(1);
+  const fresh = await f.app.inject({ method: 'POST', url: '/api/me/studio/recover', payload: payload() });
+  expect(fresh.statusCode).toBe(200);
+  expect((await f.store.getSubmissionBySlug('sky'))?.jobId).not.toBe(recovered.jobId);
+  expect((await f.store.getSubmission(recovered.jobId))?.state).toBe('canceled');
+});
 it('serializes same-millisecond normal creation and recovery claims', async () => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-09-12'));

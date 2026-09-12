@@ -63,8 +63,15 @@ export function registerCheckoutRecovery(
       });
     try {
       const status = await inspect(slug, request.user!.uid);
-      if ('holder' in status && status.holder?.recoveryKey === key)
+      if ('holder' in status && status.holder?.recoveryKey === key) {
+        if (['canceled', 'abandoned', 'failed', 'published'].includes(status.holder.state ?? ''))
+          return reply.code(409).send({
+            error: 'recovery_changed',
+            message:
+              'The recovery round has ended. Run recovery again to start a new draft; your local files are safe.',
+          });
         return { slug, token: mintToken(status.holder.jobId, deps.submissionTokenSecret) };
+      }
       if (status.kind === 'active' || status.kind === 'occupied')
         return reply
           .code(409)
