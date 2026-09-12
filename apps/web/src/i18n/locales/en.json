@@ -656,7 +656,10 @@
       "off": "Off",
       "hintOff": "Only you can play this game right now. Turn this on to give anyone with the link a go — it stays out of the catalog either way.",
       "hintOn": "Anyone with this link can play the latest build. It's the same link the game keeps once it's published, so there's nothing to re-send.",
-      "error": "We couldn't change that just now. Please try again in a moment."
+      "error": "We couldn't change that just now. Please try again in a moment.",
+      "gateRed": "This build didn't pass its checks, and a shared link is public. Fix it, deliver again, then share.",
+      "gatePending": "The checks on this build are still running. Sharing opens as soon as they come back green.",
+      "nothingDelivered": "There is nothing to play yet. Deliver a build first, then share the link."
     },
     "playtest": {
       "hint": "Play the game, pause on a moment worth changing, and send a request with that viewport and live instrumentation attached.",

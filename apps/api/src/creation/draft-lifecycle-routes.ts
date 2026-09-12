@@ -5,12 +5,15 @@ import { InvalidTokenError, verifyToken } from '../platform/submission-token.js'
 import type { GitHubClient } from '../catalog/github-client.js';
 import type { AgentBackend } from '../agent-surface/agent-backend.js';
 import type { Store, SubmissionRecord } from '../platform/store.js';
+import type { ShareRefusal } from '../delivery/draft-share-gate.js';
 import type { BuilderKind } from './builder.js';
 import { isPublished } from '../platform/publication-state.js';
 import { closeJob } from './close-job.js';
 
 export interface DraftLifecycleRoutesOptions {
   store?: Store;
+  // Injected: creation asks delivery for the verdict, never reaches for it.
+  refuseShare?: (record: SubmissionRecord) => Promise<{ error: ShareRefusal; message: string } | null>;
   now: () => number;
   submissionTokenSecret?: string;
   githubClient: GitHubClient | null;
@@ -34,6 +37,7 @@ export async function registerDraftLifecycleRoutes(
 ): Promise<void> {
   const {
     store,
+    refuseShare,
     now,
     submissionTokenSecret,
     githubClient,
@@ -84,6 +88,12 @@ export async function registerDraftLifecycleRoutes(
       }
       if (!record.slug) {
         return reply.status(409).send({ error: 'this game has no address yet' });
+      }
+
+      // A shared link is public; only green opens one.
+      if (parsedBody.data.shared && refuseShare) {
+        const refusal = await refuseShare(record);
+        if (refusal) return reply.status(409).send(refusal);
       }
 
       await store.setDraftShared(jobId, parsedBody.data.shared ? new Date(now()).toISOString() : null);

@@ -135,6 +135,8 @@ export type {
 };
 import type { ReviewStore } from '../store/slices/review.js';
 export type { ReviewStore };
+import type { ModerationFlagStore } from '../store/slices/moderation-flags.js';
+export type { ModerationFlagStore };
 import type { ReviewSweepStore } from '../store/slices/review-sweeps.js';
 export type { ReviewSweepStore };
 import type {
@@ -239,6 +241,7 @@ export interface Store
     SocialStore,
     ReviewStore,
     ReviewSweepStore,
+    ModerationFlagStore,
     PlayerDataStore,
     WorldEntriesStore,
     ContributionStore,

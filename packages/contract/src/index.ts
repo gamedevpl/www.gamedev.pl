@@ -95,6 +95,15 @@ export {
   type ReviewSweepSource,
   type ReviewSweepStatus,
 } from './review-vocab.js';
+export {
+  MODERATION_FLAG_ACTIONS,
+  MODERATION_FLAG_REASONS,
+  MODERATION_FLAG_STATUSES,
+  isModerationFlagReason,
+  type ModerationFlagAction,
+  type ModerationFlagReason,
+  type ModerationFlagStatus,
+} from './moderation-vocab.js';
 export { SOCKET_STATUSES, type SocketStatus } from './socket-status.js';
 export { DEFAULT_MAX_SOCKETS_PER_IP, MAX_SOCKET_FRAME_BYTES, MAX_SOCKET_FRAMES_PER_SECOND } from './socket-limits.js';
 export { createFrameLimiter, type FrameLimiter } from './frame-limiter.js';

@@ -30,6 +30,8 @@ import {
   type MediaUrlSigner,
 } from './delivery/media-url-signer.js';
 import { registerAdminGameRoutes } from './catalog/admin-game-routes.js';
+import { registerModerationFlagRoutes } from './community/moderation-flags.js';
+import { refuseUngatedShare, sharedDraftVersion, SHARE_REFUSAL_MESSAGES } from './delivery/draft-share-gate.js';
 import { createSlugResolver } from './catalog/slug-resolver.js';
 import { registerSelfBuildConnectRoutes } from './agent-surface/self-build-connect-routes.js';
 import { registerDraftLifecycleRoutes } from './creation/draft-lifecycle-routes.js';
@@ -266,6 +268,9 @@ export interface SubmissionRoutesOptions {
    * default for an environment that has not named an operator.
    */
   adminUids?: Set<string>;
+
+  // Who may raise a moderation flag; the review desk's own allowlist.
+  reviewerUids?: Set<string>;
 }
 
 function checkUserAccess(request: FastifyRequest, reply: FastifyReply): boolean {
@@ -1214,6 +1219,14 @@ export async function registerSubmissionRoutes(
     isSlugClaimed,
     confirmSlugClaim,
   });
+  await registerModerationFlagRoutes(app, {
+    store,
+    adminUids,
+    reviewerUids: options.reviewerUids,
+    now,
+    invalidatePublishedGameCaches,
+    isSlugPublished: catalogRoutes.isSlugPublished,
+  });
   await registerSelfBuildConnectRoutes(app, {
     managedAvailabilityGate,
     store,
@@ -1225,6 +1238,15 @@ export async function registerSubmissionRoutes(
   });
   await registerDraftLifecycleRoutes(app, {
     store,
+    refuseShare: async (record) => {
+      const refusal = await refuseUngatedShare({
+        gamesStore: options.agentChannel?.gamesStore,
+        slug: record.slug,
+        version: sharedDraftVersion(record),
+        ...(record.moderationBlockedAt ? { moderationBlockedAt: record.moderationBlockedAt } : {}),
+      });
+      return refusal ? { error: refusal, message: SHARE_REFUSAL_MESSAGES[refusal] } : null;
+    },
     now,
     submissionTokenSecret,
     githubClient,
@@ -1696,6 +1718,7 @@ export async function registerSubmissionRoutes(
             ttlMs: options.creationLimitsTtlMs,
             logWarn: (payload, message) => app.log.warn(payload, message),
           }),
+          contentChecker,
           onSourcesDelivered: options.agentChannel?.onSourcesDelivered,
           onEvent: invalidateDeliveryCaches,
           log: app.log,

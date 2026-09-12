@@ -31,9 +31,31 @@ type DeliverReply = {
   gateStarted?: boolean;
   buildId?: string;
   rejected?: string;
+  category?: string;
   error?: string;
   message?: string;
 };
+
+// Moderation reads SPEC.md and GAME.json, never your code.
+function refusalError(delivered: DeliverReply): CliError | null {
+  if (delivered.rejected === 'content_rejected') {
+    return new CliError(
+      `Delivery refused: the text in SPEC.md or GAME.json is not publishable here${
+        delivered.category ? ` (${delivered.category})` : ''
+      }.`,
+      EXIT_REFUSED,
+      'Rewrite the title, description or how-to-play, then push again. Your code was not read.',
+    );
+  }
+  if (delivered.rejected === 'moderation_unavailable') {
+    return new CliError(
+      'Delivery paused: the content check could not run. Local files are unchanged.',
+      EXIT_REFUSED,
+      'Staged files are kept — retry in a moment.',
+    );
+  }
+  return null;
+}
 
 async function stagePath(api: ApiClient, slug: string, file: TreeFile): Promise<void> {
   const body = await api.request<StageReply>('PUT', `/api/me/studio/games/${slug}/sources/stage`, {
@@ -169,6 +191,8 @@ export async function submitGame(input: {
     mapHttpError(error);
   }
   if (!delivered.accepted) {
+    const refusal = refusalError(delivered);
+    if (refusal) throw refusal;
     throw new CliError(
       delivered.error ?? delivered.message ?? `delivery refused${delivered.rejected ? ` (${delivered.rejected})` : ''}`,
       EXIT_REFUSED,
