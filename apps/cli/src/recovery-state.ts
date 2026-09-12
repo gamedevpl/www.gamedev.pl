@@ -30,12 +30,16 @@ export function clearRecoveryReady(root: string): void {
   rmSync(marker(root), { force: true });
 }
 export async function matchingStaged(api: ApiClient, slug: string, local: TreeFile[]): Promise<Set<string>> {
-  const body = await api.request<{ files?: Array<TreeFile & { stagedBy?: string }> }>(
+  const body = await api.request<{ files?: Array<TreeFile & { stagedBy?: string }>; deleted?: string[] }>(
     'GET',
     `/api/me/studio/games/${slug}/sources`,
   );
   const staged = new Map((body.files ?? []).filter((file) => file.stagedBy).map((file) => [file.path, file.content]));
-  return new Set(local.filter((file) => staged.get(file.path) === file.content).map((file) => file.path));
+  const localPaths = new Set(local.map((file) => file.path));
+  return new Set([
+    ...local.filter((file) => staged.get(file.path) === file.content).map((file) => file.path),
+    ...(body.deleted ?? []).filter((path) => !localPaths.has(path)),
+  ]);
 }
 
 export function recoveryPaths(root: string): string[] {

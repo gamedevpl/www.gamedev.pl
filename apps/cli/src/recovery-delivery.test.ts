@@ -11,6 +11,7 @@ it.each([
   ['missing', 'none'],
   ['missing', 'retry'],
   ['missing', 'delete'],
+  ['missing', 'retry_delete'],
   ['archived', 'none'],
   ['archived', 'version'],
   ['archived', 'disjoint'],
@@ -57,7 +58,7 @@ it.each([
         else if (url.endsWith('/sources/session'))
           body = { locked: false, jobId: changed && change === 'session' ? 3 : 2, generation: 0 };
         else if (url.endsWith('/sources'))
-          body = { files: [...staged].map(([path, content]) => ({ path, content, stagedBy: 'owner' })) };
+          body = { files: [...staged].map(([path, content]) => ({ path, content, stagedBy: 'owner' })), deleted };
         else if (url.endsWith('/sources/stage')) {
           puts++;
           if (puts > 300) return new Response('{}', { status: 429 });
@@ -66,7 +67,11 @@ it.each([
           if (change === 'retry' && puts === 170) throw new Error('response lost');
           body = { accepted: true };
         } else if (url.endsWith('/stage/delete')) {
-          deleted.push(JSON.parse(String(init?.body)).path);
+          const path = JSON.parse(String(init?.body)).path;
+          deleted.push(path);
+          staged.delete(path);
+          if (deleted.length > 300) return new Response('{}', { status: 429 });
+          if (change === 'retry_delete' && deleted.length === 170) throw new Error('delete response lost');
           body = { accepted: true };
         } else if (url.endsWith('/sources/deliver')) {
           delivered = true;
@@ -79,7 +84,7 @@ it.each([
       await expect(recoverCheckout({ api, cwd, yes: true, write: () => {} })).rejects.toThrow('response lost');
     await recoverCheckout({ api, cwd, yes: true, write: () => {} });
     expect(isRecoveryReady(cwd, 'sky')).toBe(true);
-    changed = !['none', 'retry', 'delete'].includes(change);
+    changed = !['none', 'retry', 'delete', 'retry_delete'].includes(change);
     if (change === 'delete') {
       rmSync(join(cwd, 'games/sky/file1.ts'));
       files.splice(
@@ -95,10 +100,18 @@ it.each([
       expect(isRecoveryReady(cwd, 'sky')).toBe(true);
       return;
     }
+    if (change === 'retry_delete') {
+      for (const file of files.filter((file) => file.path.endsWith('.ts'))) rmSync(join(cwd, 'games/sky', file.path));
+      files.splice(1);
+      await expect(submitGame({ api, slug: 'sky', dest: cwd, run: () => ({ status: 0, stderr: '' }) })).rejects.toThrow(
+        'delete response lost',
+      );
+    }
     const result = await submitGame({ api, slug: 'sky', dest: cwd, run: () => ({ status: 0, stderr: '' }) });
     expect(result.kind).toBe('delivered');
     if (change === 'delete') expect(deleted).toContain('file1.ts');
     expect(puts).toBe(180);
+    if (change === 'retry_delete') expect(deleted).toHaveLength(179);
     expect(isRecoveryReady(cwd, 'sky')).toBe(false);
   } finally {
     rmSync(cwd, { recursive: true, force: true });
