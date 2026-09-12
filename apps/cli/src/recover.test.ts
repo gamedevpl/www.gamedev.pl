@@ -156,3 +156,20 @@ it.each(['missing', 'occupied'])('measures %s recovery without source data', asy
     [kind === 'missing' ? 'recovery_succeeded' : 'recovery_failed'],
   ]);
 });
+
+it('clears ended recovery state after an interrupted renamed-checkout completion', async () => {
+  const f = fixture();
+  await recoverCheckout({ ...f, slug: 'other' });
+  const dest = join(f.cwd, '../other-recovered');
+  const key = readFileSync(join(dest, '.gamedev-import-key'), 'utf8');
+  writeFileSync(join(f.cwd, '.gamedev-recovery.json'), JSON.stringify({ slug: 'other', key, origin: f.api.origin }));
+  const original = f.fetch.getMockImplementation()!;
+  f.fetch.mockImplementation(async (url) =>
+    url.endsWith('/recover')
+      ? new Response(JSON.stringify({ error: 'recovery_changed', message: 'Run recovery again.' }), { status: 409 })
+      : original(url),
+  );
+  await expect(recoverCheckout({ ...f, slug: 'other' })).rejects.toThrow('Run recovery again');
+  expect(existsSync(join(f.cwd, '.gamedev-recovery.json'))).toBe(false);
+  expect(readFileSync(join(dest, 'games/other/game.ts'), 'utf8')).toBe('local edits');
+});

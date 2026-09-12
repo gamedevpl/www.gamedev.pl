@@ -85,16 +85,30 @@ async function performRecovery(input: {
   const concept = spec.slice(0, 4000);
   if (concept.trim().length < 30)
     throw new CliError('SPEC.md needs a game description of at least 30 characters.', EXIT_INPUT);
+  const requestRecovery = async (key: string) => {
+    try {
+      return await input.api.request<{ token: string; slug: string }>('POST', '/api/me/studio/recover', {
+        slug,
+        key,
+        title,
+        concept,
+      });
+    } catch (error) {
+      if (
+        error instanceof CliError &&
+        ['slug_unavailable', 'recovery_changed', 'invalid recovery request', 'content_rejected'].includes(
+          error.apiCode ?? '',
+        )
+      )
+        rmSync(pendingPath, { force: true });
+      throw error;
+    }
+  };
   const dest = slug === checkout.slug ? checkout.root : join(dirname(checkout.root), `${slug}-recovered`);
   if (dest !== checkout.root && existsSync(dest)) {
     const marker = join(dest, '.gamedev-import-key');
     if (pending && existsSync(marker) && readFileSync(marker, 'utf8') === pending.key) {
-      const recovered = await input.api.request<{ token: string; slug: string }>('POST', '/api/me/studio/recover', {
-        slug,
-        key: pending.key,
-        title,
-        concept,
-      });
+      const recovered = await requestRecovery(pending.key);
       rmSync(pendingPath);
       input.write(`Recovery already completed: ${dest}. Run gamedevpl push there.`);
       return { ...recovered, root: dest };
@@ -117,19 +131,7 @@ async function performRecovery(input: {
   }
   pending ??= { slug, key: randomUUID(), origin: input.api.origin };
   writeFileSync(pendingPath, JSON.stringify(pending), { mode: 0o600 });
-  let recovered: { token: string; slug: string };
-  try {
-    recovered = await input.api.request('POST', '/api/me/studio/recover', { slug, key: pending.key, title, concept });
-  } catch (error) {
-    if (
-      error instanceof CliError &&
-      ['slug_unavailable', 'recovery_changed', 'invalid recovery request', 'content_rejected'].includes(
-        error.apiCode ?? '',
-      )
-    )
-      rmSync(pendingPath);
-    throw error;
-  }
+  const recovered = await requestRecovery(pending.key);
   pending.base ??= await fetchLatestTree(input.api, slug);
   pending.session ??= (await deliverySession(input.api, slug)) ?? undefined;
   if (!pending.session) throw new CliError('Recovery session is unavailable. Retry recovery.', EXIT_REFUSED);
