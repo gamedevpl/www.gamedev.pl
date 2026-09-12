@@ -70,7 +70,8 @@ export class InMemorySubmissionStore implements SubmissionStore {
         : !holder ||
           holder.jobId !== sourceJobId ||
           holder.ownerUid !== target.ownerUid ||
-          (holder.state !== 'canceled' && !archived) ||
+          (holder.state !== 'canceled' &&
+            !(archived && ['published', 'failed', 'abandoned'].includes(holder.state ?? ''))) ||
           holder.moderationBlockedAt
     )
       return false;

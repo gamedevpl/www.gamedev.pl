@@ -149,6 +149,7 @@ it('retries atomic collisions for ordinary same-title creation', async () => {
 it('recovers creator-archived publications while preserving the archived publication', async () => {
   const f = await fixture('owner', 'queued');
   await f.store.setPublication({ slug: 'sky', state: 'published', currentVersion: 'v1', publishedAt: '2026-01-01' });
+  await f.store.recordJobTransition(1, { to: 'published', at: '2026-01-01', by: 'operator' });
   await f.store.archivePublication('sky', 'deleted by creator', '2026-01-02');
   expect((await f.app.inject('/api/me/studio/games/sky/recovery')).json()).toEqual({ kind: 'archived' });
   expect((await f.app.inject({ method: 'POST', url: '/api/me/studio/recover', payload: payload() })).statusCode).toBe(
@@ -157,6 +158,7 @@ it('recovers creator-archived publications while preserving the archived publica
   expect((await f.store.getPublication('sky'))?.state).toBe('archived');
   const recovered = (await f.store.getSubmissionBySlug('sky'))!;
   await f.store.setSubmissionPublishedAt(recovered.jobId, '2026-01-03');
+  await f.store.recordJobTransition(recovered.jobId, { to: 'published', at: '2026-01-03', by: 'operator' });
   await f.store.setPublication({ slug: 'sky', state: 'published', currentVersion: 'v2', publishedAt: '2026-01-03' });
   await f.store.archivePublication('sky', 'deleted by creator', '2026-01-04');
   expect((await f.app.inject('/api/me/studio/games/sky/recovery')).json()).toEqual({ kind: 'archived' });
@@ -169,4 +171,21 @@ it('refuses moderation-disabled publications', async () => {
   const f = await fixture();
   await f.store.setPublication({ slug: 'sky', state: 'disabled', currentVersion: 'v1', publishedAt: '2026-01-01' });
   expect((await f.app.inject('/api/me/studio/games/sky/recovery')).json()).toEqual({ kind: 'occupied' });
+});
+
+it('refuses archived recovery while an improvement round is active', async () => {
+  const f = await fixture('owner', 'queued');
+  await f.store.setPublication({
+    slug: 'sky',
+    state: 'archived',
+    currentVersion: 'v1',
+    publishedAt: '2026-01-01',
+    takedownReason: 'deleted by creator',
+  });
+  expect((await f.app.inject('/api/me/studio/games/sky/recovery')).json()).toEqual({ kind: 'active' });
+  expect((await f.app.inject({ method: 'POST', url: '/api/me/studio/recover', payload: payload() })).statusCode).toBe(
+    409,
+  );
+  await f.store.createSubmission(2, 'owner', 'Sky');
+  expect(await f.store.claimSubmissionSlug(2, 'sky', 1)).toBe(false);
 });

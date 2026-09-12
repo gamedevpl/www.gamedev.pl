@@ -1,4 +1,4 @@
-import { markRecoveryReady } from './recovery-state.js';
+import { markRecoveryReady, matchingStaged } from './recovery-state.js';
 import { detectLocalAdapters } from './workshop.js';
 import type { handleReplLine, ReplLineResult } from './repl.js';
 import { parseArgv } from './argv.js';
@@ -135,7 +135,9 @@ export async function recoverCheckout(input: {
   }
   pending.paths = [...new Set([...(pending.paths ?? []), ...currentPaths])];
   writeFileSync(pendingPath, JSON.stringify(pending), { mode: 0o600 });
+  const alreadyStaged = await matchingStaged(input.api, slug, imported);
   for (const file of imported) {
+    if (alreadyStaged.has(file.path)) continue;
     const result = await input.api.request<{ accepted?: boolean }>(
       'PUT',
       `/api/me/studio/games/${slug}/sources/stage`,
