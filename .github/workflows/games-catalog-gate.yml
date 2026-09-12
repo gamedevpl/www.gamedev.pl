@@ -2,10 +2,19 @@ name: Games catalog gate
 
 # Runs the games repository's real post-merge gate on public Actions minutes.
 # publish-games.yml calls this workflow before advancing the snapshot pointer.
-# mode=full on merge/dispatch/daily 04:23 UTC: playtest --suite default, no
-# catalog agent-play. Those two are the Sunday 06:17 UTC seal (cron
-# '17 6 * * 0'); scoped still playtests touched slugs. The daily snapshot is a
-# cheap rebuild, not a second full-catalog seal.
+# mode=full on schedule / manual dispatch / unidentifiable universal GameKit
+# patches (and catalog-wide fields like draw.rect): playtest --suite default, no
+# catalog agent-play. Named function/field edits of core/drawing/gfx/… run
+# static on the games that call that surface. Opt-in modules (gfx3d, sensing, …)
+# reverse-index to GAME.json consumers and run static + those slugs.
+# Those two catalog seals are the Sunday 06:17 UTC cron ('17 6 * * 0'); scoped
+# still playtests touched slugs. A games-published dispatch re-classifies the
+# SHA with tools/gate-scope.mjs --event push --base <last-published-sha>
+# --diffs-json so a one-game merge does not wait on a full-catalog check:pr
+# (measured ~40 min). The base is current.json's commitSha, not HEAD's
+# parent: cancel-in-progress would otherwise let a game-only B skip A's
+# unvalidated runtime. Missing pointer → full.
+# The daily snapshot is a cheap rebuild, not a second full-catalog seal.
 
 on:
   workflow_call:
@@ -44,10 +53,15 @@ on:
         type: string
         required: false
         default: '0'
+      classify_push:
+        description: '1 = re-classify this SHA as a main push (ignore payload mode)'
+        type: string
+        required: false
+        default: '0'
     outputs:
       games_sha:
         description: 'Commit SHA checked by every gate job'
-        value: ${{ jobs.catalog-gate.outputs.games_sha }}
+        value: ${{ jobs.resolve.outputs.games_sha }}
     secrets:
       GAMES_REPO_TOKEN:
         required: true
@@ -64,17 +78,22 @@ concurrency:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
-  catalog-gate:
+  resolve:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 10
     outputs:
       games_ref: ${{ steps.resolve.outputs.games_ref }}
       games_sha: ${{ steps.checkout_sha.outputs.games_sha }}
-      mode: ${{ steps.resolve.outputs.mode }}
-      slugs: ${{ steps.resolve.outputs.slugs }}
-      need_webkit: ${{ steps.resolve.outputs.need_webkit }}
+      mode: ${{ steps.scope.outputs.mode }}
+      slugs: ${{ steps.scope.outputs.slugs }}
+      need_webkit: ${{ steps.scope.outputs.need_webkit }}
+      narrow_conformance: ${{ steps.scope.outputs.narrow_conformance }}
+      run_gate: ${{ steps.scope.outputs.run_gate }}
+      catalog_playtest: ${{ steps.resolve.outputs.catalog_playtest }}
+      catalog_agent_play: ${{ steps.resolve.outputs.catalog_agent_play }}
     env:
       GAMES_REPO: 'gamedevpl/www.gamedev.pl-games'
     steps:
@@ -89,6 +108,7 @@ jobs:
           INPUT_NARROW_CONFORMANCE: ${{ inputs.narrow_conformance }}
           INPUT_CATALOG_PLAYTEST: ${{ inputs.catalog_playtest }}
           INPUT_CATALOG_AGENT_PLAY: ${{ inputs.catalog_agent_play }}
+          INPUT_CLASSIFY_PUSH: ${{ inputs.classify_push }}
         run: |
           set -euo pipefail
           REF="${INPUT_SHA:-${INPUT_REF:-main}}"
@@ -98,6 +118,7 @@ jobs:
           NARROW_CONFORMANCE="${INPUT_NARROW_CONFORMANCE:-0}"
           CATALOG_PLAYTEST="${INPUT_CATALOG_PLAYTEST:-default}"
           CATALOG_AGENT_PLAY="${INPUT_CATALOG_AGENT_PLAY:-0}"
+          CLASSIFY_PUSH="${INPUT_CLASSIFY_PUSH:-0}"
 
           case "$REF" in
             *[!A-Za-z0-9._/-]*)
@@ -112,8 +133,8 @@ jobs:
               exit 1
               ;;
           esac
-          case "$NEED_WEBKIT:$NARROW_CONFORMANCE" in
-            0:0|0:1|1:0|1:1) ;;
+          case "$NEED_WEBKIT:$NARROW_CONFORMANCE:$CLASSIFY_PUSH" in
+            0:0:0|0:0:1|0:1:0|0:1:1|1:0:0|1:0:1|1:1:0|1:1:1) ;;
             *)
               echo "Error: gate flags must be 0 or 1"
               exit 1
@@ -141,17 +162,14 @@ jobs:
                 ;;
             esac
           done
-          if [ "$MODE" = scoped ] && [ -z "${SLUGS// /}" ]; then
+          if [ "$CLASSIFY_PUSH" != 1 ] && [ "$MODE" = scoped ] && [ -z "${SLUGS// /}" ]; then
             echo "Error: scoped validation requires at least one game"
             exit 1
           fi
 
           {
             echo "games_ref=$REF"
-            echo "mode=$MODE"
-            echo "slugs=$SLUGS"
-            echo "need_webkit=$NEED_WEBKIT"
-            echo "narrow_conformance=$NARROW_CONFORMANCE"
+            echo "classify_push=$CLASSIFY_PUSH"
             echo "catalog_playtest=$CATALOG_PLAYTEST"
             echo "catalog_agent_play=$CATALOG_AGENT_PLAY"
           } >> "$GITHUB_OUTPUT"
@@ -164,11 +182,193 @@ jobs:
           token: ${{ secrets.GAMES_REPO_TOKEN }}
           path: games-repo
           persist-credentials: false
+          # HEAD~1 for --base fallback when GitHub omitted a file patch.
+          fetch-depth: 2
 
       - name: Resolve checked out games commit
         id: checkout_sha
         working-directory: games-repo
         run: echo "games_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate to GCP for snapshot pointer
+        if: steps.resolve.outputs.classify_push == '1'
+        id: gcp_auth
+        continue-on-error: true
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: 'projects/334141807880/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'github-actions-deployer@gamedevpl.iam.gserviceaccount.com'
+          token_format: access_token
+
+      - name: Classify merge scope
+        id: scope
+        working-directory: games-repo
+        env:
+          GAMES_REPO_TOKEN: ${{ secrets.GAMES_REPO_TOKEN }}
+          GAMES_REPO: ${{ env.GAMES_REPO }}
+          SHA: ${{ steps.checkout_sha.outputs.games_sha }}
+          CLASSIFY_PUSH: ${{ steps.resolve.outputs.classify_push }}
+          GCS_TOKEN: ${{ steps.gcp_auth.outputs.access_token }}
+          SNAPSHOT_BUCKET: 'gamedevpl-games-snapshots'
+          INPUT_MODE: ${{ inputs.mode }}
+          INPUT_SLUGS: ${{ inputs.slugs }}
+          INPUT_NEED_WEBKIT: ${{ inputs.need_webkit }}
+          INPUT_NARROW_CONFORMANCE: ${{ inputs.narrow_conformance }}
+        run: |
+          set -euo pipefail
+          MODE="${INPUT_MODE:-full}"
+          SLUGS="${INPUT_SLUGS:-}"
+          NEED_WEBKIT="${INPUT_NEED_WEBKIT:-1}"
+          NARROW_CONFORMANCE="${INPUT_NARROW_CONFORMANCE:-0}"
+          RUN_GATE=1
+
+          classify_from_parent() {
+            local parent="$1"
+            local compare status files file_count scope diffs_json
+            if [ "${#parent}" -ne 40 ] || printf '%s' "$parent" | grep -q '[^0-9a-f]'; then
+              echo "Parent SHA is not 40 hex — full catalog gate"
+              return 1
+            fi
+            compare=$(mktemp)
+            status=$(curl -sS -o "$compare" -w '%{http_code}' \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${GAMES_REPO_TOKEN}" \
+              -H "User-Agent: gamedev-snapshot-publish" \
+              "https://api.github.com/repos/${GAMES_REPO}/compare/${parent}...${SHA}")
+            if [ "$status" != 200 ]; then
+              echo "Compare ${parent:0:7}...${SHA:0:7} returned ${status} — full catalog gate"
+              rm -f "$compare"
+              return 1
+            fi
+            file_count=$(jq '.files | length' "$compare")
+            if [ "$file_count" -ge 300 ]; then
+              echo "Compare listed ${file_count} files (GitHub cap) — full catalog gate"
+              rm -f "$compare"
+              return 1
+            fi
+            files=$(jq -r '.files[]? | [.filename, (.previous_filename // empty)] | .[] | select(. != "")' "$compare")
+            diffs_json=$(mktemp)
+            jq -c '[.files[]? | select(.filename != null and .patch != null) | {key: .filename, value: .patch}] | from_entries' "$compare" > "$diffs_json"
+            rm -f "$compare"
+            # Checkout is shallow. Fetch the last-published SHA so --base can
+            # git-diff when GitHub omitted a patch (binary / too large). Compare
+            # patches are the primary input and work without this object.
+            if ! git cat-file -e "${parent}^{commit}" 2>/dev/null; then
+              git -c "http.extraheader=AUTHORIZATION: bearer ${GAMES_REPO_TOKEN}" \
+                fetch --depth=1 "https://github.com/${GAMES_REPO}.git" "$parent" \
+                || echo "Baseline fetch failed — classify from compare patches only"
+            fi
+            set +e
+            scope=$(printf '%s\n' "$files" | node tools/gate-scope.mjs --event push --base "$parent" --diffs-json "$diffs_json" --json)
+            status=$?
+            set -e
+            rm -f "$diffs_json"
+            if [ "$status" -ne 0 ]; then
+              echo "gate-scope exited ${status} — full catalog gate"
+              return 1
+            fi
+            MODE=$(printf '%s' "$scope" | jq -r '.mode // empty')
+            if [ -z "$MODE" ] || [ "$MODE" = null ]; then
+              echo "gate-scope returned no mode — full catalog gate"
+              return 1
+            fi
+            SLUGS=$(printf '%s' "$scope" | jq -r '.slugs | join(" ")')
+            NEED_WEBKIT=$(printf '%s' "$scope" | jq -r '.need_webkit // empty')
+            NARROW_CONFORMANCE=$(printf '%s' "$scope" | jq -r '.narrow_conformance // empty')
+            RUN_GATE=$(printf '%s' "$scope" | jq -r '.run_gate // empty')
+            if [ -z "$NEED_WEBKIT" ] || [ -z "$NARROW_CONFORMANCE" ] || [ -z "$RUN_GATE" ]; then
+              echo "gate-scope returned incomplete flags — full catalog gate"
+              return 1
+            fi
+            echo "Push scope: mode=${MODE} run_gate=${RUN_GATE} webkit=${NEED_WEBKIT} slugs=${SLUGS:-"(none)"}"
+            return 0
+          }
+
+          if [ "$CLASSIFY_PUSH" = 1 ]; then
+            # Cumulative range since the live snapshot, not HEAD^: a cancelled
+            # full gate for runtime A plus game-only B would otherwise classify
+            # only B and bake A's unvalidated modules into every game.
+            baseline=
+            if [ -n "${GCS_TOKEN:-}" ]; then
+              if pointer=$(curl -sS -f --max-time 30 \
+                -H "Authorization: Bearer ${GCS_TOKEN}" \
+                "https://storage.googleapis.com/storage/v1/b/${SNAPSHOT_BUCKET}/o/current.json?alt=media"); then
+                baseline=$(printf '%s' "$pointer" | jq -r '.commitSha // empty')
+                baseline="${baseline,,}"
+              else
+                echo "Could not read snapshot pointer — full catalog gate"
+              fi
+            fi
+            if [ "${#baseline}" -ne 40 ] || printf '%s' "$baseline" | grep -q '[^0-9a-f]'; then
+              echo "No published snapshot SHA — full catalog gate"
+              MODE=full
+              SLUGS=
+              NEED_WEBKIT=1
+              NARROW_CONFORMANCE=0
+              RUN_GATE=1
+            elif ! classify_from_parent "$baseline"; then
+              MODE=full
+              SLUGS=
+              NEED_WEBKIT=1
+              NARROW_CONFORMANCE=0
+              RUN_GATE=1
+            fi
+          fi
+
+          case "$MODE" in
+            full|static|scoped) ;;
+            *)
+              echo "Error: invalid classified mode: $MODE"
+              exit 1
+              ;;
+          esac
+          case "$NEED_WEBKIT:$NARROW_CONFORMANCE:$RUN_GATE" in
+            0:0:0|0:0:1|0:1:0|0:1:1|1:0:0|1:0:1|1:1:0|1:1:1) ;;
+            *)
+              echo "Error: classified flags must be 0 or 1"
+              exit 1
+              ;;
+          esac
+          for slug in $SLUGS; do
+            case "$slug" in
+              *[!a-z0-9-]*)
+                echo "Error: invalid classified slug: $slug"
+                exit 1
+                ;;
+            esac
+          done
+          if [ "$RUN_GATE" = 1 ] && [ "$MODE" = scoped ] && [ -z "${SLUGS// /}" ]; then
+            echo "Error: scoped validation requires at least one game"
+            exit 1
+          fi
+
+          {
+            echo "mode=$MODE"
+            echo "slugs=$SLUGS"
+            echo "need_webkit=$NEED_WEBKIT"
+            echo "narrow_conformance=$NARROW_CONFORMANCE"
+            echo "run_gate=$RUN_GATE"
+          } >> "$GITHUB_OUTPUT"
+
+  catalog-gate:
+    needs: resolve
+    if: needs.resolve.outputs.run_gate == '1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      GAMES_REPO: 'gamedevpl/www.gamedev.pl-games'
+    steps:
+      - name: Gate scope
+        run: echo "mode=${{ needs.resolve.outputs.mode }} slugs=${{ needs.resolve.outputs.slugs || '(none)' }} webkit=${{ needs.resolve.outputs.need_webkit }}"
+
+      - name: Check out games repo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: ${{ env.GAMES_REPO }}
+          ref: ${{ needs.resolve.outputs.games_sha }}
+          token: ${{ secrets.GAMES_REPO_TOKEN }}
+          path: games-repo
+          persist-credentials: false
 
       - name: Check Playwright image matches games package
         working-directory: games-repo
@@ -201,29 +401,29 @@ jobs:
           chrome-version: stable
 
       - name: Run the full games gate
-        if: steps.resolve.outputs.mode == 'full'
+        if: needs.resolve.outputs.mode == 'full'
         working-directory: games-repo
         env:
           GAME_CAPTURE_CHROME: ${{ steps.chrome.outputs.chrome-path }}
         run: |
           set -euo pipefail
           npm run check:pr
-          if [ "${{ steps.resolve.outputs.catalog_agent_play }}" = 1 ]; then
+          if [ "${{ needs.resolve.outputs.catalog_agent_play }}" = 1 ]; then
             npm run agent-play
           fi
-          if [ "${{ steps.resolve.outputs.catalog_playtest }}" = all ]; then
+          if [ "${{ needs.resolve.outputs.catalog_playtest }}" = all ]; then
             npm run playtest -- --all
           else
             npm run playtest -- --suite default
           fi
 
       - name: Run the static games gate
-        if: steps.resolve.outputs.mode == 'static'
+        if: needs.resolve.outputs.mode == 'static'
         working-directory: games-repo
         env:
           GAME_CAPTURE_CHROME: ${{ steps.chrome.outputs.chrome-path }}
-          SLUGS: ${{ steps.resolve.outputs.slugs }}
-          NARROW_CONFORMANCE: ${{ steps.resolve.outputs.narrow_conformance }}
+          SLUGS: ${{ needs.resolve.outputs.slugs }}
+          NARROW_CONFORMANCE: ${{ needs.resolve.outputs.narrow_conformance }}
         run: |
           set -euo pipefail
           npm run check:no-js
@@ -255,11 +455,11 @@ jobs:
           fi
 
       - name: Run the scoped games gate
-        if: steps.resolve.outputs.mode == 'scoped'
+        if: needs.resolve.outputs.mode == 'scoped'
         working-directory: games-repo
         env:
           GAME_CAPTURE_CHROME: ${{ steps.chrome.outputs.chrome-path }}
-          SLUGS: ${{ steps.resolve.outputs.slugs }}
+          SLUGS: ${{ needs.resolve.outputs.slugs }}
         run: |
           set -euo pipefail
           npm run check:no-js
@@ -284,9 +484,11 @@ jobs:
           ' $SLUGS)
           if [ "$need_webgl" = 1 ]; then npm run check:webgl; fi
 
+  # Overlaps catalog-gate (needs: resolve, not catalog-gate). A red gate still
+  # pays this sweep; cancel-in-progress makes that rare.
   webkit:
-    needs: catalog-gate
-    if: needs.catalog-gate.outputs.need_webkit == '1'
+    needs: resolve
+    if: needs.resolve.outputs.need_webkit == '1'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -301,7 +503,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: ${{ env.GAMES_REPO }}
-          ref: ${{ needs.catalog-gate.outputs.games_sha }}
+          ref: ${{ needs.resolve.outputs.games_sha }}
           token: ${{ secrets.GAMES_REPO_TOKEN }}
           path: games-repo
           persist-credentials: false
@@ -320,8 +522,8 @@ jobs:
       - name: Check games on WebKit
         working-directory: games-repo
         env:
-          MODE: ${{ needs.catalog-gate.outputs.mode }}
-          SLUGS: ${{ needs.catalog-gate.outputs.slugs }}
+          MODE: ${{ needs.resolve.outputs.mode }}
+          SLUGS: ${{ needs.resolve.outputs.slugs }}
         run: |
           set -euo pipefail
           if [ "$MODE" = full ]; then
