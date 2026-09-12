@@ -276,6 +276,10 @@ jobs:
             NEED_WEBKIT=$(printf '%s' "$scope" | jq -r '.need_webkit // empty')
             NARROW_CONFORMANCE=$(printf '%s' "$scope" | jq -r '.narrow_conformance // empty')
             RUN_GATE=$(printf '%s' "$scope" | jq -r '.run_gate // empty')
+            if [ -z "$NEED_WEBKIT" ] || [ -z "$NARROW_CONFORMANCE" ] || [ -z "$RUN_GATE" ]; then
+              echo "gate-scope returned incomplete flags — full catalog gate"
+              return 1
+            fi
             echo "Push scope: mode=${MODE} run_gate=${RUN_GATE} webkit=${NEED_WEBKIT} slugs=${SLUGS:-"(none)"}"
             return 0
           }

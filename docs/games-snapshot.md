@@ -114,9 +114,12 @@ merge to games-repo main
     the authority; a deleted game drops out of the slug list and still bakes).
     `games-published` only: `--event push --base <last-published-sha>
     --diffs-json` from the compare API (patches work on a shallow clone; the
-    last-published commit is fetched if GitHub omitted a patch). The base is
-    `current.json`'s `commitSha`, not `HEAD^`: with `cancel-in-progress`, a
-    game-only B would otherwise skip a cancelled/failed runtime A and bake it.
+    last-published commit is fetched if GitHub omitted a patch). If that
+    object is missing too, classify fails closed to full — it does not fall
+    back to `HEAD~1`, which would classify only the last commit and miss an
+    unpublished runtime change still in range of the live snapshot. The
+    base is `current.json`'s `commitSha`, not `HEAD^`: with `cancel-in-progress`,
+    a game-only B would otherwise skip a cancelled/failed runtime A and bake it.
     Missing pointer or compare → full. `games-validate` keeps the payload as sent.
   → scoped/static/full games gate (one-game merges: scoped, no WebKit)
   → npm run snapshot:publish (only after a green gate, or immediately when
