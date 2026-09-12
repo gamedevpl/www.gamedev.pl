@@ -175,6 +175,7 @@ export class FirestoreSubmissionStore implements SubmissionStore {
             holder.moderationBlockedAt
       )
         return false;
+      tx.set(this.db.collection('games').doc(slug), { slugClaimJobId: jobId }, { merge: true });
       tx.update(this.ref(jobId), {
         slug,
         ...(recovery

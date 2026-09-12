@@ -104,6 +104,11 @@ export function writeGameFiles(dest: string, slug: string, files: TreeFile[]): v
   }
 }
 
+export function initializeCheckoutGit(dest: string, slug: string, run = defaultRun): void {
+  run('git', ['init'], dest);
+  run('git', ['remote', 'add', 'origin', gitRemoteUrl(slug)], dest);
+}
+
 export async function checkoutGame(input: {
   api: ApiClient;
   slug: string;
@@ -136,8 +141,7 @@ export async function checkoutGame(input: {
   try {
     run('tar', ['-xzf', '.gamedev-workspace.tgz'], input.dest);
     writeFileSync(join(input.dest, '.gamedev-slug'), input.slug);
-    run('git', ['init'], input.dest);
-    run('git', ['remote', 'add', 'origin', gitRemoteUrl(input.slug)], input.dest);
+    initializeCheckoutGit(input.dest, input.slug, run);
   } finally {
     rmSync(tgz, { force: true });
   }

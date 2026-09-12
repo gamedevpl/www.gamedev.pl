@@ -9,7 +9,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import type { ApiClient } from './api.js';
 import { deliverySession, type DeliverySession } from './submit-session.js';
 import type { TreeFile } from './checkout-sync.js';
-import { findCheckout, localGameFiles, writeBase, fetchLatestTree } from './checkout.js';
+import { findCheckout, localGameFiles, writeBase, fetchLatestTree, initializeCheckoutGit } from './checkout.js';
 import { CliError, EXIT_INPUT, EXIT_REFUSED } from './exit-codes.js';
 import type { PickChoice } from './workshop.js';
 
@@ -195,6 +195,7 @@ async function performRecovery(input: {
       imported.map((file) => file.path),
     );
     if (temporary) {
+      initializeCheckoutGit(output, slug);
       writeFileSync(join(output, '.gamedev-import-key'), pending.key);
       renameSync(temporary, dest);
     }
