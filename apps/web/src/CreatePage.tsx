@@ -51,8 +51,7 @@ export function CreatePage({
         <HeroPromptSection
           key={retryKey}
           initialPrompt={initialPrompt}
-          catalogEntries={catalogEntries}
-          onPlayGame={onPlayGame}
+          enableCatalogMatch={false}
           submissionStatus={submissionStatus}
           submissionError={submissionError}
           onSubmitSpec={onSubmitSpec}

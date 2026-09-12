@@ -27,6 +27,7 @@ type HeroPromptSectionProps = {
   onPlatformBuilderAvailability?: (availability: PlatformBuilderAvailability | undefined) => void;
   // Click-to-fill prompt starters; unused on home, /create shows a few.
   exampleChips?: string[];
+  enableCatalogMatch?: boolean;
 };
 
 export type VisualAttachment = {
@@ -75,6 +76,7 @@ export function HeroPromptSection({
   onSubmitSpec,
   onPlatformBuilderAvailability,
   exampleChips,
+  enableCatalogMatch = true,
 }: HeroPromptSectionProps) {
   const { t, i18n } = useTranslation();
   // Skip autofocus on phone — keyboard would hide the composer.
@@ -212,14 +214,17 @@ export function HeroPromptSection({
         ? t('submit.submitting')
         : null;
 
-  const localMatchedGame = useMemo(() => findMatchingGame(promptText, catalogEntries), [promptText, catalogEntries]);
+  const localMatchedGame = useMemo(
+    () => (enableCatalogMatch ? findMatchingGame(promptText, catalogEntries) : null),
+    [promptText, catalogEntries, enableCatalogMatch],
+  );
   const [vectorMatch, setVectorMatch] = useState<{ query: string; match: CatalogEntry | null }>({
     query: '',
     match: null,
   });
 
   const trimmedPrompt = promptText.trim();
-  const needsVectorSearch = trimmedPrompt.length >= 3 && !localMatchedGame && !isBusy;
+  const needsVectorSearch = enableCatalogMatch && trimmedPrompt.length >= 3 && !localMatchedGame && !isBusy;
   const isSearching = needsVectorSearch && vectorMatch.query !== trimmedPrompt;
   const rawVectorGame = needsVectorSearch && vectorMatch.query === trimmedPrompt ? vectorMatch.match : null;
 

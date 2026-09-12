@@ -992,4 +992,60 @@ describe('HeroPromptSection', () => {
     fetchSpy.mockRestore();
     await act(async () => root.unmount());
   });
+
+  it('skips catalog matching when enableCatalogMatch is false', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ match: { slug: 'mexico-86', title: "Mexico '86 Arcade Football" }, score: 0.99 }),
+    } as Response);
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'mexico',
+          catalogEntries: [
+            {
+              slug: 'mexico-86',
+              title: "Mexico '86 Arcade Football",
+              genre: 'sports',
+              controls: 'Arrows',
+              status: 'published',
+              media: null,
+              multiplayer: null,
+              saves: null,
+              world: null,
+              sensing: null,
+              editor: null,
+              orientation: 'landscape' as const,
+              submittedBy: null,
+            },
+          ],
+          enableCatalogMatch: false,
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250));
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.matched-card')).toBeNull();
+    expect(container.querySelector('.searching-card')).toBeNull();
+    expect(fetchSpy.mock.calls.some((call) => String(call[0]).includes('/api/catalog/search'))).toBe(false);
+
+    fetchSpy.mockRestore();
+    await act(async () => root.unmount());
+  });
 });
