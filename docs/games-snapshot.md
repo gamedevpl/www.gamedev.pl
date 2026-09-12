@@ -111,7 +111,10 @@ merge to games-repo main
   → repository_dispatch (pinned SHA, scoped/static/full)
       (docs/tools-only pushes skip this — they cannot change served HTML)
   → publish-games.yml: re-classify that SHA after checkout (the live tree is
-    the authority; a deleted game drops out of the slug list and still bakes)
+    the authority; a deleted game drops out of the slug list and still bakes).
+    `games-published` only: `--event push --base <parent> --diffs-json` from
+    the compare API (patches work on a shallow clone; parent is fetched if
+    GitHub omitted a patch). `games-validate` keeps the payload as sent.
   → scoped/static/full games gate (one-game merges: scoped, no WebKit)
   → npm run snapshot:publish (only after a green gate, or immediately when
     the classified push needs no gate — a deletion, a docs-only dispatch)

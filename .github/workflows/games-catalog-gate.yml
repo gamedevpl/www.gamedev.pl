@@ -9,9 +9,9 @@ name: Games catalog gate
 # reverse-index to GAME.json consumers and run static + those slugs.
 # Those two catalog seals are the Sunday 06:17 UTC cron ('17 6 * * 0'); scoped
 # still playtests touched slugs. A games-published dispatch re-classifies the
-# SHA with tools/gate-scope.mjs --event push so a one-game merge does not wait
-# on a full-catalog check:pr (measured ~40 min). The daily snapshot is a cheap
-# rebuild, not a second full-catalog seal.
+# SHA with tools/gate-scope.mjs --event push --base <parent> --diffs-json so a
+# one-game merge does not wait on a full-catalog check:pr (measured ~40 min).
+# The daily snapshot is a cheap rebuild, not a second full-catalog seal.
 
 on:
   workflow_call:
@@ -178,6 +178,8 @@ jobs:
           token: ${{ secrets.GAMES_REPO_TOKEN }}
           path: games-repo
           persist-credentials: false
+          # HEAD~1 for --base fallback when GitHub omitted a file patch.
+          fetch-depth: 2
 
       - name: Resolve checked out games commit
         id: checkout_sha
@@ -206,7 +208,11 @@ jobs:
 
           classify_from_parent() {
             local parent="$1"
-            local compare status files file_count scope
+            local compare status files file_count scope diffs_json
+            if [ "${#parent}" -ne 40 ] || printf '%s' "$parent" | grep -q '[^0-9a-f]'; then
+              echo "Parent SHA is not 40 hex — full catalog gate"
+              return 1
+            fi
             compare=$(mktemp)
             status=$(curl -sS -o "$compare" -w '%{http_code}' \
               -H "Accept: application/vnd.github+json" \
@@ -225,8 +231,19 @@ jobs:
               return 1
             fi
             files=$(jq -r '.files[]? | [.filename, (.previous_filename // empty)] | .[] | select(. != "")' "$compare")
+            diffs_json=$(mktemp)
+            jq -c '[.files[]? | select(.filename != null and .patch != null) | {key: .filename, value: .patch}] | from_entries' "$compare" > "$diffs_json"
             rm -f "$compare"
-            scope=$(printf '%s\n' "$files" | node tools/gate-scope.mjs --event push --base "$parent" --json)
+            # Checkout is shallow. Fetch the API parent so --base can git-diff
+            # when GitHub omitted a patch (binary / too large). Compare patches
+            # are the primary input and work without this object.
+            if ! git cat-file -e "${parent}^{commit}" 2>/dev/null; then
+              git -c "http.extraheader=AUTHORIZATION: bearer ${GAMES_REPO_TOKEN}" \
+                fetch --depth=1 "https://github.com/${GAMES_REPO}.git" "$parent" \
+                || echo "Parent fetch failed — classify from compare patches only"
+            fi
+            scope=$(printf '%s\n' "$files" | node tools/gate-scope.mjs --event push --base "$parent" --diffs-json "$diffs_json" --json)
+            rm -f "$diffs_json"
             MODE=$(printf '%s' "$scope" | jq -r '.mode')
             SLUGS=$(printf '%s' "$scope" | jq -r '.slugs | join(" ")')
             NEED_WEBKIT=$(printf '%s' "$scope" | jq -r '.need_webkit')

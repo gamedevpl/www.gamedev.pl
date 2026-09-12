@@ -75,9 +75,10 @@ jobs:
       need_webkit: ${{ github.event.client_payload.need_webkit || '1' }}
       narrow_conformance: ${{ github.event.client_payload.narrow_conformance || '0' }}
       # Merge dispatches always re-classify against the SHA. Payload mode is a
-      # hint (and the fallback if compare fails); schedule / workflow_dispatch
+      # hint (and the fallback if compare fails). games-validate keeps its payload
+      # (including WebKit) and does not publish. Schedule / workflow_dispatch
       # keep the full catalog seal.
-      classify_push: ${{ github.event_name == 'repository_dispatch' && '1' || '0' }}
+      classify_push: ${{ github.event_name == 'repository_dispatch' && github.event.action == 'games-published' && '1' || '0' }}
       # github.event.schedule is the cron string that fired this run (empty on
       # dispatch / workflow_dispatch). Match the Sunday cron above, not
       # event_name == 'schedule' — the daily 04:23 cron is also a schedule.
