@@ -429,5 +429,6 @@ export class FirestoreIdentityStore implements IdentityStore {
 
   async setProposalsMuted(uid: string, at: string | null): Promise<void> {
     await this.db.collection('users').doc(uid).set({ proposalsMutedAt: at }, { merge: true });
+    this.forgetUser(uid);
   }
 }
