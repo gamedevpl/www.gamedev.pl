@@ -9,6 +9,7 @@ import { registerCheckoutRecovery } from './checkout-recovery.js';
 const apps: ReturnType<typeof Fastify>[] = [];
 afterEach(async () => {
   vi.useRealTimers();
+  vi.unstubAllEnvs();
   for (const app of apps.splice(0)) await app.close();
 });
 async function fixture(owner = 'owner', state: 'canceled' | 'queued' = 'canceled') {
@@ -255,4 +256,23 @@ it('rate limits refused recoveries before writing admission locks', async () => 
   const response = await f.app.inject({ method: 'POST', url: '/api/me/studio/recover', payload: payload() });
   expect(response.statusCode).toBe(429);
   expect(begin).toHaveBeenCalledTimes(10);
+});
+
+it('rejects disabled Code recovery before creating a draft or acquiring admission', async () => {
+  const f = await fixture();
+  vi.stubEnv('CODE_SURFACE', 'false');
+  const begin = vi.spyOn(f.store, 'beginCheckoutRecovery');
+  expect((await f.app.inject('/api/me/studio/games/sky/recovery')).statusCode).toBe(503);
+  expect((await f.app.inject({ method: 'POST', url: '/api/me/studio/recover', payload: payload() })).statusCode).toBe(
+    503,
+  );
+  expect(begin).not.toHaveBeenCalled();
+  expect(f.createGame).not.toHaveBeenCalled();
+});
+it('caps inspection reads before querying the store', async () => {
+  const f = await fixture();
+  const read = vi.spyOn(f.store, 'getSubmissionBySlug');
+  for (let i = 0; i < 60; i++) expect((await f.app.inject('/api/me/studio/games/sky/recovery')).statusCode).toBe(200);
+  expect((await f.app.inject('/api/me/studio/games/sky/recovery')).statusCode).toBe(429);
+  expect(read).toHaveBeenCalledTimes(60);
 });
