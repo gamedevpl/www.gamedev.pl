@@ -1,3 +1,5 @@
+import { codexEventText } from './codex-events.js';
+import { createMuseStream, museEventText } from './muse-events.js';
 import { antigravityText } from './agent-events.js';
 import { requireClaudeSubscription, subscriptionEnv } from './claude-auth.js';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -35,12 +37,13 @@ type EventShape = {
   message?: unknown;
   type?: unknown;
   session_id?: unknown;
+  subtype?: unknown;
   permission_denials?: unknown;
   result?: unknown;
-  item?: { type?: unknown; text?: unknown; command?: unknown };
+  item?: { type?: unknown; text?: unknown; message?: unknown; command?: unknown };
 };
 
-const QUIET_EVENT_TYPES = /^(system|user|thread\.|turn\.|item\.started)/;
+const QUIET_EVENT_TYPES = /^(system|user|rate_limit_event|thread\.|turn\.|item\.)/;
 
 function textOf(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null;
@@ -68,12 +71,19 @@ export function parseEventLine(line: string, adapter?: string): string | null {
     return trimmed;
   }
   if (!parsed || typeof parsed !== 'object') return trimmed;
+  if (adapter === 'muse') {
+    const text = museEventText(parsed);
+    if (text !== undefined) return text;
+  }
+  const codex = codexEventText(parsed);
+  if (codex !== undefined) return codex;
   const agy = antigravityText(parsed);
   if (agy !== undefined) return agy;
   if (parsed.type === 'item.started') return null;
   if (
     adapter === 'claude' &&
     parsed.type === 'system' &&
+    (parsed.subtype === 'init' || parsed.subtype === undefined) &&
     typeof parsed.session_id === 'string' &&
     /^[a-f0-9-]{36}$/i.test(parsed.session_id)
   ) {
@@ -85,6 +95,7 @@ export function parseEventLine(line: string, adapter?: string): string | null {
     contentText(parsed.message) ??
     textOf(parsed.result) ??
     textOf(parsed.item?.text) ??
+    textOf(parsed.item?.message) ??
     textOf(parsed.content) ??
     textOf(parsed.response) ??
     textOf(parsed.data?.content) ??
@@ -107,10 +118,10 @@ export function parseEventLine(line: string, adapter?: string): string | null {
 
 export function renderDelegateStream(adapter: string, lines: string[], verbose: boolean): string[] {
   const out: string[] = [];
+  const render = createDelegateStream(adapter);
   for (const line of lines) {
     if (verbose) out.push(`${adapter} raw ${sanitizeEventPayload(line)}`);
-    const payload = parseEventLine(line, adapter);
-    if (payload) out.push(formatAdapterEvent(adapter, payload));
+    out.push(...render(line));
   }
   return out;
 }
@@ -124,7 +135,8 @@ export async function spawnAdapter(input: {
   abort?: AbortSignal;
   authCheck?: Promise<void>;
 }): Promise<ChildProcess> {
-  const env = input.spec.name === 'claude' ? subscriptionEnv(input.env) : input.env;
+  const env = input.spec.name === 'claude' ? subscriptionEnv(input.env) : { ...input.env };
+  if (input.spec.name === 'vibe' && input.spec.selection?.model) env.VIBE_ACTIVE_MODEL = input.spec.selection.model;
   if (input.spec.name === 'claude')
     await (input.authCheck ??
       requireClaudeSubscription({
@@ -174,4 +186,29 @@ export function spawnCommand(input: {
   input.abort?.addEventListener('abort', kill, { once: true });
   if (input.abort?.aborted) kill();
   return child;
+}
+
+export function createDelegateStream(adapter: string): (line: string) => string[] {
+  const muse = adapter === 'muse' ? createMuseStream() : null;
+  const sessions = new Set<string>();
+  let lastText: string | null = null;
+  return (line) => {
+    const museText = muse?.(line);
+    const text = museText === undefined ? parseEventLine(line, adapter) : museText;
+    if (adapter === 'claude' && text?.startsWith('Local session ')) {
+      if (sessions.has(text)) return [];
+      sessions.add(text);
+    }
+    if (adapter === 'claude' && text) {
+      let result = false;
+      try {
+        result = JSON.parse(line)?.type === 'result';
+      } catch {
+        // Plain text.
+      }
+      if (result && text === lastText) return [];
+      lastText = text;
+    }
+    return text ? [formatAdapterEvent(adapter, text)] : [];
+  };
 }

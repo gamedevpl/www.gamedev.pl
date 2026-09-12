@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { modelCommand } from './model-command.js';
 import { offerKitUpdate, updateKit } from './kit-update.js';
 import { playGame } from './play.js';
 import { resolve as resolvePath } from 'node:path';
@@ -157,6 +158,10 @@ export async function runCli(
       io.stdout.write(`${formatHelp()}\n`);
       return EXIT_GREEN;
     }
+    if (verb === 'model') {
+      await modelCommand({ args, flags, env, write: (line) => io.stdout.write(`${line}\n`) });
+      return EXIT_GREEN;
+    }
     if (verb === 'kit') {
       if (args[0] && args[0] !== 'update') throw new CliError('Use gamedevpl kit [update].', EXIT_INPUT);
       const controller = new AbortController();
@@ -290,16 +295,17 @@ export async function runCli(
       }
       return EXIT_GREEN;
     }
-    if (verb === 'submit') {
+    if (verb === 'submit' || verb === 'push') {
       const dest = args[0] ?? process.cwd();
       const slug = (typeof flags.slug === 'string' ? flags.slug : null) ?? readCheckoutSlug(dest);
-      if (!slug) throw new CliError(cliUsage('submit', '[dir]'), EXIT_INPUT, '--slug');
+      if (!slug) throw new CliError(cliUsage(verb, '[dir]'), EXIT_INPUT, '--slug');
       const result = await submitGame({
         api,
         slug,
         dest,
         force: flags.force === true,
         publish: flags.publish === true,
+        takeover: flags.takeover === true,
       });
       if (asJson) io.stdout.write(`${JSON.stringify(result)}\n`);
       else io.stdout.write(`${formatSubmitLines(result, slug).join('\n')}\n`);
@@ -308,7 +314,7 @@ export async function runCli(
     if (verb === 'connect') {
       const slug = args[0] ?? readCheckoutSlug(process.cwd());
       if (!slug) throw new CliError(cliUsage('connect', '<slug>'), EXIT_INPUT, '<slug>');
-      if (tty && io.stdout.isTTY && !asJson && !flags.agent && !flags.manual && !args[1]) {
+      if (tty && io.stdout.isTTY && !asJson && !flags.manual && !args[1]) {
         const { runInkRepl } = await import('./tui/host.js');
         return runInkRepl({
           api,
@@ -316,7 +322,8 @@ export async function runCli(
           io,
           token: await studioToken(api, slug),
           slug,
-          initialLine: `/connect ${slug}${flags.handoff ? ' --handoff' : ''}`,
+          currentPath: argv[1],
+          initialLine: `/connect ${slug}${flags.handoff ? ' --handoff' : ''}${typeof flags.agent === 'string' ? ` --agent ${flags.agent}` : ''}`,
         });
       }
       const dest = args[1] ?? process.cwd();
@@ -325,6 +332,7 @@ export async function runCli(
         slug,
         dest,
         env,
+        interactiveRun: tty && io.stdout.isTTY ? (await import('./agy-interactive.js')).runInteractive : undefined,
         agent: typeof flags.agent === 'string' ? flags.agent : undefined,
         handoff: flags.handoff === true,
         write: (line) => io.stdout.write(`${line}\n`),
@@ -343,7 +351,7 @@ export async function runCli(
         telemetry,
       });
     }
-    const read = await dispatchReadVerb({ verb, args, flags, api, io, env });
+    const read = await dispatchReadVerb({ verb, args, flags, api, io, env, currentPath: argv[1] });
     if (read !== null) return read;
     if (verb === 'repl') {
       if (!tty || !io.stdout.isTTY) throw pipeNeedsFlag(`a verb such as ${cliUsage('whoami')}`);
@@ -367,6 +375,7 @@ export async function runCli(
         token,
         slug: requestedSlug,
         initialLine: requestedSlug && !opened ? `/connect ${requestedSlug}` : undefined,
+        currentPath: argv[1],
         ...(opened ? { checkout: { slug: opened.slug, root: opened.root } } : {}),
       });
     }

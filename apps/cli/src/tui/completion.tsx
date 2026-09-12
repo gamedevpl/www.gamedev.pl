@@ -28,7 +28,8 @@ export function useCommandCompletion(state: TuiState, session: TuiSession) {
     setIndex(0);
     setDismissed(false);
   }, [state.draft, state.mode]);
-  const suggestions = state.mode === 'prompt' && !dismissed ? commandSuggestions(state.draft) : [];
+  const suggestions =
+    state.mode === 'prompt' && !state.draftFromHistory && !dismissed ? commandSuggestions(state.draft) : [];
   const selected = Math.min(index, Math.max(0, suggestions.length - 1));
   const handleKey = (key: Key): boolean => {
     if (!suggestions.length) return false;

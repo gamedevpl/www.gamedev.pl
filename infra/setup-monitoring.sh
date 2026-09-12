@@ -952,6 +952,102 @@ cat > "${POLICY_DIR}/a30.json" <<EOF
 }
 EOF
 
+# A31 -- Firestore reads, daily total. A30 watches the rate in two windows: ten minutes for
+# a spike and three hours for drift. Both are still rate thresholds, and a rate threshold is
+# blind to the one shape that has actually cost money here -- a leak small enough never to
+# hold any window above its bar, running all day, every day. A regression that adds a steady
+# 5/s on top of the floor never trips A30's 8/s drift condition for three unbroken hours if
+# nights and quiet hours pull the average down, yet it bills ~430K extra reads a day and
+# nobody sees it until the invoice. The free tier is 50K reads/day; the 2026-09 incident was
+# ~800K/day and ran for weeks before anyone read the graph.
+#
+# So this condition sums instead of averaging: ALIGN_DELTA over 86400s with REDUCE_SUM is
+# the actual count of document reads in the trailing day, evaluated on a sliding window, and
+# it crosses only if the day as a whole was expensive -- however the reads were spread.
+#
+# THRESHOLD 600000/day. Derivation, from the same measurement A30 is calibrated on: Sep 8
+# daytime ran ~4.2/s median, ~5.7/s p95, which is a pace of ~364K/day if it held around the
+# clock, and it does not -- nights are quieter, so the real day is lower. 600K is ~1.6x that
+# pace ceiling, comfortably above any ordinary day including a busy one, and well under the
+# ~800K/day the incident was actually billing. It is deliberately a slow signal: duration 0
+# on a daily sum still means the leak has to have been running most of a day before the
+# policy fires, which is the point -- this is the detector for what the fast ones miss, not
+# a second copy of them.
+#
+# Like A30, this number is calibrated against a floor that the badge-polling fix removes
+# (see docs/firestore-read-cost.md). At the 2026-09-15 recheck, take the post-fix daily
+# totals for a full working week and re-derive: roughly 2x the busiest measured day, floored
+# at something that still leaves the 50K/day free tier visible as a target rather than a
+# rounding error. Do not lower it from an estimate -- measure first, the way A30 had to be.
+cat > "${POLICY_DIR}/a31.json" <<EOF
+{
+  "displayName": "A31 Firestore reads daily total",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "document reads over the last day above the daily budget",
+    "conditionThreshold": {
+      "filter": "metric.type=\"firestore.googleapis.com/document/read_count\" AND resource.type=\"firestore_instance\"",
+      "aggregations": [{
+        "alignmentPeriod": "86400s",
+        "perSeriesAligner": "ALIGN_DELTA",
+        "crossSeriesReducer": "REDUCE_SUM"
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 600000,
+      "duration": "0s",
+      "trigger": { "count": 1 }
+    }
+  }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
+  "alertStrategy": { "autoClose": "86400s" },
+  "documentation": {
+    "content": "Firestore served more than 600K document reads in the last 24 hours. This is the slow-leak detector, and it is deliberately the slowest signal in the file: A30 watches the read *rate* over ten minutes and over three hours, which catches a crawler or a loop but is blind to a regression that adds a couple of reads a second and simply never stops. Summed over a day that leak is the whole bill -- the 2026-09 incident was ~800K reads/day against a 50K/day free tier, and it ran for weeks unnoticed. If this fires while A30 stayed quiet, do not look for a spike: look for something that got permanently more expensive per request. Triage: group document/read_count by metric.label.type (LOOKUP is per-document fan-out on a request path, QUERY is a collection scan) and compare the day against the previous week to find when the step change happened; then match that time to a deploy. Reference steady state as of 2026-09-08 is a pace of ~364K/day and falling as the per-window caches land, so a sustained 600K day means something regressed, not that traffic grew. The fix is always the same shape: read a collection once per window, never per request (catalog-routes.ts, catalog-enricher.ts, notify-sweep-routes.ts, and the badge routes in docs/firestore-read-cost.md).",
+    "mimeType": "text/markdown"
+  }
+}
+EOF
+
+# A32 — the games bucket is shipping bytes at a rate nothing here explains.
+#
+# Media moved off the origin to signed Cloud Storage URLs on 2026-09-11, which took those
+# bytes off the Hosting meter — and out of every view that was watching it. A signed URL
+# is pullable by anyone holding it until it expires, so the per-request limiter bounds how
+# many links are handed out, never how much is pulled through them. This is the only thing
+# left that sees the bill forming.
+#
+# 120 MB/hour sustained over an hour is ~2.9 GB/day, roughly 24x a normal closed-beta day
+# (52 MB on 2026-09-10) and about $0.35/day of egress. Low enough to catch a scraper in
+# the first hour, high enough that a genuinely busy launch day does not page anyone.
+cat > "${POLICY_DIR}/a32.json" <<EOF
+{
+  "displayName": "A32 Games bucket egress abnormally high",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "sent bytes sustained over an hour",
+    "conditionThreshold": {
+      "filter": "metric.type=\"storage.googleapis.com/network/sent_bytes_count\" AND resource.type=\"gcs_bucket\"",
+      "aggregations": [{
+        "alignmentPeriod": "3600s",
+        "perSeriesAligner": "ALIGN_SUM",
+        "crossSeriesReducer": "REDUCE_SUM",
+        "groupByFields": ["resource.label.bucket_name"]
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 125829120,
+      "duration": "3600s",
+      "trigger": { "count": 1 }
+    }
+  }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
+  "alertStrategy": { "autoClose": "86400s" },
+  "documentation": {
+    "content": "Cloud Storage is serving far more than this project's traffic explains. Since 2026-09-11 game media is answered as a 302 to a signed URL, so these bytes leave the bucket directly and appear on no Hosting counter. Triage: group the metric by resource.label.bucket_name to see whether it is the snapshot bucket (catalog games) or the store bucket (games made on the platform). Then check whether mints match: jsonPayload.msg=\"media URL budget exhausted\" in the Cloud Run log says the daily ceiling is already refusing someone, and its absence means one or a few links are being pulled hard rather than many being handed out. Levers: MEDIA_DAILY_MINTS_PER_IP and MEDIA_DAILY_MINTS_PER_INSTANCE (both deploy paths; counted per process, so the service-wide effect is that number times the warm instances), and the video TTL in media-url-signer.ts. See docs/deployment.md 'Media egress'.",
+    "mimeType": "text/markdown"
+  }
+}
+EOF
+
+
 fi
 
 for FILE in "${POLICY_DIR}"/*.json; do

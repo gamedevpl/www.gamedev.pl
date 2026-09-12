@@ -1,3 +1,4 @@
+import { SubmissionFacade } from './submission-facade.js';
 import type { Store } from '../platform/store.js';
 import type { TransitionGuard } from './slices/dispatch.js';
 import type { SeedFiles } from '../agent-surface/agent-backend.js';
@@ -78,6 +79,14 @@ import { FirestoreDreamQuotaStore } from './slices/quota-dreams.js';
 import { FirestoreQuotaStore } from './slices/quota.js';
 import { FirestoreReviewSweepStore } from './slices/review-sweeps.js';
 import { FirestoreReviewStore } from './slices/review.js';
+import { FirestoreModerationFlagStore } from './slices/moderation-flags.js';
+import type { ModerationFlag } from './records/moderation-flag.js';
+import type {
+  RaiseModerationFlagInput,
+  ResolveModerationFlagInput,
+  ResolveModerationFlagResult,
+} from './slices/moderation-flags.js';
+
 import { FirestoreRoundBudgetStore, type DreamClaimRef } from './slices/round-budget.js';
 import { FirestoreRoundsStore } from './slices/rounds.js';
 import { FirestoreSocialStore } from './slices/social.js';
@@ -88,7 +97,7 @@ import { FirestoreWorldEntriesStore } from './slices/world-entries.js';
 import type { AssessmentSource, CreatorProposal, VoteValue, WaitlistStatus } from '@gamedevpl/contract';
 import { FieldValue, Firestore } from '@google-cloud/firestore';
 
-export class FirestoreStore implements Store {
+export class FirestoreStore extends SubmissionFacade implements Store {
   private db: Firestore;
   private telemetryStore: FirestoreTelemetryStore;
   private oauthStore: FirestoreOAuthStore;
@@ -99,6 +108,7 @@ export class FirestoreStore implements Store {
   private agentKeysStore: FirestoreAgentKeysStore;
   private accessStore: FirestoreAccessStore;
   private reviewStore: FirestoreReviewStore;
+  private moderationFlagStore: FirestoreModerationFlagStore;
   private reviewSweepStore: FirestoreReviewSweepStore;
   private identityStore: FirestoreIdentityStore;
   private quotaStore: FirestoreQuotaStore;
@@ -110,7 +120,7 @@ export class FirestoreStore implements Store {
   private roundsStore: FirestoreRoundsStore;
   private roundBudgetStore: FirestoreRoundBudgetStore;
   private dispatchStore: FirestoreDispatchStore;
-  private submissionStore: FirestoreSubmissionStore;
+  protected submissionStore: FirestoreSubmissionStore;
   private submissionQueryStore: FirestoreSubmissionQueryStore;
   private buildLogStore: FirestoreBuildLogStore;
   private buildMediaStore: FirestoreBuildMediaStore;
@@ -118,6 +128,7 @@ export class FirestoreStore implements Store {
   private cliChatStore: FirestoreCliChatStore;
 
   constructor(db?: Firestore) {
+    super();
     this.db = db ?? new Firestore();
     this.telemetryStore = new FirestoreTelemetryStore(this.db);
     this.oauthStore = new FirestoreOAuthStore(this.db);
@@ -128,6 +139,7 @@ export class FirestoreStore implements Store {
     this.agentKeysStore = new FirestoreAgentKeysStore(this.db);
     this.accessStore = new FirestoreAccessStore(this.db);
     this.reviewStore = new FirestoreReviewStore(this.db);
+    this.moderationFlagStore = new FirestoreModerationFlagStore(this.db);
     this.reviewSweepStore = new FirestoreReviewSweepStore(this.db);
     this.identityStore = new FirestoreIdentityStore(this.db);
     this.quotaStore = new FirestoreQuotaStore(this.db);
@@ -299,6 +311,8 @@ export class FirestoreStore implements Store {
       for (const write of writes.slice(start, start + BATCH_SIZE)) write(batch);
       await batch.commit();
     }
+    // The read above seeded the session window; an erased account must not survive it.
+    this.identityStore.forgetUser(uid);
 
     return { publishedSlugs, unpublishedSlugs };
   }
@@ -353,6 +367,10 @@ export class FirestoreStore implements Store {
 
   async recordJobTransition(jobId: number, transition: JobTransition, guard?: TransitionGuard): Promise<boolean> {
     return this.dispatchStore.recordJobTransition(jobId, transition, guard);
+  }
+
+  async takeOverAgentRound(jobId: number, uid: string, generation: number, at: string): Promise<boolean> {
+    return this.roundsStore.takeOverAgentRound(jobId, uid, generation, at);
   }
 
   async bumpRoundGeneration(jobId: number): Promise<number | null> {
@@ -519,22 +537,6 @@ export class FirestoreStore implements Store {
     return this.catalogEnrichmentStore.listCatalogEnrichments();
   }
 
-  async setSubmissionSlug(jobId: number, slug: string): Promise<void> {
-    return this.submissionStore.setSubmissionSlug(jobId, slug);
-  }
-
-  async setSubmissionTitle(jobId: number, title: string): Promise<void> {
-    return this.submissionStore.setSubmissionTitle(jobId, title);
-  }
-
-  async setSubmissionDeliveredVersion(jobId: number, version: string): Promise<void> {
-    return this.submissionStore.setSubmissionDeliveredVersion(jobId, version);
-  }
-
-  async setSubmissionPreviewVersion(jobId: number, version: string): Promise<void> {
-    return this.submissionStore.setSubmissionPreviewVersion(jobId, version);
-  }
-
   async recordDeliveryNudge(jobId: number): Promise<number> {
     return this.submissionStore.recordDeliveryNudge(jobId);
   }
@@ -549,6 +551,10 @@ export class FirestoreStore implements Store {
 
   async setDraftShared(jobId: number, at: string | null): Promise<void> {
     return this.submissionStore.setDraftShared(jobId, at);
+  }
+
+  async setModerationBlocked(jobId: number, at: string | null): Promise<void> {
+    return this.submissionStore.setModerationBlocked(jobId, at);
   }
 
   async setSubmissionLocale(jobId: number, locale: string): Promise<void> {
@@ -1145,6 +1151,34 @@ export class FirestoreStore implements Store {
 
   async countPlayerFeedback(slug: string): Promise<number> {
     return this.socialStore.countPlayerFeedback(slug);
+  }
+
+  async raiseModerationFlag(input: RaiseModerationFlagInput): Promise<ModerationFlag> {
+    return this.moderationFlagStore.raiseModerationFlag(input);
+  }
+
+  async getModerationFlag(id: string): Promise<ModerationFlag | null> {
+    return this.moderationFlagStore.getModerationFlag(id);
+  }
+
+  async listModerationFlags(opts?: { status?: 'open' | 'resolved'; limit?: number }): Promise<ModerationFlag[]> {
+    return this.moderationFlagStore.listModerationFlags(opts);
+  }
+
+  async resolveModerationFlag(id: string, input: ResolveModerationFlagInput): Promise<ResolveModerationFlagResult> {
+    return this.moderationFlagStore.resolveModerationFlag(id, input);
+  }
+
+  async reopenModerationFlag(id: string): Promise<void> {
+    return this.moderationFlagStore.reopenModerationFlag(id);
+  }
+
+  async countModerationFlagsByUid(uid: string): Promise<number> {
+    return this.moderationFlagStore.countModerationFlagsByUid(uid);
+  }
+
+  async deleteModerationFlagsByUid(uid: string): Promise<number> {
+    return this.moderationFlagStore.deleteModerationFlagsByUid(uid);
   }
 
   async upsertGameAssessment(

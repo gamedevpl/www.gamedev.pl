@@ -1,4 +1,5 @@
 import { isCliAction, type CliAction } from '@gamedevpl/contract';
+import { callWithVertexResilience } from '../platform/vertex-resilience.js';
 import { genaicode, resultText, resultToolCalls, type GenAIClient, type ToolDefinition } from 'genaicode';
 import { openaiCompatible } from 'genaicode/providers';
 import { createVertexClient } from '../platform/genai.js';
@@ -226,12 +227,17 @@ export class IntakeChatAgent implements IntakeAgent {
       throw new Error(`intake agent prompt exceeded ${MAX_INTAKE_PROMPT_CHARS} chars (${chars})`);
     }
 
-    const result = await builder
-      .tools(request.session ? [CREATE_TOOL, ...SESSION_TOOLS] : [CREATE_TOOL], 'auto')
-      .thinking({ level: 'low' })
-      .temperature(0.2)
-      .signal(AbortSignal.timeout(this.options.timeoutMs ?? DEFAULT_INTAKE_TIMEOUT_MS))
-      .run();
+    // Retry within the budget; no stand-in mid-conversation.
+    const result = await callWithVertexResilience({
+      timeoutMs: this.options.timeoutMs ?? DEFAULT_INTAKE_TIMEOUT_MS,
+      attempt: (_model, timeoutMs) =>
+        builder
+          .tools(request.session ? [CREATE_TOOL, ...SESSION_TOOLS] : [CREATE_TOOL], 'auto')
+          .thinking({ level: 'low' })
+          .temperature(0.2)
+          .signal(AbortSignal.timeout(timeoutMs))
+          .run(),
+    });
     const model =
       this.options.model ??
       process.env.CLI_CHAT_MODEL?.trim() ??

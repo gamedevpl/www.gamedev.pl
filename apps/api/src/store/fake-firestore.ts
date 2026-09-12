@@ -122,6 +122,13 @@ function lessThan(a: unknown, b: unknown): boolean {
 }
 
 /** Minimal Firestore stand-in: documents, collection groups, batches, transactions. */
+// Matches the real client: gRPC code 6.
+function alreadyExists(docKey: string): Error & { code: number } {
+  const error = new Error(`ALREADY_EXISTS: document ${docKey} already exists`) as Error & { code: number };
+  error.code = 6;
+  return error;
+}
+
 export function fakeFirestore() {
   const docs = new Map<string, Record<string, unknown>>();
   const key = (collection: string, id: string) => `${collection}/${id}`;
@@ -156,7 +163,7 @@ export function fakeFirestore() {
         validate: () => {
           rejectUndefined(data);
           rejectNestedArrays(data);
-          if (docs.has(docKey)) throw new Error(`ALREADY_EXISTS: document ${docKey} already exists`);
+          if (docs.has(docKey)) throw alreadyExists(docKey);
         },
         apply: () => docs.set(docKey, { ...data }),
       }),

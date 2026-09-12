@@ -21,7 +21,7 @@ let lastOnFrame: ((frame: ServerFrame) => void) | undefined;
 
 vi.mock('./roomClient.js', () => {
   return {
-    RoomClient: vi.fn().mockImplementation((opts: RoomClientOpts) => {
+    RoomClient: vi.fn().mockImplementation(function (opts: RoomClientOpts) {
       lastOnStatus = opts.onStatus;
       lastOnFrame = opts.onFrame;
       return {
@@ -92,7 +92,9 @@ describe('ControllerView Voice Cleanup', () => {
       stop: mockStop,
     };
 
-    const MockSpeechConstructor = vi.fn().mockImplementation(() => mockRecognition);
+    const MockSpeechConstructor = vi.fn().mockImplementation(function () {
+      return mockRecognition;
+    });
 
     (window as unknown as { SpeechRecognition: typeof MockSpeechConstructor }).SpeechRecognition =
       MockSpeechConstructor;

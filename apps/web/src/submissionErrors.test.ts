@@ -60,3 +60,11 @@ describe('submissionErrorKey', () => {
     }
   });
 });
+
+// A moderation outage is not a verdict on the creator's idea.
+it('tells the creator an outage was ours, not a rejection of their idea', () => {
+  expect(submissionErrorKey({ status: 503, message: 'moderation_unavailable' })).toBe('errors.moderationUnavailable');
+  expect(submissionErrorKey({ status: 422, message: 'content_rejected', category: 'pii' })).toBe(
+    'errors.contentRejected.pii',
+  );
+});

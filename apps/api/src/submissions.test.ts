@@ -140,6 +140,7 @@ async function createApp(params: {
   chatAgent?: StudioChatAgent;
   dailyChatQuota?: number;
   chatGate?: ChatGate | null;
+  storeMediaUrlSigner?: { urlFor(object: string): Promise<string | null> } | null;
   // Undefined reads env, unset under vitest, so the default is inline.
   seedDispatch?: SeedDispatchClient | null;
   seedDispatchRoutes?: { internalAuthVerifier: InternalAuthVerifier };
@@ -156,6 +157,7 @@ async function createApp(params: {
     submissionRoutes: {
       githubToken: params.githubClient ? 'token' : undefined,
       submissionTokenSecret: params.submissionTokenSecret,
+      storeMediaUrlSigner: params.storeMediaUrlSigner ?? null,
       gamesRepo: repo,
       githubClient: params.githubClient,
       agentBackend: params.agentBackend,
@@ -3307,7 +3309,7 @@ describe('playing an unpublished game at its permalink', () => {
    * point of the switch. These pin both halves, because the failure modes are opposite:
    * a leak on one side, and a creator locked out of their own game on the other.
    */
-  async function draftApp() {
+  async function draftApp(verdict: { green: boolean } | null = { green: true }) {
     const store = new InMemoryStore();
     const jobId = 1_000_077;
     await store.upsertUser({ uid: 'g:test-user' });
@@ -3319,6 +3321,11 @@ describe('playing an unpublished game at its permalink', () => {
     const gamesStore = {
       getDerivedArtifact: async (_s: string, _v: string, name: string) =>
         name === 'bundle.html' ? Buffer.from('<!doctype html><title>TV Tycoon</title><canvas></canvas>') : null,
+      getManifest: async () => ({
+        version: 'v1',
+        deliveryMode: 'publish',
+        ...(verdict ? { gate: { green: verdict.green, ranAt: '2026-09-01T00:00:00.000Z' } } : {}),
+      }),
     } as unknown as GamesStore;
 
     // The catalog knows nothing about it: an unpublished game is in no catalog and no
@@ -5459,6 +5466,7 @@ describe('games published from the store rather than the repo', () => {
     gamesStore: GamesStore,
     catalog: CatalogGameEntry[] = [],
     gameSources: GameSources | null = null,
+    storeMediaUrlSigner?: { urlFor(object: string): Promise<string | null> } | null,
   ) {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:test-user' });
@@ -5474,9 +5482,49 @@ describe('games published from the store rather than the repo', () => {
       store,
       submissionTokenSecret: secret,
       agentChannel: { gamesStore },
+      storeMediaUrlSigner,
     });
     return { app, store };
   }
+
+  // Platform-made games are store-backed, not snapshot-backed.
+  it('redirects store-published media to a signed URL instead of carrying it', async () => {
+    const { app } = await appWithPublication(publishedGamesStore(), [], null, {
+      urlFor: async (object: string) => `https://storage.googleapis.com/store/${object}?signed`,
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/api/games/comet-courier/media/gameplay.mp4' });
+
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toBe(
+      'https://storage.googleapis.com/store/games/comet-courier/versions/v1/media/gameplay.mp4?signed',
+    );
+    expect(response.rawPayload.length).toBe(0);
+    await app.close();
+  });
+
+  it('serves the bytes when the object is gone and nothing can be signed', async () => {
+    const { app } = await appWithPublication(publishedGamesStore(), [], null, {
+      urlFor: async () => null,
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/api/games/comet-courier/media/gameplay.mp4' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.rawPayload.toString()).toBe('fake-mp4');
+    await app.close();
+  });
+
+  it('refuses to sign a file the published metadata does not list', async () => {
+    const { app } = await appWithPublication(publishedGamesStore(), [], null, {
+      urlFor: async (object: string) => `https://signed/${object}`,
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/api/games/comet-courier/media/secret.png' });
+
+    expect(response.statusCode).toBe(404);
+    await app.close();
+  });
 
   it('lists a store-published game the games repo has never heard of', async () => {
     // A delivered game is never committed, so the repo catalog cannot see it. Without

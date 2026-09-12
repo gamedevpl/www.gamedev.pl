@@ -37,7 +37,8 @@ export interface ZoneClientOptions {
  * player gets in when a seat frees. `hibernating` is likewise transient by definition:
  * the host is snapshotting and will accept the next dial.
  */
-const FINAL_REASONS = new Set(['kicked', 'expired', 'bad_ticket', 'zone_not_found', 'bye', 'unsupported']);
+// `idle` is final: retrying would retake a seat the sweep just retired.
+const FINAL_REASONS = new Set(['kicked', 'expired', 'bad_ticket', 'zone_not_found', 'bye', 'unsupported', 'idle']);
 
 export class ZoneClient {
   private socket: WebSocket | null = null;
@@ -45,6 +46,8 @@ export class ZoneClient {
   private readonly backoff: ReconnectBackoff = createReconnectBackoff();
   private retryTimer: number | null = null;
   private disposed = false;
+  // Why the host hung up for good, so `closed` can say so rather than just happening.
+  private finalReason: string | null = null;
 
   constructor(options: ZoneClientOptions) {
     this.options = options;
@@ -87,13 +90,14 @@ export class ZoneClient {
       if (!frame) return;
       if (frame.t === 'closed' && FINAL_REASONS.has(frame.reason)) {
         this.disposed = true;
+        this.finalReason = frame.reason;
       }
       this.options.onFrame(frame);
     };
 
     socket.onclose = () => {
       if (this.disposed) {
-        this.options.onStatus('closed');
+        this.options.onStatus('closed', this.finalReason ?? undefined);
         return;
       }
       this.scheduleRetry();

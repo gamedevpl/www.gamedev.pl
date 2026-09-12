@@ -1,7 +1,8 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { recordCreateStep, type PlayVia } from './visitTelemetry.js';
-import { catalogMediaUrl, defaultScreenshotIndex, type CatalogEntry } from './catalog.js';
+import { catalogMediaUrl, defaultScreenshotIndex, gamePageHandle, type CatalogEntry } from './catalog.js';
+import { gamePath, NAVIGATE_EVENT } from './core/router.js';
 import { SketchModal } from './SketchModal.js';
 import { PixelIcon } from './PixelIcon.js';
 import { getQuota, type PlatformBuilderAvailability } from './submissionApi.js';
@@ -17,6 +18,7 @@ type HeroPromptSectionProps = {
   initialPrompt?: string;
   catalogEntries?: CatalogEntry[];
   onPlayGame?: (entry: CatalogEntry, via?: PlayVia) => void;
+  onNavigate?: (path: string) => void;
   // refining = pre-submit spec refiner; nothing sent yet
   submissionStatus: 'idle' | 'refining' | 'loading';
   submissionError: string | null;
@@ -25,6 +27,7 @@ type HeroPromptSectionProps = {
   onPlatformBuilderAvailability?: (availability: PlatformBuilderAvailability | undefined) => void;
   // Click-to-fill prompt starters; unused on home, /create shows a few.
   exampleChips?: string[];
+  enableCatalogMatch?: boolean;
 };
 
 export type VisualAttachment = {
@@ -67,11 +70,13 @@ export function HeroPromptSection({
   initialPrompt = '',
   catalogEntries = [],
   onPlayGame,
+  onNavigate,
   submissionStatus,
   submissionError,
   onSubmitSpec,
   onPlatformBuilderAvailability,
   exampleChips,
+  enableCatalogMatch = true,
 }: HeroPromptSectionProps) {
   const { t, i18n } = useTranslation();
   // Skip autofocus on phone — keyboard would hide the composer.
@@ -209,14 +214,17 @@ export function HeroPromptSection({
         ? t('submit.submitting')
         : null;
 
-  const localMatchedGame = useMemo(() => findMatchingGame(promptText, catalogEntries), [promptText, catalogEntries]);
+  const localMatchedGame = useMemo(
+    () => (enableCatalogMatch ? findMatchingGame(promptText, catalogEntries) : null),
+    [promptText, catalogEntries, enableCatalogMatch],
+  );
   const [vectorMatch, setVectorMatch] = useState<{ query: string; match: CatalogEntry | null }>({
     query: '',
     match: null,
   });
 
   const trimmedPrompt = promptText.trim();
-  const needsVectorSearch = trimmedPrompt.length >= 3 && !localMatchedGame && !isBusy;
+  const needsVectorSearch = enableCatalogMatch && trimmedPrompt.length >= 3 && !localMatchedGame && !isBusy;
   const isSearching = needsVectorSearch && vectorMatch.query !== trimmedPrompt;
   const rawVectorGame = needsVectorSearch && vectorMatch.query === trimmedPrompt ? vectorMatch.match : null;
 
@@ -228,6 +236,22 @@ export function HeroPromptSection({
   }, [rawVectorGame, catalogEntries]);
 
   const matchedGame = localMatchedGame || vectorMatchedGame;
+  const matchedGameHref = matchedGame
+    ? `${gamePath(gamePageHandle(matchedGame), matchedGame.slug)}?via=composer_match`
+    : '';
+
+  const handleGameLinkClick = (path: string) => (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (event.defaultPrevented || event.button !== 0) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    if (onNavigate) {
+      onNavigate(path);
+      return;
+    }
+    window.history.pushState(null, '', path);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    window.dispatchEvent(new CustomEvent(NAVIGATE_EVENT, { detail: { path } }));
+  };
 
   useEffect(() => {
     if (!needsVectorSearch) return;
@@ -541,15 +565,15 @@ export function HeroPromptSection({
           {matchedGame ? (
             <div className="smart-intent-card matched-card">
               {matchedPoster ? (
-                <div className="matched-thumb-wrap">
-                  <img
-                    src={matchedPoster}
-                    alt={matchedGame.title}
-                    className="matched-thumb"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                </div>
+                <a
+                  href={matchedGameHref}
+                  className="matched-thumb-wrap"
+                  onClick={handleGameLinkClick(matchedGameHref)}
+                  tabIndex={-1}
+                  aria-hidden="true"
+                >
+                  <img src={matchedPoster} alt="" className="matched-thumb" loading="lazy" decoding="async" />
+                </a>
               ) : null}
               <div className="matched-info">
                 <div className="matched-badges">
@@ -564,7 +588,15 @@ export function HeroPromptSection({
                     </span>
                   )}
                 </div>
-                <h3 className="matched-title">{matchedGame.title}</h3>
+                <h3 className="matched-title">
+                  <a
+                    href={matchedGameHref}
+                    className="matched-title-link"
+                    onClick={handleGameLinkClick(matchedGameHref)}
+                  >
+                    {matchedGame.title}
+                  </a>
+                </h3>
                 {(() => {
                   const isPl = (i18n?.language || '').startsWith('pl');
                   const tagline = isPl ? matchedGame.tagline?.pl : matchedGame.tagline?.en;
@@ -602,9 +634,7 @@ export function HeroPromptSection({
             <div className="smart-intent-card searching-card" role="status" aria-live="polite">
               <span className="searching-spinner" aria-hidden="true" />
               <div className="searching-info">
-                <span className="smart-badge searching-badge">
-                  {t('hero.smartSearching')}
-                </span>
+                <span className="smart-badge searching-badge">{t('hero.smartSearching')}</span>
                 <p className="searching-sub">"{promptText.trim()}"</p>
               </div>
             </div>
@@ -612,7 +642,7 @@ export function HeroPromptSection({
             <div className={`smart-intent-card creation-card${isBusy ? ' is-busy' : ''}`}>
               <div className="creation-info">
                 <span className="smart-badge creation-badge">
-                  <PixelIcon name="sparkle" size={14} /> {t('hero.smartNoMatchTitle', { query: promptText.trim() })}
+                  <PixelIcon name="sparkle" size={14} /> {t('hero.smartNoMatchTitle')}
                 </span>
                 <p className="creation-sub">{t('hero.smartNoMatchSub')}</p>
               </div>

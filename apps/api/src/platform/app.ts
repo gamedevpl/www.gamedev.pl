@@ -1,18 +1,16 @@
+import { registerErrorHandler } from './error-handler.js';
+import { registerLocalActivityRoutes } from '../creation/local-activity-routes.js';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import Fastify, {
-  type FastifyError,
-  type FastifyInstance,
-  type FastifyRequest,
-  type FastifyServerOptions,
-} from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyServerOptions } from 'fastify';
 import { registerAccessTokenRoutes, type AccessTokenRoutesOptions } from './access-token-routes.js';
 import { registerApiCachePolicy } from './api-cache-policy.js';
 import { registerCanonicalHostRedirect } from './canonical-host.js';
 import { registerClientAddress } from './client-address.js';
+import { registerReadMeterLog } from './read-meter-log.js';
 import { createLoadShedControls } from './load-shedding.js';
 import { registerProxyDiagnosticsRoutes } from './proxy-diagnostics.js';
 import { registerSecurityHeaders, resolveCspReportOnly } from './security-headers.js';
@@ -252,19 +250,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   registerClientAddress(app);
+  registerReadMeterLog(app);
   registerApiCachePolicy(app);
 
-  // Fastify's default 500 echoes err.message; 4xx replies pass through.
-  app.setErrorHandler((error: FastifyError, request, reply) => {
-    // Fastify reads both; statusCode wins when an error carries each.
-    const statusCode = error.statusCode ?? (error as { status?: number }).status ?? 500;
-    if (statusCode >= 400 && statusCode < 500) {
-      void reply.send(error);
-      return;
-    }
-    request.log.error({ err: error, method: request.method, url: request.url }, 'unhandled route error');
-    void reply.code(500).send({ error: 'internal' });
-  });
+  registerErrorHandler(app);
 
   const store = options.store ?? new InMemoryStore();
 
@@ -474,6 +463,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // people its alerts are addressed to. Two lists would drift, and the failure mode of
     // drift here is an alert nobody receives.
     adminUids,
+    reviewerUids,
     agentBackend: options.submissionRoutes?.agentBackend,
     // Self needs store callbacks inside registerSubmissionRoutes; do not pre-build it.
     agentBackends: resolvedAgentBackends,
@@ -857,21 +847,20 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     options.submissionRoutes?.submissionTokenSecret ??
     process.env.SUBMISSION_TOKEN_SECRET ??
     (localGames ? 'local-development-submission-secret' : undefined);
+  if (submissionTokenSecret) await registerLocalActivityRoutes(app, store, submissionTokenSecret);
   await registerCreatorStudioRoutes(app, {
     store,
     gamesStore,
     mintStatusToken: submissionTokenSecret ? (jobId) => mintToken(jobId, submissionTokenSecret) : undefined,
     objectStore,
-    // N1: the two cross-bucket reads the build rail needs, wired here rather
-    // than imported from creation/.
+    // N1: inject cross-bucket build-rail reads.
     isPresenceEventText: isMcpPresenceEventText,
     toRecentBuilds,
   });
   await registerCreatorVersionRoutes(app, { store, gamesStore });
   await registerCreatorPatRoutes(app, { store });
 
-  // The Code surface (creator-code-editing-execution-plan.md): owner reads and
-  // owner-authored staging writes over the same games store and staging buffer the
+  // Code surface: owner reads and staging share the games store with the
   // agent channel uses. `invalidateStatusCache` / `scheduleStagedPreview` are the two
   // seams `registerSubmissionRoutes` exposes so an owner write busts the same cache and
   // arms the same staged-preview assembly an agent write does (CE-12).
@@ -883,6 +872,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         store,
         gamesStore,
         kitFileStore: creatorKitFileStore,
+        contentChecker,
         onSourcesDelivered: gateTrigger,
         onEvent: (jobId) => submissionSeams.scheduleStagedPreview?.(jobId),
         log: app.log,

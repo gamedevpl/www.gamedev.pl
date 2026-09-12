@@ -324,3 +324,60 @@ describe('createSnapshotReaderFromEnv', () => {
     expect(createSnapshotReaderFromEnv({ GAMES_SNAPSHOT_BUCKET: bucket })).not.toBeNull();
   });
 });
+
+// A redirect cannot fall back; the inline read could.
+describe('naming an object for a signed URL', () => {
+  it('returns the name only when the object exists', async () => {
+    const fake = createFakeStorage();
+    fake.store.set('current.json', { body: Buffer.from(JSON.stringify({ snapshotId: 'snap1' })) });
+    fake.store.set('snapshots/snap1/media/bubble-pop/opening.png', { body: Buffer.from('png') });
+    const store = createStore(fake);
+
+    expect(await store.getMediaObjectName('bubble-pop', 'opening.png')).toBe(
+      'snapshots/snap1/media/bubble-pop/opening.png',
+    );
+  });
+
+  it('returns null for a variant that was never baked', async () => {
+    const fake = createFakeStorage();
+    fake.store.set('current.json', { body: Buffer.from(JSON.stringify({ snapshotId: 'snap1' })) });
+    fake.store.set('snapshots/snap1/media/bubble-pop/opening.png', { body: Buffer.from('png') });
+    const store = createStore(fake);
+
+    expect(await store.getMediaObjectName('bubble-pop', 'opening.png', 96)).toBeNull();
+  });
+
+  it('returns null when nothing is published yet', async () => {
+    const store = createStore(createFakeStorage());
+
+    expect(await store.getMediaObjectName('bubble-pop', 'opening.png')).toBeNull();
+  });
+
+  it('probes metadata rather than downloading the body', async () => {
+    const fake = createFakeStorage();
+    fake.store.set('current.json', { body: Buffer.from(JSON.stringify({ snapshotId: 'snap1' })) });
+    fake.store.set('snapshots/snap1/media/bubble-pop/opening.png', { body: Buffer.from('png') });
+    const store = createStore(fake);
+
+    await store.getMediaObjectName('bubble-pop', 'opening.png');
+
+    // fields=name is metadata; alt=media is the bytes.
+    const urls = fake.raw.mock.calls.map(([url]: [string]) => String(url));
+    const probe = urls.find((url) => url.includes('media%2Fbubble-pop%2Fopening.png'));
+    expect(probe).toContain('fields=name');
+    expect(probe).not.toContain('alt=media');
+  });
+
+  it('remembers existence for the pointer TTL instead of probing per thumbnail', async () => {
+    const fake = createFakeStorage();
+    fake.store.set('current.json', { body: Buffer.from(JSON.stringify({ snapshotId: 'snap1' })) });
+    fake.store.set('snapshots/snap1/media/bubble-pop/opening.png', { body: Buffer.from('png') });
+    const store = createStore(fake);
+
+    await store.getMediaObjectName('bubble-pop', 'opening.png');
+    const after = fake.calls.length;
+    await store.getMediaObjectName('bubble-pop', 'opening.png');
+
+    expect(fake.calls.length).toBe(after);
+  });
+});

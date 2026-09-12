@@ -10,7 +10,7 @@ describe('command suggestions', () => {
     }
   });
   it('filters the command name, not prose or arguments', () => {
-    expect(commandSuggestions('/PU').map((item) => item.command)).toEqual(['/pull']);
+    expect(commandSuggestions('/PU').map((item) => item.command)).toEqual(['/pull', '/push']);
     for (const draft of ['', 'play', 'please /pu', '/play airtime', '/play ', '/unknown']) {
       expect(commandSuggestions(draft)).toEqual([]);
     }

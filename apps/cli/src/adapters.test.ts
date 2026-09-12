@@ -52,7 +52,7 @@ it('probes Muse exec help without starting a paid session', () => {
   try {
     writeFileSync(
       command,
-      `#!${process.execPath}\nif (process.argv.slice(2).join(' ') !== 'exec --help') process.exit(1); console.log('--trust-workspace');`,
+      `#!${process.execPath}\nif (process.argv.slice(2).join(' ') !== 'exec --help') process.exit(1); console.log('--trust-workspace --json');`,
       { mode: 0o700 },
     );
     expect(() => preflightAdapter({ ...spec, command }, process.env)).not.toThrow();

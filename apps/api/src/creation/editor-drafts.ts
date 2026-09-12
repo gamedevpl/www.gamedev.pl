@@ -16,7 +16,7 @@ import { editorKitV2Enabled } from '../platform/editor-kit-env.js';
 import { isLiveAgentRound } from './code-surface.js';
 import type { GamesStore } from '../delivery/games-store.js';
 import { MAX_EDITOR_DRAFT_BYTES, type Store, type SubmissionRecord } from '../platform/store.js';
-import type { ContentChecker } from '../platform/moderation.js';
+import { replyModerationBlock, type ContentChecker  } from '../platform/moderation.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
 import { MAX_UTTERANCE_LENGTH, applyAssistPatches, assistEnabled, type EditorAssistant } from './editor-assist.js';
 import type { EditingGate } from './creation-limits.js';
@@ -342,8 +342,9 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
             surface: 'editor_draft',
             uid: request.user?.uid,
             category: verdict.category,
+            unavailable: verdict.unavailable,
           });
-          return reply.status(422).send({ error: 'that text was rejected', category: verdict.category ?? 'other' });
+          return replyModerationBlock(reply, verdict, 'that text was rejected');
         }
       }
 
@@ -417,8 +418,9 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
             surface: 'editor_assist',
             uid: request.user?.uid,
             category: verdict.category,
+            unavailable: verdict.unavailable,
           });
-          return reply.status(422).send({ error: 'that request was rejected', category: verdict.category ?? 'other' });
+          return replyModerationBlock(reply, verdict, 'that request was rejected');
         }
       }
 

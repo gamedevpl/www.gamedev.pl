@@ -11,7 +11,7 @@ import type { PartySession } from './mpApi.js';
 
 const setPhase = vi.fn();
 vi.mock('./roomClient.js', () => ({
-  RoomClient: vi.fn().mockImplementation((opts: { onStatus?: (status: string) => void }) => {
+  RoomClient: vi.fn().mockImplementation(function (opts: { onStatus?: (status: string) => void }) {
     opts.onStatus?.('connected');
     return { connect: () => undefined, close: () => undefined, setPhase, kick: () => undefined };
   }),

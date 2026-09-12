@@ -90,6 +90,9 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
   const assessedCache = new Map<string, Windowed<Set<string>>>();
   const targetedCache = new Map<string, Windowed<ReviewQueueItem[]>>();
   let openSweepCache: Windowed<ReviewSweep | null> | null = null;
+  // Same window as the badge: no new staleness bound to reason about.
+  const handleCache = new Map<string, Windowed<string | null>>();
+  const MAX_CACHED_HANDLES = 500;
 
   // Bumped by each invalidation, so a read cannot seal in staleness.
   let generation = 0;
@@ -146,6 +149,26 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
     return slugs;
   }
 
+  async function creatorHandle(ownerUid: string): Promise<string | null> {
+    const hit = handleCache.get(ownerUid);
+    if (fresh(hit)) return hit.value;
+    let handle: string | null;
+    try {
+      handle = (await store.getUser(ownerUid))?.handle ?? null;
+    } catch {
+      return null;
+    }
+    rememberBounded(handleCache, ownerUid, { value: handle, expiresAt: now() + BADGE_WINDOW_MS }, MAX_CACHED_HANDLES);
+    return handle;
+  }
+
+  // One round trip per distinct creator, not one per queued draft.
+  async function creatorHandles(ownerUids: string[]): Promise<Map<string, string | null>> {
+    const distinct = [...new Set(ownerUids)];
+    const resolved = await Promise.all(distinct.map(async (uid) => [uid, await creatorHandle(uid)] as const));
+    return new Map(resolved);
+  }
+
   async function collectPool(source: ReviewSweepSource, opts?: { fresh?: boolean }): Promise<ReviewQueueItem[]> {
     const pools = await loadReviewPools(opts);
     const items: ReviewQueueItem[] = [];
@@ -164,26 +187,27 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
       }
     }
     if ((source === 'creator' || source === 'all') && items.length < MAX_SWEEP_GAMES) {
+      const seen = new Set(items.map((item) => item.slug));
+      const drafts: SubmissionRecord[] = [];
       for (const record of pools.delivered) {
         if (!isReviewableCreatorDraft(record)) continue;
         const slug = record.slug!;
-        if (items.some((item) => item.slug === slug)) continue;
-        let creatorHandle: string | null = null;
-        try {
-          creatorHandle = (await store.getUser(record.ownerUid))?.handle ?? null;
-        } catch {
-          // best-effort
-        }
+        if (seen.has(slug)) continue;
+        seen.add(slug);
+        drafts.push(record);
+        if (items.length + drafts.length >= MAX_SWEEP_GAMES) break;
+      }
+      const handles = await creatorHandles(drafts.map((record) => record.ownerUid));
+      for (const record of drafts) {
         items.push({
-          slug,
+          slug: record.slug!,
           title: titleFromSubmission(record),
           source: 'creator',
-          creatorHandle,
+          creatorHandle: handles.get(record.ownerUid) ?? null,
           genre: null,
           jobId: record.jobId,
           media: null,
         });
-        if (items.length >= MAX_SWEEP_GAMES) break;
       }
     }
     return items;
@@ -205,17 +229,11 @@ export function createReviewQueueCache(deps: ReviewQueueCacheDeps): ReviewQueueC
     }
     const record = pools.delivered.find((row) => row.slug === slug && isReviewableCreatorDraft(row));
     if (!record) return null;
-    let creatorHandle: string | null = null;
-    try {
-      creatorHandle = (await store.getUser(record.ownerUid))?.handle ?? null;
-    } catch {
-      // best-effort
-    }
     return {
       slug,
       title: titleFromSubmission(record),
       source: 'creator',
-      creatorHandle,
+      creatorHandle: await creatorHandle(record.ownerUid),
       genre: null,
       jobId: record.jobId,
       media: null,

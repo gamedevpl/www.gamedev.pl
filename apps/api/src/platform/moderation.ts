@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import type { GenAIClient } from 'genaicode';
 import { z } from 'zod';
-import { createVertexClient, type VertexGenerationConfig } from './genai.js';
+import { createOpenAiClient, createVertexClient, type VertexGenerationConfig } from './genai.js';
+import { callWithVertexResilience } from './vertex-resilience.js';
 import {
   CATEGORY_TERMS,
   MAX_URLS_IN_TEXT,
@@ -15,6 +16,38 @@ export type { RejectCategory } from './moderation-terms.js';
 export interface ModerationVerdict {
   allowed: boolean;
   category?: RejectCategory;
+  // Set when the checker could not decide; the text was never judged.
+  unavailable?: boolean;
+}
+
+export interface ModerationRejection {
+  status: 422 | 503;
+  error: 'content_rejected' | 'moderation_unavailable';
+  category: RejectCategory | 'other';
+}
+
+// `verdictPhrase` keeps a surface's own wording; outages use the shared code.
+export function replyModerationBlock<R extends { status(code: number): R; send(body: unknown): R }>(
+  reply: R,
+  verdict: ModerationVerdict,
+  verdictPhrase?: string,
+): R {
+  const rejection = rejectionFor(verdict);
+  const error = rejection.status === 503 ? rejection.error : (verdictPhrase ?? rejection.error);
+  return reply.status(rejection.status).send({ error, category: rejection.category });
+}
+
+// Both codes mean blocked; only one judges the text.
+export function isModerationBlock(error: string): boolean {
+  return error === 'content_rejected' || error === 'moderation_unavailable';
+}
+
+// One answer for a block, so outages never read as rejections.
+export function rejectionFor(verdict: ModerationVerdict): ModerationRejection {
+  if (verdict.unavailable) {
+    return { status: 503, error: 'moderation_unavailable', category: verdict.category ?? 'other' };
+  }
+  return { status: 422, error: 'content_rejected', category: verdict.category ?? 'other' };
 }
 
 export interface ContentChecker {
@@ -119,12 +152,19 @@ export interface VertexCheckerOptions {
   projectId?: string;
   region?: string;
   model?: string;
+  // Peer-or-better only: a weaker classifier lowers the bar.
+  fallbackModel?: string;
+  // Second vendor survives the first having no capacity.
+  fallbackProvider?: 'openai' | 'vertex';
+  fallbackApiKey?: string;
+  // Between failure and retry; short, someone is waiting.
+  retryDelayMs?: number;
   // Gemini 3 thinking level ('low' | 'medium' | 'high'). gemini-3.8-flash dropped
   // 'minimal' (400 THINKING_LEVEL_MINIMAL unsupported) — 'low' is now the floor.
   thinkingLevel?: string;
   timeoutMs?: number;
   // Custom fetcher/client seam for testing without GCP network calls
-  vertexFetcher?: (prompt: string) => Promise<{ allowed: boolean; category?: string }>;
+  vertexFetcher?: (prompt: string, model?: string, timeoutMs?: number) => Promise<{ allowed: boolean; category?: string }>;
   // Lower-level seam than `vertexFetcher`: swap the genaicode client (i.e. a stub
   // ModelProvider) to exercise real prompt/response handling with no network.
   client?: GenAIClient;
@@ -137,8 +177,8 @@ const VerdictSchema = z.object({
   category: z.string().nullish(),
 });
 
-// 10s budget prevents fail-closed aborts on Gemini thinking.
-export const DEFAULT_MODERATION_TIMEOUT_MS = 10_000;
+// 20s: refine measured 12.3-12.7s, so 10s clipped it.
+export const DEFAULT_MODERATION_TIMEOUT_MS = 20_000;
 
 export class VertexChecker implements ContentChecker {
   private options: VertexCheckerOptions;
@@ -148,9 +188,16 @@ export class VertexChecker implements ContentChecker {
   private verdictCache = new Map<string, { verdict: ModerationVerdict; expiresAt: number }>();
   private static readonly VERDICT_CACHE_MAX = 1000;
   private static readonly VERDICT_CACHE_TTL_MS = 10 * 60 * 1000;
-  private vertexFetcher?: (prompt: string) => Promise<{ allowed: boolean; category?: string }>;
-  // Built lazily; tests inject vertexFetcher and stay offline.
-  private client?: GenAIClient;
+  private vertexFetcher?: (
+    prompt: string,
+    model?: string,
+    timeoutMs?: number,
+  ) => Promise<{ allowed: boolean; category?: string }>;
+  private fallbackModel?: string;
+  private fallbackProvider: 'openai' | 'vertex';
+  private fallbackApiKey?: string;
+  private retryDelayMs: number;
+  private clients = new Map<string, GenAIClient>();
   constructor(options: VertexCheckerOptions = {}) {
     this.options = options;
     this.thinkingLevel = options.thinkingLevel ?? process.env.VERTEX_THINKING_LEVEL ?? 'low';
@@ -161,10 +208,26 @@ export class VertexChecker implements ContentChecker {
       );
     this.patternChecker = new PatternChecker();
     this.vertexFetcher = options.vertexFetcher;
+    this.fallbackProvider = options.fallbackProvider ?? (process.env.MODERATION_FALLBACK_PROVIDER as 'openai' | 'vertex' | undefined) ?? 'openai';
+    this.fallbackApiKey = options.fallbackApiKey ?? process.env.OPENAI_API_KEY;
+    this.fallbackModel = resolveFallbackModel({
+      configured: options.fallbackModel ?? process.env.MODERATION_FALLBACK_MODEL,
+      provider: this.fallbackProvider,
+      hasApiKey: Boolean(this.fallbackApiKey),
+    });
+    this.retryDelayMs = options.retryDelayMs ?? 250;
   }
 
-  private getClient(): GenAIClient {
-    this.client ??=
+  private getClient(model?: string): GenAIClient {
+    const key = model ?? 'primary';
+    const existing = this.clients.get(key);
+    if (existing) return existing;
+    if (model && model === this.fallbackModel && this.fallbackProvider === 'openai') {
+      const openaiClient = this.options.client ?? createOpenAiClient({ model, apiKey: this.fallbackApiKey });
+      this.clients.set(key, openaiClient);
+      return openaiClient;
+    }
+    const built =
       this.options.client ??
       createVertexClient({
         projectId: this.options.projectId,
@@ -172,7 +235,7 @@ export class VertexChecker implements ContentChecker {
         // 'global' is the safe default. VERTEX_REGION can override without a code change.
         region: this.options.region,
         defaultRegion: 'global',
-        model: this.options.model,
+        model: model ?? this.options.model,
         defaultModel: 'gemini-3.8-flash',
         // Thinking level goes on the request via `.thinking()` below, not here: genaicode's
         // Google provider computes its own thinkingConfig from `request.thinking` whenever a
@@ -182,7 +245,8 @@ export class VertexChecker implements ContentChecker {
           responseMimeType: 'application/json',
         } as VertexGenerationConfig,
       });
-    return this.client;
+    this.clients.set(key, built);
+    return built;
   }
 
   private cacheKey(text: string): string {
@@ -223,31 +287,54 @@ export class VertexChecker implements ContentChecker {
     if (cached) return cached;
 
     // 3. Run Vertex AI LLM moderation check
-    this.options.onPaidCall?.();
+    let lastProvider = 'vertex';
     try {
-      const result = await this.callVertex(text);
+      const result = await callWithVertexResilience({
+        timeoutMs: this.timeoutMs,
+        retryDelayMs: this.retryDelayMs,
+        fallbackModel: this.fallbackModel,
+        onAttempt: (model) => {
+          lastProvider = model ? `${this.fallbackProvider}/${model}` : 'vertex';
+          // Per attempt: a retry is another billed call.
+          this.options.onPaidCall?.();
+        },
+        attempt: (model, timeoutMs) => this.callVertex(text, model, timeoutMs),
+      });
       const category = isValidCategory(result.category) ? (result.category as RejectCategory) : 'other';
       const verdict: ModerationVerdict = result.allowed ? { allowed: true } : { allowed: false, category };
       this.writeCachedVerdict(key, verdict, now);
       return verdict;
     } catch (err) {
-      // Fail closed, never cached: describes Vertex, not the text.
-      console.warn('Vertex AI moderation failed or timed out, failing closed:', err);
-      return { allowed: false, category: 'other' };
+      // Fail closed, never cached. Names the provider: triage starts there.
+      console.warn(`Moderation failed or timed out on ${lastProvider}, failing closed:`, err);
     }
+
+    return { allowed: false, category: 'other', unavailable: true };
   }
 
+  // One call for all fields; each extra call risks a 429.
   async checkFields(fields: string[]): Promise<ModerationVerdict> {
-    for (const field of fields) {
-      const verdict = await this.check(field);
-      if (!verdict.allowed) return verdict;
+    const patternVerdict = await this.patternChecker.checkFields(fields);
+    if (!patternVerdict.allowed) return patternVerdict;
+    const present = fields.filter((field) => field.trim().length > 0);
+    if (present.length === 0) return { allowed: true };
+
+    // A field refused on its own stays refused; no second hearing.
+    const now = Date.now();
+    for (const field of present) {
+      const cached = this.readCachedVerdict(this.cacheKey(field), now);
+      if (cached && !cached.allowed) return cached;
     }
-    return { allowed: true };
+    return this.check(present.join('\n---\n'));
   }
 
-  private async callVertex(text: string): Promise<{ allowed: boolean; category?: string }> {
+  private async callVertex(
+    text: string,
+    model?: string,
+    timeoutMs = this.timeoutMs,
+  ): Promise<{ allowed: boolean; category?: string }> {
     if (this.vertexFetcher) {
-      return this.vertexFetcher(text);
+      return this.vertexFetcher(text, model, timeoutMs);
     }
 
     const promptText = `You are a strict content safety classifier for a web game creation platform.
@@ -263,10 +350,10 @@ ${text}
 
     // A malformed body, a non-boolean `allowed`, or the abort firing all throw
     // out of here — and `check()` turns any throw into a fail-closed verdict.
-    const verdict = await this.getClient()(promptText)
+    const verdict = await this.getClient(model)(promptText)
       .temperature(0)
       .thinking({ level: this.thinkingLevel as 'minimal' | 'low' | 'medium' | 'high' })
-      .signal(AbortSignal.timeout(this.timeoutMs))
+      .signal(AbortSignal.timeout(Math.max(1, timeoutMs)))
       .json((value) => VerdictSchema.parse(value));
 
     return {
@@ -274,6 +361,29 @@ ${text}
       category: verdict.category ?? undefined,
     };
   }
+}
+
+// Safety control, not a cost lever. See docs/content-safety-plan.md.
+
+// Keyed by provider: a model it cannot serve dies on a 404.
+const SOTA_FALLBACK_MODELS: Record<'openai' | 'vertex', ReadonlySet<string>> = {
+  openai: new Set(['gpt-5.6-luna']),
+  vertex: new Set(['gemini-3.8-flash', 'claude-sonnet-5', 'claude-opus-5']),
+};
+
+export function resolveFallbackModel(input: {
+  configured?: string;
+  provider: 'openai' | 'vertex';
+  hasApiKey: boolean;
+}): string | undefined {
+  if (input.provider === 'openai' && !input.hasApiKey) return undefined;
+  const model = input.configured ?? (input.provider === 'openai' ? 'gpt-5.6-luna' : undefined);
+  if (!model) return undefined;
+  if (!SOTA_FALLBACK_MODELS[input.provider].has(model)) {
+    console.warn(`Refusing moderation fallback to '${model}' on ${input.provider}: not a peer-or-better classifier it serves.`);
+    return undefined;
+  }
+  return model;
 }
 
 function isValidCategory(cat?: string): boolean {

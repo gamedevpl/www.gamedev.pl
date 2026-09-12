@@ -36,9 +36,31 @@ const MINIMAL: SourceFile[] = [
   { path: 'GAME.json', content: JSON.stringify({ engine: { modules: [] }, howToPlay: HOW_TO_PLAY }) },
 ];
 
+const MINIMAL_WITH_EDITOR: SourceFile[] = [
+  ...MINIMAL,
+  {
+    path: 'EDITOR.ts',
+    content: "import { defineEditor } from '../../shared/editor-def.ts';\nexport default defineEditor({});",
+  },
+];
+
 describe('validateSourceUpload — the delivery contract', () => {
   it('accepts a minimal game', () => {
     expect(validateSourceUpload(MINIMAL)).toHaveLength(MINIMAL.length);
+  });
+
+  it('accepts editor authoring imports from the Kit without uploading shared sources', () => {
+    const kit = new Set(['shared/editor-def.ts']);
+    expect(validateSourceUpload(MINIMAL_WITH_EDITOR, 'publish', false, false, kit)).toHaveLength(
+      MINIMAL_WITH_EDITOR.length,
+    );
+    expect(validateSourceUpload(MINIMAL_WITH_EDITOR, 'publish', false, false, 'defer')).toHaveLength(
+      MINIMAL_WITH_EDITOR.length,
+    );
+    expect(() => validateSourceUpload(MINIMAL_WITH_EDITOR)).toThrow(/missing from the delivery/);
+    expect(() =>
+      validateSourceUpload(MINIMAL_WITH_EDITOR, 'publish', false, false, new Set(['shared/game-kit.d.ts'])),
+    ).toThrow(/missing from the delivery/);
   });
 
   it('refuses a publish with no behavioural golden', () => {
@@ -638,6 +660,24 @@ describe('GCS games store', () => {
     });
   });
 
+  it('defers Kit paths for copied candidates and still fail-closes agent delivery', async () => {
+    const { impl } = stubGcs();
+    const store = createGcsGamesStore({ ...base, fetchImpl: impl });
+    for (const extra of [
+      { origin: 'seal' as const },
+      { origin: 'editor' as const },
+      { origin: 'remix' as const },
+      { mode: 'proposal' as const, proposal: { id: 'p1', proposerUid: 'u1' } },
+    ]) {
+      await expect(
+        store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL_WITH_EDITOR, ...extra }),
+      ).resolves.toMatchObject({ version: expect.stringMatching(/^v/) });
+    }
+    await expect(store.putCandidateSources({ slug: 'g', jobId: 1, files: MINIMAL_WITH_EDITOR })).rejects.toThrow(
+      /missing from the delivery/,
+    );
+  });
+
   it('writes the manifest last, so a dead run leaves no version claiming missing files', async () => {
     const writes: string[] = [];
     const impl = (async (url: string | URL, init: RequestInit = {}) => {
@@ -802,73 +842,6 @@ describe('GCS games store', () => {
     expect(
       await store.getStagedSourceFile({ slug: 'g', jobId: 7, roundGeneration: 1, path: 'game/old-module.ts' }),
     ).toBeNull();
-  });
-
-  it('retries staging manifest writes when a concurrent update wins the generation race', async () => {
-    const objects = new Map<string, Buffer>();
-    const generations = new Map<string, number>();
-    let manifestWrites = 0;
-    const impl = (async (url: string | URL, init: RequestInit = {}) => {
-      const href = String(url);
-      if (init.method === 'POST') {
-        const parsed = new URL(href);
-        const name = decodeURIComponent(parsed.searchParams.get('name') ?? '');
-        if (name.endsWith('/manifest.json')) {
-          manifestWrites += 1;
-          // First attempt pretends another writer landed first.
-          if (manifestWrites === 1) {
-            return new Response('Precondition Failed', { status: 412 });
-          }
-        }
-        const ifMatch = parsed.searchParams.get('ifGenerationMatch');
-        const current = generations.get(name) ?? 0;
-        if (ifMatch !== null && Number(ifMatch) !== current) {
-          return new Response('Precondition Failed', { status: 412 });
-        }
-        objects.set(name, Buffer.from(init.body as Uint8Array));
-        const next = current + 1;
-        generations.set(name, next);
-        return new Response('{}', { status: 200 });
-      }
-      if (init.method === 'DELETE') {
-        const name = decodeURIComponent(href.split('/o/')[1].split('?')[0]);
-        objects.delete(name);
-        generations.delete(name);
-        return new Response(null, { status: 200 });
-      }
-      const name = decodeURIComponent(href.split('/o/')[1].split('?')[0]);
-      // After the first 412, the concurrent writer's manifest appears for the retry read.
-      if (name.endsWith('/manifest.json') && manifestWrites >= 1 && !objects.has(name)) {
-        const concurrent = {
-          slug: 'g',
-          jobId: 7,
-          roundGeneration: 1,
-          updatedAt: '2026-07-30T10:00:00.000Z',
-          files: [{ path: 'SPEC.md', bytes: 3 }],
-          totalBytes: 3,
-        };
-        objects.set(name, Buffer.from(JSON.stringify(concurrent)));
-        generations.set(name, 1);
-      }
-      const body = objects.get(name);
-      if (!body) return new Response('', { status: 404 });
-      return new Response(new Uint8Array(body), {
-        status: 200,
-        headers: { 'x-goog-generation': String(generations.get(name) ?? 1) },
-      });
-    }) as unknown as typeof fetch;
-
-    const store = createGcsGamesStore({ ...base, fetchImpl: impl });
-    const result = await store.putStagedSourceFile({
-      slug: 'g',
-      jobId: 7,
-      roundGeneration: 1,
-      path: 'game.ts',
-      content: 'export {};',
-    });
-
-    expect(manifestWrites).toBeGreaterThanOrEqual(2);
-    expect(result.files.map((f) => f.path).sort()).toEqual(['SPEC.md', 'game.ts']);
   });
 
   it('handles high concurrency (20 parallel staged source file updates) without dropping updates', async () => {

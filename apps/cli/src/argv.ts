@@ -1,5 +1,7 @@
 export const SLASH_VERBS = [
   'agents',
+  'model',
+  'logs',
   'kit',
   'play',
   'games',
@@ -19,6 +21,7 @@ export const SLASH_VERBS = [
   'whoami',
   'submit',
   'pull',
+  'push',
   'diff',
   'update',
 ] as const;
@@ -32,11 +35,13 @@ export function completeSlash(prefix: string): SlashVerb[] {
 
 const BOOLEAN_FLAGS = new Set([
   'manual',
+  'reset',
   'no-open',
   'stop',
   'force',
   'publish',
   'handoff',
+  'takeover',
   'submit',
   'json',
   'help',

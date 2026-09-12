@@ -46,14 +46,13 @@ describe.skipIf(!prereq.ok)('error and edge routes', () => {
     await api?.dispose();
   });
 
-  /** Rendered text, collapsed — enough to tell "a state" from "a blank page". */
+  // Collapsed body text: enough to tell a state from a blank page.
   const bodyText = async () => (await page.locator('body').innerText()).replace(/\s+/g, ' ').trim();
 
   it('serves a real 404 for an unknown path instead of silently showing home', async () => {
     const res = await visit(page, '/this-page-does-not-exist', 2_500);
 
-    // The status matters as much as the view: a soft-404 that answers 200 tells
-    // crawlers a typo'd URL is a real page.
+    // A soft-404 answering 200 tells crawlers a typo'd URL is real.
     expect(res?.status()).toBe(404);
     await expect.poll(() => page.locator('.not-found').count(), { timeout: 20_000 }).toBeGreaterThan(0);
     // The URL stays visible so the visitor can see what they mistyped.
@@ -65,15 +64,17 @@ describe.skipIf(!prereq.ok)('error and edge routes', () => {
   it('shows an in-page error for an unknown game slug, not a crash', async () => {
     await visit(page, '/play/nope-not-a-real-game', 4_000);
 
-    const text = await bodyText();
-    expect(text.length).toBeGreaterThan(0);
+    expect((await bodyText()).length).toBeGreaterThan(0);
     // Lifetime `/play/<slug>`: an unknown slug is not in the catalog, so App mounts
     // UnpublishedPlayView ("isn't available yet") rather than the published preview
     // page's "does not exist". Keep the older missing / loadError wording too so a
     // catalog-error path that still renders GameDetailPage passes this gate.
-    expect(text).toMatch(
-      /isn't available yet|nie jest jeszcze dostępna|does not exist|nie istnieje|could not load|nie udało|retry|ponów/i,
-    );
+    // The view retries a 404 with backoff before it settles, so poll past that window.
+    await expect
+      .poll(bodyText, { timeout: 20_000 })
+      .toMatch(
+        /isn't available yet|nie jest jeszcze dostępna|does not exist|nie istnieje|could not load|nie udało|retry|ponów/i,
+      );
 
     expect(describeProblems(watcher.drain())).toBe('');
   });

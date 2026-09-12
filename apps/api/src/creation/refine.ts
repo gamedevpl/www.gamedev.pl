@@ -4,8 +4,10 @@ import type { GenAIClient } from 'genaicode';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { checkUserAccess } from '../platform/auth.js';
+import { callWithVertexResilience } from '../platform/vertex-resilience.js';
+import { resolveRefineFallbackModel } from '../platform/vertex-fallback-models.js';
 import { createVertexClient, type VertexGenerationConfig } from '../platform/genai.js';
-import type { ContentChecker } from '../platform/moderation.js';
+import { rejectionFor, type ContentChecker } from '../platform/moderation.js';
 import { sanitizeCreatorText } from '../platform/submission-status.js';
 import { BOT_UID_PREFIX, type Store } from '../platform/store.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
@@ -138,6 +140,7 @@ export class VertexSpecRefiner implements SpecRefiner {
   // Lazy for the same reason as VertexChecker: building one must not touch GCP.
   private client?: GenAIClient;
   private groundingClient?: GenAIClient;
+  private spareClients = new Map<string, GenAIClient>();
 
   constructor(options: VertexSpecRefinerOptions = {}) {
     this.options = options;
@@ -147,7 +150,20 @@ export class VertexSpecRefiner implements SpecRefiner {
     this.refinerFetcher = options.refinerFetcher;
   }
 
-  private getClient(): GenAIClient {
+  private getClient(model?: string): GenAIClient {
+    if (model) {
+      // Cached per model.
+      const spare = this.spareClients.get(model) ?? this.options.client ?? createVertexClient({
+        projectId: this.options.projectId,
+        region: this.options.region,
+        defaultRegion: 'global',
+        model,
+        defaultModel: model,
+        generationConfig: { responseMimeType: 'application/json' } as VertexGenerationConfig,
+      });
+      this.spareClients.set(model, spare);
+      return spare;
+    }
     this.client ??=
       this.options.client ??
       createVertexClient({
@@ -258,11 +274,18 @@ Game Concept:
 ${params.concept}
 """`;
 
-      const parsed = await this.getClient()(promptText)
-        .temperature(0.2)
-        .thinking({ level: 'low' })
-        .signal(AbortSignal.timeout(this.timeoutMs))
-        .json((value) => RefineResultSchema.parse(value));
+      // A 429 here stopped a deploy; one attempt is not enough.
+      const parsed = await callWithVertexResilience({
+        timeoutMs: this.timeoutMs,
+        // Peer-or-better only: refinement shapes what gets built.
+        fallbackModel: resolveRefineFallbackModel(),
+        attempt: (model, timeoutMs) =>
+          this.getClient(model)(promptText)
+            .temperature(0.2)
+            .thinking({ level: 'low' })
+            .signal(AbortSignal.timeout(timeoutMs))
+            .json((value) => RefineResultSchema.parse(value)),
+      });
 
       const suggestedTitle = cleanSuggestedTitle(parsed.suggestedTitle);
 
@@ -430,8 +453,10 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
         surface: 'refine',
         uid: request.user?.uid,
         category: moderation.category,
+        unavailable: moderation.unavailable,
       });
-      return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
+      const rejection = rejectionFor(moderation);
+      return reply.status(rejection.status).send({ error: rejection.error, category: rejection.category });
     }
 
     // 3. Daily refine quota check

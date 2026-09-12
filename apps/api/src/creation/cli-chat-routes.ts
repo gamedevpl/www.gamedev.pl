@@ -6,7 +6,7 @@ import { checkUserAccess } from '../platform/auth.js';
 import { cliSurfaceEnabled } from '../platform/cli-surface.js';
 import { isRateLimited } from '../platform/ip-rate-limit.js';
 import { logModerationRejection } from '../platform/moderation-metrics.js';
-import type { ContentChecker } from '../platform/moderation.js';
+import { isModerationBlock, rejectionFor, type ContentChecker  } from '../platform/moderation.js';
 import { peekQuota } from '../platform/quota-peek.js';
 import type { Store } from '../platform/store.js';
 import { mintToken, verifyToken } from '../platform/submission-token.js';
@@ -132,7 +132,8 @@ export function registerCliChatRoutes(app: FastifyInstance, options: CliChatRout
       const moderation = await contentChecker.checkFields([text]);
       if (!moderation.allowed) {
         logModerationRejection(request.log, { surface: 'cli_chat', uid, category: moderation.category });
-        return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
+        const rejection = rejectionFor(moderation);
+        return reply.status(rejection.status).send({ error: rejection.error, category: rejection.category });
       }
 
       if (chatGate) {
@@ -228,7 +229,7 @@ export function registerCliChatRoutes(app: FastifyInstance, options: CliChatRout
       });
       if (!created.ok) {
         request.log.info({ cliChat: { outcome: 'create_refused', status: created.status } }, 'cli intake chat');
-        if (created.error === 'content_rejected') {
+        if (isModerationBlock(created.error)) {
           return reply.status(created.status).send({ error: created.error, category: created.category ?? 'other' });
         }
         if (created.status === 429 || created.status === 403 || created.status === 503) {

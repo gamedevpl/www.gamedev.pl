@@ -11,6 +11,7 @@ import {
   emptyAssessmentChecklist,
   isChecklistComplete,
 } from './reviewChecklist.js';
+import { ReviewFlagDialog } from './ReviewFlagDialog.js';
 import { captureReviewClientContext } from './reviewClientContext.js';
 import { fetchReviewQueue, ReviewApiError, submitAssessment, type ReviewQueueItem } from './reviewApi.js';
 import type {
@@ -81,6 +82,8 @@ export function ReviewDesk() {
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState<AssessmentVerdict | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [flagging, setFlagging] = useState(false);
+  const [flagged, setFlagged] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [shotIndex, setShotIndex] = useState(0);
 
@@ -168,6 +171,8 @@ export function ReviewDesk() {
   }, [videoUrl, playing, current?.slug]);
 
   const resetForm = () => {
+    // The next card is a different game; clear the notice.
+    setFlagged(false);
     setNote('');
     setNoteOrigin('none');
     setChecklist(emptyAssessmentChecklist());
@@ -229,11 +234,15 @@ export function ReviewDesk() {
   commitRef.current = commit;
   const busyRef = useRef(busy);
   busyRef.current = busy;
+  const flaggingRef = useRef(flagging);
+  flaggingRef.current = flagging;
 
   useEffect(() => {
     if (!current) return;
     const onKey = (event: KeyboardEvent) => {
       if (busyRef.current) return;
+      // An arrow inside the report dialog picks a reason, never a verdict.
+      if (flaggingRef.current) return;
       if (event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLInputElement) {
         return;
       }
@@ -557,6 +566,13 @@ export function ReviewDesk() {
               ) : null}
             </div>
 
+            <div className="review-report">
+              <button type="button" className="review-report-btn" onClick={() => setFlagging(true)}>
+                {t('review.flag.open')}
+              </button>
+              {flagged ? <span className="review-report-sent">{t('review.flag.sent')}</span> : null}
+            </div>
+
             <div className="review-actions" role="group" aria-label={t('review.actionsLabel')}>
               <button
                 type="button"
@@ -589,6 +605,20 @@ export function ReviewDesk() {
           </div>
         </>
       )}
+
+      {flagging && current ? (
+        <ReviewFlagDialog
+          key={current.slug}
+          slug={current.slug}
+          title={current.title}
+          source={current.source}
+          onClose={() => setFlagging(false)}
+          onRaised={() => {
+            setFlagging(false);
+            setFlagged(true);
+          }}
+        />
+      ) : null}
 
       {error ? (
         <p className="review-error" role="alert">

@@ -27,6 +27,7 @@ export async function dispatchReadVerb(input: {
   api: ApiClient;
   io: Io;
   env?: NodeJS.ProcessEnv;
+  currentPath?: string;
 }): Promise<number | null> {
   const asJson = jsonMode(input.flags);
   const { verb, args, api, io, flags } = input;
@@ -93,7 +94,10 @@ export async function dispatchReadVerb(input: {
     return EXIT_GREEN;
   }
   if (verb === 'update') {
-    const dest = typeof flags.dest === 'string' ? flags.dest : defaultInstallDest();
+    const dest =
+      typeof flags.dest === 'string'
+        ? flags.dest
+        : defaultInstallDest({ env: input.env, currentPath: input.currentPath });
     const version = typeof flags.version === 'string' ? flags.version : undefined;
     const result = await updateCli({ dest, version });
     if (input.env) noteInstallChannel(input.env, 'update');

@@ -48,6 +48,7 @@ const DEFAULT_BUCKET = 'platform';
 const FILE_BUCKET = {
   // platform: composition root, auth, errors, rate limits, shared primitives
   app: 'platform',
+  'error-handler': 'platform',
   server: 'platform',
   auth: 'platform',
   bearer: 'platform',
@@ -87,6 +88,7 @@ const FILE_BUCKET = {
   'creator-pat-routes': 'platform',
   'access-token-service': 'platform',
   digest: 'platform',
+  'sweep-cadence': 'platform',
   'sweep-scope': 'platform',
   'dev-seed-studio': 'platform',
   'openai-apps-challenge': 'platform',
@@ -147,8 +149,17 @@ const FILE_BUCKET = {
   // Job vocabulary and its transition table, read by eight buckets. Its only
   // domain import is type-only, so nothing follows it at runtime.
   'job-state': 'platform',
+  // Daily ceiling on signed media URLs. Pure counters, no relative imports.
+  'media-mint-budget': 'platform',
+  // Which model may stand in for which. No relative imports at all.
+  'vertex-fallback-models': 'platform',
+  // Retry/fallback loop around a Vertex call. No relative imports at all.
+  'vertex-resilience': 'platform',
   // Signed-URL minting over GCS. No relative imports at all.
   'gcs-sign': 'platform',
+  // A cache in front of gcs-sign, so the media route can redirect instead of
+  // carrying bytes. Imports gcs-sign and nothing else.
+  'media-url-signer': 'platform',
   // A line counter. No relative imports at all.
   'module-size': 'platform',
   // A generic HTTP rate-limit classifier with no domain deps at all, and a bare
@@ -240,6 +251,7 @@ const FILE_BUCKET = {
   'chat-turns': 'creation',
   'chat-turns-history': 'creation',
   'creator-feedback-handler': 'creation',
+  'creator-takeover': 'creation',
   'creator-code': 'creation',
   'creator-studio': 'creation',
   'creator-versions': 'creation',
@@ -272,6 +284,7 @@ const FILE_BUCKET = {
   // Collapses jobs to distinct games for the Studio shelf -- pure Store-record
   // grouping, no catalog dependency, only ever read by creator-studio.ts.
   'owner-games': 'creation',
+  'studio-shelf-records': 'creation',
 
   // agent-surface: channel + MCP + kit
   'agent-channel': 'agent-surface',
@@ -317,6 +330,7 @@ const FILE_BUCKET = {
   'agent-backend-env': 'agent-surface',
   'managed-agent': 'agent-surface',
   'managed-availability': 'agent-surface',
+  'managed-bot-availability': 'agent-surface',
   'managed-backend': 'agent-surface',
   'managed-provider-anthropic': 'agent-surface',
   'managed-provider-copilot': 'agent-surface',
@@ -349,10 +363,14 @@ const FILE_BUCKET = {
   'build-status': 'delivery',
   'creator-media': 'delivery',
   'draft-preview-routes': 'delivery',
+  'draft-share-gate': 'delivery',
+  'delivered-prose': 'delivery',
+  'delivery-moderation': 'delivery',
   'editor-upload-requirements': 'delivery',
   'staged-preview': 'delivery',
   'stage-hints': 'delivery',
   'games-store': 'delivery',
+  'storage-write-retry': 'delivery',
   'games-store-raster': 'delivery',
   'source-file-bytes': 'delivery',
   'gate-materialize': 'delivery',
@@ -416,6 +434,7 @@ const FILE_BUCKET = {
   review: 'community',
   'review-checklist': 'community',
   'review-queue-cache': 'community',
+  'moderation-flags': 'community',
   'review-sweep': 'community',
   'proposal-apply-bot': 'community',
   'proposal-base': 'community',

@@ -3,12 +3,17 @@ export type TuiMode = 'prompt' | 'pick' | 'busy';
 export type TuiState = {
   lines: string[];
   live: string[];
+  localTask: string;
+  previewUrl: string;
   identity: string;
   question: string;
   mode: TuiMode;
   activity: string;
   busySince: number;
+  lastOutputAt: number;
   draft: string;
+  draftCursor: number;
+  draftFromHistory: boolean;
   choices: string[];
   pickIndex: number;
 };
@@ -17,10 +22,14 @@ export type TuiSession = {
   get: () => TuiState;
   subscribe: (fn: (state: TuiState) => void) => () => void;
   writeLine: (text: string) => void;
+  clearPreview: () => void;
   setLive: (live: string[]) => void;
+  setLocalTask: (agent: string) => void;
   setIdentity: (identity: string) => void;
   setActivity: (activity: string) => void;
   setDraft: (draft: string) => void;
+  insertDraft: (text: string) => void;
+  moveDraftCursor: (delta: number) => void;
   deleteLast: () => void;
   movePick: (delta: number) => void;
   historyPrev: () => void;
@@ -39,12 +48,17 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
   let state: TuiState = {
     lines: banner ? banner.split('\n') : [],
     live: [],
+    localTask: '',
+    previewUrl: '',
     identity: '',
     question: '',
     mode: 'busy',
     activity: 'Starting gamedevpl',
     busySince: Date.now(),
+    lastOutputAt: Date.now(),
     draft: '',
+    draftCursor: 0,
+    draftFromHistory: false,
     choices: [],
     pickIndex: 0,
   };
@@ -70,7 +84,23 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
       };
     },
     writeLine(text) {
-      state = { ...state, lines: [...state.lines, ...text.split('\n')] };
+      const preview = /^(?:local live preview|live preview while .* edits): (https?:\/\/\S+)/m.exec(text)?.[1];
+      const previewStopped = /^(?:local preview stopped|no local preview is running)$/m.test(text);
+      state = {
+        ...state,
+        lines: [...state.lines, ...text.split('\n')],
+        lastOutputAt: Date.now(),
+        previewUrl: previewStopped ? '' : (preview ?? state.previewUrl),
+      };
+      emit();
+    },
+    clearPreview() {
+      if (!state.previewUrl) return;
+      state = { ...state, previewUrl: '' };
+      emit();
+    },
+    setLocalTask(localTask) {
+      state = { ...state, localTask };
       emit();
     },
     setLive(live) {
@@ -92,13 +122,46 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
         const code = ch.charCodeAt(0);
         if (code >= 32 && code !== 127 && (code < 0x80 || code > 0x9f)) next += ch;
       }
-      state = { ...state, draft: next };
+      histIndex = history.length;
+      state = { ...state, draft: next, draftCursor: [...next].length, draftFromHistory: false };
+      emit();
+    },
+    insertDraft(text) {
+      let insert = '';
+      for (const ch of text) {
+        const code = ch.charCodeAt(0);
+        if (code >= 32 && code !== 127 && (code < 0x80 || code > 0x9f)) insert += ch;
+      }
+      if (!insert) return;
+      const chars = [...state.draft];
+      const added = [...insert];
+      chars.splice(state.draftCursor, 0, ...added);
+      histIndex = history.length;
+      state = {
+        ...state,
+        draft: chars.join(''),
+        draftCursor: state.draftCursor + added.length,
+        draftFromHistory: false,
+      };
+      emit();
+    },
+    moveDraftCursor(delta) {
+      const next = Math.max(0, Math.min([...state.draft].length, state.draftCursor + delta));
+      if (next === state.draftCursor) return;
+      state = { ...state, draftCursor: next };
       emit();
     },
     deleteLast() {
+      if (state.draftCursor === 0) return;
       const chars = [...state.draft];
-      chars.pop();
-      state = { ...state, draft: chars.join('') };
+      chars.splice(state.draftCursor - 1, 1);
+      histIndex = history.length;
+      state = {
+        ...state,
+        draft: chars.join(''),
+        draftCursor: state.draftCursor - 1,
+        draftFromHistory: false,
+      };
       emit();
     },
     movePick(delta) {
@@ -111,13 +174,20 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
       if (state.mode !== 'prompt' || !history.length || histIndex === 0) return;
       if (histIndex === history.length) stash = state.draft;
       histIndex -= 1;
-      state = { ...state, draft: history[histIndex] ?? '' };
+      const draft = history[histIndex] ?? '';
+      state = { ...state, draft, draftCursor: [...draft].length, draftFromHistory: true };
       emit();
     },
     historyNext() {
       if (state.mode !== 'prompt' || histIndex >= history.length) return;
       histIndex += 1;
-      state = { ...state, draft: histIndex === history.length ? stash : (history[histIndex] ?? '') };
+      const draft = histIndex === history.length ? stash : (history[histIndex] ?? '');
+      state = {
+        ...state,
+        draft,
+        draftCursor: [...draft].length,
+        draftFromHistory: true,
+      };
       emit();
     },
     prompt(choices, question) {
@@ -137,6 +207,8 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
           question: question ?? '',
           pickIndex: 0,
           draft: '',
+          draftCursor: 0,
+          draftFromHistory: false,
         };
         emit();
       });
@@ -159,7 +231,9 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
         mode: 'busy',
         activity: state.mode === 'pick' ? 'Continuing' : 'Working on your request',
         busySince: Date.now(),
+        lastOutputAt: Date.now(),
         draft: '',
+        draftCursor: 0,
         choices: [],
         question: '',
         pickIndex: 0,
@@ -169,7 +243,7 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
     },
     cancel() {
       if (state.mode === 'prompt' && state.draft) {
-        state = { ...state, draft: '' };
+        state = { ...state, draft: '', draftCursor: 0 };
         emit();
         return;
       }
@@ -179,7 +253,7 @@ export function createTuiSession(banner: string, onBusyCancel?: () => void): Tui
       }
       const resolve = pending;
       pending = null;
-      state = { ...state, mode: 'busy', draft: '', choices: [], question: '', pickIndex: 0 };
+      state = { ...state, mode: 'busy', draft: '', draftCursor: 0, choices: [], question: '', pickIndex: 0 };
       emit();
       resolve('/quit');
     },

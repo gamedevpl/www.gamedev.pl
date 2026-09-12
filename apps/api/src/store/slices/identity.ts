@@ -199,14 +199,41 @@ export class InMemoryIdentityStore implements IdentityStore {
   }
 }
 
+// Every authenticated request reads this user; it is the floor.
+const USER_CACHE_TTL_MS = 30_000;
+
+// A long-lived instance would otherwise hold every uid it ever served.
+const USER_CACHE_MAX = 2_000;
+
 export class FirestoreIdentityStore implements IdentityStore {
+  private userCache = new Map<string, { user: User; at: number }>();
+
+  // Bumped by every drop; a read in flight then stores nothing.
+  private generation = 0;
+
   constructor(private db: Firestore) {}
 
+  // Tier and blocks live here, so every write drops it.
+  forgetUser(uid: string): void {
+    this.userCache.delete(uid);
+    this.generation += 1;
+  }
+
   async getUser(uid: string): Promise<User | null> {
+    const hit = this.userCache.get(uid);
+    if (hit && Date.now() - hit.at < USER_CACHE_TTL_MS) return { ...hit.user };
+    const generation = this.generation;
     const docRef = this.db.collection('users').doc(uid);
     const snap = await docRef.get();
-    if (!snap.exists) return null;
-    return snap.data() as User;
+    if (!snap.exists) {
+      this.forgetUser(uid);
+      return null;
+    }
+    const user = snap.data() as User;
+    if (this.generation !== generation) return { ...user };
+    if (this.userCache.size >= USER_CACHE_MAX) this.userCache.clear();
+    this.userCache.set(uid, { user, at: Date.now() });
+    return { ...user };
   }
 
   async getUserByHandle(handle: string): Promise<User | null> {
@@ -228,7 +255,9 @@ export class FirestoreIdentityStore implements IdentityStore {
   }
 
   async claimHandle(uid: string, handle: string, at: string): Promise<ClaimHandleResult> {
-    return claimHandleFirestore(this.db, uid, handle, at);
+    const result = await claimHandleFirestore(this.db, uid, handle, at);
+    this.forgetUser(uid);
+    return result;
   }
 
   async updateCreatorProfile(
@@ -244,6 +273,7 @@ export class FirestoreIdentityStore implements IdentityStore {
       ...(patch.avatarMode !== undefined ? { avatarMode: patch.avatarMode } : {}),
     };
     await this.db.collection('users').doc(uid).set(stripUndefined(updated), { merge: true });
+    this.forgetUser(uid);
     return updated;
   }
 
@@ -278,6 +308,7 @@ export class FirestoreIdentityStore implements IdentityStore {
     }
     if (released.size > 0 || user?.handle) {
       await batch.commit();
+      this.forgetUser(uid);
     }
     void at;
     return [...released].sort();
@@ -285,7 +316,7 @@ export class FirestoreIdentityStore implements IdentityStore {
 
   async scheduleAccountDeletion(uid: string, requestedAt: string, scheduledFor: string): Promise<User | null> {
     const ref = this.db.collection('users').doc(uid);
-    return this.db.runTransaction(async (transaction) => {
+    const outcome = await this.db.runTransaction(async (transaction) => {
       const snap = await transaction.get(ref);
       if (!snap.exists) return null;
       const updated = {
@@ -296,11 +327,13 @@ export class FirestoreIdentityStore implements IdentityStore {
       transaction.set(ref, { deletionRequestedAt: requestedAt, deletionScheduledFor: scheduledFor }, { merge: true });
       return updated;
     });
+    this.forgetUser(uid);
+    return outcome;
   }
 
   async cancelAccountDeletion(uid: string): Promise<boolean> {
     const ref = this.db.collection('users').doc(uid);
-    return this.db.runTransaction(async (transaction) => {
+    const cancelled = await this.db.runTransaction(async (transaction) => {
       const snap = await transaction.get(ref);
       if (!snap.exists || !(snap.data() as User).deletionScheduledFor) return false;
       transaction.set(
@@ -310,6 +343,8 @@ export class FirestoreIdentityStore implements IdentityStore {
       );
       return true;
     });
+    this.forgetUser(uid);
+    return cancelled;
   }
 
   async listAccountsDueForDeletion(at: string, limit: number): Promise<User[]> {
@@ -344,7 +379,7 @@ export class FirestoreIdentityStore implements IdentityStore {
     const now = new Date().toISOString();
     const docRef = this.db.collection('users').doc(userData.uid);
 
-    return await this.db.runTransaction(async (transaction) => {
+    const written = await this.db.runTransaction(async (transaction) => {
       const snap = await transaction.get(docRef);
       let user: User;
 
@@ -378,14 +413,18 @@ export class FirestoreIdentityStore implements IdentityStore {
       transaction.set(docRef, stripUndefined(user), { merge: true });
       return user;
     });
+    this.forgetUser(userData.uid);
+    return written;
   }
 
   async setEmailUnsubscribed(uid: string, at: string | null): Promise<void> {
     await this.db.collection('users').doc(uid).set({ emailUnsubscribedAt: at }, { merge: true });
+    this.forgetUser(uid);
   }
 
   async setDigestOptOut(uid: string, at: string | null): Promise<void> {
     await this.db.collection('users').doc(uid).set({ digestOptOutAt: at }, { merge: true });
+    this.forgetUser(uid);
   }
 
   async setProposalsMuted(uid: string, at: string | null): Promise<void> {

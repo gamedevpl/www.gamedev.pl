@@ -72,7 +72,9 @@ interface Harness {
   runTicks(count: number): void;
 }
 
-function harness(options: { sim?: string; store?: FakeStore; schema?: ZoneSchema; startAt?: number } = {}): Harness {
+function harness(
+  options: { sim?: string; store?: FakeStore; schema?: ZoneSchema; startAt?: number; idleMs?: number } = {},
+): Harness {
   const store = options.store ?? new FakeStore();
   const broadcasts: ZoneOutboundFrame[] = [];
   const direct: Array<{ slot: number; frame: ZoneOutboundFrame }> = [];
@@ -89,6 +91,7 @@ function harness(options: { sim?: string; store?: FakeStore; schema?: ZoneSchema
     sendTo: (slot, frame) => direct.push({ slot, frame }),
     now: () => clock,
     newSeed: () => 4242,
+    idleMs: options.idleMs,
   });
 
   return {
@@ -211,6 +214,112 @@ describe('a live zone', () => {
   });
 });
 
+describe('a seat nobody is playing', () => {
+  // A held seat blocks hibernation, so silence has to be visible.
+  const IDLE_MS = 60_000;
+
+  it('reports a seat that has sent nothing for the whole budget', async () => {
+    const h = harness({ idleMs: IDLE_MS });
+    await h.zone.join('player-a');
+
+    expect(h.zone.idleSlots(1_000_000 + IDLE_MS - 1)).toEqual([]);
+    expect(h.zone.idleSlots(1_000_000 + IDLE_MS)).toEqual([0]);
+  });
+
+  it('starts the budget again on every input the vocabulary accepted', async () => {
+    const h = harness({ idleMs: IDLE_MS });
+    await h.zone.join('player-a');
+
+    h.setNow(1_000_000 + IDLE_MS - 1);
+    expect(h.zone.enqueue(0, 'douse', undefined)).toBe(true);
+
+    // The whole budget again from the input, not from the arrival.
+    expect(h.zone.idleSlots(1_000_000 + 2 * IDLE_MS - 2)).toEqual([]);
+    expect(h.zone.idleSlots(1_000_000 + 2 * IDLE_MS - 1)).toEqual([0]);
+  });
+
+  it('does not count an input the vocabulary refused', async () => {
+    const h = harness({ idleMs: IDLE_MS });
+    await h.zone.join('player-a');
+
+    h.setNow(1_000_000 + IDLE_MS - 1);
+    // A client behind its game: the sim never sees this, so it holds nothing.
+    expect(h.zone.enqueue(0, 'fire', undefined)).toBe(false);
+    expect(h.zone.idleSlots(1_000_000 + IDLE_MS)).toEqual([0]);
+  });
+
+  it('leaves the other seats alone', async () => {
+    const h = harness({ idleMs: IDLE_MS });
+    await h.zone.join('player-a');
+    await h.zone.join('player-b');
+
+    h.setNow(1_000_000 + IDLE_MS - 1);
+    h.zone.enqueue(1, 'douse', undefined);
+
+    expect(h.zone.idleSlots(1_000_000 + IDLE_MS)).toEqual([0]);
+  });
+
+  it('forgets a seat that was retired, rather than reporting it forever', async () => {
+    const h = harness({ idleMs: IDLE_MS });
+    await h.zone.join('player-a');
+    await h.zone.join('player-b');
+    h.zone.leave(0);
+
+    expect(h.zone.idleSlots(1_000_000 + IDLE_MS)).toEqual([1]);
+  });
+
+  it('lets the sim hear the departure that emptied it before parking', async () => {
+    // The park snapshot is what the next wake restores, and `leave` queues its event
+    // rather than applying it. Parking on top of that pending queue wrote a world still
+    // holding the actors of everyone who had just left — the zombie this reap exists to
+    // remove, preserved across the sleep it was supposed to trigger.
+    const h = harness({ idleMs: IDLE_MS });
+    await h.zone.join('player-a');
+    await h.zone.join('player-b');
+    h.runTicks(1);
+
+    h.zone.leave(0);
+    h.zone.leave(1);
+    expect(h.zone.state).toBe('parked');
+
+    const parked = h.store.saved.get('ember-watch');
+    expect(JSON.parse(parked!.state as string).players).toEqual([]);
+  });
+
+  it('has nobody to reap while the world is parked or asleep', async () => {
+    const h = harness({ idleMs: IDLE_MS });
+    await h.zone.join('player-a');
+    h.zone.leave(0);
+    expect(h.zone.state).toBe('parked');
+
+    h.setNow(1_000_000 + IDLE_MS * 20);
+    expect(h.zone.idleSlots()).toEqual([]);
+
+    // And the same once the grace runs out and the sim is dropped entirely.
+    h.zone.pump();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(h.zone.state).toBe('sleeping');
+    expect(h.zone.idleSlots()).toEqual([]);
+
+    // And the player who comes back starts their budget when the world does.
+    await h.zone.join('player-a');
+    expect(h.zone.idleSlots()).toEqual([]);
+  });
+
+  it('does not charge a seat for the time a stopped zone spent stopped', async () => {
+    // `fail` keeps its roster; charging the outage would reap it on the next wake.
+    const h = harness({ sim: THROWING_SIM, idleMs: IDLE_MS });
+    await h.zone.join('player-a');
+    h.runTicks(10);
+    expect(h.zone.state).toBe('sleeping');
+
+    h.setNow(1_000_000 + IDLE_MS * 20);
+    await h.zone.join('player-b');
+
+    expect(h.zone.idleSlots()).toEqual([]);
+  });
+});
+
 describe('hibernation', () => {
   it('stops ticking the moment the last player leaves, and writes the world out', async () => {
     const h = harness();
@@ -265,12 +374,14 @@ describe('hibernation', () => {
     const h = harness({ store });
     await h.zone.join('player-a');
     h.runTicks(5);
-    const tickAtLeave = h.zone.currentTick;
     h.zone.leave(0);
+    // One tick past the leave: the departure is simulated work, and with nobody left
+    // there is no later tick for it to ride, so parking runs it.
+    const parkedTick = h.zone.currentTick;
 
     expect(h.zone.state).toBe('parked');
     h.runTicks(3);
-    expect(h.zone.currentTick).toBe(tickAtLeave);
+    expect(h.zone.currentTick).toBe(parkedTick);
 
     await h.zone.join('player-a');
     expect(h.zone.state).toBe('live');
@@ -279,8 +390,8 @@ describe('hibernation', () => {
     // The write landing later must not park an occupied world.
     expect(h.zone.state).toBe('live');
     h.runTicks(2);
-    expect(h.zone.currentTick).toBe(tickAtLeave + 2);
-    expect(store.saved.get('ember-watch')!.tick).toBe(tickAtLeave);
+    expect(h.zone.currentTick).toBe(parkedTick + 2);
+    expect(store.saved.get('ember-watch')!.tick).toBe(parkedTick);
   });
 
   it('lets a player back inside the grace without reloading anything', async () => {
@@ -322,8 +433,10 @@ describe('hibernation', () => {
     const first = harness({ store });
     await first.zone.join('player-a');
     first.runTicks(12);
-    first.zone.leave(0);
-    await new Promise((resolve) => setTimeout(resolve, 5));
+    // Hibernated rather than emptied, to match the control exactly. A departure is a
+    // simulated event, so leaving here would compare a world that processed one against
+    // a world that did not — which is a question about `leave`, not about sleeping.
+    await first.zone.hibernate('empty');
 
     // A fresh zone object, as a woken zone always is — new realm, new process in
     // production. Same clock, so no time passed and `wake` has nothing to catch up on.

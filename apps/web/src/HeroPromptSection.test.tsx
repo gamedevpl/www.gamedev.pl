@@ -163,7 +163,9 @@ describe('HeroPromptSection', () => {
     expect(container.querySelector('.prompt-composer-bar.is-busy')).not.toBeNull();
     expect(container.querySelector('.build-btn-spinner')).not.toBeNull();
     expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Analyzing your idea/i);
-    expect(container.querySelector('.creation-card.is-busy .creation-sub')?.textContent).toMatch(/Become the creator/i);
+    expect(container.querySelector('.creation-card.is-busy .creation-sub')?.textContent).toMatch(
+      /A coding agent writes it/i,
+    );
     expect(container.querySelector('.creation-card.is-busy .creation-sub')?.textContent).not.toMatch(
       /Analyzing your idea/i,
     );
@@ -498,7 +500,9 @@ describe('HeroPromptSection', () => {
     const recognition = new FakeSpeechRecognition();
     Object.defineProperty(window, 'webkitSpeechRecognition', {
       configurable: true,
-      value: vi.fn(() => recognition),
+      value: vi.fn(function () {
+        return recognition;
+      }),
     });
 
     const container = document.createElement('div');
@@ -804,7 +808,7 @@ describe('HeroPromptSection', () => {
     expect(container.querySelector('.searching-card')).toBeNull();
     expect(container.querySelector('.matched-card')).toBeNull();
     expect(container.querySelector('.creation-card')).not.toBeNull();
-    expect(container.querySelector('.creation-card')?.textContent).toContain('Opisz swój pomysł na grę');
+    expect(container.querySelector('.creation-card')?.textContent).toContain('Zrobimy z tego grę');
     expect(container.querySelector('.creation-card .build-match-btn')?.textContent).toContain('Stwórz taką grę');
 
     fetchSpy.mockRestore();
@@ -819,9 +823,11 @@ describe('HeroPromptSection', () => {
     document.body.appendChild(container);
     const root = createRoot(container);
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
-      Promise.resolve(new Response(JSON.stringify({ match: null, score: 0 }), { status: 200 })),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(() =>
+        Promise.resolve(new Response(JSON.stringify({ match: null, score: 0 }), { status: 200 })),
+      );
 
     await act(async () => {
       root.render(
@@ -859,9 +865,11 @@ describe('HeroPromptSection', () => {
     document.body.appendChild(container);
     const root = createRoot(container);
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
-      Promise.resolve(new Response(JSON.stringify({ match: null, score: 0 }), { status: 200 })),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(() =>
+        Promise.resolve(new Response(JSON.stringify({ match: null, score: 0 }), { status: 200 })),
+      );
 
     // Initial render without flushing effects or advancing timers
     act(() => {
@@ -892,16 +900,25 @@ describe('HeroPromptSection', () => {
     document.body.appendChild(container);
     const root = createRoot(container);
 
-    const mockCatalog = [{
-      slug: 'mexico-86',
-      title: "Mexico '86 Arcade Football",
-      genre: 'sports',
-      controls: 'Arrows / Enter',
-      media: null, multiplayer: null, saves: null, world: null, sensing: null,
-      orientation: 'landscape' as const, editor: null, status: 'published' as const, submittedBy: null,
-      tagline: { en: 'Tournament football.', pl: 'Turniej piłkarski.' },
-      searchKeywords: ['football', 'soccer', 'piłka', 'mundial'],
-    }];
+    const mockCatalog = [
+      {
+        slug: 'mexico-86',
+        title: "Mexico '86 Arcade Football",
+        genre: 'sports',
+        controls: 'Arrows / Enter',
+        media: null,
+        multiplayer: null,
+        saves: null,
+        world: null,
+        sensing: null,
+        orientation: 'landscape' as const,
+        editor: null,
+        status: 'published' as const,
+        submittedBy: null,
+        tagline: { en: 'Tournament football.', pl: 'Turniej piłkarski.' },
+        searchKeywords: ['football', 'soccer', 'piłka', 'mundial'],
+      },
+    ];
 
     await act(async () => {
       root.render(
@@ -940,9 +957,11 @@ describe('HeroPromptSection', () => {
       searchKeywords: ['miecze', 'walka'],
     };
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
-      Promise.resolve(new Response(JSON.stringify({ match: vectorMatchGame, score: 0.85 }), { status: 200 })),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(() =>
+        Promise.resolve(new Response(JSON.stringify({ match: vectorMatchGame, score: 0.85 }), { status: 200 })),
+      );
 
     // Initial render with catalogEntries = [] (e.g. initial cold load)
     await act(async () => {
@@ -968,10 +987,67 @@ describe('HeroPromptSection', () => {
     const card = container.querySelector('.matched-card');
     expect(card).not.toBeNull();
     expect(container.querySelector('.matched-title')?.textContent).toBe('Bonfire Arena');
-    expect(container.querySelector('.matched-actions .match-build-link')?.textContent).toContain('lub stwórz swoją grę');
+    expect(container.querySelector('.matched-actions .match-build-link')?.textContent).toContain(
+      'lub stwórz swoją grę',
+    );
+
+    fetchSpy.mockRestore();
+    await act(async () => root.unmount());
+  });
+
+  it('skips catalog matching when enableCatalogMatch is false', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ match: { slug: 'mexico-86', title: "Mexico '86 Arcade Football" }, score: 0.99 }),
+    } as Response);
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'mexico',
+          catalogEntries: [
+            {
+              slug: 'mexico-86',
+              title: "Mexico '86 Arcade Football",
+              genre: 'sports',
+              controls: 'Arrows',
+              status: 'published',
+              media: null,
+              multiplayer: null,
+              saves: null,
+              world: null,
+              sensing: null,
+              editor: null,
+              orientation: 'landscape' as const,
+              submittedBy: null,
+            },
+          ],
+          enableCatalogMatch: false,
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250));
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.matched-card')).toBeNull();
+    expect(container.querySelector('.searching-card')).toBeNull();
+    expect(fetchSpy.mock.calls.some((call) => String(call[0]).includes('/api/catalog/search'))).toBe(false);
 
     fetchSpy.mockRestore();
     await act(async () => root.unmount());
   });
 });
-

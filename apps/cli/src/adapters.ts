@@ -17,6 +17,7 @@ import { CliError, EXIT_REFUSED } from './exit-codes.js';
 import bundled from './adapters.json' with { type: 'json' };
 
 export interface AdapterSpec {
+  selection?: import('./agent-settings.js').AgentSelection;
   name: string;
   command: string;
   versionFlag: string;

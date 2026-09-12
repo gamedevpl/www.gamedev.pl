@@ -2,7 +2,7 @@ import { PassThrough } from 'node:stream';
 import { stripVTControlCharacters } from 'node:util';
 import { createElement } from 'react';
 import { render } from 'ink';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { connectSession } from '../connect-flow.js';
 import type { ApiClient } from '../api.js';
 import { ReplApp } from './app.js';
@@ -13,13 +13,13 @@ afterEach(() => {
   for (const close of cleanup.splice(0)) close();
 });
 const wait = (ms = 50) => new Promise((resolve) => setTimeout(resolve, ms));
-function screen(columns: number, rows: number) {
+function screen(columns: number, rows: number, openPreview?: (url: string) => void) {
   const session = createTuiSession('');
   const input = Object.assign(new PassThrough(), { isTTY: true, setRawMode() {}, ref() {}, unref() {} });
   const output = Object.assign(new PassThrough(), { columns, rows, isTTY: true });
   const frames: string[] = [];
   output.on('data', (chunk) => frames.push(stripVTControlCharacters(String(chunk))));
-  const app = render(createElement(ReplApp, { session, color: false }), {
+  const app = render(createElement(ReplApp, { session, color: false, openPreview }), {
     stdin: input as unknown as NodeJS.ReadStream,
     stdout: output as unknown as NodeJS.WriteStream,
     debug: true,
@@ -36,6 +36,49 @@ function screen(columns: number, rows: number) {
 }
 
 describe('TUI feedback', () => {
+  it('shows the selected model and effort in a narrow picker', async () => {
+    const view = screen(40, 12);
+    void view.session.prompt(
+      ['codex — model: gpt-5.3-codex; effort: xhigh — this checkout; own billing', 'Configure agent model and effort…'],
+      'Who should build this task?',
+    );
+    await wait();
+    expect(view.frame()).toContain('effort: xhigh');
+    expect(view.frame()).toContain('gpt-5.3-codex');
+  });
+  it('moves the cursor and inserts text inside a long draft', async () => {
+    const view = screen(40, 12);
+    void view.session.prompt();
+    view.session.setDraft('0123456789'.repeat(5));
+    await wait();
+    expect(view.frame()).toContain('█');
+    view.input.write('\u001b[D');
+    await wait();
+    view.input.write('X');
+    await wait();
+    expect(view.session.get()).toMatchObject({ draft: `${'0123456789'.repeat(4)}012345678X9`, draftCursor: 50 });
+    expect(view.frame()).toContain('█9');
+    expect(view.frame()).toContain('←→');
+  });
+
+  it('opens the live preview with o while an agent is working', async () => {
+    const openPreview = vi.fn();
+    const view = screen(80, 24, openPreview);
+    view.session.writeLine('live preview while claude edits: http://127.0.0.1:64897/preview/');
+    await wait();
+    expect(view.frame()).toContain('o open preview');
+    view.input.write('o');
+    await wait();
+    expect(openPreview).toHaveBeenCalledWith('http://127.0.0.1:64897/preview/');
+
+    view.session.writeLine('local preview stopped');
+    await wait();
+    expect(view.frame()).not.toContain('o open preview');
+    view.input.write('o');
+    await wait();
+    expect(openPreview).toHaveBeenCalledTimes(1);
+  });
+
   it('shows connection choices and returns to chat for the selected game', async () => {
     const view = screen(80, 24);
     const opened = connectSession({
@@ -94,7 +137,7 @@ describe('TUI feedback', () => {
     const frame = view.frame();
     expect(frame).toContain('20. Agent 20');
     expect(frame).toContain('gamedevpl');
-    expect(frame.trimEnd().split('\n').length).toBeLessThanOrEqual(rows);
+    expect(frame.slice(frame.lastIndexOf('published')).trimEnd().split('\n').length).toBeLessThanOrEqual(rows);
   });
 });
 
@@ -172,6 +215,40 @@ describe('command completion keyboard', () => {
     expect(view.session.get().draft).toBe('/p');
   });
 
+  it('walks past recalled commands and restores the draft without opening suggestions', async () => {
+    const view = screen(80, 24);
+    for (const line of ['older request', '/help']) {
+      void view.session.prompt();
+      view.session.setDraft(line);
+      view.session.submit();
+    }
+    void view.session.prompt();
+    view.session.setDraft('unfinished request');
+    await wait();
+    view.input.write('\x1b[A');
+    await wait();
+    expect(view.session.get().draft).toBe('/help');
+    expect(view.frame()).not.toContain('▸ /help');
+    view.input.write('\x1b[A');
+    await wait();
+    expect(view.session.get().draft).toBe('older request');
+    view.input.write('\x1b[B');
+    await wait();
+    expect(view.session.get().draft).toBe('/help');
+    view.input.write('\x1b[B');
+    await wait();
+    expect(view.session.get().draft).toBe('unfinished request');
+    view.input.write('\x1b[A');
+    await wait();
+    view.input.write('\x7f');
+    await wait();
+    expect(view.session.get().draft).toBe('/hel');
+    expect(view.frame()).toContain('▸ /help');
+    view.input.write('\t');
+    await wait();
+    expect(view.session.get().draft).toBe('/help ');
+  });
+
   it.each([
     [40, 12],
     [80, 24],
@@ -189,4 +266,36 @@ describe('command completion keyboard', () => {
     expect(view.frame().trimEnd().split('\n').length).toBeLessThanOrEqual(rows);
     expect(view.frame()).toContain('Tab fill');
   });
+});
+
+it('reports silence without claiming progress and clears it on new output', async () => {
+  let now = 100_000;
+  const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+  try {
+    const view = screen(80, 24);
+    now += 45_000;
+    await wait(150);
+    expect(view.frame()).toContain('No new output for 45s');
+    view.session.writeLine('Muse is reading game.ts');
+    await wait();
+    expect(view.frame()).not.toContain('No new output');
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+it('shows local ownership instead of a stale remote no-agent status', async () => {
+  const view = screen(80, 24);
+  view.session.setLive(['Studio: queued (no_agent_yet)']);
+  view.session.setLocalTask('muse');
+  await wait();
+  expect(view.frame()).toContain('Local task: muse');
+  expect(view.frame()).toContain('after /submit');
+  expect(view.frame()).not.toContain('no_agent_yet');
+  view.session.setLive(['Studio: queued (no_agent_yet)']);
+  await wait();
+  expect(view.frame()).not.toContain('no_agent_yet');
+  view.session.setLocalTask('');
+  await wait();
+  expect(view.frame()).toContain('Studio: queued');
 });

@@ -8,7 +8,7 @@ export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
 export interface ApiClient {
   origin: string;
-  request<T>(method: string, path: string, body?: unknown): Promise<T>;
+  request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T>;
   requestBytes(path: string): Promise<Buffer>;
 }
 
@@ -76,8 +76,9 @@ export function createApi(input: {
 
   return {
     origin: input.origin,
-    async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+    async request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
       const res = await authorized(path, {
+        signal,
         method,
         headers: body !== undefined ? { 'content-type': 'application/json' } : {},
         ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
@@ -88,7 +89,9 @@ export function createApi(input: {
       return (await res.json()) as T;
     },
     async requestBytes(path: string): Promise<Buffer> {
-      const res = await authorized(path, { method: 'GET' });
+      const res = await authorized(path, {
+        method: 'GET',
+      });
       if (!res.ok) {
         throwForStatus(res, (await res.json().catch(() => ({}))) as { error?: string; message?: string });
       }

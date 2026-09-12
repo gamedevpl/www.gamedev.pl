@@ -41,7 +41,7 @@ export async function registerGamePlayRoute(
   app: FastifyInstance,
   options: GamePlayRouteOptions,
 ): Promise<GamePlayRouteHandle> {
-  const { store, githubClient, snapshotReader, publishedRef, now, catalog, draftPreview } = options;
+  const { githubClient, snapshotReader, publishedRef, now, catalog, draftPreview } = options;
   const playableWithoutSession = options.playableWithoutSession ?? (async () => false);
   const maxGamesPerWindow = options.maxGamesPerWindow ?? 60;
   const gamesRateLimitWindowMs = options.gamesRateLimitWindowMs ?? 60 * 1000;
@@ -87,10 +87,9 @@ export async function registerGamePlayRoute(
         // One permalink for a game's whole life — draft or published.
 
         // Checked outside gameCache — a draft must never get cached under it.
-        if (await draftPreview.canPlayDraft(request, slug)) {
-          const record = await store?.getSubmissionBySlug(slug);
-          if (record) return draftPreview.replyWithDraft(request, reply, record.jobId);
-        }
+        const grant = await draftPreview.canPlayDraft(request, slug);
+        // The grant names its version; a later delivery does not ride it.
+        if (grant) return draftPreview.replyWithDraft(request, reply, grant.jobId, grant.version);
         return reply.status(404).send({ error: 'game not found' });
       }
 

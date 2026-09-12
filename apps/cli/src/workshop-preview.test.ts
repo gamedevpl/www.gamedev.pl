@@ -139,3 +139,41 @@ it('checks subscription before preparation, preview, telemetry or agent launch',
   expect(record).not.toHaveBeenCalled();
   expect(ws.abort.current).toBeNull();
 });
+
+it.each([true, false])('configures agy before preparation and launch: confirm=%s', async (confirm) => {
+  const { readFileSync } = await import('node:fs');
+  const { loadAdapters } = await import('./adapters.js');
+  const { spawnAdapter } = await import('./delegate.js');
+  const { prepareWorkspace } = await import('./prepare-workspace.js');
+  const root = mkdtempSync(join(tmpdir(), 'gdpl-agy-setup-'));
+  roots.push(root);
+  const spec = loadAdapters().adapters.find((item) => item.name === 'agy')!;
+  const ws: Workshop = {
+    root,
+    slug: 'robot',
+    token: '',
+    env: { HOME: root },
+    adapters: [spec],
+    builder: 'self',
+    pick: async (choices) => {
+      expect(prepareWorkspace).not.toHaveBeenCalled();
+      expect(spawnAdapter).not.toHaveBeenCalled();
+      return choices[confirm ? 0 : 2]!;
+    },
+    abort: { current: null },
+    run: () => ({ status: 0, stderr: '' }),
+  };
+  expect(await runLocalBuild({ ws, spec, brief: 'edit game', write: () => {} })).toBe(confirm);
+  expect(spawnAdapter).toHaveBeenCalledTimes(confirm ? 1 : 0);
+  if (confirm) {
+    expect(JSON.parse(readFileSync(join(root, '.gemini/antigravity-cli/settings.json'), 'utf8')).toolPermission).toBe(
+      'proceed-in-sandbox',
+    );
+    expect(spawnAdapter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        spec: expect.objectContaining({ headless: expect.arrayContaining(['--sandbox', '--print']) }),
+      }),
+    );
+  }
+  expect(ws.abort.current).toBeNull();
+});
