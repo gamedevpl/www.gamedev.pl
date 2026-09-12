@@ -255,7 +255,7 @@ export interface SubmissionRoutesOptions {
   mediaUrlSigner?: MediaUrlSigner | null;
   storeMediaUrlSigner?: MediaUrlSigner | null;
   /** Daily ceiling on signed media URLs; tests pass small numbers. */
-  mintBudget?: { perIpPerDay: number; globalPerDay: number };
+  mintBudget?: { perIpPerDay: number; perInstancePerDay: number };
   /**
    * Cap on in-memory assembled draft previews (HTML can be large). Defaults to
    * 50; tests pass a smaller value to exercise eviction without minting dozens

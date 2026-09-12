@@ -92,7 +92,7 @@ async function createApp(params: {
   snapshotReader?: GameSnapshotReader | null;
   store?: InMemoryStore;
   mediaUrlSigner?: { urlFor(object: string, ttlSeconds?: number): Promise<string | null> } | null;
-  mintBudget?: { perIpPerDay: number; globalPerDay: number };
+  mintBudget?: { perIpPerDay: number; perInstancePerDay: number };
 }): Promise<FastifyInstance> {
   const store = params.store ?? new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
@@ -581,7 +581,7 @@ describe('the daily ceiling on handing out signed URLs', () => {
       githubClient,
       snapshotReader: snapshot.reader,
       mediaUrlSigner: { urlFor: async (object) => `https://signed/${object}` },
-      mintBudget: { perIpPerDay: 1, globalPerDay: 100 },
+      mintBudget: { perIpPerDay: 1, perInstancePerDay: 100 },
     });
 
     const first = await app.inject({ method: 'GET', url: '/api/games/bubble-pop/media/opening.png' });
